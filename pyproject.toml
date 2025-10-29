@@ -1,0 +1,15 @@
+[project]
+name = "VisionForge"
+authors = [
+  {name = "Marcus Reis", email = "marcusvinicius0083@gmail.com"} 
+]
+version = "0.0.1"
+description = "VisionForge é um ambiente modular e extensível para experimentação em Visão Computacional, com foco em redes neurais convolucionais (CNNs), pré-processamento de imagens e técnicas clássicas de visão."
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = []
+
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
