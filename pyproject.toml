@@ -1,15 +1,77 @@
 [project]
 name = "VisionForge"
-authors = [
-  {name = "Marcus Reis", email = "marcusvinicius0083@gmail.com"} 
-]
+authors = [{ name = "Marcus Reis", email = "marcusvinicius0083@gmail.com" }]
 version = "0.0.1"
 description = "VisionForge é um ambiente modular e extensível para experimentação em Visão Computacional, com foco em redes neurais convolucionais (CNNs), pré-processamento de imagens e técnicas clássicas de visão."
 readme = "README.md"
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [
 
+  # Deep Learning
+  "torch>=2.3",
+  "torchvision>=0.18",
+
+  # Web Interface
+  "gradio>=4.0",
+
+  # Validator
+  "pydantic>=2.0",
+  "pydantic-settings>=2.0",
+
+  # Logger
+  "loguru>=0.7",
+
+  # Metrics
+  "scikit-learn>=1.4",
+
+  # Visualization
+  "matplotlib>=3.8",
+  "seaborn>=0.13",
+
+  # Exporters
+  "onnx>=1.16",
+
+  # Utilities
+  "pyyaml>=6.0",
+  "rich>=13.0",
+
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "pytest-cov>=5.0",
+
+  "black>=24.0",
+
+  "flake8>=7.0",
+
+  "mypy>=1.10",
+]
 
 [build-system]
-requires = ["setuptools"]
+requires = ["setuptools>=72"]
 build-backend = "setuptools.build_meta"
+
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+
+[tool.black]
+line-length = 88
+target-version = ["py313"]
+
+[tool.flake8]
+max-line-length = 88
+extend-ignore = ["E203", "E501"]
+exclude = [".venv", "build", "dist", "__pycache__", "outputs"]
+
+[tool.mypy]
+python_version = "3.13"
+ignore_missing_imports = true
+exclude = ["outputs/", "configs/", ".venv/"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --cov=src --cov-report=term-missing"
