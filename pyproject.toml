@@ -37,6 +37,10 @@ dependencies = [
 
 ]
 
+[project.scripts]
+visionforge     = "visionforge.__main__:main"
+visionforge-gui = "visionforge.gui.app:launch"
+
 [project.optional-dependencies]
 dev = [
   "pytest>=8.0",
