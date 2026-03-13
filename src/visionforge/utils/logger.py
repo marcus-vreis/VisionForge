@@ -13,10 +13,7 @@ LOG_FORMAT_TERMINAL = (
 )
 
 LOG_FORMAT_FILE = (
-    "{time:YYYY-MM-DD HH:mm:ss} | "
-    "{level: <8} | "
-    "{name}:{function}:{line} | "
-    "{message}"
+    "{time:YYYY-MM-DD HH:mm:ss} | " "{level: <8} | " "{name}:{function}:{line} | " "{message}"
 )
 
 
