@@ -19,4 +19,4 @@ htmlcov/
 # Type checking
 .mypy_cache/
 
-.vscode/settings.json   
+.vscode/settings.json
