@@ -2,17 +2,18 @@ name: CI
 
 on:
   push:
+    branches: ["main", "develop", "phase/**", "feat/**", "fix/**"]
   pull_request:
 
 jobs:
   quality:
     name: Lint, Types & Tests
     runs-on: ubuntu-latest
- 
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
- 
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -20,31 +21,37 @@ jobs:
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
- 
+
       - name: Install dependencies
         run: |
           uv venv
           source .venv/bin/activate
           uv pip install -e ".[dev]"
-          # Install CPU-only torch for CI — GPU is not available in GitHub Actions.
           uv pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
- 
+
       - name: Check formatting (black)
         run: |
           source .venv/bin/activate
           black --check src/ tests/
- 
+
       - name: Lint (flake8)
         run: |
           source .venv/bin/activate
           flake8 src/ tests/
- 
+
       - name: Type check (mypy)
         run: |
           source .venv/bin/activate
           mypy src/
- 
+
       - name: Run tests with coverage
         run: |
           source .venv/bin/activate
-          pytest --cov=src --cov-report=term-missing --cov-fail-under=70
+          pytest --cov=src --cov-report=xml --cov-report=term-missing --cov-fail-under=70
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml
+          fail_ci_if_error: true
