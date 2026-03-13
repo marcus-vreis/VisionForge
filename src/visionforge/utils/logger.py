@@ -3,7 +3,6 @@ import sys
 
 from loguru import logger
 
-
 _DEFAULT_LOG_DIR = Path.cwd() / "outputs" / "logs"
 
 LOG_FORMAT_TERMINAL = (
@@ -51,7 +50,6 @@ def setup_logger(level: str = "DEBUG", log_dir: Path | None = None) -> None:
         format=LOG_FORMAT_FILE,
         encoding="utf-8",
     )
-
 
 
 __all__ = ["logger", "setup_logger"]
