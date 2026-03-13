@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -35,12 +35,12 @@ class TrainingConfig(BaseModel):
     Hyperparameters and training loop settings.
 
     Args:
-        learning_rate:            Step size for the optimizer. Must be > 0.
-        epochs:                   Maximum number of training epochs.
-        batch_size:               Samples per gradient update. Must be a power of 2.
-        early_stopping_patience:  Stop after N epochs without validation improvement.
-        optimizer:                Optimization algorithm.
-        weight_decay:             L2 regularization coefficient.
+        learning_rate:           Step size for the optimizer. Must be > 0.
+        epochs:                  Maximum number of training epochs.
+        batch_size:              Samples per gradient update. Must be a power of 2.
+        early_stopping_patience: Stop after N epochs without validation improvement.
+        optimizer:               Optimization algorithm.
+        weight_decay:            L2 regularization coefficient.
     """
 
     learning_rate: float = Field(gt=0.0)
@@ -87,6 +87,8 @@ class DataConfig(BaseModel):
     def base_dir_must_exist(cls, v: Path) -> Path:
         if not v.exists():
             raise ValueError(f"base_dir does not exist: {v}")
+        if not v.is_dir():
+            raise ValueError(f"base_dir must be a directory, got: {v}")
         return v
 
 
@@ -130,7 +132,9 @@ class ExperimentConfig(BaseModel):
     @model_validator(mode="after")
     def validate_task_and_num_classes(self) -> "ExperimentConfig":
         if self.task == "binary" and self.model.num_classes != 1:
-            raise ValueError(f"Binary task requires num_classes=1, got {self.model.num_classes}.")
+            raise ValueError(
+                f"Binary task requires num_classes=1, got {self.model.num_classes}."
+            )
         if self.task == "multiclass" and self.model.num_classes < 2:
             raise ValueError(
                 f"Multiclass task requires num_classes>=2, got {self.model.num_classes}."
@@ -150,16 +154,28 @@ def load_config(path: Path | str) -> ExperimentConfig:
 
     Raises:
         FileNotFoundError: If the config file does not exist.
+        ValueError:        If the given path exists but is not a regular file,
+                           or if the YAML content is not a mapping.
         ValidationError:   If any field fails Pydantic validation.
     """
     path = Path(path)
     if not path.exists():
         raise FileNotFoundError(f"Config file not found: {path}")
+    if not path.is_file():
+        raise ValueError(f"Config path is not a file: {path}")
 
     with path.open(encoding="utf-8") as f:
-        raw = yaml.safe_load(f)
+        raw: Any = yaml.safe_load(f)
 
-    return ExperimentConfig(**raw)
+    if raw is None:
+        raw = {}
+
+    if not isinstance(raw, dict):
+        raise ValueError(
+            f"Config file must contain a YAML mapping, got: {type(raw).__name__}"
+        )
+
+    return ExperimentConfig.model_validate(raw)
 
 
 __all__ = [

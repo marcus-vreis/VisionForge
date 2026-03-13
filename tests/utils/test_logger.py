@@ -63,7 +63,9 @@ class TestSetupLogger:
         for msg in ["msg-debug", "msg-info", "msg-warning", "msg-error"]:
             assert msg in content, f"Expected '{msg}' in log file."
 
-    def test_double_setup_does_not_duplicate_messages(self, tmp_log_dir: Path, capsys) -> None:
+    def test_double_setup_does_not_duplicate_messages(
+        self, tmp_log_dir: Path, capsys
+    ) -> None:
         """Calling setup_logger() twice must not duplicate terminal output."""
         setup_logger(log_dir=tmp_log_dir, level="INFO")
         setup_logger(log_dir=tmp_log_dir, level="INFO")

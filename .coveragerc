@@ -1,0 +1,10 @@
+[run]
+source = src/visionforge
+omit =
+    src/visionforge/__init__.py
+    src/visionforge/*/__init__.py
+
+[report]
+exclude_lines =
+    pragma: no cover
+    if __name__ == .__main__.:

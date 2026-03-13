@@ -8,7 +8,9 @@ from pydantic import ValidationError
 from visionforge.utils.config import ExperimentConfig, load_config
 
 
-def make_raw_config(tmp_path: Path, overrides: dict[str, Any] | None = None) -> dict[str, Any]:
+def make_raw_config(
+    tmp_path: Path, overrides: dict[str, Any] | None = None
+) -> dict[str, Any]:
     """Return a valid raw config dict, with optional field overrides."""
     raw: dict[str, Any] = {
         "name": "test_experiment",
@@ -46,7 +48,9 @@ def make_raw_config(tmp_path: Path, overrides: dict[str, Any] | None = None) -> 
     return raw
 
 
-def write_yaml(tmp_path: Path, data: dict[str, Any], filename: str = "config.yaml") -> Path:
+def write_yaml(
+    tmp_path: Path, data: dict[str, Any], filename: str = "config.yaml"
+) -> Path:
     """Write a dict as a YAML file and return its path."""
     path = tmp_path / filename
     with path.open("w", encoding="utf-8") as f:
@@ -86,7 +90,9 @@ class TestModelConfig:
 
     def test_invalid_model_name_raises(self, tmp_path: Path) -> None:
         """Unknown model names should raise ValidationError."""
-        path = write_yaml(tmp_path, make_raw_config(tmp_path, {"model.name": "resnet999"}))
+        path = write_yaml(
+            tmp_path, make_raw_config(tmp_path, {"model.name": "resnet999"})
+        )
 
         with pytest.raises(ValidationError):
             load_config(path)
@@ -103,7 +109,9 @@ class TestTrainingConfig:
 
     def test_negative_learning_rate_raises(self, tmp_path: Path) -> None:
         """learning_rate must be > 0."""
-        path = write_yaml(tmp_path, make_raw_config(tmp_path, {"training.learning_rate": -0.001}))
+        path = write_yaml(
+            tmp_path, make_raw_config(tmp_path, {"training.learning_rate": -0.001})
+        )
 
         with pytest.raises(ValidationError):
             load_config(path)
@@ -117,7 +125,9 @@ class TestTrainingConfig:
 
     def test_batch_size_not_power_of_two_raises(self, tmp_path: Path) -> None:
         """batch_size must be a power of 2."""
-        path = write_yaml(tmp_path, make_raw_config(tmp_path, {"training.batch_size": 12}))
+        path = write_yaml(
+            tmp_path, make_raw_config(tmp_path, {"training.batch_size": 12})
+        )
 
         with pytest.raises(ValidationError, match="power of 2"):
             load_config(path)
@@ -135,7 +145,9 @@ class TestTrainingConfig:
 
     def test_invalid_optimizer_raises(self, tmp_path: Path) -> None:
         """Optimizer must be one of adam, sgd, adamw."""
-        path = write_yaml(tmp_path, make_raw_config(tmp_path, {"training.optimizer": "rmsprop"}))
+        path = write_yaml(
+            tmp_path, make_raw_config(tmp_path, {"training.optimizer": "rmsprop"})
+        )
 
         with pytest.raises(ValidationError):
             load_config(path)
@@ -165,7 +177,8 @@ class TestCrossValidation:
     def test_multiclass_task_with_num_classes_one_raises(self, tmp_path: Path) -> None:
         """Multiclass task must have num_classes >= 2."""
         path = write_yaml(
-            tmp_path, make_raw_config(tmp_path, {"task": "multiclass", "model.num_classes": 1})
+            tmp_path,
+            make_raw_config(tmp_path, {"task": "multiclass", "model.num_classes": 1}),
         )
 
         with pytest.raises(ValidationError, match="Multiclass task"):
@@ -174,7 +187,8 @@ class TestCrossValidation:
     def test_multiclass_task_with_valid_num_classes(self, tmp_path: Path) -> None:
         """Multiclass task with num_classes >= 2 should be valid."""
         path = write_yaml(
-            tmp_path, make_raw_config(tmp_path, {"task": "multiclass", "model.num_classes": 5})
+            tmp_path,
+            make_raw_config(tmp_path, {"task": "multiclass", "model.num_classes": 5}),
         )
 
         config = load_config(path)
