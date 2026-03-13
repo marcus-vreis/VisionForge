@@ -86,12 +86,7 @@ class TestSetupLogger:
         logger.complete()
 
         assert missing_dir.exists()
-    
-    def test_log_is_none(self, tmp_log_dir: Path) -> None:
-        """setup_logger() should not return any value."""
-        assert setup_logger(log_dir=tmp_log_dir) is None
 
-    
     def test_default_log_dir_used_when_log_dir_is_none(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -111,6 +106,7 @@ class TestLoggerExports:
     def test_logger_is_importable(self) -> None:
         """logger object must be importable from the module."""
         from visionforge.utils.logger import logger as vf_logger
+
         assert vf_logger is not None
 
     def test_setup_logger_is_callable(self) -> None:

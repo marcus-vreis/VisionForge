@@ -51,6 +51,8 @@ dev = [
   "flake8>=7.0",
 
   "mypy>=1.10",
+
+  "pre-commit>=4.0",  
 ]
 
 [build-system]
@@ -65,11 +67,6 @@ where = ["src"]
 [tool.black]
 line-length = 88
 target-version = ["py313"]
-
-[tool.flake8]
-max-line-length = 88
-extend-ignore = ["E203", "E501"]
-exclude = [".venv", "build", "dist", "__pycache__", "outputs"]
 
 [tool.mypy]
 python_version = "3.13"
