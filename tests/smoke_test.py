@@ -2,8 +2,8 @@
 Smoke test — verifies that the VisionForge package can be imported
 and that its public surface is minimally functional.
 
-These tests run first in CI to catch packaging / import errors early,
-before the full test suite is executed.
+These tests serve as lightweight smoke checks to catch packaging / import
+errors early in the feedback cycle and can be run before the full test suite.
 """
 
 import importlib
