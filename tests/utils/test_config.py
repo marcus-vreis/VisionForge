@@ -1,7 +1,7 @@
-import pytest
 from pathlib import Path
 from typing import Any
 
+import pytest
 import yaml
 from pydantic import ValidationError
 
@@ -59,7 +59,6 @@ def write_yaml(
 
 
 class TestLoadConfig:
-
     def test_valid_config_loads_successfully(self, tmp_path: Path) -> None:
         """load_config() should return a valid ExperimentConfig from a YAML file."""
         path = write_yaml(tmp_path, make_raw_config(tmp_path))
@@ -87,7 +86,6 @@ class TestLoadConfig:
 
 
 class TestModelConfig:
-
     def test_invalid_model_name_raises(self, tmp_path: Path) -> None:
         """Unknown model names should raise ValidationError."""
         path = write_yaml(
@@ -106,7 +104,6 @@ class TestModelConfig:
 
 
 class TestTrainingConfig:
-
     def test_negative_learning_rate_raises(self, tmp_path: Path) -> None:
         """learning_rate must be > 0."""
         path = write_yaml(
@@ -154,7 +151,6 @@ class TestTrainingConfig:
 
 
 class TestDataConfig:
-
     def test_nonexistent_base_dir_raises(self, tmp_path: Path) -> None:
         """base_dir must exist on disk."""
         path = write_yaml(
@@ -166,7 +162,6 @@ class TestDataConfig:
 
 
 class TestCrossValidation:
-
     def test_binary_task_with_num_classes_two_raises(self, tmp_path: Path) -> None:
         """Binary task must have num_classes=1."""
         path = write_yaml(tmp_path, make_raw_config(tmp_path, {"model.num_classes": 2}))

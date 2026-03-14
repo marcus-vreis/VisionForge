@@ -1,5 +1,5 @@
-from pathlib import Path
 import sys
+from pathlib import Path
 
 from loguru import logger
 
@@ -13,10 +13,7 @@ LOG_FORMAT_TERMINAL = (
 )
 
 LOG_FORMAT_FILE = (
-    "{time:YYYY-MM-DD HH:mm:ss} | "
-    "{level: <8} | "
-    "{name}:{function}:{line} | "
-    "{message}"
+    "{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} | {message}"
 )
 
 
