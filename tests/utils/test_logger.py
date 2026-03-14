@@ -1,5 +1,6 @@
-import pytest
 from pathlib import Path
+
+import pytest
 from loguru import logger
 
 from visionforge.utils.logger import setup_logger
@@ -21,7 +22,6 @@ def tmp_log_dir(tmp_path: Path) -> Path:
 
 
 class TestSetupLogger:
-
     def test_setup_does_not_raise(self, tmp_log_dir: Path) -> None:
         """setup_logger() should run without raising any exception."""
         try:
@@ -102,7 +102,6 @@ class TestSetupLogger:
 
 
 class TestLoggerExports:
-
     def test_logger_is_importable(self) -> None:
         """logger object must be importable from the module."""
         from visionforge.utils.logger import logger as vf_logger
