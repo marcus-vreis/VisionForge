@@ -13,10 +13,15 @@ outputs/
 
 # Test and coverage
 .coverage
+coverage.xml
 htmlcov/
 .pytest_cache/
 
 # Type checking
 .mypy_cache/
 
-.vscode/settings.json
+# Linting / formatting cache
+.ruff_cache/
+
+# IDE
+.vscode/settings.json
