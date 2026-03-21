@@ -6,14 +6,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class ModelConfig(BaseModel):
-    """
-    Configuration for the CNN model.
-
-    Args:
-        name:        Architecture to use. Must be one of the supported families.
-        num_classes: Number of output neurons. Use 1 for binary, N for multiclass.
-        pretrained:  Whether to initialize with ImageNet weights.
-    """
+    """CNN architecture and output layer settings."""
 
     name: Literal[
         "resnet18",
@@ -31,17 +24,7 @@ class ModelConfig(BaseModel):
 
 
 class TrainingConfig(BaseModel):
-    """
-    Hyperparameters and training loop settings.
-
-    Args:
-        learning_rate:           Step size for the optimizer. Must be > 0.
-        epochs:                  Maximum number of training epochs.
-        batch_size:              Samples per gradient update. Must be a power of 2.
-        early_stopping_patience: Stop after N epochs without validation improvement.
-        optimizer:               Optimization algorithm.
-        weight_decay:            L2 regularization coefficient.
-    """
+    """Hyperparameters and training loop settings."""
 
     learning_rate: float = Field(gt=0.0)
     epochs: int = Field(ge=1)
@@ -59,20 +42,7 @@ class TrainingConfig(BaseModel):
 
 
 class DataConfig(BaseModel):
-    """
-    Dataset paths and DataLoader settings.
-
-    Args:
-        base_dir:    Root directory containing train/, val/, and test/ subfolders.
-        train_dir:   Name of the training subdirectory inside base_dir.
-        val_dir:     Name of the validation subdirectory inside base_dir.
-        test_dir:    Name of the test subdirectory inside base_dir.
-        image_size:  Images are resized to (image_size x image_size) pixels.
-        num_workers: Parallel worker processes for data loading. Use 0 to disable.
-                     Increase for faster loading when CPU has multiple cores.
-        pin_memory:  Pin DataLoader memory for faster CPU-to-GPU transfers.
-                     Recommended when training on GPU.
-    """
+    """Dataset paths and DataLoader settings."""
 
     base_dir: Path
     train_dir: str = "train"
@@ -93,15 +63,7 @@ class DataConfig(BaseModel):
 
 
 class OutputConfig(BaseModel):
-    """
-    Output directory paths for models, graphics, logs, and reports.
-
-    Args:
-        models_dir:   Directory for saved model checkpoints (.pth files).
-        graphics_dir: Directory for exported plots (accuracy, loss, confusion matrix).
-        logs_dir:     Directory for log files.
-        reports_dir:  Directory for HTML/PDF experiment reports.
-    """
+    """Output directory paths for models, logs, graphics, and reports."""
 
     models_dir: Path = Path("outputs/models")
     graphics_dir: Path = Path("outputs/graphics")
@@ -110,17 +72,7 @@ class OutputConfig(BaseModel):
 
 
 class ExperimentConfig(BaseModel):
-    """
-    Top-level experiment configuration.
-
-    Args:
-        name:     Unique identifier for the experiment. Used in output filenames.
-        task:     Classification task type. Determines loss function and output layer.
-        model:    Model architecture and initialization settings.
-        training: Hyperparameters and training loop settings.
-        data:     Dataset paths and DataLoader settings.
-        output:   Output directory paths. Defaults to outputs/<type>/.
-    """
+    """Top-level experiment configuration."""
 
     name: str = Field(min_length=1)
     task: Literal["binary", "multiclass"] = "binary"
@@ -143,20 +95,18 @@ class ExperimentConfig(BaseModel):
 
 
 def load_config(path: Path | str) -> ExperimentConfig:
-    """
-    Load and validate an experiment config from a YAML file.
+    """Load and validate an experiment config from a YAML file.
 
     Args:
-        path: Path to the .yaml config file.
+        path: path to the .yaml config file.
 
     Returns:
         A fully validated ExperimentConfig instance.
 
     Raises:
-        FileNotFoundError: If the config file does not exist.
-        ValueError:        If the given path exists but is not a regular file,
-                           or if the YAML content is not a mapping.
-        ValidationError:   If any field fails Pydantic validation.
+        FileNotFoundError: if the config file does not exist.
+        ValueError: if the path is not a file, or the YAML content is not a mapping.
+        ValidationError: if any field fails Pydantic validation.
     """
     path = Path(path)
     if not path.exists():
