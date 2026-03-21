@@ -1,12 +1,3 @@
-"""
-Entry point for ``python -m visionforge``.
-
-Allows running the package directly from the command line:
-    python -m visionforge
-or, after installation:
-    visionforge
-"""
-
 from visionforge.utils.logger import logger, setup_logger
 
 
