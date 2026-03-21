@@ -60,7 +60,7 @@ def write_yaml(
 
 class TestLoadConfig:
     def test_valid_config_loads_successfully(self, tmp_path: Path) -> None:
-        """load_config() should return a valid ExperimentConfig from a YAML file."""
+        """load_config() must return a valid ExperimentConfig from a YAML file."""
         path = write_yaml(tmp_path, make_raw_config(tmp_path))
 
         config = load_config(path)
@@ -71,12 +71,25 @@ class TestLoadConfig:
         assert config.training.learning_rate == 0.001
 
     def test_missing_file_raises_file_not_found(self, tmp_path: Path) -> None:
-        """load_config() should raise FileNotFoundError for non-existent files."""
+        """load_config() must raise FileNotFoundError for non-existent files."""
         with pytest.raises(FileNotFoundError):
             load_config(tmp_path / "does_not_exist.yaml")
 
+    def test_path_is_directory_raises(self, tmp_path: Path) -> None:
+        """load_config() must raise ValueError when given a directory path."""
+        with pytest.raises(ValueError):
+            load_config(tmp_path)
+
+    def test_yaml_not_a_mapping_raises(self, tmp_path: Path) -> None:
+        """load_config() must raise ValueError when YAML content is not a mapping."""
+        path = tmp_path / "list.yaml"
+        path.write_text("- item1\n- item2\n", encoding="utf-8")
+
+        with pytest.raises(ValueError, match="YAML mapping"):
+            load_config(path)
+
     def test_output_defaults_applied_when_missing(self, tmp_path: Path) -> None:
-        """OutputConfig defaults should be applied if output section is omitted."""
+        """OutputConfig defaults must be applied when the output section is omitted."""
         path = write_yaml(tmp_path, make_raw_config(tmp_path))
 
         config = load_config(path)
@@ -87,7 +100,7 @@ class TestLoadConfig:
 
 class TestModelConfig:
     def test_invalid_model_name_raises(self, tmp_path: Path) -> None:
-        """Unknown model names should raise ValidationError."""
+        """Unknown model names must raise ValidationError."""
         path = write_yaml(
             tmp_path, make_raw_config(tmp_path, {"model.name": "resnet999"})
         )
@@ -130,7 +143,7 @@ class TestTrainingConfig:
             load_config(path)
 
     def test_valid_batch_sizes(self, tmp_path: Path) -> None:
-        """Common power-of-2 batch sizes should all be accepted."""
+        """Common power-of-2 batch sizes must all be accepted."""
         for size in [1, 2, 4, 8, 16, 32, 64, 128]:
             path = write_yaml(
                 tmp_path,
@@ -161,7 +174,7 @@ class TestDataConfig:
             load_config(path)
 
 
-class TestCrossValidation:
+class TestTaskValidation:
     def test_binary_task_with_num_classes_two_raises(self, tmp_path: Path) -> None:
         """Binary task must have num_classes=1."""
         path = write_yaml(tmp_path, make_raw_config(tmp_path, {"model.num_classes": 2}))
@@ -180,7 +193,7 @@ class TestCrossValidation:
             load_config(path)
 
     def test_multiclass_task_with_valid_num_classes(self, tmp_path: Path) -> None:
-        """Multiclass task with num_classes >= 2 should be valid."""
+        """Multiclass task with num_classes >= 2 must be valid."""
         path = write_yaml(
             tmp_path,
             make_raw_config(tmp_path, {"task": "multiclass", "model.num_classes": 5}),
