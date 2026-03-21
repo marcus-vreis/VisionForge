@@ -112,7 +112,7 @@ class TestLogCudaStatus:
         """Add a temporary loguru sink that captures log records."""
         self.log_messages: list[str] = []
         handler_id = logger.add(
-            lambda msg: self.log_messages.append(msg),
+            lambda msg: self.log_messages.append(str(msg)),
             format="{level} | {message}",
             level="DEBUG",
         )
