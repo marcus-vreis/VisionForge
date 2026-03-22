@@ -33,7 +33,6 @@ def make_raw_config(
             "train_dir": "train",
             "val_dir": "val",
             "test_dir": "test",
-            "image_size": 224,
             "num_workers": 0,
             "pin_memory": False,
         },
@@ -202,3 +201,70 @@ class TestTaskValidation:
         config = load_config(path)
         assert config.task == "multiclass"
         assert config.model.num_classes == 5
+
+
+class TestSeedConfig:
+    def test_seed_default_is_42(self, tmp_path: Path) -> None:
+        """seed must default to 42."""
+        path = write_yaml(tmp_path, make_raw_config(tmp_path))
+        config = load_config(path)
+        assert config.training.seed == 42
+
+    def test_seed_custom_value(self, tmp_path: Path) -> None:
+        """seed must accept any non-negative integer."""
+        path = write_yaml(tmp_path, make_raw_config(tmp_path, {"training.seed": 123}))
+        config = load_config(path)
+        assert config.training.seed == 123
+
+    def test_seed_negative_raises(self, tmp_path: Path) -> None:
+        """Negative seed must raise ValidationError."""
+        path = write_yaml(tmp_path, make_raw_config(tmp_path, {"training.seed": -1}))
+        with pytest.raises(ValidationError):
+            load_config(path)
+
+
+class TestWeightsPath:
+    def test_weights_path_defaults_to_none(self, tmp_path: Path) -> None:
+        """weights_path must default to None."""
+        path = write_yaml(tmp_path, make_raw_config(tmp_path))
+        config = load_config(path)
+        assert config.model.weights_path is None
+
+    def test_weights_path_accepts_valid_path(self, tmp_path: Path) -> None:
+        """weights_path must accept an existing file path."""
+        weights_file = tmp_path / "model.pth"
+        weights_file.touch()
+        path = write_yaml(
+            tmp_path,
+            make_raw_config(tmp_path, {"model.weights_path": str(weights_file)}),
+        )
+        config = load_config(path)
+        assert config.model.weights_path == weights_file
+
+
+class TestTransformConfig:
+    def test_transforms_nested_in_data(self, tmp_path: Path) -> None:
+        """DataConfig must expose a transforms field."""
+        path = write_yaml(tmp_path, make_raw_config(tmp_path))
+        config = load_config(path)
+        assert hasattr(config.data, "transforms")
+
+    def test_transform_image_size_default(self, tmp_path: Path) -> None:
+        """transforms.image_size must default to 224."""
+        path = write_yaml(tmp_path, make_raw_config(tmp_path))
+        config = load_config(path)
+        assert config.data.transforms.image_size == 224
+
+    def test_transform_image_size_custom(self, tmp_path: Path) -> None:
+        """transforms.image_size must accept custom values."""
+        raw = make_raw_config(tmp_path)
+        raw["data"]["transforms"] = {"image_size": 128}
+        path = write_yaml(tmp_path, raw)
+        config = load_config(path)
+        assert config.data.transforms.image_size == 128
+
+    def test_transform_horizontal_flip_default(self, tmp_path: Path) -> None:
+        """horizontal_flip must default to True."""
+        path = write_yaml(tmp_path, make_raw_config(tmp_path))
+        config = load_config(path)
+        assert config.data.transforms.horizontal_flip is True

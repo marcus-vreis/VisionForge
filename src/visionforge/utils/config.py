@@ -21,6 +21,18 @@ class ModelConfig(BaseModel):
     ]
     num_classes: int = Field(ge=1)
     pretrained: bool = True
+    weights_path: Path | None = None
+
+    @field_validator("weights_path")
+    @classmethod
+    def weights_path_must_be_file(cls, v: Path | None) -> Path | None:
+        if v is None:
+            return v
+        if not v.exists():
+            raise ValueError(f"weights_path does not exist: {v}")
+        if not v.is_file():
+            raise ValueError(f"weights_path must be a file, got: {v}")
+        return v
 
 
 class TrainingConfig(BaseModel):
@@ -32,6 +44,7 @@ class TrainingConfig(BaseModel):
     early_stopping_patience: int = Field(default=10, ge=1)
     optimizer: Literal["adam", "sgd", "adamw"] = "adam"
     weight_decay: float = Field(default=0.0, ge=0.0)
+    seed: int = Field(default=42, ge=0)
 
     @field_validator("batch_size")
     @classmethod
@@ -41,6 +54,17 @@ class TrainingConfig(BaseModel):
         return v
 
 
+class TransformConfig(BaseModel):
+    """Image transform and augmentation settings."""
+
+    image_size: int = Field(default=224, ge=32)
+    horizontal_flip: bool = True
+    rotation_degrees: int = Field(default=10, ge=0)
+    color_jitter: bool = False
+    normalize_mean: list[float] = [0.485, 0.456, 0.406]
+    normalize_std: list[float] = [0.229, 0.224, 0.225]
+
+
 class DataConfig(BaseModel):
     """Dataset paths and DataLoader settings."""
 
@@ -48,9 +72,9 @@ class DataConfig(BaseModel):
     train_dir: str = "train"
     val_dir: str = "val"
     test_dir: str = "test"
-    image_size: int = Field(default=224, ge=32)
     num_workers: int = Field(default=4, ge=0)
     pin_memory: bool = True
+    transforms: TransformConfig = TransformConfig()
 
     @field_validator("base_dir")
     @classmethod
@@ -133,6 +157,7 @@ __all__ = [
     "ModelConfig",
     "TrainingConfig",
     "DataConfig",
+    "TransformConfig",
     "OutputConfig",
     "load_config",
 ]
