@@ -1,18 +1,15 @@
-# ==============================================================================
-# configs/baseline.yaml
-#
-# Baseline experiment — ResNet50 binary classification.
+# baseline experiment — ResNet50 binary classification.
 # Copy and rename this file for each new experiment.
-# ==============================================================================
- 
+
 name: resnet50_baseline
 task: binary  # binary | multiclass
- 
+
 model:
   name: resnet50
   num_classes: 1      # binary → always 1
   pretrained: true
- 
+  # weights_path: configs/weights/my_checkpoint.pth  # optional local weights
+
 training:
   learning_rate: 0.0001
   epochs: 100
@@ -20,16 +17,23 @@ training:
   early_stopping_patience: 10
   optimizer: adam     # adam | sgd | adamw
   weight_decay: 0.0
- 
+  seed: 42
+
 data:
   base_dir: datasets/USK-Coffee_Binary
   train_dir: train
   val_dir: val
   test_dir: test
-  image_size: 224
   num_workers: 4
   pin_memory: true
- 
+  transforms:
+    image_size: 224
+    horizontal_flip: true
+    rotation_degrees: 10
+    color_jitter: false
+    normalize_mean: [0.485, 0.456, 0.406]
+    normalize_std:  [0.229, 0.224, 0.225]
+
 output:
   models_dir: outputs/models
   graphics_dir: outputs/graphics
