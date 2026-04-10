@@ -100,3 +100,23 @@ class TestDataModule:
         dm = DataModule(binary_config)
         loader = dm.val_loader()
         assert loader.sampler.__class__.__name__ == "SequentialSampler"
+
+    def test_test_loader_not_shuffled(self, binary_config: ExperimentConfig) -> None:
+        """Test loader must have shuffle=False."""
+        dm = DataModule(binary_config)
+        loader = dm.test_loader()
+        assert loader.sampler.__class__.__name__ == "SequentialSampler"
+
+    def test_class_names_returns_sorted_classes(
+        self, binary_config: ExperimentConfig
+    ) -> None:
+        """class_names must return sorted class names from the training dataset."""
+        dm = DataModule(binary_config)
+        names = dm.class_names
+        assert names == ["class_a", "class_b"]
+
+    def test_train_loader_is_shuffled(self, binary_config: ExperimentConfig) -> None:
+        """Train loader must use RandomSampler (shuffle=True)."""
+        dm = DataModule(binary_config)
+        loader = dm.train_loader()
+        assert loader.sampler.__class__.__name__ == "RandomSampler"

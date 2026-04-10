@@ -87,6 +87,13 @@ class TestLoadConfig:
         with pytest.raises(ValueError, match="YAML mapping"):
             load_config(path)
 
+    def test_empty_yaml_raises_validation_error(self, tmp_path: Path) -> None:
+        """An empty YAML file must raise ValidationError (missing required fields)."""
+        path = tmp_path / "empty.yaml"
+        path.write_text("", encoding="utf-8")
+        with pytest.raises(ValidationError):
+            load_config(path)
+
     def test_output_defaults_applied_when_missing(self, tmp_path: Path) -> None:
         """OutputConfig defaults must be applied when the output section is omitted."""
         path = write_yaml(tmp_path, make_raw_config(tmp_path))
@@ -172,6 +179,16 @@ class TestDataConfig:
         with pytest.raises(ValidationError, match="does not exist"):
             load_config(path)
 
+    def test_base_dir_is_file_raises(self, tmp_path: Path) -> None:
+        """base_dir pointing to a file must raise ValidationError."""
+        a_file = tmp_path / "some_file.txt"
+        a_file.touch()
+        path = write_yaml(
+            tmp_path, make_raw_config(tmp_path, {"data.base_dir": str(a_file)})
+        )
+        with pytest.raises(ValidationError, match="must be a directory"):
+            load_config(path)
+
 
 class TestTaskValidation:
     def test_binary_task_with_num_classes_two_raises(self, tmp_path: Path) -> None:
@@ -240,6 +257,28 @@ class TestWeightsPath:
         )
         config = load_config(path)
         assert config.model.weights_path == weights_file
+
+    def test_weights_path_nonexistent_raises(self, tmp_path: Path) -> None:
+        """weights_path pointing to a nonexistent path must raise ValidationError."""
+        path = write_yaml(
+            tmp_path,
+            make_raw_config(
+                tmp_path, {"model.weights_path": str(tmp_path / "no_such_file.pth")}
+            ),
+        )
+        with pytest.raises(ValidationError, match="does not exist"):
+            load_config(path)
+
+    def test_weights_path_directory_raises(self, tmp_path: Path) -> None:
+        """weights_path pointing to a directory must raise ValidationError."""
+        subdir = tmp_path / "a_dir"
+        subdir.mkdir()
+        path = write_yaml(
+            tmp_path,
+            make_raw_config(tmp_path, {"model.weights_path": str(subdir)}),
+        )
+        with pytest.raises(ValidationError, match="must be a file"):
+            load_config(path)
 
 
 class TestTransformConfig:

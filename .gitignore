@@ -24,4 +24,5 @@ htmlcov/
 .ruff_cache/
 
 # IDE
-.vscode/settings.json
+.vscode/settings.json
+datasets/
