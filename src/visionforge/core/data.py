@@ -94,5 +94,10 @@ class DataModule:
             pin_memory=self._pin_memory,
         )
 
+    @property
+    def class_names(self) -> list[str]:
+        """Ordered class names from the training dataset."""
+        return list(self._train.classes)  # type: ignore[arg-type]
+
 
 __all__ = ["DataModule"]

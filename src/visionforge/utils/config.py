@@ -95,6 +95,13 @@ class OutputConfig(BaseModel):
     reports_dir: Path = Path("outputs/reports")
 
 
+class ClassificationConfig(BaseModel):
+    """Classification block operating mode and optional checkpoint."""
+
+    mode: Literal["train", "evaluate", "infer"] = "train"
+    checkpoint_path: Path | None = None
+
+
 class ExperimentConfig(BaseModel):
     """Top-level experiment configuration."""
 
@@ -104,6 +111,7 @@ class ExperimentConfig(BaseModel):
     training: TrainingConfig
     data: DataConfig
     output: OutputConfig = OutputConfig()
+    classification: ClassificationConfig = ClassificationConfig()
 
     @model_validator(mode="after")
     def validate_task_and_num_classes(self) -> "ExperimentConfig":
@@ -159,5 +167,6 @@ __all__ = [
     "DataConfig",
     "TransformConfig",
     "OutputConfig",
+    "ClassificationConfig",
     "load_config",
 ]

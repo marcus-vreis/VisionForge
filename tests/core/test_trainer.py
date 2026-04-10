@@ -172,3 +172,99 @@ class TestTrainerFit:
         trainer = Trainer(minimal_config)
         result = trainer.fit(DummyBinaryModel(), FakeDataModule())
         assert len(result.history) == result.total_epochs
+
+
+class DummyMulticlassModel(nn.Module):
+    """Minimal model that accepts (B, 3, 32, 32) and returns (B, 3)."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.fc = nn.Linear(3 * 32 * 32, 3)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.fc(x.flatten(1))
+
+
+class FakeMulticlassDataModule:
+    """Provides tiny fake batches with 3 classes."""
+
+    def _batches(self) -> list[tuple[torch.Tensor, torch.Tensor]]:
+        return [
+            (torch.randn(6, 3, 32, 32), torch.randint(0, 3, (6,))) for _ in range(2)
+        ]
+
+    def train_loader(self) -> list[tuple[torch.Tensor, torch.Tensor]]:
+        return self._batches()
+
+    def val_loader(self) -> list[tuple[torch.Tensor, torch.Tensor]]:
+        return self._batches()
+
+
+class TestTrainerMulticlass:
+    @pytest.fixture
+    def multiclass_config(self, tmp_path: Path) -> ExperimentConfig:
+        return ExperimentConfig.model_validate(
+            {
+                "name": "mc_run",
+                "task": "multiclass",
+                "model": {"name": "resnet18", "num_classes": 3, "pretrained": False},
+                "training": {
+                    "learning_rate": 0.1,
+                    "epochs": 2,
+                    "batch_size": 4,
+                    "early_stopping_patience": 5,
+                    "seed": 0,
+                },
+                "data": {"base_dir": str(tmp_path)},
+                "output": {
+                    "models_dir": str(tmp_path / "models"),
+                    "graphics_dir": str(tmp_path / "graphics"),
+                    "logs_dir": str(tmp_path / "logs"),
+                    "reports_dir": str(tmp_path / "reports"),
+                },
+            }
+        )
+
+    def test_multiclass_fit_completes(
+        self, multiclass_config: ExperimentConfig
+    ) -> None:
+        """fit() with multiclass config must return a TrainResult."""
+        trainer = Trainer(multiclass_config)
+        result = trainer.fit(DummyMulticlassModel(), FakeMulticlassDataModule())
+        assert isinstance(result, TrainResult)
+        assert result.model_path.exists()
+
+
+class TestTrainerOptimizers:
+    @pytest.fixture
+    def base_config(self, tmp_path: Path) -> dict[str, Any]:
+        return {
+            "name": "opt_run",
+            "task": "binary",
+            "model": {"name": "resnet18", "num_classes": 1, "pretrained": False},
+            "training": {
+                "learning_rate": 0.1,
+                "epochs": 1,
+                "batch_size": 4,
+                "early_stopping_patience": 5,
+                "seed": 0,
+            },
+            "data": {"base_dir": str(tmp_path)},
+            "output": {
+                "models_dir": str(tmp_path / "models"),
+                "graphics_dir": str(tmp_path / "graphics"),
+                "logs_dir": str(tmp_path / "logs"),
+                "reports_dir": str(tmp_path / "reports"),
+            },
+        }
+
+    @pytest.mark.parametrize("optimizer", ["adam", "sgd", "adamw"])
+    def test_all_optimizers_complete(
+        self, base_config: dict[str, Any], optimizer: str
+    ) -> None:
+        """fit() must complete with each supported optimizer."""
+        base_config["training"]["optimizer"] = optimizer
+        config = ExperimentConfig.model_validate(base_config)
+        trainer = Trainer(config)
+        result = trainer.fit(DummyBinaryModel(), FakeDataModule())
+        assert isinstance(result, TrainResult)
