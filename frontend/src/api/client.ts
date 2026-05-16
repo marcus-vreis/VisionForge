@@ -1,5 +1,5 @@
 import type { JsonSchema } from "../types/schema";
-import type { RunResponse, RunResult, RunStatus, RunSummary } from "../types/run";
+import type { RunResponse, RunResult, RunStatus } from "../types/run";
 
 const BASE = "/api";
 
@@ -45,8 +45,4 @@ export async function fetchResult(runId: string): Promise<RunResult> {
 
 export function artifactUrl(path: string): string {
   return `${BASE}/artifacts/${path}`;
-}
-
-export async function fetchRuns(): Promise<RunSummary[]> {
-  return request<RunSummary[]>("/runs");
 }

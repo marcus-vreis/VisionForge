@@ -19,15 +19,3 @@ export interface RunResult {
     report?: string | null;
   };
 }
-
-export interface RunSummary {
-  run_id: string;
-  experiment_name: string;
-  model_arch: string;
-  task: string;
-  status: string;
-  started_at: string;
-  finished_at: string | null;
-  epochs_completed: number;
-  final_metrics: Record<string, number>;
-}
