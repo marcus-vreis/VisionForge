@@ -146,9 +146,10 @@ class TestTrialGeneration:
         block = GridSearchBlock()
         block.setup(grid_2x2_config)
         with (
-            patch("visionforge.blocks.grid_search.ClassificationBlock.run", mock_run),
+            patch("visionforge.blocks._search_utils.ClassificationBlock.run", mock_run),
             patch(
-                "visionforge.blocks.grid_search.ClassificationBlock.report", mock_report
+                "visionforge.blocks._search_utils.ClassificationBlock.report",
+                mock_report,
             ),
         ):
             block.run()
@@ -174,9 +175,10 @@ class TestTrialGeneration:
         block = GridSearchBlock()
         block.setup(base_config)
         with (
-            patch("visionforge.blocks.grid_search.ClassificationBlock.run", mock_run),
+            patch("visionforge.blocks._search_utils.ClassificationBlock.run", mock_run),
             patch(
-                "visionforge.blocks.grid_search.ClassificationBlock.report", mock_report
+                "visionforge.blocks._search_utils.ClassificationBlock.report",
+                mock_report,
             ),
         ):
             block.run()
@@ -205,9 +207,10 @@ class TestSeedPropagation:
         block = GridSearchBlock()
         block.setup(grid_2x2_config)
         with (
-            patch("visionforge.blocks.grid_search.ClassificationBlock.run", mock_run),
+            patch("visionforge.blocks._search_utils.ClassificationBlock.run", mock_run),
             patch(
-                "visionforge.blocks.grid_search.ClassificationBlock.report", mock_report
+                "visionforge.blocks._search_utils.ClassificationBlock.report",
+                mock_report,
             ),
         ):
             block.run()
@@ -237,9 +240,10 @@ class TestArtifacts:
         block = GridSearchBlock()
         block.setup(config)
         with (
-            patch("visionforge.blocks.grid_search.ClassificationBlock.run", mock_run),
+            patch("visionforge.blocks._search_utils.ClassificationBlock.run", mock_run),
             patch(
-                "visionforge.blocks.grid_search.ClassificationBlock.report", mock_report
+                "visionforge.blocks._search_utils.ClassificationBlock.report",
+                mock_report,
             ),
         ):
             block.run()
@@ -319,9 +323,10 @@ class TestFailureHandling:
         block = GridSearchBlock()
         block.setup(grid_2x2_config)
         with (
-            patch("visionforge.blocks.grid_search.ClassificationBlock.run", mock_run),
+            patch("visionforge.blocks._search_utils.ClassificationBlock.run", mock_run),
             patch(
-                "visionforge.blocks.grid_search.ClassificationBlock.report", mock_report
+                "visionforge.blocks._search_utils.ClassificationBlock.report",
+                mock_report,
             ),
         ):
             block.run()
@@ -342,7 +347,9 @@ class TestFailureHandling:
 
         block = GridSearchBlock()
         block.setup(base_config)
-        with patch("visionforge.blocks.grid_search.ClassificationBlock.run", mock_run):
+        with patch(
+            "visionforge.blocks._search_utils.ClassificationBlock.run", mock_run
+        ):
             block.run()
 
         with pytest.raises(RuntimeError, match="all trials failed"):

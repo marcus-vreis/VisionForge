@@ -221,7 +221,7 @@ class TestRandomSearchBlockRun:
         mock_block = _make_mock_block()
 
         with patch(
-            "visionforge.blocks.random_search.ClassificationBlock",
+            "visionforge.blocks._search_utils.ClassificationBlock",
             return_value=mock_block,
         ):
             block = RandomSearchBlock()
@@ -243,7 +243,7 @@ class TestRandomSearchBlockRun:
         mock_block.setup.side_effect = capture_setup
 
         with patch(
-            "visionforge.blocks.random_search.ClassificationBlock",
+            "visionforge.blocks._search_utils.ClassificationBlock",
             return_value=mock_block,
         ):
             block = RandomSearchBlock()
@@ -261,7 +261,7 @@ class TestRandomSearchBlockRun:
         mock_block = _make_mock_block()
 
         with patch(
-            "visionforge.blocks.random_search.ClassificationBlock",
+            "visionforge.blocks._search_utils.ClassificationBlock",
             return_value=mock_block,
         ):
             block = RandomSearchBlock()
@@ -270,7 +270,7 @@ class TestRandomSearchBlockRun:
 
         assert mock_block.run.call_count == base_config.random_search.n_trials  # type: ignore[union-attr]
 
-    @patch("visionforge.blocks.random_search.torch.cuda.empty_cache")
+    @patch("visionforge.blocks._search_utils.torch.cuda.empty_cache")
     def test_vram_empty_cache_called_per_trial(
         self, mock_cache: MagicMock, base_config: ExperimentConfig
     ) -> None:
@@ -278,7 +278,7 @@ class TestRandomSearchBlockRun:
         mock_block = _make_mock_block()
 
         with patch(
-            "visionforge.blocks.random_search.ClassificationBlock",
+            "visionforge.blocks._search_utils.ClassificationBlock",
             return_value=mock_block,
         ):
             block = RandomSearchBlock()
@@ -298,7 +298,7 @@ class TestRandomSearchArtifacts:
         mock_block = _make_mock_block()
 
         with patch(
-            "visionforge.blocks.random_search.ClassificationBlock",
+            "visionforge.blocks._search_utils.ClassificationBlock",
             return_value=mock_block,
         ):
             block = RandomSearchBlock()
@@ -319,7 +319,7 @@ class TestRandomSearchArtifacts:
         mock_block = _make_mock_block()
 
         with patch(
-            "visionforge.blocks.random_search.ClassificationBlock",
+            "visionforge.blocks._search_utils.ClassificationBlock",
             return_value=mock_block,
         ):
             block = RandomSearchBlock()
@@ -344,7 +344,7 @@ class TestRandomSearchArtifacts:
         mock_block = _make_mock_block()
 
         with patch(
-            "visionforge.blocks.random_search.ClassificationBlock",
+            "visionforge.blocks._search_utils.ClassificationBlock",
             return_value=mock_block,
         ):
             block = RandomSearchBlock()
@@ -367,7 +367,7 @@ class TestRandomSearchArtifacts:
         mock_block = _make_mock_block()
 
         with patch(
-            "visionforge.blocks.random_search.ClassificationBlock",
+            "visionforge.blocks._search_utils.ClassificationBlock",
             return_value=mock_block,
         ):
             block = RandomSearchBlock()
@@ -387,7 +387,7 @@ class TestRandomSearchArtifacts:
         mock_block.run.side_effect = RuntimeError("simulated failure")
 
         with patch(
-            "visionforge.blocks.random_search.ClassificationBlock",
+            "visionforge.blocks._search_utils.ClassificationBlock",
             return_value=mock_block,
         ):
             block = RandomSearchBlock()
@@ -422,7 +422,7 @@ class TestRandomSearchFailureHandling:
         good_mock.run.side_effect = run_side_effect
 
         with patch(
-            "visionforge.blocks.random_search.ClassificationBlock",
+            "visionforge.blocks._search_utils.ClassificationBlock",
             return_value=good_mock,
         ):
             block = RandomSearchBlock()
@@ -450,7 +450,7 @@ class TestRandomSearchFailureHandling:
         mock_block.run.side_effect = RuntimeError(nasty_message)
 
         with patch(
-            "visionforge.blocks.random_search.ClassificationBlock",
+            "visionforge.blocks._search_utils.ClassificationBlock",
             return_value=mock_block,
         ):
             block = RandomSearchBlock()
@@ -470,7 +470,7 @@ class TestRandomSearchFailureHandling:
         mock_block.run.side_effect = RuntimeError("always fails")
 
         with patch(
-            "visionforge.blocks.random_search.ClassificationBlock",
+            "visionforge.blocks._search_utils.ClassificationBlock",
             return_value=mock_block,
         ):
             block = RandomSearchBlock()
@@ -490,7 +490,7 @@ class TestRandomSearchReport:
         mock_block = _make_mock_block(val_loss=0.4, accuracy=0.9)
 
         with patch(
-            "visionforge.blocks.random_search.ClassificationBlock",
+            "visionforge.blocks._search_utils.ClassificationBlock",
             return_value=mock_block,
         ):
             block = RandomSearchBlock()
@@ -521,7 +521,7 @@ class TestRandomSearchReport:
             return m
 
         with patch(
-            "visionforge.blocks.random_search.ClassificationBlock",
+            "visionforge.blocks._search_utils.ClassificationBlock",
             side_effect=lambda: make_mock(),
         ):
             block = RandomSearchBlock()
@@ -590,7 +590,7 @@ class TestRandomSearchConfig:
         mock_block = _make_mock_block()
 
         with patch(
-            "visionforge.blocks.random_search.ClassificationBlock",
+            "visionforge.blocks._search_utils.ClassificationBlock",
             return_value=mock_block,
         ):
             block = RandomSearchBlock()
