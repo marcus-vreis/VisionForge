@@ -115,7 +115,8 @@ async def serve_artifact(file_path: str) -> FileResponse:
     resolved = Path(file_path).resolve()
     outputs_dir = Path("outputs").resolve()
 
-    if not str(resolved).startswith(str(outputs_dir)):
+    # is_relative_to is immune to the str.startswith bypass on case-insensitive FSes.
+    if not resolved.is_relative_to(outputs_dir):
         raise HTTPException(403, "Access denied.")
 
     if not resolved.is_file():
