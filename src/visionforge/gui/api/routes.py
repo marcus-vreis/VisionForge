@@ -24,6 +24,9 @@ _current_run: dict[str, Any] | None = None
 # Default location where Trainer writes run directories.
 _MODELS_DIR = Path("outputs/models")
 
+# Strong references to background tasks to prevent premature GC (asyncio doc).
+_background_tasks: set[asyncio.Task[None]] = set()
+
 
 @router.get("/schema")
 async def get_schema() -> dict[str, Any]:
@@ -56,7 +59,9 @@ async def run_experiment(config: ExperimentConfig) -> RunResponse:
         "run_dir": None,
     }
 
-    asyncio.create_task(_execute_experiment(config, run_id))
+    task = asyncio.create_task(_execute_experiment(config, run_id))
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
 
     return RunResponse(run_id=run_id)
 
@@ -112,7 +117,9 @@ async def get_result(run_id: str) -> RunResult:
 @router.get("/artifacts/{file_path:path}")
 async def serve_artifact(file_path: str) -> FileResponse:
     """Serve output files (plots, models) with path traversal protection."""
-    resolved = Path(file_path).resolve()
+    resolved = Path(
+        file_path
+    ).resolve()  # NOSONAR pythonsecurity:S6549 - re-checked with is_relative_to below before FileResponse
     outputs_dir = Path("outputs").resolve()
 
     # is_relative_to is immune to the str.startswith bypass on case-insensitive FSes.
