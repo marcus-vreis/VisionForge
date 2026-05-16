@@ -26,3 +26,9 @@ htmlcov/
 # IDE
 .vscode/settings.json
 datasets/
+USK-Coffee_Binary/
+
+# Claude Code agent team (Spec A/B/C)
+.claude/worktrees/
+STOP_TEAM
+outputs/LOOP_STATUS.md

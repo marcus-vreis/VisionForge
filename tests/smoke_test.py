@@ -108,11 +108,13 @@ class TestMainWithConfig:
         mock_block = MagicMock()
         mock_block.report.return_value = {"status": "ok"}
 
-        monkeypatch.setattr(sys, "argv", ["visionforge", str(config_file)])
+        monkeypatch.setattr(sys, "argv", ["visionforge", "run", str(config_file)])
 
+        # Patch BlockRegistry.discover so the dispatcher returns our mock instance.
+        mock_cls = MagicMock(return_value=mock_block)
         with patch(
-            "visionforge.blocks.classification.ClassificationBlock",
-            return_value=mock_block,
+            "visionforge.blocks.registry.BlockRegistry.discover",
+            return_value={"ClassificationBlock": mock_cls},
         ):
             from visionforge.__main__ import main
 
