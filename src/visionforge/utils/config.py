@@ -5,6 +5,21 @@ import yaml
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 
+class GridSearchConfig(BaseModel):
+    """Search space for exhaustive hyperparameter grid search."""
+
+    hyperparameters: dict[str, list[Any]] = Field(default_factory=dict)
+
+
+class RandomSearchConfig(BaseModel):
+    """Search space and budget for random hyperparameter search."""
+
+    n_trials: int = Field(ge=1)
+    seed: int = Field(default=42, ge=0)
+    # Each value is a raw param dict: {type: uniform|log_uniform|choice, ...}
+    search_space: dict[str, Any] = Field(default_factory=dict)
+
+
 class ModelConfig(BaseModel):
     """CNN architecture and output layer settings."""
 
@@ -89,10 +104,20 @@ class DataConfig(BaseModel):
 class OutputConfig(BaseModel):
     """Output directory paths for models, logs, graphics, and reports."""
 
-    models_dir: Path = Path("outputs/models")
-    graphics_dir: Path = Path("outputs/graphics")
-    logs_dir: Path = Path("outputs/logs")
-    reports_dir: Path = Path("outputs/reports")
+    models_dir: Path = Field(
+        default=Path("outputs/models"), json_schema_extra={"default": "outputs/models"}
+    )
+    graphics_dir: Path = Field(
+        default=Path("outputs/graphics"),
+        json_schema_extra={"default": "outputs/graphics"},
+    )
+    logs_dir: Path = Field(
+        default=Path("outputs/logs"), json_schema_extra={"default": "outputs/logs"}
+    )
+    reports_dir: Path = Field(
+        default=Path("outputs/reports"),
+        json_schema_extra={"default": "outputs/reports"},
+    )
 
 
 class ClassificationConfig(BaseModel):
@@ -107,11 +132,14 @@ class ExperimentConfig(BaseModel):
 
     name: str = Field(min_length=1)
     task: Literal["binary", "multiclass"] = "binary"
+    block: Literal["classification", "grid_search", "random_search"] = "classification"
     model: ModelConfig
     training: TrainingConfig
     data: DataConfig
     output: OutputConfig = OutputConfig()
     classification: ClassificationConfig = ClassificationConfig()
+    grid_search: GridSearchConfig | None = None
+    random_search: RandomSearchConfig | None = None
 
     @model_validator(mode="after")
     def validate_task_and_num_classes(self) -> "ExperimentConfig":
@@ -168,5 +196,7 @@ __all__ = [
     "TransformConfig",
     "OutputConfig",
     "ClassificationConfig",
+    "GridSearchConfig",
+    "RandomSearchConfig",
     "load_config",
 ]
