@@ -20,6 +20,15 @@ class RandomSearchConfig(BaseModel):
     search_space: dict[str, Any] = Field(default_factory=dict)
 
 
+class CrossValidationConfig(BaseModel):
+    """Settings for K-Fold and Stratified K-Fold cross-validation."""
+
+    n_folds: int = Field(default=5, ge=2)
+    stratified: bool = True
+    shuffle: bool = True
+    fold_seed: int = 42
+
+
 class ModelConfig(BaseModel):
     """CNN architecture and output layer settings."""
 
@@ -132,7 +141,9 @@ class ExperimentConfig(BaseModel):
 
     name: str = Field(min_length=1)
     task: Literal["binary", "multiclass"] = "binary"
-    block: Literal["classification", "grid_search", "random_search"] = "classification"
+    block: Literal[
+        "classification", "grid_search", "random_search", "cross_validation"
+    ] = "classification"
     model: ModelConfig
     training: TrainingConfig
     data: DataConfig
@@ -140,6 +151,7 @@ class ExperimentConfig(BaseModel):
     classification: ClassificationConfig = ClassificationConfig()
     grid_search: GridSearchConfig | None = None
     random_search: RandomSearchConfig | None = None
+    cross_validation: CrossValidationConfig | None = None
 
     @model_validator(mode="after")
     def validate_task_and_num_classes(self) -> "ExperimentConfig":
@@ -198,5 +210,6 @@ __all__ = [
     "ClassificationConfig",
     "GridSearchConfig",
     "RandomSearchConfig",
+    "CrossValidationConfig",
     "load_config",
 ]
