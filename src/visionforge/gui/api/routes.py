@@ -122,7 +122,8 @@ async def serve_artifact(file_path: str) -> FileResponse:
     if not resolved.is_file():
         raise HTTPException(404, "File not found.")
 
-    return FileResponse(resolved)
+    # Path is validated above to be inside outputs/ and to be a regular file.
+    return FileResponse(resolved)  # NOSONAR python:S2083
 
 
 def _load_runs(models_dir: Path) -> list[RunSummary]:
