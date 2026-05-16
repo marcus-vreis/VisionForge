@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { ConfigForm } from "./components/ConfigForm";
 import { ExperimentRunner } from "./components/ExperimentRunner";
 import { ResultsView } from "./components/ResultsView";
+import { RunHistoryOverlay } from "./components/RunHistoryOverlay";
 import { useExperiment } from "./hooks/useExperiment";
 import { Button } from "./components/ui/button";
 import { Separator } from "./components/ui/separator";
@@ -8,6 +10,7 @@ import { Separator } from "./components/ui/separator";
 export default function App() {
   const { status, result, error, validationErrors, submit, reset } =
     useExperiment();
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   const isRunning = status.status === "running";
   const hasResult = result !== null;
@@ -24,13 +27,27 @@ export default function App() {
               Computer Vision Experimentation Platform
             </p>
           </div>
-          {(hasResult || error) && (
-            <Button variant="outline" size="sm" onClick={reset}>
-              New Experiment
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => setHistoryOpen(true)}>
+              History
             </Button>
-          )}
+            {(hasResult || error) && (
+              <Button variant="outline" size="sm" onClick={reset}>
+                New Experiment
+              </Button>
+            )}
+          </div>
         </div>
       </header>
+
+      <RunHistoryOverlay
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        onResume={(_config: Record<string, unknown>) => {
+          setHistoryOpen(false);
+          reset();
+        }}
+      />
 
       <main className="mx-auto max-w-5xl px-4 py-6">
         {hasResult ? (
