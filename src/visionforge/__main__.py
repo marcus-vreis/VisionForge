@@ -19,12 +19,27 @@ def main() -> None:
     run_parser = subparsers.add_parser("run", help="Run an experiment from YAML.")
     run_parser.add_argument("config", type=Path, help="path to .yaml config")
 
+    gui_parser = subparsers.add_parser("gui", help="Start the VisionForge web GUI.")
+    gui_parser.add_argument(
+        "--host", default="127.0.0.1", help="bind host (default 127.0.0.1)"
+    )
+    gui_parser.add_argument(
+        "--port", type=int, default=8000, help="bind port (default 8000)"
+    )
+
     args = parser.parse_args()
 
     setup_logger()
 
+    if args.command == "gui":
+        from visionforge.gui.server import start_server
+
+        start_server(host=args.host, port=args.port)
+        return
+
     if args.command == "run":
         import visionforge.blocks.classification  # noqa: F401
+        import visionforge.blocks.cross_validation  # noqa: F401
         import visionforge.blocks.grid_search  # noqa: F401
         import visionforge.blocks.random_search  # noqa: F401
         from visionforge.blocks.registry import BlockRegistry
@@ -34,6 +49,7 @@ def main() -> None:
         # Map config.block snake_case literals to registry class names.
         _BLOCK_ALIASES: dict[str, str] = {
             "classification": "ClassificationBlock",
+            "cross_validation": "CrossValidationBlock",
             "grid_search": "GridSearchBlock",
             "random_search": "RandomSearchBlock",
         }
