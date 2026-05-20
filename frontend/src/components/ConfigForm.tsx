@@ -1,14 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { fetchSchema } from "../api/client";
 import type { ValidationError } from "../hooks/useExperiment";
 import type { JsonSchema } from "../types/schema";
-import {
-  parseYamlToConfig,
-  serializeConfigToYaml,
-  validateParsedConfig,
-  YamlParseError,
-} from "../lib/yaml-config";
-import { Alert, AlertDescription } from "./ui/alert";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Input } from "./ui/input";
@@ -298,8 +291,6 @@ export function ConfigForm({
   const [schema, setSchema] = useState<JsonSchema | null>(null);
   const [formData, setFormData] = useState<Record<string, unknown>>({});
   const [loading, setLoading] = useState(true);
-  const [importError, setImportError] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetchSchema()
@@ -331,54 +322,6 @@ export function ConfigForm({
   }
 
   const defs = schema.$defs ?? {};
-
-  function handleExport() {
-    const yaml = serializeConfigToYaml(formData);
-    const blob = new Blob([yaml], { type: "text/yaml" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `experiment-${new Date().toISOString().replace(/[:.]/g, "-")}.yaml`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
-  function handleImportClick() {
-    fileInputRef.current?.click();
-  }
-
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    // Reset input so the same file can be re-selected after a fix
-    e.target.value = "";
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const text = ev.target?.result;
-      if (typeof text !== "string") return;
-      try {
-        const parsed = parseYamlToConfig(text);
-        const errors = validateParsedConfig(parsed, schema!, defs);
-        if (errors.length > 0) {
-          const summary = errors
-            .slice(0, 3)
-            .map((err) => `${err.field.join(".")}: ${err.message}`)
-            .join(" · ");
-          setImportError(`Validation failed — ${summary}${errors.length > 3 ? ` (+${errors.length - 3} more)` : ""}`);
-          return;
-        }
-        setFormData(parsed);
-        setImportError(null);
-      } catch (err) {
-        if (err instanceof YamlParseError) {
-          setImportError(err.message);
-        } else {
-          setImportError("Failed to read file.");
-        }
-      }
-    };
-    reader.readAsText(file);
-  }
 
   // Top-level fields ordering
   const topLevelOrder = [
@@ -415,51 +358,6 @@ export function ConfigForm({
           errors={validationErrors}
         />
       ))}
-
-      {importError && (
-        <Alert variant="destructive" className="mt-2">
-          <AlertDescription className="flex items-start justify-between gap-2">
-            <span>{importError}</span>
-            <button
-              type="button"
-              onClick={() => setImportError(null)}
-              className="shrink-0 text-destructive/70 hover:text-destructive leading-none"
-              aria-label="Dismiss"
-            >
-              ×
-            </button>
-          </AlertDescription>
-        </Alert>
-      )}
-
-      <div className="flex gap-2 mt-2">
-        <Button
-          type="button"
-          variant="outline"
-          className="flex-1"
-          onClick={handleImportClick}
-          disabled={disabled}
-        >
-          Load .yaml
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          className="flex-1"
-          onClick={handleExport}
-          disabled={disabled}
-        >
-          Download .yaml
-        </Button>
-      </div>
-
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".yaml,.yml"
-        className="hidden"
-        onChange={handleFileChange}
-      />
 
       <Button type="submit" disabled={disabled} className="w-full mt-2">
         {disabled ? "Running..." : "Run Experiment"}
