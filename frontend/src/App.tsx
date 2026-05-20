@@ -1,57 +1,178 @@
-import { ConfigForm } from "./components/ConfigForm";
-import { ExperimentRunner } from "./components/ExperimentRunner";
+import { useEffect, useState } from "react";
+import { fetchSchema } from "./api/client";
+import { BottomBar } from "./components/BottomBar";
+import { Header } from "./components/Header";
+import { HistoryOverlay } from "./components/HistoryOverlay";
+import { ParamPanel } from "./components/ParamPanel";
+import { buildDefaults } from "./lib/schema-defaults";
 import { ResultsView } from "./components/ResultsView";
+import { TabBar } from "./components/TabBar";
+import { TaskHero } from "./components/TaskHero";
+import { TrainingOverlay } from "./components/TrainingOverlay";
+import { Waves, Particles } from "./components/Waves";
 import { useExperiment } from "./hooks/useExperiment";
-import { Button } from "./components/ui/button";
-import { Separator } from "./components/ui/separator";
+import type { JsonSchema } from "./types/schema";
+import { TASKS } from "./types/tasks";
 
 export default function App() {
   const { status, result, error, validationErrors, submit, reset } =
     useExperiment();
 
-  const isRunning = status.status === "running";
-  const hasResult = result !== null;
+  const [activeKey, setActiveKey] = useState("classification");
+  const [device, setDevice] = useState<"cuda" | "cpu">("cuda");
+  const [gpuName] = useState("NVIDIA GPU");
+  const [showHistory, setShowHistory] = useState(false);
+  // overlayVisible: user explicitly opened or the experiment just started
+  const [overlayVisible, setOverlayVisible] = useState(false);
+  // resultsVisible: user dismissed overlay and wants to see results
+  const [resultsVisible, setResultsVisible] = useState(false);
+  const [schema, setSchema] = useState<JsonSchema | null>(null);
+  const [formData, setFormData] = useState<Record<string, unknown>>({});
+
+  // Determine whether to show overlay based on current status
+  const showOverlay =
+    overlayVisible &&
+    (status.status === "running" ||
+      status.status === "completed" ||
+      status.status === "failed");
+
+  // Load schema once on mount
+  useEffect(() => {
+    fetchSchema()
+      .then((s) => {
+        setSchema(s);
+        const defaults = buildDefaults(s, s.$defs ?? {}) as Record<
+          string,
+          unknown
+        >;
+        setFormData(defaults);
+      })
+      .catch(() => {
+        /* server not running during build — ignore */
+      });
+  }, []);
+
+  const handleTrain = async () => {
+    if (activeKey !== "classification") return;
+    reset();
+    setResultsVisible(false);
+    setOverlayVisible(true);
+    await submit(formData);
+  };
+
+  const activeTask = TASKS.find((t) => t.key === activeKey) ?? TASKS[0];
+
+  // Show results panel when there is a result and user dismissed overlay
+  const showResults = resultsVisible && result !== null;
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b border-border/50 bg-card">
-        <div className="mx-auto max-w-5xl px-4 py-4 flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight">
-              VisionForge
-            </h1>
-            <p className="text-xs text-muted-foreground">
-              Computer Vision Experimentation Platform
-            </p>
-          </div>
-          {(hasResult || error) && (
-            <Button variant="outline" size="sm" onClick={reset}>
-              New Experiment
-            </Button>
-          )}
-        </div>
-      </header>
+    <div
+      className="stage"
+      data-task={activeKey}
+      style={{
+        minHeight: "100vh",
+        position: "relative",
+        overflow: "hidden",
+        background:
+          `radial-gradient(1100px 600px at 80% -10%, oklch(0.20 0.04 260 / 0.30), transparent 60%),` +
+          `radial-gradient(900px 500px at -10% 110%, var(--accent-soft), transparent 60%),` +
+          `var(--vf-bg)`,
+        transition: "background 600ms ease",
+        fontFamily: "var(--font-sans)",
+        color: "var(--vf-text)",
+      }}
+    >
+      {/* Decorative background layers */}
+      <Waves />
+      <Particles />
 
-      <main className="mx-auto max-w-5xl px-4 py-6">
-        {hasResult ? (
-          <ResultsView result={result} />
+      {/* Header */}
+      <Header device={device} setDevice={setDevice} gpuName={gpuName} />
+
+      {/* Task tabs */}
+      <TabBar tasks={TASKS} activeKey={activeKey} setActiveKey={setActiveKey} />
+
+      {/* Main content */}
+      <main
+        style={{
+          position: "relative",
+          zIndex: 2,
+          maxWidth: 1280,
+          margin: "0 auto",
+          padding: "34px 40px 140px",
+        }}
+      >
+        <TaskHero task={activeTask} />
+
+        {showResults ? (
+          <ResultsView
+            result={result}
+            taskAccent={activeTask.accent}
+            onClose={() => {
+              setResultsVisible(false);
+              reset();
+            }}
+          />
         ) : (
-          <div className="grid gap-4">
-            <ExperimentRunner status={status} error={error} />
+          <ParamPanel
+            task={activeTask}
+            schema={schema}
+            formData={formData}
+            setFormData={setFormData}
+            validationErrors={validationErrors}
+          />
+        )}
 
-            {!isRunning && (
-              <>
-                {error && <Separator />}
-                <ConfigForm
-                  onSubmit={submit}
-                  disabled={isRunning}
-                  validationErrors={validationErrors}
-                />
-              </>
-            )}
+        {/* Network / server error banner */}
+        {error && !showOverlay && (
+          <div
+            style={{
+              marginTop: 16,
+              padding: "12px 16px",
+              background: "oklch(0.704 0.191 22.216 / 0.10)",
+              border: "1px solid oklch(0.704 0.191 22.216 / 0.4)",
+              borderRadius: 12,
+              fontFamily: "var(--font-mono)",
+              fontSize: 13,
+              color: "oklch(0.85 0.14 22)",
+            }}
+          >
+            {error}
           </div>
         )}
       </main>
+
+      {/* Fixed bottom bar */}
+      <BottomBar
+        onHistory={() => setShowHistory(true)}
+        onTrain={() => void handleTrain()}
+        disabled={status.status === "running" || activeKey !== "classification"}
+        historyCount={0}
+        device={device}
+        setDevice={setDevice}
+        gpuName={gpuName}
+        isRunning={status.status === "running"}
+      />
+
+      {/* History modal */}
+      <HistoryOverlay
+        open={showHistory}
+        onClose={() => setShowHistory(false)}
+      />
+
+      {/* Training overlay */}
+      {showOverlay && (
+        <TrainingOverlay
+          status={status}
+          taskAccent={activeTask.accent}
+          taskLabel={activeTask.label}
+          onClose={() => setOverlayVisible(false)}
+          onViewResults={() => {
+            setOverlayVisible(false);
+            setResultsVisible(true);
+          }}
+        />
+      )}
     </div>
   );
 }

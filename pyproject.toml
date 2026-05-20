@@ -75,8 +75,8 @@ indent-style             = "space"
 skip-magic-trailing-comma = false
 
 [tool.codespell]
-skip     = ".venv,*.lock,outputs,htmlcov,*.egg-info,package-lock.json"
-ignore-words-list = "nd"  # abbreviations used in ML context
+skip = ".venv,*.lock,outputs,htmlcov,*.egg-info,package-lock.json,src/visionforge/gui/static,frontend/node_modules"
+ignore-words = ".codespell-ignore-words.txt"
 
 [tool.bumpversion]
 current_version = "0.0.1"

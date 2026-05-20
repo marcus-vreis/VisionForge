@@ -42,7 +42,7 @@ export function useExperiment(): ExperimentState {
   }, []);
 
   const startPolling = useCallback(
-    (_runId: string) => {
+    (_runId: string) => { // eslint-disable-line @typescript-eslint/no-unused-vars
       stopPolling();
       pollRef.current = setInterval(async () => {
         try {
