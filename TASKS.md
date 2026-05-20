@@ -62,22 +62,40 @@
 - [x] Experiment runner with status polling
 - [x] Results view — metrics grid + plot images
 - [x] Training runs via `asyncio.to_thread()` (non-blocking, GPU in same process)
+- [x] `GET /api/runs` — list completed run summaries (PR #18)
 - [ ] Live training monitor (SSE/WebSocket) — deferred to next iteration
-- [ ] Run history browser — deferred to next iteration
+- [ ] Run history browser — wire `HistoryOverlay` to `/api/runs` (backend exists, UI is stub)
 - [ ] Config export / import as `.yaml` from GUI — deferred to next iteration
+
+---
+
+## Phase 4.5 — GUI Redesign ✅ (PR #22)
+
+Visual baseline now matches `frontend-design/`: oklch dark palette, per-task accents, Space Grotesk + JetBrains Mono, glass panels, animated wave background. Classification flow wired end-to-end.
+
+- [x] Dark theme tokens + `[data-task]` accent palette in `index.css`
+- [x] Custom controls: `NumberField`, `SelectField`, `Segmented`, `Toggle`, `TextField`, `FieldLabel`
+- [x] Header / TabBar (4 tabs, only Classificação interactive) / TaskHero
+- [x] Schema-driven `ParamPanel` in glass card with redesigned primitives
+- [x] BottomBar (History · Treinar · DeviceIndicator)
+- [x] `TrainingOverlay` with progress + synthetic log stream
+- [x] `ResultsView` restyled (metric tiles + plot grid in glass aesthetic)
+- [x] `Waves` SVG animated background
+- [x] `HistoryOverlay` empty-state stub — needs `/api/runs` wire (tracked in Phase 4)
+- [ ] Detection / Regression / Segmentation tabs → currently "em breve" placeholder; wire when backends land
 
 ---
 
 ## Phase 5 — Advanced Experiment Blocks
 
-- [ ] `GridSearchBlock`
-- [ ] `RandomSearchBlock`
-- [ ] `CrossValidationBlock` (K-Fold + Stratified)
+- [x] `GridSearchBlock`
+- [x] `RandomSearchBlock`
+- [x] `CrossValidationBlock` (K-Fold + Stratified)
 - [ ] `TransferLearningBlock` (feature extraction + fine-tuning)
 - [ ] `ModelComparisonBlock`
 - [ ] `BatchPredictionBlock` (CSV output)
 - [ ] `ExportONNXBlock` (+ inference validation + latency benchmark)
-- [ ] Unit tests for all blocks
+- [x] Unit tests for implemented blocks (grid_search, random_search, cross_validation, classification)
 
 ## Phase 6 — Regression task
 
