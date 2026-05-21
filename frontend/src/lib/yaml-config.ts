@@ -2,6 +2,55 @@ import * as jsyaml from "js-yaml";
 import type { JsonSchema } from "../types/schema";
 import type { ValidationError } from "../hooks/useExperiment";
 
+/**
+ * Serialize formData to YAML and trigger a browser file download.
+ * Filename format: experiment_<name>_<YYYY-MM-DD>.yaml
+ */
+export function exportConfigToYaml(
+  formData: Record<string, unknown>,
+  experimentName: string,
+): void {
+  const yaml = serializeConfigToYaml(formData);
+  const date = new Date().toISOString().slice(0, 10);
+  const safeName = (experimentName || "config").replace(/[^\w-]/g, "_");
+  const filename = `experiment_${safeName}_${date}.yaml`;
+
+  const blob = new Blob([yaml], { type: "text/yaml;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * Read a File, parse it as YAML, and return either the parsed config object
+ * or a PT-BR friendly error message string.
+ */
+export async function importConfigFromYaml(
+  file: File,
+): Promise<{ data: Record<string, unknown> } | { error: string }> {
+  let text: string;
+  try {
+    text = await file.text();
+  } catch (e) {
+    const reason = e instanceof Error ? e.message : String(e);
+    return { error: `Não foi possível ler o arquivo YAML: ${reason}` };
+  }
+
+  try {
+    const data = parseYamlToConfig(text);
+    return { data };
+  } catch (e) {
+    if (e instanceof YamlParseError) {
+      return { error: `Arquivo YAML inválido: ${e.message}` };
+    }
+    const reason = e instanceof Error ? e.message : String(e);
+    return { error: `Não foi possível ler o arquivo YAML: ${reason}` };
+  }
+}
+
 export class YamlParseError extends Error {
   constructor(message: string) {
     super(message);
