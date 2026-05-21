@@ -1,6 +1,7 @@
-import type { ValidationError } from "../hooks/useExperiment";
+import { humanizeFieldPath, type ValidationError } from "../hooks/useExperiment";
 import type { JsonSchema } from "../types/schema";
 import type { TaskDefinition } from "../types/tasks";
+import { DatasetPicker } from "./DatasetPicker";
 import { resolveKind } from "./field-renderer";
 import {
   NumberField,
@@ -634,77 +635,18 @@ export function ParamPanel({
         // dataset
       </div>
 
-      {/* Dataset base_dir row */}
-      <div
-        style={{
-          marginBottom: 16,
-          padding: 16,
-          background: "rgba(255,255,255,0.02)",
-          border: "1px dashed var(--vf-panel-stroke)",
-          borderRadius: 12,
-          display: "flex",
-          alignItems: "center",
-          gap: 14,
-        }}
-      >
-        <span
-          style={{
-            width: 36,
-            height: 36,
-            borderRadius: 8,
-            background: "var(--accent-soft)",
-            border: "1px solid var(--accent-vf)",
-            color: "var(--accent-vf)",
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontFamily: "var(--font-mono)",
-            fontSize: 16,
-            flexShrink: 0,
-          }}
-        >
-          ◇
-        </span>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: 11,
-              color: "var(--vf-text-muted)",
-              letterSpacing: "0.16em",
-              textTransform: "uppercase",
-            }}
-          >
-            Diretório base
-          </div>
-          <div
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: 13,
-              marginTop: 2,
-              color: "var(--vf-text)",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {(dataData["base_dir"] as string) || "nenhum selecionado"}
-          </div>
-        </div>
-        {dataProps["base_dir"] && (
-          <div style={{ flexShrink: 0, width: 240 }}>
-            <SchemaFieldVF
-              name="base_dir"
-              schema={dataProps["base_dir"]}
-              defs={defs}
-              value={dataData["base_dir"]}
-              onChange={(v) => setField("data", "base_dir", v)}
-              errors={validationErrors}
-              path={["data", "base_dir"]}
-            />
-          </div>
-        )}
-      </div>
+      <DatasetPicker
+        baseDir={(dataData["base_dir"] as string) ?? ""}
+        trainDir={(dataData["train_dir"] as string) ?? ""}
+        valDir={(dataData["val_dir"] as string) ?? ""}
+        testDir={(dataData["test_dir"] as string) ?? ""}
+        onChange={(next) =>
+          setFormData((prev) => {
+            const sec = (prev["data"] ?? {}) as Record<string, unknown>;
+            return { ...prev, data: { ...sec, ...next } };
+          })
+        }
+      />
 
       <div
         style={{
@@ -714,19 +656,16 @@ export function ParamPanel({
           marginBottom: 16,
         }}
       >
-        {["train_dir", "val_dir", "test_dir", "num_workers"].map((key) =>
-          dataProps[key] ? (
-            <SchemaFieldVF
-              key={key}
-              name={key}
-              schema={dataProps[key]}
-              defs={defs}
-              value={dataData[key]}
-              onChange={(v) => setField("data", key, v)}
-              errors={validationErrors}
-              path={["data", key]}
-            />
-          ) : null,
+        {dataProps["num_workers"] && (
+          <SchemaFieldVF
+            name="num_workers"
+            schema={dataProps["num_workers"]}
+            defs={defs}
+            value={dataData["num_workers"]}
+            onChange={(v) => setField("data", "num_workers", v)}
+            errors={validationErrors}
+            path={["data", "num_workers"]}
+          />
         )}
         {dataProps["pin_memory"] && (
           <SchemaFieldVF
@@ -759,7 +698,7 @@ export function ParamPanel({
         <div
           style={{
             marginTop: 18,
-            padding: "10px 14px",
+            padding: "12px 16px",
             background: "oklch(0.704 0.191 22.216 / 0.10)",
             border: "1px solid oklch(0.704 0.191 22.216 / 0.4)",
             borderRadius: 10,
@@ -768,7 +707,22 @@ export function ParamPanel({
             color: "oklch(0.85 0.14 22)",
           }}
         >
-          {validationErrors.length} campo(s) com erro. Verifique os campos acima.
+          <div style={{ fontWeight: 600, marginBottom: 8 }}>
+            {validationErrors.length} campo(s) com erro:
+          </div>
+          <ul style={{ margin: 0, paddingLeft: 18, lineHeight: 1.65 }}>
+            {validationErrors.map((err, i) => (
+              <li key={i}>
+                <span style={{ color: "var(--vf-text)" }}>
+                  {humanizeFieldPath(err.field)}
+                </span>
+                <span style={{ color: "oklch(0.85 0.14 22)" }}>
+                  {" — "}
+                  {err.message}
+                </span>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
     </section>

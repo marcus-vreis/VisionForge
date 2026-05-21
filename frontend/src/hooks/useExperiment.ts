@@ -21,6 +21,53 @@ export interface ValidationError {
   message: string;
 }
 
+const SECTION_LABELS: Record<string, string> = {
+  model: "Modelo",
+  training: "Treinamento",
+  data: "Dataset",
+  output: "Saída",
+  classification: "Classificação",
+  transforms: "Transformações",
+};
+
+const FIELD_LABELS: Record<string, string> = {
+  name: "Nome",
+  task: "Tipo de tarefa",
+  num_classes: "Nº de classes",
+  pretrained: "Pesos pré-treinados",
+  weights_path: "Caminho dos pesos",
+  learning_rate: "Learning Rate",
+  epochs: "Épocas",
+  batch_size: "Batch size",
+  early_stopping_patience: "Early stop",
+  optimizer: "Otimizador",
+  weight_decay: "Weight decay",
+  seed: "Seed",
+  base_dir: "Diretório base",
+  train_dir: "Subpasta treino",
+  val_dir: "Subpasta validação",
+  test_dir: "Subpasta teste",
+  num_workers: "Workers",
+  pin_memory: "Pin memory",
+  image_size: "Tamanho da imagem",
+  horizontal_flip: "Flip horizontal",
+  rotation_degrees: "Rotação",
+  color_jitter: "Color jitter",
+  normalize_mean: "Normalização (média)",
+  normalize_std: "Normalização (std)",
+};
+
+/** Build a user-readable path like "Treinamento › Learning Rate". */
+export function humanizeFieldPath(loc: (string | number)[]): string {
+  return loc
+    .filter((p) => p !== "body")
+    .map((p) => {
+      const k = String(p);
+      return SECTION_LABELS[k] ?? FIELD_LABELS[k] ?? k;
+    })
+    .join(" › ");
+}
+
 export function useExperiment(): ExperimentState {
   const [status, setStatus] = useState<RunStatus>({
     status: "idle",
@@ -42,7 +89,8 @@ export function useExperiment(): ExperimentState {
   }, []);
 
   const startPolling = useCallback(
-    (_runId: string) => { // eslint-disable-line @typescript-eslint/no-unused-vars
+    (_runId: string) => {
+      // eslint-disable-line @typescript-eslint/no-unused-vars
       stopPolling();
       pollRef.current = setInterval(async () => {
         try {
@@ -51,15 +99,35 @@ export function useExperiment(): ExperimentState {
 
           if (s.status === "completed" && s.run_id) {
             stopPolling();
-            const r = await fetchResult(s.run_id);
-            setResult(r);
+            try {
+              const r = await fetchResult(s.run_id);
+              setResult(r);
+            } catch (e) {
+              const msg =
+                e instanceof ApiError
+                  ? e.message
+                  : "Falha ao buscar resultados do experimento.";
+              setError(msg);
+              setStatus({ status: "failed", run_id: s.run_id, error: msg });
+            }
           } else if (s.status === "failed") {
             stopPolling();
-            setError(s.error ?? "Experiment failed.");
+            setError(
+              s.error ?? "O experimento falhou sem mensagem detalhada.",
+            );
           }
-        } catch {
+        } catch (e) {
           stopPolling();
-          setError("Lost connection to server.");
+          const msg =
+            e instanceof ApiError
+              ? e.message
+              : "Conexão com o servidor perdida durante o polling.";
+          setError(msg);
+          setStatus((prev) => ({
+            status: "failed",
+            run_id: prev.run_id,
+            error: msg,
+          }));
         }
       }, 2000);
     },
@@ -79,27 +147,37 @@ export function useExperiment(): ExperimentState {
         setStatus({ status: "running", run_id: res.run_id, error: null });
         startPolling(res.run_id);
       } catch (e) {
-        if (e instanceof ApiError && e.status === 422) {
-          try {
-            const body = JSON.parse(e.message);
-            if (Array.isArray(body)) {
-              setValidationErrors(
-                body.map((err: { loc: string[]; msg: string }) => ({
-                  field: err.loc.filter((l) => l !== "body"),
-                  message: err.msg,
-                })),
-              );
-              return;
-            }
-          } catch {
-            // not JSON, fall through
+        if (e instanceof ApiError) {
+          if (e.status === 422 && e.validationErrors) {
+            setValidationErrors(
+              e.validationErrors.map((err) => ({
+                field: err.loc
+                  .filter((l) => l !== "body")
+                  .map((l) => String(l)),
+                message: err.msg,
+              })),
+            );
+            setError(
+              `${e.validationErrors.length} campo(s) com erro de validação. Confira os destaques no formulário.`,
+            );
+            return;
+          }
+          if (e.status === 409) {
+            setError("Já existe um experimento em execução. Aguarde terminar.");
+            return;
+          }
+          if (e.status === 0) {
+            setError(e.message);
+            return;
           }
           setError(e.message);
-        } else if (e instanceof ApiError && e.status === 409) {
-          setError("An experiment is already running.");
-        } else if (e instanceof Error) {
-          setError(e.message);
+          return;
         }
+        if (e instanceof Error) {
+          setError(`Erro inesperado: ${e.message}`);
+          return;
+        }
+        setError("Erro desconhecido ao iniciar o experimento.");
       }
     },
     [startPolling],

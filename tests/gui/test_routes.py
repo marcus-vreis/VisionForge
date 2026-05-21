@@ -10,7 +10,7 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
-from visionforge.gui.api.routes import _load_runs
+from visionforge.gui.api.routes import _detect_dataset_layout, _load_runs
 from visionforge.gui.api.schemas import RunSummary
 
 # ── fixtures ──────────────────────────────────────────────────────────────────
@@ -539,3 +539,98 @@ class TestServerSpaFallback:
             client = TestClient(app, raise_server_exceptions=True)
             resp = client.get("/some/spa/route")
         assert resp.status_code == 200
+
+
+class TestDatasetDetect:
+    """Cover the dataset split auto-detection helper."""
+
+    def _make_layout(self, root: Path, names: list[str]) -> None:
+        for n in names:
+            (root / n).mkdir(parents=True)
+
+    def test_canonical_train_val_test(self, tmp_path: Path) -> None:
+        self._make_layout(tmp_path, ["train", "val", "test"])
+        resp = _detect_dataset_layout(str(tmp_path))
+        assert resp.detected is True
+        assert resp.train_dir == "train"
+        assert resp.val_dir == "val"
+        assert resp.test_dir == "test"
+
+    def test_portuguese_names(self, tmp_path: Path) -> None:
+        self._make_layout(tmp_path, ["treino", "validacao", "teste"])
+        resp = _detect_dataset_layout(str(tmp_path))
+        assert resp.detected is True
+        assert resp.train_dir == "treino"
+        assert resp.val_dir == "validacao"
+        assert resp.test_dir == "teste"
+
+    def test_validation_long_form_with_accent(self, tmp_path: Path) -> None:
+        self._make_layout(tmp_path, ["training", "validation", "testing"])
+        resp = _detect_dataset_layout(str(tmp_path))
+        assert resp.detected is True
+        assert resp.train_dir == "training"
+        assert resp.val_dir == "validation"
+        assert resp.test_dir == "testing"
+
+    def test_mixed_case_and_separators(self, tmp_path: Path) -> None:
+        self._make_layout(tmp_path, ["Train_Set", "Val-Set", "test set"])
+        resp = _detect_dataset_layout(str(tmp_path))
+        # Names with extra tokens normalize but not to exact alias.
+        # We expect detection to be partial or none — confirm we don't crash
+        # and return candidates.
+        assert resp.candidates == sorted(["Train_Set", "Val-Set", "test set"])
+
+    def test_partial_detection_missing_test(self, tmp_path: Path) -> None:
+        self._make_layout(tmp_path, ["train", "val", "extra"])
+        resp = _detect_dataset_layout(str(tmp_path))
+        assert resp.detected is False
+        assert resp.train_dir == "train"
+        assert resp.val_dir == "val"
+        assert resp.test_dir is None
+        assert "teste" in resp.message.lower()
+
+    def test_nonexistent_base_dir(self) -> None:
+        resp = _detect_dataset_layout("/nonexistent/path/abc123")
+        assert resp.detected is False
+        assert "não foi encontrado" in resp.message
+
+    def test_empty_base_dir(self) -> None:
+        resp = _detect_dataset_layout("")
+        assert resp.detected is False
+        assert "Informe o caminho" in resp.message
+
+    def test_base_dir_is_file(self, tmp_path: Path) -> None:
+        file = tmp_path / "not_a_dir.txt"
+        file.write_text("x", encoding="utf-8")
+        resp = _detect_dataset_layout(str(file))
+        assert resp.detected is False
+        assert "não é uma pasta" in resp.message
+
+    def test_no_subdirs(self, tmp_path: Path) -> None:
+        resp = _detect_dataset_layout(str(tmp_path))
+        assert resp.detected is False
+        assert resp.candidates == []
+        assert "Nenhuma subpasta" in resp.message
+
+    def test_unrecognized_subdirs(self, tmp_path: Path) -> None:
+        self._make_layout(tmp_path, ["alpha", "beta", "gamma"])
+        resp = _detect_dataset_layout(str(tmp_path))
+        assert resp.detected is False
+        assert resp.train_dir is None
+        assert resp.candidates == ["alpha", "beta", "gamma"]
+        assert "Selecione manualmente" in resp.message
+
+    def test_endpoint_returns_response(self, tmp_path: Path) -> None:
+        from fastapi import FastAPI
+
+        from visionforge.gui.api.routes import router
+
+        app = FastAPI()
+        app.include_router(router)
+        self._make_layout(tmp_path, ["train", "val", "test"])
+        client = TestClient(app)
+        resp = client.post("/api/dataset/detect", json={"base_dir": str(tmp_path)})
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["detected"] is True
+        assert body["train_dir"] == "train"
