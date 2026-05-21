@@ -144,6 +144,27 @@ class TransferLearningConfig(BaseModel):
     backbone_lr_multiplier: float = Field(default=0.1, gt=0.0, le=1.0)
 
 
+# Architectures mirrored from ModelConfig.name — kept in sync manually.
+_ArchitectureLiteral = Literal[
+    "resnet18",
+    "resnet34",
+    "resnet50",
+    "resnet101",
+    "efficientnet_b1",
+    "efficientnet_b7",
+    "vgg16",
+    "vgg19",
+    "alexnet",
+]
+
+
+class ModelComparisonConfig(BaseModel):
+    """Settings for ranking N architectures on the same dataset."""
+
+    model_names: list[_ArchitectureLiteral] = Field(min_length=2)  # type: ignore[valid-type]
+    metric: Literal["accuracy", "f1", "auc_roc"] = "f1"
+
+
 class ExperimentConfig(BaseModel):
     """Top-level experiment configuration."""
 
@@ -155,6 +176,7 @@ class ExperimentConfig(BaseModel):
         "random_search",
         "cross_validation",
         "transfer_learning",
+        "model_comparison",
     ] = "classification"
     model: ModelConfig = Field(default_factory=ModelConfig)
     training: TrainingConfig = Field(default_factory=TrainingConfig)
@@ -165,6 +187,7 @@ class ExperimentConfig(BaseModel):
     random_search: RandomSearchConfig | None = None
     cross_validation: CrossValidationConfig | None = None
     transfer_learning: TransferLearningConfig | None = None
+    model_comparison: ModelComparisonConfig | None = None
 
     @model_validator(mode="after")
     def validate_task_and_num_classes(self) -> "ExperimentConfig":
@@ -175,6 +198,15 @@ class ExperimentConfig(BaseModel):
         if self.task == "multiclass" and self.model.num_classes < 2:
             raise ValueError(
                 f"Multiclass task requires num_classes>=2, got {self.model.num_classes}."
+            )
+        if (
+            self.model_comparison is not None
+            and self.model_comparison.metric == "auc_roc"
+            and self.task == "multiclass"
+        ):
+            raise ValueError(
+                "auc_roc metric is not defined for multiclass tasks. "
+                "Use 'accuracy' or 'f1' instead."
             )
         return self
 
@@ -225,5 +257,6 @@ __all__ = [
     "RandomSearchConfig",
     "CrossValidationConfig",
     "TransferLearningConfig",
+    "ModelComparisonConfig",
     "load_config",
 ]
