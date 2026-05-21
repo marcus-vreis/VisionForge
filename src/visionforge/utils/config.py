@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 import yaml
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class GridSearchConfig(BaseModel):
@@ -196,6 +196,34 @@ class BatchPredictionConfig(BaseModel):
         return v
 
 
+class ExportONNXConfig(BaseModel):
+    """Settings for ONNX export, validation, and latency benchmarking."""
+
+    # populate_by_name lets callers use either the alias ("validate") or the
+    # field name ("run_validate") when constructing via dict/YAML.  The alias
+    # is necessary because "validate" shadows a deprecated Pydantic BaseModel
+    # classmethod and triggers a UserWarning at class-definition time.
+    model_config = ConfigDict(populate_by_name=True)
+
+    checkpoint_path: Path
+    output_onnx: Path
+    opset_version: int = Field(default=17, ge=11, le=20)
+    dynamic_axes: bool = True
+    run_validate: bool = Field(default=True, alias="validate")
+    validation_tolerance: float = Field(default=1e-4, gt=0.0)
+    benchmark: bool = True
+    benchmark_runs: int = Field(default=50, ge=5)
+
+    @field_validator("checkpoint_path")
+    @classmethod
+    def checkpoint_path_must_be_file(cls, v: Path) -> Path:
+        if not v.exists():
+            raise ValueError(f"checkpoint_path does not exist: {v}")
+        if not v.is_file():
+            raise ValueError(f"checkpoint_path must be a file, got: {v}")
+        return v
+
+
 class ExperimentConfig(BaseModel):
     """Top-level experiment configuration."""
 
@@ -209,6 +237,7 @@ class ExperimentConfig(BaseModel):
         "transfer_learning",
         "model_comparison",
         "batch_prediction",
+        "export_onnx",
     ] = "classification"
     model: ModelConfig = Field(default_factory=ModelConfig)
     training: TrainingConfig = Field(default_factory=TrainingConfig)
@@ -221,6 +250,7 @@ class ExperimentConfig(BaseModel):
     transfer_learning: TransferLearningConfig | None = None
     model_comparison: ModelComparisonConfig | None = None
     batch_prediction: BatchPredictionConfig | None = None
+    export_onnx: ExportONNXConfig | None = None
 
     @model_validator(mode="after")
     def validate_task_and_num_classes(self) -> "ExperimentConfig":
@@ -292,5 +322,6 @@ __all__ = [
     "TransferLearningConfig",
     "ModelComparisonConfig",
     "BatchPredictionConfig",
+    "ExportONNXConfig",
     "load_config",
 ]
