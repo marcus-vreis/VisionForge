@@ -1,6 +1,8 @@
+import { useRef, useState } from "react";
 import { humanizeFieldPath, type ValidationError } from "../hooks/useExperiment";
 import type { JsonSchema } from "../types/schema";
 import type { TaskDefinition } from "../types/tasks";
+import { exportConfigToYaml, importConfigFromYaml } from "../lib/yaml-config";
 import { DatasetPicker } from "./DatasetPicker";
 import { resolveKind } from "./field-renderer";
 import {
@@ -313,6 +315,28 @@ function SchemaFieldVF({
   );
 }
 
+const yamlBtnStyle: React.CSSProperties = {
+  padding: "8px 14px",
+  background: "var(--accent-soft)",
+  border: "1px solid var(--accent-vf)",
+  borderRadius: 10,
+  color: "var(--vf-text)",
+  fontFamily: "var(--font-mono)",
+  fontSize: 11,
+  letterSpacing: "0.10em",
+  textTransform: "uppercase" as const,
+  cursor: "pointer",
+  whiteSpace: "nowrap" as const,
+  lineHeight: 1,
+};
+
+const yamlBtnSecondaryStyle: React.CSSProperties = {
+  ...yamlBtnStyle,
+  background: "transparent",
+  border: "1px solid var(--vf-panel-stroke)",
+  color: "var(--vf-text-dim)",
+};
+
 /** Glass card container for classification parameters. */
 export function ParamPanel({
   task,
@@ -321,6 +345,34 @@ export function ParamPanel({
   setFormData,
   validationErrors,
 }: ParamPanelProps) {
+  const [importError, setImportError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleExport = () => {
+    const expName = (formData["name"] as string) || "config";
+    exportConfigToYaml(formData, expName);
+  };
+
+  const handleImportClick = () => {
+    setImportError(null);
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    // Reset input so the same file can be re-imported if needed
+    e.target.value = "";
+    void importConfigFromYaml(file).then((result) => {
+      if ("error" in result) {
+        setImportError(result.error);
+      } else {
+        setImportError(null);
+        setFormData(result.data);
+      }
+    });
+  };
+
   if (task.key !== "classification") {
     return (
       <section
@@ -454,14 +506,24 @@ export function ParamPanel({
         }}
       />
 
-      {/* Experiment name + task top row */}
+      {/* Hidden file input for YAML import */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".yaml,.yml"
+        style={{ display: "none" }}
+        onChange={handleFileChange}
+      />
+
+      {/* Experiment name + task top row + YAML action buttons */}
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "1fr 1fr",
+          gridTemplateColumns: "1fr 1fr auto",
           gap: 18,
-          marginBottom: 26,
+          marginBottom: importError ? 10 : 26,
           position: "relative",
+          alignItems: "end",
         }}
       >
         {schema.properties?.["name"] && (
@@ -490,7 +552,44 @@ export function ParamPanel({
             path={["task"]}
           />
         )}
+        {/* YAML export / import buttons */}
+        <div style={{ display: "flex", gap: 8, paddingBottom: 2 }}>
+          <button
+            type="button"
+            onClick={handleExport}
+            style={yamlBtnStyle}
+            title="Exportar configuração atual como arquivo .yaml"
+          >
+            ↓ Exportar YAML
+          </button>
+          <button
+            type="button"
+            onClick={handleImportClick}
+            style={yamlBtnSecondaryStyle}
+            title="Importar configuração a partir de um arquivo .yaml"
+          >
+            ↑ Importar YAML
+          </button>
+        </div>
       </div>
+
+      {/* Import error banner */}
+      {importError && (
+        <div
+          style={{
+            marginBottom: 18,
+            padding: "10px 14px",
+            background: "oklch(0.704 0.191 22.216 / 0.10)",
+            border: "1px solid oklch(0.704 0.191 22.216 / 0.4)",
+            borderRadius: 10,
+            fontFamily: "var(--font-mono)",
+            fontSize: 12,
+            color: "oklch(0.85 0.14 22)",
+          }}
+        >
+          {importError}
+        </div>
+      )}
 
       {/* Divider */}
       <div
