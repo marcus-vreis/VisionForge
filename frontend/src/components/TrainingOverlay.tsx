@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import type { RunStatus } from "../types/run";
+import type { RunStatus, TrainingEvent } from "../types/run";
 
 interface TrainingOverlayProps {
   status: RunStatus;
+  progressEvents: TrainingEvent[];
   taskAccent: string;
   taskLabel: string;
   onClose: () => void;
@@ -12,6 +13,7 @@ interface TrainingOverlayProps {
 /** Modal overlay shown while an experiment is running or just completed. */
 export function TrainingOverlay({
   status,
+  progressEvents,
   taskAccent,
   taskLabel,
   onClose,
@@ -22,38 +24,64 @@ export function TrainingOverlay({
   const hasFailed = status.status === "failed";
   const isFinished = isCompleted || hasFailed;
 
+  // Derive real progress from the most recent epoch_end event.
+  const epochEvents = progressEvents.filter(
+    (e): e is Extract<TrainingEvent, { event: "epoch_end" }> =>
+      e.event === "epoch_end",
+  );
+  const startEvent = progressEvents.find(
+    (e): e is Extract<TrainingEvent, { event: "start" }> => e.event === "start",
+  );
+  const latestEpoch = epochEvents.at(-1);
+  const totalEpochs = latestEpoch?.total_epochs ?? startEvent?.total_epochs ?? 0;
+  const currentEpoch = latestEpoch?.epoch ?? 0;
+  // Fall back to synthetic crawl when SSE has not delivered an epoch yet.
   const [fakeProgress, setFakeProgress] = useState(0);
+  const hasRealProgress = currentEpoch > 0;
+  const realProgress =
+    totalEpochs > 0 ? currentEpoch / totalEpochs : 0;
+
   const [logs, setLogs] = useState<string[]>([
     `$ visionforge train --task classification`,
     `> inicializando runtime · ${status.run_id ?? "..."}`,
     `> carregando dataset…`,
   ]);
   const logRef = useRef<HTMLDivElement>(null);
-  // Tracks which terminal status we already processed so the effect only runs once
+  // Tracks which terminal status we already processed so the effect only runs once.
   const handledStatusRef = useRef<string | null>(null);
 
-  // Synthetic progress animation while running
+  // Synthetic progress crawl only while running and before real epochs arrive.
   useEffect(() => {
-    if (!isRunning) return;
+    if (!isRunning || hasRealProgress) return;
     const id = setInterval(() => {
       setFakeProgress((p) => Math.min(p + 0.004, 0.92));
-      const now = new Date().toLocaleTimeString("pt-BR", {
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-      });
-      setLogs((prev) => [...prev.slice(-24), `> running · polled at ${now}`]);
     }, 2000);
     return () => clearInterval(id);
-  }, [isRunning]);
+  }, [isRunning, hasRealProgress]);
 
-  // Handle terminal states — subscribe to status.status changes as an external signal
+  // Append a log line for each new epoch_end event.
+  useEffect(() => {
+    if (latestEpoch === undefined) return;
+    const { epoch, total_epochs, train_loss, val_loss, val_accuracy } =
+      latestEpoch;
+    const line =
+      `> epoch ${epoch}/${total_epochs}` +
+      ` · loss=${train_loss.toFixed(4)}` +
+      ` · val_loss=${val_loss.toFixed(4)}` +
+      ` · val_acc=${val_accuracy.toFixed(4)}`;
+    setLogs((prev) => {
+      // Avoid duplicate lines if the effect runs twice in strict-mode.
+      if (prev.at(-1) === line) return prev;
+      return [...prev.slice(-24), line];
+    });
+  }, [latestEpoch]);
+
+  // Handle terminal states — subscribe to status.status changes as an external signal.
   useEffect(() => {
     if (handledStatusRef.current === status.status) return;
     if (isCompleted) {
       handledStatusRef.current = status.status;
       const timer = setTimeout(() => {
-        setFakeProgress(1);
         setLogs((prev) => [...prev.slice(-24), "$ training complete"]);
       }, 0);
       return () => clearTimeout(timer);
@@ -71,14 +99,19 @@ export function TrainingOverlay({
     }
   }, [status.status, isCompleted, hasFailed, status.error]);
 
-  // Auto-scroll logs
+  // Auto-scroll logs.
   useEffect(() => {
     if (logRef.current) {
       logRef.current.scrollTop = logRef.current.scrollHeight;
     }
   }, [logs]);
 
-  const pct = isCompleted ? 100 : Math.round(fakeProgress * 100);
+  const progressFraction = isCompleted
+    ? 1
+    : hasRealProgress
+      ? realProgress
+      : fakeProgress;
+  const pct = Math.round(progressFraction * 100);
 
   return (
     <div

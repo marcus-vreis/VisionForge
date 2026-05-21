@@ -15,7 +15,7 @@ import type { JsonSchema } from "./types/schema";
 import { TASKS } from "./types/tasks";
 
 export default function App() {
-  const { status, result, error, validationErrors, submit, reset } =
+  const { status, result, error, validationErrors, progressEvents, submit, reset } =
     useExperiment();
 
   const [activeKey, setActiveKey] = useState("classification");
@@ -172,6 +172,7 @@ export default function App() {
       {showOverlay && (
         <TrainingOverlay
           status={status}
+          progressEvents={progressEvents}
           taskAccent={activeTask.accent}
           taskLabel={activeTask.label}
           onClose={() => setOverlayVisible(false)}

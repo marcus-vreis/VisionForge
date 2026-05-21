@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from loguru import logger
 
 from visionforge.blocks.classification import ClassificationBlock
@@ -41,6 +41,12 @@ router = APIRouter(prefix="/api")
 
 # Single-experiment state (MVP: one run at a time).
 _current_run: dict[str, Any] | None = None
+
+# Per-run SSE queue; None when no run is active.
+# The Trainer worker thread puts dicts onto this queue via asyncio.run_coroutine_threadsafe;
+# the SSE generator pulls from it and serialises each item as an SSE data line.
+# A None sentinel signals end-of-stream so the generator can close cleanly.
+_event_queue: asyncio.Queue[dict[str, Any] | None] | None = None
 
 # Default location where Trainer writes run directories.
 _MODELS_DIR = Path("outputs/models")
@@ -74,13 +80,16 @@ async def detect_dataset(req: DatasetDetectRequest) -> DatasetDetectResponse:
 @router.post("/experiment/run")
 async def run_experiment(config: ExperimentConfig) -> RunResponse:
     """Start a training experiment in the background."""
-    global _current_run
+    global _current_run, _event_queue
 
     if _current_run and _current_run["status"] == "running":
         raise HTTPException(409, "An experiment is already running.")
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     run_id = f"{config.name}_{timestamp}"
+
+    # Fresh queue for this run; SSE clients poll this queue.
+    _event_queue = asyncio.Queue()
 
     _current_run = {
         "run_id": run_id,
@@ -95,6 +104,39 @@ async def run_experiment(config: ExperimentConfig) -> RunResponse:
     task.add_done_callback(_background_tasks.discard)
 
     return RunResponse(run_id=run_id)
+
+
+@router.get("/experiment/events")
+async def experiment_events() -> StreamingResponse:
+    """Stream live training progress as Server-Sent Events.
+
+    Yields one SSE data line per training event (start, epoch_end × N, end).
+    The stream closes when the run completes, fails, or when no run is active.
+    """
+    return StreamingResponse(
+        _sse_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+async def _sse_generator():  # type: ignore[return]
+    """Pull events off _event_queue and yield SSE-formatted lines."""
+    # Snapshot the queue at request time; if no run is active, close immediately.
+    queue = _event_queue
+    if queue is None:
+        yield "data: {}\n\n"
+        return
+
+    while True:
+        item = await queue.get()
+        if item is None:
+            # Sentinel — run finished or failed.
+            break
+        yield f"data: {json.dumps(item)}\n\n"
 
 
 @router.get("/experiment/status")
@@ -221,11 +263,21 @@ def _parse_run_summary(run_dir: Path, data: dict[str, Any]) -> RunSummary:
 
 async def _execute_experiment(config: ExperimentConfig, run_id: str) -> None:
     """Run the experiment in a background thread."""
-    global _current_run
+    global _current_run, _event_queue
+
+    loop = asyncio.get_running_loop()
+    queue = _event_queue  # capture at task-start to survive queue replacement
+
+    def _put_event(event: dict[str, Any]) -> None:
+        # Called from the Trainer worker thread; must schedule the coroutine on
+        # the event loop thread-safely.
+        if queue is not None:
+            asyncio.run_coroutine_threadsafe(queue.put(event), loop)
 
     try:
         block = ClassificationBlock()
         block.setup(config)
+        block._progress_callback = _put_event
 
         logger.info("GUI: Starting experiment {}", run_id)
         await asyncio.to_thread(block.run)
@@ -257,6 +309,11 @@ async def _execute_experiment(config: ExperimentConfig, run_id: str) -> None:
             "report": None,
             "run_dir": None,
         }
+
+    finally:
+        # Always put the sentinel so the SSE generator can close cleanly.
+        if queue is not None:
+            await queue.put(None)
 
 
 def _normalize_split_name(name: str) -> str:
@@ -380,4 +437,4 @@ def _detect_dataset_layout(base_dir_str: str) -> DatasetDetectResponse:
     )
 
 
-__all__ = ["router", "_load_runs", "_detect_dataset_layout"]
+__all__ = ["router", "_load_runs", "_detect_dataset_layout", "_sse_generator"]
