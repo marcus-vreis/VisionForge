@@ -136,13 +136,25 @@ class ClassificationConfig(BaseModel):
     checkpoint_path: Path | None = None
 
 
+class TransferLearningConfig(BaseModel):
+    """Settings for feature extraction and fine-tuning transfer learning."""
+
+    mode: Literal["feature_extraction", "fine_tuning"] = "feature_extraction"
+    unfreeze_from_layer: str | None = None
+    backbone_lr_multiplier: float = Field(default=0.1, gt=0.0, le=1.0)
+
+
 class ExperimentConfig(BaseModel):
     """Top-level experiment configuration."""
 
     name: str = Field(default="experiment_001", min_length=1)
     task: Literal["binary", "multiclass"] = "multiclass"
     block: Literal[
-        "classification", "grid_search", "random_search", "cross_validation"
+        "classification",
+        "grid_search",
+        "random_search",
+        "cross_validation",
+        "transfer_learning",
     ] = "classification"
     model: ModelConfig = Field(default_factory=ModelConfig)
     training: TrainingConfig = Field(default_factory=TrainingConfig)
@@ -152,6 +164,7 @@ class ExperimentConfig(BaseModel):
     grid_search: GridSearchConfig | None = None
     random_search: RandomSearchConfig | None = None
     cross_validation: CrossValidationConfig | None = None
+    transfer_learning: TransferLearningConfig | None = None
 
     @model_validator(mode="after")
     def validate_task_and_num_classes(self) -> "ExperimentConfig":
@@ -211,5 +224,6 @@ __all__ = [
     "GridSearchConfig",
     "RandomSearchConfig",
     "CrossValidationConfig",
+    "TransferLearningConfig",
     "load_config",
 ]
