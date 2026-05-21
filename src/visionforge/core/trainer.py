@@ -54,12 +54,18 @@ class Trainer:
         self._cuda_info = check_cuda()
         self._device = torch.device("cuda" if self._cuda_info.available else "cpu")
 
-    def fit(self, model: nn.Module, data_module: Any) -> TrainResult:
+    def fit(
+        self,
+        model: nn.Module,
+        data_module: Any,
+        optimizer: torch.optim.Optimizer | None = None,
+    ) -> TrainResult:
         """Run the training loop.
 
         Args:
             model: nn.Module with the correct final layer.
             data_module: object exposing train_loader() and val_loader().
+            optimizer: pre-built optimizer; when None, one is built from config.
 
         Returns:
             TrainResult with best epoch, loss, history, and saved model path.
@@ -68,7 +74,7 @@ class Trainer:
         _seed_everything(cfg.seed)
 
         model = self._prepare_model(model)
-        optimizer = self._build_optimizer(model)
+        optimizer = optimizer if optimizer is not None else self._build_optimizer(model)
         criterion = self._build_criterion()
         run_dir = self._make_run_dir()
         model_path = run_dir / "best_model.pth"
