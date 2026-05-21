@@ -13,8 +13,29 @@ from fastapi.responses import FileResponse
 from loguru import logger
 
 from visionforge.blocks.classification import ClassificationBlock
-from visionforge.gui.api.schemas import RunResponse, RunResult, RunStatus, RunSummary
+from visionforge.gui.api.schemas import (
+    DatasetDetectRequest,
+    DatasetDetectResponse,
+    RunResponse,
+    RunResult,
+    RunStatus,
+    RunSummary,
+)
 from visionforge.utils.config import ExperimentConfig
+
+# Common split folder names per role. Lowercased, accent-stripped at match time.
+_TRAIN_ALIASES = {"train", "training", "treino", "trains", "tr"}
+_VAL_ALIASES = {
+    "val",
+    "valid",
+    "validation",
+    "validacao",
+    "validação",
+    "eval",
+    "dev",
+    "vl",
+}
+_TEST_ALIASES = {"test", "testing", "teste", "ts", "holdout", "hold_out"}
 
 router = APIRouter(prefix="/api")
 
@@ -38,6 +59,16 @@ async def get_schema() -> dict[str, Any]:
 async def list_runs() -> list[RunSummary]:
     """Return all historical runs sorted by started_at descending."""
     return _load_runs(_MODELS_DIR.resolve())
+
+
+@router.post("/dataset/detect")
+async def detect_dataset(req: DatasetDetectRequest) -> DatasetDetectResponse:
+    """Scan a base_dir for standard train/val/test split subdirectories.
+
+    Returns a structured response describing what was found so the frontend
+    can either auto-fill the splits or ask the user to map them manually.
+    """
+    return _detect_dataset_layout(req.base_dir)
 
 
 @router.post("/experiment/run")
@@ -216,14 +247,137 @@ async def _execute_experiment(config: ExperimentConfig, run_id: str) -> None:
         logger.success("GUI: Experiment {} completed.", run_id)
 
     except Exception as e:
-        logger.error("GUI: Experiment {} failed: {}", run_id, e)
+        logger.exception("GUI: Experiment {} failed", run_id)
+        cls = type(e).__name__
+        msg = str(e) or "(sem mensagem)"
         _current_run = {
             "run_id": run_id,
             "status": "failed",
-            "error": str(e),
+            "error": f"{cls}: {msg}",
             "report": None,
             "run_dir": None,
         }
 
 
-__all__ = ["router", "_load_runs"]
+def _normalize_split_name(name: str) -> str:
+    """Lowercase + strip simple separators so 'Train_Set' matches 'train'."""
+    import unicodedata
+
+    stripped = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode()
+    stripped = stripped.lower()
+    for sep in ("-", "_", " ", "."):
+        stripped = stripped.replace(sep, "")
+    return stripped
+
+
+def _match_alias(name: str, aliases: set[str]) -> bool:
+    """Return True if ``name`` (or its prefix) maps to one of the alias variants."""
+    normalized = _normalize_split_name(name)
+    return normalized in aliases
+
+
+def _detect_dataset_layout(base_dir_str: str) -> DatasetDetectResponse:
+    """Inspect a directory and try to identify standard train/val/test splits."""
+    if not base_dir_str or not base_dir_str.strip():
+        return DatasetDetectResponse(
+            base_dir=base_dir_str,
+            detected=False,
+            message="Informe o caminho do diretório base do dataset.",
+        )
+
+    base = Path(base_dir_str).expanduser()
+    if not base.exists():
+        return DatasetDetectResponse(
+            base_dir=str(base),
+            detected=False,
+            message=f"O diretório '{base}' não foi encontrado no disco.",
+        )
+    if not base.is_dir():
+        return DatasetDetectResponse(
+            base_dir=str(base),
+            detected=False,
+            message=f"O caminho '{base}' existe mas não é uma pasta.",
+        )
+
+    try:
+        children = [p for p in base.iterdir() if p.is_dir()]
+    except PermissionError:
+        return DatasetDetectResponse(
+            base_dir=str(base),
+            detected=False,
+            message=f"Sem permissão de leitura em '{base}'.",
+        )
+
+    if not children:
+        return DatasetDetectResponse(
+            base_dir=str(base),
+            detected=False,
+            message=(
+                "Nenhuma subpasta encontrada em "
+                f"'{base}'. Esperado pastas separando treino, validação e teste."
+            ),
+        )
+
+    train_dir: str | None = None
+    val_dir: str | None = None
+    test_dir: str | None = None
+
+    for child in children:
+        if train_dir is None and _match_alias(child.name, _TRAIN_ALIASES):
+            train_dir = child.name
+        elif val_dir is None and _match_alias(child.name, _VAL_ALIASES):
+            val_dir = child.name
+        elif test_dir is None and _match_alias(child.name, _TEST_ALIASES):
+            test_dir = child.name
+
+    candidates = sorted(c.name for c in children)
+    found = [v for v in (train_dir, val_dir, test_dir) if v]
+
+    if len(found) >= 2:
+        missing = []
+        if not train_dir:
+            missing.append("treino")
+        if not val_dir:
+            missing.append("validação")
+        if not test_dir:
+            missing.append("teste")
+        if missing:
+            message = (
+                f"Detectado parcialmente. Faltando: {', '.join(missing)}. "
+                "Selecione manualmente as pastas restantes."
+            )
+            return DatasetDetectResponse(
+                base_dir=str(base),
+                detected=False,
+                train_dir=train_dir,
+                val_dir=val_dir,
+                test_dir=test_dir,
+                candidates=candidates,
+                message=message,
+            )
+        return DatasetDetectResponse(
+            base_dir=str(base),
+            detected=True,
+            train_dir=train_dir,
+            val_dir=val_dir,
+            test_dir=test_dir,
+            candidates=candidates,
+            message=(
+                f"Splits detectados: treino='{train_dir}', "
+                f"validação='{val_dir}', teste='{test_dir}'."
+            ),
+        )
+
+    return DatasetDetectResponse(
+        base_dir=str(base),
+        detected=False,
+        candidates=candidates,
+        message=(
+            "Não foi possível identificar automaticamente os splits. "
+            f"Subpastas encontradas: {', '.join(candidates)}. "
+            "Selecione manualmente qual é treino / validação / teste."
+        ),
+    )
+
+
+__all__ = ["router", "_load_runs", "_detect_dataset_layout"]

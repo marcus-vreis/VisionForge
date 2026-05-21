@@ -12,7 +12,8 @@ repos:
       - id: codespell
         additional_dependencies: [tomli]
         args: [--write-changes]
-        exclude: "package-lock\\.json"
+        # Skip lockfiles + built/minified assets where typo-fixing is unsafe.
+        exclude: "(package-lock\\.json|src/visionforge/gui/static/.*|frontend/dist/.*)"
 
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.20.0
@@ -25,7 +26,7 @@ repos:
     hooks:
       - id: pytest
         name: pytest
-        entry: pytest
+        entry: uv run pytest
         language: system
         pass_filenames: false
         always_run: true

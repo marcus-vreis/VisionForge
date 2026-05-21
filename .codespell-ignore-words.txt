@@ -8,3 +8,4 @@ bu
 ot
 Alternar
 vEw
+seletor

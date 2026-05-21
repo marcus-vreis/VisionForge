@@ -63,6 +63,12 @@
 - [x] Results view — metrics grid + plot images
 - [x] Training runs via `asyncio.to_thread()` (non-blocking, GPU in same process)
 - [x] `GET /api/runs` — list completed run summaries (PR #18)
+- [x] `POST /api/dataset/detect` — auto-detect train/val/test split subdirs (PT + EN aliases)
+- [x] DatasetPicker UI — folder input + detect button + manual fallback selectors
+- [x] Structured API error handling — fixed `[object Object]` rendering, parses 422 detail arrays
+- [x] Sensible defaults in `TrainingConfig`/`ModelConfig` (lr=0.001, epochs=10, batch=32, resnet50, num_classes=2)
+- [x] Per-field validation error display in `ParamPanel` (humanized field paths)
+- [x] TrainingOverlay shows full error message panel on failure
 - [ ] Live training monitor (SSE/WebSocket) — deferred to next iteration
 - [ ] Run history browser — wire `HistoryOverlay` to `/api/runs` (backend exists, UI is stub)
 - [ ] Config export / import as `.yaml` from GUI — deferred to next iteration
