@@ -165,6 +165,37 @@ class ModelComparisonConfig(BaseModel):
     metric: Literal["accuracy", "f1", "auc_roc"] = "f1"
 
 
+class BatchPredictionConfig(BaseModel):
+    """Settings for batch inference over a folder of images."""
+
+    checkpoint_path: Path
+    input_dir: Path
+    output_csv: Path
+    recursive: bool = True
+    image_extensions: list[str] = Field(
+        default=[".jpg", ".jpeg", ".png", ".bmp", ".tiff"]
+    )
+    class_names: list[str] | None = None
+
+    @field_validator("checkpoint_path")
+    @classmethod
+    def checkpoint_must_be_file(cls, v: Path) -> Path:
+        if not v.exists():
+            raise ValueError(f"checkpoint_path does not exist: {v}")
+        if not v.is_file():
+            raise ValueError(f"checkpoint_path must be a file, got: {v}")
+        return v
+
+    @field_validator("input_dir")
+    @classmethod
+    def input_dir_must_be_directory(cls, v: Path) -> Path:
+        if not v.exists():
+            raise ValueError(f"input_dir does not exist: {v}")
+        if not v.is_dir():
+            raise ValueError(f"input_dir must be a directory, got: {v}")
+        return v
+
+
 class ExperimentConfig(BaseModel):
     """Top-level experiment configuration."""
 
@@ -177,6 +208,7 @@ class ExperimentConfig(BaseModel):
         "cross_validation",
         "transfer_learning",
         "model_comparison",
+        "batch_prediction",
     ] = "classification"
     model: ModelConfig = Field(default_factory=ModelConfig)
     training: TrainingConfig = Field(default_factory=TrainingConfig)
@@ -188,6 +220,7 @@ class ExperimentConfig(BaseModel):
     cross_validation: CrossValidationConfig | None = None
     transfer_learning: TransferLearningConfig | None = None
     model_comparison: ModelComparisonConfig | None = None
+    batch_prediction: BatchPredictionConfig | None = None
 
     @model_validator(mode="after")
     def validate_task_and_num_classes(self) -> "ExperimentConfig":
@@ -258,5 +291,6 @@ __all__ = [
     "CrossValidationConfig",
     "TransferLearningConfig",
     "ModelComparisonConfig",
+    "BatchPredictionConfig",
     "load_config",
 ]
