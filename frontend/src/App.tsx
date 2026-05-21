@@ -22,6 +22,7 @@ export default function App() {
   const [device, setDevice] = useState<"cuda" | "cpu">("cuda");
   const [gpuName] = useState("NVIDIA GPU");
   const [showHistory, setShowHistory] = useState(false);
+  const [historyCount, setHistoryCount] = useState(0);
   // overlayVisible: user explicitly opened or the experiment just started
   const [overlayVisible, setOverlayVisible] = useState(false);
   // resultsVisible: user dismissed overlay and wants to see results
@@ -153,7 +154,7 @@ export default function App() {
         onHistory={() => setShowHistory(true)}
         onTrain={() => void handleTrain()}
         disabled={status.status === "running" || activeKey !== "classification"}
-        historyCount={0}
+        historyCount={historyCount}
         device={device}
         setDevice={setDevice}
         gpuName={gpuName}
@@ -164,6 +165,7 @@ export default function App() {
       <HistoryOverlay
         open={showHistory}
         onClose={() => setShowHistory(false)}
+        onCountChange={setHistoryCount}
       />
 
       {/* Training overlay */}
