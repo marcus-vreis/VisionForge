@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import random
+import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -59,6 +60,7 @@ class Trainer:
         model: nn.Module,
         data_module: Any,
         optimizer: torch.optim.Optimizer | None = None,
+        progress_callback: Callable[[dict[str, Any]], None] | None = None,
     ) -> TrainResult:
         """Run the training loop.
 
@@ -66,6 +68,8 @@ class Trainer:
             model: nn.Module with the correct final layer.
             data_module: object exposing train_loader() and val_loader().
             optimizer: pre-built optimizer; when None, one is built from config.
+            progress_callback: called after each epoch and at start/end with a
+                progress dict. Safe to call from a worker thread.
 
         Returns:
             TrainResult with best epoch, loss, history, and saved model path.
@@ -83,6 +87,10 @@ class Trainer:
         best_val_loss = float("inf")
         best_epoch = 0
         patience_counter = 0
+        t0 = time.monotonic()
+
+        if progress_callback is not None:
+            progress_callback({"event": "start", "total_epochs": cfg.epochs})
 
         for epoch in range(1, cfg.epochs + 1):
             train_loss = self._train_epoch(
@@ -109,6 +117,19 @@ class Trainer:
                 val_acc,
             )
 
+            if progress_callback is not None:
+                progress_callback(
+                    {
+                        "event": "epoch_end",
+                        "epoch": epoch,
+                        "total_epochs": cfg.epochs,
+                        "train_loss": train_loss,
+                        "val_loss": val_loss,
+                        "val_accuracy": val_acc,
+                        "elapsed_s": round(time.monotonic() - t0, 3),
+                    }
+                )
+
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
                 best_epoch = epoch
@@ -134,6 +155,9 @@ class Trainer:
             model_path=model_path,
         )
         self._write_run_json(run_dir, train_result)
+
+        if progress_callback is not None:
+            progress_callback({"event": "end", "total_epochs": len(history)})
 
         return train_result
 

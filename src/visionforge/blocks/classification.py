@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -28,6 +29,8 @@ class ClassificationBlock(ExperimentBlock):
         self._config = config
         self._train_result: TrainResult | None = None
         self._eval_result: EvalResult | None = None
+        # Injected by the GUI layer to stream live epoch progress via SSE.
+        self._progress_callback: Callable[[dict[str, Any]], None] | None = None
 
     def run(self) -> None:
         mode = self._config.classification.mode
@@ -63,7 +66,9 @@ class ClassificationBlock(ExperimentBlock):
         model = ModelFactory.create(self._config.model)
         data = DataModule(self._config)
 
-        self._train_result = Trainer(self._config).fit(model, data)
+        self._train_result = Trainer(self._config).fit(
+            model, data, progress_callback=self._progress_callback
+        )
 
         # Reload best checkpoint for test-set evaluation.
         state_dict = torch.load(

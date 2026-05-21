@@ -5,13 +5,14 @@ import {
   fetchStatus,
   runExperiment,
 } from "../api/client";
-import type { RunResult, RunStatus } from "../types/run";
+import type { RunResult, RunStatus, TrainingEvent } from "../types/run";
 
 interface ExperimentState {
   status: RunStatus;
   result: RunResult | null;
   error: string | null;
   validationErrors: ValidationError[];
+  progressEvents: TrainingEvent[];
   submit: (config: Record<string, unknown>) => Promise<void>;
   reset: () => void;
 }
@@ -79,7 +80,9 @@ export function useExperiment(): ExperimentState {
   const [validationErrors, setValidationErrors] = useState<ValidationError[]>(
     [],
   );
+  const [progressEvents, setProgressEvents] = useState<TrainingEvent[]>([]);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const esRef = useRef<EventSource | null>(null);
 
   const stopPolling = useCallback(() => {
     if (pollRef.current) {
@@ -87,6 +90,38 @@ export function useExperiment(): ExperimentState {
       pollRef.current = null;
     }
   }, []);
+
+  const closeEventSource = useCallback(() => {
+    if (esRef.current) {
+      esRef.current.close();
+      esRef.current = null;
+    }
+  }, []);
+
+  const openEventSource = useCallback(() => {
+    closeEventSource();
+    const es = new EventSource("/api/experiment/events");
+    esRef.current = es;
+
+    es.onmessage = (ev) => {
+      try {
+        const data = JSON.parse(ev.data) as TrainingEvent;
+        // Ignore the empty sentinel emitted when no run is active.
+        if (!data.event) return;
+        setProgressEvents((prev) => [...prev, data]);
+        if (data.event === "end") {
+          closeEventSource();
+        }
+      } catch {
+        // Malformed frame — skip.
+      }
+    };
+
+    es.onerror = () => {
+      // SSE failed or server closed; fall back to the existing 2s polling.
+      closeEventSource();
+    };
+  }, [closeEventSource]);
 
   const startPolling = useCallback(
     (_runId: string) => {
@@ -134,17 +169,22 @@ export function useExperiment(): ExperimentState {
     [stopPolling],
   );
 
-  useEffect(() => stopPolling, [stopPolling]);
+  useEffect(() => () => {
+    stopPolling();
+    closeEventSource();
+  }, [stopPolling, closeEventSource]);
 
   const submit = useCallback(
     async (config: Record<string, unknown>) => {
       setError(null);
       setResult(null);
       setValidationErrors([]);
+      setProgressEvents([]);
 
       try {
         const res = await runExperiment(config);
         setStatus({ status: "running", run_id: res.run_id, error: null });
+        openEventSource();
         startPolling(res.run_id);
       } catch (e) {
         if (e instanceof ApiError) {
@@ -180,16 +220,18 @@ export function useExperiment(): ExperimentState {
         setError("Erro desconhecido ao iniciar o experimento.");
       }
     },
-    [startPolling],
+    [startPolling, openEventSource],
   );
 
   const reset = useCallback(() => {
     stopPolling();
+    closeEventSource();
     setStatus({ status: "idle", run_id: null, error: null });
     setResult(null);
     setError(null);
     setValidationErrors([]);
-  }, [stopPolling]);
+    setProgressEvents([]);
+  }, [stopPolling, closeEventSource]);
 
-  return { status, result, error, validationErrors, submit, reset };
+  return { status, result, error, validationErrors, progressEvents, submit, reset };
 }
