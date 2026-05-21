@@ -128,15 +128,21 @@ export default function App() {
           <div
             style={{
               marginTop: 16,
-              padding: "12px 16px",
+              padding: "14px 18px",
               background: "oklch(0.704 0.191 22.216 / 0.10)",
               border: "1px solid oklch(0.704 0.191 22.216 / 0.4)",
               borderRadius: 12,
               fontFamily: "var(--font-mono)",
               fontSize: 13,
               color: "oklch(0.85 0.14 22)",
+              whiteSpace: "pre-wrap",
+              wordBreak: "break-word",
+              lineHeight: 1.55,
             }}
           >
+            <div style={{ fontSize: 10, letterSpacing: "0.16em", textTransform: "uppercase", color: "oklch(0.7 0.18 22)", marginBottom: 4 }}>
+              Erro
+            </div>
             {error}
           </div>
         )}

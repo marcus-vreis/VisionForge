@@ -42,8 +42,8 @@ class ModelConfig(BaseModel):
         "vgg16",
         "vgg19",
         "alexnet",
-    ]
-    num_classes: int = Field(ge=1)
+    ] = "resnet50"
+    num_classes: int = Field(default=2, ge=1)
     pretrained: bool = True
     weights_path: Path | None = None
 
@@ -62,9 +62,9 @@ class ModelConfig(BaseModel):
 class TrainingConfig(BaseModel):
     """Hyperparameters and training loop settings."""
 
-    learning_rate: float = Field(gt=0.0)
-    epochs: int = Field(ge=1)
-    batch_size: int = Field(ge=1)
+    learning_rate: float = Field(default=0.001, gt=0.0)
+    epochs: int = Field(default=10, ge=1)
+    batch_size: int = Field(default=32, ge=1)
     early_stopping_patience: int = Field(default=10, ge=1)
     optimizer: Literal["adam", "sgd", "adamw"] = "adam"
     weight_decay: float = Field(default=0.0, ge=0.0)
@@ -139,13 +139,13 @@ class ClassificationConfig(BaseModel):
 class ExperimentConfig(BaseModel):
     """Top-level experiment configuration."""
 
-    name: str = Field(min_length=1)
-    task: Literal["binary", "multiclass"] = "binary"
+    name: str = Field(default="experiment_001", min_length=1)
+    task: Literal["binary", "multiclass"] = "multiclass"
     block: Literal[
         "classification", "grid_search", "random_search", "cross_validation"
     ] = "classification"
-    model: ModelConfig
-    training: TrainingConfig
+    model: ModelConfig = Field(default_factory=ModelConfig)
+    training: TrainingConfig = Field(default_factory=TrainingConfig)
     data: DataConfig
     output: OutputConfig = OutputConfig()
     classification: ClassificationConfig = ClassificationConfig()

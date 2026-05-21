@@ -190,11 +190,45 @@ export function TrainingOverlay({
           />
         </div>
 
+        {/* Failure detail panel — shown above logs when failed */}
+        {hasFailed && (
+          <div
+            style={{
+              padding: "14px 16px",
+              marginBottom: 14,
+              background: "oklch(0.704 0.191 22.216 / 0.10)",
+              border: "1px solid oklch(0.704 0.191 22.216 / 0.45)",
+              borderRadius: 12,
+              fontFamily: "var(--font-mono)",
+              fontSize: 12.5,
+              color: "oklch(0.88 0.14 22)",
+              whiteSpace: "pre-wrap",
+              wordBreak: "break-word",
+              lineHeight: 1.55,
+              maxHeight: 180,
+              overflowY: "auto",
+            }}
+          >
+            <div
+              style={{
+                fontSize: 10,
+                letterSpacing: "0.18em",
+                textTransform: "uppercase",
+                color: "oklch(0.7 0.18 22)",
+                marginBottom: 6,
+              }}
+            >
+              Detalhe do erro
+            </div>
+            {status.error ?? "Erro desconhecido — verifique os logs do servidor."}
+          </div>
+        )}
+
         {/* Log stream */}
         <div
           ref={logRef}
           style={{
-            height: 220,
+            height: hasFailed ? 120 : 220,
             padding: 16,
             background: "rgba(0,0,0,0.45)",
             border: "1px solid var(--vf-panel-stroke)",
