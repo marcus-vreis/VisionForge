@@ -32,3 +32,17 @@ export interface RunSummary {
   epochs_completed: number;
   final_metrics: Record<string, number>;
 }
+
+/** Discriminated union of SSE events emitted by GET /api/experiment/events. */
+export type TrainingEvent =
+  | { event: "start"; total_epochs: number }
+  | {
+      event: "epoch_end";
+      epoch: number;
+      total_epochs: number;
+      train_loss: number;
+      val_loss: number;
+      val_accuracy: number;
+      elapsed_s: number;
+    }
+  | { event: "end"; total_epochs: number };
