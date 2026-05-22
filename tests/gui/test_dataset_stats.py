@@ -124,22 +124,41 @@ class TestDatasetSamplesEndpoint:
 
 
 class TestServeDatasetFile:
-    def test_serves_valid_image(self, tmp_path: Path) -> None:
+    def test_serves_valid_image_after_dataset_was_probed(self, tmp_path: Path) -> None:
         from visionforge.gui.server import app
 
         root = _balanced_dataset(tmp_path)
         sample = next((root / "train" / "class_a").iterdir())
         client = TestClient(app, raise_server_exceptions=True)
+        # /dataset/stats registers the root in the session allow-list.
+        client.post("/api/dataset/stats", json={"base_dir": str(root)})
         resp = client.get(f"/api/dataset/file?path={sample.resolve()}")
         assert resp.status_code == 200
         assert resp.headers["content-type"].startswith("image/")
 
+    def test_rejects_path_outside_probed_roots(self, tmp_path: Path) -> None:
+        """A valid image file outside every session root must be refused."""
+        from visionforge.gui.api.routes import _ALLOWED_DATASET_ROOTS
+        from visionforge.gui.server import app
+
+        rogue_dir = tmp_path / "elsewhere"
+        rogue_dir.mkdir()
+        img = rogue_dir / "img.png"
+        Image.fromarray(np.zeros((4, 4, 3), dtype=np.uint8)).save(img)
+
+        _ALLOWED_DATASET_ROOTS.clear()
+        client = TestClient(app, raise_server_exceptions=True)
+        resp = client.get(f"/api/dataset/file?path={img.resolve()}")
+        assert resp.status_code == 403
+
     def test_rejects_non_image_extension(self, tmp_path: Path) -> None:
         from visionforge.gui.server import app
 
-        txt = tmp_path / "leak.txt"
+        root = _balanced_dataset(tmp_path)
+        txt = root / "leak.txt"
         txt.write_text("secret", encoding="utf-8")
         client = TestClient(app, raise_server_exceptions=True)
+        client.post("/api/dataset/stats", json={"base_dir": str(root)})
         resp = client.get(f"/api/dataset/file?path={txt.resolve()}")
         assert resp.status_code == 400
 

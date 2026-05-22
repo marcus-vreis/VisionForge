@@ -76,6 +76,35 @@ _MODELS_DIR = Path("outputs/models")
 # /dataset/file thumbnail endpoint.
 _IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".webp"}
 
+# Dataset roots the user has explicitly probed this session — populated by
+# /dataset/pick, /dataset/stats, /dataset/samples, /dataset/preview_preprocess
+# and /runs/{id}/test. The /dataset/file endpoint refuses paths that aren't
+# inside one of these roots, so a crafted request cannot read arbitrary files
+# even though the server runs locally with full FS access.
+_ALLOWED_DATASET_ROOTS: set[Path] = set()
+
+
+def _remember_dataset_root(base_dir: str | Path) -> None:
+    """Add a resolved dataset root to the allow-list for /dataset/file."""
+    try:
+        resolved = Path(base_dir).resolve()
+        if resolved.is_dir():
+            _ALLOWED_DATASET_ROOTS.add(resolved)
+    except OSError:
+        pass
+
+
+def _is_inside_allowed_root(path: Path) -> bool:
+    """True iff ``path`` resolves inside one of the remembered dataset roots."""
+    for root in _ALLOWED_DATASET_ROOTS:
+        try:
+            if path.is_relative_to(root):
+                return True
+        except ValueError:
+            continue
+    return False
+
+
 # Strong references to background tasks to prevent premature GC (asyncio doc).
 _background_tasks: set[asyncio.Task[None]] = set()
 
@@ -349,17 +378,28 @@ async def get_result(run_id: str) -> RunResult:
 async def serve_dataset_file(path: str) -> FileResponse:
     """Serve a local image file for dataset preview thumbnails.
 
-    Accepts only image extensions and rejects non-files. Path traversal is
-    less of a concern because VisionForge runs locally (the user can already
-    read any file via the OS), but we still gate on extension to avoid the
-    endpoint being used to exfiltrate non-image data.
+    Defense in depth — even though VisionForge runs locally, the path must:
+    1. resolve to a real file
+    2. carry a known image extension
+    3. sit inside one of the dataset roots the user has already probed via
+       /dataset/pick, /dataset/stats, /dataset/samples, etc.
+
+    Without #3 a crafted query could read any file the server process can
+    open. Restricting to the session's allow-list keeps the endpoint useful
+    for the thumbnail UI without exposing arbitrary FS reads.
     """
-    resolved = Path(path).resolve()
+    resolved = Path(
+        path
+    ).resolve()  # NOSONAR pythonsecurity:S6549 - allow-list checked below
     if not resolved.is_file():
         raise HTTPException(404, "File not found.")
     if resolved.suffix.lower() not in _IMAGE_EXTS:
         raise HTTPException(400, "Only image files are previewable.")
-    return FileResponse(resolved)
+    if not _is_inside_allowed_root(resolved):
+        raise HTTPException(
+            403, "Path is not inside any dataset directory probed this session."
+        )
+    return FileResponse(resolved)  # NOSONAR python:S2083
 
 
 @router.get("/artifacts/{file_path:path}")
@@ -415,6 +455,7 @@ def _render_preprocess_preview(
         available_kinds,
     )
 
+    _remember_dataset_root(req.base_dir)
     base = Path(req.base_dir)
     split_dir = base / req.split
     if not split_dir.is_dir():
@@ -511,6 +552,7 @@ def _render_preprocess_preview(
 
 def _collect_dataset_samples(req: DatasetSamplesRequest) -> DatasetSamplesResponse:
     """Walk the chosen split and return up to ``per_class`` image paths per class."""
+    _remember_dataset_root(req.base_dir)
     base = Path(req.base_dir)
     split_dir = base / req.split
     if not split_dir.is_dir():
@@ -542,6 +584,7 @@ def _collect_dataset_samples(req: DatasetSamplesRequest) -> DatasetSamplesRespon
 
 def _collect_dataset_stats(req: DatasetStatsRequest) -> DatasetStatsResponse:
     """Walk an ImageFolder layout and count per-class image files per split."""
+    _remember_dataset_root(req.base_dir)
     base = Path(req.base_dir)
     if not base.exists() or not base.is_dir():
         return DatasetStatsResponse(
@@ -625,7 +668,9 @@ def _open_native_folder_dialog() -> DatasetPickResponse:
     if not chosen:
         return DatasetPickResponse(path="", cancelled=True, message="Cancelado.")
 
-    return DatasetPickResponse(path=str(Path(chosen).resolve()), cancelled=False)
+    resolved = Path(chosen).resolve()
+    _remember_dataset_root(resolved)
+    return DatasetPickResponse(path=str(resolved), cancelled=False)
 
 
 def _execute_run_test(run_dir: Path, req: RunTestRequest) -> RunTestResponse:
