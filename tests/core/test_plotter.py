@@ -137,3 +137,67 @@ class TestPrecisionRecallCurve:
         )
         assert ok is True
         assert save_path.exists()
+
+    def test_multiclass_creates_png(self, tmp_path: Path) -> None:
+        """Precision-recall curve for multiclass must save a non-empty .png."""
+        save_path = tmp_path / "pr_mc.png"
+        y_true = [0, 1, 2, 0, 1, 2]
+        y_proba_full = [
+            [0.7, 0.2, 0.1],
+            [0.2, 0.6, 0.2],
+            [0.1, 0.2, 0.7],
+            [0.6, 0.3, 0.1],
+            [0.3, 0.5, 0.2],
+            [0.2, 0.2, 0.6],
+        ]
+        ok = MetricsPlotter.precision_recall_curve_plot(
+            y_true, y_proba_full, ["a", "b", "c"], save_path
+        )
+        assert ok is True
+        assert save_path.exists()
+
+    def test_single_class_returns_false(self, tmp_path: Path) -> None:
+        """Precision-recall undefined for a single class — must return False."""
+        save_path = tmp_path / "pr_undef.png"
+        ok = MetricsPlotter.precision_recall_curve_plot(
+            [1, 1, 1], [[0.0, 1.0]] * 3, ["a", "b"], save_path
+        )
+        assert ok is False
+        assert not save_path.exists()
+
+    def test_misshaped_probs_returns_false(self, tmp_path: Path) -> None:
+        """proba.shape[0] != len(y_true) must return False without writing."""
+        save_path = tmp_path / "pr_bad.png"
+        ok = MetricsPlotter.precision_recall_curve_plot(
+            [0, 1], [[0.5, 0.5]], ["a", "b"], save_path
+        )
+        assert ok is False
+        assert not save_path.exists()
+
+
+class TestROCCurveEdgeCases:
+    def test_misshaped_probs_returns_false(self, tmp_path: Path) -> None:
+        """ROC must refuse a proba array whose length disagrees with y_true."""
+        save_path = tmp_path / "roc_bad.png"
+        ok = MetricsPlotter.roc_curve_plot(
+            [0, 1, 0], [[0.5, 0.5]], ["a", "b"], save_path
+        )
+        assert ok is False
+        assert not save_path.exists()
+
+    def test_multiclass_skips_classes_with_no_samples(self, tmp_path: Path) -> None:
+        """A class that never appears in y_true must be skipped without erroring."""
+        save_path = tmp_path / "roc_mc_skip.png"
+        # 3-class probas but only classes 0 and 2 ever appear.
+        y_true = [0, 2, 0, 2]
+        y_proba_full = [
+            [0.7, 0.1, 0.2],
+            [0.1, 0.2, 0.7],
+            [0.6, 0.2, 0.2],
+            [0.2, 0.1, 0.7],
+        ]
+        ok = MetricsPlotter.roc_curve_plot(
+            y_true, y_proba_full, ["a", "b", "c"], save_path
+        )
+        assert ok is True
+        assert save_path.exists()
