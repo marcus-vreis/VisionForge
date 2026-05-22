@@ -19,10 +19,10 @@ from visionforge.utils.config import ExperimentConfig
 class ClassificationBlock(ExperimentBlock):
     """End-to-end classification experiment block.
 
-    Supports multiple operating modes via config.classification.mode:
-    - "train": ModelFactory → DataModule → Trainer → Evaluator → Plotter → run.json
+    Modes (config.classification.mode):
+    - "train": ModelFactory → DataModule → Trainer → Evaluator → all plots → run.json
     - "evaluate": loads checkpoint → Evaluator on test set
-    - "infer": loads checkpoint → single-image inference (Phase 4)
+    - "infer": single-image inference (Phase 4)
     """
 
     def setup(self, config: ExperimentConfig) -> None:
@@ -49,6 +49,7 @@ class ClassificationBlock(ExperimentBlock):
                 "best_epoch": self._train_result.best_epoch,
                 "best_val_loss": self._train_result.best_val_loss,
                 "total_epochs": self._train_result.total_epochs,
+                "device_used": self._train_result.device_used,
             }
         if self._eval_result is not None:
             result["eval"] = {
@@ -81,17 +82,8 @@ class ClassificationBlock(ExperimentBlock):
         self._eval_result = Evaluator(self._config).evaluate(model, data.test_loader())
 
         run_dir = self._train_result.model_path.parent
-        loss_path = run_dir / "loss.png"
-        cm_path = run_dir / "confusion_matrix.png"
-
-        MetricsPlotter.loss_curve(self._train_result.history, loss_path)
-        MetricsPlotter.confusion_matrix_plot(
-            self._eval_result.confusion_matrix,
-            data.class_names,
-            cm_path,
-        )
-
-        self._update_run_json(run_dir, loss_path, cm_path)
+        graphics = self._render_plots(run_dir, data.class_names)
+        self._update_run_json(run_dir, graphics)
 
     def _run_evaluate(self) -> None:
         checkpoint_path = self._config.classification.checkpoint_path
@@ -107,12 +99,59 @@ class ClassificationBlock(ExperimentBlock):
         data = DataModule(self._config)
         self._eval_result = Evaluator(self._config).evaluate(model, data.test_loader())
 
-    def _update_run_json(
-        self,
-        run_dir: Path,
-        loss_path: Path,
-        cm_path: Path,
-    ) -> None:
+    def _render_plots(self, run_dir: Path, class_names: list[str]) -> list[Path]:
+        """Render every available plot for the current train + eval results.
+
+        Returns the ordered list of plot paths that were actually written. Plots
+        that are undefined (e.g. ROC with a single class) are silently skipped.
+        """
+        assert self._train_result is not None
+        graphics: list[Path] = []
+
+        loss_path = run_dir / "loss.png"
+        MetricsPlotter.loss_curve(self._train_result.history, loss_path)
+        graphics.append(loss_path)
+
+        acc_path = run_dir / "accuracy.png"
+        MetricsPlotter.accuracy_curve(self._train_result.history, acc_path)
+        graphics.append(acc_path)
+
+        if self._eval_result is None:
+            return graphics
+
+        cm_path = run_dir / "confusion_matrix.png"
+        MetricsPlotter.confusion_matrix_plot(
+            self._eval_result.confusion_matrix, class_names, cm_path
+        )
+        graphics.append(cm_path)
+
+        cm_norm_path = run_dir / "confusion_matrix_normalized.png"
+        MetricsPlotter.confusion_matrix_normalized(
+            self._eval_result.confusion_matrix, class_names, cm_norm_path
+        )
+        graphics.append(cm_norm_path)
+
+        roc_path = run_dir / "roc_curve.png"
+        if MetricsPlotter.roc_curve_plot(
+            self._eval_result.y_true,
+            self._eval_result.y_proba_full,
+            class_names,
+            roc_path,
+        ):
+            graphics.append(roc_path)
+
+        pr_path = run_dir / "precision_recall_curve.png"
+        if MetricsPlotter.precision_recall_curve_plot(
+            self._eval_result.y_true,
+            self._eval_result.y_proba_full,
+            class_names,
+            pr_path,
+        ):
+            graphics.append(pr_path)
+
+        return graphics
+
+    def _update_run_json(self, run_dir: Path, graphics: list[Path]) -> None:
         """Rewrite run.json with full metrics and artifact paths."""
         run_json_path = run_dir / "run.json"
         if not run_json_path.exists():
@@ -130,7 +169,7 @@ class ClassificationBlock(ExperimentBlock):
                     "test_auc_roc": self._eval_result.auc_roc,
                 }
             )
-        data["artifacts"]["graphics"] = [str(loss_path), str(cm_path)]
+        data["artifacts"]["graphics"] = [str(p) for p in graphics]
 
         run_json_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
 

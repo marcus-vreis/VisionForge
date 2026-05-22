@@ -1,9 +1,12 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { fetchSystemInfo } from "../api/client";
 import { humanizeFieldPath, type ValidationError } from "../hooks/useExperiment";
 import type { JsonSchema } from "../types/schema";
 import type { TaskDefinition } from "../types/tasks";
 import { exportConfigToYaml, importConfigFromYaml } from "../lib/yaml-config";
 import { DatasetPicker } from "./DatasetPicker";
+import { DatasetStats } from "./DatasetStats";
+import { PreprocessingPanel } from "./PreprocessingPanel";
 import { resolveKind } from "./field-renderer";
 import {
   NumberField,
@@ -46,6 +49,14 @@ const FIELD_LABELS: Record<string, string> = {
   optimizer: "Otimizador",
   weight_decay: "Weight decay",
   seed: "Seed",
+  deterministic: "Determinístico (lento)",
+  mixed_precision: "Precisão mista (AMP)",
+  kind: "Tipo",
+  step_size: "Step size",
+  gamma: "Gamma",
+  patience: "Paciência",
+  factor: "Fator",
+  min_lr: "LR mínimo",
   base_dir: "Diretório base",
   train_dir: "Subdir treino",
   val_dir: "Subdir validação",
@@ -69,6 +80,251 @@ function resolveSchema(
     return defs[refName] ?? schema;
   }
   return schema;
+}
+
+
+interface SchedulerFieldsProps {
+  schema: JsonSchema;
+  defs: Record<string, JsonSchema>;
+  value: Record<string, unknown>;
+  onChange: (v: Record<string, unknown>) => void;
+  errors: ValidationError[];
+}
+
+/** Scheduler config UI — picks ``kind`` and shows only the relevant params. */
+function SchedulerFields({
+  schema,
+  defs,
+  value,
+  onChange,
+  errors,
+}: SchedulerFieldsProps) {
+  const resolved = resolveSchema(schema, defs);
+  if (!resolved.properties) return null;
+
+  const kind = (value["kind"] as string) ?? "none";
+  const setParam = (k: string, v: unknown) => onChange({ ...value, [k]: v });
+
+  // Only show params relevant to the selected kind so the form stays tidy.
+  const visibleParams: Record<string, string[]> = {
+    none: [],
+    cosine: [],
+    step: ["step_size", "gamma"],
+    plateau: ["patience", "factor", "min_lr"],
+  };
+  const shown = visibleParams[kind] ?? [];
+
+  return (
+    <div
+      style={{
+        marginTop: 4,
+        marginBottom: 26,
+        padding: 14,
+        background: "rgba(255,255,255,0.015)",
+        border: "1px solid var(--vf-panel-stroke)",
+        borderRadius: 10,
+        display: "flex",
+        flexDirection: "column",
+        gap: 14,
+      }}
+    >
+      <div
+        style={{
+          fontFamily: "var(--font-mono)",
+          fontSize: 10,
+          letterSpacing: "0.18em",
+          textTransform: "uppercase",
+          color: "var(--vf-text-muted)",
+        }}
+      >
+        // learning-rate scheduler
+      </div>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr 1fr 1fr",
+          gap: 14,
+        }}
+      >
+        {resolved.properties["kind"] && (
+          <SchemaFieldVF
+            name="kind"
+            schema={resolved.properties["kind"]}
+            defs={defs}
+            value={kind}
+            onChange={(v) => setParam("kind", v)}
+            errors={errors}
+            path={["training", "scheduler", "kind"]}
+          />
+        )}
+        {shown.map((paramKey) =>
+          resolved.properties?.[paramKey] ? (
+            <SchemaFieldVF
+              key={paramKey}
+              name={paramKey}
+              schema={resolved.properties[paramKey]}
+              defs={defs}
+              value={value[paramKey]}
+              onChange={(v) => setParam(paramKey, v)}
+              errors={errors}
+              path={["training", "scheduler", paramKey]}
+            />
+          ) : null,
+        )}
+      </div>
+    </div>
+  );
+}
+
+
+/** NumberField for num_workers with an "auto" toggle backed by /api/system/info. */
+function NumWorkersField({
+  value,
+  onChange,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+}) {
+  const [auto, setAuto] = useState(false);
+  const [suggested, setSuggested] = useState<number | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    fetchSystemInfo()
+      .then((info) => alive && setSuggested(info.suggested_workers))
+      .catch(() => {
+        /* CPU probe is non-critical — leave default value */
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const handleToggleAuto = () => {
+    if (auto) {
+      setAuto(false);
+      return;
+    }
+    if (suggested !== null) {
+      onChange(suggested);
+    }
+    setAuto(true);
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <span
+        style={{
+          fontFamily: "var(--font-mono)",
+          fontSize: 9,
+          letterSpacing: "0.14em",
+          textTransform: "uppercase",
+          color: "var(--vf-text-muted)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 8,
+        }}
+      >
+        <span>Workers</span>
+        <button
+          type="button"
+          onClick={handleToggleAuto}
+          disabled={suggested === null}
+          style={{
+            padding: "2px 8px",
+            background: auto ? "var(--accent-soft)" : "rgba(255,255,255,0.04)",
+            border: `1px solid ${auto ? "var(--accent-vf)" : "var(--vf-panel-stroke)"}`,
+            borderRadius: 6,
+            color: auto ? "var(--vf-text)" : "var(--vf-text-dim)",
+            fontFamily: "var(--font-mono)",
+            fontSize: 9,
+            letterSpacing: "0.10em",
+            textTransform: "uppercase",
+            cursor: suggested === null ? "not-allowed" : "pointer",
+            opacity: suggested === null ? 0.5 : 1,
+          }}
+          title={
+            suggested === null
+              ? "Backend não disponível"
+              : `min(cpu_count, 8) = ${suggested}`
+          }
+        >
+          auto
+        </button>
+      </span>
+      <input
+        type="number"
+        value={value}
+        min={0}
+        step={1}
+        disabled={auto}
+        onChange={(e) => {
+          const v = parseInt(e.target.value, 10);
+          if (!Number.isNaN(v)) onChange(v);
+        }}
+        style={{
+          padding: "8px 12px",
+          background: auto ? "rgba(0,0,0,0.35)" : "rgba(0,0,0,0.30)",
+          border: `1px ${auto ? "dashed" : "solid"} var(--vf-panel-stroke)`,
+          borderRadius: 8,
+          fontFamily: "var(--font-mono)",
+          fontSize: 13,
+          color: "var(--vf-text)",
+          opacity: auto ? 0.7 : 1,
+          cursor: auto ? "not-allowed" : "text",
+        }}
+      />
+    </div>
+  );
+}
+
+
+/** Read-only display for num_classes when task=binary forces it to 1. */
+function LockedNumClasses() {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <span
+        style={{
+          fontFamily: "var(--font-mono)",
+          fontSize: 9,
+          letterSpacing: "0.14em",
+          textTransform: "uppercase",
+          color: "var(--vf-text-muted)",
+        }}
+      >
+        Nº de classes
+      </span>
+      <div
+        title="Tarefa binária — fixado em 1"
+        style={{
+          padding: "8px 12px",
+          background: "rgba(0,0,0,0.35)",
+          border: "1px dashed var(--vf-panel-stroke)",
+          borderRadius: 8,
+          fontFamily: "var(--font-mono)",
+          fontSize: 13,
+          color: "var(--vf-text-dim)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          opacity: 0.85,
+        }}
+      >
+        <span>1</span>
+        <span
+          style={{
+            fontSize: 9,
+            letterSpacing: "0.14em",
+            color: "var(--vf-text-muted)",
+            textTransform: "uppercase",
+          }}
+        >
+          🔒 binário
+        </span>
+      </div>
+    </div>
+  );
 }
 
 
@@ -546,7 +802,20 @@ export function ParamPanel({
             defs={defs}
             value={formData["task"]}
             onChange={(v) =>
-              setFormData((prev) => ({ ...prev, task: v }))
+              setFormData((prev) => {
+                // Binary task is incompatible with num_classes >= 2; auto-lock
+                // num_classes = 1 to mirror the Pydantic model_validator.
+                const model = (prev["model"] ?? {}) as Record<string, unknown>;
+                const nextNumClasses =
+                  v === "binary"
+                    ? 1
+                    : (model["num_classes"] === 1 ? 2 : model["num_classes"]);
+                return {
+                  ...prev,
+                  task: v,
+                  model: { ...model, num_classes: nextNumClasses },
+                };
+              })
             }
             errors={validationErrors}
             path={["task"]}
@@ -635,17 +904,20 @@ export function ParamPanel({
             path={["model", "name"]}
           />
         )}
-        {modelProps["num_classes"] && (
-          <SchemaFieldVF
-            name="num_classes"
-            schema={modelProps["num_classes"]}
-            defs={defs}
-            value={modelData["num_classes"]}
-            onChange={(v) => setField("model", "num_classes", v)}
-            errors={validationErrors}
-            path={["model", "num_classes"]}
-          />
-        )}
+        {modelProps["num_classes"] &&
+          (formData["task"] === "binary" ? (
+            <LockedNumClasses />
+          ) : (
+            <SchemaFieldVF
+              name="num_classes"
+              schema={modelProps["num_classes"]}
+              defs={defs}
+              value={modelData["num_classes"]}
+              onChange={(v) => setField("model", "num_classes", v)}
+              errors={validationErrors}
+              path={["model", "num_classes"]}
+            />
+          ))}
         {modelProps["pretrained"] && (
           <SchemaFieldVF
             name="pretrained"
@@ -692,7 +964,7 @@ export function ParamPanel({
           position: "relative",
         }}
       >
-        {["epochs", "learning_rate", "batch_size", "optimizer", "early_stopping_patience", "weight_decay", "seed"].map(
+        {["epochs", "learning_rate", "batch_size", "optimizer", "early_stopping_patience", "weight_decay", "seed", "deterministic", "mixed_precision"].map(
           (key) =>
             trainingProps[key] ? (
               <SchemaFieldVF
@@ -708,6 +980,17 @@ export function ParamPanel({
             ) : null,
         )}
       </div>
+
+      {/* Scheduler section — nested under training */}
+      {trainingProps["scheduler"] && (
+        <SchedulerFields
+          schema={trainingProps["scheduler"]}
+          defs={defs}
+          value={(trainingData["scheduler"] ?? {}) as Record<string, unknown>}
+          onChange={(v) => setField("training", "scheduler", v)}
+          errors={validationErrors}
+        />
+      )}
 
       {/* Divider */}
       <div
@@ -747,6 +1030,15 @@ export function ParamPanel({
         }
       />
 
+      <DatasetStats
+        baseDir={(dataData["base_dir"] as string) ?? ""}
+        trainDir={(dataData["train_dir"] as string) ?? ""}
+        valDir={(dataData["val_dir"] as string) ?? ""}
+        testDir={(dataData["test_dir"] as string) ?? ""}
+      />
+
+      <PreprocessingPanel baseDir={(dataData["base_dir"] as string) ?? ""} />
+
       <div
         style={{
           display: "grid",
@@ -756,14 +1048,9 @@ export function ParamPanel({
         }}
       >
         {dataProps["num_workers"] && (
-          <SchemaFieldVF
-            name="num_workers"
-            schema={dataProps["num_workers"]}
-            defs={defs}
-            value={dataData["num_workers"]}
+          <NumWorkersField
+            value={(dataData["num_workers"] as number) ?? 0}
             onChange={(v) => setField("data", "num_workers", v)}
-            errors={validationErrors}
-            path={["data", "num_workers"]}
           />
         )}
         {dataProps["pin_memory"] && (
@@ -779,17 +1066,40 @@ export function ParamPanel({
         )}
       </div>
 
-      {/* Transforms sub-section */}
+      {/* Augmentation / Transforms sub-section */}
       {dataProps["transforms"] && (
-        <SchemaFieldVF
-          name="transforms"
-          schema={dataProps["transforms"]}
-          defs={defs}
-          value={dataData["transforms"]}
-          onChange={(v) => setField("data", "transforms", v)}
-          errors={validationErrors}
-          path={["data", "transforms"]}
-        />
+        <>
+          <div
+            style={{
+              height: 1,
+              width: "100%",
+              background:
+                "linear-gradient(90deg, transparent, var(--vf-panel-stroke), transparent)",
+              margin: "20px 0 14px",
+            }}
+          />
+          <div
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: 10,
+              color: "var(--vf-text-muted)",
+              letterSpacing: "0.20em",
+              textTransform: "uppercase",
+              marginBottom: 14,
+            }}
+          >
+            // aumentos &amp; normalização
+          </div>
+          <SchemaFieldVF
+            name="transforms"
+            schema={dataProps["transforms"]}
+            defs={defs}
+            value={dataData["transforms"]}
+            onChange={(v) => setField("data", "transforms", v)}
+            errors={validationErrors}
+            path={["data", "transforms"]}
+          />
+        </>
       )}
 
       {/* Validation errors summary */}

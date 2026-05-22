@@ -4,6 +4,7 @@ from typing import Any
 
 import pytest
 import torch
+import torch.backends.cudnn as cudnn
 import torch.nn as nn
 
 from visionforge.core.trainer import (
@@ -89,19 +90,65 @@ class TestSeedEverything:
         b = torch.randn(10)
         assert torch.allclose(a, b)
 
+    def test_reproducible_numpy(self) -> None:
+        """Same seed must produce identical numpy arrays."""
+        import numpy as np
+
+        _seed_everything(11)
+        a = np.random.rand(10)
+        _seed_everything(11)
+        b = np.random.rand(10)
+        assert np.allclose(a, b)
+
+    def test_reproducible_python_random(self) -> None:
+        """Same seed must produce identical Python random sequences."""
+        import random as py_random
+
+        _seed_everything(13)
+        a = [py_random.random() for _ in range(10)]
+        _seed_everything(13)
+        b = [py_random.random() for _ in range(10)]
+        assert a == b
+
+    def test_default_enables_benchmark(self) -> None:
+        """Default (non-deterministic) mode must enable cuDNN auto-tuning."""
+        cudnn.deterministic = True
+        cudnn.benchmark = False
+        _seed_everything(0)
+        assert cudnn.deterministic is False
+        assert cudnn.benchmark is True
+
+    def test_deterministic_disables_benchmark(self) -> None:
+        """Deterministic mode must disable cuDNN auto-tuning for reproducibility."""
+        cudnn.deterministic = False
+        cudnn.benchmark = True
+        _seed_everything(0, deterministic=True)
+        assert cudnn.deterministic is True
+        assert cudnn.benchmark is False
+
 
 class TestDataclasses:
     def test_epoch_result(self) -> None:
-        """EpochResult must store all four fields."""
-        r = EpochResult(epoch=1, train_loss=0.5, val_loss=0.4, val_accuracy=0.8)
+        """EpochResult must store all five fields including train_accuracy."""
+        r = EpochResult(
+            epoch=1,
+            train_loss=0.5,
+            train_accuracy=0.7,
+            val_loss=0.4,
+            val_accuracy=0.8,
+        )
         assert r.epoch == 1
         assert r.train_loss == 0.5
+        assert r.train_accuracy == 0.7
 
     def test_train_result(self) -> None:
-        """TrainResult must track best_epoch and history."""
-        r = TrainResult(best_epoch=3, best_val_loss=0.2, total_epochs=5)
+        """TrainResult must track best_epoch, history, and device_used."""
+        r = TrainResult(
+            best_epoch=3, best_val_loss=0.2, total_epochs=5, device_used="cpu"
+        )
         assert r.best_epoch == 3
         assert r.history == []
+        assert r.device_used == "cpu"
 
 
 class TestTrainerFit:
@@ -160,7 +207,7 @@ class TestTrainerFit:
                 self.bias = nn.Parameter(torch.zeros(1))
 
             def forward(self, x: torch.Tensor) -> torch.Tensor:
-                return torch.zeros(x.size(0), 1) + self.bias * 0
+                return torch.zeros(x.size(0), 1, device=x.device) + self.bias * 0
 
         result = trainer.fit(ConstantModel(), FakeDataModule())
         assert result.total_epochs < 10
@@ -233,6 +280,127 @@ class TestTrainerMulticlass:
         result = trainer.fit(DummyMulticlassModel(), FakeMulticlassDataModule())
         assert isinstance(result, TrainResult)
         assert result.model_path.exists()
+
+
+class TestSchedulerBuild:
+    def test_none_returns_no_scheduler(self, minimal_config: ExperimentConfig) -> None:
+        from visionforge.utils.config import ExperimentConfig as EC
+
+        cfg = EC.model_validate(
+            {
+                **minimal_config.model_dump(mode="json"),
+                "training": {
+                    **minimal_config.training.model_dump(mode="json"),
+                    "scheduler": {"kind": "none"},
+                },
+            }
+        )
+        trainer = Trainer(cfg)
+        optimizer = trainer._build_optimizer(DummyBinaryModel())
+        assert trainer._build_scheduler(optimizer) is None
+
+    def test_cosine_returns_cosine_annealing(
+        self, minimal_config: ExperimentConfig
+    ) -> None:
+        from visionforge.utils.config import ExperimentConfig as EC
+
+        cfg = EC.model_validate(
+            {
+                **minimal_config.model_dump(mode="json"),
+                "training": {
+                    **minimal_config.training.model_dump(mode="json"),
+                    "scheduler": {"kind": "cosine"},
+                },
+            }
+        )
+        trainer = Trainer(cfg)
+        optimizer = trainer._build_optimizer(DummyBinaryModel())
+        sched = trainer._build_scheduler(optimizer)
+        assert isinstance(sched, torch.optim.lr_scheduler.CosineAnnealingLR)
+
+    def test_step_returns_step_lr(self, minimal_config: ExperimentConfig) -> None:
+        from visionforge.utils.config import ExperimentConfig as EC
+
+        cfg = EC.model_validate(
+            {
+                **minimal_config.model_dump(mode="json"),
+                "training": {
+                    **minimal_config.training.model_dump(mode="json"),
+                    "scheduler": {"kind": "step", "step_size": 5, "gamma": 0.5},
+                },
+            }
+        )
+        trainer = Trainer(cfg)
+        optimizer = trainer._build_optimizer(DummyBinaryModel())
+        sched = trainer._build_scheduler(optimizer)
+        assert isinstance(sched, torch.optim.lr_scheduler.StepLR)
+
+    def test_plateau_returns_reduce_on_plateau(
+        self, minimal_config: ExperimentConfig
+    ) -> None:
+        from visionforge.utils.config import ExperimentConfig as EC
+
+        cfg = EC.model_validate(
+            {
+                **minimal_config.model_dump(mode="json"),
+                "training": {
+                    **minimal_config.training.model_dump(mode="json"),
+                    "scheduler": {"kind": "plateau", "patience": 3, "factor": 0.3},
+                },
+            }
+        )
+        trainer = Trainer(cfg)
+        optimizer = trainer._build_optimizer(DummyBinaryModel())
+        sched = trainer._build_scheduler(optimizer)
+        assert isinstance(sched, torch.optim.lr_scheduler.ReduceLROnPlateau)
+
+
+class TestSchedulerStepsDuringFit:
+    def test_cosine_changes_lr_across_epochs(
+        self, minimal_config: ExperimentConfig
+    ) -> None:
+        """Cosine scheduler must reduce LR over the course of training."""
+        from visionforge.utils.config import ExperimentConfig as EC
+
+        cfg = EC.model_validate(
+            {
+                **minimal_config.model_dump(mode="json"),
+                "training": {
+                    **minimal_config.training.model_dump(mode="json"),
+                    "epochs": 4,
+                    "scheduler": {"kind": "cosine"},
+                },
+            }
+        )
+        trainer = Trainer(cfg)
+        model = DummyBinaryModel()
+        opt = trainer._build_optimizer(model)
+        initial_lr = opt.param_groups[0]["lr"]
+        trainer.fit(model, FakeDataModule(), optimizer=opt)
+        final_lr = opt.param_groups[0]["lr"]
+        assert final_lr < initial_lr
+
+
+class TestMixedPrecision:
+    def test_amp_silently_skipped_on_cpu(
+        self, minimal_config: ExperimentConfig
+    ) -> None:
+        """mixed_precision=True must be a no-op when device is CPU."""
+        from visionforge.utils.config import ExperimentConfig as EC
+
+        cfg = EC.model_validate(
+            {
+                **minimal_config.model_dump(mode="json"),
+                "training": {
+                    **minimal_config.training.model_dump(mode="json"),
+                    "mixed_precision": True,
+                },
+                "device": {"kind": "cpu"},
+            }
+        )
+        trainer = Trainer(cfg)
+        result = trainer.fit(DummyBinaryModel(), FakeDataModule())
+        assert isinstance(result, TrainResult)
 
 
 class TestTrainerOptimizers:

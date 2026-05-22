@@ -9,3 +9,13 @@ ot
 Alternar
 vEw
 seletor
+Autor
+Utiliza
+comando
+ignora
+nomes
+ser
+potencial
+Considere
+fpr
+tpr

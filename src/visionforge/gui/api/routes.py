@@ -4,24 +4,45 @@ from __future__ import annotations
 
 import asyncio
 import json
+import platform
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, Response, StreamingResponse
 from loguru import logger
 
 from visionforge.blocks.classification import ClassificationBlock
+from visionforge.core.data import DataModule
+from visionforge.core.evaluator import Evaluator
+from visionforge.core.plotter import MetricsPlotter
 from visionforge.gui.api.schemas import (
     DatasetDetectRequest,
     DatasetDetectResponse,
+    DatasetPickResponse,
+    DatasetSamplesRequest,
+    DatasetSamplesResponse,
+    DatasetStatsRequest,
+    DatasetStatsResponse,
+    DeviceInfoResponse,
+    GPUInfo,
+    PreprocessPreviewRequest,
+    PreprocessPreviewResponse,
+    PreprocessPreviewStep,
+    RunDetail,
     RunResponse,
     RunResult,
     RunStatus,
     RunSummary,
+    RunTestRequest,
+    RunTestResponse,
+    SplitStats,
+    SystemInfo,
 )
+from visionforge.models.factory import ModelFactory
 from visionforge.utils.config import ExperimentConfig
+from visionforge.utils.cuda import check_cuda
 
 # Common split folder names per role. Lowercased, accent-stripped at match time.
 _TRAIN_ALIASES = {"train", "training", "treino", "trains", "tr"}
@@ -51,6 +72,39 @@ _event_queue: asyncio.Queue[dict[str, Any] | None] | None = None
 # Default location where Trainer writes run directories.
 _MODELS_DIR = Path("outputs/models")
 
+# Image extensions accepted both for dataset stats / sample probes and for the
+# /dataset/file thumbnail endpoint.
+_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".webp"}
+
+# Dataset roots the user has explicitly probed this session — populated by
+# /dataset/pick, /dataset/stats, /dataset/samples, /dataset/preview_preprocess
+# and /runs/{id}/test. The /dataset/file endpoint refuses paths that aren't
+# inside one of these roots, so a crafted request cannot read arbitrary files
+# even though the server runs locally with full FS access.
+_ALLOWED_DATASET_ROOTS: set[Path] = set()
+
+
+def _remember_dataset_root(base_dir: str | Path) -> None:
+    """Add a resolved dataset root to the allow-list for /dataset/file."""
+    try:
+        resolved = Path(base_dir).resolve()
+        if resolved.is_dir():
+            _ALLOWED_DATASET_ROOTS.add(resolved)
+    except OSError:
+        pass
+
+
+def _is_inside_allowed_root(path: Path) -> bool:
+    """True iff ``path`` resolves inside one of the remembered dataset roots."""
+    for root in _ALLOWED_DATASET_ROOTS:
+        try:
+            if path.is_relative_to(root):
+                return True
+        except ValueError:
+            continue
+    return False
+
+
 # Strong references to background tasks to prevent premature GC (asyncio doc).
 _background_tasks: set[asyncio.Task[None]] = set()
 
@@ -61,20 +115,180 @@ async def get_schema() -> dict[str, Any]:
     return ExperimentConfig.model_json_schema()
 
 
+@router.get("/system/info")
+async def get_system_info() -> SystemInfo:
+    """CPU probe used to derive sensible defaults (workers, threads).
+
+    Suggested workers follow PyTorch's common heuristic min(cpu_count, 8):
+    too many workers fight the GIL on small datasets and burn RAM on the
+    DataLoader pre-fetch queues without speeding things up.
+    """
+    import os
+
+    cpu = os.cpu_count() or 1
+    return SystemInfo(
+        cpu_count=cpu,
+        suggested_workers=min(cpu, 8),
+        platform=platform.system(),
+    )
+
+
+@router.get("/device/info")
+async def get_device_info() -> DeviceInfoResponse:
+    """Probe the runtime and return the real list of selectable devices."""
+    info = check_cuda()
+    gpus = [
+        GPUInfo(
+            index=d.index,
+            name=d.name,
+            total_memory_mb=d.total_memory_mb,
+            compute_capability=d.compute_capability,
+        )
+        for d in info.devices
+    ]
+    return DeviceInfoResponse(
+        cuda_available=info.available,
+        cuda_version=info.cuda_version,
+        cpu_name=platform.processor() or platform.machine() or "CPU",
+        gpus=gpus,
+    )
+
+
 @router.get("/runs")
 async def list_runs() -> list[RunSummary]:
     """Return all historical runs sorted by started_at descending."""
     return _load_runs(_MODELS_DIR.resolve())
 
 
+@router.get("/runs/{run_id}")
+async def get_run_detail(run_id: str) -> RunDetail:
+    """Return the full run.json for a specific run_id."""
+    run_dir = _find_run_dir(run_id)
+    if run_dir is None:
+        raise HTTPException(404, f"Run '{run_id}' not found.")
+    run_json_path = run_dir / "run.json"
+    try:
+        data: dict[str, Any] = json.loads(run_json_path.read_text(encoding="utf-8"))
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(500, f"Failed to parse run.json: {exc}") from exc
+
+    started = datetime.fromisoformat(data["timestamp"])
+    status = data.get("status", "completed")
+    finished = started if status == "completed" else None
+
+    return RunDetail(
+        run_id=run_dir.name,
+        experiment_name=data.get("experiment", run_dir.parent.name),
+        status=status,
+        started_at=started,
+        finished_at=finished,
+        device_used=data.get("device_used"),
+        run_dir=data.get("run_dir", str(run_dir.resolve())),
+        config=data.get("config", {}),
+        metrics=data.get("metrics", {}),
+        history=data.get("history", []),
+        artifacts=data.get("artifacts", {}),
+        tests=data.get("tests", []),
+    )
+
+
+@router.get("/runs/{run_id}/export_md")
+async def export_run_markdown(run_id: str) -> Response:
+    """Render a model card (markdown) for the run, ready for paper inclusion."""
+    run_dir = _find_run_dir(run_id)
+    if run_dir is None:
+        raise HTTPException(404, f"Run '{run_id}' not found.")
+    run_json_path = run_dir / "run.json"
+    try:
+        data: dict[str, Any] = json.loads(run_json_path.read_text(encoding="utf-8"))
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(500, f"Failed to parse run.json: {exc}") from exc
+
+    md = _render_run_markdown(run_dir, data)
+    filename = f"{data.get('experiment', run_dir.name)}_{run_dir.name}.md"
+    return Response(
+        content=md,
+        media_type="text/markdown; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.post("/runs/{run_id}/test")
+async def test_run_on_dataset(run_id: str, req: RunTestRequest) -> RunTestResponse:
+    """Run the saved checkpoint against a new dataset and record the result.
+
+    The test result is appended to run.json under the 'tests' array so each
+    saved model accumulates its own per-dataset history.
+    """
+    run_dir = _find_run_dir(run_id)
+    if run_dir is None:
+        raise HTTPException(404, f"Run '{run_id}' not found.")
+
+    # Run the actual evaluation in a worker thread (PyTorch + disk I/O).
+    try:
+        result = await asyncio.to_thread(_execute_run_test, run_dir, req)
+    except FileNotFoundError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Test on run {} failed", run_id)
+        raise HTTPException(500, f"{type(exc).__name__}: {exc}") from exc
+
+    return result
+
+
 @router.post("/dataset/detect")
 async def detect_dataset(req: DatasetDetectRequest) -> DatasetDetectResponse:
-    """Scan a base_dir for standard train/val/test split subdirectories.
-
-    Returns a structured response describing what was found so the frontend
-    can either auto-fill the splits or ask the user to map them manually.
-    """
+    """Scan a base_dir for standard train/val/test split subdirectories."""
     return _detect_dataset_layout(req.base_dir)
+
+
+@router.post("/dataset/preview_preprocess")
+async def preview_preprocess(
+    req: PreprocessPreviewRequest,
+) -> PreprocessPreviewResponse:
+    """Generate a strip of PNG previews showing the preprocessing pipeline.
+
+    Picks one image from the requested split (first one alphabetically inside
+    ``class_name`` or the first class found) and runs every step. Each step's
+    output is saved as a PNG under ``outputs/preview_cache/<run-id>/`` and
+    served via the existing /api/artifacts/{path} endpoint.
+    """
+    return await asyncio.to_thread(_render_preprocess_preview, req)
+
+
+@router.post("/dataset/samples")
+async def dataset_samples(req: DatasetSamplesRequest) -> DatasetSamplesResponse:
+    """Return the first N image paths per class in a chosen split.
+
+    The frontend renders thumbnails so the researcher can verify labels are
+    correct (i.e. ``class_a`` folder really does contain class A images).
+    """
+    return await asyncio.to_thread(_collect_dataset_samples, req)
+
+
+@router.post("/dataset/stats")
+async def dataset_stats(req: DatasetStatsRequest) -> DatasetStatsResponse:
+    """Count images per class in train/val/test and flag imbalance.
+
+    Walks the standard ImageFolder layout and counts files with image
+    extensions. Splits whose directory is missing are reported with
+    ``missing=true`` instead of raising — partial datasets are common during
+    a first-time setup.
+    """
+    return await asyncio.to_thread(_collect_dataset_stats, req)
+
+
+@router.post("/dataset/pick")
+async def pick_dataset_folder() -> DatasetPickResponse:
+    """Open a native folder picker on the server and return the absolute path.
+
+    Because VisionForge runs locally (browser + Python on the same machine),
+    we can open a tkinter dialog server-side so the user gets a *real* absolute
+    path — something the browser's File System Access API never provides.
+    """
+    return await asyncio.to_thread(_open_native_folder_dialog)
 
 
 @router.post("/experiment/run")
@@ -108,11 +322,7 @@ async def run_experiment(config: ExperimentConfig) -> RunResponse:
 
 @router.get("/experiment/events")
 async def experiment_events() -> StreamingResponse:
-    """Stream live training progress as Server-Sent Events.
-
-    Yields one SSE data line per training event (start, epoch_end × N, end).
-    The stream closes when the run completes, fails, or when no run is active.
-    """
+    """Stream live training progress as Server-Sent Events."""
     return StreamingResponse(
         _sse_generator(),
         media_type="text/event-stream",
@@ -125,7 +335,6 @@ async def experiment_events() -> StreamingResponse:
 
 async def _sse_generator():  # type: ignore[return]
     """Pull events off _event_queue and yield SSE-formatted lines."""
-    # Snapshot the queue at request time; if no run is active, close immediately.
     queue = _event_queue
     if queue is None:
         yield "data: {}\n\n"
@@ -134,7 +343,6 @@ async def _sse_generator():  # type: ignore[return]
     while True:
         item = await queue.get()
         if item is None:
-            # Sentinel — run finished or failed.
             break
         yield f"data: {json.dumps(item)}\n\n"
 
@@ -187,6 +395,41 @@ async def get_result(run_id: str) -> RunResult:
     )
 
 
+@router.get("/dataset/file")
+async def serve_dataset_file(path: str) -> FileResponse:
+    """Serve a local image file for dataset preview thumbnails.
+
+    Defense in depth — even though VisionForge runs locally, the path must:
+    1. resolve to a real file
+    2. carry a known image extension
+    3. sit inside one of the dataset roots the user has already probed via
+       /dataset/pick, /dataset/stats, /dataset/samples, etc.
+
+    Without #3 a crafted query could read any file the server process can
+    open. Restricting to the session's allow-list keeps the endpoint useful
+    for the thumbnail UI without exposing arbitrary FS reads.
+    """
+    # Fail fast on obvious traversal before we even resolve. The allow-list
+    # check below is the authoritative guard, but these two early checks make
+    # the intent obvious to readers (and to taint-analysis tools).
+    if ".." in path.replace("\\", "/").split("/"):
+        raise HTTPException(400, "Path contains traversal segments.")
+    candidate = Path(path)
+    if not candidate.is_absolute():
+        raise HTTPException(400, "Path must be absolute.")
+    try:
+        resolved = candidate.resolve(strict=True)  # NOSONAR pythonsecurity:S6549
+    except (FileNotFoundError, OSError) as exc:
+        raise HTTPException(404, "File not found.") from exc
+    if resolved.suffix.lower() not in _IMAGE_EXTS:
+        raise HTTPException(400, "Only image files are previewable.")
+    if not _is_inside_allowed_root(resolved):
+        raise HTTPException(
+            403, "Path is not inside any dataset directory probed this session."
+        )
+    return FileResponse(resolved)  # NOSONAR python:S2083
+
+
 @router.get("/artifacts/{file_path:path}")
 async def serve_artifact(file_path: str) -> FileResponse:
     """Serve output files (plots, models) with path traversal protection."""
@@ -195,22 +438,476 @@ async def serve_artifact(file_path: str) -> FileResponse:
     ).resolve()  # NOSONAR pythonsecurity:S6549 - re-checked with is_relative_to below before FileResponse
     outputs_dir = Path("outputs").resolve()
 
-    # is_relative_to is immune to the str.startswith bypass on case-insensitive FSes.
     if not resolved.is_relative_to(outputs_dir):
         raise HTTPException(403, "Access denied.")
 
     if not resolved.is_file():
         raise HTTPException(404, "File not found.")
 
-    # Path is validated above to be inside outputs/ and to be a regular file.
     return FileResponse(resolved)  # NOSONAR python:S2083
 
 
-def _load_runs(models_dir: Path) -> list[RunSummary]:
-    """Scan models_dir recursively for run.json files and parse each into RunSummary.
+# ── private helpers ──────────────────────────────────────────────────────────
 
-    Directories without a parseable run.json are silently skipped.
+
+def _render_run_markdown(run_dir: Path, data: dict[str, Any]) -> str:
+    """Format a run.json into a paper-ready model card."""
+    lines: list[str] = []
+    name = data.get("experiment", run_dir.name)
+    config: dict[str, Any] = data.get("config", {})
+    metrics: dict[str, Any] = data.get("metrics", {})
+    history: list[dict[str, Any]] = data.get("history", [])
+
+    lines.append(f"# {name}")
+    lines.append("")
+    lines.append(f"- **Run ID:** `{data.get('id', run_dir.name)}`")
+    lines.append(f"- **Timestamp:** {data.get('timestamp', '?')}")
+    lines.append(f"- **Status:** {data.get('status', '?')}")
+    if data.get("device_used"):
+        lines.append(f"- **Device used:** `{data['device_used']}`")
+    lines.append(f"- **Run directory:** `{data.get('run_dir', run_dir)}`")
+    artifacts = data.get("artifacts", {})
+    if artifacts.get("model"):
+        lines.append(f"- **Checkpoint:** `{artifacts['model']}`")
+    lines.append("")
+
+    lines.append("## Configuration")
+    lines.append("")
+    model_cfg = config.get("model", {})
+    training_cfg = config.get("training", {})
+    lines.append(f"- **Architecture:** {model_cfg.get('name', '?')}")
+    lines.append(f"- **num_classes:** {model_cfg.get('num_classes', '?')}")
+    lines.append(f"- **Pretrained:** {model_cfg.get('pretrained', '?')}")
+    lines.append(f"- **Task:** {config.get('task', '?')}")
+    lines.append(f"- **Optimizer:** {training_cfg.get('optimizer', '?')}")
+    lines.append(f"- **Learning rate:** {training_cfg.get('learning_rate', '?')}")
+    lines.append(f"- **Batch size:** {training_cfg.get('batch_size', '?')}")
+    lines.append(f"- **Epochs (max):** {training_cfg.get('epochs', '?')}")
+    lines.append(f"- **Seed:** {training_cfg.get('seed', '?')}")
+    if training_cfg.get("scheduler", {}).get("kind", "none") != "none":
+        sched = training_cfg["scheduler"]
+        lines.append(f"- **Scheduler:** {sched['kind']} ({sched})")
+    if training_cfg.get("mixed_precision"):
+        lines.append("- **Mixed precision:** enabled")
+    lines.append("")
+
+    lines.append("## Final metrics")
+    lines.append("")
+    if metrics:
+        lines.append("| Metric | Value |")
+        lines.append("|---|---|")
+        for k, v in metrics.items():
+            if isinstance(v, float):
+                lines.append(f"| {k} | {v:.4f} |")
+            else:
+                lines.append(f"| {k} | {v} |")
+    else:
+        lines.append("_(none recorded)_")
+    lines.append("")
+
+    if history:
+        lines.append(f"## Training history ({len(history)} epoch(s))")
+        lines.append("")
+        lines.append("| Epoch | train_loss | train_acc | val_loss | val_acc |")
+        lines.append("|---|---|---|---|---|")
+        for h in history:
+            lines.append(
+                f"| {h.get('epoch')} | {h.get('train_loss', '?'):.4f} | "
+                f"{h.get('train_accuracy', '?'):.4f} | "
+                f"{h.get('val_loss', '?'):.4f} | {h.get('val_accuracy', '?'):.4f} |"
+            )
+        lines.append("")
+
+    graphics = artifacts.get("graphics", [])
+    if graphics:
+        lines.append("## Plots")
+        lines.append("")
+        for g in graphics:
+            lines.append(f"- `{g}`")
+        lines.append("")
+
+    tests = data.get("tests", [])
+    if tests:
+        lines.append(f"## Test runs on additional datasets ({len(tests)})")
+        lines.append("")
+        for t in tests:
+            lines.append(f"### {t.get('label', t.get('test_id'))}")
+            lines.append(f"- **base_dir:** `{t.get('base_dir')}`")
+            lines.append(f"- **timestamp:** {t.get('timestamp')}")
+            m = t.get("metrics", {})
+            if m:
+                lines.append("| Metric | Value |")
+                lines.append("|---|---|")
+                for k, v in m.items():
+                    val = f"{v:.4f}" if isinstance(v, float) else str(v)
+                    lines.append(f"| {k} | {val} |")
+            lines.append("")
+
+    return "\n".join(lines)
+
+
+def _find_run_dir(run_id: str) -> Path | None:
+    """Locate a run directory by its timestamp folder name."""
+    models_dir = _MODELS_DIR.resolve()
+    if not models_dir.exists():
+        return None
+    # run_id == timestamp folder OR experiment_name+timestamp; check both forms.
+    for run_json in models_dir.rglob("run.json"):
+        d = run_json.parent
+        if d.name == run_id:
+            return d
+        try:
+            data = json.loads(run_json.read_text(encoding="utf-8"))
+            if data.get("id") == run_id:
+                return d
+        except Exception:  # noqa: BLE001
+            continue
+    return None
+
+
+_PREVIEW_CACHE_DIR = Path("outputs/preview_cache")
+
+
+def _render_preprocess_preview(
+    req: PreprocessPreviewRequest,
+) -> PreprocessPreviewResponse:
+    """Save original + per-step previews and return their artifact paths."""
+    from PIL import Image
+
+    from visionforge.core.preprocessing import (
+        apply_pipeline,
+        available_kinds,
+    )
+
+    _remember_dataset_root(req.base_dir)
+    base = Path(req.base_dir)
+    split_dir = base / req.split
+    if not split_dir.is_dir():
+        return PreprocessPreviewResponse(
+            original="",
+            steps=[],
+            final="",
+            source_image="",
+            available_kinds=available_kinds(),
+            message=f"Split '{req.split}' não encontrado.",
+        )
+
+    # Pick the first available class + first image inside it.
+    class_dirs = [d for d in sorted(split_dir.iterdir()) if d.is_dir()]
+    if not class_dirs:
+        return PreprocessPreviewResponse(
+            original="",
+            steps=[],
+            final="",
+            source_image="",
+            available_kinds=available_kinds(),
+            message="Nenhuma classe encontrada no split.",
+        )
+
+    target_class = None
+    if req.class_name is not None:
+        target_class = next((d for d in class_dirs if d.name == req.class_name), None)
+    if target_class is None:
+        target_class = class_dirs[0]
+
+    img_path = next(
+        (
+            p
+            for p in sorted(target_class.iterdir())
+            if p.is_file() and p.suffix.lower() in _IMAGE_EXTS
+        ),
+        None,
+    )
+    if img_path is None:
+        return PreprocessPreviewResponse(
+            original="",
+            steps=[],
+            final="",
+            source_image="",
+            available_kinds=available_kinds(),
+            message=f"Sem imagens no diretório {target_class}.",
+        )
+
+    # Cache dir is deterministic per source image so repeated previews don't
+    # accumulate hundreds of files. Each invocation overwrites prior renders.
+    cache_dir = _PREVIEW_CACHE_DIR / target_class.name
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    for old in cache_dir.glob("*.png"):
+        try:
+            old.unlink()
+        except OSError:
+            pass
+
+    original_img = Image.open(img_path).convert("RGB")
+    original_path = cache_dir / "00_original.png"
+    original_img.save(original_path)
+
+    final_img, intermediates = apply_pipeline(original_img, req.steps)
+
+    step_records: list[PreprocessPreviewStep] = []
+    for i, (step_cfg, img) in enumerate(zip(req.steps, intermediates, strict=False)):
+        step_path = cache_dir / f"{i + 1:02d}_{step_cfg.get('kind', 'step')}.png"
+        img.save(step_path)
+        step_records.append(
+            PreprocessPreviewStep(
+                kind=str(step_cfg.get("kind", "")),
+                artifact=str(step_path),
+                params={k: v for k, v in step_cfg.items() if k != "kind"},
+            )
+        )
+
+    if step_records:
+        final_path = Path(step_records[-1].artifact)
+    else:
+        final_path = original_path
+    if step_records:
+        # Save a separate "final" copy so callers don't depend on intermediates.
+        final_path = cache_dir / "99_final.png"
+        final_img.save(final_path)
+
+    return PreprocessPreviewResponse(
+        original=str(original_path),
+        steps=step_records,
+        final=str(final_path),
+        source_image=str(img_path.resolve()),
+        available_kinds=available_kinds(),
+    )
+
+
+def _collect_dataset_samples(req: DatasetSamplesRequest) -> DatasetSamplesResponse:
+    """Walk the chosen split and return up to ``per_class`` image paths per class."""
+    _remember_dataset_root(req.base_dir)
+    base = Path(req.base_dir)
+    split_dir = base / req.split
+    if not split_dir.is_dir():
+        return DatasetSamplesResponse(
+            base_dir=req.base_dir,
+            split=req.split,
+            samples={},
+            message=f"Split '{req.split}' não encontrado em {base}.",
+        )
+
+    samples: dict[str, list[str]] = {}
+    for class_dir in sorted(split_dir.iterdir()):
+        if not class_dir.is_dir():
+            continue
+        picks: list[str] = []
+        for p in sorted(class_dir.iterdir()):
+            if len(picks) >= req.per_class:
+                break
+            if p.is_file() and p.suffix.lower() in _IMAGE_EXTS:
+                picks.append(str(p.resolve()))
+        samples[class_dir.name] = picks
+
+    return DatasetSamplesResponse(
+        base_dir=str(base.resolve()),
+        split=req.split,
+        samples=samples,
+    )
+
+
+def _collect_dataset_stats(req: DatasetStatsRequest) -> DatasetStatsResponse:
+    """Walk an ImageFolder layout and count per-class image files per split."""
+    _remember_dataset_root(req.base_dir)
+    base = Path(req.base_dir)
+    if not base.exists() or not base.is_dir():
+        return DatasetStatsResponse(
+            base_dir=req.base_dir,
+            splits={},
+            class_names=[],
+            imbalanced=False,
+            message=f"Diretório base não encontrado: {req.base_dir}",
+        )
+
+    split_map = {"train": req.train_dir, "val": req.val_dir, "test": req.test_dir}
+    splits: dict[str, SplitStats] = {}
+    all_class_names: set[str] = set()
+
+    for split_label, subdir in split_map.items():
+        split_dir = base / subdir
+        if not split_dir.is_dir():
+            splits[split_label] = SplitStats(total_images=0, classes={}, missing=True)
+            continue
+
+        counts: dict[str, int] = {}
+        for class_dir in sorted(split_dir.iterdir()):
+            if not class_dir.is_dir():
+                continue
+            class_count = sum(
+                1
+                for p in class_dir.iterdir()
+                if p.is_file() and p.suffix.lower() in _IMAGE_EXTS
+            )
+            counts[class_dir.name] = class_count
+            all_class_names.add(class_dir.name)
+
+        splits[split_label] = SplitStats(
+            total_images=sum(counts.values()), classes=counts, missing=False
+        )
+
+    imbalanced = False
+    for s in splits.values():
+        non_zero = [c for c in s.classes.values() if c > 0]
+        if len(non_zero) >= 2 and max(non_zero) / min(non_zero) > 2.0:
+            imbalanced = True
+            break
+
+    return DatasetStatsResponse(
+        base_dir=str(base.resolve()),
+        splits=splits,
+        class_names=sorted(all_class_names),
+        imbalanced=imbalanced,
+    )
+
+
+def _open_native_folder_dialog() -> DatasetPickResponse:
+    """Open a tkinter folder dialog and return the chosen absolute path.
+
+    Runs in a worker thread because tkinter blocks the calling thread. Returns
+    an empty path + cancelled=True when the dialog is dismissed or unavailable.
     """
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+    except ImportError:
+        return DatasetPickResponse(
+            path="",
+            cancelled=True,
+            message="tkinter is not available on this Python installation.",
+        )
+
+    try:
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes("-topmost", True)
+        chosen = filedialog.askdirectory(title="Selecione o diretório base do dataset")
+        root.destroy()
+    except Exception as exc:  # noqa: BLE001
+        return DatasetPickResponse(
+            path="",
+            cancelled=True,
+            message=f"Falha ao abrir o seletor: {exc}",
+        )
+
+    if not chosen:
+        return DatasetPickResponse(path="", cancelled=True, message="Cancelado.")
+
+    resolved = Path(chosen).resolve()
+    _remember_dataset_root(resolved)
+    return DatasetPickResponse(path=str(resolved), cancelled=False)
+
+
+def _execute_run_test(run_dir: Path, req: RunTestRequest) -> RunTestResponse:
+    """Reload a saved checkpoint and evaluate it on a new dataset path.
+
+    Updates run.json so each model accumulates its own test history.
+    """
+    run_json_path = run_dir / "run.json"
+    data: dict[str, Any] = json.loads(run_json_path.read_text(encoding="utf-8"))
+    base_config_dict: dict[str, Any] = data["config"]
+
+    # Build an ExperimentConfig clone with the new dataset paths + evaluate mode.
+    test_config_dict = {
+        **base_config_dict,
+        "classification": {
+            "mode": "evaluate",
+            "checkpoint_path": data["artifacts"]["model"],
+        },
+        "data": {
+            **base_config_dict.get("data", {}),
+            "base_dir": req.base_dir,
+            "train_dir": req.train_dir,
+            "val_dir": req.val_dir,
+            "test_dir": req.test_dir,
+        },
+    }
+    config = ExperimentConfig.model_validate(test_config_dict)
+
+    model = ModelFactory.create(config.model)
+    import torch  # local import — keeps top-level lightweight on cold start
+
+    state_dict = torch.load(
+        str(config.classification.checkpoint_path),
+        map_location="cpu",
+        weights_only=True,
+    )
+    model.load_state_dict(state_dict)  # type: ignore[arg-type]
+
+    data_module = DataModule(config)
+    eval_result = Evaluator(config).evaluate(model, data_module.test_loader())
+
+    timestamp = datetime.now()
+    test_id = f"test_{timestamp.strftime('%Y%m%d_%H%M%S_%f')}"
+    tests_dir = run_dir / "tests"
+    tests_dir.mkdir(parents=True, exist_ok=True)
+
+    # Render the full evaluation-time plot set for the test dataset so a
+    # per-model test history mirrors what the original training produced.
+    artifacts: dict[str, Any] = {}
+    cm_path = tests_dir / f"{test_id}_confusion_matrix.png"
+    MetricsPlotter.confusion_matrix_plot(
+        eval_result.confusion_matrix, data_module.class_names, cm_path
+    )
+    artifacts["confusion_matrix"] = str(cm_path)
+
+    cm_norm_path = tests_dir / f"{test_id}_confusion_matrix_normalized.png"
+    MetricsPlotter.confusion_matrix_normalized(
+        eval_result.confusion_matrix, data_module.class_names, cm_norm_path
+    )
+    artifacts["confusion_matrix_normalized"] = str(cm_norm_path)
+
+    roc_path = tests_dir / f"{test_id}_roc_curve.png"
+    if MetricsPlotter.roc_curve_plot(
+        eval_result.y_true,
+        eval_result.y_proba_full,
+        data_module.class_names,
+        roc_path,
+    ):
+        artifacts["roc_curve"] = str(roc_path)
+
+    pr_path = tests_dir / f"{test_id}_precision_recall_curve.png"
+    if MetricsPlotter.precision_recall_curve_plot(
+        eval_result.y_true,
+        eval_result.y_proba_full,
+        data_module.class_names,
+        pr_path,
+    ):
+        artifacts["precision_recall_curve"] = str(pr_path)
+
+    metrics = {
+        "accuracy": eval_result.accuracy,
+        "f1": eval_result.f1,
+        "precision": eval_result.precision,
+        "recall": eval_result.recall,
+        "auc_roc": eval_result.auc_roc,
+    }
+
+    label = req.label or Path(req.base_dir).name or "test"
+    base_dir_str = str(Path(req.base_dir).resolve())
+    record: dict[str, Any] = {
+        "test_id": test_id,
+        "label": label,
+        "base_dir": base_dir_str,
+        "timestamp": timestamp.isoformat(),
+        "metrics": metrics,
+        "artifacts": artifacts,
+    }
+    data.setdefault("tests", []).append(record)
+    run_json_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+    return RunTestResponse(
+        test_id=test_id,
+        run_id=run_dir.name,
+        label=label,
+        base_dir=base_dir_str,
+        timestamp=timestamp,
+        metrics=metrics,
+        artifacts=artifacts,
+    )
+
+
+def _load_runs(models_dir: Path) -> list[RunSummary]:
+    """Scan models_dir recursively for run.json files and parse each into RunSummary."""
     if not models_dir.exists():
         return []
 
@@ -228,10 +925,7 @@ def _load_runs(models_dir: Path) -> list[RunSummary]:
 
 
 def _parse_run_summary(run_dir: Path, data: dict[str, Any]) -> RunSummary:
-    """Build a RunSummary from a parsed run.json dict.
-
-    Raises KeyError or ValueError if required fields are missing.
-    """
+    """Build a RunSummary from a parsed run.json dict."""
     status: str = data["status"]
     started_at = datetime.fromisoformat(data["timestamp"])
     finished_at: datetime | None = started_at if status == "completed" else None
@@ -269,8 +963,6 @@ async def _execute_experiment(config: ExperimentConfig, run_id: str) -> None:
     queue = _event_queue  # capture at task-start to survive queue replacement
 
     def _put_event(event: dict[str, Any]) -> None:
-        # Called from the Trainer worker thread; must schedule the coroutine on
-        # the event loop thread-safely.
         if queue is not None:
             asyncio.run_coroutine_threadsafe(queue.put(event), loop)
 
@@ -284,7 +976,6 @@ async def _execute_experiment(config: ExperimentConfig, run_id: str) -> None:
 
         report = block.report()
 
-        # Extract run_dir from the train result stored in the block.
         run_dir: str | None = None
         if block._train_result and block._train_result.model_path:
             run_dir = str(block._train_result.model_path.parent)
@@ -311,7 +1002,6 @@ async def _execute_experiment(config: ExperimentConfig, run_id: str) -> None:
         }
 
     finally:
-        # Always put the sentinel so the SSE generator can close cleanly.
         if queue is not None:
             await queue.put(None)
 

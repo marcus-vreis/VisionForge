@@ -92,16 +92,16 @@ Visual baseline now matches `frontend-design/`: oklch dark palette, per-task acc
 
 ---
 
-## Phase 5 — Advanced Experiment Blocks
+## Phase 5 — Advanced Experiment Blocks ✅
 
 - [x] `GridSearchBlock`
 - [x] `RandomSearchBlock`
 - [x] `CrossValidationBlock` (K-Fold + Stratified)
-- [ ] `TransferLearningBlock` (feature extraction + fine-tuning)
-- [ ] `ModelComparisonBlock`
-- [ ] `BatchPredictionBlock` (CSV output)
-- [ ] `ExportONNXBlock` (+ inference validation + latency benchmark)
-- [x] Unit tests for implemented blocks (grid_search, random_search, cross_validation, classification)
+- [x] `TransferLearningBlock` (feature extraction + fine-tuning)
+- [x] `ModelComparisonBlock`
+- [x] `BatchPredictionBlock` (CSV output)
+- [x] `ExportONNXBlock` (+ inference validation + latency benchmark)
+- [x] Unit tests for all blocks (grid_search, random_search, cross_validation, classification, transfer_learning, model_comparison, batch_prediction, export_onnx)
 
 ## Phase 6 — Regression task
 

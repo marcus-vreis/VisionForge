@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { fetchSchema } from "./api/client";
 import { BottomBar } from "./components/BottomBar";
+import type { DeviceSelection } from "./components/DeviceSelector";
 import { Header } from "./components/Header";
 import { HistoryOverlay } from "./components/HistoryOverlay";
 import { ParamPanel } from "./components/ParamPanel";
@@ -19,25 +20,23 @@ export default function App() {
     useExperiment();
 
   const [activeKey, setActiveKey] = useState("classification");
-  const [device, setDevice] = useState<"cuda" | "cpu">("cuda");
-  const [gpuName] = useState("NVIDIA GPU");
+  const [device, setDevice] = useState<DeviceSelection>({
+    kind: "cuda",
+    gpu_ids: null,
+  });
   const [showHistory, setShowHistory] = useState(false);
   const [historyCount, setHistoryCount] = useState(0);
-  // overlayVisible: user explicitly opened or the experiment just started
   const [overlayVisible, setOverlayVisible] = useState(false);
-  // resultsVisible: user dismissed overlay and wants to see results
   const [resultsVisible, setResultsVisible] = useState(false);
   const [schema, setSchema] = useState<JsonSchema | null>(null);
   const [formData, setFormData] = useState<Record<string, unknown>>({});
 
-  // Determine whether to show overlay based on current status
   const showOverlay =
     overlayVisible &&
     (status.status === "running" ||
       status.status === "completed" ||
       status.status === "failed");
 
-  // Load schema once on mount
   useEffect(() => {
     fetchSchema()
       .then((s) => {
@@ -58,12 +57,16 @@ export default function App() {
     reset();
     setResultsVisible(false);
     setOverlayVisible(true);
-    await submit(formData);
+    // Inject the live device selection so the backend actually honors it
+    // (instead of always defaulting to CUDA when present).
+    const payload = {
+      ...formData,
+      device: { kind: device.kind, gpu_ids: device.gpu_ids },
+    };
+    await submit(payload);
   };
 
   const activeTask = TASKS.find((t) => t.key === activeKey) ?? TASKS[0];
-
-  // Show results panel when there is a result and user dismissed overlay
   const showResults = resultsVisible && result !== null;
 
   return (
@@ -83,17 +86,13 @@ export default function App() {
         color: "var(--vf-text)",
       }}
     >
-      {/* Decorative background layers */}
       <Waves />
       <Particles />
 
-      {/* Header */}
-      <Header device={device} setDevice={setDevice} gpuName={gpuName} />
+      <Header />
 
-      {/* Task tabs */}
       <TabBar tasks={TASKS} activeKey={activeKey} setActiveKey={setActiveKey} />
 
-      {/* Main content */}
       <main
         style={{
           position: "relative",
@@ -124,7 +123,6 @@ export default function App() {
           />
         )}
 
-        {/* Network / server error banner */}
         {error && !showOverlay && (
           <div
             style={{
@@ -149,26 +147,24 @@ export default function App() {
         )}
       </main>
 
-      {/* Fixed bottom bar */}
       <BottomBar
         onHistory={() => setShowHistory(true)}
         onTrain={() => void handleTrain()}
         disabled={status.status === "running" || activeKey !== "classification"}
         historyCount={historyCount}
-        device={device}
-        setDevice={setDevice}
-        gpuName={gpuName}
+        selection={device}
+        onSelectionChange={setDevice}
         isRunning={status.status === "running"}
+        trainingMinimized={status.status === "running" && !overlayVisible}
+        onReopenTraining={() => setOverlayVisible(true)}
       />
 
-      {/* History modal */}
       <HistoryOverlay
         open={showHistory}
         onClose={() => setShowHistory(false)}
         onCountChange={setHistoryCount}
       />
 
-      {/* Training overlay */}
       {showOverlay && (
         <TrainingOverlay
           status={status}
