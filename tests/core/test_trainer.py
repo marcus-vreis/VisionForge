@@ -92,16 +92,26 @@ class TestSeedEverything:
 
 class TestDataclasses:
     def test_epoch_result(self) -> None:
-        """EpochResult must store all four fields."""
-        r = EpochResult(epoch=1, train_loss=0.5, val_loss=0.4, val_accuracy=0.8)
+        """EpochResult must store all five fields including train_accuracy."""
+        r = EpochResult(
+            epoch=1,
+            train_loss=0.5,
+            train_accuracy=0.7,
+            val_loss=0.4,
+            val_accuracy=0.8,
+        )
         assert r.epoch == 1
         assert r.train_loss == 0.5
+        assert r.train_accuracy == 0.7
 
     def test_train_result(self) -> None:
-        """TrainResult must track best_epoch and history."""
-        r = TrainResult(best_epoch=3, best_val_loss=0.2, total_epochs=5)
+        """TrainResult must track best_epoch, history, and device_used."""
+        r = TrainResult(
+            best_epoch=3, best_val_loss=0.2, total_epochs=5, device_used="cpu"
+        )
         assert r.best_epoch == 3
         assert r.history == []
+        assert r.device_used == "cpu"
 
 
 class TestTrainerFit:

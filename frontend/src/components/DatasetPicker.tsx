@@ -2,6 +2,7 @@ import { useState } from "react";
 import {
   ApiError,
   detectDatasetSplits,
+  pickDatasetFolder,
   type DatasetDetectResponse,
 } from "../api/client";
 import { SelectField, type SelectOption } from "./controls/SelectField";
@@ -64,21 +65,10 @@ const buttonStyle: React.CSSProperties = {
   whiteSpace: "nowrap",
 };
 
-/** Try the File System Access API (Chromium) to pick a folder. */
-async function tryShowDirectoryPicker(): Promise<string | null> {
-  const w = window as unknown as {
-    showDirectoryPicker?: () => Promise<{ name: string }>;
-  };
-  if (typeof w.showDirectoryPicker !== "function") return null;
-  try {
-    const handle = await w.showDirectoryPicker();
-    // Browsers do not expose absolute paths. Return the folder name so the
-    // user can prepend its parent path if needed.
-    return handle.name;
-  } catch {
-    return null;
-  }
-}
+// Browser File System Access API only exposes folder *names*, never absolute
+// paths. To deliver a real absolute path we hand off to /api/dataset/pick,
+// which opens a native (tkinter) dialog on the server — safe because the GUI
+// is always local.
 
 /** Dataset folder input with auto-detect + manual override selectors. */
 export function DatasetPicker({
@@ -138,25 +128,29 @@ export function DatasetPicker({
   };
 
   const handlePickFolder = async () => {
-    const name = await tryShowDirectoryPicker();
-    if (name) {
-      // Browser sandbox: we only know the folder *name*. Suggest the user
-      // append it to a parent path. If baseDir is empty, set it to name as
-      // a hint; otherwise leave untouched.
-      if (!baseDir) onChange({ base_dir: name });
+    setFeedback({ kind: "info", message: "Abrindo seletor nativo do sistema…" });
+    try {
+      const res = await pickDatasetFolder();
+      if (res.cancelled) {
+        setFeedback({
+          kind: "info",
+          message: res.message ?? "Seleção cancelada.",
+        });
+        return;
+      }
+      onChange({ base_dir: res.path });
       setFeedback({
-        kind: "info",
-        message:
-          `Pasta selecionada: '${name}'. ` +
-          "Edite o caminho acima para incluir o caminho absoluto se necessário.",
+        kind: "success",
+        message: `Pasta selecionada: ${res.path}`,
       });
-    } else {
-      setFeedback({
-        kind: "info",
-        message:
-          "Seu navegador não suporta seleção nativa de pasta. " +
-          "Cole o caminho absoluto no campo acima.",
-      });
+    } catch (e) {
+      const msg =
+        e instanceof ApiError
+          ? e.message
+          : e instanceof Error
+            ? e.message
+            : "Falha ao abrir o seletor de pastas.";
+      setFeedback({ kind: "error", message: msg });
     }
   };
 
@@ -229,9 +223,9 @@ export function DatasetPicker({
               border: "1px solid var(--vf-panel-stroke)",
               color: "var(--vf-text-dim)",
             }}
-            title="Abrir seletor nativo do navegador (Chrome/Edge)"
+            title="Abrir seletor nativo do sistema (retorna o caminho absoluto)"
           >
-            📁 Escolher
+            📁 Escolher pasta
           </button>
           <button
             type="button"

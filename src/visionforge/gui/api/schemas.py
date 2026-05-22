@@ -64,11 +64,88 @@ class DatasetDetectResponse(BaseModel):
     message: str
 
 
+class DatasetPickResponse(BaseModel):
+    """Result of server-side native folder picker.
+
+    Empty path means the user cancelled or the OS dialog is unavailable.
+    """
+
+    path: str
+    cancelled: bool = False
+    message: str | None = None
+
+
+class GPUInfo(BaseModel):
+    """Per-GPU details for the device selector UI."""
+
+    index: int
+    name: str
+    total_memory_mb: int
+    compute_capability: str | None = None
+
+
+class DeviceInfoResponse(BaseModel):
+    """Runtime device probe — what the user can actually pick."""
+
+    cuda_available: bool
+    cuda_version: str | None = None
+    cpu_name: str
+    gpus: list[GPUInfo] = []
+
+
+class RunDetail(BaseModel):
+    """Full run record served from /api/runs/{run_id}.
+
+    Mirrors run.json on disk plus a few computed convenience fields.
+    """
+
+    run_id: str
+    experiment_name: str
+    status: str
+    started_at: datetime
+    finished_at: datetime | None
+    device_used: str | None = None
+    run_dir: str
+    config: dict[str, Any]
+    metrics: dict[str, Any]
+    history: list[dict[str, Any]]
+    artifacts: dict[str, Any]
+    tests: list[dict[str, Any]] = []
+
+
+class RunTestRequest(BaseModel):
+    """Test a saved checkpoint against a new dataset path."""
+
+    base_dir: str
+    train_dir: str = "train"
+    val_dir: str = "val"
+    test_dir: str = "test"
+    label: str | None = None
+
+
+class RunTestResponse(BaseModel):
+    """Result of a single test run on a saved checkpoint."""
+
+    test_id: str
+    run_id: str
+    label: str
+    base_dir: str
+    timestamp: datetime
+    metrics: dict[str, Any]
+    artifacts: dict[str, Any] = {}
+
+
 __all__ = [
     "RunStatus",
     "RunResponse",
     "RunResult",
     "RunSummary",
+    "RunDetail",
+    "RunTestRequest",
+    "RunTestResponse",
     "DatasetDetectRequest",
     "DatasetDetectResponse",
+    "DatasetPickResponse",
+    "GPUInfo",
+    "DeviceInfoResponse",
 ]

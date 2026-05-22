@@ -136,6 +136,42 @@ class ClassificationConfig(BaseModel):
     checkpoint_path: Path | None = None
 
 
+class DeviceConfig(BaseModel):
+    """Compute device selection for training and evaluation.
+
+    ``kind`` chooses the broad category:
+    - ``cpu``: force CPU even when CUDA is available
+    - ``cuda``: single GPU (``gpu_ids[0]`` if given, otherwise GPU 0)
+    - ``multi_cuda``: DataParallel across ``gpu_ids`` (or all visible GPUs)
+    """
+
+    kind: Literal["cpu", "cuda", "multi_cuda"] = "cuda"
+    gpu_ids: list[int] | None = None
+
+    @field_validator("gpu_ids")
+    @classmethod
+    def gpu_ids_must_be_non_negative(cls, v: list[int] | None) -> list[int] | None:
+        if v is None:
+            return v
+        if any(i < 0 for i in v):
+            raise ValueError(f"gpu_ids must all be >= 0, got {v}")
+        if len(v) != len(set(v)):
+            raise ValueError(f"gpu_ids must be unique, got {v}")
+        return v
+
+    @model_validator(mode="after")
+    def validate_kind_and_ids(self) -> "DeviceConfig":
+        if (
+            self.kind == "multi_cuda"
+            and self.gpu_ids is not None
+            and len(self.gpu_ids) < 2
+        ):
+            raise ValueError(
+                f"multi_cuda requires at least 2 gpu_ids, got {self.gpu_ids}"
+            )
+        return self
+
+
 class TransferLearningConfig(BaseModel):
     """Settings for feature extraction and fine-tuning transfer learning."""
 
@@ -243,6 +279,7 @@ class ExperimentConfig(BaseModel):
     training: TrainingConfig = Field(default_factory=TrainingConfig)
     data: DataConfig
     output: OutputConfig = OutputConfig()
+    device: DeviceConfig = Field(default_factory=DeviceConfig)
     classification: ClassificationConfig = ClassificationConfig()
     grid_search: GridSearchConfig | None = None
     random_search: RandomSearchConfig | None = None
@@ -316,6 +353,7 @@ __all__ = [
     "TransformConfig",
     "OutputConfig",
     "ClassificationConfig",
+    "DeviceConfig",
     "GridSearchConfig",
     "RandomSearchConfig",
     "CrossValidationConfig",

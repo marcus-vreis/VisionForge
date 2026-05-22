@@ -126,6 +126,91 @@ export async function detectDatasetSplits(
   });
 }
 
+export interface DatasetPickResponse {
+  path: string;
+  cancelled: boolean;
+  message: string | null;
+}
+
+export async function pickDatasetFolder(): Promise<DatasetPickResponse> {
+  return request<DatasetPickResponse>("/dataset/pick", { method: "POST" });
+}
+
+export interface GPUInfo {
+  index: number;
+  name: string;
+  total_memory_mb: number;
+  compute_capability: string | null;
+}
+
+export interface DeviceInfoResponse {
+  cuda_available: boolean;
+  cuda_version: string | null;
+  cpu_name: string;
+  gpus: GPUInfo[];
+}
+
+export async function fetchDeviceInfo(): Promise<DeviceInfoResponse> {
+  return request<DeviceInfoResponse>("/device/info");
+}
+
+export interface RunDetail {
+  run_id: string;
+  experiment_name: string;
+  status: string;
+  started_at: string;
+  finished_at: string | null;
+  device_used: string | null;
+  run_dir: string;
+  config: Record<string, unknown>;
+  metrics: Record<string, unknown>;
+  history: Array<{
+    epoch: number;
+    train_loss: number;
+    train_accuracy: number;
+    val_loss: number;
+    val_accuracy: number;
+  }>;
+  artifacts: {
+    model?: string;
+    graphics?: string[];
+    report?: string | null;
+  };
+  tests: TestRecord[];
+}
+
+export interface TestRecord {
+  test_id: string;
+  label: string;
+  base_dir: string;
+  timestamp: string;
+  metrics: Record<string, number | null>;
+  artifacts: Record<string, string>;
+}
+
+export async function fetchRunDetail(runId: string): Promise<RunDetail> {
+  return request<RunDetail>(`/runs/${encodeURIComponent(runId)}`);
+}
+
+export interface RunTestRequestPayload {
+  base_dir: string;
+  train_dir?: string;
+  val_dir?: string;
+  test_dir?: string;
+  label?: string;
+}
+
+export async function testRunOnDataset(
+  runId: string,
+  payload: RunTestRequestPayload,
+): Promise<TestRecord> {
+  return request<TestRecord>(`/runs/${encodeURIComponent(runId)}/test`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
 export function artifactUrl(path: string): string {
   return `${BASE}/artifacts/${path}`;
 }

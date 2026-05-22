@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { fetchRuns } from "../api/client";
 import type { RunSummary } from "../types/run";
+import { RunDetailPanel } from "./RunDetailPanel";
 
 interface HistoryOverlayProps {
   open: boolean;
@@ -43,7 +44,7 @@ function fmtDate(iso: string): string {
 const METRIC_KEYS = ["accuracy", "f1", "val_loss"];
 
 /** One run card inside the history list. */
-function RunCard({ run }: { run: RunSummary }) {
+function RunCard({ run, onClick }: { run: RunSummary; onClick: () => void }) {
   const accent = TASK_ACCENT[run.task] ?? "var(--vf-text-muted)";
   const dot = statusColor(run.status);
   const shownMetrics = METRIC_KEYS.filter(
@@ -51,7 +52,9 @@ function RunCard({ run }: { run: RunSummary }) {
   );
 
   return (
-    <div
+    <button
+      type="button"
+      onClick={onClick}
       style={{
         padding: "14px 18px",
         background: "rgba(255,255,255,0.025)",
@@ -60,6 +63,10 @@ function RunCard({ run }: { run: RunSummary }) {
         display: "flex",
         flexDirection: "column",
         gap: 8,
+        cursor: "pointer",
+        textAlign: "left",
+        width: "100%",
+        color: "inherit",
       }}
     >
       {/* Top row: name + status dot */}
@@ -210,7 +217,7 @@ function RunCard({ run }: { run: RunSummary }) {
         {fmtDate(run.started_at)}
         {run.finished_at ? ` → ${fmtDate(run.finished_at)}` : " · em andamento"}
       </div>
-    </div>
+    </button>
   );
 }
 
@@ -219,11 +226,13 @@ export function HistoryOverlay({ open, onClose, onCountChange }: HistoryOverlayP
   const [runs, setRuns] = useState<RunSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
     setLoading(true);
     setError(null);
+    setSelectedRunId(null);
     fetchRuns()
       .then((data) => {
         setRuns(data);
@@ -257,8 +266,8 @@ export function HistoryOverlay({ open, onClose, onCountChange }: HistoryOverlayP
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          width: "min(640px, 100%)",
-          maxHeight: "80vh",
+          width: selectedRunId ? "min(960px, 100%)" : "min(640px, 100%)",
+          maxHeight: "85vh",
           background: "rgba(12,14,18,0.95)",
           border: "1px solid var(--vf-panel-stroke)",
           borderRadius: 18,
@@ -449,11 +458,23 @@ export function HistoryOverlay({ open, onClose, onCountChange }: HistoryOverlayP
             </div>
           )}
 
+          {/* Detail panel takes over when a run is selected. */}
+          {selectedRunId && (
+            <RunDetailPanel
+              runId={selectedRunId}
+              onBack={() => setSelectedRunId(null)}
+            />
+          )}
+
           {/* Run list */}
-          {!loading && error === null && runs.length > 0 && (
+          {!selectedRunId && !loading && error === null && runs.length > 0 && (
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {runs.map((run) => (
-                <RunCard key={run.run_id} run={run} />
+                <RunCard
+                  key={run.run_id}
+                  run={run}
+                  onClick={() => setSelectedRunId(run.run_id)}
+                />
               ))}
             </div>
           )}

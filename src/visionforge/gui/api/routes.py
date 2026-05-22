@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import platform
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -13,15 +14,26 @@ from fastapi.responses import FileResponse, StreamingResponse
 from loguru import logger
 
 from visionforge.blocks.classification import ClassificationBlock
+from visionforge.core.data import DataModule
+from visionforge.core.evaluator import Evaluator
+from visionforge.core.plotter import MetricsPlotter
 from visionforge.gui.api.schemas import (
     DatasetDetectRequest,
     DatasetDetectResponse,
+    DatasetPickResponse,
+    DeviceInfoResponse,
+    GPUInfo,
+    RunDetail,
     RunResponse,
     RunResult,
     RunStatus,
     RunSummary,
+    RunTestRequest,
+    RunTestResponse,
 )
+from visionforge.models.factory import ModelFactory
 from visionforge.utils.config import ExperimentConfig
+from visionforge.utils.cuda import check_cuda
 
 # Common split folder names per role. Lowercased, accent-stripped at match time.
 _TRAIN_ALIASES = {"train", "training", "treino", "trains", "tr"}
@@ -61,20 +73,105 @@ async def get_schema() -> dict[str, Any]:
     return ExperimentConfig.model_json_schema()
 
 
+@router.get("/device/info")
+async def get_device_info() -> DeviceInfoResponse:
+    """Probe the runtime and return the real list of selectable devices."""
+    info = check_cuda()
+    gpus = [
+        GPUInfo(
+            index=d.index,
+            name=d.name,
+            total_memory_mb=d.total_memory_mb,
+            compute_capability=d.compute_capability,
+        )
+        for d in info.devices
+    ]
+    return DeviceInfoResponse(
+        cuda_available=info.available,
+        cuda_version=info.cuda_version,
+        cpu_name=platform.processor() or platform.machine() or "CPU",
+        gpus=gpus,
+    )
+
+
 @router.get("/runs")
 async def list_runs() -> list[RunSummary]:
     """Return all historical runs sorted by started_at descending."""
     return _load_runs(_MODELS_DIR.resolve())
 
 
+@router.get("/runs/{run_id}")
+async def get_run_detail(run_id: str) -> RunDetail:
+    """Return the full run.json for a specific run_id."""
+    run_dir = _find_run_dir(run_id)
+    if run_dir is None:
+        raise HTTPException(404, f"Run '{run_id}' not found.")
+    run_json_path = run_dir / "run.json"
+    try:
+        data: dict[str, Any] = json.loads(run_json_path.read_text(encoding="utf-8"))
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(500, f"Failed to parse run.json: {exc}") from exc
+
+    started = datetime.fromisoformat(data["timestamp"])
+    status = data.get("status", "completed")
+    finished = started if status == "completed" else None
+
+    return RunDetail(
+        run_id=run_dir.name,
+        experiment_name=data.get("experiment", run_dir.parent.name),
+        status=status,
+        started_at=started,
+        finished_at=finished,
+        device_used=data.get("device_used"),
+        run_dir=data.get("run_dir", str(run_dir.resolve())),
+        config=data.get("config", {}),
+        metrics=data.get("metrics", {}),
+        history=data.get("history", []),
+        artifacts=data.get("artifacts", {}),
+        tests=data.get("tests", []),
+    )
+
+
+@router.post("/runs/{run_id}/test")
+async def test_run_on_dataset(run_id: str, req: RunTestRequest) -> RunTestResponse:
+    """Run the saved checkpoint against a new dataset and record the result.
+
+    The test result is appended to run.json under the 'tests' array so each
+    saved model accumulates its own per-dataset history.
+    """
+    run_dir = _find_run_dir(run_id)
+    if run_dir is None:
+        raise HTTPException(404, f"Run '{run_id}' not found.")
+
+    # Run the actual evaluation in a worker thread (PyTorch + disk I/O).
+    try:
+        result = await asyncio.to_thread(_execute_run_test, run_dir, req)
+    except FileNotFoundError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Test on run {} failed", run_id)
+        raise HTTPException(500, f"{type(exc).__name__}: {exc}") from exc
+
+    return result
+
+
 @router.post("/dataset/detect")
 async def detect_dataset(req: DatasetDetectRequest) -> DatasetDetectResponse:
-    """Scan a base_dir for standard train/val/test split subdirectories.
-
-    Returns a structured response describing what was found so the frontend
-    can either auto-fill the splits or ask the user to map them manually.
-    """
+    """Scan a base_dir for standard train/val/test split subdirectories."""
     return _detect_dataset_layout(req.base_dir)
+
+
+@router.post("/dataset/pick")
+async def pick_dataset_folder() -> DatasetPickResponse:
+    """Open a native folder picker on the server and return the absolute path.
+
+    Because VisionForge runs locally (browser + Python on the same machine),
+    we can open a tkinter dialog server-side so the user gets a *real* absolute
+    path — something the browser's File System Access API never provides.
+    """
+    return await asyncio.to_thread(_open_native_folder_dialog)
 
 
 @router.post("/experiment/run")
@@ -108,11 +205,7 @@ async def run_experiment(config: ExperimentConfig) -> RunResponse:
 
 @router.get("/experiment/events")
 async def experiment_events() -> StreamingResponse:
-    """Stream live training progress as Server-Sent Events.
-
-    Yields one SSE data line per training event (start, epoch_end × N, end).
-    The stream closes when the run completes, fails, or when no run is active.
-    """
+    """Stream live training progress as Server-Sent Events."""
     return StreamingResponse(
         _sse_generator(),
         media_type="text/event-stream",
@@ -125,7 +218,6 @@ async def experiment_events() -> StreamingResponse:
 
 async def _sse_generator():  # type: ignore[return]
     """Pull events off _event_queue and yield SSE-formatted lines."""
-    # Snapshot the queue at request time; if no run is active, close immediately.
     queue = _event_queue
     if queue is None:
         yield "data: {}\n\n"
@@ -134,7 +226,6 @@ async def _sse_generator():  # type: ignore[return]
     while True:
         item = await queue.get()
         if item is None:
-            # Sentinel — run finished or failed.
             break
         yield f"data: {json.dumps(item)}\n\n"
 
@@ -195,22 +286,167 @@ async def serve_artifact(file_path: str) -> FileResponse:
     ).resolve()  # NOSONAR pythonsecurity:S6549 - re-checked with is_relative_to below before FileResponse
     outputs_dir = Path("outputs").resolve()
 
-    # is_relative_to is immune to the str.startswith bypass on case-insensitive FSes.
     if not resolved.is_relative_to(outputs_dir):
         raise HTTPException(403, "Access denied.")
 
     if not resolved.is_file():
         raise HTTPException(404, "File not found.")
 
-    # Path is validated above to be inside outputs/ and to be a regular file.
     return FileResponse(resolved)  # NOSONAR python:S2083
 
 
-def _load_runs(models_dir: Path) -> list[RunSummary]:
-    """Scan models_dir recursively for run.json files and parse each into RunSummary.
+# ── private helpers ──────────────────────────────────────────────────────────
 
-    Directories without a parseable run.json are silently skipped.
+
+def _find_run_dir(run_id: str) -> Path | None:
+    """Locate a run directory by its timestamp folder name."""
+    models_dir = _MODELS_DIR.resolve()
+    if not models_dir.exists():
+        return None
+    # run_id == timestamp folder OR experiment_name+timestamp; check both forms.
+    for run_json in models_dir.rglob("run.json"):
+        d = run_json.parent
+        if d.name == run_id:
+            return d
+        try:
+            data = json.loads(run_json.read_text(encoding="utf-8"))
+            if data.get("id") == run_id:
+                return d
+        except Exception:  # noqa: BLE001
+            continue
+    return None
+
+
+def _open_native_folder_dialog() -> DatasetPickResponse:
+    """Open a tkinter folder dialog and return the chosen absolute path.
+
+    Runs in a worker thread because tkinter blocks the calling thread. Returns
+    an empty path + cancelled=True when the dialog is dismissed or unavailable.
     """
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+    except ImportError:
+        return DatasetPickResponse(
+            path="",
+            cancelled=True,
+            message="tkinter is not available on this Python installation.",
+        )
+
+    try:
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes("-topmost", True)
+        chosen = filedialog.askdirectory(title="Selecione o diretório base do dataset")
+        root.destroy()
+    except Exception as exc:  # noqa: BLE001
+        return DatasetPickResponse(
+            path="",
+            cancelled=True,
+            message=f"Falha ao abrir o seletor: {exc}",
+        )
+
+    if not chosen:
+        return DatasetPickResponse(path="", cancelled=True, message="Cancelado.")
+
+    return DatasetPickResponse(path=str(Path(chosen).resolve()), cancelled=False)
+
+
+def _execute_run_test(run_dir: Path, req: RunTestRequest) -> RunTestResponse:
+    """Reload a saved checkpoint and evaluate it on a new dataset path.
+
+    Updates run.json so each model accumulates its own test history.
+    """
+    run_json_path = run_dir / "run.json"
+    data: dict[str, Any] = json.loads(run_json_path.read_text(encoding="utf-8"))
+    base_config_dict: dict[str, Any] = data["config"]
+
+    # Build an ExperimentConfig clone with the new dataset paths + evaluate mode.
+    test_config_dict = {
+        **base_config_dict,
+        "classification": {
+            "mode": "evaluate",
+            "checkpoint_path": data["artifacts"]["model"],
+        },
+        "data": {
+            **base_config_dict.get("data", {}),
+            "base_dir": req.base_dir,
+            "train_dir": req.train_dir,
+            "val_dir": req.val_dir,
+            "test_dir": req.test_dir,
+        },
+    }
+    config = ExperimentConfig.model_validate(test_config_dict)
+
+    model = ModelFactory.create(config.model)
+    import torch  # local import — keeps top-level lightweight on cold start
+
+    state_dict = torch.load(
+        str(config.classification.checkpoint_path),
+        map_location="cpu",
+        weights_only=True,
+    )
+    model.load_state_dict(state_dict)  # type: ignore[arg-type]
+
+    data_module = DataModule(config)
+    eval_result = Evaluator(config).evaluate(model, data_module.test_loader())
+
+    timestamp = datetime.now()
+    test_id = f"test_{timestamp.strftime('%Y%m%d_%H%M%S_%f')}"
+    tests_dir = run_dir / "tests"
+    tests_dir.mkdir(parents=True, exist_ok=True)
+
+    # Render confusion matrix + ROC for the test dataset.
+    artifacts: dict[str, Any] = {}
+    cm_path = tests_dir / f"{test_id}_confusion_matrix.png"
+    MetricsPlotter.confusion_matrix_plot(
+        eval_result.confusion_matrix, data_module.class_names, cm_path
+    )
+    artifacts["confusion_matrix"] = str(cm_path)
+
+    roc_path = tests_dir / f"{test_id}_roc_curve.png"
+    if MetricsPlotter.roc_curve_plot(
+        eval_result.y_true,
+        eval_result.y_proba_full,
+        data_module.class_names,
+        roc_path,
+    ):
+        artifacts["roc_curve"] = str(roc_path)
+
+    metrics = {
+        "accuracy": eval_result.accuracy,
+        "f1": eval_result.f1,
+        "precision": eval_result.precision,
+        "recall": eval_result.recall,
+        "auc_roc": eval_result.auc_roc,
+    }
+
+    label = req.label or Path(req.base_dir).name or "test"
+    base_dir_str = str(Path(req.base_dir).resolve())
+    record: dict[str, Any] = {
+        "test_id": test_id,
+        "label": label,
+        "base_dir": base_dir_str,
+        "timestamp": timestamp.isoformat(),
+        "metrics": metrics,
+        "artifacts": artifacts,
+    }
+    data.setdefault("tests", []).append(record)
+    run_json_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+    return RunTestResponse(
+        test_id=test_id,
+        run_id=run_dir.name,
+        label=label,
+        base_dir=base_dir_str,
+        timestamp=timestamp,
+        metrics=metrics,
+        artifacts=artifacts,
+    )
+
+
+def _load_runs(models_dir: Path) -> list[RunSummary]:
+    """Scan models_dir recursively for run.json files and parse each into RunSummary."""
     if not models_dir.exists():
         return []
 
@@ -228,10 +464,7 @@ def _load_runs(models_dir: Path) -> list[RunSummary]:
 
 
 def _parse_run_summary(run_dir: Path, data: dict[str, Any]) -> RunSummary:
-    """Build a RunSummary from a parsed run.json dict.
-
-    Raises KeyError or ValueError if required fields are missing.
-    """
+    """Build a RunSummary from a parsed run.json dict."""
     status: str = data["status"]
     started_at = datetime.fromisoformat(data["timestamp"])
     finished_at: datetime | None = started_at if status == "completed" else None
@@ -269,8 +502,6 @@ async def _execute_experiment(config: ExperimentConfig, run_id: str) -> None:
     queue = _event_queue  # capture at task-start to survive queue replacement
 
     def _put_event(event: dict[str, Any]) -> None:
-        # Called from the Trainer worker thread; must schedule the coroutine on
-        # the event loop thread-safely.
         if queue is not None:
             asyncio.run_coroutine_threadsafe(queue.put(event), loop)
 
@@ -284,7 +515,6 @@ async def _execute_experiment(config: ExperimentConfig, run_id: str) -> None:
 
         report = block.report()
 
-        # Extract run_dir from the train result stored in the block.
         run_dir: str | None = None
         if block._train_result and block._train_result.model_path:
             run_dir = str(block._train_result.model_path.parent)
@@ -311,7 +541,6 @@ async def _execute_experiment(config: ExperimentConfig, run_id: str) -> None:
         }
 
     finally:
-        # Always put the sentinel so the SSE generator can close cleanly.
         if queue is not None:
             await queue.put(None)
 

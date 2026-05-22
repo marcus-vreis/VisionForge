@@ -107,7 +107,16 @@ class TestClassificationBlock:
         data: dict[str, Any] = json.loads(run_files[0].read_text(encoding="utf-8"))
         assert "test_accuracy" in data["metrics"]
         assert "test_f1" in data["metrics"]
-        assert len(data["artifacts"]["graphics"]) == 2
+        # Block now renders the full plot set: loss, accuracy, confusion matrix
+        # (raw + normalized), plus ROC and PR when both classes are present.
+        # Minimum 4 (no ROC/PR) when only one class survives; up to 6 when both
+        # appear. The fake binary fixture has both, so 6 is the expected count.
+        graphics = data["artifacts"]["graphics"]
+        assert len(graphics) >= 4
+        filenames = [Path(p).name for p in graphics]
+        assert "loss.png" in filenames
+        assert "accuracy.png" in filenames
+        assert "confusion_matrix.png" in filenames
 
     @patch(
         "visionforge.blocks.classification.ModelFactory.create",

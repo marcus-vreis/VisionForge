@@ -24,6 +24,9 @@ const SKIP_FIELDS = new Set([
   "checkpoint_path",
   "weights_path",
   "mode",
+  // Device is owned by the Header/BottomBar DeviceSelector — don't render it
+  // a second time in the form panel.
+  "device",
 ]);
 
 export function resolveKind(

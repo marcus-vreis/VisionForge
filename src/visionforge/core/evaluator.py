@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
@@ -16,6 +16,7 @@ from sklearn.metrics import (
     roc_auc_score,
 )
 
+from visionforge.core.trainer import resolve_device
 from visionforge.utils.config import ExperimentConfig
 
 
@@ -27,9 +28,16 @@ class EvalResult:
     f1: float
     precision: float
     recall: float
-    auc_roc: float | None  # None for multiclass (requires per-class probabilities)
+    auc_roc: float | None  # None for multiclass without per-class probabilities
     confusion_matrix: list[list[int]]
     report: str  # sklearn classification_report text
+    # Per-sample arrays kept for downstream plotting (ROC, PR, calibration).
+    # For binary tasks: y_score is sigmoid prob of positive class.
+    # For multiclass: y_score is softmax prob of the predicted class.
+    y_true: list[int] = field(default_factory=list)
+    y_score: list[float] = field(default_factory=list)
+    # Full per-class softmax matrix for multiclass ROC (one row per sample).
+    y_proba_full: list[list[float]] = field(default_factory=list)
 
 
 class Evaluator:
@@ -37,7 +45,7 @@ class Evaluator:
 
     def __init__(self, config: ExperimentConfig) -> None:
         self._config = config
-        self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self._device, self._dp_ids, _ = resolve_device(config.device)
 
     def evaluate(self, model: nn.Module, loader: Any) -> EvalResult:
         """Run inference on loader and return classification metrics.
@@ -47,14 +55,15 @@ class Evaluator:
             loader: iterable of (inputs, labels) batches.
 
         Returns:
-            EvalResult with accuracy, F1, precision, recall, AUC-ROC, confusion matrix.
+            EvalResult with metrics, confusion matrix, and per-sample arrays for plotting.
         """
         model.eval()
         model = model.to(self._device)
 
         all_preds: list[int] = []
         all_labels: list[int] = []
-        all_probs: list[float] = []
+        all_probs: list[float] = []  # prob of predicted class (binary: positive class)
+        all_proba_full: list[list[float]] = []
 
         with torch.no_grad():
             for inputs, labels in loader:
@@ -62,15 +71,21 @@ class Evaluator:
                 outputs = model(inputs)
 
                 if self._config.task == "binary":
-                    probs = outputs.sigmoid().squeeze(1)
-                    preds = (probs > 0.5).long()
+                    pos = outputs.sigmoid().squeeze(1)
+                    preds = (pos > 0.5).long()
+                    all_probs.extend(pos.cpu().tolist())
+                    # For binary, full proba is [1-p, p] per sample.
+                    all_proba_full.extend(
+                        [[1.0 - float(p), float(p)] for p in pos.cpu().tolist()]
+                    )
                 else:
-                    probs = outputs.softmax(dim=1).max(dim=1).values
-                    preds = outputs.argmax(dim=1)
+                    softmax = outputs.softmax(dim=1)
+                    preds = softmax.argmax(dim=1)
+                    all_probs.extend(softmax.max(dim=1).values.cpu().tolist())
+                    all_proba_full.extend(softmax.cpu().tolist())
 
                 all_preds.extend(preds.cpu().tolist())
                 all_labels.extend(labels.tolist())
-                all_probs.extend(probs.cpu().tolist())
 
         y_true = np.array(all_labels)
         y_pred = np.array(all_preds)
@@ -81,6 +96,21 @@ class Evaluator:
 
         if self._config.task == "binary" and len(np.unique(y_true)) == 2:
             auc_roc = float(roc_auc_score(y_true, y_prob))
+        elif self._config.task == "multiclass" and len(all_proba_full) > 0:
+            n_classes = len(all_proba_full[0])
+            present = np.unique(y_true)
+            if len(present) > 1 and n_classes >= 2:
+                try:
+                    auc_roc = float(
+                        roc_auc_score(
+                            y_true,
+                            np.array(all_proba_full),
+                            multi_class="ovr",
+                            average="macro",
+                        )
+                    )
+                except ValueError:
+                    auc_roc = None
 
         return EvalResult(
             accuracy=float(accuracy_score(y_true, y_pred)),
@@ -92,6 +122,9 @@ class Evaluator:
             auc_roc=auc_roc,
             confusion_matrix=confusion_matrix(y_true, y_pred).tolist(),
             report=classification_report(y_true, y_pred, zero_division=0),  # type: ignore[call-arg]
+            y_true=all_labels,
+            y_score=all_probs,
+            y_proba_full=all_proba_full,
         )
 
 
