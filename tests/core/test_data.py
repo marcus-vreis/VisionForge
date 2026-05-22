@@ -5,7 +5,12 @@ import pytest
 from PIL import Image
 
 from visionforge.core.data import DataModule, _build_transforms
-from visionforge.utils.config import ExperimentConfig, TransformConfig
+from visionforge.utils.config import (
+    ExperimentConfig,
+    PreprocessingConfig,
+    PreprocessingStep,
+    TransformConfig,
+)
 
 
 @pytest.fixture
@@ -78,6 +83,59 @@ class TestBuildTransforms:
         transform = _build_transforms(tc, is_train=True)
         names = [type(t).__name__ for t in transform.transforms]
         assert "RandomRotation" not in names
+
+    def test_empty_preprocessing_does_not_add_callable(self) -> None:
+        """Empty PreprocessingConfig must not prepend any step."""
+        pp = PreprocessingConfig()
+        transform = _build_transforms(
+            TransformConfig(), is_train=False, preprocessing=pp
+        )
+        # Default chain has Resize, CenterCrop, ToTensor, Normalize = 4 steps.
+        assert len(transform.transforms) == 4
+
+    def test_preprocessing_prepends_callable(self) -> None:
+        """A non-empty preprocessing must add a leading callable to the pipeline."""
+        pp = PreprocessingConfig(steps=[PreprocessingStep(kind="grayscale")])
+        transform = _build_transforms(
+            TransformConfig(), is_train=False, preprocessing=pp
+        )
+        # First step is now our pipeline callable (not a torchvision class).
+        assert callable(transform.transforms[0])
+        assert type(transform.transforms[0]).__name__ != "Resize"
+
+
+class TestDataModulePreprocessing:
+    def test_data_module_with_pipeline_loads(self, dataset_root: Path) -> None:
+        """End-to-end: DataModule with a preprocessing pipeline returns tensors."""
+        cfg = ExperimentConfig.model_validate(
+            {
+                "name": "pp_test",
+                "task": "binary",
+                "model": {"name": "resnet18", "num_classes": 1, "pretrained": False},
+                "training": {
+                    "learning_rate": 0.001,
+                    "epochs": 1,
+                    "batch_size": 2,
+                    "seed": 0,
+                },
+                "data": {
+                    "base_dir": str(dataset_root),
+                    "num_workers": 0,
+                    "pin_memory": False,
+                    "preprocessing": {
+                        "steps": [
+                            {"kind": "gaussian_blur", "radius": 1.0},
+                            {"kind": "grayscale"},
+                        ],
+                    },
+                },
+            }
+        )
+        dm = DataModule(cfg)
+        inputs, _ = next(iter(dm.train_loader()))
+        # Shape: (batch, 3, H, W) — preprocessing kept RGB channel count.
+        assert inputs.dim() == 4
+        assert inputs.shape[1] == 3
 
 
 class TestDataModule:

@@ -49,6 +49,14 @@ const FIELD_LABELS: Record<string, string> = {
   optimizer: "Otimizador",
   weight_decay: "Weight decay",
   seed: "Seed",
+  deterministic: "Determinístico (lento)",
+  mixed_precision: "Precisão mista (AMP)",
+  kind: "Tipo",
+  step_size: "Step size",
+  gamma: "Gamma",
+  patience: "Paciência",
+  factor: "Fator",
+  min_lr: "LR mínimo",
   base_dir: "Diretório base",
   train_dir: "Subdir treino",
   val_dir: "Subdir validação",
@@ -72,6 +80,100 @@ function resolveSchema(
     return defs[refName] ?? schema;
   }
   return schema;
+}
+
+
+interface SchedulerFieldsProps {
+  schema: JsonSchema;
+  defs: Record<string, JsonSchema>;
+  value: Record<string, unknown>;
+  onChange: (v: Record<string, unknown>) => void;
+  errors: ValidationError[];
+}
+
+/** Scheduler config UI — picks ``kind`` and shows only the relevant params. */
+function SchedulerFields({
+  schema,
+  defs,
+  value,
+  onChange,
+  errors,
+}: SchedulerFieldsProps) {
+  const resolved = resolveSchema(schema, defs);
+  if (!resolved.properties) return null;
+
+  const kind = (value["kind"] as string) ?? "none";
+  const setParam = (k: string, v: unknown) => onChange({ ...value, [k]: v });
+
+  // Only show params relevant to the selected kind so the form stays tidy.
+  const visibleParams: Record<string, string[]> = {
+    none: [],
+    cosine: [],
+    step: ["step_size", "gamma"],
+    plateau: ["patience", "factor", "min_lr"],
+  };
+  const shown = visibleParams[kind] ?? [];
+
+  return (
+    <div
+      style={{
+        marginTop: 4,
+        marginBottom: 26,
+        padding: 14,
+        background: "rgba(255,255,255,0.015)",
+        border: "1px solid var(--vf-panel-stroke)",
+        borderRadius: 10,
+        display: "flex",
+        flexDirection: "column",
+        gap: 14,
+      }}
+    >
+      <div
+        style={{
+          fontFamily: "var(--font-mono)",
+          fontSize: 10,
+          letterSpacing: "0.18em",
+          textTransform: "uppercase",
+          color: "var(--vf-text-muted)",
+        }}
+      >
+        // learning-rate scheduler
+      </div>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr 1fr 1fr",
+          gap: 14,
+        }}
+      >
+        {resolved.properties["kind"] && (
+          <SchemaFieldVF
+            name="kind"
+            schema={resolved.properties["kind"]}
+            defs={defs}
+            value={kind}
+            onChange={(v) => setParam("kind", v)}
+            errors={errors}
+            path={["training", "scheduler", "kind"]}
+          />
+        )}
+        {shown.map((paramKey) =>
+          resolved.properties?.[paramKey] ? (
+            <SchemaFieldVF
+              key={paramKey}
+              name={paramKey}
+              schema={resolved.properties[paramKey]}
+              defs={defs}
+              value={value[paramKey]}
+              onChange={(v) => setParam(paramKey, v)}
+              errors={errors}
+              path={["training", "scheduler", paramKey]}
+            />
+          ) : null,
+        )}
+      </div>
+    </div>
+  );
 }
 
 
@@ -862,7 +964,7 @@ export function ParamPanel({
           position: "relative",
         }}
       >
-        {["epochs", "learning_rate", "batch_size", "optimizer", "early_stopping_patience", "weight_decay", "seed"].map(
+        {["epochs", "learning_rate", "batch_size", "optimizer", "early_stopping_patience", "weight_decay", "seed", "deterministic", "mixed_precision"].map(
           (key) =>
             trainingProps[key] ? (
               <SchemaFieldVF
@@ -878,6 +980,17 @@ export function ParamPanel({
             ) : null,
         )}
       </div>
+
+      {/* Scheduler section — nested under training */}
+      {trainingProps["scheduler"] && (
+        <SchedulerFields
+          schema={trainingProps["scheduler"]}
+          defs={defs}
+          value={(trainingData["scheduler"] ?? {}) as Record<string, unknown>}
+          onChange={(v) => setField("training", "scheduler", v)}
+          errors={validationErrors}
+        />
+      )}
 
       {/* Divider */}
       <div

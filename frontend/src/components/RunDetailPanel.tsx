@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   ApiError,
   artifactUrl,
+  downloadRunMarkdown,
   fetchRunDetail,
   pickDatasetFolder,
   testRunOnDataset,
@@ -162,6 +163,26 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
         <div style={{ fontFamily: "var(--font-mono)", fontSize: 14, color: "var(--vf-text)" }}>
           {runId}
         </div>
+        <button
+          type="button"
+          onClick={() => void downloadRunMarkdown(runId)}
+          title="Baixar model card (markdown) deste run"
+          style={{
+            marginLeft: "auto",
+            padding: "6px 12px",
+            background: "var(--accent-soft)",
+            border: "1px solid var(--accent-vf)",
+            borderRadius: 8,
+            color: "var(--vf-text)",
+            fontFamily: "var(--font-mono)",
+            fontSize: 11,
+            letterSpacing: "0.10em",
+            textTransform: "uppercase",
+            cursor: "pointer",
+          }}
+        >
+          ↓ markdown
+        </button>
       </div>
 
       {loading && (

@@ -111,6 +111,45 @@ export function DatasetStats({ baseDir, trainDir, valDir, testDir }: DatasetStat
         gap: 10,
       }}
     >
+      {/* Class index map — ImageFolder sorts alphabetically, so 0 = first */}
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          alignItems: "center",
+          gap: 8,
+        }}
+      >
+        <span
+          style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: 9,
+            letterSpacing: "0.14em",
+            textTransform: "uppercase",
+            color: "var(--vf-text-muted)",
+          }}
+        >
+          mapeamento (ImageFolder):
+        </span>
+        {stats.class_names.map((cn, idx) => (
+          <span
+            key={cn}
+            style={{
+              padding: "3px 9px",
+              background: "rgba(255,255,255,0.04)",
+              border: "1px solid var(--vf-panel-stroke)",
+              borderRadius: 999,
+              fontFamily: "var(--font-mono)",
+              fontSize: 10,
+              color: "var(--vf-text-dim)",
+            }}
+          >
+            <span style={{ color: "var(--accent-vf)", marginRight: 6 }}>{idx}</span>
+            {cn}
+          </span>
+        ))}
+      </div>
+
       <div
         style={{
           display: "flex",

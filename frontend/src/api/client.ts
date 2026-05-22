@@ -307,6 +307,26 @@ export async function testRunOnDataset(
   });
 }
 
+/** Download the model card markdown for a run. Triggers a browser download. */
+export async function downloadRunMarkdown(runId: string): Promise<void> {
+  const res = await fetch(`${BASE}/runs/${encodeURIComponent(runId)}/export_md`);
+  if (!res.ok) {
+    throw new ApiError(res.status, `HTTP ${res.status} ao gerar markdown.`);
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  // Use the server-supplied filename when present, otherwise fallback.
+  const cd = res.headers.get("content-disposition") ?? "";
+  const match = cd.match(/filename="([^"]+)"/);
+  a.download = match ? match[1] : `${runId}.md`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 export function artifactUrl(path: string): string {
   return `${BASE}/artifacts/${path}`;
 }

@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, Response, StreamingResponse
 from loguru import logger
 
 from visionforge.blocks.classification import ClassificationBlock
@@ -189,6 +189,27 @@ async def get_run_detail(run_id: str) -> RunDetail:
         history=data.get("history", []),
         artifacts=data.get("artifacts", {}),
         tests=data.get("tests", []),
+    )
+
+
+@router.get("/runs/{run_id}/export_md")
+async def export_run_markdown(run_id: str) -> Response:
+    """Render a model card (markdown) for the run, ready for paper inclusion."""
+    run_dir = _find_run_dir(run_id)
+    if run_dir is None:
+        raise HTTPException(404, f"Run '{run_id}' not found.")
+    run_json_path = run_dir / "run.json"
+    try:
+        data: dict[str, Any] = json.loads(run_json_path.read_text(encoding="utf-8"))
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(500, f"Failed to parse run.json: {exc}") from exc
+
+    md = _render_run_markdown(run_dir, data)
+    filename = f"{data.get('experiment', run_dir.name)}_{run_dir.name}.md"
+    return Response(
+        content=md,
+        media_type="text/markdown; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 
@@ -427,6 +448,102 @@ async def serve_artifact(file_path: str) -> FileResponse:
 
 
 # ── private helpers ──────────────────────────────────────────────────────────
+
+
+def _render_run_markdown(run_dir: Path, data: dict[str, Any]) -> str:
+    """Format a run.json into a paper-ready model card."""
+    lines: list[str] = []
+    name = data.get("experiment", run_dir.name)
+    config: dict[str, Any] = data.get("config", {})
+    metrics: dict[str, Any] = data.get("metrics", {})
+    history: list[dict[str, Any]] = data.get("history", [])
+
+    lines.append(f"# {name}")
+    lines.append("")
+    lines.append(f"- **Run ID:** `{data.get('id', run_dir.name)}`")
+    lines.append(f"- **Timestamp:** {data.get('timestamp', '?')}")
+    lines.append(f"- **Status:** {data.get('status', '?')}")
+    if data.get("device_used"):
+        lines.append(f"- **Device used:** `{data['device_used']}`")
+    lines.append(f"- **Run directory:** `{data.get('run_dir', run_dir)}`")
+    artifacts = data.get("artifacts", {})
+    if artifacts.get("model"):
+        lines.append(f"- **Checkpoint:** `{artifacts['model']}`")
+    lines.append("")
+
+    lines.append("## Configuration")
+    lines.append("")
+    model_cfg = config.get("model", {})
+    training_cfg = config.get("training", {})
+    lines.append(f"- **Architecture:** {model_cfg.get('name', '?')}")
+    lines.append(f"- **num_classes:** {model_cfg.get('num_classes', '?')}")
+    lines.append(f"- **Pretrained:** {model_cfg.get('pretrained', '?')}")
+    lines.append(f"- **Task:** {config.get('task', '?')}")
+    lines.append(f"- **Optimizer:** {training_cfg.get('optimizer', '?')}")
+    lines.append(f"- **Learning rate:** {training_cfg.get('learning_rate', '?')}")
+    lines.append(f"- **Batch size:** {training_cfg.get('batch_size', '?')}")
+    lines.append(f"- **Epochs (max):** {training_cfg.get('epochs', '?')}")
+    lines.append(f"- **Seed:** {training_cfg.get('seed', '?')}")
+    if training_cfg.get("scheduler", {}).get("kind", "none") != "none":
+        sched = training_cfg["scheduler"]
+        lines.append(f"- **Scheduler:** {sched['kind']} ({sched})")
+    if training_cfg.get("mixed_precision"):
+        lines.append("- **Mixed precision:** enabled")
+    lines.append("")
+
+    lines.append("## Final metrics")
+    lines.append("")
+    if metrics:
+        lines.append("| Metric | Value |")
+        lines.append("|---|---|")
+        for k, v in metrics.items():
+            if isinstance(v, float):
+                lines.append(f"| {k} | {v:.4f} |")
+            else:
+                lines.append(f"| {k} | {v} |")
+    else:
+        lines.append("_(none recorded)_")
+    lines.append("")
+
+    if history:
+        lines.append(f"## Training history ({len(history)} epoch(s))")
+        lines.append("")
+        lines.append("| Epoch | train_loss | train_acc | val_loss | val_acc |")
+        lines.append("|---|---|---|---|---|")
+        for h in history:
+            lines.append(
+                f"| {h.get('epoch')} | {h.get('train_loss', '?'):.4f} | "
+                f"{h.get('train_accuracy', '?'):.4f} | "
+                f"{h.get('val_loss', '?'):.4f} | {h.get('val_accuracy', '?'):.4f} |"
+            )
+        lines.append("")
+
+    graphics = artifacts.get("graphics", [])
+    if graphics:
+        lines.append("## Plots")
+        lines.append("")
+        for g in graphics:
+            lines.append(f"- `{g}`")
+        lines.append("")
+
+    tests = data.get("tests", [])
+    if tests:
+        lines.append(f"## Test runs on additional datasets ({len(tests)})")
+        lines.append("")
+        for t in tests:
+            lines.append(f"### {t.get('label', t.get('test_id'))}")
+            lines.append(f"- **base_dir:** `{t.get('base_dir')}`")
+            lines.append(f"- **timestamp:** {t.get('timestamp')}")
+            m = t.get("metrics", {})
+            if m:
+                lines.append("| Metric | Value |")
+                lines.append("|---|---|")
+                for k, v in m.items():
+                    val = f"{v:.4f}" if isinstance(v, float) else str(v)
+                    lines.append(f"| {k} | {val} |")
+            lines.append("")
+
+    return "\n".join(lines)
 
 
 def _find_run_dir(run_id: str) -> Path | None:

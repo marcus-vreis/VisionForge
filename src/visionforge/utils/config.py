@@ -117,6 +117,38 @@ class TrainingConfig(BaseModel):
         return v
 
 
+class PreprocessingStep(BaseModel):
+    """One step in the preprocessing pipeline applied before augmentation."""
+
+    # populate_by_name lets configs use {"kind": "gaussian_blur", "radius": 1.5}
+    # — extra params are accepted because each filter consumes a different set
+    # (median needs size, wavelet needs band, etc.). They're forwarded as a dict
+    # to ``visionforge.core.preprocessing.apply_step``.
+    model_config = ConfigDict(extra="allow")
+
+    kind: Literal[
+        "gaussian_blur",
+        "median_blur",
+        "unsharp",
+        "edges",
+        "emboss",
+        "grayscale",
+        "equalize",
+        "autocontrast",
+        "wavelet",
+    ]
+
+
+class PreprocessingConfig(BaseModel):
+    """Ordered list of preprocessing steps applied to every loaded image.
+
+    Pipeline runs before the standard augmentation/normalize transforms in
+    ``DataModule``. Empty list = identity (no preprocessing).
+    """
+
+    steps: list[PreprocessingStep] = Field(default_factory=list)
+
+
 class TransformConfig(BaseModel):
     """Image transform and augmentation settings."""
 
@@ -138,6 +170,7 @@ class DataConfig(BaseModel):
     num_workers: int = Field(default=4, ge=0)
     pin_memory: bool = True
     transforms: TransformConfig = TransformConfig()
+    preprocessing: PreprocessingConfig = Field(default_factory=PreprocessingConfig)
 
     @field_validator("base_dir")
     @classmethod
@@ -394,6 +427,8 @@ __all__ = [
     "ClassificationConfig",
     "DeviceConfig",
     "SchedulerConfig",
+    "PreprocessingConfig",
+    "PreprocessingStep",
     "GridSearchConfig",
     "RandomSearchConfig",
     "CrossValidationConfig",

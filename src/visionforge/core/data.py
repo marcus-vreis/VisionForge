@@ -4,23 +4,62 @@ from collections.abc import Callable
 from typing import Any
 
 import torchvision.transforms as T
+from PIL import Image
 from torch.utils.data import DataLoader
 from torchvision.datasets import ImageFolder
 
-from visionforge.utils.config import ExperimentConfig, TransformConfig
+from visionforge.core.preprocessing import apply_pipeline
+from visionforge.utils.config import (
+    ExperimentConfig,
+    PreprocessingConfig,
+    TransformConfig,
+)
 
 
-def _build_transforms(config: TransformConfig, *, is_train: bool) -> T.Compose:
-    """Build a transform pipeline from TransformConfig.
+def _make_preprocessing_transform(
+    config: PreprocessingConfig,
+) -> Callable[[Image.Image], Image.Image]:
+    """Bind a PreprocessingConfig into a single torchvision-compatible callable.
+
+    Returns identity when the pipeline is empty so the standard transforms run
+    untouched in the default case.
+    """
+    if not config.steps:
+        return lambda img: img
+    step_dicts = [s.model_dump() for s in config.steps]
+
+    def _apply(img: Image.Image) -> Image.Image:
+        final, _ = apply_pipeline(img, step_dicts)
+        return final
+
+    return _apply
+
+
+def _build_transforms(
+    config: TransformConfig,
+    *,
+    is_train: bool,
+    preprocessing: PreprocessingConfig | None = None,
+) -> T.Compose:
+    """Build a transform pipeline.
+
+    Order: preprocessing pipeline → resize/crop → augmentation → ToTensor →
+    Normalize. The preprocessing runs first so subsequent random augmentations
+    (flip, rotation, jitter) operate on filtered images.
 
     Args:
-        config: transform settings.
-        is_train: whether to include augmentation steps.
+        config: transform/augmentation settings.
+        is_train: whether to include random augmentation steps.
+        preprocessing: optional filter pipeline applied before everything else.
 
     Returns:
         A composed torchvision transform.
     """
-    steps: list[Callable] = [
+    steps: list[Callable] = []
+    if preprocessing is not None and preprocessing.steps:
+        steps.append(_make_preprocessing_transform(preprocessing))
+
+    steps += [
         T.Resize(config.image_size),
         T.CenterCrop(config.image_size),
     ]
@@ -46,6 +85,7 @@ class DataModule:
     def __init__(self, config: ExperimentConfig) -> None:
         cfg = config.data
         tc = cfg.transforms
+        pp = cfg.preprocessing
 
         train_path = cfg.base_dir / cfg.train_dir
         val_path = cfg.base_dir / cfg.val_dir
@@ -56,13 +96,16 @@ class DataModule:
         self._pin_memory = cfg.pin_memory
 
         self._train = ImageFolder(
-            str(train_path), transform=_build_transforms(tc, is_train=True)
+            str(train_path),
+            transform=_build_transforms(tc, is_train=True, preprocessing=pp),
         )
         self._val = ImageFolder(
-            str(val_path), transform=_build_transforms(tc, is_train=False)
+            str(val_path),
+            transform=_build_transforms(tc, is_train=False, preprocessing=pp),
         )
         self._test = ImageFolder(
-            str(test_path), transform=_build_transforms(tc, is_train=False)
+            str(test_path),
+            transform=_build_transforms(tc, is_train=False, preprocessing=pp),
         )
 
         # Auto-downgrade: multiprocessing workers have a fixed startup +

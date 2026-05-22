@@ -156,3 +156,28 @@ class TestFindRunDir:
         with patch("visionforge.gui.api.routes._MODELS_DIR", tmp_path):
             found = _find_run_dir("nothing-here")
         assert found is None
+
+
+class TestExportRunMarkdown:
+    def test_returns_markdown_with_filename(
+        self, app_and_routes: tuple, tmp_path: Path
+    ) -> None:
+        app, routes_mod = app_and_routes
+        run_dir = _write_run(tmp_path)
+        with patch.object(routes_mod, "_MODELS_DIR", tmp_path):
+            client = TestClient(app, raise_server_exceptions=True)
+            resp = client.get(f"/api/runs/{run_dir.name}/export_md")
+        assert resp.status_code == 200
+        assert resp.headers["content-type"].startswith("text/markdown")
+        assert "attachment" in resp.headers.get("content-disposition", "")
+        body = resp.text
+        # The markdown must include the run identity + at least one metric.
+        assert "exp1" in body
+        assert "Run ID" in body or "run_id" in body.lower()
+
+    def test_404_for_unknown_run(self, app_and_routes: tuple, tmp_path: Path) -> None:
+        app, routes_mod = app_and_routes
+        with patch.object(routes_mod, "_MODELS_DIR", tmp_path):
+            client = TestClient(app, raise_server_exceptions=True)
+            resp = client.get("/api/runs/missing/export_md")
+        assert resp.status_code == 404
