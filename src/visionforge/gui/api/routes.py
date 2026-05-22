@@ -388,11 +388,18 @@ async def serve_dataset_file(path: str) -> FileResponse:
     open. Restricting to the session's allow-list keeps the endpoint useful
     for the thumbnail UI without exposing arbitrary FS reads.
     """
-    resolved = Path(
-        path
-    ).resolve()  # NOSONAR pythonsecurity:S6549 - allow-list checked below
-    if not resolved.is_file():
-        raise HTTPException(404, "File not found.")
+    # Fail fast on obvious traversal before we even resolve. The allow-list
+    # check below is the authoritative guard, but these two early checks make
+    # the intent obvious to readers (and to taint-analysis tools).
+    if ".." in path.replace("\\", "/").split("/"):
+        raise HTTPException(400, "Path contains traversal segments.")
+    candidate = Path(path)
+    if not candidate.is_absolute():
+        raise HTTPException(400, "Path must be absolute.")
+    try:
+        resolved = candidate.resolve(strict=True)  # NOSONAR pythonsecurity:S6549
+    except (FileNotFoundError, OSError) as exc:
+        raise HTTPException(404, "File not found.") from exc
     if resolved.suffix.lower() not in _IMAGE_EXTS:
         raise HTTPException(400, "Only image files are previewable.")
     if not _is_inside_allowed_root(resolved):
