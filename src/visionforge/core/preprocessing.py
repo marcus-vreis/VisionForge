@@ -110,7 +110,7 @@ def _wavelet_band(img: Image.Image, params: dict[str, Any]) -> Image.Image:
     out = np.clip(sub, 0, 255).astype(np.uint8)
     # Upsample back to original resolution so the pipeline composes cleanly.
     pil_sub = Image.fromarray(out, mode="RGB")
-    return pil_sub.resize(img.size, Image.BILINEAR)
+    return pil_sub.resize(img.size, Image.Resampling.BILINEAR)
 
 
 _REGISTRY = {
