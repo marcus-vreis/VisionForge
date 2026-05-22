@@ -135,6 +135,38 @@ class RunTestResponse(BaseModel):
     artifacts: dict[str, Any] = {}
 
 
+class DatasetStatsRequest(BaseModel):
+    """Path to a dataset root for class distribution analysis."""
+
+    base_dir: str
+    train_dir: str = "train"
+    val_dir: str = "val"
+    test_dir: str = "test"
+
+
+class SplitStats(BaseModel):
+    """Image counts per class for a single split."""
+
+    total_images: int
+    classes: dict[str, int]
+    missing: bool = False
+
+
+class DatasetStatsResponse(BaseModel):
+    """Per-split class distribution + imbalance verdict.
+
+    ``imbalanced`` is True when, in any present split, the ratio
+    max(count) / min(count) over classes exceeds 2.0 — a conventional rule of
+    thumb past which loss weighting or resampling becomes worth considering.
+    """
+
+    base_dir: str
+    splits: dict[str, SplitStats]
+    class_names: list[str]
+    imbalanced: bool
+    message: str | None = None
+
+
 __all__ = [
     "RunStatus",
     "RunResponse",
@@ -146,6 +178,9 @@ __all__ = [
     "DatasetDetectRequest",
     "DatasetDetectResponse",
     "DatasetPickResponse",
+    "DatasetStatsRequest",
+    "DatasetStatsResponse",
+    "SplitStats",
     "GPUInfo",
     "DeviceInfoResponse",
 ]

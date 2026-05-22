@@ -4,6 +4,7 @@ import type { JsonSchema } from "../types/schema";
 import type { TaskDefinition } from "../types/tasks";
 import { exportConfigToYaml, importConfigFromYaml } from "../lib/yaml-config";
 import { DatasetPicker } from "./DatasetPicker";
+import { DatasetStats } from "./DatasetStats";
 import { resolveKind } from "./field-renderer";
 import {
   NumberField,
@@ -747,6 +748,13 @@ export function ParamPanel({
         }
       />
 
+      <DatasetStats
+        baseDir={(dataData["base_dir"] as string) ?? ""}
+        trainDir={(dataData["train_dir"] as string) ?? ""}
+        valDir={(dataData["val_dir"] as string) ?? ""}
+        testDir={(dataData["test_dir"] as string) ?? ""}
+      />
+
       <div
         style={{
           display: "grid",
@@ -779,17 +787,40 @@ export function ParamPanel({
         )}
       </div>
 
-      {/* Transforms sub-section */}
+      {/* Augmentation / Transforms sub-section */}
       {dataProps["transforms"] && (
-        <SchemaFieldVF
-          name="transforms"
-          schema={dataProps["transforms"]}
-          defs={defs}
-          value={dataData["transforms"]}
-          onChange={(v) => setField("data", "transforms", v)}
-          errors={validationErrors}
-          path={["data", "transforms"]}
-        />
+        <>
+          <div
+            style={{
+              height: 1,
+              width: "100%",
+              background:
+                "linear-gradient(90deg, transparent, var(--vf-panel-stroke), transparent)",
+              margin: "20px 0 14px",
+            }}
+          />
+          <div
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: 10,
+              color: "var(--vf-text-muted)",
+              letterSpacing: "0.20em",
+              textTransform: "uppercase",
+              marginBottom: 14,
+            }}
+          >
+            // aumentos &amp; normalização
+          </div>
+          <SchemaFieldVF
+            name="transforms"
+            schema={dataProps["transforms"]}
+            defs={defs}
+            value={dataData["transforms"]}
+            onChange={(v) => setField("data", "transforms", v)}
+            errors={validationErrors}
+            path={["data", "transforms"]}
+          />
+        </>
       )}
 
       {/* Validation errors summary */}

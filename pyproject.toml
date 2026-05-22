@@ -11,7 +11,6 @@ dependencies = [
   # Deep Learning
   "torch>=2.3",
     "torchvision>=0.18",
-    "gradio>=4.0",
     "pydantic>=2.0",
     "pydantic-settings>=2.0",
     "loguru>=0.7",
@@ -22,6 +21,10 @@ dependencies = [
     "onnxruntime>=1.18",
     "pyyaml>=6.0",
     "rich>=13.0",
+
+  # GUI (React SPA served by FastAPI)
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
 ]
 
 [project.scripts]

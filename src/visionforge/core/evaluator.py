@@ -67,7 +67,7 @@ class Evaluator:
 
         with torch.no_grad():
             for inputs, labels in loader:
-                inputs = inputs.to(self._device)
+                inputs = inputs.to(self._device, non_blocking=True)
                 outputs = model(inputs)
 
                 if self._config.task == "binary":

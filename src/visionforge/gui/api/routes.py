@@ -21,6 +21,8 @@ from visionforge.gui.api.schemas import (
     DatasetDetectRequest,
     DatasetDetectResponse,
     DatasetPickResponse,
+    DatasetStatsRequest,
+    DatasetStatsResponse,
     DeviceInfoResponse,
     GPUInfo,
     RunDetail,
@@ -30,6 +32,7 @@ from visionforge.gui.api.schemas import (
     RunSummary,
     RunTestRequest,
     RunTestResponse,
+    SplitStats,
 )
 from visionforge.models.factory import ModelFactory
 from visionforge.utils.config import ExperimentConfig
@@ -161,6 +164,18 @@ async def test_run_on_dataset(run_id: str, req: RunTestRequest) -> RunTestRespon
 async def detect_dataset(req: DatasetDetectRequest) -> DatasetDetectResponse:
     """Scan a base_dir for standard train/val/test split subdirectories."""
     return _detect_dataset_layout(req.base_dir)
+
+
+@router.post("/dataset/stats")
+async def dataset_stats(req: DatasetStatsRequest) -> DatasetStatsResponse:
+    """Count images per class in train/val/test and flag imbalance.
+
+    Walks the standard ImageFolder layout and counts files with image
+    extensions. Splits whose directory is missing are reported with
+    ``missing=true`` instead of raising — partial datasets are common during
+    a first-time setup.
+    """
+    return await asyncio.to_thread(_collect_dataset_stats, req)
 
 
 @router.post("/dataset/pick")
@@ -317,6 +332,62 @@ def _find_run_dir(run_id: str) -> Path | None:
     return None
 
 
+_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".webp"}
+
+
+def _collect_dataset_stats(req: DatasetStatsRequest) -> DatasetStatsResponse:
+    """Walk an ImageFolder layout and count per-class image files per split."""
+    base = Path(req.base_dir)
+    if not base.exists() or not base.is_dir():
+        return DatasetStatsResponse(
+            base_dir=req.base_dir,
+            splits={},
+            class_names=[],
+            imbalanced=False,
+            message=f"Diretório base não encontrado: {req.base_dir}",
+        )
+
+    split_map = {"train": req.train_dir, "val": req.val_dir, "test": req.test_dir}
+    splits: dict[str, SplitStats] = {}
+    all_class_names: set[str] = set()
+
+    for split_label, subdir in split_map.items():
+        split_dir = base / subdir
+        if not split_dir.is_dir():
+            splits[split_label] = SplitStats(total_images=0, classes={}, missing=True)
+            continue
+
+        counts: dict[str, int] = {}
+        for class_dir in sorted(split_dir.iterdir()):
+            if not class_dir.is_dir():
+                continue
+            class_count = sum(
+                1
+                for p in class_dir.iterdir()
+                if p.is_file() and p.suffix.lower() in _IMAGE_EXTS
+            )
+            counts[class_dir.name] = class_count
+            all_class_names.add(class_dir.name)
+
+        splits[split_label] = SplitStats(
+            total_images=sum(counts.values()), classes=counts, missing=False
+        )
+
+    imbalanced = False
+    for s in splits.values():
+        non_zero = [c for c in s.classes.values() if c > 0]
+        if len(non_zero) >= 2 and max(non_zero) / min(non_zero) > 2.0:
+            imbalanced = True
+            break
+
+    return DatasetStatsResponse(
+        base_dir=str(base.resolve()),
+        splits=splits,
+        class_names=sorted(all_class_names),
+        imbalanced=imbalanced,
+    )
+
+
 def _open_native_folder_dialog() -> DatasetPickResponse:
     """Open a tkinter folder dialog and return the chosen absolute path.
 
@@ -396,13 +467,20 @@ def _execute_run_test(run_dir: Path, req: RunTestRequest) -> RunTestResponse:
     tests_dir = run_dir / "tests"
     tests_dir.mkdir(parents=True, exist_ok=True)
 
-    # Render confusion matrix + ROC for the test dataset.
+    # Render the full evaluation-time plot set for the test dataset so a
+    # per-model test history mirrors what the original training produced.
     artifacts: dict[str, Any] = {}
     cm_path = tests_dir / f"{test_id}_confusion_matrix.png"
     MetricsPlotter.confusion_matrix_plot(
         eval_result.confusion_matrix, data_module.class_names, cm_path
     )
     artifacts["confusion_matrix"] = str(cm_path)
+
+    cm_norm_path = tests_dir / f"{test_id}_confusion_matrix_normalized.png"
+    MetricsPlotter.confusion_matrix_normalized(
+        eval_result.confusion_matrix, data_module.class_names, cm_norm_path
+    )
+    artifacts["confusion_matrix_normalized"] = str(cm_norm_path)
 
     roc_path = tests_dir / f"{test_id}_roc_curve.png"
     if MetricsPlotter.roc_curve_plot(
@@ -412,6 +490,15 @@ def _execute_run_test(run_dir: Path, req: RunTestRequest) -> RunTestResponse:
         roc_path,
     ):
         artifacts["roc_curve"] = str(roc_path)
+
+    pr_path = tests_dir / f"{test_id}_precision_recall_curve.png"
+    if MetricsPlotter.precision_recall_curve_plot(
+        eval_result.y_true,
+        eval_result.y_proba_full,
+        data_module.class_names,
+        pr_path,
+    ):
+        artifacts["precision_recall_curve"] = str(pr_path)
 
     metrics = {
         "accuracy": eval_result.accuracy,

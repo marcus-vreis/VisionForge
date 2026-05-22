@@ -69,6 +69,15 @@ class TrainingConfig(BaseModel):
     optimizer: Literal["adam", "sgd", "adamw"] = "adam"
     weight_decay: float = Field(default=0.0, ge=0.0)
     seed: int = Field(default=42, ge=0)
+    deterministic: bool = Field(
+        default=False,
+        description=(
+            "When True, forces cuDNN deterministic algorithms and disables "
+            "auto-tuning. Guarantees bit-exact reproducibility across runs "
+            "but significantly reduces GPU utilization and throughput. "
+            "Leave False (default) for normal training."
+        ),
+    )
 
     @field_validator("batch_size")
     @classmethod

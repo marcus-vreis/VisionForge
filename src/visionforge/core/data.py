@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import Any
 
 import torchvision.transforms as T
 from torch.utils.data import DataLoader
@@ -64,35 +65,53 @@ class DataModule:
             str(test_path), transform=_build_transforms(tc, is_train=False)
         )
 
+        # Auto-downgrade: multiprocessing workers have a fixed startup +
+        # serialisation cost that exceeds the data-loading time on small
+        # datasets.  On Windows this cost is especially high because Python
+        # uses the "spawn" method.  Disable workers when there are fewer
+        # images than a reasonable threshold.
+        _SMALL_DATASET_THRESHOLD = 500
+        if self._num_workers > 0 and len(self._train) < _SMALL_DATASET_THRESHOLD:
+            from loguru import logger
+
+            logger.info(
+                "Dataset has {} images (< {}); setting num_workers=0 "
+                "to avoid multiprocessing overhead.",
+                len(self._train),
+                _SMALL_DATASET_THRESHOLD,
+            )
+            self._num_workers = 0
+
+    def _loader_kwargs(self) -> dict[str, Any]:
+        """Common DataLoader kwargs with GPU-friendly defaults.
+
+        When ``num_workers > 0``:
+        - ``persistent_workers=True`` keeps worker processes alive between
+          epochs, avoiding expensive re-spawn overhead (especially on Windows).
+        - ``prefetch_factor=2`` pre-loads the next 2×num_workers batches while
+          the GPU processes the current batch, eliminating data-loading stalls.
+        """
+        kwargs: dict[str, Any] = {
+            "batch_size": self._batch_size,
+            "num_workers": self._num_workers,
+            "pin_memory": self._pin_memory,
+        }
+        if self._num_workers > 0:
+            kwargs["persistent_workers"] = True
+            kwargs["prefetch_factor"] = 2
+        return kwargs
+
     def train_loader(self) -> DataLoader:  # type: ignore[type-arg]
         """DataLoader for the training split (shuffled)."""
-        return DataLoader(
-            self._train,
-            batch_size=self._batch_size,
-            shuffle=True,
-            num_workers=self._num_workers,
-            pin_memory=self._pin_memory,
-        )
+        return DataLoader(self._train, shuffle=True, **self._loader_kwargs())
 
     def val_loader(self) -> DataLoader:  # type: ignore[type-arg]
         """DataLoader for the validation split."""
-        return DataLoader(
-            self._val,
-            batch_size=self._batch_size,
-            shuffle=False,
-            num_workers=self._num_workers,
-            pin_memory=self._pin_memory,
-        )
+        return DataLoader(self._val, shuffle=False, **self._loader_kwargs())
 
     def test_loader(self) -> DataLoader:  # type: ignore[type-arg]
         """DataLoader for the test split."""
-        return DataLoader(
-            self._test,
-            batch_size=self._batch_size,
-            shuffle=False,
-            num_workers=self._num_workers,
-            pin_memory=self._pin_memory,
-        )
+        return DataLoader(self._test, shuffle=False, **self._loader_kwargs())
 
     @property
     def class_names(self) -> list[str]:

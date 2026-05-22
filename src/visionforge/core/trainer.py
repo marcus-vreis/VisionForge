@@ -4,6 +4,7 @@ import json
 import random
 import time
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -41,12 +42,27 @@ class TrainResult:
     model_path: Path = field(default_factory=lambda: Path("."))
 
 
-def _seed_everything(seed: int) -> None:
-    """Apply seed to random, numpy, and torch for reproducibility."""
+def _seed_everything(seed: int, *, deterministic: bool = False) -> None:
+    """Seed every RNG and configure cuDNN performance mode.
+
+    Args:
+        seed: integer seed applied to stdlib, numpy, and PyTorch RNGs.
+        deterministic: when True, forces cuDNN to use deterministic
+            algorithms and disables benchmark auto-tuning.  This
+            guarantees bitwise reproducibility but **significantly**
+            reduces GPU throughput (often 3-5× slower on CNNs).
+            When False (default), ``cudnn.benchmark`` is enabled so
+            cuDNN auto-selects the fastest convolution algorithm for
+            each input shape — the single largest factor in GPU
+            utilization for CNN workloads.
+    """
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = deterministic
+    torch.backends.cudnn.benchmark = not deterministic
 
 
 def resolve_device(device_cfg: DeviceConfig) -> tuple[torch.device, list[int], str]:
@@ -145,7 +161,7 @@ class Trainer:
             TrainResult with best epoch, loss, history, and saved model path.
         """
         cfg = self._config.training
-        _seed_everything(cfg.seed)
+        _seed_everything(cfg.seed, deterministic=cfg.deterministic)
 
         logger.info("Trainer using device: {}", self._device_label)
 
@@ -170,13 +186,20 @@ class Trainer:
                 }
             )
 
+        # Build loaders ONCE — reusing them across epochs avoids re-creating
+        # DataLoader objects (and re-spawning persistent workers) every epoch.
+        train_loader = data_module.train_loader()
+        val_loader = data_module.val_loader()
+
+        # Background thread pool for non-blocking checkpoint writes.
+        save_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="ckpt")
+        save_future = None
+
         for epoch in range(1, cfg.epochs + 1):
             train_loss, train_acc = self._train_epoch(
-                model, data_module.train_loader(), optimizer, criterion
+                model, train_loader, optimizer, criterion
             )
-            val_loss, val_acc = self._eval_epoch(
-                model, data_module.val_loader(), criterion
-            )
+            val_loss, val_acc = self._eval_epoch(model, val_loader, criterion)
 
             result = EpochResult(
                 epoch=epoch,
@@ -221,12 +244,21 @@ class Trainer:
                     if isinstance(model, nn.DataParallel)
                     else model.state_dict()
                 )
-                torch.save(state_dict, model_path)
+                # Wait for any previous checkpoint write to finish before
+                # overwriting the dict, then launch a new async write.
+                if save_future is not None:
+                    save_future.result()
+                save_future = save_pool.submit(torch.save, state_dict, model_path)
             else:
                 patience_counter += 1
                 if patience_counter >= cfg.early_stopping_patience:
                     logger.info("Early stopping at epoch {}.", epoch)
                     break
+
+        # Ensure the last checkpoint is fully written before proceeding.
+        if save_future is not None:
+            save_future.result()
+        save_pool.shutdown(wait=False)
 
         train_result = TrainResult(
             best_epoch=best_epoch,
@@ -237,6 +269,11 @@ class Trainer:
             model_path=model_path,
         )
         self._write_run_json(run_dir, train_result)
+
+        # Release VRAM held by activations / optimizer state so back-to-back
+        # runs (grid search, model comparison) don't accumulate fragmentation.
+        if self._device.type == "cuda":
+            torch.cuda.empty_cache()
 
         if progress_callback is not None:
             progress_callback({"event": "end", "total_epochs": len(history)})
@@ -288,13 +325,13 @@ class Trainer:
         correct = 0
         total = 0
         for inputs, labels in loader:
-            inputs = inputs.to(self._device)
-            labels = labels.to(self._device)
+            inputs = inputs.to(self._device, non_blocking=True)
+            labels = labels.to(self._device, non_blocking=True)
             if self._config.task == "binary":
                 target = labels.float().unsqueeze(1)
             else:
                 target = labels
-            optimizer.zero_grad()
+            optimizer.zero_grad(set_to_none=True)
             outputs = model(inputs)
             loss = criterion(outputs, target)
             loss.backward()
@@ -326,8 +363,8 @@ class Trainer:
         all_probs: list[float] = []
         with torch.no_grad():
             for inputs, labels in loader:
-                inputs = inputs.to(self._device)
-                labels = labels.to(self._device)
+                inputs = inputs.to(self._device, non_blocking=True)
+                labels = labels.to(self._device, non_blocking=True)
                 if self._config.task == "binary":
                     outputs = model(inputs)
                     loss = criterion(outputs, labels.float().unsqueeze(1))

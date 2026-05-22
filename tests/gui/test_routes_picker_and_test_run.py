@@ -184,6 +184,12 @@ class TestExecuteRunTest:
         assert Path(rec["base_dir"]) == dataset_root.resolve()
         assert "accuracy" in rec["metrics"]
         assert Path(rec["artifacts"]["confusion_matrix"]).exists()
+        # Per-test plot set must mirror the training-time evaluation outputs.
+        assert Path(rec["artifacts"]["confusion_matrix_normalized"]).exists()
+        if "roc_curve" in rec["artifacts"]:
+            assert Path(rec["artifacts"]["roc_curve"]).exists()
+        if "precision_recall_curve" in rec["artifacts"]:
+            assert Path(rec["artifacts"]["precision_recall_curve"]).exists()
 
     def test_label_defaults_to_dataset_name_when_omitted(
         self, configured_run: tuple[Path, Path]

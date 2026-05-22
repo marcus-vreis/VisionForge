@@ -136,6 +136,31 @@ export async function pickDatasetFolder(): Promise<DatasetPickResponse> {
   return request<DatasetPickResponse>("/dataset/pick", { method: "POST" });
 }
 
+export interface SplitStats {
+  total_images: number;
+  classes: Record<string, number>;
+  missing: boolean;
+}
+
+export interface DatasetStatsResponse {
+  base_dir: string;
+  splits: Record<string, SplitStats>;
+  class_names: string[];
+  imbalanced: boolean;
+  message: string | null;
+}
+
+export async function fetchDatasetStats(
+  baseDir: string,
+  splits?: { train_dir?: string; val_dir?: string; test_dir?: string },
+): Promise<DatasetStatsResponse> {
+  return request<DatasetStatsResponse>("/dataset/stats", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ base_dir: baseDir, ...(splits ?? {}) }),
+  });
+}
+
 export interface GPUInfo {
   index: number;
   name: string;
