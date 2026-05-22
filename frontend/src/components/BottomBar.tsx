@@ -1,25 +1,48 @@
+import { DeviceSelector, type DeviceSelection } from "./DeviceSelector";
+
 interface BottomBarProps {
   onHistory: () => void;
   onTrain: () => void;
   disabled: boolean;
   historyCount: number;
-  device: "cuda" | "cpu";
-  setDevice: (d: "cuda" | "cpu") => void;
-  gpuName: string;
+  selection: DeviceSelection;
+  onSelectionChange: (next: DeviceSelection) => void;
   isRunning: boolean;
+  /** True when training is running but the overlay was minimized; clicking
+   * the Treinar button should reopen the live view instead of starting a
+   * second run. */
+  trainingMinimized?: boolean;
+  onReopenTraining?: () => void;
 }
 
-/** Fixed bottom action bar with History, Treinar, and device indicator. */
+/** Fixed bottom action bar with History, Treinar, and device selector. */
 export function BottomBar({
   onHistory,
   onTrain,
   disabled,
   historyCount,
-  device,
-  setDevice,
-  gpuName,
+  selection,
+  onSelectionChange,
   isRunning,
+  trainingMinimized = false,
+  onReopenTraining,
 }: BottomBarProps) {
+  // While a run is minimized, the central button reopens the overlay rather
+  // than triggering a new training (a duplicate run would race with the
+  // current one). The label flips to make the action obvious.
+  const handleCenterClick = () => {
+    if (trainingMinimized && onReopenTraining) {
+      onReopenTraining();
+      return;
+    }
+    onTrain();
+  };
+
+  const centerLabel = trainingMinimized
+    ? "🔬 abrir treino"
+    : isRunning
+      ? "Executando…"
+      : "▶ Treinar";
   return (
     <div
       style={{
@@ -43,7 +66,6 @@ export function BottomBar({
         boxShadow: "0 30px 80px rgba(0,0,0,0.5)",
       }}
     >
-      {/* History button */}
       <button
         type="button"
         onClick={onHistory}
@@ -82,11 +104,10 @@ export function BottomBar({
         )}
       </button>
 
-      {/* Treinar button */}
       <button
         type="button"
-        onClick={onTrain}
-        disabled={disabled}
+        onClick={handleCenterClick}
+        disabled={disabled && !trainingMinimized}
         style={{
           flex: "0 0 auto",
           position: "relative",
@@ -104,8 +125,8 @@ export function BottomBar({
           boxShadow:
             "inset 0 0 18px var(--accent-glow), 0 0 30px var(--accent-soft)",
           overflow: "hidden",
-          cursor: disabled ? "not-allowed" : "pointer",
-          opacity: disabled ? 0.55 : 1,
+          cursor: disabled && !trainingMinimized ? "not-allowed" : "pointer",
+          opacity: disabled && !trainingMinimized ? 0.55 : 1,
         }}
       >
         <span
@@ -119,80 +140,14 @@ export function BottomBar({
             opacity: 0.6,
           }}
         />
-        <span style={{ position: "relative" }}>
-          {isRunning ? "Executando…" : "▶ Treinar"}
-        </span>
+        <span style={{ position: "relative" }}>{centerLabel}</span>
       </button>
 
-      {/* Device indicator */}
-      <button
-        type="button"
-        onClick={() => setDevice(device === "cuda" ? "cpu" : "cuda")}
-        title="Toggle compute device (cosmetic)"
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-          padding: "10px 16px",
-          background:
-            device === "cuda"
-              ? "oklch(0.78 0.18 150 / 0.10)"
-              : "rgba(255,255,255,0.025)",
-          border: "1px solid",
-          borderColor:
-            device === "cuda"
-              ? "oklch(0.78 0.18 150 / 0.5)"
-              : "var(--vf-panel-stroke)",
-          borderRadius: 999,
-          color: "var(--vf-text)",
-          fontFamily: "var(--font-mono)",
-          fontSize: 11,
-          letterSpacing: "0.12em",
-          textTransform: "uppercase",
-          cursor: "pointer",
-        }}
-      >
-        <span
-          style={{
-            width: 8,
-            height: 8,
-            borderRadius: "50%",
-            background:
-              device === "cuda"
-                ? "oklch(0.78 0.18 150)"
-                : "oklch(0.74 0.10 70)",
-            boxShadow:
-              device === "cuda"
-                ? "0 0 12px oklch(0.78 0.18 150 / 0.8)"
-                : "none",
-            animation: "pulse-dot 1.6s ease-in-out infinite",
-            flexShrink: 0,
-          }}
-        />
-        <span style={{ color: "var(--vf-text-dim)" }}>usando</span>
-        <span
-          style={{
-            color:
-              device === "cuda"
-                ? "oklch(0.85 0.16 150)"
-                : "oklch(0.85 0.10 70)",
-            fontWeight: 600,
-          }}
-        >
-          {device === "cuda" ? "CUDA" : "CPU"}
-        </span>
-        {device === "cuda" && (
-          <span
-            style={{
-              color: "var(--vf-text-muted)",
-              fontSize: 10,
-              letterSpacing: "0.08em",
-            }}
-          >
-            · {gpuName}
-          </span>
-        )}
-      </button>
+      <DeviceSelector
+        selection={selection}
+        onChange={onSelectionChange}
+        variant="bottom"
+      />
     </div>
   );
 }

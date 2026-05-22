@@ -1,11 +1,5 @@
 import { useEffect, useState } from "react";
 
-interface HeaderProps {
-  device: "cuda" | "cpu";
-  setDevice: (d: "cuda" | "cpu") => void;
-  gpuName: string;
-}
-
 function Logo() {
   return (
     <div
@@ -53,8 +47,8 @@ function Logo() {
   );
 }
 
-/** Top header with logo, brand name, clock, and device toggle. */
-export function Header({ device, setDevice, gpuName }: HeaderProps) {
+/** Top header with logo, brand name, and clock. Device selection lives only in the BottomBar. */
+export function Header() {
   const [time, setTime] = useState(() => new Date());
 
   useEffect(() => {
@@ -122,86 +116,16 @@ export function Header({ device, setDevice, gpuName }: HeaderProps) {
         </div>
       </div>
 
-      <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
-        <div
-          style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: 11,
-            color: "var(--vf-text-muted)",
-            letterSpacing: "0.12em",
-            textTransform: "uppercase",
-          }}
-        >
-          {dateStr} · {timeStr}
-        </div>
-
-        <button
-          type="button"
-          onClick={() => setDevice(device === "cuda" ? "cpu" : "cuda")}
-          title="Toggle compute device (cosmetic)"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-            padding: "8px 14px",
-            background:
-              device === "cuda"
-                ? "oklch(0.78 0.18 150 / 0.10)"
-                : "rgba(255,255,255,0.03)",
-            border: "1px solid",
-            borderColor:
-              device === "cuda"
-                ? "oklch(0.78 0.18 150 / 0.5)"
-                : "var(--vf-panel-stroke)",
-            borderRadius: 999,
-            fontFamily: "var(--font-mono)",
-            fontSize: 11,
-            letterSpacing: "0.12em",
-            textTransform: "uppercase",
-            cursor: "pointer",
-          }}
-        >
-          <span
-            style={{
-              width: 8,
-              height: 8,
-              borderRadius: "50%",
-              background:
-                device === "cuda"
-                  ? "oklch(0.78 0.18 150)"
-                  : "oklch(0.74 0.10 70)",
-              boxShadow:
-                device === "cuda"
-                  ? "0 0 12px oklch(0.78 0.18 150 / 0.8)"
-                  : "none",
-              animation: "pulse-dot 1.6s ease-in-out infinite",
-              flexShrink: 0,
-            }}
-          />
-          <span style={{ color: "var(--vf-text-dim)" }}>usando</span>
-          <span
-            style={{
-              color:
-                device === "cuda"
-                  ? "oklch(0.85 0.16 150)"
-                  : "oklch(0.85 0.10 70)",
-              fontWeight: 600,
-            }}
-          >
-            {device === "cuda" ? "CUDA" : "CPU"}
-          </span>
-          {device === "cuda" && (
-            <span
-              style={{
-                color: "var(--vf-text-muted)",
-                fontSize: 10,
-                letterSpacing: "0.08em",
-              }}
-            >
-              · {gpuName}
-            </span>
-          )}
-        </button>
+      <div
+        style={{
+          fontFamily: "var(--font-mono)",
+          fontSize: 11,
+          color: "var(--vf-text-muted)",
+          letterSpacing: "0.12em",
+          textTransform: "uppercase",
+        }}
+      >
+        {dateStr} · {timeStr}
       </div>
     </header>
   );

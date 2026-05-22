@@ -1,8 +1,18 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from loguru import logger
+
+
+@dataclass(frozen=True, slots=True)
+class GPUDevice:
+    """Per-GPU details exposed to the GUI for device selection."""
+
+    index: int
+    name: str
+    total_memory_mb: int
+    compute_capability: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -14,6 +24,7 @@ class CUDAInfo:
     current_device: int | None = None
     device_name: str | None = None
     cuda_version: str | None = None
+    devices: tuple[GPUDevice, ...] = field(default_factory=tuple)
 
 
 def check_cuda() -> CUDAInfo:
@@ -33,12 +44,36 @@ def check_cuda() -> CUDAInfo:
         device_name = torch.cuda.get_device_name(current_device)
         cuda_version = torch.version.cuda
 
+        devices: list[GPUDevice] = []
+        for i in range(device_count):
+            try:
+                props = torch.cuda.get_device_properties(i)
+                total_mb = int(props.total_memory / (1024 * 1024))
+                cap = f"{props.major}.{props.minor}"
+                devices.append(
+                    GPUDevice(
+                        index=i,
+                        name=torch.cuda.get_device_name(i),
+                        total_memory_mb=total_mb,
+                        compute_capability=cap,
+                    )
+                )
+            except Exception:
+                devices.append(
+                    GPUDevice(
+                        index=i,
+                        name=torch.cuda.get_device_name(i),
+                        total_memory_mb=0,
+                    )
+                )
+
         return CUDAInfo(
             available=True,
             device_count=device_count,
             current_device=current_device,
             device_name=device_name,
             cuda_version=cuda_version,
+            devices=tuple(devices),
         )
     except Exception:
         return CUDAInfo(available=False)
@@ -64,4 +99,4 @@ def log_cuda_status() -> None:
         logger.warning("CUDA not available — training will fall back to CPU")
 
 
-__all__ = ["CUDAInfo", "check_cuda", "log_cuda_status"]
+__all__ = ["CUDAInfo", "GPUDevice", "check_cuda", "log_cuda_status"]

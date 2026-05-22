@@ -126,6 +126,207 @@ export async function detectDatasetSplits(
   });
 }
 
+export interface DatasetPickResponse {
+  path: string;
+  cancelled: boolean;
+  message: string | null;
+}
+
+export async function pickDatasetFolder(): Promise<DatasetPickResponse> {
+  return request<DatasetPickResponse>("/dataset/pick", { method: "POST" });
+}
+
+export interface SplitStats {
+  total_images: number;
+  classes: Record<string, number>;
+  missing: boolean;
+}
+
+export interface DatasetStatsResponse {
+  base_dir: string;
+  splits: Record<string, SplitStats>;
+  class_names: string[];
+  imbalanced: boolean;
+  message: string | null;
+}
+
+export async function fetchDatasetStats(
+  baseDir: string,
+  splits?: { train_dir?: string; val_dir?: string; test_dir?: string },
+): Promise<DatasetStatsResponse> {
+  return request<DatasetStatsResponse>("/dataset/stats", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ base_dir: baseDir, ...(splits ?? {}) }),
+  });
+}
+
+export interface DatasetSamplesResponse {
+  base_dir: string;
+  split: string;
+  samples: Record<string, string[]>;
+  message: string | null;
+}
+
+export async function fetchDatasetSamples(
+  baseDir: string,
+  split: "train" | "val" | "test" = "train",
+  perClass = 4,
+): Promise<DatasetSamplesResponse> {
+  return request<DatasetSamplesResponse>("/dataset/samples", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      base_dir: baseDir,
+      split,
+      per_class: perClass,
+    }),
+  });
+}
+
+/** Build a URL that fetches a local image file from the dataset for previewing. */
+export function datasetFileUrl(absolutePath: string): string {
+  return `/api/dataset/file?path=${encodeURIComponent(absolutePath)}`;
+}
+
+export interface GPUInfo {
+  index: number;
+  name: string;
+  total_memory_mb: number;
+  compute_capability: string | null;
+}
+
+export interface DeviceInfoResponse {
+  cuda_available: boolean;
+  cuda_version: string | null;
+  cpu_name: string;
+  gpus: GPUInfo[];
+}
+
+export async function fetchDeviceInfo(): Promise<DeviceInfoResponse> {
+  return request<DeviceInfoResponse>("/device/info");
+}
+
+export interface PreprocessPreviewStep {
+  kind: string;
+  artifact: string;
+  params: Record<string, unknown>;
+}
+
+export interface PreprocessPreviewResponse {
+  original: string;
+  steps: PreprocessPreviewStep[];
+  final: string;
+  source_image: string;
+  available_kinds: string[];
+  message: string | null;
+}
+
+export async function previewPreprocess(
+  baseDir: string,
+  steps: Array<{ kind: string } & Record<string, unknown>>,
+  options?: { split?: "train" | "val" | "test"; className?: string },
+): Promise<PreprocessPreviewResponse> {
+  return request<PreprocessPreviewResponse>("/dataset/preview_preprocess", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      base_dir: baseDir,
+      split: options?.split ?? "train",
+      class_name: options?.className ?? null,
+      steps,
+    }),
+  });
+}
+
+
+export interface SystemInfo {
+  cpu_count: number;
+  suggested_workers: number;
+  platform: string;
+}
+
+export async function fetchSystemInfo(): Promise<SystemInfo> {
+  return request<SystemInfo>("/system/info");
+}
+
+export interface RunDetail {
+  run_id: string;
+  experiment_name: string;
+  status: string;
+  started_at: string;
+  finished_at: string | null;
+  device_used: string | null;
+  run_dir: string;
+  config: Record<string, unknown>;
+  metrics: Record<string, unknown>;
+  history: Array<{
+    epoch: number;
+    train_loss: number;
+    train_accuracy: number;
+    val_loss: number;
+    val_accuracy: number;
+  }>;
+  artifacts: {
+    model?: string;
+    graphics?: string[];
+    report?: string | null;
+  };
+  tests: TestRecord[];
+}
+
+export interface TestRecord {
+  test_id: string;
+  label: string;
+  base_dir: string;
+  timestamp: string;
+  metrics: Record<string, number | null>;
+  artifacts: Record<string, string>;
+}
+
+export async function fetchRunDetail(runId: string): Promise<RunDetail> {
+  return request<RunDetail>(`/runs/${encodeURIComponent(runId)}`);
+}
+
+export interface RunTestRequestPayload {
+  base_dir: string;
+  train_dir?: string;
+  val_dir?: string;
+  test_dir?: string;
+  label?: string;
+}
+
+export async function testRunOnDataset(
+  runId: string,
+  payload: RunTestRequestPayload,
+): Promise<TestRecord> {
+  return request<TestRecord>(`/runs/${encodeURIComponent(runId)}/test`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+/** Download the model card markdown for a run. Triggers a browser download. */
+export async function downloadRunMarkdown(runId: string): Promise<void> {
+  const res = await fetch(`${BASE}/runs/${encodeURIComponent(runId)}/export_md`);
+  if (!res.ok) {
+    throw new ApiError(res.status, `HTTP ${res.status} ao gerar markdown.`);
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  // Use the server-supplied filename when present, otherwise fallback.
+  const cd = res.headers.get("content-disposition") ?? "";
+  const match = cd.match(/filename="([^"]+)"/);
+  a.download = match ? match[1] : `${runId}.md`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 export function artifactUrl(path: string): string {
   return `${BASE}/artifacts/${path}`;
 }

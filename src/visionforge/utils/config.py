@@ -59,6 +59,28 @@ class ModelConfig(BaseModel):
         return v
 
 
+class SchedulerConfig(BaseModel):
+    """Learning rate scheduler choice and its parameters.
+
+    ``kind="none"`` disables scheduling (fixed LR). The other choices map
+    directly to ``torch.optim.lr_scheduler``:
+
+    - ``cosine``: ``CosineAnnealingLR(T_max=epochs)`` — smooth decay from
+      ``learning_rate`` to ~0 over the full training horizon.
+    - ``step``: ``StepLR(step_size, gamma)`` — multiplicative drops at
+      fixed epoch intervals.
+    - ``plateau``: ``ReduceLROnPlateau(patience, factor)`` — reactive
+      decay based on validation loss; stepped after the eval epoch.
+    """
+
+    kind: Literal["none", "cosine", "step", "plateau"] = "none"
+    step_size: int = Field(default=10, ge=1)
+    gamma: float = Field(default=0.1, gt=0.0, le=1.0)
+    patience: int = Field(default=5, ge=1)
+    factor: float = Field(default=0.5, gt=0.0, lt=1.0)
+    min_lr: float = Field(default=1e-6, ge=0.0)
+
+
 class TrainingConfig(BaseModel):
     """Hyperparameters and training loop settings."""
 
@@ -69,6 +91,23 @@ class TrainingConfig(BaseModel):
     optimizer: Literal["adam", "sgd", "adamw"] = "adam"
     weight_decay: float = Field(default=0.0, ge=0.0)
     seed: int = Field(default=42, ge=0)
+    deterministic: bool = Field(
+        default=False,
+        description=(
+            "When True, forces cuDNN deterministic algorithms and disables "
+            "auto-tuning. Guarantees bit-exact reproducibility across runs "
+            "but significantly reduces GPU utilization and throughput. "
+            "Leave False (default) for normal training."
+        ),
+    )
+    mixed_precision: bool = Field(
+        default=False,
+        description=(
+            "Enable torch.cuda.amp autocast + GradScaler. 2-3x speedup on "
+            "Ampere+ GPUs at minor accuracy cost. Ignored on CPU."
+        ),
+    )
+    scheduler: SchedulerConfig = Field(default_factory=lambda: SchedulerConfig())
 
     @field_validator("batch_size")
     @classmethod
@@ -76,6 +115,38 @@ class TrainingConfig(BaseModel):
         if (v & (v - 1)) != 0:
             raise ValueError(f"batch_size must be a power of 2, got {v}.")
         return v
+
+
+class PreprocessingStep(BaseModel):
+    """One step in the preprocessing pipeline applied before augmentation."""
+
+    # populate_by_name lets configs use {"kind": "gaussian_blur", "radius": 1.5}
+    # — extra params are accepted because each filter consumes a different set
+    # (median needs size, wavelet needs band, etc.). They're forwarded as a dict
+    # to ``visionforge.core.preprocessing.apply_step``.
+    model_config = ConfigDict(extra="allow")
+
+    kind: Literal[
+        "gaussian_blur",
+        "median_blur",
+        "unsharp",
+        "edges",
+        "emboss",
+        "grayscale",
+        "equalize",
+        "autocontrast",
+        "wavelet",
+    ]
+
+
+class PreprocessingConfig(BaseModel):
+    """Ordered list of preprocessing steps applied to every loaded image.
+
+    Pipeline runs before the standard augmentation/normalize transforms in
+    ``DataModule``. Empty list = identity (no preprocessing).
+    """
+
+    steps: list[PreprocessingStep] = Field(default_factory=list)
 
 
 class TransformConfig(BaseModel):
@@ -99,6 +170,7 @@ class DataConfig(BaseModel):
     num_workers: int = Field(default=4, ge=0)
     pin_memory: bool = True
     transforms: TransformConfig = TransformConfig()
+    preprocessing: PreprocessingConfig = Field(default_factory=PreprocessingConfig)
 
     @field_validator("base_dir")
     @classmethod
@@ -134,6 +206,42 @@ class ClassificationConfig(BaseModel):
 
     mode: Literal["train", "evaluate", "infer"] = "train"
     checkpoint_path: Path | None = None
+
+
+class DeviceConfig(BaseModel):
+    """Compute device selection for training and evaluation.
+
+    ``kind`` chooses the broad category:
+    - ``cpu``: force CPU even when CUDA is available
+    - ``cuda``: single GPU (``gpu_ids[0]`` if given, otherwise GPU 0)
+    - ``multi_cuda``: DataParallel across ``gpu_ids`` (or all visible GPUs)
+    """
+
+    kind: Literal["cpu", "cuda", "multi_cuda"] = "cuda"
+    gpu_ids: list[int] | None = None
+
+    @field_validator("gpu_ids")
+    @classmethod
+    def gpu_ids_must_be_non_negative(cls, v: list[int] | None) -> list[int] | None:
+        if v is None:
+            return v
+        if any(i < 0 for i in v):
+            raise ValueError(f"gpu_ids must all be >= 0, got {v}")
+        if len(v) != len(set(v)):
+            raise ValueError(f"gpu_ids must be unique, got {v}")
+        return v
+
+    @model_validator(mode="after")
+    def validate_kind_and_ids(self) -> "DeviceConfig":
+        if (
+            self.kind == "multi_cuda"
+            and self.gpu_ids is not None
+            and len(self.gpu_ids) < 2
+        ):
+            raise ValueError(
+                f"multi_cuda requires at least 2 gpu_ids, got {self.gpu_ids}"
+            )
+        return self
 
 
 class TransferLearningConfig(BaseModel):
@@ -243,6 +351,7 @@ class ExperimentConfig(BaseModel):
     training: TrainingConfig = Field(default_factory=TrainingConfig)
     data: DataConfig
     output: OutputConfig = OutputConfig()
+    device: DeviceConfig = Field(default_factory=DeviceConfig)
     classification: ClassificationConfig = ClassificationConfig()
     grid_search: GridSearchConfig | None = None
     random_search: RandomSearchConfig | None = None
@@ -316,6 +425,10 @@ __all__ = [
     "TransformConfig",
     "OutputConfig",
     "ClassificationConfig",
+    "DeviceConfig",
+    "SchedulerConfig",
+    "PreprocessingConfig",
+    "PreprocessingStep",
     "GridSearchConfig",
     "RandomSearchConfig",
     "CrossValidationConfig",
