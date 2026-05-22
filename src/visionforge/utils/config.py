@@ -59,6 +59,28 @@ class ModelConfig(BaseModel):
         return v
 
 
+class SchedulerConfig(BaseModel):
+    """Learning rate scheduler choice and its parameters.
+
+    ``kind="none"`` disables scheduling (fixed LR). The other choices map
+    directly to ``torch.optim.lr_scheduler``:
+
+    - ``cosine``: ``CosineAnnealingLR(T_max=epochs)`` — smooth decay from
+      ``learning_rate`` to ~0 over the full training horizon.
+    - ``step``: ``StepLR(step_size, gamma)`` — multiplicative drops at
+      fixed epoch intervals.
+    - ``plateau``: ``ReduceLROnPlateau(patience, factor)`` — reactive
+      decay based on validation loss; stepped after the eval epoch.
+    """
+
+    kind: Literal["none", "cosine", "step", "plateau"] = "none"
+    step_size: int = Field(default=10, ge=1)
+    gamma: float = Field(default=0.1, gt=0.0, le=1.0)
+    patience: int = Field(default=5, ge=1)
+    factor: float = Field(default=0.5, gt=0.0, lt=1.0)
+    min_lr: float = Field(default=1e-6, ge=0.0)
+
+
 class TrainingConfig(BaseModel):
     """Hyperparameters and training loop settings."""
 
@@ -78,6 +100,14 @@ class TrainingConfig(BaseModel):
             "Leave False (default) for normal training."
         ),
     )
+    mixed_precision: bool = Field(
+        default=False,
+        description=(
+            "Enable torch.cuda.amp autocast + GradScaler. 2-3x speedup on "
+            "Ampere+ GPUs at minor accuracy cost. Ignored on CPU."
+        ),
+    )
+    scheduler: SchedulerConfig = Field(default_factory=lambda: SchedulerConfig())
 
     @field_validator("batch_size")
     @classmethod
@@ -363,6 +393,7 @@ __all__ = [
     "OutputConfig",
     "ClassificationConfig",
     "DeviceConfig",
+    "SchedulerConfig",
     "GridSearchConfig",
     "RandomSearchConfig",
     "CrossValidationConfig",

@@ -8,6 +8,11 @@ interface BottomBarProps {
   selection: DeviceSelection;
   onSelectionChange: (next: DeviceSelection) => void;
   isRunning: boolean;
+  /** True when training is running but the overlay was minimized; clicking
+   * the Treinar button should reopen the live view instead of starting a
+   * second run. */
+  trainingMinimized?: boolean;
+  onReopenTraining?: () => void;
 }
 
 /** Fixed bottom action bar with History, Treinar, and device selector. */
@@ -19,7 +24,25 @@ export function BottomBar({
   selection,
   onSelectionChange,
   isRunning,
+  trainingMinimized = false,
+  onReopenTraining,
 }: BottomBarProps) {
+  // While a run is minimized, the central button reopens the overlay rather
+  // than triggering a new training (a duplicate run would race with the
+  // current one). The label flips to make the action obvious.
+  const handleCenterClick = () => {
+    if (trainingMinimized && onReopenTraining) {
+      onReopenTraining();
+      return;
+    }
+    onTrain();
+  };
+
+  const centerLabel = trainingMinimized
+    ? "🔬 abrir treino"
+    : isRunning
+      ? "Executando…"
+      : "▶ Treinar";
   return (
     <div
       style={{
@@ -83,8 +106,8 @@ export function BottomBar({
 
       <button
         type="button"
-        onClick={onTrain}
-        disabled={disabled}
+        onClick={handleCenterClick}
+        disabled={disabled && !trainingMinimized}
         style={{
           flex: "0 0 auto",
           position: "relative",
@@ -102,8 +125,8 @@ export function BottomBar({
           boxShadow:
             "inset 0 0 18px var(--accent-glow), 0 0 30px var(--accent-soft)",
           overflow: "hidden",
-          cursor: disabled ? "not-allowed" : "pointer",
-          opacity: disabled ? 0.55 : 1,
+          cursor: disabled && !trainingMinimized ? "not-allowed" : "pointer",
+          opacity: disabled && !trainingMinimized ? 0.55 : 1,
         }}
       >
         <span
@@ -117,9 +140,7 @@ export function BottomBar({
             opacity: 0.6,
           }}
         />
-        <span style={{ position: "relative" }}>
-          {isRunning ? "Executando…" : "▶ Treinar"}
-        </span>
+        <span style={{ position: "relative" }}>{centerLabel}</span>
       </button>
 
       <DeviceSelector

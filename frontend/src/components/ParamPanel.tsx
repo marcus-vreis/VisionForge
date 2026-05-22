@@ -1,10 +1,12 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { fetchSystemInfo } from "../api/client";
 import { humanizeFieldPath, type ValidationError } from "../hooks/useExperiment";
 import type { JsonSchema } from "../types/schema";
 import type { TaskDefinition } from "../types/tasks";
 import { exportConfigToYaml, importConfigFromYaml } from "../lib/yaml-config";
 import { DatasetPicker } from "./DatasetPicker";
 import { DatasetStats } from "./DatasetStats";
+import { PreprocessingPanel } from "./PreprocessingPanel";
 import { resolveKind } from "./field-renderer";
 import {
   NumberField,
@@ -70,6 +72,157 @@ function resolveSchema(
     return defs[refName] ?? schema;
   }
   return schema;
+}
+
+
+/** NumberField for num_workers with an "auto" toggle backed by /api/system/info. */
+function NumWorkersField({
+  value,
+  onChange,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+}) {
+  const [auto, setAuto] = useState(false);
+  const [suggested, setSuggested] = useState<number | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    fetchSystemInfo()
+      .then((info) => alive && setSuggested(info.suggested_workers))
+      .catch(() => {
+        /* CPU probe is non-critical — leave default value */
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const handleToggleAuto = () => {
+    if (auto) {
+      setAuto(false);
+      return;
+    }
+    if (suggested !== null) {
+      onChange(suggested);
+    }
+    setAuto(true);
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <span
+        style={{
+          fontFamily: "var(--font-mono)",
+          fontSize: 9,
+          letterSpacing: "0.14em",
+          textTransform: "uppercase",
+          color: "var(--vf-text-muted)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 8,
+        }}
+      >
+        <span>Workers</span>
+        <button
+          type="button"
+          onClick={handleToggleAuto}
+          disabled={suggested === null}
+          style={{
+            padding: "2px 8px",
+            background: auto ? "var(--accent-soft)" : "rgba(255,255,255,0.04)",
+            border: `1px solid ${auto ? "var(--accent-vf)" : "var(--vf-panel-stroke)"}`,
+            borderRadius: 6,
+            color: auto ? "var(--vf-text)" : "var(--vf-text-dim)",
+            fontFamily: "var(--font-mono)",
+            fontSize: 9,
+            letterSpacing: "0.10em",
+            textTransform: "uppercase",
+            cursor: suggested === null ? "not-allowed" : "pointer",
+            opacity: suggested === null ? 0.5 : 1,
+          }}
+          title={
+            suggested === null
+              ? "Backend não disponível"
+              : `min(cpu_count, 8) = ${suggested}`
+          }
+        >
+          auto
+        </button>
+      </span>
+      <input
+        type="number"
+        value={value}
+        min={0}
+        step={1}
+        disabled={auto}
+        onChange={(e) => {
+          const v = parseInt(e.target.value, 10);
+          if (!Number.isNaN(v)) onChange(v);
+        }}
+        style={{
+          padding: "8px 12px",
+          background: auto ? "rgba(0,0,0,0.35)" : "rgba(0,0,0,0.30)",
+          border: `1px ${auto ? "dashed" : "solid"} var(--vf-panel-stroke)`,
+          borderRadius: 8,
+          fontFamily: "var(--font-mono)",
+          fontSize: 13,
+          color: "var(--vf-text)",
+          opacity: auto ? 0.7 : 1,
+          cursor: auto ? "not-allowed" : "text",
+        }}
+      />
+    </div>
+  );
+}
+
+
+/** Read-only display for num_classes when task=binary forces it to 1. */
+function LockedNumClasses() {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <span
+        style={{
+          fontFamily: "var(--font-mono)",
+          fontSize: 9,
+          letterSpacing: "0.14em",
+          textTransform: "uppercase",
+          color: "var(--vf-text-muted)",
+        }}
+      >
+        Nº de classes
+      </span>
+      <div
+        title="Tarefa binária — fixado em 1"
+        style={{
+          padding: "8px 12px",
+          background: "rgba(0,0,0,0.35)",
+          border: "1px dashed var(--vf-panel-stroke)",
+          borderRadius: 8,
+          fontFamily: "var(--font-mono)",
+          fontSize: 13,
+          color: "var(--vf-text-dim)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          opacity: 0.85,
+        }}
+      >
+        <span>1</span>
+        <span
+          style={{
+            fontSize: 9,
+            letterSpacing: "0.14em",
+            color: "var(--vf-text-muted)",
+            textTransform: "uppercase",
+          }}
+        >
+          🔒 binário
+        </span>
+      </div>
+    </div>
+  );
 }
 
 
@@ -547,7 +700,20 @@ export function ParamPanel({
             defs={defs}
             value={formData["task"]}
             onChange={(v) =>
-              setFormData((prev) => ({ ...prev, task: v }))
+              setFormData((prev) => {
+                // Binary task is incompatible with num_classes >= 2; auto-lock
+                // num_classes = 1 to mirror the Pydantic model_validator.
+                const model = (prev["model"] ?? {}) as Record<string, unknown>;
+                const nextNumClasses =
+                  v === "binary"
+                    ? 1
+                    : (model["num_classes"] === 1 ? 2 : model["num_classes"]);
+                return {
+                  ...prev,
+                  task: v,
+                  model: { ...model, num_classes: nextNumClasses },
+                };
+              })
             }
             errors={validationErrors}
             path={["task"]}
@@ -636,17 +802,20 @@ export function ParamPanel({
             path={["model", "name"]}
           />
         )}
-        {modelProps["num_classes"] && (
-          <SchemaFieldVF
-            name="num_classes"
-            schema={modelProps["num_classes"]}
-            defs={defs}
-            value={modelData["num_classes"]}
-            onChange={(v) => setField("model", "num_classes", v)}
-            errors={validationErrors}
-            path={["model", "num_classes"]}
-          />
-        )}
+        {modelProps["num_classes"] &&
+          (formData["task"] === "binary" ? (
+            <LockedNumClasses />
+          ) : (
+            <SchemaFieldVF
+              name="num_classes"
+              schema={modelProps["num_classes"]}
+              defs={defs}
+              value={modelData["num_classes"]}
+              onChange={(v) => setField("model", "num_classes", v)}
+              errors={validationErrors}
+              path={["model", "num_classes"]}
+            />
+          ))}
         {modelProps["pretrained"] && (
           <SchemaFieldVF
             name="pretrained"
@@ -755,6 +924,8 @@ export function ParamPanel({
         testDir={(dataData["test_dir"] as string) ?? ""}
       />
 
+      <PreprocessingPanel baseDir={(dataData["base_dir"] as string) ?? ""} />
+
       <div
         style={{
           display: "grid",
@@ -764,14 +935,9 @@ export function ParamPanel({
         }}
       >
         {dataProps["num_workers"] && (
-          <SchemaFieldVF
-            name="num_workers"
-            schema={dataProps["num_workers"]}
-            defs={defs}
-            value={dataData["num_workers"]}
+          <NumWorkersField
+            value={(dataData["num_workers"] as number) ?? 0}
             onChange={(v) => setField("data", "num_workers", v)}
-            errors={validationErrors}
-            path={["data", "num_workers"]}
           />
         )}
         {dataProps["pin_memory"] && (

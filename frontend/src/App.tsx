@@ -89,7 +89,7 @@ export default function App() {
       <Waves />
       <Particles />
 
-      <Header selection={device} onSelectionChange={setDevice} />
+      <Header />
 
       <TabBar tasks={TASKS} activeKey={activeKey} setActiveKey={setActiveKey} />
 
@@ -155,6 +155,8 @@ export default function App() {
         selection={device}
         onSelectionChange={setDevice}
         isRunning={status.status === "running"}
+        trainingMinimized={status.status === "running" && !overlayVisible}
+        onReopenTraining={() => setOverlayVisible(true)}
       />
 
       <HistoryOverlay

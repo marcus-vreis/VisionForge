@@ -1,10 +1,4 @@
 import { useEffect, useState } from "react";
-import { DeviceSelector, type DeviceSelection } from "./DeviceSelector";
-
-interface HeaderProps {
-  selection: DeviceSelection;
-  onSelectionChange: (next: DeviceSelection) => void;
-}
 
 function Logo() {
   return (
@@ -53,8 +47,8 @@ function Logo() {
   );
 }
 
-/** Top header with logo, brand name, clock, and device selector. */
-export function Header({ selection, onSelectionChange }: HeaderProps) {
+/** Top header with logo, brand name, and clock. Device selection lives only in the BottomBar. */
+export function Header() {
   const [time, setTime] = useState(() => new Date());
 
   useEffect(() => {
@@ -122,24 +116,16 @@ export function Header({ selection, onSelectionChange }: HeaderProps) {
         </div>
       </div>
 
-      <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
-        <div
-          style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: 11,
-            color: "var(--vf-text-muted)",
-            letterSpacing: "0.12em",
-            textTransform: "uppercase",
-          }}
-        >
-          {dateStr} · {timeStr}
-        </div>
-
-        <DeviceSelector
-          selection={selection}
-          onChange={onSelectionChange}
-          variant="header"
-        />
+      <div
+        style={{
+          fontFamily: "var(--font-mono)",
+          fontSize: 11,
+          color: "var(--vf-text-muted)",
+          letterSpacing: "0.12em",
+          textTransform: "uppercase",
+        }}
+      >
+        {dateStr} · {timeStr}
       </div>
     </header>
   );

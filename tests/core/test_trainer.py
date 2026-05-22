@@ -282,6 +282,127 @@ class TestTrainerMulticlass:
         assert result.model_path.exists()
 
 
+class TestSchedulerBuild:
+    def test_none_returns_no_scheduler(self, minimal_config: ExperimentConfig) -> None:
+        from visionforge.utils.config import ExperimentConfig as EC
+
+        cfg = EC.model_validate(
+            {
+                **minimal_config.model_dump(mode="json"),
+                "training": {
+                    **minimal_config.training.model_dump(mode="json"),
+                    "scheduler": {"kind": "none"},
+                },
+            }
+        )
+        trainer = Trainer(cfg)
+        optimizer = trainer._build_optimizer(DummyBinaryModel())
+        assert trainer._build_scheduler(optimizer) is None
+
+    def test_cosine_returns_cosine_annealing(
+        self, minimal_config: ExperimentConfig
+    ) -> None:
+        from visionforge.utils.config import ExperimentConfig as EC
+
+        cfg = EC.model_validate(
+            {
+                **minimal_config.model_dump(mode="json"),
+                "training": {
+                    **minimal_config.training.model_dump(mode="json"),
+                    "scheduler": {"kind": "cosine"},
+                },
+            }
+        )
+        trainer = Trainer(cfg)
+        optimizer = trainer._build_optimizer(DummyBinaryModel())
+        sched = trainer._build_scheduler(optimizer)
+        assert isinstance(sched, torch.optim.lr_scheduler.CosineAnnealingLR)
+
+    def test_step_returns_step_lr(self, minimal_config: ExperimentConfig) -> None:
+        from visionforge.utils.config import ExperimentConfig as EC
+
+        cfg = EC.model_validate(
+            {
+                **minimal_config.model_dump(mode="json"),
+                "training": {
+                    **minimal_config.training.model_dump(mode="json"),
+                    "scheduler": {"kind": "step", "step_size": 5, "gamma": 0.5},
+                },
+            }
+        )
+        trainer = Trainer(cfg)
+        optimizer = trainer._build_optimizer(DummyBinaryModel())
+        sched = trainer._build_scheduler(optimizer)
+        assert isinstance(sched, torch.optim.lr_scheduler.StepLR)
+
+    def test_plateau_returns_reduce_on_plateau(
+        self, minimal_config: ExperimentConfig
+    ) -> None:
+        from visionforge.utils.config import ExperimentConfig as EC
+
+        cfg = EC.model_validate(
+            {
+                **minimal_config.model_dump(mode="json"),
+                "training": {
+                    **minimal_config.training.model_dump(mode="json"),
+                    "scheduler": {"kind": "plateau", "patience": 3, "factor": 0.3},
+                },
+            }
+        )
+        trainer = Trainer(cfg)
+        optimizer = trainer._build_optimizer(DummyBinaryModel())
+        sched = trainer._build_scheduler(optimizer)
+        assert isinstance(sched, torch.optim.lr_scheduler.ReduceLROnPlateau)
+
+
+class TestSchedulerStepsDuringFit:
+    def test_cosine_changes_lr_across_epochs(
+        self, minimal_config: ExperimentConfig
+    ) -> None:
+        """Cosine scheduler must reduce LR over the course of training."""
+        from visionforge.utils.config import ExperimentConfig as EC
+
+        cfg = EC.model_validate(
+            {
+                **minimal_config.model_dump(mode="json"),
+                "training": {
+                    **minimal_config.training.model_dump(mode="json"),
+                    "epochs": 4,
+                    "scheduler": {"kind": "cosine"},
+                },
+            }
+        )
+        trainer = Trainer(cfg)
+        model = DummyBinaryModel()
+        opt = trainer._build_optimizer(model)
+        initial_lr = opt.param_groups[0]["lr"]
+        trainer.fit(model, FakeDataModule(), optimizer=opt)
+        final_lr = opt.param_groups[0]["lr"]
+        assert final_lr < initial_lr
+
+
+class TestMixedPrecision:
+    def test_amp_silently_skipped_on_cpu(
+        self, minimal_config: ExperimentConfig
+    ) -> None:
+        """mixed_precision=True must be a no-op when device is CPU."""
+        from visionforge.utils.config import ExperimentConfig as EC
+
+        cfg = EC.model_validate(
+            {
+                **minimal_config.model_dump(mode="json"),
+                "training": {
+                    **minimal_config.training.model_dump(mode="json"),
+                    "mixed_precision": True,
+                },
+                "device": {"kind": "cpu"},
+            }
+        )
+        trainer = Trainer(cfg)
+        result = trainer.fit(DummyBinaryModel(), FakeDataModule())
+        assert isinstance(result, TrainResult)
+
+
 class TestTrainerOptimizers:
     @pytest.fixture
     def base_config(self, tmp_path: Path) -> dict[str, Any]:

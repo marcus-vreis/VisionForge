@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { fetchRuns } from "../api/client";
 import type { RunSummary } from "../types/run";
+import { CompareRunsPanel } from "./CompareRunsPanel";
 import { RunDetailPanel } from "./RunDetailPanel";
 
 interface HistoryOverlayProps {
@@ -44,21 +45,44 @@ function fmtDate(iso: string): string {
 const METRIC_KEYS = ["accuracy", "f1", "val_loss"];
 
 /** One run card inside the history list. */
-function RunCard({ run, onClick }: { run: RunSummary; onClick: () => void }) {
+function RunCard({
+  run,
+  onClick,
+  selectable,
+  selected,
+  onToggleSelect,
+}: {
+  run: RunSummary;
+  onClick: () => void;
+  selectable?: boolean;
+  selected?: boolean;
+  onToggleSelect?: () => void;
+}) {
   const accent = TASK_ACCENT[run.task] ?? "var(--vf-text-muted)";
   const dot = statusColor(run.status);
   const shownMetrics = METRIC_KEYS.filter(
     (k) => run.final_metrics[k] !== undefined,
   );
 
+  const handleClick = () => {
+    if (selectable && onToggleSelect) {
+      onToggleSelect();
+    } else {
+      onClick();
+    }
+  };
+
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={handleClick}
       style={{
+        position: "relative",
         padding: "14px 18px",
-        background: "rgba(255,255,255,0.025)",
-        border: "1px solid var(--vf-panel-stroke)",
+        background: selected
+          ? "rgba(120, 200, 130, 0.10)"
+          : "rgba(255,255,255,0.025)",
+        border: `1px solid ${selected ? "oklch(0.78 0.18 150)" : "var(--vf-panel-stroke)"}`,
         borderRadius: 12,
         display: "flex",
         flexDirection: "column",
@@ -69,6 +93,27 @@ function RunCard({ run, onClick }: { run: RunSummary; onClick: () => void }) {
         color: "inherit",
       }}
     >
+      {selectable && (
+        <span
+          style={{
+            position: "absolute",
+            top: 8,
+            right: 8,
+            width: 18,
+            height: 18,
+            borderRadius: 4,
+            border: `1.5px solid ${selected ? "oklch(0.78 0.18 150)" : "var(--vf-panel-stroke)"}`,
+            background: selected ? "oklch(0.78 0.18 150 / 0.3)" : "transparent",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: 11,
+            color: "var(--vf-text)",
+          }}
+        >
+          {selected ? "✓" : ""}
+        </span>
+      )}
       {/* Top row: name + status dot */}
       <div
         style={{
@@ -227,12 +272,18 @@ export function HistoryOverlay({ open, onClose, onCountChange }: HistoryOverlayP
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+  const [compareMode, setCompareMode] = useState(false);
+  const [compareSelection, setCompareSelection] = useState<string[]>([]);
+  const [compareActiveIds, setCompareActiveIds] = useState<string[] | null>(null);
 
   useEffect(() => {
     if (!open) return;
     setLoading(true);
     setError(null);
     setSelectedRunId(null);
+    setCompareMode(false);
+    setCompareSelection([]);
+    setCompareActiveIds(null);
     fetchRuns()
       .then((data) => {
         setRuns(data);
@@ -245,6 +296,12 @@ export function HistoryOverlay({ open, onClose, onCountChange }: HistoryOverlayP
       })
       .finally(() => setLoading(false));
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const toggleSelect = (runId: string) => {
+    setCompareSelection((prev) =>
+      prev.includes(runId) ? prev.filter((id) => id !== runId) : [...prev, runId],
+    );
+  };
 
   if (!open) return null;
 
@@ -266,7 +323,10 @@ export function HistoryOverlay({ open, onClose, onCountChange }: HistoryOverlayP
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          width: selectedRunId ? "min(960px, 100%)" : "min(640px, 100%)",
+          width:
+            selectedRunId || compareActiveIds
+              ? "min(960px, 100%)"
+              : "min(640px, 100%)",
           maxHeight: "85vh",
           background: "rgba(12,14,18,0.95)",
           border: "1px solid var(--vf-panel-stroke)",
@@ -330,26 +390,71 @@ export function HistoryOverlay({ open, onClose, onCountChange }: HistoryOverlayP
               )}
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: "50%",
-              border: "1px solid var(--vf-panel-stroke)",
-              background: "rgba(255,255,255,0.03)",
-              color: "var(--vf-text)",
-              fontSize: 20,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              cursor: "pointer",
-              flexShrink: 0,
-            }}
-          >
-            ×
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+            {!selectedRunId && !compareActiveIds && runs.length >= 2 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setCompareMode((m) => !m);
+                  if (compareMode) setCompareSelection([]);
+                }}
+                style={{
+                  padding: "8px 14px",
+                  background: compareMode ? "oklch(0.78 0.18 150 / 0.18)" : "rgba(255,255,255,0.04)",
+                  border: `1px solid ${compareMode ? "oklch(0.78 0.18 150)" : "var(--vf-panel-stroke)"}`,
+                  borderRadius: 10,
+                  color: compareMode ? "oklch(0.88 0.16 150)" : "var(--vf-text-dim)",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 11,
+                  letterSpacing: "0.10em",
+                  textTransform: "uppercase",
+                  cursor: "pointer",
+                }}
+              >
+                {compareMode ? "Cancelar comparação" : "↔ Comparar"}
+              </button>
+            )}
+            {compareMode && compareSelection.length >= 2 && (
+              <button
+                type="button"
+                onClick={() => setCompareActiveIds(compareSelection)}
+                style={{
+                  padding: "8px 14px",
+                  background: "oklch(0.78 0.18 150 / 0.30)",
+                  border: "1px solid oklch(0.78 0.18 150)",
+                  borderRadius: 10,
+                  color: "var(--vf-text)",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 11,
+                  letterSpacing: "0.10em",
+                  textTransform: "uppercase",
+                  cursor: "pointer",
+                  fontWeight: 600,
+                }}
+              >
+                Comparar {compareSelection.length}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: "50%",
+                border: "1px solid var(--vf-panel-stroke)",
+                background: "rgba(255,255,255,0.03)",
+                color: "var(--vf-text)",
+                fontSize: 20,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+              }}
+            >
+              ×
+            </button>
+          </div>
         </div>
 
         {/* Body */}
@@ -458,22 +563,56 @@ export function HistoryOverlay({ open, onClose, onCountChange }: HistoryOverlayP
             </div>
           )}
 
+          {/* Compare panel takes over when 2+ runs selected and comparison was confirmed. */}
+          {compareActiveIds && !selectedRunId && (
+            <CompareRunsPanel
+              runIds={compareActiveIds}
+              onBack={() => {
+                setCompareActiveIds(null);
+                setCompareMode(false);
+                setCompareSelection([]);
+              }}
+            />
+          )}
+
           {/* Detail panel takes over when a run is selected. */}
-          {selectedRunId && (
+          {selectedRunId && !compareActiveIds && (
             <RunDetailPanel
               runId={selectedRunId}
               onBack={() => setSelectedRunId(null)}
             />
           )}
 
+          {/* Compare mode tip */}
+          {!selectedRunId && !compareActiveIds && compareMode && (
+            <div
+              style={{
+                padding: "10px 14px",
+                marginBottom: 12,
+                background: "oklch(0.78 0.18 150 / 0.08)",
+                border: "1px dashed oklch(0.78 0.18 150 / 0.5)",
+                borderRadius: 10,
+                fontFamily: "var(--font-mono)",
+                fontSize: 11,
+                color: "oklch(0.88 0.16 150)",
+              }}
+            >
+              Modo comparação ativo — marque 2 ou mais runs e clique em
+              "Comparar N".
+            </div>
+          )}
+
           {/* Run list */}
-          {!selectedRunId && !loading && error === null && runs.length > 0 && (
+          {!selectedRunId && !compareActiveIds && !loading && error === null && runs.length > 0 && (
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {runs.map((run) => (
                 <RunCard
                   key={run.run_id}
                   run={run}
                   onClick={() => setSelectedRunId(run.run_id)}
+                  selectable={compareMode}
+                  selected={compareSelection.includes(run.run_id)}
+                  onToggleSelect={() => toggleSelect(run.run_id)}
                 />
               ))}
             </div>

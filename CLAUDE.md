@@ -384,4 +384,30 @@ Browsers cannot return absolute filesystem paths via `showDirectoryPicker` (sand
 In the frontend, clicking a `RunCard` in `HistoryOverlay` opens `RunDetailPanel`, which:
 - shows the absolute `run_dir` and checkpoint path (with copy-to-clipboard buttons),
 - displays every metric and every generated plot (click any plot → full-screen `Lightbox`),
-- exposes a "+ testar" form that calls `/api/runs/{run_id}/test` and lists every prior test with its dataset path, metrics, and per-test plots.
+- exposes a "+ testar" form that calls `/api/runs/{run_id}/test` and lists every prior test with its dataset path, metrics, and per-test plots (CM, CM normalized, ROC, PR — the full evaluation plot set, matching the parent run).
+
+### 10.5 Multi-run comparison
+
+Selecting 2 or more runs in `HistoryOverlay` (via the `↔ Comparar` toggle) opens `CompareRunsPanel`:
+
+- Side-by-side metrics table (one column per run).
+- Overlaid SVG line charts for `val_loss × epoch` and `val_accuracy × epoch`, color-coded per run.
+- Uses the existing `GET /api/runs/{id}` endpoint — no new backend route required.
+
+### 10.6 Dataset stats + sample preview + preprocessing
+
+`POST /api/dataset/stats` returns per-split class distribution and an `imbalanced` flag (when `max(count) / min(count) > 2.0`). `POST /api/dataset/samples` returns the first N image paths per class for thumbnail rendering, served via `GET /api/dataset/file?path=...` (image-extension gate, file-existence check). Both endpoints power the `DatasetStats` component which renders below the `DatasetPicker` so class skew and label mistakes are caught before training.
+
+`POST /api/dataset/preview_preprocess` runs a configurable filter pipeline over the first image of the chosen split and writes one PNG per step into `outputs/preview_cache/`. The `PreprocessingPanel` component lets the user assemble the pipeline (Gaussian blur, median blur, unsharp mask, edges, emboss, grayscale, equalize, autocontrast, wavelet — Haar 1-level decomposition with LL/LH/HL/HH bands), reorder/remove steps, tune per-step params (radius, size, band, etc.), and render a "before → after each step → final" thumbnail strip.
+
+Implementation note: every filter is implemented with PIL + NumPy only (no `opencv`, `pywavelets`, or `scikit-image`) to keep the dependency surface small. The `wavelet` band is computed via a 1-level Haar transform; researchers needing tighter wavelet families can add `pywt` in a later PR.
+
+### 10.7 System probe + auto defaults
+
+`GET /api/system/info` returns `cpu_count`, `suggested_workers` (`min(cpu_count, 8)`), and platform. The `NumWorkersField` exposes an `auto` toggle that locks the input and uses the suggested value, so the user does not have to guess the right `num_workers` for their machine.
+
+### 10.8 Training overlay reopen + UX guards
+
+- The `BottomBar` central button repurposes itself to "🔬 abrir treino" when training is running but the overlay was closed, so the user can reopen the live view without starting a duplicate run.
+- The device selector lives only in the `BottomBar` (no longer duplicated in the `Header`).
+- `task=binary` locks `num_classes` to `1` in the UI (`LockedNumClasses` component); switching back to multiclass restores the editable input with default `2`.

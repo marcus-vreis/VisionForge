@@ -1,5 +1,11 @@
 import { useEffect, useState } from "react";
-import { fetchDatasetStats, type DatasetStatsResponse } from "../api/client";
+import {
+  datasetFileUrl,
+  fetchDatasetSamples,
+  fetchDatasetStats,
+  type DatasetSamplesResponse,
+  type DatasetStatsResponse,
+} from "../api/client";
 
 interface DatasetStatsProps {
   baseDir: string;
@@ -17,22 +23,36 @@ const SPLIT_LABELS: Record<string, string> = {
 /** Compact pre-training dataset overview: image counts + imbalance flag. */
 export function DatasetStats({ baseDir, trainDir, valDir, testDir }: DatasetStatsProps) {
   const [stats, setStats] = useState<DatasetStatsResponse | null>(null);
+  const [samples, setSamples] = useState<DatasetSamplesResponse | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!baseDir.trim()) {
       setStats(null);
+      setSamples(null);
       return;
     }
     let alive = true;
     setLoading(true);
-    fetchDatasetStats(baseDir, {
-      train_dir: trainDir || "train",
-      val_dir: valDir || "val",
-      test_dir: testDir || "test",
-    })
-      .then((d) => alive && setStats(d))
-      .catch(() => alive && setStats(null))
+    Promise.all([
+      fetchDatasetStats(baseDir, {
+        train_dir: trainDir || "train",
+        val_dir: valDir || "val",
+        test_dir: testDir || "test",
+      }),
+      fetchDatasetSamples(baseDir, "train", 4).catch(() => null),
+    ])
+      .then(([s, sm]) => {
+        if (!alive) return;
+        setStats(s);
+        setSamples(sm);
+      })
+      .catch(() => {
+        if (alive) {
+          setStats(null);
+          setSamples(null);
+        }
+      })
       .finally(() => alive && setLoading(false));
     return () => {
       alive = false;
@@ -147,6 +167,92 @@ export function DatasetStats({ baseDir, trainDir, valDir, testDir }: DatasetStat
             />
           );
         })}
+      </div>
+
+      {samples && Object.keys(samples.samples).length > 0 && (
+        <div
+          style={{
+            marginTop: 4,
+            paddingTop: 12,
+            borderTop: "1px solid var(--vf-panel-stroke)",
+            display: "flex",
+            flexDirection: "column",
+            gap: 8,
+          }}
+        >
+          <div
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: 9,
+              letterSpacing: "0.14em",
+              textTransform: "uppercase",
+              color: "var(--vf-text-muted)",
+            }}
+          >
+            // amostras (split: {samples.split}) — sanity-check de labels
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {Object.entries(samples.samples).map(([cn, paths]) => (
+              <ClassSampleRow key={cn} className={cn} paths={paths} />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface ClassSampleRowProps {
+  className: string;
+  paths: string[];
+}
+
+function ClassSampleRow({ className, paths }: ClassSampleRowProps) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+      <div
+        style={{
+          minWidth: 80,
+          fontFamily: "var(--font-mono)",
+          fontSize: 11,
+          color: "var(--vf-text-dim)",
+          wordBreak: "break-all",
+        }}
+      >
+        {className}
+      </div>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+        {paths.map((p) => (
+          <img
+            key={p}
+            src={datasetFileUrl(p)}
+            alt={`${className} sample`}
+            title={p}
+            style={{
+              width: 56,
+              height: 56,
+              objectFit: "cover",
+              borderRadius: 6,
+              border: "1px solid var(--vf-panel-stroke)",
+              background: "rgba(0,0,0,0.30)",
+            }}
+            onError={(e) => {
+              (e.currentTarget as HTMLImageElement).style.opacity = "0.25";
+            }}
+          />
+        ))}
+        {paths.length === 0 && (
+          <div
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: 10,
+              color: "var(--vf-text-muted)",
+              opacity: 0.6,
+            }}
+          >
+            sem imagens
+          </div>
+        )}
       </div>
     </div>
   );

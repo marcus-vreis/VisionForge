@@ -8,8 +8,11 @@ import numpy as np
 from fastapi.testclient import TestClient
 from PIL import Image
 
-from visionforge.gui.api.routes import _collect_dataset_stats
-from visionforge.gui.api.schemas import DatasetStatsRequest
+from visionforge.gui.api.routes import (
+    _collect_dataset_samples,
+    _collect_dataset_stats,
+)
+from visionforge.gui.api.schemas import DatasetSamplesRequest, DatasetStatsRequest
 
 
 def _save_images(folder: Path, count: int) -> None:
@@ -79,6 +82,73 @@ class TestCollectDatasetStats:
         (class_dir / "manifest.json").write_text("{}", encoding="utf-8")
         resp = _collect_dataset_stats(DatasetStatsRequest(base_dir=str(tmp_path)))
         assert resp.splits["train"].classes["class_a"] == 4
+
+
+class TestCollectDatasetSamples:
+    def test_returns_up_to_per_class_paths(self, tmp_path: Path) -> None:
+        root = _balanced_dataset(tmp_path)
+        resp = _collect_dataset_samples(
+            DatasetSamplesRequest(base_dir=str(root), split="train", per_class=3)
+        )
+        assert set(resp.samples.keys()) == {"class_a", "class_b"}
+        assert all(len(paths) <= 3 for paths in resp.samples.values())
+        # The returned paths must be absolute and point at real files.
+        for paths in resp.samples.values():
+            for p in paths:
+                assert Path(p).is_file()
+                assert Path(p).is_absolute()
+
+    def test_returns_empty_when_split_missing(self, tmp_path: Path) -> None:
+        """A split that does not exist on disk must produce an empty samples dict."""
+        _save_images(tmp_path / "train" / "class_a", 2)
+        resp = _collect_dataset_samples(
+            DatasetSamplesRequest(base_dir=str(tmp_path), split="test")
+        )
+        assert resp.samples == {}
+        assert resp.message and "não encontrado" in resp.message
+
+
+class TestDatasetSamplesEndpoint:
+    def test_endpoint_returns_paths(self, tmp_path: Path) -> None:
+        from visionforge.gui.server import app
+
+        root = _balanced_dataset(tmp_path)
+        client = TestClient(app, raise_server_exceptions=True)
+        resp = client.post(
+            "/api/dataset/samples",
+            json={"base_dir": str(root), "split": "train", "per_class": 2},
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert set(body["samples"].keys()) == {"class_a", "class_b"}
+
+
+class TestServeDatasetFile:
+    def test_serves_valid_image(self, tmp_path: Path) -> None:
+        from visionforge.gui.server import app
+
+        root = _balanced_dataset(tmp_path)
+        sample = next((root / "train" / "class_a").iterdir())
+        client = TestClient(app, raise_server_exceptions=True)
+        resp = client.get(f"/api/dataset/file?path={sample.resolve()}")
+        assert resp.status_code == 200
+        assert resp.headers["content-type"].startswith("image/")
+
+    def test_rejects_non_image_extension(self, tmp_path: Path) -> None:
+        from visionforge.gui.server import app
+
+        txt = tmp_path / "leak.txt"
+        txt.write_text("secret", encoding="utf-8")
+        client = TestClient(app, raise_server_exceptions=True)
+        resp = client.get(f"/api/dataset/file?path={txt.resolve()}")
+        assert resp.status_code == 400
+
+    def test_404_on_missing_file(self, tmp_path: Path) -> None:
+        from visionforge.gui.server import app
+
+        client = TestClient(app, raise_server_exceptions=True)
+        resp = client.get(f"/api/dataset/file?path={tmp_path / 'nope.png'}")
+        assert resp.status_code == 404
 
 
 class TestDatasetStatsEndpoint:

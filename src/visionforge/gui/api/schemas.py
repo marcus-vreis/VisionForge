@@ -135,6 +135,59 @@ class RunTestResponse(BaseModel):
     artifacts: dict[str, Any] = {}
 
 
+class DatasetSamplesRequest(BaseModel):
+    """Request thumbnail paths for the first N images per class in a split."""
+
+    base_dir: str
+    split: Literal["train", "val", "test"] = "train"
+    per_class: int = 4
+
+
+class DatasetSamplesResponse(BaseModel):
+    """Per-class sample image paths so the UI can show thumbnails for label sanity-check."""
+
+    base_dir: str
+    split: str
+    samples: dict[str, list[str]]
+    message: str | None = None
+
+
+class PreprocessPreviewRequest(BaseModel):
+    """Request a strip of preview images for a preprocessing pipeline."""
+
+    base_dir: str
+    split: Literal["train", "val", "test"] = "train"
+    class_name: str | None = None  # None → first class found
+    steps: list[dict[str, Any]] = []  # each: {kind, ...params}
+
+
+class PreprocessPreviewStep(BaseModel):
+    """One step's rendered preview image + the step config that produced it."""
+
+    kind: str
+    artifact: str
+    params: dict[str, Any] = {}
+
+
+class PreprocessPreviewResponse(BaseModel):
+    """Original + per-step + final preview artifacts for the requested pipeline."""
+
+    original: str  # artifact path
+    steps: list[PreprocessPreviewStep]
+    final: str  # artifact path (equals steps[-1].artifact when steps non-empty)
+    source_image: str  # absolute path of the source image
+    available_kinds: list[str]
+    message: str | None = None
+
+
+class SystemInfo(BaseModel):
+    """System probe for sensible UI defaults (workers, threads)."""
+
+    cpu_count: int
+    suggested_workers: int
+    platform: str
+
+
 class DatasetStatsRequest(BaseModel):
     """Path to a dataset root for class distribution analysis."""
 
@@ -180,7 +233,13 @@ __all__ = [
     "DatasetPickResponse",
     "DatasetStatsRequest",
     "DatasetStatsResponse",
+    "DatasetSamplesRequest",
+    "DatasetSamplesResponse",
+    "PreprocessPreviewRequest",
+    "PreprocessPreviewResponse",
+    "PreprocessPreviewStep",
     "SplitStats",
     "GPUInfo",
     "DeviceInfoResponse",
+    "SystemInfo",
 ]

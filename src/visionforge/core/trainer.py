@@ -168,6 +168,10 @@ class Trainer:
         model = self._prepare_model(model)
         optimizer = optimizer if optimizer is not None else self._build_optimizer(model)
         criterion = self._build_criterion()
+        scheduler = self._build_scheduler(optimizer)
+        # AMP only meaningful on CUDA; on CPU torch.cuda.amp is a no-op + warning.
+        use_amp = cfg.mixed_precision and self._device.type == "cuda"
+        scaler = torch.cuda.amp.GradScaler(enabled=use_amp) if use_amp else None
         run_dir = self._make_run_dir()
         model_path = run_dir / "best_model.pth"
 
@@ -197,9 +201,17 @@ class Trainer:
 
         for epoch in range(1, cfg.epochs + 1):
             train_loss, train_acc = self._train_epoch(
-                model, train_loader, optimizer, criterion
+                model, train_loader, optimizer, criterion, scaler=scaler
             )
             val_loss, val_acc = self._eval_epoch(model, val_loader, criterion)
+
+            # Plateau scheduler is reactive — step it after we have val loss.
+            # The other schedulers step monotonically by epoch.
+            if scheduler is not None:
+                if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
+                    scheduler.step(val_loss)
+                else:
+                    scheduler.step()
 
             result = EpochResult(
                 epoch=epoch,
@@ -307,6 +319,31 @@ class Trainer:
             return nn.BCEWithLogitsLoss()
         return nn.CrossEntropyLoss()
 
+    def _build_scheduler(
+        self, optimizer: torch.optim.Optimizer
+    ) -> torch.optim.lr_scheduler.LRScheduler | None:
+        """Build a torch scheduler from the SchedulerConfig, or None for 'none'."""
+        sched_cfg = self._config.training.scheduler
+        kind = sched_cfg.kind
+        if kind == "none":
+            return None
+        if kind == "cosine":
+            return torch.optim.lr_scheduler.CosineAnnealingLR(
+                optimizer, T_max=self._config.training.epochs
+            )
+        if kind == "step":
+            return torch.optim.lr_scheduler.StepLR(
+                optimizer, step_size=sched_cfg.step_size, gamma=sched_cfg.gamma
+            )
+        # plateau — reactive on validation loss; stepped manually with val_loss.
+        return torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer,
+            mode="min",
+            patience=sched_cfg.patience,
+            factor=sched_cfg.factor,
+            min_lr=sched_cfg.min_lr,
+        )
+
     def _make_run_dir(self) -> Path:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
         run_dir = self._config.output.models_dir / self._config.name / timestamp
@@ -319,11 +356,14 @@ class Trainer:
         loader: Any,
         optimizer: torch.optim.Optimizer,
         criterion: nn.Module,
+        *,
+        scaler: torch.cuda.amp.GradScaler | None = None,
     ) -> tuple[float, float]:
         model.train()
         total_loss = 0.0
         correct = 0
         total = 0
+        use_amp = scaler is not None
         for inputs, labels in loader:
             inputs = inputs.to(self._device, non_blocking=True)
             labels = labels.to(self._device, non_blocking=True)
@@ -332,10 +372,18 @@ class Trainer:
             else:
                 target = labels
             optimizer.zero_grad(set_to_none=True)
-            outputs = model(inputs)
-            loss = criterion(outputs, target)
-            loss.backward()
-            optimizer.step()
+            if use_amp:
+                with torch.cuda.amp.autocast():
+                    outputs = model(inputs)
+                    loss = criterion(outputs, target)
+                scaler.scale(loss).backward()  # type: ignore[union-attr]
+                scaler.step(optimizer)  # type: ignore[union-attr]
+                scaler.update()  # type: ignore[union-attr]
+            else:
+                outputs = model(inputs)
+                loss = criterion(outputs, target)
+                loss.backward()
+                optimizer.step()
             total_loss += loss.item()
             with torch.no_grad():
                 if self._config.task == "binary":

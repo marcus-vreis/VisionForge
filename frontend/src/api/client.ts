@@ -161,6 +161,34 @@ export async function fetchDatasetStats(
   });
 }
 
+export interface DatasetSamplesResponse {
+  base_dir: string;
+  split: string;
+  samples: Record<string, string[]>;
+  message: string | null;
+}
+
+export async function fetchDatasetSamples(
+  baseDir: string,
+  split: "train" | "val" | "test" = "train",
+  perClass = 4,
+): Promise<DatasetSamplesResponse> {
+  return request<DatasetSamplesResponse>("/dataset/samples", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      base_dir: baseDir,
+      split,
+      per_class: perClass,
+    }),
+  });
+}
+
+/** Build a URL that fetches a local image file from the dataset for previewing. */
+export function datasetFileUrl(absolutePath: string): string {
+  return `/api/dataset/file?path=${encodeURIComponent(absolutePath)}`;
+}
+
 export interface GPUInfo {
   index: number;
   name: string;
@@ -177,6 +205,49 @@ export interface DeviceInfoResponse {
 
 export async function fetchDeviceInfo(): Promise<DeviceInfoResponse> {
   return request<DeviceInfoResponse>("/device/info");
+}
+
+export interface PreprocessPreviewStep {
+  kind: string;
+  artifact: string;
+  params: Record<string, unknown>;
+}
+
+export interface PreprocessPreviewResponse {
+  original: string;
+  steps: PreprocessPreviewStep[];
+  final: string;
+  source_image: string;
+  available_kinds: string[];
+  message: string | null;
+}
+
+export async function previewPreprocess(
+  baseDir: string,
+  steps: Array<{ kind: string } & Record<string, unknown>>,
+  options?: { split?: "train" | "val" | "test"; className?: string },
+): Promise<PreprocessPreviewResponse> {
+  return request<PreprocessPreviewResponse>("/dataset/preview_preprocess", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      base_dir: baseDir,
+      split: options?.split ?? "train",
+      class_name: options?.className ?? null,
+      steps,
+    }),
+  });
+}
+
+
+export interface SystemInfo {
+  cpu_count: number;
+  suggested_workers: number;
+  platform: string;
+}
+
+export async function fetchSystemInfo(): Promise<SystemInfo> {
+  return request<SystemInfo>("/system/info");
 }
 
 export interface RunDetail {

@@ -21,10 +21,15 @@ from visionforge.gui.api.schemas import (
     DatasetDetectRequest,
     DatasetDetectResponse,
     DatasetPickResponse,
+    DatasetSamplesRequest,
+    DatasetSamplesResponse,
     DatasetStatsRequest,
     DatasetStatsResponse,
     DeviceInfoResponse,
     GPUInfo,
+    PreprocessPreviewRequest,
+    PreprocessPreviewResponse,
+    PreprocessPreviewStep,
     RunDetail,
     RunResponse,
     RunResult,
@@ -33,6 +38,7 @@ from visionforge.gui.api.schemas import (
     RunTestRequest,
     RunTestResponse,
     SplitStats,
+    SystemInfo,
 )
 from visionforge.models.factory import ModelFactory
 from visionforge.utils.config import ExperimentConfig
@@ -66,6 +72,10 @@ _event_queue: asyncio.Queue[dict[str, Any] | None] | None = None
 # Default location where Trainer writes run directories.
 _MODELS_DIR = Path("outputs/models")
 
+# Image extensions accepted both for dataset stats / sample probes and for the
+# /dataset/file thumbnail endpoint.
+_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".webp"}
+
 # Strong references to background tasks to prevent premature GC (asyncio doc).
 _background_tasks: set[asyncio.Task[None]] = set()
 
@@ -74,6 +84,24 @@ _background_tasks: set[asyncio.Task[None]] = set()
 async def get_schema() -> dict[str, Any]:
     """Return the JSON Schema for ExperimentConfig."""
     return ExperimentConfig.model_json_schema()
+
+
+@router.get("/system/info")
+async def get_system_info() -> SystemInfo:
+    """CPU probe used to derive sensible defaults (workers, threads).
+
+    Suggested workers follow PyTorch's common heuristic min(cpu_count, 8):
+    too many workers fight the GIL on small datasets and burn RAM on the
+    DataLoader pre-fetch queues without speeding things up.
+    """
+    import os
+
+    cpu = os.cpu_count() or 1
+    return SystemInfo(
+        cpu_count=cpu,
+        suggested_workers=min(cpu, 8),
+        platform=platform.system(),
+    )
 
 
 @router.get("/device/info")
@@ -164,6 +192,30 @@ async def test_run_on_dataset(run_id: str, req: RunTestRequest) -> RunTestRespon
 async def detect_dataset(req: DatasetDetectRequest) -> DatasetDetectResponse:
     """Scan a base_dir for standard train/val/test split subdirectories."""
     return _detect_dataset_layout(req.base_dir)
+
+
+@router.post("/dataset/preview_preprocess")
+async def preview_preprocess(
+    req: PreprocessPreviewRequest,
+) -> PreprocessPreviewResponse:
+    """Generate a strip of PNG previews showing the preprocessing pipeline.
+
+    Picks one image from the requested split (first one alphabetically inside
+    ``class_name`` or the first class found) and runs every step. Each step's
+    output is saved as a PNG under ``outputs/preview_cache/<run-id>/`` and
+    served via the existing /api/artifacts/{path} endpoint.
+    """
+    return await asyncio.to_thread(_render_preprocess_preview, req)
+
+
+@router.post("/dataset/samples")
+async def dataset_samples(req: DatasetSamplesRequest) -> DatasetSamplesResponse:
+    """Return the first N image paths per class in a chosen split.
+
+    The frontend renders thumbnails so the researcher can verify labels are
+    correct (i.e. ``class_a`` folder really does contain class A images).
+    """
+    return await asyncio.to_thread(_collect_dataset_samples, req)
 
 
 @router.post("/dataset/stats")
@@ -293,6 +345,23 @@ async def get_result(run_id: str) -> RunResult:
     )
 
 
+@router.get("/dataset/file")
+async def serve_dataset_file(path: str) -> FileResponse:
+    """Serve a local image file for dataset preview thumbnails.
+
+    Accepts only image extensions and rejects non-files. Path traversal is
+    less of a concern because VisionForge runs locally (the user can already
+    read any file via the OS), but we still gate on extension to avoid the
+    endpoint being used to exfiltrate non-image data.
+    """
+    resolved = Path(path).resolve()
+    if not resolved.is_file():
+        raise HTTPException(404, "File not found.")
+    if resolved.suffix.lower() not in _IMAGE_EXTS:
+        raise HTTPException(400, "Only image files are previewable.")
+    return FileResponse(resolved)
+
+
 @router.get("/artifacts/{file_path:path}")
 async def serve_artifact(file_path: str) -> FileResponse:
     """Serve output files (plots, models) with path traversal protection."""
@@ -332,7 +401,143 @@ def _find_run_dir(run_id: str) -> Path | None:
     return None
 
 
-_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".webp"}
+_PREVIEW_CACHE_DIR = Path("outputs/preview_cache")
+
+
+def _render_preprocess_preview(
+    req: PreprocessPreviewRequest,
+) -> PreprocessPreviewResponse:
+    """Save original + per-step previews and return their artifact paths."""
+    from PIL import Image
+
+    from visionforge.core.preprocessing import (
+        apply_pipeline,
+        available_kinds,
+    )
+
+    base = Path(req.base_dir)
+    split_dir = base / req.split
+    if not split_dir.is_dir():
+        return PreprocessPreviewResponse(
+            original="",
+            steps=[],
+            final="",
+            source_image="",
+            available_kinds=available_kinds(),
+            message=f"Split '{req.split}' não encontrado.",
+        )
+
+    # Pick the first available class + first image inside it.
+    class_dirs = [d for d in sorted(split_dir.iterdir()) if d.is_dir()]
+    if not class_dirs:
+        return PreprocessPreviewResponse(
+            original="",
+            steps=[],
+            final="",
+            source_image="",
+            available_kinds=available_kinds(),
+            message="Nenhuma classe encontrada no split.",
+        )
+
+    target_class = None
+    if req.class_name is not None:
+        target_class = next((d for d in class_dirs if d.name == req.class_name), None)
+    if target_class is None:
+        target_class = class_dirs[0]
+
+    img_path = next(
+        (
+            p
+            for p in sorted(target_class.iterdir())
+            if p.is_file() and p.suffix.lower() in _IMAGE_EXTS
+        ),
+        None,
+    )
+    if img_path is None:
+        return PreprocessPreviewResponse(
+            original="",
+            steps=[],
+            final="",
+            source_image="",
+            available_kinds=available_kinds(),
+            message=f"Sem imagens no diretório {target_class}.",
+        )
+
+    # Cache dir is deterministic per source image so repeated previews don't
+    # accumulate hundreds of files. Each invocation overwrites prior renders.
+    cache_dir = _PREVIEW_CACHE_DIR / target_class.name
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    for old in cache_dir.glob("*.png"):
+        try:
+            old.unlink()
+        except OSError:
+            pass
+
+    original_img = Image.open(img_path).convert("RGB")
+    original_path = cache_dir / "00_original.png"
+    original_img.save(original_path)
+
+    final_img, intermediates = apply_pipeline(original_img, req.steps)
+
+    step_records: list[PreprocessPreviewStep] = []
+    for i, (step_cfg, img) in enumerate(zip(req.steps, intermediates, strict=False)):
+        step_path = cache_dir / f"{i + 1:02d}_{step_cfg.get('kind', 'step')}.png"
+        img.save(step_path)
+        step_records.append(
+            PreprocessPreviewStep(
+                kind=str(step_cfg.get("kind", "")),
+                artifact=str(step_path),
+                params={k: v for k, v in step_cfg.items() if k != "kind"},
+            )
+        )
+
+    if step_records:
+        final_path = Path(step_records[-1].artifact)
+    else:
+        final_path = original_path
+    if step_records:
+        # Save a separate "final" copy so callers don't depend on intermediates.
+        final_path = cache_dir / "99_final.png"
+        final_img.save(final_path)
+
+    return PreprocessPreviewResponse(
+        original=str(original_path),
+        steps=step_records,
+        final=str(final_path),
+        source_image=str(img_path.resolve()),
+        available_kinds=available_kinds(),
+    )
+
+
+def _collect_dataset_samples(req: DatasetSamplesRequest) -> DatasetSamplesResponse:
+    """Walk the chosen split and return up to ``per_class`` image paths per class."""
+    base = Path(req.base_dir)
+    split_dir = base / req.split
+    if not split_dir.is_dir():
+        return DatasetSamplesResponse(
+            base_dir=req.base_dir,
+            split=req.split,
+            samples={},
+            message=f"Split '{req.split}' não encontrado em {base}.",
+        )
+
+    samples: dict[str, list[str]] = {}
+    for class_dir in sorted(split_dir.iterdir()):
+        if not class_dir.is_dir():
+            continue
+        picks: list[str] = []
+        for p in sorted(class_dir.iterdir()):
+            if len(picks) >= req.per_class:
+                break
+            if p.is_file() and p.suffix.lower() in _IMAGE_EXTS:
+                picks.append(str(p.resolve()))
+        samples[class_dir.name] = picks
+
+    return DatasetSamplesResponse(
+        base_dir=str(base.resolve()),
+        split=req.split,
+        samples=samples,
+    )
 
 
 def _collect_dataset_stats(req: DatasetStatsRequest) -> DatasetStatsResponse:
