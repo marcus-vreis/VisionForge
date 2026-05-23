@@ -13,11 +13,21 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from loguru import logger
 
+from visionforge.blocks.batch_prediction import BatchPredictionBlock
 from visionforge.blocks.classification import ClassificationBlock
+from visionforge.blocks.cross_validation import CrossValidationBlock
+from visionforge.blocks.export_onnx import ExportONNXBlock
+from visionforge.blocks.grid_search import GridSearchBlock
+from visionforge.blocks.model_comparison import ModelComparisonBlock
+from visionforge.blocks.random_search import RandomSearchBlock
+from visionforge.blocks.transfer_learning import TransferLearningBlock
 from visionforge.core.data import DataModule
 from visionforge.core.evaluator import Evaluator
 from visionforge.core.plotter import MetricsPlotter
 from visionforge.gui.api.schemas import (
+    BatchPredictRequest,
+    BatchPredictResponse,
+    CheckpointPickResponse,
     DatasetDetectRequest,
     DatasetDetectResponse,
     DatasetPickResponse,
@@ -26,6 +36,8 @@ from visionforge.gui.api.schemas import (
     DatasetStatsRequest,
     DatasetStatsResponse,
     DeviceInfoResponse,
+    ExportOnnxRequest,
+    ExportOnnxResponse,
     GPUInfo,
     PreprocessPreviewRequest,
     PreprocessPreviewResponse,
@@ -238,6 +250,57 @@ async def test_run_on_dataset(run_id: str, req: RunTestRequest) -> RunTestRespon
     return result
 
 
+@router.post("/runs/{run_id}/batch_predict")
+async def batch_predict_run(
+    run_id: str, req: BatchPredictRequest
+) -> BatchPredictResponse:
+    """Run inference of this run's checkpoint over a folder of images.
+
+    Outputs a CSV with one row per image. ``output_csv`` defaults to a
+    timestamped file in ``<run_dir>/predictions/`` so consecutive batch runs
+    don't overwrite each other.
+    """
+    run_dir = _find_run_dir(run_id)
+    if run_dir is None:
+        raise HTTPException(404, f"Run '{run_id}' not found.")
+
+    try:
+        result = await asyncio.to_thread(_execute_batch_predict, run_dir, req)
+    except FileNotFoundError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Batch prediction on run {} failed", run_id)
+        raise HTTPException(500, f"{type(exc).__name__}: {exc}") from exc
+
+    return result
+
+
+@router.post("/runs/{run_id}/export_onnx")
+async def export_run_to_onnx(run_id: str, req: ExportOnnxRequest) -> ExportOnnxResponse:
+    """Export this run's saved checkpoint to ONNX, optionally validating it.
+
+    Reuses the run's stored ``config.data.transforms.image_size`` and
+    ``config.model`` to build the dummy input and the architecture for export.
+    """
+    run_dir = _find_run_dir(run_id)
+    if run_dir is None:
+        raise HTTPException(404, f"Run '{run_id}' not found.")
+
+    try:
+        result = await asyncio.to_thread(_execute_onnx_export, run_dir, req)
+    except FileNotFoundError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("ONNX export on run {} failed", run_id)
+        raise HTTPException(500, f"{type(exc).__name__}: {exc}") from exc
+
+    return result
+
+
 @router.post("/dataset/detect")
 async def detect_dataset(req: DatasetDetectRequest) -> DatasetDetectResponse:
     """Scan a base_dir for standard train/val/test split subdirectories."""
@@ -278,6 +341,16 @@ async def dataset_stats(req: DatasetStatsRequest) -> DatasetStatsResponse:
     a first-time setup.
     """
     return await asyncio.to_thread(_collect_dataset_stats, req)
+
+
+@router.post("/checkpoint/pick")
+async def pick_checkpoint_file() -> CheckpointPickResponse:
+    """Open a native file picker (filtered to .pth/.pt) and return the path.
+
+    Used by the ModelConfig.weights_path field — researchers loading a custom
+    pretrained checkpoint into the architecture instead of ImageNet weights.
+    """
+    return await asyncio.to_thread(_open_native_checkpoint_dialog)
 
 
 @router.post("/dataset/pick")
@@ -490,6 +563,31 @@ def _render_run_markdown(run_dir: Path, data: dict[str, Any]) -> str:
     if training_cfg.get("mixed_precision"):
         lines.append("- **Mixed precision:** enabled")
     lines.append("")
+
+    data_cfg = config.get("data", {})
+    pp_steps = data_cfg.get("preprocessing", {}).get("steps", [])
+    if pp_steps:
+        lines.append("## Preprocessing pipeline")
+        lines.append("")
+        lines.append(
+            "Applied to every loaded image before augmentation, in this order:"
+        )
+        lines.append("")
+        for i, step in enumerate(pp_steps, start=1):
+            kind = step.get("kind", "?")
+            params = ", ".join(f"{k}={v!r}" for k, v in step.items() if k != "kind")
+            lines.append(f"{i}. **{kind}**" + (f" ({params})" if params else ""))
+        lines.append("")
+
+    tx = data_cfg.get("transforms", {})
+    if tx:
+        lines.append("## Augmentation / Normalization")
+        lines.append("")
+        lines.append("| Field | Value |")
+        lines.append("|---|---|")
+        for k, v in tx.items():
+            lines.append(f"| {k} | `{v}` |")
+        lines.append("")
 
     lines.append("## Final metrics")
     lines.append("")
@@ -760,6 +858,47 @@ def _collect_dataset_stats(req: DatasetStatsRequest) -> DatasetStatsResponse:
     )
 
 
+def _open_native_checkpoint_dialog() -> CheckpointPickResponse:
+    """Open a tkinter file dialog filtered to .pth/.pt and return the chosen path.
+
+    Returns an empty path + cancelled=True when the dialog is dismissed or
+    tkinter is unavailable.
+    """
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+    except ImportError:
+        return CheckpointPickResponse(
+            path="",
+            cancelled=True,
+            message="tkinter is not available on this Python installation.",
+        )
+
+    try:
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes("-topmost", True)
+        chosen = filedialog.askopenfilename(
+            title="Selecione um checkpoint (.pth ou .pt)",
+            filetypes=[
+                ("PyTorch checkpoint", "*.pth *.pt"),
+                ("All files", "*.*"),
+            ],
+        )
+        root.destroy()
+    except Exception as exc:  # noqa: BLE001
+        return CheckpointPickResponse(
+            path="",
+            cancelled=True,
+            message=f"Falha ao abrir o seletor: {exc}",
+        )
+
+    if not chosen:
+        return CheckpointPickResponse(path="", cancelled=True, message="Cancelado.")
+
+    return CheckpointPickResponse(path=str(Path(chosen).resolve()), cancelled=False)
+
+
 def _open_native_folder_dialog() -> DatasetPickResponse:
     """Open a tkinter folder dialog and return the chosen absolute path.
 
@@ -795,6 +934,113 @@ def _open_native_folder_dialog() -> DatasetPickResponse:
     resolved = Path(chosen).resolve()
     _remember_dataset_root(resolved)
     return DatasetPickResponse(path=str(resolved), cancelled=False)
+
+
+def _execute_batch_predict(
+    run_dir: Path, req: BatchPredictRequest
+) -> BatchPredictResponse:
+    """Build a one-shot ExperimentConfig for BatchPredictionBlock and run it.
+
+    The run's stored config supplies the architecture; the request supplies
+    input_dir, output_csv (default: timestamped under run_dir/predictions/),
+    and the recursive flag.
+    """
+    run_json_path = run_dir / "run.json"
+    data: dict[str, Any] = json.loads(run_json_path.read_text(encoding="utf-8"))
+    base_config_dict: dict[str, Any] = data["config"]
+
+    checkpoint_path = data.get("artifacts", {}).get("model")
+    if not checkpoint_path:
+        raise FileNotFoundError(
+            f"Run '{run_dir.name}' has no checkpoint recorded in artifacts.model."
+        )
+
+    input_dir = Path(req.input_dir)
+    if not input_dir.exists() or not input_dir.is_dir():
+        raise FileNotFoundError(
+            f"input_dir does not exist or is not a directory: {input_dir}"
+        )
+    _remember_dataset_root(input_dir)
+
+    if req.output_csv:
+        output_csv = Path(req.output_csv)
+    else:
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        output_csv = run_dir / "predictions" / f"predictions_{ts}.csv"
+
+    batch_config_dict = {
+        **base_config_dict,
+        "block": "batch_prediction",
+        "batch_prediction": {
+            "checkpoint_path": checkpoint_path,
+            "input_dir": str(input_dir.resolve()),
+            "output_csv": str(output_csv.resolve()),
+            "recursive": req.recursive,
+            "class_names": req.class_names,
+        },
+    }
+    config = ExperimentConfig.model_validate(batch_config_dict)
+
+    block = BatchPredictionBlock()
+    block.setup(config)
+    block.run()
+    report = block.report()
+
+    failed: list[str] = list(report.get("failed_files", []))
+    return BatchPredictResponse(
+        output_csv=str(output_csv.resolve()),
+        total_processed=int(report.get("total_processed", 0)),
+        failed_count=len(failed),
+        failed_files=failed,
+    )
+
+
+def _execute_onnx_export(run_dir: Path, req: ExportOnnxRequest) -> ExportOnnxResponse:
+    """Build a one-shot ExperimentConfig for ExportONNXBlock and run it.
+
+    The run's stored config supplies the architecture and image size; the
+    request supplies the export-specific knobs. The exported file defaults
+    to ``<run_dir>/best_model.onnx`` next to the checkpoint.
+    """
+    run_json_path = run_dir / "run.json"
+    data: dict[str, Any] = json.loads(run_json_path.read_text(encoding="utf-8"))
+    base_config_dict: dict[str, Any] = data["config"]
+
+    checkpoint_path = data.get("artifacts", {}).get("model")
+    if not checkpoint_path:
+        raise FileNotFoundError(
+            f"Run '{run_dir.name}' has no checkpoint recorded in artifacts.model."
+        )
+
+    output_onnx = req.output_onnx or str((run_dir / "best_model.onnx").resolve())
+
+    export_config_dict = {
+        **base_config_dict,
+        "block": "export_onnx",
+        "export_onnx": {
+            "checkpoint_path": checkpoint_path,
+            "output_onnx": output_onnx,
+            "opset_version": req.opset_version,
+            "dynamic_axes": req.dynamic_axes,
+            "validate": req.run_validate,
+            "benchmark": req.benchmark,
+            "benchmark_runs": req.benchmark_runs,
+        },
+    }
+    config = ExperimentConfig.model_validate(export_config_dict)
+
+    block = ExportONNXBlock()
+    block.setup(config)
+    block.run()
+    report = block.report()
+
+    file_size = int(report.get("file_size_bytes", 0))
+    return ExportOnnxResponse(
+        output_onnx=output_onnx,
+        file_size_bytes=file_size,
+        validation=report.get("validation"),
+        benchmark=report.get("benchmark"),
+    )
 
 
 def _execute_run_test(run_dir: Path, req: RunTestRequest) -> RunTestResponse:
@@ -942,6 +1188,11 @@ def _parse_run_summary(run_dir: Path, data: dict[str, Any]) -> RunSummary:
         key: float(metrics[src]) for key, src in _metric_map.items() if src in metrics
     }
 
+    data_cfg = config.get("data") or {}
+    pp_cfg = data_cfg.get("preprocessing") or {}
+    pp_steps = pp_cfg.get("steps") or []
+    preprocessing_count = len(pp_steps) if isinstance(pp_steps, list) else 0
+
     return RunSummary(
         run_id=run_dir.name,
         experiment_name=data["experiment"],
@@ -952,6 +1203,7 @@ def _parse_run_summary(run_dir: Path, data: dict[str, Any]) -> RunSummary:
         finished_at=finished_at,
         epochs_completed=int(metrics["total_epochs"]),
         final_metrics=final_metrics,
+        preprocessing_count=preprocessing_count,
     )
 
 
@@ -967,18 +1219,50 @@ async def _execute_experiment(config: ExperimentConfig, run_id: str) -> None:
             asyncio.run_coroutine_threadsafe(queue.put(event), loop)
 
     try:
-        block = ClassificationBlock()
+        # Dispatch to the right block based on config.block. The classification
+        # path stays default; cross_validation reuses the same /experiment/run
+        # endpoint so the frontend doesn't need a separate route. Adding more
+        # blocks here is a one-liner — keep them limited to ones whose GUI
+        # surface is actually wired up.
+        block: (
+            ClassificationBlock
+            | CrossValidationBlock
+            | TransferLearningBlock
+            | ModelComparisonBlock
+            | GridSearchBlock
+            | RandomSearchBlock
+        )
+        if config.block == "cross_validation":
+            block = CrossValidationBlock()
+        elif config.block == "transfer_learning":
+            block = TransferLearningBlock()
+        elif config.block == "model_comparison":
+            block = ModelComparisonBlock()
+        elif config.block == "grid_search":
+            block = GridSearchBlock()
+        elif config.block == "random_search":
+            block = RandomSearchBlock()
+        else:
+            block = ClassificationBlock()
         block.setup(config)
-        block._progress_callback = _put_event
+        # Only ClassificationBlock streams epoch progress today; CV runs many
+        # models sequentially, and TransferLearning's Trainer.fit() doesn't
+        # take a progress_callback yet.
+        if isinstance(block, ClassificationBlock):
+            block._progress_callback = _put_event
 
-        logger.info("GUI: Starting experiment {}", run_id)
+        logger.info("GUI: Starting experiment {} (block={})", run_id, config.block)
         await asyncio.to_thread(block.run)
 
         report = block.report()
 
+        # Classification and TransferLearning produce a TrainResult with a
+        # model_path so the run_dir is the checkpoint's parent folder. CV
+        # writes per-fold run.jsons in subdirs and has no single run_dir.
         run_dir: str | None = None
-        if block._train_result and block._train_result.model_path:
-            run_dir = str(block._train_result.model_path.parent)
+        if isinstance(block, ClassificationBlock | TransferLearningBlock):
+            if block._train_result and block._train_result.model_path:
+                run_dir = str(block._train_result.model_path.parent)
 
         _current_run = {
             "run_id": run_id,
