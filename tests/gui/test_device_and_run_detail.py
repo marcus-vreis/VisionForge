@@ -139,6 +139,54 @@ class TestRunDetailEndpoint:
         assert body["tests"] == []
 
 
+class TestDeleteRun:
+    def test_unknown_run_returns_404(
+        self, app_and_routes: tuple, tmp_path: Path
+    ) -> None:
+        """DELETE on a missing run must be a hard 404, not a silent no-op."""
+        app, routes_mod = app_and_routes
+        with patch.object(routes_mod, "_MODELS_DIR", tmp_path):
+            client = TestClient(app, raise_server_exceptions=True)
+            resp = client.delete("/api/runs/does_not_exist")
+        assert resp.status_code == 404
+
+    def test_known_run_removes_directory(
+        self, app_and_routes: tuple, tmp_path: Path
+    ) -> None:
+        """DELETE removes the run_dir from disk and reports the run_id back."""
+        app, routes_mod = app_and_routes
+        run_dir = _write_run(tmp_path)
+        with patch.object(routes_mod, "_MODELS_DIR", tmp_path):
+            client = TestClient(app, raise_server_exceptions=True)
+            resp = client.delete(f"/api/runs/{run_dir.name}")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["run_id"] == run_dir.name
+        assert body["status"] == "deleted"
+        assert not run_dir.exists()
+
+    def test_refuses_to_delete_running_run(
+        self, app_and_routes: tuple, tmp_path: Path
+    ) -> None:
+        """The currently executing run must not be deletable — its files are
+        open, and removing them would race the trainer."""
+        app, routes_mod = app_and_routes
+        run_dir = _write_run(tmp_path)
+        routes_mod._current_run = {
+            "run_id": run_dir.name,
+            "status": "running",
+            "error": None,
+        }
+        try:
+            with patch.object(routes_mod, "_MODELS_DIR", tmp_path):
+                client = TestClient(app, raise_server_exceptions=True)
+                resp = client.delete(f"/api/runs/{run_dir.name}")
+            assert resp.status_code == 409
+            assert run_dir.exists()
+        finally:
+            routes_mod._current_run = None
+
+
 class TestFindRunDir:
     def test_by_folder_name(self, tmp_path: Path) -> None:
         run_dir = _write_run(tmp_path)

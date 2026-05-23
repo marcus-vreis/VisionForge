@@ -204,6 +204,45 @@ async def get_run_detail(run_id: str) -> RunDetail:
     )
 
 
+@router.delete("/runs/{run_id}")
+async def delete_run(run_id: str) -> dict[str, str]:
+    """Permanently remove a run directory and all its artifacts.
+
+    Safety:
+    - Must resolve to a directory under _MODELS_DIR (no path traversal).
+    - Refuses to delete the run that is currently executing.
+    """
+    import shutil
+
+    run_dir = _find_run_dir(run_id)
+    if run_dir is None:
+        raise HTTPException(404, f"Run '{run_id}' not found.")
+
+    # Block deleting the active run — its files are held open by the trainer.
+    if (
+        _current_run is not None
+        and _current_run.get("status") == "running"
+        and _current_run.get("run_id") == run_id
+    ):
+        raise HTTPException(409, "Cannot delete a run that is currently executing.")
+
+    resolved = run_dir.resolve()
+    models_dir = _MODELS_DIR.resolve()
+    try:
+        resolved.relative_to(models_dir)
+    except ValueError as exc:
+        raise HTTPException(
+            400, f"Refused to delete path outside {models_dir}: {resolved}"
+        ) from exc
+
+    if not resolved.is_dir():
+        raise HTTPException(404, f"Run directory '{resolved}' does not exist.")
+
+    shutil.rmtree(resolved)
+    logger.info("GUI: deleted run {} at {}", run_id, resolved)
+    return {"run_id": run_id, "status": "deleted"}
+
+
 @router.get("/runs/{run_id}/export_md")
 async def export_run_markdown(run_id: str) -> Response:
     """Render a model card (markdown) for the run, ready for paper inclusion."""

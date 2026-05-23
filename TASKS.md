@@ -178,6 +178,10 @@ Itens entregues por iteração de tech-leader:
 - [x] **Lock `num_classes=1` quando `task=binary`** — `LockedNumClasses` substitui o input no `ParamPanel` quando binary; flip de volta para multiclass restaura input com default 2.
 - [x] **DeviceSelector único** — vive só no `BottomBar` (Header não duplica mais).
 - [x] **Trial-queue banner** no `TrainingOverlay` — para `grid_search`, `random_search`, `model_comparison` e `cross_validation`, mostra `⛓ fila de treinos · N runs` antes do primeiro epoch.
+- [x] **CV no histórico** — `CrossValidationBlock` emite `models_dir/{name}_cv/run.json` compatível com `_parse_run_summary`; `RunDetailPanel.CrossValidationDetail` renderiza fold-a-fold + headline mean ± std.
+- [x] **Search + filter no `HistoryOverlay`** — busca por nome/arch/run_id + filter chips por task + badge `N/M` + empty-state.
+- [x] **`block` field no `RunSummary`** — distingue CV/grid/random/etc. de classification simples na lista (badge `⛓ <block>` no `RunCard`).
+- [x] **DELETE /api/runs/{id}** — endpoint com safety (path containment + bloqueio do run em execução) + trash button + modal de confirmação no `RunCard` + 3 testes regressão.
 
 ## Phase 6 — Regression task
 

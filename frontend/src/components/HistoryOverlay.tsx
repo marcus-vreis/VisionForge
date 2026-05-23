@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { fetchRuns } from "../api/client";
+import { deleteRun, fetchRuns } from "../api/client";
 import type { RunSummary } from "../types/run";
 import { CompareRunsPanel } from "./CompareRunsPanel";
 import { RunDetailPanel } from "./RunDetailPanel";
@@ -83,12 +83,16 @@ function RunCard({
   selectable,
   selected,
   onToggleSelect,
+  onDelete,
+  deleting,
 }: {
   run: RunSummary;
   onClick: () => void;
   selectable?: boolean;
   selected?: boolean;
   onToggleSelect?: () => void;
+  onDelete?: () => void;
+  deleting?: boolean;
 }) {
   const accent = TASK_ACCENT[run.task] ?? "var(--vf-text-muted)";
   const dot = statusColor(run.status);
@@ -145,6 +149,37 @@ function RunCard({
         >
           {selected ? "✓" : ""}
         </span>
+      )}
+      {!selectable && onDelete && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (deleting) return;
+            onDelete();
+          }}
+          disabled={deleting}
+          title="Excluir este run permanentemente"
+          style={{
+            position: "absolute",
+            top: 8,
+            right: 8,
+            width: 26,
+            height: 26,
+            borderRadius: 8,
+            background: deleting ? "rgba(255,255,255,0.04)" : "transparent",
+            border: "1px solid var(--vf-panel-stroke)",
+            color: deleting ? "var(--vf-text-muted)" : "oklch(0.78 0.16 22)",
+            fontSize: 12,
+            cursor: deleting ? "wait" : "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            opacity: deleting ? 0.5 : 1,
+          }}
+        >
+          {deleting ? "…" : "🗑"}
+        </button>
       )}
       {/* Top row: name + status dot */}
       <div
@@ -346,6 +381,9 @@ export function HistoryOverlay({ open, onClose, onCountChange }: HistoryOverlayP
   const [compareActiveIds, setCompareActiveIds] = useState<string[] | null>(null);
   const [query, setQuery] = useState("");
   const [taskFilter, setTaskFilter] = useState<string>("all");
+  const [pendingDelete, setPendingDelete] = useState<RunSummary | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -374,6 +412,29 @@ export function HistoryOverlay({ open, onClose, onCountChange }: HistoryOverlayP
     setCompareSelection((prev) =>
       prev.includes(runId) ? prev.filter((id) => id !== runId) : [...prev, runId],
     );
+  };
+
+  const confirmDelete = async () => {
+    if (!pendingDelete) return;
+    const id = pendingDelete.run_id;
+    setDeletingId(id);
+    setDeleteError(null);
+    try {
+      await deleteRun(id);
+      // Remove from local list and adjust selections that referenced it.
+      const next = runs.filter((r) => r.run_id !== id);
+      setRuns(next);
+      onCountChange?.(next.length);
+      if (selectedRunId === id) setSelectedRunId(null);
+      setCompareSelection((prev) => prev.filter((rid) => rid !== id));
+      setPendingDelete(null);
+    } catch (e: unknown) {
+      const msg =
+        e instanceof Error ? e.message : "Falha ao excluir o run.";
+      setDeleteError(msg);
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   // Client-side filter — keeps the list responsive even with hundreds of runs.
@@ -806,6 +867,11 @@ export function HistoryOverlay({ open, onClose, onCountChange }: HistoryOverlayP
                     selectable={compareMode}
                     selected={compareSelection.includes(run.run_id)}
                     onToggleSelect={() => toggleSelect(run.run_id)}
+                    onDelete={() => {
+                      setDeleteError(null);
+                      setPendingDelete(run);
+                    }}
+                    deleting={deletingId === run.run_id}
                   />
                 ))
               )}
@@ -813,6 +879,132 @@ export function HistoryOverlay({ open, onClose, onCountChange }: HistoryOverlayP
           )}
         </div>
       </div>
+
+      {/* Delete confirmation modal — separate layer above the history sheet
+          so its backdrop click closes the dialog, not the history. */}
+      {pendingDelete && (
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !deletingId) {
+              setPendingDelete(null);
+              setDeleteError(null);
+            }
+          }}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 200,
+            background: "rgba(2,3,5,0.78)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 24,
+          }}
+        >
+          <div
+            style={{
+              width: "min(440px, 100%)",
+              background: "rgba(12,14,18,0.98)",
+              border: "1px solid var(--vf-panel-stroke)",
+              borderRadius: 16,
+              padding: 22,
+              display: "flex",
+              flexDirection: "column",
+              gap: 14,
+            }}
+          >
+            <div
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: 10,
+                letterSpacing: "0.20em",
+                textTransform: "uppercase",
+                color: "oklch(0.78 0.16 22)",
+              }}
+            >
+              // excluir run permanentemente
+            </div>
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--vf-text)" }}>
+              {pendingDelete.experiment_name}
+              <span style={{ color: "var(--vf-text-muted)", marginLeft: 6 }}>
+                · {pendingDelete.model_arch}
+              </span>
+            </div>
+            <div
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: 11,
+                color: "var(--vf-text-dim)",
+                lineHeight: 1.6,
+              }}
+            >
+              A pasta do run, checkpoint e todos os plots/relatórios serão
+              removidos do disco. Esta ação é irreversível.
+            </div>
+            {deleteError && (
+              <div
+                style={{
+                  padding: "8px 12px",
+                  background: "oklch(0.704 0.191 22.216 / 0.10)",
+                  border: "1px solid oklch(0.704 0.191 22.216 / 0.4)",
+                  borderRadius: 8,
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 11,
+                  color: "oklch(0.85 0.14 22)",
+                }}
+              >
+                {deleteError}
+              </div>
+            )}
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 4 }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setPendingDelete(null);
+                  setDeleteError(null);
+                }}
+                disabled={!!deletingId}
+                style={{
+                  padding: "9px 16px",
+                  background: "transparent",
+                  border: "1px solid var(--vf-panel-stroke)",
+                  borderRadius: 10,
+                  color: "var(--vf-text-dim)",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 11,
+                  letterSpacing: "0.10em",
+                  textTransform: "uppercase",
+                  cursor: deletingId ? "not-allowed" : "pointer",
+                  opacity: deletingId ? 0.5 : 1,
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => void confirmDelete()}
+                disabled={!!deletingId}
+                style={{
+                  padding: "9px 16px",
+                  background: "oklch(0.704 0.191 22.216 / 0.20)",
+                  border: "1px solid oklch(0.78 0.16 22)",
+                  borderRadius: 10,
+                  color: "oklch(0.95 0.10 22)",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 11,
+                  letterSpacing: "0.10em",
+                  textTransform: "uppercase",
+                  fontWeight: 600,
+                  cursor: deletingId ? "wait" : "pointer",
+                  opacity: deletingId ? 0.7 : 1,
+                }}
+              >
+                {deletingId ? "Excluindo…" : "🗑 Excluir"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

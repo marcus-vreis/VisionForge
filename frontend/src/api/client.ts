@@ -366,6 +366,12 @@ export async function fetchRunDetail(runId: string): Promise<RunDetail> {
   return request<RunDetail>(`/runs/${encodeURIComponent(runId)}`);
 }
 
+/** Permanently delete a run directory. The backend refuses to delete the
+ *  currently running run (409) and rejects anything outside _MODELS_DIR (400). */
+export async function deleteRun(runId: string): Promise<{ run_id: string; status: string }> {
+  return request(`/runs/${encodeURIComponent(runId)}`, { method: "DELETE" });
+}
+
 export interface RunTestRequestPayload {
   base_dir: string;
   train_dir?: string;
