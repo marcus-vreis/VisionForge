@@ -45,6 +45,9 @@ class RunSummary(BaseModel):
     epochs_completed: int
     final_metrics: dict[str, float]
     preprocessing_count: int = 0
+    # Defaults to "classification" so legacy run.json files (which never
+    # serialized a block field) still parse without migration.
+    block: str = "classification"
 
 
 class DatasetDetectRequest(BaseModel):
