@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 from typing import Any
 
 import numpy as np
@@ -287,6 +288,10 @@ class CrossValidationBlock(ExperimentBlock):
             self._fold_results.append(fold_record)
 
         self._write_summary(base_name)
+        # Also emit a top-level run.json so /api/runs picks the CV experiment
+        # up alongside classification runs. Without this, CV results never
+        # surface in the HistoryOverlay despite producing real metrics.
+        self._write_top_level_run_json(base_name)
 
     def report(self) -> dict[str, Any]:
         """Return aggregated cross-validation metrics.
@@ -339,6 +344,69 @@ class CrossValidationBlock(ExperimentBlock):
 
         (out_dir / "cv_summary.json").write_text(
             json.dumps(summary, indent=2), encoding="utf-8"
+        )
+
+    def _write_top_level_run_json(self, base_name: str) -> None:
+        """Write a parent-level run.json so /api/runs treats CV like other runs.
+
+        Aggregate metrics are flattened into the same keys ClassificationBlock
+        uses (test_accuracy, test_f1, best_val_loss, total_epochs) so the
+        existing RunSummary parser works without special-casing. The full
+        per-fold breakdown is preserved under ``metrics.fold_results`` and
+        ``metrics.cv_aggregate`` for RunDetail consumers.
+        """
+        cv_dir = self._config.output.models_dir / f"{base_name}_cv"
+        cv_dir.mkdir(parents=True, exist_ok=True)
+
+        successful = [r for r in self._fold_results if r["status"] == "success"]
+        accuracies = [r["accuracy"] for r in successful] if successful else []
+        f1s = [r["f1"] for r in successful] if successful else []
+        val_losses = [
+            r["best_val_loss"] for r in successful if r["best_val_loss"] is not None
+        ]
+
+        cv = self._config.cross_validation
+        assert cv is not None
+
+        mean_acc = float(np.mean(accuracies)) if accuracies else None
+        mean_f1 = float(np.mean(f1s)) if f1s else None
+        mean_val_loss = float(np.mean(val_losses)) if val_losses else None
+        std_acc = float(np.std(accuracies)) if accuracies else None
+        std_f1 = float(np.std(f1s)) if f1s else None
+
+        run_json: dict[str, Any] = {
+            "experiment": base_name,
+            "status": "completed" if successful else "failed",
+            "timestamp": datetime.now(UTC).isoformat(),
+            "config": self._config.model_dump(mode="json"),
+            "metrics": {
+                # Mirror the keys the RunSummary parser already understands so
+                # CV results show the aggregate metric in the history list.
+                "total_epochs": sum(
+                    r.get("epochs_completed", 0) or 0 for r in self._fold_results
+                ),
+                "test_accuracy": mean_acc,
+                "test_f1": mean_f1,
+                "best_val_loss": mean_val_loss,
+                # CV-specific keys consumed by RunDetailPanel:
+                "fold_results": self._fold_results,
+                "cv_aggregate": {
+                    "n_folds": cv.n_folds,
+                    "n_folds_ok": len(successful),
+                    "n_folds_failed": len(self._fold_results) - len(successful),
+                    "mean_accuracy": mean_acc,
+                    "std_accuracy": std_acc,
+                    "mean_f1": mean_f1,
+                    "std_f1": std_f1,
+                },
+            },
+            "history": [],
+            "device_used": None,
+            "block": "cross_validation",
+        }
+
+        (cv_dir / "run.json").write_text(
+            json.dumps(run_json, indent=2), encoding="utf-8"
         )
 
 

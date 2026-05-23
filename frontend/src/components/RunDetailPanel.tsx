@@ -671,6 +671,8 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
             </Section>
           )}
 
+          <CrossValidationDetail metrics={detail.metrics} />
+
           <Section title="Métricas">
             <MetricsGrid metrics={detail.metrics} />
           </Section>
@@ -911,6 +913,210 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
     </div>
   );
 }
+
+interface CVFold {
+  fold: number;
+  train_size: number;
+  val_size: number;
+  status: string;
+  error?: string;
+  best_val_loss: number | null;
+  accuracy: number | null;
+  f1: number | null;
+}
+
+interface CVAggregate {
+  n_folds: number;
+  n_folds_ok: number;
+  n_folds_failed: number;
+  mean_accuracy: number | null;
+  std_accuracy: number | null;
+  mean_f1: number | null;
+  std_f1: number | null;
+}
+
+/** Per-fold detail section, only rendered when the run.json carries
+ *  ``fold_results`` (i.e. it was produced by CrossValidationBlock). */
+function CrossValidationDetail({ metrics }: { metrics: Record<string, unknown> }) {
+  const folds = metrics["fold_results"];
+  const agg = metrics["cv_aggregate"];
+  if (!Array.isArray(folds) || folds.length === 0) return null;
+
+  const typed = folds as CVFold[];
+  const a = (agg ?? {}) as CVAggregate;
+
+  return (
+    <Section
+      title={`Cross-validation · ${a.n_folds_ok ?? typed.length}/${a.n_folds ?? typed.length} folds ok${
+        (a.n_folds_failed ?? 0) > 0 ? ` · ${a.n_folds_failed} falharam` : ""
+      }`}
+    >
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+          gap: 10,
+          marginBottom: 12,
+        }}
+      >
+        {a.mean_accuracy !== null && a.mean_accuracy !== undefined && (
+          <CVAggregateCard
+            label="Acurácia média ± std"
+            mean={a.mean_accuracy}
+            std={a.std_accuracy ?? 0}
+            highlight
+          />
+        )}
+        {a.mean_f1 !== null && a.mean_f1 !== undefined && (
+          <CVAggregateCard
+            label="F1 média ± std"
+            mean={a.mean_f1}
+            std={a.std_f1 ?? 0}
+          />
+        )}
+      </div>
+
+      <div
+        style={{
+          padding: 10,
+          background: "rgba(0,0,0,0.30)",
+          border: "1px solid var(--vf-panel-stroke)",
+          borderRadius: 10,
+          overflowX: "auto",
+        }}
+      >
+        <table
+          style={{
+            width: "100%",
+            borderCollapse: "collapse",
+            fontFamily: "var(--font-mono)",
+            fontSize: 11,
+          }}
+        >
+          <thead>
+            <tr>
+              <th style={cvThStyle}>Fold</th>
+              <th style={cvThStyle}>train</th>
+              <th style={cvThStyle}>val</th>
+              <th style={cvThStyle}>val_loss</th>
+              <th style={cvThStyle}>accuracy</th>
+              <th style={cvThStyle}>F1</th>
+              <th style={cvThStyle}>status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {typed.map((f) => {
+              const ok = f.status === "success";
+              return (
+                <tr key={f.fold}>
+                  <td style={cvTdLabelStyle}>#{f.fold + 1}</td>
+                  <td style={cvTdStyle}>{f.train_size}</td>
+                  <td style={cvTdStyle}>{f.val_size}</td>
+                  <td style={cvTdStyle}>{fmtMetric(f.best_val_loss)}</td>
+                  <td style={cvTdStyle}>{fmtMetric(f.accuracy)}</td>
+                  <td style={cvTdStyle}>{fmtMetric(f.f1)}</td>
+                  <td
+                    style={{
+                      ...cvTdStyle,
+                      color: ok
+                        ? "oklch(0.85 0.16 150)"
+                        : "oklch(0.85 0.14 22)",
+                    }}
+                  >
+                    {ok ? "✓" : `× ${f.error || "?"}`}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </Section>
+  );
+}
+
+function CVAggregateCard({
+  label,
+  mean,
+  std,
+  highlight,
+}: {
+  label: string;
+  mean: number;
+  std: number;
+  highlight?: boolean;
+}) {
+  const accent = "var(--accent-vf)";
+  return (
+    <div
+      style={{
+        padding: 14,
+        borderRadius: 10,
+        border: "1px solid var(--vf-panel-stroke)",
+        background: highlight
+          ? "linear-gradient(180deg, var(--accent-soft) 0%, rgba(12,14,18,0.5) 100%)"
+          : "rgba(12,14,18,0.55)",
+      }}
+    >
+      <div
+        style={{
+          fontSize: 9,
+          letterSpacing: "0.18em",
+          textTransform: "uppercase",
+          color: "var(--vf-text-muted)",
+          fontFamily: "var(--font-mono)",
+        }}
+      >
+        {label}
+      </div>
+      <div
+        style={{
+          fontSize: 20,
+          marginTop: 6,
+          fontFamily: "var(--font-mono)",
+          fontWeight: 600,
+          color: highlight ? accent : "var(--vf-text)",
+        }}
+      >
+        {mean.toFixed(4)}
+        <span
+          style={{
+            fontSize: 12,
+            color: "var(--vf-text-muted)",
+            marginLeft: 6,
+            fontWeight: 400,
+          }}
+        >
+          ± {std.toFixed(4)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+const cvThStyle: React.CSSProperties = {
+  textAlign: "left",
+  padding: "6px 8px",
+  borderBottom: "1px solid var(--vf-panel-stroke)",
+  fontSize: 9,
+  letterSpacing: "0.14em",
+  textTransform: "uppercase",
+  color: "var(--vf-text-muted)",
+  fontWeight: 500,
+};
+
+const cvTdStyle: React.CSSProperties = {
+  padding: "6px 8px",
+  borderBottom: "1px solid rgba(255,255,255,0.04)",
+  color: "var(--vf-text)",
+};
+
+const cvTdLabelStyle: React.CSSProperties = {
+  ...cvTdStyle,
+  color: "var(--vf-text-muted)",
+  fontSize: 10,
+};
+
 
 interface SectionProps {
   title: string;

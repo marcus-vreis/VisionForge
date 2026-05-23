@@ -154,7 +154,7 @@ reachable from the GUI.
 
 ### Open follow-ups (sub-tarefas remanescentes)
 - [x] **Renderização específica de CV no `ResultsView`** — tabela com fold-a-fold + headline mean ± std implementada via `CrossValidationReport`.
-- [ ] **Surface `cv_summary.json` no `RunDetailPanel` / `HistoryOverlay`** — atualmente CV escreve em `reports_dir/base_name/cv_summary.json`, não em `models_dir/.../run.json`, então não aparece em `/api/runs`. Decidir entre (a) modificar `CrossValidationBlock` pra escrever `run.json` compatível, ou (b) endpoint novo `/api/cv-runs`. (task #22)
+- [x] **Surface `cv_summary.json` no `RunDetailPanel` / `HistoryOverlay`** — `CrossValidationBlock` agora emite também `models_dir/{name}_cv/run.json` compatível com o parser do `/api/runs`. `RunDetailPanel.CrossValidationDetail` renderiza fold-a-fold + mean ± std quando `metrics.fold_results` está presente.
 
 ---
 
