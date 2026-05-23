@@ -318,6 +318,28 @@ class TestReportAndArtifacts:
         assert "fold_results" in result
         assert len(result["fold_results"]) == 3
 
+    def test_top_level_run_json_written(self, cv_config: ExperimentConfig) -> None:
+        """run() must also write models_dir/{name}_cv/run.json so /api/runs
+        lists the CV experiment in the history alongside classification runs."""
+        self._run_block(cv_config)
+        run_json_path = (
+            cv_config.output.models_dir / f"{cv_config.name}_cv" / "run.json"
+        )
+        assert run_json_path.exists()
+        data = json.loads(run_json_path.read_text(encoding="utf-8"))
+        # Mirrors the keys RunSummary parser already expects.
+        assert data["status"] == "completed"
+        assert data["experiment"] == cv_config.name
+        assert "timestamp" in data
+        assert data["config"]["block"] == "cross_validation"
+        assert "test_accuracy" in data["metrics"]
+        assert "test_f1" in data["metrics"]
+        assert "fold_results" in data["metrics"]
+        assert len(data["metrics"]["fold_results"]) == 3
+        agg = data["metrics"]["cv_aggregate"]
+        assert agg["n_folds"] == 3
+        assert agg["n_folds_ok"] == 3
+
 
 # ── failure handling ──────────────────────────────────────────────────────────
 
