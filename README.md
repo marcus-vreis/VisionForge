@@ -2,6 +2,18 @@
 
 VisionForge é um ambiente modular e extensível para experimentação em Visão Computacional, com foco em redes neurais convolucionais (CNNs). Substitua notebooks Jupyter ad-hoc por um sistema limpo, testável e reprodutível para treinar, validar e comparar modelos.
 
+## Recursos atuais (classificação)
+
+- **Modelos**: ResNet 18/34/50/101, EfficientNet B1/B7, VGG 16/19, AlexNet — com pesos ImageNet, pesos custom (`.pth`/`.pt`) ou inicialização aleatória.
+- **Pipeline de pré-processamento configurável**: blur gaussiano/mediano, unsharp mask, edges (Sobel), emboss, grayscale, equalize (CLAHE), autocontrast, wavelet Haar — com preview lado a lado de cada etapa.
+- **Augmentation**: flip horizontal, rotação, color jitter, normalização customizável.
+- **Treinamento**: early stopping, AMP (mixed precision), schedulers (none/cosine/step/plateau), DataParallel multi-GPU, seleção explícita de device.
+- **Cross-validation**: K-Fold e Stratified K-Fold com normalize_mean/std recalculados por fold (sem data leakage).
+- **Avaliação**: Accuracy, F1, Precision, Recall, AUC-ROC, matriz de confusão (raw + normalizada), curvas ROC e Precision-Recall.
+- **Histórico de runs**: lista navegável com badges (preprocessing usado, device, métricas), comparação multi-run com diff de configuração destacado, teste do checkpoint salvo em datasets novos.
+- **Reprodutibilidade**: YAML import/export com validação client-side, model card markdown (config + métricas + pipeline + augmentation + histórico de testes), seed configurável.
+- **Interface**: React + FastAPI no mesmo processo Python (sem IPC), preview ao vivo de filtros, file picker nativo no servidor para pastas e checkpoints.
+
 ## 🚀 Como Executar
 
 ### 1. Pré-requisitos

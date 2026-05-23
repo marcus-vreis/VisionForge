@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>VisionForge — Local AI Training</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #07080a;
+    --bg-2: #0c0e12;
+    --panel: rgba(18, 20, 26, 0.72);
+    --panel-stroke: rgba(255, 255, 255, 0.06);
+    --text: #e7e9ee;
+    --text-dim: #9aa0ad;
+    --text-muted: #5a6070;
+    --mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+    --sans: 'Space Grotesk', system-ui, -apple-system, sans-serif;
+
+    /* Per-task tokens — overwritten by [data-task] on .stage */
+    --accent: oklch(0.72 0.18 25);
+    --accent-2: oklch(0.62 0.20 25);
+    --accent-soft: oklch(0.72 0.18 25 / 0.14);
+    --accent-glow: oklch(0.72 0.18 25 / 0.35);
+  }
+
+  /* CLASSIFICAÇÃO — red */
+  [data-task="classification"] {
+    --accent: oklch(0.74 0.18 22);
+    --accent-2: oklch(0.62 0.22 22);
+    --accent-soft: oklch(0.74 0.18 22 / 0.14);
+    --accent-glow: oklch(0.74 0.18 22 / 0.40);
+  }
+  /* DETECÇÃO — green */
+  [data-task="detection"] {
+    --accent: oklch(0.78 0.18 150);
+    --accent-2: oklch(0.66 0.20 150);
+    --accent-soft: oklch(0.78 0.18 150 / 0.14);
+    --accent-glow: oklch(0.78 0.18 150 / 0.40);
+  }
+  /* REGRESSÃO — blue */
+  [data-task="regression"] {
+    --accent: oklch(0.74 0.16 240);
+    --accent-2: oklch(0.62 0.20 240);
+    --accent-soft: oklch(0.74 0.16 240 / 0.14);
+    --accent-glow: oklch(0.74 0.16 240 / 0.40);
+  }
+  /* SEGMENTAÇÃO — violet (4th tab, the "...") */
+  [data-task="segmentation"] {
+    --accent: oklch(0.74 0.18 305);
+    --accent-2: oklch(0.62 0.22 305);
+    --accent-soft: oklch(0.74 0.18 305 / 0.14);
+    --accent-glow: oklch(0.74 0.18 305 / 0.40);
+  }
+
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+  body {
+    background:
+      radial-gradient(1200px 600px at 80% -10%, oklch(0.18 0.04 260 / 0.30), transparent 60%),
+      radial-gradient(900px 500px at -10% 110%, var(--accent-soft), transparent 60%),
+      var(--bg);
+    transition: background 600ms ease;
+  }
+
+  button { font-family: inherit; color: inherit; cursor: pointer; }
+  input, select { font-family: inherit; color: inherit; }
+
+  /* keyframes for the wave */
+  @keyframes drift {
+    0%   { transform: translate3d(0, 0, 0); }
+    100% { transform: translate3d(-25%, 0, 0); }
+  }
+  @keyframes drift2 {
+    0%   { transform: translate3d(0, 0, 0); }
+    100% { transform: translate3d(-33%, 0, 0); }
+  }
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.55; transform: scale(0.92); }
+  }
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes overlayIn {
+    from { opacity: 0; backdrop-filter: blur(0); }
+    to { opacity: 1; backdrop-filter: blur(14px); }
+  }
+  @keyframes sheetIn {
+    from { opacity: 0; transform: translateY(20px) scale(0.985); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+
+  /* Custom scrollbars */
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 999px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.16); }
+
+  /* Selection */
+  ::selection { background: var(--accent-soft); color: var(--text); }
+</style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="src/waves.jsx"></script>
+  <script type="text/babel" src="src/controls.jsx"></script>
+  <script type="text/babel" src="src/history.jsx"></script>
+  <script type="text/babel" src="src/tasks.jsx"></script>
+  <script type="text/babel" src="src/app.jsx"></script>
+</body>
+</html>

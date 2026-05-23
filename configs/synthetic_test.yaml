@@ -1,0 +1,38 @@
+# synthetic binary classification test — colored noise images (class_a=red, class_b=blue).
+# Run: uv run visionforge configs/synthetic_test.yaml
+
+name: synthetic_binary_test
+task: binary
+
+model:
+  name: resnet18
+  num_classes: 1
+  pretrained: false
+
+training:
+  learning_rate: 0.001
+  epochs: 5
+  batch_size: 8
+  early_stopping_patience: 3
+  optimizer: adam
+  weight_decay: 0.0001
+  seed: 42
+
+data:
+  base_dir: datasets/synthetic_binary
+  num_workers: 0
+  pin_memory: false
+  transforms:
+    image_size: 64
+    horizontal_flip: true
+    rotation_degrees: 5
+    color_jitter: false
+
+output:
+  models_dir: outputs/models
+  graphics_dir: outputs/graphics
+  logs_dir: outputs/logs
+  reports_dir: outputs/reports
+
+classification:
+  mode: train
