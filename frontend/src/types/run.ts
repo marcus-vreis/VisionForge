@@ -33,6 +33,9 @@ export interface RunSummary {
   final_metrics: Record<string, number>;
   /** Number of preprocessing filters applied during training (0 = none). */
   preprocessing_count?: number;
+  /** Block type from config — distinguishes classification / cross_validation /
+   *  grid_search / etc. in the history list. */
+  block?: string;
 }
 
 /** Discriminated union of SSE events emitted by GET /api/experiment/events. */

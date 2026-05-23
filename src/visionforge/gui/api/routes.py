@@ -1193,6 +1193,11 @@ def _parse_run_summary(run_dir: Path, data: dict[str, Any]) -> RunSummary:
     pp_steps = pp_cfg.get("steps") or []
     preprocessing_count = len(pp_steps) if isinstance(pp_steps, list) else 0
 
+    # The block field was added in 2026-05; older run.json files don't have
+    # it, so fall back to the config dict (also written by every block) and
+    # finally to "classification" if neither path resolves.
+    block = data.get("block") or config.get("block") or "classification"
+
     return RunSummary(
         run_id=run_dir.name,
         experiment_name=data["experiment"],
@@ -1204,6 +1209,7 @@ def _parse_run_summary(run_dir: Path, data: dict[str, Any]) -> RunSummary:
         epochs_completed=int(metrics["total_epochs"]),
         final_metrics=final_metrics,
         preprocessing_count=preprocessing_count,
+        block=block,
     )
 
 

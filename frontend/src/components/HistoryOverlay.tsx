@@ -10,6 +10,38 @@ interface HistoryOverlayProps {
   onCountChange?: (count: number) => void;
 }
 
+/** Small filter chip — used for the task-type filter row. */
+function FilterChip({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        padding: "6px 12px",
+        background: active ? "var(--accent-soft)" : "rgba(255,255,255,0.04)",
+        border: `1px solid ${active ? "var(--accent-vf)" : "var(--vf-panel-stroke)"}`,
+        borderRadius: 999,
+        fontFamily: "var(--font-mono)",
+        fontSize: 10,
+        letterSpacing: "0.12em",
+        textTransform: "uppercase",
+        color: active ? "var(--vf-text)" : "var(--vf-text-dim)",
+        cursor: "pointer",
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
 /** Color accent per task type, mirroring the VisionForge oklch palette. */
 const TASK_ACCENT: Record<string, string> = {
   classification: "oklch(0.74 0.18 22)",
@@ -219,6 +251,24 @@ function RunCard({
             {run.preprocessing_count === 1 ? "" : "s"}
           </span>
         )}
+        {run.block && run.block !== "classification" && (
+          <span
+            title={`Bloco de experimento: ${run.block}`}
+            style={{
+              padding: "2px 8px",
+              background: "rgba(180, 140, 255, 0.12)",
+              border: "1px solid rgba(180, 140, 255, 0.45)",
+              borderRadius: 999,
+              fontFamily: "var(--font-mono)",
+              fontSize: 10,
+              color: "rgba(220, 190, 255, 0.95)",
+              letterSpacing: "0.10em",
+              textTransform: "uppercase",
+            }}
+          >
+            ⛓ {run.block}
+          </span>
+        )}
         <span
           style={{
             marginLeft: "auto",
@@ -294,6 +344,8 @@ export function HistoryOverlay({ open, onClose, onCountChange }: HistoryOverlayP
   const [compareMode, setCompareMode] = useState(false);
   const [compareSelection, setCompareSelection] = useState<string[]>([]);
   const [compareActiveIds, setCompareActiveIds] = useState<string[] | null>(null);
+  const [query, setQuery] = useState("");
+  const [taskFilter, setTaskFilter] = useState<string>("all");
 
   useEffect(() => {
     if (!open) return;
@@ -303,6 +355,8 @@ export function HistoryOverlay({ open, onClose, onCountChange }: HistoryOverlayP
     setCompareMode(false);
     setCompareSelection([]);
     setCompareActiveIds(null);
+    setQuery("");
+    setTaskFilter("all");
     fetchRuns()
       .then((data) => {
         setRuns(data);
@@ -321,6 +375,24 @@ export function HistoryOverlay({ open, onClose, onCountChange }: HistoryOverlayP
       prev.includes(runId) ? prev.filter((id) => id !== runId) : [...prev, runId],
     );
   };
+
+  // Client-side filter — keeps the list responsive even with hundreds of runs.
+  // Search is case-insensitive and matches against experiment name OR arch.
+  const filteredRuns = (() => {
+    if (runs.length === 0) return runs;
+    const q = query.trim().toLowerCase();
+    return runs.filter((r) => {
+      if (taskFilter !== "all" && r.task !== taskFilter) return false;
+      if (q === "") return true;
+      return (
+        r.experiment_name.toLowerCase().includes(q) ||
+        r.model_arch.toLowerCase().includes(q) ||
+        r.run_id.toLowerCase().includes(q)
+      );
+    });
+  })();
+
+  const availableTasks = Array.from(new Set(runs.map((r) => r.task))).sort();
 
   if (!open) return null;
 
@@ -621,19 +693,122 @@ export function HistoryOverlay({ open, onClose, onCountChange }: HistoryOverlayP
             </div>
           )}
 
+          {/* Search + task filter row (only when there's a list to filter) */}
+          {!selectedRunId && !compareActiveIds && !loading && error === null && runs.length > 0 && (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                marginBottom: 12,
+                flexWrap: "wrap",
+              }}
+            >
+              <div style={{ position: "relative", flex: 1, minWidth: 200 }}>
+                <input
+                  type="text"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="🔍 buscar por nome, arquitetura ou run_id…"
+                  style={{
+                    width: "100%",
+                    padding: "9px 36px 9px 12px",
+                    background: "rgba(0,0,0,0.35)",
+                    border: "1px solid var(--vf-panel-stroke)",
+                    borderRadius: 10,
+                    color: "var(--vf-text)",
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 12,
+                  }}
+                />
+                {query && (
+                  <button
+                    type="button"
+                    onClick={() => setQuery("")}
+                    title="Limpar busca"
+                    style={{
+                      position: "absolute",
+                      right: 6,
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                      width: 24,
+                      height: 24,
+                      borderRadius: "50%",
+                      background: "rgba(255,255,255,0.06)",
+                      border: "1px solid var(--vf-panel-stroke)",
+                      color: "var(--vf-text-dim)",
+                      fontSize: 12,
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+              {availableTasks.length > 1 && (
+                <div style={{ display: "flex", gap: 6 }}>
+                  <FilterChip
+                    label="todos"
+                    active={taskFilter === "all"}
+                    onClick={() => setTaskFilter("all")}
+                  />
+                  {availableTasks.map((t) => (
+                    <FilterChip
+                      key={t}
+                      label={t}
+                      active={taskFilter === t}
+                      onClick={() => setTaskFilter(t)}
+                    />
+                  ))}
+                </div>
+              )}
+              {(query !== "" || taskFilter !== "all") && (
+                <span
+                  style={{
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 10,
+                    color: "var(--vf-text-muted)",
+                    letterSpacing: "0.08em",
+                  }}
+                >
+                  {filteredRuns.length} / {runs.length}
+                </span>
+              )}
+            </div>
+          )}
+
           {/* Run list */}
           {!selectedRunId && !compareActiveIds && !loading && error === null && runs.length > 0 && (
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {runs.map((run) => (
-                <RunCard
-                  key={run.run_id}
-                  run={run}
-                  onClick={() => setSelectedRunId(run.run_id)}
-                  selectable={compareMode}
-                  selected={compareSelection.includes(run.run_id)}
-                  onToggleSelect={() => toggleSelect(run.run_id)}
-                />
-              ))}
+              {filteredRuns.length === 0 ? (
+                <div
+                  style={{
+                    padding: 24,
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 12,
+                    color: "var(--vf-text-muted)",
+                    textAlign: "center",
+                    border: "1px dashed var(--vf-panel-stroke)",
+                    borderRadius: 10,
+                  }}
+                >
+                  Nenhum run combina com o filtro atual.
+                </div>
+              ) : (
+                filteredRuns.map((run) => (
+                  <RunCard
+                    key={run.run_id}
+                    run={run}
+                    onClick={() => setSelectedRunId(run.run_id)}
+                    selectable={compareMode}
+                    selected={compareSelection.includes(run.run_id)}
+                    onToggleSelect={() => toggleSelect(run.run_id)}
+                  />
+                ))
+              )}
             </div>
           )}
         </div>
