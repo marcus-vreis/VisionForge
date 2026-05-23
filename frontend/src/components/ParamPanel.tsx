@@ -1,12 +1,19 @@
 import { useEffect, useRef, useState } from "react";
-import { fetchSystemInfo } from "../api/client";
+import { fetchSystemInfo, pickCheckpointFile } from "../api/client";
 import { humanizeFieldPath, type ValidationError } from "../hooks/useExperiment";
 import type { JsonSchema } from "../types/schema";
 import type { TaskDefinition } from "../types/tasks";
-import { exportConfigToYaml, importConfigFromYaml } from "../lib/yaml-config";
+import {
+  exportConfigToYaml,
+  importConfigFromYaml,
+  validateParsedConfig,
+} from "../lib/yaml-config";
 import { DatasetPicker } from "./DatasetPicker";
 import { DatasetStats } from "./DatasetStats";
-import { PreprocessingPanel } from "./PreprocessingPanel";
+import {
+  PreprocessingPanel,
+  type PreprocessingStep as PreprocessingUIStep,
+} from "./PreprocessingPanel";
 import { resolveKind } from "./field-renderer";
 import {
   NumberField,
@@ -69,6 +76,18 @@ const FIELD_LABELS: Record<string, string> = {
   color_jitter: "Color jitter",
   normalize_mean: "Normalização (média)",
   normalize_std: "Normalização (std)",
+  // Cross-validation
+  n_folds: "Nº de folds",
+  stratified: "Stratified",
+  shuffle: "Shuffle",
+  fold_seed: "Fold seed",
+  // Transfer learning
+  mode: "Modo",
+  unfreeze_from_layer: "Descongelar a partir de",
+  backbone_lr_multiplier: "LR do backbone (×)",
+  // Model comparison
+  model_names: "Arquiteturas",
+  metric: "Métrica de ranking",
 };
 
 function resolveSchema(
@@ -80,6 +99,37 @@ function resolveSchema(
     return defs[refName] ?? schema;
   }
   return schema;
+}
+
+/** Convert the schema-flat preprocessing step (``{kind, ...params}``) the
+ * backend expects into the nested ``{kind, params}`` shape the UI panel uses.
+ * The backend's PreprocessingStep model uses extra="allow", so any field other
+ * than ``kind`` is treated as a filter parameter. */
+function toUIPreprocessingSteps(
+  raw: unknown,
+): PreprocessingUIStep[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((s): s is Record<string, unknown> => typeof s === "object" && s !== null)
+    .map((s) => {
+      const { kind, ...rest } = s as { kind?: unknown } & Record<string, unknown>;
+      const params: Record<string, string | number> = {};
+      for (const [k, v] of Object.entries(rest)) {
+        if (typeof v === "number" || typeof v === "string") {
+          params[k] = v;
+        }
+      }
+      return { kind: String(kind ?? ""), params };
+    })
+    .filter((s) => s.kind !== "");
+}
+
+/** Inverse of toUIPreprocessingSteps — flattens params back into the
+ * schema-level shape so the Pydantic ``PreprocessingStep`` model accepts it. */
+function fromUIPreprocessingSteps(
+  steps: PreprocessingUIStep[],
+): Array<Record<string, unknown>> {
+  return steps.map((s) => ({ kind: s.kind, ...s.params }));
 }
 
 
@@ -275,6 +325,1187 @@ function NumWorkersField({
           cursor: auto ? "not-allowed" : "text",
         }}
       />
+    </div>
+  );
+}
+
+
+/** weights_path field with a server-side file picker button.
+ *
+ * When set, the backend bypasses ImageNet weights and loads this .pth/.pt
+ * checkpoint into the architecture before training begins. Useful when the
+ * researcher wants to fine-tune from a previously trained run of their own.
+ */
+function WeightsPathField({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const [picking, setPicking] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  const handlePick = async () => {
+    setPicking(true);
+    setMessage(null);
+    try {
+      const res = await pickCheckpointFile();
+      if (res.cancelled) {
+        setMessage(res.message ?? "Cancelado.");
+        return;
+      }
+      onChange(res.path);
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : "Falha ao abrir o seletor.");
+    } finally {
+      setPicking(false);
+    }
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <span
+        style={{
+          fontFamily: "var(--font-mono)",
+          fontSize: 9,
+          letterSpacing: "0.14em",
+          textTransform: "uppercase",
+          color: "var(--vf-text-muted)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 8,
+        }}
+      >
+        <span>Checkpoint custom (.pth)</span>
+        {value && (
+          <button
+            type="button"
+            onClick={() => onChange("")}
+            title="Remover checkpoint custom (volta a usar pesos pretrained / random)"
+            style={{
+              padding: "2px 8px",
+              background: "transparent",
+              border: "1px solid var(--vf-panel-stroke)",
+              borderRadius: 6,
+              color: "var(--vf-text-dim)",
+              fontFamily: "var(--font-mono)",
+              fontSize: 9,
+              letterSpacing: "0.10em",
+              textTransform: "uppercase",
+              cursor: "pointer",
+            }}
+          >
+            limpar
+          </button>
+        )}
+      </span>
+      <div style={{ display: "flex", gap: 6, alignItems: "stretch" }}>
+        <input
+          type="text"
+          value={value}
+          placeholder="opcional — sobrescreve ImageNet"
+          onChange={(e) => onChange(e.target.value)}
+          style={{
+            flex: 1,
+            padding: "8px 12px",
+            background: "rgba(0,0,0,0.30)",
+            border: "1px solid var(--vf-panel-stroke)",
+            borderRadius: 8,
+            fontFamily: "var(--font-mono)",
+            fontSize: 12,
+            color: "var(--vf-text)",
+          }}
+        />
+        <button
+          type="button"
+          onClick={() => void handlePick()}
+          disabled={picking}
+          style={{
+            padding: "0 14px",
+            background: "transparent",
+            border: "1px solid var(--vf-panel-stroke)",
+            borderRadius: 8,
+            color: "var(--vf-text-dim)",
+            fontFamily: "var(--font-mono)",
+            fontSize: 11,
+            cursor: picking ? "wait" : "pointer",
+            whiteSpace: "nowrap",
+          }}
+        >
+          📁 {picking ? "…" : "Escolher"}
+        </button>
+      </div>
+      {message && (
+        <span
+          style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: 10,
+            color: "var(--vf-text-muted)",
+          }}
+        >
+          {message}
+        </span>
+      )}
+    </div>
+  );
+}
+
+
+/** Block selector — toggles between simple training and K-Fold cross-validation.
+ *
+ * These are the two block kinds wired into the GUI today (the backend has a
+ * few more: grid_search, transfer_learning, etc. — exposed in future phases).
+ * Selecting K-Fold reveals the CrossValidationFields below.
+ */
+function BlockSelector({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const options = [
+    { value: "classification", label: "Treino simples" },
+    { value: "cross_validation", label: "K-Fold (CV)" },
+    { value: "transfer_learning", label: "Transfer learning" },
+    { value: "model_comparison", label: "Comparar modelos" },
+    { value: "grid_search", label: "Grid search" },
+    { value: "random_search", label: "Random search" },
+  ];
+  return (
+    <div
+      style={{
+        marginBottom: 22,
+        padding: 16,
+        background: "rgba(255,255,255,0.02)",
+        border: "1px solid var(--vf-panel-stroke)",
+        borderRadius: 12,
+        display: "flex",
+        flexDirection: "column",
+        gap: 8,
+      }}
+    >
+      <div
+        style={{
+          fontFamily: "var(--font-mono)",
+          fontSize: 10,
+          letterSpacing: "0.20em",
+          textTransform: "uppercase",
+          color: "var(--vf-text-muted)",
+        }}
+      >
+        // estratégia de experimento
+      </div>
+      <div style={{ display: "flex", gap: 8 }}>
+        {options.map((o) => {
+          const selected = value === o.value;
+          return (
+            <button
+              key={o.value}
+              type="button"
+              onClick={() => onChange(o.value)}
+              style={{
+                flex: 1,
+                padding: "10px 14px",
+                background: selected
+                  ? "var(--accent-soft)"
+                  : "rgba(0,0,0,0.30)",
+                border: `1px solid ${selected ? "var(--accent-vf)" : "var(--vf-panel-stroke)"}`,
+                borderRadius: 10,
+                color: selected ? "var(--vf-text)" : "var(--vf-text-dim)",
+                fontFamily: "var(--font-mono)",
+                fontSize: 12,
+                letterSpacing: "0.08em",
+                cursor: "pointer",
+                boxShadow: selected ? "inset 0 0 12px var(--accent-glow)" : "none",
+                transition: "background 160ms ease, color 160ms ease",
+              }}
+            >
+              {o.label}
+            </button>
+          );
+        })}
+      </div>
+      {value === "cross_validation" && (
+        <div
+          style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: 10,
+            color: "var(--vf-text-muted)",
+            lineHeight: 1.5,
+            marginTop: 2,
+          }}
+        >
+          Treina N modelos em N folds da pasta de treino. Validação por fold;
+          normalize_mean/std são recalculados por fold para evitar data leakage.
+          Não usa o split de teste — agregação em <code>cv_summary.json</code>.
+        </div>
+      )}
+      {value === "transfer_learning" && (
+        <div
+          style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: 10,
+            color: "var(--vf-text-muted)",
+            lineHeight: 1.5,
+            marginTop: 2,
+          }}
+        >
+          Feature extraction (só treina o head) ou fine-tuning (head + backbone
+          parcial com LR menor). Útil para fine-tunar em datasets pequenos sem
+          destruir as features pré-treinadas.
+        </div>
+      )}
+      {value === "model_comparison" && (
+        <div
+          style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: 10,
+            color: "var(--vf-text-muted)",
+            lineHeight: 1.5,
+            marginTop: 2,
+          }}
+        >
+          Treina cada arquitetura selecionada com os mesmos hyperparams e mostra
+          o ranking pela métrica escolhida. O campo "Arquitetura" acima é
+          ignorado — quem manda é a lista abaixo.
+        </div>
+      )}
+      {value === "grid_search" && (
+        <div
+          style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: 10,
+            color: "var(--vf-text-muted)",
+            lineHeight: 1.5,
+            marginTop: 2,
+          }}
+        >
+          Treina <strong>uma vez por combinação</strong> do produto cartesiano
+          do espaço definido abaixo. Cada chave é um dot-path (ex:{" "}
+          <code>training.learning_rate</code>); o valor é uma lista. Cuidado:
+          3×3×2 já são 18 treinos.
+        </div>
+      )}
+      {value === "random_search" && (
+        <div
+          style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: 10,
+            color: "var(--vf-text-muted)",
+            lineHeight: 1.5,
+            marginTop: 2,
+          }}
+        >
+          Amostra <code>n_trials</code> configurações independentes do espaço
+          abaixo. Cada parâmetro tem um tipo: <code>uniform</code>,{" "}
+          <code>log_uniform</code> (LR e weight_decay) ou <code>choice</code>{" "}
+          (listas discretas).
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+/** Cross-validation hyperparameters — n_folds, stratified, shuffle, fold_seed. */
+function CrossValidationFields({
+  schema,
+  defs,
+  value,
+  onChange,
+  errors,
+}: {
+  schema: JsonSchema;
+  defs: Record<string, JsonSchema>;
+  value: Record<string, unknown>;
+  onChange: (v: Record<string, unknown>) => void;
+  errors: ValidationError[];
+}) {
+  const resolved = resolveSchema(schema, defs);
+  if (!resolved.properties) return null;
+
+  const setParam = (k: string, v: unknown) => onChange({ ...value, [k]: v });
+  const fields = ["n_folds", "stratified", "shuffle", "fold_seed"];
+
+  return (
+    <div
+      style={{
+        marginBottom: 26,
+        padding: 18,
+        background: "rgba(255,255,255,0.02)",
+        border: "1px solid var(--vf-panel-stroke)",
+        borderRadius: 12,
+        display: "flex",
+        flexDirection: "column",
+        gap: 12,
+      }}
+    >
+      <div
+        style={{
+          fontFamily: "var(--font-mono)",
+          fontSize: 10,
+          letterSpacing: "0.20em",
+          textTransform: "uppercase",
+          color: "var(--vf-text-muted)",
+        }}
+      >
+        // k-fold cross-validation
+      </div>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(4, 1fr)",
+          gap: 14,
+        }}
+      >
+        {fields.map((key) =>
+          resolved.properties?.[key] ? (
+            <SchemaFieldVF
+              key={key}
+              name={key}
+              schema={resolved.properties[key]}
+              defs={defs}
+              value={value[key]}
+              onChange={(v) => setParam(key, v)}
+              errors={errors}
+              path={["cross_validation", key]}
+            />
+          ) : null,
+        )}
+      </div>
+    </div>
+  );
+}
+
+
+/** Parse a CSV-style list of values into a list with smart type coercion.
+ *
+ * Numeric tokens become numbers, "true"/"false" become booleans, everything
+ * else stays as a string. Empty entries are dropped. Used by GridSearch and
+ * RandomSearch (when wired) to keep the editor a single textarea per key.
+ */
+function parseGridValuesCsv(raw: string): Array<number | boolean | string> {
+  return raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s !== "")
+    .map((s) => {
+      const n = Number(s);
+      if (s !== "" && !Number.isNaN(n)) return n;
+      if (s.toLowerCase() === "true") return true;
+      if (s.toLowerCase() === "false") return false;
+      return s;
+    });
+}
+
+/** Inverse of parseGridValuesCsv — kept stable so the CSV round-trips through
+ * formData without numeric trailing-zero damage (e.g. 0.1 → "0.1", not "0.1000000001"). */
+function stringifyGridValuesCsv(
+  values: Array<number | boolean | string> | undefined,
+): string {
+  if (!Array.isArray(values)) return "";
+  return values.map((v) => String(v)).join(", ");
+}
+
+/** Grid search hyperparameter editor — list of (key, CSV values) rows.
+ *
+ * Each key is a dot-path into the experiment config (validated server-side by
+ * ``validate_dot_keys``). The CSV is parsed at submit time into a list with
+ * smart type coercion so that ``0.001, 0.0005`` becomes ``[0.001, 0.0005]``
+ * and ``true, false`` becomes ``[True, False]``.
+ */
+function GridSearchFields({
+  value,
+  onChange,
+}: {
+  value: Record<string, unknown>;
+  onChange: (v: Record<string, unknown>) => void;
+}) {
+  const hp = (value["hyperparameters"] ?? {}) as Record<string, unknown>;
+  // Render a stable order of keys so the user can edit without rows jumping
+  // around as React re-renders. The empty-string key marks an unfilled row.
+  const entries = Object.entries(hp);
+
+  const setHp = (next: Record<string, unknown>) =>
+    onChange({ ...value, hyperparameters: next });
+
+  const renameKey = (oldKey: string, newKey: string) => {
+    if (oldKey === newKey) return;
+    if (newKey in hp && newKey !== oldKey) return; // refuse duplicate keys
+    const next: Record<string, unknown> = {};
+    for (const [k, v] of entries) {
+      next[k === oldKey ? newKey : k] = v;
+    }
+    setHp(next);
+  };
+
+  const setValuesFor = (key: string, csv: string) => {
+    setHp({ ...hp, [key]: parseGridValuesCsv(csv) });
+  };
+
+  const addRow = () => {
+    // Pick a unique placeholder key so React can render two empty rows.
+    let suffix = entries.length + 1;
+    let key = `param_${suffix}`;
+    while (key in hp) {
+      suffix += 1;
+      key = `param_${suffix}`;
+    }
+    setHp({ ...hp, [key]: [] });
+  };
+
+  const removeRow = (key: string) => {
+    const next = { ...hp };
+    delete next[key];
+    setHp(next);
+  };
+
+  // Cartesian-product preview — shows total trials the backend will run.
+  const totalTrials = entries.reduce((acc, [, v]) => {
+    const n = Array.isArray(v) ? v.length : 0;
+    return acc * Math.max(n, 1);
+  }, entries.length === 0 ? 0 : 1);
+
+  return (
+    <div
+      style={{
+        marginBottom: 26,
+        padding: 18,
+        background: "rgba(255,255,255,0.02)",
+        border: "1px solid var(--vf-panel-stroke)",
+        borderRadius: 12,
+        display: "flex",
+        flexDirection: "column",
+        gap: 12,
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: 12,
+        }}
+      >
+        <div
+          style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: 10,
+            letterSpacing: "0.20em",
+            textTransform: "uppercase",
+            color: "var(--vf-text-muted)",
+          }}
+        >
+          // grid search · {totalTrials} trial{totalTrials === 1 ? "" : "s"}
+          {totalTrials > 12 ? " ⚠️ alto" : ""}
+        </div>
+        <button
+          type="button"
+          onClick={addRow}
+          style={{
+            padding: "6px 12px",
+            background: "var(--accent-soft)",
+            border: "1px solid var(--accent-vf)",
+            borderRadius: 8,
+            color: "var(--vf-text)",
+            fontFamily: "var(--font-mono)",
+            fontSize: 11,
+            letterSpacing: "0.10em",
+            textTransform: "uppercase",
+            cursor: "pointer",
+          }}
+        >
+          + adicionar
+        </button>
+      </div>
+
+      {entries.length === 0 ? (
+        <div
+          style={{
+            padding: "12px 14px",
+            fontFamily: "var(--font-mono)",
+            fontSize: 11,
+            color: "var(--vf-text-muted)",
+            border: "1px dashed var(--vf-panel-stroke)",
+            borderRadius: 10,
+            textAlign: "center",
+            lineHeight: 1.6,
+          }}
+        >
+          Espaço de busca vazio — clique em "+ adicionar".
+          <div style={{ fontSize: 10, marginTop: 4, opacity: 0.7 }}>
+            Exemplos: <code>training.learning_rate</code> → "0.001, 0.0005";{" "}
+            <code>model.name</code> → "resnet18, resnet50".
+          </div>
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {entries.map(([key, vals]) => (
+            <GridSearchRow
+              key={key}
+              paramKey={key}
+              csv={stringifyGridValuesCsv(
+                Array.isArray(vals)
+                  ? (vals as Array<number | boolean | string>)
+                  : undefined,
+              )}
+              onRenameKey={(newKey) => renameKey(key, newKey)}
+              onChangeCsv={(csv) => setValuesFor(key, csv)}
+              onRemove={() => removeRow(key)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function GridSearchRow({
+  paramKey,
+  csv,
+  onRenameKey,
+  onChangeCsv,
+  onRemove,
+}: {
+  paramKey: string;
+  csv: string;
+  onRenameKey: (k: string) => void;
+  onChangeCsv: (csv: string) => void;
+  onRemove: () => void;
+}) {
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "1fr 2fr auto",
+        gap: 8,
+        alignItems: "center",
+      }}
+    >
+      <input
+        type="text"
+        value={paramKey}
+        onChange={(e) => onRenameKey(e.target.value)}
+        placeholder="dot-path (ex: training.learning_rate)"
+        style={{
+          padding: "8px 12px",
+          background: "rgba(0,0,0,0.30)",
+          border: "1px solid var(--vf-panel-stroke)",
+          borderRadius: 8,
+          fontFamily: "var(--font-mono)",
+          fontSize: 12,
+          color: "var(--vf-text)",
+        }}
+      />
+      <input
+        type="text"
+        value={csv}
+        onChange={(e) => onChangeCsv(e.target.value)}
+        placeholder="valores separados por vírgula (ex: 0.001, 0.0005, 0.0001)"
+        style={{
+          padding: "8px 12px",
+          background: "rgba(0,0,0,0.30)",
+          border: "1px solid var(--vf-panel-stroke)",
+          borderRadius: 8,
+          fontFamily: "var(--font-mono)",
+          fontSize: 12,
+          color: "var(--vf-text)",
+        }}
+      />
+      <button
+        type="button"
+        onClick={onRemove}
+        title="Remover linha"
+        style={{
+          width: 32,
+          height: 32,
+          padding: 0,
+          background: "transparent",
+          border: "1px solid var(--vf-panel-stroke)",
+          borderRadius: 8,
+          color: "var(--vf-text-dim)",
+          fontFamily: "var(--font-mono)",
+          fontSize: 14,
+          cursor: "pointer",
+        }}
+      >
+        ×
+      </button>
+    </div>
+  );
+}
+
+
+/** Random search editor — dot-path keys mapped to (type, params) rows.
+ *
+ * Each row picks one of the three param types accepted by the backend:
+ * - uniform(low, high)
+ * - log_uniform(low, high)   ← natural for LR and weight_decay
+ * - choice(options)          ← CSV-typed list, smart-coerced to int/float/bool
+ *
+ * The output shape matches what ``visionforge.blocks.random_search`` expects:
+ * a dict from dot-path → {type, ...}. ``n_trials`` controls how many
+ * configurations are sampled before the search ends.
+ */
+type RandomParamType = "uniform" | "log_uniform" | "choice";
+
+interface RandomParamDef {
+  type: RandomParamType;
+  low?: number;
+  high?: number;
+  options?: Array<number | boolean | string>;
+}
+
+function defaultRandomParam(type: RandomParamType): RandomParamDef {
+  if (type === "choice") return { type, options: [] };
+  if (type === "log_uniform") return { type, low: 1e-5, high: 1e-1 };
+  return { type, low: 0, high: 1 };
+}
+
+function RandomSearchFields({
+  value,
+  onChange,
+}: {
+  value: Record<string, unknown>;
+  onChange: (v: Record<string, unknown>) => void;
+}) {
+  const n_trials = typeof value["n_trials"] === "number"
+    ? (value["n_trials"] as number)
+    : 10;
+  const seed = typeof value["seed"] === "number" ? (value["seed"] as number) : 42;
+  const space = (value["search_space"] ?? {}) as Record<string, RandomParamDef>;
+  const entries = Object.entries(space);
+
+  const setSpace = (next: Record<string, RandomParamDef>) =>
+    onChange({ ...value, search_space: next });
+
+  const renameKey = (oldKey: string, newKey: string) => {
+    if (oldKey === newKey) return;
+    if (newKey in space && newKey !== oldKey) return;
+    const next: Record<string, RandomParamDef> = {};
+    for (const [k, v] of entries) {
+      next[k === oldKey ? newKey : k] = v;
+    }
+    setSpace(next);
+  };
+
+  const setParamType = (key: string, type: RandomParamType) => {
+    setSpace({ ...space, [key]: defaultRandomParam(type) });
+  };
+
+  const setParamField = (
+    key: string,
+    field: "low" | "high",
+    raw: string,
+  ) => {
+    const n = parseFloat(raw);
+    if (Number.isNaN(n)) return;
+    setSpace({ ...space, [key]: { ...space[key], [field]: n } });
+  };
+
+  const setChoiceOptions = (key: string, csv: string) => {
+    setSpace({ ...space, [key]: { ...space[key], options: parseGridValuesCsv(csv) } });
+  };
+
+  const addRow = () => {
+    let suffix = entries.length + 1;
+    let key = `param_${suffix}`;
+    while (key in space) {
+      suffix += 1;
+      key = `param_${suffix}`;
+    }
+    setSpace({ ...space, [key]: defaultRandomParam("uniform") });
+  };
+
+  const removeRow = (key: string) => {
+    const next = { ...space };
+    delete next[key];
+    setSpace(next);
+  };
+
+  return (
+    <div
+      style={{
+        marginBottom: 26,
+        padding: 18,
+        background: "rgba(255,255,255,0.02)",
+        border: "1px solid var(--vf-panel-stroke)",
+        borderRadius: 12,
+        display: "flex",
+        flexDirection: "column",
+        gap: 12,
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: 12,
+        }}
+      >
+        <div
+          style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: 10,
+            letterSpacing: "0.20em",
+            textTransform: "uppercase",
+            color: "var(--vf-text-muted)",
+          }}
+        >
+          // random search · {n_trials} trial{n_trials === 1 ? "" : "s"}
+        </div>
+        <button
+          type="button"
+          onClick={addRow}
+          style={{
+            padding: "6px 12px",
+            background: "var(--accent-soft)",
+            border: "1px solid var(--accent-vf)",
+            borderRadius: 8,
+            color: "var(--vf-text)",
+            fontFamily: "var(--font-mono)",
+            fontSize: 11,
+            letterSpacing: "0.10em",
+            textTransform: "uppercase",
+            cursor: "pointer",
+          }}
+        >
+          + adicionar
+        </button>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+        <NumberField
+          label="n_trials"
+          value={n_trials}
+          onChange={(v) => onChange({ ...value, n_trials: Math.max(1, Math.round(v)) })}
+          min={1}
+          step={1}
+        />
+        <NumberField
+          label="seed"
+          value={seed}
+          onChange={(v) => onChange({ ...value, seed: Math.max(0, Math.round(v)) })}
+          min={0}
+          step={1}
+        />
+      </div>
+
+      {entries.length === 0 ? (
+        <div
+          style={{
+            padding: "12px 14px",
+            fontFamily: "var(--font-mono)",
+            fontSize: 11,
+            color: "var(--vf-text-muted)",
+            border: "1px dashed var(--vf-panel-stroke)",
+            borderRadius: 10,
+            textAlign: "center",
+            lineHeight: 1.6,
+          }}
+        >
+          Espaço de busca vazio — clique em "+ adicionar".
+          <div style={{ fontSize: 10, marginTop: 4, opacity: 0.7 }}>
+            Exemplo: <code>training.learning_rate</code> = log_uniform(1e-5, 1e-2).
+          </div>
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {entries.map(([key, def]) => (
+            <RandomSearchRow
+              key={key}
+              paramKey={key}
+              def={def}
+              onRenameKey={(nk) => renameKey(key, nk)}
+              onChangeType={(t) => setParamType(key, t)}
+              onChangeField={(field, raw) => setParamField(key, field, raw)}
+              onChangeChoices={(csv) => setChoiceOptions(key, csv)}
+              onRemove={() => removeRow(key)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RandomSearchRow({
+  paramKey,
+  def,
+  onRenameKey,
+  onChangeType,
+  onChangeField,
+  onChangeChoices,
+  onRemove,
+}: {
+  paramKey: string;
+  def: RandomParamDef;
+  onRenameKey: (k: string) => void;
+  onChangeType: (t: RandomParamType) => void;
+  onChangeField: (field: "low" | "high", raw: string) => void;
+  onChangeChoices: (csv: string) => void;
+  onRemove: () => void;
+}) {
+  const isChoice = def.type === "choice";
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: isChoice ? "1fr 130px 2fr auto" : "1fr 130px 1fr 1fr auto",
+        gap: 8,
+        alignItems: "center",
+      }}
+    >
+      <input
+        type="text"
+        value={paramKey}
+        onChange={(e) => onRenameKey(e.target.value)}
+        placeholder="dot-path (ex: training.learning_rate)"
+        style={rsInputStyle}
+      />
+      <select
+        value={def.type}
+        onChange={(e) => onChangeType(e.target.value as RandomParamType)}
+        style={rsInputStyle}
+      >
+        <option value="uniform">uniform</option>
+        <option value="log_uniform">log_uniform</option>
+        <option value="choice">choice</option>
+      </select>
+      {isChoice ? (
+        <input
+          type="text"
+          value={
+            Array.isArray(def.options) ? def.options.map(String).join(", ") : ""
+          }
+          onChange={(e) => onChangeChoices(e.target.value)}
+          placeholder="csv: resnet18, resnet50"
+          style={rsInputStyle}
+        />
+      ) : (
+        <>
+          <input
+            type="number"
+            value={def.low ?? 0}
+            step="any"
+            onChange={(e) => onChangeField("low", e.target.value)}
+            placeholder="low"
+            style={rsInputStyle}
+          />
+          <input
+            type="number"
+            value={def.high ?? 1}
+            step="any"
+            onChange={(e) => onChangeField("high", e.target.value)}
+            placeholder="high"
+            style={rsInputStyle}
+          />
+        </>
+      )}
+      <button
+        type="button"
+        onClick={onRemove}
+        title="Remover linha"
+        style={{
+          width: 32,
+          height: 32,
+          padding: 0,
+          background: "transparent",
+          border: "1px solid var(--vf-panel-stroke)",
+          borderRadius: 8,
+          color: "var(--vf-text-dim)",
+          fontFamily: "var(--font-mono)",
+          fontSize: 14,
+          cursor: "pointer",
+        }}
+      >
+        ×
+      </button>
+    </div>
+  );
+}
+
+const rsInputStyle: React.CSSProperties = {
+  padding: "8px 12px",
+  background: "rgba(0,0,0,0.30)",
+  border: "1px solid var(--vf-panel-stroke)",
+  borderRadius: 8,
+  fontFamily: "var(--font-mono)",
+  fontSize: 12,
+  color: "var(--vf-text)",
+};
+
+
+/** ModelComparison hyperparameters — model_names multi-select + ranking metric.
+ *
+ * The list of available architectures comes from the JSON Schema for
+ * ``ModelComparisonConfig.model_names.items.enum`` so it stays in sync with
+ * the backend's Literal type without duplication.
+ */
+function ModelComparisonFields({
+  schema,
+  defs,
+  value,
+  onChange,
+  errors,
+}: {
+  schema: JsonSchema;
+  defs: Record<string, JsonSchema>;
+  value: Record<string, unknown>;
+  onChange: (v: Record<string, unknown>) => void;
+  errors: ValidationError[];
+}) {
+  const resolved = resolveSchema(schema, defs);
+  if (!resolved.properties) return null;
+
+  const namesSchema = resolved.properties["model_names"];
+  const namesResolved = namesSchema ? resolveSchema(namesSchema, defs) : null;
+  const itemEnum =
+    namesResolved?.items && "enum" in namesResolved.items
+      ? (namesResolved.items.enum as string[] | undefined)
+      : undefined;
+  const archOptions = itemEnum ?? [];
+
+  const selectedNames = Array.isArray(value["model_names"])
+    ? (value["model_names"] as string[])
+    : [];
+  const metric = String(value["metric"] ?? "f1");
+
+  const toggleArch = (arch: string) => {
+    const next = selectedNames.includes(arch)
+      ? selectedNames.filter((a) => a !== arch)
+      : [...selectedNames, arch];
+    onChange({ ...value, model_names: next });
+  };
+
+  const setMetric = (v: string) => onChange({ ...value, metric: v });
+
+  const namesErr = errors.find(
+    (e) =>
+      e.field.length === 2 &&
+      e.field[0] === "model_comparison" &&
+      e.field[1] === "model_names",
+  );
+
+  return (
+    <div
+      style={{
+        marginBottom: 26,
+        padding: 18,
+        background: "rgba(255,255,255,0.02)",
+        border: "1px solid var(--vf-panel-stroke)",
+        borderRadius: 12,
+        display: "flex",
+        flexDirection: "column",
+        gap: 14,
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+          flexWrap: "wrap",
+        }}
+      >
+        <div
+          style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: 10,
+            letterSpacing: "0.20em",
+            textTransform: "uppercase",
+            color: "var(--vf-text-muted)",
+          }}
+        >
+          // comparação de modelos · {selectedNames.length} selecionado
+          {selectedNames.length === 1 ? "" : "s"}
+        </div>
+        <div style={{ minWidth: 200 }}>
+          {resolved.properties["metric"] && (
+            <SchemaFieldVF
+              name="metric"
+              schema={resolved.properties["metric"]}
+              defs={defs}
+              value={metric}
+              onChange={(v) => setMetric(String(v))}
+              errors={errors}
+              path={["model_comparison", "metric"]}
+            />
+          )}
+        </div>
+      </div>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
+          gap: 8,
+        }}
+      >
+        {archOptions.map((arch) => {
+          const selected = selectedNames.includes(arch);
+          return (
+            <label
+              key={arch}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "8px 12px",
+                background: selected
+                  ? "var(--accent-soft)"
+                  : "rgba(0,0,0,0.30)",
+                border: `1px solid ${selected ? "var(--accent-vf)" : "var(--vf-panel-stroke)"}`,
+                borderRadius: 8,
+                fontFamily: "var(--font-mono)",
+                fontSize: 12,
+                color: selected ? "var(--vf-text)" : "var(--vf-text-dim)",
+                cursor: "pointer",
+                transition: "background 160ms ease, color 160ms ease",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={selected}
+                onChange={() => toggleArch(arch)}
+                style={{ accentColor: "var(--accent-vf)" }}
+              />
+              {arch}
+            </label>
+          );
+        })}
+      </div>
+
+      {namesErr && (
+        <p
+          style={{
+            fontSize: 11,
+            color: "oklch(0.704 0.191 22.216)",
+            fontFamily: "var(--font-mono)",
+            margin: 0,
+          }}
+        >
+          {namesErr.message}
+        </p>
+      )}
+      {selectedNames.length < 2 && (
+        <p
+          style={{
+            fontSize: 10,
+            color: "var(--vf-text-muted)",
+            fontFamily: "var(--font-mono)",
+            margin: 0,
+            fontStyle: "italic",
+          }}
+        >
+          Selecione pelo menos 2 arquiteturas para iniciar a comparação.
+        </p>
+      )}
+    </div>
+  );
+}
+
+
+/** Transfer-learning hyperparameters — mode, unfreeze_from_layer, backbone_lr_multiplier. */
+function TransferLearningFields({
+  schema,
+  defs,
+  value,
+  onChange,
+  errors,
+}: {
+  schema: JsonSchema;
+  defs: Record<string, JsonSchema>;
+  value: Record<string, unknown>;
+  onChange: (v: Record<string, unknown>) => void;
+  errors: ValidationError[];
+}) {
+  const resolved = resolveSchema(schema, defs);
+  if (!resolved.properties) return null;
+
+  const setParam = (k: string, v: unknown) => onChange({ ...value, [k]: v });
+  const mode = String(value["mode"] ?? "feature_extraction");
+
+  // unfreeze_from_layer only applies in fine_tuning mode; backbone_lr_multiplier
+  // is most useful in fine_tuning but also valid in feature_extraction (no-op).
+  const showLayer = mode === "fine_tuning";
+
+  return (
+    <div
+      style={{
+        marginBottom: 26,
+        padding: 18,
+        background: "rgba(255,255,255,0.02)",
+        border: "1px solid var(--vf-panel-stroke)",
+        borderRadius: 12,
+        display: "flex",
+        flexDirection: "column",
+        gap: 12,
+      }}
+    >
+      <div
+        style={{
+          fontFamily: "var(--font-mono)",
+          fontSize: 10,
+          letterSpacing: "0.20em",
+          textTransform: "uppercase",
+          color: "var(--vf-text-muted)",
+        }}
+      >
+        // transfer learning
+      </div>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: showLayer
+            ? "repeat(3, 1fr)"
+            : "repeat(2, 1fr)",
+          gap: 14,
+        }}
+      >
+        {resolved.properties["mode"] && (
+          <SchemaFieldVF
+            name="mode"
+            schema={resolved.properties["mode"]}
+            defs={defs}
+            value={mode}
+            onChange={(v) => setParam("mode", v)}
+            errors={errors}
+            path={["transfer_learning", "mode"]}
+          />
+        )}
+        {showLayer && resolved.properties["unfreeze_from_layer"] && (
+          <SchemaFieldVF
+            name="unfreeze_from_layer"
+            schema={resolved.properties["unfreeze_from_layer"]}
+            defs={defs}
+            value={value["unfreeze_from_layer"]}
+            onChange={(v) =>
+              setParam("unfreeze_from_layer", v === "" ? null : v)
+            }
+            errors={errors}
+            path={["transfer_learning", "unfreeze_from_layer"]}
+          />
+        )}
+        {resolved.properties["backbone_lr_multiplier"] && (
+          <SchemaFieldVF
+            name="backbone_lr_multiplier"
+            schema={resolved.properties["backbone_lr_multiplier"]}
+            defs={defs}
+            value={value["backbone_lr_multiplier"]}
+            onChange={(v) => setParam("backbone_lr_multiplier", v)}
+            errors={errors}
+            path={["transfer_learning", "backbone_lr_multiplier"]}
+          />
+        )}
+      </div>
     </div>
   );
 }
@@ -622,9 +1853,34 @@ export function ParamPanel({
     void importConfigFromYaml(file).then((result) => {
       if ("error" in result) {
         setImportError(result.error);
-      } else {
+        return;
+      }
+      // Always load the parsed data so the user sees it in the form; if any
+      // structural issues exist, warn them ahead of the submit round-trip.
+      setFormData(result.data);
+      if (!schema) {
         setImportError(null);
-        setFormData(result.data);
+        return;
+      }
+      const issues = validateParsedConfig(
+        result.data,
+        schema,
+        schema.$defs ?? {},
+      );
+      if (issues.length === 0) {
+        setImportError(null);
+      } else {
+        const summary = issues
+          .slice(0, 5)
+          .map(
+            (iss) => `· ${humanizeFieldPath(iss.field)} — ${iss.message}`,
+          )
+          .join("\n");
+        const more =
+          issues.length > 5 ? `\n…(+${issues.length - 5} mais)` : "";
+        setImportError(
+          `YAML importado com ${issues.length} aviso(s) estrutural(is):\n${summary}${more}\n\nCorrija antes de treinar — o backend rejeita por validação Pydantic.`,
+        );
       }
     });
   };
@@ -854,6 +2110,8 @@ export function ParamPanel({
             fontFamily: "var(--font-mono)",
             fontSize: 12,
             color: "oklch(0.85 0.14 22)",
+            whiteSpace: "pre-line",
+            lineHeight: 1.6,
           }}
         >
           {importError}
@@ -870,6 +2128,142 @@ export function ParamPanel({
           marginBottom: 26,
         }}
       />
+
+      {/* Block selector — toggles classification / CV / transfer learning */}
+      <BlockSelector
+        value={String(formData["block"] ?? "classification")}
+        onChange={(v) =>
+          setFormData((prev) => {
+            // Auto-populate sensible defaults so the field block below has
+            // something to render. Backend Pydantic does the rest of the
+            // validation at submit time.
+            const next: Record<string, unknown> = { ...prev, block: v };
+            if (v === "cross_validation" && !prev["cross_validation"]) {
+              next["cross_validation"] = {
+                n_folds: 5,
+                stratified: true,
+                shuffle: true,
+                fold_seed: 42,
+              };
+            }
+            if (v === "transfer_learning" && !prev["transfer_learning"]) {
+              next["transfer_learning"] = {
+                mode: "feature_extraction",
+                unfreeze_from_layer: null,
+                backbone_lr_multiplier: 0.1,
+              };
+            }
+            if (v === "model_comparison" && !prev["model_comparison"]) {
+              // Default to two light architectures so the user only has to
+              // confirm or extend the list — never an empty selection that
+              // would block submit.
+              next["model_comparison"] = {
+                model_names: ["resnet18", "resnet50"],
+                metric: "f1",
+              };
+            }
+            if (v === "grid_search" && !prev["grid_search"]) {
+              // Seed with a recognizable LR sweep so the user has a working
+              // example to edit instead of a blank slate.
+              next["grid_search"] = {
+                hyperparameters: {
+                  "training.learning_rate": [0.001, 0.0005, 0.0001],
+                },
+              };
+            }
+            if (v === "random_search" && !prev["random_search"]) {
+              // Default search_space exercises the two most common axes —
+              // LR (log_uniform) and weight_decay (log_uniform). Cheap to
+              // edit, immediately runnable.
+              next["random_search"] = {
+                n_trials: 10,
+                seed: 42,
+                search_space: {
+                  "training.learning_rate": {
+                    type: "log_uniform",
+                    low: 1e-5,
+                    high: 1e-2,
+                  },
+                  "training.weight_decay": {
+                    type: "log_uniform",
+                    low: 1e-6,
+                    high: 1e-3,
+                  },
+                },
+              };
+            }
+            return next;
+          })
+        }
+      />
+
+      {/* Cross-validation fields — only when the block is K-Fold */}
+      {formData["block"] === "cross_validation" &&
+        schema.properties?.["cross_validation"] && (
+          <CrossValidationFields
+            schema={schema.properties["cross_validation"]}
+            defs={defs}
+            value={
+              (formData["cross_validation"] ?? {}) as Record<string, unknown>
+            }
+            onChange={(v) =>
+              setFormData((prev) => ({ ...prev, cross_validation: v }))
+            }
+            errors={validationErrors}
+          />
+        )}
+
+      {/* Transfer learning fields — only when the block is TL */}
+      {formData["block"] === "transfer_learning" &&
+        schema.properties?.["transfer_learning"] && (
+          <TransferLearningFields
+            schema={schema.properties["transfer_learning"]}
+            defs={defs}
+            value={
+              (formData["transfer_learning"] ?? {}) as Record<string, unknown>
+            }
+            onChange={(v) =>
+              setFormData((prev) => ({ ...prev, transfer_learning: v }))
+            }
+            errors={validationErrors}
+          />
+        )}
+
+      {/* Model comparison fields — only when comparing architectures */}
+      {formData["block"] === "model_comparison" &&
+        schema.properties?.["model_comparison"] && (
+          <ModelComparisonFields
+            schema={schema.properties["model_comparison"]}
+            defs={defs}
+            value={
+              (formData["model_comparison"] ?? {}) as Record<string, unknown>
+            }
+            onChange={(v) =>
+              setFormData((prev) => ({ ...prev, model_comparison: v }))
+            }
+            errors={validationErrors}
+          />
+        )}
+
+      {/* Grid search fields — only when block is grid_search */}
+      {formData["block"] === "grid_search" && (
+        <GridSearchFields
+          value={(formData["grid_search"] ?? {}) as Record<string, unknown>}
+          onChange={(v) =>
+            setFormData((prev) => ({ ...prev, grid_search: v }))
+          }
+        />
+      )}
+
+      {/* Random search fields — only when block is random_search */}
+      {formData["block"] === "random_search" && (
+        <RandomSearchFields
+          value={(formData["random_search"] ?? {}) as Record<string, unknown>}
+          onChange={(v) =>
+            setFormData((prev) => ({ ...prev, random_search: v }))
+          }
+        />
+      )}
 
       {/* Model section */}
       <div
@@ -929,6 +2323,10 @@ export function ParamPanel({
             path={["model", "pretrained"]}
           />
         )}
+        <WeightsPathField
+          value={String(modelData["weights_path"] ?? "")}
+          onChange={(v) => setField("model", "weights_path", v === "" ? null : v)}
+        />
       </div>
 
       {/* Divider */}
@@ -1035,9 +2433,43 @@ export function ParamPanel({
         trainDir={(dataData["train_dir"] as string) ?? ""}
         valDir={(dataData["val_dir"] as string) ?? ""}
         testDir={(dataData["test_dir"] as string) ?? ""}
+        onApplyClasses={(n) =>
+          setFormData((prev) => {
+            // 2-class datasets → BCE head (num_classes=1, task=binary)
+            // Anything else → multiclass with the detected count
+            const model = (prev["model"] ?? {}) as Record<string, unknown>;
+            const isBinary = n === 2;
+            return {
+              ...prev,
+              task: isBinary ? "binary" : "multiclass",
+              model: { ...model, num_classes: isBinary ? 1 : n },
+            };
+          })
+        }
       />
 
-      <PreprocessingPanel baseDir={(dataData["base_dir"] as string) ?? ""} />
+      <PreprocessingPanel
+        baseDir={(dataData["base_dir"] as string) ?? ""}
+        steps={toUIPreprocessingSteps(
+          ((dataData["preprocessing"] ?? {}) as Record<string, unknown>)["steps"],
+        )}
+        onChange={(uiSteps) =>
+          setFormData((prev) => {
+            const sec = (prev["data"] ?? {}) as Record<string, unknown>;
+            const pp = (sec["preprocessing"] ?? {}) as Record<string, unknown>;
+            return {
+              ...prev,
+              data: {
+                ...sec,
+                preprocessing: {
+                  ...pp,
+                  steps: fromUIPreprocessingSteps(uiSteps),
+                },
+              },
+            };
+          })
+        }
+      />
 
       <div
         style={{

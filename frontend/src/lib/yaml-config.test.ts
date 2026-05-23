@@ -89,6 +89,36 @@ describe("serializeConfigToYaml + parseYamlToConfig round-trip", () => {
     const parsed = parseYamlToConfig(yaml) as { training: Record<string, unknown> };
     expect("epochs" in parsed.training).toBe(false);
   });
+
+  it("preserves data.preprocessing.steps with custom params", () => {
+    // Regression guard: until the PreprocessingPanel became controlled, this
+    // round-trip wasn't even possible — the pipeline lived in panel state and
+    // never reached formData. Confirms YAML export reproduces the pipeline.
+    const cfg = {
+      ...BASELINE_CONFIG,
+      data: {
+        ...(BASELINE_CONFIG.data as object),
+        preprocessing: {
+          steps: [
+            { kind: "gaussian_blur", radius: 1.5 },
+            { kind: "grayscale" },
+            { kind: "wavelet", band: "LL" },
+          ],
+        },
+      },
+    };
+    const yaml = serializeConfigToYaml(cfg);
+    const parsed = parseYamlToConfig(yaml) as {
+      data: {
+        preprocessing: { steps: Array<Record<string, unknown>> };
+      };
+    };
+    expect(parsed.data.preprocessing.steps).toEqual([
+      { kind: "gaussian_blur", radius: 1.5 },
+      { kind: "grayscale" },
+      { kind: "wavelet", band: "LL" },
+    ]);
+  });
 });
 
 describe("parseYamlToConfig", () => {

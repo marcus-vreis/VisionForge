@@ -6,9 +6,23 @@ interface TrainingOverlayProps {
   progressEvents: TrainingEvent[];
   taskAccent: string;
   taskLabel: string;
+  /** Ordered preprocessing filter names from the submitted config, if any. */
+  pipelineSummary?: string[];
+  /** Block key from config — drives the "multi-trial" banner. Empty/unknown → no banner. */
+  blockKind?: string;
+  /** For grid_search: total trials (cartesian product); for random_search: n_trials.
+   *  Lets the overlay say "fila: N treinos" before the first SSE epoch arrives. */
+  queueSize?: number;
   onClose: () => void;
   onViewResults?: () => void;
 }
+
+const QUEUE_BLOCKS: Record<string, string> = {
+  grid_search: "Grid search",
+  random_search: "Random search",
+  model_comparison: "Comparação de modelos",
+  cross_validation: "K-Fold CV",
+};
 
 /** Modal overlay shown while an experiment is running or just completed. */
 export function TrainingOverlay({
@@ -16,9 +30,13 @@ export function TrainingOverlay({
   progressEvents,
   taskAccent,
   taskLabel,
+  pipelineSummary,
+  blockKind,
+  queueSize,
   onClose,
   onViewResults,
 }: TrainingOverlayProps) {
+  const queueLabel = blockKind ? QUEUE_BLOCKS[blockKind] : undefined;
   const isRunning = status.status === "running";
   const isCompleted = status.status === "completed";
   const hasFailed = status.status === "failed";
@@ -254,6 +272,90 @@ export function TrainingOverlay({
               Detalhe do erro
             </div>
             {status.error ?? "Erro desconhecido — verifique os logs do servidor."}
+          </div>
+        )}
+
+        {/* Multi-trial queue banner — when the block runs N inner trainings
+            sequentially (grid_search, random_search, etc.) the overlay's
+            single progress bar tracks only the active trial. This banner
+            sets expectations up front. */}
+        {queueLabel && (
+          <div
+            style={{
+              marginBottom: 14,
+              padding: "10px 14px",
+              background: "rgba(180, 140, 255, 0.10)",
+              border: "1px solid rgba(180, 140, 255, 0.45)",
+              borderRadius: 12,
+              display: "flex",
+              flexDirection: "column",
+              gap: 4,
+            }}
+          >
+            <div
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: 9,
+                letterSpacing: "0.18em",
+                textTransform: "uppercase",
+                color: "rgba(220, 190, 255, 0.85)",
+              }}
+            >
+              ⛓ fila de treinos · {queueLabel}
+              {queueSize && queueSize > 1 ? ` · ${queueSize} runs` : ""}
+            </div>
+            <div
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: 11,
+                color: "var(--vf-text-dim)",
+                lineHeight: 1.5,
+              }}
+            >
+              Este bloco executa múltiplos treinos sequencialmente. A barra de
+              progresso reflete o trial corrente; o resultado agregado aparece
+              em "Ver resultados" ao final.
+            </div>
+          </div>
+        )}
+
+        {/* Active preprocessing pipeline — surfaced so the researcher can
+            confirm at a glance which filters this run is using. */}
+        {pipelineSummary && pipelineSummary.length > 0 && (
+          <div
+            style={{
+              marginBottom: 14,
+              padding: "10px 14px",
+              background: "oklch(0.72 0.16 150 / 0.10)",
+              border: "1px solid oklch(0.72 0.16 150 / 0.40)",
+              borderRadius: 12,
+              display: "flex",
+              flexDirection: "column",
+              gap: 6,
+            }}
+          >
+            <div
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: 9,
+                letterSpacing: "0.18em",
+                textTransform: "uppercase",
+                color: "oklch(0.85 0.14 150)",
+              }}
+            >
+              ⚗ pipeline ativo · {pipelineSummary.length} filtro
+              {pipelineSummary.length === 1 ? "" : "s"}
+            </div>
+            <div
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: 12,
+                color: "var(--vf-text)",
+                wordBreak: "break-all",
+              }}
+            >
+              {pipelineSummary.join(" → ")}
+            </div>
           </div>
         )}
 

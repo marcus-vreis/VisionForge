@@ -5,8 +5,15 @@ import {
   type PreprocessPreviewResponse,
 } from "../api/client";
 
+export interface PreprocessingStep {
+  kind: string;
+  params: Record<string, string | number>;
+}
+
 interface PreprocessingPanelProps {
   baseDir: string;
+  steps: PreprocessingStep[];
+  onChange: (steps: PreprocessingStep[]) => void;
 }
 
 const KNOWN_KINDS = [
@@ -33,11 +40,6 @@ const KIND_LABELS: Record<string, string> = {
   wavelet: "Wavelet (Haar)",
 };
 
-interface Step {
-  kind: string;
-  params: Record<string, string | number>;
-}
-
 const DEFAULT_PARAMS: Record<string, Record<string, string | number>> = {
   gaussian_blur: { radius: 2.0 },
   median_blur: { size: 3 },
@@ -46,9 +48,18 @@ const DEFAULT_PARAMS: Record<string, Record<string, string | number>> = {
   wavelet: { band: "LL" },
 };
 
-/** Pipeline builder + live preview for image preprocessing. */
-export function PreprocessingPanel({ baseDir }: PreprocessingPanelProps) {
-  const [steps, setSteps] = useState<Step[]>([]);
+/** Pipeline builder + live preview for image preprocessing.
+ *
+ * The pipeline is a controlled value: ``steps`` lives in the parent (typically
+ * ``formData.data.preprocessing.steps``) so it round-trips through YAML
+ * export/import and gets submitted to /api/experiment/run. The local state
+ * here only owns the preview response.
+ */
+export function PreprocessingPanel({
+  baseDir,
+  steps,
+  onChange,
+}: PreprocessingPanelProps) {
   const [preview, setPreview] = useState<PreprocessPreviewResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -61,21 +72,19 @@ export function PreprocessingPanel({ baseDir }: PreprocessingPanelProps) {
 
   const addStep = (kind: string) => {
     const params = DEFAULT_PARAMS[kind] ?? {};
-    setSteps((prev) => [...prev, { kind, params: { ...params } }]);
+    onChange([...steps, { kind, params: { ...params } }]);
   };
 
   const removeStep = (index: number) => {
-    setSteps((prev) => prev.filter((_, i) => i !== index));
+    onChange(steps.filter((_, i) => i !== index));
   };
 
   const moveStep = (index: number, dir: -1 | 1) => {
-    setSteps((prev) => {
-      const next = [...prev];
-      const target = index + dir;
-      if (target < 0 || target >= next.length) return prev;
-      [next[index], next[target]] = [next[target], next[index]];
-      return next;
-    });
+    const target = index + dir;
+    if (target < 0 || target >= steps.length) return;
+    const next = [...steps];
+    [next[index], next[target]] = [next[target], next[index]];
+    onChange(next);
   };
 
   const updateParam = (
@@ -83,11 +92,16 @@ export function PreprocessingPanel({ baseDir }: PreprocessingPanelProps) {
     key: string,
     value: string | number,
   ) => {
-    setSteps((prev) =>
-      prev.map((s, i) =>
+    onChange(
+      steps.map((s, i) =>
         i === index ? { ...s, params: { ...s.params, [key]: value } } : s,
       ),
     );
+  };
+
+  const clearSteps = () => {
+    onChange([]);
+    setPreview(null);
   };
 
   const runPreview = async () => {
@@ -133,22 +147,65 @@ export function PreprocessingPanel({ baseDir }: PreprocessingPanelProps) {
           alignItems: "center",
           justifyContent: "space-between",
           gap: 12,
+          flexWrap: "wrap",
         }}
       >
-        <div
-          style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: 10,
-            letterSpacing: "0.20em",
-            textTransform: "uppercase",
-            color: "var(--vf-text-muted)",
-          }}
-        >
-          // pré-processamento (filtros)
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: 10,
+              letterSpacing: "0.20em",
+              textTransform: "uppercase",
+              color: "var(--vf-text-muted)",
+            }}
+          >
+            // pré-processamento (filtros)
+          </div>
+          {steps.length > 0 && (
+            <span
+              title="Estes filtros serão aplicados durante o treino, antes de augmentation e normalização"
+              style={{
+                padding: "3px 9px",
+                fontFamily: "var(--font-mono)",
+                fontSize: 9,
+                letterSpacing: "0.14em",
+                textTransform: "uppercase",
+                color: "oklch(0.88 0.15 150)",
+                background: "oklch(0.72 0.16 150 / 0.14)",
+                border: "1px solid oklch(0.72 0.16 150 / 0.45)",
+                borderRadius: 999,
+              }}
+            >
+              {steps.length} filtro{steps.length === 1 ? "" : "s"} ativo
+              {steps.length === 1 ? "" : "s"} no treino
+            </span>
+          )}
         </div>
         <div style={{ display: "flex", gap: 8 }}>
+          {steps.length > 0 && (
+            <button
+              type="button"
+              onClick={clearSteps}
+              title="Remover todos os filtros do pipeline"
+              style={{
+                padding: "8px 12px",
+                background: "transparent",
+                border: "1px solid var(--vf-panel-stroke)",
+                borderRadius: 8,
+                color: "var(--vf-text-dim)",
+                fontFamily: "var(--font-mono)",
+                fontSize: 11,
+                letterSpacing: "0.10em",
+                textTransform: "uppercase",
+                cursor: "pointer",
+              }}
+            >
+              limpar
+            </button>
+          )}
           <select
-            defaultValue=""
+            value=""
             onChange={(e) => {
               if (e.target.value) {
                 addStep(e.target.value);
@@ -175,7 +232,7 @@ export function PreprocessingPanel({ baseDir }: PreprocessingPanelProps) {
           <button
             type="button"
             onClick={() => void runPreview()}
-            disabled={loading}
+            disabled={loading || steps.length === 0}
             style={{
               padding: "8px 16px",
               background: "var(--accent-soft)",
@@ -186,8 +243,8 @@ export function PreprocessingPanel({ baseDir }: PreprocessingPanelProps) {
               fontSize: 11,
               letterSpacing: "0.10em",
               textTransform: "uppercase",
-              cursor: loading ? "wait" : "pointer",
-              opacity: loading ? 0.6 : 1,
+              cursor: loading || steps.length === 0 ? "not-allowed" : "pointer",
+              opacity: loading || steps.length === 0 ? 0.5 : 1,
             }}
           >
             {loading ? "Gerando…" : "▶ Ver preview"}
@@ -205,15 +262,20 @@ export function PreprocessingPanel({ baseDir }: PreprocessingPanelProps) {
             border: "1px dashed var(--vf-panel-stroke)",
             borderRadius: 10,
             textAlign: "center",
+            lineHeight: 1.6,
           }}
         >
           Pipeline vazio — clique em "+ adicionar filtro".
+          <div style={{ fontSize: 10, marginTop: 4, opacity: 0.7 }}>
+            O pipeline configurado aqui roda <strong>antes</strong> de augmentation
+            e normalização, em todos os splits (treino / val / teste).
+          </div>
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {steps.map((step, i) => (
             <StepRow
-              key={i}
+              key={`${step.kind}-${i}`}
               step={step}
               index={i}
               total={steps.length}
@@ -268,7 +330,7 @@ export function PreprocessingPanel({ baseDir }: PreprocessingPanelProps) {
 }
 
 interface StepRowProps {
-  step: Step;
+  step: PreprocessingStep;
   index: number;
   total: number;
   onRemove: () => void;

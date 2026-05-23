@@ -17,6 +17,10 @@ export function Lightbox({ src, alt, caption, onClose }: LightboxProps) {
     return () => window.removeEventListener("keydown", handler);
   }, [onClose]);
 
+  // Caption + close button live as absolute overlays so they never steal
+  // vertical space from the image. Previously the image was constrained to
+  // 85vh in a column flex layout with caption underneath, which clipped tall
+  // plots (confusion matrices, ROC curves) on shorter viewports.
   return (
     <div
       onClick={onClose}
@@ -24,12 +28,12 @@ export function Lightbox({ src, alt, caption, onClose }: LightboxProps) {
         position: "fixed",
         inset: 0,
         zIndex: 300,
-        background: "rgba(2,3,5,0.92)",
+        background: "rgba(2,3,5,0.94)",
         display: "flex",
-        flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        padding: 32,
+        overflow: "auto",
+        padding: 24,
         cursor: "zoom-out",
       }}
     >
@@ -38,29 +42,39 @@ export function Lightbox({ src, alt, caption, onClose }: LightboxProps) {
         alt={alt ?? ""}
         onClick={(e) => e.stopPropagation()}
         style={{
-          maxWidth: "92vw",
-          maxHeight: "85vh",
+          maxWidth: "calc(100vw - 48px)",
+          maxHeight: "calc(100vh - 48px)",
+          width: "auto",
+          height: "auto",
           objectFit: "contain",
           borderRadius: 12,
           boxShadow: "0 30px 90px rgba(0,0,0,0.7)",
           background: "#0a0c10",
           cursor: "default",
+          display: "block",
         }}
       />
       {caption && (
         <div
+          onClick={(e) => e.stopPropagation()}
           style={{
-            marginTop: 18,
+            position: "fixed",
+            left: "50%",
+            bottom: 18,
+            transform: "translateX(-50%)",
+            maxWidth: "min(92vw, 720px)",
             padding: "8px 14px",
-            background: "rgba(0,0,0,0.5)",
+            background: "rgba(0,0,0,0.65)",
+            backdropFilter: "blur(6px)",
+            WebkitBackdropFilter: "blur(6px)",
             border: "1px solid var(--vf-panel-stroke)",
             borderRadius: 10,
             fontFamily: "var(--font-mono)",
             fontSize: 12,
             color: "var(--vf-text-dim)",
-            maxWidth: "92vw",
             wordBreak: "break-all",
             textAlign: "center",
+            pointerEvents: "auto",
           }}
         >
           {caption}
@@ -69,8 +83,9 @@ export function Lightbox({ src, alt, caption, onClose }: LightboxProps) {
       <button
         type="button"
         onClick={onClose}
+        title="Fechar (Esc)"
         style={{
-          position: "absolute",
+          position: "fixed",
           top: 22,
           right: 22,
           width: 38,

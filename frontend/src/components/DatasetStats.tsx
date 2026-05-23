@@ -12,6 +12,10 @@ interface DatasetStatsProps {
   trainDir: string;
   valDir: string;
   testDir: string;
+  /** Optional handler — applies detected class count to the experiment config.
+   *  When ``numClasses === 2`` the parent should also flip ``task`` to "binary"
+   *  (which the Pydantic validator lowers to ``num_classes=1`` internally). */
+  onApplyClasses?: (numClasses: number, classNames: string[]) => void;
 }
 
 const SPLIT_LABELS: Record<string, string> = {
@@ -21,7 +25,7 @@ const SPLIT_LABELS: Record<string, string> = {
 };
 
 /** Compact pre-training dataset overview: image counts + imbalance flag. */
-export function DatasetStats({ baseDir, trainDir, valDir, testDir }: DatasetStatsProps) {
+export function DatasetStats({ baseDir, trainDir, valDir, testDir, onApplyClasses }: DatasetStatsProps) {
   const [stats, setStats] = useState<DatasetStatsResponse | null>(null);
   const [samples, setSamples] = useState<DatasetSamplesResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -148,6 +152,32 @@ export function DatasetStats({ baseDir, trainDir, valDir, testDir }: DatasetStat
             {cn}
           </span>
         ))}
+        {onApplyClasses && stats.class_names.length > 0 && (
+          <button
+            type="button"
+            onClick={() => onApplyClasses(stats.class_names.length, stats.class_names)}
+            title={
+              stats.class_names.length === 2
+                ? "Aplicar ao config: task=binary, num_classes=1"
+                : `Aplicar ao config: task=multiclass, num_classes=${stats.class_names.length}`
+            }
+            style={{
+              marginLeft: "auto",
+              padding: "5px 12px",
+              background: "var(--accent-soft)",
+              border: "1px solid var(--accent-vf)",
+              borderRadius: 999,
+              fontFamily: "var(--font-mono)",
+              fontSize: 10,
+              letterSpacing: "0.14em",
+              textTransform: "uppercase",
+              color: "var(--vf-text)",
+              cursor: "pointer",
+            }}
+          >
+            🎯 aplicar {stats.class_names.length === 2 ? "binary" : `multiclass · ${stats.class_names.length}`}
+          </button>
+        )}
       </div>
 
       <div

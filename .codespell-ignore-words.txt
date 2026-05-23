@@ -19,3 +19,4 @@ potencial
 Considere
 fpr
 tpr
+mede

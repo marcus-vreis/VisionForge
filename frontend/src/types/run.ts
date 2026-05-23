@@ -31,6 +31,8 @@ export interface RunSummary {
   finished_at: string | null;
   epochs_completed: number;
   final_metrics: Record<string, number>;
+  /** Number of preprocessing filters applied during training (0 = none). */
+  preprocessing_count?: number;
 }
 
 /** Discriminated union of SSE events emitted by GET /api/experiment/events. */
