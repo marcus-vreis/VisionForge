@@ -22,11 +22,13 @@ const SKIP_FIELDS = new Set([
   "logs_dir",
   "reports_dir",
   "checkpoint_path",
-  "weights_path",
-  "mode",
   // Device is owned by the Header/BottomBar DeviceSelector — don't render it
   // a second time in the form panel.
   "device",
+  // NOTE: "mode" was previously skipped because ClassificationConfig has a
+  // mode field the GUI never exposes (train/evaluate/infer). TransferLearning
+  // now needs mode (feature_extraction/fine_tuning), and classification's
+  // mode is never rendered via SchemaFieldVF anyway — so the skip is gone.
 ]);
 
 export function resolveKind(

@@ -108,6 +108,8 @@ export function CompareRunsPanel({ runIds, onBack }: CompareRunsPanelProps) {
         <>
           <Legend details={details} />
           <MetricsTable details={details} />
+          <ConfigDiffTable details={details} />
+          <PreprocessingCompare details={details} />
           <OverlayChart
             details={details}
             yKey="val_loss"
@@ -240,6 +242,271 @@ const tdLabelStyle: React.CSSProperties = {
   fontSize: 11,
   letterSpacing: "0.04em",
 };
+
+// ── Config diff ──────────────────────────────────────────────────────────────
+
+/** Selectors that pull comparable scalar values from RunDetail.config. */
+const CONFIG_ROWS: Array<{ label: string; pick: (cfg: Record<string, unknown>) => unknown }> = [
+  { label: "Arquitetura", pick: (c) => (c.model as Record<string, unknown> | undefined)?.name },
+  { label: "Num classes", pick: (c) => (c.model as Record<string, unknown> | undefined)?.num_classes },
+  { label: "Pretrained", pick: (c) => (c.model as Record<string, unknown> | undefined)?.pretrained },
+  { label: "Task", pick: (c) => c.task },
+  { label: "Learning rate", pick: (c) => (c.training as Record<string, unknown> | undefined)?.learning_rate },
+  { label: "Optimizer", pick: (c) => (c.training as Record<string, unknown> | undefined)?.optimizer },
+  { label: "Batch size", pick: (c) => (c.training as Record<string, unknown> | undefined)?.batch_size },
+  { label: "Epochs (max)", pick: (c) => (c.training as Record<string, unknown> | undefined)?.epochs },
+  { label: "Weight decay", pick: (c) => (c.training as Record<string, unknown> | undefined)?.weight_decay },
+  { label: "Seed", pick: (c) => (c.training as Record<string, unknown> | undefined)?.seed },
+  { label: "Mixed precision", pick: (c) => (c.training as Record<string, unknown> | undefined)?.mixed_precision },
+  {
+    label: "Scheduler",
+    pick: (c) => {
+      const s = (c.training as Record<string, unknown> | undefined)?.scheduler as
+        | Record<string, unknown>
+        | undefined;
+      return s?.kind ?? "none";
+    },
+  },
+  { label: "Image size", pick: (c) => pickDataTransforms(c)?.image_size },
+  { label: "Horizontal flip", pick: (c) => pickDataTransforms(c)?.horizontal_flip },
+  { label: "Rotation (°)", pick: (c) => pickDataTransforms(c)?.rotation_degrees },
+  { label: "Color jitter", pick: (c) => pickDataTransforms(c)?.color_jitter },
+  {
+    label: "Preprocessing",
+    pick: (c) => {
+      const steps = pickPreprocessingSteps(c);
+      if (steps.length === 0) return "—";
+      return steps.map((s) => String(s.kind ?? "")).join(" → ");
+    },
+  },
+];
+
+function pickDataTransforms(
+  config: Record<string, unknown>,
+): Record<string, unknown> | undefined {
+  const data = config.data as Record<string, unknown> | undefined;
+  return data?.transforms as Record<string, unknown> | undefined;
+}
+
+function pickPreprocessingSteps(
+  config: Record<string, unknown>,
+): Array<Record<string, unknown>> {
+  const data = config.data as Record<string, unknown> | undefined;
+  const pp = data?.preprocessing as Record<string, unknown> | undefined;
+  const steps = pp?.steps;
+  return Array.isArray(steps) ? (steps as Array<Record<string, unknown>>) : [];
+}
+
+function fmtConfigValue(v: unknown): string {
+  if (v === null || v === undefined || v === "") return "—";
+  if (v === true) return "✓";
+  if (v === false) return "—";
+  if (typeof v === "number") return v % 1 === 0 ? String(v) : String(v);
+  return String(v);
+}
+
+/** Side-by-side hyperparameter comparison with diff highlighting.
+ *
+ * Highlights cells where the run's value differs from the first run — lets
+ * the researcher attribute metric deltas to specific config changes instead
+ * of guessing why one curve beats another.
+ */
+function ConfigDiffTable({ details }: { details: RunDetail[] }) {
+  return (
+    <div
+      style={{
+        padding: 14,
+        background: "rgba(255,255,255,0.025)",
+        border: "1px solid var(--vf-panel-stroke)",
+        borderRadius: 12,
+        overflowX: "auto",
+      }}
+    >
+      <div
+        style={{
+          fontFamily: "var(--font-mono)",
+          fontSize: 10,
+          letterSpacing: "0.16em",
+          textTransform: "uppercase",
+          color: "var(--vf-text-muted)",
+          marginBottom: 10,
+        }}
+      >
+        // diff de configuração (células destacadas = diferentes da 1ª run)
+      </div>
+      <table
+        style={{
+          width: "100%",
+          borderCollapse: "collapse",
+          fontFamily: "var(--font-mono)",
+          fontSize: 12,
+        }}
+      >
+        <thead>
+          <tr>
+            <th style={thStyle}>Campo</th>
+            {details.map((d, i) => (
+              <th key={d.run_id} style={{ ...thStyle, color: PALETTE[i % PALETTE.length] }}>
+                {d.experiment_name}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {CONFIG_ROWS.map(({ label, pick }) => {
+            const values = details.map((d) => pick(d.config));
+            const reference = values[0];
+            const anyDiff = values.some((v) => !sameConfigValue(v, reference));
+            return (
+              <tr key={label}>
+                <td style={tdLabelStyle}>{label}</td>
+                {values.map((v, i) => {
+                  const isDifferent = anyDiff && i > 0 && !sameConfigValue(v, reference);
+                  return (
+                    <td
+                      key={details[i].run_id}
+                      style={{
+                        ...tdStyle,
+                        ...(isDifferent
+                          ? {
+                              background: "oklch(0.78 0.16 75 / 0.16)",
+                              color: "oklch(0.92 0.14 75)",
+                              fontWeight: 600,
+                            }
+                          : {}),
+                      }}
+                    >
+                      {fmtConfigValue(v)}
+                    </td>
+                  );
+                })}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function sameConfigValue(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (a === null || a === undefined) return b === null || b === undefined;
+  return String(a) === String(b);
+}
+
+/** When any run has a preprocessing pipeline, render each one as an ordered
+ * list side by side so the differences are inspectable at a glance. */
+function PreprocessingCompare({ details }: { details: RunDetail[] }) {
+  const pipelines = details.map((d) => pickPreprocessingSteps(d.config));
+  const anyPipeline = pipelines.some((p) => p.length > 0);
+  if (!anyPipeline) return null;
+
+  return (
+    <div
+      style={{
+        padding: 14,
+        background: "rgba(255,255,255,0.025)",
+        border: "1px solid var(--vf-panel-stroke)",
+        borderRadius: 12,
+      }}
+    >
+      <div
+        style={{
+          fontFamily: "var(--font-mono)",
+          fontSize: 10,
+          letterSpacing: "0.16em",
+          textTransform: "uppercase",
+          color: "var(--vf-text-muted)",
+          marginBottom: 10,
+        }}
+      >
+        // pipelines de pré-processamento
+      </div>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: `repeat(${details.length}, minmax(0, 1fr))`,
+          gap: 12,
+        }}
+      >
+        {details.map((d, i) => {
+          const steps = pipelines[i];
+          const color = PALETTE[i % PALETTE.length];
+          return (
+            <div
+              key={d.run_id}
+              style={{
+                padding: 10,
+                background: "rgba(0,0,0,0.25)",
+                border: "1px solid var(--vf-panel-stroke)",
+                borderRadius: 10,
+              }}
+            >
+              <div
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 10,
+                  letterSpacing: "0.10em",
+                  color,
+                  marginBottom: 6,
+                }}
+              >
+                {d.experiment_name}
+              </div>
+              {steps.length === 0 ? (
+                <div
+                  style={{
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 11,
+                    color: "var(--vf-text-muted)",
+                    fontStyle: "italic",
+                  }}
+                >
+                  sem pré-processamento
+                </div>
+              ) : (
+                <ol
+                  style={{
+                    margin: 0,
+                    paddingLeft: 22,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 4,
+                  }}
+                >
+                  {steps.map((s, idx) => {
+                    const { kind, ...rest } = s as { kind?: unknown } & Record<string, unknown>;
+                    const params = Object.entries(rest)
+                      .map(([k, v]) => `${k}=${v}`)
+                      .join(", ");
+                    return (
+                      <li
+                        key={idx}
+                        style={{
+                          fontFamily: "var(--font-mono)",
+                          fontSize: 11,
+                          color: "var(--vf-text)",
+                        }}
+                      >
+                        <strong>{String(kind ?? "?")}</strong>
+                        {params && (
+                          <span style={{ color: "var(--vf-text-muted)", marginLeft: 6 }}>
+                            ({params})
+                          </span>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ol>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 interface OverlayChartProps {
   details: RunDetail[];

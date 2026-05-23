@@ -136,6 +136,84 @@ export async function pickDatasetFolder(): Promise<DatasetPickResponse> {
   return request<DatasetPickResponse>("/dataset/pick", { method: "POST" });
 }
 
+export interface CheckpointPickResponse {
+  path: string;
+  cancelled: boolean;
+  message: string | null;
+}
+
+export async function pickCheckpointFile(): Promise<CheckpointPickResponse> {
+  return request<CheckpointPickResponse>("/checkpoint/pick", { method: "POST" });
+}
+
+export interface ExportOnnxRequestPayload {
+  output_onnx?: string | null;
+  opset_version?: number;
+  dynamic_axes?: boolean;
+  validate?: boolean;
+  benchmark?: boolean;
+  benchmark_runs?: number;
+}
+
+export interface ExportOnnxResponse {
+  output_onnx: string;
+  file_size_bytes: number;
+  validation: {
+    max_diff?: number;
+    within_tolerance?: boolean;
+    tolerance?: number;
+  } | null;
+  benchmark: {
+    mean_ms?: number;
+    std_ms?: number;
+    min_ms?: number;
+    max_ms?: number;
+    n_runs?: number;
+  } | null;
+}
+
+export async function exportRunToOnnx(
+  runId: string,
+  payload: ExportOnnxRequestPayload,
+): Promise<ExportOnnxResponse> {
+  return request<ExportOnnxResponse>(
+    `/runs/${encodeURIComponent(runId)}/export_onnx`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+export interface BatchPredictRequestPayload {
+  input_dir: string;
+  output_csv?: string | null;
+  recursive?: boolean;
+  class_names?: string[] | null;
+}
+
+export interface BatchPredictResponse {
+  output_csv: string;
+  total_processed: number;
+  failed_count: number;
+  failed_files: string[];
+}
+
+export async function batchPredictRun(
+  runId: string,
+  payload: BatchPredictRequestPayload,
+): Promise<BatchPredictResponse> {
+  return request<BatchPredictResponse>(
+    `/runs/${encodeURIComponent(runId)}/batch_predict`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
 export interface SplitStats {
   total_images: number;
   classes: Record<string, number>;

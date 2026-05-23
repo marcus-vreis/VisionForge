@@ -29,6 +29,24 @@ const SECTION_LABELS: Record<string, string> = {
   output: "Saída",
   classification: "Classificação",
   transforms: "Transformações",
+  preprocessing: "Pré-processamento",
+  steps: "Filtro",
+  scheduler: "Scheduler",
+  device: "Dispositivo",
+};
+
+/** Preprocessing filter ids whose Pydantic errors should appear with a
+ * human-friendly name in field path summaries. */
+const PREPROCESS_KIND_LABELS: Record<string, string> = {
+  gaussian_blur: "Gaussian blur",
+  median_blur: "Median blur",
+  unsharp: "Unsharp mask",
+  edges: "Edges",
+  emboss: "Emboss",
+  grayscale: "Grayscale",
+  equalize: "Equalize",
+  autocontrast: "Autocontrast",
+  wavelet: "Wavelet",
 };
 
 const FIELD_LABELS: Record<string, string> = {
@@ -58,14 +76,28 @@ const FIELD_LABELS: Record<string, string> = {
   normalize_std: "Normalização (std)",
 };
 
-/** Build a user-readable path like "Treinamento › Learning Rate". */
+/** Build a user-readable path like "Treinamento › Learning Rate".
+ *
+ * Numeric segments (Pydantic list index) become "#N" so the user can tell
+ * which filter slot in the pipeline failed validation. A known filter kind
+ * (passed alongside via the special "kind=foo" pseudo-segment) gets its
+ * human label inserted next to the index.
+ */
 export function humanizeFieldPath(loc: (string | number)[]): string {
   return loc
     .filter((p) => p !== "body")
     .map((p) => {
+      if (typeof p === "number") {
+        // List index inside steps[] — show as "#N" so the user can tell
+        // which filter slot in the pipeline failed validation.
+        return `#${p + 1}`;
+      }
       const k = String(p);
+      const known = PREPROCESS_KIND_LABELS[k];
+      if (known) return known;
       return SECTION_LABELS[k] ?? FIELD_LABELS[k] ?? k;
     })
+    .filter((s) => s !== "")
     .join(" › ");
 }
 

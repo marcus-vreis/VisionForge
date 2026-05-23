@@ -200,6 +200,25 @@ function RunCard({
         >
           {run.task}
         </span>
+        {run.preprocessing_count !== undefined && run.preprocessing_count > 0 && (
+          <span
+            title={`${run.preprocessing_count} filtro(s) de pré-processamento aplicados ao treino`}
+            style={{
+              padding: "2px 8px",
+              background: "oklch(0.72 0.16 150 / 0.14)",
+              border: "1px solid oklch(0.72 0.16 150 / 0.45)",
+              borderRadius: 999,
+              fontFamily: "var(--font-mono)",
+              fontSize: 10,
+              color: "oklch(0.88 0.15 150)",
+              letterSpacing: "0.10em",
+              textTransform: "uppercase",
+            }}
+          >
+            ⚗ {run.preprocessing_count} filtro
+            {run.preprocessing_count === 1 ? "" : "s"}
+          </span>
+        )}
         <span
           style={{
             marginLeft: "auto",

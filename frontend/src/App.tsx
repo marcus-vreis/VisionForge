@@ -30,6 +30,9 @@ export default function App() {
   const [resultsVisible, setResultsVisible] = useState(false);
   const [schema, setSchema] = useState<JsonSchema | null>(null);
   const [formData, setFormData] = useState<Record<string, unknown>>({});
+  const [pipelineSummary, setPipelineSummary] = useState<string[]>([]);
+  const [blockKind, setBlockKind] = useState<string>("classification");
+  const [queueSize, setQueueSize] = useState<number | undefined>(undefined);
 
   const showOverlay =
     overlayVisible &&
@@ -59,10 +62,46 @@ export default function App() {
     setOverlayVisible(true);
     // Inject the live device selection so the backend actually honors it
     // (instead of always defaulting to CUDA when present).
-    const payload = {
+    const payload: Record<string, unknown> = {
       ...formData,
       device: { kind: device.kind, gpu_ids: device.gpu_ids },
     };
+    // Extract pipeline filter names so the overlay can surface what's active.
+    const data = (payload["data"] as Record<string, unknown> | undefined) ?? {};
+    const pp = (data["preprocessing"] as Record<string, unknown> | undefined) ?? {};
+    const steps = Array.isArray(pp["steps"])
+      ? (pp["steps"] as Array<Record<string, unknown>>)
+      : [];
+    setPipelineSummary(steps.map((s) => String(s["kind"] ?? "")).filter(Boolean));
+
+    // Surface the active block kind + queue size so the overlay can warn
+    // about multi-trial blocks before the first SSE epoch lands.
+    const kind = String(payload["block"] ?? "classification");
+    setBlockKind(kind);
+    let qSize: number | undefined;
+    if (kind === "grid_search") {
+      const gs = (payload["grid_search"] ?? {}) as Record<string, unknown>;
+      const hp = (gs["hyperparameters"] ?? {}) as Record<string, unknown>;
+      const trials = Object.values(hp).reduce<number>(
+        (acc, vals) => acc * Math.max(Array.isArray(vals) ? vals.length : 1, 1),
+        Object.keys(hp).length === 0 ? 0 : 1,
+      );
+      qSize = trials || undefined;
+    } else if (kind === "random_search") {
+      const rs = (payload["random_search"] ?? {}) as Record<string, unknown>;
+      const n = rs["n_trials"];
+      qSize = typeof n === "number" ? n : undefined;
+    } else if (kind === "cross_validation") {
+      const cv = (payload["cross_validation"] ?? {}) as Record<string, unknown>;
+      const n = cv["n_folds"];
+      qSize = typeof n === "number" ? n : undefined;
+    } else if (kind === "model_comparison") {
+      const mc = (payload["model_comparison"] ?? {}) as Record<string, unknown>;
+      const names = mc["model_names"];
+      qSize = Array.isArray(names) ? names.length : undefined;
+    }
+    setQueueSize(qSize);
+
     await submit(payload);
   };
 
@@ -171,6 +210,9 @@ export default function App() {
           progressEvents={progressEvents}
           taskAccent={activeTask.accent}
           taskLabel={activeTask.label}
+          pipelineSummary={pipelineSummary}
+          blockKind={blockKind}
+          queueSize={queueSize}
           onClose={() => setOverlayVisible(false)}
           onViewResults={() => {
             setOverlayVisible(false);

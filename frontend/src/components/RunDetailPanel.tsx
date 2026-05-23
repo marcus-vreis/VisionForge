@@ -2,10 +2,14 @@ import { useEffect, useState } from "react";
 import {
   ApiError,
   artifactUrl,
+  batchPredictRun,
   downloadRunMarkdown,
+  exportRunToOnnx,
   fetchRunDetail,
   pickDatasetFolder,
   testRunOnDataset,
+  type BatchPredictResponse,
+  type ExportOnnxResponse,
   type RunDetail,
   type TestRecord,
 } from "../api/client";
@@ -51,6 +55,30 @@ function fmtMetric(v: unknown): string {
   return String(v);
 }
 
+/** Human-friendly name for a preprocessing filter kind. */
+const PREPROCESS_KIND_LABELS: Record<string, string> = {
+  gaussian_blur: "Gaussian blur",
+  median_blur: "Median blur",
+  unsharp: "Unsharp mask",
+  edges: "Edges (Sobel)",
+  emboss: "Emboss",
+  grayscale: "Grayscale",
+  equalize: "Equalize (CLAHE)",
+  autocontrast: "Autocontrast",
+  wavelet: "Wavelet (Haar)",
+};
+
+interface ConfigData {
+  preprocessing?: { steps?: Array<Record<string, unknown>> };
+  transforms?: Record<string, unknown>;
+}
+
+function getDataSection(config: Record<string, unknown>): ConfigData | null {
+  const data = config["data"];
+  if (data === null || typeof data !== "object" || Array.isArray(data)) return null;
+  return data as ConfigData;
+}
+
 export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
   const [detail, setDetail] = useState<RunDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -66,6 +94,31 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
   const [testing, setTesting] = useState(false);
   const [testMsg, setTestMsg] = useState<{ kind: "info" | "error" | "success"; text: string } | null>(null);
   const [showTestForm, setShowTestForm] = useState(false);
+
+  // ONNX export state — kept local because the result is single-shot, not part
+  // of the persistent run.json.
+  const [showExportForm, setShowExportForm] = useState(false);
+  const [exportForm, setExportForm] = useState({
+    opset_version: 17,
+    dynamic_axes: true,
+    validate: true,
+    benchmark: true,
+    benchmark_runs: 50,
+  });
+  const [exporting, setExporting] = useState(false);
+  const [exportResult, setExportResult] = useState<ExportOnnxResponse | null>(null);
+  const [exportMsg, setExportMsg] = useState<{ kind: "info" | "error" | "success"; text: string } | null>(null);
+
+  // Batch prediction state — independent of test/export so the user can run
+  // each separately and review results.
+  const [showBatchForm, setShowBatchForm] = useState(false);
+  const [batchForm, setBatchForm] = useState({
+    input_dir: "",
+    recursive: true,
+  });
+  const [batchRunning, setBatchRunning] = useState(false);
+  const [batchResult, setBatchResult] = useState<BatchPredictResponse | null>(null);
+  const [batchMsg, setBatchMsg] = useState<{ kind: "info" | "error" | "success"; text: string } | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -106,6 +159,93 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Falha ao escolher pasta.";
       setTestMsg({ kind: "error", text: msg });
+    }
+  };
+
+  const pickBatchFolder = async () => {
+    setBatchMsg({ kind: "info", text: "Abrindo seletor…" });
+    try {
+      const res = await pickDatasetFolder();
+      if (res.cancelled) {
+        setBatchMsg({ kind: "info", text: res.message ?? "Cancelado." });
+        return;
+      }
+      setBatchForm((f) => ({ ...f, input_dir: res.path }));
+      setBatchMsg({ kind: "success", text: `Pasta: ${res.path}` });
+    } catch (e) {
+      setBatchMsg({
+        kind: "error",
+        text: e instanceof Error ? e.message : "Falha ao escolher pasta.",
+      });
+    }
+  };
+
+  const runBatch = async () => {
+    if (!batchForm.input_dir.trim()) {
+      setBatchMsg({
+        kind: "error",
+        text: "Informe a pasta de imagens para inferência.",
+      });
+      return;
+    }
+    setBatchRunning(true);
+    setBatchResult(null);
+    setBatchMsg({ kind: "info", text: "Rodando inferência em lote…" });
+    try {
+      const result = await batchPredictRun(runId, {
+        input_dir: batchForm.input_dir,
+        recursive: batchForm.recursive,
+      });
+      setBatchResult(result);
+      const okCount = result.total_processed;
+      const failed = result.failed_count;
+      setBatchMsg({
+        kind: failed === 0 ? "success" : "info",
+        text:
+          failed === 0
+            ? `${okCount} imagens processadas · CSV em ${result.output_csv}`
+            : `${okCount} ok · ${failed} falharam · CSV em ${result.output_csv}`,
+      });
+    } catch (e) {
+      const msg =
+        e instanceof ApiError
+          ? e.message
+          : e instanceof Error
+            ? e.message
+            : "Falha na inferência em lote.";
+      setBatchMsg({ kind: "error", text: msg });
+    } finally {
+      setBatchRunning(false);
+    }
+  };
+
+  const runExport = async () => {
+    setExporting(true);
+    setExportMsg({ kind: "info", text: "Exportando para ONNX…" });
+    setExportResult(null);
+    try {
+      const result = await exportRunToOnnx(runId, {
+        opset_version: exportForm.opset_version,
+        dynamic_axes: exportForm.dynamic_axes,
+        validate: exportForm.validate,
+        benchmark: exportForm.benchmark,
+        benchmark_runs: exportForm.benchmark_runs,
+      });
+      setExportResult(result);
+      setExportMsg({
+        kind: "success",
+        text: `ONNX salvo em ${result.output_onnx}`,
+      });
+    } catch (e) {
+      const msg =
+        e instanceof ApiError
+          ? e.message
+          : e instanceof Error
+            ? e.message
+            : "Falha ao exportar ONNX.";
+      setExportMsg({ kind: "error", text: msg });
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -218,6 +358,318 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
               <KeyRow label="Dispositivo usado" value={detail.device_used} />
             )}
           </Section>
+
+          <PipelineSection config={detail.config} />
+
+          {detail.artifacts.model && (
+            <Section
+              title="Exportar para ONNX"
+              action={
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowExportForm((s) => !s);
+                    setExportMsg(null);
+                  }}
+                  style={{
+                    padding: "6px 12px",
+                    background: "var(--accent-soft)",
+                    border: "1px solid var(--accent-vf)",
+                    borderRadius: 8,
+                    color: "var(--vf-text)",
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 11,
+                    cursor: "pointer",
+                    letterSpacing: "0.10em",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  {showExportForm ? "cancelar" : "↗ exportar onnx"}
+                </button>
+              }
+            >
+              {showExportForm ? (
+                <div
+                  style={{
+                    padding: 14,
+                    border: "1px dashed var(--vf-panel-stroke)",
+                    borderRadius: 10,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 10,
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(2, 1fr)",
+                      gap: 10,
+                    }}
+                  >
+                    <label style={exportLabelStyle}>
+                      <span>opset_version</span>
+                      <input
+                        type="number"
+                        min={11}
+                        max={20}
+                        value={exportForm.opset_version}
+                        onChange={(e) =>
+                          setExportForm((f) => ({
+                            ...f,
+                            opset_version: parseInt(e.target.value, 10) || 17,
+                          }))
+                        }
+                        style={exportInputStyle}
+                      />
+                    </label>
+                    <label style={exportLabelStyle}>
+                      <span>benchmark_runs</span>
+                      <input
+                        type="number"
+                        min={5}
+                        value={exportForm.benchmark_runs}
+                        onChange={(e) =>
+                          setExportForm((f) => ({
+                            ...f,
+                            benchmark_runs: parseInt(e.target.value, 10) || 50,
+                          }))
+                        }
+                        disabled={!exportForm.benchmark}
+                        style={{
+                          ...exportInputStyle,
+                          opacity: exportForm.benchmark ? 1 : 0.4,
+                        }}
+                      />
+                    </label>
+                  </div>
+                  <div style={{ display: "flex", gap: 18, flexWrap: "wrap" }}>
+                    <ExportToggle
+                      label="dynamic_axes"
+                      value={exportForm.dynamic_axes}
+                      onChange={(v) =>
+                        setExportForm((f) => ({ ...f, dynamic_axes: v }))
+                      }
+                    />
+                    <ExportToggle
+                      label="validate"
+                      value={exportForm.validate}
+                      onChange={(v) =>
+                        setExportForm((f) => ({ ...f, validate: v }))
+                      }
+                    />
+                    <ExportToggle
+                      label="benchmark"
+                      value={exportForm.benchmark}
+                      onChange={(v) =>
+                        setExportForm((f) => ({ ...f, benchmark: v }))
+                      }
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void runExport()}
+                    disabled={exporting}
+                    style={{
+                      padding: "12px 20px",
+                      background:
+                        "linear-gradient(180deg, var(--accent-soft) 0%, rgba(8,10,14,0.4) 100%)",
+                      border: "1px solid var(--accent-vf)",
+                      borderRadius: 10,
+                      color: "var(--vf-text)",
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 12,
+                      fontWeight: 600,
+                      letterSpacing: "0.10em",
+                      textTransform: "uppercase",
+                      cursor: exporting ? "wait" : "pointer",
+                      opacity: exporting ? 0.6 : 1,
+                    }}
+                  >
+                    {exporting ? "Exportando…" : "▶ Rodar export"}
+                  </button>
+                  {exportMsg && (
+                    <div
+                      style={{
+                        padding: "8px 12px",
+                        fontFamily: "var(--font-mono)",
+                        fontSize: 11,
+                        borderRadius: 8,
+                        background:
+                          exportMsg.kind === "error"
+                            ? "oklch(0.704 0.191 22.216 / 0.10)"
+                            : exportMsg.kind === "success"
+                              ? "oklch(0.72 0.16 150 / 0.10)"
+                              : "rgba(255,255,255,0.04)",
+                        color:
+                          exportMsg.kind === "error"
+                            ? "oklch(0.85 0.14 22)"
+                            : exportMsg.kind === "success"
+                              ? "oklch(0.85 0.16 150)"
+                              : "var(--vf-text-dim)",
+                        wordBreak: "break-all",
+                      }}
+                    >
+                      {exportMsg.text}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div
+                  style={{
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 11,
+                    color: "var(--vf-text-muted)",
+                    lineHeight: 1.5,
+                  }}
+                >
+                  Converte o checkpoint para ONNX, valida diff numérico contra
+                  PyTorch e mede latência de inferência. O arquivo é salvo ao
+                  lado do checkpoint como <code>best_model.onnx</code>.
+                </div>
+              )}
+              {exportResult && (
+                <ExportResultPanel result={exportResult} />
+              )}
+            </Section>
+          )}
+
+          {detail.artifacts.model && (
+            <Section
+              title="Inferência em lote (CSV)"
+              action={
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowBatchForm((s) => !s);
+                    setBatchMsg(null);
+                  }}
+                  style={{
+                    padding: "6px 12px",
+                    background: "var(--accent-soft)",
+                    border: "1px solid var(--accent-vf)",
+                    borderRadius: 8,
+                    color: "var(--vf-text)",
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 11,
+                    cursor: "pointer",
+                    letterSpacing: "0.10em",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  {showBatchForm ? "cancelar" : "+ inferência em lote"}
+                </button>
+              }
+            >
+              {showBatchForm ? (
+                <div
+                  style={{
+                    padding: 14,
+                    border: "1px dashed var(--vf-panel-stroke)",
+                    borderRadius: 10,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 10,
+                  }}
+                >
+                  <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
+                    <FormField
+                      label="Pasta de imagens"
+                      value={batchForm.input_dir}
+                      onChange={(v) =>
+                        setBatchForm((f) => ({ ...f, input_dir: v }))
+                      }
+                      placeholder="ex: C:/datasets/inbox"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void pickBatchFolder()}
+                      style={{
+                        padding: "10px 14px",
+                        background: "transparent",
+                        border: "1px solid var(--vf-panel-stroke)",
+                        borderRadius: 10,
+                        color: "var(--vf-text-dim)",
+                        fontFamily: "var(--font-mono)",
+                        fontSize: 11,
+                        cursor: "pointer",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      📁 Escolher
+                    </button>
+                  </div>
+                  <ExportToggle
+                    label="recursive (subpastas)"
+                    value={batchForm.recursive}
+                    onChange={(v) =>
+                      setBatchForm((f) => ({ ...f, recursive: v }))
+                    }
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void runBatch()}
+                    disabled={batchRunning}
+                    style={{
+                      padding: "12px 20px",
+                      background:
+                        "linear-gradient(180deg, var(--accent-soft) 0%, rgba(8,10,14,0.4) 100%)",
+                      border: "1px solid var(--accent-vf)",
+                      borderRadius: 10,
+                      color: "var(--vf-text)",
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 12,
+                      fontWeight: 600,
+                      letterSpacing: "0.10em",
+                      textTransform: "uppercase",
+                      cursor: batchRunning ? "wait" : "pointer",
+                      opacity: batchRunning ? 0.6 : 1,
+                    }}
+                  >
+                    {batchRunning ? "Processando…" : "▶ Rodar inferência"}
+                  </button>
+                  {batchMsg && (
+                    <div
+                      style={{
+                        padding: "8px 12px",
+                        fontFamily: "var(--font-mono)",
+                        fontSize: 11,
+                        borderRadius: 8,
+                        background:
+                          batchMsg.kind === "error"
+                            ? "oklch(0.704 0.191 22.216 / 0.10)"
+                            : batchMsg.kind === "success"
+                              ? "oklch(0.72 0.16 150 / 0.10)"
+                              : "rgba(255,255,255,0.04)",
+                        color:
+                          batchMsg.kind === "error"
+                            ? "oklch(0.85 0.14 22)"
+                            : batchMsg.kind === "success"
+                              ? "oklch(0.85 0.16 150)"
+                              : "var(--vf-text-dim)",
+                        wordBreak: "break-all",
+                      }}
+                    >
+                      {batchMsg.text}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div
+                  style={{
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 11,
+                    color: "var(--vf-text-muted)",
+                    lineHeight: 1.5,
+                  }}
+                >
+                  Roda o checkpoint sobre uma pasta de imagens e escreve um CSV
+                  com uma linha por imagem (probabilidades + classe predita).
+                  Útil para classificar batches de dados novos sem retreinar.
+                </div>
+              )}
+              {batchResult && <BatchResultPanel result={batchResult} />}
+            </Section>
+          )}
 
           <Section title="Métricas">
             <MetricsGrid metrics={detail.metrics} />
@@ -706,6 +1158,401 @@ interface FormFieldProps {
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
+}
+
+/** Pre-training pipeline that produced this run — preprocessing + augmentation.
+ *
+ * Reproducibility is the whole point of saving run.json. The training-time
+ * filter pipeline and augmentation flags are the bits most likely to be
+ * forgotten by the researcher months later, so we surface them up front.
+ */
+function PipelineSection({ config }: { config: Record<string, unknown> }) {
+  const data = getDataSection(config);
+  if (!data) return null;
+
+  const ppSteps = Array.isArray(data.preprocessing?.steps)
+    ? data.preprocessing!.steps!
+    : [];
+  const transforms = data.transforms ?? {};
+  const transformEntries = Object.entries(transforms).filter(
+    ([, v]) => v !== null && v !== undefined && v !== "",
+  );
+
+  if (ppSteps.length === 0 && transformEntries.length === 0) return null;
+
+  return (
+    <Section title="Pipeline aplicado (preprocessing + augmentation)">
+      {ppSteps.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
+          <div
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: 9,
+              letterSpacing: "0.14em",
+              textTransform: "uppercase",
+              color: "var(--vf-text-muted)",
+            }}
+          >
+            // pré-processamento (ordem)
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {ppSteps.map((step, i) => {
+              const kind = String(step["kind"] ?? "");
+              const params = Object.entries(step).filter(([k]) => k !== "kind");
+              const label = PREPROCESS_KIND_LABELS[kind] ?? kind;
+              const paramStr = params
+                .map(([k, v]) => `${k}=${typeof v === "number" ? v : JSON.stringify(v)}`)
+                .join(", ");
+              return (
+                <span
+                  key={`${kind}-${i}`}
+                  style={{
+                    padding: "5px 10px",
+                    background: "rgba(0,0,0,0.30)",
+                    border: "1px solid var(--vf-panel-stroke)",
+                    borderRadius: 8,
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 11,
+                    color: "var(--vf-text-dim)",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
+                >
+                  <span style={{ color: "var(--accent-vf)" }}>{i + 1}.</span>
+                  <span style={{ color: "var(--vf-text)" }}>{label}</span>
+                  {paramStr && (
+                    <span style={{ color: "var(--vf-text-muted)", fontSize: 10 }}>
+                      ({paramStr})
+                    </span>
+                  )}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {transformEntries.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <div
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: 9,
+              letterSpacing: "0.14em",
+              textTransform: "uppercase",
+              color: "var(--vf-text-muted)",
+            }}
+          >
+            // augmentation & normalize
+          </div>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
+              gap: 6,
+            }}
+          >
+            {transformEntries.map(([k, v]) => (
+              <div
+                key={k}
+                style={{
+                  padding: "6px 10px",
+                  background: "rgba(0,0,0,0.25)",
+                  border: "1px solid var(--vf-panel-stroke)",
+                  borderRadius: 6,
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  gap: 8,
+                }}
+              >
+                <span
+                  style={{
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 10,
+                    color: "var(--vf-text-muted)",
+                  }}
+                >
+                  {k}
+                </span>
+                <span
+                  style={{
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 11,
+                    color: "var(--vf-text)",
+                    wordBreak: "break-all",
+                    textAlign: "right",
+                  }}
+                >
+                  {formatTransformValue(v)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </Section>
+  );
+}
+
+function formatTransformValue(v: unknown): string {
+  if (v === true) return "✓";
+  if (v === false) return "—";
+  if (Array.isArray(v)) return `[${v.map(String).join(", ")}]`;
+  return String(v);
+}
+
+const exportLabelStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 4,
+  fontFamily: "var(--font-mono)",
+  fontSize: 10,
+  color: "var(--vf-text-muted)",
+  letterSpacing: "0.10em",
+  textTransform: "uppercase",
+};
+
+const exportInputStyle: React.CSSProperties = {
+  padding: "8px 10px",
+  background: "rgba(0,0,0,0.35)",
+  border: "1px solid var(--vf-panel-stroke)",
+  borderRadius: 8,
+  color: "var(--vf-text)",
+  fontFamily: "var(--font-mono)",
+  fontSize: 12,
+};
+
+function ExportToggle({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <label
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 8,
+        fontFamily: "var(--font-mono)",
+        fontSize: 11,
+        color: value ? "var(--vf-text)" : "var(--vf-text-dim)",
+        cursor: "pointer",
+      }}
+    >
+      <input
+        type="checkbox"
+        checked={value}
+        onChange={(e) => onChange(e.target.checked)}
+        style={{ accentColor: "var(--accent-vf)" }}
+      />
+      {label}
+    </label>
+  );
+}
+
+function ExportResultPanel({ result }: { result: ExportOnnxResponse }) {
+  const sizeMb = (result.file_size_bytes / (1024 * 1024)).toFixed(2);
+  const val = result.validation;
+  const bench = result.benchmark;
+  return (
+    <div
+      style={{
+        marginTop: 12,
+        padding: 12,
+        background: "rgba(0,0,0,0.30)",
+        border: "1px solid var(--vf-panel-stroke)",
+        borderRadius: 10,
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
+        gap: 10,
+        fontFamily: "var(--font-mono)",
+      }}
+    >
+      <ExportStat label="file_size" value={`${sizeMb} MB`} />
+      {val && (
+        <ExportStat
+          label="max_diff"
+          value={
+            typeof val.max_diff === "number" ? val.max_diff.toExponential(3) : "—"
+          }
+          accent={val.within_tolerance ? "oklch(0.85 0.16 150)" : "oklch(0.85 0.14 22)"}
+        />
+      )}
+      {bench && (
+        <>
+          <ExportStat
+            label="latency μ ± σ"
+            value={
+              typeof bench.mean_ms === "number"
+                ? `${bench.mean_ms.toFixed(2)} ± ${(bench.std_ms ?? 0).toFixed(2)} ms`
+                : "—"
+            }
+          />
+          <ExportStat
+            label="n_runs"
+            value={String(bench.n_runs ?? "—")}
+          />
+        </>
+      )}
+    </div>
+  );
+}
+
+function BatchResultPanel({ result }: { result: BatchPredictResponse }) {
+  const failedHead = result.failed_files.slice(0, 5);
+  const more = result.failed_files.length - failedHead.length;
+  return (
+    <div
+      style={{
+        marginTop: 12,
+        padding: 12,
+        background: "rgba(0,0,0,0.30)",
+        border: "1px solid var(--vf-panel-stroke)",
+        borderRadius: 10,
+        display: "flex",
+        flexDirection: "column",
+        gap: 10,
+        fontFamily: "var(--font-mono)",
+      }}
+    >
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
+          gap: 10,
+        }}
+      >
+        <ExportStat
+          label="processadas"
+          value={String(result.total_processed)}
+          accent="oklch(0.85 0.16 150)"
+        />
+        <ExportStat
+          label="falharam"
+          value={String(result.failed_count)}
+          accent={
+            result.failed_count === 0
+              ? "var(--vf-text)"
+              : "oklch(0.85 0.14 22)"
+          }
+        />
+      </div>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+        }}
+      >
+        <span
+          style={{
+            fontSize: 10,
+            color: "var(--vf-text-muted)",
+            letterSpacing: "0.14em",
+            textTransform: "uppercase",
+            minWidth: 70,
+          }}
+        >
+          csv
+        </span>
+        <code
+          style={{
+            flex: 1,
+            fontSize: 11,
+            color: "var(--vf-text)",
+            wordBreak: "break-all",
+          }}
+        >
+          {result.output_csv}
+        </code>
+        <button
+          type="button"
+          onClick={() => void navigator.clipboard.writeText(result.output_csv)}
+          title="Copiar caminho"
+          style={{
+            padding: "4px 8px",
+            background: "rgba(255,255,255,0.04)",
+            border: "1px solid var(--vf-panel-stroke)",
+            borderRadius: 6,
+            color: "var(--vf-text-dim)",
+            fontFamily: "var(--font-mono)",
+            fontSize: 10,
+            cursor: "pointer",
+          }}
+        >
+          copy
+        </button>
+      </div>
+      {failedHead.length > 0 && (
+        <details style={{ fontSize: 11, color: "var(--vf-text-muted)" }}>
+          <summary style={{ cursor: "pointer", color: "oklch(0.85 0.14 22)" }}>
+            {result.failed_count} arquivos falharam (clique para ver até 5)
+          </summary>
+          <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
+            {failedHead.map((p) => (
+              <li key={p} style={{ wordBreak: "break-all" }}>
+                {p}
+              </li>
+            ))}
+          </ul>
+          {more > 0 && (
+            <div style={{ marginTop: 4, fontSize: 10 }}>
+              …+{more} mais
+            </div>
+          )}
+        </details>
+      )}
+    </div>
+  );
+}
+
+function ExportStat({
+  label,
+  value,
+  accent,
+}: {
+  label: string;
+  value: string;
+  accent?: string;
+}) {
+  return (
+    <div
+      style={{
+        padding: "6px 10px",
+        background: "rgba(255,255,255,0.025)",
+        border: "1px solid var(--vf-panel-stroke)",
+        borderRadius: 6,
+      }}
+    >
+      <div
+        style={{
+          fontSize: 9,
+          color: "var(--vf-text-muted)",
+          letterSpacing: "0.14em",
+          textTransform: "uppercase",
+        }}
+      >
+        {label}
+      </div>
+      <div
+        style={{
+          fontSize: 13,
+          fontWeight: 600,
+          color: accent ?? "var(--vf-text)",
+          marginTop: 2,
+          wordBreak: "break-all",
+        }}
+      >
+        {value}
+      </div>
+    </div>
+  );
 }
 
 function FormField({ label, value, onChange, placeholder }: FormFieldProps) {
