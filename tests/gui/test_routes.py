@@ -96,6 +96,41 @@ class TestLoadRunsSingleRun:
         assert s.status == "completed"
         assert s.epochs_completed == 5
         assert s.started_at == datetime.fromisoformat(_TS_EARLY)
+        # No preprocessing in the synthetic run → count is 0 by default.
+        assert s.preprocessing_count == 0
+
+    def test_summary_reports_preprocessing_count(self, tmp_path: Path) -> None:
+        """RunSummary must expose the number of preprocessing filters used."""
+        run_dir = tmp_path / "exp_pp" / "20260301_120000_000000"
+        run_dir.mkdir(parents=True)
+        data = {
+            "id": "exp_pp_run",
+            "experiment": "exp_pp",
+            "timestamp": "2026-03-01T12:00:00",
+            "status": "completed",
+            "config": {
+                "model": {"name": "resnet18"},
+                "task": "binary",
+                "data": {
+                    "preprocessing": {
+                        "steps": [
+                            {"kind": "gaussian_blur", "radius": 1.5},
+                            {"kind": "grayscale"},
+                        ]
+                    },
+                },
+            },
+            "metrics": {
+                "best_val_loss": 0.4,
+                "best_epoch": 1,
+                "total_epochs": 2,
+            },
+        }
+        (run_dir / "run.json").write_text(json.dumps(data), encoding="utf-8")
+
+        results = _load_runs(tmp_path)
+        assert len(results) == 1
+        assert results[0].preprocessing_count == 2
 
     def test_completed_run_has_finished_at(self, tmp_path: Path) -> None:
         """A completed run must have finished_at equal to started_at."""
@@ -380,6 +415,478 @@ class TestApiRunsEndpoint:
         assert "run_id" in body
         assert body["status"] == "running"
         routes_mod._current_run = None
+
+    def test_post_experiment_run_accepts_preprocessing_steps(
+        self, app_and_routes: tuple, tmp_path: Path
+    ) -> None:
+        """POST /experiment/run must accept the flat preprocessing step shape the
+        PreprocessingPanel sends (``{kind, ...params}``).
+
+        Regression guard: until the panel was made controlled, the pipeline never
+        reached the backend. This test pins down that the round-trip works.
+        """
+        app, routes_mod = app_and_routes
+        routes_mod._current_run = None
+
+        captured: dict[str, object] = {}
+
+        async def fake_execute(config: object, run_id: str) -> None:
+            captured["config"] = config
+            routes_mod._current_run = {
+                "run_id": run_id,
+                "status": "completed",
+                "error": None,
+                "report": {},
+                "run_dir": None,
+            }
+
+        payload = {
+            "name": "test_exp_pp",
+            "task": "binary",
+            "model": {"name": "resnet18", "num_classes": 1, "pretrained": False},
+            "training": {
+                "learning_rate": 0.001,
+                "epochs": 1,
+                "batch_size": 4,
+                "early_stopping_patience": 1,
+                "seed": 0,
+            },
+            "data": {
+                "base_dir": str(tmp_path),
+                "preprocessing": {
+                    "steps": [
+                        {"kind": "gaussian_blur", "radius": 1.5},
+                        {"kind": "grayscale"},
+                        {"kind": "wavelet", "band": "LL"},
+                    ],
+                },
+            },
+        }
+
+        with patch.object(routes_mod, "_execute_experiment", fake_execute):
+            client = TestClient(app, raise_server_exceptions=True)
+            resp = client.post("/api/experiment/run", json=payload)
+
+        assert resp.status_code == 200, resp.text
+
+        # The handler validated the payload via Pydantic before dispatching the
+        # worker, so the captured config exposes the typed pipeline.
+        config = captured["config"]
+        steps = config.data.preprocessing.steps  # type: ignore[attr-defined]
+        assert len(steps) == 3
+        assert steps[0].kind == "gaussian_blur"
+        # extra="allow" preserves filter params on the step model
+        assert steps[0].radius == 1.5  # type: ignore[attr-defined]
+        assert steps[1].kind == "grayscale"
+        assert steps[2].kind == "wavelet"
+        assert steps[2].band == "LL"  # type: ignore[attr-defined]
+
+        routes_mod._current_run = None
+
+    def test_checkpoint_pick_handles_cancelled_dialog(
+        self, app_and_routes: tuple
+    ) -> None:
+        """POST /api/checkpoint/pick must return cancelled=True when no file chosen."""
+        from visionforge.gui.api.schemas import CheckpointPickResponse
+
+        app, routes_mod = app_and_routes
+
+        def fake_open() -> CheckpointPickResponse:
+            return CheckpointPickResponse(path="", cancelled=True, message="Cancelado.")
+
+        with patch.object(routes_mod, "_open_native_checkpoint_dialog", fake_open):
+            client = TestClient(app, raise_server_exceptions=True)
+            resp = client.post("/api/checkpoint/pick")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["cancelled"] is True
+        assert body["path"] == ""
+
+    def test_checkpoint_pick_returns_chosen_path(self, app_and_routes: tuple) -> None:
+        """POST /api/checkpoint/pick must return the absolute file path."""
+        from visionforge.gui.api.schemas import CheckpointPickResponse
+
+        app, routes_mod = app_and_routes
+        chosen = "/abs/path/to/model.pth"
+
+        def fake_open() -> CheckpointPickResponse:
+            return CheckpointPickResponse(path=chosen, cancelled=False)
+
+        with patch.object(routes_mod, "_open_native_checkpoint_dialog", fake_open):
+            client = TestClient(app, raise_server_exceptions=True)
+            resp = client.post("/api/checkpoint/pick")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["cancelled"] is False
+        assert body["path"] == chosen
+
+    def test_post_experiment_run_dispatches_cross_validation_block(
+        self, app_and_routes: tuple, tmp_path: Path
+    ) -> None:
+        """When config.block='cross_validation' the worker must instantiate
+        CrossValidationBlock instead of ClassificationBlock.
+
+        Regression guard for the new dispatch path — until this change, the
+        backend hardcoded ClassificationBlock and any other block was unreachable
+        through the GUI.
+        """
+        from visionforge.blocks.cross_validation import CrossValidationBlock
+
+        app, routes_mod = app_and_routes
+        routes_mod._current_run = None
+
+        captured_block: dict[str, object] = {}
+
+        # Replace the heavy run() with a stub so we never actually train. We
+        # only assert which class the dispatcher constructed.
+        original_setup = CrossValidationBlock.setup
+        original_run = CrossValidationBlock.run
+        original_report = CrossValidationBlock.report
+
+        def fake_setup(self, config: object) -> None:  # type: ignore[no-untyped-def]
+            captured_block["class"] = type(self).__name__
+            captured_block["config_block"] = config.block  # type: ignore[attr-defined]
+
+        def fake_run(self) -> None:  # type: ignore[no-untyped-def]
+            return None
+
+        def fake_report(self) -> dict[str, object]:  # type: ignore[no-untyped-def]
+            return {"mean_accuracy": 0.9, "std_accuracy": 0.02}
+
+        CrossValidationBlock.setup = fake_setup  # type: ignore[method-assign]
+        CrossValidationBlock.run = fake_run  # type: ignore[method-assign]
+        CrossValidationBlock.report = fake_report  # type: ignore[method-assign]
+
+        try:
+            payload = {
+                "name": "test_cv",
+                "task": "binary",
+                "block": "cross_validation",
+                "model": {"name": "resnet18", "num_classes": 1, "pretrained": False},
+                "training": {
+                    "learning_rate": 0.001,
+                    "epochs": 1,
+                    "batch_size": 4,
+                    "early_stopping_patience": 1,
+                    "seed": 0,
+                },
+                "data": {"base_dir": str(tmp_path)},
+                "cross_validation": {
+                    "n_folds": 3,
+                    "stratified": True,
+                    "shuffle": True,
+                    "fold_seed": 42,
+                },
+            }
+            client = TestClient(app, raise_server_exceptions=True)
+            resp = client.post("/api/experiment/run", json=payload)
+
+            assert resp.status_code == 200
+            # Let the background task pick up so fake_setup runs.
+            import time
+
+            for _ in range(50):
+                if "class" in captured_block:
+                    break
+                time.sleep(0.05)
+            assert captured_block.get("class") == "CrossValidationBlock"
+            assert captured_block.get("config_block") == "cross_validation"
+        finally:
+            CrossValidationBlock.setup = original_setup  # type: ignore[method-assign]
+            CrossValidationBlock.run = original_run  # type: ignore[method-assign]
+            CrossValidationBlock.report = original_report  # type: ignore[method-assign]
+            routes_mod._current_run = None
+
+    def test_post_experiment_run_dispatches_transfer_learning_block(
+        self, app_and_routes: tuple, tmp_path: Path
+    ) -> None:
+        """block='transfer_learning' must instantiate TransferLearningBlock."""
+        from visionforge.blocks.transfer_learning import TransferLearningBlock
+
+        app, routes_mod = app_and_routes
+        routes_mod._current_run = None
+
+        captured: dict[str, object] = {}
+        original_setup = TransferLearningBlock.setup
+        original_run = TransferLearningBlock.run
+        original_report = TransferLearningBlock.report
+
+        def fake_setup(self, config: object) -> None:  # type: ignore[no-untyped-def]
+            captured["class"] = type(self).__name__
+            captured["mode"] = config.transfer_learning.mode  # type: ignore[attr-defined]
+
+        def fake_run(self) -> None:  # type: ignore[no-untyped-def]
+            return None
+
+        def fake_report(self) -> dict[str, object]:  # type: ignore[no-untyped-def]
+            return {"mode": "feature_extraction", "eval": {"accuracy": 0.9}}
+
+        TransferLearningBlock.setup = fake_setup  # type: ignore[method-assign]
+        TransferLearningBlock.run = fake_run  # type: ignore[method-assign]
+        TransferLearningBlock.report = fake_report  # type: ignore[method-assign]
+
+        try:
+            payload = {
+                "name": "test_tl",
+                "task": "binary",
+                "block": "transfer_learning",
+                "model": {"name": "resnet18", "num_classes": 1, "pretrained": True},
+                "training": {
+                    "learning_rate": 0.001,
+                    "epochs": 1,
+                    "batch_size": 4,
+                    "early_stopping_patience": 1,
+                    "seed": 0,
+                },
+                "data": {"base_dir": str(tmp_path)},
+                "transfer_learning": {
+                    "mode": "feature_extraction",
+                    "unfreeze_from_layer": None,
+                    "backbone_lr_multiplier": 0.1,
+                },
+            }
+            client = TestClient(app, raise_server_exceptions=True)
+            resp = client.post("/api/experiment/run", json=payload)
+            assert resp.status_code == 200, resp.text
+
+            import time
+
+            for _ in range(50):
+                if "class" in captured:
+                    break
+                time.sleep(0.05)
+            assert captured.get("class") == "TransferLearningBlock"
+            assert captured.get("mode") == "feature_extraction"
+        finally:
+            TransferLearningBlock.setup = original_setup  # type: ignore[method-assign]
+            TransferLearningBlock.run = original_run  # type: ignore[method-assign]
+            TransferLearningBlock.report = original_report  # type: ignore[method-assign]
+            routes_mod._current_run = None
+
+    def test_post_experiment_run_dispatches_model_comparison_block(
+        self, app_and_routes: tuple, tmp_path: Path
+    ) -> None:
+        """block='model_comparison' must instantiate ModelComparisonBlock."""
+        from visionforge.blocks.model_comparison import ModelComparisonBlock
+
+        app, routes_mod = app_and_routes
+        routes_mod._current_run = None
+
+        captured: dict[str, object] = {}
+        original_setup = ModelComparisonBlock.setup
+        original_run = ModelComparisonBlock.run
+        original_report = ModelComparisonBlock.report
+
+        def fake_setup(self, config: object) -> None:  # type: ignore[no-untyped-def]
+            captured["class"] = type(self).__name__
+            captured["model_names"] = list(config.model_comparison.model_names)  # type: ignore[attr-defined]
+            captured["metric"] = config.model_comparison.metric  # type: ignore[attr-defined]
+
+        def fake_run(self) -> None:  # type: ignore[no-untyped-def]
+            return None
+
+        def fake_report(self) -> dict[str, object]:  # type: ignore[no-untyped-def]
+            return {"top_3": [], "total_ran": 2, "failed_count": 0}
+
+        ModelComparisonBlock.setup = fake_setup  # type: ignore[method-assign]
+        ModelComparisonBlock.run = fake_run  # type: ignore[method-assign]
+        ModelComparisonBlock.report = fake_report  # type: ignore[method-assign]
+
+        try:
+            payload = {
+                "name": "test_mc",
+                "task": "binary",
+                "block": "model_comparison",
+                "model": {"name": "resnet18", "num_classes": 1, "pretrained": False},
+                "training": {
+                    "learning_rate": 0.001,
+                    "epochs": 1,
+                    "batch_size": 4,
+                    "early_stopping_patience": 1,
+                    "seed": 0,
+                },
+                "data": {"base_dir": str(tmp_path)},
+                "model_comparison": {
+                    "model_names": ["resnet18", "resnet50"],
+                    "metric": "f1",
+                },
+            }
+            client = TestClient(app, raise_server_exceptions=True)
+            resp = client.post("/api/experiment/run", json=payload)
+            assert resp.status_code == 200, resp.text
+
+            import time
+
+            for _ in range(50):
+                if "class" in captured:
+                    break
+                time.sleep(0.05)
+            assert captured.get("class") == "ModelComparisonBlock"
+            assert captured.get("model_names") == ["resnet18", "resnet50"]
+            assert captured.get("metric") == "f1"
+        finally:
+            ModelComparisonBlock.setup = original_setup  # type: ignore[method-assign]
+            ModelComparisonBlock.run = original_run  # type: ignore[method-assign]
+            ModelComparisonBlock.report = original_report  # type: ignore[method-assign]
+            routes_mod._current_run = None
+
+    def test_post_experiment_run_dispatches_grid_search_block(
+        self, app_and_routes: tuple, tmp_path: Path
+    ) -> None:
+        """block='grid_search' must instantiate GridSearchBlock with the dict
+        hyperparameter space exactly as submitted."""
+        from visionforge.blocks.grid_search import GridSearchBlock
+
+        app, routes_mod = app_and_routes
+        routes_mod._current_run = None
+
+        captured: dict[str, object] = {}
+        original_setup = GridSearchBlock.setup
+        original_run = GridSearchBlock.run
+        original_report = GridSearchBlock.report
+
+        def fake_setup(self, config: object) -> None:  # type: ignore[no-untyped-def]
+            captured["class"] = type(self).__name__
+            captured["hp"] = dict(config.grid_search.hyperparameters)  # type: ignore[attr-defined]
+
+        def fake_run(self) -> None:  # type: ignore[no-untyped-def]
+            return None
+
+        def fake_report(self) -> dict[str, object]:  # type: ignore[no-untyped-def]
+            return {
+                "best_trial": {"trial_index": 1, "test_accuracy": 0.92},
+                "total_trials": 3,
+                "successful_trials": 3,
+            }
+
+        GridSearchBlock.setup = fake_setup  # type: ignore[method-assign]
+        GridSearchBlock.run = fake_run  # type: ignore[method-assign]
+        GridSearchBlock.report = fake_report  # type: ignore[method-assign]
+
+        try:
+            payload = {
+                "name": "test_grid",
+                "task": "binary",
+                "block": "grid_search",
+                "model": {"name": "resnet18", "num_classes": 1, "pretrained": False},
+                "training": {
+                    "learning_rate": 0.001,
+                    "epochs": 1,
+                    "batch_size": 4,
+                    "early_stopping_patience": 1,
+                    "seed": 0,
+                },
+                "data": {"base_dir": str(tmp_path)},
+                "grid_search": {
+                    "hyperparameters": {
+                        "training.learning_rate": [0.001, 0.0005, 0.0001],
+                    }
+                },
+            }
+            client = TestClient(app, raise_server_exceptions=True)
+            resp = client.post("/api/experiment/run", json=payload)
+            assert resp.status_code == 200, resp.text
+
+            import time
+
+            for _ in range(50):
+                if "class" in captured:
+                    break
+                time.sleep(0.05)
+            assert captured.get("class") == "GridSearchBlock"
+            assert captured.get("hp") == {
+                "training.learning_rate": [0.001, 0.0005, 0.0001]
+            }
+        finally:
+            GridSearchBlock.setup = original_setup  # type: ignore[method-assign]
+            GridSearchBlock.run = original_run  # type: ignore[method-assign]
+            GridSearchBlock.report = original_report  # type: ignore[method-assign]
+            routes_mod._current_run = None
+
+    def test_post_experiment_run_dispatches_random_search_block(
+        self, app_and_routes: tuple, tmp_path: Path
+    ) -> None:
+        """block='random_search' must instantiate RandomSearchBlock with the
+        submitted search_space + n_trials exactly as the payload describes."""
+        from visionforge.blocks.random_search import RandomSearchBlock
+
+        app, routes_mod = app_and_routes
+        routes_mod._current_run = None
+
+        captured: dict[str, object] = {}
+        original_setup = RandomSearchBlock.setup
+        original_run = RandomSearchBlock.run
+        original_report = RandomSearchBlock.report
+
+        def fake_setup(self, config: object) -> None:  # type: ignore[no-untyped-def]
+            captured["class"] = type(self).__name__
+            captured["n_trials"] = config.random_search.n_trials  # type: ignore[attr-defined]
+            captured["space"] = dict(config.random_search.search_space)  # type: ignore[attr-defined]
+
+        def fake_run(self) -> None:  # type: ignore[no-untyped-def]
+            return None
+
+        def fake_report(self) -> dict[str, object]:  # type: ignore[no-untyped-def]
+            return {
+                "best_trial": {"trial_index": 2, "test_accuracy": 0.88},
+                "total_trials": 5,
+                "successful_trials": 5,
+            }
+
+        RandomSearchBlock.setup = fake_setup  # type: ignore[method-assign]
+        RandomSearchBlock.run = fake_run  # type: ignore[method-assign]
+        RandomSearchBlock.report = fake_report  # type: ignore[method-assign]
+
+        try:
+            payload = {
+                "name": "test_random",
+                "task": "binary",
+                "block": "random_search",
+                "model": {"name": "resnet18", "num_classes": 1, "pretrained": False},
+                "training": {
+                    "learning_rate": 0.001,
+                    "epochs": 1,
+                    "batch_size": 4,
+                    "early_stopping_patience": 1,
+                    "seed": 0,
+                },
+                "data": {"base_dir": str(tmp_path)},
+                "random_search": {
+                    "n_trials": 5,
+                    "seed": 7,
+                    "search_space": {
+                        "training.learning_rate": {
+                            "type": "log_uniform",
+                            "low": 1e-5,
+                            "high": 1e-2,
+                        },
+                    },
+                },
+            }
+            client = TestClient(app, raise_server_exceptions=True)
+            resp = client.post("/api/experiment/run", json=payload)
+            assert resp.status_code == 200, resp.text
+
+            import time
+
+            for _ in range(50):
+                if "class" in captured:
+                    break
+                time.sleep(0.05)
+            assert captured.get("class") == "RandomSearchBlock"
+            assert captured.get("n_trials") == 5
+            assert captured.get("space") == {
+                "training.learning_rate": {
+                    "type": "log_uniform",
+                    "low": 1e-5,
+                    "high": 1e-2,
+                },
+            }
+        finally:
+            RandomSearchBlock.setup = original_setup  # type: ignore[method-assign]
+            RandomSearchBlock.run = original_run  # type: ignore[method-assign]
+            RandomSearchBlock.report = original_report  # type: ignore[method-assign]
+            routes_mod._current_run = None
 
     def test_post_experiment_run_rejects_concurrent(
         self, app_and_routes: tuple, tmp_path: Path

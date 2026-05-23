@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class RunStatus(BaseModel):
@@ -44,6 +44,7 @@ class RunSummary(BaseModel):
     finished_at: datetime | None
     epochs_completed: int
     final_metrics: dict[str, float]
+    preprocessing_count: int = 0
 
 
 class DatasetDetectRequest(BaseModel):
@@ -66,6 +67,17 @@ class DatasetDetectResponse(BaseModel):
 
 class DatasetPickResponse(BaseModel):
     """Result of server-side native folder picker.
+
+    Empty path means the user cancelled or the OS dialog is unavailable.
+    """
+
+    path: str
+    cancelled: bool = False
+    message: str | None = None
+
+
+class CheckpointPickResponse(BaseModel):
+    """Result of server-side native .pth file picker.
 
     Empty path means the user cancelled or the OS dialog is unavailable.
     """
@@ -121,6 +133,57 @@ class RunTestRequest(BaseModel):
     val_dir: str = "val"
     test_dir: str = "test"
     label: str | None = None
+
+
+class ExportOnnxRequest(BaseModel):
+    """Settings for exporting a run's checkpoint to ONNX.
+
+    ``output_onnx`` is optional — when omitted, the file is written next to
+    the checkpoint as ``<run_dir>/best_model.onnx``. ``validate`` is exposed
+    by alias because the literal name shadows a deprecated BaseModel
+    classmethod (same trick the underlying ``ExportONNXConfig`` uses).
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    output_onnx: str | None = None
+    opset_version: int = 17
+    dynamic_axes: bool = True
+    run_validate: bool = Field(default=True, alias="validate")
+    benchmark: bool = True
+    benchmark_runs: int = 50
+
+
+class ExportOnnxResponse(BaseModel):
+    """Result of a successful ONNX export, mirroring ExportONNXBlock.report()."""
+
+    output_onnx: str
+    file_size_bytes: int
+    validation: dict[str, Any] | None = None
+    benchmark: dict[str, Any] | None = None
+
+
+class BatchPredictRequest(BaseModel):
+    """Settings for running batch inference with a run's checkpoint.
+
+    ``output_csv`` is optional — when omitted, predictions are written to
+    ``<run_dir>/predictions/<timestamp>.csv`` so each batch run gets its own
+    file without clobbering previous ones.
+    """
+
+    input_dir: str
+    output_csv: str | None = None
+    recursive: bool = True
+    class_names: list[str] | None = None
+
+
+class BatchPredictResponse(BaseModel):
+    """Result of a successful batch prediction run."""
+
+    output_csv: str
+    total_processed: int
+    failed_count: int
+    failed_files: list[str] = []
 
 
 class RunTestResponse(BaseModel):
@@ -228,9 +291,14 @@ __all__ = [
     "RunDetail",
     "RunTestRequest",
     "RunTestResponse",
+    "ExportOnnxRequest",
+    "ExportOnnxResponse",
+    "BatchPredictRequest",
+    "BatchPredictResponse",
     "DatasetDetectRequest",
     "DatasetDetectResponse",
     "DatasetPickResponse",
+    "CheckpointPickResponse",
     "DatasetStatsRequest",
     "DatasetStatsResponse",
     "DatasetSamplesRequest",

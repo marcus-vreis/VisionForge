@@ -181,3 +181,348 @@ class TestExportRunMarkdown:
             client = TestClient(app, raise_server_exceptions=True)
             resp = client.get("/api/runs/missing/export_md")
         assert resp.status_code == 404
+
+    def test_markdown_includes_preprocessing_and_augmentation(
+        self, app_and_routes: tuple, tmp_path: Path
+    ) -> None:
+        """Model card must surface preprocessing + augmentation so the run is reproducible."""
+        app, routes_mod = app_and_routes
+        run_id = "20260522_110000_000000"
+        run_dir = tmp_path / "exp1" / run_id
+        run_dir.mkdir(parents=True)
+        data = {
+            "id": f"exp1_{run_id}",
+            "experiment": "exp1",
+            "timestamp": _TS,
+            "status": "completed",
+            "run_dir": str(run_dir.resolve()),
+            "config": {
+                "name": "exp1",
+                "task": "binary",
+                "model": {"name": "resnet18", "num_classes": 1, "pretrained": False},
+                "training": {
+                    "learning_rate": 0.001,
+                    "epochs": 1,
+                    "batch_size": 4,
+                    "seed": 0,
+                },
+                "data": {
+                    "base_dir": str(tmp_path),
+                    "preprocessing": {
+                        "steps": [
+                            {"kind": "gaussian_blur", "radius": 1.5},
+                            {"kind": "wavelet", "band": "LL"},
+                        ]
+                    },
+                    "transforms": {
+                        "image_size": 224,
+                        "horizontal_flip": True,
+                        "rotation_degrees": 15,
+                    },
+                },
+            },
+            "metrics": {"best_val_loss": 0.4, "best_epoch": 1, "total_epochs": 1},
+            "history": [],
+            "artifacts": {"model": str(run_dir / "best_model.pth"), "graphics": []},
+            "tests": [],
+        }
+        (run_dir / "run.json").write_text(json.dumps(data), encoding="utf-8")
+        with patch.object(routes_mod, "_MODELS_DIR", tmp_path):
+            client = TestClient(app, raise_server_exceptions=True)
+            resp = client.get(f"/api/runs/{run_id}/export_md")
+        assert resp.status_code == 200
+        body = resp.text
+        assert "Preprocessing pipeline" in body
+        assert "gaussian_blur" in body
+        assert "wavelet" in body
+        assert "Augmentation" in body
+        assert "horizontal_flip" in body
+        assert "image_size" in body
+
+
+class TestExportRunToOnnx:
+    def test_unknown_run_returns_404(
+        self, app_and_routes: tuple, tmp_path: Path
+    ) -> None:
+        app, routes_mod = app_and_routes
+        with patch.object(routes_mod, "_MODELS_DIR", tmp_path):
+            client = TestClient(app, raise_server_exceptions=True)
+            resp = client.post("/api/runs/missing/export_onnx", json={})
+        assert resp.status_code == 404
+
+    def test_missing_checkpoint_returns_400(
+        self, app_and_routes: tuple, tmp_path: Path
+    ) -> None:
+        """run.json without artifacts.model must surface as a 400 explanation."""
+        app, routes_mod = app_and_routes
+        run_id = "20260523_120000_000000"
+        run_dir = tmp_path / "exp1" / run_id
+        run_dir.mkdir(parents=True)
+        data = {
+            "id": f"exp1_{run_id}",
+            "experiment": "exp1",
+            "timestamp": _TS,
+            "status": "completed",
+            "config": {
+                "name": "exp1",
+                "task": "binary",
+                "model": {"name": "resnet18", "num_classes": 1, "pretrained": False},
+                "training": {
+                    "learning_rate": 0.001,
+                    "epochs": 1,
+                    "batch_size": 4,
+                    "seed": 0,
+                },
+                "data": {"base_dir": str(tmp_path)},
+            },
+            "metrics": {},
+            "history": [],
+            "artifacts": {},
+            "tests": [],
+        }
+        (run_dir / "run.json").write_text(json.dumps(data), encoding="utf-8")
+        with patch.object(routes_mod, "_MODELS_DIR", tmp_path):
+            client = TestClient(app, raise_server_exceptions=True)
+            resp = client.post(f"/api/runs/{run_id}/export_onnx", json={})
+        assert resp.status_code == 400
+        assert "checkpoint" in resp.text.lower()
+
+    def test_export_invokes_block_with_request_params(
+        self, app_and_routes: tuple, tmp_path: Path
+    ) -> None:
+        """The endpoint must build an ExperimentConfig where export_onnx is
+        populated from the request and run the block in a worker thread."""
+        from visionforge.blocks.export_onnx import ExportONNXBlock
+
+        app, routes_mod = app_and_routes
+
+        run_id = "20260523_130000_000000"
+        run_dir = tmp_path / "exp_export" / run_id
+        run_dir.mkdir(parents=True)
+        checkpoint = run_dir / "best_model.pth"
+        checkpoint.write_bytes(b"fake-checkpoint")
+        data = {
+            "id": f"exp_export_{run_id}",
+            "experiment": "exp_export",
+            "timestamp": _TS,
+            "status": "completed",
+            "config": {
+                "name": "exp_export",
+                "task": "binary",
+                "model": {"name": "resnet18", "num_classes": 1, "pretrained": False},
+                "training": {
+                    "learning_rate": 0.001,
+                    "epochs": 1,
+                    "batch_size": 4,
+                    "seed": 0,
+                },
+                "data": {"base_dir": str(tmp_path)},
+            },
+            "metrics": {},
+            "history": [],
+            "artifacts": {"model": str(checkpoint)},
+            "tests": [],
+        }
+        (run_dir / "run.json").write_text(json.dumps(data), encoding="utf-8")
+
+        captured: dict[str, object] = {}
+        original_setup = ExportONNXBlock.setup
+        original_run = ExportONNXBlock.run
+        original_report = ExportONNXBlock.report
+
+        def fake_setup(self, config: object) -> None:  # type: ignore[no-untyped-def]
+            captured["opset"] = config.export_onnx.opset_version  # type: ignore[attr-defined]
+            captured["validate"] = config.export_onnx.run_validate  # type: ignore[attr-defined]
+            captured["checkpoint"] = str(config.export_onnx.checkpoint_path)  # type: ignore[attr-defined]
+            # Pretend the export wrote a 100-byte file at the configured path.
+            cfg = config.export_onnx  # type: ignore[attr-defined]
+            cfg.output_onnx.parent.mkdir(parents=True, exist_ok=True)
+            cfg.output_onnx.write_bytes(b"x" * 100)
+
+        def fake_run(self) -> None:  # type: ignore[no-untyped-def]
+            return None
+
+        def fake_report(self) -> dict[str, object]:  # type: ignore[no-untyped-def]
+            return {
+                "file_size_bytes": 100,
+                "validation": {
+                    "max_diff": 1e-6,
+                    "within_tolerance": True,
+                    "tolerance": 1e-4,
+                },
+                "benchmark": {"mean_ms": 2.5, "std_ms": 0.1, "n_runs": 50},
+            }
+
+        ExportONNXBlock.setup = fake_setup  # type: ignore[method-assign]
+        ExportONNXBlock.run = fake_run  # type: ignore[method-assign]
+        ExportONNXBlock.report = fake_report  # type: ignore[method-assign]
+
+        try:
+            with patch.object(routes_mod, "_MODELS_DIR", tmp_path):
+                client = TestClient(app, raise_server_exceptions=True)
+                resp = client.post(
+                    f"/api/runs/{run_id}/export_onnx",
+                    json={
+                        "opset_version": 18,
+                        "validate": True,
+                        "benchmark": True,
+                        "benchmark_runs": 50,
+                    },
+                )
+            assert resp.status_code == 200, resp.text
+            body = resp.json()
+            assert body["file_size_bytes"] == 100
+            assert body["validation"]["within_tolerance"] is True
+            assert body["benchmark"]["mean_ms"] == 2.5
+            assert body["output_onnx"].endswith("best_model.onnx")
+            assert captured.get("opset") == 18
+            assert captured.get("validate") is True
+            assert captured.get("checkpoint") == str(checkpoint)
+        finally:
+            ExportONNXBlock.setup = original_setup  # type: ignore[method-assign]
+            ExportONNXBlock.run = original_run  # type: ignore[method-assign]
+            ExportONNXBlock.report = original_report  # type: ignore[method-assign]
+
+
+class TestBatchPredictRun:
+    def test_unknown_run_returns_404(
+        self, app_and_routes: tuple, tmp_path: Path
+    ) -> None:
+        app, routes_mod = app_and_routes
+        with patch.object(routes_mod, "_MODELS_DIR", tmp_path):
+            client = TestClient(app, raise_server_exceptions=True)
+            resp = client.post(
+                "/api/runs/missing/batch_predict",
+                json={"input_dir": str(tmp_path)},
+            )
+        assert resp.status_code == 404
+
+    def test_invalid_input_dir_returns_400(
+        self, app_and_routes: tuple, tmp_path: Path
+    ) -> None:
+        """A non-existent input_dir surfaces as a 400, not a 500."""
+        app, routes_mod = app_and_routes
+        run_id = "20260523_140000_000000"
+        run_dir = tmp_path / "exp_batch" / run_id
+        run_dir.mkdir(parents=True)
+        checkpoint = run_dir / "best_model.pth"
+        checkpoint.write_bytes(b"fake")
+        data = {
+            "id": f"exp_batch_{run_id}",
+            "experiment": "exp_batch",
+            "timestamp": _TS,
+            "status": "completed",
+            "config": {
+                "name": "exp_batch",
+                "task": "binary",
+                "model": {"name": "resnet18", "num_classes": 1, "pretrained": False},
+                "training": {
+                    "learning_rate": 0.001,
+                    "epochs": 1,
+                    "batch_size": 4,
+                    "seed": 0,
+                },
+                "data": {"base_dir": str(tmp_path)},
+            },
+            "metrics": {},
+            "history": [],
+            "artifacts": {"model": str(checkpoint)},
+            "tests": [],
+        }
+        (run_dir / "run.json").write_text(json.dumps(data), encoding="utf-8")
+        with patch.object(routes_mod, "_MODELS_DIR", tmp_path):
+            client = TestClient(app, raise_server_exceptions=True)
+            resp = client.post(
+                f"/api/runs/{run_id}/batch_predict",
+                json={"input_dir": str(tmp_path / "does_not_exist")},
+            )
+        assert resp.status_code == 400
+        assert "input_dir" in resp.text
+
+    def test_dispatch_writes_csv_and_returns_counts(
+        self, app_and_routes: tuple, tmp_path: Path
+    ) -> None:
+        """The endpoint builds an ExperimentConfig with batch_prediction populated
+        and surfaces the block's counts in the response."""
+        from visionforge.blocks.batch_prediction import BatchPredictionBlock
+
+        app, routes_mod = app_and_routes
+
+        run_id = "20260523_150000_000000"
+        run_dir = tmp_path / "exp_b" / run_id
+        run_dir.mkdir(parents=True)
+        checkpoint = run_dir / "best_model.pth"
+        checkpoint.write_bytes(b"fake-checkpoint")
+
+        # Create an input directory that exists.
+        input_dir = tmp_path / "inbox"
+        input_dir.mkdir()
+
+        data = {
+            "id": f"exp_b_{run_id}",
+            "experiment": "exp_b",
+            "timestamp": _TS,
+            "status": "completed",
+            "config": {
+                "name": "exp_b",
+                "task": "binary",
+                "model": {"name": "resnet18", "num_classes": 1, "pretrained": False},
+                "training": {
+                    "learning_rate": 0.001,
+                    "epochs": 1,
+                    "batch_size": 4,
+                    "seed": 0,
+                },
+                "data": {"base_dir": str(tmp_path)},
+            },
+            "metrics": {},
+            "history": [],
+            "artifacts": {"model": str(checkpoint)},
+            "tests": [],
+        }
+        (run_dir / "run.json").write_text(json.dumps(data), encoding="utf-8")
+
+        captured: dict[str, object] = {}
+        original_setup = BatchPredictionBlock.setup
+        original_run = BatchPredictionBlock.run
+        original_report = BatchPredictionBlock.report
+
+        def fake_setup(self, config: object) -> None:  # type: ignore[no-untyped-def]
+            captured["input_dir"] = str(config.batch_prediction.input_dir)  # type: ignore[attr-defined]
+            captured["recursive"] = config.batch_prediction.recursive  # type: ignore[attr-defined]
+            captured["output_csv"] = str(config.batch_prediction.output_csv)  # type: ignore[attr-defined]
+
+        def fake_run(self) -> None:  # type: ignore[no-untyped-def]
+            return None
+
+        def fake_report(self) -> dict[str, object]:  # type: ignore[no-untyped-def]
+            return {
+                "total_processed": 42,
+                "failed_files": ["broken.png"],
+                "output_csv": str(run_dir / "predictions.csv"),
+            }
+
+        BatchPredictionBlock.setup = fake_setup  # type: ignore[method-assign]
+        BatchPredictionBlock.run = fake_run  # type: ignore[method-assign]
+        BatchPredictionBlock.report = fake_report  # type: ignore[method-assign]
+
+        try:
+            with patch.object(routes_mod, "_MODELS_DIR", tmp_path):
+                client = TestClient(app, raise_server_exceptions=True)
+                resp = client.post(
+                    f"/api/runs/{run_id}/batch_predict",
+                    json={"input_dir": str(input_dir), "recursive": True},
+                )
+            assert resp.status_code == 200, resp.text
+            body = resp.json()
+            assert body["total_processed"] == 42
+            assert body["failed_count"] == 1
+            assert body["failed_files"] == ["broken.png"]
+            # output_csv defaulted to run_dir/predictions/<ts>.csv
+            assert "predictions" in body["output_csv"]
+            assert captured.get("recursive") is True
+            assert captured.get("input_dir") == str(input_dir.resolve())
+        finally:
+            BatchPredictionBlock.setup = original_setup  # type: ignore[method-assign]
+            BatchPredictionBlock.run = original_run  # type: ignore[method-assign]
+            BatchPredictionBlock.report = original_report  # type: ignore[method-assign]
