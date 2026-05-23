@@ -92,16 +92,92 @@ Visual baseline now matches `frontend-design/`: oklch dark palette, per-task acc
 
 ---
 
-## Phase 5 — Advanced Experiment Blocks ✅
+## Phase 5 — Advanced Experiment Blocks ✅ (backend) / 🟡 (GUI surface)
 
-- [x] `GridSearchBlock`
-- [x] `RandomSearchBlock`
-- [x] `CrossValidationBlock` (K-Fold + Stratified)
-- [x] `TransferLearningBlock` (feature extraction + fine-tuning)
-- [x] `ModelComparisonBlock`
-- [x] `BatchPredictionBlock` (CSV output)
-- [x] `ExportONNXBlock` (+ inference validation + latency benchmark)
+Backend implementation of all blocks is complete with tests; GUI surfacing
+is partial — only `ClassificationBlock` and `CrossValidationBlock` are
+selectable from the UI today.
+
+- [x] `GridSearchBlock` — backend done; **no GUI surface yet**
+- [x] `RandomSearchBlock` — backend done; **no GUI surface yet**
+- [x] `CrossValidationBlock` (K-Fold + Stratified) — backend done + GUI selector + per-fold defaults
+- [x] `TransferLearningBlock` (feature extraction + fine-tuning) — backend done; **no GUI surface yet**
+- [x] `ModelComparisonBlock` — backend done; **no GUI surface yet**
+- [x] `BatchPredictionBlock` (CSV output) — backend done; **no GUI surface yet**
+- [x] `ExportONNXBlock` (+ inference validation + latency benchmark) — backend done; **no GUI surface yet**
 - [x] Unit tests for all blocks (grid_search, random_search, cross_validation, classification, transfer_learning, model_comparison, batch_prediction, export_onnx)
+- [x] Dynamic block dispatch in `_execute_experiment` via `config.block` (was hardcoded to `ClassificationBlock`)
+
+---
+
+## Phase 5.5 — Frontend ↔ backend gap closing ✅ (2026-05-22 → 2026-05-23)
+
+The backend grew faster than the frontend during Phase 4-5. This phase
+plugged the gaps so that features already in the engine were actually
+reachable from the GUI.
+
+### Preprocessing pipeline (was the biggest gap)
+- [x] `PreprocessingPanel` made **controlled** — pipeline lives in `formData.data.preprocessing.steps` instead of panel-local state (previously the user built a pipeline, hit Train, and it never reached the backend even though `DataModule` was wired)
+- [x] Helpers `toUIPreprocessingSteps` / `fromUIPreprocessingSteps` in `ParamPanel` convert between schema-flat (`{kind, ...params}`) and UI-nested (`{kind, params}`)
+- [x] Green badge "**⚗ N filtros ativos no treino**" + empty-state explainer
+- [x] `RunSummary.preprocessing_count` populated by `_parse_run_summary`; `RunCard` shows `⚗ N filtros` badge
+- [x] `RunDetailPanel` ganhou `PipelineSection` (preprocessing ordenado + augmentation aplicado)
+- [x] `CompareRunsPanel` ganhou `ConfigDiffTable` (cells diferentes destacadas) + `PreprocessingCompare` (pipelines lado a lado)
+- [x] `TrainingOverlay` ganhou banner "⚗ pipeline ativo" com lista dos filtros antes dos logs
+- [x] Markdown export (`_render_run_markdown`) inclui seções "Preprocessing pipeline" + "Augmentation / Normalization"
+- [x] YAML round-trip do `preprocessing.steps` testado via Vitest
+
+### Custom checkpoints (weights_path)
+- [x] `POST /api/checkpoint/pick` endpoint — tkinter `askopenfilename` filtrado pra `*.pth *.pt`
+- [x] `CheckpointPickResponse` schema
+- [x] `WeightsPathField` component no `ParamPanel` (text input + `📁 Escolher` + `limpar`)
+- [x] `weights_path` removido do `SKIP_FIELDS` no `field-renderer.ts`
+- [x] Bind em `formData.model.weights_path` com normalização `""` → `null`
+- [x] Tests: cancelled + chosen-path
+
+### Cross-validation (K-Fold) MVP
+- [x] Backend dispatch dinâmico por `config.block` (mantém ClassificationBlock para `classification`, dispatcha CrossValidationBlock para `cross_validation`)
+- [x] `BlockSelector` segmented control no `ParamPanel` ("Treino simples / K-Fold (CV)")
+- [x] `CrossValidationFields` renderiza `n_folds`, `stratified`, `shuffle`, `fold_seed`
+- [x] Auto-populate de defaults sensatos quando alterna pra CV
+- [x] Regression test: `test_post_experiment_run_dispatches_cross_validation_block`
+
+### ResultsView polish (alinhado com RunDetailPanel)
+- [x] Plots com labels humanizados (`loss.png` → "Loss (train + val)", etc.)
+- [x] Lightbox click-to-zoom
+- [x] Botão `↓ markdown` no header (chama `downloadRunMarkdown`)
+
+### Validation UX
+- [x] `humanizeFieldPath` entende `preprocessing`, `steps`, `scheduler`, `device` e renderiza índices de array como `#N`
+- [x] YAML import faz `validateParsedConfig` client-side e mostra até 5 issues no banner antes do submit
+- [x] Vitest novos: `useExperiment.test.ts` (5 casos) + `yaml-config.test.ts` (round-trip preprocessing)
+
+### Open follow-ups (sub-tarefas remanescentes)
+- [x] **Renderização específica de CV no `ResultsView`** — tabela com fold-a-fold + headline mean ± std implementada via `CrossValidationReport`.
+- [ ] **Surface `cv_summary.json` no `RunDetailPanel` / `HistoryOverlay`** — atualmente CV escreve em `reports_dir/base_name/cv_summary.json`, não em `models_dir/.../run.json`, então não aparece em `/api/runs`. Decidir entre (a) modificar `CrossValidationBlock` pra escrever `run.json` compatível, ou (b) endpoint novo `/api/cv-runs`. (task #22)
+
+---
+
+## Phase 5.6 — GUI surface dos blocks restantes ✅
+
+Backend já existe e está testado. UI mínima entregue:
+
+- [x] **TransferLearningBlock**: extensão do `BlockSelector` + `TransferLearningFields` (`mode`, `unfreeze_from_layer`, `backbone_lr_multiplier`)
+- [x] **ModelComparisonBlock**: UI multi-select de arquiteturas + métrica de ranking (`ModelComparisonFields` + `ModelComparisonReport`)
+- [x] **GridSearchBlock**: editor de hyperparameter space dot-path → CSV (`GridSearchFields` + `GridSearchReport`)
+- [x] **RandomSearchBlock**: editor de `search_space` (uniform/log_uniform/choice) + `n_trials` + `seed`
+- [x] **BatchPredictionBlock**: form `input_dir` + `recursive` no `RunDetailPanel` chamando `/api/runs/{id}/batch_predict`
+- [x] **ExportONNXBlock**: botão "↗ exportar onnx" no `RunDetailPanel` com form de opset/dynamic_axes/validate/benchmark
+
+## Phase 5.7 — Classification polish (2026-05-23) ✅
+
+Itens entregues por iteração de tech-leader:
+
+- [x] **Lightbox** — caption/botão como overlays absolutos (não consomem altura) e imagem em `calc(100vh - 48px)`; fim do crop em plots altos (CM, ROC).
+- [x] **Auto-detect de classes** — botão `🎯 aplicar binary|multiclass·N` no `DatasetStats` que injeta `task` + `model.num_classes` no formData (binary → 1, multiclass → N).
+- [x] **Lock `num_classes=1` quando `task=binary`** — `LockedNumClasses` substitui o input no `ParamPanel` quando binary; flip de volta para multiclass restaura input com default 2.
+- [x] **DeviceSelector único** — vive só no `BottomBar` (Header não duplica mais).
+- [x] **Trial-queue banner** no `TrainingOverlay` — para `grid_search`, `random_search`, `model_comparison` e `cross_validation`, mostra `⛓ fila de treinos · N runs` antes do primeiro epoch.
 
 ## Phase 6 — Regression task
 

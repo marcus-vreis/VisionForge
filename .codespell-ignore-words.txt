@@ -20,3 +20,6 @@ Considere
 fpr
 tpr
 mede
+alternar
+itens
+Itens
