@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   datasetFileUrl,
   fetchDatasetSamples,
@@ -29,6 +29,9 @@ export function DatasetStats({ baseDir, trainDir, valDir, testDir, onApplyClasse
   const [stats, setStats] = useState<DatasetStatsResponse | null>(null);
   const [samples, setSamples] = useState<DatasetSamplesResponse | null>(null);
   const [loading, setLoading] = useState(false);
+  // Guarda o último base_dir cujas classes já foram auto-aplicadas, para não
+  // sobrescrever ajustes manuais a cada refetch (mudar subpasta também refetcha).
+  const appliedForBaseDir = useRef<string | null>(null);
 
   useEffect(() => {
     if (!baseDir.trim()) {
@@ -50,6 +53,15 @@ export function DatasetStats({ baseDir, trainDir, valDir, testDir, onApplyClasse
         if (!alive) return;
         setStats(s);
         setSamples(sm);
+        // Auto-aplica o nº de classes detectado — uma vez por base_dir.
+        if (
+          onApplyClasses &&
+          s.class_names.length > 0 &&
+          appliedForBaseDir.current !== baseDir
+        ) {
+          appliedForBaseDir.current = baseDir;
+          onApplyClasses(s.class_names.length, s.class_names);
+        }
       })
       .catch(() => {
         if (alive) {
@@ -61,7 +73,7 @@ export function DatasetStats({ baseDir, trainDir, valDir, testDir, onApplyClasse
     return () => {
       alive = false;
     };
-  }, [baseDir, trainDir, valDir, testDir]);
+  }, [baseDir, trainDir, valDir, testDir]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!baseDir.trim()) return null;
   if (loading && !stats) {
@@ -153,30 +165,27 @@ export function DatasetStats({ baseDir, trainDir, valDir, testDir, onApplyClasse
           </span>
         ))}
         {onApplyClasses && stats.class_names.length > 0 && (
-          <button
-            type="button"
-            onClick={() => onApplyClasses(stats.class_names.length, stats.class_names)}
+          <span
             title={
               stats.class_names.length === 2
-                ? "Aplicar ao config: task=binary, num_classes=1"
-                : `Aplicar ao config: task=multiclass, num_classes=${stats.class_names.length}`
+                ? "Detectado e aplicado ao config: task=binary, num_classes=1"
+                : `Detectado e aplicado ao config: task=multiclass, num_classes=${stats.class_names.length}`
             }
             style={{
               marginLeft: "auto",
-              padding: "5px 12px",
-              background: "var(--accent-soft)",
-              border: "1px solid var(--accent-vf)",
+              padding: "3px 9px",
+              background: "oklch(0.72 0.16 150 / 0.12)",
+              border: "1px solid oklch(0.72 0.16 150 / 0.4)",
               borderRadius: 999,
               fontFamily: "var(--font-mono)",
-              fontSize: 10,
+              fontSize: 9,
               letterSpacing: "0.14em",
               textTransform: "uppercase",
-              color: "var(--vf-text)",
-              cursor: "pointer",
+              color: "oklch(0.85 0.16 150)",
             }}
           >
-            🎯 aplicar {stats.class_names.length === 2 ? "binary" : `multiclass · ${stats.class_names.length}`}
-          </button>
+            ✓ {stats.class_names.length === 2 ? "binary aplicado" : `multiclass · ${stats.class_names.length} aplicado`}
+          </span>
         )}
       </div>
 

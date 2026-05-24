@@ -1,9 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ApiError,
   detectDatasetSplits,
   pickDatasetFolder,
-  type DatasetDetectResponse,
 } from "../api/client";
 import { SelectField, type SelectOption } from "./controls/SelectField";
 import { TextField } from "./controls/TextField";
@@ -80,52 +79,63 @@ export function DatasetPicker({
 }: DatasetPickerProps) {
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [candidates, setCandidates] = useState<string[]>([]);
-  const [detecting, setDetecting] = useState(false);
 
-  const handleDetect = async () => {
-    if (!baseDir.trim()) {
-      setFeedback({
-        kind: "error",
-        message:
-          "Informe primeiro o caminho do diretório base do dataset.",
-      });
-      return;
-    }
-    setDetecting(true);
-    setFeedback({ kind: "info", message: "Analisando subpastas…" });
-    try {
-      const result: DatasetDetectResponse = await detectDatasetSplits(baseDir);
-      setCandidates(result.candidates);
-      const next: Partial<DatasetPickerProps> = {};
-      if (result.train_dir) next.trainDir = result.train_dir;
-      if (result.val_dir) next.valDir = result.val_dir;
-      if (result.test_dir) next.testDir = result.test_dir;
-      onChange({
-        base_dir: result.base_dir,
-        train_dir: next.trainDir,
-        val_dir: next.valDir,
-        test_dir: next.testDir,
-      });
-
-      if (result.detected) {
-        setFeedback({ kind: "success", message: result.message });
-      } else if (result.candidates.length > 0) {
-        setFeedback({ kind: "warning", message: result.message });
-      } else {
-        setFeedback({ kind: "error", message: result.message });
-      }
-    } catch (e) {
-      const msg =
-        e instanceof ApiError
-          ? e.message
-          : e instanceof Error
-            ? e.message
-            : "Falha ao detectar splits do dataset.";
-      setFeedback({ kind: "error", message: msg });
-    } finally {
-      setDetecting(false);
-    }
-  };
+  // Auto-detecta os splits sempre que base_dir muda — substitui o antigo botão
+  // "Detectar splits". Debounce evita chamar a API a cada tecla digitada; o
+  // seletor nativo também muda base_dir, então a detecção dispara após ele.
+  // Todo setState roda dentro do timer (assíncrono) para não disparar render
+  // em cascata a partir do corpo do effect.
+  useEffect(() => {
+    let alive = true;
+    const trimmed = baseDir.trim();
+    const timer = setTimeout(
+      () => {
+        if (!trimmed) {
+          setCandidates([]);
+          setFeedback(null);
+          return;
+        }
+        void (async () => {
+          setFeedback({ kind: "info", message: "Analisando subpastas…" });
+          try {
+            const result = await detectDatasetSplits(trimmed);
+            if (!alive) return;
+            setCandidates(result.candidates);
+            const next: {
+              train_dir?: string;
+              val_dir?: string;
+              test_dir?: string;
+            } = {};
+            if (result.train_dir) next.train_dir = result.train_dir;
+            if (result.val_dir) next.val_dir = result.val_dir;
+            if (result.test_dir) next.test_dir = result.test_dir;
+            if (Object.keys(next).length > 0) onChange(next);
+            if (result.detected) {
+              setFeedback({ kind: "success", message: result.message });
+            } else if (result.candidates.length > 0) {
+              setFeedback({ kind: "warning", message: result.message });
+            } else {
+              setFeedback({ kind: "error", message: result.message });
+            }
+          } catch (e) {
+            if (!alive) return;
+            const msg =
+              e instanceof ApiError
+                ? e.message
+                : e instanceof Error
+                  ? e.message
+                  : "Falha ao detectar splits do dataset.";
+            setFeedback({ kind: "error", message: msg });
+          }
+        })();
+      },
+      trimmed ? 400 : 0,
+    );
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+    };
+  }, [baseDir]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handlePickFolder = async () => {
     setFeedback({ kind: "info", message: "Abrindo seletor nativo do sistema…" });
@@ -226,18 +236,6 @@ export function DatasetPicker({
             title="Abrir seletor nativo do sistema (retorna o caminho absoluto)"
           >
             📁 Escolher pasta
-          </button>
-          <button
-            type="button"
-            onClick={() => void handleDetect()}
-            disabled={detecting}
-            style={{
-              ...buttonStyle,
-              opacity: detecting ? 0.5 : 1,
-              cursor: detecting ? "wait" : "pointer",
-            }}
-          >
-            {detecting ? "Detectando…" : "↻ Detectar splits"}
           </button>
         </div>
 
