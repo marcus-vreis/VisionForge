@@ -2031,7 +2031,7 @@ export function ParamPanel({
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "1fr 1fr auto",
+          gridTemplateColumns: "1fr auto",
           gap: 18,
           marginBottom: importError ? 10 : 26,
           position: "relative",
@@ -2051,32 +2051,8 @@ export function ParamPanel({
             path={["name"]}
           />
         )}
-        {schema.properties?.["task"] && (
-          <SchemaFieldVF
-            name="task"
-            schema={schema.properties["task"]}
-            defs={defs}
-            value={formData["task"]}
-            onChange={(v) =>
-              setFormData((prev) => {
-                // Binary task is incompatible with num_classes >= 2; auto-lock
-                // num_classes = 1 to mirror the Pydantic model_validator.
-                const model = (prev["model"] ?? {}) as Record<string, unknown>;
-                const nextNumClasses =
-                  v === "binary"
-                    ? 1
-                    : (model["num_classes"] === 1 ? 2 : model["num_classes"]);
-                return {
-                  ...prev,
-                  task: v,
-                  model: { ...model, num_classes: nextNumClasses },
-                };
-              })
-            }
-            errors={validationErrors}
-            path={["task"]}
-          />
-        )}
+        {/* task (binário/multiclass) e num_classes vivem agora na seção
+            // dataset → // classes, perto da detecção de classes. */}
         {/* YAML export / import buttons */}
         <div style={{ display: "flex", gap: 8, paddingBottom: 2 }}>
           <button
@@ -2298,20 +2274,7 @@ export function ParamPanel({
             path={["model", "name"]}
           />
         )}
-        {modelProps["num_classes"] &&
-          (formData["task"] === "binary" ? (
-            <LockedNumClasses />
-          ) : (
-            <SchemaFieldVF
-              name="num_classes"
-              schema={modelProps["num_classes"]}
-              defs={defs}
-              value={modelData["num_classes"]}
-              onChange={(v) => setField("model", "num_classes", v)}
-              errors={validationErrors}
-              path={["model", "num_classes"]}
-            />
-          ))}
+        {/* num_classes movido para // dataset → // classes */}
         {modelProps["pretrained"] && (
           <SchemaFieldVF
             name="pretrained"
@@ -2448,28 +2411,71 @@ export function ParamPanel({
         }
       />
 
-      <PreprocessingPanel
-        baseDir={(dataData["base_dir"] as string) ?? ""}
-        steps={toUIPreprocessingSteps(
-          ((dataData["preprocessing"] ?? {}) as Record<string, unknown>)["steps"],
+      {/* Classes — task + nº de classes, alimentados pela detecção do dataset.
+          Posicionados aqui (não no topo / em // modelo) porque o número de
+          classes é uma propriedade do dataset selecionado acima. */}
+      <div
+        style={{
+          marginTop: 16,
+          marginBottom: 12,
+          fontFamily: "var(--font-mono)",
+          fontSize: 10,
+          color: "var(--vf-text-muted)",
+          letterSpacing: "0.20em",
+          textTransform: "uppercase",
+        }}
+      >
+        // classes
+      </div>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: 18,
+          marginBottom: 26,
+        }}
+      >
+        {schema.properties?.["task"] && (
+          <SchemaFieldVF
+            name="task"
+            schema={schema.properties["task"]}
+            defs={defs}
+            value={formData["task"]}
+            onChange={(v) =>
+              setFormData((prev) => {
+                // Binary task is incompatible with num_classes >= 2; auto-lock
+                // num_classes = 1 to mirror the Pydantic model_validator.
+                const model = (prev["model"] ?? {}) as Record<string, unknown>;
+                const nextNumClasses =
+                  v === "binary"
+                    ? 1
+                    : (model["num_classes"] === 1 ? 2 : model["num_classes"]);
+                return {
+                  ...prev,
+                  task: v,
+                  model: { ...model, num_classes: nextNumClasses },
+                };
+              })
+            }
+            errors={validationErrors}
+            path={["task"]}
+          />
         )}
-        onChange={(uiSteps) =>
-          setFormData((prev) => {
-            const sec = (prev["data"] ?? {}) as Record<string, unknown>;
-            const pp = (sec["preprocessing"] ?? {}) as Record<string, unknown>;
-            return {
-              ...prev,
-              data: {
-                ...sec,
-                preprocessing: {
-                  ...pp,
-                  steps: fromUIPreprocessingSteps(uiSteps),
-                },
-              },
-            };
-          })
-        }
-      />
+        {modelProps["num_classes"] &&
+          (formData["task"] === "binary" ? (
+            <LockedNumClasses />
+          ) : (
+            <SchemaFieldVF
+              name="num_classes"
+              schema={modelProps["num_classes"]}
+              defs={defs}
+              value={modelData["num_classes"]}
+              onChange={(v) => setField("model", "num_classes", v)}
+              errors={validationErrors}
+              path={["model", "num_classes"]}
+            />
+          ))}
+      </div>
 
       <div
         style={{
@@ -2497,6 +2503,41 @@ export function ParamPanel({
           />
         )}
       </div>
+
+      {/* Divider — separa os ajustes de DataLoader das transformações de imagem */}
+      <div
+        style={{
+          height: 1,
+          width: "100%",
+          background:
+            "linear-gradient(90deg, transparent, var(--vf-panel-stroke), transparent)",
+          marginBottom: 26,
+        }}
+      />
+
+      {/* Pré-processamento (filtros) — roda antes de augmentation/normalização */}
+      <PreprocessingPanel
+        baseDir={(dataData["base_dir"] as string) ?? ""}
+        steps={toUIPreprocessingSteps(
+          ((dataData["preprocessing"] ?? {}) as Record<string, unknown>)["steps"],
+        )}
+        onChange={(uiSteps) =>
+          setFormData((prev) => {
+            const sec = (prev["data"] ?? {}) as Record<string, unknown>;
+            const pp = (sec["preprocessing"] ?? {}) as Record<string, unknown>;
+            return {
+              ...prev,
+              data: {
+                ...sec,
+                preprocessing: {
+                  ...pp,
+                  steps: fromUIPreprocessingSteps(uiSteps),
+                },
+              },
+            };
+          })
+        }
+      />
 
       {/* Augmentation / Transforms sub-section */}
       {dataProps["transforms"] && (
