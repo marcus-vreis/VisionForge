@@ -2,7 +2,7 @@
 
 ## Code style
 
-All code is formatted and linted with **ruff** (replaces black + flake8).
+All code is formatted and linted with **ruff**
 Type annotations are required on all public functions and validated by **mypy**.
 Spelling is checked with **codespell**.
 
@@ -16,7 +16,7 @@ Never run these tools manually — the pre-commit hooks handle everything automa
 - No multi-line `Args:` on Pydantic models — fields document themselves via name and `Field()`.
 - Comments explain *why*, not *what*. If the code is clear, skip the comment.
 - No unnecessary capitalization. No filler phrases ("this function...", "note that...").
-- Keep it short. A docstring that reads like AI wrote it is a sign it needs trimming.
+- Keep it short. Docstrings should be clean, concise, and professional, avoiding automated boilerplate.
 
 ## Naming conventions
 

@@ -28,7 +28,9 @@ htmlcov/
 datasets/
 USK-Coffee_Binary/
 
-# Claude Code agent team (Spec A/B/C)
-.claude/worktrees/
+# Local workspace / IDE / Agent configs
+.claude/
+CLAUDE.md
 STOP_TEAM
 outputs/LOOP_STATUS.md
+coverage.json
