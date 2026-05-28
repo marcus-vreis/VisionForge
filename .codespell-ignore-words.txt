@@ -23,3 +23,5 @@ mede
 alternar
 itens
 Itens
+controles
+longe

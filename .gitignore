@@ -30,7 +30,7 @@ USK-Coffee_Binary/
 
 # Local workspace / IDE / Agent configs
 .claude/
-CLAUDE.md
+documentation/CLAUDE.md
 STOP_TEAM
 outputs/LOOP_STATUS.md
 coverage.json
