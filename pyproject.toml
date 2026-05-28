@@ -31,6 +31,11 @@ dependencies = [
 visionforge = "visionforge.__main__:main"
 
 [project.optional-dependencies]
+cpu = []
+cu118 = []
+cu121 = []
+cu124 = []
+cu126 = []
 dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
@@ -119,4 +124,49 @@ omit = [
 exclude_lines = [
     "pragma: no cover",
     "if __name__ == .__main__.:",
+]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu118"
+url = "https://download.pytorch.org/whl/cu118"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu121"
+url = "https://download.pytorch.org/whl/cu121"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu124"
+url = "https://download.pytorch.org/whl/cu124"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
+explicit = true
+
+[tool.uv.sources]
+torch = [
+  { index = "pytorch-cu118", marker = "extra == 'cu118'" },
+  { index = "pytorch-cu121", marker = "extra != 'cu118' and extra == 'cu121'" },
+  { index = "pytorch-cu124", marker = "extra != 'cu118' and extra != 'cu121' and extra == 'cu124'" },
+  { index = "pytorch-cu126", marker = "extra != 'cu118' and extra != 'cu121' and extra != 'cu124' and extra == 'cu126'" },
+  { index = "pytorch-cpu", marker = "extra != 'cu118' and extra != 'cu121' and extra != 'cu124' and extra != 'cu126' and extra == 'cpu'" },
+  { index = "pytorch-cu121", marker = "(sys_platform == 'win32' or sys_platform == 'linux') and extra != 'cu118' and extra != 'cu121' and extra != 'cu124' and extra != 'cu126' and extra != 'cpu'" },
+  { index = "pytorch-cpu", marker = "sys_platform != 'win32' and sys_platform != 'linux' and extra != 'cu118' and extra != 'cu121' and extra != 'cu124' and extra != 'cu126' and extra != 'cpu'" },
+]
+torchvision = [
+  { index = "pytorch-cu118", marker = "extra == 'cu118'" },
+  { index = "pytorch-cu121", marker = "extra != 'cu118' and extra == 'cu121'" },
+  { index = "pytorch-cu124", marker = "extra != 'cu118' and extra != 'cu121' and extra == 'cu124'" },
+  { index = "pytorch-cu126", marker = "extra != 'cu118' and extra != 'cu121' and extra != 'cu124' and extra == 'cu126'" },
+  { index = "pytorch-cpu", marker = "extra != 'cu118' and extra != 'cu121' and extra != 'cu124' and extra != 'cu126' and extra == 'cpu'" },
+  { index = "pytorch-cu121", marker = "(sys_platform == 'win32' or sys_platform == 'linux') and extra != 'cu118' and extra != 'cu121' and extra != 'cu124' and extra != 'cu126' and extra != 'cpu'" },
+  { index = "pytorch-cpu", marker = "sys_platform != 'win32' and sys_platform != 'linux' and extra != 'cu118' and extra != 'cu121' and extra != 'cu124' and extra != 'cu126' and extra != 'cpu'" },
 ]
