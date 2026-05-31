@@ -1,10 +1,15 @@
+import pickle
 from pathlib import Path
 
 import numpy as np
 import pytest
 from PIL import Image
 
-from visionforge.core.data import DataModule, _build_transforms
+from visionforge.core.data import (
+    DataModule,
+    _build_transforms,
+    _make_preprocessing_transform,
+)
 from visionforge.utils.config import (
     ExperimentConfig,
     PreprocessingConfig,
@@ -102,6 +107,38 @@ class TestBuildTransforms:
         # First step is now our pipeline callable (not a torchvision class).
         assert callable(transform.transforms[0])
         assert type(transform.transforms[0]).__name__ != "Resize"
+
+    def test_preprocessing_transform_is_picklable(self) -> None:
+        """The preprocessing callable must survive pickling.
+
+        DataLoader workers (num_workers > 0) pickle the dataset transform to
+        send it to worker processes. Under the Windows 'spawn' start method a
+        closure or lambda fails to pickle, crashing training the moment a
+        preprocessing pipeline is configured.
+        """
+        pp = PreprocessingConfig(
+            steps=[
+                # extra="allow" params go through model_validate (mypy can't see
+                # dynamic kwargs on the constructor).
+                PreprocessingStep.model_validate(
+                    {"kind": "gaussian_blur", "radius": 1.5}
+                ),
+                PreprocessingStep(kind="grayscale"),
+            ]
+        )
+        transform = _make_preprocessing_transform(pp)
+        restored = pickle.loads(pickle.dumps(transform))
+        img = Image.fromarray(np.zeros((16, 16, 3), dtype=np.uint8))
+        assert restored(img).size == img.size
+
+    def test_full_preprocessing_pipeline_is_picklable(self) -> None:
+        """The whole composed transform must pickle when preprocessing is on."""
+        pp = PreprocessingConfig(steps=[PreprocessingStep(kind="edges")])
+        transform = _build_transforms(
+            TransformConfig(), is_train=True, preprocessing=pp
+        )
+        # Round-trips without raising — this is what the DataLoader does.
+        pickle.loads(pickle.dumps(transform))
 
 
 class TestDataModulePreprocessing:
