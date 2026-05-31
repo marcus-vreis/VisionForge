@@ -55,7 +55,7 @@ Foundational utilities with no dependencies on other VisionForge modules.
 | Module | Responsibility |
 |---|---|
 | `trainer.py` | Training loop with early stopping, best-model checkpointing, per-epoch JSON history (incl. train+val accuracy), and DataParallel multi-GPU support. `resolve_device()` honours `DeviceConfig` and records the actual device used in `run.json` (`device_used` field), with a CPU fallback when CUDA is requested but unavailable. |
-| `data.py` | `DataModule` — wraps `ImageFolder`, applies transforms and augmentation, returns train/val/test `DataLoader`s. |
+| `data.py` | `DataModule` — wraps `ImageFolder`, applies transforms and augmentation, returns train/val/test `DataLoader`s. The preprocessing pipeline is bound via a top-level `_PreprocessingTransform` class so it stays picklable for `spawn` DataLoader workers (ADR-030). |
 | `evaluator.py` | Computes Accuracy, F1, AUC-ROC, Precision, Recall, confusion matrix, classification report, and preserves per-sample `y_true` / `y_score` / `y_proba_full` arrays for downstream ROC and PR plotting. |
 | `plotter.py` | `MetricsPlotter` — generates loss, accuracy, raw confusion matrix, normalized confusion matrix, ROC curve, and precision-recall curve PNGs via matplotlib/seaborn (Agg backend, no display needed). |
 
@@ -76,7 +76,7 @@ class ExperimentBlock(ABC):
 |---|---|---|---|
 | `ClassificationBlock` | ✅ | ✅ | End-to-end classification: ModelFactory + DataModule + Trainer + Evaluator + Plotter. |
 | `CrossValidationBlock` | ✅ | ✅ | K-Fold and Stratified K-Fold with per-fold metrics (selectable via `BlockSelector`). |
-| `GridSearchBlock` | ✅ | ✅ | Exhaustive sweep over hyperparameter combinations (dot-path → CSV editor + cartesian preview). |
+| `GridSearchBlock` | ✅ | ✅ | Exhaustive sweep over hyperparameter combinations (inline `+ valor ao grid` per field → Cartesian preview; see ADR-031). |
 | `RandomSearchBlock` | ✅ | ✅ | Random sampling of the hyperparameter space — `uniform`/`log_uniform`/`choice` per param + `n_trials` + `seed`. |
 | `TransferLearningBlock` | ✅ | ✅ | Feature extraction vs fine-tuning with configurable frozen layers and backbone LR multiplier. |
 | `ModelComparisonBlock` | ✅ | ✅ | Trains N selected architectures with identical config, ranks by chosen metric (F1/AUC/accuracy/time). |
@@ -103,7 +103,8 @@ React source code. Not part of the Python package.
 | Path | Responsibility |
 |---|---|
 | `src/App.tsx` | Top-level shell. Owns `schema`, `formData`, `device`, `pipelineSummary`, history/overlay visibility, dispatches the submit to `useExperiment.submit()`. |
-| `src/components/ParamPanel.tsx` | Schema-driven form for the active task. Sections: name/task, `BlockSelector`, `CrossValidationFields` (when CV), model (with `WeightsPathField`), training (with `SchedulerFields`), dataset (`DatasetPicker` + `DatasetStats` + `PreprocessingPanel`), augmentation. Hosts YAML import/export with client-side schema validation. |
+| `src/components/ParamPanel.tsx` | Schema-driven form for the active task. Sections: name/task, `BlockSelector`, `CrossValidationFields` (when CV), model (with `WeightsPathField`), training (with `SchedulerFields`), dataset (`DatasetPicker` + `DatasetStats` + `PreprocessingPanel`), augmentation. When `block = grid_search`, a `GridContext` turns each gridable field into a grid axis: `SchemaFieldVF` renders `GridAxisExtension` (the `+ valor ao grid` affordance) and a `GridSearchBanner` previews the trial count. Hosts YAML import/export with client-side schema validation. |
+| `src/lib/grid-axis.ts` | Pure helpers for grid-axis editing — `isGridableField`, `coerceGridValue`, `validateGridValue` (schema + power-of-two/enum rules), `suggestNextGridValue`. Unit-tested in `grid-axis.test.ts` (ADR-031). |
 | `src/components/PreprocessingPanel.tsx` | **Controlled** pipeline builder (steps + onChange). Backed by `formData.data.preprocessing.steps`. Per-step params, reorder, remove, live preview via `/api/dataset/preview_preprocess`. |
 | `src/components/DatasetPicker.tsx` | Folder input + native `📁 Escolher pasta` button (`/api/dataset/pick`) + auto-detect splits (`/api/dataset/detect`) + manual fallback dropdowns. |
 | `src/components/DatasetStats.tsx` | Per-split class distribution + imbalance flag + thumbnail strip from `/api/dataset/samples`. Exposes a `🎯 aplicar binary\|multiclass·N` button that injects the detected class count back into `formData.model.num_classes` + `formData.task`. |

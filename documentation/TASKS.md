@@ -164,7 +164,7 @@ Backend já existe e está testado. UI mínima entregue:
 
 - [x] **TransferLearningBlock**: extensão do `BlockSelector` + `TransferLearningFields` (`mode`, `unfreeze_from_layer`, `backbone_lr_multiplier`)
 - [x] **ModelComparisonBlock**: UI multi-select de arquiteturas + métrica de ranking (`ModelComparisonFields` + `ModelComparisonReport`)
-- [x] **GridSearchBlock**: editor de hyperparameter space dot-path → CSV (`GridSearchFields` + `GridSearchReport`)
+- [x] **GridSearchBlock**: editor de hyperparameter space — versão inicial dot-path → CSV (substituída na Phase 5.8 pelo editor inline `+ valor ao grid`)
 - [x] **RandomSearchBlock**: editor de `search_space` (uniform/log_uniform/choice) + `n_trials` + `seed`
 - [x] **BatchPredictionBlock**: form `input_dir` + `recursive` no `RunDetailPanel` chamando `/api/runs/{id}/batch_predict`
 - [x] **ExportONNXBlock**: botão "↗ exportar onnx" no `RunDetailPanel` com form de opset/dynamic_axes/validate/benchmark
@@ -182,6 +182,15 @@ Itens entregues por iteração de tech-leader:
 - [x] **Search + filter no `HistoryOverlay`** — busca por nome/arch/run_id + filter chips por task + badge `N/M` + empty-state.
 - [x] **`block` field no `RunSummary`** — distingue CV/grid/random/etc. de classification simples na lista (badge `⛓ <block>` no `RunCard`).
 - [x] **DELETE /api/runs/{id}** — endpoint com safety (path containment + bloqueio do run em execução) + trash button + modal de confirmação no `RunCard` + 3 testes regressão.
+
+## Phase 5.8 — Bug fixes + Grid search UX (2026-05-31) ✅
+
+Iteração de tech-leader a partir de feedback de uso real:
+
+- [x] **Fix: treino com pré-processamento quebrava no Windows** — `DataModule` ligava o pipeline via closure/lambda, não-picklável sob `spawn`; os workers do `DataLoader` (`num_workers > 0`) falhavam com `AttributeError: Can't get local object`. Trocado por classe top-level `_PreprocessingTransform` (ADR-030). Regressão coberta por `test_preprocessing_transform_is_picklable` + `test_full_preprocessing_pipeline_is_picklable`.
+- [x] **Grid search inline** — removido o editor dot-path → CSV (`GridSearchFields`/`GridSearchRow`). Agora cada hiperparâmetro gridável (Modelo/Treinamento) ganha `+ valor ao grid` com validação inline por tipo (int/float/enum/potência-de-2); banner com preview de trials (ADR-031). Lógica pura isolada em `lib/grid-axis.ts` + `grid-axis.test.ts` (15 casos).
+
+---
 
 ## Phase 6 — Regression task
 
