@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { fetchSystemInfo, pickCheckpointFile } from "../api/client";
 import { humanizeFieldPath, type ValidationError } from "../hooks/useExperiment";
 import type { JsonSchema } from "../types/schema";
@@ -15,6 +15,12 @@ import {
   type PreprocessingStep as PreprocessingUIStep,
 } from "./PreprocessingPanel";
 import { resolveKind } from "./field-renderer";
+import {
+  coerceGridValue,
+  isGridableField,
+  suggestNextGridValue,
+  validateGridValue,
+} from "../lib/grid-axis";
 import {
   NumberField,
   SelectField,
@@ -701,240 +707,231 @@ function parseGridValuesCsv(raw: string): Array<number | boolean | string> {
     });
 }
 
-/** Inverse of parseGridValuesCsv — kept stable so the CSV round-trips through
- * formData without numeric trailing-zero damage (e.g. 0.1 → "0.1", not "0.1000000001"). */
-function stringifyGridValuesCsv(
-  values: Array<number | boolean | string> | undefined,
-): string {
-  if (!Array.isArray(values)) return "";
-  return values.map((v) => String(v)).join(", ");
+// ── Grid search: per-hyperparameter axis editing ────────────────────────────
+// Pure helpers (validation, coercion, gridability) live in lib/grid-axis.ts.
+
+interface GridContextValue {
+  enabled: boolean;
+  hyperparameters: Record<string, unknown[]>;
+  setAxis: (dotPath: string, values: unknown[] | null) => void;
 }
 
-/** Grid search hyperparameter editor — list of (key, CSV values) rows.
+const GridContext = createContext<GridContextValue>({
+  enabled: false,
+  hyperparameters: {},
+  setAxis: () => {},
+});
+
+const gridAddBtnStyle: React.CSSProperties = {
+  marginTop: 8,
+  padding: "5px 10px",
+  background: "var(--accent-soft)",
+  border: "1px solid var(--accent-vf)",
+  borderRadius: 7,
+  color: "var(--vf-text)",
+  fontFamily: "var(--font-mono)",
+  fontSize: 10.5,
+  letterSpacing: "0.08em",
+  textTransform: "uppercase",
+  cursor: "pointer",
+};
+
+const gridRowControlStyle: React.CSSProperties = {
+  flex: 1,
+  padding: "8px 10px",
+  background: "rgba(0,0,0,0.30)",
+  border: "1px solid var(--vf-panel-stroke)",
+  borderRadius: 8,
+  fontFamily: "var(--font-mono)",
+  fontSize: 12,
+  color: "var(--vf-text)",
+  outline: "none",
+};
+
+const gridRemoveBtnStyle: React.CSSProperties = {
+  width: 30,
+  height: 30,
+  flexShrink: 0,
+  padding: 0,
+  background: "transparent",
+  border: "1px solid var(--vf-panel-stroke)",
+  borderRadius: 8,
+  color: "var(--vf-text-dim)",
+  fontFamily: "var(--font-mono)",
+  fontSize: 14,
+  cursor: "pointer",
+};
+
+const gridErrStyle: React.CSSProperties = {
+  marginTop: 3,
+  fontFamily: "var(--font-mono)",
+  fontSize: 10.5,
+  color: "oklch(0.704 0.191 22.216)",
+};
+
+const gridAxisTagStyle: React.CSSProperties = {
+  fontFamily: "var(--font-mono)",
+  fontSize: 10,
+  letterSpacing: "0.18em",
+  textTransform: "uppercase",
+  color: "var(--vf-text-muted)",
+};
+
+const gridBannerStyle: React.CSSProperties = {
+  marginBottom: 22,
+  padding: "14px 16px",
+  background: "var(--accent-soft)",
+  border: "1px solid var(--accent-vf)",
+  borderRadius: 12,
+  color: "var(--vf-text)",
+};
+
+/** Inline editor for the extra grid values of one hyperparameter.
  *
- * Each key is a dot-path into the experiment config (validated server-side by
- * ``validate_dot_keys``). The CSV is parsed at submit time into a list with
- * smart type coercion so that ``0.001, 0.0005`` becomes ``[0.001, 0.0005]``
- * and ``true, false`` becomes ``[True, False]``.
- */
-function GridSearchFields({
-  value,
-  onChange,
+ * The field's normal control owns value #1 of the axis; this renders the "+"
+ * button and values #2, #3… so the axis is ``[primary, ...extras]``. Collapsing
+ * back to a single value removes the field from the search space. */
+function GridAxisExtension({
+  dotPath,
+  name,
+  schema,
+  primaryValue,
 }: {
-  value: Record<string, unknown>;
-  onChange: (v: Record<string, unknown>) => void;
+  dotPath: string;
+  name: string;
+  schema: JsonSchema;
+  primaryValue: unknown;
 }) {
-  const hp = (value["hyperparameters"] ?? {}) as Record<string, unknown>;
-  // Render a stable order of keys so the user can edit without rows jumping
-  // around as React re-renders. The empty-string key marks an unfilled row.
-  const entries = Object.entries(hp);
+  const ctx = useContext(GridContext);
+  const axis = ctx.hyperparameters[dotPath];
+  const values = Array.isArray(axis) ? axis : [];
+  const extras = values.slice(1);
+  const enumOpts = schema.enum?.map(String);
 
-  const setHp = (next: Record<string, unknown>) =>
-    onChange({ ...value, hyperparameters: next });
-
-  const renameKey = (oldKey: string, newKey: string) => {
-    if (oldKey === newKey) return;
-    if (newKey in hp && newKey !== oldKey) return; // refuse duplicate keys
-    const next: Record<string, unknown> = {};
-    for (const [k, v] of entries) {
-      next[k === oldKey ? newKey : k] = v;
-    }
-    setHp(next);
+  const addValue = () => {
+    const base = values.length ? [...values] : [primaryValue];
+    base.push(suggestNextGridValue(base[base.length - 1], name, schema));
+    ctx.setAxis(dotPath, base);
+  };
+  const setExtra = (i: number, raw: string) => {
+    const next = [...values];
+    next[i + 1] = coerceGridValue(raw, Boolean(enumOpts));
+    ctx.setAxis(dotPath, next);
+  };
+  const removeExtra = (i: number) => {
+    const next = values.filter((_, idx) => idx !== i + 1);
+    ctx.setAxis(dotPath, next.length <= 1 ? null : next);
   };
 
-  const setValuesFor = (key: string, csv: string) => {
-    setHp({ ...hp, [key]: parseGridValuesCsv(csv) });
-  };
-
-  const addRow = () => {
-    // Pick a unique placeholder key so React can render two empty rows.
-    let suffix = entries.length + 1;
-    let key = `param_${suffix}`;
-    while (key in hp) {
-      suffix += 1;
-      key = `param_${suffix}`;
-    }
-    setHp({ ...hp, [key]: [] });
-  };
-
-  const removeRow = (key: string) => {
-    const next = { ...hp };
-    delete next[key];
-    setHp(next);
-  };
-
-  // Cartesian-product preview — shows total trials the backend will run.
-  const totalTrials = entries.reduce((acc, [, v]) => {
-    const n = Array.isArray(v) ? v.length : 0;
-    return acc * Math.max(n, 1);
-  }, entries.length === 0 ? 0 : 1);
+  if (extras.length === 0) {
+    return (
+      <button type="button" onClick={addValue} style={gridAddBtnStyle}>
+        + valor ao grid
+      </button>
+    );
+  }
 
   return (
     <div
-      style={{
-        marginBottom: 26,
-        padding: 18,
-        background: "rgba(255,255,255,0.02)",
-        border: "1px solid var(--vf-panel-stroke)",
-        borderRadius: 12,
-        display: "flex",
-        flexDirection: "column",
-        gap: 12,
-      }}
+      style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}
     >
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          flexWrap: "wrap",
-          gap: 12,
-        }}
-      >
-        <div
-          style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: 10,
-            letterSpacing: "0.20em",
-            textTransform: "uppercase",
-            color: "var(--vf-text-muted)",
-          }}
-        >
-          // grid search · {totalTrials} trial{totalTrials === 1 ? "" : "s"}
-          {totalTrials > 12 ? " ⚠️ alto" : ""}
-        </div>
-        <button
-          type="button"
-          onClick={addRow}
-          style={{
-            padding: "6px 12px",
-            background: "var(--accent-soft)",
-            border: "1px solid var(--accent-vf)",
-            borderRadius: 8,
-            color: "var(--vf-text)",
-            fontFamily: "var(--font-mono)",
-            fontSize: 11,
-            letterSpacing: "0.10em",
-            textTransform: "uppercase",
-            cursor: "pointer",
-          }}
-        >
-          + adicionar
-        </button>
-      </div>
-
-      {entries.length === 0 ? (
-        <div
-          style={{
-            padding: "12px 14px",
-            fontFamily: "var(--font-mono)",
-            fontSize: 11,
-            color: "var(--vf-text-muted)",
-            border: "1px dashed var(--vf-panel-stroke)",
-            borderRadius: 10,
-            textAlign: "center",
-            lineHeight: 1.6,
-          }}
-        >
-          Espaço de busca vazio — clique em "+ adicionar".
-          <div style={{ fontSize: 10, marginTop: 4, opacity: 0.7 }}>
-            Exemplos: <code>training.learning_rate</code> → "0.001, 0.0005";{" "}
-            <code>model.name</code> → "resnet18, resnet50".
-          </div>
-        </div>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {entries.map(([key, vals]) => (
-            <GridSearchRow
-              key={key}
-              paramKey={key}
-              csv={stringifyGridValuesCsv(
-                Array.isArray(vals)
-                  ? (vals as Array<number | boolean | string>)
-                  : undefined,
+      <div style={gridAxisTagStyle}>grade · {values.length} valores</div>
+      {extras.map((v, i) => {
+        const err = validateGridValue(name, schema, v);
+        return (
+          <div key={i}>
+            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              {enumOpts ? (
+                <select
+                  value={String(v)}
+                  onChange={(e) => setExtra(i, e.target.value)}
+                  style={gridRowControlStyle}
+                >
+                  {enumOpts.map((o) => (
+                    <option key={o} value={o}>
+                      {o}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={String(v ?? "")}
+                  onChange={(e) => setExtra(i, e.target.value)}
+                  style={gridRowControlStyle}
+                />
               )}
-              onRenameKey={(newKey) => renameKey(key, newKey)}
-              onChangeCsv={(csv) => setValuesFor(key, csv)}
-              onRemove={() => removeRow(key)}
-            />
-          ))}
-        </div>
-      )}
+              <button
+                type="button"
+                onClick={() => removeExtra(i)}
+                title="Remover valor"
+                style={gridRemoveBtnStyle}
+              >
+                ×
+              </button>
+            </div>
+            {err && <div style={gridErrStyle}>{err}</div>}
+          </div>
+        );
+      })}
+      <button type="button" onClick={addValue} style={gridAddBtnStyle}>
+        + valor
+      </button>
     </div>
   );
 }
 
-function GridSearchRow({
-  paramKey,
-  csv,
-  onRenameKey,
-  onChangeCsv,
-  onRemove,
+/** Banner shown when the grid_search block is active: explains the inline "+"
+ * workflow and previews the Cartesian trial count from the active axes. */
+function GridSearchBanner({
+  hyperparameters,
 }: {
-  paramKey: string;
-  csv: string;
-  onRenameKey: (k: string) => void;
-  onChangeCsv: (csv: string) => void;
-  onRemove: () => void;
+  hyperparameters: Record<string, unknown[]>;
 }) {
+  const axes = Object.entries(hyperparameters).filter(
+    ([, v]) => Array.isArray(v) && v.length > 1,
+  );
+  const totalTrials = axes.reduce(
+    (acc, [, v]) => acc * v.length,
+    axes.length ? 1 : 0,
+  );
   return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: "1fr 2fr auto",
-        gap: 8,
-        alignItems: "center",
-      }}
-    >
-      <input
-        type="text"
-        value={paramKey}
-        onChange={(e) => onRenameKey(e.target.value)}
-        placeholder="dot-path (ex: training.learning_rate)"
-        style={{
-          padding: "8px 12px",
-          background: "rgba(0,0,0,0.30)",
-          border: "1px solid var(--vf-panel-stroke)",
-          borderRadius: 8,
-          fontFamily: "var(--font-mono)",
-          fontSize: 12,
-          color: "var(--vf-text)",
-        }}
-      />
-      <input
-        type="text"
-        value={csv}
-        onChange={(e) => onChangeCsv(e.target.value)}
-        placeholder="valores separados por vírgula (ex: 0.001, 0.0005, 0.0001)"
-        style={{
-          padding: "8px 12px",
-          background: "rgba(0,0,0,0.30)",
-          border: "1px solid var(--vf-panel-stroke)",
-          borderRadius: 8,
-          fontFamily: "var(--font-mono)",
-          fontSize: 12,
-          color: "var(--vf-text)",
-        }}
-      />
-      <button
-        type="button"
-        onClick={onRemove}
-        title="Remover linha"
-        style={{
-          width: 32,
-          height: 32,
-          padding: 0,
-          background: "transparent",
-          border: "1px solid var(--vf-panel-stroke)",
-          borderRadius: 8,
-          color: "var(--vf-text-dim)",
-          fontFamily: "var(--font-mono)",
-          fontSize: 14,
-          cursor: "pointer",
-        }}
+    <div style={gridBannerStyle}>
+      <div
+        style={{ fontFamily: "var(--font-mono)", fontSize: 11, lineHeight: 1.6 }}
       >
-        ×
-      </button>
+        <strong>Grid search ativo.</strong> Clique em{" "}
+        <code>+ valor ao grid</code> nos hiperparâmetros de <em>Modelo</em> e{" "}
+        <em>Treinamento</em> para varrer múltiplos valores.
+      </div>
+      {axes.length > 0 && (
+        <div
+          style={{
+            marginTop: 8,
+            display: "flex",
+            flexDirection: "column",
+            gap: 4,
+          }}
+        >
+          <div style={gridAxisTagStyle}>
+            // {totalTrials} trial{totalTrials === 1 ? "" : "s"}
+            {totalTrials > 12 ? " ⚠️ alto" : ""}
+          </div>
+          {axes.map(([k, v]) => (
+            <div
+              key={k}
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: 11,
+                color: "var(--vf-text-dim)",
+              }}
+            >
+              <code>{k}</code>: {v.map(String).join(", ")}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -1587,6 +1584,33 @@ function SchemaFieldVF({
       e.field.length === path.length && e.field.every((f, i) => f === path[i]),
   )?.message;
 
+  const grid = useContext(GridContext);
+  const dotPath = path.join(".");
+  const gridable = grid.enabled && isGridableField(name, kind);
+
+  // When this field is an active grid axis, keep value #0 of the axis in sync
+  // with the primary control so the scalar config stays valid for everything else.
+  const handleChange = (v: unknown) => {
+    onChange(v);
+    if (gridable) {
+      const axis = grid.hyperparameters[dotPath];
+      if (Array.isArray(axis) && axis.length) {
+        const next = [...axis];
+        next[0] = v;
+        grid.setAxis(dotPath, next);
+      }
+    }
+  };
+
+  const gridExt = gridable ? (
+    <GridAxisExtension
+      dotPath={dotPath}
+      name={name}
+      schema={resolved}
+      primaryValue={value}
+    />
+  ) : null;
+
   if (kind === "skip") return null;
 
   if (kind === "object") {
@@ -1645,7 +1669,7 @@ function SchemaFieldVF({
         <SelectField
           label={label}
           value={String(value ?? resolved.default ?? resolved.enum?.[0] ?? "")}
-          onChange={(v) => onChange(v)}
+          onChange={(v) => handleChange(v)}
           options={opts}
         />
         {errorMsg && (
@@ -1660,6 +1684,7 @@ function SchemaFieldVF({
             {errorMsg}
           </p>
         )}
+        {gridExt}
       </div>
     );
   }
@@ -1674,7 +1699,7 @@ function SchemaFieldVF({
         <Segmented
           label={label}
           value={String(value ?? resolved.default ?? resolved.enum?.[0] ?? "")}
-          onChange={(v) => onChange(v)}
+          onChange={(v) => handleChange(v)}
           options={opts}
         />
         {errorMsg && (
@@ -1689,6 +1714,7 @@ function SchemaFieldVF({
             {errorMsg}
           </p>
         )}
+        {gridExt}
       </div>
     );
   }
@@ -1723,7 +1749,7 @@ function SchemaFieldVF({
         <NumberField
           label={label}
           value={(value as number) ?? 0}
-          onChange={(v) => onChange(v)}
+          onChange={(v) => handleChange(v)}
           min={resolved.minimum ?? resolved.exclusiveMinimum}
           step={resolved.type === "integer" ? 1 : undefined}
         />
@@ -1739,6 +1765,7 @@ function SchemaFieldVF({
             {errorMsg}
           </p>
         )}
+        {gridExt}
       </div>
     );
   }
@@ -1986,7 +2013,31 @@ export function ParamPanel({
   const trainingData = (formData["training"] ?? {}) as Record<string, unknown>;
   const dataData = (formData["data"] ?? {}) as Record<string, unknown>;
 
+  // Grid search axis state, shared with every SchemaFieldVF via context so each
+  // gridable field can render its "+ valor ao grid" affordance.
+  const gridEnabled = formData["block"] === "grid_search";
+  const gridHyperparameters = (((formData["grid_search"] ??
+    {}) as Record<string, unknown>)["hyperparameters"] ?? {}) as Record<
+    string,
+    unknown[]
+  >;
+  const gridCtx: GridContextValue = {
+    enabled: gridEnabled,
+    hyperparameters: gridHyperparameters,
+    setAxis: (dotPath, values) =>
+      setFormData((prev) => {
+        const gs = (prev["grid_search"] ?? {}) as Record<string, unknown>;
+        const hp = {
+          ...((gs["hyperparameters"] ?? {}) as Record<string, unknown>),
+        };
+        if (values === null) delete hp[dotPath];
+        else hp[dotPath] = values;
+        return { ...prev, grid_search: { ...gs, hyperparameters: hp } };
+      }),
+  };
+
   return (
+    <GridContext.Provider value={gridCtx}>
     <section
       key={task.key}
       style={{
@@ -2139,13 +2190,9 @@ export function ParamPanel({
               };
             }
             if (v === "grid_search" && !prev["grid_search"]) {
-              // Seed with a recognizable LR sweep so the user has a working
-              // example to edit instead of a blank slate.
-              next["grid_search"] = {
-                hyperparameters: {
-                  "training.learning_rate": [0.001, 0.0005, 0.0001],
-                },
-              };
+              // Axes are now built inline: the user clicks "+ valor ao grid" on
+              // the model/training fields. Start with an empty search space.
+              next["grid_search"] = { hyperparameters: {} };
             }
             if (v === "random_search" && !prev["random_search"]) {
               // Default search_space exercises the two most common axes —
@@ -2221,14 +2268,10 @@ export function ParamPanel({
           />
         )}
 
-      {/* Grid search fields — only when block is grid_search */}
+      {/* Grid search — inline "+" axis editing happens on the model/training
+          fields below; this banner explains the workflow + previews trials. */}
       {formData["block"] === "grid_search" && (
-        <GridSearchFields
-          value={(formData["grid_search"] ?? {}) as Record<string, unknown>}
-          onChange={(v) =>
-            setFormData((prev) => ({ ...prev, grid_search: v }))
-          }
-        />
+        <GridSearchBanner hyperparameters={gridHyperparameters} />
       )}
 
       {/* Random search fields — only when block is random_search */}
@@ -2608,5 +2651,6 @@ export function ParamPanel({
         </div>
       )}
     </section>
+    </GridContext.Provider>
   );
 }
