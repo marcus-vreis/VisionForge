@@ -16,23 +16,31 @@ from visionforge.utils.config import (
 )
 
 
+class _PreprocessingTransform:
+    """Picklable callable that runs a preprocessing pipeline on a PIL image.
+
+    Must be a top-level class (not a closure) so DataLoader workers can pickle
+    the dataset transform under the Windows 'spawn' start method. An empty step
+    list makes it the identity, so it is safe to use unconditionally.
+    """
+
+    def __init__(self, steps: list[dict[str, Any]]) -> None:
+        self._steps = steps
+
+    def __call__(self, img: Image.Image) -> Image.Image:
+        final, _ = apply_pipeline(img, self._steps)
+        return final
+
+
 def _make_preprocessing_transform(
     config: PreprocessingConfig,
 ) -> Callable[[Image.Image], Image.Image]:
     """Bind a PreprocessingConfig into a single torchvision-compatible callable.
 
-    Returns identity when the pipeline is empty so the standard transforms run
-    untouched in the default case.
+    Returns an identity transform when the pipeline is empty so the standard
+    transforms run untouched in the default case.
     """
-    if not config.steps:
-        return lambda img: img
-    step_dicts = [s.model_dump() for s in config.steps]
-
-    def _apply(img: Image.Image) -> Image.Image:
-        final, _ = apply_pipeline(img, step_dicts)
-        return final
-
-    return _apply
+    return _PreprocessingTransform([s.model_dump() for s in config.steps])
 
 
 def _build_transforms(
