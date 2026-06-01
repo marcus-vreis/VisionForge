@@ -53,11 +53,41 @@ export function TrainingOverlay({
   const latestEpoch = epochEvents.at(-1);
   const totalEpochs = latestEpoch?.total_epochs ?? startEvent?.total_epochs ?? 0;
   const currentEpoch = latestEpoch?.epoch ?? 0;
+
+  // Multi-trial blocks (grid/random search) stream a trial_start before each
+  // inner training and a trial_end after. Progress then spans all trials, not
+  // just the active one's epochs.
+  const trialStartEvents = progressEvents.filter(
+    (e): e is Extract<TrainingEvent, { event: "trial_start" }> =>
+      e.event === "trial_start",
+  );
+  const trialEndCount = progressEvents.filter(
+    (e) => e.event === "trial_end",
+  ).length;
+  const latestTrialStart = trialStartEvents.at(-1);
+  const totalTrials =
+    latestEpoch?.total_trials ?? latestTrialStart?.total_trials ?? 0;
+  const isMultiTrial = totalTrials > 1;
+  const currentTrialIndex = latestTrialStart?.trial_index ?? 0;
+  // Don't double-count: the just-finished trial's epochs are already folded
+  // into trialEndCount, so only add an in-flight fraction for a live trial.
+  const currentTrialDone = trialEndCount > currentTrialIndex;
+  const epochFraction =
+    !currentTrialDone &&
+    latestEpoch &&
+    (latestEpoch.trial_index ?? 0) === currentTrialIndex &&
+    totalEpochs > 0
+      ? currentEpoch / totalEpochs
+      : 0;
+
   // Fall back to synthetic crawl when SSE has not delivered an epoch yet.
   const [fakeProgress, setFakeProgress] = useState(0);
-  const hasRealProgress = currentEpoch > 0;
-  const realProgress =
-    totalEpochs > 0 ? currentEpoch / totalEpochs : 0;
+  const hasRealProgress = currentEpoch > 0 || trialEndCount > 0;
+  const realProgress = isMultiTrial
+    ? Math.min(1, (trialEndCount + epochFraction) / totalTrials)
+    : totalEpochs > 0
+      ? currentEpoch / totalEpochs
+      : 0;
 
   const [logs, setLogs] = useState<string[]>([
     `$ visionforge train --task classification`,
@@ -77,13 +107,34 @@ export function TrainingOverlay({
     return () => clearInterval(id);
   }, [isRunning, hasRealProgress]);
 
+  // Emit a separator line when a new trial starts (grid/random search).
+  useEffect(() => {
+    if (latestTrialStart === undefined) return;
+    const { trial_index, total_trials, overrides } = latestTrialStart;
+    const ov = Object.entries(overrides ?? {})
+      .map(([k, v]) => `${k.split(".").at(-1)}=${v}`)
+      .join(" · ");
+    const line =
+      `── trial ${trial_index + 1}/${total_trials}` +
+      (ov ? ` · ${ov}` : "") +
+      " ──";
+    setLogs((prev) => {
+      if (prev.at(-1) === line) return prev;
+      return [...prev.slice(-24), line];
+    });
+  }, [latestTrialStart]);
+
   // Append a log line for each new epoch_end event.
   useEffect(() => {
     if (latestEpoch === undefined) return;
     const { epoch, total_epochs, train_loss, val_loss, val_accuracy } =
       latestEpoch;
+    const trialTag =
+      latestEpoch.trial_index !== undefined && latestEpoch.total_trials
+        ? `[t${latestEpoch.trial_index + 1}/${latestEpoch.total_trials}] `
+        : "";
     const line =
-      `> epoch ${epoch}/${total_epochs}` +
+      `> ${trialTag}epoch ${epoch}/${total_epochs}` +
       ` · loss=${train_loss.toFixed(4)}` +
       ` · val_loss=${val_loss.toFixed(4)}` +
       ` · val_acc=${val_accuracy.toFixed(4)}`;
