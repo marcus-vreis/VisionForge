@@ -88,7 +88,7 @@ Visual baseline now matches `frontend-design/`: oklch dark palette, per-task acc
 - [x] `ResultsView` restyled (metric tiles + plot grid in glass aesthetic)
 - [x] `Waves` SVG animated background
 - [x] `HistoryOverlay` empty-state stub — needs `/api/runs` wire (tracked in Phase 4)
-- [ ] Detection / Regression / Segmentation tabs → currently "em breve" placeholder; wire when backends land
+- [x] Detection tab → wired end-to-end (Phase 7). Regression / Segmentation tabs still placeholder; wire when those backends land
 
 ---
 
@@ -210,7 +210,9 @@ Design: `documentation/PHASE7_DETECTION_PLAN.md`. Primary backend Ultralytics
 - [x] `DetectionBlock` — standalone `setup/run/report` over `DetectionConfig` (not an `ExperimentBlock` subclass — see ADR-033), `_progress_callback` slot, wraps `DetectionTrainer`. `blocks/detection.py`, tested in `tests/blocks/test_detection.py`.
 - [x] `ultralytics` optional extra in `pyproject.toml` (done in brick 2) + ADR-033 (standalone detection path) + ADR-034 (Ultralytics owns the loop).
 - [x] Detection run path — `GET /api/detection/schema` + `POST /api/detection/run` dispatching `DetectionBlock` with `_progress_callback` → SSE; reuses the shared single-run state and `/experiment/{status,events,result}` (one run at a time, one GPU). `gui/api/routes.py`, tests in `tests/gui/test_routes_detection.py`.
-- [ ] Detection tab in GUI — activate "em breve" placeholder, schema-driven form from `/api/detection/schema`, submit to `/api/detection/run`, mAP results + Ultralytics plots (depends: detection run path)
+- [x] Detection tab in GUI — `DetectionPanel` (backend/model/dataset/training form over `DetectionConfig`), submits to `/api/detection/run`, reuses `TrainingOverlay` (SSE) + `ResultsView` (mAP metrics + Ultralytics plots). Model options mirror the backend in `lib/detection-models.ts` (tested via Vitest). `App.tsx` wires the Detecção tab + BottomBar.
+
+**Phase 7 backend + GUI complete (Ultralytics path).** Remaining for a follow-up: the torchvision backend implementation (currently `NotImplementedError`), and a real-data integration smoke test (opt-in, skipped in CI).
 
 ## Phase 8 — Segmentation task
 
