@@ -1,8 +1,17 @@
 # Phase 7 — Object Detection (Ultralytics) — Design Plan
 
 > Branch: `feat/object-detection-ultralytics`
-> Status: **Planning** (kickoff 2026-06-01)
+> Status: **Backend complete** (bricks 1–5a done & tested) · **GUI tab remaining** (brick 5b)
+> Kickoff 2026-06-01 · hybrid backend confirmed by user 2026-06-01
 > Author: tech-leader iteration
+>
+> Progress (see TASKS Phase 7 for the live checklist):
+> - [x] brick 1 — `DetectionConfig` (`utils/detection_config.py`)
+> - [x] brick 2 — `DetectionDataModule` (`core/detection_data.py`) + `[detection]` extra
+> - [x] brick 3 — `DetectionTrainer` (`core/detection_trainer.py`)
+> - [x] brick 4 — `DetectionBlock` (`blocks/detection.py`) + ADR-033/034
+> - [x] brick 5a — `/api/detection/{schema,run}` run path (`gui/api/routes.py`)
+> - [ ] brick 5b — GUI Detecção tab (schema-driven form + results)
 
 Object detection is the first task that does **not** reuse the classification
 engine. This document records the architecture before code lands, so the build
@@ -95,10 +104,12 @@ src/visionforge/
 6. **ADR-033** (model-source split) + **ADR-034** (Ultralytics owns the loop) +
    TASKS Phase 7 checklist update.
 
-## 6. Open point to confirm with the user
+## 6. Resolved decisions
 
-The hybrid in §2 (Ultralytics primary, torchvision secondary) is my reading of
-"ultralytics … YOLO, Faster e afins". If the intent is **Ultralytics-only** for
-v1 (YOLO + RT-DETR, deferring Faster R-CNN/SSD entirely), the torchvision seam in
-§2/§3 is dropped and v1 ships sooner. Flagging here rather than blocking — will
-proceed on the hybrid scaffold unless redirected.
+- **Hybrid backends (§2): confirmed** by the user on 2026-06-01 — Ultralytics
+  primary (v1 end-to-end), torchvision seam scaffolded (`NotImplementedError`)
+  for Faster R-CNN/SSD/RetinaNet in a follow-up. Ratified as ADR-033 (standalone
+  detection path) and ADR-034 (Ultralytics owns the loop).
+- **Standalone config/block/run path (§1, §3): confirmed** — detection does not
+  reuse `ExperimentConfig`/`ExperimentBlock`; it has its own tree and a dedicated
+  `/api/detection/*` run path (ADR-033).
