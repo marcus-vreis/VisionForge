@@ -214,14 +214,16 @@ Design: `documentation/PHASE7_DETECTION_PLAN.md`. Primary backend Ultralytics
 
 **Phase 7 Ultralytics path complete (backend + GUI).**
 
-### Torchvision backend (`backend="torchvision"`) — in progress
-- [x] `build_torchvision_detector` model factory — Faster R-CNN family wired (`fasterrcnn_resnet50_fpn`, `fasterrcnn_mobilenet_v3_large_fpn`) with head sized to `num_classes + 1`; `weights_backbone=None` when not pretrained (no downloads in CI); SSD/RetinaNet raise `NotImplementedError`. `models/detection_factory.py`, tests in `tests/models/test_detection_factory.py`.
+### Torchvision backend (`backend="torchvision"`) — ✅ complete
+- [x] `build_torchvision_detector` model factory — **all five families wired**: Faster R-CNN (R50/MobileNet-FPN), SSD300-VGG16, SSDLite320-MobileNetV3, RetinaNet-R50-FPN. Each head sized to `num_classes + 1` (background slot, matching `DetectionDataset` labels); `weights_backbone=None` when not pretrained (no downloads in CI). `models/detection_factory.py`, tests in `tests/models/test_detection_factory.py` (build + train-forward with the max label verifies each family's sizing).
 - [x] `DetectionDataset` — YOLO-format labels → torchvision targets (`boxes` xyxy abs + `labels` = yolo class + 1), `detection_collate`, degenerate-box skip, empty-target for unlabeled images. `core/detection_dataset.py`, tests in `tests/core/test_detection_dataset.py`.
 - [x] torchvision training loop in `DetectionTrainer` (`backend="torchvision"` seam) — loss-dict loop (`build_torchvision_detector` + `DetectionDataset` + `detection_collate`), per-epoch train/val loss, best by val loss (frozen-BN safe), `weights/best.pt`, SSE (`start`/`epoch_end`/`end`) + ADR-013 `run.json` with `box_loss`. Requires `data.base_dir`. mAP deferred (ADR-035). Tests in `tests/core/test_detection_trainer.py::TestTorchvisionPath`.
 - [x] `mean_average_precision_50` — mAP@0.5 (VOC all-points AP, `torchvision.ops.box_iou`), torchvision-format preds/targets. `core/detection_metrics.py`, tests in `tests/core/test_detection_metrics.py`.
 - [x] Wire mAP@50 into the torchvision loop — per-epoch val mAP@50 (`_eval_torchvision_map`), best checkpoint by mAP, streamed + in `run.json` (`map50` per epoch + best). Supersedes the val-loss selection of ADR-035.
-- [ ] SSD / RetinaNet head replacement in the factory
+- [x] SSD / RetinaNet head replacement in the factory (see factory item above — all families wired).
 - [ ] Opt-in real-data integration smoke test (skipped in CI)
+
+**Phase 7 complete: Ultralytics + torchvision backends, both end-to-end (config → datamodule → trainer → block → API → GUI), with mAP@50.** Only the opt-in real-data smoke test remains as a nice-to-have.
 
 ## Phase 8 — Segmentation task
 

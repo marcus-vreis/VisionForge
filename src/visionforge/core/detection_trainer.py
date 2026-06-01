@@ -1,11 +1,11 @@
 """Drive detection training for a `DetectionConfig` (Ultralytics or torchvision).
 
 The Ultralytics path wraps ``YOLO.train``; the torchvision path runs a
-hand-written loss-dict loop (``_fit_torchvision``, ADR-035) over the Faster R-CNN
-family. Both hook the same SSE event shape the classification Trainer uses
-(ADR-032) and write a ``run.json`` compatible with the ADR-013 contract so
-detection runs appear in ``/api/runs``. torchvision SSD/RetinaNet are not wired
-yet — the model factory raises ``NotImplementedError`` for them.
+hand-written loss-dict loop (``_fit_torchvision``, ADR-035) over any model the
+factory supports (Faster R-CNN, SSD / SSDLite, RetinaNet). Both hook the same
+SSE event shape the classification Trainer uses (ADR-032) and write a
+``run.json`` compatible with the ADR-013 contract so detection runs appear in
+``/api/runs``.
 """
 
 from __future__ import annotations

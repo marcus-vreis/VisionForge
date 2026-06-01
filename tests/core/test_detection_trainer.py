@@ -79,13 +79,6 @@ def _make_fake_yolo(record: dict[str, Any]) -> type:
 
 
 class TestBackendGuards:
-    def test_unwired_torchvision_model_raises(self, tmp_path: Path) -> None:
-        # The Faster R-CNN family is wired; SSD/RetinaNet surface the factory's
-        # NotImplementedError when fit reaches model construction.
-        cfg = _config(tmp_path, {"backend": "torchvision", "name": "ssd300_vgg16"})
-        with pytest.raises(NotImplementedError, match="not wired yet"):
-            DetectionTrainer(cfg).fit()
-
     def test_missing_ultralytics_raises(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:

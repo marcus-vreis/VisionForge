@@ -1,7 +1,7 @@
 # Phase 7 — Object Detection (Ultralytics) — Design Plan
 
 > Branch: `feat/object-detection-ultralytics`
-> Status: **Complete (Ultralytics path)** — bricks 1–5b done & tested. Follow-ups: torchvision backend impl, real-data smoke test.
+> Status: **Complete** — Ultralytics + torchvision backends both end-to-end & tested (mAP@50). Only follow-up: opt-in real-data smoke test.
 > Kickoff 2026-06-01 · hybrid backend confirmed by user 2026-06-01
 > Author: tech-leader iteration
 >
