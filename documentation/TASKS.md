@@ -206,7 +206,7 @@ Design: `documentation/PHASE7_DETECTION_PLAN.md`. Primary backend Ultralytics
 
 - [x] `DetectionConfig` Pydantic models — standalone tree (`utils/detection_config.py`), backend↔model validation, non-power-of-two batch, dataset source (`data_yaml` or `base_dir`), reuses `OutputConfig`/`DeviceConfig`. Tests in `tests/utils/test_detection_config.py`.
 - [x] `DetectionDataModule` — passthrough explicit `data.yaml` or synthesize one from a YOLO-layout `base_dir` (detects `images/<split>` vs `<split>/images`, class names from config/`classes.txt`/generated). `core/detection_data.py`, no ultralytics import. Tests in `tests/core/test_detection_data.py`. `[detection]` extra (`ultralytics>=8.3`) declared in pyproject.
-- [ ] `DetectionTrainer` — wrap `YOLO.train`, hook epoch callback → SSE progress, write `run.json`; torchvision seam scaffolded (depends: DetectionDataModule)
+- [x] `DetectionTrainer` — wraps `YOLO.train` (lazy ultralytics bind), hooks `on_fit_epoch_end` → SSE `start`/`epoch_end`/`end` (mAP fields + classification-overlay-compat fields), writes ADR-013-compatible `run.json`; torchvision backend raises `NotImplementedError` (scaffold). `core/detection_trainer.py`, tested with a mocked `YOLO` in `tests/core/test_detection_trainer.py`.
 - [ ] `DetectionBlock` — `ExperimentBlock`, registry + dispatch + `_progress_callback` (depends: DetectionTrainer)
 - [ ] Detection tab in GUI — activate "em breve" placeholder, schema-driven form, mAP results (depends: DetectionBlock)
 - [ ] `ultralytics` optional extra in `pyproject.toml` + ADR-033/034
