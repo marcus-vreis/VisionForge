@@ -217,7 +217,7 @@ Design: `documentation/PHASE7_DETECTION_PLAN.md`. Primary backend Ultralytics
 ### Torchvision backend (`backend="torchvision"`) — in progress
 - [x] `build_torchvision_detector` model factory — Faster R-CNN family wired (`fasterrcnn_resnet50_fpn`, `fasterrcnn_mobilenet_v3_large_fpn`) with head sized to `num_classes + 1`; `weights_backbone=None` when not pretrained (no downloads in CI); SSD/RetinaNet raise `NotImplementedError`. `models/detection_factory.py`, tests in `tests/models/test_detection_factory.py`.
 - [x] `DetectionDataset` — YOLO-format labels → torchvision targets (`boxes` xyxy abs + `labels` = yolo class + 1), `detection_collate`, degenerate-box skip, empty-target for unlabeled images. `core/detection_dataset.py`, tests in `tests/core/test_detection_dataset.py`.
-- [ ] torchvision training loop in `DetectionTrainer` (`backend="torchvision"` seam) — loss-dict loop, mAP eval, SSE + `run.json`
+- [x] torchvision training loop in `DetectionTrainer` (`backend="torchvision"` seam) — loss-dict loop (`build_torchvision_detector` + `DetectionDataset` + `detection_collate`), per-epoch train/val loss, best by val loss (frozen-BN safe), `weights/best.pt`, SSE (`start`/`epoch_end`/`end`) + ADR-013 `run.json` with `box_loss`. Requires `data.base_dir`. mAP deferred (ADR-035). Tests in `tests/core/test_detection_trainer.py::TestTorchvisionPath`.
 - [ ] SSD / RetinaNet head replacement in the factory
 - [ ] Opt-in real-data integration smoke test (skipped in CI)
 

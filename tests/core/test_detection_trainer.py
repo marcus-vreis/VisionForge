@@ -5,6 +5,9 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+import torch
+from PIL import Image
+from torch import nn
 
 from visionforge.core import detection_trainer as dt_mod
 from visionforge.core.detection_trainer import DetectionTrainer
@@ -76,12 +79,11 @@ def _make_fake_yolo(record: dict[str, Any]) -> type:
 
 
 class TestBackendGuards:
-    def test_torchvision_backend_not_implemented(self, tmp_path: Path) -> None:
-        cfg = _config(
-            tmp_path,
-            {"backend": "torchvision", "name": "fasterrcnn_resnet50_fpn"},
-        )
-        with pytest.raises(NotImplementedError, match="torchvision"):
+    def test_unwired_torchvision_model_raises(self, tmp_path: Path) -> None:
+        # The Faster R-CNN family is wired; SSD/RetinaNet surface the factory's
+        # NotImplementedError when fit reaches model construction.
+        cfg = _config(tmp_path, {"backend": "torchvision", "name": "ssd300_vgg16"})
+        with pytest.raises(NotImplementedError, match="not wired yet"):
             DetectionTrainer(cfg).fit()
 
     def test_missing_ultralytics_raises(
@@ -148,6 +150,111 @@ class TestUltralyticsPath:
 
 
 # ── weight resolution ─────────────────────────────────────────────────────────
+
+
+class _FakeDetector(nn.Module):
+    """Minimal stand-in: returns a real loss dict in train mode so the loop runs."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.lin = nn.Linear(1, 1)
+
+    def forward(self, images: Any, targets: Any = None) -> Any:
+        if self.training:
+            loss = self.lin(torch.zeros(1, 1)).sum()
+            return {"loss_box_reg": loss}
+        return [
+            {
+                "boxes": torch.zeros((0, 4)),
+                "labels": torch.zeros((0,), dtype=torch.int64),
+                "scores": torch.zeros((0,)),
+            }
+            for _ in images
+        ]
+
+
+def _tv_config(tmp_path: Path) -> DetectionConfig:
+    base = tmp_path / "ds"
+    for split in ("train", "val"):
+        img_dir = base / "images" / split
+        lbl_dir = base / "labels" / split
+        img_dir.mkdir(parents=True, exist_ok=True)
+        lbl_dir.mkdir(parents=True, exist_ok=True)
+        Image.new("RGB", (32, 32), (100, 100, 100)).save(img_dir / "a.jpg")
+        (lbl_dir / "a.txt").write_text("0 0.5 0.5 0.4 0.4\n", encoding="utf-8")
+    return DetectionConfig.model_validate(
+        {
+            "name": "det_tv",
+            "model": {
+                "backend": "torchvision",
+                "name": "fasterrcnn_resnet50_fpn",
+                "num_classes": 2,
+                "pretrained": False,
+            },
+            "data": {"base_dir": str(base), "image_size": 320},
+            "training": {
+                "epochs": 2,
+                "batch_size": 1,
+                "learning_rate": 0.005,
+                "workers": 0,
+            },
+            "output": {"models_dir": str(tmp_path / "models")},
+            "device": {"kind": "cpu"},
+        }
+    )
+
+
+class TestTorchvisionPath:
+    def test_requires_base_dir(self, tmp_path: Path) -> None:
+        data_yaml = tmp_path / "data.yaml"
+        data_yaml.write_text("train: t\nval: v\nnames: [a]\n", encoding="utf-8")
+        cfg = DetectionConfig.model_validate(
+            {
+                "name": "det_tv",
+                "model": {"backend": "torchvision", "name": "ssd300_vgg16"},
+                "data": {"data_yaml": str(data_yaml)},
+                "training": {"epochs": 1, "batch_size": 1, "learning_rate": 0.01},
+                "output": {"models_dir": str(tmp_path / "models")},
+            }
+        )
+        with pytest.raises(ValueError, match="base_dir"):
+            DetectionTrainer(cfg).fit()
+
+    def test_trains_streams_and_writes_run_json(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(
+            dt_mod, "build_torchvision_detector", lambda *a, **k: _FakeDetector()
+        )
+        events: list[dict[str, Any]] = []
+        result = DetectionTrainer(_tv_config(tmp_path)).fit(
+            progress_callback=events.append
+        )
+
+        kinds = [e["event"] for e in events]
+        assert kinds == ["start", "epoch_end", "epoch_end", "end"]
+        assert result.total_epochs == 2
+        assert result.model_path.exists()  # best.pt saved
+
+        run_json = json.loads((result.run_dir / "run.json").read_text("utf-8"))
+        assert run_json["status"] == "completed"
+        assert run_json["metrics"]["box_loss"] is not None
+        assert run_json["device_used"] == "cpu"
+        assert len(run_json["history"]) == 2
+
+
+class TestResolveSplitDirs:
+    def test_images_split_layout(self, tmp_path: Path) -> None:
+        (tmp_path / "images" / "train").mkdir(parents=True)
+        trainer = DetectionTrainer(_tv_config(tmp_path / "x"))
+        imgs, lbls = trainer._resolve_split_dirs(tmp_path, "train")
+        assert imgs == tmp_path / "images" / "train"
+        assert lbls == tmp_path / "labels" / "train"
+
+    def test_missing_split_raises(self, tmp_path: Path) -> None:
+        trainer = DetectionTrainer(_tv_config(tmp_path / "x"))
+        with pytest.raises(ValueError, match="train"):
+            trainer._resolve_split_dirs(tmp_path / "empty", "train")
 
 
 class TestWeightResolution:
