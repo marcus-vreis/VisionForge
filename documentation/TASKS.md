@@ -212,7 +212,14 @@ Design: `documentation/PHASE7_DETECTION_PLAN.md`. Primary backend Ultralytics
 - [x] Detection run path — `GET /api/detection/schema` + `POST /api/detection/run` dispatching `DetectionBlock` with `_progress_callback` → SSE; reuses the shared single-run state and `/experiment/{status,events,result}` (one run at a time, one GPU). `gui/api/routes.py`, tests in `tests/gui/test_routes_detection.py`.
 - [x] Detection tab in GUI — `DetectionPanel` (backend/model/dataset/training form over `DetectionConfig`), submits to `/api/detection/run`, reuses `TrainingOverlay` (SSE) + `ResultsView` (mAP metrics + Ultralytics plots). Model options mirror the backend in `lib/detection-models.ts` (tested via Vitest). `App.tsx` wires the Detecção tab + BottomBar.
 
-**Phase 7 backend + GUI complete (Ultralytics path).** Remaining for a follow-up: the torchvision backend implementation (currently `NotImplementedError`), and a real-data integration smoke test (opt-in, skipped in CI).
+**Phase 7 Ultralytics path complete (backend + GUI).**
+
+### Torchvision backend (`backend="torchvision"`) — in progress
+- [x] `build_torchvision_detector` model factory — Faster R-CNN family wired (`fasterrcnn_resnet50_fpn`, `fasterrcnn_mobilenet_v3_large_fpn`) with head sized to `num_classes + 1`; `weights_backbone=None` when not pretrained (no downloads in CI); SSD/RetinaNet raise `NotImplementedError`. `models/detection_factory.py`, tests in `tests/models/test_detection_factory.py`.
+- [ ] `DetectionDataset` — YOLO-format labels → torchvision targets (`boxes` xyxy + `labels`), collate_fn
+- [ ] torchvision training loop in `DetectionTrainer` (`backend="torchvision"` seam) — loss-dict loop, mAP eval, SSE + `run.json`
+- [ ] SSD / RetinaNet head replacement in the factory
+- [ ] Opt-in real-data integration smoke test (skipped in CI)
 
 ## Phase 8 — Segmentation task
 
