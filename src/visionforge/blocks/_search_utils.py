@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -77,6 +78,34 @@ def write_best_config_yaml(
         yaml.dump(best_raw, f, default_flow_style=False, allow_unicode=True)
 
 
+def make_trial_progress_wrapper(
+    progress_callback: Callable[[dict[str, Any]], None] | None,
+    trial_idx: int,
+    total_trials: int,
+) -> Callable[[dict[str, Any]], None] | None:
+    """Wrap a sweep-level callback so a trial's inner Trainer events carry trial
+    context and don't masquerade as the terminal 'end' event.
+
+    The GUI closes the SSE stream on a bare 'end'; since each trial's Trainer
+    emits its own 'end', the inner one is rewritten to 'trial_end' to keep the
+    stream open across trials. The inner 'start' is dropped because the sweep
+    emits its own 'trial_start'. Returns None when there is nothing to forward.
+    """
+    if progress_callback is None:
+        return None
+
+    def _wrapped(event: dict[str, Any]) -> None:
+        kind = event.get("event")
+        if kind == "start":
+            return
+        annotated = {**event, "trial_index": trial_idx, "total_trials": total_trials}
+        if kind == "end":
+            annotated["event"] = "trial_end"
+        progress_callback(annotated)
+
+    return _wrapped
+
+
 def run_trial(
     base_config: ExperimentConfig,
     trial_idx: int,
@@ -84,6 +113,7 @@ def run_trial(
     trial_seed: int,
     trial_overrides: dict[str, Any],
     trial_record: dict[str, Any],
+    progress_callback: Callable[[dict[str, Any]], None] | None = None,
 ) -> None:
     """Execute one trial and mutate trial_record in place with results or error.
 
@@ -96,6 +126,8 @@ def run_trial(
         trial_seed: seed to set for this trial's training config.
         trial_overrides: dot-notation key→value pairs to apply on top of base_config.
         trial_record: mutable dict that receives status, metrics, and error fields.
+        progress_callback: injected onto the inner block so the trial's Trainer
+            streams epoch progress to the GUI; None disables streaming.
     """
     base_raw: dict[str, Any] = base_config.model_dump(mode="json")
     base_raw["training"]["seed"] = trial_seed
@@ -106,6 +138,7 @@ def run_trial(
     try:
         trial_config = ExperimentConfig.model_validate(base_raw)
         block.setup(trial_config)
+        block._progress_callback = progress_callback
         block.run()
         report = block.report()
 
@@ -137,5 +170,6 @@ __all__ = [
     "best_trial",
     "write_trials_csv",
     "write_best_config_yaml",
+    "make_trial_progress_wrapper",
     "run_trial",
 ]
