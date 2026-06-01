@@ -216,7 +216,7 @@ Design: `documentation/PHASE7_DETECTION_PLAN.md`. Primary backend Ultralytics
 
 ### Torchvision backend (`backend="torchvision"`) — in progress
 - [x] `build_torchvision_detector` model factory — Faster R-CNN family wired (`fasterrcnn_resnet50_fpn`, `fasterrcnn_mobilenet_v3_large_fpn`) with head sized to `num_classes + 1`; `weights_backbone=None` when not pretrained (no downloads in CI); SSD/RetinaNet raise `NotImplementedError`. `models/detection_factory.py`, tests in `tests/models/test_detection_factory.py`.
-- [ ] `DetectionDataset` — YOLO-format labels → torchvision targets (`boxes` xyxy + `labels`), collate_fn
+- [x] `DetectionDataset` — YOLO-format labels → torchvision targets (`boxes` xyxy abs + `labels` = yolo class + 1), `detection_collate`, degenerate-box skip, empty-target for unlabeled images. `core/detection_dataset.py`, tests in `tests/core/test_detection_dataset.py`.
 - [ ] torchvision training loop in `DetectionTrainer` (`backend="torchvision"` seam) — loss-dict loop, mAP eval, SSE + `run.json`
 - [ ] SSD / RetinaNet head replacement in the factory
 - [ ] Opt-in real-data integration smoke test (skipped in CI)
