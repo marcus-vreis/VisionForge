@@ -23,6 +23,7 @@ from torch.utils.data import DataLoader
 
 from visionforge.core.detection_data import DetectionDataModule
 from visionforge.core.detection_dataset import DetectionDataset, detection_collate
+from visionforge.core.detection_metrics import mean_average_precision_50
 from visionforge.models.detection_factory import build_torchvision_detector
 from visionforge.utils.detection_config import DetectionConfig
 
@@ -183,8 +184,10 @@ class DetectionTrainer:
     ) -> DetectionTrainResult:
         """Train a torchvision detector with a loss-dict loop.
 
-        Selection metric is validation loss (frozen-BN torchvision detectors are
-        safe to forward in train mode under no_grad). mAP eval is a follow-up.
+        Each epoch trains on the loss dict and selects the best checkpoint by
+        validation mAP@50 (`_eval_torchvision_map`); validation loss is also
+        logged (frozen-BN detectors are safe to forward in train mode under
+        no_grad). See ADR-035.
 
         Raises:
             ValueError: if data.base_dir is not set (YOLO layout is required).
@@ -217,7 +220,7 @@ class DetectionTrainer:
         train_loader, val_loader = self._build_loaders(self._config.data.base_dir)
 
         history: list[DetectionEpochResult] = []
-        best_loss = float("inf")
+        best_map = -1.0
         best_epoch = 0
 
         if progress_callback is not None:
@@ -240,14 +243,16 @@ class DetectionTrainer:
                 model, train_loader, device, optimizer
             )
             val_loss = self._eval_torchvision_loss(model, val_loader, device)
+            map50 = self._eval_torchvision_map(model, val_loader, device)
 
             history.append(
                 DetectionEpochResult(
-                    epoch=epoch, map50=None, map50_95=None, box_loss=val_loss
+                    epoch=epoch, map50=map50, map50_95=None, box_loss=val_loss
                 )
             )
-            if val_loss < best_loss:
-                best_loss = val_loss
+            # Select by validation mAP@50 (higher is better).
+            if map50 > best_map:
+                best_map = map50
                 best_epoch = epoch
                 torch.save(model.state_dict(), model_path)
 
@@ -257,16 +262,16 @@ class DetectionTrainer:
                         "event": "epoch_end",
                         "epoch": epoch,
                         "total_epochs": cfg.epochs,
-                        "map50": None,
+                        "map50": map50,
                         "map50_95": None,
                         "box_loss": val_loss,
                         "train_loss": train_loss,
                         "val_loss": val_loss,
-                        "val_accuracy": 0.0,
+                        "val_accuracy": map50,
                     }
                 )
 
-        if not model_path.exists():  # no epoch improved (e.g. epochs=0 guard)
+        if not model_path.exists():  # epochs=0 guard
             torch.save(model.state_dict(), model_path)
 
         result = DetectionTrainResult(
@@ -324,6 +329,25 @@ class DetectionTrainer:
                 total += float(sum(loss_dict.values()).item())
                 n += 1
         return total / n if n else 0.0
+
+    def _eval_torchvision_map(
+        self,
+        model: torch.nn.Module,
+        loader: DataLoader,
+        device: torch.device,
+    ) -> float:
+        """Validation mAP@0.5 — model.eval() predictions vs ground truth."""
+        model.eval()
+        preds: list[dict[str, torch.Tensor]] = []
+        gts: list[dict[str, torch.Tensor]] = []
+        with torch.no_grad():
+            for images, targets in loader:
+                outputs = model([img.to(device) for img in images])
+                for out in outputs:
+                    preds.append({k: v.detach().cpu() for k, v in out.items()})
+                for t in targets:
+                    gts.append({"boxes": t["boxes"].cpu(), "labels": t["labels"].cpu()})
+        return mean_average_precision_50(preds, gts).map50
 
     def _build_loaders(self, base_dir: Path) -> tuple[DataLoader, DataLoader]:
         train_ds = DetectionDataset(*self._resolve_split_dirs(base_dir, "train"))
