@@ -221,9 +221,9 @@ Design: `documentation/PHASE7_DETECTION_PLAN.md`. Primary backend Ultralytics
 - [x] `mean_average_precision_50` — mAP@0.5 (VOC all-points AP, `torchvision.ops.box_iou`), torchvision-format preds/targets. `core/detection_metrics.py`, tests in `tests/core/test_detection_metrics.py`.
 - [x] Wire mAP@50 into the torchvision loop — per-epoch val mAP@50 (`_eval_torchvision_map`), best checkpoint by mAP, streamed + in `run.json` (`map50` per epoch + best). Supersedes the val-loss selection of ADR-035.
 - [x] SSD / RetinaNet head replacement in the factory (see factory item above — all families wired).
-- [ ] Opt-in real-data integration smoke test (skipped in CI)
+- [x] Opt-in real end-to-end smoke test — trains the real torchvision pipeline (fasterrcnn_mobilenet, no mocks/downloads) one epoch on a synthetic YOLO set and checks loss loop + mAP@50 + run.json. Skipped in CI; enable with `VF_RUN_DETECTION_INTEGRATION=1`. `tests/integration/test_detection_torchvision_e2e.py`.
 
-**Phase 7 complete: Ultralytics + torchvision backends, both end-to-end (config → datamodule → trainer → block → API → GUI), with mAP@50.** Only the opt-in real-data smoke test remains as a nice-to-have.
+**✅ Phase 7 complete: Ultralytics + torchvision backends, both end-to-end (config → datamodule → trainer → block → API → GUI), with mAP@50.**
 
 ## Phase 8 — Segmentation task
 
