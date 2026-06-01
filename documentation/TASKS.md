@@ -199,13 +199,17 @@ Iteração de tech-leader a partir de feedback de uso real:
 - [ ] Regression blocks (GridSearch, KFold, etc.) (depends: RegressionTrainer)
 - [ ] Regression tab in GUI (depends: RegressionTrainer)
 
-## Phase 7 — Object Detection task
+## Phase 7 — Object Detection task (Ultralytics, hybrid backends)
 
-- [ ] `DetectionConfig` Pydantic models
-- [ ] Model support: YOLO, Faster R-CNN, SSD (depends: DetectionConfig)
-- [ ] `DetectionTrainer` with mAP, IoU metrics (depends: DetectionConfig)
-- [ ] Detection blocks (depends: DetectionTrainer)
-- [ ] Detection tab in GUI (depends: DetectionTrainer)
+Design: `documentation/PHASE7_DETECTION_PLAN.md`. Primary backend Ultralytics
+(YOLO / RT-DETR), secondary torchvision (Faster R-CNN / SSD / RetinaNet).
+
+- [x] `DetectionConfig` Pydantic models — standalone tree (`utils/detection_config.py`), backend↔model validation, non-power-of-two batch, dataset source (`data_yaml` or `base_dir`), reuses `OutputConfig`/`DeviceConfig`. Tests in `tests/utils/test_detection_config.py`.
+- [ ] `DetectionDataModule` — resolve/synthesize Ultralytics `data.yaml` (depends: DetectionConfig)
+- [ ] `DetectionTrainer` — wrap `YOLO.train`, hook epoch callback → SSE progress, write `run.json`; torchvision seam scaffolded (depends: DetectionDataModule)
+- [ ] `DetectionBlock` — `ExperimentBlock`, registry + dispatch + `_progress_callback` (depends: DetectionTrainer)
+- [ ] Detection tab in GUI — activate "em breve" placeholder, schema-driven form, mAP results (depends: DetectionBlock)
+- [ ] `ultralytics` optional extra in `pyproject.toml` + ADR-033/034
 
 ## Phase 8 — Segmentation task
 
