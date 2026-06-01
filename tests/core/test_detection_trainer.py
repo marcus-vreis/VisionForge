@@ -239,8 +239,11 @@ class TestTorchvisionPath:
         run_json = json.loads((result.run_dir / "run.json").read_text("utf-8"))
         assert run_json["status"] == "completed"
         assert run_json["metrics"]["box_loss"] is not None
+        # mAP@50 is computed and recorded (0.0 here: the fake emits no boxes).
+        assert run_json["metrics"]["map50"] is not None
         assert run_json["device_used"] == "cpu"
         assert len(run_json["history"]) == 2
+        assert all(e.get("map50") is not None for e in run_json["history"])
 
 
 class TestResolveSplitDirs:
