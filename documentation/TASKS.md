@@ -209,8 +209,8 @@ Design: `documentation/PHASE7_DETECTION_PLAN.md`. Primary backend Ultralytics
 - [x] `DetectionTrainer` — wraps `YOLO.train` (lazy ultralytics bind), hooks `on_fit_epoch_end` → SSE `start`/`epoch_end`/`end` (mAP fields + classification-overlay-compat fields), writes ADR-013-compatible `run.json`; torchvision backend raises `NotImplementedError` (scaffold). `core/detection_trainer.py`, tested with a mocked `YOLO` in `tests/core/test_detection_trainer.py`.
 - [x] `DetectionBlock` — standalone `setup/run/report` over `DetectionConfig` (not an `ExperimentBlock` subclass — see ADR-033), `_progress_callback` slot, wraps `DetectionTrainer`. `blocks/detection.py`, tested in `tests/blocks/test_detection.py`.
 - [x] `ultralytics` optional extra in `pyproject.toml` (done in brick 2) + ADR-033 (standalone detection path) + ADR-034 (Ultralytics owns the loop).
-- [ ] Detection run path — dedicated `/api/detection/*` endpoints (run/status/events/result) wiring `DetectionBlock._progress_callback` → SSE (depends: DetectionBlock)
-- [ ] Detection tab in GUI — activate "em breve" placeholder, schema-driven form from `DetectionConfig`, mAP results + Ultralytics plots (depends: detection run path)
+- [x] Detection run path — `GET /api/detection/schema` + `POST /api/detection/run` dispatching `DetectionBlock` with `_progress_callback` → SSE; reuses the shared single-run state and `/experiment/{status,events,result}` (one run at a time, one GPU). `gui/api/routes.py`, tests in `tests/gui/test_routes_detection.py`.
+- [ ] Detection tab in GUI — activate "em breve" placeholder, schema-driven form from `/api/detection/schema`, submit to `/api/detection/run`, mAP results + Ultralytics plots (depends: detection run path)
 
 ## Phase 8 — Segmentation task
 
