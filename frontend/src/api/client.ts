@@ -94,6 +94,22 @@ export async function runExperiment(
   });
 }
 
+/** Start an object-detection run. Detection shares the /experiment/{status,
+ *  events,result} endpoints, so only the submit endpoint differs. */
+export async function runDetection(
+  config: Record<string, unknown>,
+): Promise<RunResponse> {
+  return request<RunResponse>("/detection/run", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(config),
+  });
+}
+
+export async function fetchDetectionSchema(): Promise<JsonSchema> {
+  return request<JsonSchema>("/detection/schema");
+}
+
 export async function fetchStatus(): Promise<RunStatus> {
   return request<RunStatus>("/experiment/status");
 }

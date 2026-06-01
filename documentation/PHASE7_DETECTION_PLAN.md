@@ -1,7 +1,7 @@
 # Phase 7 — Object Detection (Ultralytics) — Design Plan
 
 > Branch: `feat/object-detection-ultralytics`
-> Status: **Backend complete** (bricks 1–5a done & tested) · **GUI tab remaining** (brick 5b)
+> Status: **Complete (Ultralytics path)** — bricks 1–5b done & tested. Follow-ups: torchvision backend impl, real-data smoke test.
 > Kickoff 2026-06-01 · hybrid backend confirmed by user 2026-06-01
 > Author: tech-leader iteration
 >
@@ -11,7 +11,7 @@
 > - [x] brick 3 — `DetectionTrainer` (`core/detection_trainer.py`)
 > - [x] brick 4 — `DetectionBlock` (`blocks/detection.py`) + ADR-033/034
 > - [x] brick 5a — `/api/detection/{schema,run}` run path (`gui/api/routes.py`)
-> - [ ] brick 5b — GUI Detecção tab (schema-driven form + results)
+> - [x] brick 5b — GUI Detecção tab (`DetectionPanel`, `lib/detection-models.ts`, `App.tsx`)
 
 Object detection is the first task that does **not** reuse the classification
 engine. This document records the architecture before code lands, so the build
