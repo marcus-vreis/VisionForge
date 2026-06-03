@@ -750,6 +750,8 @@ class TestApiRunsEndpoint:
             captured["hp"] = dict(config.grid_search.hyperparameters)  # type: ignore[attr-defined]
 
         def fake_run(self) -> None:  # type: ignore[no-untyped-def]
+            # The GUI must wire the SSE event pump so grid search streams live.
+            captured["has_callback"] = self._progress_callback is not None
             return None
 
         def fake_report(self) -> dict[str, object]:  # type: ignore[no-untyped-def]
@@ -797,6 +799,7 @@ class TestApiRunsEndpoint:
             assert captured.get("hp") == {
                 "training.learning_rate": [0.001, 0.0005, 0.0001]
             }
+            assert captured.get("has_callback") is True
         finally:
             GridSearchBlock.setup = original_setup  # type: ignore[method-assign]
             GridSearchBlock.run = original_run  # type: ignore[method-assign]

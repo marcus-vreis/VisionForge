@@ -192,6 +192,15 @@ Iteração de tech-leader a partir de feedback de uso real:
 
 ---
 
+## Phase 5.9 — Live logs for grid/random search (2026-06-01) ✅
+
+Iteração de tech-leader a partir de bug de uso real.
+
+- [x] **Fix: monitor de treino vazio em grid/random search** — `run_trial` criava o `ClassificationBlock` interno sem `_progress_callback` e `routes._execute_experiment` só ligava o callback para `ClassificationBlock` top-level; logo nenhum evento de epoch subia pelo SSE durante uma varredura. Agora `GridSearchBlock`/`RandomSearchBlock` recebem `_progress_callback`, emitem `trial_start`/`trial_end` por trial e um único `end` terminal; eventos internos do Trainer passam por `make_trial_progress_wrapper` (anota `trial_index`/`total_trials`, reescreve `end`→`trial_end` para o `EventSource` não fechar no primeiro trial). `TrainingOverlay` calcula progresso sweep-wide e mostra separador `── trial k/N ──` + tag `[tk/N]` por epoch (ADR-032).
+- [x] Regressão: `TestTrialProgressWrapper`, `TestProgressStreaming`, e assert `has_callback` no dispatch de grid search.
+
+---
+
 ## Phase 6 — Regression task
 
 - [ ] `RegressionConfig` Pydantic models

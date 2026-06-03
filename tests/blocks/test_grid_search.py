@@ -374,6 +374,96 @@ class TestFailureHandling:
         assert len(block._trials) == 2
 
 
+# ── progress streaming ────────────────────────────────────────────────────────
+
+
+class TestProgressStreaming:
+    def test_streams_trial_scoped_events_to_callback(
+        self, grid_2x2_config: ExperimentConfig
+    ) -> None:
+        """With a progress_callback wired, run() must emit one trial_start per
+        trial, forward annotated epoch events, rewrite each inner 'end' to
+        'trial_end', and emit exactly one terminal 'end' at the very end."""
+        from visionforge.blocks.grid_search import GridSearchBlock
+
+        def mock_run(self: Any) -> None:  # noqa: ANN001
+            # Simulate the inner Trainer streaming via the injected callback.
+            if self._progress_callback is not None:
+                self._progress_callback(
+                    {"event": "start", "total_epochs": 1, "device": "cpu"}
+                )
+                self._progress_callback(
+                    {
+                        "event": "epoch_end",
+                        "epoch": 1,
+                        "total_epochs": 1,
+                        "train_loss": 0.1,
+                        "train_accuracy": 0.9,
+                        "val_loss": 0.2,
+                        "val_accuracy": 0.8,
+                        "elapsed_s": 0.1,
+                    }
+                )
+                self._progress_callback({"event": "end", "total_epochs": 1})
+
+        def mock_report(self: Any) -> dict[str, Any]:  # noqa: ANN001
+            return _mock_report(0)
+
+        events: list[dict[str, Any]] = []
+        block = GridSearchBlock()
+        block.setup(grid_2x2_config)
+        block._progress_callback = events.append
+        with (
+            patch("visionforge.blocks._search_utils.ClassificationBlock.run", mock_run),
+            patch(
+                "visionforge.blocks._search_utils.ClassificationBlock.report",
+                mock_report,
+            ),
+        ):
+            block.run()
+
+        kinds = [e["event"] for e in events]
+        assert kinds.count("trial_start") == 4
+        assert kinds.count("epoch_end") == 4
+        assert kinds.count("trial_end") == 4
+        assert kinds.count("end") == 1
+        # Inner Trainer 'start' must be dropped (only one terminal 'end').
+        assert "start" not in kinds
+        # Terminal 'end' is last so the client closes the stream cleanly.
+        assert kinds[-1] == "end"
+        # Epoch events carry the trial context the overlay needs.
+        epoch_events = [e for e in events if e["event"] == "epoch_end"]
+        assert all(
+            e["trial_index"] is not None and e["total_trials"] == 4
+            for e in epoch_events
+        )
+
+    def test_run_without_callback_does_not_crash(
+        self, grid_2x2_config: ExperimentConfig
+    ) -> None:
+        """Backwards compat: a sweep with no progress_callback runs normally."""
+        from visionforge.blocks.grid_search import GridSearchBlock
+
+        def mock_run(self: Any) -> None:  # noqa: ANN001
+            pass
+
+        def mock_report(self: Any) -> dict[str, Any]:  # noqa: ANN001
+            return _mock_report(0)
+
+        block = GridSearchBlock()
+        block.setup(grid_2x2_config)
+        with (
+            patch("visionforge.blocks._search_utils.ClassificationBlock.run", mock_run),
+            patch(
+                "visionforge.blocks._search_utils.ClassificationBlock.report",
+                mock_report,
+            ),
+        ):
+            block.run()
+
+        assert len(block._trials) == 4
+
+
 # ── registry ──────────────────────────────────────────────────────────────────
 
 

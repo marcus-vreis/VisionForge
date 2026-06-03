@@ -38,9 +38,21 @@ export interface RunSummary {
   block?: string;
 }
 
-/** Discriminated union of SSE events emitted by GET /api/experiment/events. */
+/** Discriminated union of SSE events emitted by GET /api/experiment/events.
+ *
+ * Multi-trial blocks (grid_search, random_search) wrap each inner training in
+ * a trial_start/trial_end pair and annotate epoch_end with trial_index /
+ * total_trials so the overlay can show "trial k/N" progress. A single terminal
+ * "end" closes the stream once the whole sweep finishes. */
 export type TrainingEvent =
-  | { event: "start"; total_epochs: number }
+  | { event: "start"; total_epochs: number; device?: string }
+  | {
+      event: "trial_start";
+      trial_index: number;
+      total_trials: number;
+      overrides: Record<string, unknown>;
+      seed: number;
+    }
   | {
       event: "epoch_end";
       epoch: number;
@@ -49,5 +61,13 @@ export type TrainingEvent =
       val_loss: number;
       val_accuracy: number;
       elapsed_s: number;
+      trial_index?: number;
+      total_trials?: number;
     }
-  | { event: "end"; total_epochs: number };
+  | {
+      event: "trial_end";
+      total_epochs: number;
+      trial_index: number;
+      total_trials: number;
+    }
+  | { event: "end"; total_epochs: number; total_trials?: number };
