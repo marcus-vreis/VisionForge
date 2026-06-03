@@ -8,9 +8,12 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
 
-  # Deep Learning
-  "torch>=2.3",
-    "torchvision>=0.18",
+  # NOTE: torch + torchvision are intentionally NOT here (ADR-005). They have
+  # hardware-specific builds (CPU / cu118 / cu121 / cu124 / cu126) that a
+  # resolver cannot pick correctly, so the user chooses one via a hardware
+  # extra — e.g. `pip install -e ".[cu121]"` (GPU) or `".[cpu]"` (CPU-only).
+
+  # Core
     "pydantic>=2.0",
     "pydantic-settings>=2.0",
     "loguru>=0.7",
@@ -31,13 +34,17 @@ dependencies = [
 visionforge = "visionforge.__main__:main"
 
 [project.optional-dependencies]
-cpu = []
-cu118 = []
-cu121 = []
-cu124 = []
-cu126 = []
+# Hardware extras (ADR-005): pick exactly ONE to install torch + torchvision
+# from the matching index configured under [tool.uv.sources] below.
+#   pip install -e ".[cu121]"   # NVIDIA CUDA 12.1   (or cu118 / cu124 / cu126)
+#   pip install -e ".[cpu]"     # CPU-only
+cpu = ["torch>=2.3", "torchvision>=0.18"]
+cu118 = ["torch>=2.3", "torchvision>=0.18"]
+cu121 = ["torch>=2.3", "torchvision>=0.18"]
+cu124 = ["torch>=2.3", "torchvision>=0.18"]
+cu126 = ["torch>=2.3", "torchvision>=0.18"]
 # Object detection (Phase 7). Ultralytics drives YOLO/RT-DETR training; it pulls
-# torch/torchvision (already declared). Optional so the base install stays lean.
+# torch/torchvision, which still come from the hardware extra the user selected.
 detection = [
     "ultralytics>=8.3",
 ]
@@ -163,8 +170,9 @@ torch = [
   { index = "pytorch-cu124", marker = "extra != 'cu118' and extra != 'cu121' and extra == 'cu124'" },
   { index = "pytorch-cu126", marker = "extra != 'cu118' and extra != 'cu121' and extra != 'cu124' and extra == 'cu126'" },
   { index = "pytorch-cpu", marker = "extra != 'cu118' and extra != 'cu121' and extra != 'cu124' and extra != 'cu126' and extra == 'cpu'" },
-  { index = "pytorch-cu121", marker = "(sys_platform == 'win32' or sys_platform == 'linux') and extra != 'cu118' and extra != 'cu121' and extra != 'cu124' and extra != 'cu126' and extra != 'cpu'" },
-  { index = "pytorch-cpu", marker = "sys_platform != 'win32' and sys_platform != 'linux' and extra != 'cu118' and extra != 'cu121' and extra != 'cu124' and extra != 'cu126' and extra != 'cpu'" },
+  # Default when no hardware extra is selected: CPU (wheels exist for every
+  # supported Python incl. 3.13). GPU users opt in explicitly via .[cu121] etc.
+  { index = "pytorch-cpu", marker = "extra != 'cu118' and extra != 'cu121' and extra != 'cu124' and extra != 'cu126' and extra != 'cpu'" },
 ]
 torchvision = [
   { index = "pytorch-cu118", marker = "extra == 'cu118'" },
@@ -172,6 +180,6 @@ torchvision = [
   { index = "pytorch-cu124", marker = "extra != 'cu118' and extra != 'cu121' and extra == 'cu124'" },
   { index = "pytorch-cu126", marker = "extra != 'cu118' and extra != 'cu121' and extra != 'cu124' and extra == 'cu126'" },
   { index = "pytorch-cpu", marker = "extra != 'cu118' and extra != 'cu121' and extra != 'cu124' and extra != 'cu126' and extra == 'cpu'" },
-  { index = "pytorch-cu121", marker = "(sys_platform == 'win32' or sys_platform == 'linux') and extra != 'cu118' and extra != 'cu121' and extra != 'cu124' and extra != 'cu126' and extra != 'cpu'" },
-  { index = "pytorch-cpu", marker = "sys_platform != 'win32' and sys_platform != 'linux' and extra != 'cu118' and extra != 'cu121' and extra != 'cu124' and extra != 'cu126' and extra != 'cpu'" },
+  # Default when no hardware extra is selected: CPU (see torch block above).
+  { index = "pytorch-cpu", marker = "extra != 'cu118' and extra != 'cu121' and extra != 'cu124' and extra != 'cu126' and extra != 'cpu'" },
 ]
