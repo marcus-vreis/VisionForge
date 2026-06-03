@@ -37,18 +37,22 @@ uv venv
 # source .venv/bin/activate
 ```
 
-Install o pacote do projeto e suas dependências:
+Install o pacote + suas dependências **escolhendo o build de PyTorch do seu
+hardware** via extra (ADR-005 — torch/torchvision não são dependências fixas, já
+que o build correto depende da sua placa):
 
 ```bash
-uv pip install -e ".[dev]"
+uv pip install -e ".[dev,cu121]"   # GPU NVIDIA CUDA 12.1 (ou cu118 / cu124 / cu126)
+# ou
+uv pip install -e ".[dev,cpu]"     # CPU-only
 ```
 
-Install o PyTorch (exemplo para placa de vídeo Nvidia com CUDA 12.1):
+Cada extra de hardware (`cpu`, `cu118`, `cu121`, `cu124`, `cu126`) puxa
+`torch` + `torchvision` do índice PyTorch correspondente, configurado em
+`[tool.uv.sources]`. Sem extra de hardware, o padrão é CPU.
 
-```bash
-uv pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
-```
-*(Consulte o [site official do PyTorch](https://pytorch.org/get-started/locally/) para versões exclusivas de CPU ou outras versões do CUDA).*
+*(Alternativa manual: `uv pip install -e ".[dev]"` e depois instalar o PyTorch à
+parte — veja o [site official do PyTorch](https://pytorch.org/get-started/locally/).)*
 
 ### 3. Compilação da Interface Web (GUI)
 
