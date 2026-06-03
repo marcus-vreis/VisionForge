@@ -232,7 +232,14 @@ target[s]); reuses CNN backbones, `OutputConfig`/`DeviceConfig`/`TransformConfig
   `run.json`. Reuses `resolve_device`/`_seed_everything` from `core.trainer`.
   Tests in `tests/core/test_regression_trainer.py` (10 cases incl. metric math,
   multi-target, mae/huber, run.json shape).
-- [ ] brick 5 — `RegressionBlock` (`setup/run/report`) + ADR-036 (depends: brick 4)
+- [x] brick 5 — `RegressionBlock` (`blocks/regression.py`): standalone
+  `setup/run/report` (not an `ExperimentBlock` subclass — ADR-036). Wires
+  `RegressionModelFactory` + `RegressionDataModule` + `RegressionTrainer`,
+  reloads best checkpoint, computes test-set MSE/RMSE/MAE/R² (added reusable
+  `RegressionTrainer.evaluate`), renders the loss curve (reuses
+  `MetricsPlotter.loss_curve`), updates run.json with `test_*`. ADR-036 written.
+  Tests in `tests/blocks/test_regression.py` (5 cases, factory/datamodule
+  patched).
 - [ ] brick 6 — `/api/regression/{schema,run}` run path (depends: brick 5)
 - [ ] brick 7 — Regression tab in GUI (currently placeholder) (depends: brick 6)
 

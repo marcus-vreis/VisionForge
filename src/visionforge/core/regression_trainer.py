@@ -236,6 +236,24 @@ class RegressionTrainer:
 
         return train_result
 
+    def evaluate(
+        self, model: nn.Module, loader: Any
+    ) -> tuple[float, float, float, float]:
+        """Compute (mse, rmse, mae, r2) for ``model`` over ``loader``.
+
+        Reusable by the block for test-set metrics and any future per-model test
+        endpoint; moves the model to the resolved device and runs inference-only.
+        """
+        model = model.to(self._device)
+        model.eval()
+        metrics = _MetricAccumulator()
+        with torch.no_grad():
+            for inputs, targets in loader:
+                inputs = inputs.to(self._device, non_blocking=True)
+                targets = targets.to(self._device, non_blocking=True)
+                metrics.update(model(inputs), targets)
+        return metrics.compute()
+
     # ── private helpers ────────────────────────────────────────────────────────
 
     def _prepare_model(self, model: nn.Module) -> nn.Module:
