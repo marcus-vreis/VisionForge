@@ -146,11 +146,14 @@ Gap analysis (what is classification-only today) and the brick plan:
   run (`config.task === "detection"`), and the backend rejects them in
   `_require_classification_run` (HTTP 400) as defense in depth. Prevents the
   previous guaranteed-500-on-click. Tested.
-- [ ] **brick D2 — detection-native per-model test** (`/runs/{id}/test`):
-  introduce a `RunTester` strategy base with `ClassificationRunTester` /
-  `DetectionRunTester`; the detection tester loads `best.pt`, runs val/predict on
-  a new YOLO dataset, computes mAP@50 (reusing `detection_metrics`), appends to
-  `tests[]`, and re-enables the (now detection-aware) "+ testar" form.
+- [x] **brick D2 — detection-native per-model test** (done): new
+  `gui/api/detection_testing.evaluate_detection_run`; `_execute_run_test`
+  dispatches to it for `task=="detection"`. The torchvision path rebuilds the
+  detector + DataLoader and computes mAP@50 via `detection_metrics` (CPU,
+  dependency-light); the Ultralytics path drives `YOLO(...).val` (patchable
+  module global). Records mAP into `tests[]`. `RunDetailPanel` re-enables the
+  "+ testar" form for detection (ONNX/batch stay hidden). Tested (torchvision
+  real eval, Ultralytics mocked, error paths; batch/ONNX still 400 for detection).
 - [x] **brick E1 — YOLO dataset-stats backend** (done): new
   `POST /api/detection/dataset/stats` + `_collect_detection_dataset_stats`.
   Counts images and annotation *instances* per class across the `.txt` label
