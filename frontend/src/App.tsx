@@ -6,11 +6,17 @@ import { Header } from "./components/Header";
 import { HistoryOverlay } from "./components/HistoryOverlay";
 import { ParamPanel } from "./components/ParamPanel";
 import { DetectionPanel } from "./components/DetectionPanel";
+import { RegressionPanel } from "./components/RegressionPanel";
 import {
   buildDetectionDataPayload,
   makeDefaultDetectionForm,
   type DetectionForm,
 } from "./lib/detection-models";
+import {
+  buildRegressionPayload,
+  makeDefaultRegressionForm,
+  type RegressionForm,
+} from "./lib/regression-models";
 import { buildDefaults } from "./lib/schema-defaults";
 import { ResultsView } from "./components/ResultsView";
 import { TabBar } from "./components/TabBar";
@@ -41,6 +47,9 @@ export default function App() {
   const [queueSize, setQueueSize] = useState<number | undefined>(undefined);
   const [detectionForm, setDetectionForm] = useState<DetectionForm>(
     makeDefaultDetectionForm,
+  );
+  const [regressionForm, setRegressionForm] = useState<RegressionForm>(
+    makeDefaultRegressionForm,
   );
 
   const showOverlay =
@@ -78,6 +87,20 @@ export default function App() {
         device: { kind: device.kind, gpu_ids: device.gpu_ids },
       };
       await submit(payload, { detection: true });
+      return;
+    }
+    if (activeKey === "regression") {
+      reset();
+      setResultsVisible(false);
+      setOverlayVisible(true);
+      setPipelineSummary([]);
+      setBlockKind("regression");
+      setQueueSize(undefined);
+      const payload: Record<string, unknown> = {
+        ...buildRegressionPayload(regressionForm),
+        device: { kind: device.kind, gpu_ids: device.gpu_ids },
+      };
+      await submit(payload, { regression: true });
       return;
     }
     if (activeKey !== "classification") return;
@@ -200,6 +223,13 @@ export default function App() {
             accent={activeTask.accent}
             validationErrors={validationErrors}
           />
+        ) : activeKey === "regression" ? (
+          <RegressionPanel
+            formData={regressionForm}
+            setFormData={setRegressionForm}
+            accent={activeTask.accent}
+            validationErrors={validationErrors}
+          />
         ) : (
           <ParamPanel
             task={activeTask}
@@ -239,7 +269,9 @@ export default function App() {
         onTrain={() => void handleTrain()}
         disabled={
           status.status === "running" ||
-          (activeKey !== "classification" && activeKey !== "detection")
+          (activeKey !== "classification" &&
+            activeKey !== "detection" &&
+            activeKey !== "regression")
         }
         historyCount={historyCount}
         selection={device}

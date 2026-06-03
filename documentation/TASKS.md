@@ -247,7 +247,17 @@ target[s]); reuses CNN backbones, `OutputConfig`/`DeviceConfig`/`TransformConfig
   time). Mirrors the detection endpoint. Tests in
   `tests/gui/test_routes_regression.py` (4 cases: schema, dispatch+callback,
   409 conflict, 422 invalid config).
-- [ ] brick 7 — Regression tab in GUI (currently placeholder) (depends: brick 6)
+- [x] brick 7 — Regression tab in GUI — `RegressionPanel` (backbone, derived
+  num_targets, CSV-manifest dataset form, loss/optimizer segmented controls)
+  submits to `/api/regression/run`, reuses `TrainingOverlay` (SSE) +
+  `ResultsView`. `lib/regression-models.ts` mirrors the backend
+  (`buildRegressionPayload` parses comma-separated `target_columns` and forces
+  `num_targets` to match). `App.tsx`/`useExperiment` wire the Regressão tab +
+  BottomBar. Vitest in `regression-models.test.ts` (4 cases). Verified live in
+  the browser (renders, reactive num_targets, 0 console errors).
+
+**✅ Phase 6 complete: image regression end-to-end (config → CSV data → model →
+trainer → block → API → GUI), with MSE/RMSE/MAE/R² and a live training monitor.**
 
 ## Phase 7 — Object Detection task (Ultralytics, hybrid backends)
 

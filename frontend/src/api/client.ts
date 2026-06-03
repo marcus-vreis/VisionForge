@@ -110,6 +110,18 @@ export async function fetchDetectionSchema(): Promise<JsonSchema> {
   return request<JsonSchema>("/detection/schema");
 }
 
+/** Start an image-regression run. Like detection, regression shares the
+ *  /experiment/{status,events,result} endpoints; only the submit URL differs. */
+export async function runRegression(
+  config: Record<string, unknown>,
+): Promise<RunResponse> {
+  return request<RunResponse>("/regression/run", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(config),
+  });
+}
+
 export async function fetchStatus(): Promise<RunStatus> {
   return request<RunStatus>("/experiment/status");
 }
