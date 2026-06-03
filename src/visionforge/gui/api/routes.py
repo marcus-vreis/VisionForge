@@ -1249,6 +1249,41 @@ def _load_runs(models_dir: Path) -> list[RunSummary]:
     return summaries
 
 
+# Per-task projection of run.json metrics onto the compact set the history
+# card shows. Adding a task is one row; the frontend RunCard mirrors these keys.
+# Unknown tasks fall back to the classification row.
+_SUMMARY_METRIC_KEYS: dict[str, dict[str, str]] = {
+    "classification": {
+        "accuracy": "test_accuracy",
+        "f1": "test_f1",
+        "val_loss": "best_val_loss",
+    },
+    "detection": {
+        "map50": "map50",
+        "map50_95": "map50_95",
+    },
+}
+
+
+def _summary_metrics(task: str, metrics: dict[str, Any]) -> dict[str, float]:
+    """Project run.json metrics onto the task-specific history-card metric set.
+
+    Missing or non-numeric values are skipped so a partially-written run.json
+    (Ultralytics omits mAP early in training) never raises.
+    """
+    key_map = _SUMMARY_METRIC_KEYS.get(task, _SUMMARY_METRIC_KEYS["classification"])
+    out: dict[str, float] = {}
+    for label, src in key_map.items():
+        value = metrics.get(src)
+        if value is None:
+            continue
+        try:
+            out[label] = float(value)
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
 def _parse_run_summary(run_dir: Path, data: dict[str, Any]) -> RunSummary:
     """Build a RunSummary from a parsed run.json dict."""
     status: str = data["status"]
@@ -1257,15 +1292,9 @@ def _parse_run_summary(run_dir: Path, data: dict[str, Any]) -> RunSummary:
 
     config: dict[str, Any] = data["config"]
     metrics: dict[str, Any] = data.get("metrics", {})
+    task: str = config["task"]
 
-    _metric_map = {
-        "accuracy": "test_accuracy",
-        "f1": "test_f1",
-        "val_loss": "best_val_loss",
-    }
-    final_metrics: dict[str, float] = {
-        key: float(metrics[src]) for key, src in _metric_map.items() if src in metrics
-    }
+    final_metrics = _summary_metrics(task, metrics)
 
     data_cfg = config.get("data") or {}
     pp_cfg = data_cfg.get("preprocessing") or {}
@@ -1274,14 +1303,19 @@ def _parse_run_summary(run_dir: Path, data: dict[str, Any]) -> RunSummary:
 
     # The block field was added in 2026-05; older run.json files don't have
     # it, so fall back to the config dict (also written by every block) and
-    # finally to "classification" if neither path resolves.
-    block = data.get("block") or config.get("block") or "classification"
+    # finally infer from the task (detection writes no block marker) before
+    # defaulting to classification.
+    block = (
+        data.get("block")
+        or config.get("block")
+        or ("detection" if task == "detection" else "classification")
+    )
 
     return RunSummary(
         run_id=run_dir.name,
         experiment_name=data["experiment"],
         model_arch=config["model"]["name"],
-        task=config["task"],
+        task=task,
         status=status,
         started_at=started_at,
         finished_at=finished_at,

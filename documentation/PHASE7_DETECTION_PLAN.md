@@ -113,3 +113,42 @@ src/visionforge/
 - **Standalone config/block/run path (§1, §3): confirmed** — detection does not
   reuse `ExperimentConfig`/`ExperimentBlock`; it has its own tree and a dedicated
   `/api/detection/*` run path (ADR-033).
+
+## 7. Phase 7.1 — parity with the classification surface
+
+Phase 7 shipped the detection *training* path. The classification task, however,
+exposes a much wider post-training surface (run history, run detail, per-model
+test history, dataset stats, results view). This phase brings detection to parity
+with those, **reusing** the existing endpoints/components and dispatching by task
+rather than duplicating them (clean-code: table-driven projections + small
+task-strategy classes, no forked copies).
+
+Gap analysis (what is classification-only today) and the brick plan:
+
+- [x] **brick A — run-history parity** (`routes._parse_run_summary`,
+  `HistoryOverlay`): detection runs were mislabeled `block="classification"` and
+  showed no mAP (the metric projection only knew `accuracy/f1/val_loss`). Added a
+  table-driven `_SUMMARY_METRIC_KEYS` per-task projection + `_summary_metrics`,
+  inferred `block="detection"` from `task`, and made the history card's metric
+  keys task-aware (`map50`, `map50_95` → "mAP@50 / mAP@50-95"). Tested.
+- [ ] **brick B — run-detail parity** (`RunDetailPanel`): render a detection run's
+  mAP metrics + Ultralytics/torchvision plots (`results.png`,
+  `confusion_matrix.png`, `BoxPR_curve.png`, `BoxF1_curve.png`) and the `best.pt`
+  checkpoint path. Verify the panel reads `artifacts.graphics`/`artifacts.model`
+  generically; adjust metric/plot labels by task.
+- [ ] **brick C — results-view parity** (`ResultsView`, `App`): when a detection
+  run completes, show mAP + plots in the post-run results panel (today it's
+  classification-shaped).
+- [ ] **brick D — per-model test parity** (`/runs/{id}/test`,
+  `_execute_run_test`): today classification-only (ModelFactory + Evaluator).
+  Introduce a `RunTester` strategy base with `ClassificationRunTester` /
+  `DetectionRunTester`; the detection tester loads `best.pt`, runs val/predict on
+  a new YOLO dataset, computes mAP@50 (reusing `detection_metrics`), and appends
+  to `tests[]`. Frontend "+ testar" form reused.
+- [ ] **brick E — dataset-stats parity for YOLO layout** (`/dataset/stats`,
+  `/dataset/samples`, `DetectionPanel`): the current probes assume the ImageFolder
+  layout. Add a YOLO-aware variant (count images + `.txt` labels per split, class
+  distribution from label files) so detection gets the same pre-train sanity view.
+- [ ] **brick F — export / batch inference parity** (optional, lower priority):
+  Ultralytics-native ONNX export + folder inference, surfaced like the
+  classification ONNX/batch-predict run actions.

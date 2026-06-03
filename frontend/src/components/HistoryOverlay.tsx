@@ -73,8 +73,18 @@ function fmtDate(iso: string): string {
   }
 }
 
-/** Metric keys shown on each card when present. */
-const METRIC_KEYS = ["accuracy", "f1", "val_loss"];
+/** Metric keys shown on each card when present, per task. Mirrors the
+ * backend `_SUMMARY_METRIC_KEYS` projection in routes.py. */
+const METRIC_KEYS_BY_TASK: Record<string, string[]> = {
+  classification: ["accuracy", "f1", "val_loss"],
+  detection: ["map50", "map50_95"],
+};
+
+/** Human-readable labels for metric keys that aren't self-explanatory. */
+const METRIC_LABELS: Record<string, string> = {
+  map50: "mAP@50",
+  map50_95: "mAP@50-95",
+};
 
 /** One run card inside the history list. */
 function RunCard({
@@ -96,7 +106,8 @@ function RunCard({
 }) {
   const accent = TASK_ACCENT[run.task] ?? "var(--vf-text-muted)";
   const dot = statusColor(run.status);
-  const shownMetrics = METRIC_KEYS.filter(
+  const metricKeys = METRIC_KEYS_BY_TASK[run.task] ?? METRIC_KEYS_BY_TASK.classification;
+  const shownMetrics = metricKeys.filter(
     (k) => run.final_metrics[k] !== undefined,
   );
 
@@ -337,7 +348,7 @@ function RunCard({
                   color: "var(--vf-text-muted)",
                 }}
               >
-                {k}
+                {METRIC_LABELS[k] ?? k}
               </span>
               <span
                 style={{
