@@ -213,7 +213,12 @@ target[s]); reuses CNN backbones, `OutputConfig`/`DeviceConfig`/`TransformConfig
   (mse/mae/huber), non-power-of-two batch; reuses `OutputConfig`/`DeviceConfig`/
   `TransformConfig`/`PreprocessingConfig`/`SchedulerConfig`. Tests in
   `tests/utils/test_regression_config.py` (20 cases).
-- [ ] brick 2 — `RegressionDataModule` (CSV → image/target tensors) (depends: brick 1)
+- [x] brick 2 — `RegressionDataModule` (CSV → image/target tensors) — reads
+  per-split CSV manifests with the stdlib `csv` module (no pandas), reuses
+  `core.data._build_transforms` so augmentation/preprocessing match
+  classification; train/val required, test optional. Picklable dataset
+  (Windows spawn). `core/regression_data.py`, tests in
+  `tests/core/test_regression_data.py` (12 cases).
 - [ ] brick 3 — regression head on `ModelFactory` (CNN → N linear outputs)
 - [ ] brick 4 — `RegressionTrainer` with MSE/MAE/Huber loss + MSE/RMSE/MAE/R² metrics (depends: bricks 2,3)
 - [ ] brick 5 — `RegressionBlock` (`setup/run/report`) + ADR-036 (depends: brick 4)
