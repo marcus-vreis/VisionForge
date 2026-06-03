@@ -151,10 +151,16 @@ Gap analysis (what is classification-only today) and the brick plan:
   `DetectionRunTester`; the detection tester loads `best.pt`, runs val/predict on
   a new YOLO dataset, computes mAP@50 (reusing `detection_metrics`), appends to
   `tests[]`, and re-enables the (now detection-aware) "+ testar" form.
-- [ ] **brick E — dataset-stats parity for YOLO layout** (`/dataset/stats`,
-  `/dataset/samples`, `DetectionPanel`): the current probes assume the ImageFolder
-  layout. Add a YOLO-aware variant (count images + `.txt` labels per split, class
-  distribution from label files) so detection gets the same pre-train sanity view.
+- [x] **brick E1 — YOLO dataset-stats backend** (done): new
+  `POST /api/detection/dataset/stats` + `_collect_detection_dataset_stats`.
+  Counts images and annotation *instances* per class across the `.txt` label
+  files per split, flags unlabeled images and class imbalance (max/min > 2). Reads
+  class names from `classes.txt`/`names.txt` (else generates them). Extracted a
+  shared `resolve_yolo_split` into `core/detection_data.py` (the trainer now
+  delegates to it — dedup). Tested (8 cases).
+- [ ] **brick E2 — YOLO dataset-stats GUI** (`DetectionPanel`): render the stats
+  (per-split image/instance counts, imbalance warning, unlabeled-image count)
+  below the dataset picker, mirroring the classification `DatasetStats` view.
 - [ ] **brick F — export / batch inference parity** (optional, lower priority):
   Ultralytics-native ONNX export + folder inference, surfaced like the
   classification ONNX/batch-predict run actions.

@@ -246,6 +246,42 @@ class PreprocessPreviewResponse(BaseModel):
     message: str | None = None
 
 
+class DetectionDatasetStatsRequest(BaseModel):
+    """Path to a YOLO-layout dataset root for annotation distribution analysis."""
+
+    base_dir: str
+
+
+class DetectionSplitStats(BaseModel):
+    """Per-split detection dataset counts.
+
+    ``class_counts`` tallies *instances* (annotated boxes) per class, not images
+    — the relevant balance signal for detection. ``unlabeled_images`` flags
+    images without a matching/non-empty label file (background-only or missing
+    annotations).
+    """
+
+    total_images: int
+    total_annotations: int
+    class_counts: dict[str, int]
+    unlabeled_images: int = 0
+    missing: bool = False
+
+
+class DetectionDatasetStatsResponse(BaseModel):
+    """Per-split annotation distribution + imbalance verdict for a YOLO dataset.
+
+    ``imbalanced`` is True when, across all splits, the ratio
+    max(count) / min(count) over per-class instance totals exceeds 2.0.
+    """
+
+    base_dir: str
+    splits: dict[str, DetectionSplitStats]
+    class_names: list[str]
+    imbalanced: bool
+    message: str | None = None
+
+
 class SystemInfo(BaseModel):
     """System probe for sensible UI defaults (workers, threads)."""
 
@@ -304,6 +340,9 @@ __all__ = [
     "CheckpointPickResponse",
     "DatasetStatsRequest",
     "DatasetStatsResponse",
+    "DetectionDatasetStatsRequest",
+    "DetectionDatasetStatsResponse",
+    "DetectionSplitStats",
     "DatasetSamplesRequest",
     "DatasetSamplesResponse",
     "PreprocessPreviewRequest",
