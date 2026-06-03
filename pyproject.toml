@@ -36,6 +36,11 @@ cu118 = []
 cu121 = []
 cu124 = []
 cu126 = []
+# Object detection (Phase 7). Ultralytics drives YOLO/RT-DETR training; it pulls
+# torch/torchvision (already declared). Optional so the base install stays lean.
+detection = [
+    "ultralytics>=8.3",
+]
 dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",

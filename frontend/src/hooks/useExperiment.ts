@@ -3,6 +3,7 @@ import {
   ApiError,
   fetchResult,
   fetchStatus,
+  runDetection,
   runExperiment,
 } from "../api/client";
 import type { RunResult, RunStatus, TrainingEvent } from "../types/run";
@@ -13,7 +14,10 @@ interface ExperimentState {
   error: string | null;
   validationErrors: ValidationError[];
   progressEvents: TrainingEvent[];
-  submit: (config: Record<string, unknown>) => Promise<void>;
+  submit: (
+    config: Record<string, unknown>,
+    opts?: { detection?: boolean },
+  ) => Promise<void>;
   reset: () => void;
 }
 
@@ -207,14 +211,19 @@ export function useExperiment(): ExperimentState {
   }, [stopPolling, closeEventSource]);
 
   const submit = useCallback(
-    async (config: Record<string, unknown>) => {
+    async (
+      config: Record<string, unknown>,
+      opts?: { detection?: boolean },
+    ) => {
       setError(null);
       setResult(null);
       setValidationErrors([]);
       setProgressEvents([]);
 
       try {
-        const res = await runExperiment(config);
+        const res = await (opts?.detection
+          ? runDetection(config)
+          : runExperiment(config));
         setStatus({ status: "running", run_id: res.run_id, error: null });
         openEventSource();
         startPolling(res.run_id);

@@ -5,6 +5,11 @@ import type { DeviceSelection } from "./components/DeviceSelector";
 import { Header } from "./components/Header";
 import { HistoryOverlay } from "./components/HistoryOverlay";
 import { ParamPanel } from "./components/ParamPanel";
+import { DetectionPanel } from "./components/DetectionPanel";
+import {
+  makeDefaultDetectionForm,
+  type DetectionForm,
+} from "./lib/detection-models";
 import { buildDefaults } from "./lib/schema-defaults";
 import { ResultsView } from "./components/ResultsView";
 import { TabBar } from "./components/TabBar";
@@ -33,6 +38,9 @@ export default function App() {
   const [pipelineSummary, setPipelineSummary] = useState<string[]>([]);
   const [blockKind, setBlockKind] = useState<string>("classification");
   const [queueSize, setQueueSize] = useState<number | undefined>(undefined);
+  const [detectionForm, setDetectionForm] = useState<DetectionForm>(
+    makeDefaultDetectionForm,
+  );
 
   const showOverlay =
     overlayVisible &&
@@ -56,6 +64,20 @@ export default function App() {
   }, []);
 
   const handleTrain = async () => {
+    if (activeKey === "detection") {
+      reset();
+      setResultsVisible(false);
+      setOverlayVisible(true);
+      setPipelineSummary([]);
+      setBlockKind("detection");
+      setQueueSize(undefined);
+      const payload: Record<string, unknown> = {
+        ...detectionForm,
+        device: { kind: device.kind, gpu_ids: device.gpu_ids },
+      };
+      await submit(payload, { detection: true });
+      return;
+    }
     if (activeKey !== "classification") return;
     reset();
     setResultsVisible(false);
@@ -152,6 +174,13 @@ export default function App() {
               reset();
             }}
           />
+        ) : activeKey === "detection" ? (
+          <DetectionPanel
+            formData={detectionForm}
+            setFormData={setDetectionForm}
+            accent={activeTask.accent}
+            validationErrors={validationErrors}
+          />
         ) : (
           <ParamPanel
             task={activeTask}
@@ -189,7 +218,10 @@ export default function App() {
       <BottomBar
         onHistory={() => setShowHistory(true)}
         onTrain={() => void handleTrain()}
-        disabled={status.status === "running" || activeKey !== "classification"}
+        disabled={
+          status.status === "running" ||
+          (activeKey !== "classification" && activeKey !== "detection")
+        }
         historyCount={historyCount}
         selection={device}
         onSelectionChange={setDevice}
