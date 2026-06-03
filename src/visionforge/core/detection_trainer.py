@@ -21,7 +21,7 @@ import torch
 from loguru import logger
 from torch.utils.data import DataLoader
 
-from visionforge.core.detection_data import DetectionDataModule
+from visionforge.core.detection_data import DetectionDataModule, resolve_yolo_split
 from visionforge.core.detection_dataset import DetectionDataset, detection_collate
 from visionforge.core.detection_metrics import mean_average_precision_50
 from visionforge.models.detection_factory import build_torchvision_detector
@@ -375,17 +375,13 @@ class DetectionTrainer:
         Raises:
             ValueError: if the split's image folder is not found.
         """
-        candidates = [
-            (base / "images" / split, base / "labels" / split),
-            (base / split / "images", base / split / "labels"),
-        ]
-        for images_dir, labels_dir in candidates:
-            if images_dir.is_dir():
-                return images_dir, labels_dir
-        raise ValueError(
-            f"Could not find the '{split}' images under '{base}' "
-            f"(expected 'images/{split}' or '{split}/images')."
-        )
+        resolved = resolve_yolo_split(base, split)
+        if resolved is None:
+            raise ValueError(
+                f"Could not find the '{split}' images under '{base}' "
+                f"(expected 'images/{split}' or '{split}/images')."
+            )
+        return resolved
 
     def _resolve_torch_device(self) -> torch.device:
         d = self._config.device

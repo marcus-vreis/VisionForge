@@ -24,6 +24,23 @@ _LAYOUTS = (
 )
 
 
+def resolve_yolo_split(base: Path, split: str) -> tuple[Path, Path] | None:
+    """Return ``(images_dir, labels_dir)`` for a YOLO split, or None if absent.
+
+    Supports both ``images/<split>`` + ``labels/<split>`` and
+    ``<split>/images`` + ``<split>/labels`` layouts. The single source of truth
+    for split resolution, shared by the trainer and the dataset-stats probe.
+    """
+    candidates = (
+        (base / "images" / split, base / "labels" / split),
+        (base / split / "images", base / split / "labels"),
+    )
+    for images_dir, labels_dir in candidates:
+        if images_dir.is_dir():
+            return images_dir, labels_dir
+    return None
+
+
 class DetectionDataModule:
     """Produces the Ultralytics ``data.yaml`` for a `DetectionConfig`."""
 
@@ -108,4 +125,4 @@ class DetectionDataModule:
         return [f"class_{i}" for i in range(self._config.model.num_classes)]
 
 
-__all__ = ["DetectionDataModule"]
+__all__ = ["DetectionDataModule", "resolve_yolo_split"]

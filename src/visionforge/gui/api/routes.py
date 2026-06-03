@@ -23,6 +23,7 @@ from visionforge.blocks.model_comparison import ModelComparisonBlock
 from visionforge.blocks.random_search import RandomSearchBlock
 from visionforge.blocks.transfer_learning import TransferLearningBlock
 from visionforge.core.data import DataModule
+from visionforge.core.detection_data import resolve_yolo_split
 from visionforge.core.evaluator import Evaluator
 from visionforge.core.plotter import MetricsPlotter
 from visionforge.gui.api.schemas import (
@@ -36,6 +37,9 @@ from visionforge.gui.api.schemas import (
     DatasetSamplesResponse,
     DatasetStatsRequest,
     DatasetStatsResponse,
+    DetectionDatasetStatsRequest,
+    DetectionDatasetStatsResponse,
+    DetectionSplitStats,
     DeviceInfoResponse,
     ExportOnnxRequest,
     ExportOnnxResponse,
@@ -438,6 +442,19 @@ async def run_experiment(config: ExperimentConfig) -> RunResponse:
 async def get_detection_schema() -> dict[str, Any]:
     """Return the JSON Schema for DetectionConfig (drives the detection form)."""
     return DetectionConfig.model_json_schema()
+
+
+@router.post("/detection/dataset/stats")
+async def detection_dataset_stats(
+    req: DetectionDatasetStatsRequest,
+) -> DetectionDatasetStatsResponse:
+    """Per-split instance distribution for a YOLO-layout detection dataset.
+
+    The detection analogue of /dataset/stats: instead of one folder per class,
+    it counts annotated boxes per class across the ``.txt`` label files so the
+    researcher can spot class imbalance and unlabeled images before training.
+    """
+    return await asyncio.to_thread(_collect_detection_dataset_stats, req)
 
 
 @router.post("/detection/run")
@@ -934,6 +951,130 @@ def _collect_dataset_stats(req: DatasetStatsRequest) -> DatasetStatsResponse:
         splits=splits,
         class_names=sorted(all_class_names),
         imbalanced=imbalanced,
+    )
+
+
+def _read_yolo_class_names(base: Path) -> list[str]:
+    """Class names from a ``classes.txt``/``names.txt`` at the root, else []."""
+    for candidate in ("classes.txt", "names.txt"):
+        path = base / candidate
+        if path.is_file():
+            names = [
+                line.strip()
+                for line in path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            if names:
+                return names
+    return []
+
+
+def _count_split_instances(
+    images_dir: Path, labels_dir: Path
+) -> tuple[int, dict[int, int], int]:
+    """Return (image_count, per-class-id instance counts, unlabeled_image_count).
+
+    An image is "unlabeled" when it has no matching label file or none of its
+    lines is a valid ``class cx cy w h`` row.
+    """
+    images = [
+        p
+        for p in images_dir.iterdir()
+        if p.is_file() and p.suffix.lower() in _IMAGE_EXTS
+    ]
+    counts: dict[int, int] = {}
+    unlabeled = 0
+    for img in images:
+        label_path = labels_dir / f"{img.stem}.txt"
+        instances = 0
+        if label_path.is_file():
+            for line in label_path.read_text(encoding="utf-8").splitlines():
+                parts = line.split()
+                if len(parts) != 5:
+                    continue
+                try:
+                    cls = int(float(parts[0]))
+                except ValueError:
+                    continue
+                counts[cls] = counts.get(cls, 0) + 1
+                instances += 1
+        if instances == 0:
+            unlabeled += 1
+    return len(images), counts, unlabeled
+
+
+def _collect_detection_dataset_stats(
+    req: DetectionDatasetStatsRequest,
+) -> DetectionDatasetStatsResponse:
+    """Tally per-class annotation instances across a YOLO dataset's splits."""
+    _remember_dataset_root(req.base_dir)
+    base = Path(req.base_dir)
+    if not base.exists() or not base.is_dir():
+        return DetectionDatasetStatsResponse(
+            base_dir=req.base_dir,
+            splits={},
+            class_names=[],
+            imbalanced=False,
+            message=f"Diretório base não encontrado: {req.base_dir}",
+        )
+
+    declared_names = _read_yolo_class_names(base)
+
+    # Scan each split once, keeping raw int-id counts + a missing flag.
+    raw: dict[str, tuple[int, dict[int, int], int, bool]] = {}
+    max_class_id = -1
+    for split in ("train", "val", "test"):
+        resolved = resolve_yolo_split(base, split)
+        if resolved is None:
+            raw[split] = (0, {}, 0, True)
+            continue
+        image_count, counts, unlabeled = _count_split_instances(*resolved)
+        raw[split] = (image_count, counts, unlabeled, False)
+        if counts:
+            max_class_id = max(max_class_id, *counts.keys())
+
+    # Declared names win; otherwise generate up to the highest class id seen.
+    num_classes = max(len(declared_names), max_class_id + 1)
+    class_names = [
+        declared_names[i] if i < len(declared_names) else f"class_{i}"
+        for i in range(num_classes)
+    ]
+
+    def _name(cid: int) -> str:
+        return class_names[cid] if 0 <= cid < len(class_names) else f"class_{cid}"
+
+    splits: dict[str, DetectionSplitStats] = {}
+    aggregate: dict[str, int] = {}
+    for split, (image_count, counts, unlabeled, is_missing) in raw.items():
+        named_counts: dict[str, int] = {}
+        for cid, n in counts.items():
+            named = _name(cid)
+            named_counts[named] = named_counts.get(named, 0) + n
+            aggregate[named] = aggregate.get(named, 0) + n
+        splits[split] = DetectionSplitStats(
+            total_images=image_count,
+            total_annotations=sum(counts.values()),
+            class_counts=named_counts,
+            unlabeled_images=unlabeled,
+            missing=is_missing,
+        )
+
+    non_zero = [c for c in aggregate.values() if c > 0]
+    imbalanced = len(non_zero) >= 2 and max(non_zero) / min(non_zero) > 2.0
+
+    message = None
+    if all(m for _, _, _, m in raw.values()):
+        message = (
+            "Nenhum split YOLO encontrado (esperado 'images/<split>' "
+            "ou '<split>/images')."
+        )
+
+    return DetectionDatasetStatsResponse(
+        base_dir=str(base.resolve()),
+        splits=splits,
+        class_names=class_names,
+        imbalanced=imbalanced,
+        message=message,
     )
 
 
