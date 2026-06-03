@@ -1026,6 +1026,7 @@ def _execute_batch_predict(
     """
     run_json_path = run_dir / "run.json"
     data: dict[str, Any] = json.loads(run_json_path.read_text(encoding="utf-8"))
+    _require_classification_run(data, "Inferência em lote")
     base_config_dict: dict[str, Any] = data["config"]
 
     checkpoint_path = data.get("artifacts", {}).get("model")
@@ -1083,6 +1084,7 @@ def _execute_onnx_export(run_dir: Path, req: ExportOnnxRequest) -> ExportOnnxRes
     """
     run_json_path = run_dir / "run.json"
     data: dict[str, Any] = json.loads(run_json_path.read_text(encoding="utf-8"))
+    _require_classification_run(data, "Export ONNX")
     base_config_dict: dict[str, Any] = data["config"]
 
     checkpoint_path = data.get("artifacts", {}).get("model")
@@ -1122,6 +1124,22 @@ def _execute_onnx_export(run_dir: Path, req: ExportOnnxRequest) -> ExportOnnxRes
     )
 
 
+def _require_classification_run(data: dict[str, Any], action: str) -> None:
+    """Reject post-training actions that only support classification runs.
+
+    Classification runs carry task='binary'/'multiclass'; detection runs carry
+    task='detection' and have no ModelFactory/Evaluator path (their equivalents
+    are tracked in PHASE7_DETECTION_PLAN brick D/F). The GUI already hides these
+    actions for detection — this is the backend's defense in depth.
+
+    Raises:
+        ValueError: when the run is a detection run.
+    """
+    task = data.get("config", {}).get("task", "")
+    if task == "detection":
+        raise ValueError(f"{action} não é suportado para runs de '{task}' ainda.")
+
+
 def _execute_run_test(run_dir: Path, req: RunTestRequest) -> RunTestResponse:
     """Reload a saved checkpoint and evaluate it on a new dataset path.
 
@@ -1129,6 +1147,7 @@ def _execute_run_test(run_dir: Path, req: RunTestRequest) -> RunTestResponse:
     """
     run_json_path = run_dir / "run.json"
     data: dict[str, Any] = json.loads(run_json_path.read_text(encoding="utf-8"))
+    _require_classification_run(data, "Teste por modelo")
     base_config_dict: dict[str, Any] = data["config"]
 
     # Build an ExperimentConfig clone with the new dataset paths + evaluate mode.

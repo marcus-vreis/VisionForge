@@ -249,6 +249,53 @@ class TestRunTestEndpoint:
 # ── /api/dataset/pick endpoint integration ───────────────────────────────────
 
 
+class TestRunActionsRejectDetection:
+    """Classification-only post-training actions must reject detection runs."""
+
+    @staticmethod
+    def _make_detection_run(tmp_path: Path) -> Path:
+        run_dir = tmp_path / "models" / "det1" / "20260601_120000_000000"
+        run_dir.mkdir(parents=True)
+        run_json = {
+            "id": "det1_20260601_120000_000000",
+            "experiment": "det1",
+            "timestamp": "2026-06-01T12:00:00",
+            "status": "completed",
+            "run_dir": str(run_dir.resolve()),
+            "config": {
+                "name": "det1",
+                "task": "detection",
+                "model": {"name": "yolo11n"},
+            },
+            "metrics": {"map50": 0.5, "total_epochs": 1},
+            "history": [],
+            "artifacts": {
+                "model": str(run_dir / "weights" / "best.pt"),
+                "graphics": [],
+            },
+            "tests": [],
+        }
+        (run_dir / "run.json").write_text(json.dumps(run_json), encoding="utf-8")
+        return run_dir
+
+    def test_execute_run_test_rejects_detection(self, tmp_path: Path) -> None:
+        run_dir = self._make_detection_run(tmp_path)
+        with pytest.raises(ValueError, match="detection"):
+            _execute_run_test(run_dir, RunTestRequest(base_dir=str(tmp_path)))
+
+    def test_test_endpoint_returns_400_for_detection(self, tmp_path: Path) -> None:
+        from visionforge.gui.server import app
+
+        run_dir = self._make_detection_run(tmp_path)
+        models_dir = run_dir.parent.parent
+        with patch("visionforge.gui.api.routes._MODELS_DIR", models_dir):
+            client = TestClient(app, raise_server_exceptions=True)
+            resp = client.post(
+                f"/api/runs/{run_dir.name}/test", json={"base_dir": str(tmp_path)}
+            )
+        assert resp.status_code == 400
+
+
 class TestDatasetPickEndpoint:
     def test_returns_path_when_dialog_succeeds(self, tmp_path: Path) -> None:
         from visionforge.gui.server import app

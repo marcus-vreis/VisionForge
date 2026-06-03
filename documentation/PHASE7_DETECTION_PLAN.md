@@ -140,12 +140,17 @@ Gap analysis (what is classification-only today) and the brick plan:
   brick 5b — `ResultsView` carries detection `GRAPH_LABELS` + `METRIC_LABELS` and
   renders metrics/plots generically, so a completed detection run shows mAP + the
   Ultralytics plots. No change needed.
-- [ ] **brick D — per-model test parity** (`/runs/{id}/test`,
-  `_execute_run_test`): today classification-only (ModelFactory + Evaluator).
-  Introduce a `RunTester` strategy base with `ClassificationRunTester` /
+- [x] **brick D1 — guard classification-only actions for detection** (done):
+  the per-model test, batch CSV inference, and ONNX export are classification-only
+  (ModelFactory + Evaluator). `RunDetailPanel` now hides all three for a detection
+  run (`config.task === "detection"`), and the backend rejects them in
+  `_require_classification_run` (HTTP 400) as defense in depth. Prevents the
+  previous guaranteed-500-on-click. Tested.
+- [ ] **brick D2 — detection-native per-model test** (`/runs/{id}/test`):
+  introduce a `RunTester` strategy base with `ClassificationRunTester` /
   `DetectionRunTester`; the detection tester loads `best.pt`, runs val/predict on
-  a new YOLO dataset, computes mAP@50 (reusing `detection_metrics`), and appends
-  to `tests[]`. Frontend "+ testar" form reused.
+  a new YOLO dataset, computes mAP@50 (reusing `detection_metrics`), appends to
+  `tests[]`, and re-enables the (now detection-aware) "+ testar" form.
 - [ ] **brick E — dataset-stats parity for YOLO layout** (`/dataset/stats`,
   `/dataset/samples`, `DetectionPanel`): the current probes assume the ImageFolder
   layout. Add a YOLO-aware variant (count images + `.txt` labels per split, class
