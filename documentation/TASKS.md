@@ -226,7 +226,12 @@ target[s]); reuses CNN backbones, `OutputConfig`/`DeviceConfig`/`TransformConfig
   the backbone + head-swap logic (DRY). Tests in
   `tests/models/test_regression_factory.py` (8 cases); classification factory
   suite still green.
-- [ ] brick 4 — `RegressionTrainer` with MSE/MAE/Huber loss + MSE/RMSE/MAE/R² metrics (depends: bricks 2,3)
+- [x] brick 4 — `RegressionTrainer` (`core/regression_trainer.py`): MSE/MAE/Huber
+  loss, streaming MSE/RMSE/MAE/R² (`_MetricAccumulator`), best-by-val-loss
+  checkpoint + early stopping + scheduler, SSE start/epoch_end/end, ADR-013
+  `run.json`. Reuses `resolve_device`/`_seed_everything` from `core.trainer`.
+  Tests in `tests/core/test_regression_trainer.py` (10 cases incl. metric math,
+  multi-target, mae/huber, run.json shape).
 - [ ] brick 5 — `RegressionBlock` (`setup/run/report`) + ADR-036 (depends: brick 4)
 - [ ] brick 6 — `/api/regression/{schema,run}` run path (depends: brick 5)
 - [ ] brick 7 — Regression tab in GUI (currently placeholder) (depends: brick 6)
