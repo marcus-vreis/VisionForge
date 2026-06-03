@@ -158,9 +158,12 @@ Gap analysis (what is classification-only today) and the brick plan:
   class names from `classes.txt`/`names.txt` (else generates them). Extracted a
   shared `resolve_yolo_split` into `core/detection_data.py` (the trainer now
   delegates to it — dedup). Tested (8 cases).
-- [ ] **brick E2 — YOLO dataset-stats GUI** (`DetectionPanel`): render the stats
-  (per-split image/instance counts, imbalance warning, unlabeled-image count)
-  below the dataset picker, mirroring the classification `DatasetStats` view.
+- [x] **brick E2 — YOLO dataset-stats GUI** (done): new `DetectionDatasetStats`
+  component (+ `fetchDetectionDatasetStats` client) rendered below the dataset
+  picker in `DetectionPanel`. Shows the class id→name map, per-split image/instance
+  counts, per-class annotation bars, unlabeled-image count, and the imbalance
+  warning; auto-applies the detected class count to `model.num_classes`. Mirrors
+  the classification `DatasetStats` look.
 - [ ] **brick F — export / batch inference parity** (optional, lower priority):
   Ultralytics-native ONNX export + folder inference, surfaced like the
   classification ONNX/batch-predict run actions.

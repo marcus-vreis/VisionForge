@@ -10,6 +10,7 @@ import {
 } from "../lib/detection-models";
 import type { ValidationError } from "../hooks/useExperiment";
 import { NumberField, SelectField, Segmented, TextField, Toggle } from "./controls";
+import { DetectionDatasetStats } from "./DetectionDatasetStats";
 
 interface DetectionPanelProps {
   formData: DetectionForm;
@@ -181,6 +182,10 @@ export function DetectionPanel({
             hint="imgsz"
           />
         </div>
+        <DetectionDatasetStats
+          baseDir={formData.data.base_dir}
+          onApplyClasses={(n) => setModel({ num_classes: n })}
+        />
       </div>
 
       {/* Treinamento */}
