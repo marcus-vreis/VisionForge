@@ -255,6 +255,32 @@ export async function fetchDatasetStats(
   });
 }
 
+export interface DetectionSplitStats {
+  total_images: number;
+  total_annotations: number;
+  class_counts: Record<string, number>;
+  unlabeled_images: number;
+  missing: boolean;
+}
+
+export interface DetectionDatasetStatsResponse {
+  base_dir: string;
+  splits: Record<string, DetectionSplitStats>;
+  class_names: string[];
+  imbalanced: boolean;
+  message: string | null;
+}
+
+export async function fetchDetectionDatasetStats(
+  baseDir: string,
+): Promise<DetectionDatasetStatsResponse> {
+  return request<DetectionDatasetStatsResponse>("/detection/dataset/stats", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ base_dir: baseDir }),
+  });
+}
+
 export interface DatasetSamplesResponse {
   base_dir: string;
   split: string;
