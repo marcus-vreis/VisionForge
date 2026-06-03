@@ -294,9 +294,17 @@ class TestClassificationOnlyActionsRejectDetection:
                 run_dir, BatchPredictRequest(input_dir=str(tmp_path))
             )
 
-    def test_onnx_export_rejects_detection(self, tmp_path: Path) -> None:
+    def test_onnx_export_rejects_torchvision_detection(self, tmp_path: Path) -> None:
+        # Ultralytics detection export is supported (brick F); torchvision is not.
         run_dir = self._make_detection_run(tmp_path)
-        with pytest.raises(ValueError, match="detection"):
+        data = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+        data["config"]["model"]["backend"] = "torchvision"
+        data["config"]["model"]["name"] = "fasterrcnn_resnet50_fpn"
+        ckpt = run_dir / "best.pt"
+        ckpt.write_bytes(b"fake")
+        data["artifacts"]["model"] = str(ckpt)
+        (run_dir / "run.json").write_text(json.dumps(data), encoding="utf-8")
+        with pytest.raises(ValueError, match="torchvision"):
             _execute_onnx_export(run_dir, ExportOnnxRequest())
 
 

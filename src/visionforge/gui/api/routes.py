@@ -26,6 +26,7 @@ from visionforge.core.data import DataModule
 from visionforge.core.detection_data import resolve_yolo_split
 from visionforge.core.evaluator import Evaluator
 from visionforge.core.plotter import MetricsPlotter
+from visionforge.gui.api.detection_export import export_detection_run
 from visionforge.gui.api.detection_testing import evaluate_detection_run
 from visionforge.gui.api.schemas import (
     BatchPredictRequest,
@@ -1226,7 +1227,9 @@ def _execute_onnx_export(run_dir: Path, req: ExportOnnxRequest) -> ExportOnnxRes
     """
     run_json_path = run_dir / "run.json"
     data: dict[str, Any] = json.loads(run_json_path.read_text(encoding="utf-8"))
-    _require_classification_run(data, "Export ONNX")
+    # Detection exports via Ultralytics' own ONNX exporter; classification below.
+    if data.get("config", {}).get("task") == "detection":
+        return export_detection_run(run_dir, req, data)
     base_config_dict: dict[str, Any] = data["config"]
 
     checkpoint_path = data.get("artifacts", {}).get("model")
