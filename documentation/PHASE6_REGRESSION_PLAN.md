@@ -12,7 +12,10 @@
 > - [x] brick 4 — `RegressionTrainer` (MSE/MAE/Huber loss, MSE/MAE/RMSE/R²)
 > - [x] brick 5 — `RegressionBlock` (`setup/run/report`) + ADR-036
 > - [x] brick 6 — `/api/regression/{schema,run}` run path
-> - [ ] brick 7 — GUI Regressão tab (currently placeholder)
+> - [x] brick 7 — GUI Regressão tab (RegressionPanel, wired end-to-end)
+>
+> **Phase 6 complete** — image regression runs end-to-end (config → CSV data →
+> model → trainer → block → API → GUI) with MSE/RMSE/MAE/R² and a live monitor.
 
 Image regression is the second task that does **not** reuse the classification
 engine wholesale, but it sits much closer to it than detection did: the same CNN
