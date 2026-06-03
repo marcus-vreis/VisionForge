@@ -322,3 +322,33 @@ class TestDatasetPickEndpoint:
         body = resp.json()
         assert body["cancelled"] is False
         assert Path(body["path"]) == tmp_path.resolve()
+
+
+class TestDetectionYamlPickEndpoint:
+    def test_returns_path_when_dialog_succeeds(self, tmp_path: Path) -> None:
+        from visionforge.gui.server import app
+
+        data_yaml = tmp_path / "data.yaml"
+        data_yaml.write_text("nc: 1\n", encoding="utf-8")
+        with (
+            patch("tkinter.Tk"),
+            patch("tkinter.filedialog.askopenfilename", return_value=str(data_yaml)),
+        ):
+            client = TestClient(app, raise_server_exceptions=True)
+            resp = client.post("/api/detection/dataset/pick_yaml")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["cancelled"] is False
+        assert Path(body["path"]) == data_yaml.resolve()
+
+    def test_cancelled_when_dialog_dismissed(self) -> None:
+        from visionforge.gui.server import app
+
+        with (
+            patch("tkinter.Tk"),
+            patch("tkinter.filedialog.askopenfilename", return_value=""),
+        ):
+            client = TestClient(app, raise_server_exceptions=True)
+            resp = client.post("/api/detection/dataset/pick_yaml")
+        assert resp.status_code == 200
+        assert resp.json()["cancelled"] is True

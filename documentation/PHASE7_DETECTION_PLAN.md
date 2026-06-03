@@ -177,6 +177,34 @@ Gap analysis (what is classification-only today) and the brick plan:
   unsupported, missing checkpoint, ultralytics-absent). Folder-inference parity
   was descoped — Ultralytics `predict` over a folder can land later if needed.
 
+- [x] **brick G — dataset source parity (data.yaml)** (done): the GUI only
+  exposed `base_dir` (synthesize a `data.yaml` from a YOLO folder), even though
+  `DetectionDataConfig` has always accepted an explicit `data_yaml`. Real
+  Ultralytics/Roboflow datasets ship a `data.yaml`, so `DetectionPanel` now has a
+  "Fonte do dataset" toggle (Pasta YOLO ↔ data.yaml); the yaml mode uses a new
+  native `.yaml` picker (`POST /api/detection/dataset/pick_yaml` →
+  `_open_native_yaml_dialog`) and `buildDetectionDataPayload` sends only the
+  active source (an empty `base_dir` resolved to "." server-side and gave a
+  confusing "missing splits" error). Tested (payload projection, picker endpoint
+  success/cancel).
+
 **Phase 7.1 complete** — detection now matches the classification post-training
 surface: run history (mAP), run detail, results view, per-model test (mAP on a
-new dataset), YOLO dataset stats, and ONNX export (Ultralytics).
+new dataset), YOLO dataset stats, ONNX export (Ultralytics), and dual dataset
+sources (YOLO folder *or* an existing data.yaml).
+
+## 8. GUI rendering performance
+
+The animated background (`Waves` + `Particles`) sits behind several
+`backdrop-filter` glass panels. Two compounding costs caused browser jank:
+
+1. A continuously drifting full-viewport wave layer forced every panel above it
+   to re-blur each frame (~5fps). Fixed earlier by freezing the wave animation.
+2. The residual stutter came from `mix-blend-mode: screen` on the full-viewport
+   SVG: blending under `backdrop-filter` pushes the compositor onto a slow
+   offscreen-buffer path that re-evaluates on every scroll/paint. Fixed by
+   dropping the blend mode (plain accent strokes read the same on the near-black
+   background), wrapping the decorative layer in an isolated, GPU-promoted
+   container (`isolation: isolate; transform: translateZ(0); contain: layout
+   paint`) so it paints once, and halving the fixed `BottomBar` blur radius
+   (20→10px on an already ~80%-opaque surface) so it costs less per scroll frame.

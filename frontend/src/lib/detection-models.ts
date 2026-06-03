@@ -56,6 +56,12 @@ export function isValidModelForBackend(
   return DETECTION_MODELS[backend].some((m) => m.value === name);
 }
 
+/** Which dataset source the user provides. ``folder`` synthesizes a data.yaml
+ *  from a YOLO-layout root; ``yaml`` points at an existing Ultralytics
+ *  data.yaml (e.g. a Roboflow export). Mirrors DetectionDataConfig's
+ *  base_dir/data_yaml pair. */
+export type DetectionDataSource = "folder" | "yaml";
+
 /** Controlled form state for a detection run — mirrors DetectionConfig. */
 export interface DetectionForm {
   name: string;
@@ -65,7 +71,12 @@ export interface DetectionForm {
     num_classes: number;
     pretrained: boolean;
   };
-  data: { base_dir: string; image_size: number };
+  data: {
+    source: DetectionDataSource;
+    base_dir: string;
+    data_yaml: string;
+    image_size: number;
+  };
   training: {
     epochs: number;
     batch_size: number;
@@ -74,6 +85,19 @@ export interface DetectionForm {
     seed: number;
     workers: number;
   };
+}
+
+/** Project the form's dataset section into the wire payload, sending only the
+ *  active source. An empty `base_dir` resolves to "." on the server (a valid
+ *  dir) and produces a confusing "missing splits" error, so we omit the
+ *  inactive field entirely and let DetectionDataConfig validate one source. */
+export function buildDetectionDataPayload(
+  data: DetectionForm["data"],
+): Record<string, unknown> {
+  const common = { image_size: data.image_size };
+  return data.source === "yaml"
+    ? { ...common, data_yaml: data.data_yaml }
+    : { ...common, base_dir: data.base_dir };
 }
 
 export function makeDefaultDetectionForm(): DetectionForm {
@@ -85,7 +109,7 @@ export function makeDefaultDetectionForm(): DetectionForm {
       num_classes: 1,
       pretrained: true,
     },
-    data: { base_dir: "", image_size: 640 },
+    data: { source: "folder", base_dir: "", data_yaml: "", image_size: 640 },
     training: {
       epochs: 100,
       batch_size: 16,
