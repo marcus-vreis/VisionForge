@@ -11,7 +11,7 @@
 > - [x] brick 3 — regression head on `ModelFactory` (CNN → N continuous outputs)
 > - [x] brick 4 — `RegressionTrainer` (MSE/MAE/Huber loss, MSE/MAE/RMSE/R²)
 > - [x] brick 5 — `RegressionBlock` (`setup/run/report`) + ADR-036
-> - [ ] brick 6 — `/api/regression/{schema,run}` run path
+> - [x] brick 6 — `/api/regression/{schema,run}` run path
 > - [ ] brick 7 — GUI Regressão tab (currently placeholder)
 
 Image regression is the second task that does **not** reuse the classification

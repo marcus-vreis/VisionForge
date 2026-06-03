@@ -240,7 +240,13 @@ target[s]); reuses CNN backbones, `OutputConfig`/`DeviceConfig`/`TransformConfig
   `MetricsPlotter.loss_curve`), updates run.json with `test_*`. ADR-036 written.
   Tests in `tests/blocks/test_regression.py` (5 cases, factory/datamodule
   patched).
-- [ ] brick 6 — `/api/regression/{schema,run}` run path (depends: brick 5)
+- [x] brick 6 — `/api/regression/{schema,run}` run path — `GET
+  /api/regression/schema` (drives the form) + `POST /api/regression/run`
+  dispatching `RegressionBlock` with `_progress_callback` → SSE; reuses the
+  shared single-run state and `/experiment/{status,events,result}` (one run at a
+  time). Mirrors the detection endpoint. Tests in
+  `tests/gui/test_routes_regression.py` (4 cases: schema, dispatch+callback,
+  409 conflict, 422 invalid config).
 - [ ] brick 7 — Regression tab in GUI (currently placeholder) (depends: brick 6)
 
 ## Phase 7 — Object Detection task (Ultralytics, hybrid backends)

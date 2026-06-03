@@ -21,6 +21,7 @@ from visionforge.blocks.export_onnx import ExportONNXBlock
 from visionforge.blocks.grid_search import GridSearchBlock
 from visionforge.blocks.model_comparison import ModelComparisonBlock
 from visionforge.blocks.random_search import RandomSearchBlock
+from visionforge.blocks.regression import RegressionBlock
 from visionforge.blocks.transfer_learning import TransferLearningBlock
 from visionforge.core.data import DataModule
 from visionforge.core.detection_data import resolve_yolo_split
@@ -63,6 +64,7 @@ from visionforge.models.factory import ModelFactory
 from visionforge.utils.config import ExperimentConfig
 from visionforge.utils.cuda import check_cuda
 from visionforge.utils.detection_config import DetectionConfig
+from visionforge.utils.regression_config import RegressionConfig
 
 # Common split folder names per role. Lowercased, accent-stripped at match time.
 _TRAIN_ALIASES = {"train", "training", "treino", "trains", "tr"}
@@ -496,6 +498,44 @@ async def run_detection(config: DetectionConfig) -> RunResponse:
     }
 
     task = asyncio.create_task(_execute_detection(config, run_id))
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+
+    return RunResponse(run_id=run_id)
+
+
+@router.get("/regression/schema")
+async def get_regression_schema() -> dict[str, Any]:
+    """Return the JSON Schema for RegressionConfig (drives the regression form)."""
+    return RegressionConfig.model_json_schema()
+
+
+@router.post("/regression/run")
+async def run_regression(config: RegressionConfig) -> RunResponse:
+    """Start an image-regression training run in the background.
+
+    Regression shares the single-run state and the /experiment/{status,events,
+    result} endpoints (one run at a time, one GPU) but dispatches its own
+    standalone RegressionBlock (ADR-036) rather than the ExperimentConfig path.
+    """
+    global _current_run, _event_queue
+
+    if _current_run and _current_run["status"] == "running":
+        raise HTTPException(409, "An experiment is already running.")
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    run_id = f"{config.name}_{timestamp}"
+
+    _event_queue = asyncio.Queue()
+    _current_run = {
+        "run_id": run_id,
+        "status": "running",
+        "error": None,
+        "report": None,
+        "run_dir": None,
+    }
+
+    task = asyncio.create_task(_execute_regression(config, run_id))
     _background_tasks.add(task)
     task.add_done_callback(_background_tasks.discard)
 
@@ -1660,6 +1700,53 @@ async def _execute_detection(config: DetectionConfig, run_id: str) -> None:
 
     except Exception as e:
         logger.exception("GUI: Detection {} failed", run_id)
+        cls = type(e).__name__
+        msg = str(e) or "(sem mensagem)"
+        _current_run = {
+            "run_id": run_id,
+            "status": "failed",
+            "error": f"{cls}: {msg}",
+            "report": None,
+            "run_dir": None,
+        }
+
+    finally:
+        if queue is not None:
+            await queue.put(None)
+
+
+async def _execute_regression(config: RegressionConfig, run_id: str) -> None:
+    """Run an image-regression training in a background thread."""
+    global _current_run, _event_queue
+
+    loop = asyncio.get_running_loop()
+    queue = _event_queue
+
+    def _put_event(event: dict[str, Any]) -> None:
+        if queue is not None:
+            asyncio.run_coroutine_threadsafe(queue.put(event), loop)
+
+    try:
+        block = RegressionBlock()
+        block.setup(config)
+        block._progress_callback = _put_event
+
+        logger.info("GUI: Starting regression {} ({})", run_id, config.model.name)
+        await asyncio.to_thread(block.run)
+
+        report = block.report()
+        run_dir = report.get("train", {}).get("run_dir")
+        _current_run = {
+            "run_id": run_id,
+            "status": "completed",
+            "error": None,
+            "report": report,
+            "run_dir": run_dir,
+        }
+        logger.success("GUI: Regression {} completed.", run_id)
+
+    except Exception as e:
+        logger.exception("GUI: Regression {} failed", run_id)
         cls = type(e).__name__
         msg = str(e) or "(sem mensagem)"
         _current_run = {
