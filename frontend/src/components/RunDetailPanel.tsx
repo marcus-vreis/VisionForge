@@ -28,6 +28,10 @@ const GRAPH_LABELS: Record<string, string> = {
   "confusion_matrix_normalized.png": "Matriz de confusão (normalizada)",
   "roc_curve.png": "Curva ROC",
   "precision_recall_curve.png": "Curva Precision-Recall",
+  // Detection (Ultralytics / torchvision) plot names.
+  "results.png": "Resultados (loss + mAP)",
+  "BoxPR_curve.png": "Curva Precision-Recall (box)",
+  "BoxF1_curve.png": "Curva F1 (box)",
 };
 
 function metricLabel(key: string): string {
@@ -45,6 +49,10 @@ function metricLabel(key: string): string {
     best_val_loss: "Melhor val loss",
     best_epoch: "Melhor epoch",
     total_epochs: "Epochs treinados",
+    // Detection metrics (mAP @ IoU thresholds; box validation loss).
+    map50: "mAP@50",
+    map50_95: "mAP@50-95",
+    box_loss: "Box loss (val)",
   };
   return labels[key] ?? key;
 }

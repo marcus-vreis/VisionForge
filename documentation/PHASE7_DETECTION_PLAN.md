@@ -131,14 +131,15 @@ Gap analysis (what is classification-only today) and the brick plan:
   table-driven `_SUMMARY_METRIC_KEYS` per-task projection + `_summary_metrics`,
   inferred `block="detection"` from `task`, and made the history card's metric
   keys task-aware (`map50`, `map50_95` → "mAP@50 / mAP@50-95"). Tested.
-- [ ] **brick B — run-detail parity** (`RunDetailPanel`): render a detection run's
-  mAP metrics + Ultralytics/torchvision plots (`results.png`,
-  `confusion_matrix.png`, `BoxPR_curve.png`, `BoxF1_curve.png`) and the `best.pt`
-  checkpoint path. Verify the panel reads `artifacts.graphics`/`artifacts.model`
-  generically; adjust metric/plot labels by task.
-- [ ] **brick C — results-view parity** (`ResultsView`, `App`): when a detection
-  run completes, show mAP + plots in the post-run results panel (today it's
-  classification-shaped).
+- [x] **brick B — run-detail parity** (`RunDetailPanel`): the panel already reads
+  `artifacts.graphics`/`artifacts.model` and `metrics` generically, so detection
+  runs render. Added detection metric labels (`map50`, `map50_95`, `box_loss`) and
+  plot labels (`results.png`, `BoxPR_curve.png`, `BoxF1_curve.png`) so they show
+  human names instead of raw keys/filenames.
+- [x] **brick C — results-view parity** (`ResultsView`): already shipped in
+  brick 5b — `ResultsView` carries detection `GRAPH_LABELS` + `METRIC_LABELS` and
+  renders metrics/plots generically, so a completed detection run shows mAP + the
+  Ultralytics plots. No change needed.
 - [ ] **brick D — per-model test parity** (`/runs/{id}/test`,
   `_execute_run_test`): today classification-only (ModelFactory + Evaluator).
   Introduce a `RunTester` strategy base with `ClassificationRunTester` /
