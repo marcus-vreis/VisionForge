@@ -34,3 +34,5 @@ documentation/CLAUDE.md
 STOP_TEAM
 outputs/LOOP_STATUS.md
 coverage.json
+# Playwright MCP scratch output
+.playwright-mcp/

@@ -136,7 +136,10 @@ export function BottomBar({
             background:
               "linear-gradient(90deg, transparent, var(--accent-soft), transparent)",
             backgroundSize: "200% 100%",
-            animation: "shimmer 3.6s linear infinite",
+            // Only animate while a run is active. Idle, this span sits inside
+            // the blurred bottom bar and re-triggered its backdrop-filter every
+            // frame, contributing to the UI-wide jank.
+            animation: isRunning ? "shimmer 3.6s linear infinite" : "none",
             opacity: 0.6,
           }}
         />
