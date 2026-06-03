@@ -152,6 +152,14 @@ export async function pickDatasetFolder(): Promise<DatasetPickResponse> {
   return request<DatasetPickResponse>("/dataset/pick", { method: "POST" });
 }
 
+/** Open a native file picker filtered to .yaml/.yml — used to select an
+ *  existing Ultralytics data.yaml for a detection run. */
+export async function pickDetectionYaml(): Promise<DatasetPickResponse> {
+  return request<DatasetPickResponse>("/detection/dataset/pick_yaml", {
+    method: "POST",
+  });
+}
+
 export interface CheckpointPickResponse {
   path: string;
   cancelled: boolean;

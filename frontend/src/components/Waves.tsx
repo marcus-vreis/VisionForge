@@ -93,7 +93,11 @@ export function Waves() {
         height: "100%",
         pointerEvents: "none",
         zIndex: 0,
-        mixBlendMode: "screen",
+        // No mix-blend-mode: blending a full-viewport SVG into the page forces
+        // every backdrop-filter panel above it onto a slow offscreen-buffer
+        // compositing path (the residual jank after the wave animation was
+        // frozen). On the near-black background, plain accent strokes read the
+        // same as `screen` did. See the WaveLayer comment + index.css.
       }}
     >
       <defs>

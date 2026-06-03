@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { pickDatasetFolder } from "../api/client";
+import { pickDatasetFolder, pickDetectionYaml } from "../api/client";
 import {
   DETECTION_BACKENDS,
   DETECTION_MODELS,
@@ -68,6 +68,28 @@ export function DetectionPanel({
     } finally {
       setPicking(false);
     }
+  };
+
+  const onPickYaml = async () => {
+    setPicking(true);
+    try {
+      const res = await pickDetectionYaml();
+      if (!res.cancelled && res.path) setData({ data_yaml: res.path });
+    } finally {
+      setPicking(false);
+    }
+  };
+
+  const pickButton: React.CSSProperties = {
+    padding: "12px 16px",
+    background: "var(--accent-soft)",
+    border: `1px solid ${accent}`,
+    borderRadius: 10,
+    color: "var(--vf-text)",
+    fontFamily: "var(--font-mono)",
+    fontSize: 12,
+    cursor: picking ? "default" : "pointer",
+    whiteSpace: "nowrap",
   };
 
   const card: React.CSSProperties = {
@@ -140,38 +162,69 @@ export function DetectionPanel({
 
       {/* Dataset */}
       <div style={card}>
-        <div style={sectionLabel}>Dataset (layout YOLO)</div>
+        <div style={sectionLabel}>Dataset</div>
+        <div style={{ marginBottom: 14, maxWidth: 360 }}>
+          <Segmented
+            label="Fonte do dataset"
+            value={formData.data.source}
+            onChange={(v) =>
+              setData({ source: v as DetectionForm["data"]["source"] })
+            }
+            options={[
+              { value: "folder", label: "Pasta YOLO" },
+              { value: "yaml", label: "data.yaml" },
+            ]}
+            hint={
+              formData.data.source === "folder"
+                ? "gera o data.yaml a partir da pasta"
+                : "usa um data.yaml existente"
+            }
+          />
+        </div>
         <div style={grid}>
-          <div style={{ gridColumn: "1 / -1", display: "flex", gap: 10, alignItems: "flex-end" }}>
-            <div style={{ flex: 1 }}>
-              <TextField
-                label="Pasta base"
-                value={formData.data.base_dir}
-                onChange={(v) => setData({ base_dir: v })}
-                placeholder="…/dataset (images/train, images/val)"
-                hint="raiz YOLO"
-                mono
-              />
+          {formData.data.source === "folder" ? (
+            <div style={{ gridColumn: "1 / -1", display: "flex", gap: 10, alignItems: "flex-end" }}>
+              <div style={{ flex: 1 }}>
+                <TextField
+                  label="Pasta base"
+                  value={formData.data.base_dir}
+                  onChange={(v) => setData({ base_dir: v })}
+                  placeholder="…/dataset (images/train, images/val)"
+                  hint="raiz YOLO"
+                  mono
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => void onPickFolder()}
+                disabled={picking}
+                style={pickButton}
+              >
+                {picking ? "…" : "📁 Escolher"}
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={() => void onPickFolder()}
-              disabled={picking}
-              style={{
-                padding: "12px 16px",
-                background: "var(--accent-soft)",
-                border: `1px solid ${accent}`,
-                borderRadius: 10,
-                color: "var(--vf-text)",
-                fontFamily: "var(--font-mono)",
-                fontSize: 12,
-                cursor: picking ? "default" : "pointer",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {picking ? "…" : "📁 Escolher"}
-            </button>
-          </div>
+          ) : (
+            <div style={{ gridColumn: "1 / -1", display: "flex", gap: 10, alignItems: "flex-end" }}>
+              <div style={{ flex: 1 }}>
+                <TextField
+                  label="Arquivo data.yaml"
+                  value={formData.data.data_yaml}
+                  onChange={(v) => setData({ data_yaml: v })}
+                  placeholder="…/dataset/data.yaml"
+                  hint="Ultralytics / Roboflow"
+                  mono
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => void onPickYaml()}
+                disabled={picking}
+                style={pickButton}
+              >
+                {picking ? "…" : "📄 Escolher"}
+              </button>
+            </div>
+          )}
           <NumberField
             label="Image size"
             value={formData.data.image_size}
@@ -182,10 +235,25 @@ export function DetectionPanel({
             hint="imgsz"
           />
         </div>
-        <DetectionDatasetStats
-          baseDir={formData.data.base_dir}
-          onApplyClasses={(n) => setModel({ num_classes: n })}
-        />
+        {formData.data.source === "folder" ? (
+          <DetectionDatasetStats
+            baseDir={formData.data.base_dir}
+            onApplyClasses={(n) => setModel({ num_classes: n })}
+          />
+        ) : (
+          <p
+            style={{
+              marginTop: 14,
+              fontFamily: "var(--font-mono)",
+              fontSize: 11,
+              lineHeight: 1.6,
+              color: "var(--vf-text-muted)",
+            }}
+          >
+            O data.yaml define splits e nomes de classe. Confirme que{" "}
+            <code>nc</code> bate com o nº de classes acima.
+          </p>
+        )}
       </div>
 
       {/* Treinamento */}

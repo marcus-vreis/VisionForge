@@ -446,6 +446,17 @@ async def get_detection_schema() -> dict[str, Any]:
     return DetectionConfig.model_json_schema()
 
 
+@router.post("/detection/dataset/pick_yaml")
+async def pick_detection_yaml() -> DatasetPickResponse:
+    """Open a native file picker (filtered to .yaml/.yml) for a data.yaml.
+
+    Detection datasets in the standard Ultralytics/Roboflow format ship a
+    ``data.yaml`` describing splits and class names; this lets the user point
+    at it directly instead of synthesizing one from a folder layout.
+    """
+    return await asyncio.to_thread(_open_native_yaml_dialog)
+
+
 @router.post("/detection/dataset/stats")
 async def detection_dataset_stats(
     req: DetectionDatasetStatsRequest,
@@ -1119,6 +1130,47 @@ def _open_native_checkpoint_dialog() -> CheckpointPickResponse:
         return CheckpointPickResponse(path="", cancelled=True, message="Cancelado.")
 
     return CheckpointPickResponse(path=str(Path(chosen).resolve()), cancelled=False)
+
+
+def _open_native_yaml_dialog() -> DatasetPickResponse:
+    """Open a tkinter file dialog filtered to .yaml/.yml and return the path.
+
+    Returns an empty path + cancelled=True when the dialog is dismissed or
+    tkinter is unavailable.
+    """
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+    except ImportError:
+        return DatasetPickResponse(
+            path="",
+            cancelled=True,
+            message="tkinter is not available on this Python installation.",
+        )
+
+    try:
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes("-topmost", True)
+        chosen = filedialog.askopenfilename(
+            title="Selecione o data.yaml do dataset",
+            filetypes=[
+                ("Ultralytics data.yaml", "*.yaml *.yml"),
+                ("All files", "*.*"),
+            ],
+        )
+        root.destroy()
+    except Exception as exc:  # noqa: BLE001
+        return DatasetPickResponse(
+            path="",
+            cancelled=True,
+            message=f"Falha ao abrir o seletor: {exc}",
+        )
+
+    if not chosen:
+        return DatasetPickResponse(path="", cancelled=True, message="Cancelado.")
+
+    return DatasetPickResponse(path=str(Path(chosen).resolve()), cancelled=False)
 
 
 def _open_native_folder_dialog() -> DatasetPickResponse:
