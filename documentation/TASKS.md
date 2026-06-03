@@ -201,12 +201,24 @@ Iteração de tech-leader a partir de bug de uso real.
 
 ---
 
-## Phase 6 — Regression task
+## Phase 6 — Image Regression task
 
-- [ ] `RegressionConfig` Pydantic models
-- [ ] `RegressionTrainer` with MSE/MAE/R² metrics (depends: RegressionConfig)
-- [ ] Regression blocks (GridSearch, KFold, etc.) (depends: RegressionTrainer)
-- [ ] Regression tab in GUI (depends: RegressionTrainer)
+Design: `documentation/PHASE6_REGRESSION_PLAN.md`. Standalone config/block/run
+path (mirrors detection ADR-033); CSV-manifest dataset (image → continuous
+target[s]); reuses CNN backbones, `OutputConfig`/`DeviceConfig`/`TransformConfig`.
+
+- [x] brick 1 — `RegressionConfig` Pydantic models — standalone tree
+  (`utils/regression_config.py`): backbone choice, `num_targets` ↔
+  `target_columns` coherence (top-level validator), CSV field names, loss
+  (mse/mae/huber), non-power-of-two batch; reuses `OutputConfig`/`DeviceConfig`/
+  `TransformConfig`/`PreprocessingConfig`/`SchedulerConfig`. Tests in
+  `tests/utils/test_regression_config.py` (20 cases).
+- [ ] brick 2 — `RegressionDataModule` (CSV → image/target tensors) (depends: brick 1)
+- [ ] brick 3 — regression head on `ModelFactory` (CNN → N linear outputs)
+- [ ] brick 4 — `RegressionTrainer` with MSE/MAE/Huber loss + MSE/RMSE/MAE/R² metrics (depends: bricks 2,3)
+- [ ] brick 5 — `RegressionBlock` (`setup/run/report`) + ADR-036 (depends: brick 4)
+- [ ] brick 6 — `/api/regression/{schema,run}` run path (depends: brick 5)
+- [ ] brick 7 — Regression tab in GUI (currently placeholder) (depends: brick 6)
 
 ## Phase 7 — Object Detection task (Ultralytics, hybrid backends)
 
