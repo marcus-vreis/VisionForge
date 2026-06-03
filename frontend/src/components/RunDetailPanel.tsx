@@ -134,6 +134,12 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
   // detection-native equivalents land (see PHASE7_DETECTION_PLAN brick D/F).
   const isDetection =
     (detail?.config?.["task"] as string | undefined) === "detection";
+  const detectionBackend = (
+    detail?.config?.["model"] as Record<string, unknown> | undefined
+  )?.["backend"] as string | undefined;
+  // ONNX export is supported for classification and for Ultralytics detection
+  // runs (torchvision detection export is not implemented yet).
+  const canExportOnnx = !isDetection || detectionBackend === "ultralytics";
 
   useEffect(() => {
     let alive = true;
@@ -376,7 +382,7 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
 
           <PipelineSection config={detail.config} />
 
-          {detail.artifacts.model && !isDetection && (
+          {detail.artifacts.model && canExportOnnx && (
             <Section
               title="Exportar para ONNX"
               action={

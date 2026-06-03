@@ -167,6 +167,16 @@ Gap analysis (what is classification-only today) and the brick plan:
   counts, per-class annotation bars, unlabeled-image count, and the imbalance
   warning; auto-applies the detected class count to `model.num_classes`. Mirrors
   the classification `DatasetStats` look.
-- [ ] **brick F — export / batch inference parity** (optional, lower priority):
-  Ultralytics-native ONNX export + folder inference, surfaced like the
-  classification ONNX/batch-predict run actions.
+- [x] **brick F — detection ONNX export** (done): new
+  `gui/api/detection_export.export_detection_run`; `_execute_onnx_export`
+  dispatches to it for `task=="detection"`. Drives Ultralytics' own exporter
+  (`YOLO(...).export(format="onnx")`), records the artifact on the run, and
+  returns the standard `ExportOnnxResponse`. Torchvision detection export raises
+  a clear "not supported yet". `RunDetailPanel` re-enables the export card only
+  for Ultralytics-backend detection runs. Tested (mocked export, torchvision
+  unsupported, missing checkpoint, ultralytics-absent). Folder-inference parity
+  was descoped — Ultralytics `predict` over a folder can land later if needed.
+
+**Phase 7.1 complete** — detection now matches the classification post-training
+surface: run history (mAP), run detail, results view, per-model test (mAP on a
+new dataset), YOLO dataset stats, and ONNX export (Ultralytics).
