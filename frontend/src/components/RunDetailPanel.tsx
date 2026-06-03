@@ -128,6 +128,13 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
   const [batchResult, setBatchResult] = useState<BatchPredictResponse | null>(null);
   const [batchMsg, setBatchMsg] = useState<{ kind: "info" | "error" | "success"; text: string } | null>(null);
 
+  // A detection run.json carries task="detection". Its post-training actions
+  // (ONNX export, batch CSV inference, per-model evaluate) are classification
+  // -only endpoints today, so they're hidden for detection runs until the
+  // detection-native equivalents land (see PHASE7_DETECTION_PLAN brick D/F).
+  const isDetection =
+    (detail?.config?.["task"] as string | undefined) === "detection";
+
   useEffect(() => {
     let alive = true;
     setLoading(true);
@@ -369,7 +376,7 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
 
           <PipelineSection config={detail.config} />
 
-          {detail.artifacts.model && (
+          {detail.artifacts.model && !isDetection && (
             <Section
               title="Exportar para ONNX"
               action={
@@ -541,7 +548,7 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
             </Section>
           )}
 
-          {detail.artifacts.model && (
+          {detail.artifacts.model && !isDetection && (
             <Section
               title="Inferência em lote (CSV)"
               action={
@@ -748,6 +755,7 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
             </Section>
           )}
 
+          {!isDetection && (
           <Section
             title="Testes neste modelo"
             action={
@@ -908,6 +916,7 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
               </div>
             )}
           </Section>
+          )}
         </>
       )}
 
