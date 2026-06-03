@@ -20,10 +20,16 @@ from fastapi.testclient import TestClient
 from PIL import Image
 
 from visionforge.gui.api.routes import (
+    _execute_batch_predict,
+    _execute_onnx_export,
     _execute_run_test,
     _open_native_folder_dialog,
 )
-from visionforge.gui.api.schemas import RunTestRequest
+from visionforge.gui.api.schemas import (
+    BatchPredictRequest,
+    ExportOnnxRequest,
+    RunTestRequest,
+)
 
 # ── dataset + checkpoint helpers ────────────────────────────────────────────
 
@@ -249,8 +255,11 @@ class TestRunTestEndpoint:
 # ── /api/dataset/pick endpoint integration ───────────────────────────────────
 
 
-class TestRunActionsRejectDetection:
-    """Classification-only post-training actions must reject detection runs."""
+class TestClassificationOnlyActionsRejectDetection:
+    """Batch inference + ONNX export stay classification-only (detection 400s).
+
+    The per-model test is now detection-aware (brick D2); batch/ONNX are not.
+    """
 
     @staticmethod
     def _make_detection_run(tmp_path: Path) -> Path:
@@ -278,22 +287,17 @@ class TestRunActionsRejectDetection:
         (run_dir / "run.json").write_text(json.dumps(run_json), encoding="utf-8")
         return run_dir
 
-    def test_execute_run_test_rejects_detection(self, tmp_path: Path) -> None:
+    def test_batch_predict_rejects_detection(self, tmp_path: Path) -> None:
         run_dir = self._make_detection_run(tmp_path)
         with pytest.raises(ValueError, match="detection"):
-            _execute_run_test(run_dir, RunTestRequest(base_dir=str(tmp_path)))
-
-    def test_test_endpoint_returns_400_for_detection(self, tmp_path: Path) -> None:
-        from visionforge.gui.server import app
-
-        run_dir = self._make_detection_run(tmp_path)
-        models_dir = run_dir.parent.parent
-        with patch("visionforge.gui.api.routes._MODELS_DIR", models_dir):
-            client = TestClient(app, raise_server_exceptions=True)
-            resp = client.post(
-                f"/api/runs/{run_dir.name}/test", json={"base_dir": str(tmp_path)}
+            _execute_batch_predict(
+                run_dir, BatchPredictRequest(input_dir=str(tmp_path))
             )
-        assert resp.status_code == 400
+
+    def test_onnx_export_rejects_detection(self, tmp_path: Path) -> None:
+        run_dir = self._make_detection_run(tmp_path)
+        with pytest.raises(ValueError, match="detection"):
+            _execute_onnx_export(run_dir, ExportOnnxRequest())
 
 
 class TestDatasetPickEndpoint:

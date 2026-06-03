@@ -755,7 +755,6 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
             </Section>
           )}
 
-          {!isDetection && (
           <Section
             title="Testes neste modelo"
             action={
@@ -916,7 +915,6 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
               </div>
             )}
           </Section>
-          )}
         </>
       )}
 
