@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import itertools
+from collections.abc import Callable
 from typing import Any
 
 from visionforge.blocks._search_utils import (
     best_trial,
+    make_trial_progress_wrapper,
     run_trial,
     validate_dot_keys,
     write_best_config_yaml,
@@ -33,6 +35,8 @@ class GridSearchBlock(ExperimentBlock):
 
         self._config = config
         self._trials: list[dict[str, Any]] = []
+        # Injected by the GUI layer to stream live per-trial progress via SSE.
+        self._progress_callback: Callable[[dict[str, Any]], None] | None = None
 
     def run(self) -> None:
         """Execute all trials in the Cartesian product of the search space."""
@@ -62,6 +66,17 @@ class GridSearchBlock(ExperimentBlock):
                 "test_f1": None,
             }
 
+            if self._progress_callback is not None:
+                self._progress_callback(
+                    {
+                        "event": "trial_start",
+                        "trial_index": trial_idx,
+                        "total_trials": len(combos),
+                        "overrides": trial_overrides,
+                        "seed": trial_seed,
+                    }
+                )
+
             run_trial(
                 self._config,
                 trial_idx,
@@ -69,10 +84,20 @@ class GridSearchBlock(ExperimentBlock):
                 trial_seed,
                 trial_overrides,
                 trial_record,
+                progress_callback=make_trial_progress_wrapper(
+                    self._progress_callback, trial_idx, len(combos)
+                ),
             )
             self._trials.append(trial_record)
 
         self._write_artifacts()
+
+        # Single terminal 'end' after the whole sweep so the GUI closes the SSE
+        # stream once — inner trial 'end's were rewritten to 'trial_end'.
+        if self._progress_callback is not None:
+            self._progress_callback(
+                {"event": "end", "total_epochs": 0, "total_trials": len(self._trials)}
+            )
 
     def report(self) -> dict[str, Any]:
         """Return best trial metrics.

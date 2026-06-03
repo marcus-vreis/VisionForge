@@ -9,6 +9,7 @@ import pytest
 
 from visionforge.blocks._search_utils import (
     best_trial,
+    make_trial_progress_wrapper,
     run_trial,
     set_nested,
     validate_dot_keys,
@@ -309,3 +310,72 @@ class TestRunTrial:
             run_trial(config, 0, 1, 10, {}, record)
 
         mock_cache.assert_called_once()
+
+    def test_forwards_progress_callback_to_inner_block(self, tmp_path: Path) -> None:
+        """run_trial must inject its progress_callback onto the inner block so the
+        trial's Trainer streams epoch progress to the GUI."""
+        config = self._make_config(tmp_path)
+        record: dict[str, Any] = {
+            "status": "failed",
+            "error": "",
+            "best_val_loss": None,
+            "test_accuracy": None,
+            "test_f1": None,
+        }
+        seen: dict[str, Any] = {}
+
+        def mock_run(self: Any) -> None:  # noqa: ANN001
+            seen["callback"] = self._progress_callback
+
+        def mock_report(self: Any) -> dict[str, Any]:  # noqa: ANN001
+            return {"train": {"best_val_loss": 0.3}, "eval": {"accuracy": 0.9}}
+
+        def cb(_event: dict[str, Any]) -> None:
+            pass
+
+        with (
+            patch("visionforge.blocks._search_utils.ClassificationBlock.run", mock_run),
+            patch(
+                "visionforge.blocks._search_utils.ClassificationBlock.report",
+                mock_report,
+            ),
+        ):
+            run_trial(config, 0, 1, 10, {}, record, progress_callback=cb)
+
+        assert seen["callback"] is cb
+
+
+# ── make_trial_progress_wrapper ───────────────────────────────────────────────
+
+
+class TestTrialProgressWrapper:
+    def test_returns_none_for_none_callback(self) -> None:
+        assert make_trial_progress_wrapper(None, 0, 1) is None
+
+    def test_drops_inner_start_event(self) -> None:
+        """The sweep emits its own trial_start; the inner Trainer 'start' is noise."""
+        seen: list[dict[str, Any]] = []
+        wrapped = make_trial_progress_wrapper(seen.append, 2, 5)
+        assert wrapped is not None
+        wrapped({"event": "start", "total_epochs": 3, "device": "cpu"})
+        assert seen == []
+
+    def test_annotates_epoch_with_trial_context(self) -> None:
+        seen: list[dict[str, Any]] = []
+        wrapped = make_trial_progress_wrapper(seen.append, 2, 5)
+        assert wrapped is not None
+        wrapped({"event": "epoch_end", "epoch": 1, "total_epochs": 3})
+        assert seen[0]["event"] == "epoch_end"
+        assert seen[0]["trial_index"] == 2
+        assert seen[0]["total_trials"] == 5
+        assert seen[0]["epoch"] == 1
+
+    def test_rewrites_inner_end_to_trial_end(self) -> None:
+        """A bare 'end' closes the SSE stream client-side; rewriting it to
+        'trial_end' keeps the stream open for the next trial."""
+        seen: list[dict[str, Any]] = []
+        wrapped = make_trial_progress_wrapper(seen.append, 3, 5)
+        assert wrapped is not None
+        wrapped({"event": "end", "total_epochs": 2})
+        assert seen[0]["event"] == "trial_end"
+        assert seen[0]["trial_index"] == 3

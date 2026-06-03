@@ -1330,10 +1330,11 @@ async def _execute_experiment(config: ExperimentConfig, run_id: str) -> None:
         else:
             block = ClassificationBlock()
         block.setup(config)
-        # Only ClassificationBlock streams epoch progress today; CV runs many
-        # models sequentially, and TransferLearning's Trainer.fit() doesn't
-        # take a progress_callback yet.
-        if isinstance(block, ClassificationBlock):
+        # Blocks that stream live epoch progress over SSE get the event pump
+        # wired here. Grid/random search forward each inner trial's epochs
+        # (annotated with trial context) plus trial_start/trial_end banners.
+        # CV and TransferLearning don't take a progress_callback yet.
+        if isinstance(block, ClassificationBlock | GridSearchBlock | RandomSearchBlock):
             block._progress_callback = _put_event
 
         logger.info("GUI: Starting experiment {} (block={})", run_id, config.block)
