@@ -219,7 +219,13 @@ target[s]); reuses CNN backbones, `OutputConfig`/`DeviceConfig`/`TransformConfig
   classification; train/val required, test optional. Picklable dataset
   (Windows spawn). `core/regression_data.py`, tests in
   `tests/core/test_regression_data.py` (12 cases).
-- [ ] brick 3 — regression head on `ModelFactory` (CNN → N linear outputs)
+- [x] brick 3 — regression head — `RegressionModelFactory`
+  (`models/regression_factory.py`): CNN → `num_targets` linear outputs (no
+  activation). Extracted shared `build_backbone`/`replace_final_layer`/
+  `load_local_weights` helpers in `models/factory.py` so both factories share
+  the backbone + head-swap logic (DRY). Tests in
+  `tests/models/test_regression_factory.py` (8 cases); classification factory
+  suite still green.
 - [ ] brick 4 — `RegressionTrainer` with MSE/MAE/Huber loss + MSE/RMSE/MAE/R² metrics (depends: bricks 2,3)
 - [ ] brick 5 — `RegressionBlock` (`setup/run/report`) + ADR-036 (depends: brick 4)
 - [ ] brick 6 — `/api/regression/{schema,run}` run path (depends: brick 5)

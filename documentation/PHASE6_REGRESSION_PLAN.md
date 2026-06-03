@@ -8,7 +8,7 @@
 > Progress (see TASKS Phase 6 for the live checklist):
 > - [x] brick 1 — `RegressionConfig` (`utils/regression_config.py`) + tests
 > - [x] brick 2 — `RegressionDataModule` (CSV → image/target tensors)
-> - [ ] brick 3 — regression head on `ModelFactory` (CNN → N continuous outputs)
+> - [x] brick 3 — regression head on `ModelFactory` (CNN → N continuous outputs)
 > - [ ] brick 4 — `RegressionTrainer` (MSE/MAE/Huber loss, MSE/MAE/RMSE/R²)
 > - [ ] brick 5 — `RegressionBlock` (`setup/run/report`) + ADR-036
 > - [ ] brick 6 — `/api/regression/{schema,run}` run path
