@@ -88,7 +88,7 @@ Visual baseline now matches `frontend-design/`: oklch dark palette, per-task acc
 - [x] `ResultsView` restyled (metric tiles + plot grid in glass aesthetic)
 - [x] `Waves` SVG animated background
 - [x] `HistoryOverlay` empty-state stub — needs `/api/runs` wire (tracked in Phase 4)
-- [ ] Detection / Regression / Segmentation tabs → currently "em breve" placeholder; wire when backends land
+- [x] Detection tab → wired end-to-end (Phase 7). Regression / Segmentation tabs still placeholder; wire when those backends land
 
 ---
 
@@ -208,13 +208,31 @@ Iteração de tech-leader a partir de bug de uso real.
 - [ ] Regression blocks (GridSearch, KFold, etc.) (depends: RegressionTrainer)
 - [ ] Regression tab in GUI (depends: RegressionTrainer)
 
-## Phase 7 — Object Detection task
+## Phase 7 — Object Detection task (Ultralytics, hybrid backends)
 
-- [ ] `DetectionConfig` Pydantic models
-- [ ] Model support: YOLO, Faster R-CNN, SSD (depends: DetectionConfig)
-- [ ] `DetectionTrainer` with mAP, IoU metrics (depends: DetectionConfig)
-- [ ] Detection blocks (depends: DetectionTrainer)
-- [ ] Detection tab in GUI (depends: DetectionTrainer)
+Design: `documentation/PHASE7_DETECTION_PLAN.md`. Primary backend Ultralytics
+(YOLO / RT-DETR), secondary torchvision (Faster R-CNN / SSD / RetinaNet).
+
+- [x] `DetectionConfig` Pydantic models — standalone tree (`utils/detection_config.py`), backend↔model validation, non-power-of-two batch, dataset source (`data_yaml` or `base_dir`), reuses `OutputConfig`/`DeviceConfig`. Tests in `tests/utils/test_detection_config.py`.
+- [x] `DetectionDataModule` — passthrough explicit `data.yaml` or synthesize one from a YOLO-layout `base_dir` (detects `images/<split>` vs `<split>/images`, class names from config/`classes.txt`/generated). `core/detection_data.py`, no ultralytics import. Tests in `tests/core/test_detection_data.py`. `[detection]` extra (`ultralytics>=8.3`) declared in pyproject.
+- [x] `DetectionTrainer` — wraps `YOLO.train` (lazy ultralytics bind), hooks `on_fit_epoch_end` → SSE `start`/`epoch_end`/`end` (mAP fields + classification-overlay-compat fields), writes ADR-013-compatible `run.json`; torchvision backend raises `NotImplementedError` (scaffold). `core/detection_trainer.py`, tested with a mocked `YOLO` in `tests/core/test_detection_trainer.py`.
+- [x] `DetectionBlock` — standalone `setup/run/report` over `DetectionConfig` (not an `ExperimentBlock` subclass — see ADR-033), `_progress_callback` slot, wraps `DetectionTrainer`. `blocks/detection.py`, tested in `tests/blocks/test_detection.py`.
+- [x] `ultralytics` optional extra in `pyproject.toml` (done in brick 2) + ADR-033 (standalone detection path) + ADR-034 (Ultralytics owns the loop).
+- [x] Detection run path — `GET /api/detection/schema` + `POST /api/detection/run` dispatching `DetectionBlock` with `_progress_callback` → SSE; reuses the shared single-run state and `/experiment/{status,events,result}` (one run at a time, one GPU). `gui/api/routes.py`, tests in `tests/gui/test_routes_detection.py`.
+- [x] Detection tab in GUI — `DetectionPanel` (backend/model/dataset/training form over `DetectionConfig`), submits to `/api/detection/run`, reuses `TrainingOverlay` (SSE) + `ResultsView` (mAP metrics + Ultralytics plots). Model options mirror the backend in `lib/detection-models.ts` (tested via Vitest). `App.tsx` wires the Detecção tab + BottomBar.
+
+**Phase 7 Ultralytics path complete (backend + GUI).**
+
+### Torchvision backend (`backend="torchvision"`) — ✅ complete
+- [x] `build_torchvision_detector` model factory — **all five families wired**: Faster R-CNN (R50/MobileNet-FPN), SSD300-VGG16, SSDLite320-MobileNetV3, RetinaNet-R50-FPN. Each head sized to `num_classes + 1` (background slot, matching `DetectionDataset` labels); `weights_backbone=None` when not pretrained (no downloads in CI). `models/detection_factory.py`, tests in `tests/models/test_detection_factory.py` (build + train-forward with the max label verifies each family's sizing).
+- [x] `DetectionDataset` — YOLO-format labels → torchvision targets (`boxes` xyxy abs + `labels` = yolo class + 1), `detection_collate`, degenerate-box skip, empty-target for unlabeled images. `core/detection_dataset.py`, tests in `tests/core/test_detection_dataset.py`.
+- [x] torchvision training loop in `DetectionTrainer` (`backend="torchvision"` seam) — loss-dict loop (`build_torchvision_detector` + `DetectionDataset` + `detection_collate`), per-epoch train/val loss, best by val loss (frozen-BN safe), `weights/best.pt`, SSE (`start`/`epoch_end`/`end`) + ADR-013 `run.json` with `box_loss`. Requires `data.base_dir`. mAP deferred (ADR-035). Tests in `tests/core/test_detection_trainer.py::TestTorchvisionPath`.
+- [x] `mean_average_precision_50` — mAP@0.5 (VOC all-points AP, `torchvision.ops.box_iou`), torchvision-format preds/targets. `core/detection_metrics.py`, tests in `tests/core/test_detection_metrics.py`.
+- [x] Wire mAP@50 into the torchvision loop — per-epoch val mAP@50 (`_eval_torchvision_map`), best checkpoint by mAP, streamed + in `run.json` (`map50` per epoch + best). Supersedes the val-loss selection of ADR-035.
+- [x] SSD / RetinaNet head replacement in the factory (see factory item above — all families wired).
+- [x] Opt-in real end-to-end smoke test — trains the real torchvision pipeline (fasterrcnn_mobilenet, no mocks/downloads) one epoch on a synthetic YOLO set and checks loss loop + mAP@50 + run.json. Skipped in CI; enable with `VF_RUN_DETECTION_INTEGRATION=1`. `tests/integration/test_detection_torchvision_e2e.py`.
+
+**✅ Phase 7 complete: Ultralytics + torchvision backends, both end-to-end (config → datamodule → trainer → block → API → GUI), with mAP@50.**
 
 ## Phase 8 — Segmentation task
 

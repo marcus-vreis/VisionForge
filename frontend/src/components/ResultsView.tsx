@@ -18,6 +18,10 @@ const GRAPH_LABELS: Record<string, string> = {
   "confusion_matrix_normalized.png": "Matriz de confusão (normalizada)",
   "roc_curve.png": "Curva ROC",
   "precision_recall_curve.png": "Curva Precision-Recall",
+  // Detection (Ultralytics) plot names.
+  "results.png": "Curvas de treino (Ultralytics)",
+  "BoxPR_curve.png": "Curva Precision-Recall (box)",
+  "BoxF1_curve.png": "Curva F1 (box)",
 };
 
 /** Format metric values for display. */
@@ -39,6 +43,9 @@ const METRIC_LABELS: Record<string, string> = {
   test_precision: "Precision",
   test_recall: "Recall",
   test_auc_roc: "AUC-ROC",
+  // Detection metrics.
+  map50: "mAP@50",
+  map50_95: "mAP@50-95",
 };
 
 interface MetricCardProps {
