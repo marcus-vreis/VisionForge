@@ -4,10 +4,96 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+from typing import Any
+
+# Map ExperimentConfig.block snake_case literals to BlockRegistry class names.
+_BLOCK_ALIASES: dict[str, str] = {
+    "classification": "ClassificationBlock",
+    "cross_validation": "CrossValidationBlock",
+    "grid_search": "GridSearchBlock",
+    "random_search": "RandomSearchBlock",
+    "transfer_learning": "TransferLearningBlock",
+    "model_comparison": "ModelComparisonBlock",
+    "batch_prediction": "BatchPredictionBlock",
+    "export_onnx": "ExportONNXBlock",
+}
+
+
+def _peek_task(config_path: Path) -> str:
+    """Read just the ``task`` field from a YAML config (defaults to multiclass)."""
+    import yaml
+
+    with config_path.open(encoding="utf-8") as f:
+        raw: Any = yaml.safe_load(f)
+    if not isinstance(raw, dict):
+        return "multiclass"
+    return str(raw.get("task", "multiclass"))
+
+
+def build_task_block(config_path: Path) -> tuple[Any, Any]:
+    """Load a config and return ``(config, block)`` ready to run, dispatched by task.
+
+    The standalone tasks (detection/regression/segmentation/anomaly) go to their
+    own config loader + block; the classification family goes to
+    ``ExperimentConfig`` + the ``BlockRegistry`` block named by ``config.block``.
+    The block is ``setup()``-d but not run.
+
+    Raises:
+        ValueError: if the config's ``task`` is not recognized.
+    """
+    task = _peek_task(config_path)
+
+    if task == "detection":
+        from visionforge.blocks.detection import DetectionBlock
+        from visionforge.utils.detection_config import load_detection_config
+
+        config: Any = load_detection_config(config_path)
+        block: Any = DetectionBlock()
+    elif task == "regression":
+        from visionforge.blocks.regression import RegressionBlock
+        from visionforge.utils.regression_config import load_regression_config
+
+        config = load_regression_config(config_path)
+        block = RegressionBlock()
+    elif task == "segmentation":
+        from visionforge.blocks.segmentation import SegmentationBlock
+        from visionforge.utils.segmentation_config import load_segmentation_config
+
+        config = load_segmentation_config(config_path)
+        block = SegmentationBlock()
+    elif task == "anomaly":
+        from visionforge.blocks.anomaly import AnomalyBlock
+        from visionforge.utils.anomaly_config import load_anomaly_config
+
+        config = load_anomaly_config(config_path)
+        block = AnomalyBlock()
+    elif task in ("binary", "multiclass"):
+        import visionforge.blocks.batch_prediction  # noqa: F401
+        import visionforge.blocks.classification  # noqa: F401
+        import visionforge.blocks.cross_validation  # noqa: F401
+        import visionforge.blocks.export_onnx  # noqa: F401
+        import visionforge.blocks.grid_search  # noqa: F401
+        import visionforge.blocks.model_comparison  # noqa: F401
+        import visionforge.blocks.random_search  # noqa: F401
+        import visionforge.blocks.transfer_learning  # noqa: F401
+        from visionforge.blocks.registry import BlockRegistry
+        from visionforge.utils.config import load_config
+
+        config = load_config(config_path)
+        registry = BlockRegistry.discover()
+        block = registry[_BLOCK_ALIASES[config.block]]()
+    else:
+        raise ValueError(
+            f"Unknown task '{task}'. Expected one of: binary, multiclass, "
+            f"detection, regression, segmentation, anomaly."
+        )
+
+    block.setup(config)
+    return config, block
 
 
 def main() -> None:
-    """Run a VisionForge experiment from a YAML config file."""
+    """Run a VisionForge experiment or start the GUI from the command line."""
     from visionforge.utils.logger import setup_logger
 
     parser = argparse.ArgumentParser(
@@ -38,39 +124,18 @@ def main() -> None:
         return
 
     if args.command == "run":
-        import visionforge.blocks.classification  # noqa: F401
-        import visionforge.blocks.cross_validation  # noqa: F401
-        import visionforge.blocks.grid_search  # noqa: F401
-        import visionforge.blocks.random_search  # noqa: F401
-        from visionforge.blocks.registry import BlockRegistry
-        from visionforge.utils.config import load_config
         from visionforge.utils.logger import logger
 
-        # Map config.block snake_case literals to registry class names.
-        _BLOCK_ALIASES: dict[str, str] = {
-            "classification": "ClassificationBlock",
-            "cross_validation": "CrossValidationBlock",
-            "grid_search": "GridSearchBlock",
-            "random_search": "RandomSearchBlock",
-        }
-
         logger.info("Loading config: {}", args.config)
-        config = load_config(args.config)
+        config, block = build_task_block(args.config)
 
         logger.info(
             "Experiment: {} | task: {} | block: {}",
             config.name,
             config.task,
-            config.block,
+            type(block).__name__,
         )
-
-        registry = BlockRegistry.discover()
-        class_name = _BLOCK_ALIASES[config.block]
-        block_cls = registry[class_name]
-        block = block_cls()
-        block.setup(config)
-
-        logger.info("Running {}...", class_name)
+        logger.info("Running {}...", type(block).__name__)
         block.run()
 
         report = block.report()
