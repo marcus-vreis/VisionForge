@@ -29,6 +29,8 @@ from visionforge.core.plotter import MetricsPlotter
 from visionforge.gui.api.detection_export import export_detection_run
 from visionforge.gui.api.detection_testing import evaluate_detection_run
 from visionforge.gui.api.schemas import (
+    AugmentPreviewRequest,
+    AugmentPreviewResponse,
     BatchPredictRequest,
     BatchPredictResponse,
     CheckpointPickResponse,
@@ -388,6 +390,18 @@ async def preview_preprocess(
     served via the existing /api/artifacts/{path} endpoint.
     """
     return await asyncio.to_thread(_render_preprocess_preview, req)
+
+
+@router.post("/dataset/preview_augment")
+async def preview_augment(req: AugmentPreviewRequest) -> AugmentPreviewResponse:
+    """Generate a strip of randomly-augmented variants of one dataset image.
+
+    Applies the configured train-time augmentations (horizontal flip, rotation,
+    color jitter) to a sample image ``num_variants`` times so the user can see
+    the augmentation effect before training. PNGs are written under
+    ``outputs/preview_cache/augment/`` and served via /api/artifacts/{path}.
+    """
+    return await asyncio.to_thread(_render_augment_preview, req)
 
 
 @router.post("/dataset/samples")
@@ -900,6 +914,90 @@ def _render_preprocess_preview(
         final=str(final_path),
         source_image=str(img_path.resolve()),
         available_kinds=available_kinds(),
+    )
+
+
+def _pick_preview_image(
+    base_dir: str, split: str, class_name: str | None
+) -> Path | None:
+    """Return the first image of ``class_name`` (or the first class) in a split."""
+    _remember_dataset_root(base_dir)
+    split_dir = Path(base_dir) / split
+    if not split_dir.is_dir():
+        return None
+    class_dirs = [d for d in sorted(split_dir.iterdir()) if d.is_dir()]
+    if not class_dirs:
+        return None
+    target = None
+    if class_name is not None:
+        target = next((d for d in class_dirs if d.name == class_name), None)
+    if target is None:
+        target = class_dirs[0]
+    return next(
+        (
+            p
+            for p in sorted(target.iterdir())
+            if p.is_file() and p.suffix.lower() in _IMAGE_EXTS
+        ),
+        None,
+    )
+
+
+def _render_augment_preview(req: AugmentPreviewRequest) -> AugmentPreviewResponse:
+    """Save N randomly-augmented variants of one dataset image and return paths."""
+    import torchvision.transforms as T
+    from PIL import Image
+
+    from visionforge.utils.config import TransformConfig
+
+    img_path = _pick_preview_image(req.base_dir, req.split, req.class_name)
+    if img_path is None:
+        return AugmentPreviewResponse(
+            original="",
+            variants=[],
+            source_image="",
+            active=[],
+            message=f"Sem imagens no split '{req.split}'.",
+        )
+
+    tc = TransformConfig.model_validate(req.transforms)
+    size = tc.image_size
+    aug_steps: list[Any] = []
+    active: list[str] = []
+    if tc.horizontal_flip:
+        aug_steps.append(T.RandomHorizontalFlip())
+        active.append("flip")
+    if tc.rotation_degrees > 0:
+        aug_steps.append(T.RandomRotation(tc.rotation_degrees))
+        active.append("rotation")
+    if tc.color_jitter:
+        aug_steps.append(T.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2))
+        active.append("jitter")
+    transform = T.Compose([T.Resize(size), T.CenterCrop(size), *aug_steps])
+
+    cache_dir = _PREVIEW_CACHE_DIR / "augment"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    for old in cache_dir.glob("*.png"):
+        try:
+            old.unlink()
+        except OSError:
+            pass
+
+    original_img = Image.open(img_path).convert("RGB")
+    original_path = cache_dir / "00_original.png"
+    T.Compose([T.Resize(size), T.CenterCrop(size)])(original_img).save(original_path)
+
+    variants: list[str] = []
+    for i in range(req.num_variants):
+        variant_path = cache_dir / f"{i + 1:02d}_variant.png"
+        transform(original_img).save(variant_path)
+        variants.append(str(variant_path))
+
+    return AugmentPreviewResponse(
+        original=str(original_path),
+        variants=variants,
+        source_image=str(img_path.resolve()),
+        active=active,
     )
 
 

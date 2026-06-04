@@ -273,6 +273,26 @@ class PreprocessPreviewResponse(BaseModel):
     message: str | None = None
 
 
+class AugmentPreviewRequest(BaseModel):
+    """Request a strip of randomly-augmented variants of one dataset image."""
+
+    base_dir: str
+    split: Literal["train", "val", "test"] = "train"
+    class_name: str | None = None  # None → first class found
+    transforms: dict[str, Any] = {}  # validated into TransformConfig
+    num_variants: int = Field(default=4, ge=1, le=12)
+
+
+class AugmentPreviewResponse(BaseModel):
+    """Original + N randomly-augmented variant artifacts for the source image."""
+
+    original: str  # artifact path
+    variants: list[str] = []  # artifact paths
+    source_image: str  # absolute path of the source image
+    active: list[str] = []  # which augmentations were applied (flip/rotation/jitter)
+    message: str | None = None
+
+
 class DetectionDatasetStatsRequest(BaseModel):
     """Path to a YOLO-layout dataset root for annotation distribution analysis."""
 
@@ -374,6 +394,8 @@ __all__ = [
     "DatasetSamplesResponse",
     "PreprocessPreviewRequest",
     "PreprocessPreviewResponse",
+    "AugmentPreviewRequest",
+    "AugmentPreviewResponse",
     "PreprocessPreviewStep",
     "SplitStats",
     "GPUInfo",

@@ -403,6 +403,38 @@ export async function previewPreprocess(
   });
 }
 
+export interface AugmentPreviewResponse {
+  original: string;
+  variants: string[];
+  source_image: string;
+  active: string[];
+  message: string | null;
+}
+
+/** Render N randomly-augmented variants of a sample image so the user can see
+ *  the train-time augmentation effect (flip/rotation/jitter) before training. */
+export async function previewAugment(
+  baseDir: string,
+  transforms: Record<string, unknown>,
+  options?: {
+    split?: "train" | "val" | "test";
+    className?: string;
+    numVariants?: number;
+  },
+): Promise<AugmentPreviewResponse> {
+  return request<AugmentPreviewResponse>("/dataset/preview_augment", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      base_dir: baseDir,
+      split: options?.split ?? "train",
+      class_name: options?.className ?? null,
+      transforms,
+      num_variants: options?.numVariants ?? 4,
+    }),
+  });
+}
+
 
 export interface SystemInfo {
   cpu_count: number;
