@@ -1,0 +1,34 @@
+# Example image-regression config (CSV-manifest dataset). Copy, point `data` at
+# your dataset, then run:  visionforge run configs/regression.yaml
+name: regression_example
+task: regression
+
+model:
+  name: resnet50              # any classification backbone (resnet/efficientnet/vgg/alexnet)
+  num_targets: 1              # must equal len(data.target_columns)
+  pretrained: true
+
+data:
+  # base_dir holds the per-split CSVs + the images_dir root. Each CSV row maps
+  # an image (image_column, relative to images_dir) to one or more numeric targets.
+  base_dir: datasets/my_regression_dataset
+  images_dir: images
+  train_csv: train.csv
+  val_csv: val.csv
+  test_csv: test.csv          # optional
+  image_column: image
+  target_columns: [target]
+
+training:
+  learning_rate: 0.001
+  epochs: 50
+  batch_size: 32
+  loss: mse                   # mse | mae | huber
+  optimizer: adam
+  early_stopping_patience: 10
+
+output:
+  models_dir: outputs/models
+
+device:
+  kind: cuda
