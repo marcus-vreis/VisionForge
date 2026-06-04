@@ -37,6 +37,21 @@ class TestLossCurve:
         assert save_path.exists()
 
 
+class TestMetricCurve:
+    def test_creates_png(self, tmp_path: Path) -> None:
+        save_path = tmp_path / "auroc.png"
+        MetricsPlotter.metric_curve(
+            [1, 2, 3], [0.7, 0.8, 0.9], save_path, label="AUROC", ylabel="AUROC"
+        )
+        assert save_path.exists()
+        assert save_path.stat().st_size > 0
+
+    def test_creates_parent_dir_if_missing(self, tmp_path: Path) -> None:
+        save_path = tmp_path / "sub" / "auroc.png"
+        MetricsPlotter.metric_curve([1], [0.5], save_path, label="AUROC")
+        assert save_path.exists()
+
+
 class TestConfusionMatrixPlot:
     def test_creates_png(self, tmp_path: Path) -> None:
         """confusion_matrix_plot() must create a .png file at save_path."""

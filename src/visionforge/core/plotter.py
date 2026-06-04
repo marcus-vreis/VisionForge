@@ -41,6 +41,36 @@ class MetricsPlotter:
         fig.savefig(save_path, dpi=150, bbox_inches="tight")
 
     @staticmethod
+    def metric_curve(
+        epochs: list[int],
+        values: list[float],
+        save_path: Path,
+        *,
+        label: str = "metric",
+        ylabel: str | None = None,
+        title: str | None = None,
+        color: str = "#8b5cf6",
+    ) -> None:
+        """Save a single-series metric-over-epochs curve (e.g. AUROC).
+
+        Generic so any task can plot one streamed metric without a bespoke
+        method; used by the anomaly block for the AUROC curve.
+        """
+        fig = Figure(figsize=(10, 6))
+        FigureCanvasAgg(fig)
+        ax = fig.subplots()
+
+        ax.plot(epochs, values, label=label, linewidth=2, color=color, marker="o")
+        ax.set_xlabel("Epoch")
+        ax.set_ylabel(ylabel or label)
+        ax.set_title(title or f"{label} over epochs")
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(save_path, dpi=150, bbox_inches="tight")
+
+    @staticmethod
     def accuracy_curve(history: list[EpochResult], save_path: Path) -> None:
         """Save a train/val accuracy curve to save_path."""
         epochs = [r.epoch for r in history]
