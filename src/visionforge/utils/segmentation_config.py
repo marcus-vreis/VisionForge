@@ -16,11 +16,14 @@ import yaml
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from visionforge.utils.config import (
+    CURRENT_SCHEMA_VERSION,
     DeviceConfig,
     OutputConfig,
     PreprocessingConfig,
     SchedulerConfig,
     TransformConfig,
+    check_schema_version,
+    migrate_config_dict,
 )
 
 # torchvision segmentation families + a hand-rolled U-Net (brick 3). Explicit so
@@ -120,6 +123,7 @@ class SegmentationConfig(BaseModel):
     """Top-level semantic-segmentation experiment configuration."""
 
     name: str = Field(default="segmentation_001", min_length=1)
+    schema_version: int = Field(default=CURRENT_SCHEMA_VERSION, ge=1)
     task: Literal["segmentation"] = "segmentation"
     model: SegmentationModelConfig = Field(default_factory=SegmentationModelConfig)
     data: SegmentationDataConfig
@@ -131,6 +135,7 @@ class SegmentationConfig(BaseModel):
 
     @model_validator(mode="after")
     def ignore_index_must_not_collide(self) -> "SegmentationConfig":
+        check_schema_version(self.schema_version)
         idx = self.data.ignore_index
         if 0 <= idx < self.model.num_classes:
             raise ValueError(
@@ -166,7 +171,7 @@ def load_segmentation_config(path: Path | str) -> SegmentationConfig:
             f"Config file must contain a YAML mapping, got: {type(raw).__name__}"
         )
 
-    return SegmentationConfig.model_validate(raw)
+    return SegmentationConfig.model_validate(migrate_config_dict(raw))
 
 
 __all__ = [

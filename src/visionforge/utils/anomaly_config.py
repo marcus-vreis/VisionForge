@@ -14,14 +14,17 @@ from pathlib import Path
 from typing import Any, Literal
 
 import yaml
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from visionforge.utils.config import (
+    CURRENT_SCHEMA_VERSION,
     DeviceConfig,
     OutputConfig,
     PreprocessingConfig,
     SchedulerConfig,
     TransformConfig,
+    check_schema_version,
+    migrate_config_dict,
 )
 
 # PatchCore feature-extractor backbones (frozen ImageNet). The autoencoder is
@@ -93,12 +96,18 @@ class AnomalyConfig(BaseModel):
     """Top-level anomaly-detection experiment configuration."""
 
     name: str = Field(default="anomaly_001", min_length=1)
+    schema_version: int = Field(default=CURRENT_SCHEMA_VERSION, ge=1)
     task: Literal["anomaly"] = "anomaly"
     model: AnomalyModelConfig = Field(default_factory=AnomalyModelConfig)
     data: AnomalyDataConfig
     training: AnomalyTrainingConfig = Field(default_factory=AnomalyTrainingConfig)
     output: OutputConfig = Field(default_factory=OutputConfig)
     device: DeviceConfig = Field(default_factory=DeviceConfig)
+
+    @model_validator(mode="after")
+    def reject_future_schema_version(self) -> "AnomalyConfig":
+        check_schema_version(self.schema_version)
+        return self
 
 
 def load_anomaly_config(path: Path | str) -> AnomalyConfig:
@@ -126,7 +135,7 @@ def load_anomaly_config(path: Path | str) -> AnomalyConfig:
             f"Config file must contain a YAML mapping, got: {type(raw).__name__}"
         )
 
-    return AnomalyConfig.model_validate(raw)
+    return AnomalyConfig.model_validate(migrate_config_dict(raw))
 
 
 __all__ = [

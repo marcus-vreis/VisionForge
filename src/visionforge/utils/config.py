@@ -396,6 +396,20 @@ class ExperimentConfig(BaseModel):
         return self
 
 
+def check_schema_version(version: int) -> None:
+    """Reject a config whose ``schema_version`` is newer than this build supports.
+
+    Shared by every task config so a config from a future VisionForge release
+    fails loudly instead of being silently mis-parsed.
+    """
+    if version > CURRENT_SCHEMA_VERSION:
+        raise ValueError(
+            f"Config schema_version {version} was written by a newer version of "
+            f"VisionForge (this build supports up to {CURRENT_SCHEMA_VERSION}). "
+            f"Please upgrade VisionForge."
+        )
+
+
 def migrate_config_dict(raw: dict[str, Any]) -> dict[str, Any]:
     """Upgrade a raw config mapping to the current schema version.
 
@@ -468,5 +482,6 @@ __all__ = [
     "ExportONNXConfig",
     "load_config",
     "migrate_config_dict",
+    "check_schema_version",
     "CURRENT_SCHEMA_VERSION",
 ]
