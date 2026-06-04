@@ -267,6 +267,19 @@ reusing the existing endpoints/components by task dispatch (see PHASE7 plan §7)
 
 ---
 
+## Integration smoke tests (opt-in)
+
+Real end-to-end pipeline tests (no mocks), skipped in CI to keep it fast
+(ADR-010); enable with the matching env var.
+
+- [x] Detection (torchvision): `tests/integration/test_detection_torchvision_e2e.py`
+  — `VF_RUN_DETECTION_INTEGRATION=1`.
+- [x] Classification: `tests/integration/test_classification_e2e.py` — trains a
+  real resnet18 (random init, no downloads) one epoch on a synthetic ImageFolder
+  and checks the whole `ModelFactory → DataModule → Trainer → Evaluator →
+  MetricsPlotter → run.json` path (metrics, `test_accuracy`, loss/CM plots,
+  checkpoint). Enable with `VF_RUN_CLASSIFICATION_INTEGRATION=1`.
+
 ## Backlog / ideas
 
 - Optuna integration as alternative to `RandomSearchBlock`
