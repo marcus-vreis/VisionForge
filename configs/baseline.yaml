@@ -1,6 +1,7 @@
 # baseline experiment — ResNet50 binary classification.
 # Copy and rename this file for each new experiment.
 
+schema_version: 1  # config schema version (for forward migration); see DECISIONS ADR-039
 name: resnet50_baseline
 task: binary  # binary | multiclass
 

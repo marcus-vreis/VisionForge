@@ -4,6 +4,12 @@ from typing import Any, Literal
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+# Bumped whenever a breaking change is made to the experiment config schema. A
+# config carries the version it was written with so old YAML/run.json files can
+# be migrated forward (see ``migrate_config_dict``) without losing traceability —
+# the reproducibility guarantee depends on this (CLAUDE.md §6.2).
+CURRENT_SCHEMA_VERSION = 1
+
 
 class GridSearchConfig(BaseModel):
     """Search space for exhaustive hyperparameter grid search."""
@@ -336,6 +342,7 @@ class ExperimentConfig(BaseModel):
     """Top-level experiment configuration."""
 
     name: str = Field(default="experiment_001", min_length=1)
+    schema_version: int = Field(default=CURRENT_SCHEMA_VERSION, ge=1)
     task: Literal["binary", "multiclass"] = "multiclass"
     block: Literal[
         "classification",
@@ -363,6 +370,12 @@ class ExperimentConfig(BaseModel):
 
     @model_validator(mode="after")
     def validate_task_and_num_classes(self) -> "ExperimentConfig":
+        if self.schema_version > CURRENT_SCHEMA_VERSION:
+            raise ValueError(
+                f"Config schema_version {self.schema_version} was written by a "
+                f"newer version of VisionForge (this build supports up to "
+                f"{CURRENT_SCHEMA_VERSION}). Please upgrade VisionForge."
+            )
         if self.task == "binary" and self.model.num_classes != 1:
             raise ValueError(
                 f"Binary task requires num_classes=1, got {self.model.num_classes}."
@@ -383,8 +396,25 @@ class ExperimentConfig(BaseModel):
         return self
 
 
+def migrate_config_dict(raw: dict[str, Any]) -> dict[str, Any]:
+    """Upgrade a raw config mapping to the current schema version.
+
+    Returns a new dict (the input is not mutated). A config without an explicit
+    ``schema_version`` is treated as the initial schema (v1) — every legacy YAML
+    and run.json predates the field. Future breaking schema changes add a step
+    here that rewrites older shapes forward before validation.
+    """
+    if not isinstance(raw, dict):
+        return raw
+    out = dict(raw)
+    version = out.get("schema_version", 1)
+    # (no migration steps yet — v1 is the initial schema)
+    out["schema_version"] = version
+    return out
+
+
 def load_config(path: Path | str) -> ExperimentConfig:
-    """Load and validate an experiment config from a YAML file.
+    """Load, migrate, and validate an experiment config from a YAML file.
 
     Args:
         path: path to the .yaml config file.
@@ -414,7 +444,7 @@ def load_config(path: Path | str) -> ExperimentConfig:
             f"Config file must contain a YAML mapping, got: {type(raw).__name__}"
         )
 
-    return ExperimentConfig.model_validate(raw)
+    return ExperimentConfig.model_validate(migrate_config_dict(raw))
 
 
 __all__ = [
@@ -437,4 +467,6 @@ __all__ = [
     "BatchPredictionConfig",
     "ExportONNXConfig",
     "load_config",
+    "migrate_config_dict",
+    "CURRENT_SCHEMA_VERSION",
 ]

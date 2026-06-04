@@ -397,3 +397,15 @@
 **Reason:** A correct mAP implementation needs either `pycocotools`/`torchmetrics` (a heavy, Windows-fragile dependency surface, against ADR-005/ADR-010's lean-CI stance) or a carefully-tested hand-rolled metric — too much to bundle into the same change as the loop without risking correctness. Shipping a working, fully-tested loss-based loop first (mocked-model unit tests, no weight downloads) delivers a usable torchvision trainer now and isolates mAP as its own verifiable module. Validation loss is a legitimate selection signal for detection and mirrors the classification `Trainer`'s best-checkpoint contract, so `run.json`/history stay uniform across backends.
 
 **Update (2026-06-01):** the deferred mAP module landed — `core/detection_metrics.py` (`mean_average_precision_50`, VOC all-points AP via `torchvision.ops.box_iou`, no extra deps). The torchvision loop now selects the best checkpoint by **validation mAP@50** and records `map50` per epoch in `run.json`; validation loss is kept as a secondary logged signal. SSD/RetinaNet head replacement remains the open follow-up.
+
+---
+
+## ADR-039 — Config carries a `schema_version` migrated forward on load
+
+**Date:** 2026-06-04  
+**Status:** Accepted  
+**Extends:** ADR-002 (Pydantic config), ADR-013 (`run.json` contract)
+
+**Decision:** `ExperimentConfig` carries an integer `schema_version` (default `CURRENT_SCHEMA_VERSION = 1`). `load_config` runs `migrate_config_dict(raw)` before validation: a config without an explicit `schema_version` is treated as v1 (every legacy YAML and `run.json` predates the field), and future breaking schema changes add a migration step there that rewrites older shapes forward. A config whose `schema_version` is **newer** than this build supports is rejected at validation with a clear "written by a newer version — please upgrade" error rather than silently mis-parsing. The field is injected into `run.json` automatically (it is a normal config field) and hidden from the GUI form (`SKIP_FIELDS`) since it is infra metadata, not a user knob.
+
+**Reason:** Reproducibility is the project's core value — *"which exact config produced this result?"* (CLAUDE.md §6.2/§7.3). Once real experiments accumulate, a breaking change to a required config field would silently invalidate or fail to load saved configs with no traceability. Establishing the version field + a migration hook **now, while the schema is still small** ("congele cedo"), means later schema changes migrate old configs forward deterministically instead of breaking them, and the newer-version guard prevents a stale build from silently misreading a config from a future release. The migration is centralized in one pure, tested function so each future bump is a single, isolated, verifiable step. The standalone task configs (regression/segmentation/anomaly/detection) should adopt the same `schema_version` + migration pattern when those branches integrate.
