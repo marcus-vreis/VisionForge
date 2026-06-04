@@ -329,8 +329,14 @@ families + hand-rolled U-Net; reuses `OutputConfig`/`DeviceConfig`/`TransformCon
   `segmentation_logits` normalizes dict (`"out"`) vs tensor output so the trainer
   is model-agnostic. Tests in `tests/models/test_segmentation_factory.py` (15
   cases).
-- [ ] brick 4 — `SegmentationTrainer` (CE/Dice/combined loss, mIoU/Dice/pixel-acc,
-  best-by-val-mIoU checkpoint, ADR-013 `run.json`, SSE)
+- [x] brick 4 — `SegmentationTrainer` (`core/segmentation_trainer.py`) —
+  cross_entropy/dice/combined loss (all `ignore_index`-aware), streaming
+  `SegmentationMetricAccumulator` (K×K confusion matrix → mIoU/Dice/pixel-acc
+  averaged over present classes), best-by-val-**mIoU** checkpoint + early
+  stopping + scheduler, SSE start/epoch_end/end, reusable `evaluate`, ADR-013
+  `run.json` (`miou`/`dice`/`pixel_acc`). Model-agnostic via `segmentation_logits`.
+  Tests in `tests/core/test_segmentation_trainer.py` (12 cases incl. metric math,
+  ignore_index, dice/combined modes, run.json shape).
 - [ ] brick 5 — `SegmentationBlock` (`setup/run/report`) + ADR-037
 - [ ] brick 6 — `/api/segmentation/{schema,run}` run path
 - [ ] brick 7 — Segmentação tab in GUI (`SegmentationPanel`, wired end-to-end)
