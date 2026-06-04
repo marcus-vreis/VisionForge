@@ -9,7 +9,7 @@
 > Progress (see TASKS Phase 9 for the live checklist):
 > - [ ] brick 1 — `AnomalyConfig` (`utils/anomaly_config.py`) + tests
 > - [x] brick 2 — `AnomalyDataModule` (normal-only train, labelled test)
-> - [ ] brick 3 — `AnomalyModelFactory` (conv autoencoder + PatchCore memory bank)
+> - [x] brick 3 — `AnomalyModelFactory` (conv autoencoder + PatchCore memory bank)
 > - [ ] brick 4 — `AnomalyTrainer` (reconstruction / memory-bank fit, image AUROC)
 > - [ ] brick 5 — `AnomalyBlock` (`setup/run/report`) + ADR-038
 > - [ ] brick 6 — `/api/anomaly/{schema,run}` run path

@@ -385,7 +385,13 @@ bank). Reuses `OutputConfig`/`DeviceConfig`/`TransformConfig`.
   (image_size synced from `data.image_size`); picklable `AnomalyImageDataset`;
   raises on empty normal-train or missing test. Tests in
   `tests/core/test_anomaly_data.py` (8 cases).
-- [ ] brick 3 — `AnomalyModelFactory` (conv autoencoder + PatchCore memory bank)
+- [x] brick 3 — `AnomalyModelFactory` (`models/anomaly_factory.py`) —
+  `ConvAutoencoder` (encoder/decoder, bilinear decoder realign for arbitrary
+  sizes; reconstruction-error score) + `PatchCore` (frozen resnet backbone,
+  layer2⊕layer3 patch features, greedy k-center coreset memory bank, max-patch
+  nearest-neighbor distance score via `cdist`; `fit`/`score`/`extract`). Tests in
+  `tests/models/test_anomaly_factory.py` (8 cases, pretrained=False → no
+  downloads).
 - [ ] brick 4 — `AnomalyTrainer` (reconstruction loop / memory-bank fit, image AUROC)
 - [ ] brick 5 — `AnomalyBlock` (`setup/run/report`) + ADR-038
 - [ ] brick 6 — `/api/anomaly/{schema,run}` run path
