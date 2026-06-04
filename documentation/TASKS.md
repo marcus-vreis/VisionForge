@@ -408,7 +408,12 @@ bank). Reuses `OutputConfig`/`DeviceConfig`/`TransformConfig`.
   `MetricsPlotter.metric_curve`), updates run.json with `test_*`. ADR-038 written.
   Tests in `tests/blocks/test_anomaly.py` (3 cases) + `metric_curve` plotter tests
   (2 cases).
-- [ ] brick 6 — `/api/anomaly/{schema,run}` run path
+- [x] brick 6 — `/api/anomaly/{schema,run}` run path — `GET /api/anomaly/schema`
+  (drives the form) + `POST /api/anomaly/run` dispatching `AnomalyBlock` with
+  `_progress_callback` → SSE; reuses the shared single-run state and
+  `/experiment/{status,events,result}`. Mirrors the segmentation endpoint. Tests
+  in `tests/gui/test_routes_anomaly.py` (4 cases: schema, dispatch+callback, 409
+  conflict, 422 invalid config).
 - [ ] brick 7 — Anomalia tab in GUI (`AnomalyPanel`, wired end-to-end)
 
 ---
