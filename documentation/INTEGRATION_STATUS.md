@@ -1,7 +1,16 @@
 # Integration status — feature branches → `development`
 
-> Generated 2026-06-04 by a tech-leader iteration. Non-destructive analysis
-> (`git merge-tree`, no merges performed). Regenerate after any branch changes.
+> Generated 2026-06-04 by a tech-leader iteration. Regenerate after any branch changes.
+>
+> **✅ Executed & verified.** The merge-readiness analysis below was confirmed by
+> actually building the local branch **`integ/all-features`** (off `development`,
+> not pushed): all 8 branches merged in the recommended order — the only conflicts
+> were the predicted docs (`TASKS.md`/`DECISIONS.md`/`.codespellrc`) + the rebuilt
+> `gui/static` bundle, **zero source-code conflicts**. The integrated branch is
+> **fully green**: backend **814 passed / 2 skipped**, ruff + format + mypy clean;
+> frontend tsc + eslint + **54 Vitest** clean, SPA builds; the GUI server boots and
+> all five task schema endpoints respond 200. `integ/all-features` is a
+> ready-to-review snapshot; the individual branches are untouched for clean PRs.
 
 A long autonomous build session produced several independent branches off
 `development` (HEAD `1c35fb1`). None are merged yet. **All share the same
