@@ -7,6 +7,7 @@ import { HistoryOverlay } from "./components/HistoryOverlay";
 import { ParamPanel } from "./components/ParamPanel";
 import { DetectionPanel } from "./components/DetectionPanel";
 import { RegressionPanel } from "./components/RegressionPanel";
+import { SegmentationPanel } from "./components/SegmentationPanel";
 import {
   buildDetectionDataPayload,
   makeDefaultDetectionForm,
@@ -17,6 +18,11 @@ import {
   makeDefaultRegressionForm,
   type RegressionForm,
 } from "./lib/regression-models";
+import {
+  buildSegmentationPayload,
+  makeDefaultSegmentationForm,
+  type SegmentationForm,
+} from "./lib/segmentation-models";
 import { buildDefaults } from "./lib/schema-defaults";
 import { ResultsView } from "./components/ResultsView";
 import { TabBar } from "./components/TabBar";
@@ -50,6 +56,9 @@ export default function App() {
   );
   const [regressionForm, setRegressionForm] = useState<RegressionForm>(
     makeDefaultRegressionForm,
+  );
+  const [segmentationForm, setSegmentationForm] = useState<SegmentationForm>(
+    makeDefaultSegmentationForm,
   );
 
   const showOverlay =
@@ -101,6 +110,20 @@ export default function App() {
         device: { kind: device.kind, gpu_ids: device.gpu_ids },
       };
       await submit(payload, { regression: true });
+      return;
+    }
+    if (activeKey === "segmentation") {
+      reset();
+      setResultsVisible(false);
+      setOverlayVisible(true);
+      setPipelineSummary([]);
+      setBlockKind("segmentation");
+      setQueueSize(undefined);
+      const payload: Record<string, unknown> = {
+        ...buildSegmentationPayload(segmentationForm),
+        device: { kind: device.kind, gpu_ids: device.gpu_ids },
+      };
+      await submit(payload, { segmentation: true });
       return;
     }
     if (activeKey !== "classification") return;
@@ -230,6 +253,13 @@ export default function App() {
             accent={activeTask.accent}
             validationErrors={validationErrors}
           />
+        ) : activeKey === "segmentation" ? (
+          <SegmentationPanel
+            formData={segmentationForm}
+            setFormData={setSegmentationForm}
+            accent={activeTask.accent}
+            validationErrors={validationErrors}
+          />
         ) : (
           <ParamPanel
             task={activeTask}
@@ -271,7 +301,8 @@ export default function App() {
           status.status === "running" ||
           (activeKey !== "classification" &&
             activeKey !== "detection" &&
-            activeKey !== "regression")
+            activeKey !== "regression" &&
+            activeKey !== "segmentation")
         }
         historyCount={historyCount}
         selection={device}

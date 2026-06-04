@@ -351,7 +351,18 @@ families + hand-rolled U-Net; reuses `OutputConfig`/`DeviceConfig`/`TransformCon
   time). Mirrors the regression endpoint. Tests in
   `tests/gui/test_routes_segmentation.py` (4 cases: schema, dispatch+callback,
   409 conflict, 422 invalid config).
-- [ ] brick 7 — Segmentação tab in GUI (`SegmentationPanel`, wired end-to-end)
+- [x] brick 7 — Segmentação tab in GUI — `SegmentationPanel` (architecture,
+  num_classes, paired image/mask dataset form, ignore_index with live collision
+  warning, loss/optimizer segmented controls) submits to `/api/segmentation/run`,
+  reuses `TrainingOverlay` (SSE) + `ResultsView`. `lib/segmentation-models.ts`
+  mirrors the backend (`buildSegmentationPayload`, `ignoreIndexCollides`).
+  `App.tsx`/`useExperiment`/`client` wire the Segmentação tab + BottomBar. Vitest
+  in `segmentation-models.test.ts` (5 cases). Verified live in the browser
+  (renders, all sections, 0 console errors).
+
+**✅ Phase 8 complete: semantic segmentation end-to-end (config → paired
+image/mask data → model → trainer → block → API → GUI), with mean IoU / Dice /
+pixel accuracy and a live training monitor.**
 
 ## Phase 9 — Anomaly Detection task
 

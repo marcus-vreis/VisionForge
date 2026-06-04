@@ -6,6 +6,7 @@ import {
   runDetection,
   runExperiment,
   runRegression,
+  runSegmentation,
 } from "../api/client";
 import type { RunResult, RunStatus, TrainingEvent } from "../types/run";
 
@@ -17,7 +18,7 @@ interface ExperimentState {
   progressEvents: TrainingEvent[];
   submit: (
     config: Record<string, unknown>,
-    opts?: { detection?: boolean; regression?: boolean },
+    opts?: { detection?: boolean; regression?: boolean; segmentation?: boolean },
   ) => Promise<void>;
   reset: () => void;
 }
@@ -214,7 +215,7 @@ export function useExperiment(): ExperimentState {
   const submit = useCallback(
     async (
       config: Record<string, unknown>,
-      opts?: { detection?: boolean; regression?: boolean },
+      opts?: { detection?: boolean; regression?: boolean; segmentation?: boolean },
     ) => {
       setError(null);
       setResult(null);
@@ -226,7 +227,9 @@ export function useExperiment(): ExperimentState {
           ? runDetection(config)
           : opts?.regression
             ? runRegression(config)
-            : runExperiment(config));
+            : opts?.segmentation
+              ? runSegmentation(config)
+              : runExperiment(config));
         setStatus({ status: "running", run_id: res.run_id, error: null });
         openEventSource();
         startPolling(res.run_id);

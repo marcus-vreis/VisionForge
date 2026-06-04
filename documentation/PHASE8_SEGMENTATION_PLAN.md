@@ -13,7 +13,11 @@
 > - [x] brick 4 — `SegmentationTrainer` (CE/Dice loss, IoU/Dice/pixel-acc)
 > - [x] brick 5 — `SegmentationBlock` (`setup/run/report`) + ADR-037
 > - [x] brick 6 — `/api/segmentation/{schema,run}` run path
-> - [ ] brick 7 — GUI Segmentação tab (SegmentationPanel, wired end-to-end)
+> - [x] brick 7 — GUI Segmentação tab (SegmentationPanel, wired end-to-end)
+>
+> **Phase 8 complete** — semantic segmentation runs end-to-end (config → paired
+> image/mask data → model → trainer → block → API → GUI) with mean IoU / Dice /
+> pixel accuracy and a live monitor.
 
 Semantic segmentation is the fourth task (after classification, detection,
 regression). Like detection and regression it does **not** reuse the
