@@ -2,7 +2,8 @@
 
 > Branch: `feat/gradcam` (off `development` — Grad-CAM is a classification
 > explainability feature, independent of the Phase 6–9 task branches).
-> Status: **In progress** — brick 1 (`core/gradcam.py`) landing first.
+> Status: **Complete** — core (brick 1) + `/api/runs/{id}/gradcam` (brick 2) +
+> GUI action in `RunDetailPanel` (brick 3), verified live end-to-end.
 > Kickoff 2026-06-04 · author: tech-leader iteration
 
 Grad-CAM (Gradient-weighted Class Activation Mapping) is the first item from the
