@@ -401,7 +401,13 @@ bank). Reuses `OutputConfig`/`DeviceConfig`/`TransformConfig`.
   and module-level `compute_auroc`/`compute_threshold`. Tests in
   `tests/core/test_anomaly_trainer.py` (8 cases incl. AUROC math, AE + PatchCore
   fit, run.json shape).
-- [ ] brick 5 — `AnomalyBlock` (`setup/run/report`) + ADR-038
+- [x] brick 5 — `AnomalyBlock` (`blocks/anomaly.py`) — standalone `setup/run/report`
+  (not an `ExperimentBlock` subclass — ADR-038). Wires `AnomalyModelFactory` +
+  `AnomalyDataModule` + `AnomalyTrainer`, reloads best checkpoint, recomputes
+  test AUROC/threshold/F1, renders the AUROC curve (new reusable
+  `MetricsPlotter.metric_curve`), updates run.json with `test_*`. ADR-038 written.
+  Tests in `tests/blocks/test_anomaly.py` (3 cases) + `metric_curve` plotter tests
+  (2 cases).
 - [ ] brick 6 — `/api/anomaly/{schema,run}` run path
 - [ ] brick 7 — Anomalia tab in GUI (`AnomalyPanel`, wired end-to-end)
 
