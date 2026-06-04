@@ -392,7 +392,15 @@ bank). Reuses `OutputConfig`/`DeviceConfig`/`TransformConfig`.
   nearest-neighbor distance score via `cdist`; `fit`/`score`/`extract`). Tests in
   `tests/models/test_anomaly_factory.py` (8 cases, pretrained=False → no
   downloads).
-- [ ] brick 4 — `AnomalyTrainer` (reconstruction loop / memory-bank fit, image AUROC)
+- [x] brick 4 — `AnomalyTrainer` (`core/anomaly_trainer.py`) — dispatches on model
+  type: autoencoder = real MSE reconstruction loop (best by lowest train recon
+  loss, early stopping); PatchCore = one-pass memory-bank fit (`total_epochs=1`).
+  Image-level AUROC (sklearn `roc_auc_score`, 0.5 on single-class guard) + decision
+  `threshold` from the normal-score percentile + image `image_f1`; streamed each
+  epoch + ADR-013 `run.json`. Reusable `evaluate(model, train_loader, test_loader)`
+  and module-level `compute_auroc`/`compute_threshold`. Tests in
+  `tests/core/test_anomaly_trainer.py` (8 cases incl. AUROC math, AE + PatchCore
+  fit, run.json shape).
 - [ ] brick 5 — `AnomalyBlock` (`setup/run/report`) + ADR-038
 - [ ] brick 6 — `/api/anomaly/{schema,run}` run path
 - [ ] brick 7 — Anomalia tab in GUI (`AnomalyPanel`, wired end-to-end)
