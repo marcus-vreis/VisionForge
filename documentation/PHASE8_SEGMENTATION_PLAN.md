@@ -8,8 +8,8 @@
 >
 > Progress (see TASKS Phase 8 for the live checklist):
 > - [x] brick 1 — `SegmentationConfig` (`utils/segmentation_config.py`) + tests
-> - [ ] brick 2 — `SegmentationDataModule` (image+mask → tensors)
-> - [ ] brick 3 — `SegmentationModelFactory` (torchvision DeepLab/FCN/LR-ASPP + U-Net)
+> - [x] brick 2 — `SegmentationDataModule` (`core/segmentation_data.py`) + tests
+> - [x] brick 3 — `SegmentationModelFactory` (torchvision DeepLab/FCN/LR-ASPP + U-Net)
 > - [ ] brick 4 — `SegmentationTrainer` (CE/Dice loss, IoU/Dice/pixel-acc)
 > - [ ] brick 5 — `SegmentationBlock` (`setup/run/report`) + ADR-037
 > - [ ] brick 6 — `/api/segmentation/{schema,run}` run path

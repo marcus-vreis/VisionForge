@@ -315,10 +315,20 @@ families + hand-rolled U-Net; reuses `OutputConfig`/`DeviceConfig`/`TransformCon
   (cross_entropy/dice/combined), non-power-of-two batch, `image_size` floor;
   reuses `OutputConfig`/`DeviceConfig`/`TransformConfig`/`PreprocessingConfig`/
   `SchedulerConfig`. Tests in `tests/utils/test_segmentation_config.py` (31 cases).
-- [ ] brick 2 — `SegmentationDataModule` (image+mask → tensors; nearest-neighbor
-  mask resize; picklable; reuses `TransformConfig`/preprocessing)
-- [ ] brick 3 — `SegmentationModelFactory` (torchvision DeepLab/FCN/LR-ASPP head
-  resize + hand-rolled U-Net)
+- [x] brick 2 — `SegmentationDataModule` (`core/segmentation_data.py`) — paired
+  image/mask dataset keyed by filename stem; joint geometric transforms in
+  `__getitem__` (image bilinear+normalized, mask nearest-neighbor as `long`),
+  joint hflip+rotation (mask filled with `ignore_index`), image-only color
+  jitter; picklable (Windows spawn); RGB/palette masks raise an informative
+  error (deferred). train/val required, test optional. Tests in
+  `tests/core/test_segmentation_data.py` (11 cases).
+- [x] brick 3 — `SegmentationModelFactory` (`models/segmentation_factory.py`) —
+  torchvision DeepLabV3/FCN/LR-ASPP families (head sized to `num_classes`,
+  `weights_backbone=None` when not pretrained → no downloads) + hand-rolled
+  `UNet` (4-level, bilinear decoder realign for arbitrary input sizes).
+  `segmentation_logits` normalizes dict (`"out"`) vs tensor output so the trainer
+  is model-agnostic. Tests in `tests/models/test_segmentation_factory.py` (15
+  cases).
 - [ ] brick 4 — `SegmentationTrainer` (CE/Dice/combined loss, mIoU/Dice/pixel-acc,
   best-by-val-mIoU checkpoint, ADR-013 `run.json`, SSE)
 - [ ] brick 5 — `SegmentationBlock` (`setup/run/report`) + ADR-037
