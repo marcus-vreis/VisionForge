@@ -203,6 +203,7 @@ async def get_run_detail(run_id: str) -> RunDetail:
         started_at=started,
         finished_at=finished,
         device_used=data.get("device_used"),
+        environment=data.get("environment", {}),
         run_dir=data.get("run_dir", str(run_dir.resolve())),
         config=data.get("config", {}),
         metrics=data.get("metrics", {}),

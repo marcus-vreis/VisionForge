@@ -378,6 +378,10 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
             {detail.device_used && (
               <KeyRow label="Dispositivo usado" value={detail.device_used} />
             )}
+            {detail.environment &&
+              Object.entries(detail.environment).map(([k, v]) => (
+                <KeyRow key={k} label={`env · ${k}`} value={v} />
+              ))}
           </Section>
 
           <PipelineSection config={detail.config} />
