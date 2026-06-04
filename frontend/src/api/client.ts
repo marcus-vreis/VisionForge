@@ -122,6 +122,19 @@ export async function runRegression(
   });
 }
 
+/** Start a semantic-segmentation run. Like detection/regression, segmentation
+ *  shares the /experiment/{status,events,result} endpoints; only the submit URL
+ *  differs. */
+export async function runSegmentation(
+  config: Record<string, unknown>,
+): Promise<RunResponse> {
+  return request<RunResponse>("/segmentation/run", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(config),
+  });
+}
+
 export async function fetchStatus(): Promise<RunStatus> {
   return request<RunStatus>("/experiment/status");
 }
