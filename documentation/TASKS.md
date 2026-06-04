@@ -267,6 +267,14 @@ reusing the existing endpoints/components by task dispatch (see PHASE7 plan §7)
 
 ---
 
+## Environment capture in run.json ✅ (reproducibility infra)
+
+- [x] `utils/environment.capture_environment()` records Python/platform/torch/
+  torchvision/numpy/visionforge versions; `Trainer` writes them into `run.json`
+  under `environment` (ADR-013 update). Additive (`RunDetail.environment` defaults
+  to `{}`); never raises (`"unknown"` fallback). Surfaced in the GUI
+  `RunDetailPanel`. Tests in `tests/utils/test_environment.py` (5 cases).
+
 ## Backlog / ideas
 
 - Optuna integration as alternative to `RandomSearchBlock`
