@@ -7,6 +7,7 @@ import { HistoryOverlay } from "./components/HistoryOverlay";
 import { ParamPanel } from "./components/ParamPanel";
 import { DetectionPanel } from "./components/DetectionPanel";
 import {
+  buildDetectionDataPayload,
   makeDefaultDetectionForm,
   type DetectionForm,
 } from "./lib/detection-models";
@@ -73,6 +74,7 @@ export default function App() {
       setQueueSize(undefined);
       const payload: Record<string, unknown> = {
         ...detectionForm,
+        data: buildDetectionDataPayload(detectionForm.data),
         device: { kind: device.kind, gpu_ids: device.gpu_ids },
       };
       await submit(payload, { detection: true });
@@ -147,8 +149,25 @@ export default function App() {
         color: "var(--vf-text)",
       }}
     >
-      <Waves />
-      <Particles />
+      {/* Decorative background promoted to its own compositor layer so the
+          static waves/particles paint once and the backdrop-filter panels
+          above don't drag it through a repaint on every scroll. */}
+      <div
+        aria-hidden
+        style={{
+          position: "absolute",
+          inset: 0,
+          zIndex: 0,
+          pointerEvents: "none",
+          isolation: "isolate",
+          transform: "translateZ(0)",
+          willChange: "transform",
+          contain: "layout paint",
+        }}
+      >
+        <Waves />
+        <Particles />
+      </div>
 
       <Header />
 

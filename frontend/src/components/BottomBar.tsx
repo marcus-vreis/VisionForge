@@ -58,9 +58,12 @@ export function BottomBar({
         justifyContent: "space-between",
         gap: 12,
         padding: "12px 14px",
-        background: "rgba(8,10,14,0.78)",
-        backdropFilter: "blur(20px)",
-        WebkitBackdropFilter: "blur(20px)",
+        // Fixed bar over scrolling content re-blurs every frame; the surface is
+        // already ~80% opaque, so a smaller radius is visually identical and
+        // roughly halves the per-frame fill cost.
+        background: "rgba(8,10,14,0.82)",
+        backdropFilter: "blur(10px)",
+        WebkitBackdropFilter: "blur(10px)",
         border: "1px solid var(--vf-panel-stroke)",
         borderRadius: 16,
         boxShadow: "0 30px 80px rgba(0,0,0,0.5)",
@@ -136,7 +139,10 @@ export function BottomBar({
             background:
               "linear-gradient(90deg, transparent, var(--accent-soft), transparent)",
             backgroundSize: "200% 100%",
-            animation: "shimmer 3.6s linear infinite",
+            // Only animate while a run is active. Idle, this span sits inside
+            // the blurred bottom bar and re-triggered its backdrop-filter every
+            // frame, contributing to the UI-wide jank.
+            animation: isRunning ? "shimmer 3.6s linear infinite" : "none",
             opacity: 0.6,
           }}
         />

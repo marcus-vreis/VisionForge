@@ -113,3 +113,98 @@ src/visionforge/
 - **Standalone config/block/run path (§1, §3): confirmed** — detection does not
   reuse `ExperimentConfig`/`ExperimentBlock`; it has its own tree and a dedicated
   `/api/detection/*` run path (ADR-033).
+
+## 7. Phase 7.1 — parity with the classification surface
+
+Phase 7 shipped the detection *training* path. The classification task, however,
+exposes a much wider post-training surface (run history, run detail, per-model
+test history, dataset stats, results view). This phase brings detection to parity
+with those, **reusing** the existing endpoints/components and dispatching by task
+rather than duplicating them (clean-code: table-driven projections + small
+task-strategy classes, no forked copies).
+
+Gap analysis (what is classification-only today) and the brick plan:
+
+- [x] **brick A — run-history parity** (`routes._parse_run_summary`,
+  `HistoryOverlay`): detection runs were mislabeled `block="classification"` and
+  showed no mAP (the metric projection only knew `accuracy/f1/val_loss`). Added a
+  table-driven `_SUMMARY_METRIC_KEYS` per-task projection + `_summary_metrics`,
+  inferred `block="detection"` from `task`, and made the history card's metric
+  keys task-aware (`map50`, `map50_95` → "mAP@50 / mAP@50-95"). Tested.
+- [x] **brick B — run-detail parity** (`RunDetailPanel`): the panel already reads
+  `artifacts.graphics`/`artifacts.model` and `metrics` generically, so detection
+  runs render. Added detection metric labels (`map50`, `map50_95`, `box_loss`) and
+  plot labels (`results.png`, `BoxPR_curve.png`, `BoxF1_curve.png`) so they show
+  human names instead of raw keys/filenames.
+- [x] **brick C — results-view parity** (`ResultsView`): already shipped in
+  brick 5b — `ResultsView` carries detection `GRAPH_LABELS` + `METRIC_LABELS` and
+  renders metrics/plots generically, so a completed detection run shows mAP + the
+  Ultralytics plots. No change needed.
+- [x] **brick D1 — guard classification-only actions for detection** (done):
+  the per-model test, batch CSV inference, and ONNX export are classification-only
+  (ModelFactory + Evaluator). `RunDetailPanel` now hides all three for a detection
+  run (`config.task === "detection"`), and the backend rejects them in
+  `_require_classification_run` (HTTP 400) as defense in depth. Prevents the
+  previous guaranteed-500-on-click. Tested.
+- [x] **brick D2 — detection-native per-model test** (done): new
+  `gui/api/detection_testing.evaluate_detection_run`; `_execute_run_test`
+  dispatches to it for `task=="detection"`. The torchvision path rebuilds the
+  detector + DataLoader and computes mAP@50 via `detection_metrics` (CPU,
+  dependency-light); the Ultralytics path drives `YOLO(...).val` (patchable
+  module global). Records mAP into `tests[]`. `RunDetailPanel` re-enables the
+  "+ testar" form for detection (ONNX/batch stay hidden). Tested (torchvision
+  real eval, Ultralytics mocked, error paths; batch/ONNX still 400 for detection).
+- [x] **brick E1 — YOLO dataset-stats backend** (done): new
+  `POST /api/detection/dataset/stats` + `_collect_detection_dataset_stats`.
+  Counts images and annotation *instances* per class across the `.txt` label
+  files per split, flags unlabeled images and class imbalance (max/min > 2). Reads
+  class names from `classes.txt`/`names.txt` (else generates them). Extracted a
+  shared `resolve_yolo_split` into `core/detection_data.py` (the trainer now
+  delegates to it — dedup). Tested (8 cases).
+- [x] **brick E2 — YOLO dataset-stats GUI** (done): new `DetectionDatasetStats`
+  component (+ `fetchDetectionDatasetStats` client) rendered below the dataset
+  picker in `DetectionPanel`. Shows the class id→name map, per-split image/instance
+  counts, per-class annotation bars, unlabeled-image count, and the imbalance
+  warning; auto-applies the detected class count to `model.num_classes`. Mirrors
+  the classification `DatasetStats` look.
+- [x] **brick F — detection ONNX export** (done): new
+  `gui/api/detection_export.export_detection_run`; `_execute_onnx_export`
+  dispatches to it for `task=="detection"`. Drives Ultralytics' own exporter
+  (`YOLO(...).export(format="onnx")`), records the artifact on the run, and
+  returns the standard `ExportOnnxResponse`. Torchvision detection export raises
+  a clear "not supported yet". `RunDetailPanel` re-enables the export card only
+  for Ultralytics-backend detection runs. Tested (mocked export, torchvision
+  unsupported, missing checkpoint, ultralytics-absent). Folder-inference parity
+  was descoped — Ultralytics `predict` over a folder can land later if needed.
+
+- [x] **brick G — dataset source parity (data.yaml)** (done): the GUI only
+  exposed `base_dir` (synthesize a `data.yaml` from a YOLO folder), even though
+  `DetectionDataConfig` has always accepted an explicit `data_yaml`. Real
+  Ultralytics/Roboflow datasets ship a `data.yaml`, so `DetectionPanel` now has a
+  "Fonte do dataset" toggle (Pasta YOLO ↔ data.yaml); the yaml mode uses a new
+  native `.yaml` picker (`POST /api/detection/dataset/pick_yaml` →
+  `_open_native_yaml_dialog`) and `buildDetectionDataPayload` sends only the
+  active source (an empty `base_dir` resolved to "." server-side and gave a
+  confusing "missing splits" error). Tested (payload projection, picker endpoint
+  success/cancel).
+
+**Phase 7.1 complete** — detection now matches the classification post-training
+surface: run history (mAP), run detail, results view, per-model test (mAP on a
+new dataset), YOLO dataset stats, ONNX export (Ultralytics), and dual dataset
+sources (YOLO folder *or* an existing data.yaml).
+
+## 8. GUI rendering performance
+
+The animated background (`Waves` + `Particles`) sits behind several
+`backdrop-filter` glass panels. Two compounding costs caused browser jank:
+
+1. A continuously drifting full-viewport wave layer forced every panel above it
+   to re-blur each frame (~5fps). Fixed earlier by freezing the wave animation.
+2. The residual stutter came from `mix-blend-mode: screen` on the full-viewport
+   SVG: blending under `backdrop-filter` pushes the compositor onto a slow
+   offscreen-buffer path that re-evaluates on every scroll/paint. Fixed by
+   dropping the blend mode (plain accent strokes read the same on the near-black
+   background), wrapping the decorative layer in an isolated, GPU-promoted
+   container (`isolation: isolate; transform: translateZ(0); contain: layout
+   paint`) so it paints once, and halving the fixed `BottomBar` blur radius
+   (20→10px on an already ~80%-opaque surface) so it costs less per scroll frame.

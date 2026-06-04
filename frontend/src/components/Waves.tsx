@@ -26,7 +26,6 @@ interface WaveLayerProps {
   spread: number;
   amp: number;
   period: number;
-  duration: number;
   opacity: number;
   blur?: number;
   strokeW: number;
@@ -38,7 +37,6 @@ function WaveLayer({
   spread,
   amp,
   period,
-  duration,
   opacity,
   blur = 0,
   strokeW,
@@ -58,8 +56,10 @@ function WaveLayer({
   return (
     <g
       style={{
-        animation: `drift ${duration}s linear infinite`,
-        transformOrigin: "center",
+        // Static, not animated: a continuously drifting full-viewport layer
+        // forces every backdrop-filter panel above it to re-blur each frame,
+        // which collapsed the whole UI to ~5fps. The waves stay as a frozen
+        // backdrop instead. See `prefers-reduced-motion` note in index.css.
         filter: blur ? `blur(${blur}px)` : "none",
         opacity,
       }}
@@ -93,7 +93,11 @@ export function Waves() {
         height: "100%",
         pointerEvents: "none",
         zIndex: 0,
-        mixBlendMode: "screen",
+        // No mix-blend-mode: blending a full-viewport SVG into the page forces
+        // every backdrop-filter panel above it onto a slow offscreen-buffer
+        // compositing path (the residual jank after the wave animation was
+        // frozen). On the near-black background, plain accent strokes read the
+        // same as `screen` did. See the WaveLayer comment + index.css.
       }}
     >
       <defs>
@@ -114,7 +118,6 @@ export function Waves() {
           spread={520}
           amp={80}
           period={360}
-          duration={28}
           opacity={0.18}
           blur={2}
           strokeW={1.2}
@@ -125,7 +128,6 @@ export function Waves() {
           spread={580}
           amp={48}
           period={280}
-          duration={42}
           opacity={0.36}
           blur={0.4}
           strokeW={0.9}
@@ -136,7 +138,6 @@ export function Waves() {
           spread={620}
           amp={28}
           period={220}
-          duration={64}
           opacity={0.55}
           strokeW={0.55}
         />
@@ -184,7 +185,6 @@ export function Particles() {
             borderRadius: "999px",
             boxShadow: "0 0 6px var(--accent-glow)",
             opacity: 0.7,
-            animation: `pulse-dot ${d.d}s ease-in-out ${d.delay}s infinite`,
           }}
         />
       ))}
