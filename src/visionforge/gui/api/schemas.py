@@ -120,6 +120,7 @@ class RunDetail(BaseModel):
     started_at: datetime
     finished_at: datetime | None
     device_used: str | None = None
+    environment: dict[str, str] = {}
     run_dir: str
     config: dict[str, Any]
     metrics: dict[str, Any]

@@ -17,6 +17,7 @@ from loguru import logger
 
 from visionforge.utils.config import DeviceConfig, ExperimentConfig
 from visionforge.utils.cuda import check_cuda
+from visionforge.utils.environment import capture_environment
 
 
 @dataclass
@@ -443,6 +444,7 @@ class Trainer:
             "timestamp": datetime.now().isoformat(),
             "status": "completed",
             "device_used": result.device_used,
+            "environment": capture_environment(),
             "run_dir": str(run_dir.resolve()),
             "config": self._config.model_dump(mode="json"),
             "metrics": {
