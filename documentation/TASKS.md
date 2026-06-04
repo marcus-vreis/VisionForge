@@ -278,8 +278,14 @@ new task. Dependency-free (pure torch hooks).
   size), `resolve_target_layer` (last `nn.Conv2d`, arch-agnostic), `overlay_cam`
   (dependency-free jet colormap + ImageNet de-normalization → PIL overlay). Tests
   in `tests/core/test_gradcam.py` (9 cases).
-- [ ] brick 2 — `POST /api/runs/{id}/gradcam` per-run action (load checkpoint,
-  overlay N sample images, write PNGs, classification-gated)
+- [x] brick 2 — `POST /api/runs/{id}/gradcam` per-run action — rebuilds the run's
+  classifier (random init + checkpoint, no ImageNet download), reads model +
+  transform settings straight from run.json (no full ExperimentConfig validation,
+  so a moved dataset path doesn't block explainability), overlays up to
+  `num_samples` images from `input_dir`, writes PNGs to `<run_dir>/gradcam/`.
+  Classification-gated (detection/regression/segmentation/anomaly → 400).
+  `GradCamRequest`/`GradCamResponse`/`GradCamItem` schemas. Tests in
+  `tests/gui/test_routes_gradcam.py` (5 cases).
 - [ ] brick 3 — GUI "🔥 Grad-CAM" action in `RunDetailPanel` + overlay grid
 
 ## Backlog / ideas
