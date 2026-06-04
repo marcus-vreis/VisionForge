@@ -135,6 +135,18 @@ export async function runSegmentation(
   });
 }
 
+/** Start an anomaly-detection run. Shares the /experiment/{status,events,result}
+ *  endpoints; only the submit URL differs. */
+export async function runAnomaly(
+  config: Record<string, unknown>,
+): Promise<RunResponse> {
+  return request<RunResponse>("/anomaly/run", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(config),
+  });
+}
+
 export async function fetchStatus(): Promise<RunStatus> {
   return request<RunStatus>("/experiment/status");
 }

@@ -13,7 +13,11 @@
 > - [x] brick 4 — `AnomalyTrainer` (reconstruction / memory-bank fit, image AUROC)
 > - [x] brick 5 — `AnomalyBlock` (`setup/run/report`) + ADR-038
 > - [x] brick 6 — `/api/anomaly/{schema,run}` run path
-> - [ ] brick 7 — GUI Anomalia tab (AnomalyPanel, wired end-to-end)
+> - [x] brick 7 — GUI Anomalia tab (AnomalyPanel, wired end-to-end)
+>
+> **Phase 9 complete** — anomaly detection runs end-to-end (config → normal-only
+> train / labelled test → autoencoder|PatchCore → trainer → block → API → GUI)
+> with image-level AUROC / threshold / F1 and a live monitor.
 
 Anomaly detection is the fifth task. It is the first **unsupervised** task: the
 model trains on **normal images only** and learns to flag anything that deviates
