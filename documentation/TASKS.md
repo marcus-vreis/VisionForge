@@ -267,6 +267,18 @@ reusing the existing endpoints/components by task dispatch (see PHASE7 plan §7)
 
 ---
 
+## Config schema versioning ✅ (reproducibility infra)
+
+Addresses CLAUDE.md §6.2/§7.3 — "freeze the schema early" so saved configs stay
+loadable across schema changes.
+
+- [x] `schema_version` field on `ExperimentConfig` (default `CURRENT_SCHEMA_VERSION
+  = 1`) + `migrate_config_dict` run in `load_config` (legacy/missing → v1; future
+  migration steps chain here); newer-than-supported version rejected with a clear
+  upgrade error. Hidden from the GUI form (`SKIP_FIELDS`); added to
+  `configs/baseline.yaml`. ADR-039. Tests in
+  `tests/utils/test_config_schema_version.py` (11 cases).
+
 ## Backlog / ideas
 
 - Optuna integration as alternative to `RandomSearchBlock`

@@ -22,6 +22,9 @@ const SKIP_FIELDS = new Set([
   "logs_dir",
   "reports_dir",
   "checkpoint_path",
+  // schema_version is infra metadata (config migration), not a user knob — it's
+  // injected with its default and carried into run.json automatically.
+  "schema_version",
   // Device is owned by the Header/BottomBar DeviceSelector — don't render it
   // a second time in the form panel.
   "device",
