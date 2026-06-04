@@ -337,7 +337,13 @@ families + hand-rolled U-Net; reuses `OutputConfig`/`DeviceConfig`/`TransformCon
   `run.json` (`miou`/`dice`/`pixel_acc`). Model-agnostic via `segmentation_logits`.
   Tests in `tests/core/test_segmentation_trainer.py` (12 cases incl. metric math,
   ignore_index, dice/combined modes, run.json shape).
-- [ ] brick 5 — `SegmentationBlock` (`setup/run/report`) + ADR-037
+- [x] brick 5 — `SegmentationBlock` (`blocks/segmentation.py`) — standalone
+  `setup/run/report` (not an `ExperimentBlock` subclass — ADR-037). Wires
+  `SegmentationModelFactory` + `SegmentationDataModule` + `SegmentationTrainer`,
+  reloads best checkpoint, computes test-set mIoU/Dice/pixel-acc, renders the
+  loss curve (reuses `MetricsPlotter.loss_curve`), updates run.json with
+  `test_*`. ADR-037 written. Tests in `tests/blocks/test_segmentation.py`
+  (4 cases, factory/datamodule patched).
 - [ ] brick 6 — `/api/segmentation/{schema,run}` run path
 - [ ] brick 7 — Segmentação tab in GUI (`SegmentationPanel`, wired end-to-end)
 
