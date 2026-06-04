@@ -8,6 +8,7 @@ import {
   importConfigFromYaml,
   validateParsedConfig,
 } from "../lib/yaml-config";
+import { AugmentPreview } from "./AugmentPreview";
 import { DatasetPicker } from "./DatasetPicker";
 import { DatasetStats } from "./DatasetStats";
 import {
@@ -2614,6 +2615,10 @@ export function ParamPanel({
             onChange={(v) => setField("data", "transforms", v)}
             errors={validationErrors}
             path={["data", "transforms"]}
+          />
+          <AugmentPreview
+            baseDir={(dataData["base_dir"] as string) ?? ""}
+            transforms={(dataData["transforms"] ?? {}) as Record<string, unknown>}
           />
         </>
       )}

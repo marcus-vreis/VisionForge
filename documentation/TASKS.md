@@ -295,12 +295,23 @@ new task. Dependency-free (pure torch hooks).
 **✅ Grad-CAM complete: explainability for trained classification runs
 (core → API → GUI), dependency-free.**
 
+## Dataset augmentation preview ✅ (backlog item done)
+
+- [x] `POST /api/dataset/preview_augment` — renders N random variants of a sample
+  image with the configured train-time augmentations (flip/rotation/jitter)
+  applied, into `outputs/preview_cache/augment/`; reports which augmentations are
+  `active`. `_render_augment_preview` + shared `_pick_preview_image` helper.
+  `AugmentPreviewRequest`/`Response` schemas. Tests in
+  `tests/gui/test_routes_augment_preview.py` (5 cases). GUI: `AugmentPreview`
+  component (🎲 button + original/variant strip) wired into the `ParamPanel`
+  Transformações section. `previewAugment` client wrapper. Verified live (4
+  variants + `active: flip · rotation · jitter`, 0 console errors).
+
 ## Backlog / ideas
 
 - Optuna integration as alternative to `RandomSearchBlock`
 - `timm` model library support as additional model source
 - ONNX inference benchmark in `ExportONNXBlock`
 - TensorBoard / MLflow integration for experiment tracking
-- Dataset augmentation preview in GUI
 - Dark/light theme toggle in GUI
 - Migrate `utils/config.py` → `configs/schemas/classification_config.py` when a second task is added (Phase 6+)
