@@ -12,7 +12,7 @@
 > - [x] brick 3 — `AnomalyModelFactory` (conv autoencoder + PatchCore memory bank)
 > - [x] brick 4 — `AnomalyTrainer` (reconstruction / memory-bank fit, image AUROC)
 > - [x] brick 5 — `AnomalyBlock` (`setup/run/report`) + ADR-038
-> - [ ] brick 6 — `/api/anomaly/{schema,run}` run path
+> - [x] brick 6 — `/api/anomaly/{schema,run}` run path
 > - [ ] brick 7 — GUI Anomalia tab (AnomalyPanel, wired end-to-end)
 
 Anomaly detection is the fifth task. It is the first **unsupervised** task: the

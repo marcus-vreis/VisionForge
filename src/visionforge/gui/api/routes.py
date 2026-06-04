@@ -13,6 +13,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from loguru import logger
 
+from visionforge.blocks.anomaly import AnomalyBlock
 from visionforge.blocks.batch_prediction import BatchPredictionBlock
 from visionforge.blocks.classification import ClassificationBlock
 from visionforge.blocks.cross_validation import CrossValidationBlock
@@ -62,6 +63,7 @@ from visionforge.gui.api.schemas import (
     SystemInfo,
 )
 from visionforge.models.factory import ModelFactory
+from visionforge.utils.anomaly_config import AnomalyConfig
 from visionforge.utils.config import ExperimentConfig
 from visionforge.utils.cuda import check_cuda
 from visionforge.utils.detection_config import DetectionConfig
@@ -576,6 +578,44 @@ async def run_segmentation(config: SegmentationConfig) -> RunResponse:
     }
 
     task = asyncio.create_task(_execute_segmentation(config, run_id))
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+
+    return RunResponse(run_id=run_id)
+
+
+@router.get("/anomaly/schema")
+async def get_anomaly_schema() -> dict[str, Any]:
+    """Return the JSON Schema for AnomalyConfig (drives the anomaly form)."""
+    return AnomalyConfig.model_json_schema()
+
+
+@router.post("/anomaly/run")
+async def run_anomaly(config: AnomalyConfig) -> RunResponse:
+    """Start an anomaly-detection training run in the background.
+
+    Anomaly shares the single-run state and the /experiment/{status,events,
+    result} endpoints (one run at a time, one GPU) but dispatches its own
+    standalone AnomalyBlock (ADR-038) rather than the ExperimentConfig path.
+    """
+    global _current_run, _event_queue
+
+    if _current_run and _current_run["status"] == "running":
+        raise HTTPException(409, "An experiment is already running.")
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    run_id = f"{config.name}_{timestamp}"
+
+    _event_queue = asyncio.Queue()
+    _current_run = {
+        "run_id": run_id,
+        "status": "running",
+        "error": None,
+        "report": None,
+        "run_dir": None,
+    }
+
+    task = asyncio.create_task(_execute_anomaly(config, run_id))
     _background_tasks.add(task)
     task.add_done_callback(_background_tasks.discard)
 
@@ -1834,6 +1874,53 @@ async def _execute_segmentation(config: SegmentationConfig, run_id: str) -> None
 
     except Exception as e:
         logger.exception("GUI: Segmentation {} failed", run_id)
+        cls = type(e).__name__
+        msg = str(e) or "(sem mensagem)"
+        _current_run = {
+            "run_id": run_id,
+            "status": "failed",
+            "error": f"{cls}: {msg}",
+            "report": None,
+            "run_dir": None,
+        }
+
+    finally:
+        if queue is not None:
+            await queue.put(None)
+
+
+async def _execute_anomaly(config: AnomalyConfig, run_id: str) -> None:
+    """Run an anomaly-detection training in a background thread."""
+    global _current_run, _event_queue
+
+    loop = asyncio.get_running_loop()
+    queue = _event_queue
+
+    def _put_event(event: dict[str, Any]) -> None:
+        if queue is not None:
+            asyncio.run_coroutine_threadsafe(queue.put(event), loop)
+
+    try:
+        block = AnomalyBlock()
+        block.setup(config)
+        block._progress_callback = _put_event
+
+        logger.info("GUI: Starting anomaly {} ({})", run_id, config.model.name)
+        await asyncio.to_thread(block.run)
+
+        report = block.report()
+        run_dir = report.get("train", {}).get("run_dir")
+        _current_run = {
+            "run_id": run_id,
+            "status": "completed",
+            "error": None,
+            "report": report,
+            "run_dir": run_dir,
+        }
+        logger.success("GUI: Anomaly {} completed.", run_id)
+
+    except Exception as e:
+        logger.exception("GUI: Anomaly {} failed", run_id)
         cls = type(e).__name__
         msg = str(e) or "(sem mensagem)"
         _current_run = {
