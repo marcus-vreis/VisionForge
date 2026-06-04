@@ -300,6 +300,31 @@ class TestExportONNXBlockHappyPath:
         "visionforge.blocks.export_onnx.ModelFactory.create",
         return_value=TinyModel(),
     )
+    def test_benchmark_includes_torch_vs_onnx_speedup(
+        self,
+        _mock: Any,
+        base_config: dict[str, Any],
+        checkpoint: Path,
+        tmp_path: Path,
+    ) -> None:
+        """The benchmark also times the PyTorch model and reports a speedup ratio."""
+        out = tmp_path / "model.onnx"
+        cfg = _make_config(base_config, checkpoint, out, benchmark_runs=5)
+        block = ExportONNXBlock()
+        block.setup(cfg)
+        block.run()
+
+        bench = block.report()["benchmark"]
+        assert isinstance(bench["torch_mean_ms"], float)
+        assert bench["torch_mean_ms"] > 0.0
+        # speedup = torch_mean_ms / onnx_mean_ms; must be a positive float.
+        assert isinstance(bench["speedup"], float)
+        assert bench["speedup"] > 0.0
+
+    @patch(
+        "visionforge.blocks.export_onnx.ModelFactory.create",
+        return_value=TinyModel(),
+    )
     def test_report_contains_expected_keys(
         self,
         _mock: Any,
