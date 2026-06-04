@@ -429,6 +429,7 @@ image-level AUROC / threshold / F1 and a live training monitor.**
 
 ---
 
+<<<<<<< HEAD
 ## Config schema versioning ✅ (reproducibility infra)
 
 Addresses CLAUDE.md §6.2/§7.3 — "freeze the schema early" so saved configs stay
@@ -489,11 +490,20 @@ new task. Dependency-free (pure torch hooks).
   Transformações section. `previewAugment` client wrapper. Verified live (4
   variants + `active: flip · rotation · jitter`, 0 console errors).
 
+## ONNX PyTorch-vs-runtime speedup benchmark ✅ (backlog item done)
+
+- [x] `ExportONNXBlock._benchmark` now also times the **PyTorch** model on the
+  same dummy input (warmup-excluded) and reports `torch_mean_ms` + a `speedup`
+  ratio (`torch_mean_ms / mean_ms`) alongside the existing onnxruntime
+  mean/p50/p95. Surfaced in the GUI `ExportResultPanel` (onnx μ, onnx p95, torch
+  μ, speedup ×, n_runs) — also fixed a stale frontend benchmark type that
+  referenced `std_ms`/`n_runs` the backend never produced. Test in
+  `tests/blocks/test_export_onnx.py::...test_benchmark_includes_torch_vs_onnx_speedup`.
+
 ## Backlog / ideas
 
 - Optuna integration as alternative to `RandomSearchBlock`
 - `timm` model library support as additional model source
-- ONNX inference benchmark in `ExportONNXBlock`
 - TensorBoard / MLflow integration for experiment tracking
 - Dark/light theme toggle in GUI
 - Migrate `utils/config.py` → `configs/schemas/classification_config.py` when a second task is added (Phase 6+)

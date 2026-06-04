@@ -135,10 +135,15 @@ class ExportONNXBlock(ExperimentBlock):
         return result
 
     def _benchmark(self) -> dict[str, Any]:
-        """Time onnxruntime inference for benchmark_runs passes (first 3 are warmup).
+        """Benchmark onnxruntime vs PyTorch inference latency.
+
+        Times ``benchmark_runs`` passes each (first 3 are warmup) for the ONNX
+        runtime and the original PyTorch model on the same dummy input, so the
+        report shows the actual ONNX speedup.
 
         Returns:
-            Dict with 'mean_ms', 'p50_ms', 'p95_ms'.
+            Dict with onnx 'mean_ms'/'p50_ms'/'p95_ms', 'torch_mean_ms', and the
+            'speedup' ratio (torch_mean_ms / mean_ms).
         """
         cfg = self._onnx_cfg
         dummy_np = np.zeros(
@@ -161,24 +166,42 @@ class ExportONNXBlock(ExperimentBlock):
             if i >= warmup:
                 latencies_ms.append(elapsed_ms)
 
+        torch_mean_ms = self._benchmark_torch(dummy_np, warmup=warmup)
+
         arr = np.array(latencies_ms)
+        onnx_mean = float(arr.mean())
         result: dict[str, Any] = {
-            "mean_ms": float(arr.mean()),
+            "mean_ms": onnx_mean,
             "p50_ms": float(np.percentile(arr, 50)),
             "p95_ms": float(np.percentile(arr, 95)),
+            "torch_mean_ms": torch_mean_ms,
+            "speedup": (torch_mean_ms / onnx_mean) if onnx_mean > 0 else 0.0,
             "runs": cfg.benchmark_runs,
         }
 
         bench_path = cfg.output_onnx.parent / "onnx_benchmark.json"
         bench_path.write_text(json.dumps(result, indent=2), encoding="utf-8")
         logger.info(
-            "ONNX benchmark: mean={:.2f}ms p50={:.2f}ms p95={:.2f}ms",
+            "ONNX benchmark: onnx={:.2f}ms torch={:.2f}ms speedup={:.2f}x",
             result["mean_ms"],
-            result["p50_ms"],
-            result["p95_ms"],
+            result["torch_mean_ms"],
+            result["speedup"],
         )
 
         return result
+
+    def _benchmark_torch(self, dummy_np: np.ndarray, *, warmup: int) -> float:
+        """Mean PyTorch inference latency (ms) over ``benchmark_runs`` passes."""
+        tensor = torch.from_numpy(dummy_np)
+        latencies_ms: list[float] = []
+        with torch.no_grad():
+            for i in range(self._onnx_cfg.benchmark_runs + warmup):
+                t0 = time.perf_counter()
+                self._model(tensor)
+                elapsed_ms = (time.perf_counter() - t0) * 1000.0
+                if i >= warmup:
+                    latencies_ms.append(elapsed_ms)
+        return float(np.array(latencies_ms).mean())
 
 
 __all__ = ["ExportONNXBlock"]
