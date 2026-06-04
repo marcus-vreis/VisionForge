@@ -275,6 +275,42 @@ export async function batchPredictRun(
   );
 }
 
+export interface GradCamRequestPayload {
+  input_dir: string;
+  num_samples?: number;
+  target_class?: number | null;
+  alpha?: number;
+  recursive?: boolean;
+}
+
+export interface GradCamItem {
+  source: string;
+  overlay: string;
+  predicted_class: number;
+}
+
+export interface GradCamResponse {
+  run_id: string;
+  count: number;
+  target_layer: string;
+  items: GradCamItem[];
+}
+
+/** Generate Grad-CAM overlays for a trained classification run's checkpoint. */
+export async function gradcamRun(
+  runId: string,
+  payload: GradCamRequestPayload,
+): Promise<GradCamResponse> {
+  return request<GradCamResponse>(
+    `/runs/${encodeURIComponent(runId)}/gradcam`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
 export interface SplitStats {
   total_images: number;
   classes: Record<string, number>;
@@ -400,6 +436,38 @@ export async function previewPreprocess(
       split: options?.split ?? "train",
       class_name: options?.className ?? null,
       steps,
+    }),
+  });
+}
+
+export interface AugmentPreviewResponse {
+  original: string;
+  variants: string[];
+  source_image: string;
+  active: string[];
+  message: string | null;
+}
+
+/** Render N randomly-augmented variants of a sample image so the user can see
+ *  the train-time augmentation effect (flip/rotation/jitter) before training. */
+export async function previewAugment(
+  baseDir: string,
+  transforms: Record<string, unknown>,
+  options?: {
+    split?: "train" | "val" | "test";
+    className?: string;
+    numVariants?: number;
+  },
+): Promise<AugmentPreviewResponse> {
+  return request<AugmentPreviewResponse>("/dataset/preview_augment", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      base_dir: baseDir,
+      split: options?.split ?? "train",
+      class_name: options?.className ?? null,
+      transforms,
+      num_variants: options?.numVariants ?? 4,
     }),
   });
 }

@@ -190,6 +190,33 @@ class BatchPredictResponse(BaseModel):
     failed_files: list[str] = []
 
 
+class GradCamRequest(BaseModel):
+    """Settings for generating Grad-CAM overlays from a run's checkpoint."""
+
+    input_dir: str
+    num_samples: int = Field(default=8, ge=1, le=64)
+    target_class: int | None = None
+    alpha: float = Field(default=0.5, ge=0.0, le=1.0)
+    recursive: bool = True
+
+
+class GradCamItem(BaseModel):
+    """One Grad-CAM overlay: source image + predicted class + overlay artifact."""
+
+    source: str
+    overlay: str
+    predicted_class: int
+
+
+class GradCamResponse(BaseModel):
+    """Result of a Grad-CAM run over a folder of sample images."""
+
+    run_id: str
+    count: int
+    target_layer: str
+    items: list[GradCamItem] = []
+
+
 class RunTestResponse(BaseModel):
     """Result of a single test run on a saved checkpoint."""
 
@@ -244,6 +271,26 @@ class PreprocessPreviewResponse(BaseModel):
     final: str  # artifact path (equals steps[-1].artifact when steps non-empty)
     source_image: str  # absolute path of the source image
     available_kinds: list[str]
+    message: str | None = None
+
+
+class AugmentPreviewRequest(BaseModel):
+    """Request a strip of randomly-augmented variants of one dataset image."""
+
+    base_dir: str
+    split: Literal["train", "val", "test"] = "train"
+    class_name: str | None = None  # None → first class found
+    transforms: dict[str, Any] = {}  # validated into TransformConfig
+    num_variants: int = Field(default=4, ge=1, le=12)
+
+
+class AugmentPreviewResponse(BaseModel):
+    """Original + N randomly-augmented variant artifacts for the source image."""
+
+    original: str  # artifact path
+    variants: list[str] = []  # artifact paths
+    source_image: str  # absolute path of the source image
+    active: list[str] = []  # which augmentations were applied (flip/rotation/jitter)
     message: str | None = None
 
 
@@ -348,6 +395,8 @@ __all__ = [
     "DatasetSamplesResponse",
     "PreprocessPreviewRequest",
     "PreprocessPreviewResponse",
+    "AugmentPreviewRequest",
+    "AugmentPreviewResponse",
     "PreprocessPreviewStep",
     "SplitStats",
     "GPUInfo",

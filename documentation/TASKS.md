@@ -449,13 +449,51 @@ loadable across schema changes.
   to `{}`); never raises (`"unknown"` fallback). Surfaced in the GUI
   `RunDetailPanel`. Tests in `tests/utils/test_environment.py` (5 cases).
 
+## Grad-CAM explainability (backlog item, in progress)
+
+Design: `documentation/GRADCAM_PLAN.md`. Post-hoc explainability for trained
+classification runs — a per-run action (mirrors test/batch_predict/onnx), not a
+new task. Dependency-free (pure torch hooks).
+
+- [x] brick 1 — `core/gradcam.py` — `GradCAM` (forward/backward hooks on the last
+  conv, GAP-weighted ReLU-summed CAM, normalized + bilinearly upsampled to input
+  size), `resolve_target_layer` (last `nn.Conv2d`, arch-agnostic), `overlay_cam`
+  (dependency-free jet colormap + ImageNet de-normalization → PIL overlay). Tests
+  in `tests/core/test_gradcam.py` (9 cases).
+- [x] brick 2 — `POST /api/runs/{id}/gradcam` per-run action — rebuilds the run's
+  classifier (random init + checkpoint, no ImageNet download), reads model +
+  transform settings straight from run.json (no full ExperimentConfig validation,
+  so a moved dataset path doesn't block explainability), overlays up to
+  `num_samples` images from `input_dir`, writes PNGs to `<run_dir>/gradcam/`.
+  Classification-gated (detection/regression/segmentation/anomaly → 400).
+  `GradCamRequest`/`GradCamResponse`/`GradCamItem` schemas. Tests in
+  `tests/gui/test_routes_gradcam.py` (5 cases).
+- [x] brick 3 — GUI "🔥 Grad-CAM" action in `RunDetailPanel` — collapsible
+  section (classification runs only) with folder picker + num_samples, calls
+  `gradcamRun` (`client.ts`), renders the overlay grid (click → Lightbox) with
+  per-image predicted class. Verified live in the browser: 4 overlays generated
+  end-to-end (real resnet18 checkpoint → `<run_dir>/gradcam/`), 0 console errors.
+
+**✅ Grad-CAM complete: explainability for trained classification runs
+(core → API → GUI), dependency-free.**
+
+## Dataset augmentation preview ✅ (backlog item done)
+
+- [x] `POST /api/dataset/preview_augment` — renders N random variants of a sample
+  image with the configured train-time augmentations (flip/rotation/jitter)
+  applied, into `outputs/preview_cache/augment/`; reports which augmentations are
+  `active`. `_render_augment_preview` + shared `_pick_preview_image` helper.
+  `AugmentPreviewRequest`/`Response` schemas. Tests in
+  `tests/gui/test_routes_augment_preview.py` (5 cases). GUI: `AugmentPreview`
+  component (🎲 button + original/variant strip) wired into the `ParamPanel`
+  Transformações section. `previewAugment` client wrapper. Verified live (4
+  variants + `active: flip · rotation · jitter`, 0 console errors).
+
 ## Backlog / ideas
 
 - Optuna integration as alternative to `RandomSearchBlock`
 - `timm` model library support as additional model source
-- Grad-CAM visualization block
 - ONNX inference benchmark in `ExportONNXBlock`
 - TensorBoard / MLflow integration for experiment tracking
-- Dataset augmentation preview in GUI
 - Dark/light theme toggle in GUI
 - Migrate `utils/config.py` → `configs/schemas/classification_config.py` when a second task is added (Phase 6+)

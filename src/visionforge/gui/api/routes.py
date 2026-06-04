@@ -32,6 +32,8 @@ from visionforge.core.plotter import MetricsPlotter
 from visionforge.gui.api.detection_export import export_detection_run
 from visionforge.gui.api.detection_testing import evaluate_detection_run
 from visionforge.gui.api.schemas import (
+    AugmentPreviewRequest,
+    AugmentPreviewResponse,
     BatchPredictRequest,
     BatchPredictResponse,
     CheckpointPickResponse,
@@ -49,6 +51,9 @@ from visionforge.gui.api.schemas import (
     ExportOnnxRequest,
     ExportOnnxResponse,
     GPUInfo,
+    GradCamItem,
+    GradCamRequest,
+    GradCamResponse,
     PreprocessPreviewRequest,
     PreprocessPreviewResponse,
     PreprocessPreviewStep,
@@ -304,6 +309,25 @@ async def test_run_on_dataset(run_id: str, req: RunTestRequest) -> RunTestRespon
     return result
 
 
+@router.post("/runs/{run_id}/gradcam")
+async def gradcam_run(run_id: str, req: GradCamRequest) -> GradCamResponse:
+    """Generate Grad-CAM overlays for sample images using this run's checkpoint.
+
+    Classification-only (detection/regression/segmentation/anomaly have no
+    softmax-classifier CAM path). Overlays are written to ``<run_dir>/gradcam/``.
+    """
+    run_dir = _find_run_dir(run_id)
+    if run_dir is None:
+        raise HTTPException(404, f"Run '{run_id}' not found.")
+    try:
+        return await asyncio.to_thread(_execute_run_gradcam, run_dir, req)
+    except (FileNotFoundError, ValueError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Grad-CAM on run {} failed", run_id)
+        raise HTTPException(500, f"{type(exc).__name__}: {exc}") from exc
+
+
 @router.post("/runs/{run_id}/batch_predict")
 async def batch_predict_run(
     run_id: str, req: BatchPredictRequest
@@ -373,6 +397,18 @@ async def preview_preprocess(
     served via the existing /api/artifacts/{path} endpoint.
     """
     return await asyncio.to_thread(_render_preprocess_preview, req)
+
+
+@router.post("/dataset/preview_augment")
+async def preview_augment(req: AugmentPreviewRequest) -> AugmentPreviewResponse:
+    """Generate a strip of randomly-augmented variants of one dataset image.
+
+    Applies the configured train-time augmentations (horizontal flip, rotation,
+    color jitter) to a sample image ``num_variants`` times so the user can see
+    the augmentation effect before training. PNGs are written under
+    ``outputs/preview_cache/augment/`` and served via /api/artifacts/{path}.
+    """
+    return await asyncio.to_thread(_render_augment_preview, req)
 
 
 @router.post("/dataset/samples")
@@ -1002,6 +1038,90 @@ def _render_preprocess_preview(
     )
 
 
+def _pick_preview_image(
+    base_dir: str, split: str, class_name: str | None
+) -> Path | None:
+    """Return the first image of ``class_name`` (or the first class) in a split."""
+    _remember_dataset_root(base_dir)
+    split_dir = Path(base_dir) / split
+    if not split_dir.is_dir():
+        return None
+    class_dirs = [d for d in sorted(split_dir.iterdir()) if d.is_dir()]
+    if not class_dirs:
+        return None
+    target = None
+    if class_name is not None:
+        target = next((d for d in class_dirs if d.name == class_name), None)
+    if target is None:
+        target = class_dirs[0]
+    return next(
+        (
+            p
+            for p in sorted(target.iterdir())
+            if p.is_file() and p.suffix.lower() in _IMAGE_EXTS
+        ),
+        None,
+    )
+
+
+def _render_augment_preview(req: AugmentPreviewRequest) -> AugmentPreviewResponse:
+    """Save N randomly-augmented variants of one dataset image and return paths."""
+    import torchvision.transforms as T
+    from PIL import Image
+
+    from visionforge.utils.config import TransformConfig
+
+    img_path = _pick_preview_image(req.base_dir, req.split, req.class_name)
+    if img_path is None:
+        return AugmentPreviewResponse(
+            original="",
+            variants=[],
+            source_image="",
+            active=[],
+            message=f"Sem imagens no split '{req.split}'.",
+        )
+
+    tc = TransformConfig.model_validate(req.transforms)
+    size = tc.image_size
+    aug_steps: list[Any] = []
+    active: list[str] = []
+    if tc.horizontal_flip:
+        aug_steps.append(T.RandomHorizontalFlip())
+        active.append("flip")
+    if tc.rotation_degrees > 0:
+        aug_steps.append(T.RandomRotation(tc.rotation_degrees))
+        active.append("rotation")
+    if tc.color_jitter:
+        aug_steps.append(T.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2))
+        active.append("jitter")
+    transform = T.Compose([T.Resize(size), T.CenterCrop(size), *aug_steps])
+
+    cache_dir = _PREVIEW_CACHE_DIR / "augment"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    for old in cache_dir.glob("*.png"):
+        try:
+            old.unlink()
+        except OSError:
+            pass
+
+    original_img = Image.open(img_path).convert("RGB")
+    original_path = cache_dir / "00_original.png"
+    T.Compose([T.Resize(size), T.CenterCrop(size)])(original_img).save(original_path)
+
+    variants: list[str] = []
+    for i in range(req.num_variants):
+        variant_path = cache_dir / f"{i + 1:02d}_variant.png"
+        transform(original_img).save(variant_path)
+        variants.append(str(variant_path))
+
+    return AugmentPreviewResponse(
+        original=str(original_path),
+        variants=variants,
+        source_image=str(img_path.resolve()),
+        active=active,
+    )
+
+
 def _collect_dataset_samples(req: DatasetSamplesRequest) -> DatasetSamplesResponse:
     """Walk the chosen split and return up to ``per_class`` image paths per class."""
     _remember_dataset_root(req.base_dir)
@@ -1567,6 +1687,107 @@ def _execute_run_test(run_dir: Path, req: RunTestRequest) -> RunTestResponse:
         timestamp=timestamp,
         metrics=metrics,
         artifacts=artifacts,
+    )
+
+
+_GRADCAM_IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp")
+
+
+def _execute_run_gradcam(run_dir: Path, req: GradCamRequest) -> GradCamResponse:
+    """Rebuild this run's classifier and write Grad-CAM overlays for samples.
+
+    Reads the run config's model + transform settings (no full ExperimentConfig
+    validation, so a moved dataset path does not block explainability), loads the
+    checkpoint, and overlays the CAM for up to ``num_samples`` images.
+    """
+    import torch
+
+    from visionforge.core.data import _build_transforms
+    from visionforge.core.gradcam import GradCAM, overlay_cam, resolve_target_layer
+    from visionforge.models.factory import ModelFactory
+    from visionforge.utils.config import (
+        ModelConfig,
+        PreprocessingConfig,
+        TransformConfig,
+    )
+
+    data: dict[str, Any] = json.loads(
+        (run_dir / "run.json").read_text(encoding="utf-8")
+    )
+    config_dict: dict[str, Any] = data.get("config", {})
+    task = config_dict.get("task")
+    if task not in ("binary", "multiclass", "classification", None):
+        raise ValueError(
+            f"Grad-CAM is only available for classification runs (run task='{task}')."
+        )
+
+    checkpoint_path = data.get("artifacts", {}).get("model")
+    if not checkpoint_path or not Path(checkpoint_path).is_file():
+        raise FileNotFoundError(
+            f"Run '{run_dir.name}' has no usable checkpoint at artifacts.model."
+        )
+
+    # Rebuild the architecture with random init (the checkpoint provides weights),
+    # so no ImageNet download happens even if the run was pretrained.
+    model_dict = {**config_dict.get("model", {}), "pretrained": False}
+    model_dict.pop("weights_path", None)
+    model = ModelFactory.create(ModelConfig.model_validate(model_dict))
+    state_dict = torch.load(str(checkpoint_path), map_location="cpu", weights_only=True)
+    model.load_state_dict(state_dict)  # type: ignore[arg-type]
+    model.eval()
+
+    data_dict = config_dict.get("data", {})
+    transform = _build_transforms(
+        TransformConfig.model_validate(data_dict.get("transforms", {})),
+        is_train=False,
+        preprocessing=PreprocessingConfig.model_validate(
+            data_dict.get("preprocessing", {})
+        ),
+    )
+
+    input_dir = Path(req.input_dir)
+    if not input_dir.is_dir():
+        raise ValueError(f"input_dir is not a directory: {input_dir}")
+    walker = input_dir.rglob("*") if req.recursive else input_dir.iterdir()
+    images = sorted(
+        p for p in walker if p.is_file() and p.suffix.lower() in _GRADCAM_IMAGE_EXTS
+    )[: req.num_samples]
+    if not images:
+        raise ValueError(f"No image files found under {input_dir}.")
+
+    target_layer = resolve_target_layer(model)
+    cam = GradCAM(model, target_layer)
+    out_dir = run_dir / "gradcam"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    items: list[GradCamItem] = []
+    try:
+        from PIL import Image
+
+        for img_path in images:
+            with Image.open(img_path) as im:
+                tensor = transform(im.convert("RGB")).unsqueeze(0)
+            heat = cam(tensor, target_class=req.target_class)
+            with torch.no_grad():
+                predicted = int(model(tensor).argmax(dim=1).item())
+            overlay = overlay_cam(tensor[0], heat, alpha=req.alpha)
+            overlay_path = out_dir / f"{img_path.stem}_gradcam.png"
+            overlay.save(overlay_path)
+            items.append(
+                GradCamItem(
+                    source=str(img_path),
+                    overlay=str(overlay_path),
+                    predicted_class=predicted,
+                )
+            )
+    finally:
+        cam.remove()
+
+    return GradCamResponse(
+        run_id=run_dir.name,
+        count=len(items),
+        target_layer=type(target_layer).__name__,
+        items=items,
     )
 
 
