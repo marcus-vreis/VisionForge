@@ -379,7 +379,12 @@ bank). Reuses `OutputConfig`/`DeviceConfig`/`TransformConfig`.
   (0–100), non-power-of-two batch, `image_size` floor; reuses `OutputConfig`/
   `DeviceConfig`/`TransformConfig`/`PreprocessingConfig`/`SchedulerConfig`. Tests
   in `tests/utils/test_anomaly_config.py` (24 cases).
-- [ ] brick 2 — `AnomalyDataModule` (normal-only train, binary-labelled test)
+- [x] brick 2 — `AnomalyDataModule` (`core/anomaly_data.py`) — normal-only train
+  loader (`train/<normal_dir>`, all label 0) + binary-labelled test loader
+  (`test/<normal_dir>`→0, every other subdir→1); reuses `_build_transforms`
+  (image_size synced from `data.image_size`); picklable `AnomalyImageDataset`;
+  raises on empty normal-train or missing test. Tests in
+  `tests/core/test_anomaly_data.py` (8 cases).
 - [ ] brick 3 — `AnomalyModelFactory` (conv autoencoder + PatchCore memory bank)
 - [ ] brick 4 — `AnomalyTrainer` (reconstruction loop / memory-bank fit, image AUROC)
 - [ ] brick 5 — `AnomalyBlock` (`setup/run/report`) + ADR-038
