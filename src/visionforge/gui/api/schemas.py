@@ -189,6 +189,33 @@ class BatchPredictResponse(BaseModel):
     failed_files: list[str] = []
 
 
+class GradCamRequest(BaseModel):
+    """Settings for generating Grad-CAM overlays from a run's checkpoint."""
+
+    input_dir: str
+    num_samples: int = Field(default=8, ge=1, le=64)
+    target_class: int | None = None
+    alpha: float = Field(default=0.5, ge=0.0, le=1.0)
+    recursive: bool = True
+
+
+class GradCamItem(BaseModel):
+    """One Grad-CAM overlay: source image + predicted class + overlay artifact."""
+
+    source: str
+    overlay: str
+    predicted_class: int
+
+
+class GradCamResponse(BaseModel):
+    """Result of a Grad-CAM run over a folder of sample images."""
+
+    run_id: str
+    count: int
+    target_layer: str
+    items: list[GradCamItem] = []
+
+
 class RunTestResponse(BaseModel):
     """Result of a single test run on a saved checkpoint."""
 
