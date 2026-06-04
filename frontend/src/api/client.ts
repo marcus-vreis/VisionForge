@@ -422,6 +422,7 @@ export interface RunDetail {
   started_at: string;
   finished_at: string | null;
   device_used: string | null;
+  environment?: Record<string, string>;
   run_dir: string;
   config: Record<string, unknown>;
   metrics: Record<string, unknown>;

@@ -441,6 +441,14 @@ loadable across schema changes.
   `configs/baseline.yaml`. ADR-039. Tests in
   `tests/utils/test_config_schema_version.py` (11 cases).
 
+## Environment capture in run.json ✅ (reproducibility infra)
+
+- [x] `utils/environment.capture_environment()` records Python/platform/torch/
+  torchvision/numpy/visionforge versions; `Trainer` writes them into `run.json`
+  under `environment` (ADR-013 update). Additive (`RunDetail.environment` defaults
+  to `{}`); never raises (`"unknown"` fallback). Surfaced in the GUI
+  `RunDetailPanel`. Tests in `tests/utils/test_environment.py` (5 cases).
+
 ## Backlog / ideas
 
 - Optuna integration as alternative to `RandomSearchBlock`
