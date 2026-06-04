@@ -6,10 +6,12 @@ import {
   downloadRunMarkdown,
   exportRunToOnnx,
   fetchRunDetail,
+  gradcamRun,
   pickDatasetFolder,
   testRunOnDataset,
   type BatchPredictResponse,
   type ExportOnnxResponse,
+  type GradCamResponse,
   type RunDetail,
   type TestRecord,
 } from "../api/client";
@@ -128,6 +130,13 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
   const [batchResult, setBatchResult] = useState<BatchPredictResponse | null>(null);
   const [batchMsg, setBatchMsg] = useState<{ kind: "info" | "error" | "success"; text: string } | null>(null);
 
+  // Grad-CAM state — independent single-shot explainability action.
+  const [showGradcamForm, setShowGradcamForm] = useState(false);
+  const [gradcamForm, setGradcamForm] = useState({ input_dir: "", num_samples: 8 });
+  const [gradcamRunning, setGradcamRunning] = useState(false);
+  const [gradcamResult, setGradcamResult] = useState<GradCamResponse | null>(null);
+  const [gradcamMsg, setGradcamMsg] = useState<{ kind: "info" | "error" | "success"; text: string } | null>(null);
+
   // A detection run.json carries task="detection". Its post-training actions
   // (ONNX export, batch CSV inference, per-model evaluate) are classification
   // -only endpoints today, so they're hidden for detection runs until the
@@ -237,6 +246,55 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
       setBatchMsg({ kind: "error", text: msg });
     } finally {
       setBatchRunning(false);
+    }
+  };
+
+  const pickGradcamFolder = async () => {
+    setGradcamMsg({ kind: "info", text: "Abrindo seletor…" });
+    try {
+      const res = await pickDatasetFolder();
+      if (res.cancelled) {
+        setGradcamMsg({ kind: "info", text: res.message ?? "Cancelado." });
+        return;
+      }
+      setGradcamForm((f) => ({ ...f, input_dir: res.path }));
+      setGradcamMsg({ kind: "success", text: `Pasta: ${res.path}` });
+    } catch (e) {
+      setGradcamMsg({
+        kind: "error",
+        text: e instanceof Error ? e.message : "Falha ao escolher pasta.",
+      });
+    }
+  };
+
+  const runGradcam = async () => {
+    if (!gradcamForm.input_dir.trim()) {
+      setGradcamMsg({ kind: "error", text: "Informe a pasta de imagens." });
+      return;
+    }
+    setGradcamRunning(true);
+    setGradcamResult(null);
+    setGradcamMsg({ kind: "info", text: "Gerando mapas Grad-CAM…" });
+    try {
+      const result = await gradcamRun(runId, {
+        input_dir: gradcamForm.input_dir,
+        num_samples: gradcamForm.num_samples,
+      });
+      setGradcamResult(result);
+      setGradcamMsg({
+        kind: "success",
+        text: `${result.count} mapa(s) gerado(s) · camada ${result.target_layer}`,
+      });
+    } catch (e) {
+      const msg =
+        e instanceof ApiError
+          ? e.message
+          : e instanceof Error
+            ? e.message
+            : "Falha ao gerar Grad-CAM.";
+      setGradcamMsg({ kind: "error", text: msg });
+    } finally {
+      setGradcamRunning(false);
     }
   };
 
@@ -693,6 +751,195 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
                 </div>
               )}
               {batchResult && <BatchResultPanel result={batchResult} />}
+            </Section>
+          )}
+
+          {detail.artifacts.model && !isDetection && (
+            <Section
+              title="Grad-CAM (explicabilidade)"
+              action={
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowGradcamForm((s) => !s);
+                    setGradcamMsg(null);
+                  }}
+                  style={{
+                    padding: "6px 12px",
+                    background: "var(--accent-soft)",
+                    border: "1px solid var(--accent-vf)",
+                    borderRadius: 8,
+                    color: "var(--vf-text)",
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 11,
+                    cursor: "pointer",
+                    letterSpacing: "0.10em",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  {showGradcamForm ? "cancelar" : "🔥 Grad-CAM"}
+                </button>
+              }
+            >
+              {showGradcamForm ? (
+                <div
+                  style={{
+                    padding: 14,
+                    border: "1px dashed var(--vf-panel-stroke)",
+                    borderRadius: 10,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 10,
+                  }}
+                >
+                  <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
+                    <FormField
+                      label="Pasta de imagens"
+                      value={gradcamForm.input_dir}
+                      onChange={(v) =>
+                        setGradcamForm((f) => ({ ...f, input_dir: v }))
+                      }
+                      placeholder="ex: C:/datasets/amostras"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void pickGradcamFolder()}
+                      style={{
+                        padding: "10px 14px",
+                        background: "transparent",
+                        border: "1px solid var(--vf-panel-stroke)",
+                        borderRadius: 10,
+                        color: "var(--vf-text-dim)",
+                        fontFamily: "var(--font-mono)",
+                        fontSize: 11,
+                        cursor: "pointer",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      📁 Escolher
+                    </button>
+                  </div>
+                  <FormField
+                    label="Nº de amostras (1–64)"
+                    value={String(gradcamForm.num_samples)}
+                    onChange={(v) =>
+                      setGradcamForm((f) => ({
+                        ...f,
+                        num_samples: Math.max(1, Math.min(64, Number(v) || 1)),
+                      }))
+                    }
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void runGradcam()}
+                    disabled={gradcamRunning}
+                    style={{
+                      padding: "12px 20px",
+                      background:
+                        "linear-gradient(180deg, var(--accent-soft) 0%, rgba(8,10,14,0.4) 100%)",
+                      border: "1px solid var(--accent-vf)",
+                      borderRadius: 10,
+                      color: "var(--vf-text)",
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 12,
+                      fontWeight: 600,
+                      letterSpacing: "0.10em",
+                      textTransform: "uppercase",
+                      cursor: gradcamRunning ? "wait" : "pointer",
+                      opacity: gradcamRunning ? 0.6 : 1,
+                    }}
+                  >
+                    {gradcamRunning ? "Gerando…" : "▶ Gerar Grad-CAM"}
+                  </button>
+                  {gradcamMsg && (
+                    <div
+                      style={{
+                        padding: "8px 12px",
+                        fontFamily: "var(--font-mono)",
+                        fontSize: 11,
+                        borderRadius: 8,
+                        background:
+                          gradcamMsg.kind === "error"
+                            ? "oklch(0.704 0.191 22.216 / 0.10)"
+                            : gradcamMsg.kind === "success"
+                              ? "oklch(0.72 0.16 150 / 0.10)"
+                              : "rgba(255,255,255,0.04)",
+                        color:
+                          gradcamMsg.kind === "error"
+                            ? "oklch(0.85 0.14 22)"
+                            : gradcamMsg.kind === "success"
+                              ? "oklch(0.85 0.16 150)"
+                              : "var(--vf-text-dim)",
+                        wordBreak: "break-all",
+                      }}
+                    >
+                      {gradcamMsg.text}
+                    </div>
+                  )}
+                  {gradcamResult && gradcamResult.items.length > 0 && (
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns:
+                          "repeat(auto-fill, minmax(160px, 1fr))",
+                        gap: 10,
+                      }}
+                    >
+                      {gradcamResult.items.map((item) => {
+                        const url = artifactUrl(item.overlay);
+                        return (
+                          <button
+                            key={item.overlay}
+                            type="button"
+                            onClick={() =>
+                              setLightbox({ src: url, caption: item.source })
+                            }
+                            style={{
+                              background: "rgba(0,0,0,0.3)",
+                              border: "1px solid var(--vf-panel-stroke)",
+                              borderRadius: 10,
+                              padding: 0,
+                              overflow: "hidden",
+                              cursor: "zoom-in",
+                              display: "flex",
+                              flexDirection: "column",
+                            }}
+                          >
+                            <img
+                              src={url}
+                              alt={item.source}
+                              style={{ width: "100%", height: "auto", display: "block" }}
+                            />
+                            <div
+                              style={{
+                                padding: "6px 10px 8px",
+                                fontFamily: "var(--font-mono)",
+                                fontSize: 10,
+                                color: "var(--vf-text-dim)",
+                              }}
+                            >
+                              classe predita: {item.predicted_class}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div
+                  style={{
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 11,
+                    color: "var(--vf-text-muted)",
+                    lineHeight: 1.5,
+                  }}
+                >
+                  Gera mapas de calor Grad-CAM sobre imagens de exemplo,
+                  destacando as regiões que mais influenciaram a classe predita
+                  pelo checkpoint. Útil para interpretar o que o modelo aprendeu.
+                </div>
+              )}
             </Section>
           )}
 
