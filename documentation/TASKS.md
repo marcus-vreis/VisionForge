@@ -300,13 +300,30 @@ reusing the existing endpoints/components by task dispatch (see PHASE7 plan §7)
 
 **✅ Phase 7.1 complete: detection has full parity with the classification post-training surface (history, detail, results, per-model mAP test, YOLO dataset stats, ONNX export).**
 
-## Phase 8 — Segmentation task
+## Phase 8 — Semantic Segmentation task
 
-- [ ] `SegmentationConfig` Pydantic models
-- [ ] Model support: U-Net, DeepLab (depends: SegmentationConfig)
-- [ ] `SegmentationTrainer` with IoU, Dice metrics (depends: SegmentationConfig)
-- [ ] Segmentation blocks (depends: SegmentationTrainer)
-- [ ] Segmentation tab in GUI (depends: SegmentationTrainer)
+Design: `documentation/PHASE8_SEGMENTATION_PLAN.md`. Standalone config/block/run
+path (mirrors detection ADR-033 / regression ADR-036); paired image+mask
+per-split dataset (image → per-pixel class map); torchvision DeepLab/FCN/LR-ASPP
+families + hand-rolled U-Net; reuses `OutputConfig`/`DeviceConfig`/`TransformConfig`.
+
+- [x] brick 1 — `SegmentationConfig` Pydantic models — standalone tree
+  (`utils/segmentation_config.py`): backbone choice (unet + torchvision DeepLab/
+  FCN/LR-ASPP families), `num_classes`, paired image/mask dataset dir names,
+  `ignore_index` ↔ class-id coherence (top-level validator rejects an
+  `ignore_index` that collides with `0..num_classes-1`), loss
+  (cross_entropy/dice/combined), non-power-of-two batch, `image_size` floor;
+  reuses `OutputConfig`/`DeviceConfig`/`TransformConfig`/`PreprocessingConfig`/
+  `SchedulerConfig`. Tests in `tests/utils/test_segmentation_config.py` (31 cases).
+- [ ] brick 2 — `SegmentationDataModule` (image+mask → tensors; nearest-neighbor
+  mask resize; picklable; reuses `TransformConfig`/preprocessing)
+- [ ] brick 3 — `SegmentationModelFactory` (torchvision DeepLab/FCN/LR-ASPP head
+  resize + hand-rolled U-Net)
+- [ ] brick 4 — `SegmentationTrainer` (CE/Dice/combined loss, mIoU/Dice/pixel-acc,
+  best-by-val-mIoU checkpoint, ADR-013 `run.json`, SSE)
+- [ ] brick 5 — `SegmentationBlock` (`setup/run/report`) + ADR-037
+- [ ] brick 6 — `/api/segmentation/{schema,run}` run path
+- [ ] brick 7 — Segmentação tab in GUI (`SegmentationPanel`, wired end-to-end)
 
 ## Phase 9 — Anomaly Detection task
 
