@@ -184,6 +184,64 @@ class TestLoadRunsFinalMetrics:
             assert isinstance(v, float)
 
 
+def _make_detection_run_json(
+    tmp_path: Path,
+    *,
+    folder: str = "20260601_120000_000000",
+    experiment: str = "det1",
+    model_name: str = "yolo11n",
+    map50: float | None = 0.71,
+    map50_95: float | None = 0.55,
+) -> Path:
+    """Write a synthetic detection run.json (mAP metrics, no block field).
+
+    Mirrors what DetectionTrainer._write_run_json emits: task='detection',
+    map50/map50_95 metrics, and no top-level 'block' key.
+    """
+    run_dir = tmp_path / experiment / folder
+    run_dir.mkdir(parents=True)
+    metrics: dict[str, object] = {"best_epoch": 1, "total_epochs": 3}
+    if map50 is not None:
+        metrics["map50"] = map50
+    if map50_95 is not None:
+        metrics["map50_95"] = map50_95
+    data = {
+        "id": f"{experiment}_{folder}",
+        "experiment": experiment,
+        "timestamp": _TS_LATE,
+        "status": "completed",
+        "config": {"model": {"name": model_name}, "task": "detection"},
+        "metrics": metrics,
+        "history": [],
+        "artifacts": {},
+    }
+    (run_dir / "run.json").write_text(json.dumps(data), encoding="utf-8")
+    return run_dir
+
+
+class TestLoadRunsDetection:
+    """Detection runs must surface as block='detection' with mAP metrics."""
+
+    def test_detection_run_is_labeled_detection_block(self, tmp_path: Path) -> None:
+        """A run.json with task='detection' and no block field → block='detection'."""
+        _make_detection_run_json(tmp_path)
+        s = _load_runs(tmp_path)[0]
+        assert s.task == "detection"
+        assert s.block == "detection"
+
+    def test_detection_summary_exposes_map_metrics(self, tmp_path: Path) -> None:
+        """final_metrics must carry map50/map50_95 — not the classification keys."""
+        _make_detection_run_json(tmp_path, map50=0.71, map50_95=0.55)
+        s = _load_runs(tmp_path)[0]
+        assert s.final_metrics == pytest.approx({"map50": 0.71, "map50_95": 0.55})
+
+    def test_detection_skips_missing_map(self, tmp_path: Path) -> None:
+        """Ultralytics omits mAP early — a None map50_95 must be skipped, not raise."""
+        _make_detection_run_json(tmp_path, map50=0.4, map50_95=None)
+        s = _load_runs(tmp_path)[0]
+        assert s.final_metrics == pytest.approx({"map50": 0.4})
+
+
 class TestLoadRunsOrdering:
     def test_sorted_by_started_at_descending(self, tmp_path: Path) -> None:
         """_load_runs must return runs sorted newest-first."""

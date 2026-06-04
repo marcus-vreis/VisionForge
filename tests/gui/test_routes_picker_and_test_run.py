@@ -20,10 +20,16 @@ from fastapi.testclient import TestClient
 from PIL import Image
 
 from visionforge.gui.api.routes import (
+    _execute_batch_predict,
+    _execute_onnx_export,
     _execute_run_test,
     _open_native_folder_dialog,
 )
-from visionforge.gui.api.schemas import RunTestRequest
+from visionforge.gui.api.schemas import (
+    BatchPredictRequest,
+    ExportOnnxRequest,
+    RunTestRequest,
+)
 
 # ── dataset + checkpoint helpers ────────────────────────────────────────────
 
@@ -249,6 +255,59 @@ class TestRunTestEndpoint:
 # ── /api/dataset/pick endpoint integration ───────────────────────────────────
 
 
+class TestClassificationOnlyActionsRejectDetection:
+    """Batch inference + ONNX export stay classification-only (detection 400s).
+
+    The per-model test is now detection-aware (brick D2); batch/ONNX are not.
+    """
+
+    @staticmethod
+    def _make_detection_run(tmp_path: Path) -> Path:
+        run_dir = tmp_path / "models" / "det1" / "20260601_120000_000000"
+        run_dir.mkdir(parents=True)
+        run_json = {
+            "id": "det1_20260601_120000_000000",
+            "experiment": "det1",
+            "timestamp": "2026-06-01T12:00:00",
+            "status": "completed",
+            "run_dir": str(run_dir.resolve()),
+            "config": {
+                "name": "det1",
+                "task": "detection",
+                "model": {"name": "yolo11n"},
+            },
+            "metrics": {"map50": 0.5, "total_epochs": 1},
+            "history": [],
+            "artifacts": {
+                "model": str(run_dir / "weights" / "best.pt"),
+                "graphics": [],
+            },
+            "tests": [],
+        }
+        (run_dir / "run.json").write_text(json.dumps(run_json), encoding="utf-8")
+        return run_dir
+
+    def test_batch_predict_rejects_detection(self, tmp_path: Path) -> None:
+        run_dir = self._make_detection_run(tmp_path)
+        with pytest.raises(ValueError, match="detection"):
+            _execute_batch_predict(
+                run_dir, BatchPredictRequest(input_dir=str(tmp_path))
+            )
+
+    def test_onnx_export_rejects_torchvision_detection(self, tmp_path: Path) -> None:
+        # Ultralytics detection export is supported (brick F); torchvision is not.
+        run_dir = self._make_detection_run(tmp_path)
+        data = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+        data["config"]["model"]["backend"] = "torchvision"
+        data["config"]["model"]["name"] = "fasterrcnn_resnet50_fpn"
+        ckpt = run_dir / "best.pt"
+        ckpt.write_bytes(b"fake")
+        data["artifacts"]["model"] = str(ckpt)
+        (run_dir / "run.json").write_text(json.dumps(data), encoding="utf-8")
+        with pytest.raises(ValueError, match="torchvision"):
+            _execute_onnx_export(run_dir, ExportOnnxRequest())
+
+
 class TestDatasetPickEndpoint:
     def test_returns_path_when_dialog_succeeds(self, tmp_path: Path) -> None:
         from visionforge.gui.server import app
@@ -263,3 +322,33 @@ class TestDatasetPickEndpoint:
         body = resp.json()
         assert body["cancelled"] is False
         assert Path(body["path"]) == tmp_path.resolve()
+
+
+class TestDetectionYamlPickEndpoint:
+    def test_returns_path_when_dialog_succeeds(self, tmp_path: Path) -> None:
+        from visionforge.gui.server import app
+
+        data_yaml = tmp_path / "data.yaml"
+        data_yaml.write_text("nc: 1\n", encoding="utf-8")
+        with (
+            patch("tkinter.Tk"),
+            patch("tkinter.filedialog.askopenfilename", return_value=str(data_yaml)),
+        ):
+            client = TestClient(app, raise_server_exceptions=True)
+            resp = client.post("/api/detection/dataset/pick_yaml")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["cancelled"] is False
+        assert Path(body["path"]) == data_yaml.resolve()
+
+    def test_cancelled_when_dialog_dismissed(self) -> None:
+        from visionforge.gui.server import app
+
+        with (
+            patch("tkinter.Tk"),
+            patch("tkinter.filedialog.askopenfilename", return_value=""),
+        ):
+            client = TestClient(app, raise_server_exceptions=True)
+            resp = client.post("/api/detection/dataset/pick_yaml")
+        assert resp.status_code == 200
+        assert resp.json()["cancelled"] is True

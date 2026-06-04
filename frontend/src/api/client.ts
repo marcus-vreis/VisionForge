@@ -152,6 +152,14 @@ export async function pickDatasetFolder(): Promise<DatasetPickResponse> {
   return request<DatasetPickResponse>("/dataset/pick", { method: "POST" });
 }
 
+/** Open a native file picker filtered to .yaml/.yml — used to select an
+ *  existing Ultralytics data.yaml for a detection run. */
+export async function pickDetectionYaml(): Promise<DatasetPickResponse> {
+  return request<DatasetPickResponse>("/detection/dataset/pick_yaml", {
+    method: "POST",
+  });
+}
+
 export interface CheckpointPickResponse {
   path: string;
   cancelled: boolean;
@@ -252,6 +260,32 @@ export async function fetchDatasetStats(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ base_dir: baseDir, ...(splits ?? {}) }),
+  });
+}
+
+export interface DetectionSplitStats {
+  total_images: number;
+  total_annotations: number;
+  class_counts: Record<string, number>;
+  unlabeled_images: number;
+  missing: boolean;
+}
+
+export interface DetectionDatasetStatsResponse {
+  base_dir: string;
+  splits: Record<string, DetectionSplitStats>;
+  class_names: string[];
+  imbalanced: boolean;
+  message: string | null;
+}
+
+export async function fetchDetectionDatasetStats(
+  baseDir: string,
+): Promise<DetectionDatasetStatsResponse> {
+  return request<DetectionDatasetStatsResponse>("/detection/dataset/stats", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ base_dir: baseDir }),
   });
 }
 

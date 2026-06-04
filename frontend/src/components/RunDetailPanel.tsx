@@ -28,6 +28,10 @@ const GRAPH_LABELS: Record<string, string> = {
   "confusion_matrix_normalized.png": "Matriz de confusão (normalizada)",
   "roc_curve.png": "Curva ROC",
   "precision_recall_curve.png": "Curva Precision-Recall",
+  // Detection (Ultralytics / torchvision) plot names.
+  "results.png": "Resultados (loss + mAP)",
+  "BoxPR_curve.png": "Curva Precision-Recall (box)",
+  "BoxF1_curve.png": "Curva F1 (box)",
 };
 
 function metricLabel(key: string): string {
@@ -45,6 +49,10 @@ function metricLabel(key: string): string {
     best_val_loss: "Melhor val loss",
     best_epoch: "Melhor epoch",
     total_epochs: "Epochs treinados",
+    // Detection metrics (mAP @ IoU thresholds; box validation loss).
+    map50: "mAP@50",
+    map50_95: "mAP@50-95",
+    box_loss: "Box loss (val)",
   };
   return labels[key] ?? key;
 }
@@ -119,6 +127,19 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
   const [batchRunning, setBatchRunning] = useState(false);
   const [batchResult, setBatchResult] = useState<BatchPredictResponse | null>(null);
   const [batchMsg, setBatchMsg] = useState<{ kind: "info" | "error" | "success"; text: string } | null>(null);
+
+  // A detection run.json carries task="detection". Its post-training actions
+  // (ONNX export, batch CSV inference, per-model evaluate) are classification
+  // -only endpoints today, so they're hidden for detection runs until the
+  // detection-native equivalents land (see PHASE7_DETECTION_PLAN brick D/F).
+  const isDetection =
+    (detail?.config?.["task"] as string | undefined) === "detection";
+  const detectionBackend = (
+    detail?.config?.["model"] as Record<string, unknown> | undefined
+  )?.["backend"] as string | undefined;
+  // ONNX export is supported for classification and for Ultralytics detection
+  // runs (torchvision detection export is not implemented yet).
+  const canExportOnnx = !isDetection || detectionBackend === "ultralytics";
 
   useEffect(() => {
     let alive = true;
@@ -361,7 +382,7 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
 
           <PipelineSection config={detail.config} />
 
-          {detail.artifacts.model && (
+          {detail.artifacts.model && canExportOnnx && (
             <Section
               title="Exportar para ONNX"
               action={
@@ -533,7 +554,7 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
             </Section>
           )}
 
-          {detail.artifacts.model && (
+          {detail.artifacts.model && !isDetection && (
             <Section
               title="Inferência em lote (CSV)"
               action={

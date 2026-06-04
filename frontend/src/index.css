@@ -158,6 +158,19 @@
     100% { background-position: 200% 0; }
 }
 
+/* Respect users who ask the OS to minimize motion: drop every running
+   animation/transition to a single static frame. Defense-in-depth against
+   compositor-heavy decorative motion (animated background behind the
+   backdrop-filter panels). */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
 /* ============================================================
    Base layer
    ============================================================ */

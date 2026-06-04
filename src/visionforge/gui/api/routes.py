@@ -23,8 +23,11 @@ from visionforge.blocks.model_comparison import ModelComparisonBlock
 from visionforge.blocks.random_search import RandomSearchBlock
 from visionforge.blocks.transfer_learning import TransferLearningBlock
 from visionforge.core.data import DataModule
+from visionforge.core.detection_data import resolve_yolo_split
 from visionforge.core.evaluator import Evaluator
 from visionforge.core.plotter import MetricsPlotter
+from visionforge.gui.api.detection_export import export_detection_run
+from visionforge.gui.api.detection_testing import evaluate_detection_run
 from visionforge.gui.api.schemas import (
     BatchPredictRequest,
     BatchPredictResponse,
@@ -36,6 +39,9 @@ from visionforge.gui.api.schemas import (
     DatasetSamplesResponse,
     DatasetStatsRequest,
     DatasetStatsResponse,
+    DetectionDatasetStatsRequest,
+    DetectionDatasetStatsResponse,
+    DetectionSplitStats,
     DeviceInfoResponse,
     ExportOnnxRequest,
     ExportOnnxResponse,
@@ -438,6 +444,30 @@ async def run_experiment(config: ExperimentConfig) -> RunResponse:
 async def get_detection_schema() -> dict[str, Any]:
     """Return the JSON Schema for DetectionConfig (drives the detection form)."""
     return DetectionConfig.model_json_schema()
+
+
+@router.post("/detection/dataset/pick_yaml")
+async def pick_detection_yaml() -> DatasetPickResponse:
+    """Open a native file picker (filtered to .yaml/.yml) for a data.yaml.
+
+    Detection datasets in the standard Ultralytics/Roboflow format ship a
+    ``data.yaml`` describing splits and class names; this lets the user point
+    at it directly instead of synthesizing one from a folder layout.
+    """
+    return await asyncio.to_thread(_open_native_yaml_dialog)
+
+
+@router.post("/detection/dataset/stats")
+async def detection_dataset_stats(
+    req: DetectionDatasetStatsRequest,
+) -> DetectionDatasetStatsResponse:
+    """Per-split instance distribution for a YOLO-layout detection dataset.
+
+    The detection analogue of /dataset/stats: instead of one folder per class,
+    it counts annotated boxes per class across the ``.txt`` label files so the
+    researcher can spot class imbalance and unlabeled images before training.
+    """
+    return await asyncio.to_thread(_collect_detection_dataset_stats, req)
 
 
 @router.post("/detection/run")
@@ -937,6 +967,130 @@ def _collect_dataset_stats(req: DatasetStatsRequest) -> DatasetStatsResponse:
     )
 
 
+def _read_yolo_class_names(base: Path) -> list[str]:
+    """Class names from a ``classes.txt``/``names.txt`` at the root, else []."""
+    for candidate in ("classes.txt", "names.txt"):
+        path = base / candidate
+        if path.is_file():
+            names = [
+                line.strip()
+                for line in path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            if names:
+                return names
+    return []
+
+
+def _count_split_instances(
+    images_dir: Path, labels_dir: Path
+) -> tuple[int, dict[int, int], int]:
+    """Return (image_count, per-class-id instance counts, unlabeled_image_count).
+
+    An image is "unlabeled" when it has no matching label file or none of its
+    lines is a valid ``class cx cy w h`` row.
+    """
+    images = [
+        p
+        for p in images_dir.iterdir()
+        if p.is_file() and p.suffix.lower() in _IMAGE_EXTS
+    ]
+    counts: dict[int, int] = {}
+    unlabeled = 0
+    for img in images:
+        label_path = labels_dir / f"{img.stem}.txt"
+        instances = 0
+        if label_path.is_file():
+            for line in label_path.read_text(encoding="utf-8").splitlines():
+                parts = line.split()
+                if len(parts) != 5:
+                    continue
+                try:
+                    cls = int(float(parts[0]))
+                except ValueError:
+                    continue
+                counts[cls] = counts.get(cls, 0) + 1
+                instances += 1
+        if instances == 0:
+            unlabeled += 1
+    return len(images), counts, unlabeled
+
+
+def _collect_detection_dataset_stats(
+    req: DetectionDatasetStatsRequest,
+) -> DetectionDatasetStatsResponse:
+    """Tally per-class annotation instances across a YOLO dataset's splits."""
+    _remember_dataset_root(req.base_dir)
+    base = Path(req.base_dir)
+    if not base.exists() or not base.is_dir():
+        return DetectionDatasetStatsResponse(
+            base_dir=req.base_dir,
+            splits={},
+            class_names=[],
+            imbalanced=False,
+            message=f"Diretório base não encontrado: {req.base_dir}",
+        )
+
+    declared_names = _read_yolo_class_names(base)
+
+    # Scan each split once, keeping raw int-id counts + a missing flag.
+    raw: dict[str, tuple[int, dict[int, int], int, bool]] = {}
+    max_class_id = -1
+    for split in ("train", "val", "test"):
+        resolved = resolve_yolo_split(base, split)
+        if resolved is None:
+            raw[split] = (0, {}, 0, True)
+            continue
+        image_count, counts, unlabeled = _count_split_instances(*resolved)
+        raw[split] = (image_count, counts, unlabeled, False)
+        if counts:
+            max_class_id = max(max_class_id, *counts.keys())
+
+    # Declared names win; otherwise generate up to the highest class id seen.
+    num_classes = max(len(declared_names), max_class_id + 1)
+    class_names = [
+        declared_names[i] if i < len(declared_names) else f"class_{i}"
+        for i in range(num_classes)
+    ]
+
+    def _name(cid: int) -> str:
+        return class_names[cid] if 0 <= cid < len(class_names) else f"class_{cid}"
+
+    splits: dict[str, DetectionSplitStats] = {}
+    aggregate: dict[str, int] = {}
+    for split, (image_count, counts, unlabeled, is_missing) in raw.items():
+        named_counts: dict[str, int] = {}
+        for cid, n in counts.items():
+            named = _name(cid)
+            named_counts[named] = named_counts.get(named, 0) + n
+            aggregate[named] = aggregate.get(named, 0) + n
+        splits[split] = DetectionSplitStats(
+            total_images=image_count,
+            total_annotations=sum(counts.values()),
+            class_counts=named_counts,
+            unlabeled_images=unlabeled,
+            missing=is_missing,
+        )
+
+    non_zero = [c for c in aggregate.values() if c > 0]
+    imbalanced = len(non_zero) >= 2 and max(non_zero) / min(non_zero) > 2.0
+
+    message = None
+    if all(m for _, _, _, m in raw.values()):
+        message = (
+            "Nenhum split YOLO encontrado (esperado 'images/<split>' "
+            "ou '<split>/images')."
+        )
+
+    return DetectionDatasetStatsResponse(
+        base_dir=str(base.resolve()),
+        splits=splits,
+        class_names=class_names,
+        imbalanced=imbalanced,
+        message=message,
+    )
+
+
 def _open_native_checkpoint_dialog() -> CheckpointPickResponse:
     """Open a tkinter file dialog filtered to .pth/.pt and return the chosen path.
 
@@ -976,6 +1130,47 @@ def _open_native_checkpoint_dialog() -> CheckpointPickResponse:
         return CheckpointPickResponse(path="", cancelled=True, message="Cancelado.")
 
     return CheckpointPickResponse(path=str(Path(chosen).resolve()), cancelled=False)
+
+
+def _open_native_yaml_dialog() -> DatasetPickResponse:
+    """Open a tkinter file dialog filtered to .yaml/.yml and return the path.
+
+    Returns an empty path + cancelled=True when the dialog is dismissed or
+    tkinter is unavailable.
+    """
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+    except ImportError:
+        return DatasetPickResponse(
+            path="",
+            cancelled=True,
+            message="tkinter is not available on this Python installation.",
+        )
+
+    try:
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes("-topmost", True)
+        chosen = filedialog.askopenfilename(
+            title="Selecione o data.yaml do dataset",
+            filetypes=[
+                ("Ultralytics data.yaml", "*.yaml *.yml"),
+                ("All files", "*.*"),
+            ],
+        )
+        root.destroy()
+    except Exception as exc:  # noqa: BLE001
+        return DatasetPickResponse(
+            path="",
+            cancelled=True,
+            message=f"Falha ao abrir o seletor: {exc}",
+        )
+
+    if not chosen:
+        return DatasetPickResponse(path="", cancelled=True, message="Cancelado.")
+
+    return DatasetPickResponse(path=str(Path(chosen).resolve()), cancelled=False)
 
 
 def _open_native_folder_dialog() -> DatasetPickResponse:
@@ -1026,6 +1221,7 @@ def _execute_batch_predict(
     """
     run_json_path = run_dir / "run.json"
     data: dict[str, Any] = json.loads(run_json_path.read_text(encoding="utf-8"))
+    _require_classification_run(data, "Inferência em lote")
     base_config_dict: dict[str, Any] = data["config"]
 
     checkpoint_path = data.get("artifacts", {}).get("model")
@@ -1083,6 +1279,9 @@ def _execute_onnx_export(run_dir: Path, req: ExportOnnxRequest) -> ExportOnnxRes
     """
     run_json_path = run_dir / "run.json"
     data: dict[str, Any] = json.loads(run_json_path.read_text(encoding="utf-8"))
+    # Detection exports via Ultralytics' own ONNX exporter; classification below.
+    if data.get("config", {}).get("task") == "detection":
+        return export_detection_run(run_dir, req, data)
     base_config_dict: dict[str, Any] = data["config"]
 
     checkpoint_path = data.get("artifacts", {}).get("model")
@@ -1122,6 +1321,22 @@ def _execute_onnx_export(run_dir: Path, req: ExportOnnxRequest) -> ExportOnnxRes
     )
 
 
+def _require_classification_run(data: dict[str, Any], action: str) -> None:
+    """Reject post-training actions that only support classification runs.
+
+    Classification runs carry task='binary'/'multiclass'; detection runs carry
+    task='detection' and have no ModelFactory/Evaluator path (their equivalents
+    are tracked in PHASE7_DETECTION_PLAN brick D/F). The GUI already hides these
+    actions for detection — this is the backend's defense in depth.
+
+    Raises:
+        ValueError: when the run is a detection run.
+    """
+    task = data.get("config", {}).get("task", "")
+    if task == "detection":
+        raise ValueError(f"{action} não é suportado para runs de '{task}' ainda.")
+
+
 def _execute_run_test(run_dir: Path, req: RunTestRequest) -> RunTestResponse:
     """Reload a saved checkpoint and evaluate it on a new dataset path.
 
@@ -1129,6 +1344,9 @@ def _execute_run_test(run_dir: Path, req: RunTestRequest) -> RunTestResponse:
     """
     run_json_path = run_dir / "run.json"
     data: dict[str, Any] = json.loads(run_json_path.read_text(encoding="utf-8"))
+    # Detection runs evaluate via their own mAP path; classification continues below.
+    if data.get("config", {}).get("task") == "detection":
+        return evaluate_detection_run(run_dir, req, data)
     base_config_dict: dict[str, Any] = data["config"]
 
     # Build an ExperimentConfig clone with the new dataset paths + evaluate mode.
@@ -1249,6 +1467,41 @@ def _load_runs(models_dir: Path) -> list[RunSummary]:
     return summaries
 
 
+# Per-task projection of run.json metrics onto the compact set the history
+# card shows. Adding a task is one row; the frontend RunCard mirrors these keys.
+# Unknown tasks fall back to the classification row.
+_SUMMARY_METRIC_KEYS: dict[str, dict[str, str]] = {
+    "classification": {
+        "accuracy": "test_accuracy",
+        "f1": "test_f1",
+        "val_loss": "best_val_loss",
+    },
+    "detection": {
+        "map50": "map50",
+        "map50_95": "map50_95",
+    },
+}
+
+
+def _summary_metrics(task: str, metrics: dict[str, Any]) -> dict[str, float]:
+    """Project run.json metrics onto the task-specific history-card metric set.
+
+    Missing or non-numeric values are skipped so a partially-written run.json
+    (Ultralytics omits mAP early in training) never raises.
+    """
+    key_map = _SUMMARY_METRIC_KEYS.get(task, _SUMMARY_METRIC_KEYS["classification"])
+    out: dict[str, float] = {}
+    for label, src in key_map.items():
+        value = metrics.get(src)
+        if value is None:
+            continue
+        try:
+            out[label] = float(value)
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
 def _parse_run_summary(run_dir: Path, data: dict[str, Any]) -> RunSummary:
     """Build a RunSummary from a parsed run.json dict."""
     status: str = data["status"]
@@ -1257,15 +1510,9 @@ def _parse_run_summary(run_dir: Path, data: dict[str, Any]) -> RunSummary:
 
     config: dict[str, Any] = data["config"]
     metrics: dict[str, Any] = data.get("metrics", {})
+    task: str = config["task"]
 
-    _metric_map = {
-        "accuracy": "test_accuracy",
-        "f1": "test_f1",
-        "val_loss": "best_val_loss",
-    }
-    final_metrics: dict[str, float] = {
-        key: float(metrics[src]) for key, src in _metric_map.items() if src in metrics
-    }
+    final_metrics = _summary_metrics(task, metrics)
 
     data_cfg = config.get("data") or {}
     pp_cfg = data_cfg.get("preprocessing") or {}
@@ -1274,14 +1521,19 @@ def _parse_run_summary(run_dir: Path, data: dict[str, Any]) -> RunSummary:
 
     # The block field was added in 2026-05; older run.json files don't have
     # it, so fall back to the config dict (also written by every block) and
-    # finally to "classification" if neither path resolves.
-    block = data.get("block") or config.get("block") or "classification"
+    # finally infer from the task (detection writes no block marker) before
+    # defaulting to classification.
+    block = (
+        data.get("block")
+        or config.get("block")
+        or ("detection" if task == "detection" else "classification")
+    )
 
     return RunSummary(
         run_id=run_dir.name,
         experiment_name=data["experiment"],
         model_arch=config["model"]["name"],
-        task=config["task"],
+        task=task,
         status=status,
         started_at=started_at,
         finished_at=finished_at,

@@ -234,6 +234,21 @@ Design: `documentation/PHASE7_DETECTION_PLAN.md`. Primary backend Ultralytics
 
 **✅ Phase 7 complete: Ultralytics + torchvision backends, both end-to-end (config → datamodule → trainer → block → API → GUI), with mAP@50.**
 
+### Phase 7.1 — parity with the classification post-training surface
+
+Brings detection runs up to the same browse/evaluate surface classification has,
+reusing the existing endpoints/components by task dispatch (see PHASE7 plan §7).
+
+- [x] brick A — detection runs in run history with mAP (`_parse_run_summary` task-aware projection + `block="detection"`; `HistoryOverlay` task-aware metric keys).
+- [x] brick B — detection metric/plot labels in `RunDetailPanel` (mAP@50, Box loss, Ultralytics plot names). Brick C (`ResultsView`) already covered by brick 5b.
+- [x] brick D1 — hide classification-only actions (test/batch/ONNX) for detection runs + backend 400 guard.
+- [x] brick D2 — detection-native per-model test: `evaluate_detection_run` (torchvision rebuild + mAP via `detection_metrics`; Ultralytics `YOLO.val`), dispatched from `_execute_run_test`; "+ testar" form re-enabled. `gui/api/detection_testing.py`.
+- [x] brick E1 — `POST /api/detection/dataset/stats` + `_collect_detection_dataset_stats` (per-class instance tallies, unlabeled-image + imbalance flags); shared `resolve_yolo_split` extracted into `core/detection_data.py`.
+- [x] brick E2 — `DetectionDatasetStats` GUI panel in `DetectionPanel` (mirrors classification `DatasetStats`).
+- [x] brick F — Ultralytics ONNX export for detection runs: `export_detection_run` (drives `YOLO.export`), dispatched from `_execute_onnx_export`; export card re-enabled for Ultralytics-backend detection. `gui/api/detection_export.py`.
+
+**✅ Phase 7.1 complete: detection has full parity with the classification post-training surface (history, detail, results, per-model mAP test, YOLO dataset stats, ONNX export).**
+
 ## Phase 8 — Segmentation task
 
 - [ ] `SegmentationConfig` Pydantic models
