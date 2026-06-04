@@ -267,12 +267,21 @@ reusing the existing endpoints/components by task dispatch (see PHASE7 plan §7)
 
 ---
 
+## ONNX PyTorch-vs-runtime speedup benchmark ✅ (backlog item done)
+
+- [x] `ExportONNXBlock._benchmark` now also times the **PyTorch** model on the
+  same dummy input (warmup-excluded) and reports `torch_mean_ms` + a `speedup`
+  ratio (`torch_mean_ms / mean_ms`) alongside the existing onnxruntime
+  mean/p50/p95. Surfaced in the GUI `ExportResultPanel` (onnx μ, onnx p95, torch
+  μ, speedup ×, n_runs) — also fixed a stale frontend benchmark type that
+  referenced `std_ms`/`n_runs` the backend never produced. Test in
+  `tests/blocks/test_export_onnx.py::...test_benchmark_includes_torch_vs_onnx_speedup`.
+
 ## Backlog / ideas
 
 - Optuna integration as alternative to `RandomSearchBlock`
 - `timm` model library support as additional model source
 - Grad-CAM visualization block
-- ONNX inference benchmark in `ExportONNXBlock`
 - TensorBoard / MLflow integration for experiment tracking
 - Dataset augmentation preview in GUI
 - Dark/light theme toggle in GUI

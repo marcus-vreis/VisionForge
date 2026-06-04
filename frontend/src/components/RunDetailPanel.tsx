@@ -1614,17 +1614,39 @@ function ExportResultPanel({ result }: { result: ExportOnnxResponse }) {
       {bench && (
         <>
           <ExportStat
-            label="latency μ ± σ"
+            label="onnx latency μ"
             value={
               typeof bench.mean_ms === "number"
-                ? `${bench.mean_ms.toFixed(2)} ± ${(bench.std_ms ?? 0).toFixed(2)} ms`
+                ? `${bench.mean_ms.toFixed(2)} ms`
                 : "—"
             }
           />
           <ExportStat
-            label="n_runs"
-            value={String(bench.n_runs ?? "—")}
+            label="onnx p95"
+            value={
+              typeof bench.p95_ms === "number" ? `${bench.p95_ms.toFixed(2)} ms` : "—"
+            }
           />
+          <ExportStat
+            label="torch latency μ"
+            value={
+              typeof bench.torch_mean_ms === "number"
+                ? `${bench.torch_mean_ms.toFixed(2)} ms`
+                : "—"
+            }
+          />
+          <ExportStat
+            label="speedup (torch/onnx)"
+            value={
+              typeof bench.speedup === "number" ? `${bench.speedup.toFixed(2)}×` : "—"
+            }
+            accent={
+              typeof bench.speedup === "number" && bench.speedup >= 1
+                ? "oklch(0.85 0.16 150)"
+                : undefined
+            }
+          />
+          <ExportStat label="n_runs" value={String(bench.runs ?? "—")} />
         </>
       )}
     </div>

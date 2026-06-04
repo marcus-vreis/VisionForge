@@ -189,10 +189,11 @@ export interface ExportOnnxResponse {
   } | null;
   benchmark: {
     mean_ms?: number;
-    std_ms?: number;
-    min_ms?: number;
-    max_ms?: number;
-    n_runs?: number;
+    p50_ms?: number;
+    p95_ms?: number;
+    torch_mean_ms?: number;
+    speedup?: number;
+    runs?: number;
   } | null;
 }
 
