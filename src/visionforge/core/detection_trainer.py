@@ -26,6 +26,7 @@ from visionforge.core.detection_dataset import DetectionDataset, detection_colla
 from visionforge.core.detection_metrics import mean_average_precision_50
 from visionforge.models.detection_factory import build_torchvision_detector
 from visionforge.utils.detection_config import DetectionConfig
+from visionforge.utils.environment import capture_environment
 
 try:  # ultralytics is an optional extra ([detection]); bound lazily.
     from ultralytics import YOLO as _YOLO  # type: ignore[import-not-found]
@@ -453,6 +454,7 @@ class DetectionTrainer:
             "timestamp": datetime.now().isoformat(),
             "status": "completed",
             "device_used": result.device_used,
+            "environment": capture_environment(),
             "run_dir": str(run_dir.resolve()),
             "config": self._config.model_dump(mode="json"),
             "metrics": {

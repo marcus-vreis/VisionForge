@@ -27,6 +27,7 @@ from loguru import logger
 
 from visionforge.core.trainer import _seed_everything, resolve_device
 from visionforge.models.segmentation_factory import segmentation_logits
+from visionforge.utils.environment import capture_environment
 from visionforge.utils.segmentation_config import SegmentationConfig
 
 
@@ -434,6 +435,7 @@ class SegmentationTrainer:
             "timestamp": datetime.now().isoformat(),
             "status": "completed",
             "device_used": result.device_used,
+            "environment": capture_environment(),
             "run_dir": str(run_dir.resolve()),
             "config": self._config.model_dump(mode="json"),
             "metrics": {

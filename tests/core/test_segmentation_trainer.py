@@ -178,6 +178,7 @@ class TestFit:
         assert run_json["status"] == "completed"
         for key in ("miou", "dice", "pixel_acc", "best_epoch"):
             assert key in run_json["metrics"]
+        assert "torch" in run_json["environment"]
 
     def test_combined_loss_runs(self, tmp_path: Path) -> None:
         cfg = _config(tmp_path, {"training": {"loss": "combined"}})

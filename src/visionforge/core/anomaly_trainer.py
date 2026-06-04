@@ -35,6 +35,7 @@ from sklearn.metrics import f1_score, roc_auc_score
 from visionforge.core.trainer import _seed_everything, resolve_device
 from visionforge.models.anomaly_factory import ConvAutoencoder, PatchCore
 from visionforge.utils.anomaly_config import AnomalyConfig
+from visionforge.utils.environment import capture_environment
 
 
 def compute_auroc(scores: torch.Tensor, labels: torch.Tensor) -> float:
@@ -350,6 +351,7 @@ class AnomalyTrainer:
             "timestamp": datetime.now().isoformat(),
             "status": "completed",
             "device_used": result.device_used,
+            "environment": capture_environment(),
             "run_dir": str(run_dir.resolve()),
             "config": self._config.model_dump(mode="json"),
             "metrics": {
