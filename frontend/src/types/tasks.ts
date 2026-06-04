@@ -118,4 +118,20 @@ export const TASKS: TaskDefinition[] = [
       { type: "number", key: "lr",     label: "Learning Rate", hint: "lr", min: 0.000001, max: 1, step: 0.0001 },
     ],
   },
+  {
+    key: "anomaly",
+    label: "Anomalia",
+    short: "anom",
+    description: "Detecte defeitos treinando só com imagens normais",
+    accent: "#f5a524",
+    models: [
+      { value: "autoencoder", label: "Autoencoder", sub: "reconstrução" },
+      { value: "patchcore", label: "PatchCore", sub: "memory bank" },
+    ],
+    defaults: { modelo: "autoencoder", epocas: 30, lr: 0.001, batch: 32 },
+    params: [
+      { type: "number", key: "epocas", label: "Épocas", hint: "iterações", min: 1, max: 1000, step: 1 },
+      { type: "number", key: "lr",     label: "Learning Rate", hint: "lr", min: 0.000001, max: 1, step: 0.0001 },
+    ],
+  },
 ];

@@ -8,6 +8,7 @@ import { ParamPanel } from "./components/ParamPanel";
 import { DetectionPanel } from "./components/DetectionPanel";
 import { RegressionPanel } from "./components/RegressionPanel";
 import { SegmentationPanel } from "./components/SegmentationPanel";
+import { AnomalyPanel } from "./components/AnomalyPanel";
 import {
   buildDetectionDataPayload,
   makeDefaultDetectionForm,
@@ -23,6 +24,11 @@ import {
   makeDefaultSegmentationForm,
   type SegmentationForm,
 } from "./lib/segmentation-models";
+import {
+  buildAnomalyPayload,
+  makeDefaultAnomalyForm,
+  type AnomalyForm,
+} from "./lib/anomaly-models";
 import { buildDefaults } from "./lib/schema-defaults";
 import { ResultsView } from "./components/ResultsView";
 import { TabBar } from "./components/TabBar";
@@ -59,6 +65,9 @@ export default function App() {
   );
   const [segmentationForm, setSegmentationForm] = useState<SegmentationForm>(
     makeDefaultSegmentationForm,
+  );
+  const [anomalyForm, setAnomalyForm] = useState<AnomalyForm>(
+    makeDefaultAnomalyForm,
   );
 
   const showOverlay =
@@ -124,6 +133,20 @@ export default function App() {
         device: { kind: device.kind, gpu_ids: device.gpu_ids },
       };
       await submit(payload, { segmentation: true });
+      return;
+    }
+    if (activeKey === "anomaly") {
+      reset();
+      setResultsVisible(false);
+      setOverlayVisible(true);
+      setPipelineSummary([]);
+      setBlockKind("anomaly");
+      setQueueSize(undefined);
+      const payload: Record<string, unknown> = {
+        ...buildAnomalyPayload(anomalyForm),
+        device: { kind: device.kind, gpu_ids: device.gpu_ids },
+      };
+      await submit(payload, { anomaly: true });
       return;
     }
     if (activeKey !== "classification") return;
@@ -260,6 +283,13 @@ export default function App() {
             accent={activeTask.accent}
             validationErrors={validationErrors}
           />
+        ) : activeKey === "anomaly" ? (
+          <AnomalyPanel
+            formData={anomalyForm}
+            setFormData={setAnomalyForm}
+            accent={activeTask.accent}
+            validationErrors={validationErrors}
+          />
         ) : (
           <ParamPanel
             task={activeTask}
@@ -302,7 +332,8 @@ export default function App() {
           (activeKey !== "classification" &&
             activeKey !== "detection" &&
             activeKey !== "regression" &&
-            activeKey !== "segmentation")
+            activeKey !== "segmentation" &&
+            activeKey !== "anomaly")
         }
         historyCount={historyCount}
         selection={device}

@@ -414,7 +414,18 @@ bank). Reuses `OutputConfig`/`DeviceConfig`/`TransformConfig`.
   `/experiment/{status,events,result}`. Mirrors the segmentation endpoint. Tests
   in `tests/gui/test_routes_anomaly.py` (4 cases: schema, dispatch+callback, 409
   conflict, 422 invalid config).
-- [ ] brick 7 — Anomalia tab in GUI (`AnomalyPanel`, wired end-to-end)
+- [x] brick 7 — Anomalia tab in GUI — `AnomalyPanel` (method segmented control
+  with conditional autoencoder/PatchCore fields, MVTec dataset form,
+  threshold-percentile, normal-dir) submits to `/api/anomaly/run`, reuses
+  `TrainingOverlay` (SSE) + `ResultsView`. `lib/anomaly-models.ts` mirrors the
+  backend (`buildAnomalyPayload`, `isPatchCore`). Added a 5th `anomaly` task tab.
+  `App.tsx`/`useExperiment`/`client` wired. Vitest in `anomaly-models.test.ts`
+  (3 cases). Verified live in the browser (renders, PatchCore conditional fields,
+  0 console errors).
+
+**✅ Phase 9 complete: anomaly detection end-to-end (config → normal-only train /
+labelled test → autoencoder|PatchCore → trainer → block → API → GUI), with
+image-level AUROC / threshold / F1 and a live training monitor.**
 
 ---
 

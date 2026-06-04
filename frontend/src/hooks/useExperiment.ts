@@ -3,6 +3,7 @@ import {
   ApiError,
   fetchResult,
   fetchStatus,
+  runAnomaly,
   runDetection,
   runExperiment,
   runRegression,
@@ -18,7 +19,12 @@ interface ExperimentState {
   progressEvents: TrainingEvent[];
   submit: (
     config: Record<string, unknown>,
-    opts?: { detection?: boolean; regression?: boolean; segmentation?: boolean },
+    opts?: {
+      detection?: boolean;
+      regression?: boolean;
+      segmentation?: boolean;
+      anomaly?: boolean;
+    },
   ) => Promise<void>;
   reset: () => void;
 }
@@ -215,7 +221,12 @@ export function useExperiment(): ExperimentState {
   const submit = useCallback(
     async (
       config: Record<string, unknown>,
-      opts?: { detection?: boolean; regression?: boolean; segmentation?: boolean },
+      opts?: {
+      detection?: boolean;
+      regression?: boolean;
+      segmentation?: boolean;
+      anomaly?: boolean;
+    },
     ) => {
       setError(null);
       setResult(null);
@@ -229,7 +240,9 @@ export function useExperiment(): ExperimentState {
             ? runRegression(config)
             : opts?.segmentation
               ? runSegmentation(config)
-              : runExperiment(config));
+              : opts?.anomaly
+                ? runAnomaly(config)
+                : runExperiment(config));
         setStatus({ status: "running", run_id: res.run_id, error: null });
         openEventSource();
         startPolling(res.run_id);
