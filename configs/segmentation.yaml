@@ -1,0 +1,37 @@
+# Example semantic-segmentation config (paired image/mask dataset). Copy, point
+# `data` at your dataset, then run:  visionforge run configs/segmentation.yaml
+name: segmentation_example
+task: segmentation
+
+model:
+  # unet, deeplabv3_resnet50/101, deeplabv3_mobilenet_v3_large,
+  # fcn_resnet50/101, lraspp_mobilenet_v3_large
+  name: deeplabv3_resnet50
+  num_classes: 2              # including background
+  pretrained: true
+
+data:
+  # Per-split dirs, each with an images and a masks subdir; image/mask pair by
+  # filename stem (img001.jpg <-> img001.png). Masks are single-channel class ids.
+  base_dir: datasets/my_segmentation_dataset
+  images_subdir: images
+  masks_subdir: masks
+  train_dir: train
+  val_dir: val
+  test_dir: test              # optional
+  image_size: 512
+  ignore_index: 255           # void pixels excluded from loss/metrics
+
+training:
+  learning_rate: 0.001
+  epochs: 50
+  batch_size: 8
+  loss: cross_entropy         # cross_entropy | dice | combined
+  optimizer: adam
+  early_stopping_patience: 10
+
+output:
+  models_dir: outputs/models
+
+device:
+  kind: cuda

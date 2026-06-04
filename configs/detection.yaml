@@ -1,0 +1,32 @@
+# Example object-detection config. Copy, point `data` at your dataset, then run:
+#   visionforge run configs/detection.yaml
+name: detection_example
+task: detection
+
+model:
+  backend: ultralytics        # ultralytics | torchvision
+  # ultralytics: yolov8n/s/m/l/x, yolo11n/s/m/l/x, rtdetr-l, rtdetr-x
+  # torchvision: fasterrcnn_resnet50_fpn, fasterrcnn_mobilenet_v3_large_fpn,
+  #              retinanet_resnet50_fpn, ssd300_vgg16, ssdlite320_mobilenet_v3_large
+  name: yolo11n
+  num_classes: 1
+  pretrained: true
+
+data:
+  # A YOLO-layout root (images/<split> + labels/<split>), or set `data_yaml`
+  # to an existing Ultralytics data.yaml instead.
+  base_dir: datasets/my_yolo_dataset
+  image_size: 640
+
+training:
+  epochs: 100
+  batch_size: 16
+  learning_rate: 0.01         # Ultralytics lr0
+  patience: 50
+  workers: 8
+
+output:
+  models_dir: outputs/models
+
+device:
+  kind: cuda                  # cpu | cuda | multi_cuda

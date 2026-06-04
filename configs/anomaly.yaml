@@ -1,0 +1,34 @@
+# Example anomaly-detection config (MVTec-style, trains on normal images only).
+# Copy, point `data` at your dataset, then run:  visionforge run configs/anomaly.yaml
+name: anomaly_example
+task: anomaly
+
+model:
+  name: autoencoder           # autoencoder | patchcore
+  backbone: resnet18          # PatchCore feature extractor (resnet18/34/50/wide_resnet50_2)
+  latent_dim: 512             # autoencoder bottleneck
+  coreset_ratio: 0.1          # PatchCore memory-bank subsample (0 < r <= 1)
+  pretrained: true
+
+data:
+  # train/<normal_dir> holds normal images only; test/<normal_dir> (label 0)
+  # plus one or more defect subdirs (label 1).
+  base_dir: datasets/my_mvtec_category
+  train_dir: train
+  test_dir: test
+  normal_dir: good
+  image_size: 256
+
+training:
+  learning_rate: 0.001
+  epochs: 30                  # ignored by PatchCore (single memory-bank fit)
+  batch_size: 32
+  threshold_percentile: 95    # decision threshold over the normal-score distribution
+  optimizer: adam
+  early_stopping_patience: 10
+
+output:
+  models_dir: outputs/models
+
+device:
+  kind: cuda

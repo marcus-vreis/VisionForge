@@ -122,6 +122,8 @@ visionforge run configs/baseline.yaml
 `visionforge run` despacha pela tarefa do config (campo `task`): além de
 classificação (e suas estratégias — grid/random search, K-Fold, transfer
 learning, etc.), roda também **detecção, regressão, segmentação e detecção de
-anomalia** a partir do YAML correspondente.
+anomalia** a partir do YAML correspondente. Há templates prontos em `configs/`
+(`detection.yaml`, `regression.yaml`, `segmentation.yaml`, `anomaly.yaml`,
+`baseline.yaml`) — copie um, ajuste o caminho do dataset e rode.
 
 Todos os logs detalhados, matrizes de confusão e arquivos `.pth` do modelo serão salvos automaticamente na pasta `outputs/`.
