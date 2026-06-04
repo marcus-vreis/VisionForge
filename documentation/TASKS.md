@@ -429,7 +429,6 @@ image-level AUROC / threshold / F1 and a live training monitor.**
 
 ---
 
-<<<<<<< HEAD
 ## Config schema versioning ✅ (reproducibility infra)
 
 Addresses CLAUDE.md §6.2/§7.3 — "freeze the schema early" so saved configs stay
