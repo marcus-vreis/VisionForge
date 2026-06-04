@@ -366,11 +366,25 @@ pixel accuracy and a live training monitor.**
 
 ## Phase 9 — Anomaly Detection task
 
-- [ ] `AnomalyConfig` Pydantic models
-- [ ] Model support: Autoencoder, PatchCore (depends: AnomalyConfig)
-- [ ] `AnomalyTrainer` with AUROC, threshold metrics (depends: AnomalyConfig)
-- [ ] Anomaly Detection blocks (depends: AnomalyTrainer)
-- [ ] Anomaly Detection tab in GUI (depends: AnomalyTrainer)
+Design: `documentation/PHASE9_ANOMALY_PLAN.md`. Standalone config/block/run path
+(mirrors ADR-033/036/037); first **unsupervised** task — trains on normal images
+only, scores image-level AUROC over a labelled test split. Models: conv
+autoencoder (reconstruction error) + simplified PatchCore (normal-patch memory
+bank). Reuses `OutputConfig`/`DeviceConfig`/`TransformConfig`.
+
+- [x] brick 1 — `AnomalyConfig` Pydantic models — standalone tree
+  (`utils/anomaly_config.py`): model name (autoencoder/patchcore), PatchCore
+  backbone (resnet18/34/50/wide_resnet50_2), `latent_dim` (AE), `coreset_ratio`
+  (0<r≤1), MVTec-style dataset dirs + `normal_dir`, `threshold_percentile`
+  (0–100), non-power-of-two batch, `image_size` floor; reuses `OutputConfig`/
+  `DeviceConfig`/`TransformConfig`/`PreprocessingConfig`/`SchedulerConfig`. Tests
+  in `tests/utils/test_anomaly_config.py` (24 cases).
+- [ ] brick 2 — `AnomalyDataModule` (normal-only train, binary-labelled test)
+- [ ] brick 3 — `AnomalyModelFactory` (conv autoencoder + PatchCore memory bank)
+- [ ] brick 4 — `AnomalyTrainer` (reconstruction loop / memory-bank fit, image AUROC)
+- [ ] brick 5 — `AnomalyBlock` (`setup/run/report`) + ADR-038
+- [ ] brick 6 — `/api/anomaly/{schema,run}` run path
+- [ ] brick 7 — Anomalia tab in GUI (`AnomalyPanel`, wired end-to-end)
 
 ---
 
