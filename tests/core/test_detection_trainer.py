@@ -132,6 +132,7 @@ class TestUltralyticsPath:
         assert len(run_json["history"]) == 2
         assert run_json["artifacts"]["model"].endswith("best.pt")
         assert run_json["device_used"] == "cpu"
+        assert "torch" in run_json["environment"]
 
     def test_best_epoch_selected_by_map(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch

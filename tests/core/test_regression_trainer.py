@@ -129,6 +129,7 @@ class TestRegressionTrainer:
         for key in ("mse", "rmse", "mae", "r2", "best_val_loss"):
             assert key in data["metrics"]
         assert data["history"][0]["val_rmse"] is not None
+        assert "torch" in data["environment"]
 
     def test_progress_callback_emits_events(self, tmp_path: Path) -> None:
         events: list[str] = []

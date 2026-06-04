@@ -100,6 +100,7 @@ class TestFitAutoencoder:
         assert run_json["status"] == "completed"
         for key in ("auroc", "threshold", "image_f1", "best_epoch"):
             assert key in run_json["metrics"]
+        assert "torch" in run_json["environment"]
 
     def test_emits_sse_events(self, tmp_path: Path) -> None:
         events: list[dict] = []
