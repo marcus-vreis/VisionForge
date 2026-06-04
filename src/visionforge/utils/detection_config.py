@@ -13,7 +13,13 @@ from typing import Any, Literal
 import yaml
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from visionforge.utils.config import DeviceConfig, OutputConfig
+from visionforge.utils.config import (
+    CURRENT_SCHEMA_VERSION,
+    DeviceConfig,
+    OutputConfig,
+    check_schema_version,
+    migrate_config_dict,
+)
 
 # Model names per backend. Explicit so config validation rejects a name that
 # does not belong to the chosen backend before any weights are downloaded.
@@ -140,12 +146,18 @@ class DetectionConfig(BaseModel):
     """Top-level object-detection experiment configuration."""
 
     name: str = Field(default="detection_001", min_length=1)
+    schema_version: int = Field(default=CURRENT_SCHEMA_VERSION, ge=1)
     task: Literal["detection"] = "detection"
     model: DetectionModelConfig = Field(default_factory=DetectionModelConfig)
     data: DetectionDataConfig
     training: DetectionTrainingConfig = Field(default_factory=DetectionTrainingConfig)
     output: OutputConfig = Field(default_factory=OutputConfig)
     device: DeviceConfig = Field(default_factory=DeviceConfig)
+
+    @model_validator(mode="after")
+    def reject_future_schema_version(self) -> "DetectionConfig":
+        check_schema_version(self.schema_version)
+        return self
 
 
 def load_detection_config(path: Path | str) -> DetectionConfig:
@@ -173,7 +185,7 @@ def load_detection_config(path: Path | str) -> DetectionConfig:
             f"Config file must contain a YAML mapping, got: {type(raw).__name__}"
         )
 
-    return DetectionConfig.model_validate(raw)
+    return DetectionConfig.model_validate(migrate_config_dict(raw))
 
 
 __all__ = [

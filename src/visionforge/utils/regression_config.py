@@ -16,11 +16,14 @@ import yaml
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from visionforge.utils.config import (
+    CURRENT_SCHEMA_VERSION,
     DeviceConfig,
     OutputConfig,
     PreprocessingConfig,
     SchedulerConfig,
     TransformConfig,
+    check_schema_version,
+    migrate_config_dict,
 )
 
 # Backbones reused from the classification factory; regression swaps the final
@@ -132,6 +135,7 @@ class RegressionConfig(BaseModel):
     """Top-level image-regression experiment configuration."""
 
     name: str = Field(default="regression_001", min_length=1)
+    schema_version: int = Field(default=CURRENT_SCHEMA_VERSION, ge=1)
     task: Literal["regression"] = "regression"
     model: RegressionModelConfig = Field(default_factory=RegressionModelConfig)
     data: RegressionDataConfig
@@ -141,6 +145,7 @@ class RegressionConfig(BaseModel):
 
     @model_validator(mode="after")
     def targets_match_columns(self) -> "RegressionConfig":
+        check_schema_version(self.schema_version)
         n_cols = len(self.data.target_columns)
         if n_cols != self.model.num_targets:
             raise ValueError(
@@ -175,7 +180,7 @@ def load_regression_config(path: Path | str) -> RegressionConfig:
             f"Config file must contain a YAML mapping, got: {type(raw).__name__}"
         )
 
-    return RegressionConfig.model_validate(raw)
+    return RegressionConfig.model_validate(migrate_config_dict(raw))
 
 
 __all__ = [
