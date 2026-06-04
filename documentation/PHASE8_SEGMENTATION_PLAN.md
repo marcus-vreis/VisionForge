@@ -12,7 +12,7 @@
 > - [x] brick 3 — `SegmentationModelFactory` (torchvision DeepLab/FCN/LR-ASPP + U-Net)
 > - [x] brick 4 — `SegmentationTrainer` (CE/Dice loss, IoU/Dice/pixel-acc)
 > - [x] brick 5 — `SegmentationBlock` (`setup/run/report`) + ADR-037
-> - [ ] brick 6 — `/api/segmentation/{schema,run}` run path
+> - [x] brick 6 — `/api/segmentation/{schema,run}` run path
 > - [ ] brick 7 — GUI Segmentação tab (SegmentationPanel, wired end-to-end)
 
 Semantic segmentation is the fourth task (after classification, detection,

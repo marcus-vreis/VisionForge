@@ -344,7 +344,13 @@ families + hand-rolled U-Net; reuses `OutputConfig`/`DeviceConfig`/`TransformCon
   loss curve (reuses `MetricsPlotter.loss_curve`), updates run.json with
   `test_*`. ADR-037 written. Tests in `tests/blocks/test_segmentation.py`
   (4 cases, factory/datamodule patched).
-- [ ] brick 6 — `/api/segmentation/{schema,run}` run path
+- [x] brick 6 — `/api/segmentation/{schema,run}` run path — `GET
+  /api/segmentation/schema` (drives the form) + `POST /api/segmentation/run`
+  dispatching `SegmentationBlock` with `_progress_callback` → SSE; reuses the
+  shared single-run state and `/experiment/{status,events,result}` (one run at a
+  time). Mirrors the regression endpoint. Tests in
+  `tests/gui/test_routes_segmentation.py` (4 cases: schema, dispatch+callback,
+  409 conflict, 422 invalid config).
 - [ ] brick 7 — Segmentação tab in GUI (`SegmentationPanel`, wired end-to-end)
 
 ## Phase 9 — Anomaly Detection task
