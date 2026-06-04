@@ -286,7 +286,14 @@ new task. Dependency-free (pure torch hooks).
   Classification-gated (detection/regression/segmentation/anomaly → 400).
   `GradCamRequest`/`GradCamResponse`/`GradCamItem` schemas. Tests in
   `tests/gui/test_routes_gradcam.py` (5 cases).
-- [ ] brick 3 — GUI "🔥 Grad-CAM" action in `RunDetailPanel` + overlay grid
+- [x] brick 3 — GUI "🔥 Grad-CAM" action in `RunDetailPanel` — collapsible
+  section (classification runs only) with folder picker + num_samples, calls
+  `gradcamRun` (`client.ts`), renders the overlay grid (click → Lightbox) with
+  per-image predicted class. Verified live in the browser: 4 overlays generated
+  end-to-end (real resnet18 checkpoint → `<run_dir>/gradcam/`), 0 console errors.
+
+**✅ Grad-CAM complete: explainability for trained classification runs
+(core → API → GUI), dependency-free.**
 
 ## Backlog / ideas
 

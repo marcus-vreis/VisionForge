@@ -238,6 +238,42 @@ export async function batchPredictRun(
   );
 }
 
+export interface GradCamRequestPayload {
+  input_dir: string;
+  num_samples?: number;
+  target_class?: number | null;
+  alpha?: number;
+  recursive?: boolean;
+}
+
+export interface GradCamItem {
+  source: string;
+  overlay: string;
+  predicted_class: number;
+}
+
+export interface GradCamResponse {
+  run_id: string;
+  count: number;
+  target_layer: string;
+  items: GradCamItem[];
+}
+
+/** Generate Grad-CAM overlays for a trained classification run's checkpoint. */
+export async function gradcamRun(
+  runId: string,
+  payload: GradCamRequestPayload,
+): Promise<GradCamResponse> {
+  return request<GradCamResponse>(
+    `/runs/${encodeURIComponent(runId)}/gradcam`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
 export interface SplitStats {
   total_images: number;
   classes: Record<string, number>;
