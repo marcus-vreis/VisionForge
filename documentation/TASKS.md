@@ -267,11 +267,25 @@ reusing the existing endpoints/components by task dispatch (see PHASE7 plan §7)
 
 ---
 
+## Grad-CAM explainability (backlog item, in progress)
+
+Design: `documentation/GRADCAM_PLAN.md`. Post-hoc explainability for trained
+classification runs — a per-run action (mirrors test/batch_predict/onnx), not a
+new task. Dependency-free (pure torch hooks).
+
+- [x] brick 1 — `core/gradcam.py` — `GradCAM` (forward/backward hooks on the last
+  conv, GAP-weighted ReLU-summed CAM, normalized + bilinearly upsampled to input
+  size), `resolve_target_layer` (last `nn.Conv2d`, arch-agnostic), `overlay_cam`
+  (dependency-free jet colormap + ImageNet de-normalization → PIL overlay). Tests
+  in `tests/core/test_gradcam.py` (9 cases).
+- [ ] brick 2 — `POST /api/runs/{id}/gradcam` per-run action (load checkpoint,
+  overlay N sample images, write PNGs, classification-gated)
+- [ ] brick 3 — GUI "🔥 Grad-CAM" action in `RunDetailPanel` + overlay grid
+
 ## Backlog / ideas
 
 - Optuna integration as alternative to `RandomSearchBlock`
 - `timm` model library support as additional model source
-- Grad-CAM visualization block
 - ONNX inference benchmark in `ExportONNXBlock`
 - TensorBoard / MLflow integration for experiment tracking
 - Dataset augmentation preview in GUI
