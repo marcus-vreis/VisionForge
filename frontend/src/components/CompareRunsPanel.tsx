@@ -40,7 +40,11 @@ export function CompareRunsPanel({ runIds, onBack }: CompareRunsPanelProps) {
 
   useEffect(() => {
     let alive = true;
-    setLoading(true);
+    // Defer the loading flag out of the synchronous effect body; cleared in
+    // finally so a fast resolve never leaves it stuck on.
+    const loadingTimer = setTimeout(() => {
+      if (alive) setLoading(true);
+    }, 0);
     Promise.all(runIds.map((id) => fetchRunDetail(id)))
       .then((arr) => {
         if (alive) setDetails(arr);
@@ -50,9 +54,13 @@ export function CompareRunsPanel({ runIds, onBack }: CompareRunsPanelProps) {
           setError(e instanceof Error ? e.message : "Falha ao carregar runs.");
         }
       })
-      .finally(() => alive && setLoading(false));
+      .finally(() => {
+        clearTimeout(loadingTimer);
+        if (alive) setLoading(false);
+      });
     return () => {
       alive = false;
+      clearTimeout(loadingTimer);
     };
   }, [runIds.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
 

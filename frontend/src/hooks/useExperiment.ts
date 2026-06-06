@@ -168,8 +168,7 @@ export function useExperiment(): ExperimentState {
   }, [closeEventSource]);
 
   const startPolling = useCallback(
-    (_runId: string) => {
-      // eslint-disable-line @typescript-eslint/no-unused-vars
+    () => {
       stopPolling();
       pollRef.current = setInterval(async () => {
         try {
@@ -245,7 +244,7 @@ export function useExperiment(): ExperimentState {
                 : runExperiment(config));
         setStatus({ status: "running", run_id: res.run_id, error: null });
         openEventSource();
-        startPolling(res.run_id);
+        startPolling();
       } catch (e) {
         if (e instanceof ApiError) {
           if (e.status === 422 && e.validationErrors) {

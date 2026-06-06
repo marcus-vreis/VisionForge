@@ -35,12 +35,19 @@ export function DatasetStats({ baseDir, trainDir, valDir, testDir, onApplyClasse
 
   useEffect(() => {
     if (!baseDir.trim()) {
-      setStats(null);
-      setSamples(null);
-      return;
+      // Defer the reset so it does not run synchronously in the effect body.
+      const t = setTimeout(() => {
+        setStats(null);
+        setSamples(null);
+      }, 0);
+      return () => clearTimeout(t);
     }
     let alive = true;
-    setLoading(true);
+    // Defer the loading flag out of the synchronous effect body; cleared in
+    // finally so a fast resolve never leaves it stuck on.
+    const loadingTimer = setTimeout(() => {
+      if (alive) setLoading(true);
+    }, 0);
     Promise.all([
       fetchDatasetStats(baseDir, {
         train_dir: trainDir || "train",
@@ -69,9 +76,13 @@ export function DatasetStats({ baseDir, trainDir, valDir, testDir, onApplyClasse
           setSamples(null);
         }
       })
-      .finally(() => alive && setLoading(false));
+      .finally(() => {
+        clearTimeout(loadingTimer);
+        if (alive) setLoading(false);
+      });
     return () => {
       alive = false;
+      clearTimeout(loadingTimer);
     };
   }, [baseDir, trainDir, valDir, testDir]); // eslint-disable-line react-hooks/exhaustive-deps
 
