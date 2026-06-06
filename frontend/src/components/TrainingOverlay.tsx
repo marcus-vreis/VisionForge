@@ -118,10 +118,15 @@ export function TrainingOverlay({
       `── trial ${trial_index + 1}/${total_trials}` +
       (ov ? ` · ${ov}` : "") +
       " ──";
-    setLogs((prev) => {
-      if (prev.at(-1) === line) return prev;
-      return [...prev.slice(-24), line];
-    });
+    // Defer the append so it does not run synchronously inside the effect body
+    // (avoids cascading renders); same pattern as the terminal-state effect.
+    const timer = setTimeout(() => {
+      setLogs((prev) => {
+        if (prev.at(-1) === line) return prev;
+        return [...prev.slice(-24), line];
+      });
+    }, 0);
+    return () => clearTimeout(timer);
   }, [latestTrialStart]);
 
   // Append a log line for each new epoch_end event.
@@ -138,11 +143,15 @@ export function TrainingOverlay({
       ` · loss=${train_loss.toFixed(4)}` +
       ` · val_loss=${val_loss.toFixed(4)}` +
       ` · val_acc=${val_accuracy.toFixed(4)}`;
-    setLogs((prev) => {
-      // Avoid duplicate lines if the effect runs twice in strict-mode.
-      if (prev.at(-1) === line) return prev;
-      return [...prev.slice(-24), line];
-    });
+    // Defer the append (see the trial-separator effect above).
+    const timer = setTimeout(() => {
+      setLogs((prev) => {
+        // Avoid duplicate lines if the effect runs twice in strict-mode.
+        if (prev.at(-1) === line) return prev;
+        return [...prev.slice(-24), line];
+      });
+    }, 0);
+    return () => clearTimeout(timer);
   }, [latestEpoch]);
 
   // Handle terminal states — subscribe to status.status changes as an external signal.
