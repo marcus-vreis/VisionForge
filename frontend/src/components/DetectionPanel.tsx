@@ -3,10 +3,13 @@ import { pickDatasetFolder, pickDetectionYaml } from "../api/client";
 import {
   DETECTION_BACKENDS,
   DETECTION_MODELS,
+  DETECTION_OPTIMIZERS,
   defaultModelForBackend,
   isValidModelForBackend,
+  type DetectionAugmentationForm,
   type DetectionBackend,
   type DetectionForm,
+  type DetectionOptimizer,
 } from "../lib/detection-models";
 import type { ValidationError } from "../hooks/useExperiment";
 import { NumberField, SelectField, Segmented, TextField, Toggle } from "./controls";
@@ -49,6 +52,16 @@ export function DetectionPanel({
     setFormData((p) => ({ ...p, data: { ...p.data, ...patch } }));
   const setTraining = (patch: Partial<DetectionForm["training"]>) =>
     setFormData((p) => ({ ...p, training: { ...p.training, ...patch } }));
+  const setAug = (patch: Partial<DetectionAugmentationForm>) =>
+    setFormData((p) => ({
+      ...p,
+      training: {
+        ...p.training,
+        augmentation: { ...p.training.augmentation, ...patch },
+      },
+    }));
+
+  const isUltralytics = formData.model.backend === "ultralytics";
 
   const onBackendChange = (raw: string) => {
     const backend = raw as DetectionBackend;
@@ -305,8 +318,326 @@ export function DetectionPanel({
             min={0}
             step={1}
           />
+          <SelectField
+            label="Optimizer"
+            value={formData.training.optimizer}
+            onChange={(v) =>
+              setTraining({ optimizer: v as DetectionOptimizer })
+            }
+            options={DETECTION_OPTIMIZERS.map((o) => ({ value: o, label: o }))}
+            hint="auto = Ultralytics escolhe"
+          />
+          <NumberField
+            label="Momentum"
+            value={formData.training.momentum}
+            onChange={(v) => setTraining({ momentum: v })}
+            min={0}
+            max={1}
+            step={0.001}
+            hint="SGD momentum / Adam β1"
+          />
+          <NumberField
+            label="Weight decay"
+            value={formData.training.weight_decay}
+            onChange={(v) => setTraining({ weight_decay: v })}
+            min={0}
+            step={0.0001}
+            hint="L2"
+          />
         </div>
       </div>
+
+      {isUltralytics && (
+        <>
+          {/* Schedule & loss */}
+          <div style={card}>
+            <div style={sectionLabel}>Schedule de LR & pesos de loss</div>
+            <div style={grid}>
+              <NumberField
+                label="lrf"
+                value={formData.training.lrf}
+                onChange={(v) => setTraining({ lrf: v })}
+                min={0.000001}
+                step={0.001}
+                hint="LR final = lr0 × lrf"
+              />
+              <Toggle
+                label="Cosine LR"
+                value={formData.training.cos_lr}
+                onChange={(v) => setTraining({ cos_lr: v })}
+                hint="schedule cosseno"
+              />
+              <NumberField
+                label="Warmup epochs"
+                value={formData.training.warmup_epochs}
+                onChange={(v) => setTraining({ warmup_epochs: v })}
+                min={0}
+                step={0.5}
+              />
+              <NumberField
+                label="Warmup momentum"
+                value={formData.training.warmup_momentum}
+                onChange={(v) => setTraining({ warmup_momentum: v })}
+                min={0}
+                max={1}
+                step={0.05}
+              />
+              <NumberField
+                label="Warmup bias LR"
+                value={formData.training.warmup_bias_lr}
+                onChange={(v) => setTraining({ warmup_bias_lr: v })}
+                min={0}
+                step={0.01}
+              />
+              <NumberField
+                label="Box loss gain"
+                value={formData.training.box}
+                onChange={(v) => setTraining({ box: v })}
+                min={0}
+                step={0.1}
+                hint="box"
+              />
+              <NumberField
+                label="Cls loss gain"
+                value={formData.training.cls}
+                onChange={(v) => setTraining({ cls: v })}
+                min={0}
+                step={0.1}
+                hint="cls"
+              />
+              <NumberField
+                label="DFL loss gain"
+                value={formData.training.dfl}
+                onChange={(v) => setTraining({ dfl: v })}
+                min={0}
+                step={0.1}
+                hint="dfl"
+              />
+            </div>
+          </div>
+
+          {/* Regularization & mechanics */}
+          <div style={card}>
+            <div style={sectionLabel}>Regularização & mecânica</div>
+            <div style={grid}>
+              <NumberField
+                label="Label smoothing"
+                value={formData.training.label_smoothing}
+                onChange={(v) => setTraining({ label_smoothing: v })}
+                min={0}
+                max={1}
+                step={0.01}
+              />
+              <NumberField
+                label="Dropout"
+                value={formData.training.dropout}
+                onChange={(v) => setTraining({ dropout: v })}
+                min={0}
+                max={1}
+                step={0.05}
+              />
+              <NumberField
+                label="Nominal batch (nbs)"
+                value={formData.training.nbs}
+                onChange={(v) => setTraining({ nbs: Math.round(v) })}
+                min={1}
+                step={1}
+              />
+              <NumberField
+                label="Freeze layers"
+                value={formData.training.freeze}
+                onChange={(v) => setTraining({ freeze: Math.round(v) })}
+                min={0}
+                step={1}
+                hint="0 = nenhuma"
+              />
+              <NumberField
+                label="Close mosaic"
+                value={formData.training.close_mosaic}
+                onChange={(v) => setTraining({ close_mosaic: Math.round(v) })}
+                min={0}
+                step={1}
+                hint="desliga mosaico nas últimas N épocas"
+              />
+              <Toggle
+                label="AMP"
+                value={formData.training.amp}
+                onChange={(v) => setTraining({ amp: v })}
+                hint="precisão mista"
+              />
+              <Toggle
+                label="Single class"
+                value={formData.training.single_cls}
+                onChange={(v) => setTraining({ single_cls: v })}
+                hint="trata tudo como 1 classe"
+              />
+              <Toggle
+                label="Rect"
+                value={formData.training.rect}
+                onChange={(v) => setTraining({ rect: v })}
+                hint="batches retangulares"
+              />
+              <Toggle
+                label="Multi-scale"
+                value={formData.training.multi_scale}
+                onChange={(v) => setTraining({ multi_scale: v })}
+                hint="varia imgsz ±50%"
+              />
+            </div>
+          </div>
+
+          {/* Augmentation */}
+          <div style={card}>
+            <div style={sectionLabel}>Data augmentation</div>
+            <div style={grid}>
+              <NumberField
+                label="HSV — hue"
+                value={formData.training.augmentation.hsv_h}
+                onChange={(v) => setAug({ hsv_h: v })}
+                min={0}
+                max={1}
+                step={0.005}
+              />
+              <NumberField
+                label="HSV — saturation"
+                value={formData.training.augmentation.hsv_s}
+                onChange={(v) => setAug({ hsv_s: v })}
+                min={0}
+                max={1}
+                step={0.05}
+              />
+              <NumberField
+                label="HSV — value"
+                value={formData.training.augmentation.hsv_v}
+                onChange={(v) => setAug({ hsv_v: v })}
+                min={0}
+                max={1}
+                step={0.05}
+              />
+              <NumberField
+                label="Degrees"
+                value={formData.training.augmentation.degrees}
+                onChange={(v) => setAug({ degrees: v })}
+                min={-180}
+                max={180}
+                step={1}
+                suffix="°"
+              />
+              <NumberField
+                label="Translate"
+                value={formData.training.augmentation.translate}
+                onChange={(v) => setAug({ translate: v })}
+                min={0}
+                max={1}
+                step={0.05}
+              />
+              <NumberField
+                label="Scale"
+                value={formData.training.augmentation.scale}
+                onChange={(v) => setAug({ scale: v })}
+                min={0}
+                step={0.05}
+              />
+              <NumberField
+                label="Shear"
+                value={formData.training.augmentation.shear}
+                onChange={(v) => setAug({ shear: v })}
+                min={-180}
+                max={180}
+                step={1}
+                suffix="°"
+              />
+              <NumberField
+                label="Perspective"
+                value={formData.training.augmentation.perspective}
+                onChange={(v) => setAug({ perspective: v })}
+                min={0}
+                max={0.001}
+                step={0.0001}
+              />
+              <NumberField
+                label="Flip up-down"
+                value={formData.training.augmentation.flipud}
+                onChange={(v) => setAug({ flipud: v })}
+                min={0}
+                max={1}
+                step={0.05}
+                hint="probabilidade"
+              />
+              <NumberField
+                label="Flip left-right"
+                value={formData.training.augmentation.fliplr}
+                onChange={(v) => setAug({ fliplr: v })}
+                min={0}
+                max={1}
+                step={0.05}
+                hint="probabilidade"
+              />
+              <NumberField
+                label="BGR swap"
+                value={formData.training.augmentation.bgr}
+                onChange={(v) => setAug({ bgr: v })}
+                min={0}
+                max={1}
+                step={0.05}
+                hint="probabilidade"
+              />
+              <NumberField
+                label="Mosaic"
+                value={formData.training.augmentation.mosaic}
+                onChange={(v) => setAug({ mosaic: v })}
+                min={0}
+                max={1}
+                step={0.05}
+                hint="probabilidade"
+              />
+              <NumberField
+                label="Mixup"
+                value={formData.training.augmentation.mixup}
+                onChange={(v) => setAug({ mixup: v })}
+                min={0}
+                max={1}
+                step={0.05}
+                hint="probabilidade"
+              />
+              <NumberField
+                label="Copy-paste"
+                value={formData.training.augmentation.copy_paste}
+                onChange={(v) => setAug({ copy_paste: v })}
+                min={0}
+                max={1}
+                step={0.05}
+                hint="probabilidade"
+              />
+              <SelectField
+                label="Auto augment"
+                value={formData.training.augmentation.auto_augment}
+                onChange={(v) =>
+                  setAug({
+                    auto_augment:
+                      v as DetectionAugmentationForm["auto_augment"],
+                  })
+                }
+                options={[
+                  { value: "randaugment", label: "RandAugment" },
+                  { value: "autoaugment", label: "AutoAugment" },
+                  { value: "augmix", label: "AugMix" },
+                  { value: "none", label: "Desativado" },
+                ]}
+              />
+              <NumberField
+                label="Random erasing"
+                value={formData.training.augmentation.erasing}
+                onChange={(v) => setAug({ erasing: v })}
+                min={0}
+                max={1}
+                step={0.05}
+                hint="probabilidade"
+              />
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

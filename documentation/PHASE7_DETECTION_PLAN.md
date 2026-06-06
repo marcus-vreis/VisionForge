@@ -193,6 +193,30 @@ surface: run history (mAP), run detail, results view, per-model test (mAP on a
 new dataset), YOLO dataset stats, ONNX export (Ultralytics), and dual dataset
 sources (YOLO folder *or* an existing data.yaml).
 
+## 7.2 — Full hyperparameter surface + complete YOLO family (ADR-040)
+
+Phase 7 deliberately shipped a minimal training surface (6 knobs) and three
+model families to stay shippable. Phase 7.2 closes that gap:
+
+- **Hyperparameters:** `DetectionTrainingConfig` now mirrors the full Ultralytics
+  `train` argument set — optimizer (`optimizer`/`momentum`/`weight_decay`),
+  schedule (`lrf`/`cos_lr`/`warmup_*`), loss gains (`box`/`cls`/`dfl`), and
+  regularization/mechanics (`label_smoothing`/`dropout`/`nbs`/`freeze`/`amp`/
+  `close_mosaic`/`single_cls`/`rect`/`multi_scale`) — plus a nested
+  `DetectionAugmentationConfig` for every augmentation knob (HSV, geometric,
+  mosaic/mixup/copy-paste, `auto_augment`, `erasing`). All defaults equal
+  Ultralytics' own, so the change is purely additive (behaviour-preserving).
+- **Models:** the Ultralytics set is now every detection family Ultralytics
+  ships — YOLOv8, YOLOv9, YOLOv10, YOLO11, YOLO12, YOLO26, and RT-DETR.
+- **Wiring:** `_ultralytics_train_kwargs()` translates the config tree into the
+  `YOLO.train(...)` call; the optimizer trio also drives the torchvision
+  backend's optimizer (previously hard-coded SGD).
+- **GUI:** `DetectionPanel` gains an optimizer row and three Ultralytics-only
+  cards (schedule & loss, regularization, augmentation). Default model stays
+  `yolo11n` even though the list is newest-first.
+
+See ADR-040 for the rationale.
+
 ## 8. GUI rendering performance
 
 The animated background (`Waves` + `Particles`) sits behind several

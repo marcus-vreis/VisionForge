@@ -7,9 +7,11 @@ import yaml
 from pydantic import ValidationError
 
 from visionforge.utils.detection_config import (
+    _ULTRALYTICS_MODELS,
     DetectionConfig,
     DetectionDataConfig,
     DetectionModelConfig,
+    DetectionTrainingConfig,
     load_detection_config,
 )
 
@@ -113,6 +115,121 @@ class TestTrainingRules:
         raw = _base_config(
             tmp_path,
             {"training": {"epochs": 0, "batch_size": 16, "learning_rate": 0.01}},
+        )
+        with pytest.raises(ValidationError):
+            DetectionConfig.model_validate(raw)
+
+
+# ── model families (YOLOv8/9/10/11/12/26 + RT-DETR) ───────────────────────────
+
+
+class TestModelFamilies:
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "yolov8n",
+            "yolov9t",
+            "yolov9c",
+            "yolov9e",
+            "yolov10n",
+            "yolov10b",
+            "yolov10x",
+            "yolo11n",
+            "yolo12m",
+            "yolo26n",
+            "yolo26x",
+            "rtdetr-l",
+        ],
+    )
+    def test_known_ultralytics_models_accepted(self, tmp_path: Path, name: str) -> None:
+        raw = _base_config(tmp_path, {"model": {"name": name}})
+        cfg = DetectionConfig.model_validate(raw)
+        assert cfg.model.name == name
+
+    def test_yolo26_present_in_model_set(self) -> None:
+        assert "yolo26n" in _ULTRALYTICS_MODELS
+        assert "yolo26x" in _ULTRALYTICS_MODELS
+
+    def test_unknown_yolo_version_rejected(self, tmp_path: Path) -> None:
+        raw = _base_config(tmp_path, {"model": {"name": "yolo99n"}})
+        with pytest.raises(ValidationError, match="ultralytics"):
+            DetectionConfig.model_validate(raw)
+
+
+# ── extended training hyperparameters ─────────────────────────────────────────
+
+
+class TestTrainingHyperparameters:
+    def test_defaults_match_ultralytics(self) -> None:
+        t = DetectionTrainingConfig()
+        assert t.optimizer == "auto"
+        assert t.momentum == pytest.approx(0.937)
+        assert t.weight_decay == pytest.approx(0.0005)
+        assert t.lrf == pytest.approx(0.01)
+        assert t.cos_lr is False
+        assert t.box == pytest.approx(7.5)
+        assert t.cls == pytest.approx(0.5)
+        assert t.dfl == pytest.approx(1.5)
+        assert t.close_mosaic == 10
+        assert t.amp is True
+        assert t.freeze is None
+
+    def test_augmentation_defaults(self) -> None:
+        a = DetectionTrainingConfig().augmentation
+        assert a.fliplr == pytest.approx(0.5)
+        assert a.mosaic == pytest.approx(1.0)
+        assert a.flipud == pytest.approx(0.0)
+        assert a.auto_augment == "randaugment"
+        assert a.erasing == pytest.approx(0.4)
+
+    def test_accepts_overrides(self, tmp_path: Path) -> None:
+        raw = _base_config(
+            tmp_path,
+            {
+                "training": {
+                    "epochs": 1,
+                    "batch_size": 16,
+                    "learning_rate": 0.01,
+                    "optimizer": "AdamW",
+                    "cos_lr": True,
+                    "box": 5.0,
+                    "augmentation": {"mosaic": 0.0, "mixup": 0.2, "fliplr": 0.0},
+                }
+            },
+        )
+        cfg = DetectionConfig.model_validate(raw)
+        assert cfg.training.optimizer == "AdamW"
+        assert cfg.training.cos_lr is True
+        assert cfg.training.box == pytest.approx(5.0)
+        assert cfg.training.augmentation.mosaic == pytest.approx(0.0)
+        assert cfg.training.augmentation.mixup == pytest.approx(0.2)
+
+    def test_invalid_optimizer_rejected(self, tmp_path: Path) -> None:
+        raw = _base_config(
+            tmp_path,
+            {
+                "training": {
+                    "epochs": 1,
+                    "batch_size": 16,
+                    "learning_rate": 0.01,
+                    "optimizer": "rmsprop_lowercase",
+                }
+            },
+        )
+        with pytest.raises(ValidationError):
+            DetectionConfig.model_validate(raw)
+
+    def test_probability_bounds_enforced(self, tmp_path: Path) -> None:
+        raw = _base_config(
+            tmp_path,
+            {
+                "training": {
+                    "epochs": 1,
+                    "batch_size": 16,
+                    "learning_rate": 0.01,
+                    "augmentation": {"fliplr": 1.5},
+                }
+            },
         )
         with pytest.raises(ValidationError):
             DetectionConfig.model_validate(raw)
