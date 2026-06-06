@@ -5,7 +5,9 @@ task: detection
 
 model:
   backend: ultralytics        # ultralytics | torchvision
-  # ultralytics: yolov8n/s/m/l/x, yolo11n/s/m/l/x, rtdetr-l, rtdetr-x
+  # ultralytics:
+  #   yolov8n/s/m/l/x · yolov9t/s/m/c/e · yolov10n/s/m/b/l/x ·
+  #   yolo11n/s/m/l/x · yolo12n/s/m/l/x · yolo26n/s/m/l/x · rtdetr-l, rtdetr-x
   # torchvision: fasterrcnn_resnet50_fpn, fasterrcnn_mobilenet_v3_large_fpn,
   #              retinanet_resnet50_fpn, ssd300_vgg16, ssdlite320_mobilenet_v3_large
   name: yolo11n
@@ -18,12 +20,57 @@ data:
   base_dir: datasets/my_yolo_dataset
   image_size: 640
 
+# All fields below default to Ultralytics' own defaults — every one is optional.
+# Shown here as a reference of the available knobs. The optimizer/momentum/
+# weight_decay trio is also honoured by the torchvision backend.
 training:
   epochs: 100
   batch_size: 16
   learning_rate: 0.01         # Ultralytics lr0
   patience: 50
   workers: 8
+  # optimizer
+  optimizer: auto             # auto | SGD | Adam | Adamax | AdamW | NAdam | RAdam | RMSProp
+  momentum: 0.937             # SGD momentum / Adam beta1
+  weight_decay: 0.0005
+  # learning-rate schedule
+  lrf: 0.01                   # final LR = lr0 * lrf
+  cos_lr: false
+  warmup_epochs: 3.0
+  warmup_momentum: 0.8
+  warmup_bias_lr: 0.1
+  # loss gains
+  box: 7.5
+  cls: 0.5
+  dfl: 1.5
+  # regularization / mechanics
+  label_smoothing: 0.0
+  dropout: 0.0
+  nbs: 64
+  # freeze: 10                # freeze first N layers (omit for none)
+  amp: true
+  close_mosaic: 10
+  single_cls: false
+  rect: false
+  multi_scale: false
+  # data augmentation (ultralytics backend)
+  augmentation:
+    hsv_h: 0.015
+    hsv_s: 0.7
+    hsv_v: 0.4
+    degrees: 0.0
+    translate: 0.1
+    scale: 0.5
+    shear: 0.0
+    perspective: 0.0
+    flipud: 0.0
+    fliplr: 0.5
+    bgr: 0.0
+    mosaic: 1.0
+    mixup: 0.0
+    copy_paste: 0.0
+    auto_augment: randaugment  # randaugment | autoaugment | augmix | null
+    erasing: 0.4
 
 output:
   models_dir: outputs/models

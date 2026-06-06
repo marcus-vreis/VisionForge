@@ -11,6 +11,7 @@ import { SegmentationPanel } from "./components/SegmentationPanel";
 import { AnomalyPanel } from "./components/AnomalyPanel";
 import {
   buildDetectionDataPayload,
+  buildDetectionTrainingPayload,
   makeDefaultDetectionForm,
   type DetectionForm,
 } from "./lib/detection-models";
@@ -102,6 +103,7 @@ export default function App() {
       const payload: Record<string, unknown> = {
         ...detectionForm,
         data: buildDetectionDataPayload(detectionForm.data),
+        training: buildDetectionTrainingPayload(detectionForm.training),
         device: { kind: device.kind, gpu_ids: device.gpu_ids },
       };
       await submit(payload, { detection: true });

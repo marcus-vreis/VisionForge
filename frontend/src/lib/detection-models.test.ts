@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   DETECTION_MODELS,
   buildDetectionDataPayload,
+  buildDetectionTrainingPayload,
   defaultModelForBackend,
   isValidModelForBackend,
   makeDefaultDetectionForm,
+  makeDefaultDetectionTraining,
 } from "./detection-models";
 
 describe("detection-models", () => {
@@ -26,6 +28,44 @@ describe("detection-models", () => {
     const u = new Set(DETECTION_MODELS.ultralytics.map((m) => m.value));
     const overlap = DETECTION_MODELS.torchvision.filter((m) => u.has(m.value));
     expect(overlap).toEqual([]);
+  });
+
+  it("offers every YOLO family including YOLO26", () => {
+    const u = DETECTION_MODELS.ultralytics.map((m) => m.value);
+    for (const name of [
+      "yolov8n",
+      "yolov9c",
+      "yolov10b",
+      "yolo11n",
+      "yolo12m",
+      "yolo26n",
+      "yolo26x",
+      "rtdetr-l",
+    ]) {
+      expect(u).toContain(name);
+    }
+  });
+
+  it("keeps yolo11n as the explicit ultralytics default despite list order", () => {
+    expect(DETECTION_MODELS.ultralytics[0].value).toBe("yolo26n");
+    expect(defaultModelForBackend("ultralytics")).toBe("yolo11n");
+  });
+
+  it("maps the auto_augment 'none' sentinel to null in the payload", () => {
+    const t = makeDefaultDetectionTraining();
+    t.augmentation.auto_augment = "none";
+    const payload = buildDetectionTrainingPayload(t) as {
+      augmentation: { auto_augment: unknown };
+    };
+    expect(payload.augmentation.auto_augment).toBeNull();
+  });
+
+  it("forwards a real auto_augment value unchanged", () => {
+    const payload = buildDetectionTrainingPayload(
+      makeDefaultDetectionTraining(),
+    ) as { augmentation: { auto_augment: unknown }; optimizer: string };
+    expect(payload.augmentation.auto_augment).toBe("randaugment");
+    expect(payload.optimizer).toBe("auto");
   });
 
   it("defaults to the folder dataset source", () => {

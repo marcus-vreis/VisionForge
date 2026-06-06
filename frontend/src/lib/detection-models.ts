@@ -13,11 +13,32 @@ export interface DetectionModelOption {
 
 export const DETECTION_MODELS: Record<DetectionBackend, DetectionModelOption[]> = {
   ultralytics: [
+    { value: "yolo26n", label: "YOLO26-n", sub: "nano · NMS-free" },
+    { value: "yolo26s", label: "YOLO26-s", sub: "small · NMS-free" },
+    { value: "yolo26m", label: "YOLO26-m", sub: "medium · NMS-free" },
+    { value: "yolo26l", label: "YOLO26-l", sub: "large · NMS-free" },
+    { value: "yolo26x", label: "YOLO26-x", sub: "xlarge · NMS-free" },
     { value: "yolo11n", label: "YOLO11-n", sub: "nano" },
     { value: "yolo11s", label: "YOLO11-s", sub: "small" },
     { value: "yolo11m", label: "YOLO11-m", sub: "medium" },
     { value: "yolo11l", label: "YOLO11-l", sub: "large" },
     { value: "yolo11x", label: "YOLO11-x", sub: "xlarge" },
+    { value: "yolo12n", label: "YOLO12-n", sub: "nano" },
+    { value: "yolo12s", label: "YOLO12-s", sub: "small" },
+    { value: "yolo12m", label: "YOLO12-m", sub: "medium" },
+    { value: "yolo12l", label: "YOLO12-l", sub: "large" },
+    { value: "yolo12x", label: "YOLO12-x", sub: "xlarge" },
+    { value: "yolov10n", label: "YOLOv10-n", sub: "nano · NMS-free" },
+    { value: "yolov10s", label: "YOLOv10-s", sub: "small · NMS-free" },
+    { value: "yolov10m", label: "YOLOv10-m", sub: "medium · NMS-free" },
+    { value: "yolov10b", label: "YOLOv10-b", sub: "balanced · NMS-free" },
+    { value: "yolov10l", label: "YOLOv10-l", sub: "large · NMS-free" },
+    { value: "yolov10x", label: "YOLOv10-x", sub: "xlarge · NMS-free" },
+    { value: "yolov9t", label: "YOLOv9-t", sub: "tiny" },
+    { value: "yolov9s", label: "YOLOv9-s", sub: "small" },
+    { value: "yolov9m", label: "YOLOv9-m", sub: "medium" },
+    { value: "yolov9c", label: "YOLOv9-c", sub: "compact" },
+    { value: "yolov9e", label: "YOLOv9-e", sub: "extended" },
     { value: "yolov8n", label: "YOLOv8-n", sub: "nano" },
     { value: "yolov8s", label: "YOLOv8-s", sub: "small" },
     { value: "yolov8m", label: "YOLOv8-m", sub: "medium" },
@@ -43,9 +64,16 @@ export const DETECTION_MODELS: Record<DetectionBackend, DetectionModelOption[]> 
   ],
 };
 
-/** First (recommended) model for a backend — used when switching backends. */
+/** Default model for a backend — used when switching backends. Explicit (not
+ *  positional) so the list can show newest-first without changing the default,
+ *  and so it stays in sync with the Python DetectionModelConfig defaults. */
+const DEFAULT_MODEL: Record<DetectionBackend, string> = {
+  ultralytics: "yolo11n",
+  torchvision: "fasterrcnn_resnet50_fpn",
+};
+
 export function defaultModelForBackend(backend: DetectionBackend): string {
-  return DETECTION_MODELS[backend][0].value;
+  return DEFAULT_MODEL[backend];
 }
 
 /** Whether a model name belongs to the given backend. */
@@ -77,13 +105,100 @@ export interface DetectionForm {
     data_yaml: string;
     image_size: number;
   };
-  training: {
-    epochs: number;
-    batch_size: number;
-    learning_rate: number;
-    patience: number;
-    seed: number;
-    workers: number;
+  training: DetectionTrainingForm;
+}
+
+export type DetectionOptimizer =
+  | "auto"
+  | "SGD"
+  | "Adam"
+  | "Adamax"
+  | "AdamW"
+  | "NAdam"
+  | "RAdam"
+  | "RMSProp";
+
+export type DetectionAutoAugment =
+  | "randaugment"
+  | "autoaugment"
+  | "augmix"
+  | "none";
+
+/** Augmentation knobs — mirror DetectionAugmentationConfig (Ultralytics). */
+export interface DetectionAugmentationForm {
+  hsv_h: number;
+  hsv_s: number;
+  hsv_v: number;
+  degrees: number;
+  translate: number;
+  scale: number;
+  shear: number;
+  perspective: number;
+  flipud: number;
+  fliplr: number;
+  bgr: number;
+  mosaic: number;
+  mixup: number;
+  copy_paste: number;
+  auto_augment: DetectionAutoAugment;
+  erasing: number;
+}
+
+/** Training knobs — mirror DetectionTrainingConfig (Ultralytics). */
+export interface DetectionTrainingForm {
+  epochs: number;
+  batch_size: number;
+  learning_rate: number;
+  patience: number;
+  seed: number;
+  workers: number;
+  optimizer: DetectionOptimizer;
+  momentum: number;
+  weight_decay: number;
+  lrf: number;
+  cos_lr: boolean;
+  warmup_epochs: number;
+  warmup_momentum: number;
+  warmup_bias_lr: number;
+  box: number;
+  cls: number;
+  dfl: number;
+  label_smoothing: number;
+  dropout: number;
+  nbs: number;
+  freeze: number; // first N layers to freeze; 0 = none
+  amp: boolean;
+  close_mosaic: number;
+  single_cls: boolean;
+  rect: boolean;
+  multi_scale: boolean;
+  augmentation: DetectionAugmentationForm;
+}
+
+export const DETECTION_OPTIMIZERS: DetectionOptimizer[] = [
+  "auto",
+  "SGD",
+  "Adam",
+  "Adamax",
+  "AdamW",
+  "NAdam",
+  "RAdam",
+  "RMSProp",
+];
+
+/** Project the training form into the wire payload. ``auto_augment: "none"`` is
+ *  a UI sentinel for the backend's ``null`` (off); freeze stays nullable. */
+export function buildDetectionTrainingPayload(
+  t: DetectionTrainingForm,
+): Record<string, unknown> {
+  const { augmentation, ...rest } = t;
+  const { auto_augment, ...aug } = augmentation;
+  return {
+    ...rest,
+    augmentation: {
+      ...aug,
+      auto_augment: auto_augment === "none" ? null : auto_augment,
+    },
   };
 }
 
@@ -110,13 +225,57 @@ export function makeDefaultDetectionForm(): DetectionForm {
       pretrained: true,
     },
     data: { source: "folder", base_dir: "", data_yaml: "", image_size: 640 },
-    training: {
-      epochs: 100,
-      batch_size: 16,
-      learning_rate: 0.01,
-      patience: 50,
-      seed: 0,
-      workers: 8,
+    training: makeDefaultDetectionTraining(),
+  };
+}
+
+/** Ultralytics-faithful training defaults — must match DetectionTrainingConfig
+ *  and DetectionAugmentationConfig so an unmodified form is behaviour-preserving. */
+export function makeDefaultDetectionTraining(): DetectionTrainingForm {
+  return {
+    epochs: 100,
+    batch_size: 16,
+    learning_rate: 0.01,
+    patience: 50,
+    seed: 0,
+    workers: 8,
+    optimizer: "auto",
+    momentum: 0.937,
+    weight_decay: 0.0005,
+    lrf: 0.01,
+    cos_lr: false,
+    warmup_epochs: 3.0,
+    warmup_momentum: 0.8,
+    warmup_bias_lr: 0.1,
+    box: 7.5,
+    cls: 0.5,
+    dfl: 1.5,
+    label_smoothing: 0.0,
+    dropout: 0.0,
+    nbs: 64,
+    freeze: 0,
+    amp: true,
+    close_mosaic: 10,
+    single_cls: false,
+    rect: false,
+    multi_scale: false,
+    augmentation: {
+      hsv_h: 0.015,
+      hsv_s: 0.7,
+      hsv_v: 0.4,
+      degrees: 0.0,
+      translate: 0.1,
+      scale: 0.5,
+      shear: 0.0,
+      perspective: 0.0,
+      flipud: 0.0,
+      fliplr: 0.5,
+      bgr: 0.0,
+      mosaic: 1.0,
+      mixup: 0.0,
+      copy_paste: 0.0,
+      auto_augment: "randaugment",
+      erasing: 0.4,
     },
   };
 }

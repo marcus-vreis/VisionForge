@@ -157,18 +157,13 @@ class DetectionTrainer:
         )
         model.train(
             data=str(data_yaml),
-            epochs=cfg.epochs,
-            batch=cfg.batch_size,
             imgsz=self._config.data.image_size,
-            lr0=cfg.learning_rate,
-            patience=cfg.patience,
-            seed=cfg.seed,
-            workers=cfg.workers,
             device=self._device_arg(),
             project=str(run_dir.parent),
             name=run_dir.name,
             exist_ok=True,
             verbose=False,
+            **self._ultralytics_train_kwargs(),
         )
 
         result = self._build_result(run_dir, history)
@@ -212,9 +207,7 @@ class DetectionTrainer:
         )
         model.to(device)
         params = [p for p in model.parameters() if p.requires_grad]
-        optimizer = torch.optim.SGD(
-            params, lr=cfg.learning_rate, momentum=0.9, weight_decay=5e-4
-        )
+        optimizer = self._build_torchvision_optimizer(params)
         model_path = run_dir / "weights" / "best.pt"
         model_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -406,6 +399,98 @@ class DetectionTrainer:
             history=history,
             model_path=run_dir / "weights" / "best.pt",
             run_dir=run_dir,
+        )
+
+    def _ultralytics_train_kwargs(self) -> dict[str, Any]:
+        """Translate the training config into Ultralytics ``train`` arguments.
+
+        Every key here is a documented Ultralytics ``train`` hyperparameter; the
+        config defaults mirror Ultralytics' own, so omitting a field trains
+        identically to a bare ``YOLO.train`` call.
+        """
+        cfg = self._config.training
+        aug = cfg.augmentation
+        return {
+            "epochs": cfg.epochs,
+            "batch": cfg.batch_size,
+            "lr0": cfg.learning_rate,
+            "patience": cfg.patience,
+            "seed": cfg.seed,
+            "workers": cfg.workers,
+            # optimizer
+            "optimizer": cfg.optimizer,
+            "momentum": cfg.momentum,
+            "weight_decay": cfg.weight_decay,
+            # schedule
+            "lrf": cfg.lrf,
+            "cos_lr": cfg.cos_lr,
+            "warmup_epochs": cfg.warmup_epochs,
+            "warmup_momentum": cfg.warmup_momentum,
+            "warmup_bias_lr": cfg.warmup_bias_lr,
+            # loss gains
+            "box": cfg.box,
+            "cls": cfg.cls,
+            "dfl": cfg.dfl,
+            # regularization / mechanics
+            "label_smoothing": cfg.label_smoothing,
+            "dropout": cfg.dropout,
+            "nbs": cfg.nbs,
+            "freeze": cfg.freeze,
+            "amp": cfg.amp,
+            "close_mosaic": cfg.close_mosaic,
+            "single_cls": cfg.single_cls,
+            "rect": cfg.rect,
+            "multi_scale": cfg.multi_scale,
+            # augmentation
+            "hsv_h": aug.hsv_h,
+            "hsv_s": aug.hsv_s,
+            "hsv_v": aug.hsv_v,
+            "degrees": aug.degrees,
+            "translate": aug.translate,
+            "scale": aug.scale,
+            "shear": aug.shear,
+            "perspective": aug.perspective,
+            "flipud": aug.flipud,
+            "fliplr": aug.fliplr,
+            "bgr": aug.bgr,
+            "mosaic": aug.mosaic,
+            "mixup": aug.mixup,
+            "copy_paste": aug.copy_paste,
+            "auto_augment": aug.auto_augment,
+            "erasing": aug.erasing,
+        }
+
+    def _build_torchvision_optimizer(
+        self, params: list[torch.nn.Parameter]
+    ) -> torch.optim.Optimizer:
+        """Build the torchvision optimizer from the shared optimizer config.
+
+        ``auto`` maps to SGD (the torchvision detection reference recipe). Adam-
+        family choices use ``momentum`` as beta1; SGD uses it as momentum.
+        """
+        cfg = self._config.training
+        name = cfg.optimizer
+        if name in ("Adam", "AdamW", "Adamax", "NAdam", "RAdam"):
+            builder = getattr(torch.optim, name)
+            adam: torch.optim.Optimizer = builder(
+                params,
+                lr=cfg.learning_rate,
+                betas=(cfg.momentum, 0.999),
+                weight_decay=cfg.weight_decay,
+            )
+            return adam
+        if name == "RMSProp":
+            return torch.optim.RMSprop(
+                params,
+                lr=cfg.learning_rate,
+                momentum=cfg.momentum,
+                weight_decay=cfg.weight_decay,
+            )
+        return torch.optim.SGD(
+            params,
+            lr=cfg.learning_rate,
+            momentum=cfg.momentum,
+            weight_decay=cfg.weight_decay,
         )
 
     def _resolve_weights(self) -> str:

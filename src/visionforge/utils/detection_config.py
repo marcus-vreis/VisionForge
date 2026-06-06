@@ -23,17 +23,49 @@ from visionforge.utils.config import (
 
 # Model names per backend. Explicit so config validation rejects a name that
 # does not belong to the chosen backend before any weights are downloaded.
+# Covers every detection family Ultralytics ships: YOLOv8, YOLOv9, YOLOv10,
+# YOLO11, YOLO12, YOLO26, and RT-DETR. Variant letters follow each family's
+# own convention (YOLOv9 uses t/s/m/c/e; YOLOv10 adds a 'b'); a wrong name
+# would only fail when Ultralytics tries to fetch the weights, so we gate here.
 _ULTRALYTICS_MODELS = (
+    # YOLOv8
     "yolov8n",
     "yolov8s",
     "yolov8m",
     "yolov8l",
     "yolov8x",
+    # YOLOv9
+    "yolov9t",
+    "yolov9s",
+    "yolov9m",
+    "yolov9c",
+    "yolov9e",
+    # YOLOv10
+    "yolov10n",
+    "yolov10s",
+    "yolov10m",
+    "yolov10b",
+    "yolov10l",
+    "yolov10x",
+    # YOLO11
     "yolo11n",
     "yolo11s",
     "yolo11m",
     "yolo11l",
     "yolo11x",
+    # YOLO12
+    "yolo12n",
+    "yolo12s",
+    "yolo12m",
+    "yolo12l",
+    "yolo12x",
+    # YOLO26 (NMS-free, DFL-free; n/s/m/l/x)
+    "yolo26n",
+    "yolo26s",
+    "yolo26m",
+    "yolo26l",
+    "yolo26x",
+    # RT-DETR
     "rtdetr-l",
     "rtdetr-x",
 )
@@ -126,20 +158,84 @@ class DetectionDataConfig(BaseModel):
         return self
 
 
+class DetectionAugmentationConfig(BaseModel):
+    """Data-augmentation hyperparameters (Ultralytics naming and defaults).
+
+    Every field maps 1:1 to an Ultralytics ``train`` augmentation argument. The
+    defaults reproduce Ultralytics' own defaults, so an unmodified config trains
+    identically to the bare ``YOLO.train`` call it replaced.
+    """
+
+    hsv_h: float = Field(default=0.015, ge=0.0, le=1.0)  # hue jitter fraction
+    hsv_s: float = Field(default=0.7, ge=0.0, le=1.0)  # saturation jitter
+    hsv_v: float = Field(default=0.4, ge=0.0, le=1.0)  # value/brightness jitter
+    degrees: float = Field(default=0.0, ge=-180.0, le=180.0)  # rotation
+    translate: float = Field(default=0.1, ge=0.0, le=1.0)
+    scale: float = Field(default=0.5, ge=0.0)  # gain (+/-) range
+    shear: float = Field(default=0.0, ge=-180.0, le=180.0)
+    perspective: float = Field(default=0.0, ge=0.0, le=0.001)
+    flipud: float = Field(default=0.0, ge=0.0, le=1.0)  # vertical-flip prob
+    fliplr: float = Field(default=0.5, ge=0.0, le=1.0)  # horizontal-flip prob
+    bgr: float = Field(default=0.0, ge=0.0, le=1.0)  # channel-swap prob
+    mosaic: float = Field(default=1.0, ge=0.0, le=1.0)  # 4-image mosaic prob
+    mixup: float = Field(default=0.0, ge=0.0, le=1.0)
+    copy_paste: float = Field(default=0.0, ge=0.0, le=1.0)
+    auto_augment: Literal["randaugment", "autoaugment", "augmix"] | None = "randaugment"
+    erasing: float = Field(default=0.4, ge=0.0, le=1.0)  # random-erasing prob
+
+
 class DetectionTrainingConfig(BaseModel):
     """Detection training hyperparameters (Ultralytics naming).
 
     Unlike classification, ``batch_size`` is any positive int (Ultralytics does
     not require a power of two). ``learning_rate`` maps to Ultralytics ``lr0``;
-    ``patience`` to its early-stopping window.
+    ``patience`` to its early-stopping window. The optimizer, schedule, loss-gain,
+    and regularization fields all map 1:1 to Ultralytics ``train`` arguments and
+    default to its own defaults, so an unmodified config is behaviour-preserving.
+    The ``optimizer``/``momentum``/``weight_decay`` trio is also honoured by the
+    torchvision backend (which previously hard-coded SGD).
     """
 
     epochs: int = Field(default=100, gt=0)
     batch_size: int = Field(default=16, ge=1)
-    learning_rate: float = Field(default=0.01, gt=0.0)
+    learning_rate: float = Field(default=0.01, gt=0.0)  # Ultralytics lr0
     patience: int = Field(default=50, ge=0)
     seed: int = Field(default=0, ge=0)
     workers: int = Field(default=8, ge=0)
+
+    # Optimizer
+    optimizer: Literal[
+        "auto", "SGD", "Adam", "Adamax", "AdamW", "NAdam", "RAdam", "RMSProp"
+    ] = "auto"
+    momentum: float = Field(default=0.937, ge=0.0, le=1.0)  # SGD momentum / Adam beta1
+    weight_decay: float = Field(default=0.0005, ge=0.0)
+
+    # Learning-rate schedule
+    lrf: float = Field(default=0.01, gt=0.0)  # final LR = lr0 * lrf
+    cos_lr: bool = False  # cosine schedule instead of linear
+    warmup_epochs: float = Field(default=3.0, ge=0.0)
+    warmup_momentum: float = Field(default=0.8, ge=0.0, le=1.0)
+    warmup_bias_lr: float = Field(default=0.1, ge=0.0)
+
+    # Loss gains
+    box: float = Field(default=7.5, ge=0.0)  # box-regression loss weight
+    cls: float = Field(default=0.5, ge=0.0)  # classification loss weight
+    dfl: float = Field(default=1.5, ge=0.0)  # distribution-focal loss weight
+
+    # Regularization / training mechanics
+    label_smoothing: float = Field(default=0.0, ge=0.0, le=1.0)
+    dropout: float = Field(default=0.0, ge=0.0, le=1.0)
+    nbs: int = Field(default=64, ge=1)  # nominal batch size for loss normalization
+    freeze: int | None = Field(default=None, ge=0)  # freeze first N layers
+    amp: bool = True  # automatic mixed precision
+    close_mosaic: int = Field(default=10, ge=0)  # disable mosaic in last N epochs
+    single_cls: bool = False  # treat all classes as one
+    rect: bool = False  # rectangular batches (min padding)
+    multi_scale: bool = False  # vary imgsz +/- 50% during training
+
+    augmentation: DetectionAugmentationConfig = Field(
+        default_factory=DetectionAugmentationConfig
+    )
 
 
 class DetectionConfig(BaseModel):
@@ -193,5 +289,6 @@ __all__ = [
     "DetectionModelConfig",
     "DetectionDataConfig",
     "DetectionTrainingConfig",
+    "DetectionAugmentationConfig",
     "load_detection_config",
 ]

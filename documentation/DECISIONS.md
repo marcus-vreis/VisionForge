@@ -447,3 +447,50 @@
 **Reason:** Reproducibility is the project's core value — *"which exact config produced this result?"* (CLAUDE.md §6.2/§7.3). Once real experiments accumulate, a breaking change to a required config field would silently invalidate or fail to load saved configs with no traceability. Establishing the version field + a migration hook **now, while the schema is still small** ("congele cedo"), means later schema changes migrate old configs forward deterministically instead of breaking them, and the newer-version guard prevents a stale build from silently misreading a config from a future release. The migration is centralized in one pure, tested function so each future bump is a single, isolated, verifiable step.
 
 **Update (2026-06-04, integ):** all standalone task configs (detection/regression/segmentation/anomaly) now carry the same `schema_version` field, run `migrate_config_dict` in their loaders, and reject a future version via the shared `check_schema_version` helper — so every task's saved YAML/`run.json` is versioned and forward-migratable, not just classification. Done on `integ/all-features`; covered by `tests/utils/test_task_config_schema_version.py` (12 parametrized cases across the four tasks).
+
+---
+
+## ADR-040 — Full Ultralytics hyperparameter surface + complete YOLO family
+
+**Date:** 2026-06-06
+**Status:** Accepted
+**Extends:** ADR-033 (standalone detection path), ADR-034 (Ultralytics owns the loop)
+
+**Decision:** `DetectionTrainingConfig` is expanded from the original 6 knobs
+(epochs, batch_size, learning_rate, patience, seed, workers) to the full set of
+documented Ultralytics `train` hyperparameters, grouped as: optimizer
+(`optimizer`, `momentum`, `weight_decay`), LR schedule (`lrf`, `cos_lr`,
+`warmup_epochs`, `warmup_momentum`, `warmup_bias_lr`), loss gains (`box`, `cls`,
+`dfl`), and regularization/mechanics (`label_smoothing`, `dropout`, `nbs`,
+`freeze`, `amp`, `close_mosaic`, `single_cls`, `rect`, `multi_scale`). A new
+nested `DetectionAugmentationConfig` carries every Ultralytics augmentation knob
+(`hsv_h/s/v`, `degrees`, `translate`, `scale`, `shear`, `perspective`, `flipud`,
+`fliplr`, `bgr`, `mosaic`, `mixup`, `copy_paste`, `auto_augment`, `erasing`).
+Every field's default equals Ultralytics' own default, so an unmodified config
+is **behaviour-preserving** — the richer surface adds knobs, it does not change
+results. The trainer translates the whole tree into the `YOLO.train(...)` call via
+a single `_ultralytics_train_kwargs()`; the `optimizer`/`momentum`/`weight_decay`
+trio is also honoured by the torchvision backend (`_build_torchvision_optimizer`),
+which previously hard-coded SGD(momentum=0.9, weight_decay=5e-4).
+
+The Ultralytics model set grows from {YOLOv8, YOLO11, RT-DETR} to **every
+detection family Ultralytics ships**: YOLOv8 (n/s/m/l/x), YOLOv9 (t/s/m/c/e),
+YOLOv10 (n/s/m/b/l/x), YOLO11 (n/s/m/l/x), YOLO12 (n/s/m/l/x), YOLO26
+(n/s/m/l/x), and RT-DETR (l/x). Variant letters follow each family's own
+convention (YOLOv9 uses t/c/e; YOLOv10 adds a `b`). The GUI lists them
+newest-first for discoverability, but the default model stays `yolo11n` — an
+explicit (non-positional) default in both `DetectionModelConfig` and
+`detection-models.ts` so list order never silently changes the default.
+
+**Reason:** The detection task shipped a deliberately minimal training surface in
+Phase 7 to stay shippable, but serious detection research needs the optimizer,
+schedule, loss-balancing, and augmentation knobs Ultralytics exposes — tuning
+`box/cls/dfl` gains, mosaic/mixup/copy-paste, and the optimizer is routine, and
+their absence forced users back to the CLI, defeating the GUI's purpose. Keeping
+Ultralytics' own defaults means the expansion is purely additive: existing runs
+reproduce exactly. Validating the whole model set in Pydantic (not just at
+download time) gives a fast, clear rejection before any weights are fetched. New
+families (notably YOLO26, which is NMS-free and DFL-free) train through the same
+`YOLO(name).train(...)` entry point, so adding them is a names-list change plus
+config/GUI coverage — no new code path. `freeze` is exposed as an int (0 = none)
+in the GUI for a clean numeric binding while the config keeps `int | None`.

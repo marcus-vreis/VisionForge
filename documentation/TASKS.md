@@ -300,6 +300,32 @@ reusing the existing endpoints/components by task dispatch (see PHASE7 plan §7)
 
 **✅ Phase 7.1 complete: detection has full parity with the classification post-training surface (history, detail, results, per-model mAP test, YOLO dataset stats, ONNX export).**
 
+### Phase 7.2 — full hyperparameter surface + complete YOLO family (ADR-040)
+
+Phase 7 shipped a minimal 6-knob training surface and only YOLOv8/YOLO11/RT-DETR.
+This phase exposes the whole Ultralytics tuning surface and every YOLO family.
+
+- [x] `DetectionTrainingConfig` expanded with optimizer (`optimizer`/`momentum`/
+  `weight_decay`), schedule (`lrf`/`cos_lr`/`warmup_*`), loss gains (`box`/`cls`/
+  `dfl`), and regularization/mechanics (`label_smoothing`/`dropout`/`nbs`/`freeze`/
+  `amp`/`close_mosaic`/`single_cls`/`rect`/`multi_scale`). Defaults equal
+  Ultralytics' own → behaviour-preserving. `utils/detection_config.py`.
+- [x] New nested `DetectionAugmentationConfig` — every Ultralytics augmentation
+  knob (`hsv_*`, `degrees`, `translate`, `scale`, `shear`, `perspective`,
+  `flipud`, `fliplr`, `bgr`, `mosaic`, `mixup`, `copy_paste`, `auto_augment`,
+  `erasing`). Tests in `tests/utils/test_detection_config.py`.
+- [x] Full Ultralytics model set: YOLOv8/9/10/11/12/26 + RT-DETR (Python tuple +
+  `lib/detection-models.ts`, newest-first, default stays `yolo11n`).
+- [x] `DetectionTrainer._ultralytics_train_kwargs()` forwards the whole tree to
+  `YOLO.train`; `_build_torchvision_optimizer` honours the optimizer trio
+  (was hard-coded SGD). Tests in `tests/core/test_detection_trainer.py`.
+- [x] GUI: `DetectionPanel` gains optimizer fields + Ultralytics-only "Schedule &
+  loss", "Regularização & mecânica", and "Data augmentation" cards; payload maps
+  the `auto_augment` "none" sentinel → `null`. Vitest coverage in
+  `lib/detection-models.test.ts`. Example `configs/detection.yaml` documents all knobs.
+
+**✅ Phase 7.2 complete: detection exposes the full Ultralytics hyperparameter surface and every YOLO family (incl. YOLO26).**
+
 ## Phase 8 — Semantic Segmentation task
 
 Design: `documentation/PHASE8_SEGMENTATION_PLAN.md`. Standalone config/block/run

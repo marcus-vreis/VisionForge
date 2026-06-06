@@ -107,6 +107,58 @@ class TestUltralyticsPath:
         assert kw["data"].endswith("data.yaml")
         assert record["weights"] == "yolo11n.pt"
 
+    def test_passes_extended_hyperparameters_to_yolo(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Optimizer, schedule, loss-gain, and augmentation knobs all reach train()."""
+        record: dict[str, Any] = {}
+        monkeypatch.setattr(dt_mod, "YOLO", _make_fake_yolo(record))
+        cfg = _config(tmp_path)
+        # default values flow through unchanged (behaviour-preserving)
+        DetectionTrainer(cfg).fit()
+
+        kw = record["train_kwargs"]
+        # optimizer
+        assert kw["optimizer"] == "auto"
+        assert kw["momentum"] == pytest.approx(0.937)
+        assert kw["weight_decay"] == pytest.approx(0.0005)
+        # schedule
+        assert kw["lrf"] == pytest.approx(0.01)
+        assert kw["cos_lr"] is False
+        assert kw["warmup_epochs"] == pytest.approx(3.0)
+        # loss gains
+        assert kw["box"] == pytest.approx(7.5)
+        assert kw["cls"] == pytest.approx(0.5)
+        assert kw["dfl"] == pytest.approx(1.5)
+        # regularization / mechanics
+        assert kw["close_mosaic"] == 10
+        assert kw["amp"] is True
+        assert kw["single_cls"] is False
+        # augmentation
+        assert kw["fliplr"] == pytest.approx(0.5)
+        assert kw["mosaic"] == pytest.approx(1.0)
+        assert kw["hsv_h"] == pytest.approx(0.015)
+        assert kw["auto_augment"] == "randaugment"
+
+    def test_custom_hyperparameters_are_forwarded(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        record: dict[str, Any] = {}
+        monkeypatch.setattr(dt_mod, "YOLO", _make_fake_yolo(record))
+        cfg = _config(tmp_path)
+        cfg = cfg.model_copy(
+            update={
+                "training": cfg.training.model_copy(
+                    update={"optimizer": "AdamW", "cos_lr": True, "box": 9.0}
+                )
+            }
+        )
+        DetectionTrainer(cfg).fit()
+        kw = record["train_kwargs"]
+        assert kw["optimizer"] == "AdamW"
+        assert kw["cos_lr"] is True
+        assert kw["box"] == pytest.approx(9.0)
+
     def test_streams_progress_events(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -238,6 +290,25 @@ class TestTorchvisionPath:
         assert run_json["device_used"] == "cpu"
         assert len(run_json["history"]) == 2
         assert all(e.get("map50") is not None for e in run_json["history"])
+
+
+class TestTorchvisionOptimizer:
+    def test_auto_maps_to_sgd(self, tmp_path: Path) -> None:
+        trainer = DetectionTrainer(_tv_config(tmp_path))
+        param = nn.Parameter(torch.zeros(1))
+        opt = trainer._build_torchvision_optimizer([param])
+        assert isinstance(opt, torch.optim.SGD)
+        assert opt.defaults["momentum"] == pytest.approx(0.937)
+        assert opt.defaults["weight_decay"] == pytest.approx(0.0005)
+
+    def test_adamw_selected(self, tmp_path: Path) -> None:
+        cfg = _tv_config(tmp_path)
+        cfg = cfg.model_copy(
+            update={"training": cfg.training.model_copy(update={"optimizer": "AdamW"})}
+        )
+        trainer = DetectionTrainer(cfg)
+        opt = trainer._build_torchvision_optimizer([nn.Parameter(torch.zeros(1))])
+        assert isinstance(opt, torch.optim.AdamW)
 
 
 class TestResolveSplitDirs:
