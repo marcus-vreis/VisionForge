@@ -494,3 +494,72 @@ families (notably YOLO26, which is NMS-free and DFL-free) train through the same
 `YOLO(name).train(...)` entry point, so adding them is a names-list change plus
 config/GUI coverage — no new code path. `freeze` is exposed as an int (0 = none)
 in the GUI for a clean numeric binding while the config keeps `int | None`.
+
+---
+
+## ADR-041 — Cross-task strategy parity via a generic task-run handle
+
+**Date:** 2026-06
+**Status:** Proposed
+**Extends:** ADR-003 (ExperimentBlock), ADR-006 (task abstraction), ADR-033/036/037/038 (standalone tasks)
+
+**Decision:** The orchestration-style strategies that today exist only for
+classification — **model comparison, batch prediction, and grid/random
+hyperparameter search** — will be extended to the standalone tasks through a
+single task-agnostic `TaskRunner` handle, not by copying each block per task and
+not by folding tasks into `ExperimentConfig`. Each task exposes a thin handle
+(`config_type`, `run`, `metrics`, `primary_metric`, `load_checkpoint`,
+`predict`); generic runners (`GenericComparisonRunner`, `GenericSweepRunner`,
+`GenericBatchPredictor`) consume the handle and reuse the existing trial-progress
+SSE plumbing (ADR-032). Strategies that touch task internals — transfer-learning
+freeze/fine-tune, K-Fold cross-validation, ONNX export, Grad-CAM — stay
+**per-task** modules, extended only where they make sense (see the verdict matrix
+in `CROSS_TASK_PARITY_PLAN.md`). Detection sweeps defer to Ultralytics' own
+tuner; anomaly/detection K-Fold are deferred.
+
+**Reason:** The current blocks (`ModelComparisonBlock`, `BatchPredictionBlock`,
+the search blocks) are `ExperimentBlock` subclasses hard-wired to
+`ExperimentConfig`, `ClassificationBlock`, and classification metric names
+(`accuracy`/`f1`/`auc_roc`) — they cannot be pointed at a `RegressionConfig` or a
+segmentation run as written. The honest options are (a) duplicate every
+orchestrator per task (4× the surface, the exact bloat ADR-006 avoids) or (b)
+extract the genuinely-shared orchestration behind a uniform handle while keeping
+task-specific logic in the task. (b) matches the project's standing trade-off —
+*isolation over premature unification* (ADR-033) for the parts that diverge, but
+*reuse* for the parts that are identical (running a pipeline N times and ranking,
+or loading a checkpoint and predicting, are task-independent). Recorded as
+**Proposed** because it is a design ratification ahead of implementation; the
+slice order and open questions live in `CROSS_TASK_PARITY_PLAN.md` and each
+behavior-changing slice gets its own follow-up ADR.
+
+---
+
+## ADR-042 — Distribution: Docker image + `visionforge doctor`, not orchestration
+
+**Date:** 2026-06
+**Status:** Proposed
+**Extends:** ADR-005 (torch is user-managed), ADR-010 (CPU-only CI)
+
+**Decision:** VisionForge will ship two complementary distribution aids, both
+inside the local-only philosophy: (1) a **`visionforge doctor`** CLI subcommand
+that detects the host GPU/driver via `nvidia-smi`, maps it to the correct torch
+wheel index (`cu118`/`cu121`/`cu124`/`cu126`/`cpu` — the set already in
+`pyproject.toml`), and prints (optionally runs, with confirmation) the exact
+install command; and (2) a **GPU-enabled Docker image** (multi-stage: build the
+SPA, then a CUDA-runtime image with Python 3.13 + the matching torch wheel baked
+in) plus a `docker-compose.yml`, run with `--gpus all`, mounting datasets
+read-only and `outputs/` read-write. **Kubernetes and any cloud orchestration are
+explicitly rejected.** Design detail in `DOCKER_PLAN.md`.
+
+**Reason:** The torch install is the largest onboarding friction (ADR-005 makes
+it the user's job because no resolver can pick the CUDA build; picking wrong
+silently degrades to CPU). `doctor` removes the guesswork for bare-metal users;
+the image removes the install entirely and makes runs reproducible across
+machines — directly serving the "facilitate requirements" goal without adding a
+cloud dependency to any core path. Kubernetes is rejected on first principles:
+for a single local GPU it is complexity with no payoff (problem-driven, not
+resume-driven); if single-machine job queueing is ever needed, a lightweight
+queue (RQ/SQLite) is the right tool. The NVIDIA driver +
+`nvidia-container-toolkit` remain the user's responsibility — an image cannot
+ship host kernel components. Recorded as **Proposed**; `doctor` ships first as a
+self-contained, CPU-CI-testable slice (mock `nvidia-smi`), the image second.

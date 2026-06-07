@@ -538,6 +538,17 @@ Real end-to-end pipeline tests (no mocks), skipped in CI to keep it fast
   MetricsPlotter → run.json` path (metrics, `test_accuracy`, loss/CM plots,
   checkpoint). Enable with `VF_RUN_CLASSIFICATION_INTEGRATION=1`.
 
+## Planned & specced (decisions recorded, awaiting implementation)
+
+- **Cross-task strategy parity (ADR-041)** — generic `TaskRunner` handle +
+  generic comparison/sweep/batch-predict runners; extend model comparison, batch
+  prediction, and grid/random search to the standalone tasks. Slice order +
+  open questions in `documentation/CROSS_TASK_PARITY_PLAN.md`. Ship slice 1
+  (handle + classification adapter, pure de-coupling) first.
+- **Docker + `visionforge doctor` (ADR-042)** — `doctor` CLI (detect GPU/CUDA →
+  exact torch install command) first, then a multi-stage GPU Docker image +
+  compose. Design in `documentation/DOCKER_PLAN.md`. Local-only; k8s rejected.
+
 ## Backlog / ideas
 
 - Optuna integration as alternative to `RandomSearchBlock`
@@ -545,3 +556,16 @@ Real end-to-end pipeline tests (no mocks), skipped in CI to keep it fast
 - TensorBoard / MLflow integration for experiment tracking
 - Dark/light theme toggle in GUI
 - Migrate `utils/config.py` → `configs/schemas/classification_config.py` when a second task is added (Phase 6+)
+- Online dataset download in the GUI (Roboflow / Kaggle / HuggingFace / torchvision built-ins)
+- User-supplied custom model via a `ModelRegistry` (drop-in `user_models/`)
+
+## Cowork dev-experience (skills + setup)
+
+- VisionForge skills authored (install the `.skill` files): `vf-new-task`,
+  `vf-new-adr`, `vf-verify`, `vf-patterns`, `vf-brainstorm`.
+- `.gitattributes` added (LF normalization) — run `git add --renormalize .` on
+  Windows to clear the CRLF churn.
+- Single canonical root `CLAUDE.md`; deep narrative preserved as
+  `documentation/PROJECT_CONTEXT.md`; `documentation/CLAUDE.md` is now a redirect.
+- Suggested MCPs for Claude Code: Context7 (live lib docs), Playwright (already in
+  use), GitHub (optional, for PR/CI visibility).

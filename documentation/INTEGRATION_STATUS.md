@@ -1,3 +1,38 @@
+# Ground-truth verification — 2026-06-06
+
+Independent state check on `feat/detection-hyperparams-yolo-family`.
+
+**What was verifiable in an isolated env (no GPU, PyTorch index blocked, Python
+3.13 unavailable → ran the config/utils layer on 3.10):**
+
+- **Config/utils layer: 205 passed, 0 failed** (`tests/utils/` + `tests/test_example_configs.py`).
+  Covers Pydantic validation for all five tasks, `schema_version` forward-migration,
+  `DeviceConfig`, `cuda` detection guards, and every example YAML in `configs/`.
+  This is the project's correctness backbone and it is fully green.
+- The single "failure" seen was `test_environment::test_torch_version_present`,
+  which asserts torch resolves — it only fails because torch is absent in this
+  sandbox, **not** a project defect.
+
+**Not reproducible here (documented, not a regression):** the ~600 torch/ultralytics
+tests (the "814 passed" figure) need a CUDA-capable or CPU-torch env from the
+PyTorch index — which this sandbox blocks — plus Python 3.13. These run in CI
+(GitHub Actions, ADR-010) and must be the source of truth for that figure.
+
+**Fix applied this pass — deprecated AMP API:**
+`core/trainer.py` used `torch.cuda.amp.GradScaler(...)` / `torch.cuda.amp.autocast()`,
+which emit a `FutureWarning` since torch 2.4 and are slated for removal. Switched to
+the non-deprecated `torch.amp.GradScaler("cuda", ...)` / `torch.amp.autocast("cuda")`
+(generic namespace exists since torch 2.3 = the project floor, so it's safe and
+behaviour-preserving). Help text in `utils/config.py` updated to match. **Requires
+CI confirmation** (the AMP path only executes under CUDA, untestable in this sandbox).
+
+**Noted, not a bug:** regression/segmentation/anomaly trainers don't expose or
+honour `mixed_precision` — config and trainer agree (no silent no-op). This is a
+**feature gap** (AMP speedup is classification-only), a candidate for the
+"use the GPU fully" performance workstream, not a defect.
+
+---
+
 # Integration status — feature branches → `development`
 
 > Generated 2026-06-04 by a tech-leader iteration. Regenerate after any branch changes.
