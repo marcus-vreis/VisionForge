@@ -3,14 +3,13 @@ from __future__ import annotations
 import csv
 import gc
 import json
-import time
 from typing import Any
 
 import torch
 from loguru import logger
 
 from visionforge.blocks.base import ExperimentBlock
-from visionforge.blocks.classification import ClassificationBlock
+from visionforge.blocks.classification_runner import ClassificationRunner
 from visionforge.utils.config import ExperimentConfig
 
 
@@ -32,7 +31,7 @@ class ModelComparisonBlock(ExperimentBlock):
         self._trials: list[dict[str, Any]] = []
 
     def run(self) -> None:
-        """Execute one ClassificationBlock per architecture and collect metrics."""
+        """Execute one ClassificationRunner trial per architecture and collect metrics."""
         mc = self._config.model_comparison
         assert mc is not None
 
@@ -40,6 +39,7 @@ class ModelComparisonBlock(ExperimentBlock):
         raw_base["block"] = "classification"
         raw_base["model_comparison"] = None
 
+        runner = ClassificationRunner()
         unsorted: list[dict[str, Any]] = []
 
         for arch in mc.model_names:
@@ -53,42 +53,41 @@ class ModelComparisonBlock(ExperimentBlock):
                 "training_time_s": None,
             }
 
-            block = ClassificationBlock()
             try:
                 trial_raw = dict(raw_base)
                 trial_raw["model"] = dict(raw_base["model"])
                 trial_raw["model"]["name"] = arch
 
                 trial_config = ExperimentConfig.model_validate(trial_raw)
-                block.setup(trial_config)
+                result = runner.run(trial_config)
 
-                t0 = time.monotonic()
-                block.run()
-                elapsed = time.monotonic() - t0
+                if result.status == "success":
+                    trial_record["status"] = "success"
+                    trial_record["accuracy"] = result.metrics.get("accuracy")
+                    trial_record["f1"] = result.metrics.get("f1")
+                    trial_record["auc_roc"] = result.metrics.get("auc_roc")
+                    trial_record["training_time_s"] = result.training_time_s
 
-                report = block.report()
-                eval_metrics = report.get("eval", {})
-
-                trial_record["status"] = "success"
-                trial_record["accuracy"] = eval_metrics.get("accuracy")
-                trial_record["f1"] = eval_metrics.get("f1")
-                trial_record["auc_roc"] = eval_metrics.get("auc_roc")
-                trial_record["training_time_s"] = elapsed
-
-                logger.info(
-                    "ModelComparison: {} succeeded — accuracy={} f1={} auc_roc={}",
-                    arch,
-                    trial_record["accuracy"],
-                    trial_record["f1"],
-                    trial_record["auc_roc"],
-                )
+                    logger.info(
+                        "ModelComparison: {} succeeded — accuracy={} f1={} auc_roc={}",
+                        arch,
+                        trial_record["accuracy"],
+                        trial_record["f1"],
+                        trial_record["auc_roc"],
+                    )
+                else:
+                    trial_record["error"] = result.error
+                    logger.warning(
+                        "ModelComparison: {} failed — {}", arch, result.error
+                    )
 
             except Exception as exc:  # noqa: BLE001
                 trial_record["error"] = str(exc)
                 logger.warning("ModelComparison: {} failed — {}", arch, exc)
 
             finally:
-                del block
+                # Release any references the runner or block may hold before the
+                # next arch loads its weights; avoids OOM on VRAM-constrained GPUs.
                 gc.collect()
                 torch.cuda.empty_cache()
 
