@@ -500,7 +500,7 @@ in the GUI for a clean numeric binding while the config keeps `int | None`.
 ## ADR-041 — Cross-task strategy parity via a generic task-run handle
 
 **Date:** 2026-06
-**Status:** Proposed
+**Status:** Accepted — slice 1 shipped: `TaskRunner` protocol + `RunResult` (`core/task_runner.py`), `ClassificationRunner` adapter (`blocks/classification_runner.py`), `ModelComparisonBlock` refactored to consume the handle; remaining slices (regression/segmentation comparison, batch predict, generic sweep) stay planned.
 **Extends:** ADR-003 (ExperimentBlock), ADR-006 (task abstraction), ADR-033/036/037/038 (standalone tasks)
 
 **Decision:** The orchestration-style strategies that today exist only for

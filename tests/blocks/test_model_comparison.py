@@ -179,10 +179,11 @@ class TestHappyPath:
         block.setup(mc_config)
         with (
             patch(
-                "visionforge.blocks.model_comparison.ClassificationBlock.run", mock_run
+                "visionforge.blocks.classification_runner.ClassificationBlock.run",
+                mock_run,
             ),
             patch(
-                "visionforge.blocks.model_comparison.ClassificationBlock.report",
+                "visionforge.blocks.classification_runner.ClassificationBlock.report",
                 mock_report,
             ),
         ):
@@ -236,10 +237,11 @@ class TestHappyPath:
         block.setup(config)
         with (
             patch(
-                "visionforge.blocks.model_comparison.ClassificationBlock.run", mock_run
+                "visionforge.blocks.classification_runner.ClassificationBlock.run",
+                mock_run,
             ),
             patch(
-                "visionforge.blocks.model_comparison.ClassificationBlock.report",
+                "visionforge.blocks.classification_runner.ClassificationBlock.report",
                 mock_report,
             ),
         ):
@@ -272,10 +274,11 @@ class TestArtifacts:
         block.setup(mc_config)
         with (
             patch(
-                "visionforge.blocks.model_comparison.ClassificationBlock.run", mock_run
+                "visionforge.blocks.classification_runner.ClassificationBlock.run",
+                mock_run,
             ),
             patch(
-                "visionforge.blocks.model_comparison.ClassificationBlock.report",
+                "visionforge.blocks.classification_runner.ClassificationBlock.report",
                 mock_report,
             ),
         ):
@@ -341,10 +344,11 @@ class TestFailureHandling:
         block.setup(mc_config)
         with (
             patch(
-                "visionforge.blocks.model_comparison.ClassificationBlock.run", mock_run
+                "visionforge.blocks.classification_runner.ClassificationBlock.run",
+                mock_run,
             ),
             patch(
-                "visionforge.blocks.model_comparison.ClassificationBlock.report",
+                "visionforge.blocks.classification_runner.ClassificationBlock.report",
                 mock_report,
             ),
         ):
@@ -390,10 +394,11 @@ class TestFailureHandling:
         block.setup(mc_config)
         with (
             patch(
-                "visionforge.blocks.model_comparison.ClassificationBlock.run", mock_run
+                "visionforge.blocks.classification_runner.ClassificationBlock.run",
+                mock_run,
             ),
             patch(
-                "visionforge.blocks.model_comparison.ClassificationBlock.report",
+                "visionforge.blocks.classification_runner.ClassificationBlock.report",
                 mock_report,
             ),
         ):
@@ -438,10 +443,11 @@ class TestFailureHandling:
         block.setup(config)
         with (
             patch(
-                "visionforge.blocks.model_comparison.ClassificationBlock.run", mock_run
+                "visionforge.blocks.classification_runner.ClassificationBlock.run",
+                mock_run,
             ),
             patch(
-                "visionforge.blocks.model_comparison.ClassificationBlock.report",
+                "visionforge.blocks.classification_runner.ClassificationBlock.report",
                 mock_report,
             ),
         ):
@@ -460,7 +466,7 @@ class TestFailureHandling:
         block = ModelComparisonBlock()
         block.setup(mc_config)
         with patch(
-            "visionforge.blocks.model_comparison.ClassificationBlock.run", mock_run
+            "visionforge.blocks.classification_runner.ClassificationBlock.run", mock_run
         ):
             block.run()
 
@@ -496,10 +502,11 @@ class TestVramHygiene:
         block.setup(mc_config)
         with (
             patch(
-                "visionforge.blocks.model_comparison.ClassificationBlock.run", mock_run
+                "visionforge.blocks.classification_runner.ClassificationBlock.run",
+                mock_run,
             ),
             patch(
-                "visionforge.blocks.model_comparison.ClassificationBlock.report",
+                "visionforge.blocks.classification_runner.ClassificationBlock.report",
                 mock_report,
             ),
             patch(
@@ -522,7 +529,8 @@ class TestVramHygiene:
         block.setup(mc_config)
         with (
             patch(
-                "visionforge.blocks.model_comparison.ClassificationBlock.run", mock_run
+                "visionforge.blocks.classification_runner.ClassificationBlock.run",
+                mock_run,
             ),
             patch(
                 "visionforge.blocks.model_comparison.torch.cuda.empty_cache"
@@ -561,10 +569,11 @@ class TestGcCollect:
         block.setup(mc_config)
         with (
             patch(
-                "visionforge.blocks.model_comparison.ClassificationBlock.run", mock_run
+                "visionforge.blocks.classification_runner.ClassificationBlock.run",
+                mock_run,
             ),
             patch(
-                "visionforge.blocks.model_comparison.ClassificationBlock.report",
+                "visionforge.blocks.classification_runner.ClassificationBlock.report",
                 mock_report,
             ),
             patch("visionforge.blocks.model_comparison.gc.collect") as mock_gc,
