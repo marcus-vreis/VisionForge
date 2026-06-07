@@ -170,9 +170,12 @@ class Trainer:
         optimizer = optimizer if optimizer is not None else self._build_optimizer(model)
         criterion = self._build_criterion()
         scheduler = self._build_scheduler(optimizer)
-        # AMP only meaningful on CUDA; on CPU torch.cuda.amp is a no-op + warning.
+        # AMP only meaningful on CUDA; on CPU AMP is a no-op + warning.
         use_amp = cfg.mixed_precision and self._device.type == "cuda"
-        scaler = torch.cuda.amp.GradScaler(enabled=use_amp) if use_amp else None
+        # torch.amp.* is the non-deprecated API (the torch.cuda.amp.* aliases emit
+        # a FutureWarning since torch 2.4). The generic namespace exists since 2.3,
+        # which is the project's floor (pyproject torch>=2.3), so this is safe.
+        scaler = torch.amp.GradScaler("cuda", enabled=use_amp) if use_amp else None
         run_dir = self._make_run_dir()
         model_path = run_dir / "best_model.pth"
 
@@ -358,7 +361,7 @@ class Trainer:
         optimizer: torch.optim.Optimizer,
         criterion: nn.Module,
         *,
-        scaler: torch.cuda.amp.GradScaler | None = None,
+        scaler: torch.amp.GradScaler | None = None,
     ) -> tuple[float, float]:
         model.train()
         total_loss = 0.0
@@ -374,7 +377,7 @@ class Trainer:
                 target = labels
             optimizer.zero_grad(set_to_none=True)
             if use_amp:
-                with torch.cuda.amp.autocast():
+                with torch.amp.autocast("cuda"):
                     outputs = model(inputs)
                     loss = criterion(outputs, target)
                 scaler.scale(loss).backward()  # type: ignore[union-attr]
