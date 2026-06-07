@@ -1,0 +1,24 @@
+# Normalize line endings: store everything as LF in the repo and check out LF
+# on every OS. Without this, a Windows checkout rewrites every file to CRLF and
+# git reports the whole tree as modified (pure line-ending churn). eol=lf keeps
+# the working tree LF too, which Python/Node/PyTorch all handle fine on Windows.
+* text=auto eol=lf
+
+# Explicitly binary — never normalize or diff as text.
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.woff  binary
+*.woff2 binary
+*.pth   binary
+*.pt    binary
+*.onnx  binary
+*.pdf   binary
+*.lock  binary
+
+# Generated/vendored — keep out of language stats and reduce diff noise.
+src/visionforge/gui/static/**  linguist-generated=true
+uv.lock                        linguist-generated=true
+frontend/package-lock.json     linguist-generated=true
