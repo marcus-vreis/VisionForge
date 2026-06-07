@@ -109,7 +109,7 @@ class TrainingConfig(BaseModel):
     mixed_precision: bool = Field(
         default=False,
         description=(
-            "Enable torch.cuda.amp autocast + GradScaler. 2-3x speedup on "
+            "Enable torch.amp autocast + GradScaler. 2-3x speedup on "
             "Ampere+ GPUs at minor accuracy cost. Ignored on CPU."
         ),
     )
