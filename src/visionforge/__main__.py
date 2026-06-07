@@ -113,9 +113,25 @@ def main() -> None:
         "--port", type=int, default=8000, help="bind port (default 8000)"
     )
 
+    doctor_parser = subparsers.add_parser(
+        "doctor", help="Check the environment and recommend the correct torch wheel."
+    )
+    doctor_parser.add_argument(
+        "--fix",
+        action="store_true",
+        help="Run the recommended install after prompting for confirmation.",
+    )
+
     args = parser.parse_args()
 
     setup_logger()
+
+    if args.command == "doctor":
+        import sys as _sys
+
+        from visionforge.utils.doctor import _default_confirm, run_doctor
+
+        _sys.exit(run_doctor(fix=args.fix, confirm_fn=_default_confirm))
 
     if args.command == "gui":
         from visionforge.gui.server import start_server

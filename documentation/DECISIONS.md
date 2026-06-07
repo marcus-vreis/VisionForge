@@ -537,7 +537,7 @@ behavior-changing slice gets its own follow-up ADR.
 ## ADR-042 — Distribution: Docker image + `visionforge doctor`, not orchestration
 
 **Date:** 2026-06
-**Status:** Proposed
+**Status:** Accepted
 **Extends:** ADR-005 (torch is user-managed), ADR-010 (CPU-only CI)
 
 **Decision:** VisionForge will ship two complementary distribution aids, both
@@ -563,3 +563,5 @@ queue (RQ/SQLite) is the right tool. The NVIDIA driver +
 `nvidia-container-toolkit` remain the user's responsibility — an image cannot
 ship host kernel components. Recorded as **Proposed**; `doctor` ships first as a
 self-contained, CPU-CI-testable slice (mock `nvidia-smi`), the image second.
+
+Slice 1 (`visionforge doctor` command + full test coverage) shipped 2026-06; the Docker image (slice 2) remains planned.
