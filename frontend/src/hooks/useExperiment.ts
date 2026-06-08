@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ApiError,
+  compareRegression,
+  compareSegmentation,
   fetchResult,
   fetchStatus,
   runAnomaly,
@@ -24,6 +26,8 @@ interface ExperimentState {
       regression?: boolean;
       segmentation?: boolean;
       anomaly?: boolean;
+      compareRegression?: boolean;
+      compareSegmentation?: boolean;
     },
   ) => Promise<void>;
   reset: () => void;
@@ -225,6 +229,8 @@ export function useExperiment(): ExperimentState {
       regression?: boolean;
       segmentation?: boolean;
       anomaly?: boolean;
+      compareRegression?: boolean;
+      compareSegmentation?: boolean;
     },
     ) => {
       setError(null);
@@ -233,15 +239,19 @@ export function useExperiment(): ExperimentState {
       setProgressEvents([]);
 
       try {
-        const res = await (opts?.detection
-          ? runDetection(config)
-          : opts?.regression
-            ? runRegression(config)
-            : opts?.segmentation
-              ? runSegmentation(config)
-              : opts?.anomaly
-                ? runAnomaly(config)
-                : runExperiment(config));
+        const res = await (opts?.compareRegression
+          ? compareRegression(config)
+          : opts?.compareSegmentation
+            ? compareSegmentation(config)
+            : opts?.detection
+              ? runDetection(config)
+              : opts?.regression
+                ? runRegression(config)
+                : opts?.segmentation
+                  ? runSegmentation(config)
+                  : opts?.anomaly
+                    ? runAnomaly(config)
+                    : runExperiment(config));
         setStatus({ status: "running", run_id: res.run_id, error: null });
         openEventSource();
         startPolling();

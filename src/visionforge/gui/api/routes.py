@@ -29,6 +29,12 @@ from visionforge.core.data import DataModule
 from visionforge.core.detection_data import resolve_yolo_split
 from visionforge.core.evaluator import Evaluator
 from visionforge.core.plotter import MetricsPlotter
+from visionforge.gui.api.comparison import (
+    RegressionCompareRequest,
+    SegmentationCompareRequest,
+    run_regression_comparison,
+    run_segmentation_comparison,
+)
 from visionforge.gui.api.detection_export import export_detection_run
 from visionforge.gui.api.detection_testing import evaluate_detection_run
 from visionforge.gui.api.schemas import (
@@ -583,6 +589,39 @@ async def run_regression(config: RegressionConfig) -> RunResponse:
     return RunResponse(run_id=run_id)
 
 
+@router.post("/regression/compare")
+async def compare_regression(req: RegressionCompareRequest) -> RunResponse:
+    """Rank N regression backbones on the same dataset via the generic runner.
+
+    Reuses the single-run state and the /experiment/{status,result} endpoints
+    (one run at a time) and the task-agnostic GenericComparisonRunner (ADR-041).
+    Like classification comparison, it streams no per-trial SSE — only the final
+    ranked report, fetched via /experiment/result.
+    """
+    global _current_run, _event_queue
+
+    if _current_run and _current_run["status"] == "running":
+        raise HTTPException(409, "An experiment is already running.")
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    run_id = f"{req.config.name}_{timestamp}"
+
+    _event_queue = asyncio.Queue()
+    _current_run = {
+        "run_id": run_id,
+        "status": "running",
+        "error": None,
+        "report": None,
+        "run_dir": None,
+    }
+
+    task = asyncio.create_task(_execute_regression_comparison(req, run_id))
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+
+    return RunResponse(run_id=run_id)
+
+
 @router.get("/segmentation/schema")
 async def get_segmentation_schema() -> dict[str, Any]:
     """Return the JSON Schema for SegmentationConfig (drives the segmentation form)."""
@@ -615,6 +654,39 @@ async def run_segmentation(config: SegmentationConfig) -> RunResponse:
     }
 
     task = asyncio.create_task(_execute_segmentation(config, run_id))
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+
+    return RunResponse(run_id=run_id)
+
+
+@router.post("/segmentation/compare")
+async def compare_segmentation(req: SegmentationCompareRequest) -> RunResponse:
+    """Rank N segmentation architectures on the same dataset via the generic runner.
+
+    Reuses the single-run state and the /experiment/{status,result} endpoints
+    (one run at a time) and the task-agnostic GenericComparisonRunner (ADR-041).
+    Like classification comparison, it streams no per-trial SSE — only the final
+    ranked report, fetched via /experiment/result.
+    """
+    global _current_run, _event_queue
+
+    if _current_run and _current_run["status"] == "running":
+        raise HTTPException(409, "An experiment is already running.")
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    run_id = f"{req.config.name}_{timestamp}"
+
+    _event_queue = asyncio.Queue()
+    _current_run = {
+        "run_id": run_id,
+        "status": "running",
+        "error": None,
+        "report": None,
+        "run_dir": None,
+    }
+
+    task = asyncio.create_task(_execute_segmentation_comparison(req, run_id))
     _background_tasks.add(task)
     task.add_done_callback(_background_tasks.discard)
 
@@ -2096,6 +2168,86 @@ async def _execute_segmentation(config: SegmentationConfig, run_id: str) -> None
 
     except Exception as e:
         logger.exception("GUI: Segmentation {} failed", run_id)
+        cls = type(e).__name__
+        msg = str(e) or "(sem mensagem)"
+        _current_run = {
+            "run_id": run_id,
+            "status": "failed",
+            "error": f"{cls}: {msg}",
+            "report": None,
+            "run_dir": None,
+        }
+
+    finally:
+        if queue is not None:
+            await queue.put(None)
+
+
+async def _execute_regression_comparison(
+    req: RegressionCompareRequest, run_id: str
+) -> None:
+    """Run a regression model comparison in a background thread (ADR-041)."""
+    global _current_run, _event_queue
+
+    queue = _event_queue
+    try:
+        logger.info(
+            "GUI: Starting regression comparison {} ({} archs)",
+            run_id,
+            len(req.model_names),
+        )
+        report = await asyncio.to_thread(run_regression_comparison, req)
+        _current_run = {
+            "run_id": run_id,
+            "status": "completed",
+            "error": None,
+            "report": report,
+            "run_dir": None,
+        }
+        logger.success("GUI: Regression comparison {} completed.", run_id)
+
+    except Exception as e:
+        logger.exception("GUI: Regression comparison {} failed", run_id)
+        cls = type(e).__name__
+        msg = str(e) or "(sem mensagem)"
+        _current_run = {
+            "run_id": run_id,
+            "status": "failed",
+            "error": f"{cls}: {msg}",
+            "report": None,
+            "run_dir": None,
+        }
+
+    finally:
+        if queue is not None:
+            await queue.put(None)
+
+
+async def _execute_segmentation_comparison(
+    req: SegmentationCompareRequest, run_id: str
+) -> None:
+    """Run a segmentation model comparison in a background thread (ADR-041)."""
+    global _current_run, _event_queue
+
+    queue = _event_queue
+    try:
+        logger.info(
+            "GUI: Starting segmentation comparison {} ({} archs)",
+            run_id,
+            len(req.model_names),
+        )
+        report = await asyncio.to_thread(run_segmentation_comparison, req)
+        _current_run = {
+            "run_id": run_id,
+            "status": "completed",
+            "error": None,
+            "report": report,
+            "run_dir": None,
+        }
+        logger.success("GUI: Segmentation comparison {} completed.", run_id)
+
+    except Exception as e:
+        logger.exception("GUI: Segmentation comparison {} failed", run_id)
         cls = type(e).__name__
         msg = str(e) or "(sem mensagem)"
         _current_run = {

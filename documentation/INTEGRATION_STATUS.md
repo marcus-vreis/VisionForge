@@ -1,3 +1,21 @@
+# Ground-truth verification — 2026-06-07 (`feat/adr041-slice2-comparison`)
+
+ADR-041 slice 2 (model comparison for regression + segmentation via the generic
+`TaskRunner`). Verified locally on Windows + CUDA torch 2.11 (full suite runnable
+here, unlike the Linux sandbox):
+
+- **Backend: 940 passed, 2 skipped**, coverage **94%** (gate is 70). New modules
+  `core/comparison.py` 100%, `gui/api/comparison.py` 100%; `routes.py` 82%.
+- **ruff check + ruff format --check** clean; **mypy** clean (64 source files).
+- **Frontend: 62 Vitest passed**, **tsc --noEmit** clean, **SPA build** OK
+  (rebuilt `gui/static` bundle committed).
+- **Contract:** no `run.json`/`schema_version` change — comparison is an
+  orchestration (writes `comparison_summary.json` + `ranking.csv` like the
+  classification path); `model_names`/`metric` ride in the request body so no
+  task config grows a field. ADR-041 status updated (slice 2 shipped).
+
+---
+
 # Ground-truth verification — 2026-06-06
 
 Independent state check on `feat/detection-hyperparams-yolo-family`.

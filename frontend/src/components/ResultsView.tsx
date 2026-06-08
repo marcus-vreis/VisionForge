@@ -552,11 +552,30 @@ interface ModelComparisonTrial {
   model_arch: string;
   status: string;
   error?: string;
-  accuracy: number | null;
-  f1: number | null;
-  auc_roc: number | null;
   training_time_s: number | null;
+  // Task-specific metric columns (accuracy/f1/auc_roc, mse/rmse/mae/r2,
+  // miou/dice/pixel_acc, …) — metric-agnostic so one renderer serves every task.
+  [metric: string]: number | string | null | undefined;
 }
+
+// Structural keys present on every trial regardless of task — everything else
+// is a metric column to be rendered dynamically.
+const COMPARISON_STRUCTURAL_KEYS = ["model_arch", "status", "error", "training_time_s"];
+
+// Friendly column headers for known metrics; unknown keys fall back to the raw
+// key so a new task's metric still renders without a code change here.
+const COMPARISON_METRIC_LABELS: Record<string, string> = {
+  accuracy: "Accuracy",
+  f1: "F1",
+  auc_roc: "AUC-ROC",
+  mse: "MSE",
+  rmse: "RMSE",
+  mae: "MAE",
+  r2: "R²",
+  miou: "mIoU",
+  dice: "Dice",
+  pixel_acc: "Pixel acc",
+};
 
 function isModelComparisonReport(report: Record<string, unknown>): boolean {
   return (
@@ -566,11 +585,12 @@ function isModelComparisonReport(report: Record<string, unknown>): boolean {
   );
 }
 
-/** Structured render for ModelComparisonBlock.report().
+/** Structured render for a model-comparison report (any task, ADR-041).
  *
- * Surfaces the ranked top-3 architectures plus run totals. Each row shows
- * the trial's metric, training time, and status — failed rows stand out so
- * a partial-success comparison isn't mistaken for a clean sweep.
+ * Surfaces the ranked top-3 architectures plus run totals. Metric columns are
+ * derived from the trial objects, so classification (accuracy/f1/auc_roc),
+ * regression (mse/rmse/mae/r2) and segmentation (miou/dice/pixel_acc) all
+ * render through one component.
  */
 function ModelComparisonReport({
   report,
@@ -582,6 +602,13 @@ function ModelComparisonReport({
   const top3 = (report["top_3"] as ModelComparisonTrial[]) ?? [];
   const totalRan = report["total_ran"] as number;
   const failedCount = report["failed_count"] as number;
+
+  const metricKeys =
+    top3.length > 0
+      ? Object.keys(top3[0]).filter(
+          (k) => !COMPARISON_STRUCTURAL_KEYS.includes(k),
+        )
+      : [];
 
   return (
     <div style={{ marginTop: 22, display: "flex", flexDirection: "column", gap: 18 }}>
@@ -619,9 +646,11 @@ function ModelComparisonReport({
             <tr>
               <th style={cvThStyle}>Rank</th>
               <th style={cvThStyle}>Arquitetura</th>
-              <th style={cvThStyle}>Accuracy</th>
-              <th style={cvThStyle}>F1</th>
-              <th style={cvThStyle}>AUC-ROC</th>
+              {metricKeys.map((k) => (
+                <th key={k} style={cvThStyle}>
+                  {COMPARISON_METRIC_LABELS[k] ?? k}
+                </th>
+              ))}
               <th style={cvThStyle}>tempo (s)</th>
             </tr>
           </thead>
@@ -651,11 +680,13 @@ function ModelComparisonReport({
                   >
                     {trial.model_arch}
                   </td>
-                  <td style={cvTdStyle}>{formatMetric(trial.accuracy)}</td>
-                  <td style={cvTdStyle}>{formatMetric(trial.f1)}</td>
-                  <td style={cvTdStyle}>{formatMetric(trial.auc_roc)}</td>
+                  {metricKeys.map((k) => (
+                    <td key={k} style={cvTdStyle}>
+                      {formatMetric(trial[k])}
+                    </td>
+                  ))}
                   <td style={cvTdStyle}>
-                    {trial.training_time_s !== null
+                    {typeof trial.training_time_s === "number"
                       ? trial.training_time_s.toFixed(1)
                       : "—"}
                   </td>

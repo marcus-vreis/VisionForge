@@ -16,11 +16,13 @@ import {
   type DetectionForm,
 } from "./lib/detection-models";
 import {
+  buildRegressionComparePayload,
   buildRegressionPayload,
   makeDefaultRegressionForm,
   type RegressionForm,
 } from "./lib/regression-models";
 import {
+  buildSegmentationComparePayload,
   buildSegmentationPayload,
   makeDefaultSegmentationForm,
   type SegmentationForm,
@@ -114,6 +116,14 @@ export default function App() {
       setResultsVisible(false);
       setOverlayVisible(true);
       setPipelineSummary([]);
+      if (regressionForm.compare.enabled) {
+        setBlockKind("model_comparison");
+        setQueueSize(regressionForm.compare.model_names.length);
+        await submit(buildRegressionComparePayload(regressionForm), {
+          compareRegression: true,
+        });
+        return;
+      }
       setBlockKind("regression");
       setQueueSize(undefined);
       const payload: Record<string, unknown> = {
@@ -128,6 +138,14 @@ export default function App() {
       setResultsVisible(false);
       setOverlayVisible(true);
       setPipelineSummary([]);
+      if (segmentationForm.compare.enabled) {
+        setBlockKind("model_comparison");
+        setQueueSize(segmentationForm.compare.model_names.length);
+        await submit(buildSegmentationComparePayload(segmentationForm), {
+          compareSegmentation: true,
+        });
+        return;
+      }
       setBlockKind("segmentation");
       setQueueSize(undefined);
       const payload: Record<string, unknown> = {

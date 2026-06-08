@@ -147,6 +147,32 @@ export async function runAnomaly(
   });
 }
 
+/** Start a regression model comparison (ADR-041 slice 2). Reuses the
+ *  /experiment/{status,result} endpoints; the payload is
+ *  `{config, model_names, metric}`. */
+export async function compareRegression(
+  payload: Record<string, unknown>,
+): Promise<RunResponse> {
+  return request<RunResponse>("/regression/compare", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+/** Start a segmentation model comparison (ADR-041 slice 2). Reuses the
+ *  /experiment/{status,result} endpoints; the payload is
+ *  `{config, model_names, metric}`. */
+export async function compareSegmentation(
+  payload: Record<string, unknown>,
+): Promise<RunResponse> {
+  return request<RunResponse>("/segmentation/compare", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function fetchStatus(): Promise<RunStatus> {
   return request<RunStatus>("/experiment/status");
 }

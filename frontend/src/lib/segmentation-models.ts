@@ -32,6 +32,14 @@ export const SEGMENTATION_LOSSES: { value: string; label: string }[] = [
   { value: "combined", label: "CE + Dice" },
 ];
 
+/** Ranking metrics for model comparison — all higher-is-better, so descending
+ *  rank is unambiguous (ADR-041 slice 2). */
+export const SEGMENTATION_COMPARE_METRICS: { value: string; label: string }[] = [
+  { value: "miou", label: "mIoU" },
+  { value: "dice", label: "Dice" },
+  { value: "pixel_acc", label: "Pixel acc" },
+];
+
 /** Controlled form state for a segmentation run — mirrors SegmentationConfig. */
 export interface SegmentationForm {
   name: string;
@@ -59,6 +67,13 @@ export interface SegmentationForm {
     early_stopping_patience: number;
     seed: number;
   };
+  /** Model-comparison mode: when enabled, submit ranks `model_names` instead of
+   *  training the single `model.name` (ADR-041 slice 2). */
+  compare: {
+    enabled: boolean;
+    model_names: string[];
+    metric: string;
+  };
 }
 
 export function makeDefaultSegmentationForm(): SegmentationForm {
@@ -84,6 +99,11 @@ export function makeDefaultSegmentationForm(): SegmentationForm {
       early_stopping_patience: 10,
       seed: 42,
     },
+    compare: {
+      enabled: false,
+      model_names: ["deeplabv3_resnet50", "fcn_resnet50"],
+      metric: "miou",
+    },
   };
 }
 
@@ -104,5 +124,18 @@ export function buildSegmentationPayload(
     model: { ...form.model, num_classes: Math.max(form.model.num_classes, 1) },
     data: { ...form.data },
     training: { ...form.training },
+  };
+}
+
+/** Project the form into the segmentation model-comparison wire payload: the
+ *  base config (its `model.name` is a template — comparison swaps it per arch)
+ *  plus the architectures to rank and the ranking metric. */
+export function buildSegmentationComparePayload(
+  form: SegmentationForm,
+): Record<string, unknown> {
+  return {
+    config: buildSegmentationPayload(form),
+    model_names: form.compare.model_names,
+    metric: form.compare.metric,
   };
 }

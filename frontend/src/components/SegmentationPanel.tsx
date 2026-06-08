@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { pickDatasetFolder } from "../api/client";
 import {
+  SEGMENTATION_COMPARE_METRICS,
   SEGMENTATION_LOSSES,
   SEGMENTATION_MODELS,
   ignoreIndexCollides,
@@ -46,6 +47,16 @@ export function SegmentationPanel({
     setFormData((p) => ({ ...p, data: { ...p.data, ...patch } }));
   const setTraining = (patch: Partial<SegmentationForm["training"]>) =>
     setFormData((p) => ({ ...p, training: { ...p.training, ...patch } }));
+  const setCompare = (patch: Partial<SegmentationForm["compare"]>) =>
+    setFormData((p) => ({ ...p, compare: { ...p.compare, ...patch } }));
+  const toggleArch = (name: string) =>
+    setFormData((p) => {
+      const has = p.compare.model_names.includes(name);
+      const model_names = has
+        ? p.compare.model_names.filter((n) => n !== name)
+        : [...p.compare.model_names, name];
+      return { ...p, compare: { ...p.compare, model_names } };
+    });
 
   const onPickFolder = async () => {
     setPicking(true);
@@ -123,6 +134,88 @@ export function SegmentationPanel({
             hint="backbone ImageNet"
           />
         </div>
+      </div>
+
+      {/* Comparar modelos */}
+      <div style={card}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: 16,
+          }}
+        >
+          <div style={{ ...sectionLabel, marginBottom: 0 }}>Comparar modelos</div>
+          <div style={{ minWidth: 150 }}>
+            <Toggle
+              label="Ativar"
+              value={formData.compare.enabled}
+              onChange={(v) => setCompare({ enabled: v })}
+              hint="ranquear arquiteturas"
+            />
+          </div>
+        </div>
+        {formData.compare.enabled && (
+          <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 14 }}>
+            <div
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: 11,
+                color: "var(--vf-text-muted)",
+                lineHeight: 1.5,
+              }}
+            >
+              Treina cada arquitetura selecionada no mesmo dataset e ranqueia
+              pela métrica. A arquitetura única acima é ignorada neste modo.
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {SEGMENTATION_MODELS.map((m) => {
+                const selected = formData.compare.model_names.includes(m.value);
+                return (
+                  <button
+                    key={m.value}
+                    type="button"
+                    aria-pressed={selected}
+                    onClick={() => toggleArch(m.value)}
+                    style={{
+                      padding: "7px 12px",
+                      borderRadius: 999,
+                      cursor: "pointer",
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 12,
+                      color: selected ? "var(--vf-text)" : "var(--vf-text-muted)",
+                      background: selected ? "var(--accent-soft)" : "transparent",
+                      border: `1px solid ${selected ? accent : "var(--vf-panel-stroke)"}`,
+                    }}
+                  >
+                    {m.label}
+                  </button>
+                );
+              })}
+            </div>
+            <div style={{ maxWidth: 220 }}>
+              <SelectField
+                label="Métrica de ranking"
+                value={formData.compare.metric}
+                onChange={(v) => setCompare({ metric: v })}
+                options={SEGMENTATION_COMPARE_METRICS}
+                hint="maior é melhor"
+              />
+            </div>
+            {formData.compare.model_names.length < 2 && (
+              <div
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 11,
+                  color: "oklch(0.85 0.14 22)",
+                }}
+              >
+                Selecione ao menos 2 arquiteturas para comparar.
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Dataset */}

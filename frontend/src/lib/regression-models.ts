@@ -26,6 +26,13 @@ export const REGRESSION_LOSSES: { value: string; label: string }[] = [
   { value: "huber", label: "Huber" },
 ];
 
+/** Ranking metric for model comparison. Only R² is offered: it is the one
+ *  regression metric where higher is better, so descending rank is unambiguous
+ *  (mse/rmse/mae are still recorded as columns, just not used for ranking). */
+export const REGRESSION_COMPARE_METRICS: { value: string; label: string }[] = [
+  { value: "r2", label: "R²" },
+];
+
 /** Controlled form state for a regression run — mirrors RegressionConfig. */
 export interface RegressionForm {
   name: string;
@@ -54,6 +61,13 @@ export interface RegressionForm {
     early_stopping_patience: number;
     seed: number;
   };
+  /** Model-comparison mode: when enabled, submit ranks `model_names` instead of
+   *  training the single `model.name` (ADR-041 slice 2). */
+  compare: {
+    enabled: boolean;
+    model_names: string[];
+    metric: string;
+  };
 }
 
 export function makeDefaultRegressionForm(): RegressionForm {
@@ -78,6 +92,11 @@ export function makeDefaultRegressionForm(): RegressionForm {
       optimizer: "adam",
       early_stopping_patience: 10,
       seed: 42,
+    },
+    compare: {
+      enabled: false,
+      model_names: ["resnet18", "resnet50"],
+      metric: "r2",
     },
   };
 }
@@ -112,5 +131,18 @@ export function buildRegressionPayload(
       image_size: form.data.image_size,
     },
     training: { ...form.training },
+  };
+}
+
+/** Project the form into the regression model-comparison wire payload: the base
+ *  config (its `model.name` is just a template — comparison swaps it per arch)
+ *  plus the architectures to rank and the ranking metric. */
+export function buildRegressionComparePayload(
+  form: RegressionForm,
+): Record<string, unknown> {
+  return {
+    config: buildRegressionPayload(form),
+    model_names: form.compare.model_names,
+    metric: form.compare.metric,
   };
 }

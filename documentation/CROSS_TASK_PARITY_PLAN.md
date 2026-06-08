@@ -86,7 +86,12 @@ splitting, export graph) and don't generalise cleanly.
    user-facing feature yet — pure de-coupling, fully covered by existing tests.
 2. **Model comparison for regression + segmentation** (the two closest to
    classification) via the generic runner. New GUI surface mirrors the existing
-   comparison panel.
+   comparison panel. **— shipped (ADR-041):** `core/comparison.py`
+   `GenericComparisonRunner` ranks via `runner.primary_metric()`-style metric;
+   `blocks/{regression,segmentation}_runner.py` adapters;
+   `POST /api/{regression,segmentation}/compare`; compare card in each panel +
+   metric-agnostic report renderer. `model_names`/`metric` ride in the request
+   body — no config-surface change.
 3. **Batch prediction generic** — regression/segmentation/detection/anomaly.
 4. **Generic sweep** (grid/random) over the handle — start with regression.
 5. **Per-task**: transfer-learning knobs (regression/segmentation), then CV,

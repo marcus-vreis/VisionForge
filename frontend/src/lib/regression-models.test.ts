@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildRegressionComparePayload,
   buildRegressionPayload,
   makeDefaultRegressionForm,
   parseTargetColumns,
@@ -35,5 +36,23 @@ describe("regression-models", () => {
     const data = payload.data as { target_columns: string[] };
     expect(model.num_targets).toBe(1);
     expect(data.target_columns).toEqual(["target"]);
+  });
+
+  it("defaults comparison to disabled with two backbones ranked by r2", () => {
+    const form = makeDefaultRegressionForm();
+    expect(form.compare.enabled).toBe(false);
+    expect(form.compare.model_names.length).toBeGreaterThanOrEqual(2);
+    expect(form.compare.metric).toBe("r2");
+  });
+
+  it("wraps the base config plus model_names/metric in the compare payload", () => {
+    const form = makeDefaultRegressionForm();
+    form.compare.model_names = ["resnet18", "resnet34"];
+    const payload = buildRegressionComparePayload(form);
+    expect(payload.model_names).toEqual(["resnet18", "resnet34"]);
+    expect(payload.metric).toBe("r2");
+    expect((payload.config as { model: { name: string } }).model.name).toBe(
+      "resnet50",
+    );
   });
 });

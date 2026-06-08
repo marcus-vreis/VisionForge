@@ -500,7 +500,7 @@ in the GUI for a clean numeric binding while the config keeps `int | None`.
 ## ADR-041 — Cross-task strategy parity via a generic task-run handle
 
 **Date:** 2026-06
-**Status:** Accepted — slice 1 shipped: `TaskRunner` protocol + `RunResult` (`core/task_runner.py`), `ClassificationRunner` adapter (`blocks/classification_runner.py`), `ModelComparisonBlock` refactored to consume the handle; remaining slices (regression/segmentation comparison, batch predict, generic sweep) stay planned.
+**Status:** Accepted — slice 1 shipped: `TaskRunner` protocol + `RunResult` (`core/task_runner.py`), `ClassificationRunner` adapter (`blocks/classification_runner.py`), `ModelComparisonBlock` refactored to consume the handle. Slice 2 shipped: task-agnostic `GenericComparisonRunner` (`core/comparison.py`), `RegressionRunner`/`SegmentationRunner` adapters, and `POST /api/{regression,segmentation}/compare` endpoints reusing the single-run state — model comparison now works for regression and segmentation (GUI compare panel + metric-agnostic report renderer). No config-surface change: `model_names`/`metric` travel in the request body, so neither task config grows a comparison field. Remaining slices (batch predict, generic sweep, per-task transfer/CV/ONNX) stay planned.
 **Extends:** ADR-003 (ExperimentBlock), ADR-006 (task abstraction), ADR-033/036/037/038 (standalone tasks)
 
 **Decision:** The orchestration-style strategies that today exist only for

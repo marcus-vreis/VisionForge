@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildSegmentationComparePayload,
   buildSegmentationPayload,
   ignoreIndexCollides,
   makeDefaultSegmentationForm,
@@ -44,5 +45,24 @@ describe("segmentation-models", () => {
     const data = payload.data as { base_dir: string; masks_subdir: string };
     expect(data.base_dir).toBe("/data/seg");
     expect(data.masks_subdir).toBe("masks");
+  });
+
+  it("defaults comparison to disabled with two models ranked by mIoU", () => {
+    const form = makeDefaultSegmentationForm();
+    expect(form.compare.enabled).toBe(false);
+    expect(form.compare.model_names.length).toBeGreaterThanOrEqual(2);
+    expect(form.compare.metric).toBe("miou");
+  });
+
+  it("wraps the base config plus model_names/metric in the compare payload", () => {
+    const form = makeDefaultSegmentationForm();
+    form.compare.model_names = ["deeplabv3_resnet50", "fcn_resnet50"];
+    form.compare.metric = "dice";
+    const payload = buildSegmentationComparePayload(form);
+    expect(payload.model_names).toEqual(["deeplabv3_resnet50", "fcn_resnet50"]);
+    expect(payload.metric).toBe("dice");
+    expect((payload.config as { model: { name: string } }).model.name).toBe(
+      "deeplabv3_resnet50",
+    );
   });
 });
