@@ -71,6 +71,58 @@ class MetricsPlotter:
         fig.savefig(save_path, dpi=150, bbox_inches="tight")
 
     @staticmethod
+    def detection_results(
+        epochs: list[int],
+        train_losses: list[float | None],
+        val_losses: list[float | None],
+        map50s: list[float | None],
+        save_path: Path,
+    ) -> None:
+        """Save a detection history figure: train/val loss + mAP@50 over epochs.
+
+        The torchvision backend has no Ultralytics ``results.png``, so this gives
+        its runs the same at-a-glance history chart the GUI shows for YOLO runs.
+        ``None`` points (a metric not yet available for an epoch) are dropped.
+        """
+
+        def _clean(
+            xs: list[int], ys: list[float | None]
+        ) -> tuple[list[int], list[float]]:
+            kept = [(x, y) for x, y in zip(xs, ys, strict=False) if y is not None]
+            return [x for x, _ in kept], [y for _, y in kept]
+
+        fig = Figure(figsize=(12, 5))
+        FigureCanvasAgg(fig)
+        ax_loss, ax_map = fig.subplots(1, 2)
+
+        te, tl = _clean(epochs, train_losses)
+        ve, vl = _clean(epochs, val_losses)
+        if tl:
+            ax_loss.plot(te, tl, label="train", linewidth=2, color="#3b82f6")
+        if vl:
+            ax_loss.plot(ve, vl, label="val", linewidth=2, color="#f59e0b")
+        ax_loss.set_xlabel("Epoch")
+        ax_loss.set_ylabel("Loss")
+        ax_loss.set_title("Training & Validation Loss")
+        if tl or vl:
+            ax_loss.legend()
+        ax_loss.grid(True, alpha=0.3)
+
+        me, mv = _clean(epochs, map50s)
+        if mv:
+            ax_map.plot(
+                me, mv, label="mAP@50", linewidth=2, color="#10b981", marker="o"
+            )
+            ax_map.legend()
+        ax_map.set_xlabel("Epoch")
+        ax_map.set_ylabel("mAP@50")
+        ax_map.set_title("Validation mAP@50")
+        ax_map.grid(True, alpha=0.3)
+
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(save_path, dpi=150, bbox_inches="tight")
+
+    @staticmethod
     def accuracy_curve(history: list[EpochResult], save_path: Path) -> None:
         """Save a train/val accuracy curve to save_path."""
         epochs = [r.epoch for r in history]

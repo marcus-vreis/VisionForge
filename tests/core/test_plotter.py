@@ -52,6 +52,32 @@ class TestMetricCurve:
         assert save_path.exists()
 
 
+class TestDetectionResults:
+    def test_creates_png(self, tmp_path: Path) -> None:
+        save_path = tmp_path / "results.png"
+        MetricsPlotter.detection_results(
+            epochs=[1, 2, 3],
+            train_losses=[1.0, 0.8, 0.6],
+            val_losses=[1.1, 0.9, 0.7],
+            map50s=[0.3, 0.5, 0.6],
+            save_path=save_path,
+        )
+        assert save_path.exists()
+        assert save_path.stat().st_size > 0
+
+    def test_tolerates_missing_points(self, tmp_path: Path) -> None:
+        """A metric absent for some epochs (None) must not raise."""
+        save_path = tmp_path / "sub" / "results.png"
+        MetricsPlotter.detection_results(
+            epochs=[1, 2],
+            train_losses=[None, 0.8],
+            val_losses=[1.1, None],
+            map50s=[None, None],
+            save_path=save_path,
+        )
+        assert save_path.exists()
+
+
 class TestConfusionMatrixPlot:
     def test_creates_png(self, tmp_path: Path) -> None:
         """confusion_matrix_plot() must create a .png file at save_path."""

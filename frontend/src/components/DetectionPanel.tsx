@@ -135,6 +135,21 @@ export function DetectionPanel({
         </div>
       )}
 
+      {/* Experimento */}
+      <div style={card}>
+        <div style={sectionLabel}>Experimento</div>
+        <div style={{ maxWidth: 420 }}>
+          <TextField
+            label="Nome do experimento"
+            value={formData.name}
+            onChange={(v) => setFormData((p) => ({ ...p, name: v }))}
+            placeholder="detection_001"
+            hint="usado na pasta de saída e no histórico"
+            mono
+          />
+        </div>
+      </div>
+
       {/* Modelo */}
       <div style={card}>
         <div style={sectionLabel}>Modelo · detecção</div>

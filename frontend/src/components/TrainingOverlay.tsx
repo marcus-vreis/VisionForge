@@ -6,6 +6,8 @@ interface TrainingOverlayProps {
   progressEvents: TrainingEvent[];
   taskAccent: string;
   taskLabel: string;
+  /** Active task key (classification/detection/…) — drives the CLI echo line. */
+  taskKey: string;
   /** Ordered preprocessing filter names from the submitted config, if any. */
   pipelineSummary?: string[];
   /** Block key from config — drives the "multi-trial" banner. Empty/unknown → no banner. */
@@ -30,6 +32,7 @@ export function TrainingOverlay({
   progressEvents,
   taskAccent,
   taskLabel,
+  taskKey,
   pipelineSummary,
   blockKind,
   queueSize,
@@ -90,7 +93,7 @@ export function TrainingOverlay({
       : 0;
 
   const [logs, setLogs] = useState<string[]>([
-    `$ visionforge train --task classification`,
+    `$ visionforge train --task ${taskKey}`,
     `> inicializando runtime · ${status.run_id ?? "..."}`,
     `> carregando dataset…`,
   ]);
@@ -138,11 +141,24 @@ export function TrainingOverlay({
       latestEpoch.trial_index !== undefined && latestEpoch.total_trials
         ? `[t${latestEpoch.trial_index + 1}/${latestEpoch.total_trials}] `
         : "";
-    const line =
-      `> ${trialTag}epoch ${epoch}/${total_epochs}` +
-      ` · loss=${train_loss.toFixed(4)}` +
-      ` · val_loss=${val_loss.toFixed(4)}` +
-      ` · val_acc=${val_accuracy.toFixed(4)}`;
+    // Detection runs carry mAP / precision / per-component losses; show those
+    // instead of the classification loss/acc triple. `map50` is present (maybe
+    // null) only on detection events, so it discriminates the task here.
+    const isDetection = latestEpoch.map50 !== undefined;
+    const fmt = (v: number | null | undefined): string =>
+      v === null || v === undefined ? "—" : v.toFixed(4);
+    const metricsPart = isDetection
+      ? [
+          `map50=${fmt(latestEpoch.map50)}`,
+          `map50-95=${fmt(latestEpoch.map50_95)}`,
+          `P=${fmt(latestEpoch.precision)}`,
+          `R=${fmt(latestEpoch.recall)}`,
+          `box=${fmt(latestEpoch.val_box_loss ?? latestEpoch.box_loss)}`,
+          `cls=${fmt(latestEpoch.val_cls_loss)}`,
+          `dfl=${fmt(latestEpoch.val_dfl_loss)}`,
+        ].join(" · ")
+      : `loss=${train_loss.toFixed(4)} · val_loss=${val_loss.toFixed(4)} · val_acc=${val_accuracy.toFixed(4)}`;
+    const line = `> ${trialTag}epoch ${epoch}/${total_epochs} · ${metricsPart}`;
     // Defer the append (see the trial-separator effect above).
     const timer = setTimeout(() => {
       setLogs((prev) => {

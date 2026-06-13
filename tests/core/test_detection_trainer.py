@@ -48,7 +48,14 @@ class _FakeUTrainer:
         self.metrics = {
             "metrics/mAP50(B)": 0.5 + 0.1 * epoch,
             "metrics/mAP50-95(B)": 0.3 + 0.1 * epoch,
+            "metrics/precision(B)": 0.6 + 0.05 * epoch,
+            "metrics/recall(B)": 0.4 + 0.05 * epoch,
             "val/box_loss": 1.0 - 0.1 * epoch,
+            "val/cls_loss": 0.8 - 0.1 * epoch,
+            "val/dfl_loss": 0.6 - 0.05 * epoch,
+            "train/box_loss": 1.2 - 0.1 * epoch,
+            "train/cls_loss": 0.9 - 0.1 * epoch,
+            "train/dfl_loss": 0.7 - 0.05 * epoch,
         }
 
 
@@ -172,6 +179,40 @@ class TestUltralyticsPath:
         assert all("map50_95" in e for e in epoch_events)
         assert epoch_events[-1]["epoch"] == 2
 
+    def test_streams_extended_metrics(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Precision/recall + train & val loss components reach the SSE event."""
+        monkeypatch.setattr(dt_mod, "YOLO", _make_fake_yolo({}))
+        events: list[dict[str, Any]] = []
+        DetectionTrainer(_config(tmp_path)).fit(progress_callback=events.append)
+
+        last = [e for e in events if e["event"] == "epoch_end"][-1]
+        for key in (
+            "precision",
+            "recall",
+            "train_box_loss",
+            "train_cls_loss",
+            "train_dfl_loss",
+            "val_box_loss",
+            "val_cls_loss",
+            "val_dfl_loss",
+        ):
+            assert last[key] is not None, key
+
+    def test_run_json_history_carries_extended_metrics(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(dt_mod, "YOLO", _make_fake_yolo({}))
+        result = DetectionTrainer(_config(tmp_path)).fit()
+
+        run_json = json.loads((result.run_dir / "run.json").read_text("utf-8"))
+        assert run_json["metrics"]["precision"] is not None
+        assert run_json["metrics"]["recall"] is not None
+        last_epoch = run_json["history"][-1]
+        assert last_epoch["train_box_loss"] is not None
+        assert last_epoch["val_cls_loss"] is not None
+
     def test_writes_compatible_run_json(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -290,6 +331,20 @@ class TestTorchvisionPath:
         assert run_json["device_used"] == "cpu"
         assert len(run_json["history"]) == 2
         assert all(e.get("map50") is not None for e in run_json["history"])
+
+    def test_writes_results_plot(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """torchvision has no Ultralytics results.png, so the trainer renders one."""
+        monkeypatch.setattr(
+            dt_mod, "build_torchvision_detector", lambda *a, **k: _FakeDetector()
+        )
+        result = DetectionTrainer(_tv_config(tmp_path)).fit()
+
+        assert (result.run_dir / "results.png").exists()
+        run_json = json.loads((result.run_dir / "run.json").read_text("utf-8"))
+        graphics = run_json["artifacts"]["graphics"]
+        assert any(g.endswith("results.png") for g in graphics)
 
 
 class TestTorchvisionOptimizer:
