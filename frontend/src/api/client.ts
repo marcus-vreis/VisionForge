@@ -147,6 +147,30 @@ export async function runAnomaly(
   });
 }
 
+/** Start a model comparison for a standalone task (ADR-044). */
+export async function runComparison(
+  task: string,
+  payload: Record<string, unknown>,
+): Promise<RunResponse> {
+  return request<RunResponse>(`/${task}/compare`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+/** Start a grid/random hyperparameter sweep for a standalone task (ADR-045). */
+export async function runSweep(
+  task: string,
+  payload: Record<string, unknown>,
+): Promise<RunResponse> {
+  return request<RunResponse>(`/${task}/sweep`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function fetchStatus(): Promise<RunStatus> {
   return request<RunStatus>("/experiment/status");
 }

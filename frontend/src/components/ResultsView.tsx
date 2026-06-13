@@ -312,6 +312,8 @@ export function ResultsView({ result, onClose, taskAccent }: ResultsViewProps) {
       {result.report && Object.keys(result.report).length > 0 && (
         isCrossValidationReport(result.report) ? (
           <CrossValidationReport report={result.report} accent={taskAccent} />
+        ) : isTaskComparisonReport(result.report) ? (
+          <TaskComparisonReport report={result.report} accent={taskAccent} />
         ) : isModelComparisonReport(result.report) ? (
           <ModelComparisonReport report={result.report} accent={taskAccent} />
         ) : isGridSearchReport(result.report) ? (
@@ -546,6 +548,142 @@ function AggregateCard({
         >
           ± {std.toFixed(4)}
         </span>
+      </div>
+    </div>
+  );
+}
+
+interface TaskComparisonTrial {
+  model_arch: string;
+  status: string;
+  metrics: Record<string, number>;
+  training_time_s: number | null;
+  error: string;
+}
+
+/** Standalone-task comparison report (ADR-044): has a string `metric` and a
+ *  `trials` array with nested per-task metrics — distinct from the classification
+ *  ModelComparisonReport (flat accuracy/f1/auc_roc, no `metric` key). */
+function isTaskComparisonReport(report: Record<string, unknown>): boolean {
+  return (
+    typeof report["metric"] === "string" &&
+    Array.isArray(report["trials"]) &&
+    report["mode"] === undefined
+  );
+}
+
+/** Ranked architecture table for a regression/segmentation model comparison. */
+function TaskComparisonReport({
+  report,
+  accent,
+}: {
+  report: Record<string, unknown>;
+  accent: string;
+}) {
+  const trials = (report["trials"] as TaskComparisonTrial[]) ?? [];
+  const metric = report["metric"] as string;
+  const totalRan = report["total_ran"] as number;
+  const failedCount = report["failed_count"] as number;
+
+  const successful = trials.filter((t) => t.status === "success");
+  const otherKeys = Array.from(
+    new Set(successful.flatMap((t) => Object.keys(t.metrics ?? {}))),
+  ).filter((k) => k !== metric);
+  const metricCols = [metric, ...otherKeys];
+
+  return (
+    <div style={{ marginTop: 22, display: "flex", flexDirection: "column", gap: 18 }}>
+      <div
+        style={{
+          fontFamily: "var(--font-mono)",
+          fontSize: 10,
+          letterSpacing: "0.20em",
+          textTransform: "uppercase",
+          color: "var(--vf-text-muted)",
+        }}
+      >
+        // comparação de arquiteturas · {totalRan - failedCount}/{totalRan} ok
+        {failedCount > 0 ? ` · ${failedCount} falharam` : ""} · ranking por {metric}
+      </div>
+
+      <div
+        style={{
+          padding: 14,
+          background: "rgba(255,255,255,0.025)",
+          border: "1px solid var(--vf-panel-stroke)",
+          borderRadius: 12,
+          overflowX: "auto",
+        }}
+      >
+        <table
+          style={{
+            width: "100%",
+            borderCollapse: "collapse",
+            fontFamily: "var(--font-mono)",
+            fontSize: 12,
+          }}
+        >
+          <thead>
+            <tr>
+              <th style={cvThStyle}>Rank</th>
+              <th style={cvThStyle}>Arquitetura</th>
+              {metricCols.map((k) => (
+                <th key={k} style={cvThStyle}>
+                  {k}
+                </th>
+              ))}
+              <th style={cvThStyle}>tempo (s)</th>
+              <th style={cvThStyle}>status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {trials.map((trial, i) => {
+              const ok = trial.status === "success";
+              return (
+                <tr key={trial.model_arch}>
+                  <td
+                    style={{
+                      ...cvTdLabelStyle,
+                      color: i === 0 && ok ? accent : "var(--vf-text-muted)",
+                      fontWeight: i === 0 && ok ? 700 : 500,
+                    }}
+                  >
+                    {ok ? `#${i + 1}` : "—"}
+                    {i === 0 && ok && <span style={{ marginLeft: 6 }}>👑</span>}
+                  </td>
+                  <td
+                    style={{
+                      ...cvTdStyle,
+                      color: i === 0 && ok ? accent : "var(--vf-text)",
+                      fontWeight: i === 0 && ok ? 600 : 400,
+                    }}
+                  >
+                    {trial.model_arch}
+                  </td>
+                  {metricCols.map((k) => (
+                    <td key={k} style={cvTdStyle}>
+                      {formatMetric(trial.metrics?.[k])}
+                    </td>
+                  ))}
+                  <td style={cvTdStyle}>
+                    {trial.training_time_s !== null &&
+                    trial.training_time_s !== undefined
+                      ? trial.training_time_s.toFixed(1)
+                      : "—"}
+                  </td>
+                  <td
+                    style={{
+                      ...cvTdStyle,
+                      color: ok ? "oklch(0.85 0.16 150)" : "oklch(0.85 0.14 22)",
+                    }}
+                  >
+                    {ok ? "✓" : `× ${trial.error || "?"}`}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
     </div>
   );

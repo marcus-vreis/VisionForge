@@ -9,7 +9,12 @@ import {
   runRegression,
   runSegmentation,
 } from "../api/client";
-import type { RunResult, RunStatus, TrainingEvent } from "../types/run";
+import type {
+  RunResponse,
+  RunResult,
+  RunStatus,
+  TrainingEvent,
+} from "../types/run";
 
 interface ExperimentState {
   status: RunStatus;
@@ -24,6 +29,9 @@ interface ExperimentState {
       regression?: boolean;
       segmentation?: boolean;
       anomaly?: boolean;
+      /** Custom submitter (e.g. comparison/sweep endpoints); overrides the
+       *  task-based dispatch when provided. */
+      run?: (config: Record<string, unknown>) => Promise<RunResponse>;
     },
   ) => Promise<void>;
   reset: () => void;
@@ -225,6 +233,9 @@ export function useExperiment(): ExperimentState {
       regression?: boolean;
       segmentation?: boolean;
       anomaly?: boolean;
+      /** Custom submitter (e.g. comparison/sweep endpoints); overrides the
+       *  task-based dispatch when provided. */
+      run?: (config: Record<string, unknown>) => Promise<RunResponse>;
     },
     ) => {
       setError(null);
@@ -233,15 +244,17 @@ export function useExperiment(): ExperimentState {
       setProgressEvents([]);
 
       try {
-        const res = await (opts?.detection
-          ? runDetection(config)
-          : opts?.regression
-            ? runRegression(config)
-            : opts?.segmentation
-              ? runSegmentation(config)
-              : opts?.anomaly
-                ? runAnomaly(config)
-                : runExperiment(config));
+        const res = await (opts?.run
+          ? opts.run(config)
+          : opts?.detection
+            ? runDetection(config)
+            : opts?.regression
+              ? runRegression(config)
+              : opts?.segmentation
+                ? runSegmentation(config)
+                : opts?.anomaly
+                  ? runAnomaly(config)
+                  : runExperiment(config));
         setStatus({ status: "running", run_id: res.run_id, error: null });
         openEventSource();
         startPolling();

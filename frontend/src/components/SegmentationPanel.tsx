@@ -8,12 +8,21 @@ import {
 } from "../lib/segmentation-models";
 import type { ValidationError } from "../hooks/useExperiment";
 import { NumberField, SelectField, Segmented, TextField, Toggle } from "./controls";
+import { ComparisonCard } from "./ComparisonCard";
+
+const COMPARE_METRICS = [
+  { value: "miou", label: "mIoU" },
+  { value: "dice", label: "Dice" },
+  { value: "pixel_acc", label: "Pixel acc." },
+];
 
 interface SegmentationPanelProps {
   formData: SegmentationForm;
   setFormData: (updater: (prev: SegmentationForm) => SegmentationForm) => void;
   accent: string;
   validationErrors: ValidationError[];
+  busy?: boolean;
+  onCompare?: (modelNames: string[], metric: string) => void;
 }
 
 const sectionLabel: React.CSSProperties = {
@@ -37,6 +46,8 @@ export function SegmentationPanel({
   setFormData,
   accent,
   validationErrors,
+  busy,
+  onCompare,
 }: SegmentationPanelProps) {
   const [picking, setPicking] = useState(false);
 
@@ -292,6 +303,16 @@ export function SegmentationPanel({
           />
         </div>
       </div>
+
+      {onCompare && (
+        <ComparisonCard
+          modelOptions={SEGMENTATION_MODELS}
+          metrics={COMPARE_METRICS}
+          accent={accent}
+          disabled={busy}
+          onCompare={onCompare}
+        />
+      )}
     </div>
   );
 }

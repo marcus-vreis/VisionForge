@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { fetchSchema } from "./api/client";
+import { fetchSchema, runComparison } from "./api/client";
 import { BottomBar } from "./components/BottomBar";
 import type { DeviceSelection } from "./components/DeviceSelector";
 import { Header } from "./components/Header";
@@ -199,6 +199,31 @@ export default function App() {
     await submit(payload);
   };
 
+  // Model comparison (ADR-044) for the standalone tasks: trains the picked
+  // architectures on the same dataset and ranks them. Reuses the overlay (queue
+  // banner) + ResultsView (comparison report); no per-epoch stream.
+  const handleCompare = async (
+    task: "regression" | "segmentation",
+    modelNames: string[],
+    metric: string,
+  ) => {
+    reset();
+    setResultsVisible(false);
+    setOverlayVisible(true);
+    setPipelineSummary([]);
+    setBlockKind("model_comparison");
+    setQueueSize(modelNames.length);
+    const base =
+      task === "regression"
+        ? buildRegressionPayload(regressionForm)
+        : buildSegmentationPayload(segmentationForm);
+    const config = { ...base, device: { kind: device.kind, gpu_ids: device.gpu_ids } };
+    await submit(
+      { config, model_names: modelNames, metric },
+      { run: (p) => runComparison(task, p) },
+    );
+  };
+
   const activeTask = TASKS.find((t) => t.key === activeKey) ?? TASKS[0];
   const showResults = resultsVisible && result !== null;
 
@@ -251,6 +276,10 @@ export default function App() {
             setFormData={setRegressionForm}
             accent={activeTask.accent}
             validationErrors={validationErrors}
+            busy={status.status === "running"}
+            onCompare={(names, metric) =>
+              void handleCompare("regression", names, metric)
+            }
           />
         ) : activeKey === "segmentation" ? (
           <SegmentationPanel
@@ -258,6 +287,10 @@ export default function App() {
             setFormData={setSegmentationForm}
             accent={activeTask.accent}
             validationErrors={validationErrors}
+            busy={status.status === "running"}
+            onCompare={(names, metric) =>
+              void handleCompare("segmentation", names, metric)
+            }
           />
         ) : activeKey === "anomaly" ? (
           <AnomalyPanel

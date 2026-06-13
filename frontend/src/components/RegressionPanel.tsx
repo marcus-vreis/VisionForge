@@ -8,12 +8,22 @@ import {
 } from "../lib/regression-models";
 import type { ValidationError } from "../hooks/useExperiment";
 import { NumberField, SelectField, Segmented, TextField, Toggle } from "./controls";
+import { ComparisonCard } from "./ComparisonCard";
+
+const COMPARE_METRICS = [
+  { value: "r2", label: "R²" },
+  { value: "rmse", label: "RMSE" },
+  { value: "mae", label: "MAE" },
+  { value: "mse", label: "MSE" },
+];
 
 interface RegressionPanelProps {
   formData: RegressionForm;
   setFormData: (updater: (prev: RegressionForm) => RegressionForm) => void;
   accent: string;
   validationErrors: ValidationError[];
+  busy?: boolean;
+  onCompare?: (modelNames: string[], metric: string) => void;
 }
 
 const sectionLabel: React.CSSProperties = {
@@ -37,6 +47,8 @@ export function RegressionPanel({
   setFormData,
   accent,
   validationErrors,
+  busy,
+  onCompare,
 }: RegressionPanelProps) {
   const [picking, setPicking] = useState(false);
 
@@ -292,6 +304,16 @@ export function RegressionPanel({
           />
         </div>
       </div>
+
+      {onCompare && (
+        <ComparisonCard
+          modelOptions={REGRESSION_MODELS}
+          metrics={COMPARE_METRICS}
+          accent={accent}
+          disabled={busy}
+          onCompare={onCompare}
+        />
+      )}
     </div>
   );
 }

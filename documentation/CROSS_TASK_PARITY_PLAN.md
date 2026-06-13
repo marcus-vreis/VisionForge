@@ -91,12 +91,14 @@ splitting, export graph) and don't generalise cleanly.
      `RegressionRunner`/`SegmentationRunner` adapters + tests.
    - ✅ slice 2b API: `POST /api/{regression,segmentation}/compare` (background
      run over the shared single-run state, ranked report via `/experiment/result`).
-   - ⏳ slice 2c GUI: comparison panel in the regression/segmentation tabs.
-     Deferred until the planned frontend reformulation so the panel isn't reworked.
+   - ✅ slice 2c GUI: `ComparisonCard` in the regression/segmentation tabs
+     (pick archs + ranking metric → `/compare`), `TaskComparisonReport` renders
+     the ranked table in `ResultsView`.
 3. **Batch prediction generic** — regression/segmentation/detection/anomaly.
 4. **Generic sweep** (grid/random) over the handle.
    - ✅ backend (ADR-045): `core/sweep.run_sweep` + `POST /api/{regression,
      segmentation}/sweep` + tests. Same search-space grammar as classification.
+   - ⏳ GUI: sweep panel (search-space editor) in the regression/segmentation tabs.
    - ⏳ GUI: sweep panel (lands with the comparison panel on the new design).
 5. **Per-task**: transfer-learning knobs (regression/segmentation), then CV,
    then ONNX export. Each its own ADR if it changes a config surface.
