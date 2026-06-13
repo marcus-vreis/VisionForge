@@ -565,3 +565,28 @@ ship host kernel components. Recorded as **Proposed**; `doctor` ships first as a
 self-contained, CPU-CI-testable slice (mock `nvidia-smi`), the image second.
 
 Slice 1 (`visionforge doctor` command + full test coverage) shipped 2026-06; the Docker image (slice 2) remains planned.
+
+## ADR-043 — Detection runs surface the full YOLO metric set and a per-epoch history plot
+
+**Date:** 2026-06
+**Status:** Accepted
+**Extends:** ADR-013, ADR-032, ADR-040
+
+**Decision:** A detection run captures and persists the full per-epoch metric
+set Ultralytics already computes — precision, recall, mAP@50, mAP@50-95, and the
+box/cls/dfl loss components for both train and val — in the `epoch_end` SSE event
+and in each `run.json` history row (additive to the ADR-013 contract; existing
+fields keep their meaning). The live overlay renders these detection-native
+metrics instead of the classification loss/accuracy triple. The torchvision
+backend, which has no Ultralytics `results.png`, synthesizes the equivalent
+loss + mAP@50 history chart via `MetricsPlotter.detection_results`, so every
+detection run — both backends — shows charts in the history view.
+
+**Reason:** Detection previously streamed only `box_loss` mirrored onto the
+classification fields (`train_loss`/`val_loss`/`val_accuracy`), so the live log
+and history showed a misleading classification-shaped view and torchvision runs
+showed no plots at all. mAP and the per-component losses are the metrics a
+detection practitioner actually reads; dropping them while the trainer already
+has them in hand is pure loss of signal. Capturing them is free (they sit on
+`trainer.metrics`), and surfacing them closes the "detection runs look empty in
+history" gap without a new dependency or a network round-trip.

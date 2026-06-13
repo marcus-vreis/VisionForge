@@ -24,6 +24,7 @@ from torch.utils.data import DataLoader
 from visionforge.core.detection_data import DetectionDataModule, resolve_yolo_split
 from visionforge.core.detection_dataset import DetectionDataset, detection_collate
 from visionforge.core.detection_metrics import mean_average_precision_50
+from visionforge.core.plotter import MetricsPlotter
 from visionforge.models.detection_factory import build_torchvision_detector
 from visionforge.utils.detection_config import DetectionConfig
 from visionforge.utils.environment import capture_environment
@@ -36,20 +37,47 @@ except ImportError:  # pragma: no cover - exercised via monkeypatch in tests
 # Module global so tests can patch it without ultralytics installed.
 YOLO: Any = _YOLO
 
-# Ultralytics metric keys, with the leading "metrics/" namespace it uses.
+# Ultralytics exposes its per-epoch metrics on ``trainer.metrics`` with these
+# namespaced keys. Validation losses come as ``val/<component>_loss`` and the
+# training losses as ``train/<component>_loss``.
 _MAP50_KEY = "metrics/mAP50(B)"
 _MAP5095_KEY = "metrics/mAP50-95(B)"
+_PRECISION_KEY = "metrics/precision(B)"
+_RECALL_KEY = "metrics/recall(B)"
 _BOXLOSS_KEY = "val/box_loss"
+_VAL_LOSS_KEYS = {
+    "val_box_loss": "val/box_loss",
+    "val_cls_loss": "val/cls_loss",
+    "val_dfl_loss": "val/dfl_loss",
+}
+_TRAIN_LOSS_KEYS = {
+    "train_box_loss": "train/box_loss",
+    "train_cls_loss": "train/cls_loss",
+    "train_dfl_loss": "train/dfl_loss",
+}
 
 
 @dataclass
 class DetectionEpochResult:
-    """One epoch's detection metrics."""
+    """One epoch's detection metrics.
+
+    ``box_loss`` is the validation box loss kept for best-epoch fallback and
+    backward compatibility; the namespaced loss components and precision/recall
+    are populated by the Ultralytics backend (``None`` for torchvision).
+    """
 
     epoch: int
     map50: float | None
     map50_95: float | None
     box_loss: float | None
+    precision: float | None = None
+    recall: float | None = None
+    train_box_loss: float | None = None
+    train_cls_loss: float | None = None
+    train_dfl_loss: float | None = None
+    val_box_loss: float | None = None
+    val_cls_loss: float | None = None
+    val_dfl_loss: float | None = None
 
 
 @dataclass
@@ -74,6 +102,52 @@ def _extract(metrics: dict[str, Any], key: str) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _first_present(*values: float | None, default: float) -> float:
+    """Return the first non-None value, else ``default``."""
+    for value in values:
+        if value is not None:
+            return value
+    return default
+
+
+def _epoch_event(
+    result: DetectionEpochResult,
+    total_epochs: int,
+    *,
+    train_loss: float | None = None,
+    val_loss: float | None = None,
+) -> dict[str, Any]:
+    """Build the SSE ``epoch_end`` payload for one detection epoch.
+
+    Carries the detection-native metrics plus the generic
+    train_loss/val_loss/val_accuracy the shared overlay reads, so the live
+    monitor degrades cleanly when a field is absent (torchvision, early epochs).
+    """
+    return {
+        "event": "epoch_end",
+        "epoch": result.epoch,
+        "total_epochs": total_epochs,
+        "map50": result.map50,
+        "map50_95": result.map50_95,
+        "precision": result.precision,
+        "recall": result.recall,
+        "box_loss": result.box_loss,
+        "train_box_loss": result.train_box_loss,
+        "train_cls_loss": result.train_cls_loss,
+        "train_dfl_loss": result.train_dfl_loss,
+        "val_box_loss": result.val_box_loss,
+        "val_cls_loss": result.val_cls_loss,
+        "val_dfl_loss": result.val_dfl_loss,
+        "train_loss": _first_present(
+            train_loss, result.train_box_loss, result.box_loss, default=0.0
+        ),
+        "val_loss": _first_present(
+            val_loss, result.val_box_loss, result.box_loss, default=0.0
+        ),
+        "val_accuracy": _first_present(result.map50_95, result.map50, default=0.0),
+    }
 
 
 class DetectionTrainer:
@@ -129,24 +203,23 @@ class DetectionTrainer:
             map50 = _extract(metrics, _MAP50_KEY)
             map95 = _extract(metrics, _MAP5095_KEY)
             box_loss = _extract(metrics, _BOXLOSS_KEY)
-            history.append(DetectionEpochResult(epoch, map50, map95, box_loss))
+            train_losses = {
+                k: _extract(metrics, v) for k, v in _TRAIN_LOSS_KEYS.items()
+            }
+            val_losses = {k: _extract(metrics, v) for k, v in _VAL_LOSS_KEYS.items()}
+            result = DetectionEpochResult(
+                epoch=epoch,
+                map50=map50,
+                map50_95=map95,
+                box_loss=box_loss,
+                precision=_extract(metrics, _PRECISION_KEY),
+                recall=_extract(metrics, _RECALL_KEY),
+                **train_losses,
+                **val_losses,
+            )
+            history.append(result)
             if progress_callback is not None:
-                progress_callback(
-                    {
-                        "event": "epoch_end",
-                        "epoch": epoch,
-                        "total_epochs": cfg.epochs,
-                        "map50": map50,
-                        "map50_95": map95,
-                        "box_loss": box_loss,
-                        # Mirror the classification overlay's required fields so
-                        # the live monitor renders detection runs unchanged until
-                        # the GUI brick adds detection-specific display.
-                        "train_loss": box_loss if box_loss is not None else 0.0,
-                        "val_loss": box_loss if box_loss is not None else 0.0,
-                        "val_accuracy": map95 if map95 is not None else 0.0,
-                    }
-                )
+                progress_callback(_epoch_event(result, cfg.epochs))
 
         model.add_callback("on_fit_epoch_end", _on_epoch_end)
         logger.info(
@@ -214,6 +287,7 @@ class DetectionTrainer:
         train_loader, val_loader = self._build_loaders(self._config.data.base_dir)
 
         history: list[DetectionEpochResult] = []
+        train_losses: list[float | None] = []
         best_map = -1.0
         best_epoch = 0
 
@@ -239,11 +313,15 @@ class DetectionTrainer:
             val_loss = self._eval_torchvision_loss(model, val_loader, device)
             map50 = self._eval_torchvision_map(model, val_loader, device)
 
-            history.append(
-                DetectionEpochResult(
-                    epoch=epoch, map50=map50, map50_95=None, box_loss=val_loss
-                )
+            epoch_result = DetectionEpochResult(
+                epoch=epoch,
+                map50=map50,
+                map50_95=None,
+                box_loss=val_loss,
+                val_box_loss=val_loss,
             )
+            history.append(epoch_result)
+            train_losses.append(train_loss)
             # Select by validation mAP@50 (higher is better).
             if map50 > best_map:
                 best_map = map50
@@ -252,21 +330,20 @@ class DetectionTrainer:
 
             if progress_callback is not None:
                 progress_callback(
-                    {
-                        "event": "epoch_end",
-                        "epoch": epoch,
-                        "total_epochs": cfg.epochs,
-                        "map50": map50,
-                        "map50_95": None,
-                        "box_loss": val_loss,
-                        "train_loss": train_loss,
-                        "val_loss": val_loss,
-                        "val_accuracy": map50,
-                    }
+                    _epoch_event(
+                        epoch_result,
+                        cfg.epochs,
+                        train_loss=train_loss,
+                        val_loss=val_loss,
+                    )
                 )
 
         if not model_path.exists():  # epochs=0 guard
             torch.save(model.state_dict(), model_path)
+
+        # torchvision has no Ultralytics results.png, so synthesize the same
+        # loss + mAP history chart the GUI shows for YOLO runs.
+        self._render_torchvision_plot(run_dir, history, train_losses)
 
         result = DetectionTrainResult(
             best_epoch=best_epoch,
@@ -522,6 +599,23 @@ class DetectionTrainer:
         run_dir.mkdir(parents=True, exist_ok=False)
         return run_dir
 
+    def _render_torchvision_plot(
+        self,
+        run_dir: Path,
+        history: list[DetectionEpochResult],
+        train_losses: list[float | None],
+    ) -> None:
+        """Write a results.png (loss + mAP@50 over epochs) for a torchvision run."""
+        if not history:
+            return
+        MetricsPlotter.detection_results(
+            epochs=[h.epoch for h in history],
+            train_losses=train_losses,
+            val_losses=[h.box_loss for h in history],
+            map50s=[h.map50 for h in history],
+            save_path=run_dir / "results.png",
+        )
+
     def _write_run_json(self, run_dir: Path, result: DetectionTrainResult) -> None:
         graphics = [
             str(run_dir / p)
@@ -533,6 +627,7 @@ class DetectionTrainer:
             )
             if (run_dir / p).exists()
         ]
+        best = next((h for h in result.history if h.epoch == result.best_epoch), None)
         run_json: dict[str, Any] = {
             "id": f"{self._config.name}_{run_dir.name}",
             "experiment": self._config.name,
@@ -544,18 +639,10 @@ class DetectionTrainer:
             "config": self._config.model_dump(mode="json"),
             "metrics": {
                 "map50_95": result.best_map50_95,
-                "map50": next(
-                    (h.map50 for h in result.history if h.epoch == result.best_epoch),
-                    None,
-                ),
-                "box_loss": next(
-                    (
-                        h.box_loss
-                        for h in result.history
-                        if h.epoch == result.best_epoch
-                    ),
-                    None,
-                ),
+                "map50": best.map50 if best else None,
+                "precision": best.precision if best else None,
+                "recall": best.recall if best else None,
+                "box_loss": best.box_loss if best else None,
                 "best_epoch": result.best_epoch,
                 "total_epochs": result.total_epochs,
             },
@@ -564,7 +651,15 @@ class DetectionTrainer:
                     "epoch": h.epoch,
                     "map50": h.map50,
                     "map50_95": h.map50_95,
+                    "precision": h.precision,
+                    "recall": h.recall,
                     "box_loss": h.box_loss,
+                    "train_box_loss": h.train_box_loss,
+                    "train_cls_loss": h.train_cls_loss,
+                    "train_dfl_loss": h.train_dfl_loss,
+                    "val_box_loss": h.val_box_loss,
+                    "val_cls_loss": h.val_cls_loss,
+                    "val_dfl_loss": h.val_dfl_loss,
                 }
                 for h in result.history
             ],

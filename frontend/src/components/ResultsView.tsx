@@ -46,6 +46,9 @@ const METRIC_LABELS: Record<string, string> = {
   // Detection metrics.
   map50: "mAP@50",
   map50_95: "mAP@50-95",
+  precision: "Precision (box)",
+  recall: "Recall (box)",
+  box_loss: "Box loss (val)",
 };
 
 interface MetricCardProps {
