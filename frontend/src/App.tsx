@@ -357,6 +357,7 @@ export default function App() {
           progressEvents={progressEvents}
           taskAccent={activeTask.accent}
           taskLabel={activeTask.label}
+          taskKey={activeKey}
           pipelineSummary={pipelineSummary}
           blockKind={blockKind}
           queueSize={queueSize}

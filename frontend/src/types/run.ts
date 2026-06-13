@@ -60,9 +60,22 @@ export type TrainingEvent =
       train_loss: number;
       val_loss: number;
       val_accuracy: number;
-      elapsed_s: number;
+      elapsed_s?: number;
       trial_index?: number;
       total_trials?: number;
+      // Detection-specific metrics (present only on detection runs). All
+      // optional so the shared overlay degrades cleanly for other tasks.
+      map50?: number | null;
+      map50_95?: number | null;
+      precision?: number | null;
+      recall?: number | null;
+      box_loss?: number | null;
+      train_box_loss?: number | null;
+      train_cls_loss?: number | null;
+      train_dfl_loss?: number | null;
+      val_box_loss?: number | null;
+      val_cls_loss?: number | null;
+      val_dfl_loss?: number | null;
     }
   | {
       event: "trial_end";
