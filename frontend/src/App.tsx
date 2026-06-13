@@ -35,7 +35,6 @@ import { ResultsView } from "./components/ResultsView";
 import { TabBar } from "./components/TabBar";
 import { TaskHero } from "./components/TaskHero";
 import { TrainingOverlay } from "./components/TrainingOverlay";
-import { Waves, Particles } from "./components/Waves";
 import { useExperiment } from "./hooks/useExperiment";
 import type { JsonSchema } from "./types/schema";
 import { TASKS } from "./types/tasks";
@@ -211,35 +210,10 @@ export default function App() {
         minHeight: "100vh",
         position: "relative",
         overflow: "hidden",
-        background:
-          `radial-gradient(1100px 600px at 80% -10%, oklch(0.20 0.04 260 / 0.30), transparent 60%),` +
-          `radial-gradient(900px 500px at -10% 110%, var(--accent-soft), transparent 60%),` +
-          `var(--vf-bg)`,
-        transition: "background 600ms ease",
         fontFamily: "var(--font-sans)",
         color: "var(--vf-text)",
       }}
     >
-      {/* Decorative background promoted to its own compositor layer so the
-          static waves/particles paint once and the backdrop-filter panels
-          above don't drag it through a repaint on every scroll. */}
-      <div
-        aria-hidden
-        style={{
-          position: "absolute",
-          inset: 0,
-          zIndex: 0,
-          pointerEvents: "none",
-          isolation: "isolate",
-          transform: "translateZ(0)",
-          willChange: "transform",
-          contain: "layout paint",
-        }}
-      >
-        <Waves />
-        <Particles />
-      </div>
-
       <Header />
 
       <TabBar tasks={TASKS} activeKey={activeKey} setActiveKey={setActiveKey} />
