@@ -42,6 +42,23 @@ function FilterChip({
   );
 }
 
+/** Inline caption preceding a group of filter chips. */
+function FilterLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <span
+      style={{
+        fontFamily: "var(--font-mono)",
+        fontSize: 9,
+        letterSpacing: "0.16em",
+        textTransform: "uppercase",
+        color: "var(--vf-text-muted)",
+      }}
+    >
+      {children}
+    </span>
+  );
+}
+
 /** Color accent per task type, mirroring the VisionForge oklch palette. */
 const TASK_ACCENT: Record<string, string> = {
   classification: "oklch(0.74 0.18 22)",
@@ -84,6 +101,15 @@ const METRIC_KEYS_BY_TASK: Record<string, string[]> = {
 const METRIC_LABELS: Record<string, string> = {
   map50: "mAP@50",
   map50_95: "mAP@50-95",
+};
+
+/** Ordering options for the run list. */
+type SortKey = "recent" | "oldest" | "epochs";
+
+const SORT_LABELS: Record<SortKey, string> = {
+  recent: "mais recente",
+  oldest: "mais antigo",
+  epochs: "mais épocas",
 };
 
 /** One run card inside the history list. */
@@ -392,6 +418,9 @@ export function HistoryOverlay({ open, onClose, onCountChange }: HistoryOverlayP
   const [compareActiveIds, setCompareActiveIds] = useState<string[] | null>(null);
   const [query, setQuery] = useState("");
   const [taskFilter, setTaskFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [blockFilter, setBlockFilter] = useState<string>("all");
+  const [sortBy, setSortBy] = useState<SortKey>("recent");
   const [pendingDelete, setPendingDelete] = useState<RunSummary | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -406,6 +435,9 @@ export function HistoryOverlay({ open, onClose, onCountChange }: HistoryOverlayP
     setCompareActiveIds(null);
     setQuery("");
     setTaskFilter("all");
+    setStatusFilter("all");
+    setBlockFilter("all");
+    setSortBy("recent");
     fetchRuns()
       .then((data) => {
         setRuns(data);
@@ -448,13 +480,16 @@ export function HistoryOverlay({ open, onClose, onCountChange }: HistoryOverlayP
     }
   };
 
-  // Client-side filter — keeps the list responsive even with hundreds of runs.
-  // Search is case-insensitive and matches against experiment name OR arch.
+  // Client-side filter + sort — keeps the list responsive even with hundreds of
+  // runs. Search is case-insensitive and matches experiment name, arch or run_id.
   const filteredRuns = (() => {
     if (runs.length === 0) return runs;
     const q = query.trim().toLowerCase();
-    return runs.filter((r) => {
+    const matches = runs.filter((r) => {
       if (taskFilter !== "all" && r.task !== taskFilter) return false;
+      if (statusFilter !== "all" && r.status !== statusFilter) return false;
+      if (blockFilter !== "all" && (r.block ?? "classification") !== blockFilter)
+        return false;
       if (q === "") return true;
       return (
         r.experiment_name.toLowerCase().includes(q) ||
@@ -462,9 +497,27 @@ export function HistoryOverlay({ open, onClose, onCountChange }: HistoryOverlayP
         r.run_id.toLowerCase().includes(q)
       );
     });
+    const sorted = [...matches];
+    if (sortBy === "oldest") {
+      sorted.sort((a, b) => a.started_at.localeCompare(b.started_at));
+    } else if (sortBy === "epochs") {
+      sorted.sort((a, b) => b.epochs_completed - a.epochs_completed);
+    } else {
+      sorted.sort((a, b) => b.started_at.localeCompare(a.started_at));
+    }
+    return sorted;
   })();
 
   const availableTasks = Array.from(new Set(runs.map((r) => r.task))).sort();
+  const availableStatuses = Array.from(new Set(runs.map((r) => r.status))).sort();
+  const availableBlocks = Array.from(
+    new Set(runs.map((r) => r.block ?? "classification")),
+  ).sort();
+  const activeFilterCount =
+    (query !== "" ? 1 : 0) +
+    (taskFilter !== "all" ? 1 : 0) +
+    (statusFilter !== "all" ? 1 : 0) +
+    (blockFilter !== "all" ? 1 : 0);
 
   if (!open) return null;
 
@@ -837,7 +890,7 @@ export function HistoryOverlay({ open, onClose, onCountChange }: HistoryOverlayP
                   ))}
                 </div>
               )}
-              {(query !== "" || taskFilter !== "all") && (
+              {activeFilterCount > 0 && (
                 <span
                   style={{
                     fontFamily: "var(--font-mono)",
@@ -849,6 +902,86 @@ export function HistoryOverlay({ open, onClose, onCountChange }: HistoryOverlayP
                   {filteredRuns.length} / {runs.length}
                 </span>
               )}
+            </div>
+          )}
+
+          {/* Status / block / sort row — finer filters to find a specific run. */}
+          {!selectedRunId && !compareActiveIds && !loading && error === null && runs.length > 0 && (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                marginBottom: 12,
+                flexWrap: "wrap",
+              }}
+            >
+              {availableStatuses.length > 1 && (
+                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                  <FilterLabel>status</FilterLabel>
+                  <FilterChip
+                    label="todos"
+                    active={statusFilter === "all"}
+                    onClick={() => setStatusFilter("all")}
+                  />
+                  {availableStatuses.map((s) => (
+                    <FilterChip
+                      key={s}
+                      label={s}
+                      active={statusFilter === s}
+                      onClick={() => setStatusFilter(s)}
+                    />
+                  ))}
+                </div>
+              )}
+              {availableBlocks.length > 1 && (
+                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                  <FilterLabel>bloco</FilterLabel>
+                  <FilterChip
+                    label="todos"
+                    active={blockFilter === "all"}
+                    onClick={() => setBlockFilter("all")}
+                  />
+                  {availableBlocks.map((b) => (
+                    <FilterChip
+                      key={b}
+                      label={b}
+                      active={blockFilter === b}
+                      onClick={() => setBlockFilter(b)}
+                    />
+                  ))}
+                </div>
+              )}
+              <div
+                style={{
+                  marginLeft: "auto",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                <FilterLabel>ordenar</FilterLabel>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as SortKey)}
+                  style={{
+                    padding: "6px 10px",
+                    background: "rgba(0,0,0,0.35)",
+                    border: "1px solid var(--vf-panel-stroke)",
+                    borderRadius: 8,
+                    color: "var(--vf-text)",
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 11,
+                    cursor: "pointer",
+                  }}
+                >
+                  {(Object.keys(SORT_LABELS) as SortKey[]).map((k) => (
+                    <option key={k} value={k}>
+                      {SORT_LABELS[k]}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
           )}
 
