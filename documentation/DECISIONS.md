@@ -590,3 +590,32 @@ detection practitioner actually reads; dropping them while the trainer already
 has them in hand is pure loss of signal. Capturing them is free (they sit on
 `trainer.metrics`), and surfacing them closes the "detection runs look empty in
 history" gap without a new dependency or a network round-trip.
+
+## ADR-044 — Generic model comparison over the TaskRunner handle
+
+**Date:** 2026-06
+**Status:** Accepted
+**Extends:** ADR-041
+
+**Decision:** Model comparison (train N architectures on one dataset, rank them)
+is a task-agnostic function — `core/comparison.run_model_comparison(runner,
+base_config_dict, model_names, metric)` — that drives any `TaskRunner` and ranks
+by the metric the runner declares, never by hard-coded classification names. Each
+task exposes a thin adapter next to its block (`blocks/<task>_runner.py`)
+carrying `config_type`, `run`, `metrics`, and `primary_metric`; regression
+(`r2`) and segmentation (`miou`) ship first. The comparison overrides only
+`model.name` per trial — the one field every task config shares — so it needs no
+knowledge of task internals. The existing classification `ModelComparisonBlock`
+is left as-is for now (it is GUI-wired with classification-shaped report columns);
+unifying it onto the generic path is a later, behaviour-neutral cleanup.
+
+**Reason:** Slice 1 (ADR-041) added the handle but the comparison orchestrator
+still hard-coded `accuracy`/`f1`/`auc_roc` and instantiated `ClassificationBlock`,
+so it couldn't rank a regression or segmentation sweep. Pulling the
+*run-N-and-rank* logic into a function over the handle is the cheapest way to
+give the standalone tasks comparison without folding them into `ExperimentConfig`
+(which ADR-033 forbids) — task-specific metric names stay in each adapter, the
+shared orchestration is written once. `r2`/`miou` are the natural ranking
+defaults (higher-is-better, like accuracy) so the descending sort is uniform.
+Backend-first per the Phase-5 norm; the GUI surface and the generic sweep/
+batch-predict are the next ADR-041 slices.

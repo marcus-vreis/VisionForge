@@ -40,6 +40,8 @@ class TestRunResult:
 class _FakeRunner:
     """Minimal TaskRunner implementation for protocol conformance tests."""
 
+    config_type = dict
+
     def run(self, cfg: object) -> RunResult:  # noqa: ARG002
         return RunResult(
             metrics={"score": 1.0}, status="success", training_time_s=0.1, error=""
