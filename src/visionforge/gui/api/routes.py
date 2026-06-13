@@ -5,13 +5,16 @@ from __future__ import annotations
 import asyncio
 import json
 import platform
+from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from loguru import logger
+from pydantic import ValidationError
 
 from visionforge.blocks.anomaly import AnomalyBlock
 from visionforge.blocks.batch_prediction import BatchPredictionBlock
@@ -23,12 +26,16 @@ from visionforge.blocks.grid_search import GridSearchBlock
 from visionforge.blocks.model_comparison import ModelComparisonBlock
 from visionforge.blocks.random_search import RandomSearchBlock
 from visionforge.blocks.regression import RegressionBlock
+from visionforge.blocks.regression_runner import RegressionRunner
 from visionforge.blocks.segmentation import SegmentationBlock
+from visionforge.blocks.segmentation_runner import SegmentationRunner
 from visionforge.blocks.transfer_learning import TransferLearningBlock
+from visionforge.core.comparison import ComparisonTrial, run_model_comparison
 from visionforge.core.data import DataModule
 from visionforge.core.detection_data import resolve_yolo_split
 from visionforge.core.evaluator import Evaluator
 from visionforge.core.plotter import MetricsPlotter
+from visionforge.core.task_runner import TaskRunner
 from visionforge.gui.api.detection_export import export_detection_run
 from visionforge.gui.api.detection_testing import evaluate_detection_run
 from visionforge.gui.api.schemas import (
@@ -37,6 +44,7 @@ from visionforge.gui.api.schemas import (
     BatchPredictRequest,
     BatchPredictResponse,
     CheckpointPickResponse,
+    ComparisonRequest,
     DatasetDetectRequest,
     DatasetDetectResponse,
     DatasetPickResponse,
@@ -657,6 +665,18 @@ async def run_anomaly(config: AnomalyConfig) -> RunResponse:
     task.add_done_callback(_background_tasks.discard)
 
     return RunResponse(run_id=run_id)
+
+
+@router.post("/regression/compare")
+async def compare_regression(req: ComparisonRequest) -> RunResponse:
+    """Train N regression backbones on the same dataset and rank them (ADR-044)."""
+    return _start_comparison(req, RegressionConfig, RegressionRunner())
+
+
+@router.post("/segmentation/compare")
+async def compare_segmentation(req: ComparisonRequest) -> RunResponse:
+    """Train N segmentation backbones on the same dataset and rank them (ADR-044)."""
+    return _start_comparison(req, SegmentationConfig, SegmentationRunner())
 
 
 @router.get("/experiment/events")
@@ -2156,6 +2176,102 @@ async def _execute_anomaly(config: AnomalyConfig, run_id: str) -> None:
     finally:
         if queue is not None:
             await queue.put(None)
+
+
+def _start_comparison(
+    req: ComparisonRequest,
+    config_type: type[Any],
+    runner: TaskRunner,
+) -> RunResponse:
+    """Validate the base config and launch a background model-comparison run.
+
+    Raises:
+        HTTPException: 409 if a run is already active.
+        RequestValidationError: 422 if the base task config is invalid.
+    """
+    global _current_run, _event_queue
+
+    if _current_run and _current_run["status"] == "running":
+        raise HTTPException(409, "An experiment is already running.")
+
+    # Fail fast on a bad base config; each trial re-validates with its override.
+    try:
+        config_type.model_validate(req.config)
+    except ValidationError as exc:
+        raise RequestValidationError(exc.errors()) from exc
+
+    metric = req.metric or runner.primary_metric()
+    name = str(req.config.get("name", "comparison"))
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    run_id = f"{name}_{timestamp}"
+
+    _event_queue = asyncio.Queue()
+    _current_run = {
+        "run_id": run_id,
+        "status": "running",
+        "error": None,
+        "report": None,
+        "run_dir": None,
+    }
+
+    task = asyncio.create_task(
+        _execute_comparison(runner, req.config, req.model_names, metric, run_id)
+    )
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+    return RunResponse(run_id=run_id)
+
+
+async def _execute_comparison(
+    runner: TaskRunner,
+    config_dict: dict[str, Any],
+    model_names: list[str],
+    metric: str,
+    run_id: str,
+) -> None:
+    """Run a model comparison in a background thread and store the ranked report."""
+    global _current_run, _event_queue
+    queue = _event_queue
+
+    try:
+        trials = await asyncio.to_thread(
+            run_model_comparison, runner, config_dict, model_names, metric
+        )
+        if not any(t.status == "success" for t in trials):
+            raise RuntimeError("All architectures failed — no ranking available.")
+        _current_run = {
+            "run_id": run_id,
+            "status": "completed",
+            "error": None,
+            "report": _comparison_report(trials, metric),
+            "run_dir": None,
+        }
+        logger.success("GUI: Comparison {} completed ({} archs).", run_id, len(trials))
+    except Exception as e:
+        logger.exception("GUI: Comparison {} failed", run_id)
+        _current_run = {
+            "run_id": run_id,
+            "status": "failed",
+            "error": f"{type(e).__name__}: {e or '(sem mensagem)'}",
+            "report": None,
+            "run_dir": None,
+        }
+    finally:
+        if queue is not None:
+            await queue.put(None)
+
+
+def _comparison_report(trials: list[ComparisonTrial], metric: str) -> dict[str, Any]:
+    """Shape ranked comparison trials into a GUI-friendly report dict."""
+    rows = [asdict(t) for t in trials]
+    successful = [t for t in rows if t["status"] == "success"]
+    return {
+        "metric": metric,
+        "trials": rows,
+        "top_3": successful[:3],
+        "total_ran": len(rows),
+        "failed_count": len(rows) - len(successful),
+    }
 
 
 def _normalize_split_name(name: str) -> str:

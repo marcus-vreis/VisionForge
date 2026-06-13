@@ -107,3 +107,94 @@ class TestRegressionRun:
         client = TestClient(app, raise_server_exceptions=True)
         resp = client.post("/api/regression/run", json=payload)
         assert resp.status_code == 422
+
+
+class TestRegressionCompare:
+    def test_compare_dispatches_and_reports(
+        self, app_and_routes: tuple, tmp_path: Path
+    ) -> None:
+        from visionforge.core.comparison import ComparisonTrial
+
+        app, routes_mod = app_and_routes
+        routes_mod._current_run = None
+
+        def fake_compare(runner, config_dict, model_names, metric):  # type: ignore[no-untyped-def]
+            return [
+                ComparisonTrial(
+                    "resnet50", "success", {"r2": 0.9}, training_time_s=2.0
+                ),
+                ComparisonTrial(
+                    "resnet18", "success", {"r2": 0.7}, training_time_s=1.0
+                ),
+            ]
+
+        orig = routes_mod.run_model_comparison
+        routes_mod.run_model_comparison = fake_compare
+        try:
+            client = TestClient(app, raise_server_exceptions=True)
+            payload = {
+                "config": _payload(tmp_path),
+                "model_names": ["resnet18", "resnet50"],
+                "metric": "r2",
+            }
+            resp = client.post("/api/regression/compare", json=payload)
+            assert resp.status_code == 200, resp.text
+            run_id = resp.json()["run_id"]
+
+            status = {"status": "running"}
+            for _ in range(50):
+                status = client.get("/api/experiment/status").json()
+                if status["status"] in ("completed", "failed"):
+                    break
+                time.sleep(0.05)
+            assert status["status"] == "completed", status
+
+            report = client.get(f"/api/experiment/result/{run_id}").json()["report"]
+            assert report["metric"] == "r2"
+            assert report["total_ran"] == 2
+            assert report["failed_count"] == 0
+            assert report["top_3"][0]["model_arch"] == "resnet50"
+        finally:
+            routes_mod.run_model_comparison = orig
+            routes_mod._current_run = None
+
+    def test_compare_conflict_when_already_running(
+        self, app_and_routes: tuple, tmp_path: Path
+    ) -> None:
+        app, routes_mod = app_and_routes
+        routes_mod._current_run = {"run_id": "x", "status": "running"}
+        try:
+            client = TestClient(app, raise_server_exceptions=True)
+            resp = client.post(
+                "/api/regression/compare",
+                json={"config": _payload(tmp_path), "model_names": ["a", "b"]},
+            )
+            assert resp.status_code == 409
+        finally:
+            routes_mod._current_run = None
+
+    def test_compare_rejects_invalid_config(
+        self, app_and_routes: tuple, tmp_path: Path
+    ) -> None:
+        app, routes_mod = app_and_routes
+        routes_mod._current_run = None
+        cfg = _payload(tmp_path)
+        cfg["model"] = {"name": "resnet18", "num_targets": 2, "pretrained": False}
+        client = TestClient(app, raise_server_exceptions=True)
+        resp = client.post(
+            "/api/regression/compare",
+            json={"config": cfg, "model_names": ["resnet18", "resnet50"]},
+        )
+        assert resp.status_code == 422
+
+    def test_compare_requires_two_models(
+        self, app_and_routes: tuple, tmp_path: Path
+    ) -> None:
+        app, routes_mod = app_and_routes
+        routes_mod._current_run = None
+        client = TestClient(app, raise_server_exceptions=True)
+        resp = client.post(
+            "/api/regression/compare",
+            json={"config": _payload(tmp_path), "model_names": ["resnet18"]},
+        )
+        assert resp.status_code == 422

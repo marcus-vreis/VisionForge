@@ -89,7 +89,10 @@ splitting, export graph) and don't generalise cleanly.
    classification) via the generic runner.
    - ✅ slice 2a (backend, ADR-044): `core/comparison.run_model_comparison` +
      `RegressionRunner`/`SegmentationRunner` adapters + tests.
-   - ⏳ slice 2b: API endpoints + GUI surface mirroring the comparison panel.
+   - ✅ slice 2b API: `POST /api/{regression,segmentation}/compare` (background
+     run over the shared single-run state, ranked report via `/experiment/result`).
+   - ⏳ slice 2c GUI: comparison panel in the regression/segmentation tabs.
+     Deferred until the planned frontend reformulation so the panel isn't reworked.
 3. **Batch prediction generic** — regression/segmentation/detection/anomaly.
 4. **Generic sweep** (grid/random) over the handle — start with regression.
 5. **Per-task**: transfer-learning knobs (regression/segmentation), then CV,
