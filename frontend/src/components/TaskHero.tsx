@@ -80,7 +80,7 @@ export function TaskHero({ task, baseDir }: TaskHeroProps) {
             letterSpacing: "-0.025em",
             margin: "8px 0 6px",
             lineHeight: 1.05,
-            fontFamily: "var(--font-sans)",
+            fontFamily: "var(--font-display)",
           }}
         >
           {words.map((w, i) =>

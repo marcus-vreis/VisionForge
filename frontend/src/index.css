@@ -1,17 +1,19 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import "@fontsource-variable/space-grotesk";
-@import "@fontsource/jetbrains-mono/400.css";
-@import "@fontsource/jetbrains-mono/500.css";
-@import "@fontsource/jetbrains-mono/600.css";
+@import "@fontsource-variable/bricolage-grotesque/wght.css";
+@import "@fontsource-variable/familjen-grotesk/wght.css";
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource/ibm-plex-mono/500.css";
+@import "@fontsource/ibm-plex-mono/600.css";
 
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+    --font-display: 'Bricolage Grotesque Variable', 'Bricolage Grotesque', var(--font-sans);
     --font-heading: var(--font-sans);
-    --font-sans: 'Space Grotesk Variable', 'Space Grotesk', system-ui, -apple-system, sans-serif;
-    --font-mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+    --font-sans: 'Familjen Grotesk Variable', 'Familjen Grotesk', system-ui, -apple-system, sans-serif;
+    --font-mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
 
     /* Tailwind color mappings — delegate to CSS custom properties */
     --color-sidebar-ring: var(--sidebar-ring);
@@ -58,6 +60,7 @@
     --vf-text:         #e7e9ee;
     --vf-text-dim:     #9aa0ad;
     --vf-text-muted:   #5a6070;
+    --vf-grid-line:    rgba(255, 255, 255, 0.022);
 
     /* Default accent (overridden per task) */
     --accent-vf:       oklch(0.72 0.18 25);
@@ -124,16 +127,37 @@
 }
 
 /* ============================================================
+   Blueprint grid background + per-task ambient glow + grain.
+   Replaces the animated wave/particle SVG layer with a static,
+   instrument-console backdrop (lives on .stage so the per-task
+   accent glow resolves from the [data-task] tokens above).
+   ============================================================ */
+.stage {
+    background-color: var(--vf-bg);
+    background-image:
+        linear-gradient(var(--vf-grid-line) 1px, transparent 1px),
+        linear-gradient(90deg, var(--vf-grid-line) 1px, transparent 1px),
+        radial-gradient(1000px 560px at 88% -8%, var(--accent-soft), transparent 64%),
+        radial-gradient(820px 480px at -8% 108%, oklch(0.18 0.03 260 / 0.35), transparent 60%);
+    background-size: 34px 34px, 34px 34px, 100% 100%, 100% 100%;
+    background-attachment: fixed;
+    transition: background-image 600ms ease;
+}
+
+/* Subtle film grain for depth (static, GPU-cheap). */
+.stage::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    opacity: 0.035;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ============================================================
    Keyframes
    ============================================================ */
-@keyframes drift {
-    0%   { transform: translate3d(0, 0, 0); }
-    100% { transform: translate3d(-25%, 0, 0); }
-}
-@keyframes drift2 {
-    0%   { transform: translate3d(0, 0, 0); }
-    100% { transform: translate3d(-33%, 0, 0); }
-}
 @keyframes pulse-dot {
     0%, 100% { opacity: 1; transform: scale(1); }
     50%       { opacity: 0.55; transform: scale(0.92); }
@@ -202,11 +226,11 @@
     button { font-family: inherit; color: inherit; cursor: pointer; }
     input, select { font-family: inherit; color: inherit; }
 
-    /* Custom scrollbars */
-    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    /* Custom scrollbars — squared, instrument-console style */
+    ::-webkit-scrollbar { width: 9px; height: 9px; }
     ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 999px; }
-    ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.16); }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.09); border-radius: 0; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--accent-vf); }
 
     /* Selection */
     ::selection { background: var(--accent-soft); color: var(--vf-text); }
