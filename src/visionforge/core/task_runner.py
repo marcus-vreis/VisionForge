@@ -22,6 +22,10 @@ class TaskRunner(Protocol):
     predict are deferred to later slices.
     """
 
+    config_type: type[Any]
+    """The task's Pydantic config class — lets a generic orchestrator validate a
+    per-trial config dict without knowing which task it is."""
+
     def run(self, cfg: Any) -> RunResult:
         """Execute one full training run and return a uniform result."""
         ...
