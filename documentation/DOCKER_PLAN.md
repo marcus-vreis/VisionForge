@@ -1,10 +1,9 @@
 # Docker + `visionforge doctor` — analysis & plan
 
-> Status: **planning / spec for the agent team**. Decision recorded in
-> **ADR-042**. No code yet — this doc is the design Claude Code analyses and
-> implements. It deliberately stays inside the local-only philosophy: this is
-> about *removing install friction and making runs reproducible*, not about
-> turning VisionForge into a cloud service.
+> Status: **Part 1 (`visionforge doctor`) shipped** (ADR-042 slice 1);
+> **Part 2 (Docker image) is still planned**. It deliberately stays inside the
+> local-only philosophy: this is about *removing install friction and making
+> runs reproducible*, not about turning VisionForge into a cloud service.
 
 ## Problem
 
@@ -24,9 +23,10 @@ single local GPU this is complexity with no payoff — problem-driven tooling, n
 resume-driven. If multi-job queueing on one machine is ever wanted, a lightweight
 job queue (RQ/SQLite) is the right tool, not k8s.
 
-## Part 1 — `visionforge doctor` (ship first; small, high value)
+## Part 1 — `visionforge doctor` ✅ shipped
 
-A new CLI subcommand: `visionforge doctor`.
+A CLI subcommand: `visionforge doctor` (logic in `utils/doctor.py`, subparser in
+`__main__.py`).
 
 Behaviour:
 - Detect GPU + driver via `nvidia-smi` (parse "CUDA Version: 12.x" from its

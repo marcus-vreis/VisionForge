@@ -90,6 +90,8 @@ chore/<description>             # tooling / config
 
 When a decision is made (framework, library, pattern), document the decision — not a comparison of alternatives. If the decision changes, update the doc to reflect the new reality. Documentation and code must always agree.
 
+Docs and comments describe the **current state and its rationale**, never the edit history. Write "X uses Y because Z", not "changed X from W to Y" or "swapped W for Y". Change history lives in git and the commit message; a doc that narrates its own diffs rots fast and adds no signal to the reader.
+
 ## Pre-commit hooks
 
 Install once after cloning:
@@ -116,11 +118,24 @@ Hooks that run on every `git commit`:
 
 ## Adding a new task (Detection, Segmentation, etc.)
 
-1. Add Pydantic config models in `src/visionforge/configs/schemas/<task>_config.py`
-2. Add task-specific blocks in `src/visionforge/blocks/<task>/`
-3. Add a trainer in `src/visionforge/core/<task>_trainer.py`
-4. Add frontend components as needed in `frontend/src/`
-5. Rebuild the frontend: `cd frontend && npm run build`
+Every task after classification is **standalone** (ADR-033/036/037/038): it adds
+new modules and never edits an existing task's code or folds into
+`ExperimentConfig`. The brick sequence:
+
+1. `<Task>Config` Pydantic tree in `src/visionforge/utils/<task>_config.py` (reuse
+   `OutputConfig`/`DeviceConfig`).
+2. `<Task>DataModule` in `src/visionforge/core/<task>_data.py`.
+3. `<Task>ModelFactory` in `src/visionforge/models/<task>_factory.py`.
+4. `<Task>Trainer` in `src/visionforge/core/<task>_trainer.py` (reuse
+   `resolve_device`/`_seed_everything`; write the ADR-013 `run.json`; emit the
+   `start`/`epoch_end`/`end` SSE events).
+5. `<Task>Block` (`setup`/`run`/`report`) in `src/visionforge/blocks/<task>.py`,
+   plus a new ADR for the task.
+6. `/api/<task>/{schema,run}` in `src/visionforge/gui/api/routes.py` (reuse the
+   shared single-run state + `/experiment/{status,events,result}`).
+7. Frontend `<Task>Panel` + `lib/<task>-models.ts`, wired into `App.tsx` /
+   `useExperiment` / `client.ts`.
+8. Rebuild the SPA: `cd frontend && npm run build`.
 
 ## Frontend development
 
