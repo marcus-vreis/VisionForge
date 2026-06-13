@@ -314,6 +314,8 @@ export function ResultsView({ result, onClose, taskAccent }: ResultsViewProps) {
           <CrossValidationReport report={result.report} accent={taskAccent} />
         ) : isTaskComparisonReport(result.report) ? (
           <TaskComparisonReport report={result.report} accent={taskAccent} />
+        ) : isTaskSweepReport(result.report) ? (
+          <TaskSweepReport report={result.report} accent={taskAccent} />
         ) : isModelComparisonReport(result.report) ? (
           <ModelComparisonReport report={result.report} accent={taskAccent} />
         ) : isGridSearchReport(result.report) ? (
@@ -665,6 +667,174 @@ function TaskComparisonReport({
                       {formatMetric(trial.metrics?.[k])}
                     </td>
                   ))}
+                  <td style={cvTdStyle}>
+                    {trial.training_time_s !== null &&
+                    trial.training_time_s !== undefined
+                      ? trial.training_time_s.toFixed(1)
+                      : "—"}
+                  </td>
+                  <td
+                    style={{
+                      ...cvTdStyle,
+                      color: ok ? "oklch(0.85 0.16 150)" : "oklch(0.85 0.14 22)",
+                    }}
+                  >
+                    {ok ? "✓" : `× ${trial.error || "?"}`}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+interface TaskSweepTrial {
+  trial_index: number;
+  overrides: Record<string, unknown>;
+  status: string;
+  metrics: Record<string, number>;
+  training_time_s: number | null;
+  error: string;
+}
+
+/** Standalone-task sweep report (ADR-045): identified by a string `mode`
+ *  (grid/random) plus a `trials` array. */
+function isTaskSweepReport(report: Record<string, unknown>): boolean {
+  return typeof report["mode"] === "string" && Array.isArray(report["trials"]);
+}
+
+function OverrideChips({ overrides }: { overrides: Record<string, unknown> }) {
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+      {Object.entries(overrides).map(([k, v]) => (
+        <span
+          key={k}
+          style={{
+            padding: "3px 8px",
+            background: "rgba(0,0,0,0.30)",
+            border: "1px solid var(--vf-panel-stroke)",
+            borderRadius: 8,
+            fontFamily: "var(--font-mono)",
+            fontSize: 10.5,
+            color: "var(--vf-text)",
+          }}
+        >
+          <span style={{ color: "var(--vf-text-muted)" }}>{k.split(".").at(-1)}=</span>
+          {String(v)}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/** Best trial + ranked table for a regression/segmentation hyperparameter sweep. */
+function TaskSweepReport({
+  report,
+  accent,
+}: {
+  report: Record<string, unknown>;
+  accent: string;
+}) {
+  const trials = (report["trials"] as TaskSweepTrial[]) ?? [];
+  const mode = report["mode"] as string;
+  const metric = report["metric"] as string;
+  const total = report["total_trials"] as number;
+  const successful = report["successful_trials"] as number;
+  const best = report["best_trial"] as TaskSweepTrial | null;
+
+  return (
+    <div style={{ marginTop: 22, display: "flex", flexDirection: "column", gap: 16 }}>
+      <div
+        style={{
+          fontFamily: "var(--font-mono)",
+          fontSize: 10,
+          letterSpacing: "0.20em",
+          textTransform: "uppercase",
+          color: "var(--vf-text-muted)",
+        }}
+      >
+        // sweep {mode} · {successful}/{total} trials ok · ranking por {metric}
+      </div>
+
+      {best && (
+        <div
+          style={{
+            padding: 16,
+            background: `linear-gradient(180deg, ${accent}1c 0%, rgba(12,14,18,0.5) 100%)`,
+            border: `1px solid ${accent}55`,
+            borderRadius: 12,
+            display: "flex",
+            flexDirection: "column",
+            gap: 12,
+          }}
+        >
+          <div
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: 9,
+              letterSpacing: "0.14em",
+              textTransform: "uppercase",
+              color: "var(--vf-text-muted)",
+            }}
+          >
+            👑 melhor trial · {metric}=
+            <span style={{ color: accent, marginLeft: 4 }}>
+              {formatMetric(best.metrics?.[metric])}
+            </span>
+          </div>
+          <OverrideChips overrides={best.overrides} />
+        </div>
+      )}
+
+      <div
+        style={{
+          padding: 14,
+          background: "rgba(255,255,255,0.025)",
+          border: "1px solid var(--vf-panel-stroke)",
+          borderRadius: 12,
+          overflowX: "auto",
+        }}
+      >
+        <table
+          style={{
+            width: "100%",
+            borderCollapse: "collapse",
+            fontFamily: "var(--font-mono)",
+            fontSize: 12,
+          }}
+        >
+          <thead>
+            <tr>
+              <th style={cvThStyle}>Rank</th>
+              <th style={cvThStyle}>{metric}</th>
+              <th style={cvThStyle}>overrides</th>
+              <th style={cvThStyle}>tempo (s)</th>
+              <th style={cvThStyle}>status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {trials.map((trial, i) => {
+              const ok = trial.status === "success";
+              return (
+                <tr key={trial.trial_index}>
+                  <td
+                    style={{
+                      ...cvTdLabelStyle,
+                      color: i === 0 && ok ? accent : "var(--vf-text-muted)",
+                      fontWeight: i === 0 && ok ? 700 : 500,
+                    }}
+                  >
+                    {ok ? `#${i + 1}` : "—"}
+                  </td>
+                  <td style={{ ...cvTdStyle, color: i === 0 && ok ? accent : "var(--vf-text)" }}>
+                    {formatMetric(trial.metrics?.[metric])}
+                  </td>
+                  <td style={cvTdStyle}>
+                    <OverrideChips overrides={trial.overrides} />
+                  </td>
                   <td style={cvTdStyle}>
                     {trial.training_time_s !== null &&
                     trial.training_time_s !== undefined

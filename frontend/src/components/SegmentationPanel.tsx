@@ -9,11 +9,18 @@ import {
 import type { ValidationError } from "../hooks/useExperiment";
 import { NumberField, SelectField, Segmented, TextField, Toggle } from "./controls";
 import { ComparisonCard } from "./ComparisonCard";
+import { SweepCard, type SweepPayload } from "./SweepCard";
 
 const COMPARE_METRICS = [
   { value: "miou", label: "mIoU" },
   { value: "dice", label: "Dice" },
   { value: "pixel_acc", label: "Pixel acc." },
+];
+
+const SWEEP_PATH_HINTS = [
+  "training.learning_rate",
+  "training.batch_size",
+  "model.name",
 ];
 
 interface SegmentationPanelProps {
@@ -23,6 +30,7 @@ interface SegmentationPanelProps {
   validationErrors: ValidationError[];
   busy?: boolean;
   onCompare?: (modelNames: string[], metric: string) => void;
+  onSweep?: (payload: SweepPayload) => void;
 }
 
 const sectionLabel: React.CSSProperties = {
@@ -48,6 +56,7 @@ export function SegmentationPanel({
   validationErrors,
   busy,
   onCompare,
+  onSweep,
 }: SegmentationPanelProps) {
   const [picking, setPicking] = useState(false);
 
@@ -311,6 +320,15 @@ export function SegmentationPanel({
           accent={accent}
           disabled={busy}
           onCompare={onCompare}
+        />
+      )}
+      {onSweep && (
+        <SweepCard
+          metrics={COMPARE_METRICS}
+          pathHints={SWEEP_PATH_HINTS}
+          accent={accent}
+          disabled={busy}
+          onSweep={onSweep}
         />
       )}
     </div>

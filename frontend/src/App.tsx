@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { fetchSchema, runComparison } from "./api/client";
+import { fetchSchema, runComparison, runSweep } from "./api/client";
+import type { SweepPayload } from "./components/SweepCard";
 import { BottomBar } from "./components/BottomBar";
 import type { DeviceSelection } from "./components/DeviceSelector";
 import { Header } from "./components/Header";
@@ -224,6 +225,34 @@ export default function App() {
     );
   };
 
+  // Hyperparameter sweep (ADR-045) for the standalone tasks: grid/random search
+  // over dot-paths, ranked by the chosen metric. Same overlay/results flow.
+  const handleSweep = async (
+    task: "regression" | "segmentation",
+    payload: SweepPayload,
+  ) => {
+    reset();
+    setResultsVisible(false);
+    setOverlayVisible(true);
+    setPipelineSummary([]);
+    setBlockKind(payload.mode === "grid" ? "grid_search" : "random_search");
+    const space = payload.search_space;
+    const qSize =
+      payload.mode === "grid"
+        ? Object.values(space).reduce<number>(
+            (acc, v) => acc * (Array.isArray(v) ? v.length : 1),
+            Object.keys(space).length === 0 ? 0 : 1,
+          )
+        : payload.n_trials;
+    setQueueSize(qSize || undefined);
+    const base =
+      task === "regression"
+        ? buildRegressionPayload(regressionForm)
+        : buildSegmentationPayload(segmentationForm);
+    const config = { ...base, device: { kind: device.kind, gpu_ids: device.gpu_ids } };
+    await submit({ config, ...payload }, { run: (p) => runSweep(task, p) });
+  };
+
   const activeTask = TASKS.find((t) => t.key === activeKey) ?? TASKS[0];
   const showResults = resultsVisible && result !== null;
 
@@ -280,6 +309,7 @@ export default function App() {
             onCompare={(names, metric) =>
               void handleCompare("regression", names, metric)
             }
+            onSweep={(payload) => void handleSweep("regression", payload)}
           />
         ) : activeKey === "segmentation" ? (
           <SegmentationPanel
@@ -291,6 +321,7 @@ export default function App() {
             onCompare={(names, metric) =>
               void handleCompare("segmentation", names, metric)
             }
+            onSweep={(payload) => void handleSweep("segmentation", payload)}
           />
         ) : activeKey === "anomaly" ? (
           <AnomalyPanel

@@ -98,7 +98,9 @@ splitting, export graph) and don't generalise cleanly.
 4. **Generic sweep** (grid/random) over the handle.
    - ✅ backend (ADR-045): `core/sweep.run_sweep` + `POST /api/{regression,
      segmentation}/sweep` + tests. Same search-space grammar as classification.
-   - ⏳ GUI: sweep panel (search-space editor) in the regression/segmentation tabs.
+   - ✅ GUI: `SweepCard` (grid/random search-space editor, `lib/sweep-space.ts`)
+     in the regression/segmentation tabs → `/sweep`; `TaskSweepReport` renders
+     the best trial + ranked table in `ResultsView`.
    - ⏳ GUI: sweep panel (lands with the comparison panel on the new design).
 5. **Per-task**: transfer-learning knobs (regression/segmentation), then CV,
    then ONNX export. Each its own ADR if it changes a config surface.
