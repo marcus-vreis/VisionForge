@@ -546,8 +546,9 @@ Real end-to-end pipeline tests (no mocks), skipped in CI to keep it fast
   open questions in `documentation/CROSS_TASK_PARITY_PLAN.md`. Ship slice 1
   (handle + classification adapter, pure de-coupling) first.
 - **Docker + `visionforge doctor` (ADR-042)** — `doctor` CLI (detect GPU/CUDA →
-  exact torch install command) first, then a multi-stage GPU Docker image +
-  compose. Design in `documentation/DOCKER_PLAN.md`. Local-only; k8s rejected.
+  exact torch install command) **shipped** (slice 1); the multi-stage GPU Docker
+  image + compose (slice 2) is still planned. Design in
+  `documentation/DOCKER_PLAN.md`. Local-only; k8s rejected.
 
 ## Backlog / ideas
 
@@ -556,8 +557,9 @@ Real end-to-end pipeline tests (no mocks), skipped in CI to keep it fast
 - TensorBoard / MLflow integration for experiment tracking
 - Dark/light theme toggle in GUI
 - Migrate `utils/config.py` → `configs/schemas/classification_config.py` when a second task is added (Phase 6+)
-- Online dataset download in the GUI (Roboflow / Kaggle / HuggingFace / torchvision built-ins)
+- Online dataset download in the GUI (Roboflow / Kaggle / HuggingFace / torchvision built-ins) — one-shot, user-initiated fetch to a local folder, then the existing data flow takes over (stays local-first; no core-path network). Roboflow *exports* already work today via `DetectionDataConfig.data_yaml`; this only removes the manual download. `roboflow` would be an optional extra, bound lazily like `ultralytics`.
 - User-supplied custom model via a `ModelRegistry` (drop-in `user_models/`)
+- More animated-SVG touches where they carry signal (empty/loading states, per-`RunCard` metric sparklines, live-training progress) — build on the existing `Waves`/`Particles` compositor layer, gate non-essential motion behind `prefers-reduced-motion`, no heavy animation dependency.
 
 ## Cowork dev-experience (skills + setup)
 
