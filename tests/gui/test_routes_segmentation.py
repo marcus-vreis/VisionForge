@@ -107,3 +107,60 @@ class TestSegmentationRun:
         client = TestClient(app, raise_server_exceptions=True)
         resp = client.post("/api/segmentation/run", json=payload)
         assert resp.status_code == 422
+
+
+class TestSegmentationCompare:
+    def test_compare_dispatches_and_reports(
+        self, app_and_routes: tuple, tmp_path: Path
+    ) -> None:
+        from visionforge.core.comparison import ComparisonTrial
+
+        app, routes_mod = app_and_routes
+        routes_mod._current_run = None
+
+        def fake_compare(runner, config_dict, model_names, metric):  # type: ignore[no-untyped-def]
+            return [
+                ComparisonTrial("unet", "success", {"miou": 0.6}, training_time_s=2.0),
+                ComparisonTrial("deeplabv3_resnet50", "failed", {}, error="boom"),
+            ]
+
+        orig = routes_mod.run_model_comparison
+        routes_mod.run_model_comparison = fake_compare
+        try:
+            client = TestClient(app, raise_server_exceptions=True)
+            payload = {
+                "config": _payload(tmp_path),
+                "model_names": ["unet", "deeplabv3_resnet50"],
+            }
+            resp = client.post("/api/segmentation/compare", json=payload)
+            assert resp.status_code == 200, resp.text
+            run_id = resp.json()["run_id"]
+
+            status = {"status": "running"}
+            for _ in range(50):
+                status = client.get("/api/experiment/status").json()
+                if status["status"] in ("completed", "failed"):
+                    break
+                time.sleep(0.05)
+            assert status["status"] == "completed", status
+
+            report = client.get(f"/api/experiment/result/{run_id}").json()["report"]
+            assert report["metric"] == "miou"  # defaulted from primary_metric
+            assert report["total_ran"] == 2
+            assert report["failed_count"] == 1
+            assert report["top_3"][0]["model_arch"] == "unet"
+        finally:
+            routes_mod.run_model_comparison = orig
+            routes_mod._current_run = None
+
+    def test_compare_requires_two_models(
+        self, app_and_routes: tuple, tmp_path: Path
+    ) -> None:
+        app, routes_mod = app_and_routes
+        routes_mod._current_run = None
+        client = TestClient(app, raise_server_exceptions=True)
+        resp = client.post(
+            "/api/segmentation/compare",
+            json={"config": _payload(tmp_path), "model_names": ["unet"]},
+        )
+        assert resp.status_code == 422

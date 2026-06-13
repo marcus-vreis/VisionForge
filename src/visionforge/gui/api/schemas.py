@@ -23,6 +23,18 @@ class RunResponse(BaseModel):
     status: Literal["running"] = "running"
 
 
+class ComparisonRequest(BaseModel):
+    """Compare N architectures for a standalone task (ADR-044).
+
+    ``config`` is the task's base config dict (its ``model.name`` is overridden
+    per trial); ``metric`` defaults to the task runner's primary metric.
+    """
+
+    config: dict[str, Any]
+    model_names: list[str] = Field(min_length=2)
+    metric: str | None = None
+
+
 class RunResult(BaseModel):
     """Full result of a completed experiment run."""
 
