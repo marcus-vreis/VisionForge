@@ -35,6 +35,23 @@ class ComparisonRequest(BaseModel):
     metric: str | None = None
 
 
+class SweepRequest(BaseModel):
+    """Grid/random hyperparameter sweep for a standalone task (ADR-045).
+
+    ``config`` is the task's base config dict. For ``mode="grid"`` the
+    ``search_space`` is ``{dot.path: [values]}``; for ``mode="random"`` each
+    entry is ``{dot.path: {"type": "uniform"|"log_uniform"|"choice", ...}}``.
+    ``metric`` defaults to the task runner's primary metric.
+    """
+
+    config: dict[str, Any]
+    mode: Literal["grid", "random"] = "grid"
+    search_space: dict[str, Any] = Field(min_length=1)
+    metric: str | None = None
+    n_trials: int = Field(default=10, ge=1)
+    seed: int = 0
+
+
 class RunResult(BaseModel):
     """Full result of a completed experiment run."""
 

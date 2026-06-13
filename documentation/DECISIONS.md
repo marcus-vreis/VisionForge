@@ -619,3 +619,28 @@ shared orchestration is written once. `r2`/`miou` are the natural ranking
 defaults (higher-is-better, like accuracy) so the descending sort is uniform.
 Backend-first per the Phase-5 norm; the GUI surface and the generic sweep/
 batch-predict are the next ADR-041 slices.
+
+## ADR-045 — Generic hyperparameter sweep over the TaskRunner handle
+
+**Date:** 2026-06
+**Status:** Accepted
+**Extends:** ADR-041, ADR-044
+
+**Decision:** Grid and random hyperparameter search are a task-agnostic function
+— `core/sweep.run_sweep(runner, base_config_dict, search_space, *, mode, metric,
+n_trials, seed)` — that drives any `TaskRunner` and ranks trials by the runner's
+declared metric. Overrides are applied by dot-path on a validated-then-dumped
+base config; the search-space format matches classification's existing search
+(grid: `{path: [values]}`; random: `{path: {"type": "uniform"|"log_uniform"|
+"choice", ...}}`). Surfaced as `POST /api/{regression,segmentation}/sweep`
+(background run over the shared single-run state; ranked report via
+`/experiment/result`), with sweep paths validated up front (422 on an unknown
+path). The classification grid/random blocks are left as-is.
+
+**Reason:** Sweeping hyperparameters is the headline "more training methods"
+gap for the standalone tasks, and it is the same *run-N-and-rank* shape as
+comparison (ADR-044) — so it reuses the handle rather than re-coupling to a task.
+Keeping the search-space grammar identical to classification's means one mental
+model and a future unification path. Validating the base config and every
+dot-path before running spends no GPU time on a typo. Backend-first per the
+Phase-5 norm; the GUI lands with the deferred comparison panel on the new design.

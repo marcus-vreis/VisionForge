@@ -94,7 +94,10 @@ splitting, export graph) and don't generalise cleanly.
    - ⏳ slice 2c GUI: comparison panel in the regression/segmentation tabs.
      Deferred until the planned frontend reformulation so the panel isn't reworked.
 3. **Batch prediction generic** — regression/segmentation/detection/anomaly.
-4. **Generic sweep** (grid/random) over the handle — start with regression.
+4. **Generic sweep** (grid/random) over the handle.
+   - ✅ backend (ADR-045): `core/sweep.run_sweep` + `POST /api/{regression,
+     segmentation}/sweep` + tests. Same search-space grammar as classification.
+   - ⏳ GUI: sweep panel (lands with the comparison panel on the new design).
 5. **Per-task**: transfer-learning knobs (regression/segmentation), then CV,
    then ONNX export. Each its own ADR if it changes a config surface.
 6. Grad-CAM/explainability last (research-grade, per-task).

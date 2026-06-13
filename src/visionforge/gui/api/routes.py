@@ -35,6 +35,7 @@ from visionforge.core.data import DataModule
 from visionforge.core.detection_data import resolve_yolo_split
 from visionforge.core.evaluator import Evaluator
 from visionforge.core.plotter import MetricsPlotter
+from visionforge.core.sweep import SweepTrial, run_sweep, validate_sweep_space
 from visionforge.core.task_runner import TaskRunner
 from visionforge.gui.api.detection_export import export_detection_run
 from visionforge.gui.api.detection_testing import evaluate_detection_run
@@ -73,6 +74,7 @@ from visionforge.gui.api.schemas import (
     RunTestRequest,
     RunTestResponse,
     SplitStats,
+    SweepRequest,
     SystemInfo,
 )
 from visionforge.models.factory import ModelFactory
@@ -677,6 +679,18 @@ async def compare_regression(req: ComparisonRequest) -> RunResponse:
 async def compare_segmentation(req: ComparisonRequest) -> RunResponse:
     """Train N segmentation backbones on the same dataset and rank them (ADR-044)."""
     return _start_comparison(req, SegmentationConfig, SegmentationRunner())
+
+
+@router.post("/regression/sweep")
+async def sweep_regression(req: SweepRequest) -> RunResponse:
+    """Run a grid/random hyperparameter sweep for regression (ADR-045)."""
+    return _start_sweep(req, RegressionConfig, RegressionRunner())
+
+
+@router.post("/segmentation/sweep")
+async def sweep_segmentation(req: SweepRequest) -> RunResponse:
+    """Run a grid/random hyperparameter sweep for segmentation (ADR-045)."""
+    return _start_sweep(req, SegmentationConfig, SegmentationRunner())
 
 
 @router.get("/experiment/events")
@@ -2271,6 +2285,112 @@ def _comparison_report(trials: list[ComparisonTrial], metric: str) -> dict[str, 
         "top_3": successful[:3],
         "total_ran": len(rows),
         "failed_count": len(rows) - len(successful),
+    }
+
+
+def _start_sweep(
+    req: SweepRequest,
+    config_type: type[Any],
+    runner: TaskRunner,
+) -> RunResponse:
+    """Validate the base config + search space and launch a background sweep.
+
+    Raises:
+        HTTPException: 409 if a run is already active.
+        RequestValidationError: 422 if the base config or a sweep path is invalid.
+    """
+    global _current_run, _event_queue
+
+    if _current_run and _current_run["status"] == "running":
+        raise HTTPException(409, "An experiment is already running.")
+
+    # Validate the base config (fills defaults) and confirm every sweep path
+    # resolves against it before spending GPU time.
+    try:
+        complete = config_type.model_validate(req.config).model_dump(mode="json")
+        validate_sweep_space(complete, list(req.search_space))
+    except ValidationError as exc:
+        raise RequestValidationError(exc.errors()) from exc
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+    metric = req.metric or runner.primary_metric()
+    name = str(req.config.get("name", "sweep"))
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    run_id = f"{name}_{timestamp}"
+
+    _event_queue = asyncio.Queue()
+    _current_run = {
+        "run_id": run_id,
+        "status": "running",
+        "error": None,
+        "report": None,
+        "run_dir": None,
+    }
+
+    task = asyncio.create_task(_execute_sweep(runner, complete, req, metric, run_id))
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+    return RunResponse(run_id=run_id)
+
+
+async def _execute_sweep(
+    runner: TaskRunner,
+    base_config_dict: dict[str, Any],
+    req: SweepRequest,
+    metric: str,
+    run_id: str,
+) -> None:
+    """Run a hyperparameter sweep in a background thread and store the ranked report."""
+    global _current_run, _event_queue
+    queue = _event_queue
+
+    try:
+        trials = await asyncio.to_thread(
+            run_sweep,
+            runner,
+            base_config_dict,
+            req.search_space,
+            mode=req.mode,
+            metric=metric,
+            n_trials=req.n_trials,
+            seed=req.seed,
+        )
+        if not any(t.status == "success" for t in trials):
+            raise RuntimeError("All sweep trials failed — no ranking available.")
+        _current_run = {
+            "run_id": run_id,
+            "status": "completed",
+            "error": None,
+            "report": _sweep_report(trials, req.mode, metric),
+            "run_dir": None,
+        }
+        logger.success("GUI: Sweep {} completed ({} trials).", run_id, len(trials))
+    except Exception as e:
+        logger.exception("GUI: Sweep {} failed", run_id)
+        _current_run = {
+            "run_id": run_id,
+            "status": "failed",
+            "error": f"{type(e).__name__}: {e or '(sem mensagem)'}",
+            "report": None,
+            "run_dir": None,
+        }
+    finally:
+        if queue is not None:
+            await queue.put(None)
+
+
+def _sweep_report(trials: list[SweepTrial], mode: str, metric: str) -> dict[str, Any]:
+    """Shape ranked sweep trials into a GUI-friendly report dict."""
+    rows = [asdict(t) for t in trials]
+    successful = [t for t in rows if t["status"] == "success"]
+    return {
+        "mode": mode,
+        "metric": metric,
+        "trials": rows,
+        "best_trial": successful[0] if successful else None,
+        "total_trials": len(rows),
+        "successful_trials": len(successful),
     }
 
 

@@ -198,3 +198,84 @@ class TestRegressionCompare:
             json={"config": _payload(tmp_path), "model_names": ["resnet18"]},
         )
         assert resp.status_code == 422
+
+
+class TestRegressionSweep:
+    def test_grid_sweep_dispatches_and_reports(
+        self, app_and_routes: tuple, tmp_path: Path
+    ) -> None:
+        from visionforge.core.sweep import SweepTrial
+
+        app, routes_mod = app_and_routes
+        routes_mod._current_run = None
+
+        def fake_sweep(runner, base, space, *, mode, metric, n_trials, seed):  # type: ignore[no-untyped-def]
+            return [
+                SweepTrial(0, {"training.learning_rate": 0.05}, "success", {"r2": 0.9}),
+                SweepTrial(1, {"training.learning_rate": 0.1}, "success", {"r2": 0.6}),
+            ]
+
+        orig = routes_mod.run_sweep
+        routes_mod.run_sweep = fake_sweep
+        try:
+            client = TestClient(app, raise_server_exceptions=True)
+            payload = {
+                "config": _payload(tmp_path),
+                "mode": "grid",
+                "search_space": {"training.learning_rate": [0.05, 0.1]},
+                "metric": "r2",
+            }
+            resp = client.post("/api/regression/sweep", json=payload)
+            assert resp.status_code == 200, resp.text
+            run_id = resp.json()["run_id"]
+
+            status = {"status": "running"}
+            for _ in range(50):
+                status = client.get("/api/experiment/status").json()
+                if status["status"] in ("completed", "failed"):
+                    break
+                time.sleep(0.05)
+            assert status["status"] == "completed", status
+
+            report = client.get(f"/api/experiment/result/{run_id}").json()["report"]
+            assert report["mode"] == "grid"
+            assert report["metric"] == "r2"
+            assert report["total_trials"] == 2
+            assert report["best_trial"]["overrides"]["training.learning_rate"] == 0.05
+        finally:
+            routes_mod.run_sweep = orig
+            routes_mod._current_run = None
+
+    def test_sweep_rejects_unknown_path(
+        self, app_and_routes: tuple, tmp_path: Path
+    ) -> None:
+        app, routes_mod = app_and_routes
+        routes_mod._current_run = None
+        client = TestClient(app, raise_server_exceptions=True)
+        resp = client.post(
+            "/api/regression/sweep",
+            json={
+                "config": _payload(tmp_path),
+                "mode": "grid",
+                "search_space": {"training.nope": [1, 2]},
+            },
+        )
+        assert resp.status_code == 422
+
+    def test_sweep_conflict_when_already_running(
+        self, app_and_routes: tuple, tmp_path: Path
+    ) -> None:
+        app, routes_mod = app_and_routes
+        routes_mod._current_run = {"run_id": "x", "status": "running"}
+        try:
+            client = TestClient(app, raise_server_exceptions=True)
+            resp = client.post(
+                "/api/regression/sweep",
+                json={
+                    "config": _payload(tmp_path),
+                    "search_space": {"training.learning_rate": [0.1]},
+                },
+            )
+            assert resp.status_code == 409
+        finally:
+            routes_mod._current_run = None
