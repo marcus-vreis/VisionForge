@@ -87,7 +87,7 @@ export function Header() {
               fontWeight: 700,
               letterSpacing: "-0.01em",
               lineHeight: 1,
-              fontFamily: "var(--font-sans)",
+              fontFamily: "var(--font-display)",
               color: "var(--vf-text)",
             }}
           >
