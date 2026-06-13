@@ -1,8 +1,9 @@
 # Cross-task feature parity — analysis & plan
 
-> Status: **planning / spec for the agent team**. Decision recorded in
-> **ADR-041**. No code yet — this doc is the design Claude Code analyses and
-> implements in shippable slices.
+> Status: **in progress** (ADR-041). Slice 1 (the `TaskRunner` handle +
+> classification adapter) and slice 2a (generic comparison + regression/
+> segmentation adapters, ADR-044) have shipped; the remaining slices below are
+> still to do. This doc is the design implemented in shippable slices.
 
 ## Problem
 
@@ -81,12 +82,14 @@ splitting, export graph) and don't generalise cleanly.
 
 ## Implementation order (shippable slices, CPU-CI-testable)
 
-1. **`TaskRunner` protocol + classification adapter.** Make classification
+1. ✅ **`TaskRunner` protocol + classification adapter.** Make classification
    implement the handle; refactor `ModelComparisonBlock` to consume it. No new
    user-facing feature yet — pure de-coupling, fully covered by existing tests.
 2. **Model comparison for regression + segmentation** (the two closest to
-   classification) via the generic runner. New GUI surface mirrors the existing
-   comparison panel.
+   classification) via the generic runner.
+   - ✅ slice 2a (backend, ADR-044): `core/comparison.run_model_comparison` +
+     `RegressionRunner`/`SegmentationRunner` adapters + tests.
+   - ⏳ slice 2b: API endpoints + GUI surface mirroring the comparison panel.
 3. **Batch prediction generic** — regression/segmentation/detection/anomaly.
 4. **Generic sweep** (grid/random) over the handle — start with regression.
 5. **Per-task**: transfer-learning knobs (regression/segmentation), then CV,
