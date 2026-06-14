@@ -94,7 +94,8 @@ export function SweepCard({
         }}
       >
         Varre hiperparâmetros por dot-path (ex.: {pathHints.join(", ")}) e ranqueia
-        pela métrica. Grid = produto cartesiano; Random = amostras.
+        pela métrica. Grid = produto cartesiano; Random = amostras; Optuna = busca
+        TPE adaptativa (requer o extra opcional).
       </p>
 
       <div style={{ maxWidth: 320, marginBottom: 16 }}>
@@ -105,6 +106,7 @@ export function SweepCard({
           options={[
             { value: "grid", label: "Grid" },
             { value: "random", label: "Random" },
+            { value: "optuna", label: "Optuna" },
           ]}
         />
       </div>
@@ -237,7 +239,7 @@ export function SweepCard({
             options={metrics}
           />
         </div>
-        {mode === "random" && (
+        {mode !== "grid" && (
           <>
             <div style={{ width: 120 }}>
               <NumberField

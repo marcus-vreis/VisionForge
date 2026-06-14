@@ -553,6 +553,10 @@ Real end-to-end pipeline tests (no mocks), skipped in CI to keep it fast
 - **timm model source (ADR-051)** — `model.timm_model` builds any timm architecture
   via the optional `[timm]` extra (lazy `timm.create_model`). **Shipped** for
   classification + regression (mutually exclusive with `custom_model`).
+- **Optuna sweep mode (ADR-052)** — `mode="optuna"` in `core/sweep` drives a TPE
+  study over the random search-space grammar; optional `[optuna]` extra, lazy
+  import. **Shipped** for all four standalone tasks (API + GUI SweepCard). Pruning
+  deferred.
 - **Docker + `visionforge doctor` (ADR-042)** — `doctor` CLI (detect GPU/CUDA →
   exact torch install command) **shipped** (slice 1); the multi-stage GPU Docker
   image + compose (slice 2) is still planned. Design in
@@ -574,7 +578,6 @@ Real end-to-end pipeline tests (no mocks), skipped in CI to keep it fast
   GUI card + report renderer, then the same for segmentation.
 
 **Larger — needs design or new dependencies (prefer a reviewed session):**
-- **Optuna** as an alternative to `RandomSearchBlock` (samplers + pruning).
 - **TensorBoard / MLflow** experiment-tracking integration.
 - **Dark/light theme toggle** — needs a coherent light palette for the dark-first
   blueprint design (design judgment).

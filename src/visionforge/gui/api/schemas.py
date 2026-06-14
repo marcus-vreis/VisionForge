@@ -36,16 +36,17 @@ class ComparisonRequest(BaseModel):
 
 
 class SweepRequest(BaseModel):
-    """Grid/random hyperparameter sweep for a standalone task (ADR-045).
+    """Grid/random/Optuna hyperparameter sweep for a standalone task (ADR-045/052).
 
     ``config`` is the task's base config dict. For ``mode="grid"`` the
-    ``search_space`` is ``{dot.path: [values]}``; for ``mode="random"`` each
-    entry is ``{dot.path: {"type": "uniform"|"log_uniform"|"choice", ...}}``.
-    ``metric`` defaults to the task runner's primary metric.
+    ``search_space`` is ``{dot.path: [values]}``; for ``mode="random"`` and
+    ``mode="optuna"`` each entry is
+    ``{dot.path: {"type": "uniform"|"log_uniform"|"choice", ...}}`` (optuna needs
+    the optional ``optuna`` extra). ``metric`` defaults to the runner's primary.
     """
 
     config: dict[str, Any]
-    mode: Literal["grid", "random"] = "grid"
+    mode: Literal["grid", "random", "optuna"] = "grid"
     search_space: dict[str, Any] = Field(min_length=1)
     metric: str | None = None
     n_trials: int = Field(default=10, ge=1)

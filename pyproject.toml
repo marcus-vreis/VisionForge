@@ -54,6 +54,11 @@ detection = [
 timm = [
     "timm>=1.0",
 ]
+# Optuna-guided hyperparameter sweep (ADR-052): the `optuna` sweep mode uses a TPE
+# sampler over the random search-space grammar. Optional; imported lazily.
+optuna = [
+    "optuna>=3.0",
+]
 dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",

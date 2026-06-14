@@ -2,7 +2,7 @@
  *  `search_space` payload (ADR-045). Kept out of the component so the parsing
  *  and the grid-trial-count preview are unit-testable. */
 
-export type SweepMode = "grid" | "random";
+export type SweepMode = "grid" | "random" | "optuna";
 export type RandomKind = "uniform" | "log_uniform" | "choice";
 
 export interface SweepRow {

@@ -821,3 +821,32 @@ the core install, like ultralytics) and keeps the test suite offline (tests mock
 `create_model`, ADR-010). Mutual exclusivity with `custom_model` avoids ambiguous
 precedence. Segmentation is out of scope — timm yields classifiers/feature
 extractors, not dense decoders.
+
+## ADR-052 — Optuna as a third sweep mode
+
+**Date:** 2026-06
+**Status:** Accepted
+**Extends:** ADR-045
+
+**Decision:** `core/sweep.run_sweep` gains a third `mode="optuna"` alongside grid
+and random. It reuses the random search-space grammar
+(`{path: {type: uniform|log_uniform|choice, ...}}`) but drives an Optuna TPE study:
+each trial is suggested adaptively from prior results (`suggest_float` /
+`suggest_float(log=True)` / `suggest_categorical`), run through the same shared
+`_execute_trial` helper as the other modes, and recorded as a `SweepTrial`. The
+study direction is `maximize` (the ranking metrics are higher-is-better, matching
+the existing descending sort); failed trials are recorded then `TrialPruned` so the
+study continues. Optuna is a new optional extra (`[optuna]`), imported lazily.
+Exposed through the existing sweep API/GUI by adding `"optuna"` to `SweepRequest.mode`
+and the `SweepCard` strategy selector (the random-style editor + `n_trials` apply
+unchanged). Pruning of in-progress trials is deferred (would need per-epoch
+reporting from the trainers).
+
+**Reason:** Random search wastes budget re-sampling bad regions; TPE concentrates
+trials where the metric improves, which matters on the small datasets these tasks
+target. Folding it into `run_sweep` (rather than a separate block) means all four
+standalone tasks get it for free and the search-space grammar/report stay shared —
+one mental model. Keeping it an optional lazily-imported extra follows ADR-005, and
+tests stay offline by exercising the study with a fake runner (`pytest.importorskip`
+guards when the extra is absent). Mid-training pruning is left out of this slice to
+avoid changing the trainer/SSE contract.

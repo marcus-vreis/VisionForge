@@ -142,6 +142,50 @@ class TestRandomSweep:
         )
 
 
+class TestOptunaSweep:
+    def test_tpe_runs_n_trials_and_ranks_best_first(self) -> None:
+        pytest.importorskip("optuna")
+        space = {
+            "training.learning_rate": {"type": "uniform", "low": 0.01, "high": 0.1}
+        }
+        trials = run_sweep(
+            _FakeRunner(),
+            _base(),
+            space,
+            mode="optuna",
+            metric="score",
+            n_trials=6,
+            seed=0,
+        )
+        assert len(trials) == 6
+        assert all(t.status == "success" for t in trials)
+        # sampled values stay inside the declared range
+        assert all(0.01 <= t.overrides["training.learning_rate"] <= 0.1 for t in trials)
+        # the ranked-first trial holds the best score
+        best = max(t.metrics["score"] for t in trials)
+        assert trials[0].metrics["score"] == best
+
+    def test_choice_param_suggested(self) -> None:
+        pytest.importorskip("optuna")
+        space = {
+            "model.name": {"type": "choice", "options": ["resnet18", "resnet50"]},
+            "training.learning_rate": {"type": "uniform", "low": 0.01, "high": 0.1},
+        }
+        trials = run_sweep(
+            _FakeRunner(),
+            _base(),
+            space,
+            mode="optuna",
+            metric="score",
+            n_trials=4,
+            seed=1,
+        )
+        assert len(trials) == 4
+        assert all(
+            t.overrides["model.name"] in ("resnet18", "resnet50") for t in trials
+        )
+
+
 class TestGuards:
     def test_unknown_mode_raises(self) -> None:
         with pytest.raises(ValueError, match="mode"):
