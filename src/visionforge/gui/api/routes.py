@@ -80,6 +80,7 @@ from visionforge.gui.api.schemas import (
     SweepRequest,
     SystemInfo,
 )
+from visionforge.gui.api.torch_batch_predict import batch_predict_regression_run
 from visionforge.gui.api.torch_onnx_export import (
     export_regression_run,
     export_segmentation_run,
@@ -1519,22 +1520,17 @@ def _open_native_folder_dialog() -> DatasetPickResponse:
 def _execute_batch_predict(
     run_dir: Path, req: BatchPredictRequest
 ) -> BatchPredictResponse:
-    """Build a one-shot ExperimentConfig for BatchPredictionBlock and run it.
+    """Dispatch folder batch-prediction to the run's task path.
 
-    The run's stored config supplies the architecture; the request supplies
-    input_dir, output_csv (default: timestamped under run_dir/predictions/),
-    and the recursive flag.
+    Classification runs go through ``BatchPredictionBlock`` (softmax/sigmoid CSV);
+    regression runs reuse the shared ``core.batch_predict`` helper (continuous
+    targets → CSV, ADR-041 slice 3). Detection/segmentation/anomaly are not yet
+    supported and are rejected. The request supplies ``input_dir``, ``output_csv``
+    (default: timestamped under ``run_dir/predictions/``) and the recursive flag.
     """
     run_json_path = run_dir / "run.json"
     data: dict[str, Any] = json.loads(run_json_path.read_text(encoding="utf-8"))
-    _require_classification_run(data, "Inferência em lote")
-    base_config_dict: dict[str, Any] = data["config"]
-
-    checkpoint_path = data.get("artifacts", {}).get("model")
-    if not checkpoint_path:
-        raise FileNotFoundError(
-            f"Run '{run_dir.name}' has no checkpoint recorded in artifacts.model."
-        )
+    task = str(data.get("config", {}).get("task", ""))
 
     input_dir = Path(req.input_dir)
     if not input_dir.exists() or not input_dir.is_dir():
@@ -1548,6 +1544,34 @@ def _execute_batch_predict(
     else:
         ts = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
         output_csv = run_dir / "predictions" / f"predictions_{ts}.csv"
+
+    if task == "regression":
+        summary = batch_predict_regression_run(
+            run_name=run_dir.name,
+            data=data,
+            input_dir=input_dir,
+            output_csv=output_csv.resolve(),
+            recursive=req.recursive,
+        )
+        return BatchPredictResponse(
+            output_csv=summary.output_csv,
+            total_processed=summary.total_processed,
+            failed_count=len(summary.failed_files),
+            failed_files=summary.failed_files,
+        )
+
+    if task in ("detection", "segmentation", "anomaly"):
+        raise ValueError(
+            f"Inferência em lote não é suportada para runs de '{task}' ainda."
+        )
+
+    base_config_dict: dict[str, Any] = data["config"]
+
+    checkpoint_path = data.get("artifacts", {}).get("model")
+    if not checkpoint_path:
+        raise FileNotFoundError(
+            f"Run '{run_dir.name}' has no checkpoint recorded in artifacts.model."
+        )
 
     batch_config_dict = {
         **base_config_dict,
@@ -1631,22 +1655,6 @@ def _execute_onnx_export(run_dir: Path, req: ExportOnnxRequest) -> ExportOnnxRes
         validation=report.get("validation"),
         benchmark=report.get("benchmark"),
     )
-
-
-def _require_classification_run(data: dict[str, Any], action: str) -> None:
-    """Reject post-training actions that only support classification runs.
-
-    Classification runs carry task='binary'/'multiclass'; detection runs carry
-    task='detection' and have no ModelFactory/Evaluator path (their equivalents
-    are tracked in PHASE7_DETECTION_PLAN brick D/F). The GUI already hides these
-    actions for detection — this is the backend's defense in depth.
-
-    Raises:
-        ValueError: when the run is a detection run.
-    """
-    task = data.get("config", {}).get("task", "")
-    if task == "detection":
-        raise ValueError(f"{action} não é suportado para runs de '{task}' ainda.")
 
 
 def _execute_run_test(run_dir: Path, req: RunTestRequest) -> RunTestResponse:

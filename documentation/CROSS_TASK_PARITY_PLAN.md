@@ -98,6 +98,21 @@ splitting, export graph) and don't generalise cleanly.
      `<kind>_ranking.csv` to `outputs/reports/<name>/<ts>/` (mirrors the
      classification ModelComparisonBlock), and the report carries `report_dir`.
 3. **Batch prediction generic** — regression/segmentation/detection/anomaly.
+   - ✅ shared `core/batch_predict.py` (`predict_folder_to_csv` — task-agnostic
+     folder walk + image load + error recording + CSV writing; the per-task
+     inference head is a caller callback). Followed the ONNX-export precedent
+     (per-task function + shared core helper) rather than extending the
+     `TaskRunner` protocol — keeps the four runners untouched.
+   - ✅ **Regression**: `gui/api/torch_batch_predict.py` builds the regression
+     model from the run's checkpoint (`pretrained=False`, no download) and writes
+     `filename,<target_columns…>` rows. Wired into the existing
+     `POST /api/runs/{id}/batch_predict` (task dispatch); GUI batch-inference card
+     enabled for regression (`canBatchPredict`). Tests:
+     `tests/core/test_batch_predict.py` + `tests/gui/test_routes_batch_predict_regression.py`
+     (real resnet18 checkpoint end-to-end + unsupported-task rejection).
+   - Remaining: anomaly (score + threshold decision → CSV) reuses the same helper;
+     detection/segmentation deferred (per-box/per-pixel outputs don't map to a
+     flat row).
 4. **Generic sweep** (grid/random) over the handle.
    - ✅ backend (ADR-045): `core/sweep.run_sweep` + `POST /api/{regression,
      segmentation}/sweep` + tests. Same search-space grammar as classification.

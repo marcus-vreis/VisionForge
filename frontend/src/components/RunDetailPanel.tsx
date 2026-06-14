@@ -151,6 +151,11 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
   const canExportOnnx = isDetection
     ? detectionBackend === "ultralytics"
     : runTask !== "anomaly";
+  // Batch CSV inference: classification + regression (continuous targets → clean
+  // CSV). Detection/segmentation/anomaly produce per-box/per-pixel/score outputs
+  // that don't map to a flat row yet (ADR-041 slice 3).
+  const canBatchPredict =
+    !isDetection && runTask !== "segmentation" && runTask !== "anomaly";
 
   useEffect(() => {
     let alive = true;
@@ -618,7 +623,7 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
             </Section>
           )}
 
-          {detail.artifacts.model && !isDetection && (
+          {detail.artifacts.model && canBatchPredict && (
             <Section
               title="Inferência em lote (CSV)"
               action={
