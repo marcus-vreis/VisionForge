@@ -151,11 +151,10 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
   const canExportOnnx = isDetection
     ? detectionBackend === "ultralytics"
     : runTask !== "anomaly";
-  // Batch CSV inference: classification + regression (continuous targets → clean
-  // CSV). Detection/segmentation/anomaly produce per-box/per-pixel/score outputs
-  // that don't map to a flat row yet (ADR-041 slice 3).
-  const canBatchPredict =
-    !isDetection && runTask !== "segmentation" && runTask !== "anomaly";
+  // Batch CSV inference: classification + regression (continuous targets) +
+  // anomaly (score + threshold decision). Detection/segmentation produce
+  // per-box/per-pixel outputs that don't map to a flat row yet (ADR-041 slice 3).
+  const canBatchPredict = !isDetection && runTask !== "segmentation";
 
   useEffect(() => {
     let alive = true;

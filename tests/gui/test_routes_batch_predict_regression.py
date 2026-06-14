@@ -99,7 +99,7 @@ class TestBatchPredictUnsupportedTasks:
         (run_dir / "run.json").write_text(json.dumps(run_json), encoding="utf-8")
         return run_dir
 
-    @pytest.mark.parametrize("task", ["segmentation", "anomaly", "detection"])
+    @pytest.mark.parametrize("task", ["segmentation", "detection"])
     def test_unsupported_task_is_rejected(self, tmp_path: Path, task: str) -> None:
         from visionforge.gui.api.routes import _execute_batch_predict
         from visionforge.gui.api.schemas import BatchPredictRequest

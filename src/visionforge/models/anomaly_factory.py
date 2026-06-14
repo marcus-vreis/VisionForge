@@ -172,6 +172,21 @@ class PatchCore(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.score(x)
 
+    def _load_from_state_dict(  # type: ignore[no-untyped-def]
+        self, state_dict, prefix, *args, **kwargs
+    ) -> None:
+        """Resize the ``_memory`` buffer to the checkpoint before the default copy.
+
+        The buffer is registered empty (``[0, C]``) and only grows when ``fit``
+        runs, so a *fresh* instance (e.g. batch-predict reloading a checkpoint)
+        would otherwise hit a size mismatch on the fitted ``[K, C]`` bank.
+        """
+        mem_key = prefix + "_memory"
+        loaded = state_dict.get(mem_key)
+        if loaded is not None and loaded.shape != self._memory.shape:
+            self._memory = loaded.clone()
+        super()._load_from_state_dict(state_dict, prefix, *args, **kwargs)
+
 
 class AnomalyModelFactory:
     """Instantiates an anomaly model from an AnomalyModelConfig."""

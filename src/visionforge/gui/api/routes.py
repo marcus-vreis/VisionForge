@@ -80,7 +80,10 @@ from visionforge.gui.api.schemas import (
     SweepRequest,
     SystemInfo,
 )
-from visionforge.gui.api.torch_batch_predict import batch_predict_regression_run
+from visionforge.gui.api.torch_batch_predict import (
+    batch_predict_anomaly_run,
+    batch_predict_regression_run,
+)
 from visionforge.gui.api.torch_onnx_export import (
     export_regression_run,
     export_segmentation_run,
@@ -1523,10 +1526,11 @@ def _execute_batch_predict(
     """Dispatch folder batch-prediction to the run's task path.
 
     Classification runs go through ``BatchPredictionBlock`` (softmax/sigmoid CSV);
-    regression runs reuse the shared ``core.batch_predict`` helper (continuous
-    targets → CSV, ADR-041 slice 3). Detection/segmentation/anomaly are not yet
-    supported and are rejected. The request supplies ``input_dir``, ``output_csv``
-    (default: timestamped under ``run_dir/predictions/``) and the recursive flag.
+    regression and anomaly runs reuse the shared ``core.batch_predict`` helper
+    (continuous targets / anomaly score + decision → CSV, ADR-041 slice 3).
+    Detection/segmentation are not yet supported and are rejected. The request
+    supplies ``input_dir``, ``output_csv`` (default: timestamped under
+    ``run_dir/predictions/``) and the recursive flag.
     """
     run_json_path = run_dir / "run.json"
     data: dict[str, Any] = json.loads(run_json_path.read_text(encoding="utf-8"))
@@ -1545,8 +1549,13 @@ def _execute_batch_predict(
         ts = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
         output_csv = run_dir / "predictions" / f"predictions_{ts}.csv"
 
-    if task == "regression":
-        summary = batch_predict_regression_run(
+    if task in ("regression", "anomaly"):
+        runner = (
+            batch_predict_regression_run
+            if task == "regression"
+            else batch_predict_anomaly_run
+        )
+        summary = runner(
             run_name=run_dir.name,
             data=data,
             input_dir=input_dir,
@@ -1560,7 +1569,7 @@ def _execute_batch_predict(
             failed_files=summary.failed_files,
         )
 
-    if task in ("detection", "segmentation", "anomaly"):
+    if task in ("detection", "segmentation"):
         raise ValueError(
             f"Inferência em lote não é suportada para runs de '{task}' ainda."
         )

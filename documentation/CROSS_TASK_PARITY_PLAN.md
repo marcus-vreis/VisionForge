@@ -110,9 +110,15 @@ splitting, export graph) and don't generalise cleanly.
      enabled for regression (`canBatchPredict`). Tests:
      `tests/core/test_batch_predict.py` + `tests/gui/test_routes_batch_predict_regression.py`
      (real resnet18 checkpoint end-to-end + unsupported-task rejection).
-   - Remaining: anomaly (score + threshold decision → CSV) reuses the same helper;
-     detection/segmentation deferred (per-box/per-pixel outputs don't map to a
-     flat row).
+   - ✅ **Anomaly**: `batch_predict_anomaly_run` reuses the same helper, writing
+     `filename,anomaly_score,is_anomaly` (decision via the run's stored threshold).
+     Scores via the shared `anomaly_trainer.score_images`; the eval transform
+     mirrors the data module so scores match the threshold's basis. PatchCore got
+     a `_load_from_state_dict` hook so its fitted memory bank reloads into a fresh
+     instance. Tests: `tests/gui/test_routes_batch_predict_anomaly.py` (real
+     autoencoder end-to-end) + PatchCore fresh-reload in `test_anomaly_factory.py`.
+   - Detection/segmentation deferred (per-box/per-pixel outputs don't map to a
+     flat row). **Batch-predict now covers classification + regression + anomaly.**
 4. **Generic sweep** (grid/random) over the handle.
    - ✅ backend (ADR-045): `core/sweep.run_sweep` + `POST /api/{regression,
      segmentation}/sweep` + tests. Same search-space grammar as classification.

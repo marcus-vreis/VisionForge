@@ -59,6 +59,25 @@ class TestPatchCore:
         with pytest.raises(RuntimeError, match="fit"):
             pc.score(x)
 
+    def test_fitted_state_reloads_into_fresh_instance(self) -> None:
+        # A fresh instance must load a fitted checkpoint despite the memory bank
+        # growing from [0, C] to [K, C] (batch-predict reload path, ADR-041 s3).
+        trained = PatchCore(
+            backbone="resnet18", pretrained=False, coreset_ratio=0.5
+        ).eval()
+        x = torch.randn(3, 3, 64, 64)
+        with torch.no_grad():
+            trained.fit(trained.extract(x).reshape(-1, trained.feature_dim))
+        assert trained.memory_size > 0
+
+        fresh = PatchCore(backbone="resnet18", pretrained=False, coreset_ratio=0.5)
+        fresh.load_state_dict(trained.state_dict())  # must not raise on _memory
+        fresh.eval()  # eval mode so BatchNorm uses the loaded running stats
+
+        assert fresh.memory_size == trained.memory_size
+        with torch.no_grad():
+            assert torch.allclose(fresh.score(x), trained.score(x))
+
 
 class TestAnomalyModelFactory:
     def test_creates_autoencoder(self) -> None:

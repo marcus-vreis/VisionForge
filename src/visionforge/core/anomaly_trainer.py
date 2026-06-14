@@ -54,6 +54,22 @@ def compute_threshold(normal_scores: torch.Tensor, percentile: float) -> float:
     return float(np.percentile(normal_scores.detach().cpu().numpy(), percentile))
 
 
+def score_images(model: nn.Module, inputs: torch.Tensor) -> torch.Tensor:
+    """Per-image anomaly score (reconstruction error or patch distance).
+
+    Shared by the training loop and batch-prediction so both families score the
+    same way: ConvAutoencoder = mean squared reconstruction error, PatchCore =
+    max patch nearest-neighbor distance.
+    """
+    if isinstance(model, ConvAutoencoder):
+        recon = model(inputs)
+        err: torch.Tensor = ((recon - inputs) ** 2).mean(dim=(1, 2, 3))
+        return err
+    if isinstance(model, PatchCore):
+        return model.score(inputs)
+    raise TypeError(f"Unsupported anomaly model: {type(model).__name__}")
+
+
 @dataclass
 class AnomalyEpochResult:
     """Metrics for a single anomaly training epoch."""
@@ -304,13 +320,7 @@ class AnomalyTrainer:
 
     def _image_scores(self, model: nn.Module, inputs: torch.Tensor) -> torch.Tensor:
         """Per-image anomaly score (reconstruction error or patch distance)."""
-        if isinstance(model, ConvAutoencoder):
-            recon = model(inputs)
-            err: torch.Tensor = ((recon - inputs) ** 2).mean(dim=(1, 2, 3))
-            return err
-        if isinstance(model, PatchCore):
-            return model.score(inputs)
-        raise TypeError(f"Unsupported anomaly model: {type(model).__name__}")
+        return score_images(model, inputs)
 
     def _metrics(
         self,
@@ -390,4 +400,5 @@ __all__ = [
     "AnomalyEpochResult",
     "compute_auroc",
     "compute_threshold",
+    "score_images",
 ]
