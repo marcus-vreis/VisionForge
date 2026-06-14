@@ -15,6 +15,7 @@ from visionforge.models.factory import (
     load_local_weights,
     replace_final_layer,
 )
+from visionforge.models.registry import build_custom_model
 from visionforge.utils.regression_config import RegressionModelConfig
 
 
@@ -26,8 +27,18 @@ class RegressionModelFactory:
         """Build a backbone with a ``num_targets``-wide linear head.
 
         Returns:
-            nn.Module emitting ``config.num_targets`` raw continuous outputs.
+            nn.Module emitting ``config.num_targets`` raw continuous outputs —
+            either a torchvision backbone with a swapped head, or a user-registered
+            custom model when ``config.custom_model`` is set (ADR-048/049).
         """
+        if config.custom_model is not None:
+            model = build_custom_model(
+                config.custom_model, num_outputs=config.num_targets
+            )
+            if config.weights_path is not None:
+                load_local_weights(model, config.weights_path)
+            return model
+
         use_imagenet = config.pretrained and config.weights_path is None
         model = build_backbone(config.name, use_imagenet=use_imagenet)
         replace_final_layer(model, config.name, config.num_targets)

@@ -546,9 +546,10 @@ Real end-to-end pipeline tests (no mocks), skipped in CI to keep it fast
   ONNX export (classification/detection/regression/segmentation). **Shipped.**
   Per-task transfer-learning shipped for regression (ADR-046) + segmentation
   (ADR-047). Tracker: `documentation/CROSS_TASK_PARITY_PLAN.md`.
-- **Custom models (ADR-048)** — drop-in `user_models/` + `@register_model`,
-  selected via `model.custom_model` in classification configs. **Shipped**
-  (classification path). See `user_models/README.md`.
+- **Custom models (ADR-048/049)** — drop-in `user_models/` + `@register_model`,
+  selected via `model.custom_model`. **Shipped** for classification, regression
+  and segmentation (the registry's builder takes the task's output dimension).
+  See `user_models/README.md`.
 - **Docker + `visionforge doctor` (ADR-042)** — `doctor` CLI (detect GPU/CUDA →
   exact torch install command) **shipped** (slice 1); the multi-stage GPU Docker
   image + compose (slice 2) is still planned. Design in
@@ -557,10 +558,6 @@ Real end-to-end pipeline tests (no mocks), skipped in CI to keep it fast
 ## Backlog / ideas (triaged into tasks)
 
 **Ready — well-scoped pick-up tasks:**
-- **Custom models for regression/segmentation** — extend the ADR-048 registry to
-  `RegressionModelFactory`/`SegmentationModelFactory` (add a `custom_model` field
-  to their configs; a custom model bypasses the head-swap). Mirrors the
-  classification integration.
 - **Online dataset download in the GUI** (Roboflow / Kaggle / HuggingFace /
   torchvision built-ins) — one-shot, user-initiated fetch to a local folder, then
   the existing data flow takes over (local-first; no core-path network). Roboflow

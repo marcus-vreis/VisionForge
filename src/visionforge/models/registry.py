@@ -1,9 +1,13 @@
-"""User-supplied custom model registry — drop-in ``user_models/`` (ADR-048).
+"""User-supplied custom model registry — drop-in ``user_models/`` (ADR-048/049).
 
 A researcher registers a custom architecture with ``@register_model("name")`` in a
 ``.py`` file under a user-models directory (default ``./user_models``).
 ``load_user_models()`` imports those files so their decorators run, after which
-``build_custom_model("name", num_classes=...)`` returns a fresh ``nn.Module``.
+``build_custom_model("name", num_outputs=...)`` returns a fresh ``nn.Module``.
+
+The builder receives a single int — the task's output dimension (``num_classes``
+for classification/segmentation, ``num_targets`` for regression) — so one custom
+model can serve every CNN-headed task.
 
 This executes the researcher's own local Python by design — VisionForge is
 local-first and runs on the user's own machine (ADR-005), so the trust boundary is
@@ -19,7 +23,7 @@ from pathlib import Path
 import torch.nn as nn
 from loguru import logger
 
-# A builder receives the task's ``num_classes`` and returns a ready model.
+# A builder receives the task's output dimension and returns a ready model.
 ModelBuilder = Callable[[int], nn.Module]
 
 _REGISTRY: dict[str, ModelBuilder] = {}
@@ -30,8 +34,8 @@ DEFAULT_USER_MODELS_DIR = Path("user_models")
 def register_model(name: str) -> Callable[[ModelBuilder], ModelBuilder]:
     """Decorator registering a custom model builder under ``name``.
 
-    The builder is called as ``builder(num_classes)`` and must return an
-    ``nn.Module`` emitting ``num_classes`` outputs (logits for classification).
+    The builder is called as ``builder(num_outputs)`` — the task's output
+    dimension — and must return an ``nn.Module`` emitting that many outputs.
     """
     if not name or not name.strip():
         raise ValueError("register_model requires a non-empty name.")
@@ -87,10 +91,12 @@ def _import_file(path: Path) -> None:
 def build_custom_model(
     name: str,
     *,
-    num_classes: int,
+    num_outputs: int,
     user_models_dir: Path | str | None = None,
 ) -> nn.Module:
     """Build a registered custom model, scanning ``user_models/`` on first miss.
+
+    ``num_outputs`` is the task's output dimension passed to the builder.
 
     Raises:
         KeyError: when ``name`` is not registered even after loading user models.
@@ -107,7 +113,7 @@ def build_custom_model(
             f"(available: {available or 'none'}). Define it with @register_model "
             f"in a .py file under {where}/."
         )
-    return _REGISTRY[name](num_classes)
+    return _REGISTRY[name](num_outputs)
 
 
 __all__ = [

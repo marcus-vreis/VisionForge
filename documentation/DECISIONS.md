@@ -713,7 +713,7 @@ special-case guard.
 **Decision:** Researchers can register their own architectures without editing
 VisionForge source. A `.py` file dropped under `user_models/` calls
 `@register_model("name")` (from `visionforge.models.registry`) on a builder
-`(num_classes) -> nn.Module`; `ModelFactory.create` builds it when a config sets
+`(num_outputs) -> nn.Module`; `ModelFactory.create` builds it when a config sets
 `model.custom_model: "name"` (a new optional field on the classification
 `ModelConfig`). The registry (`models/registry.py`, same layer as the factory) is
 a module-global dict; `load_user_models(dir)` imports every non-underscore `.py`
@@ -721,8 +721,8 @@ in the directory (default `./user_models`) to trigger registration, called lazil
 by `build_custom_model` on a name miss. When `custom_model` is set the builtin
 `name`/`pretrained` are ignored; `weights_path` still loads a local checkpoint
 (non-strict). A blank `custom_model` ("" from an untouched GUI text field) coerces
-to `None`, so the builtin backbone path is the default. Classification only for
-now (the `ModelFactory` path); other tasks keep their own factories.
+to `None`, so the builtin backbone path is the default. Initially classification
+only (the `ModelFactory` path); extended to regression and segmentation in ADR-049.
 
 **Reason:** "Bring your own model" is a recurring research need that the fixed
 `Literal` backbone list can't serve, and forking the factory per experiment
@@ -735,3 +735,29 @@ documented in `user_models/README.md`. The field is exposed through the existing
 schema-driven GUI form automatically (a `str | None` renders as a text input), so
 no bespoke frontend was required. Bad user files are logged and skipped rather
 than aborting discovery, so one broken drop-in doesn't break the others.
+
+## ADR-049 — Custom models for regression and segmentation
+
+**Date:** 2026-06
+**Status:** Accepted
+**Extends:** ADR-048
+
+**Decision:** The custom-model registry (ADR-048) now serves the regression and
+segmentation tasks too. `RegressionModelConfig` and `SegmentationModelConfig` each
+gain the same optional `custom_model` field (blank → `None`), and
+`RegressionModelFactory`/`SegmentationModelFactory` route to `build_custom_model`
+when it is set — passing the task's output dimension (`num_targets` for regression,
+`num_classes` for segmentation). To make that contract task-neutral, the registry's
+builder argument was renamed `num_classes` → `num_outputs`: a builder receives one
+int (the output dimension) and returns an `nn.Module`, so a single custom model can
+serve any CNN-headed task. A segmentation custom model is expected to emit per-pixel
+logits already (it bypasses the torchvision head-swap); the classification head-swap
+contract is unchanged.
+
+**Reason:** The registry was built generic in ADR-048; extending it to the other
+CNN-headed tasks is a few lines per factory and avoids three divergent
+"bring-your-own-model" mechanisms. Renaming to `num_outputs` keeps the builder
+contract honest now that the int means num_targets for regression — a builder
+written once works across tasks. Detection (Ultralytics owns the model) and anomaly
+(autoencoder/PatchCore, no swappable head) keep their own paths and ignore
+`custom_model`. Purely additive and behaviour-preserving when unset, like ADR-048.

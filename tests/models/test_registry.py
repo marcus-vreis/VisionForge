@@ -15,7 +15,11 @@ from visionforge.models.registry import (
     register_model,
     registered_models,
 )
+from visionforge.models.regression_factory import RegressionModelFactory
+from visionforge.models.segmentation_factory import SegmentationModelFactory
 from visionforge.utils.config import ModelConfig
+from visionforge.utils.regression_config import RegressionModelConfig
+from visionforge.utils.segmentation_config import SegmentationModelConfig
 
 # Repo-root user_models/ shipped with the project (holds example_custom_model.py).
 _REPO_USER_MODELS = Path(__file__).resolve().parents[2] / "user_models"
@@ -48,7 +52,7 @@ class TestRegisterAndBuild:
             return nn.Linear(8, num_classes)
 
         assert "unit_net" in registered_models()
-        model = build_custom_model("unit_net", num_classes=5)
+        model = build_custom_model("unit_net", num_outputs=5)
         assert isinstance(model, nn.Linear)
         assert model.out_features == 5
 
@@ -58,7 +62,7 @@ class TestRegisterAndBuild:
 
     def test_unknown_model_raises_with_available_names(self, tmp_path: Path) -> None:
         with pytest.raises(KeyError, match="not registered"):
-            build_custom_model("missing", num_classes=2, user_models_dir=tmp_path)
+            build_custom_model("missing", num_outputs=2, user_models_dir=tmp_path)
 
 
 class TestLoadUserModels:
@@ -66,7 +70,7 @@ class TestLoadUserModels:
         _write_model_file(tmp_path, "my_model", "from_file", in_features=4)
         names = load_user_models(tmp_path)
         assert "from_file" in names
-        model = build_custom_model("from_file", num_classes=3, user_models_dir=tmp_path)
+        model = build_custom_model("from_file", num_outputs=3, user_models_dir=tmp_path)
         assert isinstance(model, nn.Linear)
         assert model.in_features == 4 and model.out_features == 3
 
@@ -89,7 +93,7 @@ class TestShippedExample:
         load_user_models(_REPO_USER_MODELS)
         assert "example_tiny_cnn" in registered_models()
         model = build_custom_model(
-            "example_tiny_cnn", num_classes=4, user_models_dir=_REPO_USER_MODELS
+            "example_tiny_cnn", num_outputs=4, user_models_dir=_REPO_USER_MODELS
         ).eval()
         with torch.no_grad():
             out = model(torch.zeros(2, 3, 16, 16))
@@ -117,3 +121,33 @@ class TestModelFactoryCustomPath:
         # An untouched GUI text field ("") must not trigger the custom path.
         assert ModelConfig(custom_model="   ").custom_model is None
         assert ModelConfig(custom_model="").custom_model is None
+
+
+class TestRegressionFactoryCustomPath:
+    def test_factory_builds_registered_custom_model_with_num_targets(self) -> None:
+        @register_model("reg_net")
+        def build(num_outputs: int) -> nn.Module:
+            return nn.Linear(6, num_outputs)
+
+        config = RegressionModelConfig(custom_model="reg_net", num_targets=3)
+        model = RegressionModelFactory.create(config)
+        assert isinstance(model, nn.Linear)
+        assert model.out_features == 3  # the head width == num_targets
+
+    def test_blank_custom_model_coerced_to_none(self) -> None:
+        assert RegressionModelConfig(custom_model="  ").custom_model is None
+
+
+class TestSegmentationFactoryCustomPath:
+    def test_factory_builds_registered_custom_model_with_num_classes(self) -> None:
+        @register_model("seg_net")
+        def build(num_outputs: int) -> nn.Module:
+            return nn.Conv2d(3, num_outputs, kernel_size=1)
+
+        config = SegmentationModelConfig(custom_model="seg_net", num_classes=5)
+        model = SegmentationModelFactory.create(config)
+        assert isinstance(model, nn.Conv2d)
+        assert model.out_channels == 5  # per-pixel logits == num_classes
+
+    def test_blank_custom_model_coerced_to_none(self) -> None:
+        assert SegmentationModelConfig(custom_model="").custom_model is None

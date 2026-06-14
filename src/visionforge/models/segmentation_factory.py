@@ -38,6 +38,7 @@ from torchvision.models.segmentation import (
 )
 
 from visionforge.models.factory import load_local_weights
+from visionforge.models.registry import build_custom_model
 from visionforge.utils.segmentation_config import SegmentationModelConfig
 
 # name -> (builder, backbone weights enum, supports aux_loss kwarg)
@@ -158,8 +159,18 @@ class SegmentationModelFactory:
         Returns:
             nn.Module emitting per-pixel logits (``[N, num_classes, H, W]`` for
             U-Net; an ``OrderedDict`` with that under ``"out"`` for torchvision —
-            normalize with ``segmentation_logits``).
+            normalize with ``segmentation_logits``). When ``config.custom_model``
+            is set, a user-registered model is returned instead (ADR-048/049); it
+            is expected to emit per-pixel logits already.
         """
+        if config.custom_model is not None:
+            model = build_custom_model(
+                config.custom_model, num_outputs=config.num_classes
+            )
+            if config.weights_path is not None:
+                load_local_weights(model, config.weights_path)
+            return model
+
         use_pretrained = config.pretrained and config.weights_path is None
         model = SegmentationModelFactory._build(
             config.name, num_classes=config.num_classes, pretrained=use_pretrained

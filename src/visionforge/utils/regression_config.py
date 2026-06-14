@@ -58,6 +58,15 @@ class RegressionModelConfig(BaseModel):
     num_targets: int = Field(default=1, ge=1)
     pretrained: bool = True
     weights_path: Path | None = None
+    custom_model: str | None = Field(
+        default=None,
+        description=(
+            "Name of a user-registered custom model (drop-in user_models/, "
+            "ADR-048/049). When set, the builtin `name`/`pretrained` are ignored "
+            "and the model is built from the registry (it receives num_targets); "
+            "`weights_path` still loads a local checkpoint."
+        ),
+    )
 
     @field_validator("weights_path")
     @classmethod
@@ -68,6 +77,13 @@ class RegressionModelConfig(BaseModel):
             raise ValueError(f"weights_path does not exist: {v}")
         if not v.is_file():
             raise ValueError(f"weights_path must be a file, got: {v}")
+        return v
+
+    @field_validator("custom_model")
+    @classmethod
+    def blank_custom_model_is_none(cls, v: str | None) -> str | None:
+        if v is not None and not v.strip():
+            return None
         return v
 
 

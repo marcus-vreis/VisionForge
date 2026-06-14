@@ -49,7 +49,7 @@ Foundational utilities with no dependencies on other VisionForge modules.
 | Module | Responsibility |
 |---|---|
 | `factory.py` | `ModelFactory` — instantiates any supported CNN architecture from a `ModelConfig`. Handles pretrained weights and final layer replacement. Routes to the custom registry when `model.custom_model` is set. |
-| `registry.py` | Custom-model registry (ADR-048) — `@register_model` + `load_user_models()` discover user architectures dropped into `user_models/`; `build_custom_model()` instantiates them. Local-first: imports the user's own Python, nothing networked. |
+| `registry.py` | Custom-model registry (ADR-048/049) — `@register_model` + `load_user_models()` discover user architectures dropped into `user_models/`; `build_custom_model(name, num_outputs=…)` instantiates them. Serves the classification, regression and segmentation factories (builder takes the task's output dimension). Local-first: imports the user's own Python, nothing networked. |
 
 ### `core/`
 

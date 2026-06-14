@@ -89,7 +89,7 @@ class ModelFactory:
         """
         if config.custom_model is not None:
             model = build_custom_model(
-                config.custom_model, num_classes=config.num_classes
+                config.custom_model, num_outputs=config.num_classes
             )
             if config.weights_path is not None:
                 load_local_weights(model, config.weights_path)
