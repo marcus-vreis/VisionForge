@@ -94,6 +94,9 @@ splitting, export graph) and don't generalise cleanly.
    - ✅ slice 2c GUI: `ComparisonCard` in the regression/segmentation tabs
      (pick archs + ranking metric → `/compare`), `TaskComparisonReport` renders
      the ranked table in `ResultsView`.
+   - ✅ persistence: every comparison/sweep writes `<kind>_summary.json` +
+     `<kind>_ranking.csv` to `outputs/reports/<name>/<ts>/` (mirrors the
+     classification ModelComparisonBlock), and the report carries `report_dir`.
 3. **Batch prediction generic** — regression/segmentation/detection/anomaly.
 4. **Generic sweep** (grid/random) over the handle.
    - ✅ backend (ADR-045): `core/sweep.run_sweep` + `POST /api/{regression,

@@ -23,7 +23,10 @@ def _payload(tmp_path: Path) -> dict:
         "model": {"name": "autoencoder", "latent_dim": 16},
         "data": {"base_dir": str(base)},
         "training": {"epochs": 1, "batch_size": 4, "learning_rate": 0.001},
-        "output": {"models_dir": str(tmp_path / "models")},
+        "output": {
+            "models_dir": str(tmp_path / "models"),
+            "reports_dir": str(tmp_path / "reports"),
+        },
     }
 
 

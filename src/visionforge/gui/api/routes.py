@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import csv
 import json
 import platform
 from dataclasses import asdict
@@ -2289,11 +2290,15 @@ async def _execute_comparison(
         )
         if not any(t.status == "success" for t in trials):
             raise RuntimeError("All architectures failed — no ranking available.")
+        report = _comparison_report(trials, metric)
+        report["report_dir"] = _write_advanced_summary(
+            config_dict, "comparison", report
+        )
         _current_run = {
             "run_id": run_id,
             "status": "completed",
             "error": None,
-            "report": _comparison_report(trials, metric),
+            "report": report,
             "run_dir": None,
         }
         logger.success("GUI: Comparison {} completed ({} archs).", run_id, len(trials))
@@ -2394,11 +2399,15 @@ async def _execute_sweep(
         )
         if not any(t.status == "success" for t in trials):
             raise RuntimeError("All sweep trials failed — no ranking available.")
+        report = _sweep_report(trials, req.mode, metric)
+        report["report_dir"] = _write_advanced_summary(
+            base_config_dict, "sweep", report
+        )
         _current_run = {
             "run_id": run_id,
             "status": "completed",
             "error": None,
-            "report": _sweep_report(trials, req.mode, metric),
+            "report": report,
             "run_dir": None,
         }
         logger.success("GUI: Sweep {} completed ({} trials).", run_id, len(trials))
@@ -2428,6 +2437,48 @@ def _sweep_report(trials: list[SweepTrial], mode: str, metric: str) -> dict[str,
         "total_trials": len(rows),
         "successful_trials": len(successful),
     }
+
+
+def _flatten_trial(row: dict[str, Any]) -> dict[str, Any]:
+    """Flatten a comparison/sweep trial row (nested metrics/overrides) for CSV."""
+    flat: dict[str, Any] = {}
+    for key, value in row.items():
+        if key in ("metrics", "overrides") and isinstance(value, dict):
+            flat.update(value)
+        else:
+            flat[key] = value
+    return flat
+
+
+def _write_advanced_summary(
+    config_dict: dict[str, Any], kind: str, report: dict[str, Any]
+) -> str:
+    """Persist a comparison/sweep report (JSON + flat ranking CSV) to outputs/reports.
+
+    Mirrors the classification ModelComparisonBlock artifact layout so a
+    standalone-task comparison/sweep leaves the same durable record on disk
+    instead of vanishing when the result view closes.
+    """
+    name = str(config_dict.get("name", kind))
+    reports_dir = config_dict.get("output", {}).get("reports_dir") or "outputs/reports"
+    out_dir = Path(reports_dir) / name / datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    (out_dir / f"{kind}_summary.json").write_text(
+        json.dumps(report, indent=2), encoding="utf-8"
+    )
+
+    flat = [_flatten_trial(r) for r in report.get("trials", [])]
+    if flat:
+        fieldnames = list(dict.fromkeys(k for row in flat for k in row))
+        with (out_dir / f"{kind}_ranking.csv").open(
+            "w", newline="", encoding="utf-8"
+        ) as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
+            writer.writeheader()
+            writer.writerows(flat)
+
+    return str(out_dir)
 
 
 def _normalize_split_name(name: str) -> str:

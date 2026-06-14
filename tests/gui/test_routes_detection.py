@@ -24,7 +24,10 @@ def _payload(tmp_path: Path) -> dict:
         "model": {"backend": "ultralytics", "name": "yolo11n", "num_classes": 2},
         "data": {"base_dir": str(base), "image_size": 640},
         "training": {"epochs": 1, "batch_size": 8, "learning_rate": 0.01},
-        "output": {"models_dir": str(tmp_path / "models")},
+        "output": {
+            "models_dir": str(tmp_path / "models"),
+            "reports_dir": str(tmp_path / "reports"),
+        },
     }
 
 

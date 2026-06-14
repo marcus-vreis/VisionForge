@@ -23,7 +23,10 @@ def _payload(tmp_path: Path) -> dict:
         "model": {"name": "resnet18", "num_targets": 1, "pretrained": False},
         "data": {"base_dir": str(base), "target_columns": ["target"]},
         "training": {"epochs": 1, "batch_size": 8, "learning_rate": 0.001},
-        "output": {"models_dir": str(tmp_path / "models")},
+        "output": {
+            "models_dir": str(tmp_path / "models"),
+            "reports_dir": str(tmp_path / "reports"),
+        },
     }
 
 
@@ -154,6 +157,9 @@ class TestRegressionCompare:
             assert report["total_ran"] == 2
             assert report["failed_count"] == 0
             assert report["top_3"][0]["model_arch"] == "resnet50"
+            # the ranking is persisted to outputs/reports for later reference
+            assert (Path(report["report_dir"]) / "comparison_summary.json").exists()
+            assert (Path(report["report_dir"]) / "comparison_ranking.csv").exists()
         finally:
             routes_mod.run_model_comparison = orig
             routes_mod._current_run = None
@@ -242,6 +248,7 @@ class TestRegressionSweep:
             assert report["metric"] == "r2"
             assert report["total_trials"] == 2
             assert report["best_trial"]["overrides"]["training.learning_rate"] == 0.05
+            assert (Path(report["report_dir"]) / "sweep_summary.json").exists()
         finally:
             routes_mod.run_sweep = orig
             routes_mod._current_run = None
