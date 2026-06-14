@@ -134,6 +134,13 @@ splitting, export graph) and don't generalise cleanly.
      tab. **Comparison + sweep now cover all four standalone tasks, backend + GUI.**
 5. **Per-task**: transfer-learning knobs (regression/segmentation), then CV,
    then ONNX export. Each its own ADR if it changes a config surface.
+   - ✅ **Regression transfer-learning** (ADR-046): optional
+     `RegressionConfig.transfer_learning` (`feature_extraction` freezes the
+     backbone, trains only the head; `fine_tuning` puts the backbone in its own
+     param group at `lr × backbone_lr_multiplier`). Freeze + param-group logic in
+     `RegressionTrainer`; behavior-preserving when unset. GUI: "Transfer learning"
+     control in `RegressionPanel`. Tests in
+     `tests/core/test_regression_transfer_learning.py`. **Segmentation next.**
    - ✅ ONNX export for regression + segmentation: shared `core/onnx_export.py`
      (classification's `ExportONNXBlock` refactored to reuse it), per-task export
      in `gui/api/torch_onnx_export.py` (segmentation wrapped to a logits tensor),

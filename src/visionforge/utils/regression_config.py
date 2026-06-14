@@ -131,6 +131,19 @@ class RegressionTrainingConfig(BaseModel):
     scheduler: SchedulerConfig = Field(default_factory=SchedulerConfig)
 
 
+class RegressionTransferLearningConfig(BaseModel):
+    """Transfer-learning over the shared CNN backbone (optional).
+
+    ``feature_extraction`` freezes the backbone and trains only the regression
+    head; ``fine_tuning`` trains the whole network but scales the backbone's
+    learning rate by ``backbone_lr_multiplier`` (discriminative fine-tuning).
+    Absent from the config → standard full-network training at a single LR.
+    """
+
+    mode: Literal["feature_extraction", "fine_tuning"] = "feature_extraction"
+    backbone_lr_multiplier: float = Field(default=0.1, gt=0.0, le=1.0)
+
+
 class RegressionConfig(BaseModel):
     """Top-level image-regression experiment configuration."""
 
@@ -140,6 +153,7 @@ class RegressionConfig(BaseModel):
     model: RegressionModelConfig = Field(default_factory=RegressionModelConfig)
     data: RegressionDataConfig
     training: RegressionTrainingConfig = Field(default_factory=RegressionTrainingConfig)
+    transfer_learning: RegressionTransferLearningConfig | None = None
     output: OutputConfig = Field(default_factory=OutputConfig)
     device: DeviceConfig = Field(default_factory=DeviceConfig)
 
@@ -188,6 +202,7 @@ __all__ = [
     "RegressionModelConfig",
     "RegressionDataConfig",
     "RegressionTrainingConfig",
+    "RegressionTransferLearningConfig",
     "load_regression_config",
     "_REGRESSION_BACKBONES",
 ]

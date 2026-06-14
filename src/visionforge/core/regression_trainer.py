@@ -121,6 +121,7 @@ class RegressionTrainer:
         logger.info("RegressionTrainer using device: {}", self._device_label)
 
         model = self._prepare_model(model)
+        self._apply_transfer_learning(model)
         optimizer = optimizer if optimizer is not None else self._build_optimizer(model)
         criterion = self._build_criterion()
         scheduler = self._build_scheduler(optimizer)
@@ -263,6 +264,40 @@ class RegressionTrainer:
             model = nn.DataParallel(model, device_ids=self._dp_ids)
         return model
 
+    def _apply_transfer_learning(self, model: nn.Module) -> None:
+        """Freeze the backbone for feature extraction (no-op otherwise).
+
+        ``feature_extraction`` freezes every child except the head (the last
+        named child); ``fine_tuning`` and the unset case leave all params
+        trainable — the LR split happens in ``_build_optimizer``.
+        """
+        tl = self._config.transfer_learning
+        if tl is None or tl.mode != "feature_extraction":
+            return
+        head, backbone = self._split_named_params(model)
+        for p in backbone:
+            p.requires_grad = False
+        for p in head:
+            p.requires_grad = True
+
+    @staticmethod
+    def _split_named_params(
+        model: nn.Module,
+    ) -> tuple[list[nn.Parameter], list[nn.Parameter]]:
+        """Return (head_params, backbone_params) split by the last named child.
+
+        Unwraps DataParallel so the head is the model's own final layer, not the
+        ``module`` wrapper.
+        """
+        core = getattr(model, "module", model)
+        children = list(core.named_children())
+        head_name = children[-1][0] if children else None
+        head: list[nn.Parameter] = []
+        backbone: list[nn.Parameter] = []
+        for name, child in children:
+            (head if name == head_name else backbone).extend(child.parameters())
+        return head, backbone
+
     def _build_optimizer(self, model: nn.Module) -> torch.optim.Optimizer:
         cfg = self._config.training
         builders: dict[str, Callable[..., torch.optim.Optimizer]] = {
@@ -270,11 +305,37 @@ class RegressionTrainer:
             "sgd": torch.optim.SGD,
             "adamw": torch.optim.AdamW,
         }
-        return builders[cfg.optimizer](
-            model.parameters(),
-            lr=cfg.learning_rate,
-            weight_decay=cfg.weight_decay,
-        )
+        builder = builders[cfg.optimizer]
+        tl = self._config.transfer_learning
+
+        if tl is None:
+            return builder(
+                model.parameters(),
+                lr=cfg.learning_rate,
+                weight_decay=cfg.weight_decay,
+            )
+
+        if tl.mode == "feature_extraction":
+            trainable = [p for p in model.parameters() if p.requires_grad]
+            return builder(
+                trainable, lr=cfg.learning_rate, weight_decay=cfg.weight_decay
+            )
+
+        # fine_tuning: backbone at a reduced LR, head at the full LR.
+        head, backbone = self._split_named_params(model)
+        groups = [
+            {
+                "params": backbone,
+                "lr": cfg.learning_rate * tl.backbone_lr_multiplier,
+                "weight_decay": cfg.weight_decay,
+            },
+            {
+                "params": head,
+                "lr": cfg.learning_rate,
+                "weight_decay": cfg.weight_decay,
+            },
+        ]
+        return builder(groups)
 
     def _build_criterion(self) -> nn.Module:
         cfg = self._config.training

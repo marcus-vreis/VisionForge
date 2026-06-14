@@ -26,6 +26,8 @@ export const REGRESSION_LOSSES: { value: string; label: string }[] = [
   { value: "huber", label: "Huber" },
 ];
 
+export type TransferMode = "none" | "feature_extraction" | "fine_tuning";
+
 /** Controlled form state for a regression run — mirrors RegressionConfig. */
 export interface RegressionForm {
   name: string;
@@ -34,6 +36,9 @@ export interface RegressionForm {
     num_targets: number;
     pretrained: boolean;
   };
+  /** Transfer learning over the shared backbone; "none" → full training. */
+  transfer: TransferMode;
+  backbone_lr_multiplier: number;
   data: {
     base_dir: string;
     images_dir: string;
@@ -60,6 +65,8 @@ export function makeDefaultRegressionForm(): RegressionForm {
   return {
     name: "regression_001",
     model: { name: "resnet50", num_targets: 1, pretrained: true },
+    transfer: "none",
+    backbone_lr_multiplier: 0.1,
     data: {
       base_dir: "",
       images_dir: "images",
@@ -112,5 +119,21 @@ export function buildRegressionPayload(
       image_size: form.data.image_size,
     },
     training: { ...form.training },
+    transfer_learning: buildTransferLearning(form),
+  };
+}
+
+/** Map the transfer-learning form fields to the RegressionConfig payload shape.
+ *  "none" → null (full training); fine_tuning carries the backbone LR multiplier. */
+export function buildTransferLearning(
+  form: RegressionForm,
+): Record<string, unknown> | null {
+  if (form.transfer === "none") return null;
+  if (form.transfer === "feature_extraction") {
+    return { mode: "feature_extraction" };
+  }
+  return {
+    mode: "fine_tuning",
+    backbone_lr_multiplier: form.backbone_lr_multiplier,
   };
 }

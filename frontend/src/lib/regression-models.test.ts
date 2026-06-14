@@ -36,4 +36,21 @@ describe("regression-models", () => {
     expect(model.num_targets).toBe(1);
     expect(data.target_columns).toEqual(["target"]);
   });
+
+  it("maps transfer-learning mode to the config payload shape", () => {
+    const form = makeDefaultRegressionForm();
+    expect(buildRegressionPayload(form).transfer_learning).toBeNull();
+
+    form.transfer = "feature_extraction";
+    expect(buildRegressionPayload(form).transfer_learning).toEqual({
+      mode: "feature_extraction",
+    });
+
+    form.transfer = "fine_tuning";
+    form.backbone_lr_multiplier = 0.2;
+    expect(buildRegressionPayload(form).transfer_learning).toEqual({
+      mode: "fine_tuning",
+      backbone_lr_multiplier: 0.2,
+    });
+  });
 });

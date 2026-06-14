@@ -644,3 +644,33 @@ Keeping the search-space grammar identical to classification's means one mental
 model and a future unification path. Validating the base config and every
 dot-path before running spends no GPU time on a typo. Backend-first per the
 Phase-5 norm; the GUI lands with the deferred comparison panel on the new design.
+
+## ADR-046 — Transfer-learning knobs as a per-task config field (regression)
+
+**Date:** 2026-06
+**Status:** Accepted
+**Extends:** ADR-036, ADR-041
+
+**Decision:** Transfer learning for the standalone tasks is an **optional config
+field on the task**, not a generic block. `RegressionConfig` gains
+`transfer_learning: RegressionTransferLearningConfig | None` with `mode`
+(`feature_extraction` | `fine_tuning`) and `backbone_lr_multiplier`. When unset
+(the default) training is unchanged — full network, single LR.
+`feature_extraction` freezes every child except the head (the model's last named
+child) and optimizes only the head; `fine_tuning` trains everything but puts the
+backbone in its own param group at `learning_rate × backbone_lr_multiplier`. The
+freeze + param-group construction lives in `RegressionTrainer`
+(`_apply_transfer_learning` / `_build_optimizer`, DataParallel-unwrapped). GUI:
+a "Transfer learning" segmented control in `RegressionPanel`; the payload maps
+"none" → `null`. Classification keeps its separate `TransferLearningBlock`.
+
+**Reason:** ADR-041's verdict put transfer learning in the *per-task* column,
+not the generic-runner column: freezing touches task-specific model internals
+(which child is the head) and a shared CNN backbone, so it does not generalize as
+cleanly as comparison/sweep/batch-predict. A nullable config field keeps it fully
+behavior-preserving when absent (no migration, no GPU-time change for existing
+runs) while exposing the two workflows researchers actually use on small image
+sets — frozen-backbone feature extraction and discriminative fine-tuning. Reusing
+the "last named child = head" convention from classification's
+`TransferLearningBlock` keeps one mental model without coupling the standalone
+task back to `ExperimentConfig`. Segmentation gets the same field next.
