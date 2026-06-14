@@ -704,3 +704,34 @@ backbones); U-Net has no pretrained weights, so feature extraction there only
 trains the final conv — allowed but documented as not recommended, mirroring
 regression's "pretrained=False is the user's call" stance rather than adding a
 special-case guard.
+
+## ADR-048 — User-supplied custom models via a drop-in registry
+
+**Date:** 2026-06
+**Status:** Accepted
+
+**Decision:** Researchers can register their own architectures without editing
+VisionForge source. A `.py` file dropped under `user_models/` calls
+`@register_model("name")` (from `visionforge.models.registry`) on a builder
+`(num_classes) -> nn.Module`; `ModelFactory.create` builds it when a config sets
+`model.custom_model: "name"` (a new optional field on the classification
+`ModelConfig`). The registry (`models/registry.py`, same layer as the factory) is
+a module-global dict; `load_user_models(dir)` imports every non-underscore `.py`
+in the directory (default `./user_models`) to trigger registration, called lazily
+by `build_custom_model` on a name miss. When `custom_model` is set the builtin
+`name`/`pretrained` are ignored; `weights_path` still loads a local checkpoint
+(non-strict). A blank `custom_model` ("" from an untouched GUI text field) coerces
+to `None`, so the builtin backbone path is the default. Classification only for
+now (the `ModelFactory` path); other tasks keep their own factories.
+
+**Reason:** "Bring your own model" is a recurring research need that the fixed
+`Literal` backbone list can't serve, and forking the factory per experiment
+doesn't scale. A drop-in directory + decorator is the lightest extension point:
+purely additive (absent `user_models/` ⇒ no behavior change, no migration), needs
+no plugin manifest, and keeps user code out of the package tree. Executing local
+Python is acceptable because VisionForge is local-first and offline (ADR-005) — the
+trust boundary is the user's own machine, so no sandboxing is imposed; this is
+documented in `user_models/README.md`. The field is exposed through the existing
+schema-driven GUI form automatically (a `str | None` renders as a text input), so
+no bespoke frontend was required. Bad user files are logged and skipped rather
+than aborting discovery, so one broken drop-in doesn't break the others.

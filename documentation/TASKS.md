@@ -538,28 +538,52 @@ Real end-to-end pipeline tests (no mocks), skipped in CI to keep it fast
   MetricsPlotter → run.json` path (metrics, `test_accuracy`, loss/CM plots,
   checkpoint). Enable with `VF_RUN_CLASSIFICATION_INTEGRATION=1`.
 
-## Planned & specced (decisions recorded, awaiting implementation)
+## Planned & specced (decisions recorded)
 
-- **Cross-task strategy parity (ADR-041)** — generic `TaskRunner` handle +
-  generic comparison/sweep/batch-predict runners; extend model comparison, batch
-  prediction, and grid/random search to the standalone tasks. Slice order +
-  open questions in `documentation/CROSS_TASK_PARITY_PLAN.md`. Ship slice 1
-  (handle + classification adapter, pure de-coupling) first.
+- **Cross-task strategy parity (ADR-041/044/045)** — generic `TaskRunner` handle +
+  comparison + sweep extended to all four standalone tasks (backend + GUI +
+  persistence), generic batch-predict (classification/regression/anomaly), and
+  ONNX export (classification/detection/regression/segmentation). **Shipped.**
+  Per-task transfer-learning shipped for regression (ADR-046) + segmentation
+  (ADR-047). Tracker: `documentation/CROSS_TASK_PARITY_PLAN.md`.
+- **Custom models (ADR-048)** — drop-in `user_models/` + `@register_model`,
+  selected via `model.custom_model` in classification configs. **Shipped**
+  (classification path). See `user_models/README.md`.
 - **Docker + `visionforge doctor` (ADR-042)** — `doctor` CLI (detect GPU/CUDA →
   exact torch install command) **shipped** (slice 1); the multi-stage GPU Docker
   image + compose (slice 2) is still planned. Design in
   `documentation/DOCKER_PLAN.md`. Local-only; k8s rejected.
 
-## Backlog / ideas
+## Backlog / ideas (triaged into tasks)
 
-- Optuna integration as alternative to `RandomSearchBlock`
-- `timm` model library support as additional model source
-- TensorBoard / MLflow integration for experiment tracking
-- Dark/light theme toggle in GUI
-- Migrate `utils/config.py` → `configs/schemas/classification_config.py` when a second task is added (Phase 6+)
-- Online dataset download in the GUI (Roboflow / Kaggle / HuggingFace / torchvision built-ins) — one-shot, user-initiated fetch to a local folder, then the existing data flow takes over (stays local-first; no core-path network). Roboflow *exports* already work today via `DetectionDataConfig.data_yaml`; this only removes the manual download. `roboflow` would be an optional extra, bound lazily like `ultralytics`.
-- User-supplied custom model via a `ModelRegistry` (drop-in `user_models/`)
-- More animated-SVG touches where they carry signal (empty/loading states, per-`RunCard` metric sparklines, live-training progress) — build on the existing `Waves`/`Particles` compositor layer, gate non-essential motion behind `prefers-reduced-motion`, no heavy animation dependency.
+**Ready — well-scoped pick-up tasks:**
+- **Custom models for regression/segmentation** — extend the ADR-048 registry to
+  `RegressionModelFactory`/`SegmentationModelFactory` (add a `custom_model` field
+  to their configs; a custom model bypasses the head-swap). Mirrors the
+  classification integration.
+- **Online dataset download in the GUI** (Roboflow / Kaggle / HuggingFace /
+  torchvision built-ins) — one-shot, user-initiated fetch to a local folder, then
+  the existing data flow takes over (local-first; no core-path network). Roboflow
+  *exports* already work via `DetectionDataConfig.data_yaml`; this removes the
+  manual download. `roboflow` as an optional extra, bound lazily like `ultralytics`.
+
+**Larger — needs design or new dependencies (prefer a reviewed session):**
+- **Cross-validation (K-fold)** for regression/segmentation — last cross-task
+  parity slice; needs dataset fold-split + orchestration + config/ADR + API + GUI
+  card + report. Design notes in the parity tracker.
+- **`timm` model source** — a third backbone source alongside torchvision builders
+  and the custom registry; adds a dependency. Design how the three coexist.
+- **Optuna** as an alternative to `RandomSearchBlock` (samplers + pruning).
+- **TensorBoard / MLflow** experiment-tracking integration.
+- **Dark/light theme toggle** — needs a coherent light palette for the dark-first
+  blueprint design (design judgment).
+- **More animated-SVG touches** where they carry signal (empty/loading states,
+  per-`RunCard` sparklines, live-training progress), gated behind
+  `prefers-reduced-motion`, no heavy animation dependency.
+
+**Housekeeping:**
+- Migrate `utils/config.py` → `configs/schemas/classification_config.py` (deferred;
+  the standalone tasks already carry their own `*_config.py`).
 
 ## Cowork dev-experience (skills + setup)
 

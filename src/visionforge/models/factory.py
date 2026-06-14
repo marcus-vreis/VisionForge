@@ -8,6 +8,7 @@ import torch
 import torch.nn as nn
 import torchvision.models as tv_models
 
+from visionforge.models.registry import build_custom_model
 from visionforge.utils.config import ModelConfig
 
 
@@ -82,8 +83,18 @@ class ModelFactory:
             config: model configuration.
 
         Returns:
-            nn.Module with the final classifier replaced to match num_classes.
+            nn.Module emitting ``num_classes`` logits — either a torchvision
+            backbone with a swapped head, or a user-registered custom model when
+            ``config.custom_model`` is set (ADR-048).
         """
+        if config.custom_model is not None:
+            model = build_custom_model(
+                config.custom_model, num_classes=config.num_classes
+            )
+            if config.weights_path is not None:
+                load_local_weights(model, config.weights_path)
+            return model
+
         # Use ImageNet weights only when pretrained=True and no local path is given.
         use_imagenet = config.pretrained and config.weights_path is None
         model = build_backbone(config.name, use_imagenet=use_imagenet)
