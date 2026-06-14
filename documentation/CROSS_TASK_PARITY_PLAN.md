@@ -140,7 +140,12 @@ splitting, export graph) and don't generalise cleanly.
      param group at `lr × backbone_lr_multiplier`). Freeze + param-group logic in
      `RegressionTrainer`; behavior-preserving when unset. GUI: "Transfer learning"
      control in `RegressionPanel`. Tests in
-     `tests/core/test_regression_transfer_learning.py`. **Segmentation next.**
+     `tests/core/test_regression_transfer_learning.py`.
+   - ✅ **Segmentation transfer-learning** (ADR-047): same field/logic on
+     `SegmentationConfig` + `SegmentationTrainer` + `SegmentationPanel`. Head =
+     last named child verified for every family (`classifier` for DeepLab/FCN/
+     LR-ASPP, `outc` for U-Net). Tests in
+     `tests/core/test_segmentation_transfer_learning.py`. **CV next.**
    - ✅ ONNX export for regression + segmentation: shared `core/onnx_export.py`
      (classification's `ExportONNXBlock` refactored to reuse it), per-task export
      in `gui/api/torch_onnx_export.py` (segmentation wrapped to a logits tensor),

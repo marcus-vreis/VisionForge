@@ -32,6 +32,8 @@ export const SEGMENTATION_LOSSES: { value: string; label: string }[] = [
   { value: "combined", label: "CE + Dice" },
 ];
 
+export type TransferMode = "none" | "feature_extraction" | "fine_tuning";
+
 /** Controlled form state for a segmentation run — mirrors SegmentationConfig. */
 export interface SegmentationForm {
   name: string;
@@ -40,6 +42,10 @@ export interface SegmentationForm {
     num_classes: number;
     pretrained: boolean;
   };
+  /** Transfer learning over the backbone; "none" → full training. Meaningful for
+   *  the torchvision families (ImageNet-pretrained); U-Net has no pretrained weights. */
+  transfer: TransferMode;
+  backbone_lr_multiplier: number;
   data: {
     base_dir: string;
     images_subdir: string;
@@ -65,6 +71,8 @@ export function makeDefaultSegmentationForm(): SegmentationForm {
   return {
     name: "segmentation_001",
     model: { name: "deeplabv3_resnet50", num_classes: 2, pretrained: true },
+    transfer: "none",
+    backbone_lr_multiplier: 0.1,
     data: {
       base_dir: "",
       images_subdir: "images",
@@ -104,5 +112,21 @@ export function buildSegmentationPayload(
     model: { ...form.model, num_classes: Math.max(form.model.num_classes, 1) },
     data: { ...form.data },
     training: { ...form.training },
+    transfer_learning: buildTransferLearning(form),
+  };
+}
+
+/** Map the transfer-learning form fields to the SegmentationConfig payload shape.
+ *  "none" → null (full training); fine_tuning carries the backbone LR multiplier. */
+export function buildTransferLearning(
+  form: SegmentationForm,
+): Record<string, unknown> | null {
+  if (form.transfer === "none") return null;
+  if (form.transfer === "feature_extraction") {
+    return { mode: "feature_extraction" };
+  }
+  return {
+    mode: "fine_tuning",
+    backbone_lr_multiplier: form.backbone_lr_multiplier,
   };
 }

@@ -313,6 +313,42 @@ export function SegmentationPanel({
         </div>
       </div>
 
+      {/* Transfer learning */}
+      <div style={card}>
+        <div style={sectionLabel}>Transfer learning</div>
+        <div style={grid}>
+          <Segmented
+            label="Modo"
+            value={formData.transfer}
+            onChange={(v) =>
+              setFormData((p) => ({
+                ...p,
+                transfer: v as SegmentationForm["transfer"],
+              }))
+            }
+            options={[
+              { value: "none", label: "Completo" },
+              { value: "feature_extraction", label: "Feature extr." },
+              { value: "fine_tuning", label: "Fine-tuning" },
+            ]}
+            hint="backbone pré-treinado (torchvision)"
+          />
+          {formData.transfer === "fine_tuning" && (
+            <NumberField
+              label="Backbone LR ×"
+              value={formData.backbone_lr_multiplier}
+              onChange={(v) =>
+                setFormData((p) => ({ ...p, backbone_lr_multiplier: v }))
+              }
+              min={0.0001}
+              max={1}
+              step={0.05}
+              hint="LR do backbone = LR × isto"
+            />
+          )}
+        </div>
+      </div>
+
       {onCompare && (
         <ComparisonCard
           modelOptions={SEGMENTATION_MODELS}

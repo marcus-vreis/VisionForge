@@ -45,4 +45,21 @@ describe("segmentation-models", () => {
     expect(data.base_dir).toBe("/data/seg");
     expect(data.masks_subdir).toBe("masks");
   });
+
+  it("maps transfer-learning mode to the config payload shape", () => {
+    const form = makeDefaultSegmentationForm();
+    expect(buildSegmentationPayload(form).transfer_learning).toBeNull();
+
+    form.transfer = "feature_extraction";
+    expect(buildSegmentationPayload(form).transfer_learning).toEqual({
+      mode: "feature_extraction",
+    });
+
+    form.transfer = "fine_tuning";
+    form.backbone_lr_multiplier = 0.25;
+    expect(buildSegmentationPayload(form).transfer_learning).toEqual({
+      mode: "fine_tuning",
+      backbone_lr_multiplier: 0.25,
+    });
+  });
 });

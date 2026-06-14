@@ -674,3 +674,33 @@ sets — frozen-backbone feature extraction and discriminative fine-tuning. Reus
 the "last named child = head" convention from classification's
 `TransferLearningBlock` keeps one mental model without coupling the standalone
 task back to `ExperimentConfig`. Segmentation gets the same field next.
+
+## ADR-047 — Transfer-learning knobs for segmentation (mirrors ADR-046)
+
+**Date:** 2026-06
+**Status:** Accepted
+**Extends:** ADR-037, ADR-046
+
+**Decision:** Segmentation gets the same per-task transfer-learning field as
+regression: optional `SegmentationConfig.transfer_learning`
+(`SegmentationTransferLearningConfig`: `mode` ∈ {`feature_extraction`,
+`fine_tuning`} + `backbone_lr_multiplier`). `feature_extraction` freezes every
+child except the dense head and optimizes only the head; `fine_tuning` puts the
+backbone in its own param group at `learning_rate × backbone_lr_multiplier`. The
+freeze + split logic lives in `SegmentationTrainer`
+(`_apply_transfer_learning`/`_split_named_params`/`_build_optimizer`), identical
+to `RegressionTrainer`. The "head = last named child" convention was verified to
+hold for every family: `classifier` for DeepLabV3 / FCN / LR-ASPP (with
+`aux_loss=False`, no `aux_classifier` child) and `outc` for U-Net. GUI: a
+"Transfer learning" segmented control in `SegmentationPanel`; payload maps
+"none" → `null`.
+
+**Reason:** Same rationale as ADR-046 — transfer learning is a per-task knob over
+a shared/pretrained backbone, behavior-preserving when unset. Verifying the
+head-is-last-child invariant for each segmentation family up front de-risks the
+freeze split (a wrong head would silently train the backbone and freeze the head).
+The knob is most useful for the torchvision families (ImageNet-pretrained
+backbones); U-Net has no pretrained weights, so feature extraction there only
+trains the final conv — allowed but documented as not recommended, mirroring
+regression's "pretrained=False is the user's call" stance rather than adding a
+special-case guard.

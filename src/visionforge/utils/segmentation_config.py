@@ -119,6 +119,21 @@ class SegmentationTrainingConfig(BaseModel):
     scheduler: SchedulerConfig = Field(default_factory=SchedulerConfig)
 
 
+class SegmentationTransferLearningConfig(BaseModel):
+    """Transfer-learning over a pretrained segmentation backbone (optional).
+
+    ``feature_extraction`` freezes the backbone and trains only the dense head
+    (the model's last named child — ``classifier`` for the torchvision families,
+    ``outc`` for U-Net); ``fine_tuning`` trains the whole network but scales the
+    backbone's learning rate by ``backbone_lr_multiplier``. Absent → standard
+    full-network training at a single LR. Most useful for the torchvision families
+    (ImageNet-pretrained backbones); U-Net has no pretrained weights.
+    """
+
+    mode: Literal["feature_extraction", "fine_tuning"] = "feature_extraction"
+    backbone_lr_multiplier: float = Field(default=0.1, gt=0.0, le=1.0)
+
+
 class SegmentationConfig(BaseModel):
     """Top-level semantic-segmentation experiment configuration."""
 
@@ -130,6 +145,7 @@ class SegmentationConfig(BaseModel):
     training: SegmentationTrainingConfig = Field(
         default_factory=SegmentationTrainingConfig
     )
+    transfer_learning: SegmentationTransferLearningConfig | None = None
     output: OutputConfig = Field(default_factory=OutputConfig)
     device: DeviceConfig = Field(default_factory=DeviceConfig)
 
@@ -179,6 +195,7 @@ __all__ = [
     "SegmentationModelConfig",
     "SegmentationDataConfig",
     "SegmentationTrainingConfig",
+    "SegmentationTransferLearningConfig",
     "load_segmentation_config",
     "_SEGMENTATION_MODELS",
 ]
