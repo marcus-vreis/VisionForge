@@ -311,7 +311,10 @@ export interface GradCamRequestPayload {
 export interface GradCamItem {
   source: string;
   overlay: string;
-  predicted_class: number;
+  /** argmax class (classification/segmentation); null for regression. */
+  predicted_class: number | null;
+  /** human-readable label (regression values / segmentation target); may be null. */
+  prediction?: string | null;
 }
 
 export interface GradCamResponse {

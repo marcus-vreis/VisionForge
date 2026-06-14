@@ -503,6 +503,12 @@ new task. Dependency-free (pure torch hooks).
 **✅ Grad-CAM complete: explainability for trained classification runs
 (core → API → GUI), dependency-free.**
 
+- [x] **Grad-CAM for regression + segmentation (ADR-053)** — generalized
+  `core.gradcam` with a `target_fn`; `gui/api/torch_gradcam.build_gradcam`
+  dispatches classification / regression (output saliency) / segmentation
+  (per-class CAM) through the same `/api/runs/{id}/gradcam`; GUI card gated to
+  those three (detection/anomaly excluded).
+
 ## Dataset augmentation preview ✅ (backlog item done)
 
 - [x] `POST /api/dataset/preview_augment` — renders N random variants of a sample

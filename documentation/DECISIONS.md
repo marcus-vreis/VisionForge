@@ -850,3 +850,33 @@ one mental model. Keeping it an optional lazily-imported extra follows ADR-005, 
 tests stay offline by exercising the study with a fake runner (`pytest.importorskip`
 guards when the extra is absent). Mid-training pruning is left out of this slice to
 avoid changing the trainer/SSE contract.
+
+## ADR-053 — Grad-CAM for regression and segmentation
+
+**Date:** 2026-06
+**Status:** Accepted
+**Extends:** ADR (classification Grad-CAM), ADR-041
+
+**Decision:** Grad-CAM explainability extends from classification to regression and
+segmentation. `core.gradcam.GradCAM.__call__` gains an optional `target_fn(output)
+-> scalar` that selects what to back-propagate, keeping the classification default
+(predicted/`target_class` logit). A new `gui/api/torch_gradcam.build_gradcam(data,
+target_index, checkpoint)` rebuilds the run's model (`pretrained=False`, lenient
+read so a moved dataset doesn't block) and returns the model + eval transform +
+`target_fn` + a `describe` label callable, dispatching on task: classification =
+class logit; regression = a continuous output column (`out[:, i]`, saliency);
+segmentation = mean logit of a class channel (`out[:, c].mean()`, model wrapped to a
+logits tensor). `_execute_run_gradcam` now drives any of the three through one loop;
+detection (Ultralytics) and anomaly (no class/conv target) are rejected.
+`GradCamItem` gains `prediction: str | None` and `predicted_class` becomes optional
+(None for regression); the GUI shows `prediction` when present and the Grad-CAM card
+is gated to classification + regression + segmentation.
+
+**Reason:** The CAM machinery (hook the last conv, GAP-weight the gradients,
+ReLU-sum) is task-agnostic — only the back-prop target differs — so generalizing is
+a small seam rather than three implementations. Routing the per-task model build
+through a `torch_gradcam` module mirrors the ONNX-export/batch-predict precedent and
+keeps `routes` thin. Regression saliency and per-class segmentation CAMs are the
+standard explainability views for those tasks; detection/anomaly genuinely lack a
+single conv-logit target, so they stay out. Dependency-free (pure torch), offline
+tests with tiny models (ADR-010).

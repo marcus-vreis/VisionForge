@@ -157,7 +157,11 @@ splitting, export graph) and don't generalise cleanly.
      in `gui/api/torch_onnx_export.py` (segmentation wrapped to a logits tensor),
      wired into the existing `/api/runs/{id}/export_onnx`. Detection = Ultralytics;
      anomaly excluded (PatchCore's memory-bank scoring has no forward graph).
-6. Grad-CAM/explainability last (research-grade, per-task).
+6. ✅ **Grad-CAM/explainability** (ADR-053): generalized `core.gradcam` with a
+   `target_fn`; `gui/api/torch_gradcam.build_gradcam` dispatches classification
+   (class logit) / regression (continuous-output saliency) / segmentation (per-class
+   CAM, logits-wrapped) through the existing `/api/runs/{id}/gradcam`. GUI gates the
+   card to those three. Detection/anomaly excluded (no single conv-logit target).
 
 Each slice: new modules + reuse, an ADR if it changes behavior, the full
 `vf-verify` gauntlet, mocked tests (no weight downloads, ADR-010).

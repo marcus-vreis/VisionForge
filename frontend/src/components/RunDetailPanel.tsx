@@ -167,6 +167,9 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
   // anomaly (score + threshold decision). Detection/segmentation produce
   // per-box/per-pixel outputs that don't map to a flat row yet (ADR-041 slice 3).
   const canBatchPredict = !isDetection && runTask !== "segmentation";
+  // Grad-CAM: classification + regression + segmentation (conv-based CAM, ADR-053).
+  // Detection (Ultralytics) and anomaly (no class/conv target) are excluded.
+  const canGradcam = !isDetection && runTask !== "anomaly";
 
   useEffect(() => {
     let alive = true;
@@ -774,7 +777,7 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
             </Section>
           )}
 
-          {detail.artifacts.model && !isDetection && (
+          {detail.artifacts.model && canGradcam && (
             <Section
               title="Grad-CAM (explicabilidade)"
               action={
@@ -938,7 +941,8 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
                                 color: "var(--vf-text-dim)",
                               }}
                             >
-                              classe predita: {item.predicted_class}
+                              {item.prediction ??
+                                `classe predita: ${item.predicted_class}`}
                             </div>
                           </button>
                         );

@@ -231,11 +231,18 @@ class GradCamRequest(BaseModel):
 
 
 class GradCamItem(BaseModel):
-    """One Grad-CAM overlay: source image + predicted class + overlay artifact."""
+    """One Grad-CAM overlay: source image + overlay artifact + a prediction label.
+
+    ``predicted_class`` is the argmax class for classification/segmentation runs
+    (None for regression); ``prediction`` is a human-readable label that also
+    carries the regression values / segmentation target so the GUI can show it for
+    every task.
+    """
 
     source: str
     overlay: str
-    predicted_class: int
+    predicted_class: int | None = None
+    prediction: str | None = None
 
 
 class GradCamResponse(BaseModel):

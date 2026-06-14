@@ -1782,55 +1782,31 @@ _GRADCAM_IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp"
 
 
 def _execute_run_gradcam(run_dir: Path, req: GradCamRequest) -> GradCamResponse:
-    """Rebuild this run's classifier and write Grad-CAM overlays for samples.
+    """Rebuild this run's model and write Grad-CAM overlays for sample images.
 
-    Reads the run config's model + transform settings (no full ExperimentConfig
-    validation, so a moved dataset path does not block explainability), loads the
-    checkpoint, and overlays the CAM for up to ``num_samples`` images.
+    Dispatches by task (classification / regression / segmentation) via
+    ``build_gradcam``; detection and anomaly are unsupported. Model + transform are
+    read leniently from run.json so a moved dataset path does not block it; the
+    checkpoint supplies the weights (architecture rebuilt with ``pretrained=False``,
+    no download).
     """
     import torch
+    from PIL import Image
 
-    from visionforge.core.data import _build_transforms
     from visionforge.core.gradcam import GradCAM, overlay_cam, resolve_target_layer
-    from visionforge.models.factory import ModelFactory
-    from visionforge.utils.config import (
-        ModelConfig,
-        PreprocessingConfig,
-        TransformConfig,
-    )
+    from visionforge.gui.api.torch_gradcam import build_gradcam
 
     data: dict[str, Any] = json.loads(
         (run_dir / "run.json").read_text(encoding="utf-8")
     )
-    config_dict: dict[str, Any] = data.get("config", {})
-    task = config_dict.get("task")
-    if task not in ("binary", "multiclass", "classification", None):
-        raise ValueError(
-            f"Grad-CAM is only available for classification runs (run task='{task}')."
-        )
-
     checkpoint_path = data.get("artifacts", {}).get("model")
     if not checkpoint_path or not Path(checkpoint_path).is_file():
         raise FileNotFoundError(
             f"Run '{run_dir.name}' has no usable checkpoint at artifacts.model."
         )
 
-    # Rebuild the architecture with random init (the checkpoint provides weights),
-    # so no ImageNet download happens even if the run was pretrained.
-    model_dict = {**config_dict.get("model", {}), "pretrained": False}
-    model_dict.pop("weights_path", None)
-    model = ModelFactory.create(ModelConfig.model_validate(model_dict))
-    state_dict = torch.load(str(checkpoint_path), map_location="cpu", weights_only=True)
-    model.load_state_dict(state_dict)  # type: ignore[arg-type]
-    model.eval()
-
-    data_dict = config_dict.get("data", {})
-    transform = _build_transforms(
-        TransformConfig.model_validate(data_dict.get("transforms", {})),
-        is_train=False,
-        preprocessing=PreprocessingConfig.model_validate(
-            data_dict.get("preprocessing", {})
-        ),
+    setup = build_gradcam(
+        data, target_index=req.target_class, checkpoint=checkpoint_path
     )
 
     input_dir = Path(req.input_dir)
@@ -1843,21 +1819,20 @@ def _execute_run_gradcam(run_dir: Path, req: GradCamRequest) -> GradCamResponse:
     if not images:
         raise ValueError(f"No image files found under {input_dir}.")
 
-    target_layer = resolve_target_layer(model)
-    cam = GradCAM(model, target_layer)
+    target_layer = resolve_target_layer(setup.model)
+    cam = GradCAM(setup.model, target_layer)
     out_dir = run_dir / "gradcam"
     out_dir.mkdir(parents=True, exist_ok=True)
 
     items: list[GradCamItem] = []
     try:
-        from PIL import Image
-
         for img_path in images:
             with Image.open(img_path) as im:
-                tensor = transform(im.convert("RGB")).unsqueeze(0)
-            heat = cam(tensor, target_class=req.target_class)
+                tensor = setup.transform(im.convert("RGB")).unsqueeze(0)
+            heat = cam(tensor, target_fn=setup.target_fn)
             with torch.no_grad():
-                predicted = int(model(tensor).argmax(dim=1).item())
+                output = setup.model(tensor)
+            predicted_class, prediction = setup.describe(output)
             overlay = overlay_cam(tensor[0], heat, alpha=req.alpha)
             overlay_path = out_dir / f"{img_path.stem}_gradcam.png"
             overlay.save(overlay_path)
@@ -1865,7 +1840,8 @@ def _execute_run_gradcam(run_dir: Path, req: GradCamRequest) -> GradCamResponse:
                 GradCamItem(
                     source=str(img_path),
                     overlay=str(overlay_path),
-                    predicted_class=predicted,
+                    predicted_class=predicted_class,
+                    prediction=prediction,
                 )
             )
     finally:

@@ -100,3 +100,102 @@ class TestExecuteRunGradcam:
             _execute_run_gradcam(
                 run_dir, GradCamRequest(input_dir=str(empty), num_samples=3)
             )
+
+    def test_anomaly_run_rejected(self, tmp_path: Path) -> None:
+        run_dir = _make_run_dir(tmp_path, task="anomaly")
+        input_dir = _make_input_dir(tmp_path, n=1)
+        with pytest.raises(ValueError, match="not available"):
+            _execute_run_gradcam(
+                run_dir, GradCamRequest(input_dir=str(input_dir), num_samples=1)
+            )
+
+
+def _make_regression_run_dir(tmp: Path) -> Path:
+    from visionforge.models.regression_factory import RegressionModelFactory
+    from visionforge.utils.regression_config import RegressionModelConfig
+
+    run_dir = tmp / "models" / "reg1" / "20260604_120000_000000"
+    run_dir.mkdir(parents=True)
+    model = RegressionModelFactory.create(
+        RegressionModelConfig(name="resnet18", num_targets=2, pretrained=False)
+    )
+    ckpt = run_dir / "best_model.pth"
+    torch.save(model.state_dict(), ckpt)
+    run_json = {
+        "id": "reg1_20260604_120000_000000",
+        "experiment": "reg1",
+        "status": "completed",
+        "config": {
+            "name": "reg1",
+            "task": "regression",
+            "model": {"name": "resnet18", "num_targets": 2, "pretrained": False},
+            "data": {"base_dir": str(tmp), "transforms": {"image_size": 32}},
+        },
+        "artifacts": {"model": str(ckpt), "graphics": []},
+        "tests": [],
+    }
+    (run_dir / "run.json").write_text(json.dumps(run_json), encoding="utf-8")
+    return run_dir
+
+
+def _make_segmentation_run_dir(tmp: Path) -> Path:
+    from visionforge.models.segmentation_factory import SegmentationModelFactory
+    from visionforge.utils.segmentation_config import SegmentationModelConfig
+
+    run_dir = tmp / "models" / "seg1" / "20260604_120000_000000"
+    run_dir.mkdir(parents=True)
+    model = SegmentationModelFactory.create(
+        SegmentationModelConfig(
+            name="lraspp_mobilenet_v3_large", num_classes=3, pretrained=False
+        )
+    )
+    ckpt = run_dir / "best_model.pth"
+    torch.save(model.state_dict(), ckpt)
+    run_json = {
+        "id": "seg1_20260604_120000_000000",
+        "experiment": "seg1",
+        "status": "completed",
+        "config": {
+            "name": "seg1",
+            "task": "segmentation",
+            "model": {
+                "name": "lraspp_mobilenet_v3_large",
+                "num_classes": 3,
+                "pretrained": False,
+            },
+            "data": {"base_dir": str(tmp), "image_size": 64},
+        },
+        "artifacts": {"model": str(ckpt), "graphics": []},
+        "tests": [],
+    }
+    (run_dir / "run.json").write_text(json.dumps(run_json), encoding="utf-8")
+    return run_dir
+
+
+class TestRegressionGradcam:
+    def test_saliency_overlays_with_value_label(self, tmp_path: Path) -> None:
+        run_dir = _make_regression_run_dir(tmp_path)
+        input_dir = _make_input_dir(tmp_path, n=2)
+        resp = _execute_run_gradcam(
+            run_dir, GradCamRequest(input_dir=str(input_dir), num_samples=2)
+        )
+        assert resp.count == 2
+        for item in resp.items:
+            assert Path(item.overlay).is_file()
+            assert item.predicted_class is None
+            assert item.prediction is not None and item.prediction.startswith("pred=")
+
+
+class TestSegmentationGradcam:
+    def test_per_class_cam_overlays(self, tmp_path: Path) -> None:
+        run_dir = _make_segmentation_run_dir(tmp_path)
+        input_dir = _make_input_dir(tmp_path, n=2)
+        resp = _execute_run_gradcam(
+            run_dir,
+            GradCamRequest(input_dir=str(input_dir), num_samples=2, target_class=1),
+        )
+        assert resp.count == 2
+        for item in resp.items:
+            assert Path(item.overlay).is_file()
+            assert item.predicted_class == 1  # the requested target class
+            assert item.prediction is not None and "class 1" in item.prediction

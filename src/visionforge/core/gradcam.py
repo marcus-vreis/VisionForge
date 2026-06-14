@@ -13,6 +13,7 @@ documentation/GRADCAM_PLAN.md.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 import numpy as np
@@ -70,22 +71,34 @@ class GradCAM:
         self._gradients = grad_out[0].detach()
 
     def __call__(
-        self, input_tensor: torch.Tensor, target_class: int | None = None
+        self,
+        input_tensor: torch.Tensor,
+        target_class: int | None = None,
+        *,
+        target_fn: Callable[[Any], torch.Tensor] | None = None,
     ) -> torch.Tensor:
         """Return a ``[H, W]`` heatmap in [0, 1] for ``input_tensor`` (batch of 1).
 
-        ``target_class`` defaults to the model's predicted class.
+        The scalar back-propagated to localize the map is, in order of precedence:
+        ``target_fn(output)`` when given (lets regression target a continuous
+        output and segmentation a class channel), else the ``target_class`` logit,
+        else the predicted class. ``target_fn`` receives the raw model output, so a
+        caller can normalize a dict output (e.g. torchvision segmentation) itself.
         """
         self._model.eval()
         # Require grad on the input so the full backward hook fires cleanly
         # (otherwise torch warns that no inputs require gradients).
         input_tensor = input_tensor.clone().requires_grad_(True)
-        logits = self._model(input_tensor)
-        if target_class is None:
-            target_class = int(logits.argmax(dim=1).item())
+        output = self._model(input_tensor)
 
         self._model.zero_grad(set_to_none=True)
-        logits[:, target_class].sum().backward()
+        if target_fn is not None:
+            score = target_fn(output)
+        else:
+            if target_class is None:
+                target_class = int(output.argmax(dim=1).item())
+            score = output[:, target_class].sum()
+        score.backward()
 
         assert self._activations is not None and self._gradients is not None
         weights = self._gradients.mean(dim=(2, 3), keepdim=True)  # [1, K, 1, 1]
