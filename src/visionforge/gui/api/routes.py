@@ -79,6 +79,10 @@ from visionforge.gui.api.schemas import (
     SweepRequest,
     SystemInfo,
 )
+from visionforge.gui.api.torch_onnx_export import (
+    export_regression_run,
+    export_segmentation_run,
+)
 from visionforge.models.factory import ModelFactory
 from visionforge.utils.anomaly_config import AnomalyConfig
 from visionforge.utils.config import ExperimentConfig
@@ -1580,9 +1584,15 @@ def _execute_onnx_export(run_dir: Path, req: ExportOnnxRequest) -> ExportOnnxRes
     """
     run_json_path = run_dir / "run.json"
     data: dict[str, Any] = json.loads(run_json_path.read_text(encoding="utf-8"))
-    # Detection exports via Ultralytics' own ONNX exporter; classification below.
-    if data.get("config", {}).get("task") == "detection":
+    # Detection exports via Ultralytics; regression/segmentation via the shared
+    # core helper (their own factory builds the model); classification below.
+    task = data.get("config", {}).get("task")
+    if task == "detection":
         return export_detection_run(run_dir, req, data)
+    if task == "regression":
+        return export_regression_run(run_dir, req, data)
+    if task == "segmentation":
+        return export_segmentation_run(run_dir, req, data)
     base_config_dict: dict[str, Any] = data["config"]
 
     checkpoint_path = data.get("artifacts", {}).get("model")

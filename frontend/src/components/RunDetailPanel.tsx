@@ -137,18 +137,20 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
   const [gradcamResult, setGradcamResult] = useState<GradCamResponse | null>(null);
   const [gradcamMsg, setGradcamMsg] = useState<{ kind: "info" | "error" | "success"; text: string } | null>(null);
 
-  // A detection run.json carries task="detection". Its post-training actions
-  // (ONNX export, batch CSV inference, per-model evaluate) are classification
-  // -only endpoints today, so they're hidden for detection runs until the
-  // detection-native equivalents land (see PHASE7_DETECTION_PLAN brick D/F).
-  const isDetection =
-    (detail?.config?.["task"] as string | undefined) === "detection";
+  // A detection run.json carries task="detection". Some post-training actions
+  // (batch CSV inference, per-model evaluate) are classification-only and hidden
+  // for detection runs (see PHASE7_DETECTION_PLAN brick D/F).
+  const runTask = detail?.config?.["task"] as string | undefined;
+  const isDetection = runTask === "detection";
   const detectionBackend = (
     detail?.config?.["model"] as Record<string, unknown> | undefined
   )?.["backend"] as string | undefined;
-  // ONNX export is supported for classification and for Ultralytics detection
-  // runs (torchvision detection export is not implemented yet).
-  const canExportOnnx = !isDetection || detectionBackend === "ultralytics";
+  // ONNX export: classification + regression + segmentation (shared core helper)
+  // and Ultralytics detection (torchvision detection export is not implemented).
+  // Anomaly is excluded — PatchCore's memory-bank scoring has no forward graph.
+  const canExportOnnx = isDetection
+    ? detectionBackend === "ultralytics"
+    : runTask !== "anomaly";
 
   useEffect(() => {
     let alive = true;

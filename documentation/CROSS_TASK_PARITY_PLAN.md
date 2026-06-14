@@ -110,6 +110,11 @@ splitting, export graph) and don't generalise cleanly.
      tab. **Comparison + sweep now cover all four standalone tasks, backend + GUI.**
 5. **Per-task**: transfer-learning knobs (regression/segmentation), then CV,
    then ONNX export. Each its own ADR if it changes a config surface.
+   - ✅ ONNX export for regression + segmentation: shared `core/onnx_export.py`
+     (classification's `ExportONNXBlock` refactored to reuse it), per-task export
+     in `gui/api/torch_onnx_export.py` (segmentation wrapped to a logits tensor),
+     wired into the existing `/api/runs/{id}/export_onnx`. Detection = Ultralytics;
+     anomaly excluded (PatchCore's memory-bank scoring has no forward graph).
 6. Grad-CAM/explainability last (research-grade, per-task).
 
 Each slice: new modules + reuse, an ADR if it changes behavior, the full
