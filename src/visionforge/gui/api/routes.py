@@ -21,6 +21,7 @@ from visionforge.blocks.batch_prediction import BatchPredictionBlock
 from visionforge.blocks.classification import ClassificationBlock
 from visionforge.blocks.cross_validation import CrossValidationBlock
 from visionforge.blocks.detection import DetectionBlock
+from visionforge.blocks.detection_runner import DetectionRunner
 from visionforge.blocks.export_onnx import ExportONNXBlock
 from visionforge.blocks.grid_search import GridSearchBlock
 from visionforge.blocks.model_comparison import ModelComparisonBlock
@@ -691,6 +692,18 @@ async def sweep_regression(req: SweepRequest) -> RunResponse:
 async def sweep_segmentation(req: SweepRequest) -> RunResponse:
     """Run a grid/random hyperparameter sweep for segmentation (ADR-045)."""
     return _start_sweep(req, SegmentationConfig, SegmentationRunner())
+
+
+@router.post("/detection/compare")
+async def compare_detection(req: ComparisonRequest) -> RunResponse:
+    """Train N detectors on the same dataset and rank them (ADR-044)."""
+    return _start_comparison(req, DetectionConfig, DetectionRunner())
+
+
+@router.post("/detection/sweep")
+async def sweep_detection(req: SweepRequest) -> RunResponse:
+    """Run a grid/random hyperparameter sweep for detection (ADR-045)."""
+    return _start_sweep(req, DetectionConfig, DetectionRunner())
 
 
 @router.get("/experiment/events")

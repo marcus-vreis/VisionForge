@@ -101,7 +101,10 @@ splitting, export graph) and don't generalise cleanly.
    - ✅ GUI: `SweepCard` (grid/random search-space editor, `lib/sweep-space.ts`)
      in the regression/segmentation tabs → `/sweep`; `TaskSweepReport` renders
      the best trial + ranked table in `ResultsView`.
-   - ⏳ GUI: sweep panel (lands with the comparison panel on the new design).
+   - ✅ **Detection**: `DetectionRunner` adapter (`blocks/detection_runner.py`,
+     ranks by `map50_95`, also exposes `map50`) + `POST /api/detection/{compare,
+     sweep}` + the comparison/sweep cards in the detection tab. Comparison model
+     options are backend-aware (Ultralytics vs torchvision).
 5. **Per-task**: transfer-learning knobs (regression/segmentation), then CV,
    then ONNX export. Each its own ADR if it changes a config surface.
 6. Grad-CAM/explainability last (research-grade, per-task).

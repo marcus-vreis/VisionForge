@@ -34,10 +34,12 @@ class DetectionBlock:
         if self._result is None:
             return {}
         r = self._result
+        best_map50 = next((h.map50 for h in r.history if h.epoch == r.best_epoch), None)
         return {
             "detection": {
                 "best_epoch": r.best_epoch,
                 "best_map50_95": r.best_map50_95,
+                "best_map50": best_map50,
                 "total_epochs": r.total_epochs,
                 "device_used": r.device_used,
                 "model_path": str(r.model_path),

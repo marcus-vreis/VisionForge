@@ -203,8 +203,21 @@ export default function App() {
   // Model comparison (ADR-044) for the standalone tasks: trains the picked
   // architectures on the same dataset and ranks them. Reuses the overlay (queue
   // banner) + ResultsView (comparison report); no per-epoch stream.
+  // Build the base task config dict for an advanced run (comparison / sweep).
+  const buildTaskBase = (
+    task: "regression" | "segmentation" | "detection",
+  ): Record<string, unknown> => {
+    if (task === "regression") return buildRegressionPayload(regressionForm);
+    if (task === "segmentation") return buildSegmentationPayload(segmentationForm);
+    return {
+      ...detectionForm,
+      data: buildDetectionDataPayload(detectionForm.data),
+      training: buildDetectionTrainingPayload(detectionForm.training),
+    };
+  };
+
   const handleCompare = async (
-    task: "regression" | "segmentation",
+    task: "regression" | "segmentation" | "detection",
     modelNames: string[],
     metric: string,
   ) => {
@@ -214,11 +227,10 @@ export default function App() {
     setPipelineSummary([]);
     setBlockKind("model_comparison");
     setQueueSize(modelNames.length);
-    const base =
-      task === "regression"
-        ? buildRegressionPayload(regressionForm)
-        : buildSegmentationPayload(segmentationForm);
-    const config = { ...base, device: { kind: device.kind, gpu_ids: device.gpu_ids } };
+    const config = {
+      ...buildTaskBase(task),
+      device: { kind: device.kind, gpu_ids: device.gpu_ids },
+    };
     await submit(
       { config, model_names: modelNames, metric },
       { run: (p) => runComparison(task, p) },
@@ -228,7 +240,7 @@ export default function App() {
   // Hyperparameter sweep (ADR-045) for the standalone tasks: grid/random search
   // over dot-paths, ranked by the chosen metric. Same overlay/results flow.
   const handleSweep = async (
-    task: "regression" | "segmentation",
+    task: "regression" | "segmentation" | "detection",
     payload: SweepPayload,
   ) => {
     reset();
@@ -245,11 +257,10 @@ export default function App() {
           )
         : payload.n_trials;
     setQueueSize(qSize || undefined);
-    const base =
-      task === "regression"
-        ? buildRegressionPayload(regressionForm)
-        : buildSegmentationPayload(segmentationForm);
-    const config = { ...base, device: { kind: device.kind, gpu_ids: device.gpu_ids } };
+    const config = {
+      ...buildTaskBase(task),
+      device: { kind: device.kind, gpu_ids: device.gpu_ids },
+    };
     await submit({ config, ...payload }, { run: (p) => runSweep(task, p) });
   };
 
@@ -298,6 +309,11 @@ export default function App() {
             setFormData={setDetectionForm}
             accent={activeTask.accent}
             validationErrors={validationErrors}
+            busy={status.status === "running"}
+            onCompare={(names, metric) =>
+              void handleCompare("detection", names, metric)
+            }
+            onSweep={(payload) => void handleSweep("detection", payload)}
           />
         ) : activeKey === "regression" ? (
           <RegressionPanel
