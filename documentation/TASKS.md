@@ -69,9 +69,9 @@
 - [x] Sensible defaults in `TrainingConfig`/`ModelConfig` (lr=0.001, epochs=10, batch=32, resnet50, num_classes=2)
 - [x] Per-field validation error display in `ParamPanel` (humanized field paths)
 - [x] TrainingOverlay shows full error message panel on failure
-- [ ] Live training monitor (SSE/WebSocket) — deferred to next iteration
-- [ ] Run history browser — wire `HistoryOverlay` to `/api/runs` (backend exists, UI is stub)
-- [ ] Config export / import as `.yaml` from GUI — deferred to next iteration
+- [x] Live training monitor (SSE) — delivered in Phase 5.9 (`TrainingOverlay` + SSE epoch/trial stream)
+- [x] Run history browser — `HistoryOverlay` wired to `/api/runs` with search/filter (Phase 5.7)
+- [x] Config import as `.yaml` from GUI (Phase 5.5) + markdown export; native YAML export still optional
 
 ---
 
@@ -564,10 +564,13 @@ Real end-to-end pipeline tests (no mocks), skipped in CI to keep it fast
   *exports* already work via `DetectionDataConfig.data_yaml`; this removes the
   manual download. `roboflow` as an optional extra, bound lazily like `ultralytics`.
 
-**Larger — needs design or new dependencies (prefer a reviewed session):**
+**In progress:**
 - **Cross-validation (K-fold)** for regression/segmentation — last cross-task
-  parity slice; needs dataset fold-split + orchestration + config/ADR + API + GUI
-  card + report. Design notes in the parity tracker.
+  parity slice. Regression **backend done** (`blocks/regression_cv.py`, ADR-050,
+  KFold + per-fold train/eval + mean±std). Remaining: regression API endpoint +
+  GUI card + report renderer, then the same for segmentation.
+
+**Larger — needs design or new dependencies (prefer a reviewed session):**
 - **`timm` model source** — a third backbone source alongside torchvision builders
   and the custom registry; adds a dependency. Design how the three coexist.
 - **Optuna** as an alternative to `RandomSearchBlock` (samplers + pruning).

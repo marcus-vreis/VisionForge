@@ -145,7 +145,13 @@ splitting, export graph) and don't generalise cleanly.
      `SegmentationConfig` + `SegmentationTrainer` + `SegmentationPanel`. Head =
      last named child verified for every family (`classifier` for DeepLab/FCN/
      LR-ASPP, `outc` for U-Net). Tests in
-     `tests/core/test_segmentation_transfer_learning.py`. **CV next.**
+     `tests/core/test_segmentation_transfer_learning.py`.
+   - 🟡 **Cross-validation (K-fold)**: regression **backend done** (ADR-050,
+     `blocks/regression_cv.py` — sklearn `KFold` over `Subset`s of augmented/clean
+     `RegressionCsvDataset`s, per-fold train/eval via `RegressionTrainer`,
+     mean±std `CrossValidationReport`; `drop_last` guard for BatchNorm on small
+     folds). Remaining: regression API + GUI card/report, then segmentation CV
+     (paired-file fold split).
    - ✅ ONNX export for regression + segmentation: shared `core/onnx_export.py`
      (classification's `ExportONNXBlock` refactored to reuse it), per-task export
      in `gui/api/torch_onnx_export.py` (segmentation wrapped to a logits tensor),

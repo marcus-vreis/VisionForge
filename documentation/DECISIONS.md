@@ -761,3 +761,35 @@ contract honest now that the int means num_targets for regression — a builder
 written once works across tasks. Detection (Ultralytics owns the model) and anomaly
 (autoencoder/PatchCore, no swappable head) keep their own paths and ignore
 `custom_model`. Purely additive and behaviour-preserving when unset, like ADR-048.
+
+## ADR-050 — K-fold cross-validation for regression (backend)
+
+**Date:** 2026-06
+**Status:** Accepted
+**Extends:** ADR-036, ADR-041
+
+**Decision:** Regression gets K-fold cross-validation via
+`blocks/regression_cv.run_regression_cross_validation(config, *, n_folds, shuffle,
+seed)`. It mirrors the classification `CrossValidationBlock` shape but over the
+CSV-manifest dataset: the pooled training rows are split with sklearn `KFold`; each
+fold builds a fresh model + `RegressionTrainer`, trains on K-1 parts, reloads the
+best checkpoint and scores the held-out part via `RegressionTrainer.evaluate`; the
+per-fold MSE/RMSE/MAE/R² are aggregated to mean ± std (`CrossValidationReport`).
+No dataset refactor: two `RegressionCsvDataset` instances (augmented train +
+clean eval transforms) are sliced per fold with `torch.utils.data.Subset`. The
+fold train loader sets `drop_last=True` when the fold has more than one batch, so a
+size-1 trailing batch can't break BatchNorm (CV folds are small). CV params are
+invocation arguments (like comparison/sweep), not a config field. Backend-first;
+the API endpoint + GUI card + report renderer land in a follow-up slice, and
+segmentation CV follows the same shape.
+
+**Reason:** CV is the last cross-task-parity feature researchers expect, and it is
+genuinely useful on the small datasets regression-on-images usually involves. It
+does not fit the generic `TaskRunner` handle (comparison/sweep just vary config;
+CV varies the *data split*), so it is a per-task orchestrator rather than a generic
+runner — consistent with ADR-041's verdict that data-level features stay per-task.
+Reusing `Subset` over two transform variants avoids touching the dataset class and
+keeps the val fold un-augmented. Passing `n_folds/shuffle/seed` as call arguments
+(not a new config field) matches the comparison/sweep precedent and needs no config
+migration. The `drop_last` guard is standard BatchNorm hygiene that CV makes
+necessary because folds shrink the training set.
