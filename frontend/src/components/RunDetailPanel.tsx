@@ -89,6 +89,18 @@ function getDataSection(config: Record<string, unknown>): ConfigData | null {
   return data as ConfigData;
 }
 
+/** Return a nested object section of the run config, or null when absent/non-object. */
+function getConfigRecord(
+  config: Record<string, unknown>,
+  key: string,
+): Record<string, unknown> | null {
+  const value = config[key];
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  return value as Record<string, unknown>;
+}
+
 export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
   const [detail, setDetail] = useState<RunDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -447,6 +459,8 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
                 <KeyRow key={k} label={`env · ${k}`} value={v} />
               ))}
           </Section>
+
+          <TrainingSection config={detail.config} />
 
           <PipelineSection config={detail.config} />
 
@@ -1642,6 +1656,52 @@ interface FormFieldProps {
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
+}
+
+/** The hyperparameters this run was trained with — reproducibility at a glance.
+ *
+ * Reads the task-agnostic ``training`` block (every task config carries one) and
+ * the optional ``transfer_learning`` field (regression/segmentation, ADR-046/047).
+ * Only scalar knobs are shown; nested config (scheduler) is skipped.
+ */
+function TrainingSection({ config }: { config: Record<string, unknown> }) {
+  const training = getConfigRecord(config, "training");
+  if (!training) return null;
+
+  const KNOBS = [
+    "learning_rate",
+    "epochs",
+    "batch_size",
+    "optimizer",
+    "loss",
+    "weight_decay",
+    "early_stopping_patience",
+    "seed",
+  ];
+  const rows = KNOBS.filter(
+    (k) => training[k] !== undefined && training[k] !== null,
+  ).map((k) => [k, training[k]] as const);
+
+  const tl = getConfigRecord(config, "transfer_learning");
+  if (rows.length === 0 && !tl) return null;
+
+  return (
+    <Section title="Configuração de treino">
+      {rows.map(([k, v]) => (
+        <KeyRow key={k} label={k.replace(/_/g, " ")} value={String(v)} />
+      ))}
+      {tl && (
+        <KeyRow
+          label="transfer learning"
+          value={
+            tl["mode"] === "fine_tuning"
+              ? `fine-tuning · backbone lr × ${String(tl["backbone_lr_multiplier"])}`
+              : String(tl["mode"])
+          }
+        />
+      )}
+    </Section>
+  );
 }
 
 /** Pre-training pipeline that produced this run — preprocessing + augmentation.
