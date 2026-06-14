@@ -40,6 +40,9 @@ import { useExperiment } from "./hooks/useExperiment";
 import type { JsonSchema } from "./types/schema";
 import { TASKS } from "./types/tasks";
 
+/** Standalone tasks that expose the comparison/sweep advanced surface. */
+type AdvancedTask = "regression" | "segmentation" | "detection" | "anomaly";
+
 export default function App() {
   const { status, result, error, validationErrors, progressEvents, submit, reset } =
     useExperiment();
@@ -204,11 +207,10 @@ export default function App() {
   // architectures on the same dataset and ranks them. Reuses the overlay (queue
   // banner) + ResultsView (comparison report); no per-epoch stream.
   // Build the base task config dict for an advanced run (comparison / sweep).
-  const buildTaskBase = (
-    task: "regression" | "segmentation" | "detection",
-  ): Record<string, unknown> => {
+  const buildTaskBase = (task: AdvancedTask): Record<string, unknown> => {
     if (task === "regression") return buildRegressionPayload(regressionForm);
     if (task === "segmentation") return buildSegmentationPayload(segmentationForm);
+    if (task === "anomaly") return buildAnomalyPayload(anomalyForm);
     return {
       ...detectionForm,
       data: buildDetectionDataPayload(detectionForm.data),
@@ -217,7 +219,7 @@ export default function App() {
   };
 
   const handleCompare = async (
-    task: "regression" | "segmentation" | "detection",
+    task: AdvancedTask,
     modelNames: string[],
     metric: string,
   ) => {
@@ -240,7 +242,7 @@ export default function App() {
   // Hyperparameter sweep (ADR-045) for the standalone tasks: grid/random search
   // over dot-paths, ranked by the chosen metric. Same overlay/results flow.
   const handleSweep = async (
-    task: "regression" | "segmentation" | "detection",
+    task: AdvancedTask,
     payload: SweepPayload,
   ) => {
     reset();
@@ -345,6 +347,11 @@ export default function App() {
             setFormData={setAnomalyForm}
             accent={activeTask.accent}
             validationErrors={validationErrors}
+            busy={status.status === "running"}
+            onCompare={(names, metric) =>
+              void handleCompare("anomaly", names, metric)
+            }
+            onSweep={(payload) => void handleSweep("anomaly", payload)}
           />
         ) : (
           <ParamPanel

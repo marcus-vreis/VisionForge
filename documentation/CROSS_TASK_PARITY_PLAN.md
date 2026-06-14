@@ -105,6 +105,9 @@ splitting, export graph) and don't generalise cleanly.
      ranks by `map50_95`, also exposes `map50`) + `POST /api/detection/{compare,
      sweep}` + the comparison/sweep cards in the detection tab. Comparison model
      options are backend-aware (Ultralytics vs torchvision).
+   - ✅ **Anomaly**: `AnomalyRunner` (`blocks/anomaly_runner.py`, ranks by `auroc`,
+     also `image_f1`) + `POST /api/anomaly/{compare,sweep}` + cards in the anomaly
+     tab. **Comparison + sweep now cover all four standalone tasks, backend + GUI.**
 5. **Per-task**: transfer-learning knobs (regression/segmentation), then CV,
    then ONNX export. Each its own ADR if it changes a config surface.
 6. Grad-CAM/explainability last (research-grade, per-task).

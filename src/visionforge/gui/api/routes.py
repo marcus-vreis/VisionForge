@@ -17,6 +17,7 @@ from loguru import logger
 from pydantic import ValidationError
 
 from visionforge.blocks.anomaly import AnomalyBlock
+from visionforge.blocks.anomaly_runner import AnomalyRunner
 from visionforge.blocks.batch_prediction import BatchPredictionBlock
 from visionforge.blocks.classification import ClassificationBlock
 from visionforge.blocks.cross_validation import CrossValidationBlock
@@ -704,6 +705,18 @@ async def compare_detection(req: ComparisonRequest) -> RunResponse:
 async def sweep_detection(req: SweepRequest) -> RunResponse:
     """Run a grid/random hyperparameter sweep for detection (ADR-045)."""
     return _start_sweep(req, DetectionConfig, DetectionRunner())
+
+
+@router.post("/anomaly/compare")
+async def compare_anomaly(req: ComparisonRequest) -> RunResponse:
+    """Train N anomaly models on the same dataset and rank them (ADR-044)."""
+    return _start_comparison(req, AnomalyConfig, AnomalyRunner())
+
+
+@router.post("/anomaly/sweep")
+async def sweep_anomaly(req: SweepRequest) -> RunResponse:
+    """Run a grid/random hyperparameter sweep for anomaly detection (ADR-045)."""
+    return _start_sweep(req, AnomalyConfig, AnomalyRunner())
 
 
 @router.get("/experiment/events")

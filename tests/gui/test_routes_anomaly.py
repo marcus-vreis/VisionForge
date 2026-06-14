@@ -107,3 +107,85 @@ class TestAnomalyRun:
         client = TestClient(app, raise_server_exceptions=True)
         resp = client.post("/api/anomaly/run", json=payload)
         assert resp.status_code == 422
+
+
+class TestAnomalyCompareSweep:
+    def test_compare_dispatches_and_reports(
+        self, app_and_routes: tuple, tmp_path: Path
+    ) -> None:
+        from visionforge.core.comparison import ComparisonTrial
+
+        app, routes_mod = app_and_routes
+        routes_mod._current_run = None
+
+        def fake_compare(runner, config_dict, model_names, metric):  # type: ignore[no-untyped-def]
+            return [
+                ComparisonTrial("patchcore", "success", {"auroc": 0.95}),
+                ComparisonTrial("autoencoder", "success", {"auroc": 0.88}),
+            ]
+
+        orig = routes_mod.run_model_comparison
+        routes_mod.run_model_comparison = fake_compare
+        try:
+            client = TestClient(app, raise_server_exceptions=True)
+            payload = {
+                "config": _payload(tmp_path),
+                "model_names": ["autoencoder", "patchcore"],
+            }
+            resp = client.post("/api/anomaly/compare", json=payload)
+            assert resp.status_code == 200, resp.text
+            run_id = resp.json()["run_id"]
+
+            status = {"status": "running"}
+            for _ in range(50):
+                status = client.get("/api/experiment/status").json()
+                if status["status"] in ("completed", "failed"):
+                    break
+                time.sleep(0.05)
+            assert status["status"] == "completed", status
+
+            report = client.get(f"/api/experiment/result/{run_id}").json()["report"]
+            assert report["metric"] == "auroc"  # defaulted from primary_metric
+            assert report["top_3"][0]["model_arch"] == "patchcore"
+        finally:
+            routes_mod.run_model_comparison = orig
+            routes_mod._current_run = None
+
+    def test_sweep_dispatches_and_reports(
+        self, app_and_routes: tuple, tmp_path: Path
+    ) -> None:
+        from visionforge.core.sweep import SweepTrial
+
+        app, routes_mod = app_and_routes
+        routes_mod._current_run = None
+
+        def fake_sweep(runner, base, space, *, mode, metric, n_trials, seed):  # type: ignore[no-untyped-def]
+            return [SweepTrial(0, {"model.latent_dim": 32}, "success", {"auroc": 0.9})]
+
+        orig = routes_mod.run_sweep
+        routes_mod.run_sweep = fake_sweep
+        try:
+            client = TestClient(app, raise_server_exceptions=True)
+            payload = {
+                "config": _payload(tmp_path),
+                "mode": "grid",
+                "search_space": {"model.latent_dim": [16, 32]},
+            }
+            resp = client.post("/api/anomaly/sweep", json=payload)
+            assert resp.status_code == 200, resp.text
+            run_id = resp.json()["run_id"]
+
+            status = {"status": "running"}
+            for _ in range(50):
+                status = client.get("/api/experiment/status").json()
+                if status["status"] in ("completed", "failed"):
+                    break
+                time.sleep(0.05)
+            assert status["status"] == "completed", status
+
+            report = client.get(f"/api/experiment/result/{run_id}").json()["report"]
+            assert report["mode"] == "grid"
+            assert report["metric"] == "auroc"
+        finally:
+            routes_mod.run_sweep = orig
+            routes_mod._current_run = None
