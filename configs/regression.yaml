@@ -27,6 +27,12 @@ training:
   optimizer: adam
   early_stopping_patience: 10
 
+# Optional transfer learning over the pretrained backbone (ADR-046). Omit the
+# whole block for standard full-network training (the default).
+# transfer_learning:
+#   mode: feature_extraction      # feature_extraction (freeze backbone, train head) | fine_tuning
+#   backbone_lr_multiplier: 0.1   # fine_tuning only: backbone LR = learning_rate * this
+
 output:
   models_dir: outputs/models
 
