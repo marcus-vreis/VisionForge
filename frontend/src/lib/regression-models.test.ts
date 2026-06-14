@@ -37,6 +37,18 @@ describe("regression-models", () => {
     expect(data.target_columns).toEqual(["target"]);
   });
 
+  it("sends image size under data.transforms (not the dropped top-level field)", () => {
+    const form = makeDefaultRegressionForm();
+    form.data.image_size = 384;
+    const payload = buildRegressionPayload(form);
+    const data = payload.data as {
+      image_size?: number;
+      transforms: { image_size: number };
+    };
+    expect(data.transforms.image_size).toBe(384);
+    expect(data.image_size).toBeUndefined();
+  });
+
   it("maps transfer-learning mode to the config payload shape", () => {
     const form = makeDefaultRegressionForm();
     expect(buildRegressionPayload(form).transfer_learning).toBeNull();

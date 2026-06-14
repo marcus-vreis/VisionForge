@@ -116,7 +116,9 @@ export function buildRegressionPayload(
       test_csv: form.data.test_csv,
       image_column: form.data.image_column,
       target_columns: targets.length > 0 ? targets : ["target"],
-      image_size: form.data.image_size,
+      // RegressionDataConfig keeps the resize under transforms.image_size (read by
+      // _build_transforms); a top-level data.image_size is silently dropped.
+      transforms: { image_size: form.data.image_size },
     },
     training: { ...form.training },
     transfer_learning: buildTransferLearning(form),
