@@ -550,6 +550,9 @@ Real end-to-end pipeline tests (no mocks), skipped in CI to keep it fast
   selected via `model.custom_model`. **Shipped** for classification, regression
   and segmentation (the registry's builder takes the task's output dimension).
   See `user_models/README.md`.
+- **timm model source (ADR-051)** — `model.timm_model` builds any timm architecture
+  via the optional `[timm]` extra (lazy `timm.create_model`). **Shipped** for
+  classification + regression (mutually exclusive with `custom_model`).
 - **Docker + `visionforge doctor` (ADR-042)** — `doctor` CLI (detect GPU/CUDA →
   exact torch install command) **shipped** (slice 1); the multi-stage GPU Docker
   image + compose (slice 2) is still planned. Design in
@@ -571,8 +574,6 @@ Real end-to-end pipeline tests (no mocks), skipped in CI to keep it fast
   GUI card + report renderer, then the same for segmentation.
 
 **Larger — needs design or new dependencies (prefer a reviewed session):**
-- **`timm` model source** — a third backbone source alongside torchvision builders
-  and the custom registry; adds a dependency. Design how the three coexist.
 - **Optuna** as an alternative to `RandomSearchBlock` (samplers + pruning).
 - **TensorBoard / MLflow** experiment-tracking integration.
 - **Dark/light theme toggle** — needs a coherent light palette for the dark-first

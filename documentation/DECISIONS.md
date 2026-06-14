@@ -793,3 +793,31 @@ keeps the val fold un-augmented. Passing `n_folds/shuffle/seed` as call argument
 (not a new config field) matches the comparison/sweep precedent and needs no config
 migration. The `drop_last` guard is standard BatchNorm hygiene that CV makes
 necessary because folds shrink the training set.
+
+## ADR-051 — timm as an optional model source
+
+**Date:** 2026-06
+**Status:** Accepted
+**Extends:** ADR-005, ADR-048/049
+
+**Decision:** Researchers can use any `timm` architecture via a `timm_model` field
+on `ModelConfig` and `RegressionModelConfig` (classification + regression — timm
+provides backbones with a linear head, not segmentation heads). When set, the
+factory builds the model through `models/timm_source.build_timm_model(name,
+num_outputs, pretrained)` — a lazy wrapper over `timm.create_model(name,
+pretrained=, num_classes=num_outputs)` — and ignores the builtin `name`;
+`weights_path` still loads a local checkpoint. `timm_model` and `custom_model` are
+mutually exclusive (a `model_validator` rejects both; blank strings coerce to
+`None`). `timm` is a new optional extra (`pip install -e ".[timm]"`); the import is
+lazy so VisionForge runs without it. The output-dimension contract is the same
+`num_outputs` the custom registry uses, so all three sources (builtin / custom /
+timm) are interchangeable.
+
+**Reason:** The fixed `Literal` backbone list is small; timm is the de-facto
+hub of hundreds of pretrained vision models and `create_model` already sizes the
+head, so wiring it in is a few lines per factory with no new head logic. Keeping it
+an optional, lazily-imported extra honours ADR-005 (heavy/optional deps stay out of
+the core install, like ultralytics) and keeps the test suite offline (tests mock
+`create_model`, ADR-010). Mutual exclusivity with `custom_model` avoids ambiguous
+precedence. Segmentation is out of scope — timm yields classifiers/feature
+extractors, not dense decoders.

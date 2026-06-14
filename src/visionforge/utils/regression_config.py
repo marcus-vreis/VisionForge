@@ -67,6 +67,15 @@ class RegressionModelConfig(BaseModel):
             "`weights_path` still loads a local checkpoint."
         ),
     )
+    timm_model: str | None = Field(
+        default=None,
+        description=(
+            "Name of a timm architecture (e.g. 'convnext_tiny'; needs the `timm` "
+            "extra, ADR-051). When set, the builtin `name` is ignored and the model "
+            "is built via timm (head sized to num_targets). Mutually exclusive with "
+            "custom_model; `weights_path` still loads a local checkpoint."
+        ),
+    )
 
     @field_validator("weights_path")
     @classmethod
@@ -79,12 +88,18 @@ class RegressionModelConfig(BaseModel):
             raise ValueError(f"weights_path must be a file, got: {v}")
         return v
 
-    @field_validator("custom_model")
+    @field_validator("custom_model", "timm_model")
     @classmethod
-    def blank_custom_model_is_none(cls, v: str | None) -> str | None:
+    def blank_model_source_is_none(cls, v: str | None) -> str | None:
         if v is not None and not v.strip():
             return None
         return v
+
+    @model_validator(mode="after")
+    def one_alternate_model_source(self) -> "RegressionModelConfig":
+        if self.custom_model is not None and self.timm_model is not None:
+            raise ValueError("Set only one of custom_model or timm_model, not both.")
+        return self
 
 
 class RegressionDataConfig(BaseModel):

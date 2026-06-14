@@ -16,6 +16,7 @@ from visionforge.models.factory import (
     replace_final_layer,
 )
 from visionforge.models.registry import build_custom_model
+from visionforge.models.timm_source import build_timm_model
 from visionforge.utils.regression_config import RegressionModelConfig
 
 
@@ -34,6 +35,16 @@ class RegressionModelFactory:
         if config.custom_model is not None:
             model = build_custom_model(
                 config.custom_model, num_outputs=config.num_targets
+            )
+            if config.weights_path is not None:
+                load_local_weights(model, config.weights_path)
+            return model
+
+        if config.timm_model is not None:
+            model = build_timm_model(
+                config.timm_model,
+                num_outputs=config.num_targets,
+                pretrained=config.pretrained,
             )
             if config.weights_path is not None:
                 load_local_weights(model, config.weights_path)
