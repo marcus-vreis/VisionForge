@@ -15,6 +15,7 @@ import torch
 import torch.nn as nn
 from loguru import logger
 
+from visionforge.core.tracking import TensorBoardLogger
 from visionforge.utils.config import DeviceConfig, ExperimentConfig
 from visionforge.utils.cuda import check_cuda
 from visionforge.utils.environment import capture_environment
@@ -178,6 +179,7 @@ class Trainer:
         scaler = torch.amp.GradScaler("cuda", enabled=use_amp) if use_amp else None
         run_dir = self._make_run_dir()
         model_path = run_dir / "best_model.pth"
+        tb = TensorBoardLogger(run_dir / "tensorboard")
 
         history: list[EpochResult] = []
         best_val_loss = float("inf")
@@ -225,6 +227,15 @@ class Trainer:
                 val_accuracy=val_acc,
             )
             history.append(result)
+            tb.log_scalars(
+                epoch,
+                {
+                    "loss/train": train_loss,
+                    "loss/val": val_loss,
+                    "accuracy/train": train_acc,
+                    "accuracy/val": val_acc,
+                },
+            )
 
             logger.info(
                 "Epoch {}/{} | train_loss={:.4f} train_acc={:.4f} val_loss={:.4f} val_acc={:.4f}",
@@ -285,6 +296,7 @@ class Trainer:
             model_path=model_path,
         )
         self._write_run_json(run_dir, train_result)
+        tb.close()
 
         # Release VRAM held by activations / optimizer state so back-to-back
         # runs (grid search, model comparison) don't accumulate fragmentation.

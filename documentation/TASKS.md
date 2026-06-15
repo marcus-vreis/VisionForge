@@ -563,6 +563,10 @@ Real end-to-end pipeline tests (no mocks), skipped in CI to keep it fast
   study over the random search-space grammar; optional `[optuna]` extra, lazy
   import. **Shipped** for all four standalone tasks (API + GUI SweepCard). Pruning
   deferred.
+- **TensorBoard tracking (ADR-054)** — best-effort `core/tracking.TensorBoardLogger`
+  writes per-epoch scalars to `<run_dir>/tensorboard/`; optional `[tensorboard]`
+  extra (no-op without it). **Shipped** for classification + regression +
+  segmentation; detection/anomaly trainers are a follow-up. (MLflow not chosen.)
 - **Docker + `visionforge doctor` (ADR-042)** — `doctor` CLI (detect GPU/CUDA →
   exact torch install command) **shipped** (slice 1); the multi-stage GPU Docker
   image + compose (slice 2) is still planned. Design in
@@ -584,7 +588,6 @@ Real end-to-end pipeline tests (no mocks), skipped in CI to keep it fast
   GUI card + report renderer, then the same for segmentation.
 
 **Larger — needs design or new dependencies (prefer a reviewed session):**
-- **TensorBoard / MLflow** experiment-tracking integration.
 - **Dark/light theme toggle** — needs a coherent light palette for the dark-first
   blueprint design (design judgment).
 - **More animated-SVG touches** where they carry signal (empty/loading states,

@@ -60,6 +60,7 @@ Foundational utilities with no dependencies on other VisionForge modules.
 | `data.py` | `DataModule` — wraps `ImageFolder`, applies transforms and augmentation, returns train/val/test `DataLoader`s. The preprocessing pipeline is bound via a top-level `_PreprocessingTransform` class so it stays picklable for `spawn` DataLoader workers (ADR-030). |
 | `evaluator.py` | Computes Accuracy, F1, AUC-ROC, Precision, Recall, confusion matrix, classification report, and preserves per-sample `y_true` / `y_score` / `y_proba_full` arrays for downstream ROC and PR plotting. |
 | `plotter.py` | `MetricsPlotter` — generates loss, accuracy, raw confusion matrix, normalized confusion matrix, ROC curve, and precision-recall curve PNGs via matplotlib/seaborn (Agg backend, no display needed). |
+| `tracking.py` | `TensorBoardLogger` (ADR-054) — best-effort per-epoch scalar logging to `<run_dir>/tensorboard/`; no-op unless the optional `[tensorboard]` extra is installed. Wired into the classification/regression/segmentation trainer loops. |
 
 ### `blocks/`
 

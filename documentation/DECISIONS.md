@@ -880,3 +880,29 @@ keeps `routes` thin. Regression saliency and per-class segmentation CAMs are the
 standard explainability views for those tasks; detection/anomaly genuinely lack a
 single conv-logit target, so they stay out. Dependency-free (pure torch), offline
 tests with tiny models (ADR-010).
+
+## ADR-054 — TensorBoard experiment tracking (best-effort, opt-in by install)
+
+**Date:** 2026-06
+**Status:** Accepted
+**Extends:** ADR-005, ADR-013
+
+**Decision:** Training writes per-epoch scalars to `<run_dir>/tensorboard/` via a
+`core/tracking.TensorBoardLogger`. The logger lazily imports
+`torch.utils.tensorboard.SummaryWriter`; if the optional `tensorboard` extra is not
+installed it is a **no-op**, so there is no config flag — installing
+`".[tensorboard]"` enables it, then `tensorboard --logdir outputs/models`. Wired
+into the classification, regression and segmentation trainer epoch loops (create
+after the run dir, `log_scalars(epoch, …)` each epoch with namespaced tags like
+`loss/train`, `accuracy/val`, `r2/val`, `miou/val`, close at the end). TensorBoard
+was chosen over MLflow (user decision). Detection (Ultralytics owns its loop) and
+anomaly trainers are a follow-up.
+
+**Reason:** TensorBoard is the lightest, most local-first tracker — `SummaryWriter`
+ships with torch and writes plain event files under the run dir, needing no server
+(MLflow's tracking store is heavier and more opinionated, against the local-first
+stance of ADR-005). Best-effort-if-installed keeps it zero-config and avoids adding
+a tracking field to all five task configs, while staying fully optional (no new
+hard dependency; the run.json history of ADR-013 remains the canonical record).
+Tests inject a fake `SummaryWriter` so they neither require the extra nor write real
+event files (ADR-010).

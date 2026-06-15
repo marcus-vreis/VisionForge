@@ -25,6 +25,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from loguru import logger
 
+from visionforge.core.tracking import TensorBoardLogger
 from visionforge.core.trainer import _seed_everything, resolve_device
 from visionforge.models.segmentation_factory import segmentation_logits
 from visionforge.utils.environment import capture_environment
@@ -190,6 +191,7 @@ class SegmentationTrainer:
         scheduler = self._build_scheduler(optimizer)
         run_dir = self._make_run_dir()
         model_path = run_dir / "best_model.pth"
+        tb = TensorBoardLogger(run_dir / "tensorboard")
 
         history: list[SegmentationEpochResult] = []
         best_val_miou = -1.0
@@ -232,6 +234,16 @@ class SegmentationTrainer:
                     val_dice=dice,
                     val_pixel_acc=pixel_acc,
                 )
+            )
+            tb.log_scalars(
+                epoch,
+                {
+                    "loss/train": train_loss,
+                    "loss/val": val_loss,
+                    "miou/val": miou,
+                    "dice/val": dice,
+                    "pixel_acc/val": pixel_acc,
+                },
             )
 
             logger.info(
@@ -304,6 +316,7 @@ class SegmentationTrainer:
             model_path=model_path,
         )
         self._write_run_json(run_dir, train_result)
+        tb.close()
 
         if self._device.type == "cuda":
             torch.cuda.empty_cache()

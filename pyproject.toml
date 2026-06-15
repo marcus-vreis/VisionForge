@@ -59,6 +59,12 @@ timm = [
 optuna = [
     "optuna>=3.0",
 ]
+# TensorBoard experiment tracking (ADR-054): when installed, trainers write
+# per-epoch scalars to <run_dir>/tensorboard/. Optional; logging is a best-effort
+# no-op without it.
+tensorboard = [
+    "tensorboard>=2.0",
+]
 dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",

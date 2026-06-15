@@ -24,6 +24,7 @@ import torch
 import torch.nn as nn
 from loguru import logger
 
+from visionforge.core.tracking import TensorBoardLogger
 from visionforge.core.trainer import _seed_everything, resolve_device
 from visionforge.utils.environment import capture_environment
 from visionforge.utils.regression_config import RegressionConfig
@@ -127,6 +128,7 @@ class RegressionTrainer:
         scheduler = self._build_scheduler(optimizer)
         run_dir = self._make_run_dir()
         model_path = run_dir / "best_model.pth"
+        tb = TensorBoardLogger(run_dir / "tensorboard")
 
         history: list[RegressionEpochResult] = []
         best_val_loss = float("inf")
@@ -170,6 +172,17 @@ class RegressionTrainer:
                 val_r2=r2,
             )
             history.append(result)
+            tb.log_scalars(
+                epoch,
+                {
+                    "loss/train": train_loss,
+                    "loss/val": val_loss,
+                    "r2/val": r2,
+                    "rmse/val": rmse,
+                    "mae/val": mae,
+                    "mse/val": mse,
+                },
+            )
 
             logger.info(
                 "Epoch {}/{} | train_loss={:.4f} val_loss={:.4f} "
@@ -229,6 +242,7 @@ class RegressionTrainer:
             model_path=model_path,
         )
         self._write_run_json(run_dir, train_result)
+        tb.close()
 
         if self._device.type == "cuda":
             torch.cuda.empty_cache()
