@@ -213,6 +213,38 @@ export async function pickDatasetFolder(): Promise<DatasetPickResponse> {
   return request<DatasetPickResponse>("/dataset/pick", { method: "POST" });
 }
 
+export interface DatasetDownloadRequest {
+  provider: "torchvision" | "roboflow" | "kaggle" | "huggingface";
+  dataset: string;
+  out_dir: string;
+  splits?: string[];
+  limit?: number | null;
+  api_key?: string | null;
+  token?: string | null;
+  version?: number | null;
+  dataset_format?: string | null;
+}
+
+export interface DatasetDownloadResponse {
+  provider: string;
+  dataset: string;
+  out_dir: string;
+  total_images: number;
+  splits: Record<string, number>;
+  classes: string[];
+}
+
+/** One-shot download of a dataset to a local folder (ADR-055). */
+export async function datasetDownload(
+  req: DatasetDownloadRequest,
+): Promise<DatasetDownloadResponse> {
+  return request<DatasetDownloadResponse>("/dataset/download", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(req),
+  });
+}
+
 /** Open a native file picker filtered to .yaml/.yml — used to select an
  *  existing Ultralytics data.yaml for a detection run. */
 export async function pickDetectionYaml(): Promise<DatasetPickResponse> {

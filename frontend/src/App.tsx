@@ -4,6 +4,7 @@ import type { SweepPayload } from "./components/SweepCard";
 import { BottomBar } from "./components/BottomBar";
 import type { DeviceSelection } from "./components/DeviceSelector";
 import { Header } from "./components/Header";
+import { DatasetDownloadCard } from "./components/DatasetDownloadCard";
 import { HistoryOverlay } from "./components/HistoryOverlay";
 import { ParamPanel } from "./components/ParamPanel";
 import { DetectionPanel } from "./components/DetectionPanel";
@@ -362,6 +363,8 @@ export default function App() {
             validationErrors={validationErrors}
           />
         )}
+
+        {!showResults && <DatasetDownloadCard accent={activeTask.accent} />}
 
         {error && !showOverlay && (
           <div

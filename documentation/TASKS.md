@@ -581,8 +581,8 @@ Real end-to-end pipeline tests (no mocks), skipped in CI to keep it fast
   extra; api_key + workspace/project + version); ✅ **Kaggle** (`[kaggle]` extra;
   kaggle.json or KAGGLE_USERNAME/KAGGLE_KEY; owner/slug, unzip); ✅ **Hugging Face**
   (`[huggingface]` extra `datasets`; materializes image+label splits → ImageFolder;
-  optional token). **All 4 backends done.** Remaining: the GUI dataset-download
-  section (provider select + conditional fields → `/api/dataset/download`).
+  optional token). ✅ **GUI** — `DatasetDownloadCard` (provider Segmented +
+  conditional fields → `/api/dataset/download`) below the active panel. **COMPLETE.**
 - **Cross-validation (K-fold)** for regression/segmentation — last cross-task
   parity slice. Regression **backend done** (`blocks/regression_cv.py`, ADR-050,
   KFold + per-fold train/eval + mean±std). Remaining: regression API endpoint +

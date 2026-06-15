@@ -927,8 +927,10 @@ per commit, simplest first:
 3. **Kaggle** (`kaggle` extra, lazy, kaggle.json) — next.
 4. **Hugging Face** (`datasets` extra, lazy, optional token) — next.
 Missing extras/credentials raise a clear error → HTTP 400. The endpoint runs in a
-worker thread (downloads are slow). The GUI section lands once the four backends are
-in.
+worker thread (downloads are slow). **All four providers + the GUI are now in**: a
+`DatasetDownloadCard` (provider selector + per-provider conditional fields →
+`/api/dataset/download`) sits below the active task panel; the user picks the local
+output folder and the existing data flow takes over from there.
 
 **Reason:** A provider dispatcher keeps each source isolated and lets the heavy/auth
 ones be optional lazy extras (ADR-005), so the core install stays lean. Materializing
