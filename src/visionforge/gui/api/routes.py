@@ -504,6 +504,8 @@ def _execute_dataset_download(req: DatasetDownloadRequest) -> DatasetDownloadRes
         limit=req.limit,
         api_key=req.api_key,
         token=req.token,
+        version=req.version,
+        dataset_format=req.dataset_format,
     )
     _remember_dataset_root(Path(result.out_dir))
     return DatasetDownloadResponse(

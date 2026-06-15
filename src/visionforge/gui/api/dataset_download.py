@@ -119,6 +119,76 @@ def download_torchvision(
     )
 
 
+_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tif", ".tiff"}
+
+
+def _count_images(root: Path) -> tuple[int, dict[str, int]]:
+    """Count image files under ``root``, grouped by top-level subdir (split)."""
+    total = 0
+    splits: dict[str, int] = {}
+    for sub in sorted(p for p in root.iterdir() if p.is_dir()):
+        n = sum(1 for f in sub.rglob("*") if f.suffix.lower() in _IMAGE_EXTS)
+        if n:
+            splits[sub.name] = n
+            total += n
+    loose = sum(
+        1 for f in root.iterdir() if f.is_file() and f.suffix.lower() in _IMAGE_EXTS
+    )
+    total += loose
+    return total, splits
+
+
+def download_roboflow(
+    dataset: str,
+    out_dir: str | Path,
+    *,
+    api_key: str | None,
+    version: int | None = None,
+    dataset_format: str = "folder",
+) -> DatasetDownloadResult:
+    """Download a Roboflow dataset export into ``out_dir``.
+
+    ``dataset`` is ``"workspace/project"``; ``dataset_format`` is the Roboflow export
+    format ("folder" gives an ImageFolder-style classification layout, "yolov8" a
+    detection layout, etc.). Counts the downloaded images per split.
+
+    Raises:
+        ValueError: if api_key/version are missing or ``dataset`` is malformed.
+        ImportError: if the optional ``roboflow`` extra is not installed.
+    """
+    if not api_key:
+        raise ValueError("Roboflow requires an api_key.")
+    if version is None:
+        raise ValueError("Roboflow requires a version number.")
+    if "/" not in dataset:
+        raise ValueError("Roboflow dataset must be 'workspace/project'.")
+    try:
+        from roboflow import Roboflow
+    except ImportError as exc:  # pragma: no cover - only without the roboflow extra
+        raise ImportError(
+            'roboflow is not installed. Add the optional extra: pip install -e ".[roboflow]".'
+        ) from exc
+
+    workspace, project_name = dataset.split("/", 1)
+    out = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+
+    rf = Roboflow(api_key=api_key)
+    project = rf.workspace(workspace).project(project_name)
+    project.version(version).download(dataset_format, location=str(out))
+
+    total, splits = _count_images(out)
+    logger.info("roboflow {} v{}: {} images", dataset, version, total)
+    return DatasetDownloadResult(
+        provider="roboflow",
+        dataset=f"{dataset}:v{version}",
+        out_dir=str(out.resolve()),
+        total_images=total,
+        splits=splits,
+        classes=[],
+    )
+
+
 def download_dataset(
     provider: str,
     *,
@@ -135,7 +205,15 @@ def download_dataset(
     """
     if provider == "torchvision":
         return download_torchvision(dataset, out_dir, splits=splits, limit=limit)
-    if provider in ("roboflow", "kaggle", "huggingface"):
+    if provider == "roboflow":
+        return download_roboflow(
+            dataset,
+            out_dir,
+            api_key=provider_kwargs.get("api_key"),
+            version=provider_kwargs.get("version"),
+            dataset_format=provider_kwargs.get("dataset_format") or "folder",
+        )
+    if provider in ("kaggle", "huggingface"):
         raise ValueError(
             f"Dataset provider '{provider}' is not implemented yet (coming soon)."
         )
@@ -148,6 +226,7 @@ def download_dataset(
 __all__ = [
     "DatasetDownloadResult",
     "download_dataset",
+    "download_roboflow",
     "download_torchvision",
     "torchvision_datasets",
 ]

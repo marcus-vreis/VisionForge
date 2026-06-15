@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+import sys
+import types
 from pathlib import Path
+from typing import Any
 
 import pytest
 from PIL import Image
 
 from visionforge.gui.api.dataset_download import (
     download_dataset,
+    download_roboflow,
     download_torchvision,
 )
 
@@ -64,7 +68,7 @@ class TestDispatcher:
         assert result.provider == "torchvision"
         assert result.total_images == 2
 
-    @pytest.mark.parametrize("provider", ["roboflow", "kaggle", "huggingface"])
+    @pytest.mark.parametrize("provider", ["kaggle", "huggingface"])
     def test_unimplemented_providers_raise(self, provider: str, tmp_path: Path) -> None:
         with pytest.raises(ValueError, match="not implemented"):
             download_dataset(provider, dataset="x", out_dir=str(tmp_path))
@@ -72,6 +76,99 @@ class TestDispatcher:
     def test_unknown_provider_raises(self, tmp_path: Path) -> None:
         with pytest.raises(ValueError, match="Unknown dataset provider"):
             download_dataset("bogus", dataset="x", out_dir=str(tmp_path))
+
+
+def _install_fake_roboflow(
+    monkeypatch: pytest.MonkeyPatch, rec: dict[str, Any]
+) -> None:
+    """Inject a fake roboflow SDK whose download() writes a couple of images."""
+
+    class FakeVersion:
+        def __init__(self, num: int) -> None:
+            self.num = num
+
+        def download(self, fmt: str, location: str) -> None:
+            rec["format"] = fmt
+            rec["location"] = location
+            d = Path(location) / "train" / "cat"
+            d.mkdir(parents=True, exist_ok=True)
+            (d / "a.jpg").write_bytes(b"x")
+            (d / "b.jpg").write_bytes(b"x")
+
+    class FakeProject:
+        def version(self, num: int) -> FakeVersion:
+            rec["version"] = num
+            return FakeVersion(num)
+
+    class FakeWorkspace:
+        def project(self, name: str) -> FakeProject:
+            rec["project"] = name
+            return FakeProject()
+
+    class FakeRoboflow:
+        def __init__(self, api_key: str) -> None:
+            rec["api_key"] = api_key
+
+        def workspace(self, ws: str) -> FakeWorkspace:
+            rec["workspace"] = ws
+            return FakeWorkspace()
+
+    fake_mod = types.ModuleType("roboflow")
+    fake_mod.Roboflow = FakeRoboflow  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "roboflow", fake_mod)
+
+
+class TestRoboflowDownload:
+    def test_downloads_and_counts(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        rec: dict[str, Any] = {}
+        _install_fake_roboflow(monkeypatch, rec)
+        result = download_roboflow(
+            "ws/proj",
+            tmp_path / "ds",
+            api_key="KEY",
+            version=3,
+            dataset_format="folder",
+        )
+        assert result.provider == "roboflow"
+        assert result.dataset == "ws/proj:v3"
+        assert result.total_images == 2
+        assert result.splits == {"train": 2}
+        assert rec == {
+            "api_key": "KEY",
+            "workspace": "ws",
+            "project": "proj",
+            "version": 3,
+            "format": "folder",
+            "location": str(tmp_path / "ds"),
+        }
+
+    def test_dispatcher_routes_to_roboflow(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        _install_fake_roboflow(monkeypatch, {})
+        result = download_dataset(
+            "roboflow",
+            dataset="ws/proj",
+            out_dir=str(tmp_path),
+            api_key="KEY",
+            version=1,
+        )
+        assert result.provider == "roboflow"
+        assert result.total_images == 2
+
+    def test_missing_api_key_raises(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError, match="api_key"):
+            download_roboflow("ws/proj", tmp_path, api_key=None, version=1)
+
+    def test_missing_version_raises(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError, match="version"):
+            download_roboflow("ws/proj", tmp_path, api_key="KEY", version=None)
+
+    def test_malformed_dataset_raises(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError, match="workspace/project"):
+            download_roboflow("justproject", tmp_path, api_key="KEY", version=1)
 
 
 class TestExecuteRoute:

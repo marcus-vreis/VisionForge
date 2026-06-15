@@ -576,10 +576,10 @@ Real end-to-end pipeline tests (no mocks), skipped in CI to keep it fast
 
 **In progress:**
 - **Online dataset download (ADR-055)** — `POST /api/dataset/download`,
-  provider-based (`gui/api/dataset_download.py`); one-shot local-first fetch. ✅
-  **torchvision built-ins** (CIFAR/MNIST/… → ImageFolder layout, no extra).
-  Remaining: Roboflow / Kaggle / Hugging Face providers (optional lazy extras), then
-  the GUI section once all four backends are in.
+  provider-based (`gui/api/dataset_download.py`); one-shot local-first fetch.
+  ✅ **torchvision built-ins** (→ ImageFolder, no extra); ✅ **Roboflow** (`[roboflow]`
+  extra, lazy; api_key + workspace/project + version). Remaining: Kaggle / Hugging
+  Face providers, then the GUI section once all four backends are in.
 - **Cross-validation (K-fold)** for regression/segmentation — last cross-task
   parity slice. Regression **backend done** (`blocks/regression_cv.py`, ADR-050,
   KFold + per-fold train/eval + mean±std). Remaining: regression API endpoint +

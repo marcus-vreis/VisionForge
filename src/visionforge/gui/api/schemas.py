@@ -425,6 +425,8 @@ class DatasetDownloadRequest(BaseModel):
     limit: int | None = Field(default=None, ge=1)
     api_key: str | None = None
     token: str | None = None
+    version: int | None = Field(default=None, ge=1)  # Roboflow dataset version
+    dataset_format: str | None = None  # Roboflow export format (e.g. folder, yolov8)
 
 
 class DatasetDownloadResponse(BaseModel):
