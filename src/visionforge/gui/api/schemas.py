@@ -407,6 +407,37 @@ class DatasetStatsResponse(BaseModel):
     message: str | None = None
 
 
+class DatasetDownloadRequest(BaseModel):
+    """One-shot dataset download to a local folder (ADR-055).
+
+    ``provider`` selects the source; ``dataset`` is its identifier (e.g. "cifar10"
+    for torchvision, "owner/project" for Roboflow). ``out_dir`` is the local target.
+    ``limit`` caps images per class per split (None = all). Provider credentials
+    (api_key/token) are passed through for the providers that need them.
+    """
+
+    provider: Literal["torchvision", "roboflow", "kaggle", "huggingface"] = (
+        "torchvision"
+    )
+    dataset: str
+    out_dir: str
+    splits: list[str] = ["train", "test"]
+    limit: int | None = Field(default=None, ge=1)
+    api_key: str | None = None
+    token: str | None = None
+
+
+class DatasetDownloadResponse(BaseModel):
+    """Result of a one-shot dataset download."""
+
+    provider: str
+    dataset: str
+    out_dir: str
+    total_images: int
+    splits: dict[str, int] = {}
+    classes: list[str] = []
+
+
 __all__ = [
     "RunStatus",
     "RunResponse",
@@ -439,4 +470,6 @@ __all__ = [
     "GPUInfo",
     "DeviceInfoResponse",
     "SystemInfo",
+    "DatasetDownloadRequest",
+    "DatasetDownloadResponse",
 ]

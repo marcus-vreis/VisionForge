@@ -40,6 +40,7 @@ from visionforge.core.evaluator import Evaluator
 from visionforge.core.plotter import MetricsPlotter
 from visionforge.core.sweep import SweepTrial, run_sweep, validate_sweep_space
 from visionforge.core.task_runner import TaskRunner
+from visionforge.gui.api.dataset_download import download_dataset
 from visionforge.gui.api.detection_export import export_detection_run
 from visionforge.gui.api.detection_testing import evaluate_detection_run
 from visionforge.gui.api.schemas import (
@@ -51,6 +52,8 @@ from visionforge.gui.api.schemas import (
     ComparisonRequest,
     DatasetDetectRequest,
     DatasetDetectResponse,
+    DatasetDownloadRequest,
+    DatasetDownloadResponse,
     DatasetPickResponse,
     DatasetSamplesRequest,
     DatasetSamplesResponse,
@@ -473,6 +476,44 @@ async def pick_dataset_folder() -> DatasetPickResponse:
     path — something the browser's File System Access API never provides.
     """
     return await asyncio.to_thread(_open_native_folder_dialog)
+
+
+@router.post("/dataset/download")
+async def dataset_download(req: DatasetDownloadRequest) -> DatasetDownloadResponse:
+    """One-shot download of a dataset to a local folder (ADR-055).
+
+    Runs in a worker thread (downloads can be slow). A missing optional extra or
+    credential surfaces as a 400 with a clear message.
+    """
+    try:
+        return await asyncio.to_thread(_execute_dataset_download, req)
+    except (ValueError, FileNotFoundError, ImportError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Dataset download ({}) failed", req.provider)
+        raise HTTPException(500, f"{type(exc).__name__}: {exc}") from exc
+
+
+def _execute_dataset_download(req: DatasetDownloadRequest) -> DatasetDownloadResponse:
+    """Dispatch a dataset download to the chosen provider and shape the response."""
+    result = download_dataset(
+        req.provider,
+        dataset=req.dataset,
+        out_dir=req.out_dir,
+        splits=tuple(req.splits),
+        limit=req.limit,
+        api_key=req.api_key,
+        token=req.token,
+    )
+    _remember_dataset_root(Path(result.out_dir))
+    return DatasetDownloadResponse(
+        provider=result.provider,
+        dataset=result.dataset,
+        out_dir=result.out_dir,
+        total_images=result.total_images,
+        splits=result.splits,
+        classes=result.classes,
+    )
 
 
 @router.post("/experiment/run")

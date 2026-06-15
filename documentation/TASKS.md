@@ -574,14 +574,12 @@ Real end-to-end pipeline tests (no mocks), skipped in CI to keep it fast
 
 ## Backlog / ideas (triaged into tasks)
 
-**Ready — well-scoped pick-up tasks:**
-- **Online dataset download in the GUI** (Roboflow / Kaggle / HuggingFace /
-  torchvision built-ins) — one-shot, user-initiated fetch to a local folder, then
-  the existing data flow takes over (local-first; no core-path network). Roboflow
-  *exports* already work via `DetectionDataConfig.data_yaml`; this removes the
-  manual download. `roboflow` as an optional extra, bound lazily like `ultralytics`.
-
 **In progress:**
+- **Online dataset download (ADR-055)** — `POST /api/dataset/download`,
+  provider-based (`gui/api/dataset_download.py`); one-shot local-first fetch. ✅
+  **torchvision built-ins** (CIFAR/MNIST/… → ImageFolder layout, no extra).
+  Remaining: Roboflow / Kaggle / Hugging Face providers (optional lazy extras), then
+  the GUI section once all four backends are in.
 - **Cross-validation (K-fold)** for regression/segmentation — last cross-task
   parity slice. Regression **backend done** (`blocks/regression_cv.py`, ADR-050,
   KFold + per-fold train/eval + mean±std). Remaining: regression API endpoint +

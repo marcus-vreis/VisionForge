@@ -906,3 +906,35 @@ a tracking field to all five task configs, while staying fully optional (no new
 hard dependency; the run.json history of ADR-013 remains the canonical record).
 Tests inject a fake `SummaryWriter` so they neither require the extra nor write real
 event files (ADR-010).
+
+## ADR-055 — One-shot dataset download (provider-based)
+
+**Date:** 2026-06
+**Status:** Accepted
+
+**Decision:** A user-initiated `POST /api/dataset/download` fetches a dataset into a
+local folder, after which the existing data flow takes over — local-first, one-shot,
+nothing in the core training path touches the network. It is **provider-based**
+(`gui/api/dataset_download.py`): `download_dataset(provider, dataset, out_dir, …)`
+dispatches to a per-provider fetcher. The user chose four providers; they ship one
+per commit, simplest first:
+1. **torchvision built-ins** (this slice) — no extra; downloads CIFAR10/100,
+   MNIST/FashionMNIST/KMNIST and **materializes them into an ImageFolder layout**
+   (`<out>/<split>/<class>/*.png`) so classification trains on them directly. A
+   `limit` caps images per class. The raw download goes to a temp dir; only the PNGs
+   are kept.
+2. **Roboflow** (`roboflow` extra, lazy, API key) — next.
+3. **Kaggle** (`kaggle` extra, lazy, kaggle.json) — next.
+4. **Hugging Face** (`datasets` extra, lazy, optional token) — next.
+Missing extras/credentials raise a clear error → HTTP 400. The endpoint runs in a
+worker thread (downloads are slow). The GUI section lands once the four backends are
+in.
+
+**Reason:** A provider dispatcher keeps each source isolated and lets the heavy/auth
+ones be optional lazy extras (ADR-005), so the core install stays lean. Materializing
+torchvision sets to ImageFolder is what makes them immediately trainable — the raw
+torchvision format is not what the DataModule consumes. Backend-first per provider
+(API-reachable + tested via a mocked dataset, no network/credentials, ADR-010) keeps
+each commit small and green; the GUI is added once at the end rather than rebuilt per
+provider. The downloaded files live wherever the user points `out_dir`; nothing is
+auto-committed.
