@@ -73,6 +73,9 @@ roboflow = [
 kaggle = [
     "kaggle>=1.6",
 ]
+huggingface = [
+    "datasets>=2.0",
+]
 dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",

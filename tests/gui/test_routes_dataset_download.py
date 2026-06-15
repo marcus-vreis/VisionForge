@@ -10,6 +10,7 @@ from PIL import Image
 
 from visionforge.gui.api.dataset_download import (
     download_dataset,
+    download_huggingface,
     download_kaggle,
     download_roboflow,
     download_torchvision,
@@ -68,11 +69,6 @@ class TestDispatcher:
         )
         assert result.provider == "torchvision"
         assert result.total_images == 2
-
-    @pytest.mark.parametrize("provider", ["huggingface"])
-    def test_unimplemented_providers_raise(self, provider: str, tmp_path: Path) -> None:
-        with pytest.raises(ValueError, match="not implemented"):
-            download_dataset(provider, dataset="x", out_dir=str(tmp_path))
 
     def test_unknown_provider_raises(self, tmp_path: Path) -> None:
         with pytest.raises(ValueError, match="Unknown dataset provider"):
@@ -222,6 +218,72 @@ class TestKaggleDownload:
     def test_malformed_dataset_raises(self, tmp_path: Path) -> None:
         with pytest.raises(ValueError, match="owner/dataset-slug"):
             download_kaggle("justslug", tmp_path)
+
+
+def _install_fake_datasets(
+    monkeypatch: pytest.MonkeyPatch, with_label: bool = True
+) -> None:
+    """Inject a fake `datasets` module: load_dataset → DatasetDict of image+label."""
+    from PIL import Image as PilImage
+
+    class Image:  # class name is what the feature introspection matches on
+        pass
+
+    class ClassLabel:
+        def __init__(self, names: list[str]) -> None:
+            self.names = names
+
+    class FakeSplit:
+        def __init__(self, n: int) -> None:
+            self._n = n
+            if with_label:
+                self.features = {"image": Image(), "label": ClassLabel(["cat", "dog"])}
+            else:
+                self.features = {"text": object()}
+
+        def __iter__(self):
+            for i in range(self._n):
+                yield {
+                    "image": PilImage.new("RGB", (8, 8), (i, 0, 0)),
+                    "label": i % 2,
+                }
+
+    def load_dataset(name: str, token: str | None = None) -> dict[str, Any]:
+        return {"train": FakeSplit(4), "test": FakeSplit(2)}
+
+    fake_mod = types.ModuleType("datasets")
+    fake_mod.load_dataset = load_dataset  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "datasets", fake_mod)
+
+
+class TestHuggingFaceDownload:
+    def test_materializes_imagefolder(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        _install_fake_datasets(monkeypatch)
+        result = download_huggingface("owner/ds", tmp_path / "ds", token="tok")
+        assert result.provider == "huggingface"
+        assert result.total_images == 6  # 4 train + 2 test
+        assert result.splits == {"train": 4, "test": 2}
+        assert result.classes == ["cat", "dog"]
+        assert (tmp_path / "ds" / "train" / "cat").is_dir()
+
+    def test_dispatcher_routes_to_huggingface(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        _install_fake_datasets(monkeypatch)
+        result = download_dataset(
+            "huggingface", dataset="owner/ds", out_dir=str(tmp_path), token="t"
+        )
+        assert result.provider == "huggingface"
+        assert result.total_images == 6
+
+    def test_no_image_label_features_raises(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        _install_fake_datasets(monkeypatch, with_label=False)
+        with pytest.raises(ValueError, match="no image\\+label features"):
+            download_huggingface("owner/text-ds", tmp_path)
 
 
 class TestExecuteRoute:
