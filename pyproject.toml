@@ -70,6 +70,9 @@ tensorboard = [
 roboflow = [
     "roboflow>=1.1",
 ]
+kaggle = [
+    "kaggle>=1.6",
+]
 dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",

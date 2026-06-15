@@ -10,6 +10,7 @@ from PIL import Image
 
 from visionforge.gui.api.dataset_download import (
     download_dataset,
+    download_kaggle,
     download_roboflow,
     download_torchvision,
 )
@@ -68,7 +69,7 @@ class TestDispatcher:
         assert result.provider == "torchvision"
         assert result.total_images == 2
 
-    @pytest.mark.parametrize("provider", ["kaggle", "huggingface"])
+    @pytest.mark.parametrize("provider", ["huggingface"])
     def test_unimplemented_providers_raise(self, provider: str, tmp_path: Path) -> None:
         with pytest.raises(ValueError, match="not implemented"):
             download_dataset(provider, dataset="x", out_dir=str(tmp_path))
@@ -169,6 +170,58 @@ class TestRoboflowDownload:
     def test_malformed_dataset_raises(self, tmp_path: Path) -> None:
         with pytest.raises(ValueError, match="workspace/project"):
             download_roboflow("justproject", tmp_path, api_key="KEY", version=1)
+
+
+def _install_fake_kaggle(monkeypatch: pytest.MonkeyPatch, rec: dict[str, Any]) -> None:
+    """Inject a fake kaggle SDK whose dataset_download_files() writes images."""
+
+    class FakeKaggleApi:
+        def authenticate(self) -> None:
+            rec["authenticated"] = True
+
+        def dataset_download_files(self, dataset: str, path: str, unzip: bool) -> None:
+            rec["dataset"] = dataset
+            rec["unzip"] = unzip
+            d = Path(path) / "images"
+            d.mkdir(parents=True, exist_ok=True)
+            for n in ("a.png", "b.png", "c.png"):
+                (d / n).write_bytes(b"x")
+
+    pkg = types.ModuleType("kaggle")
+    api_mod = types.ModuleType("kaggle.api")
+    ext = types.ModuleType("kaggle.api.kaggle_api_extended")
+    ext.KaggleApi = FakeKaggleApi  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "kaggle", pkg)
+    monkeypatch.setitem(sys.modules, "kaggle.api", api_mod)
+    monkeypatch.setitem(sys.modules, "kaggle.api.kaggle_api_extended", ext)
+
+
+class TestKaggleDownload:
+    def test_downloads_and_counts(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        rec: dict[str, Any] = {}
+        _install_fake_kaggle(monkeypatch, rec)
+        result = download_kaggle("owner/slug", tmp_path / "ds")
+        assert result.provider == "kaggle"
+        assert result.dataset == "owner/slug"
+        assert result.total_images == 3
+        assert result.splits == {"images": 3}
+        assert rec["authenticated"] is True
+        assert rec["dataset"] == "owner/slug"
+        assert rec["unzip"] is True
+
+    def test_dispatcher_routes_to_kaggle(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        _install_fake_kaggle(monkeypatch, {})
+        result = download_dataset("kaggle", dataset="owner/slug", out_dir=str(tmp_path))
+        assert result.provider == "kaggle"
+        assert result.total_images == 3
+
+    def test_malformed_dataset_raises(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError, match="owner/dataset-slug"):
+            download_kaggle("justslug", tmp_path)
 
 
 class TestExecuteRoute:

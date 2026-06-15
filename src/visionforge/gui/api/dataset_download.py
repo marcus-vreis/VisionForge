@@ -189,6 +189,54 @@ def download_roboflow(
     )
 
 
+def download_kaggle(dataset: str, out_dir: str | Path) -> DatasetDownloadResult:
+    """Download and unzip a Kaggle dataset into ``out_dir``.
+
+    ``dataset`` is ``"owner/dataset-slug"``. Authenticates via ``kaggle.json`` or the
+    ``KAGGLE_USERNAME`` / ``KAGGLE_KEY`` env vars. Counts the extracted images.
+
+    Raises:
+        ValueError: if ``dataset`` is malformed or credentials are missing.
+        ImportError: if the optional ``kaggle`` extra is not installed.
+    """
+    if "/" not in dataset:
+        raise ValueError("Kaggle dataset must be 'owner/dataset-slug'.")
+    try:
+        from kaggle.api.kaggle_api_extended import KaggleApi
+    except ImportError as exc:  # pragma: no cover - only without the kaggle extra
+        raise ImportError(
+            'kaggle is not installed. Add the optional extra: pip install -e ".[kaggle]".'
+        ) from exc
+    except OSError as exc:  # kaggle auto-authenticates on import; missing creds raise
+        raise ValueError(
+            "Kaggle credentials not found (set kaggle.json or "
+            f"KAGGLE_USERNAME/KAGGLE_KEY): {exc}"
+        ) from exc
+
+    out = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    api = KaggleApi()
+    try:
+        api.authenticate()
+    except OSError as exc:
+        raise ValueError(
+            "Kaggle credentials not found (set kaggle.json or "
+            f"KAGGLE_USERNAME/KAGGLE_KEY): {exc}"
+        ) from exc
+    api.dataset_download_files(dataset, path=str(out), unzip=True)
+
+    total, splits = _count_images(out)
+    logger.info("kaggle {}: {} images", dataset, total)
+    return DatasetDownloadResult(
+        provider="kaggle",
+        dataset=dataset,
+        out_dir=str(out.resolve()),
+        total_images=total,
+        splits=splits,
+        classes=[],
+    )
+
+
 def download_dataset(
     provider: str,
     *,
@@ -213,7 +261,9 @@ def download_dataset(
             version=provider_kwargs.get("version"),
             dataset_format=provider_kwargs.get("dataset_format") or "folder",
         )
-    if provider in ("kaggle", "huggingface"):
+    if provider == "kaggle":
+        return download_kaggle(dataset, out_dir)
+    if provider == "huggingface":
         raise ValueError(
             f"Dataset provider '{provider}' is not implemented yet (coming soon)."
         )
@@ -226,6 +276,7 @@ def download_dataset(
 __all__ = [
     "DatasetDownloadResult",
     "download_dataset",
+    "download_kaggle",
     "download_roboflow",
     "download_torchvision",
     "torchvision_datasets",
