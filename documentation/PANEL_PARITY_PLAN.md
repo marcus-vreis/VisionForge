@@ -117,7 +117,7 @@ generic custom-task panel is these same components pointed at a schema.
   - Browser-verified on Anomalia: header renders, real YAML import applies
     name/PatchCore/threshold/preprocessing to the form with a success note,
     malformed YAML shows the error banner, 0 console errors.
-- [~] brick E — dataset stats parity. **Backend shipped 2026-07-02**:
+- [x] brick E — dataset stats parity. **Backend shipped 2026-07-02**:
   `POST /api/{segmentation,anomaly,regression}/dataset/stats`
   (mirrors the detection stats endpoint) —
   segmentation: pares imagem↔máscara por stem, unpaired counts, class ids
@@ -126,8 +126,16 @@ generic custom-task panel is these same components pointed at a schema.
   teste, aviso de treino vazio; regression: linhas por CSV (cap 50k), colunas
   ausentes, distribuição dos alvos (n/média/min/max) e checagem amostrada de
   500 caminhos de imagem. Tests em `tests/gui/test_task_dataset_stats.py` (8).
-  **Remaining (next loop iteration): the three GUI stats panels** inside each
-  Dataset section (mirror `DetectionDatasetStats`), incl. o botão "aplicar"
-  que injeta `num_classes` (segmentação, a partir dos class ids).
+  **GUI shipped 2026-07-02** (brick E complete): `TaskDatasetStats.tsx` (três
+  componentes com primitivas compartilhadas + fetch com debounce de 400ms)
+  dentro da seção Dataset de cada painel — segmentação: cards de pareamento
+  por split + chips de ids (255 marcado como provável ignore_index) + botão
+  "🎯 aplicar N classes" + **guarda de máscaras interpoladas** (>32 ids
+  distintos → aviso de anti-aliasing em vez de sugerir classes; chips
+  limitados a 12+N); anomalia: treino-normal / teste-normal / teste-anômalo +
+  chips por defeito; regressão: linhas, colunas ausentes, imagens faltantes e
+  μ/[min,max]/n por alvo. Browser-verified com datasets sintéticos (pareamento
+  2 pares + aviso de img sem máscara, aplicar → num_classes=3, caminho
+  interpolado → aviso, anomalia 3/2/4 + chip por defeito), 0 console errors.
 - [ ] brick F — classification alignment pass: expose "Comparar modelos" as a
   grid preset there too (backend block untouched) so the mental model is one.

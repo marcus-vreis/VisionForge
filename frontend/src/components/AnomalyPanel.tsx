@@ -13,6 +13,7 @@ import type { ValidationError } from "../hooks/useExperiment";
 import { NumberField, SelectField, Segmented, TextField, Toggle } from "./controls";
 import { ExperimentHeader, type PanelStrategy } from "./ExperimentHeader";
 import { ReplicatesCard } from "./ReplicatesCard";
+import { AnomalyDatasetStats } from "./TaskDatasetStats";
 import { SweepCard, type SweepPayload } from "./SweepCard";
 import { TransformsSection } from "./TransformsSection";
 import type { ReplicatesPayload } from "../lib/replicates-form";
@@ -347,6 +348,12 @@ export function AnomalyPanel({
             suffix="px"
           />
         </div>
+        <AnomalyDatasetStats
+          baseDir={formData.data.base_dir}
+          trainDir={formData.data.train_dir}
+          testDir={formData.data.test_dir}
+          normalDir={formData.data.normal_dir}
+        />
       </div>
 
       {/* Pré-processamento + augmentação (ADR-059 brick A) — flips/rotações

@@ -13,6 +13,7 @@ import type { ValidationError } from "../hooks/useExperiment";
 import { NumberField, SelectField, Segmented, TextField, Toggle } from "./controls";
 import { ExperimentHeader, type PanelStrategy } from "./ExperimentHeader";
 import { ReplicatesCard } from "./ReplicatesCard";
+import { SegmentationDatasetStats } from "./TaskDatasetStats";
 import { SweepCard, type SweepPayload } from "./SweepCard";
 import { TransformsSection } from "./TransformsSection";
 import type { ReplicatesPayload } from "../lib/replicates-form";
@@ -389,6 +390,15 @@ export function SegmentationPanel({
             hint="pixels void"
           />
         </div>
+        <SegmentationDatasetStats
+          baseDir={formData.data.base_dir}
+          imagesSubdir={formData.data.images_subdir}
+          masksSubdir={formData.data.masks_subdir}
+          trainDir={formData.data.train_dir}
+          valDir={formData.data.val_dir}
+          testDir={formData.data.test_dir}
+          onApplyClasses={(n) => setModel({ num_classes: n })}
+        />
       </div>
 
       {/* Pré-processamento + augmentação (ADR-059 brick A) */}

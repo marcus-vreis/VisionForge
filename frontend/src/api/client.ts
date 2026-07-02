@@ -431,6 +431,104 @@ export async function fetchDetectionDatasetStats(
   });
 }
 
+export interface SegmentationSplitStats {
+  images: number;
+  masks: number;
+  paired: number;
+  unpaired_images: number;
+  unpaired_masks: number;
+  missing: boolean;
+}
+
+export interface SegmentationDatasetStatsResponse {
+  base_dir: string;
+  splits: Record<string, SegmentationSplitStats>;
+  mask_class_ids: number[];
+  message: string | null;
+}
+
+/** Per-split image↔mask pairing stats + sampled class ids (ADR-059 brick E). */
+export async function fetchSegmentationDatasetStats(body: {
+  base_dir: string;
+  images_subdir: string;
+  masks_subdir: string;
+  train_dir: string;
+  val_dir: string;
+  test_dir: string;
+}): Promise<SegmentationDatasetStatsResponse> {
+  return request<SegmentationDatasetStatsResponse>(
+    "/segmentation/dataset/stats",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    },
+  );
+}
+
+export interface AnomalyDatasetStatsResponse {
+  base_dir: string;
+  train_normal: number;
+  test_normal: number;
+  test_anomalous: Record<string, number>;
+  missing_train: boolean;
+  missing_test: boolean;
+  message: string | null;
+}
+
+/** Normal-vs-defect counts for an MVTec-style dataset (ADR-059 brick E). */
+export async function fetchAnomalyDatasetStats(body: {
+  base_dir: string;
+  train_dir: string;
+  test_dir: string;
+  normal_dir: string;
+}): Promise<AnomalyDatasetStatsResponse> {
+  return request<AnomalyDatasetStatsResponse>("/anomaly/dataset/stats", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export interface RegressionTargetStats {
+  count: number;
+  mean: number | null;
+  min: number | null;
+  max: number | null;
+}
+
+export interface RegressionSplitStats {
+  rows: number;
+  missing_columns: string[];
+  missing_images: number;
+  checked_images: number;
+  targets: Record<string, RegressionTargetStats>;
+  missing: boolean;
+}
+
+export interface RegressionDatasetStatsResponse {
+  base_dir: string;
+  splits: Record<string, RegressionSplitStats>;
+  message: string | null;
+}
+
+/** Manifest rows, column checks + target distributions (ADR-059 brick E). */
+export async function fetchRegressionDatasetStats(body: {
+  base_dir: string;
+  images_dir: string;
+  train_csv: string;
+  val_csv: string;
+  test_csv: string;
+  image_column: string;
+  target_columns: string[];
+}): Promise<RegressionDatasetStatsResponse> {
+  return request<RegressionDatasetStatsResponse>("/regression/dataset/stats", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
 export interface DatasetSamplesResponse {
   base_dir: string;
   split: string;

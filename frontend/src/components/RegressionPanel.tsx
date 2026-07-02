@@ -13,6 +13,7 @@ import type { ValidationError } from "../hooks/useExperiment";
 import { NumberField, SelectField, Segmented, TextField, Toggle } from "./controls";
 import { ExperimentHeader, type PanelStrategy } from "./ExperimentHeader";
 import { ReplicatesCard } from "./ReplicatesCard";
+import { RegressionDatasetStats } from "./TaskDatasetStats";
 import { SweepCard, type SweepPayload } from "./SweepCard";
 import { TransformsSection } from "./TransformsSection";
 import type { ReplicatesPayload } from "../lib/replicates-form";
@@ -390,6 +391,15 @@ export function RegressionPanel({
             suffix="px"
           />
         </div>
+        <RegressionDatasetStats
+          baseDir={formData.data.base_dir}
+          imagesDir={formData.data.images_dir}
+          trainCsv={formData.data.train_csv}
+          valCsv={formData.data.val_csv}
+          testCsv={formData.data.test_csv}
+          imageColumn={formData.data.image_column}
+          targetColumns={formData.data.target_columns}
+        />
       </div>
 
       {/* Pré-processamento + augmentação (ADR-059 brick A) */}

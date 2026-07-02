@@ -640,8 +640,9 @@ and lost reachable features their backends support. Bricks, by severity:
   estratégia numa caixa, igual à classificação) nos quatro painéis standalone;
   import valida contra o schema vivo e reconstrói o form com round-trip
   testado. Shipped 2026-07-02.
-- brick E — dataset stats parity (segmentation/anomaly folder stats; regression
-  manifest summary).
+- [x] brick E — dataset stats parity: backend + GUI shipped 2026-07-02
+  (endpoints `/api/{seg,anomaly,regression}/dataset/stats` + `TaskDatasetStats`
+  nos painéis, com aplicar-num_classes e guarda de máscaras interpoladas).
 - brick F — classification alignment (comparar modelos as grid preset).
 
 **Researcher-grade rigor (sequenced follow-ups to ADR-056):**
