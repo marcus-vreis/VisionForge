@@ -1,7 +1,7 @@
 # Panel Parity — Canonical Task-Panel Contract (ADR-059) — Audit & Plan
 
-> Status: **In progress** — audit 2026-07-01; bricks A + B shipped 2026-07-02
-> (browser-verified: canonical order + TransformsSection on the four panels).
+> Status: **COMPLETE** — audit 2026-07-01; bricks A–F shipped 2026-07-02
+> (every brick browser-verified; ADR-059 fully implemented).
 > Origin: user review — "classification serve como modelo para os outros; nos
 > outros os hiperparâmetros estão organizados de forma errada, perdem
 > pré-processamento, e os modos de treinamento estão embaralhados com os
@@ -137,5 +137,20 @@ generic custom-task panel is these same components pointed at a schema.
   μ/[min,max]/n por alvo. Browser-verified com datasets sintéticos (pareamento
   2 pares + aviso de img sem máscara, aplicar → num_classes=3, caminho
   interpolado → aviso, anomalia 3/2/4 + chip por defeito), 0 console errors.
-- [ ] brick F — classification alignment pass: expose "Comparar modelos" as a
-  grid preset there too (backend block untouched) so the mental model is one.
+- [x] brick F — classification alignment (shipped 2026-07-02): "Comparar
+  modelos" removed from the `BlockSelector` — comparing architectures in
+  classification is a one-axis grid over "Arquitetura" via the existing inline
+  "+ valor ao grid" affordance (enum values validated against the schema), and
+  the Grid search hint now says exactly that. `ModelComparisonBlock`, its
+  dispatch and `ModelComparisonReport` stay: YAML configs with
+  `block=model_comparison` remain editable (the conditional fields render is
+  kept) and executable. Browser-verified: 5 strategies in the selector, hint
+  present, 10 "+ valor ao grid" affordances in grid mode, 0 console errors.
+
+## Follow-ups that outlived the bricks (tracked in TASKS.md)
+
+- Treinar button vs. strategy: the BottomBar "Treinar" always fires the simple
+  run; Sweep/Réplicas launch from their own cards. Unifying it means lifting
+  panel strategy state into App — next refinement of the contract.
+- "Replicated comparison" (Fase D): rank architectures by mean ± CI over N
+  seeds with a paired test, inside the Sweep/Réplicas surfaces.

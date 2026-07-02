@@ -643,7 +643,11 @@ and lost reachable features their backends support. Bricks, by severity:
 - [x] brick E — dataset stats parity: backend + GUI shipped 2026-07-02
   (endpoints `/api/{seg,anomaly,regression}/dataset/stats` + `TaskDatasetStats`
   nos painéis, com aplicar-num_classes e guarda de máscaras interpoladas).
-- brick F — classification alignment (comparar modelos as grid preset).
+- [x] brick F — classification alignment shipped 2026-07-02: "Comparar modelos"
+  removido do BlockSelector (comparação = grid de um eixo sobre Arquitetura,
+  hint no modo grid); backend block + report mantidos para YAML legado.
+  **ADR-059 completo (bricks A–F).** Follow-ups: Treinar respeitar a estratégia
+  selecionada; comparação replicada (Fase D).
 
 **Researcher-grade rigor (sequenced follow-ups to ADR-056):**
 - Determinism parity: `training.deterministic` exists only in classification —

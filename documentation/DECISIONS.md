@@ -1026,8 +1026,8 @@ machine.
 ## ADR-059 — Canonical task-panel contract (classification is the template)
 
 **Date:** 2026-07
-**Status:** Accepted (bricks A+B shipped 2026-07-02; C–F tracked in
-`documentation/PANEL_PARITY_PLAN.md`)
+**Status:** Accepted — **fully implemented** (bricks A–F shipped 2026-07-02;
+audit + per-brick record in `documentation/PANEL_PARITY_PLAN.md`)
 **Extends:** ADR-025, ADR-028, ADR-044/045/056
 
 **Decision:** The classification `ParamPanel` layout is ratified as the canonical

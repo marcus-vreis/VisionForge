@@ -474,11 +474,14 @@ function BlockSelector({
   value: string;
   onChange: (v: string) => void;
 }) {
+  // "Comparar modelos" saiu do seletor (ADR-059 brick F): comparar arquiteturas
+  // é um grid de um eixo só sobre "Arquitetura" (+ valor ao grid) — um conceito,
+  // uma superfície. O ModelComparisonBlock continua no backend; configs YAML
+  // legadas com block=model_comparison seguem editáveis e executáveis.
   const options = [
     { value: "classification", label: "Treino simples" },
     { value: "cross_validation", label: "K-Fold (CV)" },
     { value: "transfer_learning", label: "Transfer learning" },
-    { value: "model_comparison", label: "Comparar modelos" },
     { value: "grid_search", label: "Grid search" },
     { value: "random_search", label: "Random search" },
   ];
@@ -566,21 +569,6 @@ function BlockSelector({
           destruir as features pré-treinadas.
         </div>
       )}
-      {value === "model_comparison" && (
-        <div
-          style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: 10,
-            color: "var(--vf-text-muted)",
-            lineHeight: 1.5,
-            marginTop: 2,
-          }}
-        >
-          Treina cada arquitetura selecionada com os mesmos hyperparams e mostra
-          o ranking pela métrica escolhida. O campo "Arquitetura" acima é
-          ignorado — quem manda é a lista abaixo.
-        </div>
-      )}
       {value === "grid_search" && (
         <div
           style={{
@@ -594,7 +582,9 @@ function BlockSelector({
           Treina <strong>uma vez por combinação</strong> do produto cartesiano
           do espaço definido abaixo. Cada chave é um dot-path (ex:{" "}
           <code>training.learning_rate</code>); o valor é uma lista. Cuidado:
-          3×3×2 já são 18 treinos.
+          3×3×2 já são 18 treinos. Para <strong>comparar arquiteturas</strong>,
+          adicione valores ao campo "Arquitetura" (botão "+ valor ao grid") —
+          um grid de um eixo só; compare os runs no histórico.
         </div>
       )}
       {value === "random_search" && (
