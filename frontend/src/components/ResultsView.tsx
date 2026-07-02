@@ -312,6 +312,8 @@ export function ResultsView({ result, onClose, taskAccent }: ResultsViewProps) {
       {result.report && Object.keys(result.report).length > 0 && (
         isCrossValidationReport(result.report) ? (
           <CrossValidationReport report={result.report} accent={taskAccent} />
+        ) : isTaskCvReport(result.report) ? (
+          <TaskCvReport report={result.report} accent={taskAccent} />
         ) : isReplicatesReport(result.report) ? (
           <ReplicatesReport report={result.report} accent={taskAccent} />
         ) : isTaskComparisonReport(result.report) ? (
@@ -552,6 +554,146 @@ function AggregateCard({
         >
           ± {std.toFixed(4)}
         </span>
+      </div>
+    </div>
+  );
+}
+
+interface TaskCvFoldRow {
+  fold: number;
+  status: string;
+  train_size: number;
+  val_size: number;
+  metrics: Record<string, number>;
+  error: string;
+}
+
+/** Standalone-task K-fold report (ADR-050): `fold_results` + per-metric
+ *  `aggregate` (the classification CV report carries `mean_accuracy` instead). */
+function isTaskCvReport(report: Record<string, unknown>): boolean {
+  return (
+    Array.isArray(report["fold_results"]) &&
+    typeof report["aggregate"] === "object" &&
+    report["aggregate"] !== null
+  );
+}
+
+/** Fold-a-fold table + mean ± std headline for a standalone-task K-fold run. */
+function TaskCvReport({
+  report,
+  accent,
+}: {
+  report: Record<string, unknown>;
+  accent: string;
+}) {
+  const folds = (report["fold_results"] as TaskCvFoldRow[]) ?? [];
+  const aggregate =
+    (report["aggregate"] as Record<string, { mean: number; std: number }>) ?? {};
+  const metric = report["metric"] as string;
+  const nFolds = report["n_folds"] as number;
+  const ok = report["successful_folds"] as number;
+  const headline = aggregate[metric];
+  const metricKeys = Object.keys(aggregate);
+
+  return (
+    <div style={{ marginTop: 22, display: "flex", flexDirection: "column", gap: 16 }}>
+      <div
+        style={{
+          fontFamily: "var(--font-mono)",
+          fontSize: 10,
+          letterSpacing: "0.20em",
+          textTransform: "uppercase",
+          color: "var(--vf-text-muted)",
+        }}
+      >
+        // k-fold · {ok}/{nFolds} folds ok · destaque {metric}
+      </div>
+
+      {headline && (
+        <div
+          style={{
+            padding: 16,
+            background: `linear-gradient(180deg, ${accent}1c 0%, rgba(12,14,18,0.5) 100%)`,
+            border: `1px solid ${accent}55`,
+            borderRadius: 12,
+            fontFamily: "var(--font-mono)",
+            fontSize: 20,
+            color: "var(--vf-text)",
+          }}
+        >
+          {metric} = <span style={{ color: accent }}>{formatMetric(headline.mean)}</span>
+          <span style={{ color: "var(--vf-text-dim)" }}> ± {formatMetric(headline.std)}</span>
+          <span style={{ fontSize: 11, color: "var(--vf-text-muted)", marginLeft: 10 }}>
+            média ± desvio sobre os folds
+          </span>
+        </div>
+      )}
+
+      <div
+        style={{
+          padding: 14,
+          background: "rgba(255,255,255,0.025)",
+          border: "1px solid var(--vf-panel-stroke)",
+          borderRadius: 12,
+          overflowX: "auto",
+        }}
+      >
+        <table
+          style={{
+            width: "100%",
+            borderCollapse: "collapse",
+            fontFamily: "var(--font-mono)",
+            fontSize: 12,
+          }}
+        >
+          <thead>
+            <tr>
+              <th style={cvThStyle}>fold</th>
+              {metricKeys.map((k) => (
+                <th key={k} style={cvThStyle}>
+                  {k}
+                </th>
+              ))}
+              <th style={cvThStyle}>treino/val</th>
+              <th style={cvThStyle}>status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {folds.map((f) => (
+              <tr key={f.fold}>
+                <td style={cvTdLabelStyle}>{f.fold + 1}</td>
+                {metricKeys.map((k) => (
+                  <td key={k} style={cvTdStyle}>
+                    {formatMetric(f.metrics?.[k])}
+                  </td>
+                ))}
+                <td style={cvTdStyle}>
+                  {f.train_size}/{f.val_size}
+                </td>
+                <td
+                  style={{
+                    ...cvTdStyle,
+                    color: f.status === "success" ? "var(--vf-text)" : "oklch(0.72 0.19 22)",
+                  }}
+                >
+                  {f.status === "success" ? "ok" : `falhou · ${f.error}`}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td style={{ ...cvTdLabelStyle, color: accent }}>μ ± σ</td>
+              {metricKeys.map((k) => (
+                <td key={k} style={{ ...cvTdStyle, color: "var(--vf-text)" }}>
+                  {formatMetric(aggregate[k].mean)} ± {formatMetric(aggregate[k].std)}
+                </td>
+              ))}
+              <td style={cvTdStyle} />
+              <td style={cvTdStyle} />
+            </tr>
+          </tfoot>
+        </table>
       </div>
     </div>
   );

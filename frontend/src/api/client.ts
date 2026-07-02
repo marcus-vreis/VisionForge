@@ -167,6 +167,17 @@ export async function runSweep(
   });
 }
 
+/** K-fold cross-validation over the regression train manifest (ADR-050). */
+export async function runRegressionCv(
+  payload: Record<string, unknown>,
+): Promise<RunResponse> {
+  return request<RunResponse>("/regression/cv", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
 /** Train the same config N times under different seeds (ADR-056) and get the
  *  mean/std/95% CI aggregate report. */
 export async function runReplicates(

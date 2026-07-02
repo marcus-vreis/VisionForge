@@ -53,6 +53,19 @@ class SweepRequest(BaseModel):
     seed: int = 0
 
 
+class RegressionCvRequest(BaseModel):
+    """K-fold cross-validation over the regression train manifest (ADR-050).
+
+    ``config`` is the RegressionConfig dict; the pooled training rows are split
+    into ``n_folds`` (each fold trains fresh and scores on its held-out part).
+    """
+
+    config: dict[str, Any]
+    n_folds: int = Field(default=5, ge=2, le=20)
+    shuffle: bool = True
+    fold_seed: int = 42
+
+
 class ReplicatesRequest(BaseModel):
     """Multi-seed replicates of one config for any task (ADR-056).
 

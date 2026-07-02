@@ -3,8 +3,14 @@ import { Segmented, TextField } from "./controls";
 import { importConfigFromYaml } from "../lib/yaml-config";
 
 /** Which experiment strategy the standalone-task panel is set to. The strategy
- *  cards (SweepCard / ReplicatesCard) render only for the selected mode. */
-export type PanelStrategy = "simple" | "sweep" | "replicates";
+ *  cards (SweepCard / ReplicatesCard / CV) render only for the selected mode. */
+export type PanelStrategy = "simple" | "cv" | "sweep" | "replicates";
+
+const DEFAULT_STRATEGIES: { value: PanelStrategy; label: string }[] = [
+  { value: "simple", label: "Treino simples" },
+  { value: "sweep", label: "Sweep" },
+  { value: "replicates", label: "Réplicas" },
+];
 
 interface ExperimentHeaderProps {
   name: string;
@@ -12,6 +18,8 @@ interface ExperimentHeaderProps {
   placeholder: string;
   strategy: PanelStrategy;
   onStrategyChange: (value: PanelStrategy) => void;
+  /** Strategy options; tasks with K-fold support pass a list including "cv". */
+  strategies?: { value: PanelStrategy; label: string }[];
   /** Serialize the current form and trigger the .yaml download. */
   onExportYaml: () => void;
   /** Apply a parsed YAML config to the form; return an error message to show,
@@ -62,6 +70,7 @@ const yamlBtnSecondaryStyle: React.CSSProperties = {
 
 const STRATEGY_HINTS: Record<PanelStrategy, string> = {
   simple: "um treino com a config abaixo (botão Treinar)",
+  cv: "K folds sobre o treino → métricas fold a fold + média ± desvio",
   sweep: "grid / random / optuna sobre a config abaixo",
   replicates: "mesma config, N seeds → média ± IC 95%",
 };
@@ -75,6 +84,7 @@ export function ExperimentHeader({
   placeholder,
   strategy,
   onStrategyChange,
+  strategies = DEFAULT_STRATEGIES,
   onExportYaml,
   onImportConfig,
 }: ExperimentHeaderProps) {
@@ -188,16 +198,12 @@ export function ExperimentHeader({
         }}
       >
         <div style={sectionLabel}>Estratégia de experimento</div>
-        <div style={{ maxWidth: 460 }}>
+        <div style={{ maxWidth: 560 }}>
           <Segmented
             label="Modo"
             value={strategy}
             onChange={(v) => onStrategyChange(v as PanelStrategy)}
-            options={[
-              { value: "simple", label: "Treino simples" },
-              { value: "sweep", label: "Sweep" },
-              { value: "replicates", label: "Réplicas" },
-            ]}
+            options={strategies}
             hint={STRATEGY_HINTS[strategy]}
           />
         </div>

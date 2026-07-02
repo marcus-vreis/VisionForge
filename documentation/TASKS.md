@@ -618,9 +618,17 @@ Real end-to-end pipeline tests (no mocks), skipped in CI to keep it fast
   optional token). ✅ **GUI** — `DatasetDownloadCard` (provider Segmented +
   conditional fields → `/api/dataset/download`) below the active panel. **COMPLETE.**
 - **Cross-validation (K-fold)** for regression/segmentation — last cross-task
-  parity slice. Regression **backend done** (`blocks/regression_cv.py`, ADR-050,
-  KFold + per-fold train/eval + mean±std). Remaining: regression API endpoint +
-  GUI card + report renderer, then the same for segmentation.
+  parity slice. Regression **COMPLETE 2026-07-02** (ADR-050): backend
+  (`blocks/regression_cv.py`) + `POST /api/regression/cv` (n_folds/shuffle/
+  fold_seed, report com `fold_results` + `aggregate`, persistido em
+  `outputs/reports` via o summary writer compartilhado — que agora aceita
+  `fold_results` além de `trials` para o CSV) + GUI: modo "K-Fold (CV)" no
+  seletor de estratégia do `ExperimentHeader` (prop `strategies` — tarefas com
+  CV passam a lista com "cv"), `CvCard` (folds/shuffle/seed) e `TaskCvReport`
+  no ResultsView (headline μ ± σ + tabela fold a fold com rodapé agregado).
+  Tests: `tests/gui/test_routes_regression_cv.py` (4). Remaining: **the same
+  slice for segmentation** (needs the fold-capable datamodule first — the
+  paired image/mask dataset has no CV backend yet).
 
 **Panel parity — canonical task-panel contract (ADR-059, PROPOSED — high priority):**
 Audit + full plan in `documentation/PANEL_PARITY_PLAN.md`. Classification is the

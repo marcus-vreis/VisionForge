@@ -30,6 +30,7 @@ from visionforge.blocks.grid_search import GridSearchBlock
 from visionforge.blocks.model_comparison import ModelComparisonBlock
 from visionforge.blocks.random_search import RandomSearchBlock
 from visionforge.blocks.regression import RegressionBlock
+from visionforge.blocks.regression_cv import run_regression_cross_validation
 from visionforge.blocks.regression_runner import RegressionRunner
 from visionforge.blocks.segmentation import SegmentationBlock
 from visionforge.blocks.segmentation_runner import SegmentationRunner
@@ -80,6 +81,7 @@ from visionforge.gui.api.schemas import (
     PreprocessPreviewRequest,
     PreprocessPreviewResponse,
     PreprocessPreviewStep,
+    RegressionCvRequest,
     RegressionDatasetStatsRequest,
     RegressionDatasetStatsResponse,
     RegressionSplitStats,
@@ -814,6 +816,12 @@ async def compare_anomaly(req: ComparisonRequest) -> RunResponse:
 async def sweep_anomaly(req: SweepRequest) -> RunResponse:
     """Run a grid/random hyperparameter sweep for anomaly detection (ADR-045)."""
     return _start_sweep(req, AnomalyConfig, AnomalyRunner())
+
+
+@router.post("/regression/cv")
+async def cv_regression(req: RegressionCvRequest) -> RunResponse:
+    """Run K-fold cross-validation for regression (ADR-050) in the background."""
+    return _start_regression_cv(req)
 
 
 @router.post("/classification/replicates")
@@ -2819,6 +2827,90 @@ def _sweep_report(trials: list[SweepTrial], mode: str, metric: str) -> dict[str,
     }
 
 
+def _start_regression_cv(req: RegressionCvRequest) -> RunResponse:
+    """Validate the config and launch a background regression K-fold run.
+
+    Raises:
+        HTTPException: 409 if a run is already active.
+        RequestValidationError: 422 if the base RegressionConfig is invalid.
+    """
+    global _current_run, _event_queue
+
+    if _current_run and _current_run["status"] == "running":
+        raise HTTPException(409, "An experiment is already running.")
+
+    try:
+        config = RegressionConfig.model_validate(req.config)
+    except ValidationError as exc:
+        raise RequestValidationError(exc.errors()) from exc
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    run_id = f"{config.name}_cv_{timestamp}"
+
+    _event_queue = asyncio.Queue()
+    _current_run = {
+        "run_id": run_id,
+        "status": "running",
+        "error": None,
+        "report": None,
+        "run_dir": None,
+    }
+
+    task = asyncio.create_task(_execute_regression_cv(config, req, run_id))
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+    return RunResponse(run_id=run_id)
+
+
+async def _execute_regression_cv(
+    config: RegressionConfig, req: RegressionCvRequest, run_id: str
+) -> None:
+    """Run the regression K-fold in a worker thread and store the fold report."""
+    global _current_run, _event_queue
+    queue = _event_queue
+
+    try:
+        cv = await asyncio.to_thread(
+            run_regression_cross_validation,
+            config,
+            n_folds=req.n_folds,
+            shuffle=req.shuffle,
+            seed=req.fold_seed,
+        )
+        if not any(f.status == "success" for f in cv.folds):
+            raise RuntimeError("All folds failed — no aggregate available.")
+        report: dict[str, Any] = {
+            "n_folds": cv.n_folds,
+            "metric": cv.metric,
+            "fold_results": [asdict(f) for f in cv.folds],
+            "aggregate": cv.aggregate,
+            "successful_folds": sum(1 for f in cv.folds if f.status == "success"),
+        }
+        report["report_dir"] = _write_advanced_summary(req.config, "cv", report)
+        _current_run = {
+            "run_id": run_id,
+            "status": "completed",
+            "error": None,
+            "report": report,
+            "run_dir": None,
+        }
+        logger.success(
+            "GUI: Regression CV {} completed ({} folds).", run_id, cv.n_folds
+        )
+    except Exception as e:
+        logger.exception("GUI: Regression CV {} failed", run_id)
+        _current_run = {
+            "run_id": run_id,
+            "status": "failed",
+            "error": f"{type(e).__name__}: {e or '(sem mensagem)'}",
+            "report": None,
+            "run_dir": None,
+        }
+    finally:
+        if queue is not None:
+            await queue.put(None)
+
+
 def _start_replicates(
     req: ReplicatesRequest,
     config_type: type[Any],
@@ -2964,7 +3056,8 @@ def _write_advanced_summary(
         json.dumps(report, indent=2), encoding="utf-8"
     )
 
-    flat = [_flatten_trial(r) for r in report.get("trials", [])]
+    rows = report.get("trials") or report.get("fold_results") or []
+    flat = [_flatten_trial(r) for r in rows]
     if flat:
         fieldnames = list(dict.fromkeys(k for row in flat for k in row))
         with (out_dir / f"{kind}_ranking.csv").open(
