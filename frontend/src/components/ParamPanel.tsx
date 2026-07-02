@@ -48,8 +48,9 @@ const SECTION_LABELS: Record<string, string> = {
   transforms: "Transformações",
 };
 
-/** Human-readable field labels. */
+/** Human-readable field labels. Dot-path keys override leaf-name keys. */
 const FIELD_LABELS: Record<string, string> = {
+  "model.name": "Arquitetura",
   name: "Nome do experimento",
   task: "Tipo de tarefa",
   block: "Bloco",
@@ -1579,7 +1580,10 @@ function SchemaFieldVF({
 }: FieldProps) {
   const resolved = resolveSchema(schema, defs);
   const kind = resolveKind(name, resolved);
-  const label = FIELD_LABELS[name] ?? resolved.title ?? name;
+  // Path-qualified labels win over leaf-name labels: `model.name` is the
+  // architecture, not the experiment name.
+  const label =
+    FIELD_LABELS[path.join(".")] ?? FIELD_LABELS[name] ?? resolved.title ?? name;
   const errorMsg = errors.find(
     (e) =>
       e.field.length === path.length && e.field.every((f, i) => f === path[i]),

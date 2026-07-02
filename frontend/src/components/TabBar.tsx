@@ -19,7 +19,15 @@ export function TabBar({ tasks, activeKey, setActiveKey }: TabBarProps) {
         borderBottom: "1px solid var(--vf-panel-stroke)",
       }}
     >
-      <div style={{ display: "flex", gap: 4, marginBottom: -1 }}>
+      <div
+        style={{
+          display: "flex",
+          gap: 4,
+          marginBottom: -1,
+          overflowX: "auto",
+          scrollbarWidth: "none",
+        }}
+      >
         {tasks.map((t) => {
           const active = t.key === activeKey;
           return (
@@ -29,6 +37,8 @@ export function TabBar({ tasks, activeKey, setActiveKey }: TabBarProps) {
               onClick={() => setActiveKey(t.key)}
               style={{
                 padding: "14px 22px",
+                whiteSpace: "nowrap",
+                flexShrink: 0,
                 background: active
                   ? `linear-gradient(180deg, ${t.accent}11 0%, transparent 100%)`
                   : "transparent",

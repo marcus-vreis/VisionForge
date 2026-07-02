@@ -455,6 +455,29 @@ image-level AUROC / threshold / F1 and a live training monitor.**
 
 ---
 
+## Phase 10 — Custom Tasks ("Blank" task SDK) — PROPOSED
+
+Design: `documentation/CUSTOM_TASK_PLAN.md` (ADR-058). The researcher defines a
+new task family in one documented `.py` under `user_tasks/` — name, accent
+color, config fields, model/data/loss/metrics hooks — and gets the schema-driven
+GUI tab, live monitor, history, run.json provenance, and (via `TaskRunner`)
+comparison/sweep/replicates for free. No user-supplied JavaScript.
+
+- [ ] brick 1 — `visionforge/tasks/`: `BaseTaskConfig` + `TaskSpec` +
+  `@register_task` + `user_tasks/` discovery (+ collision guard) + tests
+- [ ] brick 2 — `GenericTaskEngine` (hook-driven loop reusing seeding/device/
+  early-stop/checkpoint/SSE/run.json/TensorBoard) + toy-task tests
+- [ ] brick 3 — `GET /api/tasks` + `GET/POST /api/custom/{key}/{schema,run}` +
+  route tests (schema, dispatch+SSE, 409, 422, 404)
+- [ ] brick 4 — `CustomTaskRunner` adapter → compare/sweep/replicates endpoints
+  for custom keys + tests
+- [ ] brick 5 — `visionforge new-task <key>` scaffolder + `user_tasks/README.md`
+  (PT+EN walkthrough) + shipped `example_counting` task
+- [ ] brick 6 — GUI: dynamic tabs from `/api/tasks`, generic schema panel,
+  generic results/history fallback, SPA rebuild + vitest
+
+---
+
 ## Config schema versioning ✅ (reproducibility infra)
 
 Addresses CLAUDE.md §6.2/§7.3 — "freeze the schema early" so saved configs stay
@@ -600,6 +623,14 @@ Real end-to-end pipeline tests (no mocks), skipped in CI to keep it fast
   GUI card + report renderer, then the same for segmentation.
 
 **Researcher-grade rigor (sequenced follow-ups to ADR-056):**
+- Determinism parity: `training.deterministic` exists only in classification —
+  add the same flag (wired to `_seed_everything(deterministic=…)`) to
+  regression/segmentation/anomaly configs, and map it to Ultralytics'
+  `deterministic` arg for detection.
+- Experiment queue: today a second submit gets 409 (single-run state). A simple
+  FIFO queue (submit N configs, run sequentially on the one GPU, queue panel in
+  the GUI) is how a researcher trains overnight. Needs an ADR — it touches the
+  shared run-state contract.
 - GUI `ReplicatesCard` for all five task panels (see ADR-056 entry above).
 - Bootstrap confidence intervals on single-run test metrics (`Evaluator`) —
   cheap resampling of per-sample `y_true`/`y_score`, surfaces "0.87 ± 0.02"

@@ -29,3 +29,4 @@ limite
 versão
 provedor
 baixar
+funcional

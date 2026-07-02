@@ -989,3 +989,36 @@ CPU wheel from cu118/cu124 builds, and kernel selection differs across
 CUDA/cuDNN releases and GPU models — all of which can shift metrics between
 "identical" runs. A run record that claims reproducibility but omits the
 compute substrate is incomplete provenance.
+
+## ADR-058 — Researcher-defined custom tasks (`user_tasks/` SDK)
+
+**Date:** 2026-07
+**Status:** Proposed (design in `documentation/CUSTOM_TASK_PLAN.md`)
+**Extends:** ADR-048 (user_models), ADR-041 (TaskRunner), ADR-013 (run.json)
+
+**Decision:** A sixth, user-defined task surface: the researcher drops one
+documented Python file into `user_tasks/`, registers it with `@register_task`
+(key, label, **accent color**, description, metric metadata), and defines a
+Pydantic `Config` (extending `BaseTaskConfig`, which composes the shared
+training/data/output/device blocks) plus four hooks — `build_model`,
+`build_loaders`, `compute_loss`, `compute_metrics`. A VisionForge-owned
+`GenericTaskEngine` drives the loop (seeding, device, early stopping, best
+checkpoint, SSE, run.json, TensorBoard); a `run(cfg, ctx)` escape hatch exists
+for non-epoch-shaped training. The GUI renders the task as a real tab (dynamic
+`TASKS` merge from `GET /api/tasks`) with the schema-driven form — **no
+user-supplied JavaScript, ever**; custom identity is name/color/description
+only. A `CustomTaskRunner` adapter gives every custom task comparison, sweeps
+and multi-seed replicates for free. `visionforge new-task <key>` scaffolds the
+commented template.
+
+**Reason:** This is the product thesis (facilitation) applied to the last rigid
+boundary: today adding a task family requires writing ~500 lines of trainer +
+API + React panel across four layers — fine for the maintainers, impossible for
+a visiting researcher. Every seam the SDK needs already shipped and is tested
+(registry discovery, schema-driven form, SSE/run.json contracts, TaskRunner
+orchestration), so the SDK is packaging, not invention. Constraining custom
+tasks to declarative descriptors + Python hooks (instead of arbitrary frontend
+plugins) is what keeps them functional, upgrade-safe and reviewable — the
+standardization the request asked for ("padronizar da melhor forma"). Trust
+boundary is unchanged from ADR-048: the user's own Python on the user's own
+machine.
