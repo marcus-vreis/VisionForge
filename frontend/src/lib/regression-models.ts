@@ -4,6 +4,13 @@
 
 import type { PreprocessingStep } from "../components/PreprocessingPanel";
 import {
+  joinList,
+  mergeFormShape,
+  stepsFromPayload,
+  transferFromPayload,
+  transformsFormFromPayload,
+} from "./form-import";
+import {
   buildPreprocessingPayload,
   buildTransformsPayload,
   makeDefaultTransformsForm,
@@ -153,4 +160,30 @@ export function buildTransferLearning(
     mode: "fine_tuning",
     backbone_lr_multiplier: form.backbone_lr_multiplier,
   };
+}
+
+/** Rebuild the form from an imported RegressionConfig payload (YAML import).
+ *  Inverse of buildRegressionPayload; unknown/mistyped values fall back to
+ *  the defaults instead of corrupting the form. */
+export function regressionFormFromPayload(
+  payload: Record<string, unknown>,
+): RegressionForm {
+  const form = mergeFormShape(makeDefaultRegressionForm(), payload);
+  const data = (payload.data ?? {}) as Record<string, unknown>;
+  const transforms = data.transforms as Record<string, unknown> | undefined;
+
+  form.data.target_columns =
+    joinList(data.target_columns) ?? form.data.target_columns;
+  if (transforms && typeof transforms.image_size === "number") {
+    form.data.image_size = transforms.image_size;
+  }
+  form.transforms = transformsFormFromPayload(transforms);
+  form.preprocessing = stepsFromPayload(data.preprocessing);
+
+  const tl = transferFromPayload(payload.transfer_learning);
+  form.transfer = tl.transfer;
+  if (tl.backbone_lr_multiplier !== null) {
+    form.backbone_lr_multiplier = tl.backbone_lr_multiplier;
+  }
+  return form;
 }

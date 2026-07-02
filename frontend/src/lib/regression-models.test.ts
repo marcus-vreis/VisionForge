@@ -124,3 +124,25 @@ describe("regression-models · transforms & preprocessing (ADR-059 brick A)", ()
     expect(data.transforms.normalize_mean).toEqual([0.485, 0.456, 0.406]);
   });
 });
+
+describe("regression-models · YAML round-trip (ADR-059 header)", () => {
+  it("formFromPayload(buildPayload(form)) reproduces the form", async () => {
+    const { regressionFormFromPayload } = await import("./regression-models");
+    const form = makeDefaultRegressionForm();
+    form.name = "exp_rt";
+    form.model.name = "resnet18";
+    form.data.target_columns = "x, y";
+    form.data.image_size = 384;
+    form.training.learning_rate = 0.005;
+    form.transfer = "fine_tuning";
+    form.backbone_lr_multiplier = 0.2;
+    form.transforms.horizontal_flip = false;
+    form.transforms.rotation_degrees = 0;
+    form.preprocessing = [{ kind: "gaussian_blur", params: { radius: 2 } }];
+
+    const roundTripped = regressionFormFromPayload(buildRegressionPayload(form));
+    // num_targets is forced from the parsed target list on export
+    const expected = { ...form, model: { ...form.model, num_targets: 2 } };
+    expect(roundTripped).toEqual(expected);
+  });
+});

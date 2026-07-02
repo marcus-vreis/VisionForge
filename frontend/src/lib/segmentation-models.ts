@@ -4,6 +4,12 @@
 
 import type { PreprocessingStep } from "../components/PreprocessingPanel";
 import {
+  mergeFormShape,
+  stepsFromPayload,
+  transferFromPayload,
+  transformsFormFromPayload,
+} from "./form-import";
+import {
   buildPreprocessingPayload,
   buildTransformsPayload,
   makeDefaultTransformsForm,
@@ -150,4 +156,24 @@ export function buildTransferLearning(
     mode: "fine_tuning",
     backbone_lr_multiplier: form.backbone_lr_multiplier,
   };
+}
+
+/** Rebuild the form from an imported SegmentationConfig payload (YAML import).
+ *  Inverse of buildSegmentationPayload; unknown/mistyped values fall back to
+ *  the defaults instead of corrupting the form. */
+export function segmentationFormFromPayload(
+  payload: Record<string, unknown>,
+): SegmentationForm {
+  const form = mergeFormShape(makeDefaultSegmentationForm(), payload);
+  const data = (payload.data ?? {}) as Record<string, unknown>;
+
+  form.transforms = transformsFormFromPayload(data.transforms);
+  form.preprocessing = stepsFromPayload(data.preprocessing);
+
+  const tl = transferFromPayload(payload.transfer_learning);
+  form.transfer = tl.transfer;
+  if (tl.backbone_lr_multiplier !== null) {
+    form.backbone_lr_multiplier = tl.backbone_lr_multiplier;
+  }
+  return form;
 }

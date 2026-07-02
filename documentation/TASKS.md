@@ -636,7 +636,10 @@ and lost reachable features their backends support. Bricks, by severity:
   cards; ComparisonCard deleted (Sweep "arquiteturas" preset); ReplicatesCard
   + ReplicatesReport (mean ± IC 95%) shipped 2026-07-02 — closes the ADR-056
   GUI brick.
-- brick D — YAML import/export parity nos painéis standalone.
+- [x] brick D — canonical `ExperimentHeader` (nome + YAML export/import +
+  estratégia numa caixa, igual à classificação) nos quatro painéis standalone;
+  import valida contra o schema vivo e reconstrói o form com round-trip
+  testado. Shipped 2026-07-02.
 - brick E — dataset stats parity (segmentation/anomaly folder stats; regression
   manifest summary).
 - brick F — classification alignment (comparar modelos as grid preset).

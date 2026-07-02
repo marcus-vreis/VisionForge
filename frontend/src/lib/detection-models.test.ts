@@ -96,3 +96,43 @@ describe("detection-models", () => {
     expect(payload).not.toHaveProperty("base_dir");
   });
 });
+
+describe("detection-models · YAML round-trip (ADR-059 header)", () => {
+  it("formFromPayload(export payload) reproduces the form", async () => {
+    const {
+      detectionFormFromPayload,
+      makeDefaultDetectionForm,
+      buildDetectionDataPayload,
+      buildDetectionTrainingPayload,
+    } = await import("./detection-models");
+    const form = makeDefaultDetectionForm();
+    form.name = "det_rt";
+    form.model.num_classes = 3;
+    form.data.source = "yaml";
+    form.data.data_yaml = "C:/ds/data.yaml";
+    form.training.epochs = 25;
+    form.training.optimizer = "AdamW";
+    form.training.augmentation.mosaic = 0.5;
+    form.training.augmentation.auto_augment = "none";
+
+    const payload = {
+      name: form.name,
+      model: { ...form.model },
+      data: buildDetectionDataPayload(form.data),
+      training: buildDetectionTrainingPayload(form.training),
+    };
+    const roundTripped = detectionFormFromPayload(payload);
+    expect(roundTripped).toEqual(form);
+  });
+
+  it("derives source=folder and falls back on an invalid backend/model pair", async () => {
+    const { detectionFormFromPayload } = await import("./detection-models");
+    const form = detectionFormFromPayload({
+      name: "x",
+      model: { backend: "torchvision", name: "yolo11n" },
+      data: { base_dir: "C:/ds", image_size: 640 },
+    });
+    expect(form.data.source).toBe("folder");
+    expect(form.model.name).toBe("fasterrcnn_resnet50_fpn");
+  });
+});

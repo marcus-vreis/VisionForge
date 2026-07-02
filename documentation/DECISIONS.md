@@ -1035,6 +1035,12 @@ task-panel contract, and the four standalone panels (detection, regression,
 segmentation, anomaly) are brought to it:
 1. **Section order:** Nome → Estratégia → Modelo → Treinamento → Dataset
    (+stats) → Pré-processamento → Augmentação (+preview) → cards auxiliares.
+   Refined after user review (2026-07-02): Nome and Estratégia are **one
+   card** — the canonical `ExperimentHeader` (name + YAML export/import side
+   by side; strategy selector below, same box), byte-for-byte the
+   classification layout. YAML import validates against the task's live
+   schema and rebuilds the form via tested round-trip converters
+   (`formFromPayload(buildPayload(form)) == form`).
 2. **Strategy is a first-class selector** (segmented control that morphs the
    form — like classification's `BlockSelector`), not stacked always-visible
    cards: `Treino simples | K-fold (onde existir) | Sweep | Réplicas`.

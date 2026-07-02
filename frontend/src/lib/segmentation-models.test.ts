@@ -89,3 +89,23 @@ describe("segmentation-models · transforms & preprocessing (ADR-059 brick A)", 
     expect(data.preprocessing.steps).toEqual([{ kind: "equalize" }]);
   });
 });
+
+describe("segmentation-models · YAML round-trip (ADR-059 header)", () => {
+  it("formFromPayload(buildPayload(form)) reproduces the form", async () => {
+    const { segmentationFormFromPayload } = await import("./segmentation-models");
+    const form = makeDefaultSegmentationForm();
+    form.name = "seg_rt";
+    form.model.name = "unet";
+    form.model.num_classes = 5;
+    form.data.image_size = 256;
+    form.data.ignore_index = 254;
+    form.transfer = "feature_extraction";
+    form.transforms.color_jitter = true;
+    form.preprocessing = [{ kind: "equalize", params: {} }];
+
+    const roundTripped = segmentationFormFromPayload(
+      buildSegmentationPayload(form),
+    );
+    expect(roundTripped).toEqual(form);
+  });
+});

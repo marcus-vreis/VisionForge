@@ -2,6 +2,8 @@
  *  visionforge/utils/detection_config.py (_ULTRALYTICS_MODELS / _TORCHVISION_MODELS).
  *  Keep in sync: a name the backend rejects produces a 422 on submit. */
 
+import { mergeFormShape } from "./form-import";
+
 export const DETECTION_BACKENDS = ["ultralytics", "torchvision"] as const;
 export type DetectionBackend = (typeof DETECTION_BACKENDS)[number];
 
@@ -213,6 +215,31 @@ export function buildDetectionDataPayload(
   return data.source === "yaml"
     ? { ...common, data_yaml: data.data_yaml }
     : { ...common, base_dir: data.base_dir };
+}
+
+/** Rebuild the form from an imported DetectionConfig payload (YAML import).
+ *  Inverse of the buildDetection*Payload pair: the dataset source is derived
+ *  from which field the payload carries, the backend `null` auto_augment maps
+ *  back to the "none" UI sentinel, and an invalid backend/model pair falls
+ *  back to the backend's default model. */
+export function detectionFormFromPayload(
+  payload: Record<string, unknown>,
+): DetectionForm {
+  const form = mergeFormShape(makeDefaultDetectionForm(), payload);
+  const data = (payload.data ?? {}) as Record<string, unknown>;
+  const training = (payload.training ?? {}) as Record<string, unknown>;
+  const aug = (training.augmentation ?? {}) as Record<string, unknown>;
+
+  form.data.source = typeof data.data_yaml === "string" && data.data_yaml !== ""
+    ? "yaml"
+    : "folder";
+  if (aug.auto_augment === null) {
+    form.training.augmentation.auto_augment = "none";
+  }
+  if (!isValidModelForBackend(form.model.backend, form.model.name)) {
+    form.model.name = defaultModelForBackend(form.model.backend);
+  }
+  return form;
 }
 
 export function makeDefaultDetectionForm(): DetectionForm {

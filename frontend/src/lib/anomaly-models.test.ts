@@ -66,3 +66,20 @@ describe("anomaly-models · transforms & preprocessing (ADR-059 brick A)", () =>
     expect(data.preprocessing.steps).toEqual([{ kind: "median_blur", size: 3 }]);
   });
 });
+
+describe("anomaly-models · YAML round-trip (ADR-059 header)", () => {
+  it("formFromPayload(buildPayload(form)) reproduces the form", async () => {
+    const { anomalyFormFromPayload } = await import("./anomaly-models");
+    const form = makeDefaultAnomalyForm();
+    form.name = "anom_rt";
+    form.model.name = "patchcore";
+    form.model.backbone = "wide_resnet50_2";
+    form.model.coreset_ratio = 0.25;
+    form.training.threshold_percentile = 99;
+    form.transforms.horizontal_flip = false;
+    form.preprocessing = [{ kind: "median_blur", params: { size: 3 } }];
+
+    const roundTripped = anomalyFormFromPayload(buildAnomalyPayload(form));
+    expect(roundTripped).toEqual(form);
+  });
+});

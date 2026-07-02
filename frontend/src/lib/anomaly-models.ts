@@ -4,6 +4,11 @@
 
 import type { PreprocessingStep } from "../components/PreprocessingPanel";
 import {
+  mergeFormShape,
+  stepsFromPayload,
+  transformsFormFromPayload,
+} from "./form-import";
+import {
   buildPreprocessingPayload,
   buildTransformsPayload,
   makeDefaultTransformsForm,
@@ -95,6 +100,19 @@ export function makeDefaultAnomalyForm(): AnomalyForm {
 /** True when PatchCore is selected (controls which model knobs are relevant). */
 export function isPatchCore(form: AnomalyForm): boolean {
   return form.model.name === "patchcore";
+}
+
+/** Rebuild the form from an imported AnomalyConfig payload (YAML import).
+ *  Inverse of buildAnomalyPayload; unknown/mistyped values fall back to the
+ *  defaults instead of corrupting the form. */
+export function anomalyFormFromPayload(
+  payload: Record<string, unknown>,
+): AnomalyForm {
+  const form = mergeFormShape(makeDefaultAnomalyForm(), payload);
+  const data = (payload.data ?? {}) as Record<string, unknown>;
+  form.transforms = transformsFormFromPayload(data.transforms);
+  form.preprocessing = stepsFromPayload(data.preprocessing);
+  return form;
 }
 
 /** Project the form into the AnomalyConfig wire payload. */

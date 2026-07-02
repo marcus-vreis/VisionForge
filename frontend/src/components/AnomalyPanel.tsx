@@ -1,15 +1,18 @@
 import { useState } from "react";
-import { pickDatasetFolder } from "../api/client";
+import { fetchTaskSchema, pickDatasetFolder } from "../api/client";
 import {
   ANOMALY_BACKBONES,
   ANOMALY_MODELS,
+  anomalyFormFromPayload,
+  buildAnomalyPayload,
   isPatchCore,
   type AnomalyForm,
 } from "../lib/anomaly-models";
+import { exportConfigToYaml, validateParsedConfig } from "../lib/yaml-config";
 import type { ValidationError } from "../hooks/useExperiment";
 import { NumberField, SelectField, Segmented, TextField, Toggle } from "./controls";
+import { ExperimentHeader, type PanelStrategy } from "./ExperimentHeader";
 import { ReplicatesCard } from "./ReplicatesCard";
-import { StrategyBar, type PanelStrategy } from "./StrategyBar";
 import { SweepCard, type SweepPayload } from "./SweepCard";
 import { TransformsSection } from "./TransformsSection";
 import type { ReplicatesPayload } from "../lib/replicates-form";
@@ -116,23 +119,33 @@ export function AnomalyPanel({
         </div>
       )}
 
-      {/* Experimento */}
-      <div style={card}>
-        <div style={sectionLabel}>Experimento</div>
-        <div style={{ maxWidth: 420 }}>
-          <TextField
-            label="Nome do experimento"
-            value={formData.name}
-            onChange={(v) => setFormData((p) => ({ ...p, name: v }))}
-            placeholder="anomaly_001"
-            hint="usado na pasta de saída e no histórico"
-            mono
-          />
-        </div>
-      </div>
-
-      {/* Estratégia (ADR-059 brick C) */}
-      <StrategyBar value={strategy} onChange={setStrategy} />
+      {/* Cabeçalho canônico: nome + YAML + estratégia numa caixa (ADR-059) */}
+      <ExperimentHeader
+        name={formData.name}
+        onNameChange={(v) => setFormData((p) => ({ ...p, name: v }))}
+        placeholder="anomaly_001"
+        strategy={strategy}
+        onStrategyChange={setStrategy}
+        onExportYaml={() =>
+          exportConfigToYaml(buildAnomalyPayload(formData), formData.name)
+        }
+        onImportConfig={async (data) => {
+          try {
+            const schema = await fetchTaskSchema("anomaly");
+            const issues = validateParsedConfig(data, schema, schema.$defs ?? {});
+            if (issues.length > 0) {
+              return issues
+                .slice(0, 5)
+                .map((i) => `${i.field.join(" › ")}: ${i.message}`)
+                .join("\n");
+            }
+          } catch {
+            // schema unavailable → import tolerantly; o 422 do submit cobre.
+          }
+          setFormData(() => anomalyFormFromPayload(data));
+          return null;
+        }}
+      />
       {strategy === "sweep" && onSweep && (
         <SweepCard
           metrics={COMPARE_METRICS}

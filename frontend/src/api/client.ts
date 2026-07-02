@@ -110,6 +110,12 @@ export async function fetchDetectionSchema(): Promise<JsonSchema> {
   return request<JsonSchema>("/detection/schema");
 }
 
+/** Fetch a standalone task's live config schema (drives YAML import validation
+ *  in the ExperimentHeader — ADR-059). */
+export async function fetchTaskSchema(task: string): Promise<JsonSchema> {
+  return request<JsonSchema>(`/${task}/schema`);
+}
+
 /** Start an image-regression run. Like detection, regression shares the
  *  /experiment/{status,events,result} endpoints; only the submit URL differs. */
 export async function runRegression(

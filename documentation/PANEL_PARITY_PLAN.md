@@ -96,8 +96,27 @@ generic custom-task panel is these same components pointed at a schema.
   (detector shape-specific, checked before comparison/sweep). Overlay queue
   banner knows `replicates`. Browser-verified on regression + detection;
   vitest 85/85 (`lib/replicates-form.test.ts`). Shipped 2026-07-02.
-- [ ] brick D — YAML import/export in the four standalone panels (reuse
-  `lib/yaml-config` validation against each task's live schema).
+- [x] brick D — **canonical experiment header + YAML parity** (shipped
+  2026-07-02). The contract, made precise after user review: every task panel
+  opens with the same `ExperimentHeader` card — row 1: experiment name +
+  `↓ Exportar YAML` / `↑ Importar YAML` side by side; row 2 (same box, divided):
+  the strategy selector. This is byte-for-byte the classification layout; the
+  short-lived separate `StrategyBar` card was absorbed and deleted.
+  - Export: `exportConfigToYaml(buildXPayload(form))` — the exact wire payload,
+    so an exported file re-runs identically from the CLI too.
+  - Import: parse (safe loader) → validate against the task's **live schema**
+    (`GET /api/{task}/schema`, up to 5 issues shown, same UX as classification)
+    → `xFormFromPayload(data)` rebuilds the form. The reverse converters are
+    driven by a generic `mergeFormShape` (defaults define shape; mistyped
+    leaves keep defaults — a malformed YAML can never corrupt the form) plus
+    per-task adapters (target_columns list↔string, transforms arrays↔strings,
+    schema-flat preprocessing steps, transfer_learning→mode,
+    detection source derivation + auto_augment null↔"none" + backend/model
+    coherence). **Round-trip is tested per task**: `formFromPayload(
+    buildPayload(form)) == form` (vitest 90/90).
+  - Browser-verified on Anomalia: header renders, real YAML import applies
+    name/PatchCore/threshold/preprocessing to the form with a success note,
+    malformed YAML shows the error banner, 0 console errors.
 - [ ] brick E — dataset stats parity: folder-based stats for segmentation
   (pares imagem/máscara por split) and anomaly (contagem normal/anômalos por
   split); CSV-manifest summary for regression (linhas, colunas-alvo, faixa).
