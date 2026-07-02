@@ -312,6 +312,8 @@ export function ResultsView({ result, onClose, taskAccent }: ResultsViewProps) {
       {result.report && Object.keys(result.report).length > 0 && (
         isCrossValidationReport(result.report) ? (
           <CrossValidationReport report={result.report} accent={taskAccent} />
+        ) : isReplicatesReport(result.report) ? (
+          <ReplicatesReport report={result.report} accent={taskAccent} />
         ) : isTaskComparisonReport(result.report) ? (
           <TaskComparisonReport report={result.report} accent={taskAccent} />
         ) : isTaskSweepReport(result.report) ? (
@@ -550,6 +552,209 @@ function AggregateCard({
         >
           ± {std.toFixed(4)}
         </span>
+      </div>
+    </div>
+  );
+}
+
+interface ReplicateTrialRow {
+  seed: number;
+  status: string;
+  metrics: Record<string, number>;
+  training_time_s: number | null;
+  error: string;
+}
+
+interface ReplicateAggregate {
+  n: number;
+  mean: number;
+  std: number | null;
+  min: number;
+  max: number;
+  ci95_low: number | null;
+  ci95_high: number | null;
+}
+
+/** Multi-seed replicates report (ADR-056): identified by the `seeds` array +
+ *  per-metric `aggregates` — must be tested before the comparison/sweep shapes
+ *  (it also carries `metric` + `trials`). */
+function isReplicatesReport(report: Record<string, unknown>): boolean {
+  return (
+    Array.isArray(report["seeds"]) &&
+    typeof report["aggregates"] === "object" &&
+    report["aggregates"] !== null
+  );
+}
+
+/** Headline mean ± CI + per-metric aggregates + per-seed table. */
+function ReplicatesReport({
+  report,
+  accent,
+}: {
+  report: Record<string, unknown>;
+  accent: string;
+}) {
+  const trials = (report["trials"] as ReplicateTrialRow[]) ?? [];
+  const metric = report["metric"] as string;
+  const aggregates =
+    (report["aggregates"] as Record<string, ReplicateAggregate>) ?? {};
+  const headline = report["headline"] as ReplicateAggregate | null;
+  const total = report["total_replicates"] as number;
+  const ok = report["successful_replicates"] as number;
+
+  const ciHalf =
+    headline && headline.ci95_high !== null && headline.ci95_low !== null
+      ? (headline.ci95_high - headline.ci95_low) / 2
+      : null;
+
+  return (
+    <div style={{ marginTop: 22, display: "flex", flexDirection: "column", gap: 16 }}>
+      <div
+        style={{
+          fontFamily: "var(--font-mono)",
+          fontSize: 10,
+          letterSpacing: "0.20em",
+          textTransform: "uppercase",
+          color: "var(--vf-text-muted)",
+        }}
+      >
+        // réplicas multi-seed · {ok}/{total} seeds ok · destaque {metric}
+      </div>
+
+      {headline && (
+        <div
+          style={{
+            padding: 16,
+            background: `linear-gradient(180deg, ${accent}1c 0%, rgba(12,14,18,0.5) 100%)`,
+            border: `1px solid ${accent}55`,
+            borderRadius: 12,
+            fontFamily: "var(--font-mono)",
+          }}
+        >
+          <div
+            style={{
+              fontSize: 9,
+              letterSpacing: "0.14em",
+              textTransform: "uppercase",
+              color: "var(--vf-text-muted)",
+              marginBottom: 8,
+            }}
+          >
+            🎯 resultado citável
+          </div>
+          <div style={{ fontSize: 20, color: "var(--vf-text)" }}>
+            {metric} = <span style={{ color: accent }}>{formatMetric(headline.mean)}</span>
+            {ciHalf !== null && (
+              <span style={{ color: "var(--vf-text-dim)" }}> ± {formatMetric(ciHalf)}</span>
+            )}
+            <span style={{ fontSize: 11, color: "var(--vf-text-muted)", marginLeft: 10 }}>
+              {ciHalf !== null ? "IC 95% · " : ""}n={headline.n}
+            </span>
+          </div>
+        </div>
+      )}
+
+      <div
+        style={{
+          padding: 14,
+          background: "rgba(255,255,255,0.025)",
+          border: "1px solid var(--vf-panel-stroke)",
+          borderRadius: 12,
+          overflowX: "auto",
+        }}
+      >
+        <table
+          style={{
+            width: "100%",
+            borderCollapse: "collapse",
+            fontFamily: "var(--font-mono)",
+            fontSize: 12,
+          }}
+        >
+          <thead>
+            <tr>
+              <th style={cvThStyle}>métrica</th>
+              <th style={cvThStyle}>n</th>
+              <th style={cvThStyle}>média</th>
+              <th style={cvThStyle}>desvio</th>
+              <th style={cvThStyle}>min</th>
+              <th style={cvThStyle}>max</th>
+              <th style={cvThStyle}>IC 95%</th>
+            </tr>
+          </thead>
+          <tbody>
+            {Object.entries(aggregates).map(([key, agg]) => (
+              <tr key={key}>
+                <td
+                  style={{
+                    ...cvTdLabelStyle,
+                    color: key === metric ? accent : "var(--vf-text-muted)",
+                    fontWeight: key === metric ? 700 : 500,
+                  }}
+                >
+                  {key}
+                </td>
+                <td style={cvTdStyle}>{agg.n}</td>
+                <td style={cvTdStyle}>{formatMetric(agg.mean)}</td>
+                <td style={cvTdStyle}>{agg.std === null ? "—" : formatMetric(agg.std)}</td>
+                <td style={cvTdStyle}>{formatMetric(agg.min)}</td>
+                <td style={cvTdStyle}>{formatMetric(agg.max)}</td>
+                <td style={cvTdStyle}>
+                  {agg.ci95_low === null || agg.ci95_high === null
+                    ? "—"
+                    : `[${formatMetric(agg.ci95_low)}, ${formatMetric(agg.ci95_high)}]`}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div
+        style={{
+          padding: 14,
+          background: "rgba(255,255,255,0.025)",
+          border: "1px solid var(--vf-panel-stroke)",
+          borderRadius: 12,
+          overflowX: "auto",
+        }}
+      >
+        <table
+          style={{
+            width: "100%",
+            borderCollapse: "collapse",
+            fontFamily: "var(--font-mono)",
+            fontSize: 12,
+          }}
+        >
+          <thead>
+            <tr>
+              <th style={cvThStyle}>seed</th>
+              <th style={cvThStyle}>{metric}</th>
+              <th style={cvThStyle}>tempo (s)</th>
+              <th style={cvThStyle}>status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {trials.map((t) => (
+              <tr key={t.seed}>
+                <td style={cvTdLabelStyle}>{t.seed}</td>
+                <td style={cvTdStyle}>{formatMetric(t.metrics?.[metric])}</td>
+                <td style={cvTdStyle}>
+                  {t.training_time_s === null ? "—" : t.training_time_s.toFixed(1)}
+                </td>
+                <td
+                  style={{
+                    ...cvTdStyle,
+                    color: t.status === "success" ? "var(--vf-text)" : "oklch(0.72 0.19 22)",
+                  }}
+                >
+                  {t.status === "success" ? "ok" : `falhou · ${t.error}`}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );

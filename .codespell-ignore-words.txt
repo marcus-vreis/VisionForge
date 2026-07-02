@@ -31,3 +31,4 @@ provedor
 baixar
 funcional
 pares
+exata

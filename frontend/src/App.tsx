@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { fetchSchema, runComparison, runSweep } from "./api/client";
+import { fetchSchema, runReplicates, runSweep } from "./api/client";
 import type { SweepPayload } from "./components/SweepCard";
+import type { ReplicatesPayload } from "./lib/replicates-form";
 import { BottomBar } from "./components/BottomBar";
 import type { DeviceSelection } from "./components/DeviceSelector";
 import { Header } from "./components/Header";
@@ -219,25 +220,23 @@ export default function App() {
     };
   };
 
-  const handleCompare = async (
+  // Multi-seed replicates (ADR-056): same config, N seeds, mean ± CI report.
+  // Same overlay/results flow as sweeps; one trial trains at a time.
+  const handleReplicates = async (
     task: AdvancedTask,
-    modelNames: string[],
-    metric: string,
+    payload: ReplicatesPayload,
   ) => {
     reset();
     setResultsVisible(false);
     setOverlayVisible(true);
     setPipelineSummary([]);
-    setBlockKind("model_comparison");
-    setQueueSize(modelNames.length);
+    setBlockKind("replicates");
+    setQueueSize(payload.seeds?.length ?? payload.n_replicates ?? undefined);
     const config = {
       ...buildTaskBase(task),
       device: { kind: device.kind, gpu_ids: device.gpu_ids },
     };
-    await submit(
-      { config, model_names: modelNames, metric },
-      { run: (p) => runComparison(task, p) },
-    );
+    await submit({ config, ...payload }, { run: (p) => runReplicates(task, p) });
   };
 
   // Hyperparameter sweep (ADR-045) for the standalone tasks: grid/random search
@@ -313,10 +312,10 @@ export default function App() {
             accent={activeTask.accent}
             validationErrors={validationErrors}
             busy={status.status === "running"}
-            onCompare={(names, metric) =>
-              void handleCompare("detection", names, metric)
-            }
             onSweep={(payload) => void handleSweep("detection", payload)}
+            onReplicates={(payload) =>
+              void handleReplicates("detection", payload)
+            }
           />
         ) : activeKey === "regression" ? (
           <RegressionPanel
@@ -325,10 +324,10 @@ export default function App() {
             accent={activeTask.accent}
             validationErrors={validationErrors}
             busy={status.status === "running"}
-            onCompare={(names, metric) =>
-              void handleCompare("regression", names, metric)
-            }
             onSweep={(payload) => void handleSweep("regression", payload)}
+            onReplicates={(payload) =>
+              void handleReplicates("regression", payload)
+            }
           />
         ) : activeKey === "segmentation" ? (
           <SegmentationPanel
@@ -337,10 +336,10 @@ export default function App() {
             accent={activeTask.accent}
             validationErrors={validationErrors}
             busy={status.status === "running"}
-            onCompare={(names, metric) =>
-              void handleCompare("segmentation", names, metric)
-            }
             onSweep={(payload) => void handleSweep("segmentation", payload)}
+            onReplicates={(payload) =>
+              void handleReplicates("segmentation", payload)
+            }
           />
         ) : activeKey === "anomaly" ? (
           <AnomalyPanel
@@ -349,10 +348,10 @@ export default function App() {
             accent={activeTask.accent}
             validationErrors={validationErrors}
             busy={status.status === "running"}
-            onCompare={(names, metric) =>
-              void handleCompare("anomaly", names, metric)
-            }
             onSweep={(payload) => void handleSweep("anomaly", payload)}
+            onReplicates={(payload) =>
+              void handleReplicates("anomaly", payload)
+            }
           />
         ) : (
           <ParamPanel

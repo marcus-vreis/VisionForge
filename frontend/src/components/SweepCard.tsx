@@ -27,6 +27,9 @@ interface SweepCardProps {
   metrics: Option[];
   /** Suggested dot-paths shown as a hint (e.g. training.learning_rate). */
   pathHints: string[];
+  /** When present, renders the "arquiteturas" preset: pick N architectures →
+   *  one grid axis over model.name (ADR-059 folded the comparison card here). */
+  modelOptions?: Option[];
   accent: string;
   disabled?: boolean;
   onSweep: (payload: SweepPayload) => void;
@@ -60,6 +63,7 @@ const RANDOM_KINDS: Option[] = [
 export function SweepCard({
   metrics,
   pathHints,
+  modelOptions,
   accent,
   disabled,
   onSweep,
@@ -69,12 +73,38 @@ export function SweepCard({
   const [metric, setMetric] = useState(metrics[0]?.value ?? "");
   const [nTrials, setNTrials] = useState(10);
   const [seed, setSeed] = useState(0);
+  const [presetPicks, setPresetPicks] = useState<string[]>([]);
 
   const patchRow = (i: number, patch: Partial<SweepRow>) =>
     setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
   const addRow = () => setRows((prev) => [...prev, makeSweepRow()]);
   const removeRow = (i: number) =>
     setRows((prev) => (prev.length > 1 ? prev.filter((_, idx) => idx !== i) : prev));
+
+  const togglePresetPick = (value: string) =>
+    setPresetPicks((prev) =>
+      prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value],
+    );
+
+  /** Upsert a model.name axis from the preset picks — fills both the grid
+   *  value list and the random/optuna choice options so it is valid in any
+   *  mode. Replaces an existing model.name row instead of duplicating it. */
+  const applyArchPreset = () => {
+    const joined = presetPicks.join(", ");
+    const presetRow: SweepRow = {
+      ...makeSweepRow(),
+      path: "model.name",
+      values: joined,
+      kind: "choice",
+      options: joined,
+    };
+    setRows((prev) => {
+      const others = prev.filter(
+        (r) => r.path.trim() !== "model.name" && r.path.trim() !== "",
+      );
+      return [presetRow, ...others];
+    });
+  };
 
   const searchSpace = buildSearchSpace(mode, rows);
   const paramCount = Object.keys(searchSpace).length;
@@ -110,6 +140,75 @@ export function SweepCard({
           ]}
         />
       </div>
+
+      {modelOptions && modelOptions.length > 1 && (
+        <div
+          style={{
+            marginBottom: 16,
+            padding: "12px 14px",
+            background: "rgba(0,0,0,0.22)",
+            border: "1px dashed var(--vf-panel-stroke)",
+            borderRadius: 10,
+          }}
+        >
+          <div
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: 9.5,
+              letterSpacing: "0.16em",
+              textTransform: "uppercase",
+              color: "var(--vf-text-muted)",
+              marginBottom: 10,
+            }}
+          >
+            preset · arquiteturas → eixo model.name
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+            {modelOptions.map((m) => {
+              const picked = presetPicks.includes(m.value);
+              return (
+                <button
+                  key={m.value}
+                  type="button"
+                  onClick={() => togglePresetPick(m.value)}
+                  style={{
+                    padding: "5px 10px",
+                    background: picked ? `${accent}22` : "rgba(255,255,255,0.03)",
+                    border: `1px solid ${picked ? accent : "var(--vf-panel-stroke)"}`,
+                    borderRadius: 8,
+                    color: picked ? "var(--vf-text)" : "var(--vf-text-dim)",
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 11,
+                    cursor: "pointer",
+                  }}
+                >
+                  {m.label}
+                </button>
+              );
+            })}
+          </div>
+          <button
+            type="button"
+            onClick={applyArchPreset}
+            disabled={presetPicks.length < 2}
+            style={{
+              padding: "7px 12px",
+              background: "rgba(255,255,255,0.03)",
+              border: "1px solid var(--vf-panel-stroke)",
+              borderRadius: 8,
+              color:
+                presetPicks.length < 2 ? "var(--vf-text-muted)" : "var(--vf-text)",
+              fontFamily: "var(--font-mono)",
+              fontSize: 11,
+              cursor: presetPicks.length < 2 ? "not-allowed" : "pointer",
+              opacity: presetPicks.length < 2 ? 0.5 : 1,
+            }}
+          >
+            ⇒ comparar {presetPicks.length} arquitetura
+            {presetPicks.length === 1 ? "" : "s"}
+          </button>
+        </div>
+      )}
 
       <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 14 }}>
         {rows.map((row, i) => (

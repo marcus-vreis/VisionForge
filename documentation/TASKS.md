@@ -599,9 +599,9 @@ Real end-to-end pipeline tests (no mocks), skipped in CI to keep it fast
   times under different seeds, aggregate every metric into mean/std/min/max/95%
   CI (Student-t), persist `replicates_summary.json` + `replicates_ranking.csv`.
   **Backend + API shipped** with tests (`tests/core/test_replicates.py`,
-  `tests/gui/test_routes_replicates.py`). Remaining brick: the replicates GUI
-  surface — lands inside the ADR-059 `StrategyBar` (Simples | Sweep | Réplicas),
-  not as another stacked card; report table with mean ± CI headline.
+  `tests/gui/test_routes_replicates.py`). GUI **shipped** (ADR-059 brick C,
+  2026-07-02): `ReplicatesCard` inside the `StrategyBar` + `ReplicatesReport`
+  (citable headline mean ± IC 95%, aggregate + per-seed tables).
 - **CUDA/cuDNN/GPU provenance (ADR-057)** — `capture_environment()` now records
   the CUDA build, cuDNN version and GPU name into the run.json `environment`
   block. **Shipped.**
@@ -632,9 +632,10 @@ and lost reachable features their backends support. Bricks, by severity:
   endpoints gained layout fallbacks. Shipped 2026-07-02.
 - [x] brick B — canonical section order (Modelo → Treinamento → Dataset) in the
   four standalone panels, detection exception documented. Shipped 2026-07-02.
-- brick C — `StrategyBar` (Simples | Sweep | Réplicas) replaces stacked cards;
-  ComparisonCard folds into Sweep as the "arquiteturas" preset; the ADR-056
-  ReplicatesCard is born inside it.
+- [x] brick C — `StrategyBar` (Simples | Sweep | Réplicas) replaces stacked
+  cards; ComparisonCard deleted (Sweep "arquiteturas" preset); ReplicatesCard
+  + ReplicatesReport (mean ± IC 95%) shipped 2026-07-02 — closes the ADR-056
+  GUI brick.
 - brick D — YAML import/export parity nos painéis standalone.
 - brick E — dataset stats parity (segmentation/anomaly folder stats; regression
   manifest summary).

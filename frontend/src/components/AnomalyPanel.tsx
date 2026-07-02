@@ -8,9 +8,11 @@ import {
 } from "../lib/anomaly-models";
 import type { ValidationError } from "../hooks/useExperiment";
 import { NumberField, SelectField, Segmented, TextField, Toggle } from "./controls";
-import { ComparisonCard } from "./ComparisonCard";
+import { ReplicatesCard } from "./ReplicatesCard";
+import { StrategyBar, type PanelStrategy } from "./StrategyBar";
 import { SweepCard, type SweepPayload } from "./SweepCard";
 import { TransformsSection } from "./TransformsSection";
+import type { ReplicatesPayload } from "../lib/replicates-form";
 
 const COMPARE_METRICS = [
   { value: "auroc", label: "AUROC" },
@@ -29,8 +31,8 @@ interface AnomalyPanelProps {
   accent: string;
   validationErrors: ValidationError[];
   busy?: boolean;
-  onCompare?: (modelNames: string[], metric: string) => void;
   onSweep?: (payload: SweepPayload) => void;
+  onReplicates?: (payload: ReplicatesPayload) => void;
 }
 
 const sectionLabel: React.CSSProperties = {
@@ -55,10 +57,11 @@ export function AnomalyPanel({
   accent,
   validationErrors,
   busy,
-  onCompare,
   onSweep,
+  onReplicates,
 }: AnomalyPanelProps) {
   const [picking, setPicking] = useState(false);
+  const [strategy, setStrategy] = useState<PanelStrategy>("simple");
 
   const setModel = (patch: Partial<AnomalyForm["model"]>) =>
     setFormData((p) => ({ ...p, model: { ...p.model, ...patch } }));
@@ -127,6 +130,27 @@ export function AnomalyPanel({
           />
         </div>
       </div>
+
+      {/* Estratégia (ADR-059 brick C) */}
+      <StrategyBar value={strategy} onChange={setStrategy} />
+      {strategy === "sweep" && onSweep && (
+        <SweepCard
+          metrics={COMPARE_METRICS}
+          pathHints={SWEEP_PATH_HINTS}
+          modelOptions={ANOMALY_MODELS}
+          accent={accent}
+          disabled={busy}
+          onSweep={onSweep}
+        />
+      )}
+      {strategy === "replicates" && onReplicates && (
+        <ReplicatesCard
+          metrics={COMPARE_METRICS}
+          accent={accent}
+          disabled={busy}
+          onReplicates={onReplicates}
+        />
+      )}
 
       {/* Modelo */}
       <div style={card}>
@@ -324,24 +348,6 @@ export function AnomalyPanel({
         imageSize={formData.data.image_size}
       />
 
-      {onCompare && (
-        <ComparisonCard
-          modelOptions={ANOMALY_MODELS}
-          metrics={COMPARE_METRICS}
-          accent={accent}
-          disabled={busy}
-          onCompare={onCompare}
-        />
-      )}
-      {onSweep && (
-        <SweepCard
-          metrics={COMPARE_METRICS}
-          pathHints={SWEEP_PATH_HINTS}
-          accent={accent}
-          disabled={busy}
-          onSweep={onSweep}
-        />
-      )}
     </div>
   );
 }

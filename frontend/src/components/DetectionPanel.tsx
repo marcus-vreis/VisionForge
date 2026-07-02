@@ -14,8 +14,10 @@ import {
 import type { ValidationError } from "../hooks/useExperiment";
 import { NumberField, SelectField, Segmented, TextField, Toggle } from "./controls";
 import { DetectionDatasetStats } from "./DetectionDatasetStats";
-import { ComparisonCard } from "./ComparisonCard";
+import { ReplicatesCard } from "./ReplicatesCard";
+import { StrategyBar, type PanelStrategy } from "./StrategyBar";
 import { SweepCard, type SweepPayload } from "./SweepCard";
+import type { ReplicatesPayload } from "../lib/replicates-form";
 
 const COMPARE_METRICS = [
   { value: "map50_95", label: "mAP@50-95" },
@@ -34,8 +36,8 @@ interface DetectionPanelProps {
   accent: string;
   validationErrors: ValidationError[];
   busy?: boolean;
-  onCompare?: (modelNames: string[], metric: string) => void;
   onSweep?: (payload: SweepPayload) => void;
+  onReplicates?: (payload: ReplicatesPayload) => void;
 }
 
 const sectionLabel: React.CSSProperties = {
@@ -60,10 +62,11 @@ export function DetectionPanel({
   accent,
   validationErrors,
   busy,
-  onCompare,
   onSweep,
+  onReplicates,
 }: DetectionPanelProps) {
   const [picking, setPicking] = useState(false);
+  const [strategy, setStrategy] = useState<PanelStrategy>("simple");
 
   const setModel = (patch: Partial<DetectionForm["model"]>) =>
     setFormData((p) => ({ ...p, model: { ...p.model, ...patch } }));
@@ -168,6 +171,27 @@ export function DetectionPanel({
           />
         </div>
       </div>
+
+      {/* Estratégia (ADR-059 brick C) */}
+      <StrategyBar value={strategy} onChange={setStrategy} />
+      {strategy === "sweep" && onSweep && (
+        <SweepCard
+          metrics={COMPARE_METRICS}
+          pathHints={SWEEP_PATH_HINTS}
+          modelOptions={DETECTION_MODELS[formData.model.backend]}
+          accent={accent}
+          disabled={busy}
+          onSweep={onSweep}
+        />
+      )}
+      {strategy === "replicates" && onReplicates && (
+        <ReplicatesCard
+          metrics={COMPARE_METRICS}
+          accent={accent}
+          disabled={busy}
+          onReplicates={onReplicates}
+        />
+      )}
 
       {/* Modelo */}
       <div style={card}>
@@ -677,24 +701,6 @@ export function DetectionPanel({
         </>
       )}
 
-      {onCompare && (
-        <ComparisonCard
-          modelOptions={DETECTION_MODELS[formData.model.backend]}
-          metrics={COMPARE_METRICS}
-          accent={accent}
-          disabled={busy}
-          onCompare={onCompare}
-        />
-      )}
-      {onSweep && (
-        <SweepCard
-          metrics={COMPARE_METRICS}
-          pathHints={SWEEP_PATH_HINTS}
-          accent={accent}
-          disabled={busy}
-          onSweep={onSweep}
-        />
-      )}
     </div>
   );
 }

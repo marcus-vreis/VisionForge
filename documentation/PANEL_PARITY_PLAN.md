@@ -83,9 +83,19 @@ generic custom-task panel is these same components pointed at a schema.
   (Modelo → Treinamento → Dataset; detection keeps its Ultralytics training
   cards between Treinamento and Dataset, augmentation card after Dataset).
   Browser-verified section sequences on all four tabs.
-- [ ] brick C — `StrategyBar` segmented selector (Simples | Sweep | Réplicas)
-  replacing stacked cards; ComparisonCard becomes the Sweep "arquiteturas"
-  preset; ReplicatesCard (ADR-056 GUI brick) is born inside it, not as a card.
+- [x] brick C — `StrategyBar` segmented selector (Simples | Sweep | Réplicas)
+  right after Experimento in the four standalone panels (mirrors
+  classification's BlockSelector position); stacked cards removed.
+  `ComparisonCard` deleted — comparing architectures is now the Sweep
+  "arquiteturas" preset (chip multi-select → upserts a `model.name` axis,
+  valid in grid/random/optuna). `ReplicatesCard` (ADR-056 GUI) lives inside
+  the selector: auto (n a partir do training.seed) ou seeds explícitas
+  (validação espelha os 422 do backend), métrica destaque, launch →
+  `POST /api/{task}/replicates`. `ReplicatesReport` renders the citable
+  headline (mean ± IC 95%, n), per-metric aggregate table and per-seed table
+  (detector shape-specific, checked before comparison/sweep). Overlay queue
+  banner knows `replicates`. Browser-verified on regression + detection;
+  vitest 85/85 (`lib/replicates-form.test.ts`). Shipped 2026-07-02.
 - [ ] brick D — YAML import/export in the four standalone panels (reuse
   `lib/yaml-config` validation against each task's live schema).
 - [ ] brick E — dataset stats parity: folder-based stats for segmentation

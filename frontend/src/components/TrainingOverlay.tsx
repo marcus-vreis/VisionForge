@@ -24,6 +24,7 @@ const QUEUE_BLOCKS: Record<string, string> = {
   random_search: "Random search",
   model_comparison: "Comparação de modelos",
   cross_validation: "K-Fold CV",
+  replicates: "Réplicas multi-seed",
 };
 
 /** Modal overlay shown while an experiment is running or just completed. */

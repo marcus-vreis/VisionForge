@@ -8,9 +8,11 @@ import {
 } from "../lib/segmentation-models";
 import type { ValidationError } from "../hooks/useExperiment";
 import { NumberField, SelectField, Segmented, TextField, Toggle } from "./controls";
-import { ComparisonCard } from "./ComparisonCard";
+import { ReplicatesCard } from "./ReplicatesCard";
+import { StrategyBar, type PanelStrategy } from "./StrategyBar";
 import { SweepCard, type SweepPayload } from "./SweepCard";
 import { TransformsSection } from "./TransformsSection";
+import type { ReplicatesPayload } from "../lib/replicates-form";
 
 const COMPARE_METRICS = [
   { value: "miou", label: "mIoU" },
@@ -30,8 +32,8 @@ interface SegmentationPanelProps {
   accent: string;
   validationErrors: ValidationError[];
   busy?: boolean;
-  onCompare?: (modelNames: string[], metric: string) => void;
   onSweep?: (payload: SweepPayload) => void;
+  onReplicates?: (payload: ReplicatesPayload) => void;
 }
 
 const sectionLabel: React.CSSProperties = {
@@ -56,10 +58,11 @@ export function SegmentationPanel({
   accent,
   validationErrors,
   busy,
-  onCompare,
   onSweep,
+  onReplicates,
 }: SegmentationPanelProps) {
   const [picking, setPicking] = useState(false);
+  const [strategy, setStrategy] = useState<PanelStrategy>("simple");
 
   const setModel = (patch: Partial<SegmentationForm["model"]>) =>
     setFormData((p) => ({ ...p, model: { ...p.model, ...patch } }));
@@ -136,6 +139,27 @@ export function SegmentationPanel({
           />
         </div>
       </div>
+
+      {/* Estratégia (ADR-059 brick C) */}
+      <StrategyBar value={strategy} onChange={setStrategy} />
+      {strategy === "sweep" && onSweep && (
+        <SweepCard
+          metrics={COMPARE_METRICS}
+          pathHints={SWEEP_PATH_HINTS}
+          modelOptions={SEGMENTATION_MODELS}
+          accent={accent}
+          disabled={busy}
+          onSweep={onSweep}
+        />
+      )}
+      {strategy === "replicates" && onReplicates && (
+        <ReplicatesCard
+          metrics={COMPARE_METRICS}
+          accent={accent}
+          disabled={busy}
+          onReplicates={onReplicates}
+        />
+      )}
 
       {/* Modelo */}
       <div style={card}>
@@ -364,24 +388,6 @@ export function SegmentationPanel({
         imageSize={formData.data.image_size}
       />
 
-      {onCompare && (
-        <ComparisonCard
-          modelOptions={SEGMENTATION_MODELS}
-          metrics={COMPARE_METRICS}
-          accent={accent}
-          disabled={busy}
-          onCompare={onCompare}
-        />
-      )}
-      {onSweep && (
-        <SweepCard
-          metrics={COMPARE_METRICS}
-          pathHints={SWEEP_PATH_HINTS}
-          accent={accent}
-          disabled={busy}
-          onSweep={onSweep}
-        />
-      )}
     </div>
   );
 }

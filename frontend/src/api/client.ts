@@ -147,24 +147,27 @@ export async function runAnomaly(
   });
 }
 
-/** Start a model comparison for a standalone task (ADR-044). */
-export async function runComparison(
+/** Start a grid/random hyperparameter sweep for a standalone task (ADR-045).
+ *  Comparing architectures is the sweep's "arquiteturas" preset — a one-axis
+ *  grid over model.name (ADR-059 folded the separate comparison card). */
+export async function runSweep(
   task: string,
   payload: Record<string, unknown>,
 ): Promise<RunResponse> {
-  return request<RunResponse>(`/${task}/compare`, {
+  return request<RunResponse>(`/${task}/sweep`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
 }
 
-/** Start a grid/random hyperparameter sweep for a standalone task (ADR-045). */
-export async function runSweep(
+/** Train the same config N times under different seeds (ADR-056) and get the
+ *  mean/std/95% CI aggregate report. */
+export async function runReplicates(
   task: string,
   payload: Record<string, unknown>,
 ): Promise<RunResponse> {
-  return request<RunResponse>(`/${task}/sweep`, {
+  return request<RunResponse>(`/${task}/replicates`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
