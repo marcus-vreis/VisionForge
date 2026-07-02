@@ -117,8 +117,17 @@ generic custom-task panel is these same components pointed at a schema.
   - Browser-verified on Anomalia: header renders, real YAML import applies
     name/PatchCore/threshold/preprocessing to the form with a success note,
     malformed YAML shows the error banner, 0 console errors.
-- [ ] brick E — dataset stats parity: folder-based stats for segmentation
-  (pares imagem/máscara por split) and anomaly (contagem normal/anômalos por
-  split); CSV-manifest summary for regression (linhas, colunas-alvo, faixa).
+- [~] brick E — dataset stats parity. **Backend shipped 2026-07-02**:
+  `POST /api/{segmentation,anomaly,regression}/dataset/stats`
+  (mirrors the detection stats endpoint) —
+  segmentation: pares imagem↔máscara por stem, unpaired counts, class ids
+  amostrados de ≤20 máscaras de treino (sugere `num_classes` e expõe
+  `ignore_index`); anomaly: contagem normal no treino + normal/por-defeito no
+  teste, aviso de treino vazio; regression: linhas por CSV (cap 50k), colunas
+  ausentes, distribuição dos alvos (n/média/min/max) e checagem amostrada de
+  500 caminhos de imagem. Tests em `tests/gui/test_task_dataset_stats.py` (8).
+  **Remaining (next loop iteration): the three GUI stats panels** inside each
+  Dataset section (mirror `DetectionDatasetStats`), incl. o botão "aplicar"
+  que injeta `num_classes` (segmentação, a partir dos class ids).
 - [ ] brick F — classification alignment pass: expose "Comparar modelos" as a
   grid preset there too (backend block untouched) so the mental model is one.

@@ -50,6 +50,8 @@ from visionforge.gui.api.dataset_download import download_dataset
 from visionforge.gui.api.detection_export import export_detection_run
 from visionforge.gui.api.detection_testing import evaluate_detection_run
 from visionforge.gui.api.schemas import (
+    AnomalyDatasetStatsRequest,
+    AnomalyDatasetStatsResponse,
     AugmentPreviewRequest,
     AugmentPreviewResponse,
     BatchPredictRequest,
@@ -78,6 +80,10 @@ from visionforge.gui.api.schemas import (
     PreprocessPreviewRequest,
     PreprocessPreviewResponse,
     PreprocessPreviewStep,
+    RegressionDatasetStatsRequest,
+    RegressionDatasetStatsResponse,
+    RegressionSplitStats,
+    RegressionTargetStats,
     ReplicatesRequest,
     RunDetail,
     RunResponse,
@@ -86,6 +92,9 @@ from visionforge.gui.api.schemas import (
     RunSummary,
     RunTestRequest,
     RunTestResponse,
+    SegmentationDatasetStatsRequest,
+    SegmentationDatasetStatsResponse,
+    SegmentationSplitStats,
     SplitStats,
     SweepRequest,
     SystemInfo,
@@ -582,6 +591,35 @@ async def detection_dataset_stats(
     researcher can spot class imbalance and unlabeled images before training.
     """
     return await asyncio.to_thread(_collect_detection_dataset_stats, req)
+
+
+@router.post("/segmentation/dataset/stats")
+async def segmentation_dataset_stats(
+    req: SegmentationDatasetStatsRequest,
+) -> SegmentationDatasetStatsResponse:
+    """Per-split image/mask pairing stats for a paired segmentation dataset.
+
+    Unpaired files signal filename-stem mismatches before GPU time; the class
+    ids sampled from train masks help set ``num_classes`` and spot an
+    ``ignore_index`` collision.
+    """
+    return await asyncio.to_thread(_collect_segmentation_dataset_stats, req)
+
+
+@router.post("/anomaly/dataset/stats")
+async def anomaly_dataset_stats(
+    req: AnomalyDatasetStatsRequest,
+) -> AnomalyDatasetStatsResponse:
+    """Normal-vs-defect counts for an MVTec-style anomaly dataset."""
+    return await asyncio.to_thread(_collect_anomaly_dataset_stats, req)
+
+
+@router.post("/regression/dataset/stats")
+async def regression_dataset_stats(
+    req: RegressionDatasetStatsRequest,
+) -> RegressionDatasetStatsResponse:
+    """Manifest row counts, column checks and target distributions per split."""
+    return await asyncio.to_thread(_collect_regression_dataset_stats, req)
 
 
 @router.post("/detection/run")
@@ -1523,6 +1561,229 @@ def _collect_detection_dataset_stats(
         splits=splits,
         class_names=class_names,
         imbalanced=imbalanced,
+        message=message,
+    )
+
+
+def _image_stems(directory: Path) -> set[str]:
+    """Filename stems of the image files directly inside ``directory``."""
+    if not directory.is_dir():
+        return set()
+    return {
+        p.stem
+        for p in directory.iterdir()
+        if p.is_file() and p.suffix.lower() in _IMAGE_EXTS
+    }
+
+
+def _count_images(directory: Path) -> int:
+    """Number of image files directly inside ``directory`` (0 when missing)."""
+    if not directory.is_dir():
+        return 0
+    return sum(
+        1
+        for p in directory.iterdir()
+        if p.is_file() and p.suffix.lower() in _IMAGE_EXTS
+    )
+
+
+def _collect_segmentation_dataset_stats(
+    req: SegmentationDatasetStatsRequest,
+) -> SegmentationDatasetStatsResponse:
+    """Pair images↔masks by filename stem per split + sample train class ids."""
+    base = Path(req.base_dir).expanduser()
+    if not base.is_dir():
+        return SegmentationDatasetStatsResponse(
+            base_dir=req.base_dir,
+            splits={},
+            mask_class_ids=[],
+            message=f"Diretório base não encontrado: {req.base_dir}",
+        )
+
+    splits: dict[str, SegmentationSplitStats] = {}
+    for role, dname in (
+        ("train", req.train_dir),
+        ("val", req.val_dir),
+        ("test", req.test_dir),
+    ):
+        split_dir = base / dname
+        if not split_dir.is_dir():
+            splits[role] = SegmentationSplitStats(
+                images=0, masks=0, paired=0, missing=True
+            )
+            continue
+        imgs = _image_stems(split_dir / req.images_subdir)
+        masks = _image_stems(split_dir / req.masks_subdir)
+        splits[role] = SegmentationSplitStats(
+            images=len(imgs),
+            masks=len(masks),
+            paired=len(imgs & masks),
+            unpaired_images=len(imgs - masks),
+            unpaired_masks=len(masks - imgs),
+        )
+
+    # Class ids from up to 20 train masks — enough to suggest num_classes and
+    # surface an ignore_index value without scanning the whole dataset.
+    class_ids: set[int] = set()
+    mask_dir = base / req.train_dir / req.masks_subdir
+    if mask_dir.is_dir():
+        import numpy as np
+        from PIL import Image
+
+        sampled = 0
+        for p in sorted(mask_dir.iterdir()):
+            if sampled >= 20:
+                break
+            if not (p.is_file() and p.suffix.lower() in _IMAGE_EXTS):
+                continue
+            try:
+                with Image.open(p) as im:
+                    class_ids.update(
+                        int(v) for v in np.unique(np.asarray(im.convert("L")))
+                    )
+                sampled += 1
+            except OSError:
+                continue
+
+    message = None
+    if all(s.missing for s in splits.values()):
+        message = "Nenhum split encontrado (esperado <split>/{imagens,máscaras})."
+
+    return SegmentationDatasetStatsResponse(
+        base_dir=str(base.resolve()),
+        splits=splits,
+        mask_class_ids=sorted(class_ids),
+        message=message,
+    )
+
+
+def _collect_anomaly_dataset_stats(
+    req: AnomalyDatasetStatsRequest,
+) -> AnomalyDatasetStatsResponse:
+    """Count normal train images + normal/defect test images per subdir."""
+    base = Path(req.base_dir).expanduser()
+    if not base.is_dir():
+        return AnomalyDatasetStatsResponse(
+            base_dir=req.base_dir,
+            train_normal=0,
+            test_normal=0,
+            test_anomalous={},
+            missing_train=True,
+            missing_test=True,
+            message=f"Diretório base não encontrado: {req.base_dir}",
+        )
+
+    train_normal_dir = base / req.train_dir / req.normal_dir
+    test_dir = base / req.test_dir
+    train_normal = _count_images(train_normal_dir)
+    test_normal = _count_images(test_dir / req.normal_dir)
+    test_anomalous: dict[str, int] = {}
+    if test_dir.is_dir():
+        for sub in sorted(d for d in test_dir.iterdir() if d.is_dir()):
+            if sub.name == req.normal_dir:
+                continue
+            test_anomalous[sub.name] = _count_images(sub)
+
+    message = None
+    if not train_normal_dir.is_dir():
+        message = (
+            f"Pasta de treino normal não encontrada: {req.train_dir}/{req.normal_dir}"
+        )
+    elif train_normal == 0:
+        message = "Nenhuma imagem normal no treino — o treino falharia."
+
+    return AnomalyDatasetStatsResponse(
+        base_dir=str(base.resolve()),
+        train_normal=train_normal,
+        test_normal=test_normal,
+        test_anomalous=test_anomalous,
+        missing_train=not train_normal_dir.is_dir(),
+        missing_test=not test_dir.is_dir(),
+        message=message,
+    )
+
+
+def _collect_regression_dataset_stats(
+    req: RegressionDatasetStatsRequest,
+) -> RegressionDatasetStatsResponse:
+    """Row counts, column checks, target distributions and a sampled image check.
+
+    Reads at most 50k rows per CSV and verifies image paths for the first 500
+    rows only, so a huge manifest cannot stall the endpoint.
+    """
+    base = Path(req.base_dir).expanduser()
+    if not base.is_dir():
+        return RegressionDatasetStatsResponse(
+            base_dir=req.base_dir,
+            splits={},
+            message=f"Diretório base não encontrado: {req.base_dir}",
+        )
+
+    images_root = base / req.images_dir
+    expected = [req.image_column, *req.target_columns]
+    splits: dict[str, RegressionSplitStats] = {}
+    for role, fname in (
+        ("train", req.train_csv),
+        ("val", req.val_csv),
+        ("test", req.test_csv),
+    ):
+        csv_path = base / fname
+        if not csv_path.is_file():
+            splits[role] = RegressionSplitStats(rows=0, missing=True)
+            continue
+        rows = 0
+        missing_images = 0
+        checked_images = 0
+        sums: dict[str, tuple[int, float, float, float]] = {}
+        try:
+            with csv_path.open(newline="", encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+                header = reader.fieldnames or []
+                missing_columns = [c for c in expected if c not in header]
+                for row in reader:
+                    rows += 1
+                    if rows > 50_000:
+                        rows = 50_000
+                        break
+                    if checked_images < 500 and req.image_column in row:
+                        checked_images += 1
+                        if not (images_root / str(row[req.image_column])).is_file():
+                            missing_images += 1
+                    for col in req.target_columns:
+                        if col not in row:
+                            continue
+                        try:
+                            v = float(row[col])
+                        except (TypeError, ValueError):
+                            continue
+                        n, total, lo, hi = sums.get(col, (0, 0.0, v, v))
+                        sums[col] = (n + 1, total + v, min(lo, v), max(hi, v))
+        except OSError as exc:
+            splits[role] = RegressionSplitStats(
+                rows=0, missing=True, missing_columns=[str(exc)]
+            )
+            continue
+
+        splits[role] = RegressionSplitStats(
+            rows=rows,
+            missing_columns=missing_columns,
+            missing_images=missing_images,
+            checked_images=checked_images,
+            targets={
+                col: RegressionTargetStats(
+                    count=n, mean=total / n if n else None, min=lo, max=hi
+                )
+                for col, (n, total, lo, hi) in sums.items()
+            },
+        )
+
+    message = None
+    if all(s.missing for s in splits.values()):
+        message = "Nenhum CSV de manifest encontrado na pasta base."
+
+    return RegressionDatasetStatsResponse(
+        base_dir=str(base.resolve()),
+        splits=splits,
         message=message,
     )
 

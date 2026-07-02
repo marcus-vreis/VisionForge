@@ -383,6 +383,102 @@ class DetectionDatasetStatsResponse(BaseModel):
     message: str | None = None
 
 
+class SegmentationDatasetStatsRequest(BaseModel):
+    """Paired image/mask dataset root + dir names for pre-training inspection."""
+
+    base_dir: str
+    images_subdir: str = "images"
+    masks_subdir: str = "masks"
+    train_dir: str = "train"
+    val_dir: str = "val"
+    test_dir: str = "test"
+
+
+class SegmentationSplitStats(BaseModel):
+    """Per-split paired-dataset counts; unpaired files signal stem mismatches."""
+
+    images: int
+    masks: int
+    paired: int
+    unpaired_images: int = 0
+    unpaired_masks: int = 0
+    missing: bool = False
+
+
+class SegmentationDatasetStatsResponse(BaseModel):
+    """Per-split pairing stats + class ids sampled from up to 20 train masks.
+
+    ``mask_class_ids`` helps set ``num_classes`` and spot an ``ignore_index``
+    collision before GPU time.
+    """
+
+    base_dir: str
+    splits: dict[str, SegmentationSplitStats]
+    mask_class_ids: list[int]
+    message: str | None = None
+
+
+class AnomalyDatasetStatsRequest(BaseModel):
+    """MVTec-style dataset root + dir names for pre-training inspection."""
+
+    base_dir: str
+    train_dir: str = "train"
+    test_dir: str = "test"
+    normal_dir: str = "good"
+
+
+class AnomalyDatasetStatsResponse(BaseModel):
+    """Normal-only train count + per-subdir test counts (normal vs defects)."""
+
+    base_dir: str
+    train_normal: int
+    test_normal: int
+    test_anomalous: dict[str, int]
+    missing_train: bool = False
+    missing_test: bool = False
+    message: str | None = None
+
+
+class RegressionTargetStats(BaseModel):
+    """Distribution summary of one numeric target column within a split."""
+
+    count: int
+    mean: float | None = None
+    min: float | None = None
+    max: float | None = None
+
+
+class RegressionSplitStats(BaseModel):
+    """Per-CSV manifest counts; ``missing_images`` is checked on a sample."""
+
+    rows: int
+    missing_columns: list[str] = Field(default_factory=list)
+    missing_images: int = 0
+    checked_images: int = 0
+    targets: dict[str, RegressionTargetStats] = Field(default_factory=dict)
+    missing: bool = False
+
+
+class RegressionDatasetStatsRequest(BaseModel):
+    """CSV-manifest dataset root + column names for pre-training inspection."""
+
+    base_dir: str
+    images_dir: str = "images"
+    train_csv: str = "train.csv"
+    val_csv: str = "val.csv"
+    test_csv: str = "test.csv"
+    image_column: str = "image"
+    target_columns: list[str] = Field(default_factory=lambda: ["target"])
+
+
+class RegressionDatasetStatsResponse(BaseModel):
+    """Per-split manifest stats + target distributions for a regression dataset."""
+
+    base_dir: str
+    splits: dict[str, RegressionSplitStats]
+    message: str | None = None
+
+
 class SystemInfo(BaseModel):
     """System probe for sensible UI defaults (workers, threads)."""
 
