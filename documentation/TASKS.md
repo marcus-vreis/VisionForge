@@ -571,6 +571,17 @@ Real end-to-end pipeline tests (no mocks), skipped in CI to keep it fast
   exact torch install command) **shipped** (slice 1); the multi-stage GPU Docker
   image + compose (slice 2) is still planned. Design in
   `documentation/DOCKER_PLAN.md`. Local-only; k8s rejected.
+- **Multi-seed replicates (ADR-056)** — `core/replicates.py` +
+  `POST /api/{task}/replicates` for all five tasks: train the same config N
+  times under different seeds, aggregate every metric into mean/std/min/max/95%
+  CI (Student-t), persist `replicates_summary.json` + `replicates_ranking.csv`.
+  **Backend + API shipped** with tests (`tests/core/test_replicates.py`,
+  `tests/gui/test_routes_replicates.py`). Remaining brick: GUI `ReplicatesCard`
+  (mirrors `SweepCard` — seeds/n_replicates form → report table with
+  mean ± CI headline).
+- **CUDA/cuDNN/GPU provenance (ADR-057)** — `capture_environment()` now records
+  the CUDA build, cuDNN version and GPU name into the run.json `environment`
+  block. **Shipped.**
 
 ## Backlog / ideas (triaged into tasks)
 
@@ -587,6 +598,22 @@ Real end-to-end pipeline tests (no mocks), skipped in CI to keep it fast
   parity slice. Regression **backend done** (`blocks/regression_cv.py`, ADR-050,
   KFold + per-fold train/eval + mean±std). Remaining: regression API endpoint +
   GUI card + report renderer, then the same for segmentation.
+
+**Researcher-grade rigor (sequenced follow-ups to ADR-056):**
+- GUI `ReplicatesCard` for all five task panels (see ADR-056 entry above).
+- Bootstrap confidence intervals on single-run test metrics (`Evaluator`) —
+  cheap resampling of per-sample `y_true`/`y_score`, surfaces "0.87 ± 0.02"
+  even without replicates.
+- Paired significance test between two replicate sets (same seeds → paired
+  t-test / Wilcoxon) surfaced in the comparison report — "A > B" claims need
+  a p-value.
+- Determinism toggle (`torch.use_deterministic_algorithms` + cudnn.benchmark
+  off) as an opt-in training knob, documented with its speed tradeoff
+  (relaxes ADR-020 on demand).
+- Dataset fingerprint (per-split file count + content hash) in run.json —
+  "which data produced this number" is provenance, same as the env block.
+- English README + CITATION.cff + versioned PyPI release — adoption blockers
+  for researchers outside the PT-speaking circle.
 
 **Larger — needs design or new dependencies (prefer a reviewed session):**
 - **Dark/light theme toggle** — needs a coherent light palette for the dark-first

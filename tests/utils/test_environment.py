@@ -15,6 +15,9 @@ class TestCaptureEnvironment:
             "torchvision",
             "numpy",
             "visionforge",
+            "cuda",
+            "cudnn",
+            "gpu",
         ):
             assert key in env
 
@@ -37,3 +40,11 @@ class TestCaptureEnvironment:
         from visionforge.utils.environment import _safe_version
 
         assert _safe_version("definitely-not-a-real-package-xyz") == "unknown"
+
+    def test_torch_runtime_probe_reports_cuda_build_or_none(self) -> None:
+        # On a CPU-only build cuda/gpu report "none"; on a CUDA build the CUDA
+        # version resolves. Either way the probe never reports a probe failure
+        # when torch imports cleanly.
+        env = capture_environment()
+        assert env["cuda"] != "unknown"
+        assert env["gpu"] != "unknown"

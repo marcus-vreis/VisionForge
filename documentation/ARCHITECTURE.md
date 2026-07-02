@@ -61,6 +61,7 @@ Foundational utilities with no dependencies on other VisionForge modules.
 | `evaluator.py` | Computes Accuracy, F1, AUC-ROC, Precision, Recall, confusion matrix, classification report, and preserves per-sample `y_true` / `y_score` / `y_proba_full` arrays for downstream ROC and PR plotting. |
 | `plotter.py` | `MetricsPlotter` — generates loss, accuracy, raw confusion matrix, normalized confusion matrix, ROC curve, and precision-recall curve PNGs via matplotlib/seaborn (Agg backend, no display needed). |
 | `tracking.py` | `TensorBoardLogger` (ADR-054) — best-effort per-epoch scalar logging to `<run_dir>/tensorboard/`; no-op unless the optional `[tensorboard]` extra is installed. Wired into the classification/regression/segmentation trainer loops. |
+| `replicates.py` | Multi-seed replicates over the `TaskRunner` handle (ADR-056) — trains the same config once per seed and aggregates every metric into n/mean/std/min/max/95% CI (Student-t). Exposed as `POST /api/{task}/replicates` for all five tasks; report persisted to `outputs/reports`. |
 
 ### `blocks/`
 

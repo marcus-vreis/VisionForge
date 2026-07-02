@@ -21,6 +21,7 @@ from visionforge.blocks.anomaly import AnomalyBlock
 from visionforge.blocks.anomaly_runner import AnomalyRunner
 from visionforge.blocks.batch_prediction import BatchPredictionBlock
 from visionforge.blocks.classification import ClassificationBlock
+from visionforge.blocks.classification_runner import ClassificationRunner
 from visionforge.blocks.cross_validation import CrossValidationBlock
 from visionforge.blocks.detection import DetectionBlock
 from visionforge.blocks.detection_runner import DetectionRunner
@@ -38,6 +39,11 @@ from visionforge.core.data import DataModule
 from visionforge.core.detection_data import resolve_yolo_split
 from visionforge.core.evaluator import Evaluator
 from visionforge.core.plotter import MetricsPlotter
+from visionforge.core.replicates import (
+    ReplicateTrial,
+    aggregate_replicates,
+    run_replicates,
+)
 from visionforge.core.sweep import SweepTrial, run_sweep, validate_sweep_space
 from visionforge.core.task_runner import TaskRunner
 from visionforge.gui.api.dataset_download import download_dataset
@@ -72,6 +78,7 @@ from visionforge.gui.api.schemas import (
     PreprocessPreviewRequest,
     PreprocessPreviewResponse,
     PreprocessPreviewStep,
+    ReplicatesRequest,
     RunDetail,
     RunResponse,
     RunResult,
@@ -769,6 +776,36 @@ async def compare_anomaly(req: ComparisonRequest) -> RunResponse:
 async def sweep_anomaly(req: SweepRequest) -> RunResponse:
     """Run a grid/random hyperparameter sweep for anomaly detection (ADR-045)."""
     return _start_sweep(req, AnomalyConfig, AnomalyRunner())
+
+
+@router.post("/classification/replicates")
+async def replicates_classification(req: ReplicatesRequest) -> RunResponse:
+    """Train one classification config N times under different seeds (ADR-056)."""
+    return _start_replicates(req, ExperimentConfig, ClassificationRunner())
+
+
+@router.post("/regression/replicates")
+async def replicates_regression(req: ReplicatesRequest) -> RunResponse:
+    """Train one regression config N times under different seeds (ADR-056)."""
+    return _start_replicates(req, RegressionConfig, RegressionRunner())
+
+
+@router.post("/segmentation/replicates")
+async def replicates_segmentation(req: ReplicatesRequest) -> RunResponse:
+    """Train one segmentation config N times under different seeds (ADR-056)."""
+    return _start_replicates(req, SegmentationConfig, SegmentationRunner())
+
+
+@router.post("/detection/replicates")
+async def replicates_detection(req: ReplicatesRequest) -> RunResponse:
+    """Train one detection config N times under different seeds (ADR-056)."""
+    return _start_replicates(req, DetectionConfig, DetectionRunner())
+
+
+@router.post("/anomaly/replicates")
+async def replicates_anomaly(req: ReplicatesRequest) -> RunResponse:
+    """Train one anomaly config N times under different seeds (ADR-056)."""
+    return _start_replicates(req, AnomalyConfig, AnomalyRunner())
 
 
 @router.get("/experiment/events")
@@ -2472,6 +2509,122 @@ def _sweep_report(trials: list[SweepTrial], mode: str, metric: str) -> dict[str,
         "best_trial": successful[0] if successful else None,
         "total_trials": len(rows),
         "successful_trials": len(successful),
+    }
+
+
+def _start_replicates(
+    req: ReplicatesRequest,
+    config_type: type[Any],
+    runner: TaskRunner,
+) -> RunResponse:
+    """Validate the base config and launch a background multi-seed replicate set.
+
+    Explicit ``req.seeds`` win (duplicates rejected); otherwise ``n_replicates``
+    consecutive seeds are derived from the validated config's ``training.seed``.
+
+    Raises:
+        HTTPException: 409 if a run is already active; 422 for duplicate seeds.
+        RequestValidationError: 422 if the base task config is invalid.
+    """
+    global _current_run, _event_queue
+
+    if _current_run and _current_run["status"] == "running":
+        raise HTTPException(409, "An experiment is already running.")
+
+    # Validate the base config (fills defaults) so the seed derivation below can
+    # trust `training.seed` to exist.
+    try:
+        complete = config_type.model_validate(req.config).model_dump(mode="json")
+    except ValidationError as exc:
+        raise RequestValidationError(exc.errors()) from exc
+
+    if req.seeds is not None:
+        if len(set(req.seeds)) != len(req.seeds):
+            raise HTTPException(422, "Replicate seeds must be unique.")
+        seeds = list(req.seeds)
+    else:
+        base_seed = int(complete.get("training", {}).get("seed", 42))
+        seeds = [base_seed + i for i in range(req.n_replicates)]
+
+    metric = req.metric or runner.primary_metric()
+    name = str(req.config.get("name", "replicates"))
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    run_id = f"{name}_{timestamp}"
+
+    _event_queue = asyncio.Queue()
+    _current_run = {
+        "run_id": run_id,
+        "status": "running",
+        "error": None,
+        "report": None,
+        "run_dir": None,
+    }
+
+    task = asyncio.create_task(
+        _execute_replicates(runner, complete, seeds, metric, run_id)
+    )
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+    return RunResponse(run_id=run_id)
+
+
+async def _execute_replicates(
+    runner: TaskRunner,
+    base_config_dict: dict[str, Any],
+    seeds: list[int],
+    metric: str,
+    run_id: str,
+) -> None:
+    """Run the replicate set in a background thread and store the aggregate report."""
+    global _current_run, _event_queue
+    queue = _event_queue
+
+    try:
+        trials = await asyncio.to_thread(
+            run_replicates, runner, base_config_dict, seeds, metric
+        )
+        if not any(t.status == "success" for t in trials):
+            raise RuntimeError("All replicates failed — no aggregate available.")
+        report = _replicates_report(trials, seeds, metric)
+        report["report_dir"] = _write_advanced_summary(
+            base_config_dict, "replicates", report
+        )
+        _current_run = {
+            "run_id": run_id,
+            "status": "completed",
+            "error": None,
+            "report": report,
+            "run_dir": None,
+        }
+        logger.success("GUI: Replicates {} completed ({} seeds).", run_id, len(trials))
+    except Exception as e:
+        logger.exception("GUI: Replicates {} failed", run_id)
+        _current_run = {
+            "run_id": run_id,
+            "status": "failed",
+            "error": f"{type(e).__name__}: {e or '(sem mensagem)'}",
+            "report": None,
+            "run_dir": None,
+        }
+    finally:
+        if queue is not None:
+            await queue.put(None)
+
+
+def _replicates_report(
+    trials: list[ReplicateTrial], seeds: list[int], metric: str
+) -> dict[str, Any]:
+    """Shape replicate trials + per-metric aggregates into a GUI-friendly report."""
+    rows = [asdict(t) for t in trials]
+    aggregates = aggregate_replicates(trials)
+    return {
+        "metric": metric,
+        "seeds": seeds,
+        "trials": rows,
+        "aggregates": aggregates,
+        "headline": aggregates.get(metric),
+        "total_replicates": len(rows),
+        "successful_replicates": sum(1 for r in rows if r["status"] == "success"),
     }
 
 

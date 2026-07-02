@@ -940,3 +940,52 @@ torchvision format is not what the DataModule consumes. Backend-first per provid
 each commit small and green; the GUI is added once at the end rather than rebuilt per
 provider. The downloaded files live wherever the user points `out_dir`; nothing is
 auto-committed.
+
+## ADR-056 — Multi-seed replicates with aggregate statistics
+
+**Date:** 2026-07
+**Status:** Accepted
+**Extends:** ADR-041, ADR-044, ADR-045
+
+**Decision:** A generic replicate runner (`core/replicates.py`) trains the *same*
+config N times under different seeds over the `TaskRunner` handle and aggregates
+every reported metric into `n / mean / std / min / max / 95% CI` (Student-t via
+scipy, already a scikit-learn transitive dependency; normal-approximation
+fallback). Exposed as `POST /api/{task}/replicates` for all five tasks
+(classification included, via `ClassificationRunner`). Explicit `seeds` win;
+otherwise N consecutive seeds derive from the config's own `training.seed` —
+the one field every task config shares. Each replicate suffixes `name` with
+`_s{seed}` so it keeps its own run dir; trials are reported in seed order,
+**never ranked**. The aggregate report persists to `outputs/reports` via the
+same summary writer as comparison/sweep (`replicates_summary.json` +
+`replicates_ranking.csv`). GUI card (mirroring `SweepCard`) is the next brick.
+
+**Reason:** Seed-to-seed variance in deep learning routinely exceeds the gap
+between two architectures, so any single-run comparison — which is what the
+comparison/sweep rankings report today — is statistically indefensible. This is
+the single feature that turns VisionForge results into something a researcher
+can put in a paper ("accuracy = 0.87 ± 0.02, n=5") instead of a point estimate.
+Building it over the TaskRunner handle (ADR-041) keeps it one module + thin
+endpoints instead of five task-specific implementations, and reusing the
+sweep/comparison report pipeline means persistence and GUI wiring cost nothing
+new. Replicates are deliberately not ranked: they are samples of one
+distribution, and sorting them would invite exactly the cherry-picking the
+feature exists to prevent.
+
+## ADR-057 — CUDA/cuDNN/GPU recorded in run.json environment
+
+**Date:** 2026-07
+**Status:** Accepted
+**Extends:** ADR-013 (run.json contract), environment capture
+
+**Decision:** `capture_environment()` additionally records `cuda` (torch CUDA
+build version), `cudnn` (cuDNN version) and `gpu` (device 0 name). `"none"`
+means probed-and-absent (CPU build / no GPU); `"unknown"` means the probe
+failed. Best-effort — the probe never raises into a training run. Additive to
+the `environment` block, so existing run.json parsers are unaffected.
+
+**Reason:** The pip version string alone (`torch 2.5.1`) cannot distinguish a
+CPU wheel from cu118/cu124 builds, and kernel selection differs across
+CUDA/cuDNN releases and GPU models — all of which can shift metrics between
+"identical" runs. A run record that claims reproducibility but omits the
+compute substrate is incomplete provenance.

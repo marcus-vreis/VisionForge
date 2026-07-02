@@ -53,6 +53,22 @@ class SweepRequest(BaseModel):
     seed: int = 0
 
 
+class ReplicatesRequest(BaseModel):
+    """Multi-seed replicates of one config for any task (ADR-056).
+
+    ``config`` is the task's base config dict, trained once per seed
+    (``training.seed`` overridden per replicate). Explicit ``seeds`` win;
+    otherwise ``n_replicates`` consecutive seeds are derived from the config's
+    own ``training.seed``. ``metric`` defaults to the runner's primary and
+    names the headline aggregate of the report.
+    """
+
+    config: dict[str, Any]
+    seeds: list[int] | None = Field(default=None, min_length=2)
+    n_replicates: int = Field(default=5, ge=2, le=50)
+    metric: str | None = None
+
+
 class RunResult(BaseModel):
     """Full result of a completed experiment run."""
 
