@@ -30,3 +30,4 @@ versão
 provedor
 baixar
 funcional
+pares

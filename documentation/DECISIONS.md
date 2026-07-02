@@ -1022,3 +1022,44 @@ plugins) is what keeps them functional, upgrade-safe and reviewable — the
 standardization the request asked for ("padronizar da melhor forma"). Trust
 boundary is unchanged from ADR-048: the user's own Python on the user's own
 machine.
+
+## ADR-059 — Canonical task-panel contract (classification is the template)
+
+**Date:** 2026-07
+**Status:** Proposed (audit + plan in `documentation/PANEL_PARITY_PLAN.md`)
+**Extends:** ADR-025, ADR-028, ADR-044/045/056
+
+**Decision:** The classification `ParamPanel` layout is ratified as the canonical
+task-panel contract, and the four standalone panels (detection, regression,
+segmentation, anomaly) are brought to it:
+1. **Section order:** Nome → Estratégia → Modelo → Treinamento → Dataset
+   (+stats) → Pré-processamento → Augmentação (+preview) → cards auxiliares.
+2. **Strategy is a first-class selector** (segmented control that morphs the
+   form — like classification's `BlockSelector`), not stacked always-visible
+   cards: `Treino simples | K-fold (onde existir) | Sweep | Réplicas`.
+3. **"Comparar arquiteturas" stops being a separate card**: it becomes a
+   one-click *preset* inside the Sweep mode (fills a `model.name` axis from an
+   architecture multi-select). The backend comparison runner stays (it is the
+   engine); only the duplicated GUI concept goes away.
+4. **Full config-surface parity:** preprocessing pipeline, augmentation fields
+   + preview, and YAML import/export in every task panel whose backend supports
+   them (regression/segmentation/anomaly — their configs already carry
+   `PreprocessingConfig`/`TransformConfig` today, unreachable from the GUI).
+5. **Detection is the documented exception** where semantics differ:
+   Ultralytics owns augmentation (its own aug card stays) and preprocessing
+   does not apply; order and strategy selector still conform.
+Shared section components (`TrainingSection`, `TransformsSection`,
+`StrategyBar`, …) parametrized by config path replace copy-pasted panel JSX so
+the panels cannot drift again — and become the generic panel of ADR-058.
+
+**Reason:** An audit (2026-07-01) found the standalone panels diverged from
+classification in section order (Dataset before Treinamento), lost reachable
+features their backends already support — most seriously, **augmentation
+defaults (`horizontal_flip=True`, `rotation_degrees=10`) are silently applied
+to every regression/segmentation/anomaly GUI run** with no way to see or
+disable them, which can materially change anomaly results — and bolted
+strategies on as stacked cards, mixing "what to train" with "how many times to
+train it". One canonical contract restores the facilitation thesis (the user
+learns one layout, every task behaves the same), closes a real correctness
+hole, and prevents the recurring backend-ahead-of-GUI debt (Phase 5.5 déjà vu).
+Defaults are NOT changed (behavior-preserving); they are surfaced.

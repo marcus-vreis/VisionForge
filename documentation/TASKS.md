@@ -599,9 +599,9 @@ Real end-to-end pipeline tests (no mocks), skipped in CI to keep it fast
   times under different seeds, aggregate every metric into mean/std/min/max/95%
   CI (Student-t), persist `replicates_summary.json` + `replicates_ranking.csv`.
   **Backend + API shipped** with tests (`tests/core/test_replicates.py`,
-  `tests/gui/test_routes_replicates.py`). Remaining brick: GUI `ReplicatesCard`
-  (mirrors `SweepCard` — seeds/n_replicates form → report table with
-  mean ± CI headline).
+  `tests/gui/test_routes_replicates.py`). Remaining brick: the replicates GUI
+  surface — lands inside the ADR-059 `StrategyBar` (Simples | Sweep | Réplicas),
+  not as another stacked card; report table with mean ± CI headline.
 - **CUDA/cuDNN/GPU provenance (ADR-057)** — `capture_environment()` now records
   the CUDA build, cuDNN version and GPU name into the run.json `environment`
   block. **Shipped.**
@@ -621,6 +621,22 @@ Real end-to-end pipeline tests (no mocks), skipped in CI to keep it fast
   parity slice. Regression **backend done** (`blocks/regression_cv.py`, ADR-050,
   KFold + per-fold train/eval + mean±std). Remaining: regression API endpoint +
   GUI card + report renderer, then the same for segmentation.
+
+**Panel parity — canonical task-panel contract (ADR-059, PROPOSED — high priority):**
+Audit + full plan in `documentation/PANEL_PARITY_PLAN.md`. Classification is the
+template; the standalone panels diverged (order, strategies-as-stacked-cards)
+and lost reachable features their backends support. Bricks, by severity:
+- brick A — **silent augmentation fix**: `TransformsSection` (pré-processamento
+  + augment + preview) in regression/segmentation/anomaly panels — today
+  `horizontal_flip=True`/`rotation_degrees=10` apply invisibly to every GUI run.
+- brick B — canonical section order (Modelo → Treinamento → Dataset) everywhere.
+- brick C — `StrategyBar` (Simples | Sweep | Réplicas) replaces stacked cards;
+  ComparisonCard folds into Sweep as the "arquiteturas" preset; the ADR-056
+  ReplicatesCard is born inside it.
+- brick D — YAML import/export parity nos painéis standalone.
+- brick E — dataset stats parity (segmentation/anomaly folder stats; regression
+  manifest summary).
+- brick F — classification alignment (comparar modelos as grid preset).
 
 **Researcher-grade rigor (sequenced follow-ups to ADR-056):**
 - Determinism parity: `training.deterministic` exists only in classification —
