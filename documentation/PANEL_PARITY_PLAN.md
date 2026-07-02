@@ -1,6 +1,7 @@
 # Panel Parity — Canonical Task-Panel Contract (ADR-059) — Audit & Plan
 
-> Status: **Proposed** — audit done 2026-07-01, implementation not started.
+> Status: **In progress** — audit 2026-07-01; bricks A + B shipped 2026-07-02
+> (browser-verified: canonical order + TransformsSection on the four panels).
 > Origin: user review — "classification serve como modelo para os outros; nos
 > outros os hiperparâmetros estão organizados de forma errada, perdem
 > pré-processamento, e os modos de treinamento estão embaralhados com os
@@ -70,12 +71,18 @@ generic custom-task panel is these same components pointed at a schema.
 
 ## Bricks (ordered by severity; each green on CPU CI + vitest + SPA rebuild)
 
-- [ ] brick A — **stop the silent augmentation**: `TransformsSection`
-  (pré-processamento + augment fields + preview) in regression, segmentation
-  and anomaly panels; payload builders updated + vitest. Defaults unchanged —
-  surfaced, not flipped.
-- [ ] brick B — canonical section order in the four standalone panels
-  (Modelo → Treinamento → Dataset) + consistent section labels.
+- [x] brick A — **stop the silent augmentation**: shared `TransformsSection`
+  (PreprocessingPanel + augment fields + AugmentPreview) in the regression,
+  segmentation and anomaly panels; `lib/transforms-form.ts` mirrors
+  `TransformConfig` (defaults unchanged — surfaced, not flipped); payload
+  builders send `data.transforms` + `data.preprocessing` (validated against
+  the Pydantic configs); `_pick_preview_image` gained flat-split and bounded
+  recursive fallbacks so the previews work on CSV-manifest/MVTec/paired-mask
+  layouts (tests in `tests/gui/test_routes_augment_preview.py`); vitest 81/81.
+- [x] brick B — canonical section order in the four standalone panels
+  (Modelo → Treinamento → Dataset; detection keeps its Ultralytics training
+  cards between Treinamento and Dataset, augmentation card after Dataset).
+  Browser-verified section sequences on all four tabs.
 - [ ] brick C — `StrategyBar` segmented selector (Simples | Sweep | Réplicas)
   replacing stacked cards; ComparisonCard becomes the Sweep "arquiteturas"
   preset; ReplicatesCard (ADR-056 GUI brick) is born inside it, not as a card.

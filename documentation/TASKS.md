@@ -626,10 +626,12 @@ Real end-to-end pipeline tests (no mocks), skipped in CI to keep it fast
 Audit + full plan in `documentation/PANEL_PARITY_PLAN.md`. Classification is the
 template; the standalone panels diverged (order, strategies-as-stacked-cards)
 and lost reachable features their backends support. Bricks, by severity:
-- brick A — **silent augmentation fix**: `TransformsSection` (pré-processamento
-  + augment + preview) in regression/segmentation/anomaly panels — today
-  `horizontal_flip=True`/`rotation_degrees=10` apply invisibly to every GUI run.
-- brick B — canonical section order (Modelo → Treinamento → Dataset) everywhere.
+- [x] brick A — **silent augmentation fix**: shared `TransformsSection`
+  (pré-processamento + augment + preview) in regression/segmentation/anomaly
+  panels; `data.transforms`/`data.preprocessing` in the payloads; preview
+  endpoints gained layout fallbacks. Shipped 2026-07-02.
+- [x] brick B — canonical section order (Modelo → Treinamento → Dataset) in the
+  four standalone panels, detection exception documented. Shipped 2026-07-02.
 - brick C — `StrategyBar` (Simples | Sweep | Réplicas) replaces stacked cards;
   ComparisonCard folds into Sweep as the "arquiteturas" preset; the ADR-056
   ReplicatesCard is born inside it.

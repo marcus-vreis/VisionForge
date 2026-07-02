@@ -66,11 +66,47 @@ class TestRenderAugmentPreview:
         )
         assert set(resp.active) == {"flip", "rotation", "jitter"}
 
-    def test_missing_split_returns_message(self, tmp_path: Path) -> None:
+    def test_missing_split_falls_back_to_any_dataset_image(
+        self, tmp_path: Path
+    ) -> None:
+        # Non-ImageFolder layouts (CSV manifest, MVTec, paired masks) have no
+        # val/ class dirs — the preview degrades to any image under base_dir
+        # instead of failing.
         base = _make_dataset(tmp_path)
         resp = _render_augment_preview(
             AugmentPreviewRequest(base_dir=str(base), split="val")
         )
+        assert len(resp.variants) > 0
+        assert Path(resp.original).is_file()
+
+    def test_flat_split_dir_without_class_subdirs(self, tmp_path: Path) -> None:
+        # Regression-style images/ folder: loose files, no class subdirs.
+        img_dir = tmp_path / "train"
+        img_dir.mkdir(parents=True)
+        arr = np.random.default_rng(0).integers(0, 255, (48, 48, 3), dtype=np.uint8)
+        Image.fromarray(arr, "RGB").save(img_dir / "sample.png")
+        resp = _render_augment_preview(
+            AugmentPreviewRequest(base_dir=str(tmp_path), transforms={"image_size": 32})
+        )
+        assert len(resp.variants) > 0
+        assert "sample" in resp.source_image
+
+    def test_csv_manifest_layout_recursive_fallback(self, tmp_path: Path) -> None:
+        # No train/ split at all — images live under images/<sub>/, as in the
+        # regression CSV-manifest layout.
+        nested = tmp_path / "images" / "batch_a"
+        nested.mkdir(parents=True)
+        arr = np.random.default_rng(1).integers(0, 255, (48, 48, 3), dtype=np.uint8)
+        Image.fromarray(arr, "RGB").save(nested / "deep.png")
+        resp = _render_augment_preview(
+            AugmentPreviewRequest(base_dir=str(tmp_path), transforms={"image_size": 32})
+        )
+        assert len(resp.variants) > 0
+        assert "deep" in resp.source_image
+
+    def test_dataset_without_any_image_returns_message(self, tmp_path: Path) -> None:
+        (tmp_path / "train").mkdir()
+        resp = _render_augment_preview(AugmentPreviewRequest(base_dir=str(tmp_path)))
         assert resp.variants == []
         assert resp.message is not None
 

@@ -2,6 +2,14 @@
  *  SegmentationModelConfig backbones in visionforge/utils/segmentation_config.py.
  *  Keep in sync: a name the backend rejects produces a 422 on submit. */
 
+import type { PreprocessingStep } from "../components/PreprocessingPanel";
+import {
+  buildPreprocessingPayload,
+  buildTransformsPayload,
+  makeDefaultTransformsForm,
+  type TransformsForm,
+} from "./transforms-form";
+
 export interface SegmentationModelOption {
   value: string;
   label: string;
@@ -65,6 +73,11 @@ export interface SegmentationForm {
     early_stopping_patience: number;
     seed: number;
   };
+  /** Filter pipeline applied before augmentation (data.preprocessing.steps). */
+  preprocessing: PreprocessingStep[];
+  /** Augmentation/normalization (data.transforms) — joint image+mask hflip/
+   *  rotation, image-only jitter. ADR-059 brick A. */
+  transforms: TransformsForm;
 }
 
 export function makeDefaultSegmentationForm(): SegmentationForm {
@@ -92,6 +105,8 @@ export function makeDefaultSegmentationForm(): SegmentationForm {
       early_stopping_patience: 10,
       seed: 42,
     },
+    preprocessing: [],
+    transforms: makeDefaultTransformsForm(),
   };
 }
 
@@ -110,7 +125,13 @@ export function buildSegmentationPayload(
   return {
     name: form.name,
     model: { ...form.model, num_classes: Math.max(form.model.num_classes, 1) },
-    data: { ...form.data },
+    data: {
+      ...form.data,
+      // Resize is owned by data.image_size for segmentation (joint transforms);
+      // transforms carries the augmentation flags + normalization only.
+      transforms: buildTransformsPayload(form.transforms),
+      preprocessing: buildPreprocessingPayload(form.preprocessing),
+    },
     training: { ...form.training },
     transfer_learning: buildTransferLearning(form),
   };

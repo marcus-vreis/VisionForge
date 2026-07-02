@@ -2,6 +2,14 @@
  *  RegressionModelConfig backbones in visionforge/utils/regression_config.py.
  *  Keep in sync: a name the backend rejects produces a 422 on submit. */
 
+import type { PreprocessingStep } from "../components/PreprocessingPanel";
+import {
+  buildPreprocessingPayload,
+  buildTransformsPayload,
+  makeDefaultTransformsForm,
+  type TransformsForm,
+} from "./transforms-form";
+
 export interface RegressionModelOption {
   value: string;
   label: string;
@@ -59,6 +67,10 @@ export interface RegressionForm {
     early_stopping_patience: number;
     seed: number;
   };
+  /** Filter pipeline applied before augmentation (data.preprocessing.steps). */
+  preprocessing: PreprocessingStep[];
+  /** Augmentation/normalization (data.transforms) — ADR-059 brick A. */
+  transforms: TransformsForm;
 }
 
 export function makeDefaultRegressionForm(): RegressionForm {
@@ -86,6 +98,8 @@ export function makeDefaultRegressionForm(): RegressionForm {
       early_stopping_patience: 10,
       seed: 42,
     },
+    preprocessing: [],
+    transforms: makeDefaultTransformsForm(),
   };
 }
 
@@ -118,7 +132,8 @@ export function buildRegressionPayload(
       target_columns: targets.length > 0 ? targets : ["target"],
       // RegressionDataConfig keeps the resize under transforms.image_size (read by
       // _build_transforms); a top-level data.image_size is silently dropped.
-      transforms: { image_size: form.data.image_size },
+      transforms: buildTransformsPayload(form.transforms, form.data.image_size),
+      preprocessing: buildPreprocessingPayload(form.preprocessing),
     },
     training: { ...form.training },
     transfer_learning: buildTransferLearning(form),

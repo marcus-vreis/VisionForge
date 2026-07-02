@@ -10,6 +10,7 @@ import type { ValidationError } from "../hooks/useExperiment";
 import { NumberField, SelectField, Segmented, TextField, Toggle } from "./controls";
 import { ComparisonCard } from "./ComparisonCard";
 import { SweepCard, type SweepPayload } from "./SweepCard";
+import { TransformsSection } from "./TransformsSection";
 
 const COMPARE_METRICS = [
   { value: "miou", label: "mIoU" },
@@ -66,6 +67,10 @@ export function SegmentationPanel({
     setFormData((p) => ({ ...p, data: { ...p.data, ...patch } }));
   const setTraining = (patch: Partial<SegmentationForm["training"]>) =>
     setFormData((p) => ({ ...p, training: { ...p.training, ...patch } }));
+  const setTransforms = (patch: Partial<SegmentationForm["transforms"]>) =>
+    setFormData((p) => ({ ...p, transforms: { ...p.transforms, ...patch } }));
+  const setPreprocessing = (steps: SegmentationForm["preprocessing"]) =>
+    setFormData((p) => ({ ...p, preprocessing: steps }));
 
   const onPickFolder = async () => {
     setPicking(true);
@@ -156,98 +161,6 @@ export function SegmentationPanel({
             value={formData.model.pretrained}
             onChange={(v) => setModel({ pretrained: v })}
             hint="backbone ImageNet"
-          />
-        </div>
-      </div>
-
-      {/* Dataset */}
-      <div style={card}>
-        <div style={sectionLabel}>Dataset (imagens + máscaras)</div>
-        <div style={grid}>
-          <div
-            style={{
-              gridColumn: "1 / -1",
-              display: "flex",
-              gap: 10,
-              alignItems: "flex-end",
-            }}
-          >
-            <div style={{ flex: 1 }}>
-              <TextField
-                label="Pasta base"
-                value={formData.data.base_dir}
-                onChange={(v) => setData({ base_dir: v })}
-                placeholder="…/dataset (train/{images,masks}, val/…)"
-                hint="raiz do dataset"
-                mono
-              />
-            </div>
-            <button
-              type="button"
-              onClick={() => void onPickFolder()}
-              disabled={picking}
-              style={{
-                padding: "12px 16px",
-                background: "var(--accent-soft)",
-                border: `1px solid ${accent}`,
-                borderRadius: 10,
-                color: "var(--vf-text)",
-                fontFamily: "var(--font-mono)",
-                fontSize: 12,
-                cursor: picking ? "default" : "pointer",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {picking ? "…" : "📁 Escolher"}
-            </button>
-          </div>
-          <TextField
-            label="Subpasta de imagens"
-            value={formData.data.images_subdir}
-            onChange={(v) => setData({ images_subdir: v })}
-            hint="por split"
-            mono
-          />
-          <TextField
-            label="Subpasta de máscaras"
-            value={formData.data.masks_subdir}
-            onChange={(v) => setData({ masks_subdir: v })}
-            hint="PNG · id por pixel"
-            mono
-          />
-          <TextField
-            label="Split de treino"
-            value={formData.data.train_dir}
-            onChange={(v) => setData({ train_dir: v })}
-            mono
-          />
-          <TextField
-            label="Split de validação"
-            value={formData.data.val_dir}
-            onChange={(v) => setData({ val_dir: v })}
-            mono
-          />
-          <TextField
-            label="Split de teste"
-            value={formData.data.test_dir}
-            onChange={(v) => setData({ test_dir: v })}
-            hint="opcional"
-            mono
-          />
-          <NumberField
-            label="Image size"
-            value={formData.data.image_size}
-            onChange={(v) => setData({ image_size: Math.round(v) })}
-            min={32}
-            step={32}
-            suffix="px"
-          />
-          <NumberField
-            label="ignore_index"
-            value={formData.data.ignore_index}
-            onChange={(v) => setData({ ignore_index: Math.round(v) })}
-            step={1}
-            hint="pixels void"
           />
         </div>
       </div>
@@ -348,6 +261,108 @@ export function SegmentationPanel({
           )}
         </div>
       </div>
+
+      {/* Dataset */}
+      <div style={card}>
+        <div style={sectionLabel}>Dataset (imagens + máscaras)</div>
+        <div style={grid}>
+          <div
+            style={{
+              gridColumn: "1 / -1",
+              display: "flex",
+              gap: 10,
+              alignItems: "flex-end",
+            }}
+          >
+            <div style={{ flex: 1 }}>
+              <TextField
+                label="Pasta base"
+                value={formData.data.base_dir}
+                onChange={(v) => setData({ base_dir: v })}
+                placeholder="…/dataset (train/{images,masks}, val/…)"
+                hint="raiz do dataset"
+                mono
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => void onPickFolder()}
+              disabled={picking}
+              style={{
+                padding: "12px 16px",
+                background: "var(--accent-soft)",
+                border: `1px solid ${accent}`,
+                borderRadius: 10,
+                color: "var(--vf-text)",
+                fontFamily: "var(--font-mono)",
+                fontSize: 12,
+                cursor: picking ? "default" : "pointer",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {picking ? "…" : "📁 Escolher"}
+            </button>
+          </div>
+          <TextField
+            label="Subpasta de imagens"
+            value={formData.data.images_subdir}
+            onChange={(v) => setData({ images_subdir: v })}
+            hint="por split"
+            mono
+          />
+          <TextField
+            label="Subpasta de máscaras"
+            value={formData.data.masks_subdir}
+            onChange={(v) => setData({ masks_subdir: v })}
+            hint="PNG · id por pixel"
+            mono
+          />
+          <TextField
+            label="Split de treino"
+            value={formData.data.train_dir}
+            onChange={(v) => setData({ train_dir: v })}
+            mono
+          />
+          <TextField
+            label="Split de validação"
+            value={formData.data.val_dir}
+            onChange={(v) => setData({ val_dir: v })}
+            mono
+          />
+          <TextField
+            label="Split de teste"
+            value={formData.data.test_dir}
+            onChange={(v) => setData({ test_dir: v })}
+            hint="opcional"
+            mono
+          />
+          <NumberField
+            label="Image size"
+            value={formData.data.image_size}
+            onChange={(v) => setData({ image_size: Math.round(v) })}
+            min={32}
+            step={32}
+            suffix="px"
+          />
+          <NumberField
+            label="ignore_index"
+            value={formData.data.ignore_index}
+            onChange={(v) => setData({ ignore_index: Math.round(v) })}
+            step={1}
+            hint="pixels void"
+          />
+        </div>
+      </div>
+
+      {/* Pré-processamento + augmentação (ADR-059 brick A) */}
+      <TransformsSection
+        baseDir={formData.data.base_dir}
+        steps={formData.preprocessing}
+        onStepsChange={setPreprocessing}
+        transforms={formData.transforms}
+        onTransformsChange={setTransforms}
+        imageSize={formData.data.image_size}
+      />
 
       {onCompare && (
         <ComparisonCard

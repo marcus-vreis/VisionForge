@@ -10,6 +10,7 @@ import type { ValidationError } from "../hooks/useExperiment";
 import { NumberField, SelectField, Segmented, TextField, Toggle } from "./controls";
 import { ComparisonCard } from "./ComparisonCard";
 import { SweepCard, type SweepPayload } from "./SweepCard";
+import { TransformsSection } from "./TransformsSection";
 
 const COMPARE_METRICS = [
   { value: "r2", label: "R²" },
@@ -67,6 +68,10 @@ export function RegressionPanel({
     setFormData((p) => ({ ...p, data: { ...p.data, ...patch } }));
   const setTraining = (patch: Partial<RegressionForm["training"]>) =>
     setFormData((p) => ({ ...p, training: { ...p.training, ...patch } }));
+  const setTransforms = (patch: Partial<RegressionForm["transforms"]>) =>
+    setFormData((p) => ({ ...p, transforms: { ...p.transforms, ...patch } }));
+  const setPreprocessing = (steps: RegressionForm["preprocessing"]) =>
+    setFormData((p) => ({ ...p, preprocessing: steps }));
 
   const onPickFolder = async () => {
     setPicking(true);
@@ -167,92 +172,6 @@ export function RegressionPanel({
         </div>
       </div>
 
-      {/* Dataset */}
-      <div style={card}>
-        <div style={sectionLabel}>Dataset (CSV manifest)</div>
-        <div style={grid}>
-          <div style={{ gridColumn: "1 / -1", display: "flex", gap: 10, alignItems: "flex-end" }}>
-            <div style={{ flex: 1 }}>
-              <TextField
-                label="Pasta base"
-                value={formData.data.base_dir}
-                onChange={(v) => setData({ base_dir: v })}
-                placeholder="…/dataset (train.csv, val.csv, images/)"
-                hint="raiz do dataset"
-                mono
-              />
-            </div>
-            <button
-              type="button"
-              onClick={() => void onPickFolder()}
-              disabled={picking}
-              style={{
-                padding: "12px 16px",
-                background: "var(--accent-soft)",
-                border: `1px solid ${accent}`,
-                borderRadius: 10,
-                color: "var(--vf-text)",
-                fontFamily: "var(--font-mono)",
-                fontSize: 12,
-                cursor: picking ? "default" : "pointer",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {picking ? "…" : "📁 Escolher"}
-            </button>
-          </div>
-          <TextField
-            label="Subpasta de imagens"
-            value={formData.data.images_dir}
-            onChange={(v) => setData({ images_dir: v })}
-            hint="relativa à base"
-            mono
-          />
-          <TextField
-            label="Coluna da imagem"
-            value={formData.data.image_column}
-            onChange={(v) => setData({ image_column: v })}
-            hint="cabeçalho do CSV"
-            mono
-          />
-          <TextField
-            label="Colunas-alvo"
-            value={formData.data.target_columns}
-            onChange={(v) => setData({ target_columns: v })}
-            placeholder="target  ou  x,y,z"
-            hint="separadas por vírgula"
-            mono
-          />
-          <TextField
-            label="CSV de treino"
-            value={formData.data.train_csv}
-            onChange={(v) => setData({ train_csv: v })}
-            mono
-          />
-          <TextField
-            label="CSV de validação"
-            value={formData.data.val_csv}
-            onChange={(v) => setData({ val_csv: v })}
-            mono
-          />
-          <TextField
-            label="CSV de teste"
-            value={formData.data.test_csv}
-            onChange={(v) => setData({ test_csv: v })}
-            hint="opcional"
-            mono
-          />
-          <NumberField
-            label="Image size"
-            value={formData.data.image_size}
-            onChange={(v) => setData({ image_size: Math.round(v) })}
-            min={32}
-            step={32}
-            suffix="px"
-          />
-        </div>
-      </div>
-
       {/* Treinamento */}
       <div style={card}>
         <div style={sectionLabel}>Treinamento</div>
@@ -349,6 +268,102 @@ export function RegressionPanel({
           )}
         </div>
       </div>
+
+      {/* Dataset */}
+      <div style={card}>
+        <div style={sectionLabel}>Dataset (CSV manifest)</div>
+        <div style={grid}>
+          <div style={{ gridColumn: "1 / -1", display: "flex", gap: 10, alignItems: "flex-end" }}>
+            <div style={{ flex: 1 }}>
+              <TextField
+                label="Pasta base"
+                value={formData.data.base_dir}
+                onChange={(v) => setData({ base_dir: v })}
+                placeholder="…/dataset (train.csv, val.csv, images/)"
+                hint="raiz do dataset"
+                mono
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => void onPickFolder()}
+              disabled={picking}
+              style={{
+                padding: "12px 16px",
+                background: "var(--accent-soft)",
+                border: `1px solid ${accent}`,
+                borderRadius: 10,
+                color: "var(--vf-text)",
+                fontFamily: "var(--font-mono)",
+                fontSize: 12,
+                cursor: picking ? "default" : "pointer",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {picking ? "…" : "📁 Escolher"}
+            </button>
+          </div>
+          <TextField
+            label="Subpasta de imagens"
+            value={formData.data.images_dir}
+            onChange={(v) => setData({ images_dir: v })}
+            hint="relativa à base"
+            mono
+          />
+          <TextField
+            label="Coluna da imagem"
+            value={formData.data.image_column}
+            onChange={(v) => setData({ image_column: v })}
+            hint="cabeçalho do CSV"
+            mono
+          />
+          <TextField
+            label="Colunas-alvo"
+            value={formData.data.target_columns}
+            onChange={(v) => setData({ target_columns: v })}
+            placeholder="target  ou  x,y,z"
+            hint="separadas por vírgula"
+            mono
+          />
+          <TextField
+            label="CSV de treino"
+            value={formData.data.train_csv}
+            onChange={(v) => setData({ train_csv: v })}
+            mono
+          />
+          <TextField
+            label="CSV de validação"
+            value={formData.data.val_csv}
+            onChange={(v) => setData({ val_csv: v })}
+            mono
+          />
+          <TextField
+            label="CSV de teste"
+            value={formData.data.test_csv}
+            onChange={(v) => setData({ test_csv: v })}
+            hint="opcional"
+            mono
+          />
+          <NumberField
+            label="Image size"
+            value={formData.data.image_size}
+            onChange={(v) => setData({ image_size: Math.round(v) })}
+            min={32}
+            step={32}
+            suffix="px"
+          />
+        </div>
+      </div>
+
+      {/* Pré-processamento + augmentação (ADR-059 brick A) */}
+      <TransformsSection
+        baseDir={formData.data.base_dir}
+        steps={formData.preprocessing}
+        onStepsChange={setPreprocessing}
+        transforms={formData.transforms}
+        onTransformsChange={setTransforms}
+        imageSize={formData.data.image_size}
+      />
 
       {onCompare && (
         <ComparisonCard

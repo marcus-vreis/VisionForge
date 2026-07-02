@@ -63,3 +63,29 @@ describe("segmentation-models", () => {
     });
   });
 });
+
+describe("segmentation-models · transforms & preprocessing (ADR-059 brick A)", () => {
+  it("sends augmentation flags under data.transforms without image_size", () => {
+    const form = makeDefaultSegmentationForm();
+    form.transforms.horizontal_flip = false;
+    const payload = buildSegmentationPayload(form);
+    const data = payload.data as {
+      image_size: number;
+      transforms: { horizontal_flip: boolean; image_size?: number };
+    };
+    // resize stays owned by data.image_size (joint image+mask transforms)
+    expect(data.image_size).toBe(512);
+    expect(data.transforms.image_size).toBeUndefined();
+    expect(data.transforms.horizontal_flip).toBe(false);
+  });
+
+  it("projects preprocessing steps into schema-flat data.preprocessing.steps", () => {
+    const form = makeDefaultSegmentationForm();
+    form.preprocessing = [{ kind: "equalize", params: {} }];
+    const payload = buildSegmentationPayload(form);
+    const data = payload.data as {
+      preprocessing: { steps: Array<Record<string, unknown>> };
+    };
+    expect(data.preprocessing.steps).toEqual([{ kind: "equalize" }]);
+  });
+});

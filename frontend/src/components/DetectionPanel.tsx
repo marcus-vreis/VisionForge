@@ -207,102 +207,6 @@ export function DetectionPanel({
         </div>
       </div>
 
-      {/* Dataset */}
-      <div style={card}>
-        <div style={sectionLabel}>Dataset</div>
-        <div style={{ marginBottom: 14, maxWidth: 360 }}>
-          <Segmented
-            label="Fonte do dataset"
-            value={formData.data.source}
-            onChange={(v) =>
-              setData({ source: v as DetectionForm["data"]["source"] })
-            }
-            options={[
-              { value: "folder", label: "Pasta YOLO" },
-              { value: "yaml", label: "data.yaml" },
-            ]}
-            hint={
-              formData.data.source === "folder"
-                ? "gera o data.yaml a partir da pasta"
-                : "usa um data.yaml existente"
-            }
-          />
-        </div>
-        <div style={grid}>
-          {formData.data.source === "folder" ? (
-            <div style={{ gridColumn: "1 / -1", display: "flex", gap: 10, alignItems: "flex-end" }}>
-              <div style={{ flex: 1 }}>
-                <TextField
-                  label="Pasta base"
-                  value={formData.data.base_dir}
-                  onChange={(v) => setData({ base_dir: v })}
-                  placeholder="…/dataset (images/train, images/val)"
-                  hint="raiz YOLO"
-                  mono
-                />
-              </div>
-              <button
-                type="button"
-                onClick={() => void onPickFolder()}
-                disabled={picking}
-                style={pickButton}
-              >
-                {picking ? "…" : "📁 Escolher"}
-              </button>
-            </div>
-          ) : (
-            <div style={{ gridColumn: "1 / -1", display: "flex", gap: 10, alignItems: "flex-end" }}>
-              <div style={{ flex: 1 }}>
-                <TextField
-                  label="Arquivo data.yaml"
-                  value={formData.data.data_yaml}
-                  onChange={(v) => setData({ data_yaml: v })}
-                  placeholder="…/dataset/data.yaml"
-                  hint="Ultralytics / Roboflow"
-                  mono
-                />
-              </div>
-              <button
-                type="button"
-                onClick={() => void onPickYaml()}
-                disabled={picking}
-                style={pickButton}
-              >
-                {picking ? "…" : "📄 Escolher"}
-              </button>
-            </div>
-          )}
-          <NumberField
-            label="Image size"
-            value={formData.data.image_size}
-            onChange={(v) => setData({ image_size: Math.round(v) })}
-            min={32}
-            step={32}
-            suffix="px"
-            hint="imgsz"
-          />
-        </div>
-        {formData.data.source === "folder" ? (
-          <DetectionDatasetStats
-            baseDir={formData.data.base_dir}
-            onApplyClasses={(n) => setModel({ num_classes: n })}
-          />
-        ) : (
-          <p
-            style={{
-              marginTop: 14,
-              fontFamily: "var(--font-mono)",
-              fontSize: 11,
-              lineHeight: 1.6,
-              color: "var(--vf-text-muted)",
-            }}
-          >
-            O data.yaml define splits e nomes de classe. Confirme que{" "}
-            <code>nc</code> bate com o nº de classes acima.
-          </p>
-        )}
-      </div>
-
       {/* Treinamento */}
       <div style={card}>
         <div style={sectionLabel}>Treinamento</div>
@@ -519,7 +423,107 @@ export function DetectionPanel({
               />
             </div>
           </div>
+        </>
+      )}
 
+      {/* Dataset — depois dos cards de treinamento (ordem canônica ADR-059) */}
+      <div style={card}>
+        <div style={sectionLabel}>Dataset</div>
+        <div style={{ marginBottom: 14, maxWidth: 360 }}>
+          <Segmented
+            label="Fonte do dataset"
+            value={formData.data.source}
+            onChange={(v) =>
+              setData({ source: v as DetectionForm["data"]["source"] })
+            }
+            options={[
+              { value: "folder", label: "Pasta YOLO" },
+              { value: "yaml", label: "data.yaml" },
+            ]}
+            hint={
+              formData.data.source === "folder"
+                ? "gera o data.yaml a partir da pasta"
+                : "usa um data.yaml existente"
+            }
+          />
+        </div>
+        <div style={grid}>
+          {formData.data.source === "folder" ? (
+            <div style={{ gridColumn: "1 / -1", display: "flex", gap: 10, alignItems: "flex-end" }}>
+              <div style={{ flex: 1 }}>
+                <TextField
+                  label="Pasta base"
+                  value={formData.data.base_dir}
+                  onChange={(v) => setData({ base_dir: v })}
+                  placeholder="…/dataset (images/train, images/val)"
+                  hint="raiz YOLO"
+                  mono
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => void onPickFolder()}
+                disabled={picking}
+                style={pickButton}
+              >
+                {picking ? "…" : "📁 Escolher"}
+              </button>
+            </div>
+          ) : (
+            <div style={{ gridColumn: "1 / -1", display: "flex", gap: 10, alignItems: "flex-end" }}>
+              <div style={{ flex: 1 }}>
+                <TextField
+                  label="Arquivo data.yaml"
+                  value={formData.data.data_yaml}
+                  onChange={(v) => setData({ data_yaml: v })}
+                  placeholder="…/dataset/data.yaml"
+                  hint="Ultralytics / Roboflow"
+                  mono
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => void onPickYaml()}
+                disabled={picking}
+                style={pickButton}
+              >
+                {picking ? "…" : "📄 Escolher"}
+              </button>
+            </div>
+          )}
+          <NumberField
+            label="Image size"
+            value={formData.data.image_size}
+            onChange={(v) => setData({ image_size: Math.round(v) })}
+            min={32}
+            step={32}
+            suffix="px"
+            hint="imgsz"
+          />
+        </div>
+        {formData.data.source === "folder" ? (
+          <DetectionDatasetStats
+            baseDir={formData.data.base_dir}
+            onApplyClasses={(n) => setModel({ num_classes: n })}
+          />
+        ) : (
+          <p
+            style={{
+              marginTop: 14,
+              fontFamily: "var(--font-mono)",
+              fontSize: 11,
+              lineHeight: 1.6,
+              color: "var(--vf-text-muted)",
+            }}
+          >
+            O data.yaml define splits e nomes de classe. Confirme que{" "}
+            <code>nc</code> bate com o nº de classes acima.
+          </p>
+        )}
+      </div>
+
+      {isUltralytics && (
+        <>
           {/* Augmentation */}
           <div style={card}>
             <div style={sectionLabel}>Data augmentation</div>

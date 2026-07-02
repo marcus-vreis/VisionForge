@@ -1187,30 +1187,76 @@ def _render_preprocess_preview(
     )
 
 
-def _pick_preview_image(
-    base_dir: str, split: str, class_name: str | None
-) -> Path | None:
-    """Return the first image of ``class_name`` (or the first class) in a split."""
-    _remember_dataset_root(base_dir)
-    split_dir = Path(base_dir) / split
-    if not split_dir.is_dir():
-        return None
-    class_dirs = [d for d in sorted(split_dir.iterdir()) if d.is_dir()]
-    if not class_dirs:
-        return None
-    target = None
-    if class_name is not None:
-        target = next((d for d in class_dirs if d.name == class_name), None)
-    if target is None:
-        target = class_dirs[0]
+def _first_image_in(directory: Path) -> Path | None:
+    """Return the first image file directly inside ``directory`` (sorted), if any."""
     return next(
         (
             p
-            for p in sorted(target.iterdir())
+            for p in sorted(directory.iterdir())
             if p.is_file() and p.suffix.lower() in _IMAGE_EXTS
         ),
         None,
     )
+
+
+def _first_image_recursive(base: Path, max_entries: int = 5000) -> Path | None:
+    """Walk ``base`` breadth-first (sorted) and return the first image found.
+
+    Bounded by ``max_entries`` visited paths so a huge dataset root cannot make
+    the preview endpoints crawl the whole disk.
+    """
+    queue: list[Path] = [base]
+    visited = 0
+    while queue:
+        current = queue.pop(0)
+        subdirs: list[Path] = []
+        try:
+            for p in sorted(current.iterdir()):
+                visited += 1
+                if visited > max_entries:
+                    return None
+                if p.is_file() and p.suffix.lower() in _IMAGE_EXTS:
+                    return p
+                if p.is_dir():
+                    subdirs.append(p)
+        except OSError:
+            continue
+        queue.extend(subdirs)
+    return None
+
+
+def _pick_preview_image(
+    base_dir: str, split: str, class_name: str | None
+) -> Path | None:
+    """Return a representative sample image for the preview endpoints.
+
+    Tries the classification ImageFolder layout first (``base_dir/split/class/``),
+    then degrades gracefully for the other tasks' layouts: a split dir with loose
+    files (regression ``images/``), and finally a bounded recursive scan of
+    ``base_dir`` (CSV-manifest and other custom layouts).
+    """
+    _remember_dataset_root(base_dir)
+    base = Path(base_dir)
+    split_dir = base / split
+    if split_dir.is_dir():
+        class_dirs = [d for d in sorted(split_dir.iterdir()) if d.is_dir()]
+        target = None
+        if class_name is not None:
+            target = next((d for d in class_dirs if d.name == class_name), None)
+        if target is None and class_dirs:
+            target = class_dirs[0]
+        if target is not None:
+            found = _first_image_in(target)
+            if found is not None:
+                return found
+        # Split exists but has no class subdirs (or they held no images):
+        # accept loose files directly under the split.
+        found = _first_image_in(split_dir)
+        if found is not None:
+            return found
+    if not base.is_dir():
+        return None
+    return _first_image_recursive(base)
 
 
 def _render_augment_preview(req: AugmentPreviewRequest) -> AugmentPreviewResponse:

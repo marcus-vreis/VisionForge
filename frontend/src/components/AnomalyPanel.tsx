@@ -10,6 +10,7 @@ import type { ValidationError } from "../hooks/useExperiment";
 import { NumberField, SelectField, Segmented, TextField, Toggle } from "./controls";
 import { ComparisonCard } from "./ComparisonCard";
 import { SweepCard, type SweepPayload } from "./SweepCard";
+import { TransformsSection } from "./TransformsSection";
 
 const COMPARE_METRICS = [
   { value: "auroc", label: "AUROC" },
@@ -65,6 +66,10 @@ export function AnomalyPanel({
     setFormData((p) => ({ ...p, data: { ...p.data, ...patch } }));
   const setTraining = (patch: Partial<AnomalyForm["training"]>) =>
     setFormData((p) => ({ ...p, training: { ...p.training, ...patch } }));
+  const setTransforms = (patch: Partial<AnomalyForm["transforms"]>) =>
+    setFormData((p) => ({ ...p, transforms: { ...p.transforms, ...patch } }));
+  const setPreprocessing = (steps: AnomalyForm["preprocessing"]) =>
+    setFormData((p) => ({ ...p, preprocessing: steps }));
 
   const onPickFolder = async () => {
     setPicking(true);
@@ -172,6 +177,70 @@ export function AnomalyPanel({
         </div>
       </div>
 
+      {/* Treinamento */}
+      <div style={card}>
+        <div style={sectionLabel}>Treinamento</div>
+        <div style={grid}>
+          <NumberField
+            label="Épocas"
+            value={formData.training.epochs}
+            onChange={(v) => setTraining({ epochs: Math.round(v) })}
+            min={1}
+            step={1}
+            hint={patchcore ? "ignorado no PatchCore" : undefined}
+          />
+          <NumberField
+            label="Batch size"
+            value={formData.training.batch_size}
+            onChange={(v) => setTraining({ batch_size: Math.round(v) })}
+            min={1}
+            step={1}
+            hint="qualquer inteiro"
+          />
+          <NumberField
+            label="Learning rate"
+            value={formData.training.learning_rate}
+            onChange={(v) => setTraining({ learning_rate: v })}
+            min={0.000001}
+            step={0.0001}
+          />
+          <NumberField
+            label="Threshold %ile"
+            value={formData.training.threshold_percentile}
+            onChange={(v) => setTraining({ threshold_percentile: v })}
+            min={0}
+            max={100}
+            step={1}
+            hint="corte sobre scores normais"
+          />
+          <Segmented
+            label="Otimizador"
+            value={formData.training.optimizer}
+            onChange={(v) => setTraining({ optimizer: v })}
+            options={[
+              { value: "adam", label: "Adam" },
+              { value: "sgd", label: "SGD" },
+              { value: "adamw", label: "AdamW" },
+            ]}
+          />
+          <NumberField
+            label="Early stop"
+            value={formData.training.early_stopping_patience}
+            onChange={(v) => setTraining({ early_stopping_patience: Math.round(v) })}
+            min={1}
+            step={1}
+            hint="paciência"
+          />
+          <NumberField
+            label="Seed"
+            value={formData.training.seed}
+            onChange={(v) => setTraining({ seed: Math.round(v) })}
+            min={0}
+            step={1}
+          />
+        </div>
+      </div>
+
       {/* Dataset */}
       <div style={card}>
         <div style={sectionLabel}>Dataset (MVTec · normal-only no treino)</div>
@@ -243,69 +312,17 @@ export function AnomalyPanel({
         </div>
       </div>
 
-      {/* Treinamento */}
-      <div style={card}>
-        <div style={sectionLabel}>Treinamento</div>
-        <div style={grid}>
-          <NumberField
-            label="Épocas"
-            value={formData.training.epochs}
-            onChange={(v) => setTraining({ epochs: Math.round(v) })}
-            min={1}
-            step={1}
-            hint={patchcore ? "ignorado no PatchCore" : undefined}
-          />
-          <NumberField
-            label="Batch size"
-            value={formData.training.batch_size}
-            onChange={(v) => setTraining({ batch_size: Math.round(v) })}
-            min={1}
-            step={1}
-            hint="qualquer inteiro"
-          />
-          <NumberField
-            label="Learning rate"
-            value={formData.training.learning_rate}
-            onChange={(v) => setTraining({ learning_rate: v })}
-            min={0.000001}
-            step={0.0001}
-          />
-          <NumberField
-            label="Threshold %ile"
-            value={formData.training.threshold_percentile}
-            onChange={(v) => setTraining({ threshold_percentile: v })}
-            min={0}
-            max={100}
-            step={1}
-            hint="corte sobre scores normais"
-          />
-          <Segmented
-            label="Otimizador"
-            value={formData.training.optimizer}
-            onChange={(v) => setTraining({ optimizer: v })}
-            options={[
-              { value: "adam", label: "Adam" },
-              { value: "sgd", label: "SGD" },
-              { value: "adamw", label: "AdamW" },
-            ]}
-          />
-          <NumberField
-            label="Early stop"
-            value={formData.training.early_stopping_patience}
-            onChange={(v) => setTraining({ early_stopping_patience: Math.round(v) })}
-            min={1}
-            step={1}
-            hint="paciência"
-          />
-          <NumberField
-            label="Seed"
-            value={formData.training.seed}
-            onChange={(v) => setTraining({ seed: Math.round(v) })}
-            min={0}
-            step={1}
-          />
-        </div>
-      </div>
+      {/* Pré-processamento + augmentação (ADR-059 brick A) — flips/rotações
+          importam para defeitos sensíveis a orientação; antes aplicavam-se
+          silenciosamente. */}
+      <TransformsSection
+        baseDir={formData.data.base_dir}
+        steps={formData.preprocessing}
+        onStepsChange={setPreprocessing}
+        transforms={formData.transforms}
+        onTransformsChange={setTransforms}
+        imageSize={formData.data.image_size}
+      />
 
       {onCompare && (
         <ComparisonCard

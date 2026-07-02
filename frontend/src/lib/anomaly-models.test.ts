@@ -32,3 +32,37 @@ describe("anomaly-models", () => {
     expect(model.coreset_ratio).toBe(0.1);
   });
 });
+
+describe("anomaly-models · transforms & preprocessing (ADR-059 brick A)", () => {
+  it("exposes the previously-silent augmentation defaults in the payload", () => {
+    const form = makeDefaultAnomalyForm();
+    const payload = buildAnomalyPayload(form);
+    const data = payload.data as {
+      transforms: { horizontal_flip: boolean; rotation_degrees: number };
+    };
+    expect(data.transforms.horizontal_flip).toBe(true);
+    expect(data.transforms.rotation_degrees).toBe(10);
+  });
+
+  it("lets the user disable flips for orientation-sensitive defects", () => {
+    const form = makeDefaultAnomalyForm();
+    form.transforms.horizontal_flip = false;
+    form.transforms.rotation_degrees = 0;
+    const payload = buildAnomalyPayload(form);
+    const data = payload.data as {
+      transforms: { horizontal_flip: boolean; rotation_degrees: number };
+    };
+    expect(data.transforms.horizontal_flip).toBe(false);
+    expect(data.transforms.rotation_degrees).toBe(0);
+  });
+
+  it("projects preprocessing steps into schema-flat data.preprocessing.steps", () => {
+    const form = makeDefaultAnomalyForm();
+    form.preprocessing = [{ kind: "median_blur", params: { size: 3 } }];
+    const payload = buildAnomalyPayload(form);
+    const data = payload.data as {
+      preprocessing: { steps: Array<Record<string, unknown>> };
+    };
+    expect(data.preprocessing.steps).toEqual([{ kind: "median_blur", size: 3 }]);
+  });
+});

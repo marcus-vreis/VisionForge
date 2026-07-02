@@ -2,6 +2,14 @@
  *  visionforge/utils/anomaly_config.py. Keep in sync: a value the backend rejects
  *  produces a 422 on submit. */
 
+import type { PreprocessingStep } from "../components/PreprocessingPanel";
+import {
+  buildPreprocessingPayload,
+  buildTransformsPayload,
+  makeDefaultTransformsForm,
+  type TransformsForm,
+} from "./transforms-form";
+
 export interface AnomalyModelOption {
   value: string;
   label: string;
@@ -46,6 +54,11 @@ export interface AnomalyForm {
     threshold_percentile: number;
     seed: number;
   };
+  /** Filter pipeline applied before augmentation (data.preprocessing.steps). */
+  preprocessing: PreprocessingStep[];
+  /** Augmentation/normalization (data.transforms) — flips/rotations can hurt
+   *  orientation-sensitive defects; now visible instead of silently on. */
+  transforms: TransformsForm;
 }
 
 export function makeDefaultAnomalyForm(): AnomalyForm {
@@ -74,6 +87,8 @@ export function makeDefaultAnomalyForm(): AnomalyForm {
       threshold_percentile: 95,
       seed: 42,
     },
+    preprocessing: [],
+    transforms: makeDefaultTransformsForm(),
   };
 }
 
@@ -87,7 +102,13 @@ export function buildAnomalyPayload(form: AnomalyForm): Record<string, unknown> 
   return {
     name: form.name,
     model: { ...form.model },
-    data: { ...form.data },
+    data: {
+      ...form.data,
+      // Resize is owned by data.image_size for anomaly (synced by the
+      // datamodule); transforms carries augmentation flags + normalization.
+      transforms: buildTransformsPayload(form.transforms),
+      preprocessing: buildPreprocessingPayload(form.preprocessing),
+    },
     training: { ...form.training },
   };
 }
