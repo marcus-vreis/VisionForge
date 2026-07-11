@@ -629,9 +629,19 @@ Real end-to-end pipeline tests (no mocks), skipped in CI to keep it fast
   seletor de estratégia do `ExperimentHeader` (prop `strategies` — tarefas com
   CV passam a lista com "cv"), `CvCard` (folds/shuffle/seed) e `TaskCvReport`
   no ResultsView (headline μ ± σ + tabela fold a fold com rodapé agregado).
-  Tests: `tests/gui/test_routes_regression_cv.py` (4). Remaining: **the same
-  slice for segmentation** (needs the fold-capable datamodule first — the
-  paired image/mask dataset has no CV backend yet).
+  Tests: `tests/gui/test_routes_regression_cv.py` (4). Segmentation **COMPLETE
+  2026-07-02**: `blocks/segmentation_cv.py` (KFold sobre os pares imagem/máscara
+  do treino — dois `SegmentationDataset` sobre o mesmo split, augmentado para
+  treino e limpo para validação, folds via `Subset`; reusa os shapes
+  `FoldResult`/`CrossValidationReport` do regression_cv; métricas
+  mIoU/Dice/pixel-acc agregadas a média ± desvio, primária mIoU) +
+  `POST /api/segmentation/cv` (os starters de CV foram generalizados em
+  `_start_task_cv`/`_execute_task_cv`; schema renomeado para `TaskCvRequest`) +
+  GUI: modo "K-Fold (CV)" no seletor da segmentação reutilizando `CvCard` e
+  `TaskCvReport`; client generalizado `runTaskCv(task, payload)`. Tests:
+  `tests/blocks/test_segmentation_cv.py` (3, treino real de UNet em CPU) +
+  `tests/gui/test_routes_segmentation_cv.py` (3).
+  **Cross-task parity: TODAS as fatias entregues.**
 
 **Panel parity — canonical task-panel contract (ADR-059, PROPOSED — high priority):**
 Audit + full plan in `documentation/PANEL_PARITY_PLAN.md`. Classification is the

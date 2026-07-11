@@ -53,11 +53,12 @@ class SweepRequest(BaseModel):
     seed: int = 0
 
 
-class RegressionCvRequest(BaseModel):
-    """K-fold cross-validation over the regression train manifest (ADR-050).
+class TaskCvRequest(BaseModel):
+    """K-fold cross-validation for a standalone task (ADR-050 + parity).
 
-    ``config`` is the RegressionConfig dict; the pooled training rows are split
+    ``config`` is the task's config dict; the pooled train samples are split
     into ``n_folds`` (each fold trains fresh and scores on its held-out part).
+    Serves regression (CSV rows) and segmentation (image/mask pairs).
     """
 
     config: dict[str, Any]

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { fetchSchema, runRegressionCv, runReplicates, runSweep } from "./api/client";
+import { fetchSchema, runReplicates, runSweep, runTaskCv } from "./api/client";
 import type { CvPayload } from "./components/CvCard";
 import type { SweepPayload } from "./components/SweepCard";
 import type { ReplicatesPayload } from "./lib/replicates-form";
@@ -221,9 +221,12 @@ export default function App() {
     };
   };
 
-  // Regression K-fold CV (ADR-050): folds over the train manifest, fold-a-fold
-  // metrics + mean ± std. Same overlay/results flow; one fold trains at a time.
-  const handleRegressionCv = async (payload: CvPayload) => {
+  // Task K-fold CV (ADR-050): folds over the train split, fold-a-fold metrics
+  // + mean ± std. Same overlay/results flow; one fold trains at a time.
+  const handleTaskCv = async (
+    task: "regression" | "segmentation",
+    payload: CvPayload,
+  ) => {
     reset();
     setResultsVisible(false);
     setOverlayVisible(true);
@@ -231,10 +234,10 @@ export default function App() {
     setBlockKind("cross_validation");
     setQueueSize(payload.n_folds);
     const config = {
-      ...buildTaskBase("regression"),
+      ...buildTaskBase(task),
       device: { kind: device.kind, gpu_ids: device.gpu_ids },
     };
-    await submit({ config, ...payload }, { run: (p) => runRegressionCv(p) });
+    await submit({ config, ...payload }, { run: (p) => runTaskCv(task, p) });
   };
 
   // Multi-seed replicates (ADR-056): same config, N seeds, mean ± CI report.
@@ -345,7 +348,7 @@ export default function App() {
             onReplicates={(payload) =>
               void handleReplicates("regression", payload)
             }
-            onCv={(payload) => void handleRegressionCv(payload)}
+            onCv={(payload) => void handleTaskCv("regression", payload)}
           />
         ) : activeKey === "segmentation" ? (
           <SegmentationPanel
@@ -358,6 +361,7 @@ export default function App() {
             onReplicates={(payload) =>
               void handleReplicates("segmentation", payload)
             }
+            onCv={(payload) => void handleTaskCv("segmentation", payload)}
           />
         ) : activeKey === "anomaly" ? (
           <AnomalyPanel

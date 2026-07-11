@@ -167,11 +167,13 @@ export async function runSweep(
   });
 }
 
-/** K-fold cross-validation over the regression train manifest (ADR-050). */
-export async function runRegressionCv(
+/** K-fold cross-validation over a standalone task's train split (ADR-050:
+ *  regression rows / segmentation image-mask pairs). */
+export async function runTaskCv(
+  task: string,
   payload: Record<string, unknown>,
 ): Promise<RunResponse> {
-  return request<RunResponse>("/regression/cv", {
+  return request<RunResponse>(`/${task}/cv`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),

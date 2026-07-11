@@ -11,6 +11,7 @@ import {
 import { exportConfigToYaml, validateParsedConfig } from "../lib/yaml-config";
 import type { ValidationError } from "../hooks/useExperiment";
 import { NumberField, SelectField, Segmented, TextField, Toggle } from "./controls";
+import { CvCard, type CvPayload } from "./CvCard";
 import { ExperimentHeader, type PanelStrategy } from "./ExperimentHeader";
 import { ReplicatesCard } from "./ReplicatesCard";
 import { SegmentationDatasetStats } from "./TaskDatasetStats";
@@ -38,6 +39,7 @@ interface SegmentationPanelProps {
   busy?: boolean;
   onSweep?: (payload: SweepPayload) => void;
   onReplicates?: (payload: ReplicatesPayload) => void;
+  onCv?: (payload: CvPayload) => void;
 }
 
 const sectionLabel: React.CSSProperties = {
@@ -64,6 +66,7 @@ export function SegmentationPanel({
   busy,
   onSweep,
   onReplicates,
+  onCv,
 }: SegmentationPanelProps) {
   const [picking, setPicking] = useState(false);
   const [strategy, setStrategy] = useState<PanelStrategy>("simple");
@@ -136,6 +139,12 @@ export function SegmentationPanel({
         placeholder="segmentation_001"
         strategy={strategy}
         onStrategyChange={setStrategy}
+        strategies={[
+          { value: "simple", label: "Treino simples" },
+          { value: "cv", label: "K-Fold (CV)" },
+          { value: "sweep", label: "Sweep" },
+          { value: "replicates", label: "Réplicas" },
+        ]}
         onExportYaml={() =>
           exportConfigToYaml(buildSegmentationPayload(formData), formData.name)
         }
@@ -173,6 +182,9 @@ export function SegmentationPanel({
           disabled={busy}
           onReplicates={onReplicates}
         />
+      )}
+      {strategy === "cv" && onCv && (
+        <CvCard accent={accent} disabled={busy} onCv={onCv} />
       )}
 
       {/* Modelo */}

@@ -6,6 +6,7 @@ import asyncio
 import csv
 import json
 import platform
+from collections.abc import Callable
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
@@ -33,6 +34,7 @@ from visionforge.blocks.regression import RegressionBlock
 from visionforge.blocks.regression_cv import run_regression_cross_validation
 from visionforge.blocks.regression_runner import RegressionRunner
 from visionforge.blocks.segmentation import SegmentationBlock
+from visionforge.blocks.segmentation_cv import run_segmentation_cross_validation
 from visionforge.blocks.segmentation_runner import SegmentationRunner
 from visionforge.blocks.transfer_learning import TransferLearningBlock
 from visionforge.core.comparison import ComparisonTrial, run_model_comparison
@@ -81,7 +83,6 @@ from visionforge.gui.api.schemas import (
     PreprocessPreviewRequest,
     PreprocessPreviewResponse,
     PreprocessPreviewStep,
-    RegressionCvRequest,
     RegressionDatasetStatsRequest,
     RegressionDatasetStatsResponse,
     RegressionSplitStats,
@@ -100,6 +101,7 @@ from visionforge.gui.api.schemas import (
     SplitStats,
     SweepRequest,
     SystemInfo,
+    TaskCvRequest,
 )
 from visionforge.gui.api.torch_batch_predict import (
     batch_predict_anomaly_run,
@@ -819,9 +821,19 @@ async def sweep_anomaly(req: SweepRequest) -> RunResponse:
 
 
 @router.post("/regression/cv")
-async def cv_regression(req: RegressionCvRequest) -> RunResponse:
+async def cv_regression(req: TaskCvRequest) -> RunResponse:
     """Run K-fold cross-validation for regression (ADR-050) in the background."""
-    return _start_regression_cv(req)
+    return _start_task_cv(
+        req, RegressionConfig, run_regression_cross_validation, "Regression"
+    )
+
+
+@router.post("/segmentation/cv")
+async def cv_segmentation(req: TaskCvRequest) -> RunResponse:
+    """Run K-fold cross-validation for segmentation in the background."""
+    return _start_task_cv(
+        req, SegmentationConfig, run_segmentation_cross_validation, "Segmentation"
+    )
 
 
 @router.post("/classification/replicates")
@@ -2827,12 +2839,20 @@ def _sweep_report(trials: list[SweepTrial], mode: str, metric: str) -> dict[str,
     }
 
 
-def _start_regression_cv(req: RegressionCvRequest) -> RunResponse:
-    """Validate the config and launch a background regression K-fold run.
+def _start_task_cv(
+    req: TaskCvRequest,
+    config_type: type[Any],
+    cv_fn: Callable[..., Any],
+    task_label: str,
+) -> RunResponse:
+    """Validate the config and launch a background K-fold run for one task.
+
+    ``cv_fn`` is the task's CV runner (regression/segmentation) — same keyword
+    signature, same report shape.
 
     Raises:
         HTTPException: 409 if a run is already active.
-        RequestValidationError: 422 if the base RegressionConfig is invalid.
+        RequestValidationError: 422 if the base task config is invalid.
     """
     global _current_run, _event_queue
 
@@ -2840,7 +2860,7 @@ def _start_regression_cv(req: RegressionCvRequest) -> RunResponse:
         raise HTTPException(409, "An experiment is already running.")
 
     try:
-        config = RegressionConfig.model_validate(req.config)
+        config = config_type.model_validate(req.config)
     except ValidationError as exc:
         raise RequestValidationError(exc.errors()) from exc
 
@@ -2856,22 +2876,26 @@ def _start_regression_cv(req: RegressionCvRequest) -> RunResponse:
         "run_dir": None,
     }
 
-    task = asyncio.create_task(_execute_regression_cv(config, req, run_id))
+    task = asyncio.create_task(_execute_task_cv(config, req, run_id, cv_fn, task_label))
     _background_tasks.add(task)
     task.add_done_callback(_background_tasks.discard)
     return RunResponse(run_id=run_id)
 
 
-async def _execute_regression_cv(
-    config: RegressionConfig, req: RegressionCvRequest, run_id: str
+async def _execute_task_cv(
+    config: Any,
+    req: TaskCvRequest,
+    run_id: str,
+    cv_fn: Callable[..., Any],
+    task_label: str,
 ) -> None:
-    """Run the regression K-fold in a worker thread and store the fold report."""
+    """Run a task's K-fold in a worker thread and store the fold report."""
     global _current_run, _event_queue
     queue = _event_queue
 
     try:
         cv = await asyncio.to_thread(
-            run_regression_cross_validation,
+            cv_fn,
             config,
             n_folds=req.n_folds,
             shuffle=req.shuffle,
@@ -2895,10 +2919,10 @@ async def _execute_regression_cv(
             "run_dir": None,
         }
         logger.success(
-            "GUI: Regression CV {} completed ({} folds).", run_id, cv.n_folds
+            "GUI: {} CV {} completed ({} folds).", task_label, run_id, cv.n_folds
         )
     except Exception as e:
-        logger.exception("GUI: Regression CV {} failed", run_id)
+        logger.exception("GUI: {} CV {} failed", task_label, run_id)
         _current_run = {
             "run_id": run_id,
             "status": "failed",
