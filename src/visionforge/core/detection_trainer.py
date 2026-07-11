@@ -25,6 +25,7 @@ from visionforge.core.detection_data import DetectionDataModule, resolve_yolo_sp
 from visionforge.core.detection_dataset import DetectionDataset, detection_collate
 from visionforge.core.detection_metrics import mean_average_precision_50
 from visionforge.core.plotter import MetricsPlotter
+from visionforge.core.tracking import TensorBoardLogger
 from visionforge.models.detection_factory import build_torchvision_detector
 from visionforge.utils.detection_config import DetectionConfig
 from visionforge.utils.environment import capture_environment
@@ -306,37 +307,49 @@ class DetectionTrainer:
             cfg.epochs,
             self._device_label,
         )
-        for epoch in range(1, cfg.epochs + 1):
-            train_loss = self._run_torchvision_epoch(
-                model, train_loader, device, optimizer
-            )
-            val_loss = self._eval_torchvision_loss(model, val_loader, device)
-            map50 = self._eval_torchvision_map(model, val_loader, device)
-
-            epoch_result = DetectionEpochResult(
-                epoch=epoch,
-                map50=map50,
-                map50_95=None,
-                box_loss=val_loss,
-                val_box_loss=val_loss,
-            )
-            history.append(epoch_result)
-            train_losses.append(train_loss)
-            # Select by validation mAP@50 (higher is better).
-            if map50 > best_map:
-                best_map = map50
-                best_epoch = epoch
-                torch.save(model.state_dict(), model_path)
-
-            if progress_callback is not None:
-                progress_callback(
-                    _epoch_event(
-                        epoch_result,
-                        cfg.epochs,
-                        train_loss=train_loss,
-                        val_loss=val_loss,
-                    )
+        tb = TensorBoardLogger(run_dir / "tensorboard")
+        try:
+            for epoch in range(1, cfg.epochs + 1):
+                train_loss = self._run_torchvision_epoch(
+                    model, train_loader, device, optimizer
                 )
+                val_loss = self._eval_torchvision_loss(model, val_loader, device)
+                map50 = self._eval_torchvision_map(model, val_loader, device)
+
+                epoch_result = DetectionEpochResult(
+                    epoch=epoch,
+                    map50=map50,
+                    map50_95=None,
+                    box_loss=val_loss,
+                    val_box_loss=val_loss,
+                )
+                history.append(epoch_result)
+                train_losses.append(train_loss)
+                tb.log_scalars(
+                    epoch,
+                    {
+                        "loss/train": train_loss,
+                        "loss/val": val_loss,
+                        "map50/val": map50,
+                    },
+                )
+                # Select by validation mAP@50 (higher is better).
+                if map50 > best_map:
+                    best_map = map50
+                    best_epoch = epoch
+                    torch.save(model.state_dict(), model_path)
+
+                if progress_callback is not None:
+                    progress_callback(
+                        _epoch_event(
+                            epoch_result,
+                            cfg.epochs,
+                            train_loss=train_loss,
+                            val_loss=val_loss,
+                        )
+                    )
+        finally:
+            tb.close()
 
         if not model_path.exists():  # epochs=0 guard
             torch.save(model.state_dict(), model_path)

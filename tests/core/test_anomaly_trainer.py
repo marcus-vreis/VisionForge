@@ -147,3 +147,55 @@ class TestFitPatchCore:
         assert 0.0 <= auroc <= 1.0
         assert 0.0 <= f1 <= 1.0
         assert isinstance(threshold, float)
+
+
+class TestTensorBoardTracking:
+    def _install_fake_writer(self, monkeypatch, calls):  # type: ignore[no-untyped-def]
+        import sys
+        import types
+
+        class FakeWriter:
+            def __init__(self, log_dir: str) -> None:
+                self.log_dir = log_dir
+
+            def add_scalar(self, tag: str, value: float, step: int) -> None:
+                calls.append((tag, value, step))
+
+            def flush(self) -> None:
+                pass
+
+            def close(self) -> None:
+                pass
+
+        fake_mod = types.ModuleType("torch.utils.tensorboard")
+        fake_mod.SummaryWriter = FakeWriter  # type: ignore[attr-defined]
+        monkeypatch.setitem(sys.modules, "torch.utils.tensorboard", fake_mod)
+
+    def test_autoencoder_logs_per_epoch_scalars(
+        self, monkeypatch, tmp_path: Path
+    ) -> None:  # type: ignore[no-untyped-def]
+        calls: list[tuple[str, float, int]] = []
+        self._install_fake_writer(monkeypatch, calls)
+
+        trainer = AnomalyTrainer(_config(tmp_path))
+        trainer.fit(ConvAutoencoder(latent_dim=8), FakeAnomalyDataModule())
+
+        tags = {tag for tag, _, _ in calls}
+        assert {"loss/recon_train", "auroc/val", "image_f1/val"} <= tags
+        # one entry per epoch for the recon loss (2 epochs configured)
+        recon_steps = [step for tag, _, step in calls if tag == "loss/recon_train"]
+        assert recon_steps == [1, 2]
+
+    def test_patchcore_logs_single_step(self, monkeypatch, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+        calls: list[tuple[str, float, int]] = []
+        self._install_fake_writer(monkeypatch, calls)
+
+        cfg = _config(
+            tmp_path,
+            {"model": {"name": "patchcore", "backbone": "resnet18"}},
+        )
+        model = PatchCore(backbone="resnet18", pretrained=False)
+        AnomalyTrainer(cfg).fit(model, FakeAnomalyDataModule(size=64))
+
+        assert "auroc/val" in {t for t, _, _ in calls}
+        assert all(step == 1 for _, _, step in calls)

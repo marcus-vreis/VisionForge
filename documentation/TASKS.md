@@ -588,8 +588,11 @@ Real end-to-end pipeline tests (no mocks), skipped in CI to keep it fast
   deferred.
 - **TensorBoard tracking (ADR-054)** — best-effort `core/tracking.TensorBoardLogger`
   writes per-epoch scalars to `<run_dir>/tensorboard/`; optional `[tensorboard]`
-  extra (no-op without it). **Shipped** for classification + regression +
-  segmentation; detection/anomaly trainers are a follow-up. (MLflow not chosen.)
+  extra (no-op without it). **Shipped for ALL tasks 2026-07-02**: classification +
+  regression + segmentation + anomaly (autoencoder per-epoch recon/AUROC/F1;
+  PatchCore single-step) + detection **torchvision** loop (train/val loss +
+  mAP@50 por época). The Ultralytics path deliberately stays out: Ultralytics
+  owns its own loop and ships its own TensorBoard integration. (MLflow not chosen.)
 - **Docker + `visionforge doctor` (ADR-042)** — `doctor` CLI (detect GPU/CUDA →
   exact torch install command) **shipped** (slice 1); the multi-stage GPU Docker
   image + compose (slice 2) is still planned. Design in

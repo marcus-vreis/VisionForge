@@ -32,6 +32,7 @@ import torch.nn as nn
 from loguru import logger
 from sklearn.metrics import f1_score, roc_auc_score
 
+from visionforge.core.tracking import TensorBoardLogger
 from visionforge.core.trainer import _seed_everything, resolve_device
 from visionforge.models.anomaly_factory import ConvAutoencoder, PatchCore
 from visionforge.utils.anomaly_config import AnomalyConfig
@@ -133,14 +134,18 @@ class AnomalyTrainer:
                 }
             )
 
-        if isinstance(model, PatchCore):
-            result = self._fit_patchcore(
-                model, data_module, model_path, progress_callback
-            )
-        else:
-            result = self._fit_autoencoder(
-                model, data_module, optimizer, model_path, progress_callback
-            )
+        tb = TensorBoardLogger(run_dir / "tensorboard")
+        try:
+            if isinstance(model, PatchCore):
+                result = self._fit_patchcore(
+                    model, data_module, model_path, progress_callback, tb
+                )
+            else:
+                result = self._fit_autoencoder(
+                    model, data_module, optimizer, model_path, progress_callback, tb
+                )
+        finally:
+            tb.close()
 
         self._write_run_json(run_dir, result)
         if self._device.type == "cuda":
@@ -172,6 +177,7 @@ class AnomalyTrainer:
         optimizer: torch.optim.Optimizer | None,
         model_path: Path,
         progress_callback: Callable[[dict[str, Any]], None] | None,
+        tb: TensorBoardLogger,
     ) -> AnomalyTrainResult:
         cfg = self._config.training
         optimizer = optimizer or self._build_optimizer(model)
@@ -205,6 +211,15 @@ class AnomalyTrainer:
                 normal_scores, test_scores, test_labels
             )
             history.append(AnomalyEpochResult(epoch, train_loss, auroc, threshold, f1))
+            tb.log_scalars(
+                epoch,
+                {
+                    "loss/recon_train": train_loss,
+                    "auroc/val": auroc,
+                    "image_f1/val": f1,
+                    "threshold/val": threshold,
+                },
+            )
 
             logger.info(
                 "Epoch {}/{} | recon_loss={:.4f} auroc={:.4f} f1={:.4f}",
@@ -258,6 +273,7 @@ class AnomalyTrainer:
         data_module: Any,
         model_path: Path,
         progress_callback: Callable[[dict[str, Any]], None] | None,
+        tb: TensorBoardLogger,
     ) -> AnomalyTrainResult:
         model.eval()
         train_loader = data_module.train_loader()
@@ -276,6 +292,10 @@ class AnomalyTrainer:
         test_scores, test_labels = self._collect_scores(model, test_loader)
         auroc, threshold, f1 = self._metrics(normal_scores, test_scores, test_labels)
         torch.save(model.state_dict(), model_path)
+        tb.log_scalars(
+            1,
+            {"auroc/val": auroc, "image_f1/val": f1, "threshold/val": threshold},
+        )
 
         logger.info("PatchCore fit | auroc={:.4f} f1={:.4f}", auroc, f1)
         if progress_callback is not None:

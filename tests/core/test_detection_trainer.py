@@ -400,3 +400,40 @@ class TestWeightResolution:
         cfg = _config(tmp_path, {"name": "yolo11n", "weights_path": str(ckpt)})
         DetectionTrainer(cfg).fit()
         assert record["weights"] == str(ckpt)
+
+
+class TestTensorBoardTracking:
+    def test_torchvision_loop_logs_per_epoch_scalars(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import sys
+        import types
+
+        calls: list[tuple[str, float, int]] = []
+
+        class FakeWriter:
+            def __init__(self, log_dir: str) -> None:
+                self.log_dir = log_dir
+
+            def add_scalar(self, tag: str, value: float, step: int) -> None:
+                calls.append((tag, value, step))
+
+            def flush(self) -> None:
+                pass
+
+            def close(self) -> None:
+                pass
+
+        fake_mod = types.ModuleType("torch.utils.tensorboard")
+        fake_mod.SummaryWriter = FakeWriter  # type: ignore[attr-defined]
+        monkeypatch.setitem(sys.modules, "torch.utils.tensorboard", fake_mod)
+        monkeypatch.setattr(
+            dt_mod, "build_torchvision_detector", lambda *a, **k: _FakeDetector()
+        )
+
+        DetectionTrainer(_tv_config(tmp_path)).fit()
+
+        tags = {tag for tag, _, _ in calls}
+        assert {"loss/train", "loss/val", "map50/val"} <= tags
+        steps = sorted({step for _, _, step in calls})
+        assert steps == [1, 2]  # one entry per configured epoch
