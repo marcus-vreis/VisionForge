@@ -708,7 +708,10 @@ and lost reachable features their backends support. Bricks, by severity:
   **Remaining user step to release:** create the project's Trusted Publisher
   on pypi.org (owner marcus-vreis, repo VisionForge, workflow cd.yml,
   environment pypi), then `git tag v0.1.0 && git push --tags`.
-  Still open in Fase C: quickstart dataset walkthrough.
+  Quickstart walkthrough added 2026-07-02 (docs/QUICKSTART.md, linked from the
+  README): install -> doctor -> built-in CIFAR10 download -> first run ->
+  replicates com IC -> YAML re-run. **Fase C COMPLETA** (só o release tag
+  depende do passo do usuário no pypi.org).
 
 **Larger — needs design or new dependencies (prefer a reviewed session):**
 - **Dark/light theme toggle** — needs a coherent light palette for the dark-first

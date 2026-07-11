@@ -97,6 +97,10 @@ uv pip install -e ".[detection,optuna,tensorboard]"
 
 ## Quickstart
 
+> New here? The step-by-step walkthrough — install → built-in dataset download
+> → first run → replicates with confidence intervals → YAML re-run — lives in
+> [`docs/QUICKSTART.md`](docs/QUICKSTART.md).
+
 **GUI** (recommended):
 
 ```bash
