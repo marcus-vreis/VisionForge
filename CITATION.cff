@@ -1,0 +1,31 @@
+cff-version: 1.2.0
+message: "If you use VisionForge in your research, please cite it as below."
+title: "VisionForge: a local-first computer-vision experimentation platform"
+type: software
+authors:
+  - family-names: "Reis"
+    given-names: "Marcus Vinícius"
+repository-code: "https://github.com/marcus-vreis/VisionForge"
+url: "https://github.com/marcus-vreis/VisionForge"
+license: MIT
+version: 0.0.1
+date-released: 2026-07-02
+keywords:
+  - computer-vision
+  - deep-learning
+  - pytorch
+  - experiment-tracking
+  - reproducibility
+  - image-classification
+  - object-detection
+  - semantic-segmentation
+  - anomaly-detection
+abstract: >-
+  VisionForge is a local-first platform for training, validating and comparing
+  computer-vision models on the researcher's own GPU. It covers five task
+  families (classification, object detection, image regression, semantic
+  segmentation and anomaly detection) behind one canonical interface, and
+  treats statistical rigor as a first-class feature: multi-seed replicates
+  with 95% confidence intervals, K-fold cross-validation, hyperparameter
+  sweeps (grid/random/Optuna), and full run provenance (config, seeds,
+  library versions, CUDA/cuDNN/GPU) recorded in a versioned run.json contract.

@@ -1,129 +1,148 @@
 # VisionForge
 
-VisionForge é um ambiente modular e extensível para experimentação em Visão Computacional, com foco em redes neurais convolucionais (CNNs). Substitua notebooks Jupyter ad-hoc por um sistema limpo, testável e reprodutível para treinar, validar e comparar modelos.
+[![CI](https://github.com/marcus-vreis/VisionForge/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/marcus-vreis/VisionForge/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-## Recursos atuais
+**A local-first computer-vision experimentation platform for researchers.**
+Train, validate and compare models on your own GPU — no cloud, no notebooks,
+no copy-pasted training loops. PyTorch + FastAPI + React in one Python process.
 
-O VisionForge tem uma arquitetura por **tarefa** (uma aba/config/block por tarefa).
-Hoje a engine suporta **classificação de imagens** e **detecção de objetos**.
+VisionForge replaces ad-hoc Jupyter workflows with a clean, testable, reproducible
+system where the numbers you report are numbers you can defend: every run records
+its full provenance, and every comparison can be replicated across seeds with
+confidence intervals.
 
-### Classificação de imagens
+## Five task families, one interface
 
-- **Modelos**: ResNet 18/34/50/101, EfficientNet B1/B7, VGG 16/19, AlexNet — com pesos ImageNet, pesos custom (`.pth`/`.pt`) ou inicialização aleatória.
-- **Pipeline de pré-processamento configurável**: blur gaussiano/mediano, unsharp mask, edges (Sobel), emboss, grayscale, equalize (CLAHE), autocontrast, wavelet Haar — com preview lado a lado de cada etapa.
-- **Augmentation**: flip horizontal, rotação, color jitter, normalização customizável.
-- **Treinamento**: early stopping, AMP (mixed precision), schedulers (none/cosine/step/plateau), DataParallel multi-GPU, seleção explícita de device.
-- **Avaliação**: Accuracy, F1, Precision, Recall, AUC-ROC, matriz de confusão (raw + normalizada), curvas ROC e Precision-Recall.
+| Task | Models | Metrics |
+|---|---|---|
+| **Classification** | ResNet 18/34/50/101, EfficientNet B1/B7, VGG 16/19, AlexNet, timm, custom | Accuracy, F1, Precision, Recall, AUC-ROC, confusion matrix, ROC/PR curves |
+| **Object detection** | Ultralytics YOLOv8/9/10/11/12/26, RT-DETR · torchvision Faster R-CNN, SSD, RetinaNet | mAP@50, mAP@50-95, box loss |
+| **Image regression** | CNN backbones + linear head (CSV manifest datasets), timm, custom | MSE, RMSE, MAE, R² |
+| **Semantic segmentation** | DeepLabV3, FCN, LR-ASPP, U-Net, custom | mean IoU, Dice, pixel accuracy |
+| **Anomaly detection** | Convolutional autoencoder, PatchCore (unsupervised, MVTec-style) | image AUROC, threshold, F1 |
 
-### Detecção de objetos
+Every task panel follows the same canonical layout: experiment name + YAML
+export/import, a strategy selector, model, training, dataset (with pre-training
+stats), preprocessing filters and augmentation with live preview.
 
-- **Backends híbridos**: Ultralytics (YOLOv8 n/s/m/l/x, YOLO11, RT-DETR) e torchvision (Faster R-CNN, SSD/SSDLite, RetinaNet) — selecionáveis no mesmo formulário.
-- **Datasets YOLO**: aponte um `data.yaml` Ultralytics existente ou um diretório no layout YOLO (o `DataModule` sintetiza o `data.yaml`). Painel de estatísticas do dataset (instâncias por classe, imagens sem rótulo, flag de desbalanceamento).
-- **Métrica**: mAP@50 (VOC all-points, sem dependências extras) para o backend torchvision; métricas nativas do Ultralytics no outro backend.
-- **Pós-treino**: teste por-modelo (mAP em dataset novo) e export ONNX (backend Ultralytics).
+## Built for defensible results
 
-### Estratégias de experimento (blocks)
+- **Multi-seed replicates** — train the same config N times under different
+  seeds and report `metric = mean ± 95% CI` (Student-t) instead of a single
+  point estimate.
+- **K-fold cross-validation** — classification, regression and segmentation;
+  per-fold metrics + mean ± std, with fold-leakage-safe transforms.
+- **Hyperparameter sweeps** — grid, random, or Optuna TPE over any config field
+  by dot-path; one-click architecture-comparison preset.
+- **Full provenance** — every run writes a versioned `run.json` with the exact
+  config, seed, per-epoch history, and environment (Python, torch/torchvision,
+  numpy, CUDA, cuDNN, GPU model).
+- **Reproducibility knobs** — seeded runs, optional deterministic cuDNN mode,
+  config schema versioning with migrations, YAML round-trip (export from the
+  GUI, re-run from the CLI).
+- **Post-training tooling** — run history with multi-run comparison and config
+  diff, per-checkpoint testing on new datasets, batch prediction to CSV,
+  Grad-CAM explainability, ONNX export with PyTorch-vs-runtime latency
+  benchmark, TensorBoard scalars per run.
+- **Dataset utilities** — split auto-detection, per-split stats (class balance,
+  image/mask pairing, manifest checks with target distributions), one-shot
+  download from torchvision / Roboflow / Kaggle / Hugging Face.
 
-Cada estratégia é um `ExperimentBlock` plugável (`setup`/`run`/`report`), auto-descoberto pelo `BlockRegistry`:
+## Installation
 
-- **Cross-validation** — K-Fold e Stratified K-Fold, com `normalize_mean/std` recalculados por fold (sem data leakage); relatório fold-a-fold + mean ± std.
-- **Grid search** e **Random search** — varredura de hiperparâmetros com logs de progresso por trial via SSE.
-- **Transfer learning** — feature extraction vs fine-tuning, LR diferencial por backbone.
-- **Model comparison** — ranking de N arquiteturas por F1/AUC/tempo.
-- **Batch prediction** — inferência em lote de um checkpoint sobre uma pasta, saída CSV.
-- **Export ONNX** — export + validação PyTorch↔ONNX + benchmark de latência.
-
-### Histórico, ações pós-treino e reprodutibilidade
-
-- **Histórico de runs**: lista navegável com badges (preprocessing usado, block, device, métricas), busca/filtro por tarefa, comparação multi-run com diff de configuração destacado, e exclusão segura.
-- **Ações por run** (no painel de detalhes): testar o checkpoint salvo em um dataset novo, inferência em lote (CSV) e export ONNX.
-- **Reprodutibilidade**: contrato `run.json` por run (config + histórico + métricas + artefatos + device usado), YAML import/export com validação client-side, model card markdown, seed configurável.
-- **Interface**: React + FastAPI no mesmo processo Python (sem IPC), preview ao vivo dos filtros de pré-processamento, monitor de treino ao vivo (SSE), file picker nativo no servidor para pastas e checkpoints.
-
-> **Mais tarefas em desenvolvimento** (regressão, segmentação semântica, detecção de anomalia) e explicabilidade (Grad-CAM) vivem em branches de feature e ainda não estão integradas em `development`.
-
-## 🚀 Como Executar
-
-### 1. Pré-requisitos
-- **Python 3.13+**
-- **Node.js 18+** (para compilar o frontend)
-- [uv](https://github.com/astral-sh/uv) (recomendado) ou `pip` para gerenciamento de dependências Python
-
-### 2. Instalação do Ambiente e Engine
-
-Clone o repositório e crie um ambiente virtual:
+Requirements: **Python 3.13+**, **Node.js 18+** (only to build the frontend once),
+and [uv](https://github.com/astral-sh/uv) (recommended) or pip.
 
 ```bash
 git clone https://github.com/marcus-vreis/VisionForge.git
 cd VisionForge
 uv venv
-
-# Active o ambiente virtual:
-# No Windows:
-.venv\Scripts\activate
-# No Linux/macOS:
-# source .venv/bin/activate
+# Windows: .venv\Scripts\activate     Linux/macOS: source .venv/bin/activate
+uv pip install -e ".[dev]"
 ```
 
-Install o pacote + suas dependências **escolhendo o build de PyTorch do seu
-hardware** via extra (ADR-005 — torch/torchvision não são dependências fixas, já
-que o build correto depende da sua placa):
+PyTorch is intentionally **not** pinned as a dependency — its build must match
+your hardware. Let the built-in doctor tell you the exact command:
 
 ```bash
-uv pip install -e ".[dev,cu121]"   # GPU NVIDIA CUDA 12.1 (ou cu118 / cu124 / cu126)
-# ou
-uv pip install -e ".[dev,cpu]"     # CPU-only
+visionforge doctor        # detects your GPU/CUDA → prints the right install line
+# e.g.: uv pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
 ```
 
-Cada extra de hardware (`cpu`, `cu118`, `cu121`, `cu124`, `cu126`) puxa
-`torch` + `torchvision` do índice PyTorch correspondente, configurado em
-`[tool.uv.sources]`. Sem extra de hardware, o padrão é CPU.
-
-*(Alternativa manual: `uv pip install -e ".[dev]"` e depois instalar o PyTorch à
-parte — veja o [site official do PyTorch](https://pytorch.org/get-started/locally/).)*
-
-### 3. Compilação da Interface Web (GUI)
-
-O VisionForge possui um frontend moderno em React que é servido pelo backend. Antes de executar a GUI, você precisa instalar e fazer o build:
+Build the web UI once (it is then served by the Python backend — end users
+never need Node):
 
 ```bash
-cd frontend
-npm install
-npm run build
-cd ..
+cd frontend && npm install && npm run build && cd ..
 ```
-*(O commando `npm run build` cria a pasta de distribuição e a coloca automaticamente em `src/visionforge/gui/static` para o FastAPI servir).*
 
----
+### Optional extras
 
-### 4. Executando Experimentos
-
-Você tem duas opções principais de como interagir com o VisionForge:
-
-#### Opção A: Usando a Interface Web (Recomendado)
-
-Suba o servidor local:
+| Extra | Enables |
+|---|---|
+| `detection` | Ultralytics YOLO / RT-DETR backends |
+| `timm` | hundreds of extra backbones via `model.timm_model` |
+| `optuna` | TPE-guided sweeps (`mode="optuna"`) |
+| `tensorboard` | per-epoch scalars under `<run_dir>/tensorboard/` |
+| `roboflow` / `kaggle` / `huggingface` | one-shot dataset download providers |
 
 ```bash
-visionforge gui
+uv pip install -e ".[detection,optuna,tensorboard]"
 ```
-O sistema abrirá automaticamente o navegador em `http://127.0.0.1:8000`. A partir da interface, você pode configurar todos os parâmetros do seu modelo e acompanhar o treinamento e as métricas.
 
-*Dica para desenvolvedores Frontend:* Se quiser trabalhar na interface com recarregamento rápido, deixe o commando `visionforge gui` rodando num terminal. Em outro terminal (na pasta `frontend`), rode `npm run dev` e acesse pelo `http://localhost:5173`.
+## Quickstart
 
-#### Opção B: Pelo Terminal (CLI)
-
-Se preferir automatizar fluxos com arquivos `.yaml`, o VisionForge também possui uma interface de linha de commando:
+**GUI** (recommended):
 
 ```bash
-visionforge run configs/baseline.yaml
+visionforge gui           # opens http://127.0.0.1:8000
 ```
 
-`visionforge run` despacha pela tarefa do config (campo `task`): além de
-classificação (e suas estratégias — grid/random search, K-Fold, transfer
-learning, etc.), roda também **detecção, regressão, segmentação e detecção de
-anomalia** a partir do YAML correspondente. Há templates prontos em `configs/`
-(`detection.yaml`, `regression.yaml`, `segmentation.yaml`, `anomaly.yaml`,
-`baseline.yaml`) — copie um, ajuste o caminho do dataset e rode.
+Pick a task tab, point the dataset picker at your data (stats render
+immediately), choose a strategy — single run, K-fold, sweep or replicates —
+and press *Treinar*. A live monitor streams epochs; results land in the run
+history with plots, markdown model cards and artifact paths.
 
-Todos os logs detalhados, matrizes de confusão e arquivos `.pth` do modelo serão salvos automaticamente na pasta `outputs/`.
+**CLI** (automation):
+
+```bash
+visionforge run configs/baseline.yaml        # classification
+visionforge run configs/detection.yaml       # any task — dispatched by config
+```
+
+Configs exported from the GUI are the exact wire payload, so they re-run
+identically from the CLI. All artifacts (checkpoints, plots, `run.json`,
+reports) are written under `outputs/`.
+
+## Custom models
+
+Drop a Python file into `user_models/` and register it:
+
+```python
+from visionforge.models.registry import register_model
+
+@register_model("my_net")
+def build_my_net(num_outputs: int) -> nn.Module: ...
+```
+
+Select it via `model.custom_model` — works for classification, regression and
+segmentation. See `user_models/README.md`.
+
+## Architecture, decisions and contributing
+
+- `documentation/ARCHITECTURE.md` — layers, modules, boundaries
+- `documentation/DECISIONS.md` — every architecture decision as an ADR (001–059)
+- `documentation/CONTRIBUTING.md` — dev setup, test/lint gauntlet, PR flow
+
+Backend checks: `pytest` · `ruff check src/ tests/` · `mypy src/`.
+Frontend: `cd frontend && npx vitest run && npx tsc --noEmit`.
+
+## Citing
+
+If VisionForge is useful in your research, please cite it — see
+[`CITATION.cff`](CITATION.cff) (GitHub renders a “Cite this repository” button).
+
+## License
+
+[MIT](LICENSE)

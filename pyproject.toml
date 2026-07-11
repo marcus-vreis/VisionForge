@@ -3,8 +3,9 @@ name = "VisionForge"
 authors = [{ name = "Marcus Reis", email = "marcusvinicius0083@gmail.com" }]
 version = "0.0.1"
 dynamic = []
-description = "VisionForge é um ambiente modular e extensível para experimentação em Visão Computacional, com foco em redes neurais convolucionais (CNNs), pré-processamento de imagens e técnicas clássicas de visão."
+description = "Local-first computer-vision experimentation platform: five task families, multi-seed replicates with confidence intervals, K-fold CV, sweeps and full run provenance — on your own GPU."
 readme = "README.md"
+license = { file = "LICENSE" }
 requires-python = ">=3.13"
 dependencies = [
 
@@ -32,6 +33,10 @@ dependencies = [
 
 [project.scripts]
 visionforge = "visionforge.__main__:main"
+
+[project.urls]
+Repository = "https://github.com/marcus-vreis/VisionForge"
+Documentation = "https://github.com/marcus-vreis/VisionForge/tree/main/documentation"
 
 [project.optional-dependencies]
 # Hardware extras (ADR-005): pick exactly ONE to install torch + torchvision

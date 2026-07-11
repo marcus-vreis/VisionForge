@@ -691,8 +691,14 @@ and lost reachable features their backends support. Bricks, by severity:
   (relaxes ADR-020 on demand).
 - Dataset fingerprint (per-split file count + content hash) in run.json —
   "which data produced this number" is provenance, same as the env block.
-- English README + CITATION.cff + versioned PyPI release — adoption blockers
-  for researchers outside the PT-speaking circle.
+- [x] English README + CITATION.cff + LICENSE (adoption slice 1, 2026-07-02):
+  README rewritten in English covering all five tasks + the statistical-rigor
+  features (was PT and classification+detection only); `CITATION.cff` (GitHub
+  "Cite this repository" button); **MIT LICENSE added** (was missing — an
+  adoption/PyPI blocker; swap if another license is preferred); pyproject
+  gained `license`, `[project.urls]` and an English description. Remaining
+  adoption items: screenshots/GIF in the README, versioned PyPI release
+  (CD on tags already exists), quickstart dataset walkthrough.
 
 **Larger — needs design or new dependencies (prefer a reviewed session):**
 - **Dark/light theme toggle** — needs a coherent light palette for the dark-first
