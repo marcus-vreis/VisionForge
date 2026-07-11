@@ -34,9 +34,10 @@ class TestReplicatesEndpoints:
     def test_all_five_tasks_expose_a_replicates_route(
         self, app_and_routes: tuple
     ) -> None:
-        app, _ = app_and_routes
-        # getattr: newer Starlette exposes included routers without a .path
-        paths = {getattr(route, "path", None) for route in app.routes}
+        # Probe the APIRouter directly: depending on the Starlette version,
+        # app.routes may hide included-router children entirely.
+        _, routes_mod = app_and_routes
+        paths = {route.path for route in routes_mod.router.routes}
         for task in (
             "classification",
             "regression",
