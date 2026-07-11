@@ -12,6 +12,8 @@ system where the numbers you report are numbers you can defend: every run record
 its full provenance, and every comparison can be replicated across seeds with
 confidence intervals.
 
+![VisionForge — classification panel](docs/images/vf-classification.png)
+
 ## Five task families, one interface
 
 | Task | Models | Metrics |
@@ -27,6 +29,8 @@ export/import, a strategy selector, model, training, dataset (with pre-training
 stats), preprocessing filters and augmentation with live preview.
 
 ## Built for defensible results
+
+![Multi-seed replicates — same config, N seeds, mean ± 95% CI](docs/images/vf-replicates.png)
 
 - **Multi-seed replicates** — train the same config N times under different
   seeds and report `metric = mean ± 95% CI` (Student-t) instead of a single

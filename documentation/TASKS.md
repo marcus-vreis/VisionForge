@@ -698,7 +698,8 @@ and lost reachable features their backends support. Bricks, by severity:
   adoption/PyPI blocker; swap if another license is preferred); pyproject
   gained `license`, `[project.urls]` and an English description. Remaining
   adoption items: screenshots/GIF in the README, versioned PyPI release
-  (CD on tags already exists), quickstart dataset walkthrough.
+  (CD on tags already exists), quickstart dataset walkthrough. Screenshots
+  added 2026-07-02 (docs/images/: classification panel + replicates card).
 
 **Larger — needs design or new dependencies (prefer a reviewed session):**
 - **Dark/light theme toggle** — needs a coherent light palette for the dark-first
