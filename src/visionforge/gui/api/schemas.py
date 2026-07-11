@@ -53,6 +53,24 @@ class SweepRequest(BaseModel):
     seed: int = 0
 
 
+class TaskDescriptor(BaseModel):
+    """One task the GUI can render as a tab — built-in or custom (ADR-058)."""
+
+    key: str
+    label: str
+    accent: str
+    description: str = ""
+    custom: bool = False
+    metrics: dict[str, str] = Field(default_factory=dict)
+    primary_metric: str = ""
+
+
+class TaskListResponse(BaseModel):
+    """Every renderable task: the five built-ins + registered custom tasks."""
+
+    tasks: list[TaskDescriptor]
+
+
 class TaskCvRequest(BaseModel):
     """K-fold cross-validation for a standalone task (ADR-050 + parity).
 

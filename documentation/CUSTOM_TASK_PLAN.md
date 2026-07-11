@@ -110,7 +110,7 @@ isn't epoch-shaped (GANs, two-stage, EM-style loops).
   `_seed_everything(deterministic=…)`/`resolve_device`/early-stop/checkpoint/
   SSE/`run.json`/TensorBoard/`metric_curve`. Tests: toy task trains on synthetic
   tensors, run.json shape, early-stop, best-checkpoint, SSE callback capture.
-- [ ] brick 3 — API: `GET /api/tasks`, `GET /api/custom/{key}/schema`,
+- [x] brick 3 — API: `GET /api/tasks`, `GET /api/custom/{key}/schema`,
   `POST /api/custom/{key}/run` + dispatch. Route tests (schema, dispatch+SSE,
   409, 422, unknown key 404).
 - [ ] brick 4 — `CustomTaskRunner` adapter + compare/sweep/replicates endpoints

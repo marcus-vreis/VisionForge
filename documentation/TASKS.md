@@ -467,7 +467,7 @@ comparison/sweep/replicates for free. No user-supplied JavaScript.
   `@register_task` + `user_tasks/` discovery (+ collision guard) + tests
 - [x] brick 2 — `GenericTaskEngine` (hook-driven loop reusing seeding/device/
   early-stop/checkpoint/SSE/run.json/TensorBoard) + toy-task tests
-- [ ] brick 3 — `GET /api/tasks` + `GET/POST /api/custom/{key}/{schema,run}` +
+- [x] brick 3 — `GET /api/tasks` + `GET/POST /api/custom/{key}/{schema,run}` +
   route tests (schema, dispatch+SSE, 409, 422, 404)
 - [ ] brick 4 — `CustomTaskRunner` adapter → compare/sweep/replicates endpoints
   for custom keys + tests

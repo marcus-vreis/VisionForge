@@ -102,6 +102,8 @@ from visionforge.gui.api.schemas import (
     SweepRequest,
     SystemInfo,
     TaskCvRequest,
+    TaskDescriptor,
+    TaskListResponse,
 )
 from visionforge.gui.api.torch_batch_predict import (
     batch_predict_anomaly_run,
@@ -112,6 +114,8 @@ from visionforge.gui.api.torch_onnx_export import (
     export_segmentation_run,
 )
 from visionforge.models.factory import ModelFactory
+from visionforge.tasks.engine import GenericTaskEngine
+from visionforge.tasks.registry import get_task, registered_tasks
 from visionforge.utils.anomaly_config import AnomalyConfig
 from visionforge.utils.config import ExperimentConfig
 from visionforge.utils.cuda import check_cuda
@@ -818,6 +822,171 @@ async def compare_anomaly(req: ComparisonRequest) -> RunResponse:
 async def sweep_anomaly(req: SweepRequest) -> RunResponse:
     """Run a grid/random hyperparameter sweep for anomaly detection (ADR-045)."""
     return _start_sweep(req, AnomalyConfig, AnomalyRunner())
+
+
+# Built-in task descriptors — accents mirror frontend/src/types/tasks.ts.
+_BUILTIN_TASK_DESCRIPTORS = [
+    TaskDescriptor(
+        key="classification",
+        label="Classificação",
+        accent="#f16363",
+        description="Categorize imagens em rótulos discretos",
+        primary_metric="accuracy",
+    ),
+    TaskDescriptor(
+        key="detection",
+        label="Detecção de Objeto",
+        accent="#48cf8e",
+        description="Localize objetos com caixas delimitadoras",
+        primary_metric="map50_95",
+    ),
+    TaskDescriptor(
+        key="regression",
+        label="Regressão",
+        accent="#5b9fff",
+        description="Estime valores contínuos a partir das entradas",
+        primary_metric="r2",
+    ),
+    TaskDescriptor(
+        key="segmentation",
+        label="Segmentação",
+        accent="#b079ff",
+        description="Classifique cada pixel da imagem",
+        primary_metric="miou",
+    ),
+    TaskDescriptor(
+        key="anomaly",
+        label="Anomalia",
+        accent="#f5a524",
+        description="Detecte defeitos treinando só com imagens normais",
+        primary_metric="auroc",
+    ),
+]
+
+
+@router.get("/tasks")
+async def list_tasks() -> TaskListResponse:
+    """Every renderable task: the five built-ins + registered custom tasks.
+
+    Scans ``user_tasks/`` so a freshly dropped task file appears without a
+    server restart (ADR-058).
+    """
+    from visionforge.tasks.registry import load_user_tasks
+
+    load_user_tasks()
+    custom = [
+        TaskDescriptor(
+            key=t.key,
+            label=t.label,
+            accent=t.accent,
+            description=t.description,
+            custom=True,
+            metrics=t.metrics,
+            primary_metric=t.primary_metric,
+        )
+        for t in registered_tasks()
+    ]
+    return TaskListResponse(tasks=[*_BUILTIN_TASK_DESCRIPTORS, *custom])
+
+
+def _get_custom_task_or_404(key: str) -> Any:
+    try:
+        return get_task(key)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
+@router.get("/custom/{key}/schema")
+async def custom_task_schema(key: str) -> dict[str, Any]:
+    """JSON Schema of a custom task's Config — drives the generic form."""
+    info = _get_custom_task_or_404(key)
+    return info.spec_cls.Config.model_json_schema()  # type: ignore[no-any-return]
+
+
+@router.post("/custom/{key}/run")
+async def run_custom_task(key: str, config: dict[str, Any]) -> RunResponse:
+    """Start a custom-task training run in the background (ADR-058).
+
+    Validates against the task's own Config; reuses the shared single-run
+    state and the /experiment/{status,events,result} endpoints.
+
+    Raises:
+        HTTPException: 404 unknown key; 409 if a run is already active.
+        RequestValidationError: 422 if the config is invalid for the task.
+    """
+    global _current_run, _event_queue
+
+    info = _get_custom_task_or_404(key)
+    if _current_run and _current_run["status"] == "running":
+        raise HTTPException(409, "An experiment is already running.")
+
+    try:
+        cfg = info.spec_cls.Config.model_validate(config)
+    except ValidationError as exc:
+        raise RequestValidationError(exc.errors()) from exc
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    run_id = f"{cfg.name}_{timestamp}"
+
+    _event_queue = asyncio.Queue()
+    _current_run = {
+        "run_id": run_id,
+        "status": "running",
+        "error": None,
+        "report": None,
+        "run_dir": None,
+    }
+
+    task = asyncio.create_task(_execute_custom_task(info, cfg, run_id))
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+    return RunResponse(run_id=run_id)
+
+
+async def _execute_custom_task(info: Any, cfg: Any, run_id: str) -> None:
+    """Run a custom task's engine in a worker thread and store the report."""
+    global _current_run, _event_queue
+
+    loop = asyncio.get_running_loop()
+    queue = _event_queue
+
+    def _put_event(event: dict[str, Any]) -> None:
+        if queue is not None:
+            asyncio.run_coroutine_threadsafe(queue.put(event), loop)
+
+    try:
+        engine = GenericTaskEngine(info, cfg)
+        logger.info("GUI: Starting custom task '{}' run {}", info.key, run_id)
+        result = await asyncio.to_thread(engine.run, _put_event)
+
+        report = {
+            "task": f"custom:{info.key}",
+            "metrics": result.metrics,
+            "best_epoch": result.best_epoch,
+            "total_epochs": result.total_epochs,
+            "device_used": result.device_used,
+            "run_dir": str(result.run_dir),
+        }
+        _current_run = {
+            "run_id": run_id,
+            "status": "completed",
+            "error": None,
+            "report": report,
+            "run_dir": str(result.run_dir),
+        }
+        logger.success("GUI: Custom task {} completed.", run_id)
+    except Exception as e:
+        logger.exception("GUI: Custom task {} failed", run_id)
+        _current_run = {
+            "run_id": run_id,
+            "status": "failed",
+            "error": f"{type(e).__name__}: {e or '(sem mensagem)'}",
+            "report": None,
+            "run_dir": None,
+        }
+    finally:
+        if queue is not None:
+            await queue.put(None)
 
 
 @router.post("/regression/cv")
