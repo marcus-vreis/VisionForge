@@ -142,6 +142,7 @@ class TestEndpointsExposed:
     def test_all_three_stats_routes_registered(self) -> None:
         from visionforge.gui.server import app
 
-        paths = {route.path for route in app.routes}
+        # getattr: newer Starlette exposes included routers without a .path
+        paths = {getattr(route, "path", None) for route in app.routes}
         for task in ("segmentation", "anomaly", "regression"):
             assert f"/api/{task}/dataset/stats" in paths

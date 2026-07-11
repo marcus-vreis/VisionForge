@@ -35,7 +35,8 @@ class TestReplicatesEndpoints:
         self, app_and_routes: tuple
     ) -> None:
         app, _ = app_and_routes
-        paths = {route.path for route in app.routes}
+        # getattr: newer Starlette exposes included routers without a .path
+        paths = {getattr(route, "path", None) for route in app.routes}
         for task in (
             "classification",
             "regression",
