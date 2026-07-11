@@ -463,7 +463,7 @@ color, config fields, model/data/loss/metrics hooks — and gets the schema-driv
 GUI tab, live monitor, history, run.json provenance, and (via `TaskRunner`)
 comparison/sweep/replicates for free. No user-supplied JavaScript.
 
-- [ ] brick 1 — `visionforge/tasks/`: `BaseTaskConfig` + `TaskSpec` +
+- [x] brick 1 — `visionforge/tasks/`: `BaseTaskConfig` + `TaskSpec` +
   `@register_task` + `user_tasks/` discovery (+ collision guard) + tests
 - [ ] brick 2 — `GenericTaskEngine` (hook-driven loop reusing seeding/device/
   early-stop/checkpoint/SSE/run.json/TensorBoard) + toy-task tests

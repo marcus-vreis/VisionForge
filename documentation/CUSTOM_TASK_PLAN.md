@@ -1,6 +1,6 @@
 # Phase 10 — Custom Tasks ("Blank" task SDK) — Design Plan
 
-> Status: **Proposed** (ADR-058). No code yet — this is the reviewed design.
+> Status: **In progress** (ADR-058) — brick 1 shipped 2026-07-02; bricks 2-6 tracked below.
 > Kickoff target: after the ReplicatesCard GUI brick.
 > Author: research-grade review session, 2026-07-01.
 
@@ -102,7 +102,7 @@ isn't epoch-shaped (GANs, two-stage, EM-style loops).
 
 ## Bricks (each lands green on CPU-only CI, ADR-010)
 
-- [ ] brick 1 — `visionforge/tasks/` package: `BaseTaskConfig` (composes the
+- [x] brick 1 — `visionforge/tasks/` package: `BaseTaskConfig` (composes the
   shared config blocks), `TaskSpec` ABC (Level 1 hooks + optional `run`),
   `@register_task` + `user_tasks/` discovery (mirror `models/registry.py`,
   reject collisions with built-in keys). Tests with a toy task fixture.
