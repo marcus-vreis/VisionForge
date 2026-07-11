@@ -696,10 +696,19 @@ and lost reachable features their backends support. Bricks, by severity:
   features (was PT and classification+detection only); `CITATION.cff` (GitHub
   "Cite this repository" button); **MIT LICENSE added** (was missing — an
   adoption/PyPI blocker; swap if another license is preferred); pyproject
-  gained `license`, `[project.urls]` and an English description. Remaining
-  adoption items: screenshots/GIF in the README, versioned PyPI release
-  (CD on tags already exists), quickstart dataset walkthrough. Screenshots
+  gained `license`, `[project.urls]` and an English description. Screenshots
   added 2026-07-02 (docs/images/: classification panel + replicates card).
+- [x] PyPI packaging validated (2026-07-02): `[tool.setuptools.package-data]`
+  ships the SPA in the wheel (was missing — a pip-installed `visionforge gui`
+  would have served nothing); `uv build` sdist+wheel verified (41 static files,
+  index.html + JS bundle) and the wheel smoke-tested in a throwaway venv
+  (installs, imports, `visionforge --help` works without torch, static
+  resolvable from site-packages). `cd.yml` gained a `publish-pypi` job on
+  `v*` tags via **PyPI Trusted Publishing** (OIDC, no token in the repo).
+  **Remaining user step to release:** create the project's Trusted Publisher
+  on pypi.org (owner marcus-vreis, repo VisionForge, workflow cd.yml,
+  environment pypi), then `git tag v0.1.0 && git push --tags`.
+  Still open in Fase C: quickstart dataset walkthrough.
 
 **Larger — needs design or new dependencies (prefer a reviewed session):**
 - **Dark/light theme toggle** — needs a coherent light palette for the dark-first
