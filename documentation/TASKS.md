@@ -465,7 +465,7 @@ comparison/sweep/replicates for free. No user-supplied JavaScript.
 
 - [x] brick 1 — `visionforge/tasks/`: `BaseTaskConfig` + `TaskSpec` +
   `@register_task` + `user_tasks/` discovery (+ collision guard) + tests
-- [ ] brick 2 — `GenericTaskEngine` (hook-driven loop reusing seeding/device/
+- [x] brick 2 — `GenericTaskEngine` (hook-driven loop reusing seeding/device/
   early-stop/checkpoint/SSE/run.json/TensorBoard) + toy-task tests
 - [ ] brick 3 — `GET /api/tasks` + `GET/POST /api/custom/{key}/{schema,run}` +
   route tests (schema, dispatch+SSE, 409, 422, 404)
