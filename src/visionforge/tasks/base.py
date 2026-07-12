@@ -74,7 +74,7 @@ class BaseTaskConfig(BaseModel):
     device: DeviceConfig = Field(default_factory=DeviceConfig)
 
 
-class TaskSpec(ABC):
+class TaskSpec[ConfigT: BaseTaskConfig](ABC):
     """The four hooks a custom task implements (Level 1).
 
     The generic engine calls them in order: ``build_model`` →
@@ -82,38 +82,40 @@ class TaskSpec(ABC):
     ``compute_metrics`` on the val loader (best checkpoint by the task's
     primary metric). Tasks whose training is not epoch-shaped override
     :meth:`run` instead (Level 2) and own the whole loop.
+
+    Subclass as ``TaskSpec[YourConfig]`` (and set ``Config = YourConfig``) so
+    the hooks can be annotated with the task's own config type.
     """
 
     Config: ClassVar[type[BaseTaskConfig]] = BaseTaskConfig
 
     @abstractmethod
-    def build_model(self, cfg: BaseTaskConfig) -> nn.Module:
+    def build_model(self, cfg: ConfigT) -> nn.Module:
         """Return the freshly-initialized model for this config."""
 
     @abstractmethod
-    def build_loaders(self, cfg: BaseTaskConfig) -> tuple[Any, Any, Any | None]:
+    def build_loaders(self, cfg: ConfigT) -> tuple[Any, Any, Any | None]:
         """Return ``(train_loader, val_loader, test_loader_or_None)``.
 
-        Dataset classes must be top-level (picklable) so ``num_workers > 0``
-        works under the Windows ``spawn`` start method (ADR-030).
+        Datasets defined in the task file itself require ``num_workers=0``:
+        spawned loader workers cannot re-import a path-loaded module
+        (ADR-030).
         """
 
     @abstractmethod
-    def compute_loss(
-        self, model: nn.Module, batch: Any, cfg: BaseTaskConfig
-    ) -> torch.Tensor:
+    def compute_loss(self, model: nn.Module, batch: Any, cfg: ConfigT) -> torch.Tensor:
         """Return the scalar training loss for one batch (model already on device)."""
 
     @abstractmethod
     def compute_metrics(
-        self, model: nn.Module, loader: Any, cfg: BaseTaskConfig
+        self, model: nn.Module, loader: Any, cfg: ConfigT
     ) -> dict[str, float]:
         """Evaluate ``model`` over ``loader`` and return ``{metric: value}``.
 
         Keys must match the metric names declared in ``@register_task``.
         """
 
-    def run(self, cfg: BaseTaskConfig, ctx: Any) -> dict[str, float] | None:
+    def run(self, cfg: ConfigT, ctx: Any) -> dict[str, float] | None:
         """Level 2 escape hatch: own the whole training loop.
 
         Return the final metrics dict to bypass the generic engine entirely;

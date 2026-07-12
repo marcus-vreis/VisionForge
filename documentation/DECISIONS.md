@@ -993,9 +993,9 @@ compute substrate is incomplete provenance.
 ## ADR-058 — Researcher-defined custom tasks (`user_tasks/` SDK)
 
 **Date:** 2026-07
-**Status:** Accepted — bricks 1–4 shipped 2026-07 (SDK package, engine, API,
-orchestrator adapter); bricks 5–6 (scaffolder CLI, GUI) tracked in
-`documentation/CUSTOM_TASK_PLAN.md`
+**Status:** Accepted — bricks 1–5 shipped 2026-07 (SDK package, engine, API,
+orchestrator adapter, `new-task` scaffolder + example + README); brick 6 (GUI)
+tracked in `documentation/CUSTOM_TASK_PLAN.md`
 **Extends:** ADR-048 (user_models), ADR-041 (TaskRunner), ADR-013 (run.json)
 
 **Decision:** A sixth, user-defined task surface: the researcher drops one

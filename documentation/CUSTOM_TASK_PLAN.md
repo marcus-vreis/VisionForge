@@ -1,6 +1,6 @@
 # Phase 10 — Custom Tasks ("Blank" task SDK) — Design Plan
 
-> Status: **In progress** (ADR-058) — bricks 1-4 shipped; bricks 5-6 tracked below.
+> Status: **In progress** (ADR-058) — bricks 1-5 shipped; brick 6 (GUI) tracked below.
 > Kickoff target: after the ReplicatesCard GUI brick.
 > Author: research-grade review session, 2026-07-01.
 
@@ -120,20 +120,31 @@ isn't epoch-shaped (GANs, two-stage, EM-style loops).
   through `run_sweep`/`run_replicates` (incl. sweeping the task's own declared
   field) + route dispatch/404/409/422. Compare deliberately omitted (see API
   surface above).
-- [ ] brick 5 — `visionforge new-task <key>` CLI scaffolder → generates the
-  commented template (+ `--split` variant with config/data/model files),
-  ships `user_tasks/example_counting/` as the working example (like
-  `user_models/example_custom_model.py`). `user_tasks/README.md` walkthrough
-  (PT + EN): "your task in the GUI in 30 minutes".
+- [x] brick 5 — `visionforge new-task <key>` CLI scaffolder
+  (`tasks/scaffold.py`): generates a self-contained template that **trains
+  out of the box** on synthetic data (`--package` puts it in
+  `user_tasks/<key>/task.py` for tasks with assets); ships
+  `user_tasks/example_counting/` (dot-counting CNN, no dataset on disk) +
+  `user_tasks/README.md` (PT + EN walkthrough). Tests import the generated
+  file through real discovery and train it through the real engine, so a
+  broken template fails CI. **Scope change vs. the original sketch:** no
+  multi-file `--split` variant — discovery loads task files as standalone
+  modules (`spec_from_file_location`), so sibling imports would break; one
+  file is the contract.
 - [ ] brick 6 — GUI: fetch `/api/tasks`, merge dynamic tabs, generic schema
   panel + generic results/history fallback, SPA rebuild. Vitest for the
   merge + payload builder.
 
 ## Risks / honest hard parts
 
-- **Windows spawn pickling** (ADR-030): user datasets must be top-level classes.
-  The template says so loudly and the engine raises a diagnostic that names the
-  fix when a loader worker fails to pickle.
+- **Windows spawn pickling** (ADR-030): worse than anticipated — datasets
+  defined in a task file can never go to DataLoader workers, because spawn
+  re-imports the dataset's module by name and task files are loaded from a
+  path (`spec_from_file_location`), not an importable package (symptom:
+  `EOFError: Ran out of input`). Resolution (brick 5): template + example use
+  `num_workers=0` with the reason commented; README documents the rule and
+  the escape (put the Dataset in an installed package, then
+  `cfg.data.num_workers` works).
 - **User-code failures**: surface as the existing failure panel with the full
   traceback (routes already do this for built-in blocks); never crash the server.
 - **History for unknown metrics**: brick 6's generic fallback must land with the

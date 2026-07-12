@@ -474,8 +474,11 @@ sweeps/replicates for free. No user-supplied JavaScript.
   the orchestrators; route dispatch/404/409/422). Compare is deliberately
   omitted: it overrides `model.name`, which `BaseTaskConfig` doesn't
   guarantee — a one-axis sweep covers the use case.
-- [ ] brick 5 — `visionforge new-task <key>` scaffolder + `user_tasks/README.md`
-  (PT+EN walkthrough) + shipped `example_counting` task
+- [x] brick 5 — `visionforge new-task <key>` scaffolder (`tasks/scaffold.py`,
+  `--package`/`--force`; template trains out of the box on synthetic data) +
+  `user_tasks/README.md` (PT+EN) + shipped `example_counting` task
+  (dot-counting CNN). CI trains the generated template + the example for real.
+  Note: task-file datasets require `num_workers=0` (ADR-030, documented).
 - [ ] brick 6 — GUI: dynamic tabs from `/api/tasks`, generic schema panel,
   generic results/history fallback, SPA rebuild + vitest
 

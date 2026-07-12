@@ -122,9 +122,45 @@ def main() -> None:
         help="Run the recommended install after prompting for confirmation.",
     )
 
+    newtask_parser = subparsers.add_parser(
+        "new-task",
+        help="Scaffold a custom task under user_tasks/ (ADR-058).",
+    )
+    newtask_parser.add_argument(
+        "key", help="task key: lowercase letters/digits/underscores"
+    )
+    newtask_parser.add_argument(
+        "--package",
+        action="store_true",
+        help="create user_tasks/<key>/task.py (room for assets) instead of a flat file",
+    )
+    newtask_parser.add_argument(
+        "--force", action="store_true", help="overwrite an existing file"
+    )
+
     args = parser.parse_args()
 
     setup_logger()
+
+    if args.command == "new-task":
+        import sys as _sys
+
+        from visionforge.tasks.scaffold import scaffold_task
+        from visionforge.utils.logger import logger
+
+        try:
+            target = scaffold_task(args.key, package=args.package, force=args.force)
+        except (ValueError, FileExistsError) as exc:
+            logger.error("{}", exc)
+            _sys.exit(1)
+        logger.success("Task template created: {}", target)
+        logger.info(
+            "Next: edit the TODOs in {}, then `visionforge gui` — the "
+            "'{}' tab appears automatically. Guide: user_tasks/README.md",
+            target,
+            args.key,
+        )
+        return
 
     if args.command == "doctor":
         import sys as _sys
