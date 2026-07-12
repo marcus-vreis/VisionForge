@@ -993,7 +993,9 @@ compute substrate is incomplete provenance.
 ## ADR-058 — Researcher-defined custom tasks (`user_tasks/` SDK)
 
 **Date:** 2026-07
-**Status:** Proposed (design in `documentation/CUSTOM_TASK_PLAN.md`)
+**Status:** Accepted — bricks 1–4 shipped 2026-07 (SDK package, engine, API,
+orchestrator adapter); bricks 5–6 (scaffolder CLI, GUI) tracked in
+`documentation/CUSTOM_TASK_PLAN.md`
 **Extends:** ADR-048 (user_models), ADR-041 (TaskRunner), ADR-013 (run.json)
 
 **Decision:** A sixth, user-defined task surface: the researcher drops one
@@ -1007,9 +1009,13 @@ checkpoint, SSE, run.json, TensorBoard); a `run(cfg, ctx)` escape hatch exists
 for non-epoch-shaped training. The GUI renders the task as a real tab (dynamic
 `TASKS` merge from `GET /api/tasks`) with the schema-driven form — **no
 user-supplied JavaScript, ever**; custom identity is name/color/description
-only. A `CustomTaskRunner` adapter gives every custom task comparison, sweeps
-and multi-seed replicates for free. `visionforge new-task <key>` scaffolds the
-commented template.
+only. A `CustomTaskRunner` adapter gives every custom task hyperparameter
+sweeps (ADR-045) and multi-seed replicates (ADR-056) for free —
+`/api/custom/{key}/{sweep,replicates}`. Model comparison (ADR-044) is
+**deliberately not exposed** for custom tasks: it overrides `model.name`, which
+`BaseTaskConfig` does not guarantee, and comparing alternatives is a one-axis
+sweep over whichever field the task declares. `visionforge new-task <key>`
+scaffolds the commented template.
 
 **Reason:** This is the product thesis (facilitation) applied to the last rigid
 boundary: today adding a task family requires writing ~500 lines of trainer +

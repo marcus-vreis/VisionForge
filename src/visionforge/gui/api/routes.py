@@ -116,6 +116,7 @@ from visionforge.gui.api.torch_onnx_export import (
 from visionforge.models.factory import ModelFactory
 from visionforge.tasks.engine import GenericTaskEngine
 from visionforge.tasks.registry import get_task, registered_tasks
+from visionforge.tasks.runner import CustomTaskRunner
 from visionforge.utils.anomaly_config import AnomalyConfig
 from visionforge.utils.config import ExperimentConfig
 from visionforge.utils.cuda import check_cuda
@@ -987,6 +988,27 @@ async def _execute_custom_task(info: Any, cfg: Any, run_id: str) -> None:
     finally:
         if queue is not None:
             await queue.put(None)
+
+
+@router.post("/custom/{key}/sweep")
+async def sweep_custom_task(key: str, req: SweepRequest) -> RunResponse:
+    """Run a grid/random hyperparameter sweep for a custom task (ADR-045/058).
+
+    ``CustomTaskRunner`` gives the task the same orchestrator the built-ins
+    use; the search space is validated against the task's own Config. There is
+    deliberately no /custom compare endpoint: comparison overrides
+    ``model.name``, which ``BaseTaskConfig`` does not guarantee — a one-axis
+    sweep over whichever field the task declares covers that use case.
+    """
+    info = _get_custom_task_or_404(key)
+    return _start_sweep(req, info.spec_cls.Config, CustomTaskRunner(info))
+
+
+@router.post("/custom/{key}/replicates")
+async def replicates_custom_task(key: str, req: ReplicatesRequest) -> RunResponse:
+    """Train one custom-task config N times under different seeds (ADR-056/058)."""
+    info = _get_custom_task_or_404(key)
+    return _start_replicates(req, info.spec_cls.Config, CustomTaskRunner(info))
 
 
 @router.post("/regression/cv")

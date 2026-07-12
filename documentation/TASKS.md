@@ -455,13 +455,13 @@ image-level AUROC / threshold / F1 and a live training monitor.**
 
 ---
 
-## Phase 10 — Custom Tasks ("Blank" task SDK) — PROPOSED
+## Phase 10 — Custom Tasks ("Blank" task SDK) — IN PROGRESS (bricks 1–4 ✅)
 
 Design: `documentation/CUSTOM_TASK_PLAN.md` (ADR-058). The researcher defines a
 new task family in one documented `.py` under `user_tasks/` — name, accent
 color, config fields, model/data/loss/metrics hooks — and gets the schema-driven
 GUI tab, live monitor, history, run.json provenance, and (via `TaskRunner`)
-comparison/sweep/replicates for free. No user-supplied JavaScript.
+sweeps/replicates for free. No user-supplied JavaScript.
 
 - [x] brick 1 — `visionforge/tasks/`: `BaseTaskConfig` + `TaskSpec` +
   `@register_task` + `user_tasks/` discovery (+ collision guard) + tests
@@ -469,8 +469,11 @@ comparison/sweep/replicates for free. No user-supplied JavaScript.
   early-stop/checkpoint/SSE/run.json/TensorBoard) + toy-task tests
 - [x] brick 3 — `GET /api/tasks` + `GET/POST /api/custom/{key}/{schema,run}` +
   route tests (schema, dispatch+SSE, 409, 422, 404)
-- [ ] brick 4 — `CustomTaskRunner` adapter → compare/sweep/replicates endpoints
-  for custom keys + tests
+- [x] brick 4 — `CustomTaskRunner` adapter (`tasks/runner.py`) →
+  `/api/custom/{key}/{sweep,replicates}` + tests (real toy training through
+  the orchestrators; route dispatch/404/409/422). Compare is deliberately
+  omitted: it overrides `model.name`, which `BaseTaskConfig` doesn't
+  guarantee — a one-axis sweep covers the use case.
 - [ ] brick 5 — `visionforge new-task <key>` scaffolder + `user_tasks/README.md`
   (PT+EN walkthrough) + shipped `example_counting` task
 - [ ] brick 6 — GUI: dynamic tabs from `/api/tasks`, generic schema panel,

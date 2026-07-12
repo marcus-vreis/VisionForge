@@ -1,6 +1,6 @@
 # Phase 10 — Custom Tasks ("Blank" task SDK) — Design Plan
 
-> Status: **In progress** (ADR-058) — brick 1 shipped 2026-07-02; bricks 2-6 tracked below.
+> Status: **In progress** (ADR-058) — bricks 1-4 shipped; bricks 5-6 tracked below.
 > Kickoff target: after the ReplicatesCard GUI brick.
 > Author: research-grade review session, 2026-07-01.
 
@@ -97,8 +97,10 @@ isn't epoch-shaped (GANs, two-stage, EM-style loops).
 - `GET /api/custom/{key}/schema` — the task Config's `model_json_schema()`.
 - `POST /api/custom/{key}/run` — validate + dispatch through the shared
   single-run state (409/422 semantics identical to the built-in endpoints).
-- `CustomTaskRunner(key)` adapter → `/api/custom/{key}/{compare,sweep,replicates}`
-  come for free from `_start_comparison/_start_sweep/_start_replicates`.
+- `CustomTaskRunner(info)` adapter → `/api/custom/{key}/{sweep,replicates}`
+  come for free from `_start_sweep/_start_replicates`. **No compare endpoint**:
+  comparison overrides `model.name`, which `BaseTaskConfig` does not guarantee —
+  a one-axis sweep over whichever field the task declares covers it.
 
 ## Bricks (each lands green on CPU-only CI, ADR-010)
 
@@ -113,8 +115,11 @@ isn't epoch-shaped (GANs, two-stage, EM-style loops).
 - [x] brick 3 — API: `GET /api/tasks`, `GET /api/custom/{key}/schema`,
   `POST /api/custom/{key}/run` + dispatch. Route tests (schema, dispatch+SSE,
   409, 422, unknown key 404).
-- [ ] brick 4 — `CustomTaskRunner` adapter + compare/sweep/replicates endpoints
-  for custom keys. Tests mirror the existing runner tests.
+- [x] brick 4 — `CustomTaskRunner` adapter (`tasks/runner.py`) +
+  `/api/custom/{key}/{sweep,replicates}` endpoints. Tests: real toy training
+  through `run_sweep`/`run_replicates` (incl. sweeping the task's own declared
+  field) + route dispatch/404/409/422. Compare deliberately omitted (see API
+  surface above).
 - [ ] brick 5 — `visionforge new-task <key>` CLI scaffolder → generates the
   commented template (+ `--split` variant with config/data/model files),
   ships `user_tasks/example_counting/` as the working example (like
