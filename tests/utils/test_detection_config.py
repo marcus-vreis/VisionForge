@@ -182,6 +182,14 @@ class TestTrainingHyperparameters:
         assert a.auto_augment == "randaugment"
         assert a.erasing == pytest.approx(0.4)
 
+    def test_workers_default_is_platform_aware(self) -> None:
+        """Ultralytics' 8 on POSIX; 2 on Windows, where 8 spawned workers
+        reloading torch's CUDA DLLs exhaust the page file (WinError 1455)."""
+        import sys
+
+        expected = 2 if sys.platform == "win32" else 8
+        assert DetectionTrainingConfig().workers == expected
+
     def test_accepts_overrides(self, tmp_path: Path) -> None:
         raw = _base_config(
             tmp_path,

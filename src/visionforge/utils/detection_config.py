@@ -7,6 +7,7 @@ mAP instead of accuracy, dataset is boxes not ImageFolder). It does reuse
 identical across tasks. See documentation/PHASE7_DETECTION_PLAN.md.
 """
 
+import sys
 from pathlib import Path
 from typing import Any, Literal
 
@@ -201,7 +202,12 @@ class DetectionTrainingConfig(BaseModel):
     learning_rate: float = Field(default=0.01, gt=0.0)  # Ultralytics lr0
     patience: int = Field(default=50, ge=0)
     seed: int = Field(default=0, ge=0)
-    workers: int = Field(default=8, ge=0)
+    # Ultralytics' default (8) except on Windows: each DataLoader worker is a
+    # spawned process that reloads torch's CUDA DLLs (gigabytes of commit
+    # charge each), and 8 of them exhausts the page file — WinError 1455.
+    workers: int = Field(
+        default_factory=lambda: 2 if sys.platform == "win32" else 8, ge=0
+    )
 
     # Optimizer
     optimizer: Literal[

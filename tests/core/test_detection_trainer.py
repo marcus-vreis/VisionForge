@@ -10,7 +10,10 @@ from PIL import Image
 from torch import nn
 
 from visionforge.core import detection_trainer as dt_mod
-from visionforge.core.detection_trainer import DetectionTrainer
+from visionforge.core.detection_trainer import (
+    DetectionTrainer,
+    _is_worker_spawn_crash,
+)
 from visionforge.utils.detection_config import DetectionConfig
 
 
@@ -83,6 +86,29 @@ def _make_fake_yolo(record: dict[str, Any]) -> type:
 
 
 # ── backend guards ────────────────────────────────────────────────────────────
+
+
+class TestWorkerSpawnCrashDetection:
+    """WinError 1455 (page file too small for N workers to reload torch's
+    CUDA DLLs) surfaces under several disguises — all must be recognized so
+    the trainer can raise an actionable message instead of the raw crash."""
+
+    @pytest.mark.parametrize(
+        "message",
+        [
+            "[WinError 1455] O arquivo de paginação é muito pequeno",
+            'Error loading "...\\torch\\lib\\shm.dll" or one of its dependencies.',
+            "The paging file is too small for this operation to complete.",
+            "DataLoader worker (pid 1234) exited unexpectedly",
+            "Ran out of input",
+        ],
+    )
+    def test_recognizes_page_file_exhaustion_disguises(self, message: str) -> None:
+        assert _is_worker_spawn_crash(message)
+
+    def test_unrelated_errors_pass_through(self) -> None:
+        assert not _is_worker_spawn_crash("CUDA out of memory")
+        assert not _is_worker_spawn_crash("dataset.yaml not found")
 
 
 class TestBackendGuards:

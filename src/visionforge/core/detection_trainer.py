@@ -11,6 +11,7 @@ SSE event shape the classification Trainer uses (ADR-032) and write a
 from __future__ import annotations
 
 import json
+import sys
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
@@ -151,6 +152,25 @@ def _epoch_event(
     }
 
 
+def _is_worker_spawn_crash(message: str) -> bool:
+    """True when an exception message matches a DataLoader worker dying at
+    startup — on Windows the near-certain cause is the page file being too
+    small for N spawned workers to each reload torch's CUDA DLLs
+    (WinError 1455 loading shm.dll)."""
+    lowered = message.lower()
+    return any(
+        marker in lowered
+        for marker in (
+            "1455",
+            "paging file",
+            "paginação",
+            "shm.dll",
+            "dataloader worker",
+            "ran out of input",
+        )
+    )
+
+
 class DetectionTrainer:
     """Wraps Ultralytics training for a `DetectionConfig`."""
 
@@ -162,10 +182,28 @@ class DetectionTrainer:
         self,
         progress_callback: Callable[[dict[str, Any]], None] | None = None,
     ) -> DetectionTrainResult:
-        """Run training for the configured backend and return the result."""
-        if self._config.model.backend == "torchvision":
-            return self._fit_torchvision(progress_callback)
-        return self._fit_ultralytics(progress_callback)
+        """Run training for the configured backend and return the result.
+
+        Raises:
+            RuntimeError: with an actionable message when DataLoader workers
+                crash at startup on Windows (page-file exhaustion).
+        """
+        try:
+            if self._config.model.backend == "torchvision":
+                return self._fit_torchvision(progress_callback)
+            return self._fit_ultralytics(progress_callback)
+        except (OSError, RuntimeError, EOFError) as exc:
+            if sys.platform == "win32" and _is_worker_spawn_crash(str(exc)):
+                raise RuntimeError(
+                    f"Os workers do DataLoader morreram ao iniciar — no Windows "
+                    f"isso quase sempre é o arquivo de paginação pequeno demais "
+                    f"para {self._config.training.workers} workers recarregarem "
+                    f"as DLLs CUDA do torch (WinError 1455). Reduza "
+                    f"training.workers para 0–2, ou aumente a memória virtual "
+                    f"do Windows (Sistema → Configurações avançadas → "
+                    f"Desempenho → Memória virtual)."
+                ) from exc
+            raise
 
     def _fit_ultralytics(
         self,

@@ -305,6 +305,7 @@ export function DetectionPanel({
             onChange={(v) => setTraining({ workers: Math.round(v) })}
             min={0}
             step={1}
+            hint="no Windows, >2 pode estourar a paginação"
           />
           <SelectField
             label="Optimizer"
