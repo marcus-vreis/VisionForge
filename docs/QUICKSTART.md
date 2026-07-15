@@ -67,9 +67,22 @@ visionforge run experiment_meu_teste_2026-07-02.yaml
 
 Import the same file back through **↑ Importar YAML** to restore the form.
 
+## 6. Define your own task (optional)
+
+If your problem isn't classification/detection/regression/segmentation/anomaly:
+
+```bash
+visionforge new-task my_task      # generates user_tasks/my_task.py — it already trains
+```
+
+Fill the four hooks with your model/data/loss/metrics and the task gets the
+run endpoint, live monitor, `run.json` provenance, sweeps and replicates for
+free. Walkthrough: `user_tasks/README.md`.
+
 ## Where to go next
 
 - `README.md` — feature overview and optional extras (`detection`, `timm`,
   `optuna`, `tensorboard`, dataset providers)
 - `user_models/README.md` — drop in your own architectures
+- `user_tasks/README.md` — define whole new task families (ADR-058)
 - `documentation/ARCHITECTURE.md` — how the pieces fit

@@ -23,6 +23,7 @@ confidence intervals.
 | **Image regression** | CNN backbones + linear head (CSV manifest datasets), timm, custom | MSE, RMSE, MAE, R² |
 | **Semantic segmentation** | DeepLabV3, FCN, LR-ASPP, U-Net, custom | mean IoU, Dice, pixel accuracy |
 | **Anomaly detection** | Convolutional autoencoder, PatchCore (unsupervised, MVTec-style) | image AUROC, threshold, F1 |
+| **Your own task** (SDK) | any `nn.Module` — you write 4 hooks in one Python file | any metrics you declare (`higher`/`lower` direction-aware) |
 
 Every task panel follows the same canonical layout: experiment name + YAML
 export/import, a strategy selector, model, training, dataset (with pre-training
@@ -136,6 +137,31 @@ def build_my_net(num_outputs: int) -> nn.Module: ...
 
 Select it via `model.custom_model` — works for classification, regression and
 segmentation. See `user_models/README.md`.
+
+## Custom tasks — define a whole new task family (ADR-058)
+
+When your research doesn't fit the five built-in tasks, define your own in
+**one documented Python file** — no React, no FastAPI, no training loop:
+
+```bash
+visionforge new-task cell_counting     # writes user_tasks/cell_counting.py
+```
+
+The generated template **trains out of the box** on synthetic data. Fill four
+hooks — `build_model`, `build_loaders`, `compute_loss`, `compute_metrics` —
+and a Pydantic `Config` whose fields become a validated form schema. You get,
+with zero extra code:
+
+- `GET /api/tasks` · `GET /api/custom/<key>/schema` · `POST /api/custom/<key>/run`
+  (live SSE monitor, TensorBoard, versioned `run.json` provenance)
+- `POST /api/custom/<key>/sweep` — grid/random/Optuna over **any** config
+  field, including the ones you declared
+- `POST /api/custom/<key>/replicates` — N seeds → mean ± std ± 95% CI
+
+Training not epoch-shaped (GANs, EM loops)? Override `run(cfg, ctx)` and own
+the loop while keeping every contract. A working example ships in
+`user_tasks/example_counting/` (a CNN counting dots in synthetic images —
+trains in seconds on CPU). Full walkthrough: [`user_tasks/README.md`](user_tasks/README.md) (PT + EN).
 
 ## Architecture, decisions and contributing
 
