@@ -44,7 +44,7 @@ class TestRegressionCv:
 
         captured: dict[str, object] = {}
 
-        def fake_cv(config, *, n_folds, shuffle, seed):  # type: ignore[no-untyped-def]
+        def fake_cv(config, *, n_folds, shuffle, seed, progress_callback=None):  # type: ignore[no-untyped-def]
             captured["n_folds"] = n_folds
             captured["shuffle"] = shuffle
             captured["seed"] = seed

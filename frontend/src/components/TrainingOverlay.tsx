@@ -4,6 +4,9 @@ import type { RunStatus, TrainingEvent } from "../types/run";
 interface TrainingOverlayProps {
   status: RunStatus;
   progressEvents: TrainingEvent[];
+  /** When false the overlay is hidden with CSS but stays MOUNTED, so logs and
+   *  progress survive minimize/reopen instead of resetting. */
+  visible: boolean;
   taskAccent: string;
   taskLabel: string;
   /** Active task key (classification/detection/…) — drives the CLI echo line. */
@@ -31,6 +34,7 @@ const QUEUE_BLOCKS: Record<string, string> = {
 export function TrainingOverlay({
   status,
   progressEvents,
+  visible,
   taskAccent,
   taskLabel,
   taskKey,
@@ -194,12 +198,13 @@ export function TrainingOverlay({
     }
   }, [status.status, isCompleted, hasFailed, status.error]);
 
-  // Auto-scroll logs.
+  // Auto-scroll logs — also when the overlay is re-shown after a minimize
+  // (scrollHeight is 0 while display:none, so re-anchor on visibility).
   useEffect(() => {
-    if (logRef.current) {
+    if (visible && logRef.current) {
       logRef.current.scrollTop = logRef.current.scrollHeight;
     }
-  }, [logs]);
+  }, [logs, visible]);
 
   const progressFraction = isCompleted
     ? 1
@@ -218,7 +223,7 @@ export function TrainingOverlay({
         inset: 0,
         zIndex: 90,
         background: "rgba(4,5,7,0.78)",
-        display: "flex",
+        display: visible ? "flex" : "none",
         alignItems: "center",
         justifyContent: "center",
         animation: "overlayIn 220ms ease forwards",

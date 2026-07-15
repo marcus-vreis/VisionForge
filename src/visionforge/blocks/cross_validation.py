@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
+from collections.abc import Callable
+from datetime import datetime
 from typing import Any
 
 import numpy as np
@@ -12,6 +13,7 @@ from sklearn.model_selection import KFold, StratifiedKFold
 from torch.utils.data import DataLoader, Subset
 from torchvision.datasets import ImageFolder
 
+from visionforge.blocks._search_utils import make_trial_progress_wrapper
 from visionforge.blocks.base import ExperimentBlock
 from visionforge.core.evaluator import Evaluator
 from visionforge.core.trainer import Trainer
@@ -173,6 +175,7 @@ class CrossValidationBlock(ExperimentBlock):
             )
         self._config = config
         self._fold_results: list[dict[str, Any]] = []
+        self._progress_callback: Callable[[dict[str, Any]], None] | None = None
 
     def run(self) -> None:
         """Execute all folds and write cv_summary.json."""
@@ -209,6 +212,19 @@ class CrossValidationBlock(ExperimentBlock):
         for fold_idx, (train_idx, val_idx) in enumerate(split_iter):
             train_indices = train_idx.tolist()
             val_indices = val_idx.tolist()
+
+            # trial_start/trial_end is the vocabulary the GUI overlay tracks
+            # (same contract as grid/random search); the wrapped callback below
+            # streams each fold's epochs annotated with trial context.
+            if self._progress_callback is not None:
+                self._progress_callback(
+                    {
+                        "event": "trial_start",
+                        "trial_index": fold_idx,
+                        "total_trials": cv.n_folds,
+                        "overrides": {"fold": fold_idx + 1},
+                    }
+                )
 
             fold_record: dict[str, Any] = {
                 "fold": fold_idx,
@@ -252,7 +268,13 @@ class CrossValidationBlock(ExperimentBlock):
                 )
 
                 model = ModelFactory.create(fold_config.model)
-                train_result = Trainer(fold_config).fit(model, fold_data)
+                train_result = Trainer(fold_config).fit(
+                    model,
+                    fold_data,
+                    progress_callback=make_trial_progress_wrapper(
+                        self._progress_callback, fold_idx, cv.n_folds
+                    ),
+                )
 
                 state_dict = torch.load(
                     str(train_result.model_path),
@@ -281,11 +303,29 @@ class CrossValidationBlock(ExperimentBlock):
             except Exception as exc:  # noqa: BLE001
                 fold_record["error"] = str(exc)
                 logger.warning("Fold {}/{} failed: {}", fold_idx + 1, cv.n_folds, exc)
+                # On success the wrapped Trainer's terminal "end" was rewritten
+                # to trial_end; a fold that died before finishing emits it here.
+                if self._progress_callback is not None:
+                    self._progress_callback(
+                        {
+                            "event": "trial_end",
+                            "trial_index": fold_idx,
+                            "total_trials": cv.n_folds,
+                            "status": "failed",
+                        }
+                    )
 
             finally:
                 torch.cuda.empty_cache()
 
             self._fold_results.append(fold_record)
+
+        # Single terminal 'end' after all folds so the GUI closes the SSE
+        # stream once — inner fold 'end's were rewritten to 'trial_end'.
+        if self._progress_callback is not None:
+            self._progress_callback(
+                {"event": "end", "total_epochs": 0, "total_trials": cv.n_folds}
+            )
 
         self._write_summary(base_name)
         # Also emit a top-level run.json so /api/runs picks the CV experiment
@@ -377,7 +417,9 @@ class CrossValidationBlock(ExperimentBlock):
         run_json: dict[str, Any] = {
             "experiment": base_name,
             "status": "completed" if successful else "failed",
-            "timestamp": datetime.now(UTC).isoformat(),
+            # Naive local time like every other run.json writer — mixing aware
+            # and naive timestamps breaks the history sort (see routes.py).
+            "timestamp": datetime.now().isoformat(),
             "config": self._config.model_dump(mode="json"),
             "metrics": {
                 # Mirror the keys the RunSummary parser already understands so

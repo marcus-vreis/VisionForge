@@ -6,6 +6,7 @@ import asyncio
 import csv
 import json
 import platform
+import uuid
 from collections.abc import Callable
 from dataclasses import asdict
 from datetime import datetime
@@ -252,7 +253,7 @@ async def get_run_detail(run_id: str) -> RunDetail:
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(500, f"Failed to parse run.json: {exc}") from exc
 
-    started = datetime.fromisoformat(data["timestamp"])
+    started = _parse_run_timestamp(data["timestamp"])
     status = data.get("status", "completed")
     finished = started if status == "completed" else None
 
@@ -1400,15 +1401,22 @@ def _render_preprocess_preview(
         except OSError:
             pass
 
+    # Unique token per invocation: the browser caches /dataset/file by URL, so
+    # reusing a filename (99_final.png) shows the PREVIOUS render after the
+    # pipeline changes. Fresh names every call — old ones were unlinked above.
+    token = uuid.uuid4().hex[:8]
+
     original_img = Image.open(img_path).convert("RGB")
-    original_path = cache_dir / "00_original.png"
+    original_path = cache_dir / f"00_original_{token}.png"
     original_img.save(original_path)
 
     final_img, intermediates = apply_pipeline(original_img, req.steps)
 
     step_records: list[PreprocessPreviewStep] = []
     for i, (step_cfg, img) in enumerate(zip(req.steps, intermediates, strict=False)):
-        step_path = cache_dir / f"{i + 1:02d}_{step_cfg.get('kind', 'step')}.png"
+        step_path = (
+            cache_dir / f"{i + 1:02d}_{step_cfg.get('kind', 'step')}_{token}.png"
+        )
         img.save(step_path)
         step_records.append(
             PreprocessPreviewStep(
@@ -1419,13 +1427,11 @@ def _render_preprocess_preview(
         )
 
     if step_records:
-        final_path = Path(step_records[-1].artifact)
+        # Save a separate "final" copy so callers don't depend on intermediates.
+        final_path = cache_dir / f"99_final_{token}.png"
+        final_img.save(final_path)
     else:
         final_path = original_path
-    if step_records:
-        # Save a separate "final" copy so callers don't depend on intermediates.
-        final_path = cache_dir / "99_final.png"
-        final_img.save(final_path)
 
     return PreprocessPreviewResponse(
         original=str(original_path),
@@ -1548,13 +1554,17 @@ def _render_augment_preview(req: AugmentPreviewRequest) -> AugmentPreviewRespons
         except OSError:
             pass
 
+    # Unique names per invocation — same browser-cache pitfall as the
+    # preprocess preview above.
+    token = uuid.uuid4().hex[:8]
+
     original_img = Image.open(img_path).convert("RGB")
-    original_path = cache_dir / "00_original.png"
+    original_path = cache_dir / f"00_original_{token}.png"
     T.Compose([T.Resize(size), T.CenterCrop(size)])(original_img).save(original_path)
 
     variants: list[str] = []
     for i in range(req.num_variants):
-        variant_path = cache_dir / f"{i + 1:02d}_variant.png"
+        variant_path = cache_dir / f"{i + 1:02d}_variant_{token}.png"
         transform(original_img).save(variant_path)
         variants.append(str(variant_path))
 
@@ -2506,10 +2516,23 @@ def _summary_metrics(task: str, metrics: dict[str, Any]) -> dict[str, float]:
     return out
 
 
+def _parse_run_timestamp(value: str) -> datetime:
+    """Parse a run.json timestamp as naive local time.
+
+    Writers historically disagreed (CV wrote timezone-aware UTC, everything
+    else naive local); a mixed list cannot be sorted. Aware values are
+    converted to local time and stripped so every run compares.
+    """
+    parsed = datetime.fromisoformat(value)
+    if parsed.tzinfo is not None:
+        parsed = parsed.astimezone().replace(tzinfo=None)
+    return parsed
+
+
 def _parse_run_summary(run_dir: Path, data: dict[str, Any]) -> RunSummary:
     """Build a RunSummary from a parsed run.json dict."""
     status: str = data["status"]
-    started_at = datetime.fromisoformat(data["timestamp"])
+    started_at = _parse_run_timestamp(data["timestamp"])
     finished_at: datetime | None = started_at if status == "completed" else None
 
     config: dict[str, Any] = data["config"]
@@ -2587,10 +2610,17 @@ async def _execute_experiment(config: ExperimentConfig, run_id: str) -> None:
             block = ClassificationBlock()
         block.setup(config)
         # Blocks that stream live epoch progress over SSE get the event pump
-        # wired here. Grid/random search forward each inner trial's epochs
-        # (annotated with trial context) plus trial_start/trial_end banners.
-        # CV and TransferLearning don't take a progress_callback yet.
-        if isinstance(block, ClassificationBlock | GridSearchBlock | RandomSearchBlock):
+        # wired here. Grid/random search and K-fold CV forward each inner
+        # trial/fold's epochs (annotated with trial context) plus
+        # trial_start/trial_end banners. TransferLearning doesn't take a
+        # progress_callback yet.
+        if isinstance(
+            block,
+            ClassificationBlock
+            | GridSearchBlock
+            | RandomSearchBlock
+            | CrossValidationBlock,
+        ):
             block._progress_callback = _put_event
 
         logger.info("GUI: Starting experiment {} (block={})", run_id, config.block)
@@ -2975,7 +3005,12 @@ async def _execute_sweep(
 ) -> None:
     """Run a hyperparameter sweep in a background thread and store the ranked report."""
     global _current_run, _event_queue
+    loop = asyncio.get_running_loop()
     queue = _event_queue
+
+    def _put_event(event: dict[str, Any]) -> None:
+        if queue is not None:
+            asyncio.run_coroutine_threadsafe(queue.put(event), loop)
 
     try:
         trials = await asyncio.to_thread(
@@ -2987,6 +3022,7 @@ async def _execute_sweep(
             metric=metric,
             n_trials=req.n_trials,
             seed=req.seed,
+            progress_callback=_put_event,
         )
         if not any(t.status == "success" for t in trials):
             raise RuntimeError("All sweep trials failed — no ranking available.")
@@ -3082,7 +3118,12 @@ async def _execute_task_cv(
 ) -> None:
     """Run a task's K-fold in a worker thread and store the fold report."""
     global _current_run, _event_queue
+    loop = asyncio.get_running_loop()
     queue = _event_queue
+
+    def _put_event(event: dict[str, Any]) -> None:
+        if queue is not None:
+            asyncio.run_coroutine_threadsafe(queue.put(event), loop)
 
     try:
         cv = await asyncio.to_thread(
@@ -3091,6 +3132,7 @@ async def _execute_task_cv(
             n_folds=req.n_folds,
             shuffle=req.shuffle,
             seed=req.fold_seed,
+            progress_callback=_put_event,
         )
         if not any(f.status == "success" for f in cv.folds):
             raise RuntimeError("All folds failed — no aggregate available.")
@@ -3191,11 +3233,21 @@ async def _execute_replicates(
 ) -> None:
     """Run the replicate set in a background thread and store the aggregate report."""
     global _current_run, _event_queue
+    loop = asyncio.get_running_loop()
     queue = _event_queue
+
+    def _put_event(event: dict[str, Any]) -> None:
+        if queue is not None:
+            asyncio.run_coroutine_threadsafe(queue.put(event), loop)
 
     try:
         trials = await asyncio.to_thread(
-            run_replicates, runner, base_config_dict, seeds, metric
+            run_replicates,
+            runner,
+            base_config_dict,
+            seeds,
+            metric,
+            progress_callback=_put_event,
         )
         if not any(t.status == "success" for t in trials):
             raise RuntimeError("All replicates failed — no aggregate available.")

@@ -52,6 +52,10 @@
    VisionForge dark palette — matches frontend-design/VisionForge.html
    ============================================================ */
 :root {
+    /* Native widgets (select popups, scrollbars, pickers) must render dark —
+       without this, an open <select> shows the light UA dropdown. */
+    color-scheme: dark;
+
     /* Core surfaces */
     --vf-bg:           #07080a;
     --vf-bg-2:         #0c0e12;

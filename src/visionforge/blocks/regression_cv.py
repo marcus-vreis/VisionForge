@@ -24,6 +24,7 @@ from loguru import logger
 from sklearn.model_selection import KFold
 from torch.utils.data import DataLoader, Subset
 
+from visionforge.blocks._search_utils import make_trial_progress_wrapper
 from visionforge.core.data import _build_transforms
 from visionforge.core.regression_data import RegressionCsvDataset
 from visionforge.core.regression_trainer import RegressionTrainer
@@ -147,10 +148,18 @@ def run_regression_cross_validation(
     base_name = config.name
     folds: list[FoldResult] = []
 
-    if progress_callback is not None:
-        progress_callback({"event": "start", "total_folds": n_folds})
-
     for fold_idx, (train_idx, val_idx) in enumerate(splitter.split(range(n_samples))):
+        # trial_start/trial_end is the vocabulary the GUI overlay tracks; the
+        # wrapped inner callback streams each fold's epochs with trial context.
+        if progress_callback is not None:
+            progress_callback(
+                {
+                    "event": "trial_start",
+                    "trial_index": fold_idx,
+                    "total_trials": n_folds,
+                    "overrides": {"fold": fold_idx + 1},
+                }
+            )
         record = FoldResult(
             fold=fold_idx,
             status="failed",
@@ -168,7 +177,13 @@ def run_regression_cross_validation(
             )
             model = RegressionModelFactory.create(fold_config.model)
             trainer = RegressionTrainer(fold_config)
-            result = trainer.fit(model, fold_data)
+            result = trainer.fit(
+                model,
+                fold_data,
+                progress_callback=make_trial_progress_wrapper(
+                    progress_callback, fold_idx, n_folds
+                ),
+            )
 
             state = torch.load(
                 str(result.model_path), map_location="cpu", weights_only=True
@@ -194,9 +209,16 @@ def run_regression_cross_validation(
                 torch.cuda.empty_cache()
 
         folds.append(record)
-        if progress_callback is not None:
+        # On success the wrapped trainer's terminal "end" was already rewritten
+        # to trial_end; emit one here only when the fold died before finishing.
+        if progress_callback is not None and record.status != "success":
             progress_callback(
-                {"event": "fold_end", "fold": fold_idx, "total_folds": n_folds}
+                {
+                    "event": "trial_end",
+                    "trial_index": fold_idx,
+                    "total_trials": n_folds,
+                    "status": record.status,
+                }
             )
 
     return CrossValidationReport(

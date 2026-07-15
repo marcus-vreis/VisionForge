@@ -88,6 +88,27 @@ class TestRunReplicates:
         trials = run_replicates(_FakeRunner(), _base(), [90, 10, 50], metric="score")
         assert [t.seed for t in trials] == [90, 10, 50]
 
+    def test_emits_trial_start_and_end_per_seed(self) -> None:
+        events: list[dict[str, Any]] = []
+        run_replicates(
+            _FakeRunner(fail_seed=8),
+            _base(),
+            [7, 8],
+            metric="score",
+            progress_callback=events.append,
+        )
+        assert [e["event"] for e in events] == [
+            "trial_start",
+            "trial_end",
+            "trial_start",
+            "trial_end",
+        ]
+        assert events[0]["overrides"] == {"training.seed": 7}
+        assert events[0]["total_trials"] == 2
+        # trial_end carries the outcome, including for the failed seed.
+        assert events[1]["status"] == "success"
+        assert events[3]["status"] == "failed"
+
 
 class TestAggregateReplicates:
     def _trial(self, seed: int, score: float | None) -> ReplicateTrial:

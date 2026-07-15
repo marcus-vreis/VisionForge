@@ -162,7 +162,9 @@ class TestDetectionCompareSweep:
         app, routes_mod = app_and_routes
         routes_mod._current_run = None
 
-        def fake_sweep(runner, base, space, *, mode, metric, n_trials, seed):  # type: ignore[no-untyped-def]
+        def fake_sweep(
+            runner, base, space, *, mode, metric, n_trials, seed, progress_callback=None
+        ):  # type: ignore[no-untyped-def]
             return [
                 SweepTrial(
                     0, {"training.learning_rate": 0.01}, "success", {"map50_95": 0.6}

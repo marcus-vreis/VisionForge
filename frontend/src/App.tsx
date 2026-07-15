@@ -77,11 +77,13 @@ export default function App() {
     makeDefaultAnomalyForm,
   );
 
-  const showOverlay =
-    overlayVisible &&
-    (status.status === "running" ||
-      status.status === "completed" ||
-      status.status === "failed");
+  // The overlay stays MOUNTED for the whole life of a run (hidden via CSS when
+  // minimized) so its logs and progress survive minimize/reopen.
+  const runActive =
+    status.status === "running" ||
+    status.status === "completed" ||
+    status.status === "failed";
+  const showOverlay = overlayVisible && runActive;
 
   useEffect(() => {
     fetchSchema()
@@ -436,10 +438,11 @@ export default function App() {
         onCountChange={setHistoryCount}
       />
 
-      {showOverlay && (
+      {runActive && (
         <TrainingOverlay
           status={status}
           progressEvents={progressEvents}
+          visible={overlayVisible}
           taskAccent={activeTask.accent}
           taskLabel={activeTask.label}
           taskKey={activeKey}

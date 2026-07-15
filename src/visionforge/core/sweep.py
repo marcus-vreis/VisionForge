@@ -18,6 +18,7 @@ import gc
 import itertools
 import math
 import random
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -106,13 +107,25 @@ def _execute_trial(
     index: int,
     metric: str,
     total: int,
+    progress_callback: Callable[[dict[str, Any]], None] | None = None,
 ) -> SweepTrial:
     """Apply ``overrides`` to the base config, run one trial, and record the result.
 
     Never raises — a failed trial is captured in the returned ``SweepTrial`` so the
-    sweep continues. GPU memory is released afterwards.
+    sweep continues. GPU memory is released afterwards. ``progress_callback``
+    receives ``trial_start``/``trial_end`` events (the vocabulary the GUI's
+    training overlay tracks) so multi-trial progress is real, not synthetic.
     """
     trial = SweepTrial(trial_index=index, overrides=overrides)
+    if progress_callback is not None:
+        progress_callback(
+            {
+                "event": "trial_start",
+                "trial_index": index,
+                "total_trials": total,
+                "overrides": overrides,
+            }
+        )
     try:
         cfg_dict = copy.deepcopy(base_config_dict)
         for path, value in overrides.items():
@@ -140,6 +153,15 @@ def _execute_trial(
         gc.collect()
         if torch is not None and torch.cuda.is_available():
             torch.cuda.empty_cache()
+    if progress_callback is not None:
+        progress_callback(
+            {
+                "event": "trial_end",
+                "trial_index": index,
+                "total_trials": total,
+                "status": trial.status,
+            }
+        )
     return trial
 
 
@@ -164,6 +186,7 @@ def _optuna_trials(
     metric: str,
     n_trials: int,
     seed: int,
+    progress_callback: Callable[[dict[str, Any]], None] | None = None,
 ) -> list[SweepTrial]:
     """Run an Optuna TPE study over the search space, collecting every trial.
 
@@ -190,7 +213,13 @@ def _optuna_trials(
             name: _suggest_one(trial, name, spec) for name, spec in search_space.items()
         }
         st = _execute_trial(
-            runner, base_config_dict, overrides, trial.number, metric, n_trials
+            runner,
+            base_config_dict,
+            overrides,
+            trial.number,
+            metric,
+            n_trials,
+            progress_callback=progress_callback,
         )
         trials.append(st)
         value = st.metrics.get(metric)
@@ -214,6 +243,7 @@ def run_sweep(
     metric: str,
     n_trials: int = 10,
     seed: int = 0,
+    progress_callback: Callable[[dict[str, Any]], None] | None = None,
 ) -> list[SweepTrial]:
     """Run a grid, random or Optuna sweep and return trials ranked by ``metric``.
 
@@ -229,18 +259,40 @@ def run_sweep(
     if mode == "grid":
         points = _grid_points(search_space)
         trials = [
-            _execute_trial(runner, base_config_dict, ov, i, metric, len(points))
+            _execute_trial(
+                runner,
+                base_config_dict,
+                ov,
+                i,
+                metric,
+                len(points),
+                progress_callback=progress_callback,
+            )
             for i, ov in enumerate(points)
         ]
     elif mode == "random":
         points = _random_points(search_space, n_trials, seed)
         trials = [
-            _execute_trial(runner, base_config_dict, ov, i, metric, len(points))
+            _execute_trial(
+                runner,
+                base_config_dict,
+                ov,
+                i,
+                metric,
+                len(points),
+                progress_callback=progress_callback,
+            )
             for i, ov in enumerate(points)
         ]
     elif mode == "optuna":
         trials = _optuna_trials(
-            runner, base_config_dict, search_space, metric, n_trials, seed
+            runner,
+            base_config_dict,
+            search_space,
+            metric,
+            n_trials,
+            seed,
+            progress_callback=progress_callback,
         )
     else:
         raise ValueError(

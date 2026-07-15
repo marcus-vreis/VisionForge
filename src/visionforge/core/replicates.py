@@ -19,6 +19,7 @@ import copy
 import gc
 import math
 import statistics
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -100,6 +101,7 @@ def run_replicates(
     base_config_dict: dict[str, Any],
     seeds: list[int],
     metric: str,
+    progress_callback: Callable[[dict[str, Any]], None] | None = None,
 ) -> list[ReplicateTrial]:
     """Train ``base_config_dict`` once per seed and return the trials in seed order.
 
@@ -107,13 +109,24 @@ def run_replicates(
     ``_s{seed}`` so its checkpoints and run.json land in a distinct run dir.
     Replicates are never ranked — they are samples of one distribution, not
     competitors. A failed replicate is recorded and the set continues; GPU
-    memory is released between replicates.
+    memory is released between replicates. ``progress_callback`` receives
+    ``trial_start``/``trial_end`` events so the GUI overlay tracks real
+    progress across the set.
     """
     trials: list[ReplicateTrial] = []
     base_name = str(base_config_dict.get("name", "replicates"))
 
-    for seed in seeds:
+    for index, seed in enumerate(seeds):
         trial = ReplicateTrial(seed=seed)
+        if progress_callback is not None:
+            progress_callback(
+                {
+                    "event": "trial_start",
+                    "trial_index": index,
+                    "total_trials": len(seeds),
+                    "overrides": {"training.seed": seed},
+                }
+            )
         try:
             trial_dict = copy.deepcopy(base_config_dict)
             trial_dict["name"] = f"{base_name}_s{seed}"
@@ -143,6 +156,15 @@ def run_replicates(
             gc.collect()
             if torch is not None and torch.cuda.is_available():
                 torch.cuda.empty_cache()
+        if progress_callback is not None:
+            progress_callback(
+                {
+                    "event": "trial_end",
+                    "trial_index": index,
+                    "total_trials": len(seeds),
+                    "status": trial.status,
+                }
+            )
         trials.append(trial)
 
     return trials

@@ -266,6 +266,27 @@ class TestLoadRunsOrdering:
         results = _load_runs(tmp_path)
         assert len(results) == 2
 
+    def test_mixed_aware_and_naive_timestamps_still_sort(self, tmp_path: Path) -> None:
+        """CV run.jsons were written with timezone-aware UTC while every other
+        writer used naive local time — the mixed list must sort, not raise
+        (regression: TypeError after opening History following a k-fold)."""
+        _make_run_json(
+            tmp_path,
+            folder="naive_run",
+            timestamp=_TS_EARLY,
+            experiment="exp1",
+        )
+        _make_run_json(
+            tmp_path,
+            folder="aware_run",
+            timestamp="2026-06-01T10:00:00+00:00",
+            experiment="exp2",
+        )
+        results = _load_runs(tmp_path)
+        assert len(results) == 2
+        assert all(r.started_at.tzinfo is None for r in results)
+        assert results[0].started_at > results[1].started_at
+
 
 class TestLoadRunsSkipBadEntries:
     def test_skips_invalid_json(self, tmp_path: Path) -> None:

@@ -676,6 +676,21 @@ and lost reachable features their backends support. Bricks, by severity:
   **ADR-059 completo (bricks A–F).** Follow-ups: Treinar respeitar a estratégia
   selecionada; comparação replicada (Fase D).
 
+**GUI polish sweep (2026-07-15, user-reported):** history 500 after k-fold
+(CV wrote timezone-aware timestamps while every other writer is naive —
+writer fixed + parse normalizes so old run.jsons heal); preprocess/augment
+preview artifacts get unique per-request filenames (fixed URLs were served
+stale from the browser cache — the "final" image lagged one pipeline behind);
+`color-scheme: dark` on `:root` (native select popups rendered light);
+TrainingOverlay stays mounted while minimized (logs/progress survive
+reopen); **real multi-trial SSE streaming everywhere** — classification
+K-fold, task K-fold (regression/segmentation) and task-level
+sweeps/replicates (built-in + custom) now emit the same
+`trial_start`/`trial_end` (+ per-fold epochs where the trainer streams)
+vocabulary grid/random search already used, so the overlay's progress bar
+tracks real trials instead of a synthetic time crawl. Remaining follow-up:
+Treinar respeitar a estratégia selecionada.
+
 **Researcher-grade rigor (sequenced follow-ups to ADR-056):**
 - Determinism parity: `training.deterministic` exists only in classification —
   add the same flag (wired to `_seed_everything(deterministic=…)`) to

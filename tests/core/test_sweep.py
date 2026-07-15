@@ -89,6 +89,29 @@ class TestGridSweep:
         assert trials[-1].status == "failed"
         assert trials[-1].error == "boom"
 
+    def test_emits_trial_start_and_end_per_point(self) -> None:
+        events: list[dict[str, Any]] = []
+        run_sweep(
+            _FakeRunner(fail_lr=0.1),
+            _base(),
+            {"training.learning_rate": [0.05, 0.1]},
+            mode="grid",
+            metric="score",
+            progress_callback=events.append,
+        )
+        assert [e["event"] for e in events] == [
+            "trial_start",
+            "trial_end",
+            "trial_start",
+            "trial_end",
+        ]
+        assert events[0]["trial_index"] == 0
+        assert events[0]["total_trials"] == 2
+        assert events[0]["overrides"] == {"training.learning_rate": 0.05}
+        # trial_end carries the outcome, including for failed trials.
+        assert events[1]["status"] == "success"
+        assert events[3]["status"] == "failed"
+
 
 class TestRandomSweep:
     def test_deterministic_with_seed(self) -> None:

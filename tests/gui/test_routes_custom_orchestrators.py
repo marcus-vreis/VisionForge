@@ -107,7 +107,7 @@ class TestCustomReplicates:
 
         captured: dict[str, object] = {}
 
-        def fake_replicates(runner, base, seeds, metric):  # type: ignore[no-untyped-def]
+        def fake_replicates(runner, base, seeds, metric, progress_callback=None):  # type: ignore[no-untyped-def]
             captured["seeds"] = seeds
             captured["metric"] = metric
             captured["runner"] = type(runner).__name__
@@ -198,7 +198,9 @@ class TestCustomSweep:
 
         captured: dict[str, object] = {}
 
-        def fake_sweep(runner, base, space, *, mode, metric, n_trials, seed):  # type: ignore[no-untyped-def]
+        def fake_sweep(
+            runner, base, space, *, mode, metric, n_trials, seed, progress_callback=None
+        ):  # type: ignore[no-untyped-def]
             captured["space"] = space
             captured["metric"] = metric
             captured["runner"] = type(runner).__name__

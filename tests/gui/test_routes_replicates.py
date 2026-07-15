@@ -59,7 +59,7 @@ class TestRegressionReplicates:
 
         captured: dict[str, object] = {}
 
-        def fake_replicates(runner, base, seeds, metric):  # type: ignore[no-untyped-def]
+        def fake_replicates(runner, base, seeds, metric, progress_callback=None):  # type: ignore[no-untyped-def]
             captured["seeds"] = seeds
             captured["metric"] = metric
             return [
@@ -120,7 +120,7 @@ class TestRegressionReplicates:
 
         captured: dict[str, object] = {}
 
-        def fake_replicates(runner, base, seeds, metric):  # type: ignore[no-untyped-def]
+        def fake_replicates(runner, base, seeds, metric, progress_callback=None):  # type: ignore[no-untyped-def]
             captured["seeds"] = seeds
             return [ReplicateTrial(s, "success", {"r2": 0.9}, 0.1) for s in seeds]
 
