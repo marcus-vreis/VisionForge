@@ -1,5 +1,10 @@
 # VisionForge — Roadmap & improvement plan
 
+> **Historical (superseded).** Every item below shipped — ADR-041 through
+> ADR-047 are Accepted in `DECISIONS.md`. Kept for the reasoning trail that
+> produced them. For what is planned *now*, see `TASKS.md` (current phases and
+> open follow-ups) and `RELEASE_NOTES.md` (what shipped recently).
+
 > Live planning doc owned by Cowork (judgment/decisions/docs). Each item below was
 > grounded in the actual code, given a recommendation, and — where it's a real
 > decision — an ADR. The agent team implements from here + the linked specs.
