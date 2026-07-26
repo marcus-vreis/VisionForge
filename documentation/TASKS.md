@@ -455,7 +455,7 @@ image-level AUROC / threshold / F1 and a live training monitor.**
 
 ---
 
-## Phase 10 — Custom Tasks ("Blank" task SDK) — IN PROGRESS (bricks 1–4 ✅)
+## Phase 10 — Custom Tasks ("Blank" task SDK) ✅ COMPLETE (bricks 1–6)
 
 Design: `documentation/CUSTOM_TASK_PLAN.md` (ADR-058). The researcher defines a
 new task family in one documented `.py` under `user_tasks/` — name, accent
@@ -479,8 +479,11 @@ sweeps/replicates for free. No user-supplied JavaScript.
   `user_tasks/README.md` (PT+EN) + shipped `example_counting` task
   (dot-counting CNN). CI trains the generated template + the example for real.
   Note: task-file datasets require `num_workers=0` (ADR-030, documented).
-- [ ] brick 6 — GUI: dynamic tabs from `/api/tasks`, generic schema panel,
-  generic results/history fallback, SPA rebuild + vitest
+- [x] brick 6 — GUI: dynamic tabs from `/api/tasks` (`lib/custom-tasks.ts`,
+  12 vitest), `CustomTaskPanel` with the canonical header + generic
+  `SchemaForm` from the task's own schema, generic results/history fallback,
+  SPA rebuilt. Verified live end to end: tab → form → Treinar → live monitor
+  streaming the researcher's metrics → results → history. **Phase 10 complete.**
 
 ---
 

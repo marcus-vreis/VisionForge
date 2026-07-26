@@ -58,9 +58,15 @@ export type TrainingEvent =
       epoch: number;
       total_epochs: number;
       train_loss: number;
-      val_loss: number;
+      // Optional: the generic engine behind researcher-defined tasks
+      // (ADR-058) has no notion of a validation loss and streams the task's
+      // own declared metrics as `val_<name>` instead. val_accuracy is the
+      // compat field every task fills so the live chart has a series.
+      val_loss?: number;
       val_accuracy: number;
       elapsed_s?: number;
+      // Custom tasks' declared metrics arrive as val_<name>.
+      [customMetric: `val_${string}`]: number | null | undefined | string;
       trial_index?: number;
       total_trials?: number;
       // Detection-specific metrics (present only on detection runs). All

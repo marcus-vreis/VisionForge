@@ -1,6 +1,6 @@
 # Phase 10 — Custom Tasks ("Blank" task SDK) — Design Plan
 
-> Status: **In progress** (ADR-058) — bricks 1-5 shipped; brick 6 (GUI) tracked below.
+> Status: **COMPLETE** (ADR-058) — all six bricks shipped (brick 6: 2026-07-26).
 > Kickoff target: after the ReplicatesCard GUI brick.
 > Author: research-grade review session, 2026-07-01.
 
@@ -131,9 +131,24 @@ isn't epoch-shaped (GANs, two-stage, EM-style loops).
   multi-file `--split` variant — discovery loads task files as standalone
   modules (`spec_from_file_location`), so sibling imports would break; one
   file is the contract.
-- [ ] brick 6 — GUI: fetch `/api/tasks`, merge dynamic tabs, generic schema
-  panel + generic results/history fallback, SPA rebuild. Vitest for the
-  merge + payload builder.
+- [x] brick 6 — GUI: `App` fetches `/api/tasks` and merges custom tabs
+  (`lib/custom-tasks.ts`, 12 vitest cases incl. "a custom key can never shadow
+  a built-in"); `CustomTaskPanel` = canonical ExperimentHeader (name + YAML +
+  strategy: simples/sweep/réplicas — no K-fold, the API has none) + the
+  generic `SchemaForm` rendered from `/api/custom/{key}/schema`; results and
+  history fall back to the declared metric names. Two real defects the live
+  run surfaced and this brick fixes:
+  1. **The overlay crashed** (`val_loss.toFixed of undefined`) on a custom
+     task's first epoch — the generic engine has no validation loss. It now
+     lists whatever `val_<name>` metrics the event carries, so the monitor
+     reads `loss=9.2850 · mae=2.4959 · rmse=2.9421` instead of mislabelling
+     the primary metric as `val_acc`.
+  2. **Custom runs never reached History** — `_parse_run_summary` required
+     `config.task` and `config.model.name`, which `BaseTaskConfig` has
+     neither of, so every custom run.json was skipped as unparsable (the
+     exact risk flagged in "honest hard parts" below). Identity now falls
+     back to the top-level `task`/`task_label`, and metrics are surfaced
+     under the researcher's own names.
 
 ## Risks / honest hard parts
 

@@ -152,6 +152,21 @@ export function TrainingOverlay({
     const isDetection = latestEpoch.map50 !== undefined;
     const fmt = (v: number | null | undefined): string =>
       v === null || v === undefined ? "—" : v.toFixed(4);
+    // Researcher-defined tasks (ADR-058) stream their own declared metrics as
+    // val_<name> and have no val_loss — list what the event actually carries
+    // instead of assuming the classification triple (which crashed the
+    // overlay when a custom task's first epoch arrived).
+    const customMetrics = Object.entries(latestEpoch)
+      .filter(
+        ([k, v]) =>
+          k.startsWith("val_") &&
+          k !== "val_accuracy" &&
+          k !== "val_loss" &&
+          !k.endsWith("_loss") &&
+          typeof v === "number",
+      )
+      .map(([k, v]) => `${k.slice(4)}=${fmt(v as number)}`);
+
     const metricsPart = isDetection
       ? [
           `map50=${fmt(latestEpoch.map50)}`,
@@ -162,7 +177,9 @@ export function TrainingOverlay({
           `cls=${fmt(latestEpoch.val_cls_loss)}`,
           `dfl=${fmt(latestEpoch.val_dfl_loss)}`,
         ].join(" · ")
-      : `loss=${train_loss.toFixed(4)} · val_loss=${val_loss.toFixed(4)} · val_acc=${val_accuracy.toFixed(4)}`;
+      : customMetrics.length > 0
+        ? [`loss=${fmt(train_loss)}`, ...customMetrics].join(" · ")
+        : `loss=${fmt(train_loss)} · val_loss=${fmt(val_loss)} · val_acc=${fmt(val_accuracy)}`;
     const line = `> ${trialTag}epoch ${epoch}/${total_epochs} · ${metricsPart}`;
     // Defer the append (see the trial-separator effect above).
     const timer = setTimeout(() => {

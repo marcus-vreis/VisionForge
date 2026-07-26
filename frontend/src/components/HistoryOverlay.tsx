@@ -132,7 +132,12 @@ function RunCard({
 }) {
   const accent = TASK_ACCENT[run.task] ?? "var(--vf-text-muted)";
   const dot = statusColor(run.status);
-  const metricKeys = METRIC_KEYS_BY_TASK[run.task] ?? METRIC_KEYS_BY_TASK.classification;
+  // A researcher-defined task (custom:<key>, ADR-058) declares its own metric
+  // names, so there is no fixed key list — the backend already projected the
+  // ones worth showing, and they render under their real names.
+  const metricKeys = run.task.startsWith("custom:")
+    ? Object.keys(run.final_metrics)
+    : (METRIC_KEYS_BY_TASK[run.task] ?? METRIC_KEYS_BY_TASK.classification);
   const shownMetrics = metricKeys.filter(
     (k) => run.final_metrics[k] !== undefined,
   );

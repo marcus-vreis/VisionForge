@@ -1,5 +1,14 @@
-import { useEffect, useState } from "react";
-import { fetchSchema, runReplicates, runSweep, runTaskCv } from "./api/client";
+import { useCallback, useEffect, useState } from "react";
+import {
+  fetchSchema,
+  fetchTasks,
+  runCustomReplicates,
+  runCustomSweep,
+  runCustomTask,
+  runReplicates,
+  runSweep,
+  runTaskCv,
+} from "./api/client";
 import type { CvPayload } from "./components/CvCard";
 import type { SweepPayload } from "./components/SweepCard";
 import type { ReplicatesPayload } from "./lib/replicates-form";
@@ -35,13 +44,20 @@ import {
   type AnomalyForm,
 } from "./lib/anomaly-models";
 import { buildDefaults } from "./lib/schema-defaults";
+import {
+  buildCustomPayload,
+  isCustomTask,
+  mergeTasks,
+} from "./lib/custom-tasks";
+import { CustomTaskPanel } from "./components/CustomTaskPanel";
 import { ResultsView } from "./components/ResultsView";
 import { TabBar } from "./components/TabBar";
 import { TaskHero } from "./components/TaskHero";
 import { TrainingOverlay } from "./components/TrainingOverlay";
 import { useExperiment } from "./hooks/useExperiment";
+import type { RunResponse } from "./types/run";
 import type { JsonSchema } from "./types/schema";
-import { TASKS } from "./types/tasks";
+import { TASKS, type TaskDefinition } from "./types/tasks";
 
 /** Standalone tasks that expose the comparison/sweep advanced surface. */
 type AdvancedTask = "regression" | "segmentation" | "detection" | "anomaly";
@@ -76,6 +92,13 @@ export default function App() {
   const [anomalyForm, setAnomalyForm] = useState<AnomalyForm>(
     makeDefaultAnomalyForm,
   );
+  // Tabs are data-driven: built-ins are local, custom tasks arrive from
+  // /api/tasks (ADR-058 brick 6). One form per custom key so switching tabs
+  // preserves what the researcher typed.
+  const [tasks, setTasks] = useState<TaskDefinition[]>(TASKS);
+  const [customForms, setCustomForms] = useState<
+    Record<string, Record<string, unknown>>
+  >({});
 
   // The overlay stays MOUNTED for the whole life of a run (hidden via CSS when
   // minimized) so its logs and progress survive minimize/reopen.
@@ -84,6 +107,7 @@ export default function App() {
     status.status === "completed" ||
     status.status === "failed";
   const showOverlay = overlayVisible && runActive;
+  const activeTask = tasks.find((t) => t.key === activeKey) ?? tasks[0];
 
   useEffect(() => {
     fetchSchema()
@@ -100,7 +124,49 @@ export default function App() {
       });
   }, []);
 
+  useEffect(() => {
+    fetchTasks()
+      .then((res) => setTasks(mergeTasks(TASKS, res.tasks)))
+      .catch(() => {
+        /* older server or none: the five built-in tabs still work */
+      });
+  }, []);
+
+  const activeCustomForm = customForms[activeKey] ?? {};
+  // Stable per key: CustomTaskPanel's schema effect depends on this identity.
+  const setActiveCustomForm = useCallback(
+    (next: Record<string, unknown>) =>
+      setCustomForms((prev) => ({ ...prev, [activeKey]: next })),
+    [activeKey],
+  );
+
+  // A custom task shares the whole single-run surface (overlay, results,
+  // history); only the submit URL differs (ADR-058).
+  const startCustom = async (
+    key: string,
+    body: Record<string, unknown>,
+    kind: string,
+    queue?: number,
+    run?: (p: Record<string, unknown>) => Promise<RunResponse>,
+  ) => {
+    reset();
+    setResultsVisible(false);
+    setOverlayVisible(true);
+    setPipelineSummary([]);
+    setBlockKind(kind);
+    setQueueSize(queue);
+    await submit(body, { run: run ?? ((p) => runCustomTask(key, p)) });
+  };
+
   const handleTrain = async () => {
+    if (isCustomTask(activeTask)) {
+      await startCustom(
+        activeTask.key,
+        buildCustomPayload(activeCustomForm, device),
+        "custom",
+      );
+      return;
+    }
     if (activeKey === "detection") {
       reset();
       setResultsVisible(false);
@@ -288,7 +354,6 @@ export default function App() {
     await submit({ config, ...payload }, { run: (p) => runSweep(task, p) });
   };
 
-  const activeTask = TASKS.find((t) => t.key === activeKey) ?? TASKS[0];
   const showResults = resultsVisible && result !== null;
 
   return (
@@ -305,7 +370,7 @@ export default function App() {
     >
       <Header />
 
-      <TabBar tasks={TASKS} activeKey={activeKey} setActiveKey={setActiveKey} />
+      <TabBar tasks={tasks} activeKey={activeKey} setActiveKey={setActiveKey} />
 
       <main
         style={{
@@ -326,6 +391,38 @@ export default function App() {
               setResultsVisible(false);
               reset();
             }}
+          />
+        ) : isCustomTask(activeTask) ? (
+          <CustomTaskPanel
+            task={activeTask}
+            formData={activeCustomForm}
+            setFormData={setActiveCustomForm}
+            validationErrors={validationErrors}
+            busy={status.status === "running"}
+            onSweep={(payload) =>
+              void startCustom(
+                activeTask.key,
+                {
+                  config: buildCustomPayload(activeCustomForm, device),
+                  ...payload,
+                },
+                payload.mode === "grid" ? "grid_search" : "random_search",
+                undefined,
+                (p) => runCustomSweep(activeTask.key, p),
+              )
+            }
+            onReplicates={(payload) =>
+              void startCustom(
+                activeTask.key,
+                {
+                  config: buildCustomPayload(activeCustomForm, device),
+                  ...payload,
+                },
+                "replicates",
+                payload.seeds?.length ?? payload.n_replicates ?? undefined,
+                (p) => runCustomReplicates(activeTask.key, p),
+              )
+            }
           />
         ) : activeKey === "detection" ? (
           <DetectionPanel
@@ -416,14 +513,7 @@ export default function App() {
       <BottomBar
         onHistory={() => setShowHistory(true)}
         onTrain={() => void handleTrain()}
-        disabled={
-          status.status === "running" ||
-          (activeKey !== "classification" &&
-            activeKey !== "detection" &&
-            activeKey !== "regression" &&
-            activeKey !== "segmentation" &&
-            activeKey !== "anomaly")
-        }
+        disabled={status.status === "running"}
         historyCount={historyCount}
         selection={device}
         onSelectionChange={setDevice}

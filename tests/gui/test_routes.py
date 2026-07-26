@@ -1223,3 +1223,65 @@ class TestDatasetDetect:
         body = resp.json()
         assert body["detected"] is True
         assert body["train_dir"] == "train"
+
+
+class TestCustomTaskRunsInHistory:
+    """A researcher-defined task's run.json has no config.task and no model
+    block — reading them unguarded made every custom run get skipped as
+    unparsable, so custom trainings never reached History (ADR-058 brick 6).
+    """
+
+    def _custom_run_json(self, tmp_path: Path) -> Path:
+        run_dir = tmp_path / "custom_run_20260726_131759"
+        run_dir.mkdir(parents=True)
+        (run_dir / "run.json").write_text(
+            json.dumps(
+                {
+                    "id": "custom_run_20260726_131759",
+                    "experiment": "custom_run",
+                    "task": "custom:example_counting",
+                    "task_label": "Contagem (exemplo)",
+                    "status": "completed",
+                    "timestamp": _TS_LATE,
+                    "config": {
+                        "name": "custom_run",
+                        "schema_version": 3,
+                        "training": {"epochs": 10},
+                        "data": {"base_dir": "."},
+                    },
+                    "metrics": {
+                        "best_epoch": 10,
+                        "total_epochs": 10,
+                        "mae": 1.3464,
+                        "rmse": 1.5382,
+                        "test_mae": 1.2876,
+                    },
+                    "history": [],
+                }
+            ),
+            encoding="utf-8",
+        )
+        return run_dir
+
+    def test_custom_run_is_listed(self, tmp_path: Path) -> None:
+        self._custom_run_json(tmp_path)
+        runs = _load_runs(tmp_path)
+        assert len(runs) == 1
+        assert runs[0].task == "custom:example_counting"
+        assert runs[0].epochs_completed == 10
+
+    def test_model_column_falls_back_to_the_task_label(self, tmp_path: Path) -> None:
+        self._custom_run_json(tmp_path)
+        assert _load_runs(tmp_path)[0].model_arch == "Contagem (exemplo)"
+
+    def test_declared_metrics_are_surfaced_under_their_own_names(
+        self, tmp_path: Path
+    ) -> None:
+        self._custom_run_json(tmp_path)
+        metrics = _load_runs(tmp_path)[0].final_metrics
+        # The researcher's own names, not a built-in task's fixed key map.
+        assert metrics["mae"] == pytest.approx(1.3464)
+        assert metrics["rmse"] == pytest.approx(1.5382)
+        # Bookkeeping keys are not metrics.
+        assert "total_epochs" not in metrics
+        assert "best_epoch" not in metrics

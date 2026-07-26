@@ -1,3 +1,4 @@
+import type { TaskDescriptor } from "../lib/custom-tasks";
 import type { JsonSchema } from "../types/schema";
 import type { RunResponse, RunResult, RunStatus, RunSummary } from "../types/run";
 
@@ -187,6 +188,54 @@ export async function runReplicates(
   payload: Record<string, unknown>,
 ): Promise<RunResponse> {
   return request<RunResponse>(`/${task}/replicates`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+/** Every renderable task: the five built-ins + registered custom tasks
+ *  (ADR-058). The backend rescans user_tasks/ per call, so a freshly dropped
+ *  file appears on reload without restarting the server. */
+export async function fetchTasks(): Promise<{ tasks: TaskDescriptor[] }> {
+  return request<{ tasks: TaskDescriptor[] }>("/tasks");
+}
+
+/** A custom task's Config schema — drives the generic form. */
+export async function fetchCustomSchema(key: string): Promise<JsonSchema> {
+  return request<JsonSchema>(`/custom/${key}/schema`);
+}
+
+/** Start a custom-task run. Shares /experiment/{status,events,result}. */
+export async function runCustomTask(
+  key: string,
+  config: Record<string, unknown>,
+): Promise<RunResponse> {
+  return request<RunResponse>(`/custom/${key}/run`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(config),
+  });
+}
+
+/** Grid/random/Optuna sweep over a custom task's own config fields. */
+export async function runCustomSweep(
+  key: string,
+  payload: Record<string, unknown>,
+): Promise<RunResponse> {
+  return request<RunResponse>(`/custom/${key}/sweep`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+/** Multi-seed replicates for a custom task (ADR-056). */
+export async function runCustomReplicates(
+  key: string,
+  payload: Record<string, unknown>,
+): Promise<RunResponse> {
+  return request<RunResponse>(`/custom/${key}/replicates`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),

@@ -36,3 +36,17 @@ outputs/LOOP_STATUS.md
 coverage.json
 # Playwright MCP scratch output
 .playwright-mcp/
+
+# Researcher-defined tasks and models are personal work: the repo ships only
+# the guides and the worked examples (ADR-048/058). Without this a broad
+# `git add -A` sweeps a user's own experiments into the project history.
+user_tasks/*
+!user_tasks/README.md
+!user_tasks/example_counting/
+user_models/*
+!user_models/README.md
+!user_models/example_custom_model.py
+
+# Pretrained weights Ultralytics downloads into the CWD on first use — tens of
+# megabytes of build output, never source.
+*.pt

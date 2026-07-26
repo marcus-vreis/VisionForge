@@ -2502,7 +2502,22 @@ def _summary_metrics(task: str, metrics: dict[str, Any]) -> dict[str, float]:
 
     Missing or non-numeric values are skipped so a partially-written run.json
     (Ultralytics omits mAP early in training) never raises.
+
+    A researcher-defined task (``custom:<key>``) declares its own metric names,
+    so there is no fixed map: the first three numeric metrics are surfaced
+    under their real names, which is what the generic history card renders.
     """
+    if task.startswith("custom:"):
+        declared: dict[str, float] = {}
+        for name, value in metrics.items():
+            if name in ("total_epochs", "best_epoch") or len(declared) >= 3:
+                continue
+            try:
+                declared[name] = float(value)
+            except (TypeError, ValueError):
+                continue
+        return declared
+
     key_map = _SUMMARY_METRIC_KEYS.get(task, _SUMMARY_METRIC_KEYS["classification"])
     out: dict[str, float] = {}
     for label, src in key_map.items():
@@ -2537,7 +2552,11 @@ def _parse_run_summary(run_dir: Path, data: dict[str, Any]) -> RunSummary:
 
     config: dict[str, Any] = data["config"]
     metrics: dict[str, Any] = data.get("metrics", {})
-    task: str = config["task"]
+    # A researcher-defined task (ADR-058) has neither `config.task` nor a
+    # `model` block — its identity is the top-level `task: "custom:<key>"`
+    # the engine stamps. Reading them unguarded made every custom run get
+    # skipped as unparsable, so they never reached History.
+    task: str = config.get("task") or data.get("task", "classification")
 
     final_metrics = _summary_metrics(task, metrics)
 
@@ -2556,14 +2575,20 @@ def _parse_run_summary(run_dir: Path, data: dict[str, Any]) -> RunSummary:
         or ("detection" if task == "detection" else "classification")
     )
 
+    # Custom tasks declare no architecture; the researcher's label is the most
+    # useful thing to show in that column.
+    model_arch = (config.get("model") or {}).get("name") or data.get("task_label", task)
+
     return RunSummary(
         run_id=run_dir.name,
         experiment_name=data["experiment"],
-        model_arch=config["model"]["name"],
+        model_arch=str(model_arch),
         task=task,
         status=status,
         started_at=started_at,
         finished_at=finished_at,
+        # Required: a run.json without it is incomplete and must be skipped
+        # (the caller catches the KeyError), not listed with a fake 0.
         epochs_completed=int(metrics["total_epochs"]),
         final_metrics=final_metrics,
         preprocessing_count=preprocessing_count,
