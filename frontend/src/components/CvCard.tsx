@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { NumberField, Toggle } from "./controls";
 
 export interface CvPayload {
@@ -11,6 +11,9 @@ interface CvCardProps {
   accent: string;
   disabled?: boolean;
   onCv: (payload: CvPayload) => void;
+  /** Incremented by the main "Treinar" button so it runs the selected
+   *  strategy instead of silently starting a plain single run. */
+  runSignal?: number;
 }
 
 const card: React.CSSProperties = {
@@ -33,12 +36,23 @@ const sectionLabel: React.CSSProperties = {
 /** K-fold cross-validation launcher for a standalone task (ADR-050): splits
  *  the pooled training rows into K folds and reports fold-a-fold metrics +
  *  mean ± std — the honest estimate when there is no big held-out val set. */
-export function CvCard({ accent, disabled, onCv }: CvCardProps) {
+export function CvCard({ accent, disabled, onCv, runSignal }: CvCardProps) {
   const [nFolds, setNFolds] = useState(5);
   const [shuffle, setShuffle] = useState(true);
   const [foldSeed, setFoldSeed] = useState(42);
 
   const canRun = !disabled && nFolds >= 2;
+
+  const run = () => onCv({ n_folds: nFolds, shuffle, fold_seed: foldSeed });
+
+  // Fire on a new signal only — see ReplicatesCard for the rationale.
+  const lastSignal = useRef(runSignal ?? 0);
+  useEffect(() => {
+    if (runSignal === undefined || runSignal === lastSignal.current) return;
+    lastSignal.current = runSignal;
+    if (canRun) run();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runSignal]);
 
   return (
     <div style={card}>
@@ -79,7 +93,7 @@ export function CvCard({ accent, disabled, onCv }: CvCardProps) {
         </div>
         <button
           type="button"
-          onClick={() => onCv({ n_folds: nFolds, shuffle, fold_seed: foldSeed })}
+          onClick={run}
           disabled={!canRun}
           style={{
             padding: "12px 18px",

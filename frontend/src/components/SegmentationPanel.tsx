@@ -39,6 +39,10 @@ interface SegmentationPanelProps {
   busy?: boolean;
   onSweep?: (payload: SweepPayload) => void;
   onReplicates?: (payload: ReplicatesPayload) => void;
+  /** Lets App label and route the main Treinar button by the active strategy. */
+  onStrategyChange?: (strategy: PanelStrategy) => void;
+  /** Incremented by Treinar so the selected strategy's card runs. */
+  runSignal?: number;
   onCv?: (payload: CvPayload) => void;
 }
 
@@ -66,6 +70,8 @@ export function SegmentationPanel({
   busy,
   onSweep,
   onReplicates,
+  onStrategyChange,
+  runSignal,
   onCv,
 }: SegmentationPanelProps) {
   const [picking, setPicking] = useState(false);
@@ -138,7 +144,10 @@ export function SegmentationPanel({
         onNameChange={(v) => setFormData((p) => ({ ...p, name: v }))}
         placeholder="segmentation_001"
         strategy={strategy}
-        onStrategyChange={setStrategy}
+        onStrategyChange={(s) => {
+          setStrategy(s);
+          onStrategyChange?.(s);
+        }}
         strategies={[
           { value: "simple", label: "Treino simples" },
           { value: "cv", label: "K-Fold (CV)" },
@@ -173,6 +182,7 @@ export function SegmentationPanel({
           accent={accent}
           disabled={busy}
           onSweep={onSweep}
+          runSignal={runSignal}
         />
       )}
       {strategy === "replicates" && onReplicates && (
@@ -181,10 +191,11 @@ export function SegmentationPanel({
           accent={accent}
           disabled={busy}
           onReplicates={onReplicates}
+          runSignal={runSignal}
         />
       )}
       {strategy === "cv" && onCv && (
-        <CvCard accent={accent} disabled={busy} onCv={onCv} />
+        <CvCard accent={accent} disabled={busy} onCv={onCv} runSignal={runSignal} />
       )}
 
       {/* Modelo */}

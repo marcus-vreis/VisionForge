@@ -46,6 +46,10 @@ interface DetectionPanelProps {
   busy?: boolean;
   onSweep?: (payload: SweepPayload) => void;
   onReplicates?: (payload: ReplicatesPayload) => void;
+  /** Lets App label and route the main Treinar button by the active strategy. */
+  onStrategyChange?: (strategy: PanelStrategy) => void;
+  /** Incremented by Treinar so the selected strategy's card runs. */
+  runSignal?: number;
 }
 
 const sectionLabel: React.CSSProperties = {
@@ -72,6 +76,8 @@ export function DetectionPanel({
   busy,
   onSweep,
   onReplicates,
+  onStrategyChange,
+  runSignal,
 }: DetectionPanelProps) {
   const [picking, setPicking] = useState(false);
   const [strategy, setStrategy] = useState<PanelStrategy>("simple");
@@ -171,7 +177,10 @@ export function DetectionPanel({
         onNameChange={(v) => setFormData((p) => ({ ...p, name: v }))}
         placeholder="detection_001"
         strategy={strategy}
-        onStrategyChange={setStrategy}
+        onStrategyChange={(s) => {
+          setStrategy(s);
+          onStrategyChange?.(s);
+        }}
         onExportYaml={() =>
           exportConfigToYaml(
             {
@@ -208,6 +217,7 @@ export function DetectionPanel({
           accent={accent}
           disabled={busy}
           onSweep={onSweep}
+          runSignal={runSignal}
         />
       )}
       {strategy === "replicates" && onReplicates && (
@@ -216,6 +226,7 @@ export function DetectionPanel({
           accent={accent}
           disabled={busy}
           onReplicates={onReplicates}
+          runSignal={runSignal}
         />
       )}
 

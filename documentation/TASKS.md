@@ -676,8 +676,13 @@ and lost reachable features their backends support. Bricks, by severity:
 - [x] brick F — classification alignment shipped 2026-07-02: "Comparar modelos"
   removido do BlockSelector (comparação = grid de um eixo sobre Arquitetura,
   hint no modo grid); backend block + report mantidos para YAML legado.
-  **ADR-059 completo (bricks A–F).** Follow-ups: Treinar respeitar a estratégia
-  selecionada; comparação replicada (Fase D).
+  **ADR-059 completo (bricks A–F).** Follow-up fechado 2026-07-26: **o botão
+  Treinar respeita a estratégia selecionada** — ele agora se renomeia
+  ("▶ Rodar sweep/K-fold/réplicas") e dispara o card da estratégia ativa via
+  um `runSignal`, em vez de iniciar silenciosamente um treino simples enquanto
+  o header dizia "Sweep". Classificação já carregava a estratégia no
+  `config.block`, então segue pelo caminho normal. Resta: comparação replicada
+  (Fase D).
 
 **End-to-end self-test ✅ (ADR-060, 2026-07-26)** — `visionforge selftest`
 trains every task through the *real* API on synthetic data (`utils/selftest.py`

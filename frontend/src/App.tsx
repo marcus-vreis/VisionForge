@@ -10,6 +10,7 @@ import {
   runTaskCv,
 } from "./api/client";
 import type { CvPayload } from "./components/CvCard";
+import type { PanelStrategy } from "./components/ExperimentHeader";
 import type { SweepPayload } from "./components/SweepCard";
 import type { ReplicatesPayload } from "./lib/replicates-form";
 import { BottomBar } from "./components/BottomBar";
@@ -62,6 +63,14 @@ import { TASKS, type TaskDefinition } from "./types/tasks";
 /** Standalone tasks that expose the comparison/sweep advanced surface. */
 type AdvancedTask = "regression" | "segmentation" | "detection" | "anomaly";
 
+/** The main button says what it will actually run (ADR-059 follow-up). */
+const TRAIN_LABELS: Record<PanelStrategy, string> = {
+  simple: "▶ Treinar",
+  cv: "▶ Rodar K-fold",
+  sweep: "▶ Rodar sweep",
+  replicates: "▶ Rodar réplicas",
+};
+
 export default function App() {
   const { status, result, error, validationErrors, progressEvents, submit, reset } =
     useExperiment();
@@ -99,6 +108,14 @@ export default function App() {
   const [customForms, setCustomForms] = useState<
     Record<string, Record<string, unknown>>
   >({});
+  // The strategy lives in each panel's header; App mirrors it so the main
+  // Treinar button runs what the researcher selected instead of silently
+  // starting a plain single run. `runSignal` is the trigger the active
+  // strategy's card listens to.
+  const [strategyByTask, setStrategyByTask] = useState<
+    Record<string, PanelStrategy>
+  >({});
+  const [runSignal, setRunSignal] = useState(0);
 
   // The overlay stays MOUNTED for the whole life of a run (hidden via CSS when
   // minimized) so its logs and progress survive minimize/reopen.
@@ -158,7 +175,18 @@ export default function App() {
     await submit(body, { run: run ?? ((p) => runCustomTask(key, p)) });
   };
 
+  const activeStrategy = strategyByTask[activeKey] ?? "simple";
+  const setActiveStrategy = (s: PanelStrategy) =>
+    setStrategyByTask((prev) => ({ ...prev, [activeKey]: s }));
+
   const handleTrain = async () => {
+    // Classification encodes its strategy in config.block, so its payload
+    // already carries it; the standalone panels keep theirs in cards, which
+    // this signal triggers.
+    if (activeStrategy !== "simple" && activeKey !== "classification") {
+      setRunSignal((n) => n + 1);
+      return;
+    }
     if (isCustomTask(activeTask)) {
       await startCustom(
         activeTask.key,
@@ -423,6 +451,8 @@ export default function App() {
                 (p) => runCustomReplicates(activeTask.key, p),
               )
             }
+            onStrategyChange={setActiveStrategy}
+            runSignal={runSignal}
           />
         ) : activeKey === "detection" ? (
           <DetectionPanel
@@ -435,6 +465,8 @@ export default function App() {
             onReplicates={(payload) =>
               void handleReplicates("detection", payload)
             }
+            onStrategyChange={setActiveStrategy}
+            runSignal={runSignal}
           />
         ) : activeKey === "regression" ? (
           <RegressionPanel
@@ -448,6 +480,8 @@ export default function App() {
               void handleReplicates("regression", payload)
             }
             onCv={(payload) => void handleTaskCv("regression", payload)}
+            onStrategyChange={setActiveStrategy}
+            runSignal={runSignal}
           />
         ) : activeKey === "segmentation" ? (
           <SegmentationPanel
@@ -461,6 +495,8 @@ export default function App() {
               void handleReplicates("segmentation", payload)
             }
             onCv={(payload) => void handleTaskCv("segmentation", payload)}
+            onStrategyChange={setActiveStrategy}
+            runSignal={runSignal}
           />
         ) : activeKey === "anomaly" ? (
           <AnomalyPanel
@@ -473,6 +509,8 @@ export default function App() {
             onReplicates={(payload) =>
               void handleReplicates("anomaly", payload)
             }
+            onStrategyChange={setActiveStrategy}
+            runSignal={runSignal}
           />
         ) : (
           <ParamPanel
@@ -514,6 +552,7 @@ export default function App() {
         onHistory={() => setShowHistory(true)}
         onTrain={() => void handleTrain()}
         disabled={status.status === "running"}
+        trainLabel={TRAIN_LABELS[activeStrategy] ?? "▶ Treinar"}
         historyCount={historyCount}
         selection={device}
         onSelectionChange={setDevice}

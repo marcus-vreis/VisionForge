@@ -33,6 +33,10 @@ interface CustomTaskPanelProps {
   busy?: boolean;
   onSweep: (payload: SweepPayload) => void;
   onReplicates: (payload: ReplicatesPayload) => void;
+  /** Lets App label and route the main Treinar button by the active strategy. */
+  onStrategyChange?: (strategy: PanelStrategy) => void;
+  /** Incremented by Treinar so the selected strategy's card runs. */
+  runSignal?: number;
 }
 
 const STRATEGIES: { value: PanelStrategy; label: string }[] = [
@@ -60,6 +64,8 @@ export function CustomTaskPanel({
   busy,
   onSweep,
   onReplicates,
+  onStrategyChange,
+  runSignal,
 }: CustomTaskPanelProps) {
   const [schema, setSchema] = useState<JsonSchema | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -116,7 +122,10 @@ export function CustomTaskPanel({
         onNameChange={(v) => setFormData({ ...formData, name: v })}
         placeholder={`${task.key}_001`}
         strategy={strategy}
-        onStrategyChange={setStrategy}
+        onStrategyChange={(s) => {
+          setStrategy(s);
+          onStrategyChange?.(s);
+        }}
         strategies={STRATEGIES}
         onExportYaml={() => exportConfigToYaml(formData, name || task.key)}
         onImportConfig={(data) => {
@@ -134,6 +143,7 @@ export function CustomTaskPanel({
           accent={task.accent}
           disabled={busy}
           onSweep={onSweep}
+          runSignal={runSignal}
         />
       )}
       {strategy === "replicates" && (
@@ -142,6 +152,7 @@ export function CustomTaskPanel({
           accent={task.accent}
           disabled={busy}
           onReplicates={onReplicates}
+          runSignal={runSignal}
         />
       )}
 

@@ -40,6 +40,10 @@ interface RegressionPanelProps {
   busy?: boolean;
   onSweep?: (payload: SweepPayload) => void;
   onReplicates?: (payload: ReplicatesPayload) => void;
+  /** Lets App label and route the main Treinar button by the active strategy. */
+  onStrategyChange?: (strategy: PanelStrategy) => void;
+  /** Incremented by Treinar so the selected strategy's card runs. */
+  runSignal?: number;
   onCv?: (payload: CvPayload) => void;
 }
 
@@ -67,6 +71,8 @@ export function RegressionPanel({
   busy,
   onSweep,
   onReplicates,
+  onStrategyChange,
+  runSignal,
   onCv,
 }: RegressionPanelProps) {
   const [picking, setPicking] = useState(false);
@@ -131,7 +137,10 @@ export function RegressionPanel({
         onNameChange={(v) => setFormData((p) => ({ ...p, name: v }))}
         placeholder="regression_001"
         strategy={strategy}
-        onStrategyChange={setStrategy}
+        onStrategyChange={(s) => {
+          setStrategy(s);
+          onStrategyChange?.(s);
+        }}
         strategies={[
           { value: "simple", label: "Treino simples" },
           { value: "cv", label: "K-Fold (CV)" },
@@ -166,6 +175,7 @@ export function RegressionPanel({
           accent={accent}
           disabled={busy}
           onSweep={onSweep}
+          runSignal={runSignal}
         />
       )}
       {strategy === "replicates" && onReplicates && (
@@ -174,10 +184,11 @@ export function RegressionPanel({
           accent={accent}
           disabled={busy}
           onReplicates={onReplicates}
+          runSignal={runSignal}
         />
       )}
       {strategy === "cv" && onCv && (
-        <CvCard accent={accent} disabled={busy} onCv={onCv} />
+        <CvCard accent={accent} disabled={busy} onCv={onCv} runSignal={runSignal} />
       )}
 
       {/* Modelo */}

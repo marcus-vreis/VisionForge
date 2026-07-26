@@ -13,6 +13,9 @@ interface BottomBarProps {
    * second run. */
   trainingMinimized?: boolean;
   onReopenTraining?: () => void;
+  /** What the button will actually run, from the panel's strategy selector —
+   * so "Treinar" never silently starts a plain run while Sweep is selected. */
+  trainLabel?: string;
 }
 
 /** Fixed bottom action bar with History, Treinar, and device selector. */
@@ -26,6 +29,7 @@ export function BottomBar({
   isRunning,
   trainingMinimized = false,
   onReopenTraining,
+  trainLabel,
 }: BottomBarProps) {
   // While a run is minimized, the central button reopens the overlay rather
   // than triggering a new training (a duplicate run would race with the
@@ -42,7 +46,7 @@ export function BottomBar({
     ? "🔬 abrir treino"
     : isRunning
       ? "Executando…"
-      : "▶ Treinar";
+      : (trainLabel ?? "▶ Treinar");
   return (
     <div
       style={{

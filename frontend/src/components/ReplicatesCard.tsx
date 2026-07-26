@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { NumberField, SelectField, Segmented, TextField } from "./controls";
 import {
   buildReplicatesPayload,
@@ -19,6 +19,9 @@ interface ReplicatesCardProps {
   accent: string;
   disabled?: boolean;
   onReplicates: (payload: ReplicatesPayload) => void;
+  /** Incremented by the main "Treinar" button so it runs the selected
+   *  strategy instead of silently starting a plain single run. */
+  runSignal?: number;
 }
 
 const card: React.CSSProperties = {
@@ -46,6 +49,7 @@ export function ReplicatesCard({
   accent,
   disabled,
   onReplicates,
+  runSignal,
 }: ReplicatesCardProps) {
   const [seedMode, setSeedMode] = useState<ReplicatesSeedMode>("auto");
   const [nReplicates, setNReplicates] = useState(5);
@@ -56,6 +60,19 @@ export function ReplicatesCard({
   const problem = seedMode === "explicit" ? seedsProblem(seeds) : null;
   const count = seedMode === "explicit" ? seeds.length : nReplicates;
   const canRun = !disabled && problem === null && count >= 2;
+
+  const run = () =>
+    onReplicates(buildReplicatesPayload(seedMode, nReplicates, rawSeeds, metric));
+
+  // Fire on a new signal only — the card keeps owning its own fields, so the
+  // effect deliberately does not depend on them (it would re-fire on typing).
+  const lastSignal = useRef(runSignal ?? 0);
+  useEffect(() => {
+    if (runSignal === undefined || runSignal === lastSignal.current) return;
+    lastSignal.current = runSignal;
+    if (canRun) run();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runSignal]);
 
   return (
     <div style={card}>
@@ -124,11 +141,7 @@ export function ReplicatesCard({
         </div>
         <button
           type="button"
-          onClick={() =>
-            onReplicates(
-              buildReplicatesPayload(seedMode, nReplicates, rawSeeds, metric),
-            )
-          }
+          onClick={run}
           disabled={!canRun}
           style={{
             padding: "12px 18px",

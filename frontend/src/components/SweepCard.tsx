@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { NumberField, SelectField, Segmented, TextField } from "./controls";
 import {
   buildSearchSpace,
@@ -33,6 +33,9 @@ interface SweepCardProps {
   accent: string;
   disabled?: boolean;
   onSweep: (payload: SweepPayload) => void;
+  /** Incremented by the main "Treinar" button so it runs the selected
+   *  strategy instead of silently starting a plain single run. */
+  runSignal?: number;
 }
 
 const card: React.CSSProperties = {
@@ -67,6 +70,7 @@ export function SweepCard({
   accent,
   disabled,
   onSweep,
+  runSignal,
 }: SweepCardProps) {
   const [mode, setMode] = useState<SweepMode>("grid");
   const [rows, setRows] = useState<SweepRow[]>([makeSweepRow()]);
@@ -110,6 +114,19 @@ export function SweepCard({
   const paramCount = Object.keys(searchSpace).length;
   const trialCount = mode === "grid" ? gridTrialCount(rows) : nTrials;
   const canRun = paramCount > 0 && trialCount > 0 && !disabled;
+
+  const run = () =>
+    onSweep({ mode, search_space: searchSpace, metric, n_trials: nTrials, seed });
+
+  // Fire on a new signal only — the card keeps owning its own fields, so the
+  // effect deliberately does not depend on them (it would re-fire on typing).
+  const lastSignal = useRef(runSignal ?? 0);
+  useEffect(() => {
+    if (runSignal === undefined || runSignal === lastSignal.current) return;
+    lastSignal.current = runSignal;
+    if (canRun) run();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runSignal]);
 
   return (
     <div style={card}>
@@ -363,7 +380,7 @@ export function SweepCard({
         <button
           type="button"
           onClick={() =>
-            onSweep({ mode, search_space: searchSpace, metric, n_trials: nTrials, seed })
+            run()
           }
           disabled={!canRun}
           style={{

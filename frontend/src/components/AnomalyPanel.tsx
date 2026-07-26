@@ -37,6 +37,10 @@ interface AnomalyPanelProps {
   busy?: boolean;
   onSweep?: (payload: SweepPayload) => void;
   onReplicates?: (payload: ReplicatesPayload) => void;
+  /** Lets App label and route the main Treinar button by the active strategy. */
+  onStrategyChange?: (strategy: PanelStrategy) => void;
+  /** Incremented by Treinar so the selected strategy's card runs. */
+  runSignal?: number;
 }
 
 const sectionLabel: React.CSSProperties = {
@@ -63,6 +67,8 @@ export function AnomalyPanel({
   busy,
   onSweep,
   onReplicates,
+  onStrategyChange,
+  runSignal,
 }: AnomalyPanelProps) {
   const [picking, setPicking] = useState(false);
   const [strategy, setStrategy] = useState<PanelStrategy>("simple");
@@ -126,7 +132,10 @@ export function AnomalyPanel({
         onNameChange={(v) => setFormData((p) => ({ ...p, name: v }))}
         placeholder="anomaly_001"
         strategy={strategy}
-        onStrategyChange={setStrategy}
+        onStrategyChange={(s) => {
+          setStrategy(s);
+          onStrategyChange?.(s);
+        }}
         onExportYaml={() =>
           exportConfigToYaml(buildAnomalyPayload(formData), formData.name)
         }
@@ -155,6 +164,7 @@ export function AnomalyPanel({
           accent={accent}
           disabled={busy}
           onSweep={onSweep}
+          runSignal={runSignal}
         />
       )}
       {strategy === "replicates" && onReplicates && (
@@ -163,6 +173,7 @@ export function AnomalyPanel({
           accent={accent}
           disabled={busy}
           onReplicates={onReplicates}
+          runSignal={runSignal}
         />
       )}
 
