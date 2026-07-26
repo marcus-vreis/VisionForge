@@ -17,6 +17,14 @@ visionforge doctor                        # prints the torch install line for YO
 cd frontend && npm install && npm run build && cd ..
 ```
 
+Before pointing it at real data, confirm the install actually trains — this
+runs every task through the real API on synthetic data and needs no dataset,
+GPU or network:
+
+```bash
+visionforge selftest --quick
+```
+
 ## 2. Launch the GUI and get a dataset
 
 ```bash

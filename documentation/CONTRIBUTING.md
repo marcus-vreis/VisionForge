@@ -109,6 +109,20 @@ Hooks that run on every `git commit`:
 | mypy | Fails on type errors |
 | pytest | Fails if any test breaks |
 
+`pytest` here runs the fast suite: cases marked `slow` (real trainings behind
+a live server, ADR-060) are deselected by `addopts` so committing stays quick.
+Before opening a PR that touches a trainer, a block, the API or the SSE
+contract, also run the end-to-end matrix:
+
+```bash
+visionforge selftest          # every task x strategy, real API, synthetic data
+pytest -m slow                # the harness's own live cases
+```
+
+Anything that changes what the browser receives — report shapes, event names,
+endpoints — should be reflected in `utils/selftest.py`'s case table, so the
+next run catches a regression the mocked route tests cannot.
+
 ## Adding a new ExperimentBlock
 
 1. Create `src/visionforge/blocks/<your_block>.py`

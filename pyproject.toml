@@ -159,7 +159,13 @@ exclude                = ["outputs/", "configs/", ".venv/"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
-addopts   = "-v --cov=src --cov-report=term-missing"
+# Slow cases train real models through a live server (ADR-060). They are
+# deselected here so the pre-commit suite stays seconds-fast; run them with
+# `pytest -m slow`, or the full matrix with `visionforge selftest`.
+addopts   = "-v --cov=src --cov-report=term-missing -m 'not slow'"
+markers = [
+    "slow: end-to-end cases that start a server and train real models",
+]
 
 
 [tool.coverage.run]

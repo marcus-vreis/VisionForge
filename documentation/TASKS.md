@@ -676,6 +676,16 @@ and lost reachable features their backends support. Bricks, by severity:
   **ADR-059 completo (bricks A–F).** Follow-ups: Treinar respeitar a estratégia
   selecionada; comparação replicada (Fase D).
 
+**End-to-end self-test ✅ (ADR-060, 2026-07-26)** — `visionforge selftest`
+trains every task through the *real* API on synthetic data (`utils/selftest.py`
++ `utils/selftest_data.py`), asserting run completion, report shape and the
+**SSE live-monitor contract** per (task, strategy) pair — 21 cases, ~90s on
+CPU, offline. Fast harness tests in `tests/e2e/`; live cases carry the `slow`
+marker (deselected by default). Found on its first full run: replicates/sweeps
+accepted a metric no trial reports, silently returning `headline: None` (blank
+results card) or ranking every trial as 0.0 — now a loud failure naming the
+available metrics (`_require_reported_metric`).
+
 **GUI polish sweep (2026-07-15, user-reported):** history 500 after k-fold
 (CV wrote timezone-aware timestamps while every other writer is naive —
 writer fixed + parse normalizes so old run.jsons heal); preprocess/augment

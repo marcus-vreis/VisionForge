@@ -34,7 +34,9 @@ from visionforge.utils.environment import capture_environment
 try:  # ultralytics is an optional extra ([detection]); bound lazily.
     from ultralytics import YOLO as _YOLO  # type: ignore[import-not-found]
 except ImportError:  # pragma: no cover - exercised via monkeypatch in tests
-    _YOLO = None
+    # The ignore matters only when ultralytics IS installed, where mypy binds
+    # _YOLO to the class and rejects the None fallback.
+    _YOLO = None  # type: ignore[assignment,misc]
 
 # Module global so tests can patch it without ultralytics installed.
 YOLO: Any = _YOLO

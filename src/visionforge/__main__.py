@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 from typing import Any
 
@@ -122,6 +123,36 @@ def main() -> None:
         help="Run the recommended install after prompting for confirmation.",
     )
 
+    selftest_parser = subparsers.add_parser(
+        "selftest",
+        help="Train every task through the real GUI API on synthetic data (ADR-060).",
+    )
+    selftest_parser.add_argument(
+        "--tasks",
+        default="all",
+        help="comma-separated task keys, or 'all' (default): "
+        "classification,regression,segmentation,anomaly,detection,custom",
+    )
+    selftest_parser.add_argument(
+        "--strategies",
+        default="all",
+        help="comma-separated strategies, or 'all' (default): simple,cv,sweep,replicates",
+    )
+    selftest_parser.add_argument(
+        "--quick",
+        action="store_true",
+        help="only the 'simple' strategy — a fast is-my-install-sane check",
+    )
+    selftest_parser.add_argument(
+        "--workdir",
+        type=Path,
+        default=None,
+        help="where datasets and outputs land (default: a temp dir, kept on failure)",
+    )
+    selftest_parser.add_argument(
+        "--json", type=Path, default=None, help="also write the outcomes as JSON here"
+    )
+
     newtask_parser = subparsers.add_parser(
         "new-task",
         help="Scaffold a custom task under user_tasks/ (ADR-058).",
@@ -141,6 +172,49 @@ def main() -> None:
     args = parser.parse_args()
 
     setup_logger()
+
+    if args.command == "selftest":
+        import sys as _sys
+        import tempfile
+
+        from visionforge.utils.logger import logger
+        from visionforge.utils.selftest import (
+            STRATEGIES,
+            TASKS,
+            format_report,
+            run_selftest,
+        )
+
+        tasks = TASKS if args.tasks == "all" else tuple(args.tasks.split(","))
+        if args.quick:
+            strategies: tuple[str, ...] = ("simple",)
+        else:
+            strategies = (
+                STRATEGIES
+                if args.strategies == "all"
+                else tuple(args.strategies.split(","))
+            )
+        unknown = [t for t in tasks if t not in TASKS] + [
+            s for s in strategies if s not in STRATEGIES
+        ]
+        if unknown:
+            logger.error("Unknown task/strategy: {}", ", ".join(unknown))
+            _sys.exit(2)
+
+        workdir = args.workdir or Path(tempfile.mkdtemp(prefix="visionforge_selftest_"))
+        logger.info("Self-test workdir: {}", workdir)
+        outcomes = run_selftest(workdir, tasks=tasks, strategies=strategies)
+        report = format_report(outcomes)
+        print(f"\n{report}\n")  # noqa: T201 — the table IS the command's output
+
+        if args.json is not None:
+            args.json.parent.mkdir(parents=True, exist_ok=True)
+            args.json.write_text(
+                json.dumps([vars(o) for o in outcomes], indent=2), encoding="utf-8"
+            )
+            logger.info("Wrote {}", args.json)
+
+        _sys.exit(0 if all(o.status == "passed" for o in outcomes) else 1)
 
     if args.command == "new-task":
         import sys as _sys

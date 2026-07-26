@@ -1076,3 +1076,51 @@ train it". One canonical contract restores the facilitation thesis (the user
 learns one layout, every task behaves the same), closes a real correctness
 hole, and prevents the recurring backend-ahead-of-GUI debt (Phase 5.5 déjà vu).
 Defaults are NOT changed (behavior-preserving); they are surfaced.
+
+## ADR-060 — `visionforge selftest`: end-to-end verification through the real API
+
+**Date:** 2026-07
+**Status:** Accepted — shipped 2026-07-26
+**Extends:** ADR-010 (CPU-only CI), ADR-013 (run.json), ADR-041 (TaskRunner)
+
+**Decision:** A first-class self-test command that trains **every task through
+the real GUI API**, not through the blocks. `visionforge selftest` builds tiny
+synthetic datasets in the exact on-disk layouts the tasks consume
+(`utils/selftest_data.py`), starts the real FastAPI app on an ephemeral socket,
+and POSTs one case per (task, strategy) pair to the same endpoints the browser
+uses. Each case is validated on three axes:
+
+1. the run reaches `completed` and its stored report carries the keys that
+   task's block actually returns (train/test sections for the
+   regression-family tasks, `detection` for detection, `metrics` for custom);
+2. the **SSE stream** delivers the live-monitor contract — `epoch_end` for
+   single runs, `trial_start`/`trial_end` for every multi-trial strategy;
+3. artifacts land on disk.
+
+Everything is CPU-sized, `pretrained=False` and `num_workers=0`, so it runs
+offline on a bare install in minutes and writes only inside a scratch dir.
+Filters (`--tasks`, `--strategies`, `--quick`) narrow the matrix; `--json`
+emits machine-readable outcomes; exit code is non-zero if any case failed.
+
+Test layering: the dataset builders, case table and formatter are covered by
+fast always-on unit tests (`tests/e2e/`); the live-training cases carry the
+`slow` marker and are **deselected by default** (`addopts = -m 'not slow'`) so
+the pre-commit suite stays seconds-fast, with `pytest -m slow` and the CLI as
+the explicit gates.
+
+**Reason:** The unit suite mocked exactly the seam that kept breaking. Three
+defects reached the user in one week — a 500 opening History after k-fold, a
+preview that composed filters correctly but served a cached image, and
+multi-trial runs that streamed *nothing* while the progress bar crawled on
+wall-clock — and **every one of them passed CI**, because the tests asserted
+against mocked orchestrators and never drove a real run end to end. The gap was
+structural: no test started a server, trained something, and looked at what the
+browser would actually receive. This command closes it, and doubles as an
+install verifier for a researcher who has VisionForge but no dataset yet
+(`visionforge doctor` checks the environment; `selftest` checks the pipeline).
+
+The server is a real uvicorn socket rather than an in-process test client on
+purpose: the loop-per-request behaviour of `TestClient` outside a context
+manager silently destroys genuinely-async background training (learned in
+ADR-058 brick 3), so a fidelity gap there would hide precisely the class of bug
+this exists to catch.

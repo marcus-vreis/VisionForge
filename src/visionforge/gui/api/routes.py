@@ -3026,6 +3026,7 @@ async def _execute_sweep(
         )
         if not any(t.status == "success" for t in trials):
             raise RuntimeError("All sweep trials failed — no ranking available.")
+        _require_reported_metric(metric, [t.metrics for t in trials], "sweep")
         report = _sweep_report(trials, req.mode, metric)
         report["report_dir"] = _write_advanced_summary(
             base_config_dict, "sweep", report
@@ -3050,6 +3051,30 @@ async def _execute_sweep(
     finally:
         if queue is not None:
             await queue.put(None)
+
+
+def _require_reported_metric(
+    metric: str, per_trial_metrics: list[dict[str, float]], kind: str
+) -> None:
+    """Fail loudly when no trial reported the metric the run is ranked/aggregated by.
+
+    Without this the failure is silent and misleading: a sweep ranks every
+    trial as 0.0 and calls an arbitrary one "best", and a replicate set returns
+    ``headline: None`` that renders as an empty card. The metric is chosen
+    before any training, so the earliest honest place to catch a typo (or a
+    name the runner never projects, e.g. ``test_accuracy`` vs ``accuracy``) is
+    here, once results exist.
+
+    Raises:
+        RuntimeError: naming the metric and what the trials actually reported.
+    """
+    if any(metric in m for m in per_trial_metrics):
+        return
+    available = sorted({key for m in per_trial_metrics for key in m})
+    raise RuntimeError(
+        f"No {kind} reported the metric '{metric}' — "
+        f"available: {available or 'none'}. Pick one of those."
+    )
 
 
 def _sweep_report(trials: list[SweepTrial], mode: str, metric: str) -> dict[str, Any]:
@@ -3251,6 +3276,7 @@ async def _execute_replicates(
         )
         if not any(t.status == "success" for t in trials):
             raise RuntimeError("All replicates failed — no aggregate available.")
+        _require_reported_metric(metric, [t.metrics for t in trials], "replicate")
         report = _replicates_report(trials, seeds, metric)
         report["report_dir"] = _write_advanced_summary(
             base_config_dict, "replicates", report

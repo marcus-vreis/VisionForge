@@ -195,3 +195,51 @@ class TestRegressionReplicates:
             json={"config": cfg, "seeds": [1, 2]},
         )
         assert resp.status_code == 422
+
+
+class TestUnknownMetricGuard:
+    """A metric no trial reports must fail loudly, not return an empty report.
+
+    Regression from the ADR-060 self-test: asking for 'test_accuracy' (the
+    run.json key) instead of 'accuracy' (what ClassificationRunner projects)
+    produced headline=None and a blank results card.
+    """
+
+    def test_replicates_reject_metric_nobody_reported(
+        self, app_and_routes: tuple, tmp_path: Path
+    ) -> None:
+        from visionforge.core.replicates import ReplicateTrial
+
+        app, routes_mod = app_and_routes
+        routes_mod._current_run = None
+
+        def fake_replicates(runner, base, seeds, metric, progress_callback=None):  # type: ignore[no-untyped-def]
+            # Trials succeed but report r2 — not the requested metric.
+            return [ReplicateTrial(s, "success", {"r2": 0.9}, 0.1) for s in seeds]
+
+        orig = routes_mod.run_replicates
+        routes_mod.run_replicates = fake_replicates
+        try:
+            client = TestClient(app, raise_server_exceptions=True)
+            resp = client.post(
+                "/api/regression/replicates",
+                json={
+                    "config": _payload(tmp_path),
+                    "seeds": [1, 2],
+                    "metric": "test_accuracy",
+                },
+            )
+            assert resp.status_code == 200, resp.text
+
+            status = {"status": "running"}
+            for _ in range(50):
+                status = client.get("/api/experiment/status").json()
+                if status["status"] in ("completed", "failed"):
+                    break
+                time.sleep(0.05)
+            assert status["status"] == "failed"
+            assert "test_accuracy" in status["error"]
+            assert "r2" in status["error"]  # names what IS available
+        finally:
+            routes_mod.run_replicates = orig
+            routes_mod._current_run = None

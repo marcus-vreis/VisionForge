@@ -163,6 +163,32 @@ the loop while keeping every contract. A working example ships in
 `user_tasks/example_counting/` (a CNN counting dots in synthetic images —
 trains in seconds on CPU). Full walkthrough: [`user_tasks/README.md`](user_tasks/README.md) (PT + EN).
 
+## Verifying the install
+
+`visionforge doctor` checks your environment; **`visionforge selftest` checks
+the pipeline** — it builds tiny synthetic datasets, starts the real API, and
+trains every task through the same endpoints the browser uses, asserting that
+each run completes, streams live progress, and stores its report:
+
+```bash
+visionforge selftest --quick     # one run per task (~15s, CPU, offline)
+visionforge selftest             # every task x strategy: simple, K-fold, sweep, replicates
+```
+
+```
+case                       result    time  detail
+classification/replicates  PASS      2.7s  accuracy=1.0000±0.0000
+segmentation/cv            PASS      2.0s  miou=0.0783
+custom/sweep               PASS      0.6s  best mae=2.4231
+...
+21/21 cases passed
+```
+
+Filters: `--tasks classification,custom`, `--strategies sweep,replicates`,
+`--json out.json`. Exit code is non-zero if any case fails, so it drops into
+CI as-is. It verifies integrity, not model quality — one epoch on synthetic
+data says nothing about accuracy.
+
 ## Architecture, decisions and contributing
 
 - `documentation/ARCHITECTURE.md` — layers, modules, boundaries
@@ -171,6 +197,8 @@ trains in seconds on CPU). Full walkthrough: [`user_tasks/README.md`](user_tasks
 
 Backend checks: `pytest` · `ruff check src/ tests/` · `mypy src/`.
 Frontend: `cd frontend && npx vitest run && npx tsc --noEmit`.
+End-to-end: `visionforge selftest` (or `pytest -m slow` for the harness's own
+live cases — they are deselected from the default run).
 
 ## Citing
 
