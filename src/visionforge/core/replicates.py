@@ -25,6 +25,7 @@ from typing import Any
 
 from loguru import logger
 
+from visionforge.core.significance import bootstrap_ci
 from visionforge.core.task_runner import RunResult, TaskRunner
 
 try:  # torch is the heavy hardware extra; the cache flush is best-effort.
@@ -67,6 +68,12 @@ def aggregate_replicates(
     ``mean``, ``std`` (sample, n-1), ``min``, ``max`` and a Student-t 95%
     confidence interval (``ci95_low``/``ci95_high``). With a single value the
     dispersion fields are ``None`` — one sample has no spread to report.
+
+    A percentile **bootstrap** interval (``boot95_low``/``boot95_high``,
+    ADR-061) is reported alongside the t interval: t assumes the sampling
+    distribution of the mean is normal, which a handful of seeds cannot
+    establish. When the two disagree, that disagreement is itself the finding
+    — the t interval is leaning on an assumption the data does not support.
     """
     successful = [t for t in trials if t.status == "success"]
     keys: list[str] = list(dict.fromkeys(k for t in successful for k in t.metrics))
@@ -76,11 +83,16 @@ def aggregate_replicates(
         values = [t.metrics[key] for t in successful if key in t.metrics]
         n = len(values)
         mean = statistics.fmean(values)
+        boot_low: float | None = None
+        boot_high: float | None = None
         if n >= 2:
             std = statistics.stdev(values)
             half_width = _t_critical_95(n - 1) * std / math.sqrt(n)
             ci_low: float | None = mean - half_width
             ci_high: float | None = mean + half_width
+            boot = bootstrap_ci(values)
+            if boot is not None:
+                boot_low, boot_high = boot.ci_low, boot.ci_high
         else:
             std = None  # type: ignore[assignment]
             ci_low = ci_high = None
@@ -92,6 +104,8 @@ def aggregate_replicates(
             "max": max(values),
             "ci95_low": ci_low,
             "ci95_high": ci_high,
+            "boot95_low": boot_low,
+            "boot95_high": boot_high,
         }
     return aggregates
 

@@ -684,6 +684,18 @@ and lost reachable features their backends support. Bricks, by severity:
   `config.block`, então segue pelo caminho normal. Resta: comparação replicada
   (Fase D).
 
+**Fase D — saídas de paper 🟡 (ADR-061, slice 1 de 2, 2026-07-26)** —
+`core/significance.py` (comparação pareada sobre as seeds compartilhadas,
+escolha justificada entre t pareado e Wilcoxon, Cohen's d_z, IC bootstrap da
+diferença, correção Holm-Bonferroni; **recusa** comparar runs cujas seeds não
+casam) + IC bootstrap junto do IC-t em todo agregado de réplicas +
+`core/latex_export.py` (tabelas booktabs de réplicas/sweep/K-fold/comparação
+gravadas ao lado do JSON/CSV). 46 testes, incluindo p-valores conferidos
+contra o scipy. Descoberto ao rodar de verdade: com n=2 o IC-t de um MAE saiu
+`[-0.70, 3.76]` — negativo para uma métrica não-negativa; a tabela agora
+carrega um aviso explícito abaixo de 5 seeds. **Falta (slice 2):** endpoint de
+comparação replicada ponta a ponta + fingerprint de dataset no run.json.
+
 **End-to-end self-test ✅ (ADR-060, 2026-07-26)** — `visionforge selftest`
 trains every task through the *real* API on synthetic data (`utils/selftest.py`
 + `utils/selftest_data.py`), asserting run completion, report shape and the

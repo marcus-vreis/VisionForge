@@ -1125,3 +1125,53 @@ purpose: the loop-per-request behaviour of `TestClient` outside a context
 manager silently destroys genuinely-async background training (learned in
 ADR-058 brick 3), so a fidelity gap there would hide precisely the class of bug
 this exists to catch.
+
+## ADR-061 — Paper outputs: significance testing, bootstrap intervals, LaTeX
+
+**Date:** 2026-07
+**Status:** Accepted — core shipped 2026-07-26 (Phase D slice 1)
+**Extends:** ADR-056 (replicates), ADR-045 (sweeps), ADR-050 (K-fold)
+
+**Decision:** Three additions that carry a result from "trained" to
+"publishable":
+
+1. **`core/significance.py`** — paired comparison between two configs over the
+   seeds they **share**, with the test chosen and *justified* per comparison
+   (paired t when the differences pass Shapiro-Wilk and there are ≥8 pairs;
+   Wilcoxon signed-rank otherwise, with the reason recorded in the report),
+   Cohen's `d_z`, a bootstrap CI of the difference, and Holm-Bonferroni
+   control across the comparison family.
+2. **Bootstrap intervals** alongside the Student-t interval in every replicate
+   aggregate (`boot95_low`/`boot95_high`).
+3. **`core/latex_export.py`** — every advanced report (replicates, sweep,
+   K-fold, comparison) is written as a `booktabs` table next to its JSON/CSV.
+
+**Reason:** ADR-056 answered "how uncertain is this number?" but not the
+question a paper asks — *is A better than B, or is that gap seed noise?*
+Pairing is what makes the answer sensitive: two configs trained under the same
+seed share the split, the initialization and the augmentation stream, so their
+difference isolates the change under study instead of drowning it in
+between-seed variance. The helpers therefore **refuse** to compare runs whose
+seeds do not line up rather than silently falling back to a weaker test, and
+Holm correction is applied by default because K configs mean K(K-1)/2 tests,
+where at α=0.05 roughly one in twenty "wins" is chance.
+
+The bootstrap is not a nicety: the t interval assumes the sampling
+distribution of the mean is normal, which a handful of seeds cannot establish.
+A real run made the point concretely — with n=2 the t interval for MAE came
+out `[-0.70, 3.76]`, crossing zero for a strictly non-negative metric.
+**Both intervals are reported, and below 5 seeds the table itself carries a
+caution**, because with tiny n the t interval is far too wide while the
+percentile bootstrap is far too narrow (it can only resample the values it
+has). A caveat that lives only in the docs never reaches the reader.
+
+LaTeX export exists because the last mile of a result is a table in a
+manuscript, and retyping numbers is where transcription errors enter — errors
+no reviewer catches and no rerun reproduces. Table notes state what the
+interval is over, that a sweep ranked on one run per config still reflects
+seed noise, and which correction was applied.
+
+**Remaining (Phase D slice 2):** an endpoint that runs N seeds for each of M
+configs and returns the comparison matrix end to end, plus a dataset
+fingerprint in `run.json` so two experiments can be proven to have used the
+same data.

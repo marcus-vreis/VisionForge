@@ -42,6 +42,7 @@ from visionforge.core.comparison import ComparisonTrial, run_model_comparison
 from visionforge.core.data import DataModule
 from visionforge.core.detection_data import resolve_yolo_split
 from visionforge.core.evaluator import Evaluator
+from visionforge.core.latex_export import report_to_latex
 from visionforge.core.plotter import MetricsPlotter
 from visionforge.core.replicates import (
     ReplicateTrial,
@@ -3359,11 +3360,13 @@ def _flatten_trial(row: dict[str, Any]) -> dict[str, Any]:
 def _write_advanced_summary(
     config_dict: dict[str, Any], kind: str, report: dict[str, Any]
 ) -> str:
-    """Persist a comparison/sweep report (JSON + flat ranking CSV) to outputs/reports.
+    """Persist a comparison/sweep report (JSON + ranking CSV + LaTeX) to outputs/reports.
 
     Mirrors the classification ModelComparisonBlock artifact layout so a
     standalone-task comparison/sweep leaves the same durable record on disk
-    instead of vanishing when the result view closes.
+    instead of vanishing when the result view closes. The ``.tex`` table
+    (ADR-061) is the paper-ready form: retyping numbers into a manuscript is
+    where transcription errors enter, and nothing downstream catches them.
     """
     name = str(config_dict.get("name", kind))
     reports_dir = config_dict.get("output", {}).get("reports_dir") or "outputs/reports"
@@ -3384,6 +3387,10 @@ def _write_advanced_summary(
             writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
             writer.writeheader()
             writer.writerows(flat)
+
+    latex = report_to_latex(report, experiment=name)
+    if latex:
+        (out_dir / f"{kind}_table.tex").write_text(latex, encoding="utf-8")
 
     return str(out_dir)
 
