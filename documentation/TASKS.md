@@ -702,7 +702,13 @@ p<0.0625, então uma diferença real de 0.10 voltou "não significativa"; agora
 todo comparativo reporta `min_achievable_p`/`underpowered` e explica que
 "não significativo" ali quer dizer "poucas seeds"; (2) **direção da métrica** —
 o primeiro run coroou MAE 4.02 sobre MAE 0.99 porque o ranking ordenava sempre
-decrescente. **Falta:** fingerprint de dataset no run.json.
+decrescente. **Slice 3 ✅ (2026-07-26):** `core/dataset_fingerprint.py` — todo `run.json`
+grava `dataset_fingerprint` (sha256 do manifesto ordenado de caminho+tamanho de
+`data.base_dir`), nos seis trainers. O método fica registrado ao lado do digest
+porque garantem coisas diferentes: `manifest` (padrão, só faz stat) não detecta
+edição que preserve o tamanho; `content` lê os bytes. `same_dataset()` devolve
+`None` entre métodos diferentes em vez de `False`. Nunca levanta exceção.
+**Fase D completa.**
 
 **End-to-end self-test ✅ (ADR-060, 2026-07-26)** — `visionforge selftest`
 trains every task through the *real* API on synthetic data (`utils/selftest.py`

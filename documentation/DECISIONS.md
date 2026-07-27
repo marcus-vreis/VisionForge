@@ -1189,5 +1189,22 @@ guards the first real run forced:
   getting this wrong is uniquely damaging because the wrong winner arrives
   with a p-value beside it.
 
-**Remaining:** a dataset fingerprint in `run.json` so two experiments can be
-proven to have used the same data.
+**Slice 3 (shipped 2026-07-26) — dataset fingerprint.** Every `run.json` now
+carries `dataset_fingerprint`: a sha256 over the sorted `(relative path, size)`
+manifest of `data.base_dir`, written by all six trainers. A config records a
+*path*, and paths lie — files get added, a split gets re-shuffled, the dataset
+gets re-exported between runs — so "same base_dir" was never a checkable claim
+and now is.
+
+The method is recorded next to the digest because the two on offer guarantee
+different things: `manifest` (default) only stats files, so it is cheap enough
+to run before every training and catches added/removed/renamed/resized files
+but **not** an edit that preserves byte count; `content` hashes the bytes too.
+The `note` field states that limitation inside the artifact, and
+`same_dataset()` returns `None` rather than `False` when comparing digests
+produced by different methods — over-claiming here would be worse than not
+fingerprinting at all. It never raises: a missing directory, an unreadable
+file or a dataset above 200k files yields an `unavailable` entry with the
+reason, because provenance must not be what fails a training run.
+
+**Phase D is complete.**

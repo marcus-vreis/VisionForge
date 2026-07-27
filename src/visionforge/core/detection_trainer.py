@@ -22,6 +22,7 @@ import torch
 from loguru import logger
 from torch.utils.data import DataLoader
 
+from visionforge.core.dataset_fingerprint import fingerprint_from_config
 from visionforge.core.detection_data import DetectionDataModule, resolve_yolo_split
 from visionforge.core.detection_dataset import DetectionDataset, detection_collate
 from visionforge.core.detection_metrics import mean_average_precision_50
@@ -688,6 +689,8 @@ class DetectionTrainer:
             "status": "completed",
             "device_used": result.device_used,
             "environment": capture_environment(),
+            # Proves two runs saw the same data, not just the same path.
+            "dataset_fingerprint": fingerprint_from_config(self._config),
             "run_dir": str(run_dir.resolve()),
             "config": self._config.model_dump(mode="json"),
             "metrics": {

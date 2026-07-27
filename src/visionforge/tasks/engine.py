@@ -25,6 +25,7 @@ import torch
 from loguru import logger
 from torch import nn
 
+from visionforge.core.dataset_fingerprint import fingerprint_from_config
 from visionforge.core.plotter import MetricsPlotter
 from visionforge.core.tracking import TensorBoardLogger
 from visionforge.core.trainer import _seed_everything, resolve_device
@@ -329,6 +330,8 @@ class GenericTaskEngine:
             "status": "completed",
             "device_used": result.device_used,
             "environment": capture_environment(),
+            # Proves two runs saw the same data, not just the same path.
+            "dataset_fingerprint": fingerprint_from_config(self._config),
             "run_dir": str(result.run_dir.resolve()),
             "config": self._config.model_dump(mode="json"),
             "metrics": {
