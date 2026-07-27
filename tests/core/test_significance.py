@@ -16,6 +16,8 @@ from visionforge.core.significance import (
     cohens_dz,
     comparison_matrix,
     holm_correct,
+    infer_direction,
+    min_achievable_p,
     paired_comparison,
 )
 
@@ -229,3 +231,59 @@ class TestComparisonMatrix:
         matrix = comparison_matrix("accuracy", groups)
         assert matrix[0].significant is False
         assert not math.isnan(matrix[0].p_value)
+
+
+class TestInferDirection:
+    """Ranking a lower-is-better metric as if higher were better crowns the
+    worst variant — and it looks authoritative next to a p-value."""
+
+    def test_error_metrics_are_lower_is_better(self) -> None:
+        for name in ("mae", "test_mae", "rmse", "mse", "val_loss", "train_loss"):
+            assert infer_direction(name) == "lower", name
+
+    def test_score_metrics_are_higher_is_better(self) -> None:
+        for name in (
+            "accuracy",
+            "f1",
+            "auc_roc",
+            "r2",
+            "miou",
+            "dice",
+            "map50",
+            "auroc",
+        ):
+            assert infer_direction(name) == "higher", name
+
+    def test_unknown_names_default_to_higher(self) -> None:
+        # Most VisionForge ranking metrics are scores; an unknown custom
+        # metric is more likely a score than an error.
+        assert infer_direction("my_custom_score") == "higher"
+
+
+class TestMinAchievableP:
+    def test_wilcoxon_floor_matches_the_closed_form(self) -> None:
+        # 2 / 2**n for a two-sided test with no ties.
+        assert min_achievable_p("wilcoxon", 5) == pytest.approx(0.0625)
+        assert min_achievable_p("wilcoxon", 6) == pytest.approx(0.03125)
+        assert min_achievable_p("wilcoxon", 8) == pytest.approx(0.0078125)
+
+    def test_five_seeds_cannot_reach_the_usual_alpha(self) -> None:
+        assert min_achievable_p("wilcoxon", 5) > 0.05
+        assert min_achievable_p("wilcoxon", 6) < 0.05
+
+    def test_the_t_test_has_no_floor(self) -> None:
+        assert min_achievable_p("paired_t", 3) == 0.0
+
+    def test_underpowered_flag_follows_the_floor(self) -> None:
+        few = paired_comparison(
+            "accuracy",
+            dict.fromkeys(range(5), 0.9),
+            dict.fromkeys(range(5), 0.8),
+        )
+        assert few.underpowered is True
+        many = paired_comparison(
+            "accuracy",
+            {s: 0.9 + s * 0.001 for s in range(8)},
+            {s: 0.8 + s * 0.001 for s in range(8)},
+        )
+        assert many.underpowered is False

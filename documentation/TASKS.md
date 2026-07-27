@@ -693,8 +693,16 @@ casam) + IC bootstrap junto do IC-t em todo agregado de réplicas +
 gravadas ao lado do JSON/CSV). 46 testes, incluindo p-valores conferidos
 contra o scipy. Descoberto ao rodar de verdade: com n=2 o IC-t de um MAE saiu
 `[-0.70, 3.76]` — negativo para uma métrica não-negativa; a tabela agora
-carrega um aviso explícito abaixo de 5 seeds. **Falta (slice 2):** endpoint de
-comparação replicada ponta a ponta + fingerprint de dataset no run.json.
+carrega um aviso explícito abaixo de 5 seeds. **Slice 2 ✅ (2026-07-26):** `core/replicated_comparison.py` +
+`POST /api/{task}/replicated-comparison` (5 built-ins + custom): N seeds para
+cada uma de M variantes sobre a **mesma lista de seeds**, matriz Holm-corrigida
+e tabela `.tex`. Verificado ponta a ponta com 12 treinos reais. Dois guardas
+que o run real exigiu: (1) **piso de poder** — o Wilcoxon com n=5 não consegue
+p<0.0625, então uma diferença real de 0.10 voltou "não significativa"; agora
+todo comparativo reporta `min_achievable_p`/`underpowered` e explica que
+"não significativo" ali quer dizer "poucas seeds"; (2) **direção da métrica** —
+o primeiro run coroou MAE 4.02 sobre MAE 0.99 porque o ranking ordenava sempre
+decrescente. **Falta:** fingerprint de dataset no run.json.
 
 **End-to-end self-test ✅ (ADR-060, 2026-07-26)** — `visionforge selftest`
 trains every task through the *real* API on synthetic data (`utils/selftest.py`

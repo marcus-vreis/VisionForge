@@ -67,6 +67,11 @@ class PairedComparison:
     effect_label: str
     ci_low: float  # bootstrap CI of the paired difference
     ci_high: float
+    # Smallest p the chosen test could possibly return with this many pairs.
+    min_achievable_p: float = 0.0
+    # True when that floor is above alpha: no result, however consistent, can
+    # reach significance — "not significant" then means "not enough seeds".
+    underpowered: bool = False
     significant: bool = False  # set by holm_correct over a family of tests
 
     def to_dict(self) -> dict[str, Any]:
@@ -129,6 +134,42 @@ def cohens_dz(differences: list[float]) -> float:
     return statistics.fmean(differences) / sd
 
 
+# Substrings that mark a metric as lower-is-better. Ranking without this gets
+# the winner exactly backwards for error metrics — a mistake that reads as
+# authoritative because it comes with a p-value attached.
+_LOWER_IS_BETTER = ("loss", "mae", "mse", "rmse", "error", "err", "distance")
+
+
+def infer_direction(metric: str) -> Literal["higher", "lower"]:
+    """Guess whether a metric is better when higher or lower.
+
+    A heuristic, and named as one: task-declared directions
+    (``@register_task(metrics=...)``) should win where they exist. It covers
+    the built-in vocabulary — accuracy/f1/auc/r2/miou/dice/map/auroc are
+    higher-better; mae/mse/rmse/loss are lower-better.
+    """
+    lowered = metric.lower()
+    return "lower" if any(token in lowered for token in _LOWER_IS_BETTER) else "higher"
+
+
+def min_achievable_p(test: TestKind, n_pairs: int) -> float:
+    """The smallest two-sided p this test can return with ``n_pairs`` pairs.
+
+    Wilcoxon's signed-rank statistic is discrete: with every difference
+    pointing the same way it still only reaches ``2 / 2**n``. At n=5 that is
+    0.0625 — **above 0.05, so five seeds can never be significant no matter
+    how large and consistent the gap is**. Surfacing this floor is the
+    difference between "we found no effect" and "we could not have found one".
+
+    The t test is continuous, so it has no such floor (0.0 is returned).
+    """
+    if test == "wilcoxon":
+        if n_pairs < 1:
+            return 1.0
+        return min(1.0, 2.0 ** (1 - n_pairs))
+    return 0.0
+
+
 def _effect_label(dz: float) -> str:
     """Cohen's conventional bands, stated as guidance rather than truth."""
     magnitude = abs(dz)
@@ -171,6 +212,7 @@ def paired_comparison(
     label_a: str = "A",
     label_b: str = "B",
     test: TestKind | Literal["auto"] = "auto",
+    alpha: float = 0.05,
     seed: int = 0,
 ) -> PairedComparison:
     """Compare two configs over their shared seeds.
@@ -209,6 +251,7 @@ def paired_comparison(
 
     dz = cohens_dz(differences)
     ci = bootstrap_ci(differences, seed=seed)
+    floor = min_achievable_p(kind, len(shared))
     return PairedComparison(
         label_a=label_a,
         label_b=label_b,
@@ -225,6 +268,8 @@ def paired_comparison(
         effect_label=_effect_label(dz),
         ci_low=ci.ci_low if ci else math.nan,
         ci_high=ci.ci_high if ci else math.nan,
+        min_achievable_p=floor,
+        underpowered=floor > alpha,
     )
 
 
@@ -280,6 +325,7 @@ def comparison_matrix(
                         groups[label_b],
                         label_a=label_a,
                         label_b=label_b,
+                        alpha=alpha,
                         seed=seed,
                     )
                 )

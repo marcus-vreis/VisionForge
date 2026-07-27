@@ -236,6 +236,19 @@ def comparison_to_latex(
                 _num(c.get("effect_size"), digits=2),
             ]
         )
+    # A rank test on few pairs has a p-value floor; if it sits above alpha,
+    # "not significant" carries no information about the effect and the table
+    # must not let a reader infer otherwise.
+    blocked = [c for c in comparisons if c.get("underpowered")]
+    power_note = ""
+    if blocked:
+        floor = max(float(c.get("min_achievable_p") or 0.0) for c in blocked)
+        power_note = (
+            r" \textbf{Underpowered:} with this many seeds the rank test cannot "
+            f"return $p<{floor:.4f}$, so no difference could reach "
+            f"$\\alpha={alpha}$ regardless of its size. Add seeds before "
+            "interpreting a non-significant result."
+        )
     return _table(
         caption=(
             f"{escape(experiment or 'Experiment')}: paired comparison over "
@@ -255,7 +268,7 @@ def comparison_to_latex(
         note=(
             f"$^{{*}}$ significant at $\\alpha={alpha}$ after Holm-Bonferroni "
             "correction across the family. Differences are A minus B on the "
-            "seeds both configurations ran."
+            "seeds both configurations ran." + power_note
         ),
     )
 

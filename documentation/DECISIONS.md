@@ -1171,7 +1171,23 @@ no reviewer catches and no rerun reproduces. Table notes state what the
 interval is over, that a sweep ranked on one run per config still reflects
 seed noise, and which correction was applied.
 
-**Remaining (Phase D slice 2):** an endpoint that runs N seeds for each of M
-configs and returns the comparison matrix end to end, plus a dataset
-fingerprint in `run.json` so two experiments can be proven to have used the
-same data.
+**Slice 2 (shipped 2026-07-26):** `core/replicated_comparison.py` +
+`POST /api/{task}/replicated-comparison` (all five built-ins and custom
+tasks) run N seeds for each of M variants over the **same seed list** and
+return the Holm-corrected matrix, with a `.tex` table beside the JSON. Two
+guards the first real run forced:
+
+- **Power floor.** Wilcoxon's statistic is discrete: with n pairs its smallest
+  two-sided p is `2^(1-n)`, so at **n=5 nothing can reach α=0.05** — a real,
+  perfectly consistent 0.10 gap came back "not significant". Every comparison
+  now reports `min_achievable_p` and an `underpowered` flag, and the report
+  and LaTeX note say that a non-significant verdict there means "too few
+  seeds", not "no effect".
+- **Ranking direction.** The first run crowned MAE 4.02 over MAE 0.99 because
+  ranking always sorted descending. `infer_direction` reads the metric name
+  (loss/mae/mse/rmse/error → lower-is-better) and callers may override it;
+  getting this wrong is uniquely damaging because the wrong winner arrives
+  with a p-value beside it.
+
+**Remaining:** a dataset fingerprint in `run.json` so two experiments can be
+proven to have used the same data.

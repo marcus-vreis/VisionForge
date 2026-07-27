@@ -232,3 +232,44 @@ class TestSmallSampleCaveat:
         report = _replicates_report()
         report["successful_replicates"] = 10
         assert "Caution" not in replicates_to_latex(report)
+
+
+class TestUnderpoweredWarning:
+    """ "Not significant" from a test that could never reject is not a
+    finding; the table has to say so where a reader cannot miss it."""
+
+    def test_warns_when_the_test_could_not_reject(self) -> None:
+        comparisons = [
+            {
+                "label_a": "a",
+                "label_b": "b",
+                "mean_difference": 0.10,
+                "ci_low": 0.08,
+                "ci_high": 0.12,
+                "test": "wilcoxon",
+                "p_value": 0.0625,
+                "effect_size": 3.0,
+                "significant": False,
+                "underpowered": True,
+                "min_achievable_p": 0.0625,
+            }
+        ]
+        tex = comparison_to_latex(comparisons)
+        assert "Underpowered" in tex
+        assert "0.0625" in tex
+
+    def test_silent_when_the_test_had_power(self) -> None:
+        comparisons = [
+            {
+                "label_a": "a",
+                "label_b": "b",
+                "mean_difference": 0.10,
+                "test": "paired_t",
+                "p_value": 0.001,
+                "effect_size": 3.0,
+                "significant": True,
+                "underpowered": False,
+                "min_achievable_p": 0.0,
+            }
+        ]
+        assert "Underpowered" not in comparison_to_latex(comparisons)

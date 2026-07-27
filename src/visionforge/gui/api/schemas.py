@@ -101,6 +101,25 @@ class ReplicatesRequest(BaseModel):
     metric: str | None = None
 
 
+class ReplicatedComparisonRequest(BaseModel):
+    """Compare N configurations over the same seeds, with a paired test (ADR-061).
+
+    ``variants`` maps a label to the dot-path overrides applied on top of
+    ``config`` (the baseline is a variant with no overrides). Every variant is
+    trained on the *same* seed list, which is what makes the comparison paired
+    — same seed, same split and initialization, so the difference isolates the
+    change instead of seed noise. Cost is ``len(variants) * len(seeds)``
+    trainings, so the seed count is capped conservatively.
+    """
+
+    config: dict[str, Any]
+    variants: dict[str, dict[str, Any]] = Field(min_length=2)
+    seeds: list[int] | None = Field(default=None, min_length=2)
+    n_replicates: int = Field(default=5, ge=2, le=20)
+    metric: str | None = None
+    alpha: float = Field(default=0.05, gt=0.0, lt=0.5)
+
+
 class RunResult(BaseModel):
     """Full result of a completed experiment run."""
 

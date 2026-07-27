@@ -44,6 +44,10 @@ from visionforge.core.detection_data import resolve_yolo_split
 from visionforge.core.evaluator import Evaluator
 from visionforge.core.latex_export import report_to_latex
 from visionforge.core.plotter import MetricsPlotter
+from visionforge.core.replicated_comparison import (
+    run_replicated_comparison,
+    validate_variants,
+)
 from visionforge.core.replicates import (
     ReplicateTrial,
     aggregate_replicates,
@@ -89,6 +93,7 @@ from visionforge.gui.api.schemas import (
     RegressionDatasetStatsResponse,
     RegressionSplitStats,
     RegressionTargetStats,
+    ReplicatedComparisonRequest,
     ReplicatesRequest,
     RunDetail,
     RunResponse,
@@ -1057,6 +1062,57 @@ async def replicates_detection(req: ReplicatesRequest) -> RunResponse:
 async def replicates_anomaly(req: ReplicatesRequest) -> RunResponse:
     """Train one anomaly config N times under different seeds (ADR-056)."""
     return _start_replicates(req, AnomalyConfig, AnomalyRunner())
+
+
+@router.post("/classification/replicated-comparison")
+async def replicated_comparison_classification(
+    req: ReplicatedComparisonRequest,
+) -> RunResponse:
+    """Compare classification variants over shared seeds with a paired test."""
+    return _start_replicated_comparison(req, ExperimentConfig, ClassificationRunner())
+
+
+@router.post("/regression/replicated-comparison")
+async def replicated_comparison_regression(
+    req: ReplicatedComparisonRequest,
+) -> RunResponse:
+    """Compare regression variants over shared seeds with a paired test."""
+    return _start_replicated_comparison(req, RegressionConfig, RegressionRunner())
+
+
+@router.post("/segmentation/replicated-comparison")
+async def replicated_comparison_segmentation(
+    req: ReplicatedComparisonRequest,
+) -> RunResponse:
+    """Compare segmentation variants over shared seeds with a paired test."""
+    return _start_replicated_comparison(req, SegmentationConfig, SegmentationRunner())
+
+
+@router.post("/detection/replicated-comparison")
+async def replicated_comparison_detection(
+    req: ReplicatedComparisonRequest,
+) -> RunResponse:
+    """Compare detection variants over shared seeds with a paired test."""
+    return _start_replicated_comparison(req, DetectionConfig, DetectionRunner())
+
+
+@router.post("/anomaly/replicated-comparison")
+async def replicated_comparison_anomaly(
+    req: ReplicatedComparisonRequest,
+) -> RunResponse:
+    """Compare anomaly variants over shared seeds with a paired test."""
+    return _start_replicated_comparison(req, AnomalyConfig, AnomalyRunner())
+
+
+@router.post("/custom/{key}/replicated-comparison")
+async def replicated_comparison_custom(
+    key: str, req: ReplicatedComparisonRequest
+) -> RunResponse:
+    """Compare a custom task's variants over shared seeds (ADR-058 + ADR-061)."""
+    info = _get_custom_task_or_404(key)
+    return _start_replicated_comparison(
+        req, info.spec_cls.Config, CustomTaskRunner(info)
+    )
 
 
 @router.get("/experiment/events")
@@ -3207,6 +3263,128 @@ async def _execute_task_cv(
         )
     except Exception as e:
         logger.exception("GUI: {} CV {} failed", task_label, run_id)
+        _current_run = {
+            "run_id": run_id,
+            "status": "failed",
+            "error": f"{type(e).__name__}: {e or '(sem mensagem)'}",
+            "report": None,
+            "run_dir": None,
+        }
+    finally:
+        if queue is not None:
+            await queue.put(None)
+
+
+def _start_replicated_comparison(
+    req: ReplicatedComparisonRequest,
+    config_type: type[Any],
+    runner: TaskRunner,
+) -> RunResponse:
+    """Validate the base config + variants and launch the background comparison.
+
+    Raises:
+        HTTPException: 409 if a run is already active; 422 for an invalid
+            variant set (unknown override path, duplicate seeds).
+        RequestValidationError: 422 if the base task config is invalid.
+    """
+    global _current_run, _event_queue
+
+    if _current_run and _current_run["status"] == "running":
+        raise HTTPException(409, "An experiment is already running.")
+
+    try:
+        complete = config_type.model_validate(req.config).model_dump(mode="json")
+    except ValidationError as exc:
+        raise RequestValidationError(exc.errors()) from exc
+
+    if req.seeds is not None:
+        if len(set(req.seeds)) != len(req.seeds):
+            raise HTTPException(422, "Comparison seeds must be unique.")
+        seeds = list(req.seeds)
+    else:
+        base_seed = int(complete.get("training", {}).get("seed", 42))
+        seeds = [base_seed + i for i in range(req.n_replicates)]
+
+    # Fail on a bad override path before spending len(variants)*len(seeds)
+    # trainings on it.
+    try:
+        validate_variants(complete, req.variants)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+    metric = req.metric or runner.primary_metric()
+    name = str(req.config.get("name", "comparison"))
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    run_id = f"{name}_{timestamp}"
+
+    _event_queue = asyncio.Queue()
+    _current_run = {
+        "run_id": run_id,
+        "status": "running",
+        "error": None,
+        "report": None,
+        "run_dir": None,
+    }
+
+    task = asyncio.create_task(
+        _execute_replicated_comparison(runner, complete, req, seeds, metric, run_id)
+    )
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+    return RunResponse(run_id=run_id)
+
+
+async def _execute_replicated_comparison(
+    runner: TaskRunner,
+    base_config_dict: dict[str, Any],
+    req: ReplicatedComparisonRequest,
+    seeds: list[int],
+    metric: str,
+    run_id: str,
+) -> None:
+    """Run every variant over the shared seeds and store the paired report."""
+    global _current_run, _event_queue
+    loop = asyncio.get_running_loop()
+    queue = _event_queue
+
+    def _put_event(event: dict[str, Any]) -> None:
+        if queue is not None:
+            asyncio.run_coroutine_threadsafe(queue.put(event), loop)
+
+    try:
+        report = await asyncio.to_thread(
+            run_replicated_comparison,
+            runner,
+            base_config_dict,
+            req.variants,
+            seeds,
+            metric,
+            alpha=req.alpha,
+            progress_callback=_put_event,
+        )
+        if not report["comparisons"]:
+            raise RuntimeError(
+                "No variant produced enough successful replicates to compare "
+                f"(skipped: {report['skipped_variants']})."
+            )
+        report["report_dir"] = _write_advanced_summary(
+            base_config_dict, "comparison", report
+        )
+        _current_run = {
+            "run_id": run_id,
+            "status": "completed",
+            "error": None,
+            "report": report,
+            "run_dir": None,
+        }
+        logger.success(
+            "GUI: Replicated comparison {} completed ({} variants x {} seeds).",
+            run_id,
+            len(req.variants),
+            len(seeds),
+        )
+    except Exception as e:
+        logger.exception("GUI: Replicated comparison {} failed", run_id)
         _current_run = {
             "run_id": run_id,
             "status": "failed",
