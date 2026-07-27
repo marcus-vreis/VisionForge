@@ -40,9 +40,19 @@ stats), preprocessing filters and augmentation with live preview.
   per-fold metrics + mean ± std, with fold-leakage-safe transforms.
 - **Hyperparameter sweeps** — grid, random, or Optuna TPE over any config field
   by dot-path; one-click architecture-comparison preset.
+- **Paired significance testing** — compare N configurations over the *same*
+  seeds and get the difference, its bootstrap CI, a paired t or Wilcoxon test
+  (chosen and justified per comparison), Cohen's `d_z`, and Holm-Bonferroni
+  correction across the family. It refuses to compare runs whose seeds do not
+  line up, and flags when the seed count makes significance unreachable — so
+  "not significant" is never mistaken for "no effect".
+- **Paper-ready output** — every replicates / sweep / K-fold / comparison
+  report is also written as a `booktabs` LaTeX table, with notes stating what
+  each interval covers and which correction was applied.
 - **Full provenance** — every run writes a versioned `run.json` with the exact
-  config, seed, per-epoch history, and environment (Python, torch/torchvision,
-  numpy, CUDA, cuDNN, GPU model).
+  config, seed, per-epoch history, environment (Python, torch/torchvision,
+  numpy, CUDA, cuDNN, GPU model) and a **dataset fingerprint**, so "same data"
+  is a checkable claim rather than a shared path.
 - **Reproducibility knobs** — seeded runs, optional deterministic cuDNN mode,
   config schema versioning with migrations, YAML round-trip (export from the
   GUI, re-run from the CLI).
@@ -193,7 +203,7 @@ data says nothing about accuracy.
 ## Architecture, decisions and contributing
 
 - `documentation/ARCHITECTURE.md` — layers, modules, boundaries
-- `documentation/DECISIONS.md` — every architecture decision as an ADR (001–059)
+- `documentation/DECISIONS.md` — every architecture decision as an ADR (001–061)
 - `documentation/CONTRIBUTING.md` — dev setup, test/lint gauntlet, PR flow
 
 Backend checks: `pytest` · `ruff check src/ tests/` · `mypy src/`.

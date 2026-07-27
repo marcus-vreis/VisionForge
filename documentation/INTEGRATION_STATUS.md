@@ -1,5 +1,20 @@
 # Ground-truth verification — 2026-06-06
 
+> **Superseded (2026-07-27).** This snapshot describes a mid-integration state
+> that no longer exists: the branches below were merged long ago and both
+> follow-ups listed at the end are done (every standalone trainer carries
+> `schema_version` and the `run.json` environment block, and the ONNX benchmark
+> shape landed). Kept for the audit trail. **Current state:**
+>
+> - `main` and `development` are in sync; everything below is merged.
+> - The full suite runs green on the maintainer's Windows/CUDA machine and in
+>   CI (`1244 passed, 2 skipped`, plus 2 `slow` cases deselected by default).
+> - End-to-end health is now a command rather than a document:
+>   `visionforge selftest` trains all six tasks through the real API across
+>   five strategies — **27/27 cases** on CPU, offline (ADR-060).
+> - Live phase/status tracking lives in `TASKS.md`; decisions in
+>   `DECISIONS.md` (ADR-001..061).
+
 Independent state check on `feat/detection-hyperparams-yolo-family`.
 
 **What was verifiable in an isolated env (no GPU, PyTorch index blocked, Python

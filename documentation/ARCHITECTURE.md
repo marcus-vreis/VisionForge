@@ -43,6 +43,10 @@ Foundational utilities with no dependencies on other VisionForge modules.
 | `logger.py` | Centralized loguru setup. Two sinks: colored terminal + rotating file. Call `setup_logger()` once from the entry point. |
 | `config.py` | Pydantic v2 models for experiment configuration. `load_config(path)` reads a YAML file and validates all fields before any training starts. `model_json_schema()` drives the GUI config form. |
 | `cuda.py` | Runtime device detection. `check_cuda()` returns a `CUDAInfo` snapshot including a `GPUDevice` per visible GPU. Adapts transparently to CPU, single GPU, or multi-GPU and logs device name + CUDA version on startup. |
+| `<task>_config.py` | One standalone Pydantic config tree per non-classification task (detection, regression, segmentation, anomaly) per ADR-033/036/037/038, reusing the shared `OutputConfig`/`DeviceConfig`/`TransformConfig` blocks. |
+| `environment.py` | The `run.json` environment block (ADR-057): Python, torch/torchvision, numpy, CUDA, cuDNN and the GPU model — what makes a recorded number reproducible. |
+| `doctor.py` | `visionforge doctor` — inspects the machine and prints the exact torch install line for it (torch is user-managed per ADR-005). |
+| `selftest.py` · `selftest_data.py` | `visionforge selftest` (ADR-060) — builds tiny synthetic datasets in each task's real on-disk layout, starts the real API on an ephemeral socket, and trains every (task, strategy) pair through the same endpoints the browser uses, checking the report shape and the SSE contract. The answer to "does this install actually train?". |
 
 ### `models/`
 
@@ -62,6 +66,31 @@ Foundational utilities with no dependencies on other VisionForge modules.
 | `plotter.py` | `MetricsPlotter` — generates loss, accuracy, raw confusion matrix, normalized confusion matrix, ROC curve, and precision-recall curve PNGs via matplotlib/seaborn (Agg backend, no display needed). |
 | `tracking.py` | `TensorBoardLogger` (ADR-054) — best-effort per-epoch scalar logging to `<run_dir>/tensorboard/`; no-op unless the optional `[tensorboard]` extra is installed. Wired into the classification/regression/segmentation trainer loops. |
 | `replicates.py` | Multi-seed replicates over the `TaskRunner` handle (ADR-056) — trains the same config once per seed and aggregates every metric into n/mean/std/min/max/95% CI (Student-t). Exposed as `POST /api/{task}/replicates` for all five tasks; report persisted to `outputs/reports`. |
+| `task_runner.py` | The `TaskRunner` Protocol (ADR-041) — `config_type` / `run(cfg)` / `metrics(result)` / `primary_metric()`. Every generic orchestrator (comparison, sweep, replicates, replicated comparison) drives tasks through this handle alone, which is why adding a task costs no orchestrator code. |
+| `comparison.py` | Model comparison (ADR-044) — trains N architectures on one dataset and ranks them through the runner handle. |
+| `sweep.py` | Hyperparameter sweep (ADR-045/052) — grid, random or Optuna TPE over any config field by dot-path; emits `trial_start`/`trial_end` so the live monitor tracks real progress. |
+| `replicated_comparison.py` | N seeds x M variants, then a paired test (ADR-061) — the honest form of "A beats B". Every variant trains on the *same* seed list; failed variants stay visible in the report instead of vanishing from the matrix. |
+| `significance.py` | Paired significance testing (ADR-061) — paired t / Wilcoxon chosen and *justified* per comparison, Cohen's `d_z`, percentile bootstrap CIs, Holm-Bonferroni across the family, and `min_achievable_p` so an underpowered "not significant" is never read as "no effect". |
+| `latex_export.py` | Paper-ready `booktabs` tables (ADR-061) for replicates / sweep / K-fold / comparison reports, written beside the JSON and CSV. Table notes state what each interval covers and which correction was applied. |
+| `dataset_fingerprint.py` | `dataset_fingerprint` in every `run.json` (ADR-061) — sha256 over the sorted path+size manifest of `data.base_dir`, so "same dataset" becomes checkable. Records the method used, because `manifest` cannot see a same-size edit and `content` can. |
+| `preprocessing.py` | The filter pipeline (blur, edges, wavelet, CLAHE…) shared by every task, applied before augmentation and normalization. |
+| `gradcam.py` · `onnx_export.py` · `batch_predict.py` | Post-training tooling: explainability heatmaps, ONNX export with a latency benchmark, and batch inference to CSV. |
+| `<task>_data.py` · `<task>_trainer.py` | One pair per standalone task (detection, regression, segmentation, anomaly) per ADR-033/036/037/038 — a new task adds files here and never edits existing ones. |
+
+### `tasks/` — researcher-defined tasks (ADR-058)
+
+The "sixth task" surface: a researcher drops one documented `.py` into
+`user_tasks/` and gets a real GUI tab, the live monitor, run history,
+`run.json` provenance, sweeps and replicates — without writing React,
+FastAPI or a training loop.
+
+| Module | Responsibility |
+|---|---|
+| `base.py` | `BaseTaskConfig` (composes the shared training/data/output/device blocks) and the generic `TaskSpec[ConfigT]` ABC: four Level-1 hooks (`build_model`, `build_loaders`, `compute_loss`, `compute_metrics`) plus a `run(cfg, ctx)` escape hatch for training that is not epoch-shaped. Torch appears only under `TYPE_CHECKING`, so schema generation needs no hardware extra. |
+| `registry.py` | `@register_task` (key, label, accent colour, metric names + directions) and `user_tasks/` discovery, mirroring the proven `user_models/` pattern. Built-in keys are reserved; a broken user file logs a warning and is skipped rather than crashing discovery. |
+| `engine.py` | `GenericTaskEngine` — the loop VisionForge owns: seeding, device resolution, AMP, early stopping, direction-aware best checkpoint, SSE events, TensorBoard, metric curve and the `run.json` contract stamped `custom:<key>`. |
+| `runner.py` | `CustomTaskRunner` — wraps the engine behind the `TaskRunner` handle so custom tasks get sweeps, replicates and replicated comparison from the same orchestrators the built-ins use. |
+| `scaffold.py` | `visionforge new-task <key>` — writes a commented template that **trains out of the box** on synthetic data, so the tab is live before the researcher writes anything. |
 
 ### `blocks/`
 
