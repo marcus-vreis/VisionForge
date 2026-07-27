@@ -1102,6 +1102,9 @@ Everything is CPU-sized, `pretrained=False` and `num_workers=0`, so it runs
 offline on a bare install in minutes and writes only inside a scratch dir.
 Filters (`--tasks`, `--strategies`, `--quick`) narrow the matrix; `--json`
 emits machine-readable outcomes; exit code is non-zero if any case failed.
+The strategy list grows with the API: `comparison` (ADR-061's replicated
+comparison) was added the day the endpoint shipped, because a strategy the
+harness does not exercise is exactly where the last three defects hid.
 
 Test layering: the dataset builders, case table and formatter are covered by
 fast always-on unit tests (`tests/e2e/`); the live-training cases carry the

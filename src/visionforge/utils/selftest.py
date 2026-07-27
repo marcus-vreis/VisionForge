@@ -47,7 +47,7 @@ TASKS = (
     "detection",
     "custom",
 )
-STRATEGIES = ("simple", "cv", "sweep", "replicates")
+STRATEGIES = ("simple", "cv", "sweep", "replicates", "comparison")
 
 # Per-case ceiling. A one-epoch CPU run on tiny data is seconds; this only
 # fires when something is genuinely stuck.
@@ -338,6 +338,22 @@ def _standalone_cases(
             ("headline", "total_replicates"),
             multi_trial=True,
         ),
+        SelfTestCase(
+            task,
+            "comparison",
+            f"/api/{task}/replicated-comparison",
+            {
+                "config": payload,
+                "variants": {
+                    "baseline": {},
+                    "lr_alto": {"training.learning_rate": 0.002},
+                },
+                "seeds": [1, 2],
+                "metric": metric,
+            },
+            ("comparisons", "variants", "ranked_by_mean"),
+            multi_trial=True,
+        ),
     ]
     if has_cv:
         cases.insert(
@@ -415,6 +431,22 @@ def build_cases(
                 ("headline", "total_replicates"),
                 multi_trial=True,
             ),
+            SelfTestCase(
+                "classification",
+                "comparison",
+                "/api/classification/replicated-comparison",
+                {
+                    "config": simple,
+                    "variants": {
+                        "baseline": {},
+                        "lr_alto": {"training.learning_rate": 0.002},
+                    },
+                    "seeds": [1, 2],
+                    "metric": "accuracy",
+                },
+                ("comparisons", "variants", "ranked_by_mean"),
+                multi_trial=True,
+            ),
         ]
 
     if "regression" in tasks:
@@ -483,6 +515,22 @@ def build_cases(
                 f"/api/custom/{key}/replicates",
                 {"config": payload, "seeds": [1, 2], "metric": "mae"},
                 ("headline", "total_replicates"),
+                multi_trial=True,
+            ),
+            SelfTestCase(
+                "custom",
+                "comparison",
+                f"/api/custom/{key}/replicated-comparison",
+                {
+                    "config": payload,
+                    "variants": {
+                        "poucos": {"max_count": 2},
+                        "muitos": {"max_count": 5},
+                    },
+                    "seeds": [1, 2],
+                    "metric": "mae",
+                },
+                ("comparisons", "variants", "ranked_by_mean"),
                 multi_trial=True,
             ),
         ]
@@ -562,6 +610,14 @@ def run_case(base_url: str, case: SelfTestCase) -> SelfTestOutcome:
 
 def _summarize(report: dict[str, Any]) -> str:
     """One-line headline for the results table."""
+    if report.get("kind") == "replicated_comparison":
+        comparisons = report.get("comparisons") or []
+        significant = report.get("significant_pairs", 0)
+        note = " (underpowered)" if report.get("underpowered") else ""
+        return (
+            f"best={report.get('best_by_mean')} "
+            f"{significant}/{len(comparisons)} signif.{note}"
+        )
     h = report.get("headline")
     if isinstance(h, dict):
         half = h.get("ci95_high", 0.0) - h.get("mean", 0.0)

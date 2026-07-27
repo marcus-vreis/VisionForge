@@ -172,7 +172,7 @@ each run completes, streams live progress, and stores its report:
 
 ```bash
 visionforge selftest --quick     # one run per task (~15s, CPU, offline)
-visionforge selftest             # every task x strategy: simple, K-fold, sweep, replicates
+visionforge selftest             # every task x strategy: simple, K-fold, sweep, replicates, comparison
 ```
 
 ```
@@ -180,8 +180,9 @@ case                       result    time  detail
 classification/replicates  PASS      2.7s  accuracy=1.0000±0.0000
 segmentation/cv            PASS      2.0s  miou=0.0783
 custom/sweep               PASS      0.6s  best mae=2.4231
+regression/comparison      PASS      6.5s  best=baseline 1/1 signif.
 ...
-21/21 cases passed
+27/27 cases passed
 ```
 
 Filters: `--tasks classification,custom`, `--strategies sweep,replicates`,

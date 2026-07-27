@@ -95,6 +95,19 @@ class TestCaseTable:
         cv_tasks = {c.task for c in cases}
         assert cv_tasks == {"classification", "regression", "segmentation"}
 
+    def test_every_task_can_be_compared(self, tmp_path: Path) -> None:
+        """The replicated comparison (ADR-061) is the newest endpoint and the
+        one whose bugs were only visible end to end — every task must be
+        covered, or the harness re-opens the gap it exists to close."""
+        cases = build_cases(tmp_path, TASKS, ("comparison",))
+        assert {c.task for c in cases} == set(TASKS)
+        for case in cases:
+            assert case.endpoint.endswith("/replicated-comparison")
+            assert len(case.payload["variants"]) >= 2
+            # Same seed list for every variant is what makes the test paired.
+            assert len(case.payload["seeds"]) >= 2
+            assert case.multi_trial is True
+
     def test_strategy_filter_narrows_the_run(self, tmp_path: Path) -> None:
         cases = build_cases(tmp_path, ("custom",), ("simple",))
         assert len(cases) == 1
