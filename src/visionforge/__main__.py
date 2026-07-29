@@ -131,7 +131,7 @@ def main() -> None:
 
     selftest_parser = subparsers.add_parser(
         "selftest",
-        help="Train every task through the real GUI API on synthetic data (ADR-060).",
+        help="Check the install by training every task on generated data.",
     )
     selftest_parser.add_argument(
         "--tasks",
@@ -161,7 +161,7 @@ def main() -> None:
 
     newtask_parser = subparsers.add_parser(
         "new-task",
-        help="Scaffold a custom task under user_tasks/ (ADR-058).",
+        help="Create a new task of your own under user_tasks/.",
     )
     newtask_parser.add_argument(
         "key", help="task key: lowercase letters/digits/underscores"

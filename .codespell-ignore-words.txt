@@ -38,3 +38,6 @@ variantes
 oficial
 valeu
 sequencial
+eles
+autor
+instale

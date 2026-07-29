@@ -21,6 +21,8 @@ from typing import Any
 
 from loguru import logger
 
+from visionforge.utils.doctor import extra_install_hint
+
 # name -> torchvision.datasets class name. All take a ``train`` kwarg and expose
 # ``.classes``; items are ``(PIL.Image, int)``.
 _TORCHVISION_DATASETS = {
@@ -203,7 +205,8 @@ def download_roboflow(
         from roboflow import Roboflow
     except ImportError as exc:  # pragma: no cover - only without the roboflow extra
         raise ImportError(
-            'roboflow is not installed. Add the optional extra: pip install -e ".[roboflow]".'
+            f"roboflow is not installed. Add the optional extra: "
+            f"{extra_install_hint('roboflow')}"
         ) from exc
 
     workspace, project_name = dataset.split("/", 1)
@@ -242,7 +245,8 @@ def download_kaggle(dataset: str, out_dir: str | Path) -> DatasetDownloadResult:
         from kaggle.api.kaggle_api_extended import KaggleApi
     except ImportError as exc:  # pragma: no cover - only without the kaggle extra
         raise ImportError(
-            'kaggle is not installed. Add the optional extra: pip install -e ".[kaggle]".'
+            f"kaggle is not installed. Add the optional extra: "
+            f"{extra_install_hint('kaggle')}"
         ) from exc
     except OSError as exc:  # kaggle auto-authenticates on import; missing creds raise
         raise ValueError(
@@ -336,7 +340,8 @@ def download_huggingface(
         from datasets import load_dataset  # type: ignore[attr-defined]
     except ImportError as exc:  # pragma: no cover - only without the extra
         raise ImportError(
-            'datasets is not installed. Add the optional extra: pip install -e ".[huggingface]".'
+            f"datasets is not installed. Add the optional extra: "
+            f"{extra_install_hint('huggingface')}"
         ) from exc
 
     out = Path(out_dir)

@@ -1572,3 +1572,37 @@ torchvision's original two for anyone who wants them.
 **Verified from the published package**, not the checkout: `pip install
 visionforge-studio` into a clean venv, then a real MNIST download (400 images,
 ImageFolder layout) and a config validated against it.
+
+---
+
+## ADR-069 — User-facing text stops citing ADRs; install hints adapt
+
+**Date:** 2026-07-29
+**Status:** Accepted — shipped 2026-07-29
+**Extends:** ADR-067 (distribution name)
+
+**Context:** `visionforge --help` described two commands as
+"...on synthetic data (ADR-060)" and "...under user_tasks/ (ADR-058)". An ADR
+number is a pointer into this file; to someone who installed a package it is
+noise that suggests they are missing context they cannot get.
+
+**Decision:** ADR references belong in code comments, docstrings and
+`documentation/` — never in `--help`, error messages, or GUI copy. The two help
+strings now say what the command does in the reader's terms. The audit found
+these were the only two leaks; the frontend's ADR mentions are all in JSDoc,
+which is developer-facing and stays.
+
+**Also fixed, same class as the `doctor` bug in ADR-067:** the three optional
+dataset providers raised
+`ImportError("... pip install -e \".[roboflow]\".")`. That form only works
+inside a checkout, so a pip-installed user got a command that fails — while
+being told it is the fix. The install hint moved into
+`doctor.extra_install_hint(extra)`, shared with `build_install_command`, so
+there is one place that knows how to phrase "install this extra" and it can
+never again be written for only one audience.
+
+**`docs/DATASETS.md`** now documents each provider: which extra it needs,
+which credential and where it goes, what to type, how to validate it from the
+command line, and what the result should look like. It also states the limits
+plainly — Kaggle returns whatever layout the author published, and Hugging Face
+only materializes datasets that expose an image plus a label column.

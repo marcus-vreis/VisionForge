@@ -113,6 +113,19 @@ def installed_from_source() -> bool:
     return bool(info.get("dir_info", {}).get("editable"))
 
 
+def extra_install_hint(extra: str) -> str:
+    """The command that installs an optional extra *for this install*.
+
+    Same split as `build_install_command`: `pip install -e ".[x]"` only works
+    inside a checkout, so a pip-installed user needs the distribution name.
+    Optional features raise ImportError with this string, and a hint that
+    cannot be pasted is no hint at all.
+    """
+    if installed_from_source():
+        return f'pip install -e ".[{extra}]"'
+    return f'pip install "{_DIST_NAME}[{extra}]"'
+
+
 def build_install_command(tag: str) -> tuple[str, str]:
     """Return the pip install command and index URL for the given wheel tag."""
     if installed_from_source():

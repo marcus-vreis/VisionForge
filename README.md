@@ -62,7 +62,8 @@ stats), preprocessing filters and augmentation with live preview.
   benchmark, TensorBoard scalars per run.
 - **Dataset utilities** — split auto-detection, per-split stats (class balance,
   image/mask pairing, manifest checks with target distributions), one-shot
-  download from torchvision / Roboflow / Kaggle / Hugging Face.
+  download from torchvision / Roboflow / Kaggle / Hugging Face — see
+  [`docs/DATASETS.md`](docs/DATASETS.md) for what each provider needs.
 
 ## Installation
 
