@@ -28,6 +28,25 @@ jobs:
         run: |
           uv build
 
+      # The tag and the packaged version are set in two different places, so
+      # they can disagree: tagging v0.2.0 without bumping publishes 0.1.0 under
+      # a v0.2.0 release, or fails deep inside the upload when PyPI rejects a
+      # version that already exists. Failing here says which two values
+      # disagree, before anything is published.
+      - name: Tag must match the packaged version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          BUILT=$(ls dist/*.whl | head -1 | sed -E 's/.*-([0-9]+\.[0-9]+\.[0-9]+)-py3.*/\1/')
+          echo "tag=$TAG  built=$BUILT"
+          if [ "$TAG" != "$BUILT" ]; then
+            echo "::error::Tag v$TAG does not match the packaged version $BUILT."
+            echo "::error::Release with 'bump-my-version bump <part>', which"
+            echo "::error::updates pyproject.toml + CITATION.cff + CHANGELOG,"
+            echo "::error::commits and tags in one step."
+            exit 1
+          fi
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:

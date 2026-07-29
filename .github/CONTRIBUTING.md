@@ -15,6 +15,10 @@ cd frontend && npx vitest run && npx tsc --noEmit
 visionforge selftest                     # every task through the real API
 ```
 
+Cutting a release is one command — `bump-my-version bump <part>` — never a
+hand-written `git tag`. See
+[`documentation/RELEASING.md`](../documentation/RELEASING.md).
+
 Behaviour changes get an ADR in
 [`documentation/DECISIONS.md`](../documentation/DECISIONS.md) — the reasoning
 matters as much as the diff.

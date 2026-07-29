@@ -327,6 +327,7 @@ answers most of the questions up front.
   layers of increasing cost
 - `documentation/VALIDATION.md` — the real-dataset validation record
 - `documentation/CONTRIBUTING.md` — dev setup, test/lint gauntlet, PR flow
+- `documentation/RELEASING.md` — how a version gets cut and published
 
 Backend checks: `pytest` · `ruff check src/ tests/` · `mypy src/`.
 Frontend: `cd frontend && npx vitest run && npx tsc --noEmit`.

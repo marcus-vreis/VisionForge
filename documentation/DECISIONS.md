@@ -1789,3 +1789,50 @@ torch (CUDA build 12.8); nvidia-smi not on PATH". The CUDA *runtime* image does
 not ship `nvidia-smi`, so the ADR-066 fix — trusting the torch probe when the
 binary is absent — is what keeps doctor from telling a working GPU container to
 install the CPU wheel.
+
+---
+
+## ADR-073 — Releases are one command, and CD refuses a mismatched tag
+
+**Date:** 2026-07-29
+**Status:** Accepted — shipped 2026-07-29
+**Extends:** ADR-066 (single source of truth for the version)
+
+**Context:** ADR-066 made the version single-sourced — two literals
+(`pyproject.toml`, `CITATION.cff`), everything else reading
+`importlib.metadata`, and `bump-my-version` rewriting both. What it did not fix
+is that cutting a release was still described as `git tag v0.1.0`, which
+bypasses that machinery entirely.
+
+`bump-my-version` is already configured with `commit = true` and `tag = true`,
+so `bump-my-version bump minor` rewrites every literal, adds the changelog
+heading, commits and tags **atomically**. The mechanism existed; nothing
+pointed at it, and the instructions pointed elsewhere.
+
+**Decision:**
+
+1. **`documentation/RELEASING.md`** states the one command, what it rewrites,
+   what to verify before tagging (including that the wheel carries the built
+   SPA — a stale build would publish an old interface with new code), and what
+   to check after publishing. Linked from the README and the contributing
+   guide.
+
+2. **CD fails on a mismatched tag, before publishing.** The tag and the
+   packaged version live in different places and nothing made them agree:
+   tagging `v0.2.0` while `pyproject.toml` says `0.1.0` builds
+   `visionforge_studio-0.1.0` and either publishes it under a `v0.2.0` release
+   or dies inside the upload when PyPI rejects a version that already exists.
+   The workflow now compares the tag against the built wheel's filename and
+   stops with both values named and the correct command in the error.
+
+**Rejected: deriving the version from the git tag (`setuptools-scm`).** It is
+the more automatic answer and it was the first instinct here, but it trades a
+guard for a build-backend change immediately after a working PyPI publish, and
+it makes a source tree without `.git` produce a version of `0.0.0`. The
+remaining manual step is one command that already does everything; automating
+it further buys little and risks the release path.
+
+**Verified:** the tag-vs-version extraction was checked against the real wheel
+filename (`visionforge_studio-0.1.0-py3-none-any.whl` → `0.1.0`) rather than
+assumed, and `bump-my-version` correctly refuses to run from a dirty working
+tree.
