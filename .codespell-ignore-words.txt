@@ -41,3 +41,4 @@ sequencial
 eles
 autor
 instale
+caracteres

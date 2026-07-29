@@ -10,6 +10,7 @@ import { exportConfigToYaml } from "../lib/yaml-config";
 import type { ValidationError } from "../hooks/useExperiment";
 import type { JsonSchema } from "../types/schema";
 import { ExperimentHeader, type PanelStrategy } from "./ExperimentHeader";
+import { CustomTaskManageCard } from "./CustomTaskManageCard";
 import { ReplicatesCard } from "./ReplicatesCard";
 import { SchemaForm } from "./SchemaForm";
 import { SweepCard, type SweepPayload } from "./SweepCard";
@@ -37,6 +38,8 @@ interface CustomTaskPanelProps {
   onStrategyChange?: (strategy: PanelStrategy) => void;
   /** Incremented by Treinar so the selected strategy's card runs. */
   runSignal?: number;
+  /** Refetch the tab list after this task was hidden or deleted. */
+  onRemoved?: () => void;
 }
 
 const STRATEGIES: { value: PanelStrategy; label: string }[] = [
@@ -66,6 +69,7 @@ export function CustomTaskPanel({
   onReplicates,
   onStrategyChange,
   runSignal,
+  onRemoved,
 }: CustomTaskPanelProps) {
   const [schema, setSchema] = useState<JsonSchema | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -165,6 +169,16 @@ export function CustomTaskPanel({
         // DeviceSelector in the bottom bar (same rule as the built-in panels).
         omit={["name", "device"]}
       />
+
+      {/* Last in the panel on purpose: you reach it by scrolling past the
+          thing you came here to configure, not by aiming near it. */}
+      {onRemoved && (
+        <CustomTaskManageCard
+          taskKey={task.key}
+          label={task.label}
+          onRemoved={onRemoved}
+        />
+      )}
     </div>
   );
 }

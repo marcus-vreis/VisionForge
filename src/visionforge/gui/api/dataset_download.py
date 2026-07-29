@@ -13,6 +13,7 @@ credentials are missing.
 
 from __future__ import annotations
 
+import os
 import tempfile
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -21,6 +22,7 @@ from typing import Any
 
 from loguru import logger
 
+from visionforge.utils.credentials import load_credential, resolve_credential
 from visionforge.utils.doctor import extra_install_hint
 
 # name -> torchvision.datasets class name. All take a ``train`` kwarg and expose
@@ -241,6 +243,16 @@ def download_kaggle(dataset: str, out_dir: str | Path) -> DatasetDownloadResult:
     """
     if "/" not in dataset:
         raise ValueError("Kaggle dataset must be 'owner/dataset-slug'.")
+
+    # The kaggle client reads credentials from kaggle.json or the environment
+    # and authenticates *at import time*, so a stored key has to be in place
+    # before the import below — not passed as an argument.
+    stored = load_credential("kaggle")
+    if stored and ":" in stored and not os.environ.get("KAGGLE_KEY"):
+        username, _, key = stored.partition(":")
+        os.environ["KAGGLE_USERNAME"] = username.strip()
+        os.environ["KAGGLE_KEY"] = key.strip()
+
     try:
         from kaggle.api.kaggle_api_extended import KaggleApi
     except ImportError as exc:  # pragma: no cover - only without the kaggle extra
@@ -398,7 +410,9 @@ def download_dataset(
         return download_roboflow(
             dataset,
             out_dir,
-            api_key=provider_kwargs.get("api_key"),
+            # Falls back to the key saved for this user, so it is typed once.
+            # An explicit value still wins, for a one-off key.
+            api_key=resolve_credential("roboflow", provider_kwargs.get("api_key")),
             version=provider_kwargs.get("version"),
             dataset_format=provider_kwargs.get("dataset_format") or "folder",
         )
@@ -406,7 +420,9 @@ def download_dataset(
         return download_kaggle(dataset, out_dir)
     if provider == "huggingface":
         return download_huggingface(
-            dataset, out_dir, token=provider_kwargs.get("token")
+            dataset,
+            out_dir,
+            token=resolve_credential("huggingface", provider_kwargs.get("token")),
         )
     raise ValueError(
         f"Unknown dataset provider '{provider}' "

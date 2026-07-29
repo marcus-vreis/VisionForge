@@ -20,6 +20,21 @@ pip install "visionforge-studio[roboflow,kaggle,huggingface]"
 Se esquecer, o erro diz a linha exata para a sua instalação — não é preciso
 adivinhar.
 
+## A chave se digita uma vez
+
+Ao lado de cada campo de credencial há um botão **💾 Salvar**. Salvando, a
+chave fica guardada em `~/.visionforge/credentials.json` e nas próximas vezes o
+campo já aparece marcado como *salva*, mostrando só os últimos caracteres
+(`salva: •••••••1234`) — o suficiente para você saber qual é, sem a chave
+aparecer na tela.
+
+- deixe o campo **em branco** para usar a salva
+- digite outra e **↻ Substituir** para trocar
+- **Esquecer** remove a chave deste computador
+
+Um valor digitado no momento sempre vence o salvo, então dá para usar uma chave
+avulsa sem perder a sua.
+
 ---
 
 ## 1. torchvision — o único sem credencial

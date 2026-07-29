@@ -1606,3 +1606,76 @@ which credential and where it goes, what to type, how to validate it from the
 command line, and what the result should look like. It also states the limits
 plainly — Kaggle returns whatever layout the author published, and Hugging Face
 only materializes datasets that expose an image plus a label column.
+
+---
+
+## ADR-070 — Stored provider keys; hide vs delete for custom tasks
+
+**Date:** 2026-07-29
+**Status:** Accepted — shipped 2026-07-29
+**Extends:** ADR-055 (dataset download), ADR-058 (custom tasks)
+
+### Stored provider keys
+
+**Context:** typing a Roboflow key or a Kaggle token on every download is the
+kind of friction that stops a feature being used at all.
+
+**Decision:** one local store, `~/.visionforge/credentials.json`
+(`VISIONFORGE_HOME` overrides), with three deliberate properties:
+
+1. **Per user, not per project.** Custom models and tasks resolve next to the
+   working directory precisely so two projects do not share them (ADR-068). A
+   key is the opposite — it belongs to the person, and keeping it out of the
+   project folder means it cannot be carried into a git repository or a synced
+   drive by accident.
+2. **Read back masked.** The API returns `rf_•••••••1234`, never the value. The
+   GUI only needs to show that a key exists and *which* one — the common
+   question is "is this my old key?", not "what is it?" — and the download runs
+   server-side where the real value already is. A screenshot of the panel is
+   therefore not a leak, which a test asserts by serializing the status and
+   checking the secret does not appear.
+3. **Explicit beats stored.** A key passed in the request wins, so a one-off
+   key can be used without overwriting what is saved.
+
+The file is written owner-only where the platform supports it; on Windows that
+call is a no-op and the file inherits the profile ACL, which the module
+docstring states rather than glosses over. The log records that a credential
+was stored, never its value.
+
+Kaggle is the odd one: its client authenticates *at import time* from
+`kaggle.json` or the environment, so the stored value (`user:key`) is placed
+into the environment before the import rather than passed as an argument.
+
+### Hide vs delete for custom tasks
+
+**Context:** two custom tasks were enough to crowd the task bar. "Remove this
+task" was the request — but it means two different things, and only one of them
+is recoverable.
+
+**Decision:** both, separated by how much they cost to undo.
+
+- **Hide** — the tab stops rendering; the file is untouched; one click; undone
+  by unhiding. This is the honest answer to "my tab bar is full", which is the
+  actual complaint. A hidden task stays registered, so past runs still resolve
+  and a YAML still re-runs it.
+- **Delete** — removes the `.py` the researcher wrote. The API requires
+  `confirm` to repeat the task key exactly, and the GUI keeps the button
+  disabled until it matches. A second click is not evidence of intent; typing
+  the name is.
+
+A packaged task (`user_tasks/<key>/task.py`) takes its directory with it — the
+folder exists to hold assets beside the module, so removing only the `.py`
+would orphan them. Deleting also clears any stale hidden entry, or re-creating
+a task with the same key would resurrect it already hidden with nothing on
+screen to explain why.
+
+The hidden list lives at `user_tasks/.hidden.json`, next to the tasks rather
+than in the per-user config, because tasks are per working directory: two
+projects with a task of the same name must be able to disagree about whether it
+is visible.
+
+**Placement:** the management card sits at the *bottom* of the custom task's
+own panel, behind an "⚙ opções" toggle. You reach it by scrolling past the
+thing you came to configure, not by aiming near it — unlike a tab-bar × or a
+bottom-bar trash, both of which put an irreversible action within a mis-click
+of a frequent one.

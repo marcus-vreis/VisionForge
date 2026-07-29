@@ -68,6 +68,10 @@ from visionforge.gui.api.schemas import (
     BatchPredictResponse,
     CheckpointPickResponse,
     ComparisonRequest,
+    CredentialEntry,
+    CredentialSaveRequest,
+    CredentialsResponse,
+    CustomTaskActionResponse,
     DatasetDetectRequest,
     DatasetDetectResponse,
     DatasetDownloadRequest,
@@ -881,9 +885,13 @@ async def list_tasks() -> TaskListResponse:
     Scans ``user_tasks/`` so a freshly dropped task file appears without a
     server restart (ADR-058).
     """
+    from visionforge.tasks.manage import hidden_tasks
     from visionforge.tasks.registry import load_user_tasks
 
     load_user_tasks()
+    # A hidden task stays registered — it can still be re-run from a YAML and
+    # its past runs still resolve — it just does not claim a tab.
+    hidden = hidden_tasks()
     custom = [
         TaskDescriptor(
             key=t.key,
@@ -895,8 +903,96 @@ async def list_tasks() -> TaskListResponse:
             primary_metric=t.primary_metric,
         )
         for t in registered_tasks()
+        if t.key not in hidden
     ]
     return TaskListResponse(tasks=[*_BUILTIN_TASK_DESCRIPTORS, *custom])
+
+
+@router.post("/custom/{key}/hide")
+async def hide_custom_task(key: str) -> CustomTaskActionResponse:
+    """Stop rendering a custom task's tab, keeping its file untouched."""
+    from visionforge.tasks.manage import set_hidden
+
+    _get_custom_task_or_404(key)
+    changed = set_hidden(key, True)
+    return CustomTaskActionResponse(
+        key=key,
+        action="hidden",
+        detail="Aba ocultada. O arquivo continua em user_tasks/."
+        if changed
+        else "Já estava oculta.",
+    )
+
+
+@router.post("/custom/{key}/unhide")
+async def unhide_custom_task(key: str) -> CustomTaskActionResponse:
+    """Bring a hidden custom task's tab back."""
+    from visionforge.tasks.manage import set_hidden
+
+    set_hidden(key, False)
+    return CustomTaskActionResponse(
+        key=key, action="unhidden", detail="Aba restaurada."
+    )
+
+
+@router.delete("/custom/{key}")
+async def delete_custom_task(key: str, confirm: str = "") -> CustomTaskActionResponse:
+    """Delete a custom task's source file. ``confirm`` must repeat the key.
+
+    Typing the name is deliberately more work than clicking: this removes code
+    the researcher wrote, and there is no undo.
+    """
+    from visionforge.tasks.manage import delete_task
+
+    try:
+        removed = delete_task(key, confirm)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    return CustomTaskActionResponse(
+        key=key, action="deleted", detail=f"Removido do disco: {removed}"
+    )
+
+
+@router.get("/credentials")
+async def get_credentials() -> CredentialsResponse:
+    """Which dataset providers have a key stored, masked."""
+    from visionforge.utils.credentials import config_dir, credential_status
+
+    return CredentialsResponse(
+        providers={k: CredentialEntry(**v) for k, v in credential_status().items()},
+        config_dir=str(config_dir()),
+    )
+
+
+@router.post("/credentials")
+async def save_credential_route(req: CredentialSaveRequest) -> CredentialsResponse:
+    """Store (or replace) one provider's key, then return the masked status."""
+    from visionforge.utils.credentials import config_dir, credential_status
+    from visionforge.utils.credentials import save_credential as _save
+
+    try:
+        _save(req.provider, req.value)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return CredentialsResponse(
+        providers={k: CredentialEntry(**v) for k, v in credential_status().items()},
+        config_dir=str(config_dir()),
+    )
+
+
+@router.delete("/credentials/{provider}")
+async def forget_credential_route(provider: str) -> CredentialsResponse:
+    """Remove one provider's stored key."""
+    from visionforge.utils.credentials import config_dir, credential_status
+    from visionforge.utils.credentials import forget_credential as _forget
+
+    _forget(provider)
+    return CredentialsResponse(
+        providers={k: CredentialEntry(**v) for k, v in credential_status().items()},
+        config_dir=str(config_dir()),
+    )
 
 
 def _get_custom_task_or_404(key: str) -> Any:

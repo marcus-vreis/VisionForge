@@ -640,3 +640,37 @@ __all__ = [
     "DatasetDownloadRequest",
     "DatasetDownloadResponse",
 ]
+
+
+class CredentialSaveRequest(BaseModel):
+    """One provider's API key, on its way to the local store."""
+
+    provider: Literal["roboflow", "kaggle", "huggingface"]
+    value: str = Field(min_length=1)
+
+
+class CredentialEntry(BaseModel):
+    """Whether a provider has a stored key, and its masked form.
+
+    Never carries the real value: the GUI only needs to show that a key exists
+    and which one, and the download runs server-side where the value already
+    is.
+    """
+
+    saved: bool
+    masked: str
+
+
+class CredentialsResponse(BaseModel):
+    """Stored-credential status per provider, plus where the file lives."""
+
+    providers: dict[str, CredentialEntry]
+    config_dir: str
+
+
+class CustomTaskActionResponse(BaseModel):
+    """Outcome of hiding, unhiding or deleting a researcher-defined task."""
+
+    key: str
+    action: Literal["hidden", "unhidden", "deleted"]
+    detail: str

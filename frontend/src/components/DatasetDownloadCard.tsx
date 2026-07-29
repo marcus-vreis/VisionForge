@@ -12,6 +12,7 @@ import {
   type DatasetProvider,
 } from "../lib/dataset-download";
 import { SelectField, Segmented, TextField } from "./controls";
+import { CredentialField } from "./CredentialField";
 
 const PROVIDERS: { value: DatasetProvider; label: string }[] = [
   { value: "torchvision", label: "torchvision" },
@@ -172,11 +173,10 @@ export function DatasetDownloadCard({
                   placeholder="1"
                   mono
                 />
-                <TextField
+                <CredentialField
+                  provider="roboflow"
                   label="API key"
-                  value={form.api_key}
-                  onChange={(v) => set({ api_key: v })}
-                  mono
+                  hint="app.roboflow.com → Settings → API Keys"
                 />
                 <TextField
                   label="Formato"
@@ -188,13 +188,21 @@ export function DatasetDownloadCard({
                 />
               </>
             ) : form.provider === "kaggle" ? (
-              <TextField
-                label="Dataset (owner/slug)"
-                value={form.dataset}
-                onChange={(v) => set({ dataset: v })}
-                placeholder="zalando-research/fashionmnist"
-                mono
-              />
+              <>
+                <TextField
+                  label="Dataset (owner/slug)"
+                  value={form.dataset}
+                  onChange={(v) => set({ dataset: v })}
+                  placeholder="zalando-research/fashionmnist"
+                  mono
+                />
+                <CredentialField
+                  provider="kaggle"
+                  label="Credencial (usuario:chave)"
+                  placeholder="seu-usuario:sua-chave"
+                  hint="kaggle.com → Settings → API → Create New Token"
+                />
+              </>
             ) : (
               <>
                 <TextField
@@ -204,12 +212,10 @@ export function DatasetDownloadCard({
                   placeholder="owner/dataset"
                   mono
                 />
-                <TextField
+                <CredentialField
+                  provider="huggingface"
                   label="Token"
-                  value={form.token}
-                  onChange={(v) => set({ token: v })}
-                  hint="opcional (datasets privados)"
-                  mono
+                  hint="opcional — só para datasets privados"
                 />
               </>
             )}

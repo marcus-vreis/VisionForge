@@ -800,3 +800,68 @@ export async function downloadRunMarkdown(runId: string): Promise<void> {
 export function artifactUrl(path: string): string {
   return `${BASE}/artifacts/${path}`;
 }
+
+/** Whether each dataset provider has a stored key, and its masked form.
+ *
+ * The real value never reaches the browser: the GUI only needs to show that a
+ * key exists and which one, and the download runs server-side.
+ */
+export interface CredentialEntry {
+  saved: boolean;
+  masked: string;
+}
+
+export interface CredentialsResponse {
+  providers: Record<string, CredentialEntry>;
+  config_dir: string;
+}
+
+export async function fetchCredentials(): Promise<CredentialsResponse> {
+  return request<CredentialsResponse>("/credentials");
+}
+
+export async function saveCredential(
+  provider: string,
+  value: string,
+): Promise<CredentialsResponse> {
+  return request<CredentialsResponse>("/credentials", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ provider, value }),
+  });
+}
+
+export async function forgetCredential(
+  provider: string,
+): Promise<CredentialsResponse> {
+  return request<CredentialsResponse>(`/credentials/${provider}`, {
+    method: "DELETE",
+  });
+}
+
+/** Outcome of hiding, unhiding or deleting a researcher-defined task. */
+export interface CustomTaskActionResponse {
+  key: string;
+  action: "hidden" | "unhidden" | "deleted";
+  detail: string;
+}
+
+export async function hideCustomTask(
+  key: string,
+): Promise<CustomTaskActionResponse> {
+  return request<CustomTaskActionResponse>(`/custom/${key}/hide`, {
+    method: "POST",
+  });
+}
+
+/** Delete a custom task's source file. `confirm` must repeat the key — there
+ *  is no undo, so the confirmation is deliberately more work than a click. */
+export async function deleteCustomTask(
+  key: string,
+  confirm: string,
+): Promise<CustomTaskActionResponse> {
+  return request<CustomTaskActionResponse>(
+    `/custom/${key}?confirm=${encodeURIComponent(confirm)}`,
+    { method: "DELETE" },
+  );
+}

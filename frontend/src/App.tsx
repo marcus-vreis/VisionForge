@@ -142,13 +142,25 @@ export default function App() {
       });
   }, []);
 
-  useEffect(() => {
+  const reloadTasks = useCallback(() => {
     fetchTasks()
-      .then((res) => setTasks(mergeTasks(TASKS, res.tasks)))
+      .then((res) => {
+        const merged = mergeTasks(TASKS, res.tasks);
+        setTasks(merged);
+        // A hidden or deleted task must not stay selected — its panel would
+        // fetch a schema for a tab that no longer exists.
+        setActiveKey((current) =>
+          merged.some((t) => t.key === current) ? current : merged[0].key,
+        );
+      })
       .catch(() => {
         /* older server or none: the five built-in tabs still work */
       });
   }, []);
+
+  useEffect(() => {
+    reloadTasks();
+  }, [reloadTasks]);
 
   const activeCustomForm = customForms[activeKey] ?? {};
   // Stable per key: CustomTaskPanel's schema effect depends on this identity.
@@ -454,6 +466,7 @@ export default function App() {
             }
             onStrategyChange={setActiveStrategy}
             runSignal={runSignal}
+            onRemoved={reloadTasks}
           />
         ) : activeKey === "detection" ? (
           <DetectionPanel
