@@ -281,6 +281,7 @@ async def get_run_detail(run_id: str) -> RunDetail:
         run_dir=data.get("run_dir", str(run_dir.resolve())),
         config=data.get("config", {}),
         metrics=data.get("metrics", {}),
+        metric_cis=data.get("metric_cis", {}),
         history=data.get("history", []),
         artifacts=data.get("artifacts", {}),
         tests=data.get("tests", []),
@@ -1277,6 +1278,7 @@ async def get_result(run_id: str) -> RunResult:
         return RunResult(
             run_id=run_id,
             metrics=data.get("metrics", {}),
+            metric_cis=data.get("metric_cis", {}),
             report=_current_run.get("report", {}),
             artifacts=data.get("artifacts", {}),
         )
@@ -1413,13 +1415,35 @@ def _render_run_markdown(run_dir: Path, data: dict[str, Any]) -> str:
     lines.append("## Final metrics")
     lines.append("")
     if metrics:
-        lines.append("| Metric | Value |")
-        lines.append("|---|---|")
+        cis: dict[str, Any] = data.get("metric_cis", {})
+        has_cis = bool(cis)
+        header = (
+            "| Metric | Value | 95% CI (bootstrap) |"
+            if has_cis
+            else "| Metric | Value |"
+        )
+        lines.append(header)
+        lines.append("|---|---|---|" if has_cis else "|---|---|")
         for k, v in metrics.items():
-            if isinstance(v, float):
-                lines.append(f"| {k} | {v:.4f} |")
-            else:
-                lines.append(f"| {k} | {v} |")
+            value = f"{v:.4f}" if isinstance(v, float) else str(v)
+            if not has_cis:
+                lines.append(f"| {k} | {value} |")
+                continue
+            # run.json keys the CIs by bare metric name; the metrics block
+            # prefixes the test-split ones with "test_".
+            ci = cis.get(k[len("test_") :] if k.startswith("test_") else k)
+            interval = f"[{ci['ci_low']:.4f}, {ci['ci_high']:.4f}]" if ci else "—"
+            lines.append(f"| {k} | {value} | {interval} |")
+        if has_cis:
+            sample = next(iter(cis.values()))
+            lines.append("")
+            lines.append(
+                f"Intervals are percentile bootstrap over the "
+                f"{sample['n_samples']} test images "
+                f"({sample['n_resamples']} resamples): they quantify test-split "
+                f"sampling noise for this fixed model, not run-to-run variance. "
+                f"For the latter, train replicates under several seeds."
+            )
     else:
         lines.append("_(none recorded)_")
     lines.append("")

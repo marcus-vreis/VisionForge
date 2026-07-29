@@ -9,7 +9,8 @@ import torch
 
 from visionforge.blocks.base import ExperimentBlock
 from visionforge.core.data import DataModule
-from visionforge.core.evaluator import EvalResult, Evaluator
+from visionforge.core.evaluator import EvalResult, Evaluator, bootstrap_eval_cis
+from visionforge.core.metric_ci import MetricCI
 from visionforge.core.plotter import MetricsPlotter
 from visionforge.core.trainer import Trainer, TrainResult
 from visionforge.models.factory import ModelFactory
@@ -29,6 +30,7 @@ class ClassificationBlock(ExperimentBlock):
         self._config = config
         self._train_result: TrainResult | None = None
         self._eval_result: EvalResult | None = None
+        self._metric_cis: dict[str, MetricCI] = {}
         # Injected by the GUI layer to stream live epoch progress via SSE.
         self._progress_callback: Callable[[dict[str, Any]], None] | None = None
 
@@ -59,6 +61,10 @@ class ClassificationBlock(ExperimentBlock):
                 "recall": self._eval_result.recall,
                 "auc_roc": self._eval_result.auc_roc,
             }
+            if self._metric_cis:
+                result["eval"]["confidence_intervals"] = {
+                    name: ci.to_dict() for name, ci in self._metric_cis.items()
+                }
         return result
 
     # ── private ───────────────────────────────────────────────────────────────
@@ -79,7 +85,7 @@ class ClassificationBlock(ExperimentBlock):
         )
         model.load_state_dict(state_dict)  # type: ignore[arg-type]
 
-        self._eval_result = Evaluator(self._config).evaluate(model, data.test_loader())
+        self._evaluate(model, data)
 
         run_dir = self._train_result.model_path.parent
         graphics = self._render_plots(run_dir, data.class_names)
@@ -97,7 +103,13 @@ class ClassificationBlock(ExperimentBlock):
         model.load_state_dict(state_dict)  # type: ignore[arg-type]
 
         data = DataModule(self._config)
-        self._eval_result = Evaluator(self._config).evaluate(model, data.test_loader())
+        self._evaluate(model, data)
+
+    def _evaluate(self, model: Any, data: DataModule) -> None:
+        """Score the test split and attach a bootstrap CI to each metric."""
+        result = Evaluator(self._config).evaluate(model, data.test_loader())
+        self._eval_result = result
+        self._metric_cis = bootstrap_eval_cis(result, self._config)
 
     def _render_plots(self, run_dir: Path, class_names: list[str]) -> list[Path]:
         """Render every available plot for the current train + eval results.
@@ -169,6 +181,14 @@ class ClassificationBlock(ExperimentBlock):
                     "test_auc_roc": self._eval_result.auc_roc,
                 }
             )
+        if self._metric_cis:
+            # Sibling of "metrics" rather than a nested entry inside it: several
+            # readers treat metrics as a flat name -> number map (the history
+            # projection, the markdown table), and a dict value there would
+            # either be skipped or printed raw.
+            data["metric_cis"] = {
+                name: ci.to_dict() for name, ci in self._metric_cis.items()
+            }
         data["artifacts"]["graphics"] = [str(p) for p in graphics]
 
         run_json_path.write_text(json.dumps(data, indent=2), encoding="utf-8")

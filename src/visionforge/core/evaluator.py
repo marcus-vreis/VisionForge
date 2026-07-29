@@ -16,6 +16,7 @@ from sklearn.metrics import (
     roc_auc_score,
 )
 
+from visionforge.core.metric_ci import MetricCI, bootstrap_classification_cis
 from visionforge.core.trainer import resolve_device
 from visionforge.utils.config import ExperimentConfig
 
@@ -38,6 +39,11 @@ class EvalResult:
     y_score: list[float] = field(default_factory=list)
     # Full per-class softmax matrix for multiclass ROC (one row per sample).
     y_proba_full: list[list[float]] = field(default_factory=list)
+    # Predicted labels. Kept alongside the probabilities because a multiclass
+    # y_score only holds the winning class's probability, which cannot recover
+    # which class won — and the bootstrap CIs (ADR-074) recompute metrics from
+    # the predictions, not from the aggregates.
+    y_pred: list[int] = field(default_factory=list)
 
 
 class Evaluator:
@@ -125,7 +131,27 @@ class Evaluator:
             y_true=all_labels,
             y_score=all_probs,
             y_proba_full=all_proba_full,
+            y_pred=all_preds,
         )
 
 
-__all__ = ["Evaluator", "EvalResult"]
+def bootstrap_eval_cis(
+    result: EvalResult, config: ExperimentConfig
+) -> dict[str, MetricCI]:
+    """Bootstrap CIs for an evaluated split, seeded from the run's own seed (ADR-074).
+
+    Lives here rather than in each block so every classification path that
+    evaluates a test set reports the interval the same way — and derives it from
+    ``training.seed``, so re-reading a finished run never yields a different
+    interval than the one already written to ``run.json``.
+    """
+    return bootstrap_classification_cis(
+        result.y_true,
+        result.y_pred,
+        task=config.task,
+        y_proba_full=result.y_proba_full,
+        seed=config.training.seed,
+    )
+
+
+__all__ = ["Evaluator", "EvalResult", "bootstrap_eval_cis"]

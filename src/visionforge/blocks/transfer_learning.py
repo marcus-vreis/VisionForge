@@ -11,7 +11,8 @@ from loguru import logger
 
 from visionforge.blocks.base import ExperimentBlock
 from visionforge.core.data import DataModule
-from visionforge.core.evaluator import EvalResult, Evaluator
+from visionforge.core.evaluator import EvalResult, Evaluator, bootstrap_eval_cis
+from visionforge.core.metric_ci import MetricCI
 from visionforge.core.trainer import Trainer, TrainResult
 from visionforge.models.factory import ModelFactory
 from visionforge.utils.config import ExperimentConfig
@@ -39,6 +40,7 @@ class TransferLearningBlock(ExperimentBlock):
         self._config = config
         self._train_result: TrainResult | None = None
         self._eval_result: EvalResult | None = None
+        self._metric_cis: dict[str, MetricCI] = {}
         self._frozen_layers: list[str] = []
         self._optimizer: torch.optim.Optimizer | None = None
         # Injected by the GUI layer to stream live epoch progress via SSE.
@@ -66,6 +68,7 @@ class TransferLearningBlock(ExperimentBlock):
         model.load_state_dict(state_dict)  # type: ignore[arg-type]
 
         self._eval_result = Evaluator(self._config).evaluate(model, data.test_loader())
+        self._metric_cis = bootstrap_eval_cis(self._eval_result, self._config)
 
         run_dir = self._train_result.model_path.parent
         self._update_run_json(run_dir)
@@ -104,6 +107,10 @@ class TransferLearningBlock(ExperimentBlock):
                 "recall": self._eval_result.recall,
                 "auc_roc": self._eval_result.auc_roc,
             }
+            if self._metric_cis:
+                result["eval"]["confidence_intervals"] = {
+                    name: ci.to_dict() for name, ci in self._metric_cis.items()
+                }
 
         return result
 
@@ -257,6 +264,10 @@ class TransferLearningBlock(ExperimentBlock):
                     "test_auc_roc": self._eval_result.auc_roc,
                 }
             )
+        if self._metric_cis:
+            data["metric_cis"] = {
+                name: ci.to_dict() for name, ci in self._metric_cis.items()
+            }
 
         run_json_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
 

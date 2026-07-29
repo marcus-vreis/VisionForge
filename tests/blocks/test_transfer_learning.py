@@ -740,3 +740,81 @@ class TestProgressStreaming:
 
         source = inspect.getsource(routes._execute_experiment)
         assert "TransferLearningBlock" in source
+
+
+# ── bootstrap confidence intervals (ADR-074) ──────────────────────────────────
+
+
+class TestBootstrapConfidenceIntervals:
+    """Transfer learning reports the same intervals a plain run does.
+
+    Deliberately a *real* run — the mocked-Evaluator tests above cannot cover
+    this: a MagicMock's y_true reads as a zero-length array, so the interval
+    code correctly declines and the path is never exercised.
+    """
+
+    @pytest.fixture
+    def wide_config(self, tmp_path: Path) -> ExperimentConfig:
+        from PIL import Image
+
+        rng = np.random.default_rng(1)
+        root = tmp_path / "data"
+        for split, per_class in (("train", 8), ("val", 8), ("test", 16)):
+            for cls in ("class_a", "class_b"):
+                folder = root / split / cls
+                folder.mkdir(parents=True)
+                for i in range(per_class):
+                    pixels = rng.integers(0, 255, (32, 32, 3), dtype=np.uint8)
+                    Image.fromarray(pixels).save(folder / f"image_{i}.png")
+
+        return ExperimentConfig.model_validate(
+            {
+                "name": "tl_ci_test",
+                "task": "binary",
+                "block": "transfer_learning",
+                "model": {"name": "resnet18", "num_classes": 1, "pretrained": False},
+                "training": {
+                    "learning_rate": 0.01,
+                    "epochs": 1,
+                    "batch_size": 4,
+                    "seed": 3,
+                },
+                "data": {
+                    "base_dir": str(root),
+                    "num_workers": 0,
+                    "pin_memory": False,
+                    "transforms": {"image_size": 32},
+                },
+                "output": {
+                    "models_dir": str(tmp_path / "models"),
+                    "graphics_dir": str(tmp_path / "graphics"),
+                    "logs_dir": str(tmp_path / "logs"),
+                    "reports_dir": str(tmp_path / "reports"),
+                },
+                "transfer_learning": {"mode": "feature_extraction"},
+            }
+        )
+
+    def test_run_json_and_report_carry_intervals(
+        self, wide_config: ExperimentConfig
+    ) -> None:
+        from visionforge.blocks.transfer_learning import TransferLearningBlock
+
+        block = TransferLearningBlock()
+        block.setup(wide_config)
+        with patch(
+            "visionforge.blocks.transfer_learning.ModelFactory.create",
+            return_value=TinyModel(),
+        ):
+            block.run()
+
+        run_json = next(
+            (wide_config.output.models_dir / wide_config.name).glob("*/run.json")
+        )
+        data = json.loads(run_json.read_text(encoding="utf-8"))
+
+        assert data["metric_cis"]["accuracy"]["n_samples"] == 32
+        assert (
+            block.report()["eval"]["confidence_intervals"]["accuracy"]
+            == data["metric_cis"]["accuracy"]
+        )

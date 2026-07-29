@@ -125,6 +125,9 @@ class RunResult(BaseModel):
 
     run_id: str
     metrics: dict[str, Any]
+    # Same shape and field name as RunDetail.metric_cis (ADR-074) so the results
+    # view and the run-detail panel read one contract instead of two.
+    metric_cis: dict[str, Any] = {}
     report: dict[str, Any]
     artifacts: dict[str, Any]
 
@@ -221,6 +224,9 @@ class RunDetail(BaseModel):
     run_dir: str
     config: dict[str, Any]
     metrics: dict[str, Any]
+    # Bootstrap interval per test metric (ADR-074). Empty for runs written
+    # before it existed, and for tasks that do not keep per-sample predictions.
+    metric_cis: dict[str, Any] = {}
     history: list[dict[str, Any]]
     artifacts: dict[str, Any]
     tests: list[dict[str, Any]] = []

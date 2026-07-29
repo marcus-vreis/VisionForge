@@ -1836,3 +1836,83 @@ it further buys little and risks the release path.
 filename (`visionforge_studio-0.1.0-py3-none-any.whl` → `0.1.0`) rather than
 assumed, and `bump-my-version` correctly refuses to run from a dirty working
 tree.
+
+---
+
+## ADR-074 — A single run's test metrics carry a bootstrap interval
+
+**Date:** 2026-07-29
+**Status:** Accepted — shipped 2026-07-29
+**Complements:** ADR-056 (multi-seed replicates), ADR-061 (significance testing)
+
+**Context:** ADR-056 answers "how uncertain is this number?" by training N times
+under N seeds and aggregating to mean ± CI. That is the stronger answer, and it
+costs N trainings. Most runs are not replicated, and those reported a bare
+`accuracy: 0.7506` — a number whose precision is unknowable from the report.
+There is a second, cheaper question that one training can answer: given this
+fixed model, how much of the metric is an accident of *which images landed in
+the test split*? Resampling the split with replacement answers exactly that.
+
+**Decision:** every classification run reports a 95% percentile bootstrap
+interval per test metric (accuracy, F1, precision, recall, AUC-ROC), written to
+`run.json` as a `metric_cis` block and surfaced in the results tiles, the
+run-detail panel and the markdown model card.
+
+- **Always on, no config knob.** Provenance, like the `environment` block
+  (ADR-057) and the dataset fingerprint (ADR-061): a researcher should not have
+  to know to ask for it. This was only defensible once the cost was negligible
+  (see below).
+- **`metric_cis` is a sibling of `metrics`, not nested inside it.** Several
+  readers treat `metrics` as a flat name → number map — the history projection,
+  the markdown table — and a dict value there is either silently dropped or
+  printed as a raw Python dict.
+- **Seeded from `training.seed`.** Re-evaluating a finished checkpoint must not
+  produce a different interval than the one already in `run.json`; an interval
+  that moves between reads of the same result cannot be cited.
+- **Applies to plain and transfer-learning runs**, the two paths that evaluate
+  one test split. **Not** to cross-validation: its report is already μ ± σ over
+  folds, and a per-fold interval would be uncertainty on top of uncertainty
+  measuring a different thing.
+
+**What the interval is not, stated in the report itself.** It holds the model
+fixed and varies the evaluation sample, so it captures test-split sampling noise
+only — not the run-to-run variance from initialization, data order and
+nondeterministic kernels that replicates measure. A tight interval here says
+nothing about whether retraining would land in the same place. The markdown card
+and the GUI tooltip both say so and point at replicates, because the failure mode
+of shipping this feature is a reader treating it as the stronger claim.
+
+**Metrics are recomputed with vectorized confusion-matrix and rank arithmetic,
+not by calling sklearn once per resample.** This is a deliberate exception to
+"prefer the obvious implementation", and the reason is measured, not assumed:
+sklearn's per-call overhead dominates (~5 ms regardless of split size), putting
+1000 resamples at ~5 s per run and ~135 s across the 27-case selftest. That cost
+would have forced the feature to be opt-in, which defeats the point. Vectorized
+it is 0.007 s at n=500 and 0.069 s at n=5000 — 700x faster — so it can simply
+always be there. The shortcut is only acceptable because the tests pin every
+path against sklearn: accuracy/precision/recall/F1 for binary and macro
+averaging over 2, 3 and 7 classes, and AUC including the heavy-ties case that
+bootstrap resampling guarantees and naive ranking gets wrong. Agreement is
+1e-16.
+
+**Two guards the honest version needs:**
+
+1. **A 20-sample floor.** Below it the interval is arithmetic, not evidence —
+   resampling a handful of values produces a narrow interval that describes the
+   sample, not the population. Under the floor no interval is written, so the
+   report says "none" instead of something misleading. (This is the same trap
+   ADR-061 documented from the other direction: with n=2 seeds a t interval for
+   a MAE came out negative.)
+2. **A resample that loses a class is dropped, and the count is reported.**
+   Macro AUC over a resample-dependent set of classes would be a different
+   statistic than the point estimate. `n_resamples` therefore reports how many
+   resamples the metric was actually defined in — a split with a one-image class
+   visibly loses ~37% of them.
+
+**Verified on real data, not only synthetically:** one epoch of resnet18 on
+USK-COFFEE (4 classes, 1600 test images) on the GPU gave accuracy
+`0.7506 [0.7294, 0.7713]`. The analytic binomial interval for p=0.7506 at
+n=1600 is `[0.7288, 0.7712]` — an independent confirmation the bootstrap is
+calibrated rather than merely self-consistent. Rendering was confirmed in the
+browser against that run (five intervals under the right labels, no console
+errors).

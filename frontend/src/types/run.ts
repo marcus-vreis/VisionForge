@@ -9,9 +9,24 @@ export interface RunResponse {
   status: "running";
 }
 
+/** Bootstrap interval for one test metric (backend MetricCI, ADR-074). */
+export interface MetricCI {
+  metric: string;
+  value: number;
+  ci_low: number;
+  ci_high: number;
+  confidence: number;
+  n_resamples: number;
+  n_samples: number;
+}
+
 export interface RunResult {
   run_id: string;
   metrics: Record<string, number | null>;
+  /** Keyed by bare metric name (`accuracy`), while `metrics` prefixes the
+   *  test-split entries (`test_accuracy`). Absent on runs trained before
+   *  ADR-074 and on tasks that keep no per-sample predictions. */
+  metric_cis?: Record<string, MetricCI>;
   report: Record<string, unknown>;
   artifacts: {
     model?: string;

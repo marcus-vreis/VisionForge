@@ -602,10 +602,12 @@ Real end-to-end pipeline tests (no mocks), skipped in CI to keep it fast
   PatchCore single-step) + detection **torchvision** loop (train/val loss +
   mAP@50 por época). The Ultralytics path deliberately stays out: Ultralytics
   owns its own loop and ships its own TensorBoard integration. (MLflow not chosen.)
-- **Docker + `visionforge doctor` (ADR-042)** — `doctor` CLI (detect GPU/CUDA →
-  exact torch install command) **shipped** (slice 1); the multi-stage GPU Docker
-  image + compose (slice 2) is still planned. Design in
-  `documentation/DOCKER_PLAN.md`. Local-only; k8s rejected.
+- **Docker + `visionforge doctor` (ADR-042/071/072)** — both slices **shipped**.
+  `doctor` CLI (detect GPU/CUDA → exact torch install command) plus the
+  multi-stage image + compose, built and run for real on an RTX 5060 Ti: GPU
+  variant 18.4 GB on disk / 6.56 GB compressed, CPU variant 2.36 GB / 509 MB.
+  Design and verification table in `documentation/DOCKER_PLAN.md`. Local-only;
+  k8s rejected.
 - **Multi-seed replicates (ADR-056)** — `core/replicates.py` +
   `POST /api/{task}/replicates` for all five tasks: train the same config N
   times under different seeds, aggregate every metric into mean/std/min/max/95%
@@ -713,8 +715,11 @@ edição que preserve o tamanho; `content` lê os bytes. `same_dataset()` devolv
 **End-to-end self-test ✅ (ADR-060, 2026-07-26)** — `visionforge selftest`
 trains every task through the *real* API on synthetic data (`utils/selftest.py`
 + `utils/selftest_data.py`), asserting run completion, report shape and the
-**SSE live-monitor contract** per (task, strategy) pair — 21 cases, ~90s on
-CPU, offline. Fast harness tests in `tests/e2e/`; live cases carry the `slow`
+**SSE live-monitor contract** per (task, strategy) pair — **27 cases** today
+(6 tasks × 5 strategies minus the pairs that do not exist; it was 21 when
+ADR-060 landed and grew with the custom-task path), ~90s on CPU, offline.
+The four `custom` cases need the shipped `example_counting` task registered;
+a clean pip install without it skips them instead of failing (ADR-071). Fast harness tests in `tests/e2e/`; live cases carry the `slow`
 marker (deselected by default). Found on its first full run: replicates/sweeps
 accepted a metric no trial reports, silently returning `headline: None` (blank
 results card) or ranking every trial as 0.0 — now a loud failure naming the
@@ -777,6 +782,33 @@ matriz oficial de modelos × estratégias por task (conferida contra as rotas da
 API, com as ausências justificadas) em quatro camadas de custo crescente
 P0→P3, cada uma terminando num estado defensável.
 
+**Distribuição, credenciais e release ✅ (ADR-066→073, 2026-07-29)** — a sequência
+que transformou o repositório num pacote que outra pessoa consegue instalar:
+
+- **ADR-066 — versão com uma única fonte.** Dois literais (`pyproject.toml`,
+  `CITATION.cff`); todo o resto lê `importlib.metadata`. `visionforge --version`,
+  o app FastAPI, `/api/system/info` e o header da GUI passam a ler o mesmo valor.
+- **ADR-067 — publicado como `visionforge-studio`.**
+- **ADR-068 — o workspace de quem instala por pip.** `doctor` imprime o diretório
+  de trabalho e os caminhos resolvidos de `user_models`/`user_tasks` (antes o
+  usuário não tinha como saber onde largar o modelo próprio); o download de
+  dataset ganhou split de validação.
+- **ADR-069 — texto de usuário para de citar ADRs** e as dicas de instalação se
+  adaptam: um install editável recebe `pip install -e ".[extra]"`, um install de
+  pip recebe `pip install "visionforge-studio[extra]"` (antes o segundo caso
+  recebia um comando que não funciona sem a árvore de fontes). Guia dos quatro
+  provedores de dataset em `docs/DATASETS.md`.
+- **ADR-070 — chaves de provedor guardadas uma vez** (`~/.visionforge/credentials.json`,
+  chmod 600 no POSIX, mascaradas na GUI, o log registra o evento e nunca o valor)
+  + **ocultar vs excluir** task custom (ocultar é reversível; excluir exige
+  digitar a chave da task).
+- **ADR-071/072 — a imagem Docker construída de verdade**, e os defeitos que só
+  o build real expôs (ver a entrada de Docker acima). cu128 virou o padrão.
+- **ADR-073 — release é um comando.** `bump-my-version bump <part>` já reescrevia
+  tudo, commitava e taggeava atomicamente; faltava documentar e faltava um guarda.
+  `documentation/RELEASING.md` + o CD recusa uma tag que não bate com a versão
+  empacotada, nomeando os dois valores antes de publicar qualquer coisa.
+
 **Researcher-grade rigor (sequenced follow-ups to ADR-056):**
 - [x] **Determinism parity ✅ (ADR-062, 2026-07-28)** — `training.deterministic`
   in all five tasks + the custom-task SDK, wired to
@@ -796,18 +828,32 @@ P0→P3, cada uma terminando num estado defensável.
   FIFO queue (submit N configs, run sequentially on the one GPU, queue panel in
   the GUI) is how a researcher trains overnight. Needs an ADR — it touches the
   shared run-state contract.
-- GUI `ReplicatesCard` for all five task panels (see ADR-056 entry above).
-- Bootstrap confidence intervals on single-run test metrics (`Evaluator`) —
-  cheap resampling of per-sample `y_true`/`y_score`, surfaces "0.87 ± 0.02"
-  even without replicates.
-- Paired significance test between two replicate sets (same seeds → paired
-  t-test / Wilcoxon) surfaced in the comparison report — "A > B" claims need
-  a p-value.
-- Determinism toggle (`torch.use_deterministic_algorithms` + cudnn.benchmark
-  off) as an opt-in training knob, documented with its speed tradeoff
-  (relaxes ADR-020 on demand).
-- Dataset fingerprint (per-split file count + content hash) in run.json —
-  "which data produced this number" is provenance, same as the env block.
+- [x] **Bootstrap CI on single-run test metrics ✅ (ADR-074, 2026-07-29)** — todo
+  run de classificação (simples e transfer learning) grava `metric_cis` no
+  `run.json` e mostra o intervalo nos tiles de resultado, no painel de detalhe e
+  no model card em markdown. Sempre ligado, sem knob, semeado por
+  `training.seed` para o intervalo não mudar entre leituras do mesmo run.
+  As métricas são recalculadas com aritmética vetorizada de matriz de confusão e
+  de ranks em vez de uma chamada ao sklearn por reamostragem: o overhead por
+  chamada do sklearn (~5 ms, independente do tamanho do split) colocava 1000
+  reamostragens em ~5 s por run e ~135 s no selftest de 27 casos, o que teria
+  forçado a feature a ser opt-in. Vetorizado são 0,007 s (n=500) — 700× mais
+  rápido — e os testes fixam cada caminho contra o sklearn (1e-16), incluindo o
+  caso de empates pesados que o bootstrap garante. Piso de 20 amostras (abaixo
+  disso o intervalo é aritmética, não evidência) e reamostragem que perde uma
+  classe é descartada com a contagem reportada. Conferido em dado real
+  (USK-COFFEE, 1600 imagens de teste): acurácia `0.7506 [0.7294, 0.7713]`,
+  contra `[0.7288, 0.7712]` do intervalo binomial analítico.
+  Testes: `tests/core/test_metric_ci.py` (22) + blocos (6) +
+  `frontend/src/lib/metric-ci.test.ts` (8).
+- Estender o intervalo às outras tasks (regressão, segmentação, anomalia) —
+  precisa que cada `evaluate` devolva os arrays por amostra em vez de só os
+  agregados; o módulo `core/metric_ci.py` já é agnóstico de task.
+
+Delivered elsewhere in this file, listed here once so the section is not read as
+open work: the GUI `ReplicatesCard` (ADR-059 brick C), the paired significance
+test (ADR-061 slice 1), the determinism toggle (ADR-062) and the dataset
+fingerprint (ADR-061 slice 3).
 - [x] English README + CITATION.cff + LICENSE (adoption slice 1, 2026-07-02):
   README rewritten in English covering all five tasks + the statistical-rigor
   features (was PT and classification+detection only); `CITATION.cff` (GitHub
@@ -822,13 +868,19 @@ P0→P3, cada uma terminando num estado defensável.
   (installs, imports, `visionforge --help` works without torch, static
   resolvable from site-packages). `cd.yml` gained a `publish-pypi` job on
   `v*` tags via **PyPI Trusted Publishing** (OIDC, no token in the repo).
-  **Remaining user step to release:** create the project's Trusted Publisher
-  on pypi.org (owner marcus-vreis, repo VisionForge, workflow cd.yml,
-  environment pypi), then `git tag v0.1.0 && git push --tags`.
   Quickstart walkthrough added 2026-07-02 (docs/QUICKSTART.md, linked from the
   README): install -> doctor -> built-in CIFAR10 download -> first run ->
-  replicates com IC -> YAML re-run. **Fase C COMPLETA** (só o release tag
-  depende do passo do usuário no pypi.org).
+  replicates com IC -> YAML re-run.
+- [x] **v0.1.0 publicado no PyPI (2026-07-29)** — Trusted Publisher criado na
+  conta do usuário, tag `v0.1.0` disparou o `cd.yml` e o `publish-pypi` subiu
+  sdist+wheel por OIDC. **Fase C COMPLETA.** O nome de distribuição virou
+  `visionforge-studio` (ADR-067): `visionforge` já pertencia a outro projeto no
+  índice, e o rename expôs três mensagens de erro e um `importlib.metadata`
+  apontando para o pacote errado. Instalar num venv limpo achou dois defeitos
+  que atingiam **todo** usuário de pip, não só Docker: o `selftest` falhava
+  porque exigia a task de exemplo `example_counting` (ADR-071), e ele quebrava
+  com `UnicodeEncodeError` no console do Windows (cp1252) exatamente quando
+  encontrava uma falha.
 
 **Larger — needs design or new dependencies (prefer a reviewed session):**
 - **Dark/light theme toggle** — needs a coherent light palette for the dark-first

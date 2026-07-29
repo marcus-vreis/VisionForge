@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { artifactUrl, downloadRunMarkdown } from "../api/client";
-import type { RunResult } from "../types/run";
+import { metricCi } from "../lib/metric-ci";
+import type { MetricCI, RunResult } from "../types/run";
 import { Lightbox } from "./Lightbox";
 
 interface ResultsViewProps {
@@ -56,9 +57,35 @@ interface MetricCardProps {
   value: string;
   accent: string;
   highlight?: boolean;
+  /** Bootstrap interval for this metric, when the run has one (ADR-074). */
+  ci?: MetricCI;
 }
 
-function MetricCard({ label, value, accent, highlight }: MetricCardProps) {
+/** `0.7294 – 0.7713` under the value, with the split size it was resampled from. */
+function CiFootnote({ ci }: { ci: MetricCI }) {
+  return (
+    <div
+      title={
+        `IC ${Math.round(ci.confidence * 100)}% por bootstrap percentil: ` +
+        `${ci.n_resamples} reamostragens das ${ci.n_samples} imagens de teste. ` +
+        `Mede o ruído de amostragem do split com este modelo fixo — não a ` +
+        `variação entre treinos, que réplicas com várias seeds medem.`
+      }
+      style={{
+        marginTop: 4,
+        fontFamily: "var(--font-mono)",
+        fontSize: 10,
+        color: "var(--vf-text-muted)",
+        whiteSpace: "nowrap",
+        cursor: "help",
+      }}
+    >
+      {ci.ci_low.toFixed(4)} – {ci.ci_high.toFixed(4)}
+    </div>
+  );
+}
+
+function MetricCard({ label, value, accent, highlight, ci }: MetricCardProps) {
   return (
     <div
       style={{
@@ -108,6 +135,7 @@ function MetricCard({ label, value, accent, highlight }: MetricCardProps) {
       >
         {value}
       </div>
+      {ci && <CiFootnote ci={ci} />}
     </div>
   );
 }
@@ -230,6 +258,7 @@ export function ResultsView({ result, onClose, taskAccent }: ResultsViewProps) {
               value={formatMetric(value)}
               accent={taskAccent}
               highlight={key === highlightKey}
+              ci={metricCi(result.metric_cis, key)}
             />
           ))}
         </div>

@@ -15,6 +15,8 @@ import {
   type RunDetail,
   type TestRecord,
 } from "../api/client";
+import { metricCi } from "../lib/metric-ci";
+import type { MetricCI } from "../types/run";
 import { Lightbox } from "./Lightbox";
 
 interface RunDetailPanelProps {
@@ -970,7 +972,7 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
           <CrossValidationDetail metrics={detail.metrics} />
 
           <Section title="Métricas">
-            <MetricsGrid metrics={detail.metrics} />
+            <MetricsGrid metrics={detail.metrics} metricCis={detail.metric_cis} />
           </Section>
 
           {detail.artifacts.graphics && detail.artifacts.graphics.length > 0 && (
@@ -1542,7 +1544,13 @@ function KeyRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function MetricsGrid({ metrics }: { metrics: Record<string, unknown> }) {
+function MetricsGrid({
+  metrics,
+  metricCis,
+}: {
+  metrics: Record<string, unknown>;
+  metricCis?: Record<string, MetricCI>;
+}) {
   const entries = Object.entries(metrics);
   if (entries.length === 0) {
     return <div style={{ color: "var(--vf-text-muted)", fontSize: 12 }}>Sem métricas registradas.</div>;
@@ -1555,40 +1563,63 @@ function MetricsGrid({ metrics }: { metrics: Record<string, unknown> }) {
         gap: 8,
       }}
     >
-      {entries.map(([k, v]) => (
-        <div
-          key={k}
-          style={{
-            padding: "8px 10px",
-            background: "rgba(0,0,0,0.3)",
-            border: "1px solid var(--vf-panel-stroke)",
-            borderRadius: 8,
-          }}
-        >
+      {entries.map(([k, v]) => {
+        const ci = metricCi(metricCis, k);
+        return (
           <div
+            key={k}
             style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: 9,
-              letterSpacing: "0.14em",
-              textTransform: "uppercase",
-              color: "var(--vf-text-muted)",
+              padding: "8px 10px",
+              background: "rgba(0,0,0,0.3)",
+              border: "1px solid var(--vf-panel-stroke)",
+              borderRadius: 8,
             }}
           >
-            {metricLabel(k)}
+            <div
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: 9,
+                letterSpacing: "0.14em",
+                textTransform: "uppercase",
+                color: "var(--vf-text-muted)",
+              }}
+            >
+              {metricLabel(k)}
+            </div>
+            <div
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: 15,
+                fontWeight: 600,
+                color: "var(--vf-text)",
+                marginTop: 2,
+              }}
+            >
+              {fmtMetric(v)}
+            </div>
+            {ci && (
+              <div
+                title={
+                  `IC ${Math.round(ci.confidence * 100)}% por bootstrap percentil: ` +
+                  `${ci.n_resamples} reamostragens das ${ci.n_samples} imagens de ` +
+                  `teste. Mede o ruído de amostragem do split com este modelo ` +
+                  `fixo — não a variação entre treinos.`
+                }
+                style={{
+                  marginTop: 3,
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 9,
+                  color: "var(--vf-text-muted)",
+                  whiteSpace: "nowrap",
+                  cursor: "help",
+                }}
+              >
+                {ci.ci_low.toFixed(4)} – {ci.ci_high.toFixed(4)}
+              </div>
+            )}
           </div>
-          <div
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: 15,
-              fontWeight: 600,
-              color: "var(--vf-text)",
-              marginTop: 2,
-            }}
-          >
-            {fmtMetric(v)}
-          </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

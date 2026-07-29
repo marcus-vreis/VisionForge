@@ -219,3 +219,177 @@ class TestClassificationBlock:
         report = eval_block.report()
         assert "eval" in report
         assert "train" not in report
+
+
+@pytest.fixture
+def wide_dataset_root(tmp_path: Path) -> Path:
+    """ImageFolder with a test split big enough for a bootstrap interval.
+
+    The CI floor is 20 samples, and the two-image fixture above sits under it on
+    purpose — both sides of that boundary need a test.
+    """
+    from PIL import Image
+
+    rng = np.random.default_rng(0)
+    counts = {"train": 8, "val": 8, "test": 16}  # 16 per class -> 32 test images
+    for split, per_class in counts.items():
+        for cls in ["class_a", "class_b"]:
+            folder = tmp_path / split / cls
+            folder.mkdir(parents=True)
+            for i in range(per_class):
+                pixels = rng.integers(0, 255, (32, 32, 3), dtype=np.uint8)
+                Image.fromarray(pixels).save(folder / f"image_{i}.png")
+    return tmp_path
+
+
+@pytest.fixture
+def wide_config(wide_dataset_root: Path, tmp_path: Path) -> ExperimentConfig:
+    return ExperimentConfig.model_validate(
+        {
+            "name": "ci_block_test",
+            "task": "binary",
+            "model": {"name": "resnet18", "num_classes": 1, "pretrained": False},
+            "training": {
+                "learning_rate": 0.1,
+                "epochs": 1,
+                "batch_size": 4,
+                "seed": 7,
+            },
+            "data": {
+                "base_dir": str(wide_dataset_root),
+                "num_workers": 0,
+                "pin_memory": False,
+                "transforms": {"image_size": 32},
+            },
+            "output": {
+                "models_dir": str(tmp_path / "models"),
+                "graphics_dir": str(tmp_path / "graphics"),
+                "logs_dir": str(tmp_path / "logs"),
+                "reports_dir": str(tmp_path / "reports"),
+            },
+            "classification": {"mode": "train"},
+        }
+    )
+
+
+class TestBootstrapConfidenceIntervals:
+    """ADR-074: every classification test metric ships an interval."""
+
+    @patch(
+        "visionforge.blocks.classification.ModelFactory.create",
+        return_value=TinyBinaryModel(),
+    )
+    def test_run_json_carries_metric_cis(
+        self, _mock: Any, wide_config: ExperimentConfig
+    ) -> None:
+        block = ClassificationBlock()
+        block.setup(wide_config)
+        block.run()
+
+        run_files = list(
+            (wide_config.output.models_dir / wide_config.name).glob("*/run.json")
+        )
+        data: dict[str, Any] = json.loads(run_files[0].read_text(encoding="utf-8"))
+
+        cis = data["metric_cis"]
+        assert {"accuracy", "f1", "precision", "recall"} <= set(cis)
+        accuracy = cis["accuracy"]
+        assert accuracy["n_samples"] == 32
+        assert (
+            accuracy["ci_low"]
+            <= data["metrics"]["test_accuracy"]
+            <= accuracy["ci_high"]
+        )
+
+    @patch(
+        "visionforge.blocks.classification.ModelFactory.create",
+        return_value=TinyBinaryModel(),
+    )
+    def test_metrics_block_stays_a_flat_number_map(
+        self, _mock: Any, wide_config: ExperimentConfig
+    ) -> None:
+        """The intervals are a sibling of metrics, not nested inside it.
+
+        Several readers (the history projection, the markdown table) treat
+        metrics as name -> number; a dict value there would be dropped or
+        printed raw.
+        """
+        block = ClassificationBlock()
+        block.setup(wide_config)
+        block.run()
+
+        run_files = list(
+            (wide_config.output.models_dir / wide_config.name).glob("*/run.json")
+        )
+        data: dict[str, Any] = json.loads(run_files[0].read_text(encoding="utf-8"))
+
+        assert all(not isinstance(v, dict) for v in data["metrics"].values())
+
+    @patch(
+        "visionforge.blocks.classification.ModelFactory.create",
+        return_value=TinyBinaryModel(),
+    )
+    def test_report_exposes_the_intervals(
+        self, _mock: Any, wide_config: ExperimentConfig
+    ) -> None:
+        block = ClassificationBlock()
+        block.setup(wide_config)
+        block.run()
+
+        intervals = block.report()["eval"]["confidence_intervals"]
+
+        assert intervals["accuracy"]["confidence"] == 0.95
+        assert intervals["accuracy"]["n_resamples"] == 1000
+
+    @patch(
+        "visionforge.blocks.classification.ModelFactory.create",
+        return_value=TinyBinaryModel(),
+    )
+    def test_tiny_test_split_gets_no_interval(
+        self, _mock: Any, train_config: ExperimentConfig
+    ) -> None:
+        """Two test images cannot support an interval, so none is written."""
+        block = ClassificationBlock()
+        block.setup(train_config)
+        block.run()
+
+        run_files = list(
+            (train_config.output.models_dir / train_config.name).glob("*/run.json")
+        )
+        data: dict[str, Any] = json.loads(run_files[0].read_text(encoding="utf-8"))
+
+        assert "metric_cis" not in data
+        assert "confidence_intervals" not in block.report()["eval"]
+
+    @patch(
+        "visionforge.blocks.classification.ModelFactory.create",
+        return_value=TinyBinaryModel(),
+    )
+    def test_seed_makes_the_interval_reproducible(
+        self, _mock: Any, wide_config: ExperimentConfig
+    ) -> None:
+        """The same run re-evaluated must not report a different interval."""
+        first = ClassificationBlock()
+        first.setup(wide_config)
+        first.run()
+
+        checkpoint = next(
+            (wide_config.output.models_dir / wide_config.name).glob("*/best_model.pth")
+        )
+        eval_config = ExperimentConfig.model_validate(
+            {
+                **wide_config.model_dump(mode="json"),
+                "classification": {
+                    "mode": "evaluate",
+                    "checkpoint_path": str(checkpoint),
+                },
+            }
+        )
+        second = ClassificationBlock()
+        second.setup(eval_config)
+        second.run()
+
+        assert (
+            second.report()["eval"]["confidence_intervals"]
+            == first.report()["eval"]["confidence_intervals"]
+        )

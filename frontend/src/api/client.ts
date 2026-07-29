@@ -1,6 +1,6 @@
 import type { TaskDescriptor } from "../lib/custom-tasks";
 import type { JsonSchema } from "../types/schema";
-import type { RunResponse, RunResult, RunStatus, RunSummary } from "../types/run";
+import type { MetricCI, RunResponse, RunResult, RunStatus, RunSummary } from "../types/run";
 
 const BASE = "/api";
 
@@ -724,6 +724,8 @@ export interface RunDetail {
   run_dir: string;
   config: Record<string, unknown>;
   metrics: Record<string, unknown>;
+  /** Bootstrap interval per test metric (ADR-074), keyed by bare metric name. */
+  metric_cis?: Record<string, MetricCI>;
   history: Array<{
     epoch: number;
     train_loss: number;
