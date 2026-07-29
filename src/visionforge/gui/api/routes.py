@@ -2694,14 +2694,14 @@ async def _execute_experiment(config: ExperimentConfig, run_id: str) -> None:
         # Blocks that stream live epoch progress over SSE get the event pump
         # wired here. Grid/random search and K-fold CV forward each inner
         # trial/fold's epochs (annotated with trial context) plus
-        # trial_start/trial_end banners. TransferLearning doesn't take a
-        # progress_callback yet.
+        # trial_start/trial_end banners.
         if isinstance(
             block,
             ClassificationBlock
             | GridSearchBlock
             | RandomSearchBlock
-            | CrossValidationBlock,
+            | CrossValidationBlock
+            | TransferLearningBlock,
         ):
             block._progress_callback = _put_event
 

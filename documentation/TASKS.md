@@ -747,6 +747,19 @@ backdrop cujo `onClick` é `onClose`, então todo clique nele — inclusive
 Cancelar — fechava tudo); e o download de dataset saiu dos cinco painéis para
 uma superfície própria (`DatasetsOverlay`) ao lado do histórico.
 
+**Validação em datasets reais ✅ (ADR-065, 2026-07-29)** — matriz completa de
+21 casos (5 tasks × simple/k-fold/transfer/grid/random, onde cada uma existe)
+em **dados reais** na GPU, pelos mesmos endpoints do navegador e com o
+`run_case` do selftest, então o critério de aprovação é idêntico. Corpus e
+resultados em `documentation/VALIDATION.md`. **21/21 passam.** Achou um defeito
+real: `TransferLearningBlock` treinava e gravava relatório correto mas **não
+emitia nenhum evento SSE** — barra de progresso morta o treino inteiro; o
+selftest sintético não pegava porque transfer learning é um *block* de
+classificação, não uma das estratégias que ele enumera. Três outras falhas
+eram expectativa errada do harness (relatório de anomalia é `train`/`test`; a
+métrica do sweep é `auroc`), e a segunda apareceu via o guard de métrica não
+reportada do ADR-060 fazendo exatamente seu trabalho.
+
 **Dropdowns próprios + histórico contextual ✅ (ADR-064, 2026-07-29,
 user-reported):** nenhum `<select>` nativo restou na GUI — o popup nativo é
 desenhado pelo sistema operacional (lista cinza, fonte do sistema, destaque do

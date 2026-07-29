@@ -509,7 +509,12 @@ class TestRun:
                 / "best_model.pth"
             )
 
-            def fit_capture(m: Any, data: Any, optimizer: Any = None) -> Any:  # noqa: ANN001
+            def fit_capture(  # noqa: ANN001
+                m: Any,
+                data: Any,
+                optimizer: Any = None,
+                progress_callback: Any = None,
+            ) -> Any:
                 if optimizer is not None:
                     captured_optimizer.append(optimizer)
                 return mock_train_result
@@ -703,3 +708,35 @@ class TestConfigExports:
         import visionforge.utils.config as cfg_module
 
         assert "TransferLearningConfig" in cfg_module.__all__
+
+
+# ── live progress ─────────────────────────────────────────────────────────────
+
+
+class TestProgressStreaming:
+    """The block trained fine but streamed nothing: the GUI's progress bar sat
+    dead for a whole transfer-learning run while `routes.py` carried a comment
+    saying the block "doesn't take a progress_callback yet". Found by running
+    the real matrix on a real dataset, so it is pinned here."""
+
+    def test_epoch_events_reach_the_callback(self, ft_config: ExperimentConfig) -> None:
+        from visionforge.blocks.transfer_learning import TransferLearningBlock
+
+        events: list[dict[str, Any]] = []
+        block = TransferLearningBlock()
+        block.setup(ft_config)
+        block._progress_callback = events.append
+        block.run()
+
+        kinds = [e.get("event") for e in events]
+        assert "epoch_end" in kinds, f"no epoch_end streamed, got {kinds}"
+
+    def test_the_gui_wires_the_block_to_the_event_pump(self) -> None:
+        """The block accepting a callback is only half of it — routes.py has to
+        be the one attaching it, which an isinstance check used to exclude."""
+        import inspect
+
+        from visionforge.gui.api import routes
+
+        source = inspect.getsource(routes._execute_experiment)
+        assert "TransferLearningBlock" in source

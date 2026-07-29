@@ -1379,3 +1379,51 @@ lists both names; cancelling leaves the history open on the same tab.
 **Rejected:** styling the native popup with `appearance: none` plus CSS. It
 restyles the *closed* control only — the open list is drawn by the OS and is
 not reachable from CSS, which is precisely the part that looked wrong.
+
+---
+
+## ADR-065 — Transfer learning streams progress; validated on real datasets
+
+**Date:** 2026-07-29
+**Status:** Accepted — shipped 2026-07-29
+**Extends:** ADR-060 (selftest), ADR-062 (determinism parity)
+
+**Context:** `visionforge selftest` proves the pipeline on synthetic data. A
+full matrix was run on **real** datasets instead — five tasks × the strategies
+each one has (simple, K-fold, transfer, grid, random), 21 cases on GPU, driving
+the same endpoints the browser uses through the selftest's own `run_case`, so
+the pass criteria were identical: the run completes, the report carries the
+keys that task really returns, and the SSE stream delivers progress.
+
+**What it found:** `TransferLearningBlock` trained correctly and wrote a
+correct report, but emitted **no SSE events at all** — the GUI's progress bar
+sat dead for the whole run. The block never accepted a `progress_callback`, and
+`routes.py` left it out of the isinstance check that attaches the event pump,
+with a comment stating the gap as if it were a decision. The synthetic selftest
+did not cover it because transfer learning is a classification *block*, not one
+of the five task strategies the selftest enumerates.
+
+**Decision:** the block takes a `_progress_callback` like every other streaming
+block and forwards it to `Trainer.fit`; `routes.py` attaches the pump. Two
+regression tests pin both halves — one asserts `epoch_end` reaches the
+callback, the other asserts `routes._execute_experiment` still names the block,
+because a block that accepts a callback nobody attaches is the same defect.
+
+**Real-data corpus** (`documentation/VALIDATION.md`): USK-COFFEE for
+classification, a Roboflow cats/dogs export for detection, Oxford-IIIT Pet
+trimaps for segmentation, IMDB-WIKI `wiki_crop` ages for regression, and
+USK-COFFEE again for anomaly — `premium` as the normal class and `defect` as
+the anomaly, which is the dataset's own labelling re-expressed in the MVTec
+layout. Nothing is synthesised; the only local work is file arrangement.
+
+**Not defects, recorded so they are not re-investigated:**
+
+- Three initial failures were the harness asserting the wrong contract: the
+  anomaly report is `train`/`test` (not `anomaly`), and its sweep metric is
+  `auroc` (not `image_auroc`). The second surfaced as a loud
+  `RuntimeError: No sweep reported the metric 'image_auroc' — available:
+  ['auroc', 'image_f1']`, which is ADR-060's unreported-metric guard working.
+- Age regression came back with a negative R² on some strategies. Two epochs
+  over 1500 faces does not learn age; this validates that the pipeline runs,
+  not that the model is good. The distinction is the whole point of the "what
+  this is not" section in `TRAINING_PLAN.md`.

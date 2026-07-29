@@ -41,6 +41,8 @@ class TransferLearningBlock(ExperimentBlock):
         self._eval_result: EvalResult | None = None
         self._frozen_layers: list[str] = []
         self._optimizer: torch.optim.Optimizer | None = None
+        # Injected by the GUI layer to stream live epoch progress via SSE.
+        self._progress_callback: Callable[[dict[str, Any]], None] | None = None
 
     def run(self) -> None:
         """Build model, freeze/unfreeze layers, train, and evaluate."""
@@ -49,7 +51,12 @@ class TransferLearningBlock(ExperimentBlock):
         self._optimizer = self._build_transfer_optimizer(model)
 
         data = DataModule(self._config)
-        self._train_result = Trainer(self._config).fit(model, data, self._optimizer)
+        self._train_result = Trainer(self._config).fit(
+            model,
+            data,
+            self._optimizer,
+            progress_callback=self._progress_callback,
+        )
 
         state_dict = torch.load(
             str(self._train_result.model_path),
