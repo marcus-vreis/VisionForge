@@ -66,8 +66,22 @@ stats), preprocessing filters and augmentation with live preview.
 
 ## Installation
 
-Requirements: **Python 3.13+**, **Node.js 18+** (only to build the frontend once),
-and [uv](https://github.com/astral-sh/uv) (recommended) or pip.
+Requirements: **Python 3.13+**. Node.js is only needed to build the frontend
+from source — the published package already ships the built UI.
+
+> **On PyPI the distribution is `visionforge-studio`** — the bare
+> `visionforge` name belongs to an unrelated project. The import name, the CLI
+> command and the project itself are still `visionforge`.
+
+```bash
+pip install "visionforge-studio[cu121]"    # NVIDIA CUDA 12.1
+visionforge doctor                          # confirms the right wheel for your GPU
+visionforge gui
+```
+
+### From source
+
+For development, or to run an unreleased commit:
 
 ```bash
 git clone https://github.com/marcus-vreis/VisionForge.git

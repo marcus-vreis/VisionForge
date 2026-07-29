@@ -221,7 +221,7 @@ class DetectionTrainer:
         if YOLO is None:
             raise RuntimeError(
                 "ultralytics is not installed. Install the detection extra: "
-                "pip install 'visionforge[detection]'."
+                "pip install 'visionforge-studio[detection]'."
             )
 
         cfg = self._config.training

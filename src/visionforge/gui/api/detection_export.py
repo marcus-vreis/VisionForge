@@ -47,7 +47,7 @@ def export_detection_run(
     if detection_trainer.YOLO is None:
         raise RuntimeError(
             "ultralytics is not installed. Install the detection extra: "
-            "pip install 'visionforge[detection]'."
+            "pip install 'visionforge-studio[detection]'."
         )
 
     model = detection_trainer.YOLO(str(checkpoint))

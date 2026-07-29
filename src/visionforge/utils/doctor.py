@@ -3,11 +3,17 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import re
 import subprocess
 import sys
 from collections.abc import Callable
+from importlib.metadata import distribution
 from typing import TypedDict
+
+# The PyPI distribution name, which is NOT the import name: plain `visionforge`
+# on PyPI belongs to an unrelated project.
+_DIST_NAME = "visionforge-studio"
 
 # Supported wheel tags in ascending CUDA capability order.
 # Each entry is (min_driver_major*10 + min_driver_minor, tag).
@@ -86,9 +92,32 @@ def select_wheel_tag(driver_cuda: str | None) -> str:
     return selected
 
 
+def installed_from_source() -> bool:
+    """True when this install points at a checkout (``pip install -e .``).
+
+    Editable installs record a ``direct_url.json`` with ``dir_info.editable``.
+    Anything else — a wheel from PyPI — has no source tree to install from, so
+    telling that user to run ``pip install -e ".[cpu]"`` would fail.
+    """
+    try:
+        raw = distribution(_DIST_NAME).read_text("direct_url.json")
+    except Exception:  # noqa: BLE001 - absent metadata just means "not editable"
+        return False
+    if not raw:
+        return False
+    try:
+        info = json.loads(raw)
+    except ValueError:
+        return False
+    return bool(info.get("dir_info", {}).get("editable"))
+
+
 def build_install_command(tag: str) -> tuple[str, str]:
     """Return the pip install command and index URL for the given wheel tag."""
-    cmd = f'pip install -e ".[{tag}]"'
+    if installed_from_source():
+        cmd = f'pip install -e ".[{tag}]"'
+    else:
+        cmd = f'pip install "{_DIST_NAME}[{tag}]"'
     url = f"{_INDEX_BASE}/{tag}"
     return cmd, url
 
@@ -209,7 +238,15 @@ def run_doctor(
 
     # --- torch probe ---
     if not torch_info["importable"]:
-        print("[INFO] torch is not installed")
+        # Not an INFO: torch is what trains. Reporting "environment looks good"
+        # while the one required dependency is missing sends a new user off to
+        # discover it on their first run instead of here.
+        print(
+            "[FAIL] torch is not installed — nothing can train yet.\n"
+            f"       Install it with the hardware extra:\n"
+            f"         {cmd}"
+        )
+        issues.append("torch-missing")
     else:
         cuda_ok = torch_info["cuda_available"]
         torch_marker = "OK" if cuda_ok else "WARN"

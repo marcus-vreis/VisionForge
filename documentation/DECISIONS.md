@@ -1477,3 +1477,48 @@ resolve (it only looks at the root, `.github/` or `docs/`);
 section stating the known limits — single concurrent training, dataset download
 covering classification only, no K-fold for detection/anomaly, the Windows
 worker cap, dark theme only.
+
+---
+
+## ADR-067 — Published as `visionforge-studio`
+
+**Date:** 2026-07-29
+**Status:** Accepted — shipped 2026-07-29
+**Extends:** ADR-066 (versioning)
+
+**Context:** `visionforge` on PyPI is taken — an unrelated computer-vision
+project by another author, version 1.0.0, uploaded 2024-05-05. Discovered while
+setting up Trusted Publishing, before the first tag: a release under that name
+was never going to succeed, and pointing users at `pip install visionforge`
+would have installed someone else's package.
+
+**Decision:** the **distribution** name is `visionforge-studio`. The import
+name (`import visionforge`), the CLI command (`visionforge`), the repository
+and the project's own name are unchanged — only the string PyPI indexes moves.
+
+The rename touches more than `pyproject.toml`, and two of the places fail
+*silently*:
+
+- `__init__.py` looks the version up by distribution name. Left as
+  `visionforge`, `importlib.metadata` would have raised `PackageNotFoundError`
+  on every install and every user would have seen `0.0.0+unknown`.
+- Three runtime error messages told the user to run
+  `pip install 'visionforge[detection]'` — which, post-release, installs the
+  other project.
+
+**Also fixed, found by installing the wheel into a clean venv:**
+
+- `doctor` printed `pip install -e ".[cpu]"` to everyone. That form only works
+  inside a checkout; a user who installed from PyPI has no source tree, so the
+  first command doctor gave them simply failed. It now detects an editable
+  install (`direct_url.json` → `dir_info.editable`) and prints the matching
+  form.
+- `doctor` reported "Verdict: environment looks good" when torch was not
+  installed at all. Torch is what trains; that verdict sent a new user to
+  discover the missing dependency on their first run instead of here. Missing
+  torch is now a `[FAIL]` with the install line and a non-zero exit.
+
+**Verified end to end in a throwaway venv:** the wheel installs, `visionforge
+--version` reports `0.1.0` (not `0.0.0+unknown`), `import visionforge` works
+under the new distribution name, and the built SPA ships inside the wheel
+(42 files) so a pip-installed user never needs Node.

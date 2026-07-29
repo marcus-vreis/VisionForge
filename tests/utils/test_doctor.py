@@ -95,20 +95,50 @@ class TestDetectDriverCuda:
 
 
 class TestBuildInstallCommand:
-    def test_gpu_tag(self) -> None:
+    """The command has to match how *this* install got here.
+
+    `pip install -e ".[cpu]"` only works inside a checkout. Someone who
+    installed the wheel from PyPI has no source tree, so that line just fails —
+    and it was the first thing doctor told them to run.
+    """
+
+    @pytest.fixture
+    def from_wheel(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(
+            "visionforge.utils.doctor.installed_from_source", lambda: False
+        )
+
+    @pytest.fixture
+    def from_source(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(
+            "visionforge.utils.doctor.installed_from_source", lambda: True
+        )
+
+    def test_wheel_install_uses_the_distribution_name(self, from_wheel: None) -> None:
         cmd, url = build_install_command("cu124")
-        assert cmd == 'pip install -e ".[cu124]"'
+        assert cmd == 'pip install "visionforge-studio[cu124]"'
         assert url == "https://download.pytorch.org/whl/cu124"
 
-    def test_cpu_tag(self) -> None:
+    def test_editable_install_keeps_the_source_form(self, from_source: None) -> None:
+        cmd, _ = build_install_command("cu124")
+        assert cmd == 'pip install -e ".[cu124]"'
+
+    def test_cpu_tag(self, from_wheel: None) -> None:
         cmd, url = build_install_command("cpu")
-        assert cmd == 'pip install -e ".[cpu]"'
+        assert cmd == 'pip install "visionforge-studio[cpu]"'
         assert url == "https://download.pytorch.org/whl/cpu"
 
-    def test_cu118_tag(self) -> None:
+    def test_cu118_tag(self, from_wheel: None) -> None:
         cmd, url = build_install_command("cu118")
-        assert cmd == 'pip install -e ".[cu118]"'
+        assert cmd == 'pip install "visionforge-studio[cu118]"'
         assert url == "https://download.pytorch.org/whl/cu118"
+
+    def test_the_distribution_name_is_not_the_import_name(self) -> None:
+        """Plain `visionforge` on PyPI is an unrelated project; pointing users
+        at it would install someone else's package."""
+        from visionforge.utils.doctor import _DIST_NAME
+
+        assert _DIST_NAME == "visionforge-studio"
 
 
 # ---------------------------------------------------------------------------
@@ -247,7 +277,8 @@ class TestRunDoctor:
             run_doctor(fix=False, confirm_fn=MagicMock())
 
         out = capsys.readouterr().out
-        assert 'pip install -e ".[cu126]"' in out
+        assert "cu126" in out
+        assert "pip install" in out
         assert "https://download.pytorch.org/whl/cu126" in out
 
     def test_no_gpu_recommends_cpu(self, capsys: pytest.CaptureFixture[str]) -> None:
@@ -258,7 +289,7 @@ class TestRunDoctor:
             run_doctor(fix=False, confirm_fn=MagicMock())
 
         out = capsys.readouterr().out
-        assert 'pip install -e ".[cpu]"' in out
+        assert "Recommended wheel: cpu" in out
 
     def test_verdict_gpu_driver_but_cpu_torch_is_not_ok(self) -> None:
         """CUDA driver present but torch.cuda.is_available() False → exit code 1."""
@@ -406,4 +437,4 @@ class TestGpuDetectedWithoutNvidiaSmi:
         )
         out = self._run(capsys)
         assert "No CUDA-capable GPU detected" in out
-        assert '".[cpu]"' in out
+        assert "Recommended wheel: cpu" in out

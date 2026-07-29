@@ -146,7 +146,7 @@ def _evaluate_ultralytics(
     if detection_trainer.YOLO is None:
         raise RuntimeError(
             "ultralytics is not installed. Install the detection extra: "
-            "pip install 'visionforge[detection]'."
+            "pip install 'visionforge-studio[detection]'."
         )
 
     data_yaml = DetectionDataModule(config).resolve_data_yaml(out_dir=run_dir / "tests")

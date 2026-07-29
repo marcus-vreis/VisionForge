@@ -1,5 +1,5 @@
 [project]
-name = "VisionForge"
+name = "visionforge-studio"
 authors = [{ name = "Marcus Reis", email = "marcusvinicius0083@gmail.com" }]
 version = "0.1.0"
 dynamic = []

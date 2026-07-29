@@ -3107,7 +3107,7 @@ wheels = [
 ]
 
 [[package]]
-name = "visionforge"
+name = "visionforge-studio"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

@@ -18,6 +18,10 @@ reasoning lives in [`documentation/DECISIONS.md`](documentation/DECISIONS.md).
 First public release. Everything below already shipped on `main`; this is the
 point at which it becomes a version other people can install and cite.
 
+> **Installed from PyPI as `visionforge-studio`.** The bare `visionforge` name
+> is an unrelated project by another author. The import name, the `visionforge`
+> CLI command and the project itself are unchanged.
+
 ### Tasks
 
 - **Classification** — ResNet 18/34/50/101, EfficientNet B1/B7, VGG 16/19,
