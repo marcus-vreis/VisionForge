@@ -9,6 +9,7 @@ import subprocess
 import sys
 from collections.abc import Callable
 from importlib.metadata import distribution
+from pathlib import Path
 from typing import TypedDict
 
 # The PyPI distribution name, which is NOT the import name: plain `visionforge`
@@ -265,6 +266,25 @@ def run_doctor(
                 f"         --index-url {index_url}"
             )
             issues.append("torch-cuda-mismatch")
+
+    # --- Workspace ---
+    # Custom models and tasks are picked up from folders *relative to the
+    # working directory*, which works but is invisible: a pip-installed user
+    # has no repo to look at, and running from a different folder silently
+    # loses them. Printing the resolved paths turns that into something you
+    # can see and act on.
+    print()
+    print(f"  Working directory: {Path.cwd()}")
+    for label, folder in (
+        ("Custom models", "user_models"),
+        ("Custom tasks", "user_tasks"),
+    ):
+        path = Path(folder)
+        if path.is_dir():
+            n = len(list(path.glob("*.py"))) + len(list(path.glob("*/task.py")))
+            print(f"  {label:17}: {path.resolve()}  ({n} found)")
+        else:
+            print(f"  {label:17}: {path.resolve()}  (create it to add your own)")
 
     # --- Verdict ---
     print()

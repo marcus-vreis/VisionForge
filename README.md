@@ -74,10 +74,16 @@ from source — the published package already ships the built UI.
 > command and the project itself are still `visionforge`.
 
 ```bash
-pip install "visionforge-studio[cu121]"    # NVIDIA CUDA 12.1
-visionforge doctor                          # confirms the right wheel for your GPU
+mkdir my-research && cd my-research    # one folder per project (see Workspace)
+pip install "visionforge-studio[cu121]"
+visionforge doctor
 visionforge gui
 ```
+
+The extra picks the torch build: `cu118` · `cu121` · `cu124` · `cu126` · `cpu`.
+Not sure which? Install the bare package first, run `visionforge doctor`, and
+it prints the exact line for your machine — then re-run the install with the
+extra it names.
 
 ### From source
 
@@ -164,6 +170,23 @@ visionforge run configs/detection.yaml       # any task — dispatched by config
 Configs exported from the GUI are the exact wire payload, so they re-run
 identically from the CLI. All artifacts (checkpoints, plots, `run.json`,
 reports) are written under `outputs/`.
+
+## Your workspace
+
+VisionForge looks for your own models and tasks in folders **next to wherever
+you run it** — no repository needed, and nothing to edit inside the package:
+
+```
+my-research/            ← run `visionforge gui` from here
+├── user_models/        ← your architectures  (see below)
+├── user_tasks/         ← your task families  (`visionforge new-task`)
+├── datasets/           ← whatever you point the picker at
+└── outputs/            ← runs, checkpoints, reports, run.json
+```
+
+`visionforge doctor` prints the exact resolved paths, so you can always see
+where it is looking. Run it from a different folder and it looks there instead
+— pick one working directory per project and stay in it.
 
 ## Custom models
 

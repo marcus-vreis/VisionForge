@@ -70,17 +70,45 @@ def _materialize(ds: Any, split_dir: Path, class_names: Any, limit: int | None) 
     return written
 
 
+def _carve_validation(train_dir: Path, val_dir: Path, fraction: float) -> int:
+    """Move a stratified slice of ``train_dir`` into ``val_dir``.
+
+    Per class, so a rare class keeps representation in both splits, and by
+    sorted filename rather than at random, so re-running the download twice
+    produces the same split.
+    """
+    moved = 0
+    for class_dir in sorted(p for p in train_dir.iterdir() if p.is_dir()):
+        files = sorted(p for p in class_dir.iterdir() if p.is_file())
+        n = int(len(files) * fraction)
+        if n == 0:
+            continue
+        target = val_dir / class_dir.name
+        target.mkdir(parents=True, exist_ok=True)
+        for path in files[:n]:
+            path.rename(target / path.name)
+            moved += 1
+    return moved
+
+
 def download_torchvision(
     name: str,
     out_dir: str | Path,
     *,
     splits: tuple[str, ...] = ("train", "test"),
     limit: int | None = None,
+    val_fraction: float = 0.2,
 ) -> DatasetDownloadResult:
     """Download a torchvision built-in dataset and materialize it as an ImageFolder.
 
     ``limit`` caps images per class per split (None = all). The raw download goes to
     a temp dir; only the materialized PNGs are kept under ``out_dir``.
+
+    torchvision ships these datasets as train/test only, but every VisionForge
+    task expects train/val/test — so a downloaded dataset used to land one
+    split short and the picker reported "Faltando: validação" on what should be
+    the smoothest possible first run. ``val_fraction`` carves the missing split
+    out of train; set it to 0 to keep torchvision's original two.
 
     Raises:
         ValueError: if ``name`` is not a supported torchvision dataset.
@@ -91,6 +119,8 @@ def download_torchvision(
             f"Unknown torchvision dataset '{name}'. "
             f"Available: {', '.join(torchvision_datasets())}."
         )
+    if not 0.0 <= val_fraction < 1.0:
+        raise ValueError(f"val_fraction must be in [0, 1), got {val_fraction}")
     import torchvision.datasets as tvd
 
     ds_cls = getattr(tvd, _TORCHVISION_DATASETS[key])
@@ -108,6 +138,13 @@ def download_torchvision(
             split_counts[split] = count
             total += count
             logger.info("torchvision {} {}: {} images", key, split, count)
+
+    if val_fraction > 0 and "train" in split_counts and "val" not in split_counts:
+        moved = _carve_validation(out / "train", out / "val", val_fraction)
+        if moved:
+            split_counts["train"] -= moved
+            split_counts["val"] = moved
+            logger.info("torchvision {}: carved {} images into val", key, moved)
 
     return DatasetDownloadResult(
         provider="torchvision",

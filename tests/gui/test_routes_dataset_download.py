@@ -62,6 +62,75 @@ class TestTorchvisionDownload:
             download_torchvision("not_a_dataset", tmp_path)
 
 
+class _BigFakeCIFAR(_FakeCIFAR):
+    """Enough images per class that a 20% slice is a whole number."""
+
+    def __init__(self, root: str, train: bool, download: bool) -> None:
+        self._n = 20 if train else 6
+
+
+@pytest.fixture
+def _big_fake_cifar(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("torchvision.datasets.CIFAR10", _BigFakeCIFAR)
+
+
+class TestValidationSplit:
+    """torchvision ships train/test; every VisionForge task wants train/val/test.
+
+    Without this the smoothest possible first run — download a built-in dataset,
+    point the picker at it — reported "Faltando: validação" and made the user
+    resolve it by hand.
+    """
+
+    def test_val_is_carved_out_of_train(
+        self, _big_fake_cifar: None, tmp_path: Path
+    ) -> None:
+        out = tmp_path / "ds"
+        result = download_torchvision("cifar10", out, splits=("train", "test"))
+
+        assert set(result.splits) == {"train", "val", "test"}
+        assert result.splits["val"] == 4  # 20 train = 10/class, 20% = 2/class
+        assert result.splits["train"] == 16
+        # Nothing is lost or duplicated in the move.
+        assert result.splits["train"] + result.splits["val"] == 20
+        assert (out / "val" / "cat").is_dir()
+        assert (out / "val" / "dog").is_dir()
+
+    def test_every_class_is_represented_in_val(
+        self, _big_fake_cifar: None, tmp_path: Path
+    ) -> None:
+        """Stratified, so a rare class does not vanish from validation."""
+        out = tmp_path / "ds"
+        download_torchvision("cifar10", out, splits=("train",))
+        per_class = {
+            d.name: len(list(d.iterdir())) for d in sorted((out / "val").iterdir())
+        }
+        assert per_class == {"cat": 2, "dog": 2}
+
+    def test_split_is_reproducible(self, _big_fake_cifar: None, tmp_path: Path) -> None:
+        """Sorted, not random: downloading twice gives the same val set."""
+        first = tmp_path / "a"
+        second = tmp_path / "b"
+        download_torchvision("cifar10", first, splits=("train",))
+        download_torchvision("cifar10", second, splits=("train",))
+        names = lambda root: sorted(p.name for p in (root / "val").rglob("*.png"))  # noqa: E731
+        assert names(first) == names(second)
+
+    def test_zero_fraction_keeps_the_original_two_splits(
+        self, _big_fake_cifar: None, tmp_path: Path
+    ) -> None:
+        out = tmp_path / "ds"
+        result = download_torchvision(
+            "cifar10", out, splits=("train", "test"), val_fraction=0.0
+        )
+        assert set(result.splits) == {"train", "test"}
+        assert not (out / "val").exists()
+
+    def test_rejects_a_fraction_that_would_empty_train(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError, match="val_fraction"):
+            download_torchvision("cifar10", tmp_path, val_fraction=1.0)
+
+
 class TestDispatcher:
     def test_routes_to_torchvision(self, _fake_cifar: None, tmp_path: Path) -> None:
         result = download_dataset(

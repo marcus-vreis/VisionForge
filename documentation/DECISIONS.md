@@ -1522,3 +1522,53 @@ The rename touches more than `pyproject.toml`, and two of the places fail
 --version` reports `0.1.0` (not `0.0.0+unknown`), `import visionforge` works
 under the new distribution name, and the built SPA ships inside the wheel
 (42 files) so a pip-installed user never needs Node.
+
+---
+
+## ADR-068 — The pip-installed workspace, and a validation split on download
+
+**Date:** 2026-07-29
+**Status:** Accepted — shipped 2026-07-29
+**Extends:** ADR-048/049 (custom models), ADR-055 (dataset download), ADR-058
+(custom tasks)
+
+**Context:** with `visionforge-studio` live on PyPI, the first-run path was
+walked from a clean venv with no repository — the position every tester is in.
+Two questions had no good answer.
+
+**1. Where does a pip-installed user put their own model?**
+
+`user_models/` and `user_tasks/` resolve relative to the working directory, so
+the answer is "a folder next to wherever you run it" — verified working from a
+throwaway venv, including `visionforge new-task`. Nothing is broken, but
+nothing *said* so: a pip user has no repo to look at, `user_models/README.md`
+ships only in the source tree, and running from a different folder silently
+loses both.
+
+**Decision:** keep the cwd-relative resolution — it needs no configuration and
+gives one folder per project — and make it visible instead. `visionforge
+doctor` now prints the working directory and the resolved paths for both
+folders, with a count of what it found or a hint to create them. The README
+gained a Workspace section showing the layout, so the answer arrives before the
+question.
+
+Rejected: a fixed `~/.visionforge/` home. It would make two projects share one
+model namespace, and "which of my experiments used which version of my model"
+is exactly the question this project exists to keep answerable.
+
+**2. Does the one-click dataset download produce something trainable?**
+
+Almost. torchvision ships its built-ins as train/test, while every VisionForge
+task expects train/val/test — so a downloaded dataset landed one split short
+and the picker reported *"Detectado parcialmente. Faltando: validação"* on what
+should be the smoothest possible first run.
+
+**Decision:** `download_torchvision` carves the missing split out of train
+(`val_fraction`, default 0.2). Stratified per class, so a rare class keeps
+representation in both; taken by sorted filename rather than at random, so
+running the download twice yields the same split. `val_fraction=0` keeps
+torchvision's original two for anyone who wants them.
+
+**Verified from the published package**, not the checkout: `pip install
+visionforge-studio` into a clean venv, then a real MNIST download (400 images,
+ImageFolder layout) and a config validated against it.
