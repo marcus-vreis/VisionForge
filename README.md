@@ -109,7 +109,7 @@ The CUDA build is a build arg, not a hardcoded base, so one Dockerfile serves
 every supported version:
 
 ```bash
-docker build --build-arg CUDA_TAG=cu126 --build-arg CUDA_IMAGE=12.6.3 -t visionforge:cu126 .
+docker build --build-arg CUDA_TAG=cu126 \n  --build-arg BASE_IMAGE=nvidia/cuda:12.6.3-runtime-ubuntu22.04 -t visionforge:cu126 .
 ```
 
 One difference inside the container: the native folder picker needs a display,

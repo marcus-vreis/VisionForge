@@ -113,6 +113,21 @@ class TestCaseTable:
         assert len(cases) == 1
         assert cases[0].endpoint == "/api/custom/example_counting/run"
 
+    def test_custom_cases_are_skipped_when_no_task_is_registered(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A fresh install has no researcher-defined task, and that is the
+        normal state — not a broken install.
+
+        Emitting the cases anyway made `visionforge selftest` report a failure
+        on a clean `pip install` and inside the Docker image, where user_tasks/
+        is a mount point rather than the repository's example.
+        """
+        monkeypatch.setattr(
+            "visionforge.tasks.registry.load_user_tasks", lambda *a, **k: []
+        )
+        assert build_cases(tmp_path, ("custom",), STRATEGIES) == []
+
     def test_multi_trial_flag_marks_the_streaming_contract(
         self, tmp_path: Path
     ) -> None:

@@ -14,7 +14,7 @@ services:
       args:
         # Change both together — the wheel tag and the CUDA runtime it needs.
         CUDA_TAG: cu124
-        CUDA_IMAGE: 12.4.1
+        BASE_IMAGE: nvidia/cuda:12.4.1-runtime-ubuntu22.04
     image: visionforge:cu124
     ports:
       - "8000:8000"
@@ -48,7 +48,9 @@ services:
       context: .
       args:
         CUDA_TAG: cpu
-        CUDA_IMAGE: 12.4.1
+        # Plain Ubuntu, not the CUDA runtime: a CPU wheel never loads those
+        # driver libraries, and they are ~2.5 GB of image.
+        BASE_IMAGE: ubuntu:22.04
         VARIANT: cpu
     image: visionforge:cpu
     ports:

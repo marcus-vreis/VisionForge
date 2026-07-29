@@ -90,10 +90,10 @@ What stays the user's job: installing the NVIDIA driver and
 
 ## Part 2 status — 2026-07-29
 
-**Written and committed; the image build is NOT yet verified.** Docker Desktop
-was not running on the development machine, so `docker build` could not reach
-the daemon. The files below are reviewed but unproven — treat the first real
-build as part of the work, not a formality.
+**Built, run and verified** (CPU variant). The first build failed and the
+first run failed differently — see ADR-071 for what that exposed. The GPU
+variant remains unverified: this machine's Docker has no GPU passthrough
+configured.
 
 Shipped: `Dockerfile` (multi-stage), `.dockerignore`, `docker-compose.yml`,
 README section, and the containerized folder-picker behaviour with tests.
@@ -115,15 +115,27 @@ README section, and the containerized folder-picker behaviour with tests.
   montado, por exemplo /work/datasets/meu-dataset". Two tests pin both
   branches.
 
-### Still to verify on the first real build
+### Verified on the CPU image
 
-1. `docker build` completes for the CPU variant (fastest) and the GPU default.
-2. `uv python install 3.13` resolves inside `nvidia/cuda:*-runtime-ubuntu22.04`.
-3. The web stage's output path (`/src/visionforge/gui/static`, from
-   vite's `outDir: "../src/visionforge/gui/static"` relative to `frontend/`)
-   lands where the runtime stage copies from.
-4. `torch.cuda.is_available()` is True inside the GPU image with `--gpus all`.
-5. `visionforge selftest --quick` passes inside the container — the existing
-   end-to-end check is exactly the right smoke test for the image.
-6. Files written into the mounted `outputs/` are owned by uid 1000 and usable
-   from the host.
+| Check | Result |
+|---|---|
+| `docker build` (CPU variant) | ✅ 509 MB |
+| `uv python install 3.13` in-image | ✅ |
+| SPA copied from the web stage | ✅ 42 files |
+| `visionforge selftest --quick` inside | ✅ 5/5 |
+| `GET /api/system/info` on the published port | ✅ `version: 0.1.0`, `platform: Linux` |
+| SPA served at `/` | ✅ 200 text/html |
+| Headless folder picker explains itself | ✅ names the mounted path |
+| Runs as uid 1000, workdir `/work` | ✅ |
+
+The CPU image dropped from **6.01 GB to 509 MB** once `BASE_IMAGE` let it start
+from `ubuntu:22.04` instead of inheriting the CUDA runtime — a 12x cut for a
+variant that never loads a driver library.
+
+### Still unverified
+
+- The **GPU variant**: `--gpus all` and `torch.cuda.is_available()` inside the
+  image. Needs a host with `nvidia-container-toolkit` configured for Docker.
+- Files written into a mounted `outputs/` being usable from a Linux host (uid
+  1000 maps cleanly there; Docker Desktop on Windows virtualizes ownership, so
+  testing it here would not prove the Linux case).

@@ -492,6 +492,24 @@ def build_cases(
     if "custom" in tasks:
         payload = _custom_payload(workdir)
         key = "example_counting"
+        # A fresh install has no researcher-defined task, which is the normal
+        # state — not a broken install. Reporting it as a failure made
+        # `selftest` say the install was bad on a clean `pip install` and
+        # inside the Docker image, where `user_tasks/` is a mount point rather
+        # than the repository's example. The custom cases only run when the
+        # example is actually present.
+        from visionforge.tasks.registry import load_user_tasks
+
+        if not any(t.key == key for t in load_user_tasks()):
+            logger.info(
+                "Self-test: skipping the custom-task cases — '{}' is not "
+                "registered (no user_tasks/ here). This is expected on a fresh "
+                "install; `visionforge new-task` creates one.",
+                key,
+            )
+            # Return through the same strategy filter as every other path —
+            # bypassing it here would quietly ignore `--strategies`.
+            return [c for c in cases if c.strategy in strategies]
         cases += [
             SelfTestCase(
                 "custom", "simple", f"/api/custom/{key}/run", payload, ("metrics",)

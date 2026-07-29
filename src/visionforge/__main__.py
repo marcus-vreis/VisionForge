@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -176,6 +177,15 @@ def main() -> None:
     )
 
     args = parser.parse_args()
+
+    # Windows consoles default to a legacy codepage (cp1252), which cannot
+    # encode the arrows and box characters the reports use. Without this,
+    # `visionforge selftest` crashed with a UnicodeEncodeError while printing a
+    # failure — the diagnostic command dying exactly when it found something.
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            reconfigure(encoding="utf-8", errors="replace")
 
     setup_logger()
 

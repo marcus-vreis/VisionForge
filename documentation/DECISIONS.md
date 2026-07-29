@@ -1679,3 +1679,70 @@ own panel, behind an "⚙ opções" toggle. You reach it by scrolling past the
 thing you came to configure, not by aiming near it — unlike a tab-bar × or a
 bottom-bar trash, both of which put an irreversible action within a mis-click
 of a frequent one.
+
+---
+
+## ADR-071 — The Docker image, and two defects the first real build exposed
+
+**Date:** 2026-07-29
+**Status:** Accepted — shipped 2026-07-29
+**Completes:** ADR-042 (Docker + doctor)
+
+**Decision:** a multi-stage image whose *base* is a build arg, not a hardcoded
+CUDA tag. Shipping one image per CUDA version is a maintenance tax and picking
+a single one strands everybody else:
+
+```
+docker build -t visionforge .                                   # CUDA 12.4
+docker build --build-arg CUDA_TAG=cu126 \
+             --build-arg BASE_IMAGE=nvidia/cuda:12.6.3-runtime-ubuntu22.04 .
+docker build --build-arg VARIANT=cpu --build-arg CUDA_TAG=cpu \
+             --build-arg BASE_IMAGE=ubuntu:22.04 .
+```
+
+`BASE_IMAGE` is a whole image reference rather than a CUDA version because the
+CPU variant should not inherit the CUDA runtime at all — that is ~2.5 GB of
+driver libraries a CPU wheel never loads.
+
+Other choices: `uv` installs Python 3.13 in-image, so the `pyproject` floor is
+met exactly and no distro PPA is involved; dependencies are layered before
+application code, because torch is a ~2 GB download nobody wants to repeat for
+a one-line change; the runtime stage has no Node (the SPA is built in a
+separate stage and copied); the container runs as uid 1000 so files it writes
+into the mounted `outputs/` stay usable from the host; and `datasets/` mounts
+read-only, because training reads images and has no business modifying them.
+
+### What building it actually found
+
+Three of these would have survived any amount of reading.
+
+1. **`ARG` used in `FROM` must be global.** Declared after the first `FROM` it
+   is stage-scoped, resolves empty, and the build dies on
+   `nvidia/cuda:-runtime-ubuntu22.04`. Reading the file, it looked right.
+
+2. **`visionforge selftest` failed on a clean install.** Its `custom` cases
+   target `example_counting`, which exists only in the repository. On a fresh
+   `pip install` — and inside the image, where `user_tasks/` is a mount point —
+   the command that exists to say "your install is fine" reported a failure for
+   the normal state of having no researcher-defined task. The cases are now
+   skipped, with a log line naming `visionforge new-task` as the way to get one.
+
+3. **`visionforge selftest` crashed on Windows exactly when it found a
+   problem.** The report contains `→`; the default console codepage (cp1252)
+   cannot encode it, so printing a *failure* raised `UnicodeEncodeError` and
+   the diagnostic command died mid-diagnosis. stdout/stderr are reconfigured to
+   UTF-8 with `errors="replace"` before anything prints.
+
+Defects 2 and 3 affect every pip user, not just Docker ones. They surfaced
+because the image was actually built and run, which is the argument for doing
+that rather than shipping a reviewed Dockerfile.
+
+**Verified:** `visionforge selftest --quick` reports 5/5 inside the container;
+`visionforge --version` and the `org.opencontainers.image.version` label both
+read 0.1.0, stamped from the package metadata at build time rather than typed
+into the Dockerfile; the built SPA (42 files) ships inside the image; the
+container runs as `forge` with workdir `/work`.
+
+**Unverified and stated as such:** the GPU variant. This machine's Docker has
+no GPU passthrough configured, so `--gpus all` and
+`torch.cuda.is_available()` inside the image remain untested.

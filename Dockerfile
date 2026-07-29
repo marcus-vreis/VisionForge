@@ -11,11 +11,22 @@
 #
 #   docker build -t visionforge .                          # default: CUDA 12.4
 #   docker build --build-arg CUDA_TAG=cu126 \
-#                --build-arg CUDA_IMAGE=12.6.3 -t visionforge:cu126 .
-#   docker build --build-arg VARIANT=cpu -t visionforge:cpu .
+#                --build-arg BASE_IMAGE=nvidia/cuda:12.6.3-runtime-ubuntu22.04 \
+#                -t visionforge:cu126 .
+#   docker build --build-arg VARIANT=cpu --build-arg CUDA_TAG=cpu \
+#                --build-arg BASE_IMAGE=ubuntu:22.04 -t visionforge:cpu .
+#
+# The base is a whole image reference, not just a CUDA version, so the CPU
+# build can drop the CUDA runtime entirely — it was ~2.5 GB of driver libraries
+# that a CPU wheel never loads.
 #
 # The host still owns the NVIDIA driver and nvidia-container-toolkit. An image
 # cannot ship those, and pretending otherwise would just move the failure.
+
+# Declared before the first FROM on purpose: an ARG used *in* a FROM must be in
+# the global scope. Declaring it next to the stage it belongs to reads better
+# and does not work — the value is empty there and the tag fails to parse.
+ARG BASE_IMAGE=nvidia/cuda:12.4.1-runtime-ubuntu22.04
 
 # ── stage 1: build the SPA ────────────────────────────────────────────────────
 # Node exists only here. The runtime stage copies the built assets, so the
@@ -33,8 +44,7 @@ RUN mkdir -p /src/visionforge/gui/static && npm run build
 
 
 # ── stage 2: runtime ──────────────────────────────────────────────────────────
-ARG CUDA_IMAGE=12.4.1
-FROM nvidia/cuda:${CUDA_IMAGE}-runtime-ubuntu22.04 AS runtime
+FROM ${BASE_IMAGE} AS runtime
 
 # Repeated after FROM on purpose: an ARG declared before FROM is out of scope
 # in the stage body.
