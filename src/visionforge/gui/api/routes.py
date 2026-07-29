@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import csv
 import json
+import os
 import platform
 import uuid
 from collections.abc import Callable
@@ -2252,6 +2253,19 @@ def _open_native_folder_dialog() -> DatasetPickResponse:
     Runs in a worker thread because tkinter blocks the calling thread. Returns
     an empty path + cancelled=True when the dialog is dismissed or unavailable.
     """
+    # A container has no display, so the dialog can never open there. Saying so
+    # up front beats letting Tk fail and reporting its error, which reads like a
+    # bug rather than the expected consequence of running headless.
+    if os.environ.get("VISIONFORGE_CONTAINER"):
+        return DatasetPickResponse(
+            path="",
+            cancelled=True,
+            message=(
+                "O seletor nativo não abre dentro do container (sem display). "
+                "Digite o caminho montado, por exemplo /work/datasets/meu-dataset."
+            ),
+        )
+
     try:
         import tkinter as tk
         from tkinter import filedialog

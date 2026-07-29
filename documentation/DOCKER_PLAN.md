@@ -85,3 +85,45 @@ What stays the user's job: installing the NVIDIA driver and
 - Does `tkinter` (native folder picker, ADR-018) work headless in the container?
   If not, the GUI folder-picker degrades to manual path entry inside Docker —
   document it, or gate the picker on a "not containerized" check.
+
+---
+
+## Part 2 status — 2026-07-29
+
+**Written and committed; the image build is NOT yet verified.** Docker Desktop
+was not running on the development machine, so `docker build` could not reach
+the daemon. The files below are reviewed but unproven — treat the first real
+build as part of the work, not a formality.
+
+Shipped: `Dockerfile` (multi-stage), `.dockerignore`, `docker-compose.yml`,
+README section, and the containerized folder-picker behaviour with tests.
+
+### The open questions, answered
+
+- **Which CUDA base?** None, exclusively. Shipping one image per CUDA version is
+  a maintenance tax, and picking a single one strands everybody else — so
+  `CUDA_TAG` / `CUDA_IMAGE` are build args with `cu124` / `12.4.1` as the
+  default, and `VARIANT=cpu` gives the CPU build from the same file.
+- **Bake a weights cache?** No — download on first run, keep the image lean. A
+  baked cache would grow the image by hundreds of MB to save a one-time
+  download that most users make once per model anyway.
+- **Does the tkinter picker work headless?** It cannot: there is no display in
+  the container. It already degraded without crashing (Tk raises, the route
+  catches), but the message read like a bug. The image sets
+  `VISIONFORGE_CONTAINER=1` and the route now checks it *before* touching Tk,
+  returning "o seletor nativo não abre dentro do container — digite o caminho
+  montado, por exemplo /work/datasets/meu-dataset". Two tests pin both
+  branches.
+
+### Still to verify on the first real build
+
+1. `docker build` completes for the CPU variant (fastest) and the GPU default.
+2. `uv python install 3.13` resolves inside `nvidia/cuda:*-runtime-ubuntu22.04`.
+3. The web stage's output path (`/src/visionforge/gui/static`, from
+   vite's `outDir: "../src/visionforge/gui/static"` relative to `frontend/`)
+   lands where the runtime stage copies from.
+4. `torch.cuda.is_available()` is True inside the GPU image with `--gpus all`.
+5. `visionforge selftest --quick` passes inside the container — the existing
+   end-to-end check is exactly the right smoke test for the image.
+6. Files written into the mounted `outputs/` are owned by uid 1000 and usable
+   from the host.

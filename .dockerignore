@@ -1,0 +1,42 @@
+# Keep the build context small and free of anything host-specific.
+# A fat context slows every build and risks baking local state into the image.
+
+.git
+.github
+.venv
+venv
+**/__pycache__
+**/*.py[cod]
+.mypy_cache
+.pytest_cache
+.ruff_cache
+htmlcov
+.coverage
+*.egg-info
+dist
+build
+
+# Node: the web stage runs `npm ci` from the lockfile, so a host node_modules
+# would only be a large, platform-wrong copy.
+frontend/node_modules
+frontend/dist
+
+# The SPA is built inside the image; a stale host build must not shadow it.
+src/visionforge/gui/static
+
+# User data and results belong in mounted volumes, never in the image.
+outputs
+datasets
+user_models/*
+user_tasks/*
+!user_models/README.md
+!user_tasks/README.md
+!user_tasks/example_counting
+*.pt
+*.pth
+*.onnx
+
+# Local-only files.
+.claude
+.env
+*.log

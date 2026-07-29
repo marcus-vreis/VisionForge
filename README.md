@@ -86,6 +86,36 @@ Not sure which? Install the bare package first, run `visionforge doctor`, and
 it prints the exact line for your machine — then re-run the install with the
 extra it names.
 
+### With Docker
+
+Skips the PyTorch install entirely — the image carries a matching torch build.
+The host needs the NVIDIA driver and `nvidia-container-toolkit`; an image
+cannot ship those.
+
+```bash
+docker compose up            # GPU, GUI on http://localhost:8000
+```
+
+```bash
+docker compose --profile cpu up      # machines without a GPU
+```
+
+`datasets/` is mounted read-only, `outputs/` read-write, and `user_models/` +
+`user_tasks/` exactly as they work outside Docker — so runs, checkpoints and
+your own code live on the host, not inside the image. Saved provider keys
+persist in a named volume.
+
+The CUDA build is a build arg, not a hardcoded base, so one Dockerfile serves
+every supported version:
+
+```bash
+docker build --build-arg CUDA_TAG=cu126 --build-arg CUDA_IMAGE=12.6.3 -t visionforge:cu126 .
+```
+
+One difference inside the container: the native folder picker needs a display,
+so it explains itself and you type the mounted path (`/work/datasets/...`)
+instead.
+
 ### From source
 
 For development, or to run an unreleased commit:

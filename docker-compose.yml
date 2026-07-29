@@ -1,0 +1,66 @@
+# VisionForge via Docker Compose — the common case in one command.
+#
+#   docker compose up                 # GPU
+#   docker compose --profile cpu up   # no GPU on this machine
+#
+# Datasets are mounted read-only and outputs read-write, so the container never
+# writes anything that matters to its own filesystem and nothing user-specific
+# is baked into the image.
+
+services:
+  visionforge:
+    build:
+      context: .
+      args:
+        # Change both together — the wheel tag and the CUDA runtime it needs.
+        CUDA_TAG: cu124
+        CUDA_IMAGE: 12.4.1
+    image: visionforge:cu124
+    ports:
+      - "8000:8000"
+    volumes:
+      # Read-only: training reads images, it has no business modifying them.
+      - ./datasets:/work/datasets:ro
+      # Read-write: runs, checkpoints, reports and run.json land here and
+      # survive the container.
+      - ./outputs:/work/outputs
+      # Your own architectures and task families, picked up from the working
+      # directory exactly as they are outside Docker.
+      - ./user_models:/work/user_models
+      - ./user_tasks:/work/user_tasks
+      # Provider API keys, so a key saved in the GUI outlives the container.
+      - visionforge-config:/home/forge/.visionforge
+    environment:
+      VISIONFORGE_CONTAINER: "1"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  # Same image, built for CPU. Useful on a laptop, and for checking that a
+  # config runs before moving it to the GPU machine.
+  visionforge-cpu:
+    profiles: ["cpu"]
+    build:
+      context: .
+      args:
+        CUDA_TAG: cpu
+        CUDA_IMAGE: 12.4.1
+        VARIANT: cpu
+    image: visionforge:cpu
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./datasets:/work/datasets:ro
+      - ./outputs:/work/outputs
+      - ./user_models:/work/user_models
+      - ./user_tasks:/work/user_tasks
+      - visionforge-config:/home/forge/.visionforge
+    environment:
+      VISIONFORGE_CONTAINER: "1"
+
+volumes:
+  visionforge-config:

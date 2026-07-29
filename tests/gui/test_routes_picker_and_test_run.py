@@ -135,6 +135,33 @@ class TestOpenNativeFolderDialog:
         assert resp.path == ""
         assert resp.message  # human message present
 
+    def test_container_says_why_instead_of_failing(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Inside Docker there is no display, so the dialog can never open.
+
+        Letting Tk fail and reporting its error reads like a bug; naming the
+        cause and the mounted path the user should type reads like the expected
+        consequence of running headless (ADR-042 part 2).
+        """
+        monkeypatch.setenv("VISIONFORGE_CONTAINER", "1")
+        with patch("tkinter.Tk", side_effect=AssertionError("must not be called")):
+            resp = _open_native_folder_dialog()
+        assert resp.cancelled is True
+        assert "container" in (resp.message or "")
+        assert "/work/datasets" in (resp.message or "")
+
+    def test_outside_a_container_the_dialog_is_still_attempted(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.delenv("VISIONFORGE_CONTAINER", raising=False)
+        with (
+            patch("tkinter.Tk"),
+            patch("tkinter.filedialog.askdirectory", return_value=str(tmp_path)),
+        ):
+            resp = _open_native_folder_dialog()
+        assert resp.cancelled is False
+
     def test_returns_cancelled_when_tk_raises(self) -> None:
         with patch("tkinter.Tk", side_effect=RuntimeError("no display")):
             resp = _open_native_folder_dialog()
