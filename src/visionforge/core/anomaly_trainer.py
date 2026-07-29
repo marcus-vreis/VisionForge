@@ -116,7 +116,10 @@ class AnomalyTrainer:
         progress_callback: Callable[[dict[str, Any]], None] | None = None,
     ) -> AnomalyTrainResult:
         """Train (autoencoder) or fit the memory bank (PatchCore) and score test."""
-        _seed_everything(self._config.training.seed)
+        _seed_everything(
+            self._config.training.seed,
+            deterministic=self._config.training.deterministic,
+        )
         logger.info("AnomalyTrainer using device: {}", self._device_label)
         model = model.to(self._device)
         run_dir = self._make_run_dir()

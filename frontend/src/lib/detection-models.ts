@@ -153,6 +153,7 @@ export interface DetectionTrainingForm {
   learning_rate: number;
   patience: number;
   seed: number;
+  deterministic: boolean;
   workers: number;
   optimizer: DetectionOptimizer;
   momentum: number;
@@ -265,6 +266,7 @@ export function makeDefaultDetectionTraining(): DetectionTrainingForm {
     learning_rate: 0.01,
     patience: 50,
     seed: 0,
+    deterministic: true,
     // 2, not Ultralytics' 8: on Windows every DataLoader worker is a spawned
     // process reloading torch's CUDA DLLs — 8 exhausts the page file
     // (WinError 1455). Linux users can raise it for throughput.

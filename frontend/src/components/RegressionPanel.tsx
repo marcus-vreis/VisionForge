@@ -291,6 +291,12 @@ export function RegressionPanel({
             min={0}
             step={1}
           />
+          <Toggle
+            label="Determinístico"
+            value={formData.training.deterministic}
+            onChange={(v) => setTraining({ deterministic: v })}
+            hint="reprodutível, mais lento"
+          />
         </div>
       </div>
 

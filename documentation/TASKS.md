@@ -736,10 +736,20 @@ tracks real trials instead of a synthetic time crawl. Remaining follow-up:
 Treinar respeitar a estratégia selecionada.
 
 **Researcher-grade rigor (sequenced follow-ups to ADR-056):**
-- Determinism parity: `training.deterministic` exists only in classification —
-  add the same flag (wired to `_seed_everything(deterministic=…)`) to
-  regression/segmentation/anomaly configs, and map it to Ultralytics'
-  `deterministic` arg for detection.
+- [x] **Determinism parity ✅ (ADR-062, 2026-07-28)** — `training.deterministic`
+  in all five tasks + the custom-task SDK, wired to
+  `_seed_everything(seed, deterministic=…)` in each trainer, mapped to
+  Ultralytics' `deterministic` arg for detection, and surfaced as a
+  "Determinístico" toggle beside Seed in the four standalone panels (+ the
+  run-detail knob list, since a seed without cuDNN pinning is only half the
+  reproducibility claim). Description lives once in
+  `utils.config.DETERMINISTIC_DESCRIPTION` — the GUI renders it as help text.
+  Detection defaults to `True` (its contract is to mirror `YOLO.train`), every
+  other task to `False` (ADR-020's throughput default stands; this relaxes it
+  on demand). **Found while wiring it:** the torchvision detection backend
+  forwarded `seed` only to Ultralytics, so those runs were never seeded and
+  `seed: 42` was a claim nothing backed — now fixed.
+  Tests: `tests/core/test_determinism_parity.py` (27).
 - Experiment queue: today a second submit gets 409 (single-run state). A simple
   FIFO queue (submit N configs, run sequentially on the one GPU, queue panel in
   the GUI) is how a researcher trains overnight. Needs an ADR — it touches the

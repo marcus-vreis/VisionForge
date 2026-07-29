@@ -1211,3 +1211,57 @@ file or a dataset above 200k files yields an `unavailable` entry with the
 reason, because provenance must not be what fails a training run.
 
 **Phase D is complete.**
+
+---
+
+## ADR-062 — `training.deterministic` in every task, and detection's two seeds
+
+**Date:** 2026-07-28
+**Status:** Accepted — shipped 2026-07-28
+**Extends:** ADR-020 (cuDNN benchmark on by default), ADR-057 (provenance)
+
+**Context:** `training.deterministic` existed only in the classification
+`TrainingConfig` (and, undocumented, in the custom-task SDK). The four
+standalone tasks called `_seed_everything(cfg.seed)` with no way to pin cuDNN,
+so a regression or segmentation run could not be made bit-reproducible at all —
+while its `run.json` recorded a seed, implying it could. Worse, the torchvision
+detection backend forwarded `seed` **only** to Ultralytics: on that path nothing
+was seeded, and `seed: 42` in the config was a claim nothing backed.
+
+A seed alone does not make a GPU run reproducible. cuDNN's autotuner picks
+kernels by benchmark, and non-deterministic kernels are selected by default
+(ADR-020, for throughput). Reproducibility is the pair — seed *and* pinned
+cuDNN — so exposing one without the other overstates what the artifact proves.
+
+**Decision:** every task's training config carries `deterministic: bool`, wired
+to `_seed_everything(seed, deterministic=…)` in its trainer and surfaced as a
+"Determinístico" toggle beside Seed in all five panels. The description is a
+single shared constant, `utils.config.DETERMINISTIC_DESCRIPTION`, because the
+GUI renders it as form help text and four hand-copies would drift.
+
+Two deliberate asymmetries:
+
+- **Detection defaults to `True`**, everywhere else `False`. `DetectionConfig`'s
+  stated contract is that an unmodified copy trains exactly like a bare
+  `YOLO.train` call, and Ultralytics' own `deterministic` default is `True`.
+  Defaulting it to `False` for symmetry would have silently changed how every
+  existing detection config trains.
+- **The knob keeps costing speed, and says so.** It is opt-in, not the default,
+  because pinning cuDNN measurably reduces throughput; ADR-020 stands, and this
+  relaxes it on demand rather than reversing it.
+
+`_seed_everything` was also added to the torchvision detection path, which fixes
+unseeded runs independently of the new knob.
+
+**Rejected:** a global "reproducible mode" flag outside the config tree — it
+would not travel with the exported YAML, so a re-run from the CLI could differ
+from the GUI run that produced it, which is the exact failure the config
+contract exists to prevent.
+
+**Tests:** `tests/core/test_determinism_parity.py` (27) — one file on purpose,
+parametrized over all six training configs, since the defect being guarded
+against is a *gap*, and a per-task test file is how such a gap stays invisible.
+It asserts the field, its documented default and its shared description exist
+everywhere; that the value reaches `_seed_everything` for regression,
+segmentation and anomaly; that it reaches Ultralytics' `train` kwargs; and that
+the torchvision detection backend is seeded at all.

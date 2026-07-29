@@ -119,7 +119,7 @@ class RegressionTrainer:
                 progress dict. Safe to call from a worker thread.
         """
         cfg = self._config.training
-        _seed_everything(cfg.seed)
+        _seed_everything(cfg.seed, deterministic=cfg.deterministic)
         logger.info("RegressionTrainer using device: {}", self._device_label)
 
         model = self._prepare_model(model)

@@ -310,6 +310,12 @@ export function DetectionPanel({
             min={0}
             step={1}
           />
+          <Toggle
+            label="Determinístico"
+            value={formData.training.deterministic}
+            onChange={(v) => setTraining({ deterministic: v })}
+            hint="reprodutível, mais lento"
+          />
           <NumberField
             label="Workers"
             value={formData.training.workers}

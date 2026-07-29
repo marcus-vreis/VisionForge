@@ -119,6 +119,16 @@ class SchedulerConfig(BaseModel):
     min_lr: float = Field(default=1e-6, ge=0.0)
 
 
+# Shared by every task's training config (ADR-062): the knob means the same
+# thing everywhere, so it is described once instead of drifting five times.
+DETERMINISTIC_DESCRIPTION = (
+    "When True, forces cuDNN deterministic algorithms and disables "
+    "auto-tuning. Guarantees bit-exact reproducibility across runs "
+    "but significantly reduces GPU utilization and throughput. "
+    "Leave False (default) for normal training."
+)
+
+
 class TrainingConfig(BaseModel):
     """Hyperparameters and training loop settings."""
 
@@ -129,15 +139,7 @@ class TrainingConfig(BaseModel):
     optimizer: Literal["adam", "sgd", "adamw"] = "adam"
     weight_decay: float = Field(default=0.0, ge=0.0)
     seed: int = Field(default=42, ge=0)
-    deterministic: bool = Field(
-        default=False,
-        description=(
-            "When True, forces cuDNN deterministic algorithms and disables "
-            "auto-tuning. Guarantees bit-exact reproducibility across runs "
-            "but significantly reduces GPU utilization and throughput. "
-            "Leave False (default) for normal training."
-        ),
-    )
+    deterministic: bool = Field(default=False, description=DETERMINISTIC_DESCRIPTION)
     mixed_precision: bool = Field(
         default=False,
         description=(

@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from visionforge.utils.config import (
     CURRENT_SCHEMA_VERSION,
+    DETERMINISTIC_DESCRIPTION,
     DeviceConfig,
     OutputConfig,
     PreprocessingConfig,
@@ -159,6 +160,7 @@ class RegressionTrainingConfig(BaseModel):
     loss: Literal["mse", "mae", "huber"] = "mse"
     huber_delta: float = Field(default=1.0, gt=0.0)
     seed: int = Field(default=42, ge=0)
+    deterministic: bool = Field(default=False, description=DETERMINISTIC_DESCRIPTION)
     scheduler: SchedulerConfig = Field(default_factory=SchedulerConfig)
 
 

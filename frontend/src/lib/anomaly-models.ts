@@ -58,6 +58,7 @@ export interface AnomalyForm {
     early_stopping_patience: number;
     threshold_percentile: number;
     seed: number;
+    deterministic: boolean;
   };
   /** Filter pipeline applied before augmentation (data.preprocessing.steps). */
   preprocessing: PreprocessingStep[];
@@ -91,6 +92,7 @@ export function makeDefaultAnomalyForm(): AnomalyForm {
       early_stopping_patience: 10,
       threshold_percentile: 95,
       seed: 42,
+      deterministic: false,
     },
     preprocessing: [],
     transforms: makeDefaultTransformsForm(),

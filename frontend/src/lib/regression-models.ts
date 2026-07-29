@@ -73,6 +73,7 @@ export interface RegressionForm {
     optimizer: string;
     early_stopping_patience: number;
     seed: number;
+    deterministic: boolean;
   };
   /** Filter pipeline applied before augmentation (data.preprocessing.steps). */
   preprocessing: PreprocessingStep[];
@@ -104,6 +105,7 @@ export function makeDefaultRegressionForm(): RegressionForm {
       optimizer: "adam",
       early_stopping_patience: 10,
       seed: 42,
+      deterministic: false,
     },
     preprocessing: [],
     transforms: makeDefaultTransformsForm(),

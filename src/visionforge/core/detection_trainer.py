@@ -28,6 +28,7 @@ from visionforge.core.detection_dataset import DetectionDataset, detection_colla
 from visionforge.core.detection_metrics import mean_average_precision_50
 from visionforge.core.plotter import MetricsPlotter
 from visionforge.core.tracking import TensorBoardLogger
+from visionforge.core.trainer import _seed_everything
 from visionforge.models.detection_factory import build_torchvision_detector
 from visionforge.utils.detection_config import DetectionConfig
 from visionforge.utils.environment import capture_environment
@@ -310,6 +311,10 @@ class DetectionTrainer:
                 "data_yaml-only is not supported yet."
             )
 
+        # `training.seed` used to reach only Ultralytics, so torchvision runs
+        # were unseeded and `seed: 42` in the config was a claim nothing backed.
+        _seed_everything(cfg.seed, deterministic=cfg.deterministic)
+
         run_dir = self._make_run_dir()
         device = self._resolve_torch_device()
 
@@ -547,6 +552,7 @@ class DetectionTrainer:
             "lr0": cfg.learning_rate,
             "patience": cfg.patience,
             "seed": cfg.seed,
+            "deterministic": cfg.deterministic,
             "workers": cfg.workers,
             # optimizer
             "optimizer": cfg.optimizer,

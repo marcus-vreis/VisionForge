@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from visionforge.utils.config import (
     CURRENT_SCHEMA_VERSION,
+    DETERMINISTIC_DESCRIPTION,
     DeviceConfig,
     OutputConfig,
     PreprocessingConfig,
@@ -132,6 +133,7 @@ class SegmentationTrainingConfig(BaseModel):
     weight_decay: float = Field(default=0.0, ge=0.0)
     loss: Literal["cross_entropy", "dice", "combined"] = "cross_entropy"
     seed: int = Field(default=42, ge=0)
+    deterministic: bool = Field(default=False, description=DETERMINISTIC_DESCRIPTION)
     scheduler: SchedulerConfig = Field(default_factory=SchedulerConfig)
 
 

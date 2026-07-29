@@ -1681,6 +1681,9 @@ function TrainingSection({ config }: { config: Record<string, unknown> }) {
     "weight_decay",
     "early_stopping_patience",
     "seed",
+    // A seed alone does not make a run reproducible on GPU; whether cuDNN was
+    // pinned is part of the same claim, so it belongs next to it.
+    "deterministic",
   ];
   const rows = KNOBS.filter(
     (k) => training[k] !== undefined && training[k] !== null,

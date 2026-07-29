@@ -182,7 +182,7 @@ class SegmentationTrainer:
     ) -> SegmentationTrainResult:
         """Run the segmentation training loop (best checkpoint by val mIoU)."""
         cfg = self._config.training
-        _seed_everything(cfg.seed)
+        _seed_everything(cfg.seed, deterministic=cfg.deterministic)
         logger.info("SegmentationTrainer using device: {}", self._device_label)
 
         model = self._prepare_model(model)

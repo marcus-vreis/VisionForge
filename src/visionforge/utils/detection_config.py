@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from visionforge.utils.config import (
     CURRENT_SCHEMA_VERSION,
+    DETERMINISTIC_DESCRIPTION,
     DeviceConfig,
     OutputConfig,
     check_schema_version,
@@ -202,6 +203,11 @@ class DetectionTrainingConfig(BaseModel):
     learning_rate: float = Field(default=0.01, gt=0.0)  # Ultralytics lr0
     patience: int = Field(default=50, ge=0)
     seed: int = Field(default=0, ge=0)
+    # True here and False in every other task on purpose: this config's contract
+    # is that an unmodified copy trains exactly like a bare `YOLO.train` call,
+    # and Ultralytics defaults `deterministic` to True. The torchvision backend
+    # reads the same field through `_seed_everything`.
+    deterministic: bool = Field(default=True, description=DETERMINISTIC_DESCRIPTION)
     # Ultralytics' default (8) except on Windows: each DataLoader worker is a
     # spawned process that reloads torch's CUDA DLLs (gigabytes of commit
     # charge each), and 8 of them exhausts the page file — WinError 1455.
