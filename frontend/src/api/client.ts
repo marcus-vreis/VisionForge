@@ -706,6 +706,7 @@ export interface SystemInfo {
   cpu_count: number;
   suggested_workers: number;
   platform: string;
+  version: string;
 }
 
 export async function fetchSystemInfo(): Promise<SystemInfo> {

@@ -356,3 +356,54 @@ class TestDoctorCLIDispatch:
             main()
 
         mock_install.assert_not_called()
+
+
+class TestGpuDetectedWithoutNvidiaSmi:
+    """nvidia-smi is simply absent from PATH on plenty of working GPU machines.
+
+    doctor used to derive its whole recommendation from that one probe, so it
+    told a researcher with a functioning RTX card to install the CPU wheel —
+    and then printed "environment looks good" underneath. The torch probe knows
+    better and is now consulted first.
+    """
+
+    def _run(self, capsys: pytest.CaptureFixture[str]) -> str:
+        run_doctor(fix=False)
+        out: str = capsys.readouterr().out
+        return out
+
+    def test_reports_the_gpu_and_keeps_the_working_install(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        monkeypatch.setattr("visionforge.utils.doctor.detect_driver_cuda", lambda: None)
+        monkeypatch.setattr(
+            "visionforge.utils.doctor.probe_torch",
+            lambda: {
+                "importable": True,
+                "version": "2.11.0+cu128",
+                "cuda_available": True,
+                "cuda_build": "12.8",
+            },
+        )
+        out = self._run(capsys)
+        assert "GPU usable via torch" in out
+        assert "keep the current install" in out
+        # The bug in one line: never send a working GPU user to the CPU wheel.
+        assert '".[cpu]"' not in out
+
+    def test_still_recommends_cpu_when_there_is_no_gpu_at_all(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        monkeypatch.setattr("visionforge.utils.doctor.detect_driver_cuda", lambda: None)
+        monkeypatch.setattr(
+            "visionforge.utils.doctor.probe_torch",
+            lambda: {
+                "importable": True,
+                "version": "2.11.0+cpu",
+                "cuda_available": False,
+                "cuda_build": None,
+            },
+        )
+        out = self._run(capsys)
+        assert "No CUDA-capable GPU detected" in out
+        assert '".[cpu]"' in out

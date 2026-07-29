@@ -19,6 +19,7 @@ from fastapi.responses import FileResponse, Response, StreamingResponse
 from loguru import logger
 from pydantic import ValidationError
 
+from visionforge import __version__
 from visionforge.blocks.anomaly import AnomalyBlock
 from visionforge.blocks.anomaly_runner import AnomalyRunner
 from visionforge.blocks.batch_prediction import BatchPredictionBlock
@@ -217,6 +218,7 @@ async def get_system_info() -> SystemInfo:
         cpu_count=cpu,
         suggested_workers=min(cpu, 8),
         platform=platform.system(),
+        version=__version__,
     )
 
 

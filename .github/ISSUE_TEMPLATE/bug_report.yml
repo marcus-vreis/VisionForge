@@ -1,0 +1,89 @@
+name: Bug report
+description: Something in VisionForge behaves incorrectly
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for testing VisionForge. The two commands below answer most of
+        the questions a maintainer would otherwise have to ask you.
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Paste the output of both commands.
+      render: shell
+      placeholder: |
+        $ visionforge --version
+        $ visionforge doctor
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what you got instead.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: task
+    attributes:
+      label: Task
+      options:
+        - classification
+        - detection
+        - regression
+        - segmentation
+        - anomaly
+        - custom task (SDK)
+        - not task-specific
+    validations:
+      required: true
+
+  - type: dropdown
+    id: strategy
+    attributes:
+      label: Strategy
+      options:
+        - single run
+        - K-fold cross-validation
+        - transfer learning
+        - grid search
+        - random search
+        - Optuna sweep
+        - replicates
+        - replicated comparison
+        - not applicable
+    validations:
+      required: true
+
+  - type: textarea
+    id: config
+    attributes:
+      label: Config
+      description: >
+        The YAML from the panel's "Exportar YAML" button, or the `config` block
+        of the run's `run.json`. This is what makes the bug reproducible —
+        please redact dataset paths if they are sensitive.
+      render: yaml
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Traceback or logs
+      description: >
+        The full traceback, or the relevant part of `outputs/logs/visionforge.log`.
+      render: shell
+
+  - type: checkboxes
+    id: selftest
+    attributes:
+      label: Before submitting
+      options:
+        - label: >
+            I ran `visionforge selftest --quick` and noted whether it passes.
+            (If it fails too, say so — that points at the install rather than
+            at my dataset.)

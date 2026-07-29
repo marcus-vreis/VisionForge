@@ -30,6 +30,9 @@ class TorchProbe(TypedDict):
     importable: bool
     version: str
     cuda_available: bool
+    # The CUDA the installed wheel was *built* against (torch.version.cuda),
+    # which is what names the wheel — not the driver's CUDA.
+    cuda_build: str | None
 
 
 class PythonCheck(TypedDict):
@@ -96,7 +99,12 @@ def probe_torch() -> TorchProbe:
     Uses importlib to avoid a hard import at module top so CI (no torch) stays clean.
     """
     if importlib.util.find_spec("torch") is None:
-        return TorchProbe(importable=False, version="unknown", cuda_available=False)
+        return TorchProbe(
+            importable=False,
+            version="unknown",
+            cuda_available=False,
+            cuda_build=None,
+        )
 
     try:
         import torch  # noqa: PLC0415
@@ -105,9 +113,15 @@ def probe_torch() -> TorchProbe:
             importable=True,
             version=torch.__version__,
             cuda_available=torch.cuda.is_available(),
+            cuda_build=torch.version.cuda,
         )
     except Exception:  # noqa: BLE001
-        return TorchProbe(importable=False, version="unknown", cuda_available=False)
+        return TorchProbe(
+            importable=False,
+            version="unknown",
+            cuda_available=False,
+            cuda_build=None,
+        )
 
 
 def check_python() -> PythonCheck:
@@ -161,23 +175,39 @@ def run_doctor(
         print()
 
     # --- GPU / driver ---
+    # Probe torch first: a working CUDA build is stronger evidence of a usable
+    # GPU than nvidia-smi, which is simply absent from PATH on plenty of
+    # machines. Recommending the CPU wheel to someone whose GPU already works
+    # is the worst answer doctor can give, and it used to give it.
+    torch_info = probe_torch()
     driver_cuda = detect_driver_cuda()
+    torch_says_cuda = torch_info["importable"] and torch_info["cuda_available"]
+
     if driver_cuda:
         print(f"[OK] CUDA driver version: {driver_cuda}")
+    elif torch_says_cuda:
+        print(
+            "[OK] GPU usable via torch "
+            f"(CUDA build {torch_info['cuda_build']}); nvidia-smi not on PATH"
+        )
     else:
         print("[INFO] No CUDA-capable GPU detected (nvidia-smi not found or failed)")
 
     # --- Wheel recommendation (always shown — this is doctor's primary value) ---
+    already_working = torch_says_cuda and not driver_cuda
     tag = select_wheel_tag(driver_cuda)
     cmd, index_url = build_install_command(tag)
     print()
-    print(f"  Recommended wheel: {tag}")
-    print(f"  Install command  : {cmd}")
-    print(f"  Index URL        : --index-url {index_url}")
+    if already_working:
+        print("  Recommended wheel: keep the current install")
+        print(f"  Reason           : torch {torch_info['version']} already runs on GPU")
+    else:
+        print(f"  Recommended wheel: {tag}")
+        print(f"  Install command  : {cmd}")
+        print(f"  Index URL        : --index-url {index_url}")
     print()
 
     # --- torch probe ---
-    torch_info = probe_torch()
     if not torch_info["importable"]:
         print("[INFO] torch is not installed")
     else:

@@ -7,6 +7,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from visionforge import __version__
+
 # Map ExperimentConfig.block snake_case literals to BlockRegistry class names.
 _BLOCK_ALIASES: dict[str, str] = {
     "classification": "ClassificationBlock",
@@ -100,6 +102,10 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         prog="visionforge",
         description="VisionForge — Computer Vision experimentation platform.",
+    )
+    # A bug report without a version is a bug report nobody can act on.
+    parser.add_argument(
+        "--version", action="version", version=f"visionforge {__version__}"
     )
     subparsers = parser.add_subparsers(dest="command")
 

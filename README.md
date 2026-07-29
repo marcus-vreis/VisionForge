@@ -74,22 +74,39 @@ git clone https://github.com/marcus-vreis/VisionForge.git
 cd VisionForge
 uv venv
 # Windows: .venv\Scripts\activate     Linux/macOS: source .venv/bin/activate
-uv pip install -e ".[dev]"
 ```
 
-PyTorch is intentionally **not** pinned as a dependency — its build must match
-your hardware. Let the built-in doctor tell you the exact command:
+PyTorch is intentionally **not** a plain dependency — its build must match your
+hardware, and a resolver cannot pick correctly between the CPU and CUDA wheels
+(ADR-005). You choose one via a **hardware extra**, and the right index is
+already wired up for it:
 
 ```bash
-visionforge doctor        # detects your GPU/CUDA → prints the right install line
-# e.g.: uv pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+uv pip install -e ".[cu121,dev]"    # NVIDIA CUDA 12.1
+# also available: cu118 · cu124 · cu126 · cpu
 ```
+
+Not sure which? Ask, and it prints the exact line for your machine:
+
+```bash
+visionforge doctor
+```
+
+It reads your driver *and* any torch already installed, so on a machine whose
+GPU works it says so instead of recommending a downgrade.
 
 Build the web UI once (it is then served by the Python backend — end users
 never need Node):
 
 ```bash
 cd frontend && npm install && npm run build && cd ..
+```
+
+Check the install actually works before pointing it at your data:
+
+```bash
+visionforge --version
+visionforge selftest --quick     # trains every task on synthetic data, ~15s
 ```
 
 ### Optional extras
@@ -200,10 +217,46 @@ Filters: `--tasks classification,custom`, `--strategies sweep,replicates`,
 CI as-is. It verifies integrity, not model quality — one epoch on synthetic
 data says nothing about accuracy.
 
+## Status
+
+**v0.1.0 — first public release.** Usable for real work and under active
+development. Below 1.0 the config schema and HTTP API may change between minor
+releases; configs carry a `schema_version` and are migrated on load, so a YAML
+exported from an older release keeps working.
+
+Verified, not asserted: 1274 backend tests and 102 frontend tests gated in CI,
+plus a full matrix of 21 (task × strategy) cases trained on **real** datasets —
+the corpus, the numbers and the one defect it caught are in
+[`documentation/VALIDATION.md`](documentation/VALIDATION.md).
+
+Known limits worth knowing before you start:
+
+- **One training at a time.** A second submit gets a 409; an experiment queue
+  is on the roadmap. Run batches from the CLI in the meantime.
+- **One-click dataset download covers classification only** (the torchvision
+  built-ins produce an `ImageFolder`). Detection, regression, segmentation and
+  anomaly need a dataset already in their layout — see
+  [`documentation/TRAINING_PLAN.md`](documentation/TRAINING_PLAN.md).
+- **No K-fold for detection or anomaly**, by design: Ultralytics owns its
+  training loop, and an unsupervised validation fold without anomalies measures
+  nothing.
+- **Windows**: keep `training.workers` at 0–2. Each DataLoader worker is a
+  process that reloads torch's CUDA DLLs, and eight of them exhaust the page
+  file (`WinError 1455`). The default is already 2 there.
+- Dark theme only; a light palette is not designed yet.
+
+Found something? [Open an issue](https://github.com/marcus-vreis/VisionForge/issues/new/choose)
+— the template asks for `visionforge --version` and `visionforge doctor`, which
+answers most of the questions up front.
+
 ## Architecture, decisions and contributing
 
+- [`CHANGELOG.md`](CHANGELOG.md) — what shipped in each release
 - `documentation/ARCHITECTURE.md` — layers, modules, boundaries
-- `documentation/DECISIONS.md` — every architecture decision as an ADR (001–061)
+- `documentation/DECISIONS.md` — every architecture decision as an ADR (001–065)
+- `documentation/TRAINING_PLAN.md` — the model × strategy matrix, in four
+  layers of increasing cost
+- `documentation/VALIDATION.md` — the real-dataset validation record
 - `documentation/CONTRIBUTING.md` — dev setup, test/lint gauntlet, PR flow
 
 Backend checks: `pytest` · `ruff check src/ tests/` · `mypy src/`.

@@ -536,6 +536,8 @@ class SystemInfo(BaseModel):
     cpu_count: int
     suggested_workers: int
     platform: str
+    # Shown in the header so a screenshot of a bug carries its own version.
+    version: str
 
 
 class DatasetStatsRequest(BaseModel):

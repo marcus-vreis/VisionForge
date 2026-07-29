@@ -1,0 +1,46 @@
+name: Feature request
+description: Suggest a capability VisionForge does not have yet
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: >
+        Describe the research workflow, not the implementation. "I need to
+        compare three backbones and report which is better with a p-value" is
+        more useful than "add a comparison button".
+    validations:
+      required: true
+
+  - type: textarea
+    id: today
+    attributes:
+      label: How do you do it today?
+      description: >
+        Outside VisionForge, or with a workaround inside it. This tells us what
+        the feature has to beat.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - a new task family
+        - a new model or backbone
+        - a new training strategy
+        - statistics and reporting
+        - dataset handling
+        - GUI / usability
+        - CLI / automation
+        - other
+    validations:
+      required: true
+
+  - type: markdown
+    attributes:
+      value: |
+        If this is a whole new task family, note that VisionForge already lets
+        you define one in a single Python file — `visionforge new-task`, see
+        [`user_tasks/README.md`](../../user_tasks/README.md). A request still
+        makes sense if the task deserves to ship built in.

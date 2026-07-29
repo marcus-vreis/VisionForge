@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { fetchSystemInfo } from "../api/client";
 
 function Logo() {
   return (
@@ -50,10 +51,19 @@ function Logo() {
 /** Top header with logo, brand name, and clock. Device selection lives only in the BottomBar. */
 export function Header() {
   const [time, setTime] = useState(() => new Date());
+  // Read from the backend rather than hardcoded: a screenshot of a bug then
+  // carries the version that produced it, and the two can never drift.
+  const [version, setVersion] = useState("");
 
   useEffect(() => {
     const id = setInterval(() => setTime(new Date()), 30_000);
     return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    fetchSystemInfo()
+      .then((info) => setVersion(info.version))
+      .catch(() => setVersion(""));
   }, []);
 
   const dateStr = time.toLocaleDateString("pt-BR", {
@@ -111,7 +121,7 @@ export function Header() {
               marginTop: 4,
             }}
           >
-            local ai studio · v0.0.1
+            local ai studio{version ? ` · v${version}` : ""}
           </div>
         </div>
       </div>

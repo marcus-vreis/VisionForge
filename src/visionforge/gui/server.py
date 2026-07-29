@@ -9,11 +9,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from loguru import logger
 
+from visionforge import __version__
 from visionforge.gui.api.routes import router as api_router
 
 STATIC_DIR = Path(__file__).parent / "static"
 
-app = FastAPI(title="VisionForge", version="0.0.1")
+app = FastAPI(title="VisionForge", version=__version__)
 
 app.add_middleware(
     CORSMiddleware,

@@ -1427,3 +1427,53 @@ layout. Nothing is synthesised; the only local work is file arrangement.
   over 1500 faces does not learn age; this validates that the pipeline runs,
   not that the model is good. The distinction is the whole point of the "what
   this is not" section in `TRAINING_PLAN.md`.
+
+---
+
+## ADR-066 — One source of truth for the version; v0.1.0 as the first release
+
+**Date:** 2026-07-29
+**Status:** Accepted — shipped 2026-07-29
+
+**Context:** the project had shipped 65 ADRs, five task families, a custom-task
+SDK and 1274 tests while still declaring `version = "0.0.1"`, never tagged. The
+string was also duplicated in four places — `pyproject.toml`, `CITATION.cff`,
+`gui/server.py` and a hardcoded `v0.0.1` in the React header — and
+`bump-my-version` was configured to rewrite only the first, so any bump would
+have silently shipped three stale versions.
+
+**Decisions:**
+
+1. **`0.1.0`, not `1.0.0`.** Below 1.0 says the config schema and HTTP API may
+   still change between minor releases, which is true and worth saying out
+   loud. `schema_version` + migrations (ADR-039) already keep old configs
+   loadable across that churn, so the promise costs users nothing.
+
+2. **The package reads its own installed metadata.** `visionforge.__version__`
+   comes from `importlib.metadata`, and `server.py`, the CLI and the
+   `/api/system/info` payload all read that. Only two files can now hold a
+   literal — `pyproject.toml`, which *is* the metadata, and `CITATION.cff`,
+   which is a data file that cannot import anything — and `bump-my-version`
+   rewrites both plus the changelog heading.
+
+3. **`visionforge --version`, and the version in the GUI header from the API.**
+   A bug report without a version costs a round-trip; a screenshot of the GUI
+   now carries the version that produced it.
+
+**Also fixed, found while checking the first-run path:** `visionforge doctor`
+derived its whole recommendation from `nvidia-smi`. On a machine where that
+binary is not on PATH but torch reports a working CUDA build, it announced "No
+CUDA-capable GPU detected", recommended the **CPU wheel**, and then printed
+"environment looks good" — the worst possible answer for a new user, who would
+follow it, get CPU-speed training, and conclude the tool ignores their GPU. The
+torch probe now runs first and is trusted when it says CUDA works. Two
+regression tests pin both directions.
+
+**For external testers:** `.github/ISSUE_TEMPLATE/` asks for
+`visionforge --version` and `visionforge doctor` up front, plus the exported
+YAML; `.github/CONTRIBUTING.md` is a pointer so GitHub's "Contribute" links
+resolve (it only looks at the root, `.github/` or `docs/`);
+`CHANGELOG.md` records what 0.1.0 contains; and the README gained a **Status**
+section stating the known limits — single concurrent training, dataset download
+covering classification only, no K-fold for detection/anomaly, the Windows
+worker cap, dark theme only.
