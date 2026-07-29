@@ -39,10 +39,14 @@ const grid: React.CSSProperties = {
  *  local folder, then point a task's dataset field at the result. */
 export function DatasetDownloadCard({
   accent = "var(--accent-vf)",
+  collapsible = true,
 }: {
   accent?: string;
+  /** False inside the Datasets surface, where the form *is* the content and
+   * a collapse toggle would just hide the only thing on screen. */
+  collapsible?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(!collapsible);
   const [form, setForm] = useState<DatasetDownloadForm>(makeDefaultDatasetForm());
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<DatasetDownloadResponse | null>(null);
@@ -97,27 +101,29 @@ export function DatasetDownloadCard({
     <div style={card}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={sectionLabel}>Baixar dataset (online → pasta local)</div>
-        <button
-          type="button"
-          onClick={() => {
-            setOpen((o) => !o);
-            setMsg(null);
-          }}
-          style={{
-            padding: "6px 12px",
-            background: "var(--accent-soft)",
-            border: `1px solid ${accent}`,
-            borderRadius: 8,
-            color: "var(--vf-text)",
-            fontFamily: "var(--font-mono)",
-            fontSize: 11,
-            cursor: "pointer",
-            letterSpacing: "0.10em",
-            textTransform: "uppercase",
-          }}
-        >
-          {open ? "cancelar" : "+ baixar dataset"}
-        </button>
+        {collapsible && (
+          <button
+            type="button"
+            onClick={() => {
+              setOpen((o) => !o);
+              setMsg(null);
+            }}
+            style={{
+              padding: "6px 12px",
+              background: "var(--accent-soft)",
+              border: `1px solid ${accent}`,
+              borderRadius: 8,
+              color: "var(--vf-text)",
+              fontFamily: "var(--font-mono)",
+              fontSize: 11,
+              cursor: "pointer",
+              letterSpacing: "0.10em",
+              textTransform: "uppercase",
+            }}
+          >
+            {open ? "cancelar" : "+ baixar dataset"}
+          </button>
+        )}
       </div>
 
       {open && (

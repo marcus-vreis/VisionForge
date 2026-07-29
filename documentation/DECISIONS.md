@@ -1265,3 +1265,70 @@ It asserts the field, its documented default and its shared description exist
 everywhere; that the value reaches `_seed_everything` for regression,
 segmentation and anomaly; that it reaches Ultralytics' `train` kwargs; and that
 the torchvision detection backend is seeded at all.
+
+---
+
+## ADR-063 — History by task family, selection-driven actions, Datasets as its own surface
+
+**Date:** 2026-07-29
+**Status:** Accepted — shipped 2026-07-29
+**Extends:** ADR-059 (canonical panel contract), ADR-055 (dataset download)
+
+**Context:** four defects reported from real use, all in the same area — the
+history overlay had grown past what its layout could carry, and the dataset
+download had been placed inside every task panel.
+
+**Decisions:**
+
+1. **A tab per task family, not a chip per task value.** The task filter was a
+   chip row that clipped its own options off both edges once a fourth task
+   existed. It is now a tab row above the list, one tab per family with its run
+   count, and the task is navigation rather than a filter competing for space
+   with status, block and sort.
+
+   The grouping key is a *family*, derived by `taskFamily()`, not `run.task`.
+   `run.task` is not the family: classification runs record their problem type
+   (`binary`, `multiclass`, `multilabel`) because that is what the
+   classification config's `task` field means, while the standalone tasks
+   record the family itself. Grouping on the raw value produced a "BINARY" and
+   a "MULTICLASS" tab — neither of which is a task anyone selects. Custom tasks
+   (ADR-058) keep one tab each, labelled with their own key.
+
+2. **Status and block become dropdowns.** Same overflow, worse: `bloco` reaches
+   seven values. A chip per value is fine for three and unusable for ten, and
+   the options are now scoped to the active tab so a tab never offers a filter
+   that would empty its own list.
+
+3. **One selection mode drives both delete and compare.** Separate "compare
+   mode" and "delete mode" toggles would make the researcher declare intent
+   before picking runs, which is backwards — you pick the runs, then decide.
+   Selecting reveals `🗑 Excluir N` (1+) and `↔ Comparar N` (2+). The
+   confirmation names every run being deleted, however many: "excluir 12 runs"
+   without the list is a destructive action taken on trust. Deletion is
+   sequential, and a partial failure keeps the runs that survived on screen
+   with the reason.
+
+4. **Deleting no longer closes the history.** The confirmation modal renders
+   inside the overlay's backdrop, whose `onClick` is `onClose`. Every click in
+   the dialog — including Cancel and Confirm — bubbled to it, so any delete
+   attempt dismissed the whole history. The modal layer now stops propagation.
+   The comment above it claimed the opposite behaviour, which is how it
+   survived review.
+
+5. **Datasets is a surface of its own.** The download form rendered at the
+   bottom of all five task panels: five copies of one global action, each
+   pushing the panel it belonged to further down. A dataset is not owned by a
+   task — you fetch it once and then point whichever panel you like at the
+   folder. It now opens from the bottom bar next to History
+   (`DatasetsOverlay`), and `DatasetDownloadCard` takes a `collapsible` prop so
+   the standalone surface skips a toggle that would hide its only content.
+
+**Rejected:** a top-level "Datasets" entry in the task tab bar. That bar is the
+task selector — its state drives which config is built, which schema is
+validated and what Treinar submits. A tab there that is not a task would have
+to be special-cased in each of those, to place one form.
+
+**Verified live** against the researcher's own 92 runs: tabs read
+Classificação 79 / Detecção 4 / example_counting 9 (was BINARY 61 /
+MULTICLASS 18); selecting two runs offers compare and delete; the confirmation
+lists both names; cancelling leaves the history open on the same tab.

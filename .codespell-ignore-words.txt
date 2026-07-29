@@ -35,3 +35,6 @@ exata
 componentes
 implemente
 variantes
+oficial
+valeu
+sequencial

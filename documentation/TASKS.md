@@ -735,6 +735,23 @@ vocabulary grid/random search already used, so the overlay's progress bar
 tracks real trials instead of a synthetic time crawl. Remaining follow-up:
 Treinar respeitar a estratégia selecionada.
 
+**GUI sweep — histórico e datasets ✅ (ADR-063, 2026-07-29, user-reported):**
+abas por família de task no histórico (a linha de chips cortava as opções nas
+duas bordas; e agrupar por `run.task` cru produzia abas "BINARY"/"MULTICLASS",
+que não são tasks que alguém escolhe — `taskFamily()` mapeia para a família);
+`status` e `bloco` viram dropdowns escopados à aba ativa; **um** modo de
+seleção passa a servir exclusão *e* comparação (🗑 a partir de 1, ↔ a partir
+de 2), com o diálogo nomeando cada run e exclusão sequencial que reporta falha
+parcial; **excluir não fecha mais o histórico** (o modal renderizava dentro do
+backdrop cujo `onClick` é `onClose`, então todo clique nele — inclusive
+Cancelar — fechava tudo); e o download de dataset saiu dos cinco painéis para
+uma superfície própria (`DatasetsOverlay`) ao lado do histórico.
+
+**Plano de treinamento máximo ✅ (2026-07-29)** — `documentation/TRAINING_PLAN.md`:
+matriz oficial de modelos × estratégias por task (conferida contra as rotas da
+API, com as ausências justificadas) em quatro camadas de custo crescente
+P0→P3, cada uma terminando num estado defensável.
+
 **Researcher-grade rigor (sequenced follow-ups to ADR-056):**
 - [x] **Determinism parity ✅ (ADR-062, 2026-07-28)** — `training.deterministic`
   in all five tasks + the custom-task SDK, wired to

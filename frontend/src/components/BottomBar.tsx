@@ -2,6 +2,7 @@ import { DeviceSelector, type DeviceSelection } from "./DeviceSelector";
 
 interface BottomBarProps {
   onHistory: () => void;
+  onDatasets: () => void;
   onTrain: () => void;
   disabled: boolean;
   historyCount: number;
@@ -21,6 +22,7 @@ interface BottomBarProps {
 /** Fixed bottom action bar with History, Treinar, and device selector. */
 export function BottomBar({
   onHistory,
+  onDatasets,
   onTrain,
   disabled,
   historyCount,
@@ -73,6 +75,7 @@ export function BottomBar({
         boxShadow: "0 30px 80px rgba(0,0,0,0.5)",
       }}
     >
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
       <button
         type="button"
         onClick={onHistory}
@@ -110,6 +113,31 @@ export function BottomBar({
           </span>
         )}
       </button>
+
+      <button
+        type="button"
+        onClick={onDatasets}
+        title="Baixar um dataset para uma pasta local"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          padding: "10px 16px",
+          background: "rgba(255,255,255,0.025)",
+          border: "1px solid var(--vf-panel-stroke)",
+          borderRadius: 10,
+          color: "var(--vf-text-dim)",
+          fontFamily: "var(--font-mono)",
+          fontSize: 12,
+          letterSpacing: "0.08em",
+          textTransform: "uppercase",
+          cursor: "pointer",
+        }}
+      >
+        <span style={{ fontSize: 14 }}>⤓</span>
+        datasets
+      </button>
+      </div>
 
       <button
         type="button"

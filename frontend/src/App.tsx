@@ -16,7 +16,7 @@ import type { ReplicatesPayload } from "./lib/replicates-form";
 import { BottomBar } from "./components/BottomBar";
 import type { DeviceSelection } from "./components/DeviceSelector";
 import { Header } from "./components/Header";
-import { DatasetDownloadCard } from "./components/DatasetDownloadCard";
+import { DatasetsOverlay } from "./components/DatasetsOverlay";
 import { HistoryOverlay } from "./components/HistoryOverlay";
 import { ParamPanel } from "./components/ParamPanel";
 import { DetectionPanel } from "./components/DetectionPanel";
@@ -81,6 +81,7 @@ export default function App() {
     gpu_ids: null,
   });
   const [showHistory, setShowHistory] = useState(false);
+  const [showDatasets, setShowDatasets] = useState(false);
   const [historyCount, setHistoryCount] = useState(0);
   const [overlayVisible, setOverlayVisible] = useState(false);
   const [resultsVisible, setResultsVisible] = useState(false);
@@ -522,8 +523,6 @@ export default function App() {
           />
         )}
 
-        {!showResults && <DatasetDownloadCard accent={activeTask.accent} />}
-
         {error && !showOverlay && (
           <div
             style={{
@@ -550,6 +549,7 @@ export default function App() {
 
       <BottomBar
         onHistory={() => setShowHistory(true)}
+        onDatasets={() => setShowDatasets(true)}
         onTrain={() => void handleTrain()}
         disabled={status.status === "running"}
         trainLabel={TRAIN_LABELS[activeStrategy] ?? "▶ Treinar"}
@@ -565,6 +565,11 @@ export default function App() {
         open={showHistory}
         onClose={() => setShowHistory(false)}
         onCountChange={setHistoryCount}
+      />
+
+      <DatasetsOverlay
+        open={showDatasets}
+        onClose={() => setShowDatasets(false)}
       />
 
       {runActive && (

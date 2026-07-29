@@ -10,39 +10,7 @@ interface HistoryOverlayProps {
   onCountChange?: (count: number) => void;
 }
 
-/** Small filter chip — used for the task-type filter row. */
-function FilterChip({
-  label,
-  active,
-  onClick,
-}: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        padding: "6px 12px",
-        background: active ? "var(--accent-soft)" : "rgba(255,255,255,0.04)",
-        border: `1px solid ${active ? "var(--accent-vf)" : "var(--vf-panel-stroke)"}`,
-        borderRadius: 999,
-        fontFamily: "var(--font-mono)",
-        fontSize: 10,
-        letterSpacing: "0.12em",
-        textTransform: "uppercase",
-        color: active ? "var(--vf-text)" : "var(--vf-text-dim)",
-        cursor: "pointer",
-      }}
-    >
-      {label}
-    </button>
-  );
-}
-
-/** Inline caption preceding a group of filter chips. */
+/** Inline caption preceding a filter control. */
 function FilterLabel({ children }: { children: React.ReactNode }) {
   return (
     <span
@@ -59,13 +27,179 @@ function FilterLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
+/** Dropdown filter with a fixed footprint.
+ *
+ * These used to be chip rows. A chip per distinct value is fine for three
+ * values and unusable for ten: `bloco` alone reaches classification,
+ * cross_validation, detection, grid_search, random_search, sweep and
+ * replicates, and the row silently clipped its own options off both edges.
+ */
+function FilterSelect({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: string[];
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+      <FilterLabel>{label}</FilterLabel>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        style={{
+          padding: "6px 10px",
+          maxWidth: 190,
+          background: value === "all" ? "rgba(0,0,0,0.35)" : "var(--accent-soft)",
+          border: `1px solid ${value === "all" ? "var(--vf-panel-stroke)" : "var(--accent-vf)"}`,
+          borderRadius: 8,
+          color: "var(--vf-text)",
+          fontFamily: "var(--font-mono)",
+          fontSize: 11,
+          cursor: "pointer",
+        }}
+      >
+        <option value="all">todos</option>
+        {options.map((o) => (
+          <option key={o} value={o}>
+            {o}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 /** Color accent per task type, mirroring the VisionForge oklch palette. */
 const TASK_ACCENT: Record<string, string> = {
   classification: "oklch(0.74 0.18 22)",
   detection: "oklch(0.78 0.18 150)",
   regression: "oklch(0.74 0.16 240)",
   segmentation: "oklch(0.74 0.18 305)",
+  anomaly: "oklch(0.80 0.15 75)",
 };
+
+/** Tab label per task family; custom tasks (ADR-058) keep their own key. */
+const FAMILY_LABELS: Record<string, string> = {
+  classification: "Classificação",
+  detection: "Detecção",
+  regression: "Regressão",
+  segmentation: "Segmentação",
+  anomaly: "Anomalia",
+};
+
+/** Order the family tabs the way the app's own task bar orders them, so the
+ * history reads like the rest of the GUI instead of alphabetically. */
+const FAMILY_ORDER = [
+  "classification",
+  "detection",
+  "regression",
+  "segmentation",
+  "anomaly",
+];
+
+/** Map a run's `task` onto the family it belongs to.
+ *
+ * `run.task` is not the family: classification runs record their *problem*
+ * type (`binary`, `multiclass`, `multilabel`) because that is what the
+ * classification config's `task` field means, while the standalone tasks
+ * record the family itself. Grouping on the raw value split classification
+ * into a "BINARY" and a "MULTICLASS" tab, which is not a task anyone chose.
+ */
+function taskFamily(task: string): string {
+  if (task.startsWith("custom:")) return task;
+  if (FAMILY_LABELS[task] !== undefined && task !== "classification") return task;
+  return "classification";
+}
+
+function familyLabel(family: string): string {
+  if (family.startsWith("custom:")) return family.slice("custom:".length);
+  return FAMILY_LABELS[family] ?? family;
+}
+
+/** One history tab per task, each scoped to that task's runs.
+ *
+ * Replaces the task chip row: a researcher looks for "that detection run",
+ * not for a run among all tasks, so the task is navigation rather than a
+ * filter competing for space with status, block and sort.
+ */
+function TaskTabs({
+  tasks,
+  counts,
+  active,
+  onSelect,
+  total,
+}: {
+  tasks: string[];
+  counts: Record<string, number>;
+  active: string;
+  onSelect: (task: string) => void;
+  total: number;
+}) {
+  const entries: { key: string; label: string; count: number }[] = [
+    { key: "all", label: "Todos", count: total },
+    ...tasks.map((t) => ({ key: t, label: familyLabel(t), count: counts[t] ?? 0 })),
+  ];
+  return (
+    <div
+      style={{
+        display: "flex",
+        gap: 2,
+        overflowX: "auto",
+        scrollbarWidth: "none",
+        borderBottom: "1px solid var(--vf-panel-stroke)",
+        padding: "0 24px",
+        flexShrink: 0,
+      }}
+    >
+      {entries.map((e) => {
+        const on = e.key === active;
+        const accent = e.key === "all" ? "var(--vf-text-dim)" : TASK_ACCENT[e.key] ?? "var(--vf-text-muted)";
+        return (
+          <button
+            key={e.key}
+            type="button"
+            onClick={() => onSelect(e.key)}
+            style={{
+              padding: "10px 14px",
+              whiteSpace: "nowrap",
+              flexShrink: 0,
+              background: "transparent",
+              border: "none",
+              borderBottom: `2px solid ${on ? accent : "transparent"}`,
+              color: on ? "var(--vf-text)" : "var(--vf-text-dim)",
+              fontFamily: "var(--font-mono)",
+              fontSize: 11,
+              letterSpacing: "0.10em",
+              textTransform: "uppercase",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 7,
+            }}
+          >
+            {e.label}
+            <span
+              style={{
+                padding: "1px 6px",
+                borderRadius: 999,
+                background: on ? "rgba(255,255,255,0.10)" : "rgba(255,255,255,0.04)",
+                fontSize: 10,
+                color: "var(--vf-text-dim)",
+              }}
+            >
+              {e.count}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 /** Status dot color — completed is muted green, running is accent, failed is red. */
 function statusColor(status: string): string {
@@ -130,7 +264,10 @@ function RunCard({
   onDelete?: () => void;
   deleting?: boolean;
 }) {
-  const accent = TASK_ACCENT[run.task] ?? "var(--vf-text-muted)";
+  // Keyed by family: a classification run records `binary`/`multiclass`, which
+  // has no accent of its own — the card used to fall back to grey for the most
+  // common task in the list.
+  const accent = TASK_ACCENT[taskFamily(run.task)] ?? "var(--vf-text-muted)";
   const dot = statusColor(run.status);
   // A researcher-defined task (custom:<key>, ADR-058) declares its own metric
   // names, so there is no fixed key list — the backend already projected the
@@ -418,16 +555,16 @@ export function HistoryOverlay({ open, onClose, onCountChange }: HistoryOverlayP
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
-  const [compareMode, setCompareMode] = useState(false);
-  const [compareSelection, setCompareSelection] = useState<string[]>([]);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selection, setSelection] = useState<string[]>([]);
   const [compareActiveIds, setCompareActiveIds] = useState<string[] | null>(null);
   const [query, setQuery] = useState("");
   const [taskFilter, setTaskFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [blockFilter, setBlockFilter] = useState<string>("all");
   const [sortBy, setSortBy] = useState<SortKey>("recent");
-  const [pendingDelete, setPendingDelete] = useState<RunSummary | null>(null);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [pendingDeletes, setPendingDeletes] = useState<RunSummary[] | null>(null);
+  const [deletingIds, setDeletingIds] = useState<string[]>([]);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -435,8 +572,8 @@ export function HistoryOverlay({ open, onClose, onCountChange }: HistoryOverlayP
     setLoading(true);
     setError(null);
     setSelectedRunId(null);
-    setCompareMode(false);
-    setCompareSelection([]);
+    setSelectMode(false);
+    setSelection([]);
     setCompareActiveIds(null);
     setQuery("");
     setTaskFilter("all");
@@ -457,32 +594,56 @@ export function HistoryOverlay({ open, onClose, onCountChange }: HistoryOverlayP
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggleSelect = (runId: string) => {
-    setCompareSelection((prev) =>
+    setSelection((prev) =>
       prev.includes(runId) ? prev.filter((id) => id !== runId) : [...prev, runId],
     );
   };
 
+  /** Delete every run in `pendingDeletes`, one request at a time.
+   *
+   * Sequential rather than parallel: each call is an `rmtree` on the same
+   * disk, and a partial failure has to name the runs that survived, which a
+   * racing `Promise.all` cannot do cleanly. Runs that succeeded are dropped
+   * from the list even when a later one fails, so the view never claims a
+   * deleted run still exists. The overlay stays open either way.
+   */
   const confirmDelete = async () => {
-    if (!pendingDelete) return;
-    const id = pendingDelete.run_id;
-    setDeletingId(id);
+    if (!pendingDeletes || pendingDeletes.length === 0) return;
+    const targets = pendingDeletes.map((r) => r.run_id);
+    setDeletingIds(targets);
     setDeleteError(null);
-    try {
-      await deleteRun(id);
-      // Remove from local list and adjust selections that referenced it.
-      const next = runs.filter((r) => r.run_id !== id);
+
+    const deleted: string[] = [];
+    const failures: string[] = [];
+    for (const id of targets) {
+      try {
+        await deleteRun(id);
+        deleted.push(id);
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : "erro desconhecido";
+        failures.push(`${id}: ${msg}`);
+      }
+    }
+
+    if (deleted.length > 0) {
+      const next = runs.filter((r) => !deleted.includes(r.run_id));
       setRuns(next);
       onCountChange?.(next.length);
-      if (selectedRunId === id) setSelectedRunId(null);
-      setCompareSelection((prev) => prev.filter((rid) => rid !== id));
-      setPendingDelete(null);
-    } catch (e: unknown) {
-      const msg =
-        e instanceof Error ? e.message : "Falha ao excluir o run.";
-      setDeleteError(msg);
-    } finally {
-      setDeletingId(null);
+      if (selectedRunId && deleted.includes(selectedRunId)) setSelectedRunId(null);
+      setSelection((prev) => prev.filter((rid) => !deleted.includes(rid)));
     }
+    setDeletingIds([]);
+
+    if (failures.length > 0) {
+      setDeleteError(
+        `${failures.length} de ${targets.length} não puderam ser excluídos:\n${failures.join("\n")}`,
+      );
+      // Keep the dialog open on the ones that survived so the message has a
+      // subject; dismissing it is the researcher's call.
+      setPendingDeletes(pendingDeletes.filter((r) => !deleted.includes(r.run_id)));
+      return;
+    }
+    setPendingDeletes(null);
   };
 
   // Client-side filter + sort — keeps the list responsive even with hundreds of
@@ -491,7 +652,7 @@ export function HistoryOverlay({ open, onClose, onCountChange }: HistoryOverlayP
     if (runs.length === 0) return runs;
     const q = query.trim().toLowerCase();
     const matches = runs.filter((r) => {
-      if (taskFilter !== "all" && r.task !== taskFilter) return false;
+      if (taskFilter !== "all" && taskFamily(r.task) !== taskFilter) return false;
       if (statusFilter !== "all" && r.status !== statusFilter) return false;
       if (blockFilter !== "all" && (r.block ?? "classification") !== blockFilter)
         return false;
@@ -513,16 +674,36 @@ export function HistoryOverlay({ open, onClose, onCountChange }: HistoryOverlayP
     return sorted;
   })();
 
-  const availableTasks = Array.from(new Set(runs.map((r) => r.task))).sort();
-  const availableStatuses = Array.from(new Set(runs.map((r) => r.status))).sort();
+  const taskCounts = runs.reduce<Record<string, number>>((acc, r) => {
+    const f = taskFamily(r.task);
+    acc[f] = (acc[f] ?? 0) + 1;
+    return acc;
+  }, {});
+  // Built-in families in the GUI's own order, then the researcher's custom
+  // tasks alphabetically after them.
+  const presentFamilies = new Set(Object.keys(taskCounts));
+  const availableTasks = [
+    ...FAMILY_ORDER.filter((f) => presentFamilies.has(f)),
+    ...Array.from(presentFamilies).filter((f) => f.startsWith("custom:")).sort(),
+  ];
+
+  // Status and block options are derived from the runs of the *active tab*, so
+  // a tab never offers a filter that would empty its own list.
+  const tabRuns =
+    taskFilter === "all"
+      ? runs
+      : runs.filter((r) => taskFamily(r.task) === taskFilter);
+  const availableStatuses = Array.from(new Set(tabRuns.map((r) => r.status))).sort();
   const availableBlocks = Array.from(
-    new Set(runs.map((r) => r.block ?? "classification")),
+    new Set(tabRuns.map((r) => r.block ?? "classification")),
   ).sort();
   const activeFilterCount =
     (query !== "" ? 1 : 0) +
-    (taskFilter !== "all" ? 1 : 0) +
     (statusFilter !== "all" ? 1 : 0) +
     (blockFilter !== "all" ? 1 : 0);
+
+  const selectedRuns = runs.filter((r) => selection.includes(r.run_id));
+  const busyDeleting = deletingIds.length > 0;
 
   if (!open) return null;
 
@@ -547,7 +728,9 @@ export function HistoryOverlay({ open, onClose, onCountChange }: HistoryOverlayP
           width:
             selectedRunId || compareActiveIds
               ? "min(960px, 100%)"
-              : "min(640px, 100%)",
+              : // Wide enough for the family tab row not to need scrolling at
+                // the five built-ins plus a custom task.
+                "min(760px, 100%)",
           maxHeight: "85vh",
           background: "rgba(12,14,18,0.95)",
           border: "1px solid var(--vf-panel-stroke)",
@@ -612,19 +795,23 @@ export function HistoryOverlay({ open, onClose, onCountChange }: HistoryOverlayP
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-            {!selectedRunId && !compareActiveIds && runs.length >= 2 && (
+            {/* One selection mode drives both actions. Separate "compare
+                mode" and "delete mode" toggles would make the researcher
+                declare intent before picking runs, which is backwards: you
+                pick the runs, then decide what to do with them. */}
+            {!selectedRunId && !compareActiveIds && runs.length > 0 && (
               <button
                 type="button"
                 onClick={() => {
-                  setCompareMode((m) => !m);
-                  if (compareMode) setCompareSelection([]);
+                  setSelectMode((m) => !m);
+                  if (selectMode) setSelection([]);
                 }}
                 style={{
                   padding: "8px 14px",
-                  background: compareMode ? "oklch(0.78 0.18 150 / 0.18)" : "rgba(255,255,255,0.04)",
-                  border: `1px solid ${compareMode ? "oklch(0.78 0.18 150)" : "var(--vf-panel-stroke)"}`,
+                  background: selectMode ? "oklch(0.78 0.18 150 / 0.18)" : "rgba(255,255,255,0.04)",
+                  border: `1px solid ${selectMode ? "oklch(0.78 0.18 150)" : "var(--vf-panel-stroke)"}`,
                   borderRadius: 10,
-                  color: compareMode ? "oklch(0.88 0.16 150)" : "var(--vf-text-dim)",
+                  color: selectMode ? "oklch(0.88 0.16 150)" : "var(--vf-text-dim)",
                   fontFamily: "var(--font-mono)",
                   fontSize: 11,
                   letterSpacing: "0.10em",
@@ -632,13 +819,13 @@ export function HistoryOverlay({ open, onClose, onCountChange }: HistoryOverlayP
                   cursor: "pointer",
                 }}
               >
-                {compareMode ? "Cancelar comparação" : "↔ Comparar"}
+                {selectMode ? "Cancelar seleção" : "✓ Selecionar"}
               </button>
             )}
-            {compareMode && compareSelection.length >= 2 && (
+            {selectMode && selection.length >= 2 && (
               <button
                 type="button"
-                onClick={() => setCompareActiveIds(compareSelection)}
+                onClick={() => setCompareActiveIds(selection)}
                 style={{
                   padding: "8px 14px",
                   background: "oklch(0.78 0.18 150 / 0.30)",
@@ -653,7 +840,32 @@ export function HistoryOverlay({ open, onClose, onCountChange }: HistoryOverlayP
                   fontWeight: 600,
                 }}
               >
-                Comparar {compareSelection.length}
+                ↔ Comparar {selection.length}
+              </button>
+            )}
+            {selectMode && selection.length >= 1 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setDeleteError(null);
+                  setPendingDeletes(selectedRuns);
+                }}
+                title={`Excluir ${selection.length} run(s) permanentemente`}
+                style={{
+                  padding: "8px 14px",
+                  background: "oklch(0.704 0.191 22.216 / 0.18)",
+                  border: "1px solid oklch(0.78 0.16 22)",
+                  borderRadius: 10,
+                  color: "oklch(0.92 0.12 22)",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 11,
+                  letterSpacing: "0.10em",
+                  textTransform: "uppercase",
+                  cursor: "pointer",
+                  fontWeight: 600,
+                }}
+              >
+                🗑 Excluir {selection.length}
               </button>
             )}
             <button
@@ -677,6 +889,28 @@ export function HistoryOverlay({ open, onClose, onCountChange }: HistoryOverlayP
             </button>
           </div>
         </div>
+
+        {/* One tab per task — the researcher navigates by task, then filters
+            inside it. Hidden while a run detail or a comparison is open. */}
+        {!selectedRunId &&
+          !compareActiveIds &&
+          !loading &&
+          error === null &&
+          availableTasks.length > 1 && (
+            <TaskTabs
+              tasks={availableTasks}
+              counts={taskCounts}
+              active={taskFilter}
+              onSelect={(t) => {
+                setTaskFilter(t);
+                // Both are scoped to the tab; carrying them across would show
+                // an empty list under a filter the new tab cannot satisfy.
+                setStatusFilter("all");
+                setBlockFilter("all");
+              }}
+              total={runs.length}
+            />
+          )}
 
         {/* Body */}
         <div style={{ flex: 1, overflowY: "auto", padding: "16px 24px 24px" }}>
@@ -790,8 +1024,8 @@ export function HistoryOverlay({ open, onClose, onCountChange }: HistoryOverlayP
               runIds={compareActiveIds}
               onBack={() => {
                 setCompareActiveIds(null);
-                setCompareMode(false);
-                setCompareSelection([]);
+                setSelectMode(false);
+                setSelection([]);
               }}
             />
           )}
@@ -804,8 +1038,9 @@ export function HistoryOverlay({ open, onClose, onCountChange }: HistoryOverlayP
             />
           )}
 
-          {/* Compare mode tip */}
-          {!selectedRunId && !compareActiveIds && compareMode && (
+          {/* Selection-mode tip — states what each count unlocks, because the
+              two actions have different thresholds (delete 1+, compare 2+). */}
+          {!selectedRunId && !compareActiveIds && selectMode && (
             <div
               style={{
                 padding: "10px 14px",
@@ -818,8 +1053,9 @@ export function HistoryOverlay({ open, onClose, onCountChange }: HistoryOverlayP
                 color: "oklch(0.88 0.16 150)",
               }}
             >
-              Modo comparação ativo — marque 2 ou mais runs e clique em
-              "Comparar N".
+              {selection.length === 0
+                ? "Modo seleção — marque os runs que quer excluir ou comparar."
+                : `${selection.length} selecionado(s) — 🗑 exclui; ↔ compara a partir de 2.`}
             </div>
           )}
 
@@ -878,23 +1114,6 @@ export function HistoryOverlay({ open, onClose, onCountChange }: HistoryOverlayP
                   </button>
                 )}
               </div>
-              {availableTasks.length > 1 && (
-                <div style={{ display: "flex", gap: 6 }}>
-                  <FilterChip
-                    label="todos"
-                    active={taskFilter === "all"}
-                    onClick={() => setTaskFilter("all")}
-                  />
-                  {availableTasks.map((t) => (
-                    <FilterChip
-                      key={t}
-                      label={t}
-                      active={taskFilter === t}
-                      onClick={() => setTaskFilter(t)}
-                    />
-                  ))}
-                </div>
-              )}
               {activeFilterCount > 0 && (
                 <span
                   style={{
@@ -922,40 +1141,20 @@ export function HistoryOverlay({ open, onClose, onCountChange }: HistoryOverlayP
               }}
             >
               {availableStatuses.length > 1 && (
-                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                  <FilterLabel>status</FilterLabel>
-                  <FilterChip
-                    label="todos"
-                    active={statusFilter === "all"}
-                    onClick={() => setStatusFilter("all")}
-                  />
-                  {availableStatuses.map((s) => (
-                    <FilterChip
-                      key={s}
-                      label={s}
-                      active={statusFilter === s}
-                      onClick={() => setStatusFilter(s)}
-                    />
-                  ))}
-                </div>
+                <FilterSelect
+                  label="status"
+                  value={statusFilter}
+                  options={availableStatuses}
+                  onChange={setStatusFilter}
+                />
               )}
               {availableBlocks.length > 1 && (
-                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                  <FilterLabel>bloco</FilterLabel>
-                  <FilterChip
-                    label="todos"
-                    active={blockFilter === "all"}
-                    onClick={() => setBlockFilter("all")}
-                  />
-                  {availableBlocks.map((b) => (
-                    <FilterChip
-                      key={b}
-                      label={b}
-                      active={blockFilter === b}
-                      onClick={() => setBlockFilter(b)}
-                    />
-                  ))}
-                </div>
+                <FilterSelect
+                  label="bloco"
+                  value={blockFilter}
+                  options={availableBlocks}
+                  onChange={setBlockFilter}
+                />
               )}
               <div
                 style={{
@@ -1013,14 +1212,14 @@ export function HistoryOverlay({ open, onClose, onCountChange }: HistoryOverlayP
                     key={run.run_id}
                     run={run}
                     onClick={() => setSelectedRunId(run.run_id)}
-                    selectable={compareMode}
-                    selected={compareSelection.includes(run.run_id)}
+                    selectable={selectMode}
+                    selected={selection.includes(run.run_id)}
                     onToggleSelect={() => toggleSelect(run.run_id)}
                     onDelete={() => {
                       setDeleteError(null);
-                      setPendingDelete(run);
+                      setPendingDeletes([run]);
                     }}
-                    deleting={deletingId === run.run_id}
+                    deleting={deletingIds.includes(run.run_id)}
                   />
                 ))
               )}
@@ -1029,13 +1228,16 @@ export function HistoryOverlay({ open, onClose, onCountChange }: HistoryOverlayP
         </div>
       </div>
 
-      {/* Delete confirmation modal — separate layer above the history sheet
-          so its backdrop click closes the dialog, not the history. */}
-      {pendingDelete && (
+      {/* Delete confirmation modal — a layer above the history sheet. It sits
+          inside the overlay's backdrop, whose onClick closes the history, so
+          every click in here must stop propagating: without it, confirming or
+          cancelling a delete also closed the whole history. */}
+      {pendingDeletes && pendingDeletes.length > 0 && (
         <div
           onClick={(e) => {
-            if (e.target === e.currentTarget && !deletingId) {
-              setPendingDelete(null);
+            e.stopPropagation();
+            if (e.target === e.currentTarget && deletingIds.length === 0) {
+              setPendingDeletes(null);
               setDeleteError(null);
             }
           }}
@@ -1071,13 +1273,38 @@ export function HistoryOverlay({ open, onClose, onCountChange }: HistoryOverlayP
                 color: "oklch(0.78 0.16 22)",
               }}
             >
-              // excluir run permanentemente
+              // excluir {pendingDeletes.length === 1 ? "run" : `${pendingDeletes.length} runs`}{" "}
+              permanentemente
             </div>
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--vf-text)" }}>
-              {pendingDelete.experiment_name}
-              <span style={{ color: "var(--vf-text-muted)", marginLeft: 6 }}>
-                · {pendingDelete.model_arch}
-              </span>
+            {/* Every run is named, however many: "excluir 12 runs" without the
+                list is a destructive action taken on trust. Scrolls past ~6. */}
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 4,
+                maxHeight: 168,
+                overflowY: "auto",
+              }}
+            >
+              {pendingDeletes.map((r) => (
+                <div
+                  key={r.run_id}
+                  style={{
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 12,
+                    color: "var(--vf-text)",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {r.experiment_name}
+                  <span style={{ color: "var(--vf-text-muted)", marginLeft: 6 }}>
+                    · {r.model_arch}
+                  </span>
+                </div>
+              ))}
             </div>
             <div
               style={{
@@ -1087,8 +1314,9 @@ export function HistoryOverlay({ open, onClose, onCountChange }: HistoryOverlayP
                 lineHeight: 1.6,
               }}
             >
-              A pasta do run, checkpoint e todos os plots/relatórios serão
-              removidos do disco. Esta ação é irreversível.
+              {pendingDeletes.length === 1 ? "A pasta do run" : "As pastas dos runs"},
+              checkpoints e todos os plots/relatórios serão removidos do disco.
+              Esta ação é irreversível.
             </div>
             {deleteError && (
               <div
@@ -1109,10 +1337,10 @@ export function HistoryOverlay({ open, onClose, onCountChange }: HistoryOverlayP
               <button
                 type="button"
                 onClick={() => {
-                  setPendingDelete(null);
+                  setPendingDeletes(null);
                   setDeleteError(null);
                 }}
-                disabled={!!deletingId}
+                disabled={busyDeleting}
                 style={{
                   padding: "9px 16px",
                   background: "transparent",
@@ -1123,16 +1351,16 @@ export function HistoryOverlay({ open, onClose, onCountChange }: HistoryOverlayP
                   fontSize: 11,
                   letterSpacing: "0.10em",
                   textTransform: "uppercase",
-                  cursor: deletingId ? "not-allowed" : "pointer",
-                  opacity: deletingId ? 0.5 : 1,
+                  cursor: busyDeleting ? "not-allowed" : "pointer",
+                  opacity: busyDeleting ? 0.5 : 1,
                 }}
               >
-                Cancelar
+                {deleteError ? "Fechar" : "Cancelar"}
               </button>
               <button
                 type="button"
                 onClick={() => void confirmDelete()}
-                disabled={!!deletingId}
+                disabled={busyDeleting}
                 style={{
                   padding: "9px 16px",
                   background: "oklch(0.704 0.191 22.216 / 0.20)",
@@ -1144,11 +1372,13 @@ export function HistoryOverlay({ open, onClose, onCountChange }: HistoryOverlayP
                   letterSpacing: "0.10em",
                   textTransform: "uppercase",
                   fontWeight: 600,
-                  cursor: deletingId ? "wait" : "pointer",
-                  opacity: deletingId ? 0.7 : 1,
+                  cursor: busyDeleting ? "wait" : "pointer",
+                  opacity: busyDeleting ? 0.7 : 1,
                 }}
               >
-                {deletingId ? "Excluindo…" : "🗑 Excluir"}
+                {busyDeleting
+                  ? "Excluindo…"
+                  : `🗑 Excluir${pendingDeletes.length > 1 ? ` ${pendingDeletes.length}` : ""}`}
               </button>
             </div>
           </div>
