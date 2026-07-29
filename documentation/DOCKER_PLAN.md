@@ -119,7 +119,7 @@ README section, and the containerized folder-picker behaviour with tests.
 
 | Check | Result |
 |---|---|
-| `docker build` (CPU variant) | ✅ 509 MB |
+| `docker build` (CPU variant) | ✅ 2.36 GB on disk / 509 MB compressed |
 | `uv python install 3.13` in-image | ✅ |
 | SPA copied from the web stage | ✅ 42 files |
 | `visionforge selftest --quick` inside | ✅ 5/5 |
@@ -128,14 +128,42 @@ README section, and the containerized folder-picker behaviour with tests.
 | Headless folder picker explains itself | ✅ names the mounted path |
 | Runs as uid 1000, workdir `/work` | ✅ |
 
-The CPU image dropped from **6.01 GB to 509 MB** once `BASE_IMAGE` let it start
-from `ubuntu:22.04` instead of inheriting the CUDA runtime — a 12x cut for a
-variant that never loads a driver library.
+The CPU image dropped from **6.01 GB to 2.36 GB on disk** once `BASE_IMAGE`
+let it start from `ubuntu:22.04` instead of inheriting the CUDA runtime — a
+2.5x cut for a variant that never loads a driver library.
+
+Two size numbers exist and answer different questions: `docker images` reports
+the unpacked size on disk (2.36 GB), `docker image inspect .Size` the sum of
+compressed layer blobs, i.e. the download (509 MB). Comparing one against the
+other overstates the win, which is how this first got written down as 12x.
+
+### Verified on the GPU image (cu128, RTX 5060 Ti)
+
+| Check | Result |
+|---|---|
+| `docker run --gpus all` sees the card | ✅ RTX 5060 Ti, driver 610.53 |
+| `torch.cuda.is_available()` | ✅ |
+| A kernel actually launches | ✅ 512×512 matmul on device |
+| `arch_list` covers this card | ✅ sm_75 … sm_120, capability (12, 0) |
+| `visionforge selftest --quick` | ✅ 5/5 |
+| `visionforge doctor` inside | ✅ "GPU usable via torch; nvidia-smi not on PATH" |
+
+The last row is the ADR-066 fix paying off in the case it was written for: the
+CUDA *runtime* image does not ship `nvidia-smi`, so a doctor that trusted only
+that probe would have told a working GPU container to install the CPU wheel.
+
+Size: 18.4 GB on disk / 6.56 GB compressed. CUDA is expensive; the CPU variant
+exists precisely so nobody pays that who does not need to.
+
+**cu128 became the default.** Its kernels span sm_75 (Turing) through sm_120
+(Blackwell) — strictly more hardware than cu124, which ships no sm_120 kernel
+and therefore imports fine, reports the GPU, and fails at the first kernel
+launch on any RTX 50-series card. `cu128` was also missing from the project's
+hardware extras and from `doctor`'s thresholds, so that misconfiguration was
+being actively recommended to those users.
 
 ### Still unverified
 
-- The **GPU variant**: `--gpus all` and `torch.cuda.is_available()` inside the
-  image. Needs a host with `nvidia-container-toolkit` configured for Docker.
 - Files written into a mounted `outputs/` being usable from a Linux host (uid
   1000 maps cleanly there; Docker Desktop on Windows virtualizes ownership, so
   testing it here would not prove the Linux case).

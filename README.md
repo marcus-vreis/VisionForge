@@ -105,7 +105,8 @@ docker compose --profile cpu up      # machines without a GPU
 your own code live on the host, not inside the image. Saved provider keys
 persist in a named volume.
 
-The CUDA build is a build arg, not a hardcoded base, so one Dockerfile serves
+The default is CUDA 12.8, whose kernels span Turing through Blackwell. The
+build is a build arg rather than a hardcoded base, so one Dockerfile serves
 every supported version:
 
 ```bash

@@ -26,7 +26,9 @@ class TestSelectWheelTag:
         ("driver_ver", "expected_tag"),
         [
             ("12.6", "cu126"),
-            ("12.8", "cu126"),  # above highest supported → clamp to cu126
+            ("12.7", "cu126"),  # between 12.6 and 12.8 → cu126
+            ("12.8", "cu128"),
+            ("13.3", "cu128"),  # above highest supported → clamp to cu128
             ("12.4", "cu124"),
             ("12.5", "cu124"),  # between 12.4 and 12.6 → cu124
             ("12.1", "cu121"),
@@ -39,6 +41,17 @@ class TestSelectWheelTag:
     )
     def test_mapping(self, driver_ver: str | None, expected_tag: str) -> None:
         assert select_wheel_tag(driver_ver) == expected_tag
+
+    def test_blackwell_drivers_get_cu128_not_an_older_wheel(self) -> None:
+        """RTX 50-series is compute capability 12.0, and no wheel before cu128
+        ships an sm_120 kernel.
+
+        An earlier build imports fine and reports the GPU, then fails at the
+        first kernel launch — exactly the silent misconfiguration doctor exists
+        to prevent, so the mapping must not stop below cu128.
+        """
+        assert select_wheel_tag("12.8") == "cu128"
+        assert select_wheel_tag("13.0") == "cu128"
 
 
 # ---------------------------------------------------------------------------

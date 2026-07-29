@@ -10,7 +10,7 @@ requires-python = ">=3.13"
 dependencies = [
 
   # NOTE: torch + torchvision are intentionally NOT here (ADR-005). They have
-  # hardware-specific builds (CPU / cu118 / cu121 / cu124 / cu126) that a
+  # hardware-specific builds (CPU / cu118 / cu121 / cu124 / cu126 / cu128) that a
   # resolver cannot pick correctly, so the user chooses one via a hardware
   # extra — e.g. `pip install -e ".[cu121]"` (GPU) or `".[cpu]"` (CPU-only).
 
@@ -41,13 +41,16 @@ Documentation = "https://github.com/marcus-vreis/VisionForge/tree/main/documenta
 [project.optional-dependencies]
 # Hardware extras (ADR-005): pick exactly ONE to install torch + torchvision
 # from the matching index configured under [tool.uv.sources] below.
-#   pip install -e ".[cu121]"   # NVIDIA CUDA 12.1   (or cu118 / cu124 / cu126)
+#   pip install -e ".[cu121]"   # NVIDIA CUDA 12.1   (or cu118 / cu124 / cu126 / cu128)
+#   RTX 50-series (Blackwell, sm_120) needs cu128 — earlier wheels carry no
+#   kernel for it, so they see the GPU and then fail to run on it.
 #   pip install -e ".[cpu]"     # CPU-only
 cpu = ["torch>=2.3", "torchvision>=0.18"]
 cu118 = ["torch>=2.3", "torchvision>=0.18"]
 cu121 = ["torch>=2.3", "torchvision>=0.18"]
 cu124 = ["torch>=2.3", "torchvision>=0.18"]
 cu126 = ["torch>=2.3", "torchvision>=0.18"]
+cu128 = ["torch>=2.3", "torchvision>=0.18"]
 # Object detection (Phase 7). Ultralytics drives YOLO/RT-DETR training; it pulls
 # torch/torchvision, which still come from the hardware extra the user selected.
 detection = [
@@ -220,23 +223,30 @@ name = "pytorch-cu126"
 url = "https://download.pytorch.org/whl/cu126"
 explicit = true
 
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
 [tool.uv.sources]
 torch = [
   { index = "pytorch-cu118", marker = "extra == 'cu118'" },
   { index = "pytorch-cu121", marker = "extra != 'cu118' and extra == 'cu121'" },
   { index = "pytorch-cu124", marker = "extra != 'cu118' and extra != 'cu121' and extra == 'cu124'" },
   { index = "pytorch-cu126", marker = "extra != 'cu118' and extra != 'cu121' and extra != 'cu124' and extra == 'cu126'" },
-  { index = "pytorch-cpu", marker = "extra != 'cu118' and extra != 'cu121' and extra != 'cu124' and extra != 'cu126' and extra == 'cpu'" },
+  { index = "pytorch-cu128", marker = "extra != 'cu118' and extra != 'cu121' and extra != 'cu124' and extra != 'cu126' and extra == 'cu128'" },
+  { index = "pytorch-cpu", marker = "extra != 'cu118' and extra != 'cu121' and extra != 'cu124' and extra != 'cu126' and extra != 'cu128' and extra == 'cpu'" },
   # Default when no hardware extra is selected: CPU (wheels exist for every
   # supported Python incl. 3.13). GPU users opt in explicitly via .[cu121] etc.
-  { index = "pytorch-cpu", marker = "extra != 'cu118' and extra != 'cu121' and extra != 'cu124' and extra != 'cu126' and extra != 'cpu'" },
+  { index = "pytorch-cpu", marker = "extra != 'cu118' and extra != 'cu121' and extra != 'cu124' and extra != 'cu126' and extra != 'cu128' and extra != 'cpu'" },
 ]
 torchvision = [
   { index = "pytorch-cu118", marker = "extra == 'cu118'" },
   { index = "pytorch-cu121", marker = "extra != 'cu118' and extra == 'cu121'" },
   { index = "pytorch-cu124", marker = "extra != 'cu118' and extra != 'cu121' and extra == 'cu124'" },
   { index = "pytorch-cu126", marker = "extra != 'cu118' and extra != 'cu121' and extra != 'cu124' and extra == 'cu126'" },
-  { index = "pytorch-cpu", marker = "extra != 'cu118' and extra != 'cu121' and extra != 'cu124' and extra != 'cu126' and extra == 'cpu'" },
+  { index = "pytorch-cu128", marker = "extra != 'cu118' and extra != 'cu121' and extra != 'cu124' and extra != 'cu126' and extra == 'cu128'" },
+  { index = "pytorch-cpu", marker = "extra != 'cu118' and extra != 'cu121' and extra != 'cu124' and extra != 'cu126' and extra != 'cu128' and extra == 'cpu'" },
   # Default when no hardware extra is selected: CPU (see torch block above).
-  { index = "pytorch-cpu", marker = "extra != 'cu118' and extra != 'cu121' and extra != 'cu124' and extra != 'cu126' and extra != 'cpu'" },
+  { index = "pytorch-cpu", marker = "extra != 'cu118' and extra != 'cu121' and extra != 'cu124' and extra != 'cu126' and extra != 'cu128' and extra != 'cpu'" },
 ]

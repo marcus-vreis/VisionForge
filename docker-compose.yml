@@ -13,9 +13,11 @@ services:
       context: .
       args:
         # Change both together — the wheel tag and the CUDA runtime it needs.
-        CUDA_TAG: cu124
-        BASE_IMAGE: nvidia/cuda:12.4.1-runtime-ubuntu22.04
-    image: visionforge:cu124
+        # cu128 spans sm_75 (Turing) to sm_120 (Blackwell); cu124 has no sm_120
+        # kernel, so an RTX 50-series card sees the GPU and then cannot use it.
+        CUDA_TAG: cu128
+        BASE_IMAGE: nvidia/cuda:12.8.1-runtime-ubuntu22.04
+    image: visionforge:cu128
     ports:
       - "8000:8000"
     volumes:

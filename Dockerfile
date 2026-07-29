@@ -9,7 +9,7 @@
 # shipping one image per CUDA version is a maintenance tax and picking a single
 # one strands everybody else:
 #
-#   docker build -t visionforge .                          # default: CUDA 12.4
+#   docker build -t visionforge .                          # default: CUDA 12.8
 #   docker build --build-arg CUDA_TAG=cu126 \
 #                --build-arg BASE_IMAGE=nvidia/cuda:12.6.3-runtime-ubuntu22.04 \
 #                -t visionforge:cu126 .
@@ -26,7 +26,7 @@
 # Declared before the first FROM on purpose: an ARG used *in* a FROM must be in
 # the global scope. Declaring it next to the stage it belongs to reads better
 # and does not work — the value is empty there and the tag fails to parse.
-ARG BASE_IMAGE=nvidia/cuda:12.4.1-runtime-ubuntu22.04
+ARG BASE_IMAGE=nvidia/cuda:12.8.1-runtime-ubuntu22.04
 
 # ── stage 1: build the SPA ────────────────────────────────────────────────────
 # Node exists only here. The runtime stage copies the built assets, so the
@@ -48,7 +48,12 @@ FROM ${BASE_IMAGE} AS runtime
 
 # Repeated after FROM on purpose: an ARG declared before FROM is out of scope
 # in the stage body.
-ARG CUDA_TAG=cu124
+# cu128 is the default because it covers strictly more hardware than cu124:
+# its kernels span sm_75 (Turing) through sm_120 (Blackwell), and CUDA minor
+# version compatibility lets that runtime work on any CUDA 12 driver. cu124
+# ships no sm_120 kernel, so on an RTX 50-series card it imports, reports the
+# GPU, and then fails at the first kernel launch.
+ARG CUDA_TAG=cu128
 ARG VARIANT=gpu
 ARG EXTRAS=detection,timm,optuna,tensorboard
 

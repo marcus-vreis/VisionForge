@@ -1701,8 +1701,10 @@ docker build --build-arg VARIANT=cpu --build-arg CUDA_TAG=cpu \
 ```
 
 `BASE_IMAGE` is a whole image reference rather than a CUDA version because the
-CPU variant should not inherit the CUDA runtime at all — that is ~2.5 GB of
-driver libraries a CPU wheel never loads.
+CPU variant should not inherit the CUDA runtime at all — driver libraries a CPU
+wheel never loads. Measured on disk (`docker images`): **6.01 GB → 2.36 GB**.
+The compressed download is 509 MB; the two numbers answer different questions
+and must not be compared with each other.
 
 Other choices: `uv` installs Python 3.13 in-image, so the `pyproject` floor is
 met exactly and no distro PPA is involved; dependencies are layered before
@@ -1746,3 +1748,44 @@ container runs as `forge` with workdir `/work`.
 **Unverified and stated as such:** the GPU variant. This machine's Docker has
 no GPU passthrough configured, so `--gpus all` and
 `torch.cuda.is_available()` inside the image remain untested.
+
+---
+
+## ADR-072 — cu128 is the supported floor for current hardware
+
+**Date:** 2026-07-29
+**Status:** Accepted — shipped 2026-07-29
+**Extends:** ADR-005 (user-managed torch), ADR-042 (doctor + Docker)
+
+**Context:** the project's hardware extras stopped at `cu126`, and `doctor`'s
+driver→wheel thresholds stopped there too. Building the GPU image on an
+RTX 5060 Ti exposed what that costs.
+
+RTX 50-series is Blackwell — compute capability **12.0 / sm_120**. No PyTorch
+wheel before `cu128` ships an sm_120 kernel. On such a card an earlier build
+installs cleanly, imports cleanly, reports the GPU through
+`torch.cuda.is_available()`, and then fails at the first kernel launch. It is
+the exact silent misconfiguration ADR-042 created `doctor` to prevent — and
+`doctor` was recommending it, because `cu126` was the highest tag it knew.
+
+**Decision:** `cu128` joins the hardware extras (`pyproject.toml`, both
+`[tool.uv.sources]` marker chains) and `doctor`'s thresholds, which now map
+driver 12.8+ → `cu128`.
+
+It is also the **Docker default**, replacing `cu124`. That is not "newer is
+better": `cu128`'s kernels span sm_75 (Turing) through sm_120 (Blackwell), so
+it covers strictly more hardware than `cu124`, and CUDA minor version
+compatibility lets its runtime work on any CUDA 12 driver. Choosing `cu124` as
+the default meant shipping an image that cannot run on a current card.
+
+**Verified on the real card, not just by version arithmetic:**
+`docker run --gpus all` sees the RTX 5060 Ti; `torch.cuda.is_available()` is
+True; a 512×512 matmul executes **on the device** (availability alone would not
+have caught a missing kernel); `arch_list` includes sm_120; and
+`visionforge selftest --quick` reports 5/5 inside the container.
+
+A detail worth recording: `doctor` inside that container prints "GPU usable via
+torch (CUDA build 12.8); nvidia-smi not on PATH". The CUDA *runtime* image does
+not ship `nvidia-smi`, so the ADR-066 fix — trusting the torch probe when the
+binary is absent — is what keeps doctor from telling a working GPU container to
+install the CPU wheel.
