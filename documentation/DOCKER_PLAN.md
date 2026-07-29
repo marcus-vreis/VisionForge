@@ -1,9 +1,11 @@
 # Docker + `visionforge doctor` — analysis & plan
 
-> Status: **Part 1 (`visionforge doctor`) shipped** (ADR-042 slice 1);
-> **Part 2 (Docker image) is still planned**. It deliberately stays inside the
-> local-only philosophy: this is about *removing install friction and making
-> runs reproducible*, not about turning VisionForge into a cloud service.
+> Status: **both parts shipped** — `visionforge doctor` (ADR-042 slice 1) and the
+> multi-stage image + compose (ADR-071/072), built and run on real hardware; the
+> verification tables and the one remaining unverified item are at the end of
+> this file. It deliberately stays inside the local-only philosophy: this is
+> about *removing install friction and making runs reproducible*, not about
+> turning VisionForge into a cloud service.
 
 ## Problem
 

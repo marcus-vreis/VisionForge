@@ -14,7 +14,7 @@ path; the other four are standalone tasks (own config/trainer/block/route).
 
 ## Canonical docs (read for depth)
 - `documentation/ARCHITECTURE.md` — layers, modules, boundaries
-- `documentation/DECISIONS.md` — ADR-001..040 (every decision + reason)
+- `documentation/DECISIONS.md` — ADR-001..073 (every decision + reason)
 - `documentation/INTEGRATION_STATUS.md` — branch/merge state + verified test state
 - `documentation/PROJECT_CONTEXT.md` — long-form project narrative (historical depth)
 
@@ -50,7 +50,14 @@ path; the other four are standalone tasks (own config/trainer/block/route).
 - The Cowork Linux sandbox **cannot run the full torch/ultralytics suite**: the
   PyTorch wheel index and Python 3.13 downloads are blocked by network policy.
   Only the config/utils layer runs here (~205 tests, green). **CI is the source of
-  truth** for the full ~814-test figure.
+  truth** for the full figure — currently `1323 passed, 2 skipped` (plus `slow`
+  cases deselected by default).
+- Published on PyPI as **`visionforge-studio`** (ADR-067); the import name stays
+  `visionforge`. `pip install visionforge-studio[cpu]`, then `visionforge doctor`.
+- A Docker image exists for both variants (ADR-071/072): GPU defaults to **cu128**,
+  which is the floor for RTX 50-series (sm_120). See `documentation/DOCKER_PLAN.md`.
+- Releases are one command: `bump-my-version bump <part>` (ADR-073, see
+  `documentation/RELEASING.md`). Never tag by hand.
 
 ## Cowork operating rules
 - **Never run git write ops through the mount** (`git add`/`commit`/`--renormalize`):

@@ -8,12 +8,16 @@
 >
 > - `main` and `development` are in sync; everything below is merged.
 > - The full suite runs green on the maintainer's Windows/CUDA machine and in
->   CI (`1244 passed, 2 skipped`, plus 2 `slow` cases deselected by default).
+>   CI (`1323 passed, 2 skipped` as of 2026-07-29, plus `slow` cases deselected
+>   by default).
 > - End-to-end health is now a command rather than a document:
 >   `visionforge selftest` trains all six tasks through the real API across
->   five strategies — **27/27 cases** on CPU, offline (ADR-060).
+>   five strategies — **27/27 cases** on CPU, offline (ADR-060). Verified again
+>   inside the GPU container (`--quick`, 5/5).
 > - Live phase/status tracking lives in `TASKS.md`; decisions in
->   `DECISIONS.md` (ADR-001..061).
+>   `DECISIONS.md` (ADR-001..073).
+> - v0.1.0 is on PyPI as `visionforge-studio` (ADR-067); releases go through
+>   `bump-my-version` (ADR-073, `documentation/RELEASING.md`).
 
 Independent state check on `feat/detection-hyperparams-yolo-family`.
 
