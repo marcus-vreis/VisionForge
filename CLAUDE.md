@@ -66,3 +66,9 @@ path; the other four are standalone tasks (own config/trainer/block/route).
 
 ## Style
 - Portuguese for prose/docs with the user; English fine in code/comments/ADRs.
+- **Chat replies use "caveman" prose to save tokens**: telegraphic, no articles or
+  filler, no preamble/recap, no restating the question. Say the finding, the
+  action, the number. This applies **only to conversation with the user** —
+  code, comments, docstrings, commit messages, ADRs and docs stay full, correct
+  prose per §9. Never drop a fact to be terse: shorten the wording, not the
+  content, and keep exact numbers, file paths and caveats.
