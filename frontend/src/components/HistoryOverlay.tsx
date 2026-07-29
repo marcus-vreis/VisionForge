@@ -2,12 +2,18 @@ import { useEffect, useState } from "react";
 import { deleteRun, fetchRuns } from "../api/client";
 import type { RunSummary } from "../types/run";
 import { CompareRunsPanel } from "./CompareRunsPanel";
+import { MenuSelect } from "./controls";
 import { RunDetailPanel } from "./RunDetailPanel";
 
 interface HistoryOverlayProps {
   open: boolean;
   onClose: () => void;
   onCountChange?: (count: number) => void;
+  /** Task family the app is currently on. Opening the history from the
+   * Classification panel means you want *its* runs — landing on "Todos" and
+   * making you click again is a step nobody wants. Falls back to "all" when
+   * the active task has no runs yet, so the sheet is never empty on open. */
+  initialTask?: string;
 }
 
 /** Inline caption preceding a filter control. */
@@ -27,14 +33,17 @@ function FilterLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** Dropdown filter with a fixed footprint.
+/** One filter dimension as a row of chips that wraps.
  *
- * These used to be chip rows. A chip per distinct value is fine for three
- * values and unusable for ten: `bloco` alone reaches classification,
- * cross_validation, detection, grid_search, random_search, sweep and
- * replicates, and the row silently clipped its own options off both edges.
+ * Chips, not a dropdown: every option and the current one are readable without
+ * opening anything. The clipping that made the original row unusable came from
+ * it being a single non-wrapping line — `flexWrap` fixes that directly, and a
+ * long list grows downward instead of disappearing off the edge.
+ *
+ * The label sits on its own line so the chips always start from the same
+ * column, however long the caption is.
  */
-function FilterSelect({
+function FilterChips({
   label,
   value,
   options,
@@ -42,34 +51,40 @@ function FilterSelect({
 }: {
   label: string;
   value: string;
-  options: string[];
+  options: { value: string; label: string }[];
   onChange: (v: string) => void;
 }) {
+  const entries = [{ value: "all", label: "todos" }, ...options];
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
       <FilterLabel>{label}</FilterLabel>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        style={{
-          padding: "6px 10px",
-          maxWidth: 190,
-          background: value === "all" ? "rgba(0,0,0,0.35)" : "var(--accent-soft)",
-          border: `1px solid ${value === "all" ? "var(--vf-panel-stroke)" : "var(--accent-vf)"}`,
-          borderRadius: 8,
-          color: "var(--vf-text)",
-          fontFamily: "var(--font-mono)",
-          fontSize: 11,
-          cursor: "pointer",
-        }}
-      >
-        <option value="all">todos</option>
-        {options.map((o) => (
-          <option key={o} value={o}>
-            {o}
-          </option>
-        ))}
-      </select>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+        {entries.map((o) => {
+          const active = o.value === value;
+          return (
+            <button
+              key={o.value}
+              type="button"
+              onClick={() => onChange(o.value)}
+              style={{
+                padding: "5px 11px",
+                background: active ? "var(--accent-soft)" : "rgba(255,255,255,0.04)",
+                border: `1px solid ${active ? "var(--accent-vf)" : "var(--vf-panel-stroke)"}`,
+                borderRadius: 999,
+                fontFamily: "var(--font-mono)",
+                fontSize: 10,
+                letterSpacing: "0.10em",
+                textTransform: "uppercase",
+                color: active ? "var(--vf-text)" : "var(--vf-text-dim)",
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {o.label}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -550,7 +565,12 @@ function RunCard({
 }
 
 /** History overlay — fetches and displays past experiment runs from /api/runs. */
-export function HistoryOverlay({ open, onClose, onCountChange }: HistoryOverlayProps) {
+export function HistoryOverlay({
+  open,
+  onClose,
+  onCountChange,
+  initialTask,
+}: HistoryOverlayProps) {
   const [runs, setRuns] = useState<RunSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -562,6 +582,9 @@ export function HistoryOverlay({ open, onClose, onCountChange }: HistoryOverlayP
   const [taskFilter, setTaskFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [blockFilter, setBlockFilter] = useState<string>("all");
+  // The raw `run.task` within a family — `binary` vs `multiclass` inside
+  // Classificação. Only meaningful where the family has more than one.
+  const [subtypeFilter, setSubtypeFilter] = useState<string>("all");
   const [sortBy, setSortBy] = useState<SortKey>("recent");
   const [pendingDeletes, setPendingDeletes] = useState<RunSummary[] | null>(null);
   const [deletingIds, setDeletingIds] = useState<string[]>([]);
@@ -579,11 +602,16 @@ export function HistoryOverlay({ open, onClose, onCountChange }: HistoryOverlayP
     setTaskFilter("all");
     setStatusFilter("all");
     setBlockFilter("all");
+    setSubtypeFilter("all");
     setSortBy("recent");
     fetchRuns()
       .then((data) => {
         setRuns(data);
         onCountChange?.(data.length);
+        // Only land on the active task's tab if that tab will actually exist.
+        if (initialTask && data.some((r) => taskFamily(r.task) === initialTask)) {
+          setTaskFilter(initialTask);
+        }
       })
       .catch((e: unknown) => {
         const msg =
@@ -653,6 +681,7 @@ export function HistoryOverlay({ open, onClose, onCountChange }: HistoryOverlayP
     const q = query.trim().toLowerCase();
     const matches = runs.filter((r) => {
       if (taskFilter !== "all" && taskFamily(r.task) !== taskFilter) return false;
+      if (subtypeFilter !== "all" && r.task !== subtypeFilter) return false;
       if (statusFilter !== "all" && r.status !== statusFilter) return false;
       if (blockFilter !== "all" && (r.block ?? "classification") !== blockFilter)
         return false;
@@ -697,9 +726,13 @@ export function HistoryOverlay({ open, onClose, onCountChange }: HistoryOverlayP
   const availableBlocks = Array.from(
     new Set(tabRuns.map((r) => r.block ?? "classification")),
   ).sort();
+  // Classification records `binary`/`multiclass`/`multilabel` as its task, so
+  // inside that tab the raw value is a real second dimension to filter by.
+  const availableSubtypes = Array.from(new Set(tabRuns.map((r) => r.task))).sort();
   const activeFilterCount =
     (query !== "" ? 1 : 0) +
     (statusFilter !== "all" ? 1 : 0) +
+    (subtypeFilter !== "all" ? 1 : 0) +
     (blockFilter !== "all" ? 1 : 0);
 
   const selectedRuns = runs.filter((r) => selection.includes(r.run_id));
@@ -903,10 +936,11 @@ export function HistoryOverlay({ open, onClose, onCountChange }: HistoryOverlayP
               active={taskFilter}
               onSelect={(t) => {
                 setTaskFilter(t);
-                // Both are scoped to the tab; carrying them across would show
-                // an empty list under a filter the new tab cannot satisfy.
+                // All three are scoped to the tab; carrying them across would
+                // show an empty list under a filter the new tab cannot satisfy.
                 setStatusFilter("all");
                 setBlockFilter("all");
+                setSubtypeFilter("all");
               }}
               total={runs.length}
             />
@@ -1129,62 +1163,57 @@ export function HistoryOverlay({ open, onClose, onCountChange }: HistoryOverlayP
             </div>
           )}
 
-          {/* Status / block / sort row — finer filters to find a specific run. */}
+          {/* Refinements *inside* the active tab. Each dimension is its own
+              wrapping row, so a long option list grows downward instead of
+              running off the edge, and only dimensions that actually vary in
+              this tab are shown — a single-valued filter filters nothing. */}
           {!selectedRunId && !compareActiveIds && !loading && error === null && runs.length > 0 && (
             <div
               style={{
                 display: "flex",
-                alignItems: "center",
+                flexDirection: "column",
                 gap: 10,
-                marginBottom: 12,
-                flexWrap: "wrap",
+                marginBottom: 14,
               }}
             >
-              {availableStatuses.length > 1 && (
-                <FilterSelect
-                  label="status"
-                  value={statusFilter}
-                  options={availableStatuses}
-                  onChange={setStatusFilter}
+              {availableSubtypes.length > 1 && (
+                <FilterChips
+                  label="tipo"
+                  value={subtypeFilter}
+                  options={availableSubtypes.map((s) => ({
+                    value: s,
+                    label: s.startsWith("custom:") ? s.slice(7) : s,
+                  }))}
+                  onChange={setSubtypeFilter}
                 />
               )}
               {availableBlocks.length > 1 && (
-                <FilterSelect
+                <FilterChips
                   label="bloco"
                   value={blockFilter}
-                  options={availableBlocks}
+                  options={availableBlocks.map((b) => ({ value: b, label: b }))}
                   onChange={setBlockFilter}
                 />
               )}
-              <div
-                style={{
-                  marginLeft: "auto",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                }}
-              >
+              {availableStatuses.length > 1 && (
+                <FilterChips
+                  label="status"
+                  value={statusFilter}
+                  options={availableStatuses.map((s) => ({ value: s, label: s }))}
+                  onChange={setStatusFilter}
+                />
+              )}
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <FilterLabel>ordenar</FilterLabel>
-                <select
+                <MenuSelect
                   value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as SortKey)}
-                  style={{
-                    padding: "6px 10px",
-                    background: "rgba(0,0,0,0.35)",
-                    border: "1px solid var(--vf-panel-stroke)",
-                    borderRadius: 8,
-                    color: "var(--vf-text)",
-                    fontFamily: "var(--font-mono)",
-                    fontSize: 11,
-                    cursor: "pointer",
-                  }}
-                >
-                  {(Object.keys(SORT_LABELS) as SortKey[]).map((k) => (
-                    <option key={k} value={k}>
-                      {SORT_LABELS[k]}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(v) => setSortBy(v as SortKey)}
+                  options={(Object.keys(SORT_LABELS) as SortKey[]).map((k) => ({
+                    value: k,
+                    label: SORT_LABELS[k],
+                  }))}
+                  minWidth={150}
+                />
               </div>
             </div>
           )}

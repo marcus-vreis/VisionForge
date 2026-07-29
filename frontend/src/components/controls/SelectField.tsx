@@ -1,6 +1,7 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { FieldLabel } from "./FieldLabel";
+import { useAnchoredMenu } from "./useAnchoredMenu";
 
 export interface SelectOption {
   value: string;
@@ -16,13 +17,11 @@ interface SelectFieldProps {
   hint?: string;
 }
 
-/** Custom dropdown with glass panel and accent highlight.
+/** Labelled dropdown with glass panel and accent highlight.
  *
- * The open menu is rendered in a portal with fixed positioning. The form cards
- * use `backdrop-filter`, which creates a stacking context per card — an
- * absolutely-positioned menu would be trapped inside its own card and painted
- * *under* the following card (so the model list opened behind the Dataset
- * panel). Portaling to <body> escapes every card stacking context. */
+ * Positioning and outside-click live in `useAnchoredMenu`, shared with the
+ * compact `MenuSelect`. See that hook for why the menu is portaled.
+ */
 export function SelectField({
   label,
   value,
@@ -31,49 +30,11 @@ export function SelectField({
   hint,
 }: SelectFieldProps) {
   const [open, setOpen] = useState(false);
-  const [pos, setPos] = useState<{
-    left: number;
-    top: number;
-    width: number;
-  } | null>(null);
-  const wrapRef = useRef<HTMLDivElement>(null);
-  const btnRef = useRef<HTMLButtonElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
+  const { pos, wrapRef, btnRef, menuRef, closeRef } = useAnchoredMenu(open);
 
-  const reposition = () => {
-    const el = btnRef.current;
-    if (!el) return;
-    const r = el.getBoundingClientRect();
-    setPos({ left: r.left, top: r.bottom + 6, width: r.width });
-  };
-
-  // Position the portal menu against the button's viewport rect, and keep it
-  // glued there while scrolling/resizing (capture phase catches scroll on any
-  // ancestor container, not just window).
-  useLayoutEffect(() => {
-    if (!open) return;
-    reposition();
-    const onMove = () => reposition();
-    window.addEventListener("scroll", onMove, true);
-    window.addEventListener("resize", onMove);
-    return () => {
-      window.removeEventListener("scroll", onMove, true);
-      window.removeEventListener("resize", onMove);
-    };
-  }, [open]);
-
-  // Close on outside click — the menu lives outside the wrapper now, so check
-  // both the trigger wrapper and the portaled menu before closing.
   useEffect(() => {
-    const onDoc = (e: MouseEvent) => {
-      const t = e.target as Node;
-      if (wrapRef.current?.contains(t)) return;
-      if (menuRef.current?.contains(t)) return;
-      setOpen(false);
-    };
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, []);
+    closeRef.current = () => setOpen(false);
+  }, [closeRef]);
 
   const normalize = (opt: string | SelectOption): SelectOption =>
     typeof opt === "string" ? { value: opt, label: opt } : opt;

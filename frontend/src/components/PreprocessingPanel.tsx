@@ -4,6 +4,7 @@ import {
   previewPreprocess,
   type PreprocessPreviewResponse,
 } from "../api/client";
+import { MenuSelect } from "./controls";
 
 export interface PreprocessingStep {
   kind: string;
@@ -204,31 +205,15 @@ export function PreprocessingPanel({
               limpar
             </button>
           )}
-          <select
+          <MenuSelect
             value=""
-            onChange={(e) => {
-              if (e.target.value) {
-                addStep(e.target.value);
-                e.target.value = "";
-              }
-            }}
-            style={{
-              padding: "8px 10px",
-              background: "rgba(0,0,0,0.35)",
-              border: "1px solid var(--vf-panel-stroke)",
-              borderRadius: 8,
-              color: "var(--vf-text)",
-              fontFamily: "var(--font-mono)",
-              fontSize: 11,
-            }}
-          >
-            <option value="">+ adicionar filtro</option>
-            {KNOWN_KINDS.map((k) => (
-              <option key={k} value={k}>
-                {KIND_LABELS[k] ?? k}
-              </option>
-            ))}
-          </select>
+            placeholder="+ adicionar filtro"
+            onChange={(v) => addStep(v)}
+            options={KNOWN_KINDS.map((k) => ({
+              value: k,
+              label: KIND_LABELS[k] ?? k,
+            }))}
+          />
           <button
             type="button"
             onClick={() => void runPreview()}

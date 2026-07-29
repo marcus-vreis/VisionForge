@@ -565,6 +565,12 @@ export default function App() {
         open={showHistory}
         onClose={() => setShowHistory(false)}
         onCountChange={setHistoryCount}
+        // `activeKey` is already the family the history groups by: the task
+        // tabs are classification/detection/... and custom tasks carry their
+        // own key, which the history prefixes to match its `custom:<key>` runs.
+        initialTask={
+          isCustomTask(activeTask) ? `custom:${activeKey}` : activeKey
+        }
       />
 
       <DatasetsOverlay

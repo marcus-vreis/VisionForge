@@ -747,6 +747,18 @@ backdrop cujo `onClick` é `onClose`, então todo clique nele — inclusive
 Cancelar — fechava tudo); e o download de dataset saiu dos cinco painéis para
 uma superfície própria (`DatasetsOverlay`) ao lado do histórico.
 
+**Dropdowns próprios + histórico contextual ✅ (ADR-064, 2026-07-29,
+user-reported):** nenhum `<select>` nativo restou na GUI — o popup nativo é
+desenhado pelo sistema operacional (lista cinza, fonte do sistema, destaque do
+OS) e `color-scheme: dark` só repinta o fundo dele. `MenuSelect` (compacto, para
+toolbars) acompanha o `SelectField` (campos de formulário) e ambos passam a
+dividir `useAnchoredMenu`. O histórico abre na aba da task ativa, com fallback
+para "Todos" quando ela ainda não tem runs. Os filtros dentro da aba voltam a
+ser chips, agora em linhas que **quebram** (`flexWrap`) — o corte original vinha
+de a linha não quebrar, não de serem chips; e dentro de Classificação o
+`run.task` cru (`binary`/`multiclass`) vira a dimensão `tipo`, que a aba de
+família tinha colapsado.
+
 **Plano de treinamento máximo ✅ (2026-07-29)** — `documentation/TRAINING_PLAN.md`:
 matriz oficial de modelos × estratégias por task (conferida contra as rotas da
 API, com as ausências justificadas) em quatro camadas de custo crescente

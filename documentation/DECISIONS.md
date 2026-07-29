@@ -1294,10 +1294,14 @@ download had been placed inside every task panel.
    a "MULTICLASS" tab — neither of which is a task anyone selects. Custom tasks
    (ADR-058) keep one tab each, labelled with their own key.
 
-2. **Status and block become dropdowns.** Same overflow, worse: `bloco` reaches
-   seven values. A chip per value is fine for three and unusable for ten, and
-   the options are now scoped to the active tab so a tab never offers a filter
-   that would empty its own list.
+2. **Status and block wrap instead of clipping.** They stay chips — every
+   option and the current one are readable without opening anything — but each
+   dimension is its own `flexWrap` row, so a long list grows downward instead
+   of running off the edge, which was the actual defect. Options are scoped to
+   the active tab, and a dimension with a single value is hidden entirely
+   because it filters nothing. Inside Classificação the raw `run.task`
+   (`binary`/`multiclass`) becomes a `tipo` row of its own: the family tab
+   collapsed a distinction that is still worth filtering by.
 
 3. **One selection mode drives both delete and compare.** Separate "compare
    mode" and "delete mode" toggles would make the researcher declare intent
@@ -1332,3 +1336,46 @@ to be special-cased in each of those, to place one form.
 Classificação 79 / Detecção 4 / example_counting 9 (was BINARY 61 /
 MULTICLASS 18); selecting two runs offers compare and delete; the confirmation
 lists both names; cancelling leaves the history open on the same tab.
+
+---
+
+## ADR-064 — Every dropdown is drawn by the app; history opens on the active task
+
+**Date:** 2026-07-29
+**Status:** Accepted — shipped 2026-07-29
+**Extends:** ADR-063 (history surface)
+
+**Context:** three follow-ups from using ADR-063 for real.
+
+**Decisions:**
+
+1. **No native `<select>` anywhere in the GUI.** A native select renders its
+   popup with the operating system's own widget — grey list, system font, OS
+   highlight — and inside a dark monospaced UI that popup is the one surface
+   that looks borrowed. `color-scheme: dark` (the earlier mitigation) only
+   repaints its background; it cannot touch the typography or the highlight.
+
+   `SelectField` already drew its own menu for labelled form fields. The five
+   remaining native selects were *toolbar* controls, which `SelectField` does
+   not fit (it is full-width and carries a `FieldLabel`), so they got a
+   sibling: `MenuSelect`, compact and sized to content. Positioning,
+   outside-click and the portal escape hatch are now one hook,
+   `useAnchoredMenu`, shared by both — the menu must be portaled because the
+   form cards use `backdrop-filter`, which creates a stacking context per card
+   and would otherwise paint the menu under the next card.
+
+2. **The history opens on the active task's tab.** Opening it from the
+   Classification panel means you want *its* runs; landing on "Todos" and
+   making the researcher click again is a step nobody wants. It falls back to
+   "Todos" when the active task has no runs yet, so the sheet is never empty on
+   open.
+
+3. **Filters within a tab are wrapping chip rows, not dropdowns.** ADR-063
+   turned the clipped chip row into a dropdown; the clipping came from the row
+   being a single non-wrapping line, and `flexWrap` fixes it without hiding the
+   options behind a click. Verified at a 620px viewport: the five `bloco` chips
+   render on two lines with no horizontal overflow.
+
+**Rejected:** styling the native popup with `appearance: none` plus CSS. It
+restyles the *closed* control only — the open list is drawn by the OS and is
+not reachable from CSS, which is precisely the part that looked wrong.

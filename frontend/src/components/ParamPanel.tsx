@@ -23,6 +23,7 @@ import {
   validateGridValue,
 } from "../lib/grid-axis";
 import {
+  MenuSelect,
   NumberField,
   SelectField,
   Segmented,
@@ -834,17 +835,12 @@ function GridAxisExtension({
           <div key={i}>
             <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
               {enumOpts ? (
-                <select
+                <MenuSelect
                   value={String(v)}
-                  onChange={(e) => setExtra(i, e.target.value)}
-                  style={gridRowControlStyle}
-                >
-                  {enumOpts.map((o) => (
-                    <option key={o} value={o}>
-                      {o}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(nv) => setExtra(i, nv)}
+                  options={enumOpts.map(String)}
+                  minWidth={150}
+                />
               ) : (
                 <input
                   type="text"
@@ -1158,15 +1154,12 @@ function RandomSearchRow({
         placeholder="dot-path (ex: training.learning_rate)"
         style={rsInputStyle}
       />
-      <select
+      <MenuSelect
         value={def.type}
-        onChange={(e) => onChangeType(e.target.value as RandomParamType)}
-        style={rsInputStyle}
-      >
-        <option value="uniform">uniform</option>
-        <option value="log_uniform">log_uniform</option>
-        <option value="choice">choice</option>
-      </select>
+        onChange={(v) => onChangeType(v as RandomParamType)}
+        options={["uniform", "log_uniform", "choice"]}
+        minWidth={130}
+      />
       {isChoice ? (
         <input
           type="text"
