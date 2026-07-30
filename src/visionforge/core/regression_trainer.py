@@ -20,6 +20,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import torch
 import torch.nn as nn
 from loguru import logger
@@ -261,15 +262,40 @@ class RegressionTrainer:
         Reusable by the block for test-set metrics and any future per-model test
         endpoint; moves the model to the resolved device and runs inference-only.
         """
+        return self.evaluate_with_predictions(model, loader)[0]
+
+    def evaluate_with_predictions(
+        self, model: nn.Module, loader: Any
+    ) -> tuple[tuple[float, float, float, float], np.ndarray, np.ndarray]:
+        """As ``evaluate``, plus the per-sample targets and predictions.
+
+        The arrays are what the bootstrap intervals resample (ADR-076); the
+        aggregates come from the same pass, so a caller never risks reporting a
+        metric computed differently from its interval.
+        """
         model = model.to(self._device)
         model.eval()
         metrics = _MetricAccumulator()
+        targets_seen: list[np.ndarray] = []
+        preds_seen: list[np.ndarray] = []
         with torch.no_grad():
             for inputs, targets in loader:
                 inputs = inputs.to(self._device, non_blocking=True)
                 targets = targets.to(self._device, non_blocking=True)
-                metrics.update(model(inputs), targets)
-        return metrics.compute()
+                outputs = model(inputs)
+                metrics.update(outputs, targets)
+                targets_seen.append(
+                    targets.detach().cpu().numpy().reshape(len(targets), -1)
+                )
+                preds_seen.append(
+                    outputs.detach().cpu().numpy().reshape(len(targets), -1)
+                )
+        empty = np.zeros((0, 1))
+        return (
+            metrics.compute(),
+            np.concatenate(targets_seen) if targets_seen else empty,
+            np.concatenate(preds_seen) if preds_seen else empty,
+        )
 
     # ── private helpers ────────────────────────────────────────────────────────
 

@@ -881,9 +881,26 @@ que transformou o repositório num pacote que outra pessoa consegue instalar:
   contra `[0.7288, 0.7712]` do intervalo binomial analítico.
   Testes: `tests/core/test_metric_ci.py` (22) + blocos (6) +
   `frontend/src/lib/metric-ci.test.ts` (8).
-- Estender o intervalo às outras tasks (regressão, segmentação, anomalia) —
-  precisa que cada `evaluate` devolva os arrays por amostra em vez de só os
-  agregados; o módulo `core/metric_ci.py` já é agnóstico de task.
+- [x] **Intervalo nas outras quatro tasks ✅ (ADR-076, 2026-07-30)** — regressão
+  (MSE/RMSE/MAE/R²), anomalia (AUROC/F1) e segmentação (mIoU/Dice/pixel-acc)
+  ganharam entry points próprios em `core/metric_ci.py`, gravando no mesmo
+  `metric_cis` que a GUI já lê. Cada trainer ganhou um irmão do `evaluate`
+  devolvendo agregados **e** arrays numa passada só, com `evaluate` delegando —
+  nenhum chamador mudou. A unidade de reamostragem é sempre a **imagem**: em
+  segmentação isso significa uma matriz de confusão K×K por imagem somada por
+  reamostragem (reamostrar pixels daria um intervalo bem mais estreito do que a
+  evidência sustenta), e em anomalia o `threshold` fica fixo porque vem da
+  distribuição de score do treino normal — é parte do detector, não da amostra.
+  Cada um é fixado contra o acumulador que produz o número reportado, e esse
+  teste se pagou na hora: a primeira versão de segmentação mediava IoU sobre as
+  classes presentes no ground-truth, e o acumulador media sobre ground-truth
+  **ou** predição. Achado no navegador: o `run.json` de segmentação tem `miou`
+  (validação) além de `test_miou`, e o helper do frontend casava o nome puro —
+  a métrica de validação aparecia com o intervalo do teste; `metricCi` agora
+  exige o prefixo `test_`. Verificado em dado real na GPU: mIoU
+  `0.5526 [0.5255, 0.5806]` (Oxford Pets, 100), MAE `18.42 [17.19, 19.72]`
+  (wiki age, 400), AUROC `0.7738 [0.7411, 0.8036]` (coffee, 800).
+  Testes: `tests/core/test_metric_ci_tasks.py` (19).
 
 Delivered elsewhere in this file, listed here once so the section is not read as
 open work: the GUI `ReplicatesCard` (ADR-059 brick C), the paired significance

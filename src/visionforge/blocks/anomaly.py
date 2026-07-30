@@ -18,6 +18,7 @@ import torch
 
 from visionforge.core.anomaly_data import AnomalyDataModule
 from visionforge.core.anomaly_trainer import AnomalyTrainer, AnomalyTrainResult
+from visionforge.core.metric_ci import MetricCI, bootstrap_anomaly_cis
 from visionforge.core.plotter import MetricsPlotter
 from visionforge.models.anomaly_factory import AnomalyModelFactory
 from visionforge.utils.anomaly_config import AnomalyConfig
@@ -30,6 +31,7 @@ class AnomalyBlock:
         self._config = config
         self._train_result: AnomalyTrainResult | None = None
         self._test_metrics: tuple[float, float, float] | None = None
+        self._metric_cis: dict[str, MetricCI] = {}
         # Injected by the GUI layer to stream live progress via SSE.
         self._progress_callback: Callable[[dict[str, Any]], None] | None = None
 
@@ -48,8 +50,14 @@ class AnomalyBlock:
         )
         model.load_state_dict(state_dict)  # type: ignore[arg-type]
 
-        self._test_metrics = trainer.evaluate(
+        self._test_metrics, labels, scores = trainer.evaluate_with_scores(
             model, data.train_loader(), data.test_loader()
+        )
+        self._metric_cis = bootstrap_anomaly_cis(
+            labels,
+            scores,
+            self._test_metrics[1],  # the threshold this detector decided on
+            seed=self._config.training.seed,
         )
 
         run_dir = self._train_result.model_path.parent
@@ -75,6 +83,10 @@ class AnomalyBlock:
                 "threshold": threshold,
                 "image_f1": image_f1,
             }
+            if self._metric_cis:
+                result["test"]["confidence_intervals"] = {
+                    name: ci.to_dict() for name, ci in self._metric_cis.items()
+                }
         return result
 
     # ── private ───────────────────────────────────────────────────────────────
@@ -111,6 +123,10 @@ class AnomalyBlock:
                     "test_image_f1": image_f1,
                 }
             )
+        if self._metric_cis:
+            data["metric_cis"] = {
+                name: ci.to_dict() for name, ci in self._metric_cis.items()
+            }
         data["artifacts"]["graphics"] = [str(p) for p in graphics]
         run_json_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
 

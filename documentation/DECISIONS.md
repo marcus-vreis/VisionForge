@@ -2011,3 +2011,69 @@ only while the badge is showing and this tab has no run of its own, stopping by
 itself at zero. A failed read keeps the last known depth instead of flickering to
 zero, because ambient information that lies briefly is worse than information
 that is a few seconds late.
+
+---
+
+## ADR-076 — The bootstrap interval reaches the other four tasks
+
+**Date:** 2026-07-30
+**Status:** Accepted — shipped 2026-07-30
+**Extends:** ADR-074 (bootstrap CI for classification)
+
+**Context:** ADR-074 gave classification `0.8734 [0.8412, 0.9021]` and left
+regression, segmentation and anomaly reporting bare numbers, because their
+`evaluate` returned only aggregates from a streaming accumulator — there were no
+per-sample arrays to resample. A researcher comparing a segmentation run against
+a published mIoU has the same need as one comparing an accuracy.
+
+**Decision:** one entry point per task family in `core/metric_ci.py` —
+`bootstrap_regression_cis` (MSE/RMSE/MAE/R²), `bootstrap_anomaly_cis`
+(AUROC/F1) and `bootstrap_segmentation_cis` (mIoU/Dice/pixel accuracy) — each
+wired into its block and written to `run.json` under the same `metric_cis` key
+the GUI already reads. Each trainer gained a sibling of `evaluate`
+(`evaluate_with_predictions`, `evaluate_with_scores`, `evaluate_with_confusion`)
+that returns the aggregates **and** the arrays from one pass, with `evaluate`
+delegating to it — so no caller changed and a report can never show a metric
+computed differently from its interval.
+
+**The image is always the resampling unit, never the smaller thing inside it.**
+This is the decision that matters:
+
+- **Regression** resamples rows, not the flattened (sample × target) elements the
+  metrics pool over. A multi-target sample's columns come from one image and move
+  together; drawing them independently would understate the spread.
+- **Segmentation** takes one K×K confusion matrix *per image* and sums the drawn
+  matrices. Resampling pixels would be arithmetically easy and statistically
+  wrong: pixels inside one image are not independent draws, and the interval
+  would come out far tighter than the evidence supports. Passing matrices instead
+  of masks also keeps the cost at K×K per image rather than one array per pixel.
+- **Anomaly** holds the decision `threshold` fixed instead of recomputing it per
+  resample: it is derived from the *normal training* score distribution, which
+  makes it part of the trained detector, not of the test sample being varied.
+
+**Each entry point is pinned against the accumulator that actually produces the
+reported number**, not against a textbook formula — `_MetricAccumulator`,
+`SegmentationMetricAccumulator`, and the anomaly trainer's own F1/AUROC. An
+interval computed by a second implementation is worse than no interval if the two
+disagree, because it would bracket a value the report never shows. That test
+immediately earned itself: the first segmentation implementation averaged IoU
+over the classes present in *ground truth*, while the accumulator averages over
+classes present in ground truth **or** prediction — a silent disagreement that
+the parity test failed on.
+
+**Found in the browser, not in review:** segmentation's `run.json` carries both
+`miou` (the best *validation* score) and `test_miou`, and the frontend lookup
+stripped a `test_` prefix when present but otherwise matched the bare name — so
+the validation number was rendered with the *test* split's interval. `metricCi`
+now requires the prefix, since every entry in `metric_cis` is by construction a
+test-split measurement. Classification never exposed this because its metrics
+block has no bare metric name to collide with.
+
+**Verified on real datasets on the GPU**, one epoch each, point estimates checked
+against the reported metric in every case: segmentation mIoU
+`0.5526 [0.5255, 0.5806]` (Oxford-IIIT Pets, 100 test images), regression MAE
+`18.42 [17.19, 19.72]` (wiki age, 400), anomaly AUROC
+`0.7738 [0.7411, 0.8036]` (coffee, 800). Regression's R² came out negative with
+its interval entirely below zero — correct for a model worse than predicting the
+mean, and worth noting as a reminder that these intervals do not assume a
+metric's sign.

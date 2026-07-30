@@ -1,20 +1,20 @@
 import type { MetricCI } from "../types/run";
 
-/** Look up the bootstrap interval for a metrics-block key (ADR-074).
+/** Look up the bootstrap interval for a metrics-block key (ADR-074/076).
  *
- * The two blocks are keyed differently on purpose: `metrics` prefixes the
- * test-split entries (`test_accuracy`) because it also holds training numbers
- * like `best_val_loss`, while `metric_cis` only ever describes the test split
- * and keys by the bare metric name. This bridges the two so a caller can ask
- * with whichever key it is already iterating.
+ * Every entry in `metric_cis` is measured on the **test** split, so only a
+ * `test_`-prefixed metric can have one. That restriction is load-bearing rather
+ * than tidiness: segmentation's run.json carries both `miou` (the best
+ * *validation* score from training) and `test_miou`, and a lookup that also
+ * accepted the bare name pinned the test interval onto the validation number —
+ * an interval bracketing a value it was not computed from.
  */
 export function metricCi(
   cis: Record<string, MetricCI> | undefined,
   metricsKey: string,
 ): MetricCI | undefined {
-  if (!cis) return undefined;
-  const bare = metricsKey.startsWith("test_") ? metricsKey.slice("test_".length) : metricsKey;
-  return cis[bare];
+  if (!cis || !metricsKey.startsWith("test_")) return undefined;
+  return cis[metricsKey.slice("test_".length)];
 }
 
 /** `0.7506 [0.7294, 0.7713]` — the citable form for one metric. */

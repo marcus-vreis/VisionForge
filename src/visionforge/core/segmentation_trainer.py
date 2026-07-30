@@ -20,6 +20,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -55,6 +56,37 @@ class SegmentationTrainResult:
     device_used: str
     history: list[SegmentationEpochResult] = field(default_factory=list)
     model_path: Path = field(default_factory=lambda: Path("."))
+
+
+def per_image_confusion(
+    logits: torch.Tensor,
+    target: torch.Tensor,
+    num_classes: int,
+    ignore_index: int,
+) -> np.ndarray:
+    """One KxK confusion matrix per image in the batch.
+
+    Applies the same ignore-index and in-range filtering as
+    ``SegmentationMetricAccumulator.update``, so the matrices sum to exactly the
+    accumulator's — that identity is what lets a bootstrap interval (ADR-076)
+    bracket the metric a run actually reports.
+    """
+    preds = logits.argmax(dim=1).reshape(logits.shape[0], -1)
+    truth = target.reshape(target.shape[0], -1)
+    out = np.zeros((truth.shape[0], num_classes, num_classes), dtype=np.int64)
+    for i in range(truth.shape[0]):
+        t, p = truth[i].to(torch.long), preds[i].to(torch.long)
+        keep = (
+            (t != ignore_index)
+            & (t >= 0)
+            & (t < num_classes)
+            & (p >= 0)
+            & (p < num_classes)
+        )
+        t, p = t[keep], p[keep]
+        counts = torch.bincount(t * num_classes + p, minlength=num_classes**2)
+        out[i] = counts.reshape(num_classes, num_classes).cpu().numpy()
+    return out
 
 
 class SegmentationMetricAccumulator:
@@ -329,16 +361,40 @@ class SegmentationTrainer:
 
     def evaluate(self, model: nn.Module, loader: Any) -> tuple[float, float, float]:
         """Compute (mean_iou, dice, pixel_acc) for ``model`` over ``loader``."""
+        return self.evaluate_with_confusion(model, loader)[0]
+
+    def evaluate_with_confusion(
+        self, model: nn.Module, loader: Any
+    ) -> tuple[tuple[float, float, float], np.ndarray]:
+        """As ``evaluate``, plus one KxK confusion matrix **per image**.
+
+        Per-image rather than per-pixel because the image is the sampling unit
+        the bootstrap intervals resample (ADR-076) — pixels inside one image are
+        not independent draws. Summing the returned matrices reproduces the
+        accumulator's single matrix exactly, so the aggregates and the intervals
+        cannot describe different numbers.
+        """
         model = model.to(self._device)
         model.eval()
         metrics = SegmentationMetricAccumulator(self._num_classes, self._ignore_index)
+        per_image: list[np.ndarray] = []
         with torch.no_grad():
             for inputs, targets in loader:
                 inputs = inputs.to(self._device, non_blocking=True)
                 targets = targets.to(self._device, non_blocking=True)
                 logits = segmentation_logits(model(inputs))
                 metrics.update(logits, targets)
-        return metrics.compute()
+                per_image.append(
+                    per_image_confusion(
+                        logits, targets, self._num_classes, self._ignore_index
+                    )
+                )
+        stacked = (
+            np.concatenate(per_image)
+            if per_image
+            else np.zeros((0, self._num_classes, self._num_classes))
+        )
+        return metrics.compute(), stacked
 
     # ── private helpers ────────────────────────────────────────────────────────
 
@@ -553,4 +609,5 @@ __all__ = [
     "SegmentationEpochResult",
     "SegmentationMetricAccumulator",
     "dice_loss",
+    "per_image_confusion",
 ]

@@ -1,4 +1,4 @@
-"""Bootstrap confidence intervals for a single run's test metrics (ADR-074).
+"""Bootstrap confidence intervals for a single run's test metrics (ADR-074/076).
 
 ADR-056 answers "how uncertain is this number?" by training N times under N
 seeds. That is the stronger answer and it costs N trainings. This module answers
@@ -16,7 +16,11 @@ would land in the same place.
 
 Everything is a pure function over per-sample arrays — no torch, no config — so
 it is testable against sklearn and reusable by any task that keeps its
-predictions.
+predictions. One entry point per task family: classification, regression,
+anomaly and segmentation, each resampling **images**, never the smaller unit
+inside them (a regression sample's target columns move together; segmentation
+pixels within one image are not independent draws, so resampling pixels would
+report an interval far tighter than the evidence supports).
 
 Implementation note: the metrics are recomputed with vectorized confusion-matrix
 and rank arithmetic rather than by calling sklearn once per resample. That is
@@ -151,6 +155,220 @@ def bootstrap_classification_cis(
         if merged.size >= 2:
             out["auc_roc"] = _interval("auc_roc", auc_point, merged, confidence, n)
     return out
+
+
+def bootstrap_regression_cis(
+    y_true: Sequence[Sequence[float]] | Sequence[float] | np.ndarray,
+    y_pred: Sequence[Sequence[float]] | Sequence[float] | np.ndarray,
+    *,
+    confidence: float = 0.95,
+    n_resamples: int = 1000,
+    seed: int = 0,
+) -> dict[str, MetricCI]:
+    """Percentile CIs for MSE, RMSE, MAE and R² (ADR-076).
+
+    Resamples **rows**, not the flattened (sample x target) elements the metrics
+    pool over: a multi-target sample's columns come from one image and move
+    together, so drawing them independently would understate the spread.
+    """
+    true = np.atleast_2d(np.asarray(y_true, dtype=float).reshape(len(y_true), -1))
+    pred = np.atleast_2d(np.asarray(y_pred, dtype=float).reshape(len(y_pred), -1))
+    if true.shape != pred.shape:
+        raise ValueError(
+            f"y_true and y_pred must have the same shape ({true.shape} != {pred.shape})."
+        )
+    n = int(true.shape[0])
+    if n < _MIN_SAMPLES or n_resamples < 2:
+        return {}
+
+    rng = np.random.default_rng(seed)
+    collected: dict[str, list[np.ndarray]] = {
+        "mse": [],
+        "rmse": [],
+        "mae": [],
+        "r2": [],
+    }
+    drawn = 0
+    while drawn < n_resamples:
+        chunk = min(_chunk_size(n * true.shape[1]), n_resamples - drawn)
+        idx = rng.integers(0, n, size=(chunk, n))
+        for name, values in _regression_metrics(true, pred, idx).items():
+            collected[name].append(values)
+        drawn += chunk
+
+    identity = np.arange(n, dtype=np.int64)[None, :]
+    point = _regression_metrics(true, pred, identity)
+    return {
+        name: _interval(
+            name, float(point[name][0]), np.concatenate(parts), confidence, n
+        )
+        for name, parts in collected.items()
+    }
+
+
+def bootstrap_anomaly_cis(
+    labels: Sequence[int] | np.ndarray,
+    scores: Sequence[float] | np.ndarray,
+    threshold: float,
+    *,
+    confidence: float = 0.95,
+    n_resamples: int = 1000,
+    seed: int = 0,
+) -> dict[str, MetricCI]:
+    """Percentile CIs for image-level AUROC and F1 (ADR-076).
+
+    ``threshold`` is held fixed rather than recomputed per resample: it is
+    derived from the *normal training* score distribution, which makes it part
+    of the trained detector, not of the test sample being resampled.
+    """
+    label_arr = np.asarray(labels, dtype=np.int64)
+    score_arr = np.asarray(scores, dtype=float)
+    if label_arr.size != score_arr.size:
+        raise ValueError(
+            f"labels and scores must have the same length "
+            f"({label_arr.size} != {score_arr.size})."
+        )
+    n = int(label_arr.size)
+    if n < _MIN_SAMPLES or n_resamples < 2:
+        return {}
+
+    predicted = (score_arr >= threshold).astype(np.int64)
+    _, positions = np.unique(score_arr, return_inverse=True)
+    positions = positions.astype(np.int64).ravel()
+    n_values = int(positions.max()) + 1
+    both_classes = len(np.unique(label_arr)) > 1
+
+    rng = np.random.default_rng(seed)
+    f1_parts: list[np.ndarray] = []
+    auc_parts: list[np.ndarray] = []
+    drawn = 0
+    while drawn < n_resamples:
+        chunk = min(_chunk_size(n), n_resamples - drawn)
+        idx = rng.integers(0, n, size=(chunk, n))
+        _, _, _, f1 = _confusion_metrics(label_arr, predicted, idx, 2, "binary")
+        f1_parts.append(f1)
+        if both_classes:
+            values, usable = _auc_batch(label_arr, positions, n_values, idx)
+            auc_parts.append(values[usable])
+        drawn += chunk
+
+    identity = np.arange(n, dtype=np.int64)[None, :]
+    _, _, _, f1_point = _confusion_metrics(label_arr, predicted, identity, 2, "binary")
+    out = {
+        "image_f1": _interval(
+            "image_f1", float(f1_point[0]), np.concatenate(f1_parts), confidence, n
+        )
+    }
+    if auc_parts:
+        merged = np.concatenate(auc_parts)
+        auc_point, usable = _auc_batch(label_arr, positions, n_values, identity)
+        if merged.size >= 2 and bool(usable[0]):
+            out["auroc"] = _interval(
+                "auroc", float(auc_point[0]), merged, confidence, n
+            )
+    return out
+
+
+def bootstrap_segmentation_cis(
+    per_image_confusion: Sequence[Sequence[Sequence[int]]] | np.ndarray,
+    *,
+    confidence: float = 0.95,
+    n_resamples: int = 1000,
+    seed: int = 0,
+) -> dict[str, MetricCI]:
+    """Percentile CIs for mean IoU, Dice and pixel accuracy (ADR-076).
+
+    Takes one KxK confusion matrix **per image** and resamples images, summing
+    the drawn matrices before computing the metrics — which is what makes the
+    interval honest: pixels inside one image are not independent draws, so
+    resampling pixels would produce an interval far tighter than the evidence
+    supports. Passing matrices rather than masks also keeps the memory cost at
+    KxK per image instead of one array per pixel.
+
+    Averaging matches ``SegmentationMetricAccumulator``: over the classes
+    present in the drawn images.
+    """
+    matrices = np.asarray(per_image_confusion, dtype=float)
+    if matrices.ndim != 3 or matrices.shape[1] != matrices.shape[2]:
+        raise ValueError(
+            "per_image_confusion must be a sequence of square KxK matrices, got "
+            f"shape {matrices.shape}."
+        )
+    n = int(matrices.shape[0])
+    if n < _MIN_SAMPLES or n_resamples < 2:
+        return {}
+
+    rng = np.random.default_rng(seed)
+    collected: dict[str, list[np.ndarray]] = {"miou": [], "dice": [], "pixel_acc": []}
+    k = int(matrices.shape[1])
+    drawn = 0
+    while drawn < n_resamples:
+        chunk = min(_chunk_size(n * k * k), n_resamples - drawn)
+        idx = rng.integers(0, n, size=(chunk, n))
+        for name, values in _segmentation_metrics(matrices, idx).items():
+            collected[name].append(values)
+        drawn += chunk
+
+    identity = np.arange(n, dtype=np.int64)[None, :]
+    point = _segmentation_metrics(matrices, identity)
+    return {
+        name: _interval(
+            name, float(point[name][0]), np.concatenate(parts), confidence, n
+        )
+        for name, parts in collected.items()
+    }
+
+
+def _regression_metrics(
+    true: np.ndarray, pred: np.ndarray, idx: np.ndarray
+) -> dict[str, np.ndarray]:
+    """MSE/RMSE/MAE/R² per resample, pooled over target columns."""
+    drawn_true = true[idx]  # (rows, n, targets)
+    residual = pred[idx] - drawn_true
+    count = residual.shape[1] * residual.shape[2]
+
+    sse = np.einsum("rnt,rnt->r", residual, residual)
+    mse = sse / count
+    mae = np.abs(residual).sum(axis=(1, 2)) / count
+
+    total = drawn_true.sum(axis=(1, 2))
+    ss_tot = np.einsum("rnt,rnt->r", drawn_true, drawn_true) - (total * total) / count
+    # Same guard as the streaming accumulator: a constant target has no variance
+    # to explain, and R² is undefined rather than perfect.
+    r2 = np.where(
+        ss_tot > 1e-12, 1.0 - sse / np.where(ss_tot > 1e-12, ss_tot, 1.0), 0.0
+    )
+
+    return {"mse": mse, "rmse": np.sqrt(mse), "mae": mae, "r2": r2}
+
+
+def _segmentation_metrics(
+    matrices: np.ndarray, idx: np.ndarray
+) -> dict[str, np.ndarray]:
+    """mIoU/Dice/pixel-accuracy per resample from summed per-image matrices."""
+    summed = matrices[idx].sum(axis=1)  # (rows, K, K)
+    tp = np.einsum("rii->ri", summed)
+    support = summed.sum(axis=2)  # true pixels per class
+    predicted = summed.sum(axis=1)  # predicted pixels per class
+
+    union = support + predicted - tp
+    iou = np.where(union > 0, tp / np.where(union > 0, union, 1.0), 0.0)
+    denom = support + predicted
+    dice = np.where(denom > 0, 2.0 * tp / np.where(denom > 0, denom, 1.0), 0.0)
+
+    # Present means "appears as a ground-truth OR a predicted class", matching
+    # SegmentationMetricAccumulator — averaging over ground-truth classes only
+    # would silently report a different number than the run headlines.
+    present = (support + predicted) > 0
+    n_present = np.maximum(present.sum(axis=1), 1)
+    total = summed.sum(axis=(1, 2))
+    return {
+        "miou": (iou * present).sum(axis=1) / n_present,
+        "dice": (dice * present).sum(axis=1) / n_present,
+        "pixel_acc": np.where(
+            total > 0, tp.sum(axis=1) / np.where(total > 0, total, 1.0), 0.0
+        ),
+    }
 
 
 def _interval(
@@ -327,4 +545,10 @@ def _point_estimates(
     return values, auc_point
 
 
-__all__ = ["MetricCI", "bootstrap_classification_cis"]
+__all__ = [
+    "MetricCI",
+    "bootstrap_anomaly_cis",
+    "bootstrap_classification_cis",
+    "bootstrap_regression_cis",
+    "bootstrap_segmentation_cis",
+]

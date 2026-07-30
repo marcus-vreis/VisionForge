@@ -16,6 +16,7 @@ from typing import Any
 
 import torch
 
+from visionforge.core.metric_ci import MetricCI, bootstrap_segmentation_cis
 from visionforge.core.plotter import MetricsPlotter
 from visionforge.core.segmentation_data import SegmentationDataModule
 from visionforge.core.segmentation_trainer import (
@@ -33,6 +34,7 @@ class SegmentationBlock:
         self._config = config
         self._train_result: SegmentationTrainResult | None = None
         self._test_metrics: tuple[float, float, float] | None = None
+        self._metric_cis: dict[str, MetricCI] = {}
         # Injected by the GUI layer to stream live epoch progress via SSE.
         self._progress_callback: Callable[[dict[str, Any]], None] | None = None
 
@@ -53,7 +55,12 @@ class SegmentationBlock:
 
         test_loader = data.test_loader()
         if test_loader is not None:
-            self._test_metrics = trainer.evaluate(model, test_loader)
+            self._test_metrics, per_image = trainer.evaluate_with_confusion(
+                model, test_loader
+            )
+            self._metric_cis = bootstrap_segmentation_cis(
+                per_image, seed=self._config.training.seed
+            )
 
         run_dir = self._train_result.model_path.parent
         graphics = self._render_plots(run_dir)
@@ -74,6 +81,10 @@ class SegmentationBlock:
         if self._test_metrics is not None:
             miou, dice, pixel_acc = self._test_metrics
             result["test"] = {"miou": miou, "dice": dice, "pixel_acc": pixel_acc}
+            if self._metric_cis:
+                result["test"]["confidence_intervals"] = {
+                    name: ci.to_dict() for name, ci in self._metric_cis.items()
+                }
         return result
 
     # ── private ───────────────────────────────────────────────────────────────
@@ -103,6 +114,10 @@ class SegmentationBlock:
                     "test_pixel_acc": pixel_acc,
                 }
             )
+        if self._metric_cis:
+            data["metric_cis"] = {
+                name: ci.to_dict() for name, ci in self._metric_cis.items()
+            }
         data["artifacts"]["graphics"] = [str(p) for p in graphics]
         run_json_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
 

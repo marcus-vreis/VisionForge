@@ -21,8 +21,14 @@ describe("metricCi", () => {
     expect(metricCi({ accuracy: ci() }, "test_accuracy")?.metric).toBe("accuracy");
   });
 
-  it("also accepts the bare metric name", () => {
-    expect(metricCi({ accuracy: ci() }, "accuracy")?.metric).toBe("accuracy");
+  it("refuses the bare metric name — that is the validation number", () => {
+    // Segmentation's run.json holds `miou` (best validation) next to
+    // `test_miou`. Attaching the test interval to the former would bracket a
+    // value it was never computed from.
+    expect(metricCi({ miou: ci({ metric: "miou" }) }, "miou")).toBeUndefined();
+    expect(metricCi({ miou: ci({ metric: "miou" }) }, "test_miou")?.metric).toBe(
+      "miou",
+    );
   });
 
   it("returns undefined for a metric with no interval", () => {

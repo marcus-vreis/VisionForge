@@ -166,11 +166,27 @@ class AnomalyTrainer:
         The threshold is derived from the normal (train) score distribution; the
         F1 uses that threshold against the binary test labels.
         """
+        return self.evaluate_with_scores(model, train_loader, test_loader)[0]
+
+    def evaluate_with_scores(
+        self, model: nn.Module, train_loader: Any, test_loader: Any
+    ) -> tuple[tuple[float, float, float], np.ndarray, np.ndarray]:
+        """As ``evaluate``, plus the per-image test labels and anomaly scores.
+
+        Those arrays are what the bootstrap intervals resample (ADR-076), and
+        they come from the same pass that produced the aggregates, so a report
+        cannot show a metric computed differently from its interval.
+        """
         model = model.to(self._device)
         model.eval()
         normal_scores = self._collect_scores(model, train_loader)[0]
         test_scores, test_labels = self._collect_scores(model, test_loader)
-        return self._metrics(normal_scores, test_scores, test_labels)
+        metrics = self._metrics(normal_scores, test_scores, test_labels)
+        return (
+            metrics,
+            test_labels.detach().cpu().numpy().ravel(),
+            test_scores.detach().cpu().numpy().ravel(),
+        )
 
     # ── private ─────────────────────────────────────────────────────────────────
 
