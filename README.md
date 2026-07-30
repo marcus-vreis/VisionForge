@@ -76,15 +76,17 @@ from source — the published package already ships the built UI.
 
 ```bash
 mkdir my-research && cd my-research    # one folder per project (see Workspace)
-pip install "visionforge-studio[cu121]"
+pip install "visionforge-studio[cu128]"
 visionforge doctor
 visionforge gui
 ```
 
-The extra picks the torch build: `cu118` · `cu121` · `cu124` · `cu126` · `cpu`.
-Not sure which? Install the bare package first, run `visionforge doctor`, and
-it prints the exact line for your machine — then re-run the install with the
-extra it names.
+The extra picks the torch build: `cu118` · `cu121` · `cu124` · `cu126` ·
+`cu128` · `cpu`. `cu128` is the broadest — its kernels span Turing (sm_75)
+through Blackwell (sm_120), and it is the only one that runs on an RTX
+50-series card at all. Not sure which? Install the bare package first, run
+`visionforge doctor`, and it prints the exact line for your machine — then
+re-run the install with the extra it names.
 
 ### With Docker
 
@@ -110,12 +112,33 @@ build is a build arg rather than a hardcoded base, so one Dockerfile serves
 every supported version:
 
 ```bash
-docker build --build-arg CUDA_TAG=cu126 \n  --build-arg BASE_IMAGE=nvidia/cuda:12.6.3-runtime-ubuntu22.04 -t visionforge:cu126 .
+docker build \
+  --build-arg CUDA_TAG=cu126 \
+  --build-arg BASE_IMAGE=nvidia/cuda:12.6.3-runtime-ubuntu22.04 \
+  -t visionforge:cu126 .
 ```
+
+Change both args together: the wheel tag and the CUDA runtime it needs.
 
 One difference inside the container: the native folder picker needs a display,
 so it explains itself and you type the mounted path (`/work/datasets/...`)
 instead.
+
+### pip and Docker side by side
+
+They are the same code and the same version — Docker only removes the PyTorch
+install step. Pick per machine, not per project:
+
+| | shared between the two | why |
+|---|---|---|
+| `outputs/` — runs, checkpoints, `run.json`, reports | **yes** | it is a mounted host folder, so a run trained via pip shows up in the Docker GUI's history and vice versa |
+| `datasets/`, `user_models/`, `user_tasks/` | **yes** | also mounted from the host |
+| saved provider API keys | **no** | pip keeps them in `~/.visionforge/credentials.json` on the host; the container keeps them in its own `visionforge-config` volume, so you save the key once per form (set `VISIONFORGE_HOME` to point elsewhere) |
+| the run queue | **no** | it lives in the server process, so each running server has its own |
+
+**Run one at a time.** Both serve port 8000, and both want the same GPU —
+starting the container while a pip-installed server is training does not divide
+the card between them, it just makes two processes compete for its memory.
 
 ### From source
 
@@ -134,8 +157,8 @@ hardware, and a resolver cannot pick correctly between the CPU and CUDA wheels
 already wired up for it:
 
 ```bash
-uv pip install -e ".[cu121,dev]"    # NVIDIA CUDA 12.1
-# also available: cu118 · cu124 · cu126 · cpu
+uv pip install -e ".[cu128,dev]"    # NVIDIA CUDA 12.8 — widest GPU coverage
+# also available: cu118 · cu121 · cu124 · cu126 · cpu
 ```
 
 Not sure which? Ask, and it prints the exact line for your machine:
@@ -293,15 +316,21 @@ development. Below 1.0 the config schema and HTTP API may change between minor
 releases; configs carry a `schema_version` and are migrated on load, so a YAML
 exported from an older release keeps working.
 
-Verified, not asserted: 1274 backend tests and 102 frontend tests gated in CI,
+Verified, not asserted: 1370 backend tests and 121 frontend tests gated in CI,
 plus a full matrix of 21 (task × strategy) cases trained on **real** datasets —
 the corpus, the numbers and the one defect it caught are in
 [`documentation/VALIDATION.md`](documentation/VALIDATION.md).
 
 Known limits worth knowing before you start:
 
-- **One training at a time.** A second submit gets a 409; an experiment queue
-  is on the roadmap. Run batches from the CLI in the meantime.
+- **One training at a time — but submissions queue.** The card runs one job;
+  extra submissions line up and start on their own as it frees, so you can
+  stack an evening's experiments and leave (ADR-075). The bottom bar shows
+  `⧗ fila N` when something is waiting, and a job that has not started yet can
+  be dropped. A job already training cannot be cancelled: the trainers have no
+  stop point, and interrupting one would leave a half-written run directory.
+  The queue lives in the server process, so restarting the server clears what
+  had not started.
 - **One-click dataset download covers classification only** (the torchvision
   built-ins produce an `ImageFolder`). Detection, regression, segmentation and
   anomaly need a dataset already in their layout — see
