@@ -13,6 +13,8 @@ from fastapi.testclient import TestClient
 from visionforge.gui.api.routes import _detect_dataset_layout, _load_runs
 from visionforge.gui.api.schemas import RunSummary
 
+from .conftest import occupy_queue, release_queue
+
 # ── fixtures ──────────────────────────────────────────────────────────────────
 
 _TS_EARLY = "2026-01-01T10:00:00"
@@ -970,16 +972,12 @@ class TestApiRunsEndpoint:
             RandomSearchBlock.report = original_report  # type: ignore[method-assign]
             routes_mod._current_run = None
 
-    def test_post_experiment_run_rejects_concurrent(
+    def test_queues_behind_a_running_job(
         self, app_and_routes: tuple, tmp_path: Path
     ) -> None:
-        """POST /experiment/run must return 409 when a run is already active."""
+        """A submission that arrives while the GPU is busy waits its turn."""
         app, routes_mod = app_and_routes
-        routes_mod._current_run = {
-            "run_id": "already-running",
-            "status": "running",
-            "error": None,
-        }
+        occupy_queue(routes_mod)
         try:
             minimal_config = {
                 "name": "test_exp",
@@ -996,9 +994,10 @@ class TestApiRunsEndpoint:
             }
             client = TestClient(app, raise_server_exceptions=True)
             resp = client.post("/api/experiment/run", json=minimal_config)
-            assert resp.status_code == 409
+            assert resp.status_code == 200
+            assert resp.json()["status"] == "queued"
         finally:
-            routes_mod._current_run = None
+            release_queue(routes_mod)
 
     def test_get_status_with_active_run(self, app_and_routes: tuple) -> None:
         """GET /api/experiment/status must return run_id and status when a run exists."""

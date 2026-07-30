@@ -1,12 +1,33 @@
 export interface RunStatus {
-  status: "idle" | "running" | "completed" | "failed";
+  /** `queued` is client-side only: the server reports the *active* run, and the
+   *  hook derives this for a submission of its own that has not started yet. */
+  status: "idle" | "queued" | "running" | "completed" | "failed";
   run_id: string | null;
   error: string | null;
+  /** Submissions waiting behind the active run (ADR-075). */
+  queued?: number;
+  /** 1-based place in the queue while this run is waiting. */
+  position?: number;
 }
 
 export interface RunResponse {
   run_id: string;
-  status: "running";
+  /** `queued` when the GPU was busy and the job is waiting its turn (ADR-075). */
+  status: "running" | "queued";
+}
+
+/** One entry in the run queue. */
+export interface QueuedJobInfo {
+  run_id: string;
+  label: string;
+  task: string;
+  strategy: string;
+  submitted_at: string;
+}
+
+export interface QueueSnapshot {
+  active: QueuedJobInfo | null;
+  pending: QueuedJobInfo[];
 }
 
 /** Bootstrap interval for one test metric (backend MetricCI, ADR-074). */

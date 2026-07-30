@@ -6,6 +6,8 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from .conftest import occupy_queue, release_queue
+
 
 @pytest.fixture
 def app_and_routes():  # type: ignore[return]
@@ -166,20 +168,21 @@ class TestRegressionReplicates:
         )
         assert resp.status_code == 422
 
-    def test_conflict_when_already_running(
+    def test_queues_behind_a_running_job(
         self, app_and_routes: tuple, tmp_path: Path
     ) -> None:
         app, routes_mod = app_and_routes
-        routes_mod._current_run = {"run_id": "x", "status": "running"}
+        occupy_queue(routes_mod)
         try:
             client = TestClient(app, raise_server_exceptions=True)
             resp = client.post(
                 "/api/regression/replicates",
                 json={"config": _payload(tmp_path)},
             )
-            assert resp.status_code == 409
+            assert resp.status_code == 200
+            assert resp.json()["status"] == "queued"
         finally:
-            routes_mod._current_run = None
+            release_queue(routes_mod)
 
     def test_rejects_invalid_config(
         self, app_and_routes: tuple, tmp_path: Path

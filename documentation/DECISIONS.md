@@ -1916,3 +1916,81 @@ n=1600 is `[0.7288, 0.7712]` — an independent confirmation the bootstrap is
 calibrated rather than merely self-consistent. Rendering was confirmed in the
 browser against that run (five intervals under the right labels, no console
 errors).
+
+---
+
+## ADR-075 — Submissions queue instead of being refused
+
+**Date:** 2026-07-29
+**Status:** Accepted — shipped 2026-07-29
+**Supersedes:** the "one run at a time, 409 otherwise" contract of ADR-016
+
+**Context:** the GUI accepted one run at a time and answered `409 An experiment
+is already running.` to anything else. The machine genuinely has one GPU, so
+running one at a time is right — but *refusing the submission* forced the
+researcher to sit at the keyboard and resubmit the moment each run ended. The
+obvious overnight workflow (line up the evening's experiments and walk away) was
+impossible for anything the sweep/replicates orchestrators do not already
+parametrize, which is exactly the heterogeneous case: a detection run, then a
+segmentation run, then the same classifier on a different dataset.
+
+Worth being precise about the gap, because it is narrower than "there is no way
+to queue work": sweeps, replicates, K-fold and comparison already run N
+trainings from one submission. What was missing is queueing *unrelated* jobs.
+
+**Decision:** `gui/api/run_queue.py` holds a FIFO of submissions and drains it
+one job at a time. A submission returns `{"run_id", "status"}` where status is
+`running` (the GPU was free) or `queued`. `GET /api/queue` lists the active job
+and everything waiting; `DELETE /api/queue/{run_id}` drops a job that has not
+started; `/experiment/status` gained a `queued` count.
+
+**Two things had to change beyond "keep a list", and they are why this needed an
+ADR rather than a few lines in the route layer:**
+
+1. **A finished run's result has to survive the next one starting.** The route
+   module kept exactly one `_current_run` dict and `/experiment/result/{run_id}`
+   read straight from it. With jobs running back to back, job 2 overwrites job
+   1's report before the browser fetches it — the report would simply be gone.
+   Terminal snapshots are now recorded per `run_id` in the queue (bounded at 100;
+   the durable record is `run.json` on disk).
+2. **The SSE queue must be created when a job starts, not when it is submitted.**
+   Every starter used to do `_event_queue = asyncio.Queue()` in the request
+   handler, which was safe *only* because a second submit was refused. Under
+   queueing, submitting job 2 would replace the live queue of job 1 and its
+   progress stream would go dead mid-training. Creation moved into the queue's
+   `on_start` callback.
+
+**A related bug the queue would have introduced in the frontend, fixed here:**
+`useExperiment` polled `/experiment/status` — which describes whatever is
+*active* — and treated the answer as its own run. A submission still waiting
+would therefore have read another job's completion as its own and fetched the
+wrong result. The hook now tracks the run it submitted and only acts on that id;
+while waiting it reports position in line, and it attaches the EventSource at
+the moment its own job becomes active, so a queued run's live monitor starts by
+itself.
+
+**A running job is deliberately not cancellable.** The trainers own their loop
+and have no cooperative stop point, so "cancel" would either lie or leave a
+half-written run directory. `DELETE /api/queue/{run_id}` answers 404 for a job
+that already started, and says so in the message.
+
+**The queue is in-memory and not persisted.** It describes what this server
+process is about to do; losing the pending list on restart is correct rather
+than a gap. Persisting it would promise to resume work after a crash, which
+nothing else in the design supports.
+
+**One bad job must not strand the batch.** The drain loop catches anything the
+executors let escape, logs it, and continues — a queue that stops at the first
+failure would defeat the purpose of submitting several jobs unattended.
+
+**Rejected: per-run event streams** (`/experiment/events?run_id=`). Cleaner in
+principle, and it would let a client watch a job that is not the active one, but
+it rewrites a contract five task panels and every strategy already consume, for
+a case that does not arise while exactly one job can run. The single active
+stream stays; the hook attaches when its turn comes.
+
+**Contract change, called out:** a busy server no longer answers 409 to a
+submission. Thirteen route tests asserted that and now assert `status: "queued"`
+instead; the 409 branch is kept in the frontend for an older server. The
+per-endpoint validation errors (422 for a bad config, 404 for an unknown custom
+task) are unchanged and still happen before anything is enqueued.

@@ -824,10 +824,32 @@ que transformou o repositório num pacote que outra pessoa consegue instalar:
   forwarded `seed` only to Ultralytics, so those runs were never seeded and
   `seed: 42` was a claim nothing backed — now fixed.
   Tests: `tests/core/test_determinism_parity.py` (27).
-- Experiment queue: today a second submit gets 409 (single-run state). A simple
-  FIFO queue (submit N configs, run sequentially on the one GPU, queue panel in
-  the GUI) is how a researcher trains overnight. Needs an ADR — it touches the
-  shared run-state contract.
+- [x] **Fila de experimentos ✅ (ADR-075, 2026-07-29)** — submeter deixou de ser
+  bloqueante: o segundo POST vira `status: "queued"` em vez de 409, e
+  `gui/api/run_queue.py` drena um job por vez. `GET /api/queue` lista ativo +
+  pendentes, `DELETE /api/queue/{run_id}` cancela o que ainda não começou (um job
+  em execução responde 404 — os trainers não têm ponto de parada cooperativo, e
+  "cancelar" mentiria ou deixaria um run dir pela metade), e
+  `/experiment/status` ganhou a contagem `queued`. Duas coisas além de "guardar
+  uma lista", que são o motivo do ADR: o resultado de um run precisava sobreviver
+  ao próximo começar (havia **um** `_current_run` e `/experiment/result` lia dele
+  — o job 2 sobrescrevia o relatório do job 1 antes do navegador buscar), e a
+  fila SSE passou a ser criada **quando o job começa**, não na submissão (criar
+  no handler só era seguro porque um segundo submit era recusado; com fila,
+  submeter o job 2 substituía a fila viva do job 1 e matava o monitor dele no
+  meio do treino). No frontend, o `useExperiment` lia o status *global* como se
+  fosse o próprio run — um job na fila veria a conclusão de outro como sua e
+  buscaria o resultado errado; agora ele acompanha o id que submeteu, mostra a
+  posição na fila e liga o EventSource sozinho quando chega a vez.
+  Verificado ponta a ponta com treinos reais na GPU: 3 submissões → 1 running +
+  2 queued, cancelamento do pendente OK e 404 no que já rodava, fila avançou
+  sozinha, resultado do job A servido íntegro (métricas + IC) com o B rodando, e
+  na GUI o overlay foi de "NA FILA · 1º na fila" para "TRAINING" com épocas
+  chegando ao vivo, sem clique nenhum.
+  Testes: `tests/gui/test_run_queue.py` (19) + 13 testes de rota reescritos para
+  o contrato novo.
+- Painel de fila na GUI (listar/cancelar sem abrir o overlay) — o backend já
+  serve `GET /api/queue`; falta a superfície.
 - [x] **Bootstrap CI on single-run test metrics ✅ (ADR-074, 2026-07-29)** — todo
   run de classificação (simples e transfer learning) grava `metric_cis` no
   `run.json` e mostra o intervalo nos tiles de resultado, no painel de detalhe e

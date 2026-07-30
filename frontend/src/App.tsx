@@ -121,6 +121,7 @@ export default function App() {
   // The overlay stays MOUNTED for the whole life of a run (hidden via CSS when
   // minimized) so its logs and progress survive minimize/reopen.
   const runActive =
+    status.status === "queued" ||
     status.status === "running" ||
     status.status === "completed" ||
     status.status === "failed";

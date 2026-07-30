@@ -8,7 +8,7 @@ import json
 import os
 import platform
 import uuid
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
@@ -60,6 +60,7 @@ from visionforge.core.task_runner import TaskRunner
 from visionforge.gui.api.dataset_download import download_dataset
 from visionforge.gui.api.detection_export import export_detection_run
 from visionforge.gui.api.detection_testing import evaluate_detection_run
+from visionforge.gui.api.run_queue import QueuedJob, RunQueue
 from visionforge.gui.api.schemas import (
     AnomalyDatasetStatsRequest,
     AnomalyDatasetStatsResponse,
@@ -95,6 +96,8 @@ from visionforge.gui.api.schemas import (
     PreprocessPreviewRequest,
     PreprocessPreviewResponse,
     PreprocessPreviewStep,
+    QueuedJobInfo,
+    QueueSnapshot,
     RegressionDatasetStatsRequest,
     RegressionDatasetStatsResponse,
     RegressionSplitStats,
@@ -153,7 +156,8 @@ _TEST_ALIASES = {"test", "testing", "teste", "ts", "holdout", "hold_out"}
 
 router = APIRouter(prefix="/api")
 
-# Single-experiment state (MVP: one run at a time).
+# State of the run that is executing right now (the machine still trains one at
+# a time); submissions that arrive while it is busy wait in _RUN_QUEUE.
 _current_run: dict[str, Any] | None = None
 
 # Per-run SSE queue; None when no run is active.
@@ -164,6 +168,63 @@ _event_queue: asyncio.Queue[dict[str, Any] | None] | None = None
 
 # Default location where Trainer writes run directories.
 _MODELS_DIR = Path("outputs/models")
+
+
+def _begin_job(job: QueuedJob) -> None:
+    """Prepare per-run state the moment a queued job actually starts (ADR-075).
+
+    The fresh SSE queue is created here rather than at submission time: doing it
+    in the request handler was safe only while a second submit was refused, and
+    with queueing it would replace the live queue of the job still running.
+    """
+    global _current_run, _event_queue
+
+    _event_queue = asyncio.Queue()
+    _current_run = {
+        "run_id": job.run_id,
+        "status": "running",
+        "error": None,
+        "report": None,
+        "run_dir": None,
+    }
+
+
+def _finish_job(job: QueuedJob) -> dict[str, Any] | None:
+    """Hand the finished run's terminal state to the queue to keep by run_id."""
+    if _current_run is not None and _current_run.get("run_id") == job.run_id:
+        return dict(_current_run)
+    return None
+
+
+_RUN_QUEUE = RunQueue(on_start=_begin_job, on_finish=_finish_job)
+
+
+def _task_label_from_config(config_type: type[Any]) -> str:
+    """Queue display label for a shared starter, derived from its config class.
+
+    The shared orchestrators take a config type rather than a task name — and
+    for a researcher-defined task they never see its real key. Every task's
+    config is named ``<Task>Config``, so the class name is the honest source
+    here. This is a label for the queue panel, never a dispatch key.
+    """
+    if config_type is ExperimentConfig:
+        return "classification"
+    return config_type.__name__.removesuffix("Config").lower() or "experiment"
+
+
+def _submit_job(
+    run_id: str,
+    label: str,
+    task: str,
+    strategy: str,
+    start: Callable[[], Awaitable[None]],
+) -> RunResponse:
+    """Queue a training job and report whether it started or is waiting."""
+    status = _RUN_QUEUE.submit(
+        QueuedJob(run_id=run_id, label=label, task=task, strategy=strategy, start=start)
+    )
+    return RunResponse(run_id=run_id, status=status)  # type: ignore[arg-type]
+
 
 # Image extensions accepted both for dataset stats / sample probes and for the
 # /dataset/file thumbnail endpoint.
@@ -560,31 +621,17 @@ def _execute_dataset_download(req: DatasetDownloadRequest) -> DatasetDownloadRes
 
 @router.post("/experiment/run")
 async def run_experiment(config: ExperimentConfig) -> RunResponse:
-    """Start a training experiment in the background."""
-    global _current_run, _event_queue
-
-    if _current_run and _current_run["status"] == "running":
-        raise HTTPException(409, "An experiment is already running.")
-
+    """Start a training experiment, or queue it if one is already running."""
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     run_id = f"{config.name}_{timestamp}"
 
-    # Fresh queue for this run; SSE clients poll this queue.
-    _event_queue = asyncio.Queue()
-
-    _current_run = {
-        "run_id": run_id,
-        "status": "running",
-        "error": None,
-        "report": None,
-        "run_dir": None,
-    }
-
-    task = asyncio.create_task(_execute_experiment(config, run_id))
-    _background_tasks.add(task)
-    task.add_done_callback(_background_tasks.discard)
-
-    return RunResponse(run_id=run_id)
+    return _submit_job(
+        run_id,
+        config.name,
+        "classification",
+        config.block,
+        lambda: _execute_experiment(config, run_id),
+    )
 
 
 @router.get("/detection/schema")
@@ -650,32 +697,20 @@ async def regression_dataset_stats(
 async def run_detection(config: DetectionConfig) -> RunResponse:
     """Start an object-detection training run in the background.
 
-    Detection shares the single-run state and the /experiment/{status,events,
-    result} endpoints (one run at a time, one GPU) but dispatches its own
-    standalone DetectionBlock (ADR-033) rather than the ExperimentConfig path.
+    Detection shares the run queue and the /experiment/{status,events,result}
+    endpoints (one run at a time, one GPU) but dispatches its own standalone
+    DetectionBlock (ADR-033) rather than the ExperimentConfig path.
     """
-    global _current_run, _event_queue
-
-    if _current_run and _current_run["status"] == "running":
-        raise HTTPException(409, "An experiment is already running.")
-
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     run_id = f"{config.name}_{timestamp}"
 
-    _event_queue = asyncio.Queue()
-    _current_run = {
-        "run_id": run_id,
-        "status": "running",
-        "error": None,
-        "report": None,
-        "run_dir": None,
-    }
-
-    task = asyncio.create_task(_execute_detection(config, run_id))
-    _background_tasks.add(task)
-    task.add_done_callback(_background_tasks.discard)
-
-    return RunResponse(run_id=run_id)
+    return _submit_job(
+        run_id,
+        config.name,
+        "detection",
+        "simple",
+        lambda: _execute_detection(config, run_id),
+    )
 
 
 @router.get("/regression/schema")
@@ -688,32 +723,20 @@ async def get_regression_schema() -> dict[str, Any]:
 async def run_regression(config: RegressionConfig) -> RunResponse:
     """Start an image-regression training run in the background.
 
-    Regression shares the single-run state and the /experiment/{status,events,
-    result} endpoints (one run at a time, one GPU) but dispatches its own
-    standalone RegressionBlock (ADR-036) rather than the ExperimentConfig path.
+    Regression shares the run queue and the /experiment/{status,events,result}
+    endpoints (one run at a time, one GPU) but dispatches its own standalone
+    RegressionBlock (ADR-036) rather than the ExperimentConfig path.
     """
-    global _current_run, _event_queue
-
-    if _current_run and _current_run["status"] == "running":
-        raise HTTPException(409, "An experiment is already running.")
-
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     run_id = f"{config.name}_{timestamp}"
 
-    _event_queue = asyncio.Queue()
-    _current_run = {
-        "run_id": run_id,
-        "status": "running",
-        "error": None,
-        "report": None,
-        "run_dir": None,
-    }
-
-    task = asyncio.create_task(_execute_regression(config, run_id))
-    _background_tasks.add(task)
-    task.add_done_callback(_background_tasks.discard)
-
-    return RunResponse(run_id=run_id)
+    return _submit_job(
+        run_id,
+        config.name,
+        "regression",
+        "simple",
+        lambda: _execute_regression(config, run_id),
+    )
 
 
 @router.get("/segmentation/schema")
@@ -726,32 +749,20 @@ async def get_segmentation_schema() -> dict[str, Any]:
 async def run_segmentation(config: SegmentationConfig) -> RunResponse:
     """Start a semantic-segmentation training run in the background.
 
-    Segmentation shares the single-run state and the /experiment/{status,events,
-    result} endpoints (one run at a time, one GPU) but dispatches its own
-    standalone SegmentationBlock (ADR-037) rather than the ExperimentConfig path.
+    Segmentation shares the run queue and the /experiment/{status,events,result}
+    endpoints (one run at a time, one GPU) but dispatches its own standalone
+    SegmentationBlock (ADR-037) rather than the ExperimentConfig path.
     """
-    global _current_run, _event_queue
-
-    if _current_run and _current_run["status"] == "running":
-        raise HTTPException(409, "An experiment is already running.")
-
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     run_id = f"{config.name}_{timestamp}"
 
-    _event_queue = asyncio.Queue()
-    _current_run = {
-        "run_id": run_id,
-        "status": "running",
-        "error": None,
-        "report": None,
-        "run_dir": None,
-    }
-
-    task = asyncio.create_task(_execute_segmentation(config, run_id))
-    _background_tasks.add(task)
-    task.add_done_callback(_background_tasks.discard)
-
-    return RunResponse(run_id=run_id)
+    return _submit_job(
+        run_id,
+        config.name,
+        "segmentation",
+        "simple",
+        lambda: _execute_segmentation(config, run_id),
+    )
 
 
 @router.get("/anomaly/schema")
@@ -764,32 +775,20 @@ async def get_anomaly_schema() -> dict[str, Any]:
 async def run_anomaly(config: AnomalyConfig) -> RunResponse:
     """Start an anomaly-detection training run in the background.
 
-    Anomaly shares the single-run state and the /experiment/{status,events,
-    result} endpoints (one run at a time, one GPU) but dispatches its own
-    standalone AnomalyBlock (ADR-038) rather than the ExperimentConfig path.
+    Anomaly shares the run queue and the /experiment/{status,events,result}
+    endpoints (one run at a time, one GPU) but dispatches its own standalone
+    AnomalyBlock (ADR-038) rather than the ExperimentConfig path.
     """
-    global _current_run, _event_queue
-
-    if _current_run and _current_run["status"] == "running":
-        raise HTTPException(409, "An experiment is already running.")
-
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     run_id = f"{config.name}_{timestamp}"
 
-    _event_queue = asyncio.Queue()
-    _current_run = {
-        "run_id": run_id,
-        "status": "running",
-        "error": None,
-        "report": None,
-        "run_dir": None,
-    }
-
-    task = asyncio.create_task(_execute_anomaly(config, run_id))
-    _background_tasks.add(task)
-    task.add_done_callback(_background_tasks.discard)
-
-    return RunResponse(run_id=run_id)
+    return _submit_job(
+        run_id,
+        config.name,
+        "anomaly",
+        "simple",
+        lambda: _execute_anomaly(config, run_id),
+    )
 
 
 @router.post("/regression/compare")
@@ -1015,18 +1014,14 @@ async def custom_task_schema(key: str) -> dict[str, Any]:
 async def run_custom_task(key: str, config: dict[str, Any]) -> RunResponse:
     """Start a custom-task training run in the background (ADR-058).
 
-    Validates against the task's own Config; reuses the shared single-run
-    state and the /experiment/{status,events,result} endpoints.
+    Validates against the task's own Config; reuses the shared run queue and the
+    /experiment/{status,events,result} endpoints.
 
     Raises:
-        HTTPException: 404 unknown key; 409 if a run is already active.
+        HTTPException: 404 unknown key.
         RequestValidationError: 422 if the config is invalid for the task.
     """
-    global _current_run, _event_queue
-
     info = _get_custom_task_or_404(key)
-    if _current_run and _current_run["status"] == "running":
-        raise HTTPException(409, "An experiment is already running.")
 
     try:
         cfg = info.spec_cls.Config.model_validate(config)
@@ -1036,19 +1031,13 @@ async def run_custom_task(key: str, config: dict[str, Any]) -> RunResponse:
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     run_id = f"{cfg.name}_{timestamp}"
 
-    _event_queue = asyncio.Queue()
-    _current_run = {
-        "run_id": run_id,
-        "status": "running",
-        "error": None,
-        "report": None,
-        "run_dir": None,
-    }
-
-    task = asyncio.create_task(_execute_custom_task(info, cfg, run_id))
-    _background_tasks.add(task)
-    task.add_done_callback(_background_tasks.discard)
-    return RunResponse(run_id=run_id)
+    return _submit_job(
+        run_id,
+        str(cfg.name),
+        f"custom:{info.key}",
+        "simple",
+        lambda: _execute_custom_task(info, cfg, run_id),
+    )
 
 
 async def _execute_custom_task(info: Any, cfg: Any, run_id: str) -> None:
@@ -1244,33 +1233,72 @@ async def _sse_generator():  # type: ignore[return]
 
 @router.get("/experiment/status")
 async def get_status() -> RunStatus:
-    """Poll the current experiment status."""
+    """Poll the current experiment status, plus how many are queued behind it."""
+    queued = _RUN_QUEUE.pending_count()
     if _current_run is None:
-        return RunStatus(status="idle")
+        return RunStatus(status="idle", queued=queued)
 
     return RunStatus(
         status=_current_run["status"],
         run_id=_current_run["run_id"],
         error=_current_run.get("error"),
+        queued=queued,
     )
+
+
+@router.get("/queue")
+async def get_queue() -> QueueSnapshot:
+    """The active run and everything waiting behind it, in submission order."""
+    snap = _RUN_QUEUE.snapshot()
+    return QueueSnapshot(
+        active=QueuedJobInfo(**snap["active"]) if snap["active"] else None,
+        pending=[QueuedJobInfo(**job) for job in snap["pending"]],
+    )
+
+
+@router.delete("/queue/{run_id}")
+async def cancel_queued_run(run_id: str) -> dict[str, str]:
+    """Drop a job that has not started yet.
+
+    A running job is deliberately not cancellable: the trainers own their loop
+    and have no cooperative stop point, so "cancel" would either lie or leave a
+    half-written run directory behind.
+
+    Raises:
+        HTTPException: 404 if no pending job carries that id (already running,
+            already finished, or never submitted).
+    """
+    if not _RUN_QUEUE.cancel(run_id):
+        raise HTTPException(
+            404, "No queued run with that id — it may have already started."
+        )
+    return {"run_id": run_id, "status": "cancelled"}
 
 
 @router.get("/experiment/result/{run_id}")
 async def get_result(run_id: str) -> RunResult:
-    """Fetch the result of a completed experiment."""
-    if _current_run is None or _current_run["run_id"] != run_id:
+    """Fetch the result of a completed experiment.
+
+    Reads the live state when the id is the current run, and otherwise the
+    queue's per-run record: with jobs queued back to back, the next one is
+    already running by the time the browser asks for the previous one's report.
+    """
+    state = _current_run if (_current_run or {}).get("run_id") == run_id else None
+    if state is None:
+        state = _RUN_QUEUE.record(run_id)
+    if state is None:
         raise HTTPException(404, "Run not found.")
 
-    if _current_run["status"] == "running":
+    if state["status"] == "running":
         raise HTTPException(409, "Experiment is still running.")
 
-    if _current_run["status"] == "failed":
+    if state["status"] == "failed":
         raise HTTPException(
             500,
-            f"Experiment failed: {_current_run.get('error', 'unknown error')}",
+            f"Experiment failed: {state.get('error', 'unknown error')}",
         )
 
-    run_dir = _current_run.get("run_dir")
+    run_dir = state.get("run_dir")
     run_json_path = Path(run_dir) / "run.json" if run_dir else None
 
     if run_json_path and run_json_path.exists():
@@ -1279,14 +1307,14 @@ async def get_result(run_id: str) -> RunResult:
             run_id=run_id,
             metrics=data.get("metrics", {}),
             metric_cis=data.get("metric_cis", {}),
-            report=_current_run.get("report", {}),
+            report=state.get("report") or {},
             artifacts=data.get("artifacts", {}),
         )
 
     return RunResult(
         run_id=run_id,
         metrics={},
-        report=_current_run.get("report", {}),
+        report=state.get("report") or {},
         artifacts={},
     )
 
@@ -3073,17 +3101,11 @@ def _start_comparison(
     config_type: type[Any],
     runner: TaskRunner,
 ) -> RunResponse:
-    """Validate the base config and launch a background model-comparison run.
+    """Validate the base config and queue a model-comparison run.
 
     Raises:
-        HTTPException: 409 if a run is already active.
         RequestValidationError: 422 if the base task config is invalid.
     """
-    global _current_run, _event_queue
-
-    if _current_run and _current_run["status"] == "running":
-        raise HTTPException(409, "An experiment is already running.")
-
     # Fail fast on a bad base config; each trial re-validates with its override.
     try:
         config_type.model_validate(req.config)
@@ -3095,21 +3117,15 @@ def _start_comparison(
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     run_id = f"{name}_{timestamp}"
 
-    _event_queue = asyncio.Queue()
-    _current_run = {
-        "run_id": run_id,
-        "status": "running",
-        "error": None,
-        "report": None,
-        "run_dir": None,
-    }
-
-    task = asyncio.create_task(
-        _execute_comparison(runner, req.config, req.model_names, metric, run_id)
+    return _submit_job(
+        run_id,
+        name,
+        _task_label_from_config(config_type),
+        "comparison",
+        lambda: _execute_comparison(
+            runner, req.config, req.model_names, metric, run_id
+        ),
     )
-    _background_tasks.add(task)
-    task.add_done_callback(_background_tasks.discard)
-    return RunResponse(run_id=run_id)
 
 
 async def _execute_comparison(
@@ -3173,17 +3189,11 @@ def _start_sweep(
     config_type: type[Any],
     runner: TaskRunner,
 ) -> RunResponse:
-    """Validate the base config + search space and launch a background sweep.
+    """Validate the base config + search space and queue a sweep.
 
     Raises:
-        HTTPException: 409 if a run is already active.
         RequestValidationError: 422 if the base config or a sweep path is invalid.
     """
-    global _current_run, _event_queue
-
-    if _current_run and _current_run["status"] == "running":
-        raise HTTPException(409, "An experiment is already running.")
-
     # Validate the base config (fills defaults) and confirm every sweep path
     # resolves against it before spending GPU time.
     try:
@@ -3199,19 +3209,13 @@ def _start_sweep(
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     run_id = f"{name}_{timestamp}"
 
-    _event_queue = asyncio.Queue()
-    _current_run = {
-        "run_id": run_id,
-        "status": "running",
-        "error": None,
-        "report": None,
-        "run_dir": None,
-    }
-
-    task = asyncio.create_task(_execute_sweep(runner, complete, req, metric, run_id))
-    _background_tasks.add(task)
-    task.add_done_callback(_background_tasks.discard)
-    return RunResponse(run_id=run_id)
+    return _submit_job(
+        run_id,
+        name,
+        _task_label_from_config(config_type),
+        f"sweep:{req.mode}" if getattr(req, "mode", None) else "sweep",
+        lambda: _execute_sweep(runner, complete, req, metric, run_id),
+    )
 
 
 async def _execute_sweep(
@@ -3315,20 +3319,14 @@ def _start_task_cv(
     cv_fn: Callable[..., Any],
     task_label: str,
 ) -> RunResponse:
-    """Validate the config and launch a background K-fold run for one task.
+    """Validate the config and queue a K-fold run for one task.
 
     ``cv_fn`` is the task's CV runner (regression/segmentation) — same keyword
     signature, same report shape.
 
     Raises:
-        HTTPException: 409 if a run is already active.
         RequestValidationError: 422 if the base task config is invalid.
     """
-    global _current_run, _event_queue
-
-    if _current_run and _current_run["status"] == "running":
-        raise HTTPException(409, "An experiment is already running.")
-
     try:
         config = config_type.model_validate(req.config)
     except ValidationError as exc:
@@ -3337,19 +3335,13 @@ def _start_task_cv(
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     run_id = f"{config.name}_cv_{timestamp}"
 
-    _event_queue = asyncio.Queue()
-    _current_run = {
-        "run_id": run_id,
-        "status": "running",
-        "error": None,
-        "report": None,
-        "run_dir": None,
-    }
-
-    task = asyncio.create_task(_execute_task_cv(config, req, run_id, cv_fn, task_label))
-    _background_tasks.add(task)
-    task.add_done_callback(_background_tasks.discard)
-    return RunResponse(run_id=run_id)
+    return _submit_job(
+        run_id,
+        str(config.name),
+        _task_label_from_config(config_type),
+        "cv",
+        lambda: _execute_task_cv(config, req, run_id, cv_fn, task_label),
+    )
 
 
 async def _execute_task_cv(
@@ -3416,18 +3408,13 @@ def _start_replicated_comparison(
     config_type: type[Any],
     runner: TaskRunner,
 ) -> RunResponse:
-    """Validate the base config + variants and launch the background comparison.
+    """Validate the base config + variants and queue the paired comparison.
 
     Raises:
-        HTTPException: 409 if a run is already active; 422 for an invalid
-            variant set (unknown override path, duplicate seeds).
+        HTTPException: 422 for an invalid variant set (unknown override path,
+            duplicate seeds).
         RequestValidationError: 422 if the base task config is invalid.
     """
-    global _current_run, _event_queue
-
-    if _current_run and _current_run["status"] == "running":
-        raise HTTPException(409, "An experiment is already running.")
-
     try:
         complete = config_type.model_validate(req.config).model_dump(mode="json")
     except ValidationError as exc:
@@ -3453,21 +3440,15 @@ def _start_replicated_comparison(
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     run_id = f"{name}_{timestamp}"
 
-    _event_queue = asyncio.Queue()
-    _current_run = {
-        "run_id": run_id,
-        "status": "running",
-        "error": None,
-        "report": None,
-        "run_dir": None,
-    }
-
-    task = asyncio.create_task(
-        _execute_replicated_comparison(runner, complete, req, seeds, metric, run_id)
+    return _submit_job(
+        run_id,
+        name,
+        _task_label_from_config(config_type),
+        "replicated-comparison",
+        lambda: _execute_replicated_comparison(
+            runner, complete, req, seeds, metric, run_id
+        ),
     )
-    _background_tasks.add(task)
-    task.add_done_callback(_background_tasks.discard)
-    return RunResponse(run_id=run_id)
 
 
 async def _execute_replicated_comparison(
@@ -3538,20 +3519,15 @@ def _start_replicates(
     config_type: type[Any],
     runner: TaskRunner,
 ) -> RunResponse:
-    """Validate the base config and launch a background multi-seed replicate set.
+    """Validate the base config and queue a multi-seed replicate set.
 
     Explicit ``req.seeds`` win (duplicates rejected); otherwise ``n_replicates``
     consecutive seeds are derived from the validated config's ``training.seed``.
 
     Raises:
-        HTTPException: 409 if a run is already active; 422 for duplicate seeds.
+        HTTPException: 422 for duplicate seeds.
         RequestValidationError: 422 if the base task config is invalid.
     """
-    global _current_run, _event_queue
-
-    if _current_run and _current_run["status"] == "running":
-        raise HTTPException(409, "An experiment is already running.")
-
     # Validate the base config (fills defaults) so the seed derivation below can
     # trust `training.seed` to exist.
     try:
@@ -3572,21 +3548,13 @@ def _start_replicates(
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     run_id = f"{name}_{timestamp}"
 
-    _event_queue = asyncio.Queue()
-    _current_run = {
-        "run_id": run_id,
-        "status": "running",
-        "error": None,
-        "report": None,
-        "run_dir": None,
-    }
-
-    task = asyncio.create_task(
-        _execute_replicates(runner, complete, seeds, metric, run_id)
+    return _submit_job(
+        run_id,
+        name,
+        _task_label_from_config(config_type),
+        "replicates",
+        lambda: _execute_replicates(runner, complete, seeds, metric, run_id),
     )
-    _background_tasks.add(task)
-    task.add_done_callback(_background_tasks.discard)
-    return RunResponse(run_id=run_id)
 
 
 async def _execute_replicates(

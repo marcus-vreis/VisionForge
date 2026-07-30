@@ -17,6 +17,8 @@ from visionforge.tasks import (
     register_task,
 )
 
+from .conftest import occupy_queue, release_queue
+
 
 @pytest.fixture(autouse=True)
 def _clean_registry():
@@ -149,18 +151,19 @@ class TestCustomRun:
             assert (run_dir / "run.json").is_file()
         routes_mod._current_run = None
 
-    def test_conflict_when_already_running(
+    def test_queues_behind_a_running_job(
         self, app_and_routes: tuple, tmp_path: Path
     ) -> None:
         _register_toy()
         app, routes_mod = app_and_routes
-        routes_mod._current_run = {"run_id": "x", "status": "running"}
+        occupy_queue(routes_mod)
         try:
             client = TestClient(app, raise_server_exceptions=True)
             resp = client.post("/api/custom/toyapi/run", json=_payload(tmp_path))
-            assert resp.status_code == 409
+            assert resp.status_code == 200
+            assert resp.json()["status"] == "queued"
         finally:
-            routes_mod._current_run = None
+            release_queue(routes_mod)
 
     def test_invalid_config_422(self, app_and_routes: tuple, tmp_path: Path) -> None:
         _register_toy()

@@ -49,6 +49,10 @@ export function TrainingOverlay({
   const isCompleted = status.status === "completed";
   const hasFailed = status.status === "failed";
   const isFinished = isCompleted || hasFailed;
+  // Waiting for the GPU (ADR-075): no epochs will arrive yet, so the synthetic
+  // progress crawl must stay off — a moving bar here would claim work that has
+  // not begun.
+  const isQueued = status.status === "queued";
 
   // Derive real progress from the most recent epoch_end event.
   const epochEvents = progressEvents.filter(
@@ -291,7 +295,9 @@ export function TrainingOverlay({
                 ? hasFailed
                   ? "training failed"
                   : "training complete"
-                : `training · ${taskLabel}`}
+                : isQueued
+                  ? `na fila · ${taskLabel}`
+                  : `training · ${taskLabel}`}
             </div>
             <div
               style={{
@@ -304,6 +310,24 @@ export function TrainingOverlay({
             >
               {status.run_id ?? "iniciando…"}
             </div>
+            {isQueued && (
+              <div
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 11,
+                  marginTop: 6,
+                  color: "var(--vf-text-muted)",
+                }}
+              >
+                {status.position
+                  ? `aguardando a GPU — ${status.position}º na fila`
+                  : "aguardando a GPU"}
+                {typeof status.queued === "number" && status.queued > 1
+                  ? ` · ${status.queued} submissões esperando`
+                  : ""}
+                . O treino começa sozinho quando chegar a vez.
+              </div>
+            )}
           </div>
           <div
             style={{

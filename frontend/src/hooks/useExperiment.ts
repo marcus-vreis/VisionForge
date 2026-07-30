@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ApiError,
+  fetchQueue,
   fetchResult,
   fetchStatus,
   runAnomaly,
@@ -135,6 +136,12 @@ export function useExperiment(): ExperimentState {
   const [progressEvents, setProgressEvents] = useState<TrainingEvent[]>([]);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const esRef = useRef<EventSource | null>(null);
+  // Which run this hook is following, and whether it has been seen executing.
+  // /experiment/status describes whatever is *active*, so with a queue (ADR-075)
+  // a submission that is still waiting would otherwise read another job's
+  // completion as its own and fetch the wrong result.
+  const myRunRef = useRef<string | null>(null);
+  const startedRef = useRef(false);
 
   const stopPolling = useCallback(() => {
     if (pollRef.current) {
@@ -175,27 +182,66 @@ export function useExperiment(): ExperimentState {
     };
   }, [closeEventSource]);
 
+  const collectResult = useCallback(
+    async (runId: string) => {
+      stopPolling();
+      try {
+        setResult(await fetchResult(runId));
+        setStatus({ status: "completed", run_id: runId, error: null });
+      } catch (e) {
+        const msg =
+          e instanceof ApiError
+            ? e.message
+            : "Falha ao buscar resultados do experimento.";
+        setError(msg);
+        setStatus({ status: "failed", run_id: runId, error: msg });
+      }
+    },
+    [stopPolling],
+  );
+
   const startPolling = useCallback(
     () => {
       stopPolling();
       pollRef.current = setInterval(async () => {
         try {
           const s = await fetchStatus();
+          const mine = myRunRef.current;
+
+          if (mine !== null && s.run_id !== mine) {
+            if (startedRef.current) {
+              // Our run held the slot and no longer does: it finished and the
+              // next queued job took over. Its report is still fetchable by id.
+              await collectResult(mine);
+              return;
+            }
+            // Still waiting behind someone else — show where in line.
+            try {
+              const q = await fetchQueue();
+              const index = q.pending.findIndex((p) => p.run_id === mine);
+              setStatus({
+                status: "queued",
+                run_id: mine,
+                error: null,
+                queued: q.pending.length,
+                position: index >= 0 ? index + 1 : undefined,
+              });
+            } catch {
+              // Queue endpoint hiccup — keep waiting rather than failing the run.
+            }
+            return;
+          }
+
+          if (mine !== null && s.status === "running") {
+            if (!startedRef.current) {
+              startedRef.current = true;
+              openEventSource(); // it is our turn: attach to the live stream
+            }
+          }
           setStatus(s);
 
           if (s.status === "completed" && s.run_id) {
-            stopPolling();
-            try {
-              const r = await fetchResult(s.run_id);
-              setResult(r);
-            } catch (e) {
-              const msg =
-                e instanceof ApiError
-                  ? e.message
-                  : "Falha ao buscar resultados do experimento.";
-              setError(msg);
-              setStatus({ status: "failed", run_id: s.run_id, error: msg });
-            }
+            await collectResult(s.run_id);
           } else if (s.status === "failed") {
             stopPolling();
             setError(
@@ -217,7 +263,7 @@ export function useExperiment(): ExperimentState {
         }
       }, 2000);
     },
-    [stopPolling],
+    [stopPolling, collectResult, openEventSource],
   );
 
   useEffect(() => () => {
@@ -255,8 +301,16 @@ export function useExperiment(): ExperimentState {
                 : opts?.anomaly
                   ? runAnomaly(config)
                   : runExperiment(config));
-        setStatus({ status: "running", run_id: res.run_id, error: null });
-        openEventSource();
+        myRunRef.current = res.run_id;
+        startedRef.current = res.status === "running";
+        if (res.status === "queued") {
+          // No live stream yet — polling promotes this to "running" and attaches
+          // the EventSource when the queue reaches this job.
+          setStatus({ status: "queued", run_id: res.run_id, error: null });
+        } else {
+          setStatus({ status: "running", run_id: res.run_id, error: null });
+          openEventSource();
+        }
         startPolling();
       } catch (e) {
         if (e instanceof ApiError) {
@@ -275,6 +329,8 @@ export function useExperiment(): ExperimentState {
             return;
           }
           if (e.status === 409) {
+            // Kept for older servers: since ADR-075 a busy server queues the
+            // submission instead of refusing it.
             setError("Já existe um experimento em execução. Aguarde terminar.");
             return;
           }
@@ -298,6 +354,8 @@ export function useExperiment(): ExperimentState {
   const reset = useCallback(() => {
     stopPolling();
     closeEventSource();
+    myRunRef.current = null;
+    startedRef.current = false;
     setStatus({ status: "idle", run_id: null, error: null });
     setResult(null);
     setError(null);

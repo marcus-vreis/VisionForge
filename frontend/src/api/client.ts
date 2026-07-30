@@ -1,6 +1,13 @@
 import type { TaskDescriptor } from "../lib/custom-tasks";
 import type { JsonSchema } from "../types/schema";
-import type { MetricCI, RunResponse, RunResult, RunStatus, RunSummary } from "../types/run";
+import type {
+  MetricCI,
+  QueueSnapshot,
+  RunResponse,
+  RunResult,
+  RunStatus,
+  RunSummary,
+} from "../types/run";
 
 const BASE = "/api";
 
@@ -244,6 +251,18 @@ export async function runCustomReplicates(
 
 export async function fetchStatus(): Promise<RunStatus> {
   return request<RunStatus>("/experiment/status");
+}
+
+/** The active run plus everything waiting behind it (ADR-075). */
+export async function fetchQueue(): Promise<QueueSnapshot> {
+  return request<QueueSnapshot>("/queue");
+}
+
+/** Drop a submission that has not started. 404 once it is running. */
+export async function cancelQueuedRun(
+  runId: string,
+): Promise<{ run_id: string; status: string }> {
+  return request(`/queue/${encodeURIComponent(runId)}`, { method: "DELETE" });
 }
 
 export async function fetchResult(runId: string): Promise<RunResult> {

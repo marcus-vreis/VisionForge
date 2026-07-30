@@ -14,13 +14,38 @@ class RunStatus(BaseModel):
     status: Literal["idle", "running", "completed", "failed"]
     run_id: str | None = None
     error: str | None = None
+    # How many submissions are waiting behind the active one (ADR-075). Zero
+    # whenever nothing is queued, which is the only state that existed before.
+    queued: int = 0
 
 
 class RunResponse(BaseModel):
-    """Response after submitting an experiment."""
+    """Response after submitting an experiment.
+
+    ``queued`` means accepted but not started: the GPU was busy, so the job
+    waits its turn (ADR-075). Before the queue existed this could only ever be
+    ``running``, because a busy server answered 409 instead.
+    """
 
     run_id: str
-    status: Literal["running"] = "running"
+    status: Literal["running", "queued"] = "running"
+
+
+class QueuedJobInfo(BaseModel):
+    """One entry in the run queue (ADR-075)."""
+
+    run_id: str
+    label: str
+    task: str
+    strategy: str
+    submitted_at: str
+
+
+class QueueSnapshot(BaseModel):
+    """The active job and everything waiting behind it, in submission order."""
+
+    active: QueuedJobInfo | None = None
+    pending: list[QueuedJobInfo] = []
 
 
 class ComparisonRequest(BaseModel):

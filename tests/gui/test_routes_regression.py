@@ -6,6 +6,8 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from .conftest import occupy_queue, release_queue
+
 
 @pytest.fixture
 def app_and_routes():  # type: ignore[return]
@@ -87,17 +89,18 @@ class TestRegressionRun:
             RegressionBlock.report = orig_report  # type: ignore[method-assign]
             routes_mod._current_run = None
 
-    def test_run_conflict_when_already_running(
+    def test_queues_behind_a_running_job(
         self, app_and_routes: tuple, tmp_path: Path
     ) -> None:
         app, routes_mod = app_and_routes
-        routes_mod._current_run = {"run_id": "x", "status": "running"}
+        occupy_queue(routes_mod)
         try:
             client = TestClient(app, raise_server_exceptions=True)
             resp = client.post("/api/regression/run", json=_payload(tmp_path))
-            assert resp.status_code == 409
+            assert resp.status_code == 200
+            assert resp.json()["status"] == "queued"
         finally:
-            routes_mod._current_run = None
+            release_queue(routes_mod)
 
     def test_run_rejects_invalid_config(
         self, app_and_routes: tuple, tmp_path: Path
@@ -164,20 +167,21 @@ class TestRegressionCompare:
             routes_mod.run_model_comparison = orig
             routes_mod._current_run = None
 
-    def test_compare_conflict_when_already_running(
+    def test_queues_behind_a_running_job(
         self, app_and_routes: tuple, tmp_path: Path
     ) -> None:
         app, routes_mod = app_and_routes
-        routes_mod._current_run = {"run_id": "x", "status": "running"}
+        occupy_queue(routes_mod)
         try:
             client = TestClient(app, raise_server_exceptions=True)
             resp = client.post(
                 "/api/regression/compare",
                 json={"config": _payload(tmp_path), "model_names": ["a", "b"]},
             )
-            assert resp.status_code == 409
+            assert resp.status_code == 200
+            assert resp.json()["status"] == "queued"
         finally:
-            routes_mod._current_run = None
+            release_queue(routes_mod)
 
     def test_compare_rejects_invalid_config(
         self, app_and_routes: tuple, tmp_path: Path
@@ -271,11 +275,11 @@ class TestRegressionSweep:
         )
         assert resp.status_code == 422
 
-    def test_sweep_conflict_when_already_running(
+    def test_queues_behind_a_running_job(
         self, app_and_routes: tuple, tmp_path: Path
     ) -> None:
         app, routes_mod = app_and_routes
-        routes_mod._current_run = {"run_id": "x", "status": "running"}
+        occupy_queue(routes_mod)
         try:
             client = TestClient(app, raise_server_exceptions=True)
             resp = client.post(
@@ -285,6 +289,7 @@ class TestRegressionSweep:
                     "search_space": {"training.learning_rate": [0.1]},
                 },
             )
-            assert resp.status_code == 409
+            assert resp.status_code == 200
+            assert resp.json()["status"] == "queued"
         finally:
-            routes_mod._current_run = None
+            release_queue(routes_mod)
