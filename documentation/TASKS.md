@@ -848,8 +848,21 @@ que transformou o repositório num pacote que outra pessoa consegue instalar:
   chegando ao vivo, sem clique nenhum.
   Testes: `tests/gui/test_run_queue.py` (19) + 13 testes de rota reescritos para
   o contrato novo.
-- Painel de fila na GUI (listar/cancelar sem abrir o overlay) — o backend já
-  serve `GET /api/queue`; falta a superfície.
+- [x] **Painel de fila na GUI ✅ (ADR-075 brick 2, 2026-07-29)** — `QueueOverlay`
+  ao lado de History/Datasets, com o botão `⧗ fila N` aparecendo na barra
+  inferior **só quando há algo esperando** (um "fila 0" permanente seria lembrete
+  de uma fila que a maioria das sessões nunca forma). Lista o ativo e os
+  pendentes em ordem, com task/estratégia traduzidas, tempo de espera e 🗑 por
+  pendente; o ativo mostra "sem cancelar" com o motivo no tooltip. Helpers puros
+  em `lib/queue-format.ts` (11 vitest). Achado ao rodar de verdade: o badge
+  ficava **defasado** — `seededQueueCount` era lido uma vez no mount e essa aba
+  não tinha run próprio pra fazer polling, então cancelar pelo painel corrigia a
+  lista mas não o número; agora o overlay reporta a contagem pra cima
+  (`onCountChange`, mesmo padrão do `HistoryOverlay`) e o App faz um poll de 5s
+  que só existe enquanto o badge está visível e a aba não tem run próprio,
+  terminando sozinho no zero. Verificado no navegador: badge em carregamento
+  frio, cancelar pela UI (2 → 1 sem reload), e badge desaparecendo quando a fila
+  foi drenada por fora do navegador.
 - [x] **Bootstrap CI on single-run test metrics ✅ (ADR-074, 2026-07-29)** — todo
   run de classificação (simples e transfer learning) grava `metric_cis` no
   `run.json` e mostra o intervalo nos tiles de resultado, no painel de detalhe e

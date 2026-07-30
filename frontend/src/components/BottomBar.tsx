@@ -3,9 +3,12 @@ import { DeviceSelector, type DeviceSelection } from "./DeviceSelector";
 interface BottomBarProps {
   onHistory: () => void;
   onDatasets: () => void;
+  onQueue: () => void;
   onTrain: () => void;
   disabled: boolean;
   historyCount: number;
+  /** Submissions waiting behind the active run (ADR-075); 0 hides the badge. */
+  queuedCount: number;
   selection: DeviceSelection;
   onSelectionChange: (next: DeviceSelection) => void;
   isRunning: boolean;
@@ -23,9 +26,11 @@ interface BottomBarProps {
 export function BottomBar({
   onHistory,
   onDatasets,
+  onQueue,
   onTrain,
   disabled,
   historyCount,
+  queuedCount,
   selection,
   onSelectionChange,
   isRunning,
@@ -137,6 +142,47 @@ export function BottomBar({
         <span style={{ fontSize: 14 }}>⤓</span>
         datasets
       </button>
+
+      {/* Only shown once something is waiting: an always-visible "fila 0" would
+          be a permanent reminder of a queue most sessions never form. */}
+      {queuedCount > 0 && (
+        <button
+          type="button"
+          onClick={onQueue}
+          title="Ver e reordenar os treinos que estão esperando a GPU"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            padding: "10px 16px",
+            background: "var(--accent-soft)",
+            border: "1px solid var(--accent-vf)",
+            borderRadius: 10,
+            color: "var(--vf-text)",
+            fontFamily: "var(--font-mono)",
+            fontSize: 12,
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            cursor: "pointer",
+          }}
+        >
+          <span style={{ fontSize: 14 }}>⧗</span>
+          fila
+          <span
+            style={{
+              marginLeft: 4,
+              padding: "2px 7px",
+              background: "rgba(0,0,0,0.35)",
+              color: "var(--accent-vf)",
+              borderRadius: 999,
+              fontSize: 10,
+              letterSpacing: "0.04em",
+            }}
+          >
+            {queuedCount}
+          </span>
+        </button>
+      )}
       </div>
 
       <button

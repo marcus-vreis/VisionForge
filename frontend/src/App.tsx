@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import {
+  fetchQueue,
   fetchSchema,
   fetchTasks,
   runCustomReplicates,
@@ -18,6 +19,7 @@ import type { DeviceSelection } from "./components/DeviceSelector";
 import { Header } from "./components/Header";
 import { DatasetsOverlay } from "./components/DatasetsOverlay";
 import { HistoryOverlay } from "./components/HistoryOverlay";
+import { QueueOverlay } from "./components/QueueOverlay";
 import { ParamPanel } from "./components/ParamPanel";
 import { DetectionPanel } from "./components/DetectionPanel";
 import { RegressionPanel } from "./components/RegressionPanel";
@@ -71,6 +73,20 @@ const TRAIN_LABELS: Record<PanelStrategy, string> = {
   replicates: "▶ Rodar réplicas",
 };
 
+/** Read the queue depth for the bottom-bar badge, ignoring transport hiccups.
+ *
+ * A failed read leaves the previous number alone on purpose: the badge is
+ * ambient information, and flickering it to zero on one dropped request would
+ * be a worse lie than being a few seconds late.
+ */
+async function readQueueDepth(set: (n: number) => void): Promise<void> {
+  try {
+    set((await fetchQueue()).pending.length);
+  } catch {
+    // keep the last known depth
+  }
+}
+
 export default function App() {
   const { status, result, error, validationErrors, progressEvents, submit, reset } =
     useExperiment();
@@ -82,7 +98,11 @@ export default function App() {
   });
   const [showHistory, setShowHistory] = useState(false);
   const [showDatasets, setShowDatasets] = useState(false);
+  const [showQueue, setShowQueue] = useState(false);
   const [historyCount, setHistoryCount] = useState(0);
+  // Seeded once on mount so a reload mid-queue still shows the badge, then kept
+  // live by the run status the training hook already polls (ADR-075).
+  const [seededQueueCount, setSeededQueueCount] = useState(0);
   const [overlayVisible, setOverlayVisible] = useState(false);
   const [resultsVisible, setResultsVisible] = useState(false);
   const [schema, setSchema] = useState<JsonSchema | null>(null);
@@ -127,6 +147,27 @@ export default function App() {
     status.status === "failed";
   const showOverlay = overlayVisible && runActive;
   const activeTask = tasks.find((t) => t.key === activeKey) ?? tasks[0];
+  // While this tab has a run in flight its own polling is authoritative;
+  // otherwise fall back to what was on the server when the page loaded.
+  const queuedCount = runActive ? (status.queued ?? 0) : seededQueueCount;
+
+  // A page reload does not clear the server's queue, so ask once whether
+  // anything is already waiting.
+  useEffect(() => {
+    void readQueueDepth(setSeededQueueCount);
+  }, []);
+
+  // Keep asking only while a badge is up and this tab has no run of its own to
+  // poll: those jobs still drain, and a stale badge is worse than no badge.
+  // Stops on its own once the queue empties.
+  useEffect(() => {
+    if (runActive || seededQueueCount === 0) return;
+    const id = setInterval(
+      () => void readQueueDepth(setSeededQueueCount),
+      5000,
+    );
+    return () => clearInterval(id);
+  }, [runActive, seededQueueCount]);
 
   useEffect(() => {
     fetchSchema()
@@ -564,10 +605,12 @@ export default function App() {
       <BottomBar
         onHistory={() => setShowHistory(true)}
         onDatasets={() => setShowDatasets(true)}
+        onQueue={() => setShowQueue(true)}
         onTrain={() => void handleTrain()}
         disabled={status.status === "running"}
         trainLabel={TRAIN_LABELS[activeStrategy] ?? "▶ Treinar"}
         historyCount={historyCount}
+        queuedCount={queuedCount}
         selection={device}
         onSelectionChange={setDevice}
         isRunning={status.status === "running"}
@@ -590,6 +633,12 @@ export default function App() {
       <DatasetsOverlay
         open={showDatasets}
         onClose={() => setShowDatasets(false)}
+      />
+
+      <QueueOverlay
+        open={showQueue}
+        onClose={() => setShowQueue(false)}
+        onCountChange={setSeededQueueCount}
       />
 
       {runActive && (

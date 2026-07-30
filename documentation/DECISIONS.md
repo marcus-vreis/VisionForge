@@ -1994,3 +1994,20 @@ submission. Thirteen route tests asserted that and now assert `status: "queued"`
 instead; the 409 branch is kept in the frontend for an older server. The
 per-endpoint validation errors (422 for a bad config, 404 for an unknown custom
 task) are unchanged and still happen before anything is enqueued.
+
+**Brick 2 (2026-07-29) — the queue's own surface.** `QueueOverlay` sits beside
+History and Datasets, and the bottom-bar button appears **only when something is
+waiting**: a permanent "fila 0" would be a standing reminder of a queue most
+sessions never form. It lists the active job and the pending ones in order with
+task and strategy translated, how long each has waited, and a 🗑 per pending job;
+the active row says "sem cancelar" and explains why in its tooltip.
+
+Found by running it rather than by reading it: the badge went **stale**. The
+count was seeded once on mount, and a tab that had submitted nothing had no run
+of its own to poll — so cancelling inside the panel fixed the list and left the
+number wrong. The overlay now reports its count upward (`onCountChange`, the
+pattern `HistoryOverlay` already used) and the app runs a 5s poll that exists
+only while the badge is showing and this tab has no run of its own, stopping by
+itself at zero. A failed read keeps the last known depth instead of flickering to
+zero, because ambient information that lies briefly is worse than information
+that is a few seconds late.
