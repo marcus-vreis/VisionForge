@@ -13,6 +13,8 @@ reasoning lives in [`documentation/DECISIONS.md`](documentation/DECISIONS.md).
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-08-03
+
 ### Added
 
 - **Bootstrap confidence intervals on a single run's test metrics.** Every
