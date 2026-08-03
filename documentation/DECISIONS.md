@@ -2150,3 +2150,57 @@ on a folder, for regression/segmentation/anomaly. Those refuse today with a raw
 Pydantic error about `ExperimentConfig.task` instead of a plain "not supported"
 — the refusal is correct, the wording is not. Fixing it properly means a native
 evaluator per task, which is a feature, not a message change.
+
+---
+
+## ADR-078 — The interface stops hiding what it was asked to show
+
+**Date:** 2026-08-03
+**Status:** Accepted — shipped 2026-08-03
+
+Three user reports with one shape: a surface that discards or covers something
+the researcher explicitly asked for.
+
+**1. A grid axis could not reach a scheduler's dependent parameters.** The
+scheduler card decides which fields to render from the *scalar* `kind`. Putting
+`step` on the grid axis while the scalar stayed `none` left `step_size` and
+`gamma` unrendered — so the sweep ran them on their defaults, with no way to see
+or sweep them. The shown set is now the union over the scalar kind **and every
+kind on the axis**.
+
+Checked whether the same shape exists elsewhere, since a conditional group is
+exactly the thing that breaks under a sweep. Only three exist: the scheduler,
+transfer-learning's `unfreeze_from_layer`, and the anomaly panel's
+autoencoder-vs-PatchCore fields. Neither of the other two can collide with a
+grid axis — transfer learning is a *block*, mutually exclusive with grid search,
+and the anomaly panel sweeps through the dot-path SweepCard, which has no reveal
+step to get wrong.
+
+**2. The lightbox covered the plot it existed to show.** An earlier fix moved the
+caption and close button to fixed overlays "so they never steal vertical space
+from the image" — which put them *on top of* it, over the strip matplotlib uses
+for the x-axis and legend. Neither obvious layout works: a fixed `85vh` image
+clips tall plots on short viewports, and floating the chrome occludes them. It
+is now three flex rows with the image row absorbing the remainder
+(`min-height: 0`, without which a flex item refuses to shrink below its content
+size), so nothing is covered and nothing is cut.
+
+**3. Clicking outside threw away the whole navigation stack.** From a plot,
+inside a run, inside the history, one stray click outside the sheet returned to
+the training screen — discarding two levels the user had navigated into. The
+backdrop now pops **one** level: plot → run detail → list → closed. Esc mirrors
+it, and the lightbox stands down while it is the top layer so one key press
+closes one thing. The header's × still closes everything at once, which is the
+distinction that makes both useful: the backdrop is a stray click, the × is a
+decision.
+
+**Verified by driving the real GUI**, not by reading the components: the layer
+trail reads `grafico → treinamento → historico → gui` for both Esc and the
+backdrop, the × from a run detail lands on the GUI in one step, and adding
+`step` to the scheduler axis makes STEP SIZE and GAMMA appear with their own
+grid buttons.
+
+**Not verified visually — stated because it matters:** the lightbox geometry.
+The browser pane in this environment reports a 0×0 viewport and does not
+composite, so every `getBoundingClientRect` returned zero. The layout is
+reasoned from the CSS and wants a human eyeball before it is trusted.

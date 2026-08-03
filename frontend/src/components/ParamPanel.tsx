@@ -171,7 +171,18 @@ function SchedulerFields({
     step: ["step_size", "gamma"],
     plateau: ["patience", "factor", "min_lr"],
   };
-  const shown = visibleParams[kind] ?? [];
+
+  // A grid axis over `kind` sweeps schedulers the scalar control is not
+  // currently showing, and their parameters have to be reachable — otherwise
+  // adding "step" to the grid silently runs it on the default step_size/gamma,
+  // with no way to see or sweep them (ADR-078).
+  const grid = useContext(GridContext);
+  const axisKinds = grid.enabled
+    ? (grid.hyperparameters["training.scheduler.kind"] ?? []).map(String)
+    : [];
+  const shown = Array.from(
+    new Set([kind, ...axisKinds].flatMap((k) => visibleParams[k] ?? [])),
+  );
 
   return (
     <div
