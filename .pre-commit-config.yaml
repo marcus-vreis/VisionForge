@@ -26,7 +26,12 @@ repos:
     hooks:
       - id: pytest
         name: pytest
-        entry: uv run pytest
+        # --frozen: run against the lockfile as it is, never rewrite it. Without
+        # it, `uv run` re-locks whenever pyproject.toml changed — which is
+        # exactly what a release commit does — pre-commit then sees a modified
+        # uv.lock, reports "files were modified by this hook" and aborts. That
+        # made `bump-my-version bump` (ADR-073) fail every single time.
+        entry: uv run --frozen pytest
         language: system
         pass_filenames: false
         always_run: true
