@@ -62,9 +62,30 @@ reasoning lives in [`documentation/DECISIONS.md`](documentation/DECISIONS.md).
   with an RTX 50-series card into a build that imports fine and fails at the
   first kernel launch. The `docker build` example also carried a literal `\n`
   instead of a line continuation.
+- **A grid axis could not reach a scheduler's dependent parameters.** Putting
+  `step` on the axis while the scalar control still said `none` left `step_size`
+  and `gamma` unrendered, so the sweep ran them on defaults with no way to see or
+  sweep them. The form now shows the union over the scalar kind and every kind on
+  the axis ([ADR-078](documentation/DECISIONS.md)).
+- **The image viewer covered the plot it was showing.** The caption and close
+  button floated over the figure, hiding the strip matplotlib uses for the
+  x-axis and legend. They now occupy their own rows, so nothing is covered and
+  nothing is cut ([ADR-078](documentation/DECISIONS.md)).
+- **An unknown preprocessing filter returned 500.** Typing `blur` — the natural
+  guess for `gaussian_blur` or `median_blur` — produced a server fault with no
+  hint. It is now a 422 that lists every registered filter
+  ([ADR-078](documentation/DECISIONS.md)).
+- **`bump-my-version bump` could never complete**, so the documented one-command
+  release (ADR-073) had never once worked: the pytest pre-commit hook ran
+  `uv run`, which re-locked because the version had just changed, and pre-commit
+  aborted on the modified `uv.lock`. The hook now runs `--frozen`.
 
 ### Changed
 
+- **Clicking outside a dialog steps back one level** instead of dismissing the
+  whole stack: plot → run detail → history list → closed, with Esc mirroring it.
+  The header's × still closes everything at once
+  ([ADR-078](documentation/DECISIONS.md)).
 - A busy server **queues** a submission instead of refusing it with 409. The
   per-endpoint validation errors (422 for a bad config, 404 for an unknown custom
   task) are unchanged and still happen before anything is enqueued

@@ -26,12 +26,16 @@ repos:
     hooks:
       - id: pytest
         name: pytest
-        # --frozen: run against the lockfile as it is, never rewrite it. Without
-        # it, `uv run` re-locks whenever pyproject.toml changed — which is
-        # exactly what a release commit does — pre-commit then sees a modified
-        # uv.lock, reports "files were modified by this hook" and aborts. That
-        # made `bump-my-version bump` (ADR-073) fail every single time.
-        entry: uv run --frozen pytest
+        # A test hook verifies the tree; it does not curate the environment.
+        # --frozen: never rewrite uv.lock. `uv run` re-locks whenever
+        #   pyproject.toml changed — exactly what a release commit does — and
+        #   pre-commit then aborts on the modified lockfile, which made
+        #   `bump-my-version bump` (ADR-073) fail every single time.
+        # --no-sync: never reinstall the project either. The reinstall replaces
+        #   Scripts/visionforge.exe, which Windows refuses to delete while a
+        #   `visionforge gui` server is running — committing with the GUI open
+        #   failed with "o arquivo já está sendo usado por outro processo".
+        entry: uv run --frozen --no-sync pytest
         language: system
         pass_filenames: false
         always_run: true
