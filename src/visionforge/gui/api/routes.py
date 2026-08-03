@@ -555,8 +555,18 @@ async def preview_preprocess(
     ``class_name`` or the first class found) and runs every step. Each step's
     output is saved as a PNG under ``outputs/preview_cache/<run-id>/`` and
     served via the existing /api/artifacts/{path} endpoint.
+
+    Raises:
+        HTTPException: 422 when a step names a filter that does not exist —
+            that is bad input, not a server fault, and the message lists the
+            filters that do (ADR-078).
     """
-    return await asyncio.to_thread(_render_preprocess_preview, req)
+    try:
+        return await asyncio.to_thread(_render_preprocess_preview, req)
+    except FileNotFoundError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
 
 
 @router.post("/dataset/preview_augment")

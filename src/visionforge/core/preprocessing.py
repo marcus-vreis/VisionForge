@@ -136,7 +136,13 @@ def apply_step(
     """
     fn = _REGISTRY.get(kind)
     if fn is None:
-        raise ValueError(f"Unknown preprocessing step: {kind}")
+        # Naming the alternatives matters here: this reaches a researcher who
+        # typed a filter name into the GUI, and "blur" is a reasonable guess
+        # that happens to be spelled gaussian_blur or median_blur.
+        raise ValueError(
+            f"Unknown preprocessing step: {kind!r}. "
+            f"Available: {', '.join(sorted(_REGISTRY))}."
+        )
     return fn(img, params or {})
 
 

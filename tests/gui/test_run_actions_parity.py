@@ -166,3 +166,30 @@ class TestGradcamClassNames:
         }
 
         assert _gradcam_class_names(data) == []
+
+
+class TestPreprocessingStepErrors:
+    """An unknown filter is bad input, not a server fault (ADR-078)."""
+
+    def test_unknown_step_names_the_available_ones(self) -> None:
+        from PIL import Image
+
+        from visionforge.core.preprocessing import apply_step
+
+        with pytest.raises(ValueError) as excinfo:
+            apply_step(Image.new("RGB", (8, 8)), "blur")
+
+        message = str(excinfo.value)
+        assert "'blur'" in message
+        # "blur" is the natural guess; the message has to point at the real names.
+        assert "gaussian_blur" in message
+        assert "median_blur" in message
+
+    def test_a_registered_step_still_applies(self) -> None:
+        from PIL import Image
+
+        from visionforge.core.preprocessing import apply_step
+
+        out = apply_step(Image.new("RGB", (8, 8)), "grayscale")
+
+        assert out.size == (8, 8)

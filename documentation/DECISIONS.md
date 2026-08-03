@@ -2200,6 +2200,12 @@ backdrop, the × from a run detail lands on the GUI in one step, and adding
 `step` to the scheduler axis makes STEP SIZE and GAMMA appear with their own
 grid buttons.
 
+**A fourth, found by the GUI sweep this ADR triggered:** an unknown
+preprocessing filter came back as `500 Internal Server Error`. A researcher
+typing "blur" into the filter list — a reasonable guess for what is spelled
+`gaussian_blur` or `median_blur` — got a server fault and no hint. That is bad
+input, so it is now `422`, and the message lists every registered filter.
+
 **Not verified visually — stated because it matters:** the lightbox geometry.
 The browser pane in this environment reports a 0×0 viewport and does not
 composite, so every `getBoundingClientRect` returned zero. The layout is
