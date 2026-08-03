@@ -13,6 +13,63 @@ reasoning lives in [`documentation/DECISIONS.md`](documentation/DECISIONS.md).
 
 ## [Unreleased]
 
+### Added
+
+- **Bootstrap confidence intervals on a single run's test metrics.** Every
+  classification run reports `0.8734 [0.8412, 0.9021]` instead of a bare number,
+  written to `run.json` as `metric_cis` and shown in the result tiles, the
+  run-detail panel and the model card. Always on — the metrics are recomputed
+  with vectorized arithmetic (700x faster than one sklearn call per resample,
+  pinned against sklearn to 1e-16), so it costs ~0.02 s and needs no knob
+  ([ADR-074](documentation/DECISIONS.md)).
+- **The same intervals for regression, segmentation and anomaly** — MSE/RMSE/MAE/R²,
+  mIoU/Dice/pixel-accuracy, AUROC/F1. The image is always the resampling unit,
+  never the smaller thing inside it: segmentation sums per-image confusion
+  matrices rather than resampling pixels, which would report an interval far
+  tighter than the evidence supports ([ADR-076](documentation/DECISIONS.md)).
+- **A training queue.** A second submission no longer gets a 409 — it lines up and
+  starts on its own when the GPU frees, so an evening's experiments can be
+  submitted and left. `GET /api/queue` lists what is waiting, a not-yet-started
+  job can be dropped, and the bottom bar shows `⧗ fila N` with a panel
+  ([ADR-075](documentation/DECISIONS.md)).
+- **Test-set diagnostics for every task, not just classification**: predicted-vs-actual
+  scatter and residual histogram (regression), per-class IoU and confusion matrix
+  (segmentation), score histogram with the decision threshold (anomaly)
+  ([ADR-077](documentation/DECISIONS.md)).
+- **Grad-CAM shows the true class next to the predicted one**, with wrong
+  predictions outlined in red. Class names are recovered from the training
+  folder and ground truth from each image's parent folder — never guessed: a
+  count mismatch shows the index, and an unlabeled folder shows nothing
+  ([ADR-077](documentation/DECISIONS.md)).
+
+### Fixed
+
+- **The markdown model card returned 500 for every task except classification.**
+  It hardcoded the classification epoch columns and formatted each cell with
+  `:.4f`, so the `"?"` fallback for a missing key always raised. Columns now come
+  from the run's own history ([ADR-077](documentation/DECISIONS.md)).
+- **Per-run actions crashed on a researcher-defined task's run.** `test`,
+  `gradcam`, `batch_predict` and `export_onnx` read `config.task`, which a custom
+  run does not have, fell through to the classification path and died rebuilding
+  a ResNet. They now answer 400 naming the task
+  ([ADR-077](documentation/DECISIONS.md)).
+- **A custom task whose config used `Literal`, `Path` or any non-builtin
+  annotation failed to load** with a confusing Pydantic "is not fully defined"
+  error pointing at the user's file. Task modules are now registered in
+  `sys.modules` before execution, which is where Pydantic resolves the
+  stringified annotations the scaffold generates.
+- The install docs recommended `cu121` and never listed `cu128`, walking anyone
+  with an RTX 50-series card into a build that imports fine and fails at the
+  first kernel launch. The `docker build` example also carried a literal `\n`
+  instead of a line continuation.
+
+### Changed
+
+- A busy server **queues** a submission instead of refusing it with 409. The
+  per-endpoint validation errors (422 for a bad config, 404 for an unknown custom
+  task) are unchanged and still happen before anything is enqueued
+  ([ADR-075](documentation/DECISIONS.md)).
+
 ## [0.1.0] — 2026-07-29
 
 First public release. Everything below already shipped on `main`; this is the

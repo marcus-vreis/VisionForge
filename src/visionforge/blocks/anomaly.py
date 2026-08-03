@@ -32,6 +32,7 @@ class AnomalyBlock:
         self._train_result: AnomalyTrainResult | None = None
         self._test_metrics: tuple[float, float, float] | None = None
         self._metric_cis: dict[str, MetricCI] = {}
+        self._test_scores: tuple[Any, Any] | None = None
         # Injected by the GUI layer to stream live progress via SSE.
         self._progress_callback: Callable[[dict[str, Any]], None] | None = None
 
@@ -59,6 +60,7 @@ class AnomalyBlock:
             self._test_metrics[1],  # the threshold this detector decided on
             seed=self._config.training.seed,
         )
+        self._test_scores = (labels, scores)
 
         run_dir = self._train_result.model_path.parent
         graphics = self._render_plots(run_dir)
@@ -105,7 +107,18 @@ class AnomalyBlock:
             ylabel="Image AUROC",
             title="Image-level AUROC over epochs",
         )
-        return [auroc_path]
+        graphics = [auroc_path]
+
+        # Test-set diagnostic (ADR-077): AUROC says how separable the two
+        # populations are, this says where they sit and what the chosen cut keeps.
+        if self._test_scores is not None and self._test_metrics is not None:
+            labels, scores = self._test_scores
+            hist_path = run_dir / "score_histogram.png"
+            MetricsPlotter.score_histogram(
+                labels, scores, hist_path, threshold=self._test_metrics[1]
+            )
+            graphics.append(hist_path)
+        return graphics
 
     def _update_run_json(self, run_dir: Path, graphics: list[Path]) -> None:
         """Rewrite run.json with test metrics and artifact paths."""

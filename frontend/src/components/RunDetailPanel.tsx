@@ -11,6 +11,7 @@ import {
   testRunOnDataset,
   type BatchPredictResponse,
   type ExportOnnxResponse,
+  type GradCamItem,
   type GradCamResponse,
   type RunDetail,
   type TestRecord,
@@ -36,6 +37,12 @@ const GRAPH_LABELS: Record<string, string> = {
   "results.png": "Resultados (loss + mAP)",
   "BoxPR_curve.png": "Curva Precision-Recall (box)",
   "BoxF1_curve.png": "Curva F1 (box)",
+  // Test-set diagnostics per task (ADR-077).
+  "auroc.png": "AUROC por época",
+  "pred_vs_true.png": "Predito vs real",
+  "residuals.png": "Distribuição dos resíduos",
+  "iou_per_class.png": "IoU por classe",
+  "score_histogram.png": "Escores: normal vs defeito",
 };
 
 function metricLabel(key: string): string {
@@ -921,7 +928,14 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
                             }
                             style={{
                               background: "rgba(0,0,0,0.3)",
-                              border: "1px solid var(--vf-panel-stroke)",
+                              // A wrong prediction is the one worth looking at,
+                              // so the border says so before the caption does.
+                              border:
+                                item.correct === false
+                                  ? "1px solid oklch(0.74 0.18 22)"
+                                  : item.correct === true
+                                    ? "1px solid oklch(0.72 0.16 150)"
+                                    : "1px solid var(--vf-panel-stroke)",
                               borderRadius: 10,
                               padding: 0,
                               overflow: "hidden",
@@ -941,10 +955,10 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
                                 fontFamily: "var(--font-mono)",
                                 fontSize: 10,
                                 color: "var(--vf-text-dim)",
+                                textAlign: "left",
                               }}
                             >
-                              {item.prediction ??
-                                `classe predita: ${item.predicted_class}`}
+                              <GradCamCaption item={item} />
                             </div>
                           </button>
                         );
@@ -1541,6 +1555,32 @@ function KeyRow({ label, value }: { label: string; value: string }) {
         {value}
       </span>
     </div>
+  );
+}
+
+/** Caption under a Grad-CAM overlay: what the model said, and what it should have.
+ *
+ * The ground truth only exists when the images came from class-named folders, so
+ * the "real" line is omitted rather than filled with a guess (ADR-077).
+ */
+function GradCamCaption({ item }: { item: GradCamItem }) {
+  const predicted =
+    item.predicted_label ??
+    (item.predicted_class !== null ? `classe ${item.predicted_class}` : null);
+
+  if (item.true_class === null || item.true_class === undefined) {
+    return <>{item.prediction ?? (predicted ? `predito: ${predicted}` : "—")}</>;
+  }
+  return (
+    <>
+      <div>
+        <span style={{ color: "var(--vf-text-muted)" }}>real</span> {item.true_class}
+      </div>
+      <div style={{ color: item.correct ? "inherit" : "oklch(0.8 0.16 22)" }}>
+        <span style={{ color: "var(--vf-text-muted)" }}>predito</span> {predicted}
+        {item.correct === false ? " ✗" : " ✓"}
+      </div>
+    </>
   );
 }
 

@@ -934,6 +934,39 @@ fingerprint (ADR-061 slice 3).
   com `UnicodeEncodeError` no console do Windows (cp1252) exatamente quando
   encontrava uma falha.
 
+**Superfície pós-treino padronizada ✅ (ADR-077, 2026-08-02)** — exercitar cada
+ação por-run contra um run treinado de cada task (em vez de ler o código) achou
+três versões do mesmo erro, duas delas crashes que o usuário pegaria na primeira
+tentativa:
+
+- **O model card dava 500 em 6 dos 8 tipos de run.** `_render_run_markdown` fixava
+  as colunas de classificação e formatava cada célula com `:.4f`; chave ausente
+  virava a string `"?"`, e `f"{'?':.4f}"` levanta `ValueError` — o fallback nunca
+  podia ter funcionado. As colunas agora vêm do próprio histórico.
+- **Run de task custom crashava as quatro ações** (`test`, `gradcam`,
+  `batch_predict`, `export_onnx`): elas liam `config.task`, que não existe num run
+  custom, caíam no padrão de classificação e morriam montando um ResNet. A chave
+  certa está no topo do run.json (ADR-013); agora recusam com 400 nomeando a task.
+- **Só classificação tinha diagnóstico de teste** (6 gráficos contra 1). Agora
+  regressão tem dispersão predito-vs-real + histograma de resíduos, segmentação
+  tem IoU por classe + matriz de confusão, e anomalia tem histograma de escores
+  com o limiar. Os arrays vieram de graça do ADR-076.
+- **Grad-CAM mostra a classe real ao lado da predita.** Os nomes saem da pasta de
+  treino (a ordenação que o `ImageFolder` usa para atribuir índices) e a verdade
+  da pasta-pai da imagem — nunca chutados: divergência de contagem devolve índice,
+  e pasta sem rótulo devolve `null`. A GUI contorna de vermelho quem errou.
+
+Verificado em runs reais: a matriz de 8 alvos saiu de 6+8 respostas 500 para `ok`
+e 400 limpos. A dispersão da regressão explicou na hora um R² negativo — nuvem
+achatada em ~20 para qualquer idade real, que é o "prediz a média" que MAE e RMSE
+reportam igual a um erro sem viés.
+Testes: `tests/gui/test_run_actions_parity.py` (11) + `tests/core/test_plotter.py` (+9).
+
+**Ainda só em classificação, de propósito:** `test` por-modelo numa pasta para
+regressão/segmentação/anomalia. Hoje recusam com erro cru do Pydantic sobre
+`ExperimentConfig.task` — a recusa está certa, a mensagem não. Consertar direito
+pede um avaliador nativo por task, que é feature, não ajuste de texto.
+
 **Larger — needs design or new dependencies (prefer a reviewed session):**
 - **Dark/light theme toggle** — needs a coherent light palette for the dark-first
   blueprint design (design judgment).

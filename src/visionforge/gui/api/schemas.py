@@ -335,12 +335,22 @@ class GradCamItem(BaseModel):
     (None for regression); ``prediction`` is a human-readable label that also
     carries the regression values / segmentation target so the GUI can show it for
     every task.
+
+    ``true_class`` and ``correct`` are filled only when the ground truth is
+    actually knowable — a classification run whose images sit in class-named
+    folders (ADR-077). A heatmap is far easier to read next to "the answer was X"
+    than on its own, and the interesting overlays are usually the wrong ones.
     """
 
     source: str
     overlay: str
     predicted_class: int | None = None
     prediction: str | None = None
+    # Class-name form of predicted_class, when the run's class list is recoverable.
+    predicted_label: str | None = None
+    # From the image's parent folder (the ImageFolder convention), never guessed.
+    true_class: str | None = None
+    correct: bool | None = None
 
 
 class GradCamResponse(BaseModel):

@@ -71,6 +71,183 @@ class MetricsPlotter:
         fig.savefig(save_path, dpi=150, bbox_inches="tight")
 
     @staticmethod
+    def regression_scatter(
+        y_true: list[float] | np.ndarray,
+        y_pred: list[float] | np.ndarray,
+        save_path: Path,
+        *,
+        target_name: str = "target",
+    ) -> None:
+        """Predicted vs actual, against the identity line (ADR-077).
+
+        The regression counterpart of a confusion matrix: a scatter that hugs the
+        diagonal is a good model, and the *shape* of the departure says which
+        kind of wrong it is — a flat cloud means the model predicts the mean, a
+        tilted one means systematic under- or over-estimation. An error number
+        alone cannot distinguish those.
+        """
+        true = np.asarray(y_true, dtype=float).ravel()
+        pred = np.asarray(y_pred, dtype=float).ravel()
+
+        fig = Figure(figsize=(7, 7))
+        FigureCanvasAgg(fig)
+        ax = fig.subplots()
+        ax.scatter(true, pred, s=14, alpha=0.45, color="#5b9fff", edgecolors="none")
+
+        if true.size:
+            low = float(min(true.min(), pred.min()))
+            high = float(max(true.max(), pred.max()))
+            ax.plot(
+                [low, high],
+                [low, high],
+                "--",
+                color="#f16363",
+                linewidth=1.5,
+                label="perfeito (y = ŷ)",
+            )
+            ax.set_xlim(low, high)
+            ax.set_ylim(low, high)
+            ax.legend()
+
+        ax.set_xlabel(f"real ({target_name})")
+        ax.set_ylabel(f"predito ({target_name})")
+        ax.set_title("Predito vs real")
+        ax.grid(True, alpha=0.3)
+        ax.set_aspect("equal", adjustable="box")
+
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(save_path, dpi=150, bbox_inches="tight")
+
+    @staticmethod
+    def residual_histogram(
+        y_true: list[float] | np.ndarray,
+        y_pred: list[float] | np.ndarray,
+        save_path: Path,
+    ) -> None:
+        """Distribution of ``pred - true`` (ADR-077).
+
+        Centred and symmetric is healthy; a shifted centre is bias the aggregate
+        error hides, because MAE and RMSE are the same whether the model reads
+        every sample too high or scatters both ways.
+        """
+        residual = (
+            np.asarray(y_pred, dtype=float).ravel()
+            - np.asarray(y_true, dtype=float).ravel()
+        )
+
+        fig = Figure(figsize=(9, 5))
+        FigureCanvasAgg(fig)
+        ax = fig.subplots()
+        ax.hist(residual, bins=40, color="#5b9fff", alpha=0.85)
+        ax.axvline(
+            0.0, color="#f16363", linestyle="--", linewidth=1.5, label="sem erro"
+        )
+        if residual.size:
+            ax.axvline(
+                float(residual.mean()),
+                color="#f5a524",
+                linewidth=1.5,
+                label=f"viés médio = {residual.mean():+.4f}",
+            )
+        ax.set_xlabel("resíduo (predito − real)")
+        ax.set_ylabel("amostras")
+        ax.set_title("Distribuição dos resíduos")
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(save_path, dpi=150, bbox_inches="tight")
+
+    @staticmethod
+    def per_class_bars(
+        values: list[float] | np.ndarray,
+        class_names: list[str],
+        save_path: Path,
+        *,
+        metric_label: str = "IoU",
+        title: str | None = None,
+    ) -> None:
+        """One bar per class (ADR-077).
+
+        A mean IoU of 0.55 can be five mediocre classes or four good ones and a
+        class the model never finds; only the per-class view separates them, and
+        it is the first thing anyone asks of a segmentation result.
+        """
+        scores = np.asarray(values, dtype=float).ravel()
+        names = list(class_names) or [str(i) for i in range(scores.size)]
+
+        fig = Figure(figsize=(max(7.0, 0.7 * scores.size + 3), 5))
+        FigureCanvasAgg(fig)
+        ax = fig.subplots()
+        ax.bar(names, scores, color="#b079ff", alpha=0.9)
+        if scores.size:
+            ax.axhline(
+                float(scores.mean()),
+                color="#f5a524",
+                linestyle="--",
+                linewidth=1.5,
+                label=f"média = {scores.mean():.4f}",
+            )
+            ax.legend()
+        ax.set_ylim(0.0, 1.0)
+        ax.set_ylabel(metric_label)
+        ax.set_title(title or f"{metric_label} por classe")
+        ax.grid(True, axis="y", alpha=0.3)
+        for tick in ax.get_xticklabels():
+            tick.set_rotation(30)
+            tick.set_horizontalalignment("right")
+
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(save_path, dpi=150, bbox_inches="tight")
+
+    @staticmethod
+    def score_histogram(
+        labels: list[int] | np.ndarray,
+        scores: list[float] | np.ndarray,
+        save_path: Path,
+        *,
+        threshold: float | None = None,
+    ) -> None:
+        """Anomaly scores for normal vs defective images, with the threshold (ADR-077).
+
+        AUROC says how separable the two populations are; this says *where* they
+        sit and what the chosen cut actually keeps. A researcher moving the
+        threshold needs to see the overlap, not a single number summarising it.
+        """
+        label_arr = np.asarray(labels).ravel()
+        score_arr = np.asarray(scores, dtype=float).ravel()
+
+        fig = Figure(figsize=(9, 5))
+        FigureCanvasAgg(fig)
+        ax = fig.subplots()
+        for value, name, color in ((0, "normal", "#48cf8e"), (1, "defeito", "#f16363")):
+            subset = score_arr[label_arr == value]
+            if subset.size:
+                ax.hist(
+                    subset,
+                    bins=40,
+                    alpha=0.6,
+                    label=f"{name} (n={subset.size})",
+                    color=color,
+                )
+        if threshold is not None:
+            ax.axvline(
+                float(threshold),
+                color="#f5a524",
+                linestyle="--",
+                linewidth=1.8,
+                label=f"limiar = {threshold:.4f}",
+            )
+        ax.set_xlabel("escore de anomalia")
+        ax.set_ylabel("imagens")
+        ax.set_title("Distribuição dos escores")
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(save_path, dpi=150, bbox_inches="tight")
+
+    @staticmethod
     def detection_results(
         epochs: list[int],
         train_losses: list[float | None],

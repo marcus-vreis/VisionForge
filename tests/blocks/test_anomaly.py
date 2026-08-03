@@ -70,7 +70,11 @@ class TestAnomalyBlock:
         assert (run_dir / "auroc.png").is_file()
         data = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
         assert "test_auroc" in data["metrics"]
-        assert data["artifacts"]["graphics"] == [str(run_dir / "auroc.png")]
+        # ADR-077: the score histogram shows where the two populations overlap
+        # and what the chosen threshold keeps.
+        graphics = [Path(p).name for p in data["artifacts"]["graphics"]]
+        assert graphics == ["auroc.png", "score_histogram.png"]
+        assert all((run_dir / name).is_file() for name in graphics)
 
     def test_report_empty_before_run(self, tmp_path: Path) -> None:
         block = AnomalyBlock()

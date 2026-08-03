@@ -242,3 +242,91 @@ class TestROCCurveEdgeCases:
         )
         assert ok is True
         assert save_path.exists()
+
+
+class TestTaskDiagnostics:
+    """Per-task test-set plots (ADR-077).
+
+    These render matplotlib figures, so the assertions are about the contract a
+    caller depends on — a file appears, degenerate input does not raise — rather
+    than about pixels.
+    """
+
+    def test_regression_scatter_is_written(self, tmp_path: Path) -> None:
+        save_path = tmp_path / "pred_vs_true.png"
+
+        MetricsPlotter.regression_scatter(
+            [1.0, 2.0, 3.0], [1.1, 1.9, 3.4], save_path, target_name="age"
+        )
+
+        assert save_path.exists() and save_path.stat().st_size > 0
+
+    def test_regression_scatter_survives_an_empty_split(self, tmp_path: Path) -> None:
+        """No test rows must not raise — the block still wants its other plots."""
+        save_path = tmp_path / "empty_scatter.png"
+
+        MetricsPlotter.regression_scatter([], [], save_path)
+
+        assert save_path.exists()
+
+    def test_regression_scatter_accepts_multi_target_columns(
+        self, tmp_path: Path
+    ) -> None:
+        """Multi-target arrays are flattened, matching how the metrics pool them."""
+        save_path = tmp_path / "multi.png"
+
+        MetricsPlotter.regression_scatter(
+            [[1.0, 5.0], [2.0, 6.0]], [[1.2, 4.8], [1.9, 6.3]], save_path
+        )
+
+        assert save_path.exists()
+
+    def test_residual_histogram_is_written(self, tmp_path: Path) -> None:
+        save_path = tmp_path / "residuals.png"
+
+        MetricsPlotter.residual_histogram([1.0, 2.0, 3.0], [1.5, 2.5, 3.5], save_path)
+
+        assert save_path.exists() and save_path.stat().st_size > 0
+
+    def test_residual_histogram_survives_an_empty_split(self, tmp_path: Path) -> None:
+        save_path = tmp_path / "empty_residuals.png"
+
+        MetricsPlotter.residual_histogram([], [], save_path)
+
+        assert save_path.exists()
+
+    def test_per_class_bars_is_written(self, tmp_path: Path) -> None:
+        save_path = tmp_path / "iou.png"
+
+        MetricsPlotter.per_class_bars(
+            [0.8, 0.4, 0.0], ["fundo", "gato", "borda"], save_path
+        )
+
+        assert save_path.exists() and save_path.stat().st_size > 0
+
+    def test_per_class_bars_falls_back_to_indices_without_names(
+        self, tmp_path: Path
+    ) -> None:
+        """A task that never named its classes still gets a readable chart."""
+        save_path = tmp_path / "iou_unnamed.png"
+
+        MetricsPlotter.per_class_bars([0.5, 0.6], [], save_path)
+
+        assert save_path.exists()
+
+    def test_score_histogram_is_written(self, tmp_path: Path) -> None:
+        save_path = tmp_path / "scores.png"
+
+        MetricsPlotter.score_histogram(
+            [0, 0, 1, 1], [0.1, 0.2, 0.8, 0.9], save_path, threshold=0.5
+        )
+
+        assert save_path.exists() and save_path.stat().st_size > 0
+
+    def test_score_histogram_handles_a_single_class(self, tmp_path: Path) -> None:
+        """A split with no defects must still plot the normals it does have."""
+        save_path = tmp_path / "scores_one_class.png"
+
+        MetricsPlotter.score_histogram([0, 0, 0], [0.1, 0.2, 0.3], save_path)
+
+        assert save_path.exists()

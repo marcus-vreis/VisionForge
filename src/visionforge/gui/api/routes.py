@@ -409,6 +409,36 @@ async def export_run_markdown(run_id: str) -> Response:
     )
 
 
+def _reject_custom_task_action(run_dir: Path, action: str) -> None:
+    """Refuse a per-run action on a researcher-defined task's run.
+
+    These four actions rebuild the model from ``config.model`` and assume one of
+    the five built-in shapes. A custom run.json has no ``config.task`` and no
+    ``config.model`` — the task owns those — so the dispatchers fell through to
+    the classification default and died inside ``load_state_dict`` with a raw
+    ResNet key mismatch. The task's own key lives at the top level of run.json
+    (ADR-013), which is what makes an honest refusal possible here.
+
+    Raises:
+        HTTPException: 400 naming the task, so the GUI can hide the action.
+    """
+    run_json = run_dir / "run.json"
+    if not run_json.exists():
+        return
+    try:
+        task = json.loads(run_json.read_text(encoding="utf-8")).get("task", "")
+    except (OSError, json.JSONDecodeError):
+        return
+    if isinstance(task, str) and task.startswith("custom:"):
+        raise HTTPException(
+            400,
+            f"'{action}' is not available for the researcher-defined task "
+            f"'{task[len('custom:') :]}': this action rebuilds a built-in "
+            f"architecture from the run's config, and a custom task owns its own "
+            f"model. Evaluate it by re-running the task against another split.",
+        )
+
+
 @router.post("/runs/{run_id}/test")
 async def test_run_on_dataset(run_id: str, req: RunTestRequest) -> RunTestResponse:
     """Run the saved checkpoint against a new dataset and record the result.
@@ -419,6 +449,8 @@ async def test_run_on_dataset(run_id: str, req: RunTestRequest) -> RunTestRespon
     run_dir = _find_run_dir(run_id)
     if run_dir is None:
         raise HTTPException(404, f"Run '{run_id}' not found.")
+
+    _reject_custom_task_action(run_dir, "test")
 
     # Run the actual evaluation in a worker thread (PyTorch + disk I/O).
     try:
@@ -444,6 +476,7 @@ async def gradcam_run(run_id: str, req: GradCamRequest) -> GradCamResponse:
     run_dir = _find_run_dir(run_id)
     if run_dir is None:
         raise HTTPException(404, f"Run '{run_id}' not found.")
+    _reject_custom_task_action(run_dir, "gradcam")
     try:
         return await asyncio.to_thread(_execute_run_gradcam, run_dir, req)
     except (FileNotFoundError, ValueError) as exc:
@@ -467,6 +500,7 @@ async def batch_predict_run(
     if run_dir is None:
         raise HTTPException(404, f"Run '{run_id}' not found.")
 
+    _reject_custom_task_action(run_dir, "batch_predict")
     try:
         result = await asyncio.to_thread(_execute_batch_predict, run_dir, req)
     except FileNotFoundError as exc:
@@ -491,6 +525,7 @@ async def export_run_to_onnx(run_id: str, req: ExportOnnxRequest) -> ExportOnnxR
     if run_dir is None:
         raise HTTPException(404, f"Run '{run_id}' not found.")
 
+    _reject_custom_task_action(run_dir, "export_onnx")
     try:
         result = await asyncio.to_thread(_execute_onnx_export, run_dir, req)
     except FileNotFoundError as exc:
@@ -1477,16 +1512,32 @@ def _render_run_markdown(run_dir: Path, data: dict[str, Any]) -> str:
     lines.append("")
 
     if history:
+        # Columns come from the history itself rather than a fixed
+        # classification shape: a segmentation epoch has val_miou and no
+        # val_accuracy, a custom task streams whatever metrics it declared, and
+        # a hardcoded header formatted every missing cell with ":.4f" — which
+        # raised on the "?" fallback and made this endpoint 500 for every task
+        # except classification.
+        columns: list[str] = []
+        for epoch in history:
+            for key in epoch:
+                if key != "epoch" and key not in columns:
+                    columns.append(key)
+
         lines.append(f"## Training history ({len(history)} epoch(s))")
         lines.append("")
-        lines.append("| Epoch | train_loss | train_acc | val_loss | val_acc |")
-        lines.append("|---|---|---|---|---|")
-        for h in history:
-            lines.append(
-                f"| {h.get('epoch')} | {h.get('train_loss', '?'):.4f} | "
-                f"{h.get('train_accuracy', '?'):.4f} | "
-                f"{h.get('val_loss', '?'):.4f} | {h.get('val_accuracy', '?'):.4f} |"
-            )
+        lines.append("| Epoch | " + " | ".join(columns) + " |")
+        lines.append("|---" * (len(columns) + 1) + "|")
+        for epoch in history:
+            cells = [str(epoch.get("epoch", "?"))]
+            for key in columns:
+                cell = epoch.get(key)
+                cells.append(
+                    f"{cell:.4f}"
+                    if isinstance(cell, float)
+                    else str(cell if cell is not None else "—")
+                )
+            lines.append("| " + " | ".join(cells) + " |")
         lines.append("")
 
     graphics = artifacts.get("graphics", [])
@@ -2610,6 +2661,34 @@ def _execute_run_test(run_dir: Path, req: RunTestRequest) -> RunTestResponse:
 _GRADCAM_IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp")
 
 
+def _gradcam_class_names(data: dict[str, Any]) -> list[str]:
+    """Class names for a classification run, in the model's own index order.
+
+    Recovered from the training folder rather than run.json, which never stored
+    them: ``ImageFolder`` assigns indices by sorting the class sub-directories,
+    so the sorted folder names *are* the index→name mapping the checkpoint was
+    trained with. Returns an empty list when the folder is gone or the task is
+    not classification — the caller then reports indices, as before.
+    """
+    config = data.get("config", {})
+    if config.get("task") not in ("binary", "multiclass"):
+        return []
+    data_config = config.get("data", {})
+    base_dir = data_config.get("base_dir")
+    if not base_dir:
+        return []
+    train_dir = Path(base_dir) / str(data_config.get("train_dir", "train"))
+    if not train_dir.is_dir():
+        return []
+    names = sorted(p.name for p in train_dir.iterdir() if p.is_dir())
+    # A binary run trained with a single output unit maps 1 -> the second class;
+    # anything else that does not line up is safer left unnamed.
+    expected = config.get("model", {}).get("num_classes")
+    if expected and len(names) != expected and not (expected == 1 and len(names) == 2):
+        return []
+    return names
+
+
 def _execute_run_gradcam(run_dir: Path, req: GradCamRequest) -> GradCamResponse:
     """Rebuild this run's model and write Grad-CAM overlays for sample images.
 
@@ -2652,6 +2731,7 @@ def _execute_run_gradcam(run_dir: Path, req: GradCamRequest) -> GradCamResponse:
     cam = GradCAM(setup.model, target_layer)
     out_dir = run_dir / "gradcam"
     out_dir.mkdir(parents=True, exist_ok=True)
+    class_names = _gradcam_class_names(data)
 
     items: list[GradCamItem] = []
     try:
@@ -2665,12 +2745,32 @@ def _execute_run_gradcam(run_dir: Path, req: GradCamRequest) -> GradCamResponse:
             overlay = overlay_cam(tensor[0], heat, alpha=req.alpha)
             overlay_path = out_dir / f"{img_path.stem}_gradcam.png"
             overlay.save(overlay_path)
+
+            predicted_label = (
+                class_names[predicted_class]
+                if class_names
+                and predicted_class is not None
+                and 0 <= predicted_class < len(class_names)
+                else None
+            )
+            # Only a folder named after one of this run's classes counts as
+            # ground truth. A flat folder of unlabeled images has none, and
+            # inventing one would be worse than showing nothing.
+            parent = img_path.parent.name
+            true_class = parent if parent in class_names else None
             items.append(
                 GradCamItem(
                     source=str(img_path),
                     overlay=str(overlay_path),
                     predicted_class=predicted_class,
                     prediction=prediction,
+                    predicted_label=predicted_label,
+                    true_class=true_class,
+                    correct=(
+                        predicted_label == true_class
+                        if true_class is not None and predicted_label is not None
+                        else None
+                    ),
                 )
             )
     finally:

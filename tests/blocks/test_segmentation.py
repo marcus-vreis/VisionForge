@@ -87,7 +87,11 @@ class TestSegmentationBlock:
         assert (run_dir / "loss.png").is_file()
         data = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
         assert "test_miou" in data["metrics"]
-        assert data["artifacts"]["graphics"] == [str(run_dir / "loss.png")]
+        # ADR-077: per-class IoU and the confusion matrix say which class the
+        # mean IoU is hiding.
+        graphics = [Path(p).name for p in data["artifacts"]["graphics"]]
+        assert graphics == ["loss.png", "iou_per_class.png", "confusion_matrix.png"]
+        assert all((run_dir / name).is_file() for name in graphics)
 
     def test_no_test_split_skips_test_metrics(self, tmp_path: Path) -> None:
         block = _run_block(_config(tmp_path), with_test=False)

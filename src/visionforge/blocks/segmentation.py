@@ -35,6 +35,7 @@ class SegmentationBlock:
         self._train_result: SegmentationTrainResult | None = None
         self._test_metrics: tuple[float, float, float] | None = None
         self._metric_cis: dict[str, MetricCI] = {}
+        self._test_confusion: Any | None = None
         # Injected by the GUI layer to stream live epoch progress via SSE.
         self._progress_callback: Callable[[dict[str, Any]], None] | None = None
 
@@ -61,6 +62,7 @@ class SegmentationBlock:
             self._metric_cis = bootstrap_segmentation_cis(
                 per_image, seed=self._config.training.seed
             )
+            self._test_confusion = per_image.sum(axis=0) if len(per_image) else None
 
         run_dir = self._train_result.model_path.parent
         graphics = self._render_plots(run_dir)
@@ -96,7 +98,27 @@ class SegmentationBlock:
         # SegmentationEpochResult exposes epoch/train_loss/val_loss, which is all
         # loss_curve reads — duck-typed reuse of the classification plotter.
         MetricsPlotter.loss_curve(self._train_result.history, loss_path)  # type: ignore[arg-type]
-        return [loss_path]
+        graphics = [loss_path]
+
+        # Test-set diagnostics (ADR-077): the mean hides which class the model
+        # never finds, and the confusion matrix says which one it confuses it with.
+        if self._test_confusion is not None:
+            confusion = self._test_confusion
+            names = [f"classe {i}" for i in range(confusion.shape[0])]
+            diagonal = confusion.diagonal()
+            union = confusion.sum(axis=1) + confusion.sum(axis=0) - diagonal
+            iou = [
+                float(diagonal[i] / union[i]) if union[i] > 0 else 0.0
+                for i in range(confusion.shape[0])
+            ]
+            iou_path = run_dir / "iou_per_class.png"
+            MetricsPlotter.per_class_bars(iou, names, iou_path, metric_label="IoU")
+            cm_path = run_dir / "confusion_matrix.png"
+            MetricsPlotter.confusion_matrix_plot(
+                confusion.astype(int).tolist(), names, cm_path
+            )
+            graphics += [iou_path, cm_path]
+        return graphics
 
     def _update_run_json(self, run_dir: Path, graphics: list[Path]) -> None:
         """Rewrite run.json with test metrics and artifact paths."""

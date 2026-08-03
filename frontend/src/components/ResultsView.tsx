@@ -23,6 +23,12 @@ const GRAPH_LABELS: Record<string, string> = {
   "results.png": "Curvas de treino (Ultralytics)",
   "BoxPR_curve.png": "Curva Precision-Recall (box)",
   "BoxF1_curve.png": "Curva F1 (box)",
+  // Test-set diagnostics per task (ADR-077).
+  "auroc.png": "AUROC por época",
+  "pred_vs_true.png": "Predito vs real",
+  "residuals.png": "Distribuição dos resíduos",
+  "iou_per_class.png": "IoU por classe",
+  "score_histogram.png": "Escores: normal vs defeito",
 };
 
 /** Format metric values for display. */

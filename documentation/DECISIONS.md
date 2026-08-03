@@ -2077,3 +2077,76 @@ against the reported metric in every case: segmentation mIoU
 its interval entirely below zero — correct for a model worse than predicting the
 mean, and worth noting as a reminder that these intervals do not assume a
 metric's sign.
+
+---
+
+## ADR-077 — The post-training surface stops being classification-shaped
+
+**Date:** 2026-08-02
+**Status:** Accepted — shipped 2026-08-02
+**Extends:** ADR-043 (task-aware history), ADR-053 (Grad-CAM beyond classification)
+
+**Context:** classification was built first and the surfaces around a *finished*
+run quietly assumed its shape. Exercising every per-run action against a real
+trained run of every task — rather than reading the code — turned up three
+separate versions of the same mistake, two of them crashes users would hit on
+their first try.
+
+**1. The model card 500'd for six of the eight run types.** `_render_run_markdown`
+hardcoded the classification epoch columns and formatted each with `:.4f`. A
+missing key fell back to the string `"?"`, and `f"{'?':.4f}"` raises
+`ValueError: Unknown format code 'f'` — so the guard could never have worked, and
+detection, regression, segmentation, anomaly and both custom tasks all returned
+500 from the "↓ markdown" button. Columns now come from the history itself, which
+is the only thing that knows what a task streams.
+
+**2. A researcher-defined task's run crashed all four actions.** `test`,
+`gradcam`, `batch_predict` and `export_onnx` read `config.task` to dispatch — but
+a custom run.json has no `config.task` and no `config.model`, because the task
+owns those. Dispatch fell through to the classification default, tried to rebuild
+a ResNet, and died inside `load_state_dict` with a raw key mismatch shown to the
+user as a 500. The task's key has always been at the *top level* of run.json
+(ADR-013), which is what makes an honest refusal possible: the actions now answer 400
+naming the task and saying why.
+
+**3. Only classification had test-set diagnostics.** It renders six plots;
+regression and segmentation rendered a loss curve, anomaly an AUROC curve. So the
+tasks whose numbers are hardest to interpret had the least to interpret them
+with. Each now gets the diagnostic its own literature expects:
+
+| task | added | what the aggregate metric cannot say |
+|---|---|---|
+| regression | predicted-vs-actual scatter, residual histogram | whether the model tracks the target or just predicts its mean; whether the error is bias or spread |
+| segmentation | per-class IoU bars, confusion matrix | which class is never found, and what it is confused with |
+| anomaly | score histogram with the threshold | where the two populations overlap, and what the chosen cut actually keeps |
+
+The arrays these need already existed: ADR-076 made every trainer return
+per-sample predictions alongside its aggregates, so this is wiring, not new
+inference.
+
+**4. Grad-CAM now shows the true class next to the predicted one.** A heatmap
+answers "where did it look" and left "was it right?" to the reader. `run.json`
+never stored class names, so both sides were unavailable: the caption said
+`classe predita: 2`. Names are recovered from the training folder — `ImageFolder`
+assigns indices by sorting the class sub-directories, so the sorted names *are*
+the mapping the checkpoint was trained with — and the ground truth from each
+image's parent folder.
+
+**Neither is guessed.** A class-count mismatch between the folder and
+`model.num_classes` yields no names rather than a confidently wrong one, and a
+flat folder of unlabeled images gets `true_class: null` instead of a fabricated
+label. The GUI outlines a wrong prediction in red, because the overlays worth
+opening are the mistakes.
+
+**Verified on real runs, not fixtures:** the eight-target action matrix went from
+6 model-card 500s and 8 custom-task 500s to `ok` and clean 400s; regression,
+segmentation and anomaly were retrained and their new plots inspected. The
+regression scatter immediately explained a negative R² from an earlier run — a
+flat cloud at ~20 for every true age, which is the "predicts the mean" failure
+MAE and RMSE report identically to an unbiased one.
+
+**Still classification-only, and left that way deliberately:** per-model `test`
+on a folder, for regression/segmentation/anomaly. Those refuse today with a raw
+Pydantic error about `ExperimentConfig.task` instead of a plain "not supported"
+— the refusal is correct, the wording is not. Fixing it properly means a native
+evaluator per task, which is a feature, not a message change.

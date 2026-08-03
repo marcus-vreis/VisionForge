@@ -35,6 +35,7 @@ class RegressionBlock:
         self._train_result: RegressionTrainResult | None = None
         self._test_metrics: tuple[float, float, float, float] | None = None
         self._metric_cis: dict[str, MetricCI] = {}
+        self._test_predictions: tuple[Any, Any] | None = None
         # Injected by the GUI layer to stream live epoch progress via SSE.
         self._progress_callback: Callable[[dict[str, Any]], None] | None = None
 
@@ -61,6 +62,7 @@ class RegressionBlock:
             self._metric_cis = bootstrap_regression_cis(
                 y_true, y_pred, seed=self._config.training.seed
             )
+            self._test_predictions = (y_true, y_pred)
 
         run_dir = self._train_result.model_path.parent
         graphics = self._render_plots(run_dir)
@@ -96,7 +98,21 @@ class RegressionBlock:
         # RegressionEpochResult exposes epoch/train_loss/val_loss, which is all
         # loss_curve reads — duck-typed reuse of the classification plotter.
         MetricsPlotter.loss_curve(self._train_result.history, loss_path)  # type: ignore[arg-type]
-        return [loss_path]
+        graphics = [loss_path]
+
+        # Test-set diagnostics (ADR-077). Only meaningful once a test split has
+        # been scored, so an evaluate-less run still gets its loss curve.
+        if self._test_predictions is not None:
+            y_true, y_pred = self._test_predictions
+            target = ", ".join(self._config.data.target_columns)
+            scatter_path = run_dir / "pred_vs_true.png"
+            MetricsPlotter.regression_scatter(
+                y_true, y_pred, scatter_path, target_name=target
+            )
+            residual_path = run_dir / "residuals.png"
+            MetricsPlotter.residual_histogram(y_true, y_pred, residual_path)
+            graphics += [scatter_path, residual_path]
+        return graphics
 
     def _update_run_json(self, run_dir: Path, graphics: list[Path]) -> None:
         """Rewrite run.json with test metrics and artifact paths."""

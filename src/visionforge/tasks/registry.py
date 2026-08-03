@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import importlib.util
 import re
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -143,9 +144,19 @@ def _import_file(path: Path) -> None:
         logger.warning("Could not load user-task file: {}", path)
         return
     module = importlib.util.module_from_spec(spec)
+    # Registered in sys.modules *before* executing, which is what lets Pydantic
+    # resolve the task Config's annotations. The scaffold starts every task file
+    # with `from __future__ import annotations`, so those annotations are
+    # strings, and Pydantic resolves a string by looking the class's module up
+    # in sys.modules. Without this line the lookup misses and any field typed
+    # with something that is not a builtin — Literal, Path, an enum the user
+    # defined two lines above — fails with "is not fully defined; you should
+    # define Literal", which points the user at their file rather than at here.
+    sys.modules[module_name] = module
     try:
         spec.loader.exec_module(module)
     except Exception as exc:  # noqa: BLE001 — a bad user file must name itself, not crash discovery
+        sys.modules.pop(module_name, None)
         logger.warning("Failed to import user-task file {}: {}", path, exc)
 
 

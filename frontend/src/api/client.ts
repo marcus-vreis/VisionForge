@@ -437,6 +437,11 @@ export interface GradCamItem {
   predicted_class: number | null;
   /** human-readable label (regression values / segmentation target); may be null. */
   prediction?: string | null;
+  /** class-name form of predicted_class, when the run's class list is known. */
+  predicted_label?: string | null;
+  /** from the image's parent folder; null when the folder carries no label. */
+  true_class?: string | null;
+  correct?: boolean | null;
 }
 
 export interface GradCamResponse {
