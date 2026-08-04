@@ -13,6 +13,8 @@ reasoning lives in [`documentation/DECISIONS.md`](documentation/DECISIONS.md).
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-08-04
+
 ## [0.2.0] — 2026-08-03
 
 ### Added
