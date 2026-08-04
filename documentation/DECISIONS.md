@@ -2263,3 +2263,61 @@ genuinely harder rather than overlooked — Ultralytics reports aggregate mAP wi
 no per-image predictions to resample without re-running validation, and a custom
 task declares arbitrary metric names whose resampling unit only its author
 knows. Neither is a one-line wiring job like the plots were.
+
+---
+
+## ADR-080 — "Testar modelo" takes one labelled folder
+
+**Date:** 2026-08-04
+**Status:** Accepted — shipped 2026-08-04
+**Implements:** ADR-047, which decided this and was never built
+
+**Context:** the per-run test action asked for a `base_dir` plus three split
+names — `train`, `val`, `test` — to score a checkpoint. That is a description of
+a *training layout*, and the researcher supplying it has already trained; what
+they have is one evaluation set. Worse, the request was built into an
+`ExperimentConfig` regardless of task, so regression, segmentation and anomaly
+runs answered with a raw Pydantic error — `Input should be 'binary' or
+'multiclass'` — and the action only ever worked for classification and
+detection.
+
+**Decision:** the request is one field, `data_dir`, and the endpoint dispatches
+per task.
+
+The folder is given **in the label shape the run was trained with** — class
+sub-folders for classification, images plus YOLO `.txt` for detection, the
+paired image/mask folders for segmentation, normal and defect folders for
+anomaly. Everything else (which sub-folder holds masks, what the normal class
+is called) is read from the run's own config instead of being asked again: the
+model was trained under those conventions, and a test set that does not follow
+them is not comparable anyway.
+
+**Regression is the exception its data model forces.** It has no split folders —
+it has CSV manifests — so `data_dir` points at the `.csv`, and choosing a folder
+is refused with a message that says what to pick instead. The GUI's field
+relabels itself and the hint under it names exactly what the chosen path must
+contain, per task.
+
+**No new evaluators were written.** Each task's trainer already knows how to
+score a loader; the only thing missing was a way to aim its *test* split at the
+chosen folder. For the folder-shaped tasks that is `base_dir=<parent>` +
+`test_dir=<name>`; regression gets `test_csv=<file>`. The existing DataModules
+then do the loading, which keeps the numbers identical to the ones training
+reports.
+
+**A folder of bare images is deliberately not accepted.** Metrics need labels;
+without them there is nothing to be right or wrong about. Running a checkpoint
+over unlabelled images is a different action that already exists — batch
+prediction, which writes a CSV.
+
+**Validation order matters and is chosen, not incidental:** the path the
+researcher just typed is checked before the run's checkpoint, because
+"Run X has no usable checkpoint" is a confusing answer to "I picked the wrong
+folder". A test caught the original order.
+
+**Verified on real data**, all four families through the same entry point:
+classification `accuracy=0.7506` on the coffee test folder — identical to what
+that run reported at training time, which is the consistency check that matters
+— plus regression `mae=15.32` from a CSV, segmentation `miou=0.4122` from a
+paired folder, and anomaly `auroc=0.601`. The three standalone ones had never
+completed this action at all.

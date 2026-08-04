@@ -201,20 +201,16 @@ class TestExecuteRunTest:
         self, configured_run: tuple[Path, Path]
     ) -> None:
         run_dir, dataset_root = configured_run
-        req = RunTestRequest(
-            base_dir=str(dataset_root),
-            train_dir="train",
-            val_dir="val",
-            test_dir="test",
-            label="smoke",
-        )
+        # ADR-080: one folder — the evaluation set itself, not a dataset root
+        # with split names.
+        req = RunTestRequest(data_dir=str(dataset_root / "test"), label="smoke")
         resp = _execute_run_test(run_dir, req)
         data = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
         assert len(data["tests"]) == 1
         rec = data["tests"][0]
         assert rec["label"] == "smoke"
         assert rec["test_id"] == resp.test_id
-        assert Path(rec["base_dir"]) == dataset_root.resolve()
+        assert Path(rec["base_dir"]) == (dataset_root / "test").resolve()
         assert "accuracy" in rec["metrics"]
         assert Path(rec["artifacts"]["confusion_matrix"]).exists()
         # Per-test plot set must mirror the training-time evaluation outputs.
@@ -228,10 +224,10 @@ class TestExecuteRunTest:
         self, configured_run: tuple[Path, Path]
     ) -> None:
         run_dir, dataset_root = configured_run
-        req = RunTestRequest(base_dir=str(dataset_root))
+        req = RunTestRequest(data_dir=str(dataset_root / "test"))
         resp = _execute_run_test(run_dir, req)
-        # Falls back to dataset folder name.
-        assert resp.label == dataset_root.name
+        # Falls back to the chosen folder's own name.
+        assert resp.label == "test"
 
     def test_multiple_calls_accumulate_history(
         self, configured_run: tuple[Path, Path]
@@ -240,7 +236,7 @@ class TestExecuteRunTest:
         for label in ("a", "b", "c"):
             _execute_run_test(
                 run_dir,
-                RunTestRequest(base_dir=str(dataset_root), label=label),
+                RunTestRequest(data_dir=str(dataset_root / "test"), label=label),
             )
         data = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
         labels = [t["label"] for t in data["tests"]]
@@ -258,7 +254,7 @@ class TestRunTestEndpoint:
             client = TestClient(app, raise_server_exceptions=True)
             resp = client.post(
                 "/api/runs/does_not_exist/test",
-                json={"base_dir": str(tmp_path)},
+                json={"data_dir": str(tmp_path)},
             )
         assert resp.status_code == 404
 
@@ -274,7 +270,7 @@ class TestRunTestEndpoint:
             client = TestClient(app, raise_server_exceptions=True)
             resp = client.post(
                 f"/api/runs/{run_dir.name}/test",
-                json={"base_dir": str(tmp_path / "nonexistent")},
+                json={"data_dir": str(tmp_path / "nonexistent")},
             )
         assert resp.status_code == 400
 

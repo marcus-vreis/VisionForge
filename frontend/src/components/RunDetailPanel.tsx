@@ -119,10 +119,7 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
   const [error, setError] = useState<string | null>(null);
   const [lightbox, setLightbox] = useState<{ src: string; caption: string } | null>(null);
   const [testForm, setTestForm] = useState({
-    base_dir: "",
-    train_dir: "train",
-    val_dir: "val",
-    test_dir: "test",
+    data_dir: "",
     label: "",
   });
   const [testing, setTesting] = useState(false);
@@ -217,7 +214,7 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
         setTestMsg({ kind: "info", text: res.message ?? "Cancelado." });
         return;
       }
-      setTestForm((f) => ({ ...f, base_dir: res.path }));
+      setTestForm((f) => ({ ...f, data_dir: res.path }));
       setTestMsg({ kind: "success", text: `Pasta: ${res.path}` });
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Falha ao escolher pasta.";
@@ -362,7 +359,7 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
   };
 
   const runTest = async () => {
-    if (!testForm.base_dir.trim()) {
+    if (!testForm.data_dir.trim()) {
       setTestMsg({ kind: "error", text: "Informe o diretório base do dataset de teste." });
       return;
     }
@@ -370,10 +367,7 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
     setTestMsg({ kind: "info", text: "Avaliando modelo no novo dataset…" });
     try {
       const record = await testRunOnDataset(runId, {
-        base_dir: testForm.base_dir,
-        train_dir: testForm.train_dir || "train",
-        val_dir: testForm.val_dir || "val",
-        test_dir: testForm.test_dir || "test",
+        data_dir: testForm.data_dir,
         label: testForm.label || undefined,
       });
       setTestMsg({
@@ -1092,7 +1086,7 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
               >
                 <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
                   <FormField
-                    label="Diretório base"
+                    label={testFolderLabel(detail)}
                     value={testForm.base_dir}
                     onChange={(v) => setTestForm((f) => ({ ...f, base_dir: v }))}
                     placeholder="ex: C:/datasets/coffee_v2"
@@ -1117,26 +1111,13 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
                 </div>
                 <div
                   style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(3, 1fr)",
-                    gap: 10,
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 10,
+                    lineHeight: 1.7,
+                    color: "var(--vf-text-muted)",
                   }}
                 >
-                  <FormField
-                    label="Subpasta treino"
-                    value={testForm.train_dir}
-                    onChange={(v) => setTestForm((f) => ({ ...f, train_dir: v }))}
-                  />
-                  <FormField
-                    label="Subpasta validação"
-                    value={testForm.val_dir}
-                    onChange={(v) => setTestForm((f) => ({ ...f, val_dir: v }))}
-                  />
-                  <FormField
-                    label="Subpasta teste"
-                    value={testForm.test_dir}
-                    onChange={(v) => setTestForm((f) => ({ ...f, test_dir: v }))}
-                  />
+                  {testFolderHint(detail)}
                 </div>
                 <FormField
                   label="Rótulo (opcional)"
@@ -1559,6 +1540,44 @@ function KeyRow({ label, value }: { label: string; value: string }) {
       </span>
     </div>
   );
+}
+
+/** The task a run belongs to, from its run.json (mirrors the backend's rule). */
+function runTask(detail: RunDetail | null): string {
+  const config = (detail?.config ?? {}) as { task?: string };
+  const task = config.task;
+  if (task && ["regression", "segmentation", "anomaly", "detection"].includes(task)) {
+    return task;
+  }
+  return "classification";
+}
+
+/** What the single test input is called for this task (ADR-080). */
+function testFolderLabel(detail: RunDetail | null): string {
+  return runTask(detail) === "regression"
+    ? "Manifesto de teste (.csv)"
+    : "Pasta de teste";
+}
+
+/** What that folder has to contain — the label shape the run was trained with.
+ *
+ * Spelled out per task because "one folder" is only unambiguous once you know
+ * where the labels live, and getting it wrong is a failed evaluation rather
+ * than a validation error.
+ */
+function testFolderHint(detail: RunDetail | null): string {
+  switch (runTask(detail)) {
+    case "detection":
+      return "Uma pasta no layout YOLO: imagens e os .txt de rótulo correspondentes.";
+    case "segmentation":
+      return "Uma pasta com as subpastas de imagens e de máscaras, pareadas pelo nome do arquivo.";
+    case "anomaly":
+      return "Uma pasta com a subpasta de imagens normais e as de defeito, como no treino.";
+    case "regression":
+      return "O .csv com a coluna de imagem e a(s) coluna(s) alvo. As imagens seguem a mesma pasta do treino.";
+    default:
+      return "Uma pasta com uma subpasta por classe — a mesma convenção do treino.";
+  }
 }
 
 /** Caption under a Grad-CAM overlay: what the model said, and what it should have.

@@ -27,13 +27,13 @@ _EVAL_SPLITS = ("val", "test", "train")
 def evaluate_detection_run(
     run_dir: Path, req: RunTestRequest, data: dict[str, Any]
 ) -> RunTestResponse:
-    """Evaluate a detection run's checkpoint on ``req.base_dir`` and record mAP.
+    """Evaluate a detection run's checkpoint on ``req.data_dir`` and record mAP.
 
     Raises:
         FileNotFoundError: if the run has no usable checkpoint on disk.
         ValueError: if the new dataset has no resolvable YOLO split.
     """
-    config = _config_for_new_dataset(data["config"], req.base_dir)
+    config = _config_for_new_dataset(data["config"], req.data_dir)
 
     checkpoint = data.get("artifacts", {}).get("model")
     if not checkpoint or not Path(checkpoint).is_file():
@@ -49,8 +49,8 @@ def evaluate_detection_run(
 
     timestamp = datetime.now()
     test_id = f"test_{timestamp.strftime('%Y%m%d_%H%M%S_%f')}"
-    label = req.label or Path(req.base_dir).name or "test"
-    base_dir_str = str(Path(req.base_dir).resolve())
+    label = req.label or Path(req.data_dir).name or "test"
+    base_dir_str = str(Path(req.data_dir).resolve())
     record: dict[str, Any] = {
         "test_id": test_id,
         "label": label,
@@ -98,7 +98,7 @@ def _evaluate_torchvision(
     from visionforge.core.detection_metrics import mean_average_precision_50
     from visionforge.models.detection_factory import build_torchvision_detector
 
-    base = Path(req.base_dir)
+    base = Path(req.data_dir)
     resolved = next(
         (r for s in _EVAL_SPLITS if (r := resolve_yolo_split(base, s)) is not None),
         None,

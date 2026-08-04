@@ -258,12 +258,26 @@ class RunDetail(BaseModel):
 
 
 class RunTestRequest(BaseModel):
-    """Test a saved checkpoint against a new dataset path."""
+    """Evaluate a saved checkpoint on **one** labelled folder (ADR-080).
 
-    base_dir: str
-    train_dir: str = "train"
-    val_dir: str = "val"
-    test_dir: str = "test"
+    A test needs an evaluation set, not a dataset root: asking for a `base_dir`
+    plus three split names made the researcher describe a whole training layout
+    to score a single folder, and it is the reason this action only ever worked
+    for classification.
+
+    ``data_dir`` is that folder, in the label shape the run was trained with —
+    class sub-folders for classification, images + YOLO labels for detection,
+    the paired image/mask folders for segmentation, normal + defect for anomaly.
+    Regression is the exception its data model forces: a CSV manifest, so
+    ``data_dir`` points at the ``.csv``.
+
+    Everything else — which sub-folder holds masks, what the normal class is
+    called — is read from the run's own config rather than asked again, because
+    the model was trained under those conventions and a test set that does not
+    follow them is not comparable anyway.
+    """
+
+    data_dir: str
     label: str | None = None
 
 

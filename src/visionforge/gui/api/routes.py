@@ -2556,6 +2556,150 @@ def _execute_onnx_export(run_dir: Path, req: ExportOnnxRequest) -> ExportOnnxRes
     )
 
 
+def _run_task(data: dict[str, Any]) -> str:
+    """The task family a run belongs to, from run.json.
+
+    Custom runs carry ``custom:<key>`` at the top level; the built-ins record
+    their own name in ``config.task``, except classification which records the
+    *problem* type (binary/multiclass/multilabel) there.
+    """
+    top = data.get("task")
+    if isinstance(top, str) and top.startswith("custom:"):
+        return top
+    task = data.get("config", {}).get("task")
+    if task in ("regression", "segmentation", "anomaly", "detection"):
+        return str(task)
+    return "classification"
+
+
+def _evaluate_standalone_run(
+    run_dir: Path, req: RunTestRequest, data: dict[str, Any], task: str
+) -> RunTestResponse:
+    """Score a regression / segmentation / anomaly checkpoint on one folder.
+
+    Each task's trainer already knows how to evaluate; all that was missing was
+    a way to point its *test* split at the folder the researcher chose. For the
+    folder-shaped tasks that is ``base_dir=<parent>`` + ``test_dir=<name>``;
+    regression's manifest model makes the chosen path a ``.csv`` instead, so its
+    parent becomes the base and the file becomes ``test_csv``.
+
+    Raises:
+        FileNotFoundError: the run has no checkpoint on disk.
+        ValueError: the chosen path does not exist.
+    """
+    import torch
+
+    # What the researcher just chose is validated first: a complaint about the
+    # run's checkpoint is confusing when the actual problem is the path they
+    # typed a second ago.
+    chosen = Path(req.data_dir)
+    if not chosen.exists():
+        raise ValueError(f"Caminho não encontrado: {chosen}")
+    if task == "regression" and chosen.is_dir():
+        raise ValueError(
+            "Regressão avalia um manifesto: escolha o arquivo .csv com a "
+            "coluna de imagem e a(s) coluna(s) alvo, não uma pasta."
+        )
+
+    checkpoint = (data.get("artifacts") or {}).get("model")
+    if not checkpoint or not Path(checkpoint).is_file():
+        raise FileNotFoundError(
+            f"Run '{run_dir.name}' não tem um checkpoint utilizável "
+            f"(artifacts.model: {checkpoint!r})."
+        )
+
+    config_dict = dict(data["config"])
+    data_dict = dict(config_dict.get("data", {}))
+    if task == "regression":
+        data_dict |= {"base_dir": str(chosen.parent), "test_csv": chosen.name}
+    else:
+        data_dict |= {"base_dir": str(chosen.parent), "test_dir": chosen.name}
+    config_dict["data"] = data_dict
+
+    if task == "regression":
+        from visionforge.core.regression_data import RegressionDataModule
+        from visionforge.core.regression_trainer import RegressionTrainer
+        from visionforge.models.regression_factory import RegressionModelFactory
+        from visionforge.utils.regression_config import RegressionConfig
+
+        reg_config = RegressionConfig.model_validate(config_dict)
+        reg_model = RegressionModelFactory.create(reg_config.model)
+        reg_model.load_state_dict(
+            torch.load(checkpoint, map_location="cpu", weights_only=True)
+        )
+        reg_loader = RegressionDataModule(reg_config).test_loader()
+        if reg_loader is None:
+            raise ValueError(f"Nenhuma linha utilizável em {chosen}.")
+        mse, rmse, mae, r2 = RegressionTrainer(reg_config).evaluate(
+            reg_model, reg_loader
+        )
+        metrics: dict[str, Any] = {"mse": mse, "rmse": rmse, "mae": mae, "r2": r2}
+
+    elif task == "segmentation":
+        from visionforge.core.segmentation_data import SegmentationDataModule
+        from visionforge.core.segmentation_trainer import SegmentationTrainer
+        from visionforge.models.segmentation_factory import SegmentationModelFactory
+        from visionforge.utils.segmentation_config import SegmentationConfig
+
+        seg_config = SegmentationConfig.model_validate(config_dict)
+        seg_model = SegmentationModelFactory.create(seg_config.model)
+        seg_model.load_state_dict(
+            torch.load(checkpoint, map_location="cpu", weights_only=True)
+        )
+        seg_loader = SegmentationDataModule(seg_config).test_loader()
+        if seg_loader is None:
+            raise ValueError(f"Nenhum par imagem/máscara encontrado em {chosen}.")
+        miou, dice, pixel_acc = SegmentationTrainer(seg_config).evaluate(
+            seg_model, seg_loader
+        )
+        metrics = {"miou": miou, "dice": dice, "pixel_acc": pixel_acc}
+
+    else:  # anomaly
+        from visionforge.core.anomaly_data import AnomalyDataModule
+        from visionforge.core.anomaly_trainer import AnomalyTrainer
+        from visionforge.models.anomaly_factory import AnomalyModelFactory
+        from visionforge.utils.anomaly_config import AnomalyConfig
+
+        anom_config = AnomalyConfig.model_validate(config_dict)
+        anom_model = AnomalyModelFactory.create(anom_config.model)
+        anom_model.load_state_dict(
+            torch.load(checkpoint, map_location="cpu", weights_only=True)
+        )
+        modules = AnomalyDataModule(anom_config)
+        # The threshold comes from the *normal training* distribution, so the
+        # train loader is still needed even though only the chosen folder is
+        # being scored (ADR-076).
+        auroc, threshold, image_f1 = AnomalyTrainer(anom_config).evaluate(
+            anom_model, modules.train_loader(), modules.test_loader()
+        )
+        metrics = {"auroc": auroc, "threshold": threshold, "image_f1": image_f1}
+
+    timestamp = datetime.now()
+    test_id = f"test_{timestamp.strftime('%Y%m%d_%H%M%S_%f')}"
+    label = req.label or chosen.name or "test"
+    resolved = str(chosen.resolve())
+    record: dict[str, Any] = {
+        "test_id": test_id,
+        "label": label,
+        "base_dir": resolved,
+        "timestamp": timestamp.isoformat(),
+        "metrics": metrics,
+        "artifacts": {},
+    }
+    data.setdefault("tests", []).append(record)
+    (run_dir / "run.json").write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+    return RunTestResponse(
+        test_id=test_id,
+        run_id=run_dir.name,
+        label=label,
+        base_dir=resolved,
+        timestamp=timestamp,
+        metrics=metrics,
+        artifacts={},
+    )
+
+
 def _execute_run_test(run_dir: Path, req: RunTestRequest) -> RunTestResponse:
     """Reload a saved checkpoint and evaluate it on a new dataset path.
 
@@ -2563,12 +2707,22 @@ def _execute_run_test(run_dir: Path, req: RunTestRequest) -> RunTestResponse:
     """
     run_json_path = run_dir / "run.json"
     data: dict[str, Any] = json.loads(run_json_path.read_text(encoding="utf-8"))
-    # Detection runs evaluate via their own mAP path; classification continues below.
-    if data.get("config", {}).get("task") == "detection":
+    task = _run_task(data)
+
+    # Each family evaluates through its own trainer (ADR-080). Detection had a
+    # native path already; the other three used to fall into the classification
+    # branch below and surface a raw ExperimentConfig validation error.
+    if task == "detection":
         return evaluate_detection_run(run_dir, req, data)
+    if task in ("regression", "segmentation", "anomaly"):
+        return _evaluate_standalone_run(run_dir, req, data, task)
+
     base_config_dict: dict[str, Any] = data["config"]
 
-    # Build an ExperimentConfig clone with the new dataset paths + evaluate mode.
+    # Point the *test* split at the chosen folder: base_dir is its parent and the
+    # split name is the folder itself, so one folder is all the researcher gives
+    # and the existing DataModule still does the loading.
+    chosen = Path(req.data_dir)
     test_config_dict = {
         **base_config_dict,
         "classification": {
@@ -2577,10 +2731,8 @@ def _execute_run_test(run_dir: Path, req: RunTestRequest) -> RunTestResponse:
         },
         "data": {
             **base_config_dict.get("data", {}),
-            "base_dir": req.base_dir,
-            "train_dir": req.train_dir,
-            "val_dir": req.val_dir,
-            "test_dir": req.test_dir,
+            "base_dir": str(chosen.parent),
+            "test_dir": chosen.name,
         },
     }
     config = ExperimentConfig.model_validate(test_config_dict)
@@ -2644,8 +2796,8 @@ def _execute_run_test(run_dir: Path, req: RunTestRequest) -> RunTestResponse:
         "auc_roc": eval_result.auc_roc,
     }
 
-    label = req.label or Path(req.base_dir).name or "test"
-    base_dir_str = str(Path(req.base_dir).resolve())
+    label = req.label or Path(req.data_dir).name or "test"
+    base_dir_str = str(Path(req.data_dir).resolve())
     record: dict[str, Any] = {
         "test_id": test_id,
         "label": label,

@@ -84,7 +84,7 @@ class TestTorchvisionDetectionTest:
         )
 
         resp = evaluate_detection_run(
-            run_dir, RunTestRequest(base_dir=str(ds), label="smoke"), data
+            run_dir, RunTestRequest(data_dir=str(ds), label="smoke"), data
         )
 
         assert "map50" in resp.metrics
@@ -104,7 +104,7 @@ class TestTorchvisionDetectionTest:
             checkpoint=str(tmp_path / "missing.pt"),
         )
         with pytest.raises(FileNotFoundError):
-            evaluate_detection_run(run_dir, RunTestRequest(base_dir=str(ds)), data)
+            evaluate_detection_run(run_dir, RunTestRequest(data_dir=str(ds)), data)
 
     def test_no_yolo_split_raises(self, tmp_path: Path) -> None:
         from visionforge.models.detection_factory import build_torchvision_detector
@@ -125,7 +125,7 @@ class TestTorchvisionDetectionTest:
             checkpoint=str(ckpt),
         )
         with pytest.raises(ValueError, match="split"):
-            evaluate_detection_run(run_dir, RunTestRequest(base_dir=str(empty)), data)
+            evaluate_detection_run(run_dir, RunTestRequest(data_dir=str(empty)), data)
 
 
 class TestUltralyticsDetectionTest:
@@ -152,7 +152,7 @@ class TestUltralyticsDetectionTest:
 
         with patch("visionforge.core.detection_trainer.YOLO", fake_yolo):
             resp = evaluate_detection_run(
-                run_dir, RunTestRequest(base_dir=str(ds)), data
+                run_dir, RunTestRequest(data_dir=str(ds)), data
             )
 
         assert resp.metrics == {
@@ -179,4 +179,4 @@ class TestUltralyticsDetectionTest:
         )
         with patch("visionforge.core.detection_trainer.YOLO", None):
             with pytest.raises(RuntimeError, match="ultralytics"):
-                evaluate_detection_run(run_dir, RunTestRequest(base_dir=str(ds)), data)
+                evaluate_detection_run(run_dir, RunTestRequest(data_dir=str(ds)), data)

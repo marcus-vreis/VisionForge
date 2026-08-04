@@ -193,3 +193,64 @@ class TestPreprocessingStepErrors:
         out = apply_step(Image.new("RGB", (8, 8)), "grayscale")
 
         assert out.size == (8, 8)
+
+
+class TestOneFolderTestDispatch:
+    """Per-model test takes one labelled folder and dispatches per task (ADR-080)."""
+
+    def test_task_is_read_from_the_run(self, tmp_path: Path) -> None:
+        from visionforge.gui.api.routes import _run_task
+
+        assert _run_task({"config": {"task": "segmentation"}}) == "segmentation"
+        assert _run_task({"config": {"task": "multiclass"}}) == "classification"
+        assert _run_task({"config": {"task": "binary"}}) == "classification"
+        assert _run_task({"task": "custom:counting"}) == "custom:counting"
+        # A run with nothing recorded is the original classification path.
+        assert _run_task({}) == "classification"
+
+    def test_missing_folder_is_rejected_before_loading_a_model(
+        self, tmp_path: Path
+    ) -> None:
+        from visionforge.gui.api.routes import _evaluate_standalone_run
+        from visionforge.gui.api.schemas import RunTestRequest
+
+        run_dir = _run_json(tmp_path, {"config": {"task": "segmentation"}})
+
+        with pytest.raises(ValueError, match="não encontrado"):
+            _evaluate_standalone_run(
+                run_dir,
+                RunTestRequest(data_dir=str(tmp_path / "gone")),
+                {"config": {"task": "segmentation"}},
+                "segmentation",
+            )
+
+    def test_regression_refuses_a_folder(self, tmp_path: Path) -> None:
+        """Its data model is a manifest, so the chosen path must be the .csv."""
+        from visionforge.gui.api.routes import _evaluate_standalone_run
+        from visionforge.gui.api.schemas import RunTestRequest
+
+        folder = tmp_path / "some_split"
+        folder.mkdir()
+        run_dir = _run_json(tmp_path, {"config": {"task": "regression"}})
+
+        with pytest.raises(ValueError, match=r"\.csv"):
+            _evaluate_standalone_run(
+                run_dir,
+                RunTestRequest(data_dir=str(folder)),
+                {"config": {"task": "regression"}},
+                "regression",
+            )
+
+    def test_a_run_without_a_checkpoint_says_so(self, tmp_path: Path) -> None:
+        from visionforge.gui.api.routes import _evaluate_standalone_run
+        from visionforge.gui.api.schemas import RunTestRequest
+
+        folder = tmp_path / "split"
+        folder.mkdir()
+        payload = {"config": {"task": "segmentation"}, "artifacts": {"model": None}}
+        run_dir = _run_json(tmp_path, payload)
+
+        with pytest.raises(FileNotFoundError, match="checkpoint"):
+            _evaluate_standalone_run(
+                run_dir, RunTestRequest(data_dir=str(folder)), payload, "segmentation"
+            )

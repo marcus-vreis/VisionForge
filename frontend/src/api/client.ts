@@ -785,10 +785,9 @@ export async function deleteRun(runId: string): Promise<{ run_id: string; status
 }
 
 export interface RunTestRequestPayload {
-  base_dir: string;
-  train_dir?: string;
-  val_dir?: string;
-  test_dir?: string;
+  /** The single labelled folder to score — or, for regression, the .csv
+   *  manifest its data model requires (ADR-080). */
+  data_dir: string;
   label?: string;
 }
 
