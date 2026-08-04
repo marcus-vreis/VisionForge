@@ -26,6 +26,11 @@ reasoning lives in [`documentation/DECISIONS.md`](documentation/DECISIONS.md).
 
 ### Fixed
 
+- **`visionforge doctor` recommended the CPU wheel on a CUDA machine.** Driver
+  6xx renamed the `nvidia-smi` header field to `CUDA UMD Version`, which the
+  parser did not match, so a recent driver looked like no GPU at all — an
+  RTX 5060 Ti on driver 610.74 was told to `pip install "visionforge-studio[cpu]"`.
+  Both spellings are accepted now.
 - **The documented frontend type-check was a no-op.** The root `tsconfig.json`
   is a solution file with `"files": []`, so `npx tsc --noEmit` type-checked
   nothing and always passed — which is how a `base_dir` reference that no longer

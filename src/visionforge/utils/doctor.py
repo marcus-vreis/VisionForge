@@ -71,7 +71,10 @@ def detect_driver_cuda() -> str | None:
     if result.returncode != 0:
         return None
 
-    match = re.search(r"CUDA Version:\s*(\d+\.\d+)", result.stdout)
+    # Driver 6xx renamed the header field to "CUDA UMD Version" (and added a
+    # separate KMD one). Matching only the old spelling made every recent driver
+    # look like no GPU at all, which recommended the CPU wheel on a CUDA machine.
+    match = re.search(r"CUDA(?:\s+UMD)?\s+Version:\s*(\d+\.\d+)", result.stdout)
     if not match:
         return None
 

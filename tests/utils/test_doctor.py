@@ -94,6 +94,20 @@ class TestDetectDriverCuda:
         ):
             assert detect_driver_cuda() is None
 
+    def test_parses_umd_version_from_driver_6xx_header(self) -> None:
+        """Driver 6xx renamed the field, which used to read as "no GPU at all"."""
+        output = (
+            "+-----------------------------------------------------------------------------------------+\n"
+            "| NVIDIA-SMI 610.74                 KMD Version: 610.74        CUDA UMD Version: 13.3     |\n"
+            "+-----------------------------------------------------------------------------------------+\n"
+        )
+        with patch("subprocess.run", return_value=self._make_result(output)):
+            assert detect_driver_cuda() == "13.3"
+
+    def test_driver_6xx_still_selects_a_cuda_wheel(self) -> None:
+        """The bug's real cost: a CUDA machine being told to install cpu torch."""
+        assert select_wheel_tag("13.3") == "cu128"
+
     def test_parses_version_with_single_digit_minor(self) -> None:
         output = (
             "| NVIDIA-SMI 500.00    Driver Version: 500.00    CUDA Version: 11.8 |\n"
