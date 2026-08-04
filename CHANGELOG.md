@@ -15,7 +15,24 @@ reasoning lives in [`documentation/DECISIONS.md`](documentation/DECISIONS.md).
 
 ## [0.3.0] — 2026-08-04
 
+### Fixed
+
+- **Detection runs produced no plots and no checkpoint.** Ultralytics resolves a
+  relative `project` path under its own `runs_dir`, so every artifact landed in
+  `runs/detect/outputs/...` and the real run directory held only `data.yaml` and
+  `run.json` — which is why every post-training action on a detection run
+  reported a missing `best.pt`. The path is now absolute, and the run collects
+  both confusion matrices, all four Box curves and the validation prediction
+  sample ([ADR-079](documentation/DECISIONS.md)).
+- **Custom-task runs showed no plots** although the engine was drawing one:
+  `run.json` hardcoded `graphics: []`, orphaning the primary-metric curve on
+  disk. It is now declared, alongside a train-loss curve
+  ([ADR-079](documentation/DECISIONS.md)).
+
 ## [0.2.0] — 2026-08-03
+
+> Tagged locally and superseded before it was published; 0.3.0 is the first
+> release after 0.1.0 to reach PyPI. The entries below shipped as part of it.
 
 ### Added
 
@@ -79,17 +96,6 @@ reasoning lives in [`documentation/DECISIONS.md`](documentation/DECISIONS.md).
   guess for `gaussian_blur` or `median_blur` — produced a server fault with no
   hint. It is now a 422 that lists every registered filter
   ([ADR-078](documentation/DECISIONS.md)).
-- **Detection runs produced no plots and no checkpoint.** Ultralytics resolves a
-  relative `project` path under its own `runs_dir`, so every artifact landed in
-  `runs/detect/outputs/...` and the real run directory held only `data.yaml` and
-  `run.json` — which is why every post-training action on a detection run
-  reported a missing `best.pt`. The path is now absolute, and the run collects
-  both confusion matrices, all four Box curves and the validation prediction
-  sample ([ADR-079](documentation/DECISIONS.md)).
-- **Custom-task runs showed no plots** although the engine was drawing one:
-  `run.json` hardcoded `graphics: []`, orphaning the primary-metric curve on
-  disk. It is now declared, alongside a train-loss curve
-  ([ADR-079](documentation/DECISIONS.md)).
 - **`bump-my-version bump` could never complete**, so the documented one-command
   release (ADR-073) had never once worked: the pytest pre-commit hook ran
   `uv run`, which re-locked because the version had just changed, and pre-commit
