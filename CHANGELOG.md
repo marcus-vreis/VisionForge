@@ -13,6 +13,8 @@ reasoning lives in [`documentation/DECISIONS.md`](documentation/DECISIONS.md).
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-08-04
+
 ### Fixed
 
 - **Detection runs produced no plots and no checkpoint.** Ultralytics resolves a
