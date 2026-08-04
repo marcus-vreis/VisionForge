@@ -13,6 +13,29 @@ reasoning lives in [`documentation/DECISIONS.md`](documentation/DECISIONS.md).
 
 ## [Unreleased]
 
+### Changed
+
+- **"Testar modelo" takes one labelled folder** instead of a dataset root plus
+  three split names, and dispatches per task — so regression, segmentation and
+  anomaly can be tested at all, where they previously answered with a raw
+  `Input should be 'binary' or 'multiclass'` and only classification and
+  detection ever worked. The folder is given in the label shape the run was
+  trained with; regression points at its `.csv` manifest, since its data model
+  has manifests rather than split folders
+  ([ADR-080](documentation/DECISIONS.md)).
+
+### Fixed
+
+- **The documented frontend type-check was a no-op.** The root `tsconfig.json`
+  is a solution file with `"files": []`, so `npx tsc --noEmit` type-checked
+  nothing and always passed — which is how a `base_dir` reference that no longer
+  existed survived a green check. The command is now `npm run typecheck`
+  (`tsc -b`), and CI gained a `frontend` job running vitest and the SPA build;
+  neither had ever run there.
+- **Esc in the run history could desynchronise from the backdrop.** Its handler
+  read the step-back function from a ref written during render; it is now a
+  `useCallback` the effect depends on directly.
+
 ## [0.3.0] — 2026-08-04
 
 ### Fixed

@@ -41,7 +41,7 @@ path; the other four are standalone tasks (own config/trainer/block/route).
 ## Commands
 - Backend tests: `pytest` (CI gates at `--cov-fail-under=70`)
 - Lint/format/types: `ruff check src/ tests/` · `ruff format --check` · `mypy src/`
-- Frontend: `cd frontend && npx vitest run && npx tsc --noEmit`
+- Frontend: `cd frontend && npx vitest run && npm run typecheck`
 - Build SPA (served by FastAPI): `cd frontend && npm run build`
 - Run GUI: `visionforge gui` · Run CLI: `visionforge run configs/<task>.yaml`
 

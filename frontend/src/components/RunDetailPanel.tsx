@@ -161,8 +161,11 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
   // A detection run.json carries task="detection". Some post-training actions
   // (batch CSV inference, per-model evaluate) are classification-only and hidden
   // for detection runs (see PHASE7_DETECTION_PLAN brick D/F).
-  const runTask = detail?.config?.["task"] as string | undefined;
-  const isDetection = runTask === "detection";
+  const task = runTask(detail);
+  const isDetection = task === "detection";
+  // A custom task owns its own training loop, so the built-in post-training
+  // actions have no checkpoint contract to load; the API rejects them with 400.
+  const isCustom = task.startsWith("custom:");
   const detectionBackend = (
     detail?.config?.["model"] as Record<string, unknown> | undefined
   )?.["backend"] as string | undefined;
@@ -171,14 +174,14 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
   // Anomaly is excluded — PatchCore's memory-bank scoring has no forward graph.
   const canExportOnnx = isDetection
     ? detectionBackend === "ultralytics"
-    : runTask !== "anomaly";
+    : !isCustom && task !== "anomaly";
   // Batch CSV inference: classification + regression (continuous targets) +
   // anomaly (score + threshold decision). Detection/segmentation produce
   // per-box/per-pixel outputs that don't map to a flat row yet (ADR-041 slice 3).
-  const canBatchPredict = !isDetection && runTask !== "segmentation";
+  const canBatchPredict = !isDetection && !isCustom && task !== "segmentation";
   // Grad-CAM: classification + regression + segmentation (conv-based CAM, ADR-053).
   // Detection (Ultralytics) and anomaly (no class/conv target) are excluded.
-  const canGradcam = !isDetection && runTask !== "anomaly";
+  const canGradcam = !isDetection && !isCustom && task !== "anomaly";
 
   useEffect(() => {
     let alive = true;
@@ -1087,9 +1090,13 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
                 <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
                   <FormField
                     label={testFolderLabel(detail)}
-                    value={testForm.base_dir}
-                    onChange={(v) => setTestForm((f) => ({ ...f, base_dir: v }))}
-                    placeholder="ex: C:/datasets/coffee_v2"
+                    value={testForm.data_dir}
+                    onChange={(v) => setTestForm((f) => ({ ...f, data_dir: v }))}
+                    placeholder={
+                      task === "regression"
+                        ? "ex: C:/datasets/idade/test.csv"
+                        : "ex: C:/datasets/coffee_v2/test"
+                    }
                   />
                   <button
                     type="button"

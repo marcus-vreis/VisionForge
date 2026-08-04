@@ -359,7 +359,7 @@ answers most of the questions up front.
 - `documentation/RELEASING.md` — how a version gets cut and published
 
 Backend checks: `pytest` · `ruff check src/ tests/` · `mypy src/`.
-Frontend: `cd frontend && npx vitest run && npx tsc --noEmit`.
+Frontend: `cd frontend && npx vitest run && npm run typecheck`.
 End-to-end: `visionforge selftest` (or `pytest -m slow` for the harness's own
 live cases — they are deselected from the default run).
 

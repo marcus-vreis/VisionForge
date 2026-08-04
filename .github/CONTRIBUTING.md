@@ -11,7 +11,7 @@ The short version, before opening a PR:
 ```bash
 pytest                                   # backend
 ruff check src/ tests/ && mypy src/      # lint + types
-cd frontend && npx vitest run && npx tsc --noEmit
+cd frontend && npx vitest run && npm run typecheck
 visionforge selftest                     # every task through the real API
 ```
 

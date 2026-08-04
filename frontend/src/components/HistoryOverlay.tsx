@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { deleteRun, fetchRuns } from "../api/client";
 import type { RunSummary } from "../types/run";
 import { CompareRunsPanel } from "./CompareRunsPanel";
@@ -589,21 +589,33 @@ export function HistoryOverlay({
   const [pendingDeletes, setPendingDeletes] = useState<RunSummary[] | null>(null);
   const [deletingIds, setDeletingIds] = useState<string[]>([]);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  // Esc mirrors the backdrop click, one level at a time. Held in a ref so the
-  // listener is registered once instead of on every state change.
-  const stepBackRef = useRef<() => void>(() => {});
+  // A stray click outside the sheet used to throw away the whole navigation, so
+  // the backdrop and Esc both step back exactly one level: gráfico → treinamento
+  // → histórico → gui. The × in the header is the deliberate "close it all".
+  // Declared before the `!open` early return so the Esc effect can depend on it.
+  const stepBack = useCallback(() => {
+    if (selectedRunId) {
+      setSelectedRunId(null);
+      return;
+    }
+    if (compareActiveIds) {
+      setCompareActiveIds(null);
+      return;
+    }
+    onClose();
+  }, [selectedRunId, compareActiveIds, onClose]);
 
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
       // The lightbox is on top and owns Esc while it is open; it stops there.
       if (e.key === "Escape" && !document.querySelector("[data-lightbox]")) {
-        stepBackRef.current();
+        stepBack();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open]);
+  }, [open, stepBack]);
 
   useEffect(() => {
     if (!open) return;
@@ -754,24 +766,6 @@ export function HistoryOverlay({
   const busyDeleting = deletingIds.length > 0;
 
   if (!open) return null;
-
-  // Clicking the backdrop steps back one level instead of dismissing
-  // everything (ADR-078): run detail -> list -> closed. Losing a run you had
-  // navigated into because of a stray click outside the sheet was the whole
-  // complaint; the × in the header is the deliberate "close it all" and stays
-  // that way.
-  const stepBack = () => {
-    if (selectedRunId) {
-      setSelectedRunId(null);
-      return;
-    }
-    if (compareActiveIds) {
-      setCompareActiveIds(null);
-      return;
-    }
-    onClose();
-  };
-  stepBackRef.current = stepBack;
 
   return (
     <div

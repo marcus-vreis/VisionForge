@@ -117,7 +117,7 @@ touched different regions). The only real conflicts:
 At each step the only conflicts are `TASKS.md`/`DECISIONS.md`/`.codespellrc`
 (accept both sides) and the `gui/static` bundle (rebuild once at the end). After
 all merges: `npm run build`, then `pytest -q && ruff check && mypy src` and
-`cd frontend && npx vitest run && npx tsc --noEmit`.
+`cd frontend && npx vitest run && npm run typecheck`.
 
 ## Follow-ups to reconcile after integration (consistency, not conflicts)
 

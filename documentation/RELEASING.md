@@ -50,7 +50,7 @@ disagree either.
 
 ```bash
 pytest && ruff check src/ tests/ && mypy src/
-cd frontend && npx vitest run && npx tsc --noEmit && npm run build && cd ..
+cd frontend && npx vitest run && npm run typecheck && npm run build && cd ..
 visionforge selftest
 ```
 
