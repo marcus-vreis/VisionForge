@@ -39,6 +39,9 @@ const GRAPH_LABELS: Record<string, string> = {
   "BoxF1_curve.png": "Curva F1 (box)",
   // Test-set diagnostics per task (ADR-077).
   "auroc.png": "AUROC por época",
+  "BoxP_curve.png": "Curva Precision (box)",
+  "BoxR_curve.png": "Curva Recall (box)",
+  "val_batch0_pred.jpg": "Predições na validação",
   "pred_vs_true.png": "Predito vs real",
   "residuals.png": "Distribuição dos resíduos",
   "iou_per_class.png": "IoU por classe",

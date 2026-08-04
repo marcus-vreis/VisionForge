@@ -56,6 +56,8 @@ class TaskRunResult:
     run_dir: Path
     model_path: Path | None
     history: list[TaskEpochResult] = field(default_factory=list)
+    # Plot files this run produced, so run.json can declare them (ADR-079).
+    graphics: list[Path] = field(default_factory=list)
 
 
 @dataclass
@@ -239,7 +241,7 @@ class GenericTaskEngine:
             test_metrics = spec.compute_metrics(model, test_loader, cfg)
             final_metrics |= {f"test_{k}": float(v) for k, v in test_metrics.items()}
 
-        self._render_primary_curve(run_dir, history)
+        graphics = self._render_curves(run_dir, history)
         result = TaskRunResult(
             metrics=final_metrics,
             best_epoch=best_epoch,
@@ -248,6 +250,7 @@ class GenericTaskEngine:
             run_dir=run_dir,
             model_path=model_path,
             history=history,
+            graphics=graphics,
         )
         self._write_run_json(result)
         if self._device.type == "cuda":
@@ -303,21 +306,48 @@ class GenericTaskEngine:
             )
         return None
 
-    def _render_primary_curve(
+    def _render_curves(
         self, run_dir: Path, history: list[TaskEpochResult]
-    ) -> None:
+    ) -> list[Path]:
+        """Render the loss curve and the primary-metric curve; return what exists.
+
+        Returning the paths is the point (ADR-079): the primary-metric curve was
+        already being written here, but ``run.json`` declared ``graphics: []``,
+        so every custom run left an orphaned PNG on disk that the GUI never
+        showed. A loss curve comes free from the same history and is what every
+        built-in task plots first.
+        """
+        graphics: list[Path] = []
+
+        if history:
+            loss_path = run_dir / "loss.png"
+            MetricsPlotter.metric_curve(
+                [r.epoch for r in history],
+                [r.train_loss for r in history],
+                loss_path,
+                label="train_loss",
+                ylabel="loss",
+                title=f"{self._info.label} — train loss",
+                color="#3b82f6",
+            )
+            graphics.append(loss_path)
+
         primary = self._info.primary_metric
+        epochs = [r.epoch for r in history if primary in r.val_metrics]
         values = [r.val_metrics[primary] for r in history if primary in r.val_metrics]
-        if not values:
-            return
-        MetricsPlotter.metric_curve(
-            [r.epoch for r in history if primary in r.val_metrics],
-            values,
-            run_dir / f"{primary}_curve.png",
-            label=primary,
-            ylabel=primary,
-            title=f"{self._info.label} — {primary} (val)",
-        )
+        if values:
+            curve_path = run_dir / f"{primary}_curve.png"
+            MetricsPlotter.metric_curve(
+                epochs,
+                values,
+                curve_path,
+                label=primary,
+                ylabel=primary,
+                title=f"{self._info.label} — {primary} (val)",
+            )
+            graphics.append(curve_path)
+
+        return graphics
 
     def _write_run_json(self, result: TaskRunResult) -> None:
         """Write the ADR-013 run.json; ``task`` is stamped ``custom:<key>``."""
@@ -349,7 +379,7 @@ class GenericTaskEngine:
             ],
             "artifacts": {
                 "model": str(result.model_path) if result.model_path else None,
-                "graphics": [],
+                "graphics": [str(p) for p in result.graphics],
                 "report": None,
             },
             "tests": [],

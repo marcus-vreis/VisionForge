@@ -2210,3 +2210,56 @@ input, so it is now `422`, and the message lists every registered filter.
 The browser pane in this environment reports a 0×0 viewport and does not
 composite, so every `getBoundingClientRect` returned zero. The layout is
 reasoned from the CSS and wants a human eyeball before it is trusted.
+
+---
+
+## ADR-079 — Detection and custom runs get their artifacts back
+
+**Date:** 2026-08-04
+**Status:** Accepted — shipped 2026-08-04
+
+**Context:** ADR-077 standardised the *plots* across regression, segmentation and
+anomaly and stopped there, which left the two task families the user actually
+noticed: a detection run showed no graphics in the history, and neither did a
+researcher-defined one. Auditing every `run.json` on disk made the gap
+countable — classification 74 of 80 runs with plots, detection 0 of 4, custom 0
+of 44.
+
+**Two unrelated causes, both confirmed by running a fresh training rather than
+by reading the code.**
+
+**1. Ultralytics was writing everything to the wrong directory.** The trainer
+passes `project=str(run_dir.parent)` — a *relative* path — and Ultralytics
+resolves a relative project under its own `runs_dir` setting. So a run destined
+for `outputs/models/<name>/<stamp>/` landed in
+`runs/detect/outputs/models/<name>/<stamp>/`, and the real run directory held
+exactly two files: `data.yaml` and `run.json`.
+
+That is much worse than missing plots. **The checkpoint was not there either** —
+which is the actual reason every post-training action on a detection run
+reported "no usable checkpoint at artifacts.model". ADR-077 recorded that as a
+stale run from July; it was systematic, and a training run today reproduced it.
+`project` is now `run_dir.parent.resolve()`, and the collected list grew to
+everything Ultralytics draws that answers a question: both confusion matrices,
+all four Box curves, `results.png`, and the validation prediction sample.
+
+**2. The custom-task engine rendered a plot and then declared it did not exist.**
+`_render_primary_curve` wrote `<primary>_curve.png` into the run directory and
+`_write_run_json` hardcoded `"graphics": []`, so every custom run left an
+orphaned PNG on disk that no surface ever showed — 44 of them here. The engine
+now returns the paths it wrote and the run.json declares them, plus a train-loss
+curve that comes free from the same history and is what every built-in task
+plots first.
+
+**Verified on real trainings:** a two-epoch YOLO11n run now leaves 18 files in
+its run directory, declares 8 graphics, and its `best.pt` exists — with
+`export_md` and `export_onnx` both answering 200 where the latter previously
+returned 400. A custom run declares `loss.png` and `auprc_curve.png`, both
+present.
+
+**Still not at parity, stated rather than quietly skipped:** detection and
+custom runs carry no bootstrap confidence intervals (ADR-074/076). Both are
+genuinely harder rather than overlooked — Ultralytics reports aggregate mAP with
+no per-image predictions to resample without re-running validation, and a custom
+task declares arbitrary metric names whose resampling unit only its author
+knows. Neither is a one-line wiring job like the plots were.

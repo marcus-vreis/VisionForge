@@ -275,7 +275,14 @@ class DetectionTrainer:
             data=str(data_yaml),
             imgsz=self._config.data.image_size,
             device=self._device_arg(),
-            project=str(run_dir.parent),
+            # Absolute, deliberately (ADR-079): Ultralytics resolves a *relative*
+            # project under its own settings `runs_dir`, so passing
+            # "outputs/models/<name>" wrote everything to
+            # "runs/detect/outputs/models/<name>" instead. The run directory then
+            # held only data.yaml and run.json — no plots, and no checkpoint,
+            # which is why every post-training action on a detection run reported
+            # a missing best.pt.
+            project=str(run_dir.parent.resolve()),
             name=run_dir.name,
             exist_ok=True,
             verbose=False,
@@ -677,13 +684,21 @@ class DetectionTrainer:
         )
 
     def _write_run_json(self, run_dir: Path, result: DetectionTrainResult) -> None:
+        # Everything Ultralytics draws that answers a question about the model,
+        # in the order a reader wants them. The torchvision backend synthesizes
+        # results.png itself and simply has no curves, so the exists() filter is
+        # what keeps one list serving both backends.
         graphics = [
             str(run_dir / p)
             for p in (
                 "results.png",
                 "confusion_matrix.png",
+                "confusion_matrix_normalized.png",
                 "BoxPR_curve.png",
                 "BoxF1_curve.png",
+                "BoxP_curve.png",
+                "BoxR_curve.png",
+                "val_batch0_pred.jpg",
             )
             if (run_dir / p).exists()
         ]
