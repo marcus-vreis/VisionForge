@@ -35,11 +35,6 @@ reasoning lives in [`documentation/DECISIONS.md`](documentation/DECISIONS.md).
 - **Esc in the run history could desynchronise from the backdrop.** Its handler
   read the step-back function from a ref written during render; it is now a
   `useCallback` the effect depends on directly.
-
-## [0.3.0] — 2026-08-04
-
-### Fixed
-
 - **Detection runs produced no plots and no checkpoint.** Ultralytics resolves a
   relative `project` path under its own `runs_dir`, so every artifact landed in
   `runs/detect/outputs/...` and the real run directory held only `data.yaml` and
