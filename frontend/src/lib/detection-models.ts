@@ -128,6 +128,10 @@ export type DetectionAutoAugment =
 
 /** Augmentation knobs — mirror DetectionAugmentationConfig (Ultralytics). */
 export interface DetectionAugmentationForm {
+  /** Off sends the neutral value for every knob below to Ultralytics, which
+   *  owns its own pipeline; the values here are kept so turning it back on
+   *  restores them. */
+  augment: boolean;
   hsv_h: number;
   hsv_s: number;
   hsv_v: number;
@@ -292,6 +296,7 @@ export function makeDefaultDetectionTraining(): DetectionTrainingForm {
     rect: false,
     multi_scale: false,
     augmentation: {
+      augment: true,
       hsv_h: 0.015,
       hsv_s: 0.7,
       hsv_v: 0.4,

@@ -47,6 +47,9 @@ export function transformsFormFromPayload(node: unknown): TransformsForm {
   const defaults = makeDefaultTransformsForm();
   if (!isPlainObject(node)) return defaults;
   return {
+    // A YAML written before the flag existed has no `augment` key and must
+    // import as "on", which is how it trained.
+    augment: typeof node.augment === "boolean" ? node.augment : defaults.augment,
     horizontal_flip:
       typeof node.horizontal_flip === "boolean"
         ? node.horizontal_flip

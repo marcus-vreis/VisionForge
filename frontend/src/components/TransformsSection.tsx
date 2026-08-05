@@ -66,49 +66,81 @@ export function TransformsSection({
         />
       </div>
 
+      {/* Normalization is not augmentation: it applies to train, val and test
+          alike, so it stays visible when augmentation is switched off. The old
+          combined section said otherwise by putting them under one heading. */}
       <div style={card}>
-        <div style={sectionLabel}>Augmentação & normalização</div>
+        <div style={sectionLabel}>Imagem</div>
         <div style={grid}>
-          <Toggle
-            label="Flip horizontal"
-            value={transforms.horizontal_flip}
-            onChange={(v) => onTransformsChange({ horizontal_flip: v })}
-            hint="treino"
-          />
-          <NumberField
-            label="Rotação (graus)"
-            value={transforms.rotation_degrees}
-            onChange={(v) =>
-              onTransformsChange({ rotation_degrees: Math.max(Math.round(v), 0) })
-            }
-            min={0}
-            step={1}
-            hint="0 = desliga"
-          />
-          <Toggle
-            label="Color jitter"
-            value={transforms.color_jitter}
-            onChange={(v) => onTransformsChange({ color_jitter: v })}
-          />
           <TextField
             label="Normalização (média)"
             value={transforms.normalize_mean}
             onChange={(v) => onTransformsChange({ normalize_mean: v })}
-            hint="R, G, B"
+            hint="R, G, B — aplicada a treino, validação e teste"
           />
           <TextField
             label="Normalização (std)"
             value={transforms.normalize_std}
             onChange={(v) => onTransformsChange({ normalize_std: v })}
-            hint="R, G, B"
+            hint="R, G, B — aplicada a treino, validação e teste"
           />
         </div>
-        <div style={{ marginTop: 16 }}>
-          <AugmentPreview
-            baseDir={baseDir}
-            transforms={buildTransformsPayload(transforms, imageSize)}
-          />
-        </div>
+      </div>
+
+      <div style={card}>
+        <div style={sectionLabel}>Data augmentation</div>
+        <Toggle
+          label="Augmentation"
+          value={transforms.augment}
+          onChange={(v) => onTransformsChange({ augment: v })}
+          hint="só no treino; desligada, os valores abaixo ficam guardados"
+        />
+        {transforms.augment ? (
+          <>
+            <div style={{ ...grid, marginTop: 14 }}>
+              <Toggle
+                label="Flip horizontal"
+                value={transforms.horizontal_flip}
+                onChange={(v) => onTransformsChange({ horizontal_flip: v })}
+                hint="treino"
+              />
+              <NumberField
+                label="Rotação (graus)"
+                value={transforms.rotation_degrees}
+                onChange={(v) =>
+                  onTransformsChange({ rotation_degrees: Math.max(Math.round(v), 0) })
+                }
+                min={0}
+                step={1}
+                hint="0 = desliga"
+              />
+              <Toggle
+                label="Color jitter"
+                value={transforms.color_jitter}
+                onChange={(v) => onTransformsChange({ color_jitter: v })}
+              />
+            </div>
+            {/* Previewing transforms the run will not apply would show something
+                that never happens, so the preview follows the toggle. */}
+            <div style={{ marginTop: 16 }}>
+              <AugmentPreview
+                baseDir={baseDir}
+                transforms={buildTransformsPayload(transforms, imageSize)}
+              />
+            </div>
+          </>
+        ) : (
+          <div
+            style={{
+              marginTop: 14,
+              fontFamily: "var(--font-mono)",
+              fontSize: 11,
+              color: "var(--vf-text-muted)",
+            }}
+          >
+            3 parâmetros ocultos — ligue para ajustar
+          </div>
+        )}
       </div>
     </>
   );

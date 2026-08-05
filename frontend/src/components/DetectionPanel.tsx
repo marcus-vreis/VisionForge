@@ -595,7 +595,31 @@ export function DetectionPanel({
           {/* Augmentation */}
           <div style={card}>
             <div style={sectionLabel}>Data augmentation</div>
-            <div style={grid}>
+            <Toggle
+              label="Augmentation"
+              value={formData.training.augmentation.augment}
+              onChange={(v) => setAug({ augment: v })}
+              hint="desligada, os 15 valores abaixo ficam guardados"
+            />
+            {!formData.training.augmentation.augment && (
+              <div
+                style={{
+                  marginTop: 14,
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 11,
+                  color: "var(--vf-text-muted)",
+                }}
+              >
+                15 parâmetros ocultos — ligue para ajustar
+              </div>
+            )}
+            <div
+              style={{
+                ...grid,
+                marginTop: 14,
+                display: formData.training.augmentation.augment ? grid.display : "none",
+              }}
+            >
               <NumberField
                 label="HSV — hue"
                 value={formData.training.augmentation.hsv_h}

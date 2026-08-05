@@ -10,6 +10,8 @@
 import type { PreprocessingStep } from "../components/PreprocessingPanel";
 
 export interface TransformsForm {
+  /** Off skips flip/rotation/jitter at training time without discarding them. */
+  augment: boolean;
   horizontal_flip: boolean;
   rotation_degrees: number;
   color_jitter: boolean;
@@ -20,6 +22,7 @@ export interface TransformsForm {
 
 export function makeDefaultTransformsForm(): TransformsForm {
   return {
+    augment: true,
     horizontal_flip: true,
     rotation_degrees: 10,
     color_jitter: false,
@@ -47,6 +50,7 @@ export function buildTransformsPayload(
   imageSize?: number,
 ): Record<string, unknown> {
   const payload: Record<string, unknown> = {
+    augment: t.augment,
     horizontal_flip: t.horizontal_flip,
     rotation_degrees: t.rotation_degrees,
     color_jitter: t.color_jitter,
