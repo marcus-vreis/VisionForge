@@ -2445,3 +2445,54 @@ worth making on its own. Backfilling fingerprints onto old runs was refused: the
 hash of the folder *today* does not describe what it held *then*, so it would
 answer "same data" about two runs that saw different data — the exact error the
 fingerprint exists to prevent.
+
+---
+
+## ADR-083 — Data augmentation has an explicit on/off flag
+
+**Date:** 2026-08-05
+**Status:** Accepted — shipped 2026-08-05
+**Extends:** ADR-059 (canonical task-panel contract)
+
+**Context:** there was no way to turn augmentation off short of zeroing every
+field by hand. In detection that is 15 fields, so "run a baseline without
+augmentation" was work nobody did.
+
+**Decision:** `augment: bool = True` on `TransformConfig` (classification,
+regression, segmentation, anomaly) and on `DetectionAugmentationConfig`.
+`_build_transforms` gates its `is_train` branch on it; the Ultralytics kwargs go
+through `_augmentation_kwargs`.
+
+**A flag, not inference from the values.** The alternative was to treat "all
+knobs neutral" as off and write neutral values when switching off. Rejected
+because the `run.json` then only *implies* the state — wrongly, for anyone who
+zeroed a field for another reason — and because the researcher's tuning would be
+destroyed by the round trip. Writing neutral values into an exported YAML loses
+the tuning permanently; the "previous values" would live only in browser state.
+Detection makes that concrete: 15 values to restore versus one boolean.
+
+**Detection disables by sending neutral values, not by omitting keys.**
+Ultralytics fills an omitted `train` argument with its own default, which
+augments — so omission would silently do the opposite of what was asked. The
+config's own values are left untouched, which is what makes switching back on
+restore them.
+
+**Off hides the fields rather than disabling them.** Keeping 15 greyed-out rows
+on screen is the visual clutter that prompted the request in the first place. The
+count (`15 parâmetros ocultos`) stays visible so the panel does not read as
+broken.
+
+**`image_size` and `normalize_*` left the augmentation section.** They are not
+augmentation: they apply to train, validation and test alike, which
+`_build_transforms` already reflected by keeping them outside the `is_train`
+branch. The UI heading "Augmentação & normalização" was the only place claiming
+otherwise, and hiding them with the toggle would have said they stop applying.
+This is a labelling error being corrected, not a preference.
+
+**Backward compatible without migration.** A new field with a default means an
+old config loads as `augment=True` and trains exactly as before. The YAML import
+path needed the same rule stated explicitly — `form-import.ts` treats a missing
+key as on — which the type checker, not review, is what caught.
+
+**Not done in this ADR:** presets ("leve / médio / agressivo"). Reasonable, and a
+separate decision.

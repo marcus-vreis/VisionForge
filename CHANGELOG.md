@@ -15,6 +15,13 @@ reasoning lives in [`documentation/DECISIONS.md`](documentation/DECISIONS.md).
 
 ### Added
 
+- **Uma chave liga e desliga a data augmentation**, em todas as cinco tarefas.
+  Desligada, os parâmetros somem da tela e o `run.json` registra o estado — em
+  vez de você ter que zerar cada campo à mão, que em detecção são 15. Os valores
+  ficam guardados, então religar devolve o ajuste. Normalização e tamanho da
+  imagem saíram da seção: não são augmentation, valem para treino, validação e
+  teste ([ADR-083](documentation/DECISIONS.md)).
+
 - **O histórico mostra em qual dataset cada run foi treinado** — selo no card,
   caminho e fingerprint no detalhe do run, e um veredito "mesmos dados?" ao
   comparar runs. Nada novo é medido: os dados já estavam no `run.json`. O nome

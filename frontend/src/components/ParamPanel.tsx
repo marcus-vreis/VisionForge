@@ -110,6 +110,63 @@ function resolveSchema(
   return schema;
 }
 
+// `data.transforms` carries two unrelated things. Resize and normalization
+// apply to train, val and test alike; only these three run inside the
+// `if is_train and config.augment` branch of `_build_transforms`. Splitting the
+// keys here is what lets the toggle hide the augmentation without also hiding
+// settings that still apply.
+const IMAGE_KEYS = ["image_size", "normalize_mean", "normalize_std"];
+const AUGMENT_KEYS = ["horizontal_flip", "rotation_degrees", "color_jitter"];
+
+/** Render a chosen subset of an object schema's fields, flat.
+ *
+ * Every instance is bound to the same object and merges into it on change, so
+ * the subsets stay parts of one value rather than becoming separate ones.
+ */
+function TransformFields({
+  keys,
+  schema,
+  defs,
+  value,
+  onChange,
+  errors,
+}: {
+  keys: string[];
+  schema: JsonSchema;
+  defs: Record<string, JsonSchema>;
+  value: unknown;
+  onChange: (v: Record<string, unknown>) => void;
+  errors: ValidationError[];
+}) {
+  const inner = resolveSchema(schema, defs);
+  if (!inner.properties) return null;
+  const objVal = (value ?? {}) as Record<string, unknown>;
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
+        gap: 16,
+      }}
+    >
+      {keys
+        .filter((key) => inner.properties?.[key])
+        .map((key) => (
+          <SchemaFieldVF
+            key={key}
+            name={key}
+            schema={inner.properties![key]}
+            defs={defs}
+            value={objVal[key]}
+            onChange={(v) => onChange({ ...objVal, [key]: v })}
+            errors={errors}
+            path={["data", "transforms", key]}
+          />
+        ))}
+    </div>
+  );
+}
+
 /** Convert the schema-flat preprocessing step (``{kind, ...params}``) the
  * backend expects into the nested ``{kind, params}`` shape the UI panel uses.
  * The backend's PreprocessingStep model uses extra="allow", so any field other
@@ -2011,6 +2068,9 @@ export function ParamPanel({
   const modelData = (formData["model"] ?? {}) as Record<string, unknown>;
   const trainingData = (formData["training"] ?? {}) as Record<string, unknown>;
   const dataData = (formData["data"] ?? {}) as Record<string, unknown>;
+  // Absent means on: a config written before the flag existed trained augmented.
+  const augmentOn =
+    ((dataData["transforms"] ?? {}) as Record<string, unknown>)["augment"] !== false;
 
   // Grid search axis state, shared with every SchemaFieldVF via context so each
   // gridable field can render its "+ valor ao grid" affordance.
@@ -2603,21 +2663,66 @@ export function ParamPanel({
               marginBottom: 14,
             }}
           >
-            // aumentos &amp; normalização
+            // imagem
           </div>
-          <SchemaFieldVF
-            name="transforms"
+          <TransformFields
+            keys={IMAGE_KEYS}
             schema={dataProps["transforms"]}
             defs={defs}
             value={dataData["transforms"]}
             onChange={(v) => setField("data", "transforms", v)}
             errors={validationErrors}
-            path={["data", "transforms"]}
           />
-          <AugmentPreview
-            baseDir={(dataData["base_dir"] as string) ?? ""}
-            transforms={(dataData["transforms"] ?? {}) as Record<string, unknown>}
+
+          <div
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: 10,
+              color: "var(--vf-text-muted)",
+              letterSpacing: "0.20em",
+              textTransform: "uppercase",
+              margin: "20px 0 14px",
+            }}
+          >
+            // data augmentation
+          </div>
+          <TransformFields
+            keys={["augment"]}
+            schema={dataProps["transforms"]}
+            defs={defs}
+            value={dataData["transforms"]}
+            onChange={(v) => setField("data", "transforms", v)}
+            errors={validationErrors}
           />
+          {augmentOn ? (
+            <>
+              <TransformFields
+                keys={AUGMENT_KEYS}
+                schema={dataProps["transforms"]}
+                defs={defs}
+                value={dataData["transforms"]}
+                onChange={(v) => setField("data", "transforms", v)}
+                errors={validationErrors}
+              />
+              {/* Previewing transforms the run will not apply would show
+                  something that never happens, so it follows the toggle. */}
+              <AugmentPreview
+                baseDir={(dataData["base_dir"] as string) ?? ""}
+                transforms={(dataData["transforms"] ?? {}) as Record<string, unknown>}
+              />
+            </>
+          ) : (
+            <div
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: 11,
+                color: "var(--vf-text-muted)",
+                marginTop: 10,
+              }}
+            >
+              {AUGMENT_KEYS.length} parâmetros ocultos — ligue para ajustar
+            </div>
+          )}
         </>
       )}
 
