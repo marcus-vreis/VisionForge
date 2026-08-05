@@ -127,7 +127,15 @@ Registrado para não voltar por engano:
 **Frontend**
 
 - Os três estados do veredito de comparação, incluindo métodos divergentes.
-- Card com e sem selo.
+- Formatação de bytes e truncamento do digest.
+
+Os testes de frontend cobrem `src/lib/` e `src/hooks/`; o projeto não tem
+biblioteca de teste de componente instalada (sem `@testing-library`, sem
+`jsdom`). Por isso a renderização do selo não ganha teste automatizado: toda a
+decisão fica em `dataset_identity` (Python, coberto) e em
+`lib/dataset-identity.ts` (coberto), e o que sobra no componente é um
+condicional sobre um campo. Introduzir infraestrutura de teste de componente é
+uma decisão de projeto separada, não um detalhe deste sub-projeto.
 
 `same_dataset` já tem cobertura em `tests/core/test_dataset_fingerprint.py:139`.
 

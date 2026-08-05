@@ -12,6 +12,7 @@ classe
 cliente
 comando
 componentes
+construtor
 controles
 eles
 exata
