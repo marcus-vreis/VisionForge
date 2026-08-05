@@ -12,8 +12,11 @@ repos:
       - id: codespell
         additional_dependencies: [tomli]
         args: [--write-changes]
-        # Skip lockfiles + built/minified assets where typo-fixing is unsafe.
-        exclude: "(package-lock\\.json|src/visionforge/gui/static/.*|frontend/dist/.*)"
+        # Skip lockfiles + built/minified assets where typo-fixing is unsafe,
+        # and the specs/plans under docs/superpowers/, which are Portuguese prose:
+        # --write-changes was silently rewriting falso→false, dito→ditto,
+        # ocasional→occasional, corrupting the document to fix a non-typo.
+        exclude: "(package-lock\\.json|src/visionforge/gui/static/.*|frontend/dist/.*|docs/superpowers/.*)"
 
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.20.0
