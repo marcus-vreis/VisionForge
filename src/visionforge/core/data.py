@@ -73,7 +73,7 @@ def _build_transforms(
         T.CenterCrop(config.image_size),
     ]
 
-    if is_train:
+    if is_train and config.augment:
         if config.horizontal_flip:
             steps.append(T.RandomHorizontalFlip())
         if config.rotation_degrees > 0:

@@ -43,6 +43,40 @@ except ImportError:  # pragma: no cover - exercised via monkeypatch in tests
 # Module global so tests can patch it without ultralytics installed.
 YOLO: Any = _YOLO
 
+# Every augmentation knob at the value that makes it do nothing. `auto_augment`
+# is a policy name rather than a magnitude, so its "off" is None.
+_NEUTRAL_AUGMENTATION: dict[str, Any] = {
+    "hsv_h": 0.0,
+    "hsv_s": 0.0,
+    "hsv_v": 0.0,
+    "degrees": 0.0,
+    "translate": 0.0,
+    "scale": 0.0,
+    "shear": 0.0,
+    "perspective": 0.0,
+    "flipud": 0.0,
+    "fliplr": 0.0,
+    "bgr": 0.0,
+    "mosaic": 0.0,
+    "mixup": 0.0,
+    "copy_paste": 0.0,
+    "auto_augment": None,
+    "erasing": 0.0,
+}
+
+
+def _augmentation_kwargs(aug: Any) -> dict[str, Any]:
+    """Ultralytics ``train`` augmentation arguments, honouring the on/off flag.
+
+    Disabling sends neutral values rather than omitting the keys: Ultralytics
+    fills an omitted argument with its own default, which augments. The config's
+    own values are left untouched, so turning the flag back on restores them.
+    """
+    if not aug.augment:
+        return dict(_NEUTRAL_AUGMENTATION)
+    return {key: getattr(aug, key) for key in _NEUTRAL_AUGMENTATION}
+
+
 # Ultralytics exposes its per-epoch metrics on ``trainer.metrics`` with these
 # namespaced keys. Validation losses come as ``val/<component>_loss`` and the
 # training losses as ``train/<component>_loss``.
@@ -585,23 +619,7 @@ class DetectionTrainer:
             "single_cls": cfg.single_cls,
             "rect": cfg.rect,
             "multi_scale": cfg.multi_scale,
-            # augmentation
-            "hsv_h": aug.hsv_h,
-            "hsv_s": aug.hsv_s,
-            "hsv_v": aug.hsv_v,
-            "degrees": aug.degrees,
-            "translate": aug.translate,
-            "scale": aug.scale,
-            "shear": aug.shear,
-            "perspective": aug.perspective,
-            "flipud": aug.flipud,
-            "fliplr": aug.fliplr,
-            "bgr": aug.bgr,
-            "mosaic": aug.mosaic,
-            "mixup": aug.mixup,
-            "copy_paste": aug.copy_paste,
-            "auto_augment": aug.auto_augment,
-            "erasing": aug.erasing,
+            **_augmentation_kwargs(aug),
         }
 
     def _build_torchvision_optimizer(

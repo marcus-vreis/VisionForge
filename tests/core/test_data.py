@@ -215,3 +215,46 @@ class TestDataModule:
         dm = DataModule(binary_config)
         loader = dm.train_loader()
         assert loader.sampler.__class__.__name__ == "RandomSampler"
+
+
+class TestAugmentToggle:
+    """Turning augmentation off must not touch resize or normalization."""
+
+    def _names(self, *, augment: bool, is_train: bool) -> list[str]:
+        from visionforge.core.data import _build_transforms
+        from visionforge.utils.config import TransformConfig
+
+        cfg = TransformConfig(
+            augment=augment,
+            horizontal_flip=True,
+            rotation_degrees=25,
+            color_jitter=True,
+        )
+        composed = _build_transforms(cfg, is_train=is_train)
+        return [type(t).__name__ for t in composed.transforms]
+
+    def test_augment_off_drops_the_augmenting_steps(self) -> None:
+        names = self._names(augment=False, is_train=True)
+
+        assert "RandomHorizontalFlip" not in names
+        assert "RandomRotation" not in names
+        assert "ColorJitter" not in names
+
+    def test_augment_off_keeps_resize_and_normalize(self) -> None:
+        """These apply to train, val and test alike — they are not augmentation."""
+        names = self._names(augment=False, is_train=True)
+
+        assert "Resize" in names
+        assert "Normalize" in names
+
+    def test_augment_defaults_to_on_and_still_augments(self) -> None:
+        from visionforge.utils.config import TransformConfig
+
+        assert TransformConfig().augment is True
+        assert "RandomHorizontalFlip" in self._names(augment=True, is_train=True)
+
+    def test_the_flag_changes_nothing_outside_training(self) -> None:
+        on = self._names(augment=True, is_train=False)
+        off = self._names(augment=False, is_train=False)
+
+        assert on == off

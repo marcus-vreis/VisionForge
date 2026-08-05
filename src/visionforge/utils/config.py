@@ -193,6 +193,10 @@ class TransformConfig(BaseModel):
     """Image transform and augmentation settings."""
 
     image_size: int = Field(default=224, ge=32)
+    # Off skips the augmenting steps below without discarding their values, so a
+    # baseline run and the tuned run differ by one field in the run.json — and
+    # turning it back on restores the tuning instead of losing it.
+    augment: bool = True
     horizontal_flip: bool = True
     rotation_degrees: int = Field(default=10, ge=0)
     color_jitter: bool = False

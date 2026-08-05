@@ -168,6 +168,10 @@ class DetectionAugmentationConfig(BaseModel):
     identically to the bare ``YOLO.train`` call it replaced.
     """
 
+    # Off sends the neutral value for every knob below to Ultralytics, which is
+    # the only way to disable augmentation there: it owns its own data pipeline,
+    # and an omitted argument gets its default, which augments.
+    augment: bool = True
     hsv_h: float = Field(default=0.015, ge=0.0, le=1.0)  # hue jitter fraction
     hsv_s: float = Field(default=0.7, ge=0.0, le=1.0)  # saturation jitter
     hsv_v: float = Field(default=0.4, ge=0.0, le=1.0)  # value/brightness jitter

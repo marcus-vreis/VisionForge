@@ -463,3 +463,51 @@ class TestTensorBoardTracking:
         assert {"loss/train", "loss/val", "map50/val"} <= tags
         steps = sorted({step for _, _, step in calls})
         assert steps == [1, 2]  # one entry per configured epoch
+
+
+class TestAugmentationToggle:
+    """Ultralytics owns its pipeline; the only way off is neutral values."""
+
+    def test_off_sends_neutral_values_and_leaves_the_config_alone(self) -> None:
+        from visionforge.core.detection_trainer import _augmentation_kwargs
+        from visionforge.utils.detection_config import DetectionAugmentationConfig
+
+        aug = DetectionAugmentationConfig(
+            augment=False, mosaic=1.0, fliplr=0.5, hsv_h=0.015
+        )
+
+        kwargs = _augmentation_kwargs(aug)
+
+        assert kwargs["mosaic"] == 0.0
+        assert kwargs["fliplr"] == 0.0
+        assert kwargs["hsv_h"] == 0.0
+        assert kwargs["auto_augment"] is None
+        # Turning it back on has to restore the tuning, so nothing was zeroed.
+        assert aug.mosaic == 1.0
+        assert aug.fliplr == 0.5
+
+    def test_off_still_sends_every_key(self) -> None:
+        """An omitted argument gets Ultralytics' own default, which augments."""
+        from visionforge.core.detection_trainer import (
+            _NEUTRAL_AUGMENTATION,
+            _augmentation_kwargs,
+        )
+        from visionforge.utils.detection_config import DetectionAugmentationConfig
+
+        kwargs = _augmentation_kwargs(DetectionAugmentationConfig(augment=False))
+
+        assert set(kwargs) == set(_NEUTRAL_AUGMENTATION)
+
+    def test_on_passes_the_configured_values(self) -> None:
+        from visionforge.core.detection_trainer import _augmentation_kwargs
+        from visionforge.utils.detection_config import DetectionAugmentationConfig
+
+        kwargs = _augmentation_kwargs(DetectionAugmentationConfig(mosaic=0.8))
+
+        assert kwargs["mosaic"] == 0.8
+        assert kwargs["auto_augment"] == "randaugment"
+
+    def test_defaults_to_on(self) -> None:
+        from visionforge.utils.detection_config import DetectionAugmentationConfig
+
+        assert DetectionAugmentationConfig().augment is True
