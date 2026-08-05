@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import asdict, dataclass
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any, Literal
 
 from loguru import logger
@@ -159,9 +159,34 @@ def same_dataset(a: dict[str, Any], b: dict[str, Any]) -> bool | None:
     return bool(a["digest"] == b["digest"])
 
 
+def dataset_identity(run_json: dict[str, Any]) -> tuple[str | None, str | None]:
+    """The dataset a run.json points at, as ``(display name, full path)``.
+
+    Prefers the fingerprint's ``root`` and falls back to ``config.data.base_dir``,
+    which every run.json has ever written — the fingerprint itself only exists
+    from 2026-07-26 on, so the fallback is what makes the name work across the
+    whole history instead of only the last few runs.
+
+    ``(None, None)`` means there is nothing to show, which the history renders as
+    no badge at all rather than a badge with an empty label.
+    """
+    fingerprint = run_json.get("dataset_fingerprint") or {}
+    root = fingerprint.get("root") or ""
+    if not root:
+        root = ((run_json.get("config") or {}).get("data") or {}).get("base_dir") or ""
+    if not root:
+        return None, None
+    # PurePath resolves against the *running* platform's separator, so a run
+    # written on Windows and read in CI on Linux would keep its backslashes and
+    # yield the entire string as the name. PureWindowsPath accepts both.
+    name = PureWindowsPath(str(root)).name
+    return (name or None), str(root)
+
+
 __all__ = [
     "DatasetFingerprint",
     "Method",
+    "dataset_identity",
     "fingerprint_dataset",
     "fingerprint_from_config",
     "same_dataset",

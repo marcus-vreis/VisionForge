@@ -7,6 +7,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from visionforge.core.dataset_fingerprint import (
+    dataset_identity,
     fingerprint_dataset,
     fingerprint_from_config,
     same_dataset,
@@ -148,3 +149,50 @@ class TestSameDataset:
         # A manifest digest and a content digest of the same data differ;
         # returning False would wrongly claim the datasets differ.
         assert same_dataset(self._fp("abc"), self._fp("abc", "content")) is None
+
+
+class TestDatasetIdentity:
+    """The name has to survive runs written before the fingerprint existed."""
+
+    def test_prefers_the_fingerprint_root(self) -> None:
+        run = {
+            "dataset_fingerprint": {"root": "/data/USK-COFFEE", "digest": "abc"},
+            "config": {"data": {"base_dir": "/outro/caminho"}},
+        }
+
+        assert dataset_identity(run) == ("USK-COFFEE", "/data/USK-COFFEE")
+
+    def test_falls_back_to_config_base_dir(self) -> None:
+        """26 of the 28 runs on disk have only this."""
+        run = {"config": {"data": {"base_dir": "/data/USK-COFFEE"}}}
+
+        assert dataset_identity(run) == ("USK-COFFEE", "/data/USK-COFFEE")
+
+    def test_relative_path_gives_the_same_name(self) -> None:
+        run = {"config": {"data": {"base_dir": "datasets/USK-COFFEE"}}}
+
+        assert dataset_identity(run)[0] == "USK-COFFEE"
+
+    def test_windows_path_gives_the_same_name(self) -> None:
+        """Runs are written on Windows and the tests also run on Linux in CI."""
+        run = {"config": {"data": {"base_dir": r"C:\Users\x\datasets\USK-COFFEE"}}}
+
+        assert dataset_identity(run)[0] == "USK-COFFEE"
+
+    def test_trailing_separator_does_not_produce_an_empty_name(self) -> None:
+        run = {"config": {"data": {"base_dir": "datasets/USK-COFFEE/"}}}
+
+        assert dataset_identity(run)[0] == "USK-COFFEE"
+
+    def test_no_path_anywhere_is_none(self) -> None:
+        """None means no badge at all, never a badge with an empty label."""
+        assert dataset_identity({"config": {}}) == (None, None)
+
+    def test_unavailable_fingerprint_falls_back(self) -> None:
+        """`method: unavailable` carries an empty root; base_dir still answers."""
+        run = {
+            "dataset_fingerprint": {"root": "", "method": "unavailable"},
+            "config": {"data": {"base_dir": "datasets/USK-COFFEE"}},
+        }
+
+        assert dataset_identity(run) == ("USK-COFFEE", "datasets/USK-COFFEE")
