@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { fetchRunDetail, type RunDetail } from "../api/client";
+import { compareDatasets } from "../lib/dataset-identity";
 
 interface CompareRunsPanelProps {
   runIds: string[];
@@ -115,6 +116,7 @@ export function CompareRunsPanel({ runIds, onBack }: CompareRunsPanelProps) {
       {!loading && !error && details.length > 0 && (
         <>
           <Legend details={details} />
+          <DatasetVerdictRow details={details} />
           <MetricsTable details={details} />
           <ConfigDiffTable details={details} />
           <PreprocessingCompare details={details} />
@@ -130,6 +132,58 @@ export function CompareRunsPanel({ runIds, onBack }: CompareRunsPanelProps) {
             title="Val accuracy × epoch"
           />
         </>
+      )}
+    </div>
+  );
+}
+
+const VERDICT_STYLE = {
+  same: { icon: "✓", color: "oklch(0.80 0.15 150)", text: "mesmos dados" },
+  different: { icon: "✗", color: "oklch(0.72 0.19 25)", text: "dados diferentes" },
+  unknown: { icon: "⚠", color: "oklch(0.80 0.13 85)", text: "não verificável" },
+};
+
+/** Whether the runs being compared saw the same data.
+ *
+ * Comparing metrics across different datasets is the mistake the fingerprint
+ * exists to prevent, so the answer belongs next to the metrics. Every run is
+ * compared against the first, and the weakest verdict wins: one unanswerable
+ * pair makes the whole set unanswerable, because a "same" that skipped a run
+ * would overclaim.
+ */
+function DatasetVerdictRow({ details }: { details: RunDetail[] }) {
+  if (details.length < 2) return null;
+
+  const verdicts = details.slice(1).map((d) => compareDatasets(details[0].dataset, d.dataset));
+  const verdict =
+    verdicts.find((v) => v.kind === "unknown") ??
+    verdicts.find((v) => v.kind === "different") ??
+    verdicts[0];
+  const style = VERDICT_STYLE[verdict.kind];
+  const names = Array.from(new Set(details.map((d) => d.dataset?.name).filter(Boolean)));
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        padding: "8px 12px",
+        background: "rgba(255,255,255,0.02)",
+        border: "1px solid var(--vf-panel-stroke)",
+        borderRadius: 10,
+        fontFamily: "var(--font-mono)",
+        fontSize: 11,
+        color: style.color,
+      }}
+    >
+      <span>{style.icon}</span>
+      <span>
+        {style.text}
+        {verdict.kind === "unknown" ? ` — ${verdict.reason}` : ""}
+      </span>
+      {names.length > 0 && (
+        <span style={{ color: "var(--vf-text-muted)" }}>· 🗂 {names.join(", ")}</span>
       )}
     </div>
   );

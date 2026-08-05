@@ -14,11 +14,14 @@ histórico sem essa informação obriga a abrir cada run e ler a config.
 
 Três peças estão construídas e não aparecem na interface:
 
-1. **`config.data.base_dir`** está em **28 de 28** `run.json` de `outputs/models/`.
-   O nome do dataset é recuperável para o histórico inteiro.
+1. **`config.data.base_dir`** está em praticamente todo `run.json`. Medido
+   contra o histórico servido pela API — **78 runs**, não 28: a primeira
+   contagem usou o glob `outputs/models/*/*/run.json`, que não alcança os runs
+   de tarefa custom, gravados em outra profundidade. Dos 78, **69 resolvem um
+   nome** e 9 não.
 2. **`dataset_fingerprint`** (ADR-061) grava `digest`, `method`, `n_files`,
    `total_bytes`, `root` e `note` a cada treino — mas só a partir do commit
-   `5fb8bbb`, de **2026-07-26**. Na prática: **2 de 28** runs têm. Todas as
+   `5fb8bbb`, de **2026-07-26**, então só a minoria dos runs tem. Todas as
    tarefas gravam, detecção inclusive (`cats-dogsv2.v1i.yolov8`, 559 arquivos).
 3. **`same_dataset(a, b)`** (`src/visionforge/core/dataset_fingerprint.py:148`)
    já responde "mesmos dados?" e já devolve `None` quando a pergunta não pode ser
@@ -43,12 +46,15 @@ Nome exibido = último segmento do caminho. Vale para caminho relativo
 (`datasets/USK-COFFEE`) e absoluto. `None` significa card sem selo, não card com
 selo vazio.
 
-**Ressalva registrada:** uma tarefa custom que *sintetiza* os próprios dados usa
-`base_dir` como marcador, não como dataset (ver docstring de
-`fingerprint_from_config`). O selo vai mostrar o nome dessa pasta. Não há nenhum
-run custom em `outputs/models/` para confirmar como fica na prática, então a
-regra fica uniforme e a ressalva fica escrita — inventar uma exceção sem
-evidência seria pior.
+**Ressalva resolvida por medição.** A dúvida registrada era o que aconteceria com
+uma tarefa custom que *sintetiza* os próprios dados e usa `base_dir` como
+marcador. Os 9 runs sem nome são exatamente esse caso — `custom:example_counting`
+grava `base_dir: "."`, cujo último segmento é vazio, e a regra `name or None` já
+os deixa sem selo. O resultado é o certo e não precisou de exceção.
+
+Já os runs de `custom:vlm_pseudo_label` apontam para um dataset real
+(`D:\datasets\cache-fase1`) e ganham selo normalmente — ou seja, "tarefa custom"
+não implica "sem dataset".
 
 ### 2. Superfície da API
 
@@ -120,7 +126,8 @@ Registrado para não voltar por engano:
 **Backend**
 
 - Derivação do nome: `root` do fingerprint presente; fallback para `base_dir`;
-  ambos ausentes → `None`; caminho relativo e absoluto dando o mesmo nome.
+  ambos ausentes → `None`; caminho relativo, absoluto e de Windows dando o mesmo
+  nome; `base_dir: "."` não produzindo selo.
 - Contrato: `RunSummary` e `RunDetail` carregam os campos novos, e um `run.json`
   antigo (sem `dataset_fingerprint`) continua parseando.
 

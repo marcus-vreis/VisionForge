@@ -72,6 +72,25 @@ export interface RunSummary {
   /** Block type from config — distinguishes classification / cross_validation /
    *  grid_search / etc. in the history list. */
   block?: string;
+  /** Dataset the run trained on. Derived server-side, falling back to
+   *  config.data.base_dir so it resolves on runs older than the fingerprint. */
+  dataset_name?: string | null;
+  dataset_root?: string | null;
+}
+
+/** The dataset a run trained on, as far as its run.json can prove it.
+ *
+ * `name` and `root` exist for every run; everything below comes from the
+ * fingerprint (ADR-061) and is absent on runs written before 2026-07-26.
+ */
+export interface DatasetInfo {
+  name: string;
+  root: string;
+  n_files?: number | null;
+  total_bytes?: number | null;
+  method?: string | null;
+  digest?: string | null;
+  note?: string | null;
 }
 
 /** Discriminated union of SSE events emitted by GET /api/experiment/events.

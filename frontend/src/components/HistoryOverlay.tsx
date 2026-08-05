@@ -480,6 +480,29 @@ function RunCard({
             {run.preprocessing_count === 1 ? "" : "s"}
           </span>
         )}
+        {run.dataset_name && (
+          <span
+            title={run.dataset_root ?? run.dataset_name}
+            style={{
+              padding: "2px 8px",
+              background: "oklch(0.70 0.12 250 / 0.14)",
+              border: "1px solid oklch(0.70 0.12 250 / 0.45)",
+              borderRadius: 999,
+              fontFamily: "var(--font-mono)",
+              fontSize: 10,
+              color: "oklch(0.86 0.11 250)",
+              letterSpacing: "0.10em",
+              // A long dataset name must not push the other pills out of the
+              // row; the row wraps, but the pill itself has to stay bounded.
+              maxWidth: 180,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            🗂 {run.dataset_name}
+          </span>
+        )}
         {run.block && run.block !== "classification" && (
           <span
             title={`Bloco de experimento: ${run.block}`}

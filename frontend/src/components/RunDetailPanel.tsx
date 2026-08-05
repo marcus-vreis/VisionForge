@@ -16,6 +16,7 @@ import {
   type RunDetail,
   type TestRecord,
 } from "../api/client";
+import { formatBytes, shortDigest } from "../lib/dataset-identity";
 import { metricCi } from "../lib/metric-ci";
 import type { MetricCI } from "../types/run";
 import { Lightbox } from "./Lightbox";
@@ -458,6 +459,34 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
 
       {detail && (
         <>
+          {detail.dataset && (
+            <Section title="Dataset">
+              <KeyRow label="Nome" value={detail.dataset.name} />
+              <PathRow label="Caminho" value={detail.dataset.root} />
+              {detail.dataset.digest ? (
+                <>
+                  <KeyRow
+                    label="Conteúdo"
+                    value={`${detail.dataset.n_files} arquivos · ${formatBytes(
+                      detail.dataset.total_bytes,
+                    )}`}
+                  />
+                  <KeyRow
+                    label="Fingerprint"
+                    value={`${detail.dataset.method} ${shortDigest(detail.dataset.digest)}`}
+                  />
+                </>
+              ) : (
+                // Saying nothing here would read as "no dataset"; the run has one,
+                // it just predates the fingerprint (ADR-061, 2026-07-26).
+                <KeyRow
+                  label="Fingerprint"
+                  value="sem fingerprint — run anterior a 26/07/2026"
+                />
+              )}
+            </Section>
+          )}
+
           <Section title="Localização no disco">
             <PathRow label="Pasta do run" value={detail.run_dir} />
             {detail.artifacts.model && (

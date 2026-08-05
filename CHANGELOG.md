@@ -13,6 +13,15 @@ reasoning lives in [`documentation/DECISIONS.md`](documentation/DECISIONS.md).
 
 ## [Unreleased]
 
+### Added
+
+- **O histórico mostra em qual dataset cada run foi treinado** — selo no card,
+  caminho e fingerprint no detalhe do run, e um veredito "mesmos dados?" ao
+  comparar runs. Nada novo é medido: os dados já estavam no `run.json`. O nome
+  aparece em 69 dos 78 runs existentes porque cai para `config.data.base_dir`;
+  a verificação por hash só vale de 26/07/2026 em diante, e o comparador diz
+  isso em vez de adivinhar ([ADR-082](documentation/DECISIONS.md)).
+
 ## [0.3.1] — 2026-08-05
 
 ### Fixed

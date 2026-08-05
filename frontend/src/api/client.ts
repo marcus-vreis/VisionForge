@@ -1,6 +1,7 @@
 import type { TaskDescriptor } from "../lib/custom-tasks";
 import type { JsonSchema } from "../types/schema";
 import type {
+  DatasetInfo,
   MetricCI,
   QueueSnapshot,
   RunResponse,
@@ -763,6 +764,7 @@ export interface RunDetail {
     report?: string | null;
   };
   tests: TestRecord[];
+  dataset?: DatasetInfo | null;
 }
 
 export interface TestRecord {

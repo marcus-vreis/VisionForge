@@ -2388,3 +2388,60 @@ to 8.
 need a per-platform estimate of the per-worker cost, and guessing it wrong either
 throttles a machine that was fine or fails to save one that wasn't. The error
 message tells the researcher which knob to turn; they know their machine.
+
+---
+
+## ADR-082 — The dataset of each run appears in the history
+
+**Date:** 2026-08-05
+**Status:** Accepted — shipped 2026-08-05
+**Extends:** ADR-061 (dataset fingerprint), ADR-078 (history overlay)
+
+**Context:** the history listed the experiment name, the architecture, the task,
+the epochs and the metrics — and never said which dataset the run was trained on.
+Comparing two rows meant opening each run and reading its config.
+
+**Nothing new is measured.** Both sources were already in `run.json`:
+`config.data.base_dir`, written by every run since the beginning, and
+`dataset_fingerprint` (ADR-061), written since 2026-07-26.
+
+**Decision:** `dataset_identity(run_json)` derives `(name, path)` with the
+precedence `dataset_fingerprint.root → config.data.base_dir → None`, the API
+exposes it on `RunSummary` and `RunDetail`, and three places render it: a
+`🗂 <name>` badge on the history card, a "Dataset" block in the run detail, and a
+same-data verdict when comparing runs.
+
+**The fallback is the whole point.** Reading only the fingerprint would put the
+badge on the handful of runs written after 2026-07-26. Reading `base_dir` puts it
+on 69 of the 78 runs in this researcher's history.
+
+**The consequence the design must not hide:** recognising and re-finding are
+retroactive; *verifying* is not. A path proves nothing about the bytes, so two
+old runs pointing at the same folder cannot be shown as "same data" — the
+comparison reports `⚠ não verificável`, with the reason, rather than guessing.
+`same_dataset` already returned `None` for exactly this, including when the two
+runs used different fingerprint methods; the UI now surfaces that third answer
+instead of collapsing it into a yes or a no.
+
+**`PureWindowsPath`, not `PurePath`.** Runs are written on Windows and the tests
+also run on Linux in CI, where a backslash path has no separator and the entire
+string would become the "name".
+
+**A caveat that measurement resolved.** The open question was what a custom task
+that *synthesizes* its data would show, since it treats `base_dir` as a marker.
+Measured: `custom:example_counting` writes `base_dir: "."`, whose last segment is
+empty, and the `name or None` guard already leaves those 9 runs with no badge —
+the right outcome, with no special case. Meanwhile `custom:vlm_pseudo_label`
+points at a real folder and gets a badge, so "custom task" does not imply "no
+dataset".
+
+**Deliberate duplication.** The comparison rule is four lines and is rewritten in
+TypeScript rather than served by an endpoint; `CompareRunsPanel` already fetches
+each run's detail. What had to survive the translation is the "cannot tell"
+branch, which is the common case rather than an edge one.
+
+**Not done, and why.** Grouping the history by dataset is a navigation decision
+worth making on its own. Backfilling fingerprints onto old runs was refused: the
+hash of the folder *today* does not describe what it held *then*, so it would
+answer "same data" about two runs that saw different data — the exact error the
+fingerprint exists to prevent.
