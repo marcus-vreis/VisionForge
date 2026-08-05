@@ -50,3 +50,6 @@ user_models/*
 # Pretrained weights Ultralytics downloads into the CWD on first use — tens of
 # megabytes of build output, never source.
 *.pt
+
+# Visual brainstorming companion (superpowers)
+.superpowers/
