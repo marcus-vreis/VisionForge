@@ -13,6 +13,8 @@ reasoning lives in [`documentation/DECISIONS.md`](documentation/DECISIONS.md).
 
 ## [Unreleased]
 
+## [0.3.1] — 2026-08-05
+
 ### Fixed
 
 - **`WinError 1455: o arquivo de paginação é muito pequeno` while starting a
