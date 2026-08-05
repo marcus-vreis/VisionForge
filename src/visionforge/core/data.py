@@ -8,6 +8,7 @@ from PIL import Image
 from torch.utils.data import DataLoader
 from torchvision.datasets import ImageFolder
 
+from visionforge.core.loader_lifecycle import LoaderCache
 from visionforge.core.preprocessing import apply_pipeline
 from visionforge.utils.config import (
     ExperimentConfig,
@@ -102,6 +103,7 @@ class DataModule:
         self._batch_size = config.training.batch_size
         self._num_workers = cfg.num_workers
         self._pin_memory = cfg.pin_memory
+        self._cache = LoaderCache()
 
         self._train = ImageFolder(
             str(train_path),
@@ -133,12 +135,14 @@ class DataModule:
             )
             self._num_workers = 0
 
-    def _loader_kwargs(self) -> dict[str, Any]:
+    def _loader_kwargs(self, *, persistent: bool) -> dict[str, Any]:
         """Common DataLoader kwargs with GPU-friendly defaults.
 
         When ``num_workers > 0``:
-        - ``persistent_workers=True`` keeps worker processes alive between
-          epochs, avoiding expensive re-spawn overhead (especially on Windows).
+        - ``persistent_workers`` keeps worker processes alive between epochs,
+          avoiding expensive re-spawn overhead (especially on Windows). Only the
+          loaders that are iterated once per epoch earn it; the test split is
+          read once, so a pool that outlives it is pure cost.
         - ``prefetch_factor=2`` pre-loads the next 2×num_workers batches while
           the GPU processes the current batch, eliminating data-loading stalls.
         """
@@ -148,21 +152,44 @@ class DataModule:
             "pin_memory": self._pin_memory,
         }
         if self._num_workers > 0:
-            kwargs["persistent_workers"] = True
+            kwargs["persistent_workers"] = persistent
             kwargs["prefetch_factor"] = 2
         return kwargs
 
     def train_loader(self) -> DataLoader:  # type: ignore[type-arg]
         """DataLoader for the training split (shuffled)."""
-        return DataLoader(self._train, shuffle=True, **self._loader_kwargs())
+        return self._cache.cached(
+            "train",
+            lambda: DataLoader(
+                self._train, shuffle=True, **self._loader_kwargs(persistent=True)
+            ),
+        )
 
     def val_loader(self) -> DataLoader:  # type: ignore[type-arg]
         """DataLoader for the validation split."""
-        return DataLoader(self._val, shuffle=False, **self._loader_kwargs())
+        return self._cache.cached(
+            "val",
+            lambda: DataLoader(
+                self._val, shuffle=False, **self._loader_kwargs(persistent=True)
+            ),
+        )
 
     def test_loader(self) -> DataLoader:  # type: ignore[type-arg]
         """DataLoader for the test split."""
-        return DataLoader(self._test, shuffle=False, **self._loader_kwargs())
+        return self._cache.cached(
+            "test",
+            lambda: DataLoader(
+                self._test, shuffle=False, **self._loader_kwargs(persistent=False)
+            ),
+        )
+
+    def close(self) -> None:
+        """Stop every worker pool this module started.
+
+        Callers run inside a long-lived server process, where a failed run's
+        traceback keeps the loaders alive and their workers with them.
+        """
+        self._cache.close()
 
     @property
     def class_names(self) -> list[str]:

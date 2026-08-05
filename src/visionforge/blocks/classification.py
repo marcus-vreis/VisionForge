@@ -73,23 +73,29 @@ class ClassificationBlock(ExperimentBlock):
         model = ModelFactory.create(self._config.model)
         data = DataModule(self._config)
 
-        self._train_result = Trainer(self._config).fit(
-            model, data, progress_callback=self._progress_callback
-        )
+        # The worker pools have to be stopped even when the run raises: inside
+        # `visionforge gui` the traceback keeps `data` alive, so without this the
+        # processes outlive the run and each retry stacks more of them.
+        try:
+            self._train_result = Trainer(self._config).fit(
+                model, data, progress_callback=self._progress_callback
+            )
 
-        # Reload best checkpoint for test-set evaluation.
-        state_dict = torch.load(
-            str(self._train_result.model_path),
-            map_location="cpu",
-            weights_only=True,
-        )
-        model.load_state_dict(state_dict)  # type: ignore[arg-type]
+            # Reload best checkpoint for test-set evaluation.
+            state_dict = torch.load(
+                str(self._train_result.model_path),
+                map_location="cpu",
+                weights_only=True,
+            )
+            model.load_state_dict(state_dict)  # type: ignore[arg-type]
 
-        self._evaluate(model, data)
+            self._evaluate(model, data)
 
-        run_dir = self._train_result.model_path.parent
-        graphics = self._render_plots(run_dir, data.class_names)
-        self._update_run_json(run_dir, graphics)
+            run_dir = self._train_result.model_path.parent
+            graphics = self._render_plots(run_dir, data.class_names)
+            self._update_run_json(run_dir, graphics)
+        finally:
+            data.close()
 
     def _run_evaluate(self) -> None:
         checkpoint_path = self._config.classification.checkpoint_path
@@ -103,7 +109,10 @@ class ClassificationBlock(ExperimentBlock):
         model.load_state_dict(state_dict)  # type: ignore[arg-type]
 
         data = DataModule(self._config)
-        self._evaluate(model, data)
+        try:
+            self._evaluate(model, data)
+        finally:
+            data.close()
 
     def _evaluate(self, model: Any, data: DataModule) -> None:
         """Score the test split and attach a bootstrap CI to each metric."""

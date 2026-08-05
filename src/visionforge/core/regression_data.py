@@ -20,6 +20,7 @@ from PIL import Image
 from torch.utils.data import DataLoader, Dataset
 
 from visionforge.core.data import _build_transforms
+from visionforge.core.loader_lifecycle import LoaderCache
 from visionforge.utils.regression_config import RegressionConfig
 
 # Disable DataLoader workers below this many rows: spawn/serialisation overhead
@@ -106,6 +107,7 @@ class RegressionDataModule:
 
         self._batch_size = config.training.batch_size
         self._num_workers = cfg.num_workers
+        self._cache = LoaderCache()
         self._pin_memory = cfg.pin_memory
 
         def _dataset(csv_name: str, *, is_train: bool) -> RegressionCsvDataset:
@@ -133,30 +135,54 @@ class RegressionDataModule:
             )
             self._num_workers = 0
 
-    def _loader_kwargs(self) -> dict[str, Any]:
+    def _loader_kwargs(self, *, persistent: bool) -> dict[str, Any]:
         kwargs: dict[str, Any] = {
             "batch_size": self._batch_size,
             "num_workers": self._num_workers,
             "pin_memory": self._pin_memory,
         }
         if self._num_workers > 0:
-            kwargs["persistent_workers"] = True
+            kwargs["persistent_workers"] = persistent
             kwargs["prefetch_factor"] = 2
         return kwargs
 
     def train_loader(self) -> DataLoader:  # type: ignore[type-arg]
         """DataLoader for the training split (shuffled)."""
-        return DataLoader(self._train, shuffle=True, **self._loader_kwargs())
+        return self._cache.cached(
+            "train",
+            lambda: DataLoader(
+                self._train, shuffle=True, **self._loader_kwargs(persistent=True)
+            ),
+        )
 
     def val_loader(self) -> DataLoader:  # type: ignore[type-arg]
         """DataLoader for the validation split."""
-        return DataLoader(self._val, shuffle=False, **self._loader_kwargs())
+        return self._cache.cached(
+            "val",
+            lambda: DataLoader(
+                self._val, shuffle=False, **self._loader_kwargs(persistent=True)
+            ),
+        )
 
     def test_loader(self) -> DataLoader | None:  # type: ignore[type-arg]
         """DataLoader for the test split, or None when no test CSV exists."""
-        if self._test is None:
+        test = self._test
+        if test is None:
             return None
-        return DataLoader(self._test, shuffle=False, **self._loader_kwargs())
+        return self._cache.cached(
+            "test",
+            lambda: DataLoader(
+                test, shuffle=False, **self._loader_kwargs(persistent=False)
+            ),
+        )
+
+    def close(self) -> None:
+        """Stop every worker pool this module started.
+
+        Callers run inside a long-lived server process, where a failed run's
+        traceback keeps the loaders alive and their workers with them.
+        """
+        self._cache.close()
 
 
 __all__ = ["RegressionDataModule", "RegressionCsvDataset"]

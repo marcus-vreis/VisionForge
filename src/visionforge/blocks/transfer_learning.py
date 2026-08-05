@@ -53,25 +53,34 @@ class TransferLearningBlock(ExperimentBlock):
         self._optimizer = self._build_transfer_optimizer(model)
 
         data = DataModule(self._config)
-        self._train_result = Trainer(self._config).fit(
-            model,
-            data,
-            self._optimizer,
-            progress_callback=self._progress_callback,
-        )
 
-        state_dict = torch.load(
-            str(self._train_result.model_path),
-            map_location="cpu",
-            weights_only=True,
-        )
-        model.load_state_dict(state_dict)  # type: ignore[arg-type]
+        # The worker pools have to be stopped even when the run raises: inside
+        # `visionforge gui` the traceback keeps `data` alive, so without this the
+        # processes outlive the run and each retry stacks more of them.
+        try:
+            self._train_result = Trainer(self._config).fit(
+                model,
+                data,
+                self._optimizer,
+                progress_callback=self._progress_callback,
+            )
 
-        self._eval_result = Evaluator(self._config).evaluate(model, data.test_loader())
-        self._metric_cis = bootstrap_eval_cis(self._eval_result, self._config)
+            state_dict = torch.load(
+                str(self._train_result.model_path),
+                map_location="cpu",
+                weights_only=True,
+            )
+            model.load_state_dict(state_dict)  # type: ignore[arg-type]
 
-        run_dir = self._train_result.model_path.parent
-        self._update_run_json(run_dir)
+            self._eval_result = Evaluator(self._config).evaluate(
+                model, data.test_loader()
+            )
+            self._metric_cis = bootstrap_eval_cis(self._eval_result, self._config)
+
+            run_dir = self._train_result.model_path.parent
+            self._update_run_json(run_dir)
+        finally:
+            data.close()
 
     def report(self) -> dict[str, Any]:
         """Return a summary of the run including transfer-learning metadata."""

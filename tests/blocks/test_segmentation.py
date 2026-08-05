@@ -21,6 +21,8 @@ class TinySegModel(nn.Module):
 
 
 class FakeDataModule:
+    closed = False
+
     def __init__(self, config: SegmentationConfig, *, with_test: bool = True) -> None:
         self._with_test = with_test
 
@@ -38,6 +40,10 @@ class FakeDataModule:
 
     def test_loader(self) -> list[tuple[torch.Tensor, torch.Tensor]] | None:
         return self._batches() if self._with_test else None
+
+    def close(self) -> None:
+        """The blocks shut their data module down in a finally; record it."""
+        self.closed = True
 
 
 def _config(tmp_path: Path) -> SegmentationConfig:

@@ -18,6 +18,7 @@ from PIL import Image
 from torch.utils.data import DataLoader, Dataset
 
 from visionforge.core.data import _build_transforms
+from visionforge.core.loader_lifecycle import LoaderCache
 from visionforge.utils.anomaly_config import AnomalyConfig
 
 _SMALL_DATASET_THRESHOLD = 500
@@ -84,6 +85,7 @@ class AnomalyDataModule:
 
         self._batch_size = config.training.batch_size
         self._num_workers = cfg.num_workers
+        self._cache = LoaderCache()
         self._pin_memory = cfg.pin_memory
 
         train_normal = base / cfg.train_dir / cfg.normal_dir
@@ -131,24 +133,42 @@ class AnomalyDataModule:
             )
             self._num_workers = 0
 
-    def _loader_kwargs(self) -> dict[str, Any]:
+    def _loader_kwargs(self, *, persistent: bool) -> dict[str, Any]:
         kwargs: dict[str, Any] = {
             "batch_size": self._batch_size,
             "num_workers": self._num_workers,
             "pin_memory": self._pin_memory,
         }
         if self._num_workers > 0:
-            kwargs["persistent_workers"] = True
+            kwargs["persistent_workers"] = persistent
             kwargs["prefetch_factor"] = 2
         return kwargs
 
     def train_loader(self) -> DataLoader:  # type: ignore[type-arg]
         """DataLoader for the normal-only training split (shuffled)."""
-        return DataLoader(self._train, shuffle=True, **self._loader_kwargs())
+        return self._cache.cached(
+            "train",
+            lambda: DataLoader(
+                self._train, shuffle=True, **self._loader_kwargs(persistent=True)
+            ),
+        )
 
     def test_loader(self) -> DataLoader:  # type: ignore[type-arg]
         """DataLoader for the labelled test split (normal=0, anomalous=1)."""
-        return DataLoader(self._test, shuffle=False, **self._loader_kwargs())
+        return self._cache.cached(
+            "test",
+            lambda: DataLoader(
+                self._test, shuffle=False, **self._loader_kwargs(persistent=False)
+            ),
+        )
+
+    def close(self) -> None:
+        """Stop every worker pool this module started.
+
+        Callers run inside a long-lived server process, where a failed run's
+        traceback keeps the loaders alive and their workers with them.
+        """
+        self._cache.close()
 
 
 __all__ = ["AnomalyDataModule", "AnomalyImageDataset"]

@@ -45,6 +45,7 @@ from visionforge.core.data import DataModule
 from visionforge.core.detection_data import resolve_yolo_split
 from visionforge.core.evaluator import Evaluator
 from visionforge.core.latex_export import report_to_latex
+from visionforge.core.loader_lifecycle import describe_worker_spawn_failure
 from visionforge.core.plotter import MetricsPlotter
 from visionforge.core.replicated_comparison import (
     run_replicated_comparison,
@@ -3157,10 +3158,13 @@ async def _execute_experiment(config: ExperimentConfig, run_id: str) -> None:
         logger.exception("GUI: Experiment {} failed", run_id)
         cls = type(e).__name__
         msg = str(e) or "(sem mensagem)"
+        # A worker-spawn failure surfaces as a torch DLL error, which sends the
+        # reader after the wrong thing entirely.
+        spawn_hint = describe_worker_spawn_failure(e)
         _current_run = {
             "run_id": run_id,
             "status": "failed",
-            "error": f"{cls}: {msg}",
+            "error": spawn_hint or f"{cls}: {msg}",
             "report": None,
             "run_dir": None,
         }

@@ -13,6 +13,27 @@ reasoning lives in [`documentation/DECISIONS.md`](documentation/DECISIONS.md).
 
 ## [Unreleased]
 
+### Fixed
+
+- **`WinError 1455: o arquivo de paginação é muito pequeno` while starting a
+  run** now says what it means. Every DataLoader worker is a separate process
+  that re-imports torch and its CUDA DLLs — on Windows the start method is
+  spawn, not fork — so the cost is roughly a gigabyte per worker, per loader.
+  Windows reported the shortfall against whichever DLL happened to be loading,
+  which pointed at torch and hid the cause. The GUI now explains it and names
+  `data.num_workers` ([ADR-081](documentation/DECISIONS.md)).
+
+### Changed
+
+- **Data modules own their loaders and shut the worker pools down.** Each call
+  to `train_loader()` built a *new* DataLoader, so a second call meant a second
+  set of worker processes for the same split; and nothing ever stopped them
+  explicitly. Splits are now built once and every block closes its data module
+  in a `finally`, so a run that raises does not leave its workers behind. The
+  test split also no longer asks for `persistent_workers` — it is read once —
+  which drops the peak worker count for a classification run from 12 to 8
+  ([ADR-081](documentation/DECISIONS.md)).
+
 ## [0.3.0] — 2026-08-04
 
 ### Changed

@@ -2321,3 +2321,70 @@ that run reported at training time, which is the consistency check that matters
 — plus regression `mae=15.32` from a CSV, segmentation `miou=0.4122` from a
 paired folder, and anomaly `auroc=0.601`. The three standalone ones had never
 completed this action at all.
+
+---
+
+## ADR-081 — Data modules own their DataLoaders
+
+**Date:** 2026-08-05
+**Status:** Accepted — shipped 2026-08-05
+
+**Context:** a classification run died on Windows with
+
+```
+OSError: [WinError 1455] O arquivo de paginação é muito pequeno para que esta
+operação seja concluída. Error loading "...\torch\lib\curand64_10.dll"
+```
+
+The message points at torch, and at a CUDA DLL, and at neither of the two things
+that actually mattered. Inspecting the machine while it was failing found the
+`visionforge gui` process holding **19 orphaned worker processes from two earlier
+attempts**, together about 22 GB of commit charge, against a commit limit of
+58.6 GB that was already 95% consumed. Windows' auto-managed paging file had
+also shrunk back to a smaller size once the pressure passed, so it could not grow
+quickly enough for a burst of spawns.
+
+Each DataLoader worker is a **separate process** — Windows spawns, it does not
+fork — so every one of them re-imports torch and loads the CUDA DLLs. The cost
+is roughly a gigabyte per worker, and it is paid per loader, not per run.
+
+**Two defects were found, and they are not the same defect.**
+
+**1. Every `*_loader()` call built a new DataLoader.** Calling `train_loader()`
+twice gave the same split two independent worker pools. `AnomalyBlock` does
+exactly that — it passes `data.train_loader()` to the trainer and again to the
+scorer. Splits are now built once and cached, so the second call returns the
+same object.
+
+**2. Nothing ever stopped a pool.** A `persistent_workers=True` pool lives until
+the DataLoader's iterator is garbage-collected, which is fine in a script and not
+fine in `visionforge gui`, where a failed run's traceback keeps the frames — and
+therefore the loaders — alive. Each data module now has `close()`, and every
+block calls it in a `finally`.
+
+**The measurement that shaped this, including the part that disagreed with the
+first guess.** A probe that counts live child processes shows 8 workers during a
+classification run and 0 after, for both a completed run and one forced to raise.
+But running the *same probe against the pre-fix code* also showed 0 left behind:
+in a standalone script, refcounting already collected the loaders. So the
+teardown is not what rescued the reported failure, and claiming otherwise would
+be wrong. The orphaning in the GUI happens when the spawn itself fails partway —
+some workers are already up, the iterator is never assigned, and no reference to
+them exists for anyone to clean up. That is a cascade: the first failure strands
+workers, and the stranded workers make the next attempt fail sooner.
+
+Which is why the third change is the one a user actually feels:
+
+**3. The error explains itself.** WinError 1455 is now translated into what it
+means and what to change — `data.num_workers` first, the Windows paging file
+second — instead of a DLL name.
+
+**Also reduced: the peak.** The test split asked for `persistent_workers=True`
+despite being read exactly once, so a run kept a third pool alive for no reason.
+It does not any more, which takes a classification run from 12 worker processes
+to 8.
+
+**Not done:** capping `num_workers` from available commit at run start. It would
+need a per-platform estimate of the per-worker cost, and guessing it wrong either
+throttles a machine that was fine or fails to save one that wasn't. The error
+message tells the researcher which knob to turn; they know their machine.

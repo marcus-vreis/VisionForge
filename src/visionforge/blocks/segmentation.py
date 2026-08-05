@@ -44,29 +44,37 @@ class SegmentationBlock:
         data = SegmentationDataModule(self._config)
         trainer = SegmentationTrainer(self._config)
 
-        self._train_result = trainer.fit(
-            model, data, progress_callback=self._progress_callback
-        )
-
-        # Reload the best checkpoint before test-set evaluation.
-        state_dict = torch.load(
-            str(self._train_result.model_path), map_location="cpu", weights_only=True
-        )
-        model.load_state_dict(state_dict)  # type: ignore[arg-type]
-
-        test_loader = data.test_loader()
-        if test_loader is not None:
-            self._test_metrics, per_image = trainer.evaluate_with_confusion(
-                model, test_loader
+        # The worker pools have to be stopped even when the run raises: inside
+        # `visionforge gui` the traceback keeps `data` alive, so without this the
+        # processes outlive the run and each retry stacks more of them.
+        try:
+            self._train_result = trainer.fit(
+                model, data, progress_callback=self._progress_callback
             )
-            self._metric_cis = bootstrap_segmentation_cis(
-                per_image, seed=self._config.training.seed
-            )
-            self._test_confusion = per_image.sum(axis=0) if len(per_image) else None
 
-        run_dir = self._train_result.model_path.parent
-        graphics = self._render_plots(run_dir)
-        self._update_run_json(run_dir, graphics)
+            # Reload the best checkpoint before test-set evaluation.
+            state_dict = torch.load(
+                str(self._train_result.model_path),
+                map_location="cpu",
+                weights_only=True,
+            )
+            model.load_state_dict(state_dict)  # type: ignore[arg-type]
+
+            test_loader = data.test_loader()
+            if test_loader is not None:
+                self._test_metrics, per_image = trainer.evaluate_with_confusion(
+                    model, test_loader
+                )
+                self._metric_cis = bootstrap_segmentation_cis(
+                    per_image, seed=self._config.training.seed
+                )
+                self._test_confusion = per_image.sum(axis=0) if len(per_image) else None
+
+            run_dir = self._train_result.model_path.parent
+            graphics = self._render_plots(run_dir)
+            self._update_run_json(run_dir, graphics)
+        finally:
+            data.close()
 
     def report(self) -> dict[str, Any]:
         """Return a summary of the run for logging and GUI display."""

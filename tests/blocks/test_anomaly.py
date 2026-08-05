@@ -12,6 +12,8 @@ from visionforge.utils.anomaly_config import AnomalyConfig
 
 
 class FakeDataModule:
+    closed = False
+
     def __init__(self, config: AnomalyConfig) -> None:
         pass
 
@@ -23,6 +25,10 @@ class FakeDataModule:
 
     def test_loader(self) -> list[tuple[torch.Tensor, torch.Tensor]]:
         return self._batches(torch.tensor([0, 1]))
+
+    def close(self) -> None:
+        """The blocks shut their data module down in a finally; record it."""
+        self.closed = True
 
 
 def _config(tmp_path: Path) -> AnomalyConfig:

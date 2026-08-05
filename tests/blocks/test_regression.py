@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
 import torch
 import torch.nn as nn
 
@@ -21,6 +22,8 @@ class DummyRegressor(nn.Module):
 
 
 class FakeDataModule:
+    closed = False
+
     def __init__(self, config: RegressionConfig, *, with_test: bool = True) -> None:
         self._with_test = with_test
 
@@ -35,6 +38,10 @@ class FakeDataModule:
 
     def test_loader(self) -> list[tuple[torch.Tensor, torch.Tensor]] | None:
         return self._batches() if self._with_test else None
+
+    def close(self) -> None:
+        """The blocks shut their data module down in a finally; record it."""
+        self.closed = True
 
 
 def _config(tmp_path: Path) -> RegressionConfig:
@@ -98,3 +105,49 @@ class TestRegressionBlock:
         block = RegressionBlock()
         block.setup(_config(tmp_path))
         assert block.report() == {}
+
+
+class TestWorkerPoolTeardown:
+    """A run that raises must still stop its DataLoader worker processes."""
+
+    def test_close_is_called_on_success(self, tmp_path: Path) -> None:
+        module = FakeDataModule(_config(tmp_path))
+        block = RegressionBlock()
+        block.setup(_config(tmp_path))
+        with (
+            patch(
+                "visionforge.blocks.regression.RegressionModelFactory.create",
+                return_value=DummyRegressor(),
+            ),
+            patch(
+                "visionforge.blocks.regression.RegressionDataModule",
+                lambda cfg: module,
+            ),
+        ):
+            block.run()
+
+        assert module.closed
+
+    def test_close_is_called_when_the_run_raises(self, tmp_path: Path) -> None:
+        module = FakeDataModule(_config(tmp_path))
+        block = RegressionBlock()
+        block.setup(_config(tmp_path))
+        with (
+            patch(
+                "visionforge.blocks.regression.RegressionModelFactory.create",
+                side_effect=None,
+                return_value=DummyRegressor(),
+            ),
+            patch(
+                "visionforge.blocks.regression.RegressionDataModule",
+                lambda cfg: module,
+            ),
+            patch(
+                "visionforge.blocks.regression.RegressionTrainer.fit",
+                side_effect=RuntimeError("boom"),
+            ),
+        ):
+            with pytest.raises(RuntimeError, match="boom"):
+                block.run()
+
+        assert module.closed

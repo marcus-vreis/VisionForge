@@ -41,30 +41,38 @@ class AnomalyBlock:
         data = AnomalyDataModule(self._config)
         trainer = AnomalyTrainer(self._config)
 
-        self._train_result = trainer.fit(
-            model, data, progress_callback=self._progress_callback
-        )
+        # The worker pools have to be stopped even when the run raises: inside
+        # `visionforge gui` the traceback keeps `data` alive, so without this the
+        # processes outlive the run and each retry stacks more of them.
+        try:
+            self._train_result = trainer.fit(
+                model, data, progress_callback=self._progress_callback
+            )
 
-        # Reload the best checkpoint before final scoring.
-        state_dict = torch.load(
-            str(self._train_result.model_path), map_location="cpu", weights_only=True
-        )
-        model.load_state_dict(state_dict)  # type: ignore[arg-type]
+            # Reload the best checkpoint before final scoring.
+            state_dict = torch.load(
+                str(self._train_result.model_path),
+                map_location="cpu",
+                weights_only=True,
+            )
+            model.load_state_dict(state_dict)  # type: ignore[arg-type]
 
-        self._test_metrics, labels, scores = trainer.evaluate_with_scores(
-            model, data.train_loader(), data.test_loader()
-        )
-        self._metric_cis = bootstrap_anomaly_cis(
-            labels,
-            scores,
-            self._test_metrics[1],  # the threshold this detector decided on
-            seed=self._config.training.seed,
-        )
-        self._test_scores = (labels, scores)
+            self._test_metrics, labels, scores = trainer.evaluate_with_scores(
+                model, data.train_loader(), data.test_loader()
+            )
+            self._metric_cis = bootstrap_anomaly_cis(
+                labels,
+                scores,
+                self._test_metrics[1],  # the threshold this detector decided on
+                seed=self._config.training.seed,
+            )
+            self._test_scores = (labels, scores)
 
-        run_dir = self._train_result.model_path.parent
-        graphics = self._render_plots(run_dir)
-        self._update_run_json(run_dir, graphics)
+            run_dir = self._train_result.model_path.parent
+            graphics = self._render_plots(run_dir)
+            self._update_run_json(run_dir, graphics)
+        finally:
+            data.close()
 
     def report(self) -> dict[str, Any]:
         """Return a summary of the run for logging and GUI display."""
