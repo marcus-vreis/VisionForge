@@ -574,3 +574,84 @@ class TestBatchPredictRun:
             BatchPredictionBlock.setup = original_setup  # type: ignore[method-assign]
             BatchPredictionBlock.run = original_run  # type: ignore[method-assign]
             BatchPredictionBlock.report = original_report  # type: ignore[method-assign]
+
+
+class TestDatasetOnRunSchemas:
+    """The history has to name the dataset on runs older than the fingerprint."""
+
+    def test_summary_names_the_dataset_of_a_legacy_run(self, tmp_path: Path) -> None:
+        from visionforge.gui.api.routes import _parse_run_summary
+
+        data = {
+            "experiment": "coffee",
+            "status": "completed",
+            "timestamp": _TS,
+            "config": {
+                "task": "multiclass",
+                "model": {"name": "resnet50"},
+                "data": {"base_dir": "datasets/USK-COFFEE"},
+            },
+            "metrics": {"total_epochs": 30},
+        }
+
+        summary = _parse_run_summary(tmp_path / "20260805_100000", data)
+
+        assert summary.dataset_name == "USK-COFFEE"
+        assert summary.dataset_root == "datasets/USK-COFFEE"
+
+    def test_detail_carries_the_full_fingerprint_when_present(
+        self, app_and_routes: tuple, tmp_path: Path
+    ) -> None:
+        app, routes_mod = app_and_routes
+        run_dir = _write_run(tmp_path)
+        data = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+        data["dataset_fingerprint"] = {
+            "digest": "abc123def456789",
+            "method": "manifest",
+            "n_files": 8000,
+            "total_bytes": 123456,
+            "root": "C:/data/USK-COFFEE",
+            "note": "paths+sizes only",
+        }
+        (run_dir / "run.json").write_text(json.dumps(data), encoding="utf-8")
+
+        with patch.object(routes_mod, "_MODELS_DIR", tmp_path):
+            client = TestClient(app, raise_server_exceptions=True)
+            resp = client.get(f"/api/runs/{run_dir.name}")
+
+        assert resp.status_code == 200
+        dataset = resp.json()["dataset"]
+        assert dataset["name"] == "USK-COFFEE"
+        assert dataset["n_files"] == 8000
+        assert dataset["method"] == "manifest"
+
+    def test_detail_has_a_dataset_without_a_fingerprint(
+        self, app_and_routes: tuple, tmp_path: Path
+    ) -> None:
+        """The common case: 26 of the 28 runs on disk look like this."""
+        app, routes_mod = app_and_routes
+        run_dir = _write_run(tmp_path)
+
+        with patch.object(routes_mod, "_MODELS_DIR", tmp_path):
+            client = TestClient(app, raise_server_exceptions=True)
+            resp = client.get(f"/api/runs/{run_dir.name}")
+
+        dataset = resp.json()["dataset"]
+        assert dataset["name"] == tmp_path.name
+        assert dataset["digest"] is None
+
+    def test_detail_dataset_is_none_without_any_path(
+        self, app_and_routes: tuple, tmp_path: Path
+    ) -> None:
+        app, routes_mod = app_and_routes
+        run_dir = _write_run(tmp_path)
+        data = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+        data["config"].pop("data")
+        (run_dir / "run.json").write_text(json.dumps(data), encoding="utf-8")
+
+        with patch.object(routes_mod, "_MODELS_DIR", tmp_path):
+            client = TestClient(app, raise_server_exceptions=True)
+            resp = client.get(f"/api/runs/{run_dir.name}")
+
+        assert resp.status_code == 200
+        assert resp.json()["dataset"] is None

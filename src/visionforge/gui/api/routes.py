@@ -42,6 +42,7 @@ from visionforge.blocks.segmentation_runner import SegmentationRunner
 from visionforge.blocks.transfer_learning import TransferLearningBlock
 from visionforge.core.comparison import ComparisonTrial, run_model_comparison
 from visionforge.core.data import DataModule
+from visionforge.core.dataset_fingerprint import dataset_identity
 from visionforge.core.detection_data import resolve_yolo_split
 from visionforge.core.evaluator import Evaluator
 from visionforge.core.latex_export import report_to_latex
@@ -79,6 +80,7 @@ from visionforge.gui.api.schemas import (
     DatasetDetectResponse,
     DatasetDownloadRequest,
     DatasetDownloadResponse,
+    DatasetInfo,
     DatasetPickResponse,
     DatasetSamplesRequest,
     DatasetSamplesResponse,
@@ -332,6 +334,22 @@ async def get_run_detail(run_id: str) -> RunDetail:
     status = data.get("status", "completed")
     finished = started if status == "completed" else None
 
+    dataset_name, dataset_root = dataset_identity(data)
+    fingerprint = data.get("dataset_fingerprint") or {}
+    dataset = (
+        DatasetInfo(
+            name=dataset_name,
+            root=dataset_root or "",
+            n_files=fingerprint.get("n_files"),
+            total_bytes=fingerprint.get("total_bytes"),
+            method=fingerprint.get("method"),
+            digest=fingerprint.get("digest") or None,
+            note=fingerprint.get("note"),
+        )
+        if dataset_name
+        else None
+    )
+
     return RunDetail(
         run_id=run_dir.name,
         experiment_name=data.get("experiment", run_dir.parent.name),
@@ -347,6 +365,7 @@ async def get_run_detail(run_id: str) -> RunDetail:
         history=data.get("history", []),
         artifacts=data.get("artifacts", {}),
         tests=data.get("tests", []),
+        dataset=dataset,
     )
 
 
@@ -3063,6 +3082,8 @@ def _parse_run_summary(run_dir: Path, data: dict[str, Any]) -> RunSummary:
     # useful thing to show in that column.
     model_arch = (config.get("model") or {}).get("name") or data.get("task_label", task)
 
+    dataset_name, dataset_root = dataset_identity(data)
+
     return RunSummary(
         run_id=run_dir.name,
         experiment_name=data["experiment"],
@@ -3077,6 +3098,8 @@ def _parse_run_summary(run_dir: Path, data: dict[str, Any]) -> RunSummary:
         final_metrics=final_metrics,
         preprocessing_count=preprocessing_count,
         block=block,
+        dataset_name=dataset_name,
+        dataset_root=dataset_root,
     )
 
 

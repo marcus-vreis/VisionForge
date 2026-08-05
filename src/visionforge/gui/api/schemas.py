@@ -157,6 +157,24 @@ class RunResult(BaseModel):
     artifacts: dict[str, Any]
 
 
+class DatasetInfo(BaseModel):
+    """The dataset a run trained on, as far as its run.json can prove it.
+
+    `name` and `root` come from the config and exist for every run. Everything
+    below them comes from the fingerprint (ADR-061), which only runs written from
+    2026-07-26 on carry — so they are optional, and their absence is what the
+    comparison reports as "not verifiable" instead of guessing.
+    """
+
+    name: str
+    root: str
+    n_files: int | None = None
+    total_bytes: int | None = None
+    method: str | None = None
+    digest: str | None = None
+    note: str | None = None
+
+
 class RunSummary(BaseModel):
     """Summary of one historical experiment run for the history browser."""
 
@@ -173,6 +191,10 @@ class RunSummary(BaseModel):
     # Defaults to "classification" so legacy run.json files (which never
     # serialized a block field) still parse without migration.
     block: str = "classification"
+    # Dataset the run trained on. Derived rather than stored: the name falls back
+    # to config.data.base_dir, so it resolves on every run ever written.
+    dataset_name: str | None = None
+    dataset_root: str | None = None
 
 
 class DatasetDetectRequest(BaseModel):
@@ -255,6 +277,8 @@ class RunDetail(BaseModel):
     history: list[dict[str, Any]]
     artifacts: dict[str, Any]
     tests: list[dict[str, Any]] = []
+    # None when the run.json records no dataset path at all.
+    dataset: DatasetInfo | None = None
 
 
 class RunTestRequest(BaseModel):
