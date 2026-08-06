@@ -40,6 +40,19 @@ _BOOT_SPA_BUNDLE = _read_spa_bundle()
 app = FastAPI(title="VisionForge", version=__version__)
 
 
+@app.on_event("startup")
+async def _sweep_filtered_datasets() -> None:
+    """Remove filtered dataset copies a killed process left behind (ADR-084).
+
+    The context manager cleans up after itself, including on exception, but
+    nothing in a process that was killed outright ever runs again. Every copy
+    present at startup is by definition from a process that is already gone.
+    """
+    from visionforge.core.materialized_dataset import sweep_orphans
+
+    sweep_orphans(Path("outputs/models/_filtered"))
+
+
 @app.get("/api/health")
 async def health() -> dict[str, str]:
     """Version and the SPA build this process booted against.

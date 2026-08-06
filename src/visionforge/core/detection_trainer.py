@@ -26,6 +26,7 @@ from visionforge.core.dataset_fingerprint import fingerprint_from_config
 from visionforge.core.detection_data import DetectionDataModule, resolve_yolo_split
 from visionforge.core.detection_dataset import DetectionDataset, detection_collate
 from visionforge.core.detection_metrics import mean_average_precision_50
+from visionforge.core.materialized_dataset import materialize_dataset
 from visionforge.core.plotter import MetricsPlotter
 from visionforge.core.tracking import TensorBoardLogger
 from visionforge.core.trainer import _seed_everything
@@ -215,6 +216,8 @@ class DetectionTrainer:
     def __init__(self, config: DetectionConfig) -> None:
         self._config = config
         self._device_label = self._resolve_device_label()
+        # Set by fit() for the duration of a run when filters produced a copy.
+        self._images_root: Path | None = None
 
     def fit(
         self,
@@ -226,10 +229,23 @@ class DetectionTrainer:
             RuntimeError: with an actionable message when DataLoader workers
                 crash at startup on Windows (page-file exhaustion).
         """
+        data = self._config.data
+        steps = [step.model_dump() for step in data.preprocessing.steps]
         try:
-            if self._config.model.backend == "torchvision":
-                return self._fit_torchvision(progress_callback)
-            return self._fit_ultralytics(progress_callback)
+            # Filters are applied once into a copy the backend reads from, and
+            # the copy is removed when this `with` exits -- including when the
+            # run raises, which is the case that used to strand things on disk
+            # (ADR-081/084). An empty pipeline yields the original untouched.
+            with materialize_dataset(
+                data.base_dir if data.base_dir is not None else Path(),
+                steps,
+                cache_root=self._config.output.models_dir / "_filtered",
+                image_format=data.preprocessed_format,
+            ) as prepared:
+                self._images_root = prepared.path if prepared.filtered else None
+                if self._config.model.backend == "torchvision":
+                    return self._fit_torchvision(progress_callback)
+                return self._fit_ultralytics(progress_callback)
         except (OSError, RuntimeError, EOFError) as exc:
             if sys.platform == "win32" and _is_worker_spawn_crash(str(exc)):
                 raise RuntimeError(
@@ -260,7 +276,9 @@ class DetectionTrainer:
 
         cfg = self._config.training
         run_dir = self._make_run_dir()
-        data_yaml = DetectionDataModule(self._config).resolve_data_yaml(out_dir=run_dir)
+        data_yaml = DetectionDataModule(self._config).resolve_data_yaml(
+            out_dir=run_dir, images_root=self._images_root
+        )
 
         model = YOLO(self._resolve_weights())
         history: list[DetectionEpochResult] = []

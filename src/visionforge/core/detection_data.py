@@ -47,7 +47,9 @@ class DetectionDataModule:
     def __init__(self, config: DetectionConfig) -> None:
         self._config = config
 
-    def resolve_data_yaml(self, out_dir: Path | None = None) -> Path:
+    def resolve_data_yaml(
+        self, out_dir: Path | None = None, *, images_root: Path | None = None
+    ) -> Path:
         """Return a usable ``data.yaml`` path.
 
         Args:
@@ -63,12 +65,17 @@ class DetectionDataModule:
             return data.data_yaml
 
         assert data.base_dir is not None  # config guarantees one source
+        # Splits and class names are read from the original layout. `images_root`
+        # only redirects where Ultralytics reads the pixels from, so a filtered
+        # copy (ADR-084) mirrors the tree and changes nothing else.
         base = data.base_dir.resolve()
         splits = self._detect_splits(base)
-
-        spec: dict[str, object] = {"path": str(base)}
-        spec.update(splits)
         names = self._resolve_names(base)
+
+        spec: dict[str, object] = {
+            "path": str(images_root.resolve() if images_root is not None else base)
+        }
+        spec.update(splits)
         spec["names"] = names
         spec["nc"] = len(names)
 

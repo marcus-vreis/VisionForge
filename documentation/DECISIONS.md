@@ -2537,3 +2537,66 @@ the message was and to have it taken out. A warning that reads as noise in the
 product is worse than the documentation line it was meant to reinforce — the
 people who hit this are developing the project, not using it, and the terminal is
 where they already are.
+
+---
+
+## ADR-084 — Detection preprocesses by materializing a filtered copy
+
+**Date:** 2026-08-05
+**Status:** Accepted — backend shipped 2026-08-05
+**Extends:** ADR-059 (canonical task-panel contract), ADR-081 (teardown discipline)
+
+**Context:** detection was the only task without preprocessing filters, and the
+reason was not an oversight. With the Ultralytics backend — the default —
+`model.train(data=data.yaml)` hands the library the entire data pipeline. A
+per-image PIL filter cannot be injected into its loader without subclassing its
+internal dataset, which would pin the project to one version of it.
+
+**Decision:** apply the filters once, write the result to a temporary folder, and
+point the synthesized `data.yaml` at that folder.
+
+**This is cheaper than the path it replaces, not a workaround with a cost.** The
+on-the-fly path filters **per image, per epoch**; this filters once. Over 30
+epochs with an expensive filter (CLAHE, bilateral) it is roughly 30x less CPU.
+
+Four properties make it safe rather than a trap, each with a test:
+
+**The fingerprint stays on the original.** If it followed the copy, `run.json`
+would record the digest and path of something that was then deleted, and the
+history from ADR-082 would show `🗂 a3f9c1…` instead of the dataset name.
+
+**Removed by the context manager, swept at startup.** The `with` covers the
+exception path, which is the one that matters — runs die for real (ADR-081). A
+process killed outright never runs its `finally`, so the GUI sweeps the cache
+directory at startup, where every folder present is by definition orphaned.
+
+**PNG, not the source format.** Re-encoding a JPEG dataset as JPEG would stack
+compression loss on top of the filter. PNG of photographic data commonly runs
+5-10x larger, so the size is logged before the copy is made and the format is
+configurable for anyone who would rather trade fidelity for disk.
+
+**Keyed by content, not by run.** The key is the dataset fingerprint plus the
+canonicalized pipeline, so a 20-trial sweep materializes once. Using the
+fingerprint rather than the path means re-exporting a dataset to the same
+location produces a different key instead of silently reusing a stale copy.
+
+**Labels travel verbatim.** Every non-image file is copied byte for byte;
+filtering an image without carrying its label produces a training run that is
+wrong and says nothing about it. The extension changes with the format but the
+stem does not, which is what YOLO matches on.
+
+**A half-written copy is deleted rather than left.** If the build raises partway,
+the folder is removed — otherwise the next run would find it and treat it as
+complete.
+
+**Registered consequence:** detection now uses a *different mechanism from
+classification for the same feature* — on-the-fly there, materialized here. Two
+mechanisms for one feature is a smell, and it is recorded as one. The reason is
+specific and does not generalize: Ultralytics owns its pipeline. Migrating the
+other four tasks for the CPU saving is a separate decision, deliberately not
+taken here, because the on-the-fly path works and is covered by tests.
+
+**Verified on the real dataset** (`cats-dogsv2.v1i.yolov8`): 277 images filtered,
+279 label files byte-identical, stems preserved across the `.jpg`→`.png` change,
+`data.yaml` pointing at the copy with `names`/`nc` unchanged, the copy removed on
+exit, and no orphans left behind.

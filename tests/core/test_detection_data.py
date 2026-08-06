@@ -147,3 +147,57 @@ class TestOutputLocation:
         out = DetectionDataModule(cfg).resolve_data_yaml(out_dir=out_dir)
         assert out.parent == out_dir
         assert out.exists()
+
+
+class TestFilteredImagesRoot:
+    """The data.yaml points Ultralytics at the filtered copy, nothing else moves."""
+
+    def _tree(self, base: Path) -> Path:
+        _make_layout(base, "split_images", ("train", "val"))
+        return base
+
+    def _config(self, base: Path, tmp_path: Path) -> DetectionConfig:
+        return DetectionConfig.model_validate(
+            {
+                "name": "yaml_root",
+                "model": {"name": "yolo11n", "num_classes": 2},
+                "data": {"base_dir": str(base)},
+                "training": {"epochs": 1},
+                "output": {"models_dir": str(tmp_path / "models")},
+            }
+        )
+
+    def test_without_a_copy_the_path_is_the_original(self, tmp_path: Path) -> None:
+        base = self._tree(tmp_path / "src")
+        cfg = self._config(base, tmp_path)
+
+        spec = yaml.safe_load(
+            DetectionDataModule(cfg)
+            .resolve_data_yaml(out_dir=tmp_path / "out")
+            .read_text(encoding="utf-8")
+        )
+
+        assert Path(spec["path"]) == base.resolve()
+
+    def test_with_a_copy_the_path_moves_and_the_names_do_not(
+        self, tmp_path: Path
+    ) -> None:
+        base = self._tree(tmp_path / "src")
+        copy = self._tree(tmp_path / "filtered")
+        cfg = self._config(base, tmp_path)
+
+        original = yaml.safe_load(
+            DetectionDataModule(cfg)
+            .resolve_data_yaml(out_dir=tmp_path / "a")
+            .read_text(encoding="utf-8")
+        )
+        redirected = yaml.safe_load(
+            DetectionDataModule(cfg)
+            .resolve_data_yaml(out_dir=tmp_path / "b", images_root=copy)
+            .read_text(encoding="utf-8")
+        )
+
+        assert Path(redirected["path"]) == copy.resolve()
+        assert redirected["names"] == original["names"]
+        assert redirected["nc"] == original["nc"]
+        assert redirected["train"] == original["train"]

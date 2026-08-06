@@ -19,6 +19,7 @@ from visionforge.utils.config import (
     DETERMINISTIC_DESCRIPTION,
     DeviceConfig,
     OutputConfig,
+    PreprocessingConfig,
     check_schema_version,
     migrate_config_dict,
 )
@@ -128,6 +129,13 @@ class DetectionDataConfig(BaseModel):
     base_dir: Path | None = None
     image_size: int = Field(default=640, ge=32)
     class_names: list[str] | None = None
+    # Ultralytics owns its data pipeline, so filters cannot be injected into its
+    # loader. They are applied once into a temporary copy that the synthesized
+    # data.yaml points at (ADR-084). Empty list = no copy is made at all.
+    preprocessing: PreprocessingConfig = Field(default_factory=PreprocessingConfig)
+    # PNG by default: re-encoding a JPEG dataset as JPEG would stack compression
+    # loss on top of the filter, and the copy is transient anyway.
+    preprocessed_format: Literal["png", "jpeg"] = "png"
 
     @field_validator("data_yaml")
     @classmethod

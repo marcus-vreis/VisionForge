@@ -13,6 +13,16 @@ reasoning lives in [`documentation/DECISIONS.md`](documentation/DECISIONS.md).
 
 ## [Unreleased]
 
+### Added
+
+- **Detecção aceita filtros de pré-processamento.** A Ultralytics é dona do
+  próprio pipeline de dados, então os filtros são aplicados uma vez numa cópia
+  temporária que o `data.yaml` passa a apontar — o que também é ~30x menos CPU
+  que filtrar por imagem a cada época. A cópia é chaveada por conteúdo (um sweep
+  de 20 trials materializa uma vez), removida ao fim mesmo quando o treino
+  falha, e o `run.json` continua registrando o dataset **original**
+  ([ADR-084](documentation/DECISIONS.md)).
+
 ## [0.4.0] — 2026-08-05
 
 ### Added
