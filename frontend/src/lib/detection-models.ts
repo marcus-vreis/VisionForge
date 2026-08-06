@@ -1,3 +1,5 @@
+import type { PreprocessingStep } from "../components/PreprocessingPanel";
+
 /** Detection model options per backend — mirrors the Python sets in
  *  visionforge/utils/detection_config.py (_ULTRALYTICS_MODELS / _TORCHVISION_MODELS).
  *  Keep in sync: a name the backend rejects produces a 422 on submit. */
@@ -106,6 +108,9 @@ export interface DetectionForm {
     base_dir: string;
     data_yaml: string;
     image_size: number;
+    /** Filters applied once into a temporary copy the data.yaml points at
+     *  (ADR-084); Ultralytics owns its loader, so they cannot run per batch. */
+    preprocessing: PreprocessingStep[];
   };
   training: DetectionTrainingForm;
 }
@@ -216,7 +221,13 @@ export function buildDetectionTrainingPayload(
 export function buildDetectionDataPayload(
   data: DetectionForm["data"],
 ): Record<string, unknown> {
-  const common = { image_size: data.image_size };
+  const common = {
+    image_size: data.image_size,
+    // Schema-flat, like every other task's preprocessing payload.
+    preprocessing: {
+      steps: data.preprocessing.map((s) => ({ kind: s.kind, ...s.params })),
+    },
+  };
   return data.source === "yaml"
     ? { ...common, data_yaml: data.data_yaml }
     : { ...common, base_dir: data.base_dir };
@@ -256,7 +267,13 @@ export function makeDefaultDetectionForm(): DetectionForm {
       num_classes: 1,
       pretrained: true,
     },
-    data: { source: "folder", base_dir: "", data_yaml: "", image_size: 640 },
+    data: {
+      source: "folder",
+      base_dir: "",
+      data_yaml: "",
+      image_size: 640,
+      preprocessing: [],
+    },
     training: makeDefaultDetectionTraining(),
   };
 }

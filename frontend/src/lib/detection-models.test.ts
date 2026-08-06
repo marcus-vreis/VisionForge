@@ -80,8 +80,13 @@ describe("detection-models", () => {
       base_dir: "/data/yolo",
       data_yaml: "/ignored.yaml",
       image_size: 640,
+      preprocessing: [],
     });
-    expect(payload).toEqual({ base_dir: "/data/yolo", image_size: 640 });
+    expect(payload).toEqual({
+      base_dir: "/data/yolo",
+      image_size: 640,
+      preprocessing: { steps: [] },
+    });
     expect(payload).not.toHaveProperty("data_yaml");
   });
 
@@ -91,8 +96,13 @@ describe("detection-models", () => {
       base_dir: "/ignored",
       data_yaml: "/data/data.yaml",
       image_size: 512,
+      preprocessing: [],
     });
-    expect(payload).toEqual({ data_yaml: "/data/data.yaml", image_size: 512 });
+    expect(payload).toEqual({
+      data_yaml: "/data/data.yaml",
+      image_size: 512,
+      preprocessing: { steps: [] },
+    });
     expect(payload).not.toHaveProperty("base_dir");
   });
 });
@@ -134,5 +144,36 @@ describe("detection-models · YAML round-trip (ADR-059 header)", () => {
     });
     expect(form.data.source).toBe("folder");
     expect(form.model.name).toBe("fasterrcnn_resnet50_fpn");
+  });
+});
+
+describe("preprocessing na payload de detecção", () => {
+  it("envia a pipeline no formato plano que o backend espera", () => {
+    const form = makeDefaultDetectionForm();
+    form.data.base_dir = "datasets/coffee";
+    form.data.preprocessing = [
+      { kind: "grayscale", params: {} },
+      { kind: "gaussian_blur", params: { radius: 2 } },
+    ];
+
+    const payload = buildDetectionDataPayload(form.data) as {
+      preprocessing: { steps: Record<string, unknown>[] };
+    };
+
+    expect(payload.preprocessing.steps).toEqual([
+      { kind: "grayscale" },
+      { kind: "gaussian_blur", radius: 2 },
+    ]);
+  });
+
+  it("manda uma pipeline vazia quando não há filtros, e o backend não copia nada", () => {
+    const form = makeDefaultDetectionForm();
+    form.data.base_dir = "datasets/coffee";
+
+    const payload = buildDetectionDataPayload(form.data) as {
+      preprocessing: { steps: unknown[] };
+    };
+
+    expect(payload.preprocessing.steps).toEqual([]);
   });
 });

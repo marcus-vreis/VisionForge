@@ -22,6 +22,7 @@ import { exportConfigToYaml, validateParsedConfig } from "../lib/yaml-config";
 import type { ValidationError } from "../hooks/useExperiment";
 import { NumberField, SelectField, Segmented, TextField, Toggle } from "./controls";
 import { DetectionDatasetStats } from "./DetectionDatasetStats";
+import { PreprocessingPanel } from "./PreprocessingPanel";
 import { ExperimentHeader, type PanelStrategy } from "./ExperimentHeader";
 import { ReplicatesCard } from "./ReplicatesCard";
 import { SweepCard, type SweepPayload } from "./SweepCard";
@@ -251,14 +252,9 @@ export function DetectionPanel({
             options={DETECTION_MODELS[formData.model.backend]}
             hint="detector"
           />
-          <NumberField
-            label="Nº de classes"
-            value={formData.model.num_classes}
-            onChange={(v) => setModel({ num_classes: Math.round(v) })}
-            min={1}
-            step={1}
-            hint="classes do dataset"
-          />
+          {/* Nº de classes vive na seção Dataset, ao lado de onde o dataset é
+              escolhido — é dele que o número sai. Classificação já fazia isso;
+              detecção pedia o número aqui e só confirmava lá embaixo. */}
           <Toggle
             label="Pesos pré-treinados"
             value={formData.model.pretrained}
@@ -569,6 +565,16 @@ export function DetectionPanel({
             hint="imgsz"
           />
         </div>
+        <div style={{ ...grid, marginTop: 14 }}>
+          <NumberField
+            label="Nº de classes"
+            value={formData.model.num_classes}
+            onChange={(v) => setModel({ num_classes: Math.round(v) })}
+            min={1}
+            step={1}
+            hint="preenchido pelo dataset abaixo; editável"
+          />
+        </div>
         {formData.data.source === "folder" ? (
           <DetectionDatasetStats
             baseDir={formData.data.base_dir}
@@ -586,6 +592,32 @@ export function DetectionPanel({
           >
             O data.yaml define splits e nomes de classe. Confirme que{" "}
             <code>nc</code> bate com o nº de classes acima.
+          </p>
+        )}
+      </div>
+
+      {/* Pré-processamento (ADR-084). Ultralytics é dona do próprio loader, então
+          os filtros são aplicados uma vez numa cópia temporária que o data.yaml
+          passa a apontar — e a cópia é apagada quando o treino termina. */}
+      <div style={card}>
+        <PreprocessingPanel
+          baseDir={formData.data.base_dir}
+          steps={formData.data.preprocessing}
+          onChange={(steps) => setData({ preprocessing: steps })}
+        />
+        {formData.data.preprocessing.length > 0 && (
+          <p
+            style={{
+              marginTop: 12,
+              fontFamily: "var(--font-mono)",
+              fontSize: 11,
+              lineHeight: 1.6,
+              color: "var(--vf-text-muted)",
+            }}
+          >
+            Os filtros são aplicados uma vez e gravados numa cópia temporária do
+            dataset, usada só durante o treino e apagada ao fim. Os rótulos vão
+            junto, inalterados.
           </p>
         )}
       </div>
