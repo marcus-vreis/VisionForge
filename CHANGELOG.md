@@ -13,6 +13,8 @@ reasoning lives in [`documentation/DECISIONS.md`](documentation/DECISIONS.md).
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-08-05
+
 ### Added
 
 - **Cada hiperparâmetro tem uma linha explicando o que ele faz**, e os painéis
