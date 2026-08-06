@@ -60,3 +60,7 @@ user_models/*
 CLAUDE.md
 .claude/
 .local-docs/
+
+# Extracted sdists — an unpacked release tarball once got committed by accident,
+# duplicating a test file that pytest then collected twice.
+visionforge_studio-*/
