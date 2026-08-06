@@ -2496,3 +2496,52 @@ key as on — which the type checker, not review, is what caught.
 
 **Not done in this ADR:** presets ("leve / médio / agressivo"). Reasonable, and a
 separate decision.
+
+---
+
+## ADR-086 — The GUI detects a server older than the page it serves
+
+**Date:** 2026-08-05
+**Status:** Accepted — shipped 2026-08-05
+
+**Context:** a researcher rebuilt the SPA, reloaded, and saw none of the new
+features. The build was correct — the bundle on disk provably contained the code
+— and the browser was serving it. The cause was a `visionforge gui` process that
+had been running for ten hours.
+
+FastAPI reads `static/` from disk on every request, so a rebuild reaches the
+browser at once. Python does not work that way: modules are imported once, at
+process start. A server left running across a change therefore serves **new
+JavaScript from old Python**. The page asks for fields the stale routes never
+send, every guard on those fields is false, and the feature renders nothing.
+
+**What makes this expensive is that it mimics a broken build.** The two natural
+responses — rebuild, hard-reload — both appear to fail, because neither is the
+problem. It cost the researcher an evening, and cost me a wrong diagnosis
+(cache) that I only corrected by inspecting the running process.
+
+**Decision:** the server records, at import, the SPA bundle `index.html`
+referenced when it booted, and reports it at `/api/health`. The page knows its
+own bundle from `import.meta.url`. A mismatch means the process predates the
+page, and the GUI says so — naming the fix, which is restarting the server, and
+explicitly ruling out the reload.
+
+**A server older than the check itself is the case that matters most**, since it
+is the upgrade that introduces it. Such a server answers `/api/health` with
+index.html through the SPA catch-all, so parsing the response as JSON throws —
+and that throw is treated as staleness rather than as an inconclusive result.
+
+**Deliberately quiet when it cannot tell.** Under the Vite dev server there is no
+fingerprinted bundle, an unbuilt checkout has no name to report, and a server
+that is down is a different problem with its own symptoms. Warning in those cases
+would teach the researcher to ignore the banner, which would cost more than the
+bug.
+
+**Also documented, because the guard is a safety net and not the explanation.**
+CLAUDE.md and the README now state that a change under `src/` requires
+restarting the server. The README previously said "build the web UI *once*",
+which implied the whole thing was a one-time setup step.
+
+**Verified against live processes rather than mocks:** a ten-hour-old server
+returning HTML for `/api/health`, and a freshly started one reporting a bundle
+name that a later rebuild had already superseded.

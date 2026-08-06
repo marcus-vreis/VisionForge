@@ -44,6 +44,12 @@ path; the other four are standalone tasks (own config/trainer/block/route).
 - Frontend: `cd frontend && npx vitest run && npm run typecheck`
 - Build SPA (served by FastAPI): `cd frontend && npm run build`
 - Run GUI: `visionforge gui` · Run CLI: `visionforge run configs/<task>.yaml`
+- **Restart `visionforge gui` after any change under `src/`.** Static files are
+  re-read from disk per request, so a rebuilt SPA reaches the browser at once —
+  but Python modules are imported once, at process start. A server left running
+  across a change serves new JavaScript from old Python, and the feature
+  silently does nothing. The GUI now detects this and says so, but the fix is
+  always to restart the server, never to rebuild or hard-reload.
 
 ## Environment reality
 - torch/torchvision are **user-managed** per hardware (ADR-005) — not pinned deps.

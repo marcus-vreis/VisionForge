@@ -15,6 +15,14 @@ reasoning lives in [`documentation/DECISIONS.md`](documentation/DECISIONS.md).
 
 ### Added
 
+- **A GUI avisa quando o servidor está rodando código mais antigo que a página.**
+  Arquivos estáticos são lidos do disco a cada requisição, mas módulos Python são
+  importados uma vez, na partida — então um `visionforge gui` deixado aberto
+  durante uma alteração serve JavaScript novo com backend velho, e a
+  funcionalidade simplesmente não aparece. Isso é indistinguível de um build
+  quebrado, e nem recompilar nem recarregar resolvem
+  ([ADR-086](documentation/DECISIONS.md)).
+
 - **Uma chave liga e desliga a data augmentation**, em todas as cinco tarefas.
   Desligada, os parâmetros somem da tela e o `run.json` registra o estado — em
   vez de você ter que zerar cada campo à mão, que em detecção são 15. Os valores

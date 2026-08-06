@@ -8,6 +8,8 @@ against today's server. That has been mistaken for a broken build twice.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from fastapi.testclient import TestClient
 
 from visionforge.gui.server import app
@@ -43,3 +45,37 @@ class TestIndexCaching:
 
         assert resp.status_code == 200
         assert "no-cache" not in resp.headers.get("cache-control", "")
+
+
+class TestHealthReportsTheBootBundle:
+    """The signal that a server outlived the build it is serving."""
+
+    def test_health_names_the_bundle_index_html_points_at(self) -> None:
+        import re
+
+        from visionforge.gui.server import STATIC_DIR
+
+        index_html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+        expected = re.search(r"assets/(index-[A-Za-z0-9_-]+\.js)", index_html)
+        assert expected, "the SPA must be built for this test to mean anything"
+
+        resp = TestClient(app).get("/api/health")
+
+        assert resp.status_code == 200
+        assert resp.json()["spa_bundle"] == expected.group(1)
+
+    def test_health_reports_the_version(self) -> None:
+        from visionforge import __version__
+
+        assert TestClient(app).get("/api/health").json()["version"] == __version__
+
+    def test_a_missing_build_reports_an_empty_bundle_rather_than_raising(
+        self, tmp_path: Path
+    ) -> None:
+        """An unbuilt checkout must not warn; it has no name to compare."""
+        from unittest.mock import patch
+
+        from visionforge.gui import server as server_mod
+
+        with patch.object(server_mod, "STATIC_DIR", tmp_path):
+            assert server_mod._read_spa_bundle() == ""

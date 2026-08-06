@@ -170,12 +170,18 @@ visionforge doctor
 It reads your driver *and* any torch already installed, so on a machine whose
 GPU works it says so instead of recommending a downgrade.
 
-Build the web UI once (it is then served by the Python backend — end users
-never need Node):
+Build the web UI (it is then served by the Python backend — end users never
+need Node):
 
 ```bash
 cd frontend && npm install && npm run build && cd ..
 ```
+
+Working on the code? Rebuild after changing anything under `frontend/`, and
+**restart `visionforge gui` after changing anything under `src/`** — Python
+imports its modules once, at start, so a running server keeps serving the old
+backend no matter how many times you rebuild or reload. The GUI shows a warning
+when it detects this.
 
 Check the install actually works before pointing it at your data:
 

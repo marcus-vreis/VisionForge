@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -14,7 +15,41 @@ from visionforge.gui.api.routes import router as api_router
 
 STATIC_DIR = Path(__file__).parent / "static"
 
+
+def _read_spa_bundle() -> str:
+    """Name of the SPA bundle `index.html` referenced when this process started.
+
+    Static files are read from disk per request, so a rebuild reaches the browser
+    immediately. Python modules are not: they are loaded once, at import. A
+    server left running across a rebuild therefore serves *new* JavaScript from
+    *old* Python — the SPA asks for fields the stale routes never send, and the
+    feature silently does nothing. Capturing the bundle name here, at import,
+    gives the SPA something to compare itself against and name the cause.
+    """
+    index = STATIC_DIR / "index.html"
+    if not index.is_file():
+        return ""
+    match = re.search(
+        r"assets/(index-[A-Za-z0-9_-]+\.js)", index.read_text(encoding="utf-8")
+    )
+    return match.group(1) if match else ""
+
+
+_BOOT_SPA_BUNDLE = _read_spa_bundle()
+
 app = FastAPI(title="VisionForge", version=__version__)
+
+
+@app.get("/api/health")
+async def health() -> dict[str, str]:
+    """Version and the SPA build this process booted against.
+
+    `spa_bundle` is what lets the running page detect that the server predates
+    it and needs restarting, rather than leaving the researcher to conclude the
+    feature is broken.
+    """
+    return {"version": __version__, "spa_bundle": _BOOT_SPA_BUNDLE}
+
 
 app.add_middleware(
     CORSMiddleware,
