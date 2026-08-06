@@ -430,7 +430,7 @@ export function SegmentationPanel({
         />
       </div>
 
-      {/* Pré-processamento + augmentação (ADR-059 brick A) */}
+      {/* Pré-processamento + augmentação (ADR-059) */}
       <TransformsSection
         baseDir={formData.data.base_dir}
         steps={formData.preprocessing}

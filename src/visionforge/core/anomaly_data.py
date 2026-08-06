@@ -1,10 +1,10 @@
-"""Datasets and DataLoaders for the anomaly-detection task (Phase 9).
+"""Datasets and DataLoaders for the anomaly-detection task.
 
 MVTec-AD-style layout: ``train/<normal_dir>`` holds normal images only
 (unsupervised training, all label 0); ``test/`` holds the ``<normal_dir>``
 subfolder (label 0) plus one or more defect subfolders (any other subdir →
 label 1). Reuses ``core.data._build_transforms`` so augmentation/preprocessing
-match the other tasks. See documentation/PHASE9_ANOMALY_PLAN.md.
+match the other tasks.
 """
 
 from __future__ import annotations

@@ -161,7 +161,7 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
 
   // A detection run.json carries task="detection". Some post-training actions
   // (batch CSV inference, per-model evaluate) are classification-only and hidden
-  // for detection runs (see PHASE7_DETECTION_PLAN brick D/F).
+  // for detection runs.
   const task = runTask(detail);
   const isDetection = task === "detection";
   // A custom task owns its own training loop, so the built-in post-training

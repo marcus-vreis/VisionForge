@@ -64,7 +64,7 @@ describe("segmentation-models", () => {
   });
 });
 
-describe("segmentation-models · transforms & preprocessing (ADR-059 brick A)", () => {
+describe("segmentation-models · transforms & preprocessing (ADR-059)", () => {
   it("sends augmentation flags under data.transforms without image_size", () => {
     const form = makeDefaultSegmentationForm();
     form.transforms.horizontal_flip = false;

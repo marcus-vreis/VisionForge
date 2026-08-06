@@ -1,4 +1,4 @@
-"""Pydantic config models for the image-regression task (Phase 6).
+"""Pydantic config models for the image-regression task.
 
 Regression is a standalone config tree — it does not reuse the classification
 ``ExperimentConfig`` because the targets diverge (continuous values keyed by a
@@ -6,7 +6,7 @@ CSV manifest instead of an ImageFolder class index, a linear head instead of a
 softmax classifier, MSE/MAE/R² instead of accuracy). It *does* reuse
 ``OutputConfig``, ``DeviceConfig``, ``TransformConfig``, ``PreprocessingConfig``
 and ``SchedulerConfig`` so output layout, device selection and the image
-pipeline are identical across tasks. See documentation/PHASE6_REGRESSION_PLAN.md.
+pipeline are identical across tasks.
 """
 
 from pathlib import Path
@@ -28,7 +28,7 @@ from visionforge.utils.config import (
 )
 
 # Backbones reused from the classification factory; regression swaps the final
-# layer for a linear head (brick 3) rather than a softmax classifier.
+# layer for a linear head rather than a softmax classifier.
 _REGRESSION_BACKBONES = (
     "resnet18",
     "resnet34",

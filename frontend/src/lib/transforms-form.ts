@@ -3,9 +3,9 @@
  *  in visionforge/utils/config.py, which those tasks' `data.transforms` reuse.
  *
  *  Defaults MUST equal the backend defaults: they were already silently applied
- *  to every GUI run of these tasks before the panels exposed them (ADR-059
- *  brick A). Surfacing them unchanged is behavior-preserving; flipping them is
- *  the user's call now that they can see them. */
+ *  to every GUI run of these tasks before the panels exposed them (ADR-059).
+ *  Surfacing them unchanged is behavior-preserving; flipping them is the
+ *  user's call now that they can see them. */
 
 import type { PreprocessingStep } from "../components/PreprocessingPanel";
 

@@ -1,5 +1,5 @@
 /**
- * Merging researcher-defined tasks into the tab bar (ADR-058, brick 6).
+ * Merging researcher-defined tasks into the tab bar (ADR-058).
  *
  * `GET /api/tasks` returns the five built-in descriptors plus every task
  * registered from `user_tasks/`. The built-ins keep their rich local

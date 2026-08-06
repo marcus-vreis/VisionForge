@@ -95,5 +95,5 @@ prever a média". Isso é orçamento de treino, não defeito de sistema.
 
 A matriz prova que **o sistema funciona**: cada modelo treina, cada estratégia
 fecha, cada relatório sai com a forma certa e cada run transmite progresso. Um
-número defensável exige o caminho de `documentation/TRAINING_PLAN.md` — camada
+número defensável exige o caminho de `docs/archive/TRAINING_PLAN.md` — camada
 P2, com múltiplas seeds e teste de significância.

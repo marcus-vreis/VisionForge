@@ -4,7 +4,7 @@ import type { ValidationError } from "../hooks/useExperiment";
 import type { JsonSchema } from "../types/schema";
 
 /**
- * Generic JSON-Schema form (ADR-058, brick 6).
+ * Generic JSON-Schema form (ADR-058).
  *
  * Renders a custom task's Config with the same design-system controls the
  * built-in panels use. Deliberately simpler than `ParamPanel`'s renderer: no

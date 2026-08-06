@@ -53,3 +53,10 @@ user_models/*
 
 # Visual brainstorming companion (superpowers)
 .superpowers/
+
+# Internal working files — agent contract, run books, specs and plans. These are
+# scaffolding for how the project is built, not documentation of what it does,
+# and they confused readers when they sat next to the user guides.
+CLAUDE.md
+.claude/
+.local-docs/

@@ -7,8 +7,7 @@ weights the activation channels by the global-average-pooled gradients, and
 ReLU-sums them into a class-localizing map.
 
 This is a post-hoc analysis of an already-trained classification checkpoint — it
-needs no new config tree and is dependency-free (pure torch). See
-documentation/GRADCAM_PLAN.md.
+needs no new config tree and is dependency-free (pure torch).
 """
 
 from __future__ import annotations

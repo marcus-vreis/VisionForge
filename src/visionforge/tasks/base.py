@@ -4,7 +4,7 @@ A custom task is one documented ``.py`` under ``user_tasks/``: a Pydantic
 ``Config`` extending :class:`BaseTaskConfig` (which already composes the shared
 training/data/output/device blocks — the researcher adds only task-specific
 fields) and a :class:`TaskSpec` subclass with four hooks. VisionForge's generic
-engine (brick 2) drives the loop, checkpointing, SSE and run.json around them;
+engine drives the loop, checkpointing, SSE and run.json around them;
 the researcher never touches React, FastAPI, or the epoch loop.
 
 Torch types appear only in annotations (``TYPE_CHECKING``): importing this
@@ -120,7 +120,7 @@ class TaskSpec[ConfigT: BaseTaskConfig](ABC):
         """Level 2 escape hatch: own the whole training loop.
 
         Return the final metrics dict to bypass the generic engine entirely;
-        the default ``None`` means "use the Level 1 hooks". ``ctx`` (brick 2)
+        the default ``None`` means "use the Level 1 hooks". ``ctx``
         provides ``run_dir``, ``emit(event)``, ``save_checkpoint`` and
         ``write_run_json`` so a custom loop still honours the contracts.
         """

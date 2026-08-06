@@ -1,4 +1,4 @@
-"""Pydantic config models for the anomaly-detection task (Phase 9).
+"""Pydantic config models for the anomaly-detection task.
 
 Anomaly detection is a standalone config tree — it does not reuse the
 classification ``ExperimentConfig`` because it is unsupervised: training sees
@@ -7,7 +7,7 @@ bank of normal patch features (no classifier head), and the metric is image-leve
 AUROC over a labelled test split. It *does* reuse ``OutputConfig``,
 ``DeviceConfig``, ``TransformConfig``, ``PreprocessingConfig`` and
 ``SchedulerConfig`` so output layout, device selection and the image pipeline are
-identical across tasks. See documentation/PHASE9_ANOMALY_PLAN.md.
+identical across tasks.
 """
 
 from pathlib import Path

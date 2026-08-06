@@ -534,7 +534,7 @@ export interface SegmentationDatasetStatsResponse {
   message: string | null;
 }
 
-/** Per-split image↔mask pairing stats + sampled class ids (ADR-059 brick E). */
+/** Per-split image↔mask pairing stats + sampled class ids (ADR-059). */
 export async function fetchSegmentationDatasetStats(body: {
   base_dir: string;
   images_subdir: string;
@@ -563,7 +563,7 @@ export interface AnomalyDatasetStatsResponse {
   message: string | null;
 }
 
-/** Normal-vs-defect counts for an MVTec-style dataset (ADR-059 brick E). */
+/** Normal-vs-defect counts for an MVTec-style dataset (ADR-059). */
 export async function fetchAnomalyDatasetStats(body: {
   base_dir: string;
   train_dir: string;
@@ -599,7 +599,7 @@ export interface RegressionDatasetStatsResponse {
   message: string | null;
 }
 
-/** Manifest rows, column checks + target distributions (ADR-059 brick E). */
+/** Manifest rows, column checks + target distributions (ADR-059). */
 export async function fetchRegressionDatasetStats(body: {
   base_dir: string;
   images_dir: string;

@@ -123,7 +123,7 @@ export default function App() {
     makeDefaultAnomalyForm,
   );
   // Tabs are data-driven: built-ins are local, custom tasks arrive from
-  // /api/tasks (ADR-058 brick 6). One form per custom key so switching tabs
+  // /api/tasks (ADR-058). One form per custom key so switching tabs
   // preserves what the researcher typed.
   const [tasks, setTasks] = useState<TaskDefinition[]>(TASKS);
   const [customForms, setCustomForms] = useState<

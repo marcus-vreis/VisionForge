@@ -9,7 +9,7 @@ import {
 } from "../api/client";
 
 /** Pre-training dataset overviews for segmentation / anomaly / regression
- *  (ADR-059 brick E) — the task-specific analogues of `DetectionDatasetStats`,
+ *  (ADR-059) — the task-specific analogues of `DetectionDatasetStats`,
  *  rendered inside each panel's Dataset section. Fetches are debounced and
  *  skipped while the base dir is empty. */
 

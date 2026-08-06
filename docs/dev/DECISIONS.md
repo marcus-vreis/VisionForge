@@ -996,7 +996,7 @@ compute substrate is incomplete provenance.
 **Status:** Accepted — **fully implemented** (all six bricks shipped 2026-07:
 SDK package, engine, API, orchestrator adapter, `new-task` scaffolder +
 example + README, and the GUI — dynamic tabs, schema-driven panel, generic
-results/history; per-brick record in `documentation/CUSTOM_TASK_PLAN.md`)
+results/history; per-brick record in `docs/archive/CUSTOM_TASK_PLAN.md`)
 **Extends:** ADR-048 (user_models), ADR-041 (TaskRunner), ADR-013 (run.json)
 
 **Decision:** A sixth, user-defined task surface: the researcher drops one
@@ -1034,7 +1034,7 @@ machine.
 
 **Date:** 2026-07
 **Status:** Accepted — **fully implemented** (bricks A–F shipped 2026-07-02;
-audit + per-brick record in `documentation/PANEL_PARITY_PLAN.md`)
+audit + per-brick record in `docs/archive/PANEL_PARITY_PLAN.md`)
 **Extends:** ADR-025, ADR-028, ADR-044/045/056
 
 **Decision:** The classification `ParamPanel` layout is ratified as the canonical
@@ -1409,7 +1409,7 @@ regression tests pin both halves — one asserts `epoch_end` reaches the
 callback, the other asserts `routes._execute_experiment` still names the block,
 because a block that accepts a callback nobody attaches is the same defect.
 
-**Real-data corpus** (`documentation/VALIDATION.md`): USK-COFFEE for
+**Real-data corpus** (`docs/dev/VALIDATION.md`): USK-COFFEE for
 classification, a Roboflow cats/dogs export for detection, Oxford-IIIT Pet
 trimaps for segmentation, IMDB-WIKI `wiki_crop` ages for regression, and
 USK-COFFEE again for anomaly — `premium` as the normal class and `defect` as
@@ -1587,7 +1587,7 @@ number is a pointer into this file; to someone who installed a package it is
 noise that suggests they are missing context they cannot get.
 
 **Decision:** ADR references belong in code comments, docstrings and
-`documentation/` — never in `--help`, error messages, or GUI copy. The two help
+`docs/` — never in `--help`, error messages, or GUI copy. The two help
 strings now say what the command does in the reader's terms. The audit found
 these were the only two leaks; the frontend's ADR mentions are all in JSDoc,
 which is developer-facing and stays.
@@ -1811,7 +1811,7 @@ pointed at it, and the instructions pointed elsewhere.
 
 **Decision:**
 
-1. **`documentation/RELEASING.md`** states the one command, what it rewrites,
+1. **`docs/dev/RELEASING.md`** states the one command, what it rewrites,
    what to verify before tagging (including that the wheel carries the built
    SPA — a stale build would publish an old interface with new code), and what
    to check after publishing. Linked from the README and the contributing

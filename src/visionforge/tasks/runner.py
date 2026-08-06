@@ -1,4 +1,4 @@
-"""TaskRunner adapter for researcher-defined tasks (ADR-058, brick 4).
+"""TaskRunner adapter for researcher-defined tasks (ADR-058).
 
 Wraps :class:`~visionforge.tasks.engine.GenericTaskEngine` behind the uniform
 ``TaskRunner`` handle (ADR-041), so a custom task gets hyperparameter sweeps

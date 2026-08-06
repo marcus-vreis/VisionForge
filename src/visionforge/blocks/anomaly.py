@@ -1,4 +1,4 @@
-"""Anomaly-detection experiment block (Phase 9).
+"""Anomaly-detection experiment block.
 
 Mirrors the `ExperimentBlock` setup/run/report contract but over the standalone
 `AnomalyConfig` tree rather than `ExperimentConfig` (see ADR-038). It is not an

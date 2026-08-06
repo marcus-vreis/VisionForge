@@ -1,4 +1,4 @@
-"""Training loop for the semantic-segmentation task (Phase 8).
+"""Training loop for the semantic-segmentation task.
 
 Mirrors the regression/classification trainers (device resolution, per-epoch
 loop, scheduler, ADR-013 ``run.json``, SSE ``start``/``epoch_end``/``end``
@@ -6,7 +6,7 @@ events) but with a pixel-wise criterion (cross-entropy / Dice / combined) and
 segmentation metrics (mean IoU, Dice, pixel accuracy via a streaming confusion
 matrix). The best checkpoint is selected by **val mean IoU** (higher is better),
 the segmentation standard, not by val loss. Reuses ``resolve_device`` and
-``_seed_everything`` from ``core.trainer``. See PHASE8_SEGMENTATION_PLAN.md.
+``_seed_everything`` from ``core.trainer``.
 """
 
 from __future__ import annotations

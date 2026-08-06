@@ -120,4 +120,4 @@ free. Walkthrough: `user_tasks/README.md`.
   `optuna`, `tensorboard`, dataset providers)
 - `user_models/README.md` — drop in your own architectures
 - `user_tasks/README.md` — define whole new task families (ADR-058)
-- `documentation/ARCHITECTURE.md` — how the pieces fit
+- `docs/dev/ARCHITECTURE.md` — how the pieces fit

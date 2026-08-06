@@ -373,7 +373,7 @@ export function AnomalyPanel({
         />
       </div>
 
-      {/* Pré-processamento + augmentação (ADR-059 brick A) — flips/rotações
+      {/* Pré-processamento + augmentação (ADR-059) — flips/rotações
           importam para defeitos sensíveis a orientação; antes aplicavam-se
           silenciosamente. */}
       <TransformsSection

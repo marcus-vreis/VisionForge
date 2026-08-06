@@ -1,4 +1,4 @@
-"""Generic training engine for researcher-defined tasks (ADR-058, brick 2).
+"""Generic training engine for researcher-defined tasks (ADR-058).
 
 Drives a :class:`~visionforge.tasks.base.TaskSpec`'s four Level 1 hooks with
 everything the built-in trainers provide — seeding (+ determinism flag), device

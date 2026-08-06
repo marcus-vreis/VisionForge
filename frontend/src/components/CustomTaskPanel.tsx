@@ -17,7 +17,7 @@ import { SweepCard, type SweepPayload } from "./SweepCard";
 import type { ReplicatesPayload } from "../lib/replicates-form";
 
 /**
- * The panel a researcher-defined task gets for free (ADR-058, brick 6).
+ * The panel a researcher-defined task gets for free (ADR-058).
  *
  * Same canonical contract as every built-in panel (ADR-059): the experiment
  * header with name + YAML export/import + strategy selector, then the form —

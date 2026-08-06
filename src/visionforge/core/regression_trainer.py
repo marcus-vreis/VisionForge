@@ -1,11 +1,10 @@
-"""Training loop for the image-regression task (Phase 6).
+"""Training loop for the image-regression task.
 
 Mirrors the classification ``Trainer`` (device resolution, per-epoch loop,
 best-by-val-loss checkpoint, ADR-013 ``run.json``, SSE ``start``/``epoch_end``/
 ``end`` events) but with a regression criterion (MSE/MAE/Huber) and regression
 metrics (MSE, RMSE, MAE, R²). Reuses ``resolve_device`` and ``_seed_everything``
-from ``core.trainer`` so device handling stays identical across tasks. See
-documentation/PHASE6_REGRESSION_PLAN.md.
+from ``core.trainer`` so device handling stays identical across tasks.
 """
 
 from __future__ import annotations

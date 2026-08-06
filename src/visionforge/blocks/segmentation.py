@@ -1,4 +1,4 @@
-"""Semantic-segmentation experiment block (Phase 8).
+"""Semantic-segmentation experiment block.
 
 Mirrors the `ExperimentBlock` setup/run/report contract but over the standalone
 `SegmentationConfig` tree rather than `ExperimentConfig` (see ADR-037). It is not

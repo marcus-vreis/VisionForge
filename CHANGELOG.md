@@ -9,7 +9,7 @@ between minor releases. Configs carry a `schema_version` and are migrated on
 load (ADR-039), so a config exported from an older release keeps working.
 
 Every entry links the ADR that records *why* the change was made; the full
-reasoning lives in [`documentation/DECISIONS.md`](documentation/DECISIONS.md).
+reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ## [Unreleased]
 
@@ -21,7 +21,7 @@ reasoning lives in [`documentation/DECISIONS.md`](documentation/DECISIONS.md).
   passam a separar o básico (épocas, batch, learning rate, seed) do avançado,
   que começa recolhido. Nenhum parâmetro saiu da tela — o corte é por frequência
   de ajuste, não por importância, e um valor avançado fora do padrão abre a
-  seção sozinho ([ADR-085](documentation/DECISIONS.md)).
+  seção sozinho ([ADR-085](docs/dev/DECISIONS.md)).
 
 - **Detecção aceita filtros de pré-processamento.** A Ultralytics é dona do
   próprio pipeline de dados, então os filtros são aplicados uma vez numa cópia
@@ -29,7 +29,7 @@ reasoning lives in [`documentation/DECISIONS.md`](documentation/DECISIONS.md).
   que filtrar por imagem a cada época. A cópia é chaveada por conteúdo (um sweep
   de 20 trials materializa uma vez), removida ao fim mesmo quando o treino
   falha, e o `run.json` continua registrando o dataset **original**
-  ([ADR-084](documentation/DECISIONS.md)).
+  ([ADR-084](docs/dev/DECISIONS.md)).
 
 ## [0.4.0] — 2026-08-05
 
@@ -39,21 +39,21 @@ reasoning lives in [`documentation/DECISIONS.md`](documentation/DECISIONS.md).
   Serve para diagnosticar o caso em que um `visionforge gui` deixado aberto
   durante uma alteração passa a servir JavaScript novo com backend velho — os
   estáticos são lidos do disco a cada requisição, mas os módulos Python só na
-  partida ([ADR-086](documentation/DECISIONS.md)).
+  partida ([ADR-086](docs/dev/DECISIONS.md)).
 
 - **Uma chave liga e desliga a data augmentation**, em todas as cinco tarefas.
   Desligada, os parâmetros somem da tela e o `run.json` registra o estado — em
   vez de você ter que zerar cada campo à mão, que em detecção são 15. Os valores
   ficam guardados, então religar devolve o ajuste. Normalização e tamanho da
   imagem saíram da seção: não são augmentation, valem para treino, validação e
-  teste ([ADR-083](documentation/DECISIONS.md)).
+  teste ([ADR-083](docs/dev/DECISIONS.md)).
 
 - **O histórico mostra em qual dataset cada run foi treinado** — selo no card,
   caminho e fingerprint no detalhe do run, e um veredito "mesmos dados?" ao
   comparar runs. Nada novo é medido: os dados já estavam no `run.json`. O nome
   aparece em 69 dos 78 runs existentes porque cai para `config.data.base_dir`;
   a verificação por hash só vale de 26/07/2026 em diante, e o comparador diz
-  isso em vez de adivinhar ([ADR-082](documentation/DECISIONS.md)).
+  isso em vez de adivinhar ([ADR-082](docs/dev/DECISIONS.md)).
 
 ## [0.3.1] — 2026-08-05
 
@@ -65,7 +65,7 @@ reasoning lives in [`documentation/DECISIONS.md`](documentation/DECISIONS.md).
   spawn, not fork — so the cost is roughly a gigabyte per worker, per loader.
   Windows reported the shortfall against whichever DLL happened to be loading,
   which pointed at torch and hid the cause. The GUI now explains it and names
-  `data.num_workers` ([ADR-081](documentation/DECISIONS.md)).
+  `data.num_workers` ([ADR-081](docs/dev/DECISIONS.md)).
 
 ### Changed
 
@@ -76,7 +76,7 @@ reasoning lives in [`documentation/DECISIONS.md`](documentation/DECISIONS.md).
   in a `finally`, so a run that raises does not leave its workers behind. The
   test split also no longer asks for `persistent_workers` — it is read once —
   which drops the peak worker count for a classification run from 12 to 8
-  ([ADR-081](documentation/DECISIONS.md)).
+  ([ADR-081](docs/dev/DECISIONS.md)).
 
 ## [0.3.0] — 2026-08-04
 
@@ -89,7 +89,7 @@ reasoning lives in [`documentation/DECISIONS.md`](documentation/DECISIONS.md).
   detection ever worked. The folder is given in the label shape the run was
   trained with; regression points at its `.csv` manifest, since its data model
   has manifests rather than split folders
-  ([ADR-080](documentation/DECISIONS.md)).
+  ([ADR-080](docs/dev/DECISIONS.md)).
 
 ### Fixed
 
@@ -113,11 +113,11 @@ reasoning lives in [`documentation/DECISIONS.md`](documentation/DECISIONS.md).
   `run.json` — which is why every post-training action on a detection run
   reported a missing `best.pt`. The path is now absolute, and the run collects
   both confusion matrices, all four Box curves and the validation prediction
-  sample ([ADR-079](documentation/DECISIONS.md)).
+  sample ([ADR-079](docs/dev/DECISIONS.md)).
 - **Custom-task runs showed no plots** although the engine was drawing one:
   `run.json` hardcoded `graphics: []`, orphaning the primary-metric curve on
   disk. It is now declared, alongside a train-loss curve
-  ([ADR-079](documentation/DECISIONS.md)).
+  ([ADR-079](docs/dev/DECISIONS.md)).
 
 ## [0.2.0] — 2026-08-03
 
@@ -132,38 +132,38 @@ reasoning lives in [`documentation/DECISIONS.md`](documentation/DECISIONS.md).
   run-detail panel and the model card. Always on — the metrics are recomputed
   with vectorized arithmetic (700x faster than one sklearn call per resample,
   pinned against sklearn to 1e-16), so it costs ~0.02 s and needs no knob
-  ([ADR-074](documentation/DECISIONS.md)).
+  ([ADR-074](docs/dev/DECISIONS.md)).
 - **The same intervals for regression, segmentation and anomaly** — MSE/RMSE/MAE/R²,
   mIoU/Dice/pixel-accuracy, AUROC/F1. The image is always the resampling unit,
   never the smaller thing inside it: segmentation sums per-image confusion
   matrices rather than resampling pixels, which would report an interval far
-  tighter than the evidence supports ([ADR-076](documentation/DECISIONS.md)).
+  tighter than the evidence supports ([ADR-076](docs/dev/DECISIONS.md)).
 - **A training queue.** A second submission no longer gets a 409 — it lines up and
   starts on its own when the GPU frees, so an evening's experiments can be
   submitted and left. `GET /api/queue` lists what is waiting, a not-yet-started
   job can be dropped, and the bottom bar shows `⧗ fila N` with a panel
-  ([ADR-075](documentation/DECISIONS.md)).
+  ([ADR-075](docs/dev/DECISIONS.md)).
 - **Test-set diagnostics for every task, not just classification**: predicted-vs-actual
   scatter and residual histogram (regression), per-class IoU and confusion matrix
   (segmentation), score histogram with the decision threshold (anomaly)
-  ([ADR-077](documentation/DECISIONS.md)).
+  ([ADR-077](docs/dev/DECISIONS.md)).
 - **Grad-CAM shows the true class next to the predicted one**, with wrong
   predictions outlined in red. Class names are recovered from the training
   folder and ground truth from each image's parent folder — never guessed: a
   count mismatch shows the index, and an unlabeled folder shows nothing
-  ([ADR-077](documentation/DECISIONS.md)).
+  ([ADR-077](docs/dev/DECISIONS.md)).
 
 ### Fixed
 
 - **The markdown model card returned 500 for every task except classification.**
   It hardcoded the classification epoch columns and formatted each cell with
   `:.4f`, so the `"?"` fallback for a missing key always raised. Columns now come
-  from the run's own history ([ADR-077](documentation/DECISIONS.md)).
+  from the run's own history ([ADR-077](docs/dev/DECISIONS.md)).
 - **Per-run actions crashed on a researcher-defined task's run.** `test`,
   `gradcam`, `batch_predict` and `export_onnx` read `config.task`, which a custom
   run does not have, fell through to the classification path and died rebuilding
   a ResNet. They now answer 400 naming the task
-  ([ADR-077](documentation/DECISIONS.md)).
+  ([ADR-077](docs/dev/DECISIONS.md)).
 - **A custom task whose config used `Literal`, `Path` or any non-builtin
   annotation failed to load** with a confusing Pydantic "is not fully defined"
   error pointing at the user's file. Task modules are now registered in
@@ -177,15 +177,15 @@ reasoning lives in [`documentation/DECISIONS.md`](documentation/DECISIONS.md).
   `step` on the axis while the scalar control still said `none` left `step_size`
   and `gamma` unrendered, so the sweep ran them on defaults with no way to see or
   sweep them. The form now shows the union over the scalar kind and every kind on
-  the axis ([ADR-078](documentation/DECISIONS.md)).
+  the axis ([ADR-078](docs/dev/DECISIONS.md)).
 - **The image viewer covered the plot it was showing.** The caption and close
   button floated over the figure, hiding the strip matplotlib uses for the
   x-axis and legend. They now occupy their own rows, so nothing is covered and
-  nothing is cut ([ADR-078](documentation/DECISIONS.md)).
+  nothing is cut ([ADR-078](docs/dev/DECISIONS.md)).
 - **An unknown preprocessing filter returned 500.** Typing `blur` — the natural
   guess for `gaussian_blur` or `median_blur` — produced a server fault with no
   hint. It is now a 422 that lists every registered filter
-  ([ADR-078](documentation/DECISIONS.md)).
+  ([ADR-078](docs/dev/DECISIONS.md)).
 - **`bump-my-version bump` could never complete**, so the documented one-command
   release (ADR-073) had never once worked: the pytest pre-commit hook ran
   `uv run`, which re-locked because the version had just changed, and pre-commit
@@ -196,11 +196,11 @@ reasoning lives in [`documentation/DECISIONS.md`](documentation/DECISIONS.md).
 - **Clicking outside a dialog steps back one level** instead of dismissing the
   whole stack: plot → run detail → history list → closed, with Esc mirroring it.
   The header's × still closes everything at once
-  ([ADR-078](documentation/DECISIONS.md)).
+  ([ADR-078](docs/dev/DECISIONS.md)).
 - A busy server **queues** a submission instead of refusing it with 409. The
   per-endpoint validation errors (422 for a bad config, 404 for an unknown custom
   task) are unchanged and still happen before anything is enqueued
-  ([ADR-075](documentation/DECISIONS.md)).
+  ([ADR-075](docs/dev/DECISIONS.md)).
 
 ## [0.1.0] — 2026-07-29
 
@@ -279,7 +279,7 @@ point at which it becomes a version other people can install and cite.
   data and asserts the run, the report shape and the live-progress contract
   (ADR-060). Offline, ~90 s, CI-ready.
 - A full matrix on **real** datasets (ADR-065) is recorded in
-  [`documentation/VALIDATION.md`](documentation/VALIDATION.md): 21 cases across
+  [`docs/dev/VALIDATION.md`](docs/dev/VALIDATION.md): 21 cases across
   five tasks and five strategies, all passing.
 - 1274 backend tests, 102 frontend tests, ruff + mypy clean, gated in CI.
 

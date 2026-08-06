@@ -1,4 +1,4 @@
-"""Pydantic config models for the semantic-segmentation task (Phase 8).
+"""Pydantic config models for the semantic-segmentation task.
 
 Segmentation is a standalone config tree — it does not reuse the classification
 ``ExperimentConfig`` because the target diverges (a per-pixel class mask instead
@@ -6,7 +6,6 @@ of a single class index, a dense head instead of a pooled classifier, mean IoU /
 Dice instead of accuracy). It *does* reuse ``OutputConfig``, ``DeviceConfig``,
 ``TransformConfig``, ``PreprocessingConfig`` and ``SchedulerConfig`` so output
 layout, device selection and the image pipeline are identical across tasks.
-See documentation/PHASE8_SEGMENTATION_PLAN.md.
 """
 
 from pathlib import Path
@@ -27,7 +26,7 @@ from visionforge.utils.config import (
     migrate_config_dict,
 )
 
-# torchvision segmentation families + a hand-rolled U-Net (brick 3). Explicit so
+# torchvision segmentation families + a hand-rolled U-Net. Explicit so
 # config validation rejects an unsupported name before any weights are loaded.
 _SEGMENTATION_MODELS = (
     "unet",

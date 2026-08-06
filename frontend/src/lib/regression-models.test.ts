@@ -67,7 +67,7 @@ describe("regression-models", () => {
   });
 });
 
-describe("regression-models · transforms & preprocessing (ADR-059 brick A)", () => {
+describe("regression-models · transforms & preprocessing (ADR-059)", () => {
   it("sends the augmentation flags and normalization under data.transforms", () => {
     const form = makeDefaultRegressionForm();
     form.transforms.horizontal_flip = false;

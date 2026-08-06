@@ -153,7 +153,7 @@ uv venv
 
 PyTorch is intentionally **not** a plain dependency — its build must match your
 hardware, and a resolver cannot pick correctly between the CPU and CUDA wheels
-(ADR-005). You choose one via a **hardware extra**, and the right index is
+You choose one via a **hardware extra**, and the right index is
 already wired up for it:
 
 ```bash
@@ -263,7 +263,7 @@ def build_my_net(num_outputs: int) -> nn.Module: ...
 Select it via `model.custom_model` — works for classification, regression and
 segmentation. See `user_models/README.md`.
 
-## Custom tasks — define a whole new task family (ADR-058)
+## Custom tasks — define a whole new task family
 
 When your research doesn't fit the five built-in tasks, define your own in
 **one documented Python file** — no React, no FastAPI, no training loop:
@@ -325,13 +325,13 @@ exported from an older release keeps working.
 Verified, not asserted: 1370 backend tests and 121 frontend tests gated in CI,
 plus a full matrix of 21 (task × strategy) cases trained on **real** datasets —
 the corpus, the numbers and the one defect it caught are in
-[`documentation/VALIDATION.md`](documentation/VALIDATION.md).
+[`docs/dev/VALIDATION.md`](docs/dev/VALIDATION.md).
 
 Known limits worth knowing before you start:
 
 - **One training at a time — but submissions queue.** The card runs one job;
   extra submissions line up and start on their own as it frees, so you can
-  stack an evening's experiments and leave (ADR-075). The bottom bar shows
+  stack an evening's experiments and leave. The bottom bar shows
   `⧗ fila N` when something is waiting, and a job that has not started yet can
   be dropped. A job already training cannot be cancelled: the trainers have no
   stop point, and interrupting one would leave a half-written run directory.
@@ -340,7 +340,7 @@ Known limits worth knowing before you start:
 - **One-click dataset download covers classification only** (the torchvision
   built-ins produce an `ImageFolder`). Detection, regression, segmentation and
   anomaly need a dataset already in their layout — see
-  [`documentation/TRAINING_PLAN.md`](documentation/TRAINING_PLAN.md).
+  [`docs/archive/TRAINING_PLAN.md`](docs/archive/TRAINING_PLAN.md).
 - **No K-fold for detection or anomaly**, by design: Ultralytics owns its
   training loop, and an unsupervised validation fold without anomalies measures
   nothing.
@@ -353,16 +353,26 @@ Found something? [Open an issue](https://github.com/marcus-vreis/VisionForge/iss
 — the template asks for `visionforge --version` and `visionforge doctor`, which
 answers most of the questions up front.
 
-## Architecture, decisions and contributing
+## Documentation
 
+**Using it** — these are written in Portuguese, like the interface itself:
+
+- [`docs/QUICKSTART.md`](docs/QUICKSTART.md) — first run, start to finish
+- [`docs/DATASETS.md`](docs/DATASETS.md) — dataset layouts and the download providers
 - [`CHANGELOG.md`](CHANGELOG.md) — what shipped in each release
-- `documentation/ARCHITECTURE.md` — layers, modules, boundaries
-- `documentation/DECISIONS.md` — every architecture decision as an ADR (001–065)
-- `documentation/TRAINING_PLAN.md` — the model × strategy matrix, in four
-  layers of increasing cost
-- `documentation/VALIDATION.md` — the real-dataset validation record
-- `documentation/CONTRIBUTING.md` — dev setup, test/lint gauntlet, PR flow
-- `documentation/RELEASING.md` — how a version gets cut and published
+
+**Working on it** — English, for contributors:
+
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) — dev setup, the check gauntlet, PR flow
+- [`docs/dev/ARCHITECTURE.md`](docs/dev/ARCHITECTURE.md) — layers, modules, boundaries
+- [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md) — every architecture decision and
+  the reasoning behind it, as ADRs
+- [`docs/dev/VALIDATION.md`](docs/dev/VALIDATION.md) — the real-dataset validation record
+- [`docs/dev/DOCKER.md`](docs/dev/DOCKER.md) — image layout and the CUDA variants
+- [`docs/dev/RELEASING.md`](docs/dev/RELEASING.md) — how a version gets cut and published
+
+[`docs/archive/`](docs/archive) holds superseded planning documents, kept for
+history. Nothing there describes current behaviour.
 
 Backend checks: `pytest` · `ruff check src/ tests/` · `mypy src/`.
 Frontend: `cd frontend && npx vitest run && npm run typecheck`.

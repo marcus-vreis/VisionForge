@@ -3,7 +3,7 @@
 Either passes through an explicit ``data_yaml`` from the config, or synthesizes
 one from a YOLO-layout ``base_dir`` by detecting the train/val/test image
 folders and the class names. No ``ultralytics`` import here — this module only
-produces the dataset spec file the Trainer (brick 3) hands to ``YOLO.train``.
+produces the dataset spec file the Trainer hands to ``YOLO.train``.
 """
 
 from __future__ import annotations

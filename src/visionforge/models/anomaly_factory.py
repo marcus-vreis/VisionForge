@@ -1,4 +1,4 @@
-"""Anomaly-detection models (Phase 9).
+"""Anomaly-detection models.
 
 Two model families behind one factory:
 
@@ -9,7 +9,7 @@ Two model families behind one factory:
   over the normal train set; a greedy-coreset subsample is stored as a memory
   bank. The per-image anomaly score is the max over patches of the distance to
   the nearest memory-bank feature. No gradient training; "fit" is one pass +
-  subsample. Uses torch ``cdist`` (no faiss). See PHASE9_ANOMALY_PLAN.md.
+  subsample. Uses torch ``cdist`` (no faiss).
 """
 
 from __future__ import annotations

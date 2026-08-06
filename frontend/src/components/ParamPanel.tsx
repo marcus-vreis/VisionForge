@@ -567,7 +567,7 @@ function BlockSelector({
   value: string;
   onChange: (v: string) => void;
 }) {
-  // "Comparar modelos" saiu do seletor (ADR-059 brick F): comparar arquiteturas
+  // "Comparar modelos" saiu do seletor (ADR-059): comparar arquiteturas
   // é um grid de um eixo só sobre "Arquitetura" (+ valor ao grid) — um conceito,
   // uma superfície. O ModelComparisonBlock continua no backend; configs YAML
   // legadas com block=model_comparison seguem editáveis e executáveis.

@@ -83,7 +83,7 @@ export interface SegmentationForm {
   /** Filter pipeline applied before augmentation (data.preprocessing.steps). */
   preprocessing: PreprocessingStep[];
   /** Augmentation/normalization (data.transforms) — joint image+mask hflip/
-   *  rotation, image-only jitter. ADR-059 brick A. */
+   *  rotation, image-only jitter. ADR-059. */
   transforms: TransformsForm;
 }
 

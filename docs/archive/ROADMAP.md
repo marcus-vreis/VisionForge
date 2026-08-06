@@ -245,7 +245,7 @@ base.
 não concorda; e comentários no código "situando porque tomou a decisão baseada
 numa regra, ou pq trocou a parte" não fazem sentido ali.
 
-**What I found:** `documentation/` carries four per-task plans
+**What I found:** `docs/` carries four per-task plans
 (`PHASE6/7/8/9_*_PLAN.md`) plus `GRADCAM_PLAN.md`. They were implementation
 scaffolds; their *decisions* now live in `DECISIONS.md` (ADRs) and their *status*
 in `TASKS.md`. They're redundant with the canonical set. In code, there are ~35

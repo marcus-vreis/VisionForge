@@ -1,4 +1,4 @@
-"""Training/scoring loop for the anomaly-detection task (Phase 9).
+"""Training/scoring loop for the anomaly-detection task.
 
 Handles both model families behind one interface:
 
@@ -13,7 +13,6 @@ Handles both model families behind one interface:
 The metric is image-level AUROC over the labelled test split (sklearn), plus a
 decision threshold taken from a percentile of the normal-score distribution and
 the resulting image-level F1. Reuses ``resolve_device``/``_seed_everything``.
-See documentation/PHASE9_ANOMALY_PLAN.md.
 """
 
 from __future__ import annotations

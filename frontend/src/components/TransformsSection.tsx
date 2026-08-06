@@ -44,7 +44,7 @@ const grid: React.CSSProperties = {
 };
 
 /** Preprocessing pipeline + augmentation/normalization for the standalone task
- *  panels (ADR-059 brick A) — the canonical sections 6 and 7 of the task-panel
+ *  panels (ADR-059) — the canonical sections 6 and 7 of the task-panel
  *  contract. The values mirror `data.preprocessing` / `data.transforms`, which
  *  the regression/segmentation/anomaly backends already consume; before this
  *  section existed those defaults applied invisibly. */

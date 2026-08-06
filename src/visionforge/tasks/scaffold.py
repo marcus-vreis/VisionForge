@@ -1,4 +1,4 @@
-"""Scaffolder behind ``visionforge new-task`` (ADR-058, brick 5).
+"""Scaffolder behind ``visionforge new-task`` (ADR-058).
 
 Generates a self-contained, functional task file under ``user_tasks/``: the
 template registers a real task that trains on synthetic data out of the box,

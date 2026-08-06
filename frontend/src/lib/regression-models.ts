@@ -77,7 +77,7 @@ export interface RegressionForm {
   };
   /** Filter pipeline applied before augmentation (data.preprocessing.steps). */
   preprocessing: PreprocessingStep[];
-  /** Augmentation/normalization (data.transforms) — ADR-059 brick A. */
+  /** Augmentation/normalization (data.transforms) — ADR-059. */
   transforms: TransformsForm;
 }
 

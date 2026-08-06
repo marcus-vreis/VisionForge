@@ -1,4 +1,4 @@
-"""Paired image/mask dataset and DataLoaders for the segmentation task (Phase 8).
+"""Paired image/mask dataset and DataLoaders for the segmentation task.
 
 A segmentation dataset is, per split, an ``images`` directory and a ``masks``
 directory whose files pair by filename stem (``img001.jpg`` ↔ ``img001.png``).
@@ -11,7 +11,7 @@ apply to both — so this module does **not** reuse ``core.data._build_transform
 jointly in ``__getitem__`` via the functional API: the image is resized with
 bilinear interpolation and normalized; the mask is resized with nearest-neighbor
 (preserving integer class ids) and left as a ``long`` tensor. The preprocessing
-filter pipeline runs on the image only. See PHASE8_SEGMENTATION_PLAN.md.
+filter pipeline runs on the image only.
 """
 
 from __future__ import annotations
@@ -124,7 +124,7 @@ class SegmentationDataset(Dataset):  # type: ignore[type-arg]
             raise ValueError(
                 f"Mask '{mask_path.name}' is {mask.mode}; segmentation expects a "
                 f"single-channel integer-id mask (mode 'L' or 'P'). RGB/palette-"
-                f"color masks need a colour→id map (deferred, see PHASE8 plan)."
+                f"color masks need a colour→id map, which is not implemented."
             )
 
         size = [self._image_size, self._image_size]

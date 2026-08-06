@@ -1,4 +1,4 @@
-"""Build semantic-segmentation models from a SegmentationModelConfig (Phase 8).
+"""Build semantic-segmentation models from a SegmentationModelConfig.
 
 Two model sources:
 
@@ -12,7 +12,7 @@ Two model sources:
   U-Net weights exist).
 
 ``segmentation_logits`` normalizes either output shape to a plain tensor so the
-trainer (brick 4) is model-agnostic. See PHASE8_SEGMENTATION_PLAN.md.
+trainer is model-agnostic.
 """
 
 from __future__ import annotations

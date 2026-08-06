@@ -1,11 +1,11 @@
-"""CSV-manifest dataset and DataLoaders for the image-regression task (Phase 6).
+"""CSV-manifest dataset and DataLoaders for the image-regression task.
 
 A regression dataset is a per-split CSV (``image,target[,target2,…]``) plus an
 images root. Each row maps an image to one or more continuous targets. This
 module reuses the classification transform/preprocessing pipeline
 (``core.data._build_transforms``) so augmentation and the filter pipeline behave
 identically across tasks; only the label changes (a float vector instead of a
-class index). See documentation/PHASE6_REGRESSION_PLAN.md.
+class index).
 """
 
 from __future__ import annotations

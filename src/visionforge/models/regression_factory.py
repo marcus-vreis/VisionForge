@@ -1,4 +1,4 @@
-"""Build a CNN with a regression head from a RegressionModelConfig (Phase 6).
+"""Build a CNN with a regression head from a RegressionModelConfig.
 
 Reuses the shared backbone builders and head-swap helper from
 ``models.factory``; the only difference from classification is that the final

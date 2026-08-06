@@ -1,10 +1,10 @@
-"""Pydantic config models for the object-detection task (Phase 7).
+"""Pydantic config models for the object-detection task.
 
 Detection is a standalone config tree — it does not reuse the classification
 ``ExperimentConfig`` because the field sets diverge (no power-of-two batch,
 mAP instead of accuracy, dataset is boxes not ImageFolder). It does reuse
 ``OutputConfig`` and ``DeviceConfig`` so output layout and device selection are
-identical across tasks. See documentation/PHASE7_DETECTION_PLAN.md.
+identical across tasks.
 """
 
 import sys

@@ -1,4 +1,4 @@
-"""Image-regression experiment block (Phase 6).
+"""Image-regression experiment block.
 
 Mirrors the `ExperimentBlock` setup/run/report contract but over the standalone
 `RegressionConfig` tree rather than `ExperimentConfig` (see ADR-036). It is not

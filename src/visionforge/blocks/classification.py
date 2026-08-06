@@ -23,7 +23,7 @@ class ClassificationBlock(ExperimentBlock):
     Modes (config.classification.mode):
     - "train": ModelFactory → DataModule → Trainer → Evaluator → all plots → run.json
     - "evaluate": loads checkpoint → Evaluator on test set
-    - "infer": single-image inference (Phase 4)
+    - "infer": single-image inference
     """
 
     def setup(self, config: ExperimentConfig) -> None:
@@ -41,7 +41,7 @@ class ClassificationBlock(ExperimentBlock):
         elif mode == "evaluate":
             self._run_evaluate()
         elif mode == "infer":
-            raise NotImplementedError("Infer mode will be implemented in Phase 4.")
+            raise NotImplementedError("Infer mode is not implemented.")
 
     def report(self) -> dict[str, Any]:
         """Return a summary of the run for logging and GUI display."""

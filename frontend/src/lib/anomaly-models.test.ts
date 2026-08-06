@@ -33,7 +33,7 @@ describe("anomaly-models", () => {
   });
 });
 
-describe("anomaly-models · transforms & preprocessing (ADR-059 brick A)", () => {
+describe("anomaly-models · transforms & preprocessing (ADR-059)", () => {
   it("exposes the previously-silent augmentation defaults in the payload", () => {
     const form = makeDefaultAnomalyForm();
     const payload = buildAnomalyPayload(form);
