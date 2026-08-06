@@ -16,6 +16,7 @@ import {
   type PreprocessingStep as PreprocessingUIStep,
 } from "./PreprocessingPanel";
 import { resolveKind } from "./field-renderer";
+import { paramHelp } from "../lib/param-help";
 import {
   coerceGridValue,
   isGridableField,
@@ -117,6 +118,29 @@ function resolveSchema(
 // settings that still apply.
 const IMAGE_KEYS = ["image_size", "normalize_mean", "normalize_std"];
 const AUGMENT_KEYS = ["horizontal_flip", "rotation_degrees", "color_jitter"];
+
+/** The one-line explanation for a field, under the control it explains.
+ *
+ * The hint slot in FieldLabel is right-aligned beside the label and sized for a
+ * word or two ("treino", "0 = desliga"); a sentence belongs on its own line.
+ */
+function ParamHelp({ name }: { name: string }) {
+  const text = paramHelp(name);
+  if (!text) return null;
+  return (
+    <p
+      style={{
+        fontSize: 11,
+        lineHeight: 1.5,
+        color: "var(--vf-text-muted)",
+        marginTop: 4,
+      }}
+    >
+      {text}
+    </p>
+  );
+}
+
 
 /** Render a chosen subset of an object schema's fields, flat.
  *
@@ -1740,6 +1764,7 @@ function SchemaFieldVF({
             {errorMsg}
           </p>
         )}
+        <ParamHelp name={name} />
         {gridExt}
       </div>
     );
@@ -1770,6 +1795,7 @@ function SchemaFieldVF({
             {errorMsg}
           </p>
         )}
+        <ParamHelp name={name} />
         {gridExt}
       </div>
     );
@@ -1821,6 +1847,7 @@ function SchemaFieldVF({
             {errorMsg}
           </p>
         )}
+        <ParamHelp name={name} />
         {gridExt}
       </div>
     );

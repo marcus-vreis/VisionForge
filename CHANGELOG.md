@@ -15,6 +15,12 @@ reasoning lives in [`documentation/DECISIONS.md`](documentation/DECISIONS.md).
 
 ### Added
 
+- **Cada hiperparâmetro tem uma linha explicando o que ele faz**, e os painéis
+  passam a separar o básico (épocas, batch, learning rate, seed) do avançado,
+  que começa recolhido. Nenhum parâmetro saiu da tela — o corte é por frequência
+  de ajuste, não por importância, e um valor avançado fora do padrão abre a
+  seção sozinho ([ADR-085](documentation/DECISIONS.md)).
+
 - **Detecção aceita filtros de pré-processamento.** A Ultralytics é dona do
   próprio pipeline de dados, então os filtros são aplicados uma vez numa cópia
   temporária que o `data.yaml` passa a apontar — o que também é ~30x menos CPU

@@ -2600,3 +2600,50 @@ taken here, because the on-the-fly path works and is covered by tests.
 279 label files byte-identical, stems preserved across the `.jpg`→`.png` change,
 `data.yaml` pointing at the copy with `names`/`nc` unchanged, the copy removed on
 exit, and no orphans left behind.
+
+---
+
+## ADR-085 — Hyperparameters are tiered and explained, not trimmed
+
+**Date:** 2026-08-05
+**Status:** Accepted — shipped 2026-08-05
+**Extends:** ADR-059 (canonical task-panel contract), ADR-083 (collapsing pattern)
+
+**Context:** the report was *"conheço apenas metade desses; tá bem difícil de
+entender, muita coisa junta"* — and, when asked directly, explicitly **not** a
+request to remove any of them. The problem is presentation, not count.
+
+**Decision:** every hyperparameter gets a one-line explanation, and the panels
+split into a basic tier that is always visible and an advanced tier that starts
+collapsed, reusing the toggle pattern from ADR-083.
+
+**The cut is by how often a value changes, not by how much it matters.** The
+optimizer matters enormously and is still advanced, because it gets decided once
+and then left alone. Epochs, batch size, learning rate and seed are what move
+between one experiment and the next, so those four stay on screen.
+
+**Nothing is removed.** An advanced parameter is one click away and travels in
+the payload with the same value it always had.
+
+**An unclassified parameter counts as basic.** A field nobody thought to tier
+must stay visible rather than disappear by accident — the failure mode of the
+opposite default is a knob that silently stops being reachable when someone adds
+it.
+
+**A non-default advanced value opens the section.** Hiding a setting the
+researcher deliberately chose, or that arrived with an imported YAML, would be
+worse than the clutter the collapsing removes.
+
+**The explanations live in a data module** (`lib/param-help.ts`) rather than
+spread through JSX, which is what makes "every field is explained" a test
+instead of a promise: the suite iterates the tier map and fails on any entry
+without text.
+
+**They describe consequences, not definitions.** "Alto demais diverge, baixo
+demais nunca chega" is usable by someone who does not already know what a
+learning rate is; "taxa de aprendizado do otimizador" is not.
+
+**`num_workers` carries the warning ADR-081 earned.** It is the only knob in the
+list whose wrong value does not degrade training but *prevents* it — each worker
+is a process reloading torch and the CUDA DLLs, about a gigabyte each, and the
+failure surfaces as WinError 1455 naming an unrelated DLL.
