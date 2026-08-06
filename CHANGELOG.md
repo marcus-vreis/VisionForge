@@ -13,6 +13,8 @@ reasoning lives in [`documentation/DECISIONS.md`](documentation/DECISIONS.md).
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-08-05
+
 ### Added
 
 - **`/api/health`** informa a versão e o bundle da SPA com que o processo subiu.
