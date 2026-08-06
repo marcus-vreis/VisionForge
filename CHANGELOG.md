@@ -15,13 +15,11 @@ reasoning lives in [`documentation/DECISIONS.md`](documentation/DECISIONS.md).
 
 ### Added
 
-- **A GUI avisa quando o servidor está rodando código mais antigo que a página.**
-  Arquivos estáticos são lidos do disco a cada requisição, mas módulos Python são
-  importados uma vez, na partida — então um `visionforge gui` deixado aberto
-  durante uma alteração serve JavaScript novo com backend velho, e a
-  funcionalidade simplesmente não aparece. Isso é indistinguível de um build
-  quebrado, e nem recompilar nem recarregar resolvem
-  ([ADR-086](documentation/DECISIONS.md)).
+- **`/api/health`** informa a versão e o bundle da SPA com que o processo subiu.
+  Serve para diagnosticar o caso em que um `visionforge gui` deixado aberto
+  durante uma alteração passa a servir JavaScript novo com backend velho — os
+  estáticos são lidos do disco a cada requisição, mas os módulos Python só na
+  partida ([ADR-086](documentation/DECISIONS.md)).
 
 - **Uma chave liga e desliga a data augmentation**, em todas as cinco tarefas.
   Desligada, os parâmetros somem da tela e o `run.json` registra o estado — em

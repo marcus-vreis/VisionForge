@@ -14,7 +14,6 @@ import type { CvPayload } from "./components/CvCard";
 import type { PanelStrategy } from "./components/ExperimentHeader";
 import type { SweepPayload } from "./components/SweepCard";
 import type { ReplicatesPayload } from "./lib/replicates-form";
-import { detectStaleServer, STALE_SERVER_MESSAGE } from "./lib/stale-server";
 import { BottomBar } from "./components/BottomBar";
 import type { DeviceSelection } from "./components/DeviceSelector";
 import { Header } from "./components/Header";
@@ -97,13 +96,6 @@ export default function App() {
     kind: "cuda",
     gpu_ids: null,
   });
-  // A gui process left running across a rebuild serves new JS from old Python,
-  // which looks exactly like a broken feature. Ask once, on mount.
-  const [serverStale, setServerStale] = useState(false);
-  useEffect(() => {
-    void detectStaleServer(fetch, import.meta.url).then(setServerStale);
-  }, []);
-
   const [showHistory, setShowHistory] = useState(false);
   const [showDatasets, setShowDatasets] = useState(false);
   const [showQueue, setShowQueue] = useState(false);
@@ -460,24 +452,6 @@ export default function App() {
       }}
     >
       <Header />
-
-      {serverStale && (
-        <div
-          role="alert"
-          style={{
-            margin: "0 24px 12px",
-            padding: "10px 14px",
-            background: "oklch(0.75 0.15 60 / 0.12)",
-            border: "1px solid oklch(0.75 0.15 60 / 0.5)",
-            borderRadius: 10,
-            color: "oklch(0.88 0.13 70)",
-            fontFamily: "var(--font-mono)",
-            fontSize: 12,
-          }}
-        >
-          ⚠ {STALE_SERVER_MESSAGE}
-        </div>
-      )}
 
       <TabBar tasks={tasks} activeKey={activeKey} setActiveKey={setActiveKey} />
 
