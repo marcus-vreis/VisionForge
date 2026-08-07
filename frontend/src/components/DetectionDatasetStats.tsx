@@ -259,6 +259,24 @@ interface DetectionSplitCardProps {
   classNames: string[];
 }
 
+/** The resolved layout, so a half-converted dataset is caught before the GPU. */
+function ResolvedLayout({ split }: { split: DetectionSplitStats }) {
+  if (!split.images_dir || !split.labels_dir) return null;
+  return (
+    <div
+      style={{
+        fontFamily: "var(--font-mono)",
+        fontSize: 10,
+        color: "var(--vf-text-muted)",
+        marginTop: 4,
+      }}
+      title="Layout YOLO detectado neste split"
+    >
+      {split.images_dir} · {split.labels_dir}
+    </div>
+  );
+}
+
 function DetectionSplitCard({ label, split, classNames }: DetectionSplitCardProps) {
   if (split.missing) {
     return (
@@ -332,6 +350,7 @@ function DetectionSplitCard({ label, split, classNames }: DetectionSplitCardProp
           {split.total_images} img
         </span>
       </div>
+      <ResolvedLayout split={split} />
       <div
         style={{
           fontFamily: "var(--font-mono)",

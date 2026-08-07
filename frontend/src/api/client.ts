@@ -498,6 +498,11 @@ export interface DetectionSplitStats {
   class_counts: Record<string, number>;
   unlabeled_images: number;
   missing: boolean;
+  /** Which YOLO layout matched, relative to base_dir. Both
+   *  `images/<split>` and `<split>/images` are valid, and a dataset that
+   *  half-follows one resolves in a way the researcher did not intend. */
+  images_dir?: string | null;
+  labels_dir?: string | null;
 }
 
 export interface DetectionDatasetStatsResponse {

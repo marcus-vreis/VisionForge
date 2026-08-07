@@ -497,6 +497,12 @@ class DetectionSplitStats(BaseModel):
     class_counts: dict[str, int]
     unlabeled_images: int = 0
     missing: bool = False
+    # Which layout matched, relative to base_dir. YOLO accepts both
+    # `images/<split>` and `<split>/images`, and a dataset that half-follows one
+    # convention resolves in a way the researcher did not intend -- showing the
+    # resolved pair is how that gets caught before the GPU is booked.
+    images_dir: str | None = None
+    labels_dir: str | None = None
 
 
 class DetectionDatasetStatsResponse(BaseModel):

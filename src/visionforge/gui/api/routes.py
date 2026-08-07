@@ -2125,6 +2125,7 @@ def _collect_detection_dataset_stats(
 
     # Scan each split once, keeping raw int-id counts + a missing flag.
     raw: dict[str, tuple[int, dict[int, int], int, bool]] = {}
+    resolved_dirs: dict[str, tuple[str, str]] = {}
     max_class_id = -1
     for split in ("train", "val", "test"):
         resolved = resolve_yolo_split(base, split)
@@ -2133,6 +2134,10 @@ def _collect_detection_dataset_stats(
             continue
         image_count, counts, unlabeled = _count_split_instances(*resolved)
         raw[split] = (image_count, counts, unlabeled, False)
+        resolved_dirs[split] = (
+            resolved[0].relative_to(base).as_posix(),
+            resolved[1].relative_to(base).as_posix(),
+        )
         if counts:
             max_class_id = max(max_class_id, *counts.keys())
 
@@ -2160,6 +2165,8 @@ def _collect_detection_dataset_stats(
             class_counts=named_counts,
             unlabeled_images=unlabeled,
             missing=is_missing,
+            images_dir=resolved_dirs.get(split, (None, None))[0],
+            labels_dir=resolved_dirs.get(split, (None, None))[1],
         )
 
     non_zero = [c for c in aggregate.values() if c > 0]

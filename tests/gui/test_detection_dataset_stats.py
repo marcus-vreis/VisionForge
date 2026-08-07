@@ -183,3 +183,45 @@ class TestDetectionDatasetSamples:
 
         assert resp.status_code == 200
         assert "não encontrado" in resp.json()["message"]
+
+
+class TestResolvedLayout:
+    """YOLO accepts two layouts; a half-converted dataset resolves surprisingly."""
+
+    def test_reports_the_split_images_layout(self, tmp_path: Path) -> None:
+        base = tmp_path / "yolo"
+        for split in ("train", "val"):
+            _write(base / split / "images" / "a.jpg")
+            _write(base / split / "labels" / "a.txt", "0 0.5 0.5 0.2 0.2\n")
+
+        stats = _collect_detection_dataset_stats(
+            DetectionDatasetStatsRequest(base_dir=str(base))
+        )
+
+        assert stats.splits["train"].images_dir == "train/images"
+        assert stats.splits["train"].labels_dir == "train/labels"
+
+    def test_reports_the_images_split_layout(self, tmp_path: Path) -> None:
+        base = tmp_path / "yolo"
+        for split in ("train", "val"):
+            _write(base / "images" / split / "a.jpg")
+            _write(base / "labels" / split / "a.txt", "0 0.5 0.5 0.2 0.2\n")
+
+        stats = _collect_detection_dataset_stats(
+            DetectionDatasetStatsRequest(base_dir=str(base))
+        )
+
+        assert stats.splits["train"].images_dir == "images/train"
+
+    def test_a_missing_split_reports_no_layout(self, tmp_path: Path) -> None:
+        base = tmp_path / "yolo"
+        for split in ("train", "val"):
+            _write(base / split / "images" / "a.jpg")
+            _write(base / split / "labels" / "a.txt", "0 0.5 0.5 0.2 0.2\n")
+
+        stats = _collect_detection_dataset_stats(
+            DetectionDatasetStatsRequest(base_dir=str(base))
+        )
+
+        assert stats.splits["test"].missing is True
+        assert stats.splits["test"].images_dir is None

@@ -13,6 +13,15 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ## [Unreleased]
 
+### Added
+
+- **O painel de detecção mostra exemplos das classes e o layout detectado.**
+  As caixas anotadas viram miniaturas recortadas, uma por classe — contagem não
+  diz se o rótulo está no lugar certo, e a imagem inteira não diz a qual caixa
+  ele se refere. Cada split também informa qual das duas convenções YOLO foi
+  resolvida (`train/images` ou `images/train`), que é como um dataset convertido
+  pela metade aparece antes de ocupar a GPU.
+
 ## [0.5.1] — 2026-08-06
 
 ## [0.5.0] — 2026-08-05
