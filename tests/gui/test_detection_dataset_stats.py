@@ -108,3 +108,78 @@ class TestDetectionDatasetStatsEndpoint:
         assert body["class_names"] == ["cat", "dog"]
         assert body["splits"]["train"]["class_counts"] == {"cat": 4, "dog": 1}
         assert body["imbalanced"] is True
+
+
+class TestDetectionDatasetSamples:
+    """A crop answers "is this labelled right"; a file path only hints at it."""
+
+    def _dataset(self, tmp_path: Path) -> Path:
+        from PIL import Image
+
+        base = tmp_path / "yolo"
+        (base / "train" / "images").mkdir(parents=True)
+        (base / "train" / "labels").mkdir(parents=True)
+        for i, cid in enumerate((0, 1, 0)):
+            Image.new("RGB", (64, 64), (10 * i, 200, 30)).save(
+                base / "train" / "images" / f"img{i}.jpg"
+            )
+            (base / "train" / "labels" / f"img{i}.txt").write_text(
+                f"{cid} 0.5 0.5 0.5 0.5\n", encoding="utf-8"
+            )
+        return base
+
+    def test_returns_one_data_uri_per_annotated_class(self, tmp_path: Path) -> None:
+        from visionforge.gui.server import app
+
+        base = self._dataset(tmp_path)
+
+        client = TestClient(app, raise_server_exceptions=True)
+        resp = client.post(
+            "/api/detection/dataset/samples", json={"base_dir": str(base)}
+        )
+
+        assert resp.status_code == 200
+        crops = resp.json()["crops"]
+        assert set(crops) == {"class_0", "class_1"}
+        assert all(
+            u.startswith("data:image/png;base64,") for us in crops.values() for u in us
+        )
+
+    def test_respects_per_class(self, tmp_path: Path) -> None:
+        from visionforge.gui.server import app
+
+        base = self._dataset(tmp_path)
+
+        client = TestClient(app, raise_server_exceptions=True)
+        resp = client.post(
+            "/api/detection/dataset/samples",
+            json={"base_dir": str(base), "per_class": 1},
+        )
+
+        assert all(len(v) == 1 for v in resp.json()["crops"].values())
+
+    def test_a_missing_split_says_so_instead_of_failing(self, tmp_path: Path) -> None:
+        from visionforge.gui.server import app
+
+        base = self._dataset(tmp_path)
+
+        client = TestClient(app, raise_server_exceptions=True)
+        resp = client.post(
+            "/api/detection/dataset/samples",
+            json={"base_dir": str(base), "split": "test"},
+        )
+
+        assert resp.status_code == 200
+        assert resp.json()["crops"] == {}
+        assert "test" in resp.json()["message"]
+
+    def test_a_missing_directory_says_so(self, tmp_path: Path) -> None:
+        from visionforge.gui.server import app
+
+        client = TestClient(app, raise_server_exceptions=True)
+        resp = client.post(
+            "/api/detection/dataset/samples", json={"base_dir": str(tmp_path / "nope")}
+        )
+
+        assert resp.status_code == 200
+        assert "não encontrado" in resp.json()["message"]

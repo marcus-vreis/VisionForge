@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import csv
+import io
 import json
 import os
 import platform
@@ -86,6 +88,8 @@ from visionforge.gui.api.schemas import (
     DatasetSamplesResponse,
     DatasetStatsRequest,
     DatasetStatsResponse,
+    DetectionDatasetSamplesRequest,
+    DetectionDatasetSamplesResponse,
     DetectionDatasetStatsRequest,
     DetectionDatasetStatsResponse,
     DetectionSplitStats,
@@ -727,6 +731,20 @@ async def detection_dataset_stats(
     researcher can spot class imbalance and unlabeled images before training.
     """
     return await asyncio.to_thread(_collect_detection_dataset_stats, req)
+
+
+@router.post("/detection/dataset/samples")
+async def detection_dataset_samples(
+    req: DetectionDatasetSamplesRequest,
+) -> DetectionDatasetSamplesResponse:
+    """One or more box crops per class, so labels can be eyeballed before training.
+
+    The detection analogue of /dataset/samples. That one returns file paths
+    because a classification class *is* a folder; here a class is a box inside an
+    image that may contain several, so a path would show a picture and leave the
+    researcher guessing which part of it the label meant.
+    """
+    return await asyncio.to_thread(_collect_detection_dataset_samples, req)
 
 
 @router.post("/segmentation/dataset/stats")
@@ -1964,6 +1982,94 @@ def _read_yolo_class_names(base: Path) -> list[str]:
             if names:
                 return names
     return []
+
+
+def _crop_to_data_uri(
+    image_path: Path, box: tuple[float, float, float, float]
+) -> str | None:
+    """Crop a YOLO-normalized box and return it as a PNG data URI.
+
+    Returns None rather than raising: a sample thumbnail is a convenience, and a
+    single unreadable image must not fail the whole panel.
+    """
+    from PIL import Image
+
+    try:
+        with Image.open(image_path) as opened:
+            img = opened.convert("RGB")
+            w, h = img.size
+            cx, cy, bw, bh = box
+            left = max(int((cx - bw / 2) * w), 0)
+            top = max(int((cy - bh / 2) * h), 0)
+            right = min(int((cx + bw / 2) * w), w)
+            bottom = min(int((cy + bh / 2) * h), h)
+            if right - left < 2 or bottom - top < 2:
+                return None
+            crop = img.crop((left, top, right, bottom))
+            crop.thumbnail((160, 160))
+            buf = io.BytesIO()
+            crop.save(buf, format="PNG")
+    except Exception:  # noqa: BLE001 - a bad image costs one thumbnail, not the panel
+        return None
+    return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
+
+
+def _collect_detection_dataset_samples(
+    req: DetectionDatasetSamplesRequest,
+) -> DetectionDatasetSamplesResponse:
+    """Crop up to ``per_class`` boxes per class from the requested split."""
+    base = Path(req.base_dir).expanduser()
+    if not base.is_dir():
+        return DetectionDatasetSamplesResponse(
+            base_dir=req.base_dir,
+            split=req.split,
+            crops={},
+            message=f"Diretório não encontrado: {req.base_dir}",
+        )
+
+    resolved = resolve_yolo_split(base, req.split)
+    if resolved is None:
+        return DetectionDatasetSamplesResponse(
+            base_dir=req.base_dir,
+            split=req.split,
+            crops={},
+            message=f"Split '{req.split}' não encontrado neste dataset.",
+        )
+
+    images_dir, labels_dir = resolved
+    names = _read_yolo_class_names(base)
+    crops: dict[str, list[str]] = {}
+
+    for image_path in sorted(images_dir.iterdir()):
+        if not image_path.is_file() or image_path.suffix.lower() not in _IMAGE_EXTS:
+            continue
+        label_path = labels_dir / f"{image_path.stem}.txt"
+        if not label_path.is_file():
+            continue
+        for line in label_path.read_text(
+            encoding="utf-8", errors="ignore"
+        ).splitlines():
+            parts = line.split()
+            if len(parts) < 5:
+                continue
+            try:
+                cid = int(float(parts[0]))
+                box = tuple(float(v) for v in parts[1:5])
+            except ValueError:
+                continue
+            name = names[cid] if 0 <= cid < len(names) else f"class_{cid}"
+            if len(crops.get(name, [])) >= req.per_class:
+                continue
+            uri = _crop_to_data_uri(image_path, box)  # type: ignore[arg-type]
+            if uri is not None:
+                crops.setdefault(name, []).append(uri)
+
+    return DetectionDatasetSamplesResponse(
+        base_dir=req.base_dir,
+        split=req.split,
+        crops=crops,
+        message=None if crops else "Nenhuma caixa anotada encontrada neste split.",
+    )
 
 
 def _count_split_instances(

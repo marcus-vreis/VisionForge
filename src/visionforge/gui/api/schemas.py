@@ -513,6 +513,30 @@ class DetectionDatasetStatsResponse(BaseModel):
     message: str | None = None
 
 
+class DetectionDatasetSamplesRequest(BaseModel):
+    """A YOLO dataset root to crop one labelled example per class from."""
+
+    base_dir: str
+    split: Literal["train", "val", "test"] = "train"
+    per_class: int = Field(default=3, ge=1, le=8)
+
+
+class DetectionDatasetSamplesResponse(BaseModel):
+    """Per-class box crops, as data URIs.
+
+    Classification can hand back file paths because a class *is* a folder there.
+    A detection label is a box inside an image that may hold several classes, so
+    a path would show the researcher a picture and leave them guessing which
+    part of it the label refers to. The crop is the answer to "is this labelled
+    correctly", which is what the panel is for.
+    """
+
+    base_dir: str
+    split: str
+    crops: dict[str, list[str]]
+    message: str | None = None
+
+
 class SegmentationDatasetStatsRequest(BaseModel):
     """Paired image/mask dataset root + dir names for pre-training inspection."""
 

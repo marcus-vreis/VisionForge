@@ -518,6 +518,29 @@ export async function fetchDetectionDatasetStats(
   });
 }
 
+/** Per-class box crops, as PNG data URIs.
+ *
+ * Detection cannot hand back file paths the way classification does: a class is
+ * a box inside an image that may contain several, so a path would show a
+ * picture and leave the reader guessing which part of it the label meant.
+ */
+export interface DetectionDatasetSamplesResponse {
+  base_dir: string;
+  split: string;
+  crops: Record<string, string[]>;
+  message: string | null;
+}
+
+export async function fetchDetectionDatasetSamples(
+  baseDir: string,
+): Promise<DetectionDatasetSamplesResponse> {
+  return request<DetectionDatasetSamplesResponse>("/detection/dataset/samples", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ base_dir: baseDir }),
+  });
+}
+
 export interface SegmentationSplitStats {
   images: number;
   masks: number;

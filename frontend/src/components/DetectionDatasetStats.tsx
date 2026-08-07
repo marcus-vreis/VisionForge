@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  fetchDetectionDatasetSamples,
   fetchDetectionDatasetStats,
+  type DetectionDatasetSamplesResponse,
   type DetectionDatasetStatsResponse,
   type DetectionSplitStats,
 } from "../api/client";
@@ -22,11 +24,31 @@ const SPLIT_LABELS: Record<string, string> = {
  * The detection analogue of `DatasetStats` (which assumes ImageFolder). */
 export function DetectionDatasetStats({ baseDir, onApplyClasses }: DetectionDatasetStatsProps) {
   const [stats, setStats] = useState<DetectionDatasetStatsResponse | null>(null);
+  const [samples, setSamples] = useState<DetectionDatasetSamplesResponse | null>(
+    null,
+  );
   const appliedForBaseDir = useRef<string | null>(null);
 
   // All setState happens in the async callbacks (not synchronously in the effect
   // body) so the work stays a genuine external-system sync, not a cascading
   // render. Empty base_dir simply skips the fetch; the render guard hides us.
+  // Crops are a separate request so a slow decode never delays the counts,
+  // and a failure costs the thumbnails rather than the whole panel.
+  useEffect(() => {
+    if (!baseDir.trim()) return;
+    let alive = true;
+    fetchDetectionDatasetSamples(baseDir)
+      .then((r) => {
+        if (alive) setSamples(r);
+      })
+      .catch(() => {
+        if (alive) setSamples(null);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [baseDir]);
+
   useEffect(() => {
     if (!baseDir.trim()) return;
     let alive = true;
@@ -135,6 +157,52 @@ export function DetectionDatasetStats({ baseDir, onApplyClasses }: DetectionData
           </span>
         )}
       </div>
+
+      {samples && Object.keys(samples.crops).length > 0 && (
+        <div>
+          <div
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: 10,
+              letterSpacing: "0.18em",
+              textTransform: "uppercase",
+              color: "var(--vf-text-muted)",
+              marginBottom: 10,
+            }}
+          >
+            // amostras (split: {samples.split}) — sanity-check de labels
+          </div>
+          {Object.entries(samples.crops).map(([cn, uris]) => (
+            <div
+              key={cn}
+              style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}
+            >
+              <span
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 11,
+                  color: "var(--vf-text-dim)",
+                  minWidth: 110,
+                }}
+              >
+                {cn}
+              </span>
+              {uris.map((uri, i) => (
+                <img
+                  key={i}
+                  src={uri}
+                  alt={`${cn} — exemplo ${i + 1}`}
+                  style={{
+                    height: 56,
+                    borderRadius: 6,
+                    border: "1px solid var(--vf-panel-stroke)",
+                  }}
+                />
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div
