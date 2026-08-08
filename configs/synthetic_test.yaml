@@ -19,7 +19,7 @@ training:
   seed: 42
 
 data:
-  base_dir: datasets/synthetic_binary
+  base_dir: datasets/Classification - synthetic_binary
   num_workers: 0
   pin_memory: false
   transforms:
