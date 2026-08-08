@@ -15,6 +15,14 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Added
 
+- **Detecção passa a reportar intervalo de confiança no mAP.** Era a única das
+  cinco tarefas sem — e por um motivo real: mAP ordena todas as detecções do
+  conjunto por confiança e percorre a curva precisão/recall, então é propriedade
+  do *conjunto*, não média de números por imagem. Não há acumulador para somar,
+  e a métrica é recomputada a cada reamostragem. Um sorteio que perde uma classe
+  inteira é descartado em vez de entrar na média, e o `n_resamples` reportado
+  conta só os sobreviventes ([ADR-087](docs/dev/DECISIONS.md)).
+
 - **O painel de detecção mostra exemplos das classes e o layout detectado.**
   As caixas anotadas viram miniaturas recortadas, uma por classe — contagem não
   diz se o rótulo está no lugar certo, e a imagem inteira não diz a qual caixa

@@ -2647,3 +2647,54 @@ learning rate is; "taxa de aprendizado do otimizador" is not.
 list whose wrong value does not degrade training but *prevents* it — each worker
 is a process reloading torch and the CUDA DLLs, about a gigabyte each, and the
 failure surfaces as WinError 1455 naming an unrelated DLL.
+
+---
+
+## ADR-087 — Detection gets a bootstrap interval, at a different price
+
+**Date:** 2026-08-07
+**Status:** Accepted — shipped 2026-08-07
+**Extends:** ADR-074 (per-run intervals), ADR-076 (the image is the resampling unit)
+
+**Context:** four of the five tasks reported `0.7506 [0.7294, 0.7713]`; detection
+reported a bare `map50`. ADR-079 recorded this as genuinely harder rather than
+overlooked, and left it there.
+
+**Why it is harder, precisely.** Every other task's metric decomposes. A
+classification split is a confusion matrix that can be accumulated per sample
+and summed; segmentation is one KxK matrix per image, which is what let ADR-076
+resample images cheaply. mAP does neither: it ranks every detection in the split
+by confidence and walks a precision/recall curve, so it is a property of the
+**set**, not a mean of per-image numbers. There is no accumulator to sum.
+
+**Decision:** recompute the metric on each resampled set. The image stays the
+resampling unit, as ADR-076 requires.
+
+**The default resample count drops from 1000 to 200.** A percentile interval at
+200 draws is grainier at the tails, and that is the honest price of a metric
+that cannot be decomposed. It still separates `0.72 ± 0.03` from `0.72 ± 0.20`,
+which is the question the interval is asked.
+
+**A draw that loses a class is discarded, not averaged in.** If a resample
+happens to exclude every image containing a class, `mean_average_precision_50`
+averages over the remaining classes — a different quantity, not a noisier
+estimate of the same one. Those draws are dropped and the reported
+`n_resamples` counts only survivors, so a rare class makes that number fall
+visibly. That fall is the signal that the interval rests on less evidence than
+its width suggests.
+
+**A caveat found by testing, worth writing down.** mAP is order-dependent when
+confidence scores tie. A synthetic split where every detection scored 0.9 and
+every hit preceded every miss produced an interval sitting *entirely below* the
+point estimate — the full set enjoyed a precision curve no resample could
+reproduce. That is a property of mAP under ties, not a defect of the bootstrap,
+but it means a model emitting constant confidences gets an interval that looks
+wrong. Real detectors do not, and the fixture was corrected to interleave hits
+and use distinct scores.
+
+**Where it is wired:** the per-model detection test, which already held the
+per-image predictions and ground truth it needs. The Ultralytics *training* path
+computes mAP inside the library and never exposes per-image detections, so an
+interval there would need a second inference pass over the validation set —
+deliberately not done here, and the reason detection training still reports a
+bare number.

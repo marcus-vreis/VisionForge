@@ -133,7 +133,15 @@ def _evaluate_torchvision(
             for t in targets:
                 gts.append({"boxes": t["boxes"].cpu(), "labels": t["labels"].cpu()})
 
-    return {"map50": mean_average_precision_50(preds, gts).map50}
+    from visionforge.core.metric_ci import bootstrap_detection_cis
+
+    result: dict[str, Any] = {"map50": mean_average_precision_50(preds, gts).map50}
+    # mAP is a property of the whole set, so the interval costs one recomputation
+    # per resample rather than a cheap accumulation (ADR-087).
+    cis = bootstrap_detection_cis(preds, gts)
+    if cis:
+        result["metric_cis"] = {k: v.to_dict() for k, v in cis.items()}
+    return result
 
 
 def _evaluate_ultralytics(

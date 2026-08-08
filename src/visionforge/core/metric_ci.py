@@ -319,6 +319,74 @@ def bootstrap_segmentation_cis(
     }
 
 
+def bootstrap_detection_cis(
+    predictions: Sequence[Any],
+    targets: Sequence[Any],
+    *,
+    iou_threshold: float = 0.5,
+    confidence: float = 0.95,
+    n_resamples: int = 200,
+    seed: int = 0,
+) -> dict[str, MetricCI]:
+    """Percentile CI for mAP@0.5, resampling images.
+
+    Detection is the one task whose metric cannot be accumulated per image and
+    summed. mAP ranks every detection in the split by confidence and walks the
+    precision/recall curve, so it is a property of the *set*, not a mean of
+    per-image numbers — which is why classification's confusion-matrix trick and
+    segmentation's per-image matrices do not transfer. The only honest option is
+    to recompute the metric on each resampled set.
+
+    That costs real time, so the default resample count is 200 rather than the
+    1000 used elsewhere. A percentile interval at 200 draws is noticeably
+    grainier at the tails; it is the price of the metric not being decomposable,
+    and 200 still separates "0.72 ± 0.03" from "0.72 ± 0.20", which is the
+    question the interval is asked.
+
+    **A resample that drops every image of a class changes what mAP means** —
+    the average is then over fewer classes, so the draw is not an estimate of
+    the same quantity. Those draws are discarded rather than averaged in, and
+    the returned ``n_resamples`` reports how many survived. A rare class makes
+    that count fall visibly, which is the signal that the interval is resting on
+    less evidence than it appears to.
+    """
+    from visionforge.core.detection_metrics import mean_average_precision_50
+
+    n = len(predictions)
+    if n != len(targets):
+        raise ValueError(
+            f"predictions and targets must be per-image and equal length, "
+            f"got {n} and {len(targets)}."
+        )
+    if n < _MIN_SAMPLES or n_resamples < 2:
+        return {}
+
+    full = mean_average_precision_50(list(predictions), list(targets), iou_threshold)
+    expected_classes = set(full.per_class)
+    if not expected_classes:
+        return {}
+
+    rng = np.random.default_rng(seed)
+    samples: list[float] = []
+    for _ in range(n_resamples):
+        idx = rng.integers(0, n, size=n)
+        drawn = mean_average_precision_50(
+            [predictions[i] for i in idx],
+            [targets[i] for i in idx],
+            iou_threshold,
+        )
+        if set(drawn.per_class) == expected_classes:
+            samples.append(drawn.map50)
+
+    if len(samples) < 2:
+        return {}
+    return {
+        "map50": _interval(
+            "map50", float(full.map50), np.asarray(samples), confidence, n
+        )
+    }
+
+
 def _regression_metrics(
     true: np.ndarray, pred: np.ndarray, idx: np.ndarray
 ) -> dict[str, np.ndarray]:
@@ -549,6 +617,7 @@ __all__ = [
     "MetricCI",
     "bootstrap_anomaly_cis",
     "bootstrap_classification_cis",
+    "bootstrap_detection_cis",
     "bootstrap_regression_cis",
     "bootstrap_segmentation_cis",
 ]
