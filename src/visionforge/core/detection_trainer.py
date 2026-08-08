@@ -22,6 +22,7 @@ import torch
 from loguru import logger
 from torch.utils.data import DataLoader
 
+from visionforge.core.cancellation import CancellationToken, is_cancelled
 from visionforge.core.dataset_fingerprint import fingerprint_from_config
 from visionforge.core.detection_data import DetectionDataModule, resolve_yolo_split
 from visionforge.core.detection_dataset import DetectionDataset, detection_collate
@@ -222,6 +223,7 @@ class DetectionTrainer:
     def fit(
         self,
         progress_callback: Callable[[dict[str, Any]], None] | None = None,
+        cancel_token: CancellationToken | None = None,
     ) -> DetectionTrainResult:
         """Run training for the configured backend and return the result.
 
@@ -244,8 +246,8 @@ class DetectionTrainer:
             ) as prepared:
                 self._images_root = prepared.path if prepared.filtered else None
                 if self._config.model.backend == "torchvision":
-                    return self._fit_torchvision(progress_callback)
-                return self._fit_ultralytics(progress_callback)
+                    return self._fit_torchvision(progress_callback, cancel_token)
+                return self._fit_ultralytics(progress_callback, cancel_token)
         except (OSError, RuntimeError, EOFError) as exc:
             if sys.platform == "win32" and _is_worker_spawn_crash(str(exc)):
                 raise RuntimeError(
@@ -262,6 +264,7 @@ class DetectionTrainer:
     def _fit_ultralytics(
         self,
         progress_callback: Callable[[dict[str, Any]], None] | None = None,
+        cancel_token: CancellationToken | None = None,
     ) -> DetectionTrainResult:
         """Drive Ultralytics YOLO/RT-DETR training.
 
@@ -315,6 +318,11 @@ class DetectionTrainer:
             history.append(result)
             if progress_callback is not None:
                 progress_callback(_epoch_event(result, cfg.epochs))
+            # Ultralytics owns this loop; `trainer.stop` is the same flag its own
+            # early stopping sets, and the only cooperative exit it exposes.
+            if is_cancelled(cancel_token):
+                logger.info("Run cancelled at epoch {}; stopping after it.", epoch)
+                trainer.stop = True
 
         model.add_callback("on_fit_epoch_end", _on_epoch_end)
         logger.info(
@@ -352,6 +360,7 @@ class DetectionTrainer:
     def _fit_torchvision(
         self,
         progress_callback: Callable[[dict[str, Any]], None] | None = None,
+        cancel_token: CancellationToken | None = None,
     ) -> DetectionTrainResult:
         """Train a torchvision detector with a loss-dict loop.
 
@@ -415,6 +424,12 @@ class DetectionTrainer:
         tb = TensorBoardLogger(run_dir / "tensorboard")
         try:
             for epoch in range(1, cfg.epochs + 1):
+                if is_cancelled(cancel_token):
+                    logger.info(
+                        "Run cancelled at epoch {}; keeping the best checkpoint.",
+                        epoch,
+                    )
+                    break
                 train_loss = self._run_torchvision_epoch(
                     model, train_loader, device, optimizer
                 )

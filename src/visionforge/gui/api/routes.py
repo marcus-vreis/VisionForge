@@ -1341,15 +1341,15 @@ async def get_queue() -> QueueSnapshot:
 
 @router.delete("/queue/{run_id}")
 async def cancel_queued_run(run_id: str) -> dict[str, str]:
-    """Drop a job that has not started yet.
+    """Stop a job, whether it is waiting or already training.
 
-    A running job is deliberately not cancellable: the trainers own their loop
-    and have no cooperative stop point, so "cancel" would either lie or leave a
-    half-written run directory behind.
+    A pending job is dropped. A running one is asked to stop at its next epoch
+    boundary and keeps the best checkpoint it has earned (ADR-088), so a 200
+    here means the request was delivered, not that training has already ended.
 
     Raises:
-        HTTPException: 404 if no pending job carries that id (already running,
-            already finished, or never submitted).
+        HTTPException: 404 if no job carries that id — already finished, or
+            never submitted.
     """
     if not _RUN_QUEUE.cancel(run_id):
         raise HTTPException(

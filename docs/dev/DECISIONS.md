@@ -2698,3 +2698,53 @@ computes mAP inside the library and never exposes per-image detections, so an
 interval there would need a second inference pass over the validation set —
 deliberately not done here, and the reason detection training still reports a
 bare number.
+
+---
+
+## ADR-088 — A running job can be stopped, and keeps what it earned
+
+**Date:** 2026-08-08
+**Status:** Accepted — shipped 2026-08-08
+**Revises:** ADR-075 (the run queue)
+
+**Context:** ADR-075 refused to cancel a running job, and its reasoning was
+sound at the time: the trainers owned their loops and had no point at which
+stopping was safe, so "cancel" would either lie about having worked or leave a
+half-written run directory behind.
+
+What that left, in practice, is a researcher who starts 120 epochs with one
+wrong parameter and whose only recourse is killing the server — which also
+destroys the queue behind it. In a tool built to leave an evening of
+experiments running, one bad job blocks the whole night.
+
+**What changed is not the mechanism but the availability of a safe point.**
+Every trainer already pauses between epochs to write its checkpoint and emit
+progress. By then the run directory is consistent, so stopping there costs
+nothing. The token is read at the top of each epoch, which is the same instant
+as the end of the previous one, and it is read nowhere else.
+
+**Cancelling keeps the work.** The best checkpoint so far, its metrics, its
+plots and its `run.json` all survive, and `total_epochs` records how far the run
+actually got. The alternative — discarding on cancel — makes a button people
+avoid pressing, which defeats having it. A researcher usually cancels because
+the curve already answered the question, not because the work is worthless.
+
+**The queue's `cancel` now means "the request was delivered", not "training has
+ended".** A pending job still disappears immediately; a running one stops at its
+next boundary. The endpoint answers 200 for both, and the docstring says which
+is which, because a caller that assumed the process was already dead would be
+wrong.
+
+**Ultralytics needed a different lever.** It owns its own loop, so the token is
+checked in the `on_fit_epoch_end` callback and sets `trainer.stop` — the same
+flag its own early stopping uses. That is an internal of theirs; the comment in
+the code says so, because a version bump could move it.
+
+**Verified on a real training rather than a mock:** a 20-epoch classification
+run cancelled after epoch 3 stopped at the top of epoch 4, reported
+`total_epochs=3`, and left a 43 MB checkpoint from its best epoch plus a written
+`run.json`.
+
+**Still not done:** resuming a cancelled run. That needs optimizer and scheduler
+state in the checkpoint, not just weights, which changes the checkpoint format
+and deserves its own decision.

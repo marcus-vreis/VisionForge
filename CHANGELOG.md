@@ -13,6 +13,14 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ## [Unreleased]
 
+### Added
+
+- **Dá para parar um treino em andamento**, e ele mantém o que já conquistou —
+  melhor checkpoint, métricas, gráficos e `run.json`, com `total_epochs`
+  registrando até onde foi. A parada acontece na virada de época, que é onde o
+  checkpoint já está escrito. Antes a única saída era matar o servidor, o que
+  derrubava a fila inteira junto ([ADR-088](docs/dev/DECISIONS.md)).
+
 ## [0.6.0] — 2026-08-08
 
 ### Added

@@ -210,7 +210,16 @@ export function QueueOverlay({
             </div>
           )}
 
-          {active && <JobRow job={active} running />}
+          {/* The running job can be stopped too (ADR-088): it finishes the epoch
+              it is in and keeps the best checkpoint, so the button is safe. */}
+          {active && (
+            <JobRow
+              job={active}
+              running
+              onCancel={() => void cancel(active.run_id)}
+              cancelling={busyId === active.run_id}
+            />
+          )}
 
           {pending.map((job, index) => (
             <JobRow
@@ -316,7 +325,7 @@ function JobRow({
             flexShrink: 0,
           }}
         >
-          {cancelling ? "…" : "🗑 remover"}
+          {cancelling ? "…" : running ? "■ parar" : "🗑 remover"}
         </button>
       ) : (
         <span

@@ -146,8 +146,8 @@ class TestCancel:
         assert cancelled is True
         assert started == ["a"]
 
-    def test_running_job_cannot_be_cancelled(self) -> None:
-        """The trainers have no cooperative stop point, so this must say no."""
+    def test_running_job_is_asked_to_stop(self) -> None:
+        """ADR-088 gave the trainers a safe stop point: the epoch boundary."""
 
         async def scenario() -> bool:
             queue, _ = _queue()
@@ -156,14 +156,16 @@ class TestCancel:
             async def blocking() -> None:
                 await gate.wait()
 
-            queue.submit(_job("a", blocking))
+            job = _job("a", blocking)
+            queue.submit(job)
             await asyncio.sleep(0.01)
             result = queue.cancel("a")
             gate.set()
             await asyncio.sleep(0.05)
-            return result
+            # True means the request reached the run, not that it already ended.
+            return result and job.cancel_token.cancelled
 
-        assert asyncio.run(scenario()) is False
+        assert asyncio.run(scenario()) is True
 
     def test_unknown_id_cancels_nothing(self) -> None:
         queue, _ = _queue()
@@ -364,7 +366,8 @@ class TestQueueEndpoints:
         finally:
             release_queue(routes_mod)
 
-    def test_cancelling_the_running_job_is_a_404(self) -> None:
+    def test_cancelling_the_running_job_asks_it_to_stop(self) -> None:
+        """ADR-088: a running job is now stoppable at its epoch boundary."""
         from .conftest import occupy_queue, release_queue
 
         client, routes_mod = self._client_and_routes()
@@ -372,8 +375,8 @@ class TestQueueEndpoints:
         try:
             resp = client.delete("/api/queue/holding")
 
-            assert resp.status_code == 404
-            assert "already started" in resp.json()["detail"]
+            assert resp.status_code == 200
+            assert routes_mod._RUN_QUEUE._active.cancel_token.cancelled is True
         finally:
             release_queue(routes_mod)
 

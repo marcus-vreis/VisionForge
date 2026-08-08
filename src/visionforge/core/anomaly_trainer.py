@@ -31,6 +31,7 @@ import torch.nn as nn
 from loguru import logger
 from sklearn.metrics import f1_score, roc_auc_score
 
+from visionforge.core.cancellation import CancellationToken, is_cancelled
 from visionforge.core.dataset_fingerprint import fingerprint_from_config
 from visionforge.core.tracking import TensorBoardLogger
 from visionforge.core.trainer import _seed_everything, resolve_device
@@ -113,6 +114,7 @@ class AnomalyTrainer:
         data_module: Any,
         optimizer: torch.optim.Optimizer | None = None,
         progress_callback: Callable[[dict[str, Any]], None] | None = None,
+        cancel_token: CancellationToken | None = None,
     ) -> AnomalyTrainResult:
         """Train (autoencoder) or fit the memory bank (PatchCore) and score test."""
         _seed_everything(
@@ -145,7 +147,13 @@ class AnomalyTrainer:
                 )
             else:
                 result = self._fit_autoencoder(
-                    model, data_module, optimizer, model_path, progress_callback, tb
+                    model,
+                    data_module,
+                    optimizer,
+                    model_path,
+                    progress_callback,
+                    tb,
+                    cancel_token,
                 )
         finally:
             tb.close()
@@ -197,6 +205,7 @@ class AnomalyTrainer:
         model_path: Path,
         progress_callback: Callable[[dict[str, Any]], None] | None,
         tb: TensorBoardLogger,
+        cancel_token: CancellationToken | None = None,
     ) -> AnomalyTrainResult:
         cfg = self._config.training
         optimizer = optimizer or self._build_optimizer(model)
@@ -211,6 +220,15 @@ class AnomalyTrainer:
         t0 = time.monotonic()
 
         for epoch in range(1, cfg.epochs + 1):
+            # The safe point: the previous epoch's checkpoint is written and its
+            # metrics emitted, so stopping here leaves the run directory whole.
+            if is_cancelled(cancel_token):
+                logger.info(
+                    "Run cancelled at epoch {}; keeping the best checkpoint so far.",
+                    epoch,
+                )
+                break
+
             model.train()
             total = 0.0
             for inputs, _ in train_loader:

@@ -38,6 +38,8 @@ from typing import Any
 
 from loguru import logger
 
+from visionforge.core.cancellation import CancellationToken
+
 # Terminal snapshots are kept so a result can be fetched after later runs start.
 # Bounded because a long session would otherwise grow without limit, and the
 # durable record is run.json — this cache only serves the "just finished" fetch.
@@ -54,6 +56,9 @@ class QueuedJob:
     strategy: str  # simple | sweep | replicates | cv | comparison | ...
     start: Callable[[], Awaitable[None]]
     submitted_at: datetime = field(default_factory=datetime.now)
+    # Handed to the trainer so a running job can be asked to stop at its next
+    # epoch boundary. Pending jobs never read it -- they are simply dropped.
+    cancel_token: CancellationToken = field(default_factory=CancellationToken)
 
     def describe(self) -> dict[str, Any]:
         """JSON-ready form for the queue endpoint (never includes the callable)."""
@@ -105,17 +110,24 @@ class RunQueue:
         return "running" if starts_now else "queued"
 
     def cancel(self, run_id: str) -> bool:
-        """Drop a *pending* job. Returns False if it is unknown or already running.
+        """Stop a job, whether it is waiting or already training.
 
-        A running job is deliberately not cancellable here: the trainers own
-        their loop and have no cooperative stop point, so "cancel" would either
-        lie or leave a half-written run directory.
+        A pending job is dropped outright. A running one is *asked* to stop:
+        ADR-075 refused this because the trainers had no safe place to stop, and
+        ADR-088 gave them one — the epoch boundary, where the checkpoint is
+        already written. So this returns True meaning "the request was
+        delivered", not "training has ended"; the run finishes its current epoch
+        and keeps the best checkpoint it has earned.
         """
         for job in list(self._pending):
             if job.run_id == run_id:
                 self._pending.remove(job)
                 logger.info("Queue: {} cancelled before it started.", run_id)
                 return True
+        if self._active is not None and self._active.run_id == run_id:
+            self._active.cancel_token.cancel()
+            logger.info("Queue: {} asked to stop at the next epoch.", run_id)
+            return True
         return False
 
     # ── inspection ────────────────────────────────────────────────────────────

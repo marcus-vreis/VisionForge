@@ -24,6 +24,7 @@ import torch
 import torch.nn as nn
 from loguru import logger
 
+from visionforge.core.cancellation import CancellationToken, is_cancelled
 from visionforge.core.dataset_fingerprint import fingerprint_from_config
 from visionforge.core.tracking import TensorBoardLogger
 from visionforge.core.trainer import _seed_everything, resolve_device
@@ -108,6 +109,7 @@ class RegressionTrainer:
         data_module: Any,
         optimizer: torch.optim.Optimizer | None = None,
         progress_callback: Callable[[dict[str, Any]], None] | None = None,
+        cancel_token: CancellationToken | None = None,
     ) -> RegressionTrainResult:
         """Run the regression training loop.
 
@@ -152,6 +154,15 @@ class RegressionTrainer:
         save_future = None
 
         for epoch in range(1, cfg.epochs + 1):
+            # The safe point: the previous epoch's checkpoint is written and its
+            # metrics emitted, so stopping here leaves the run directory whole.
+            if is_cancelled(cancel_token):
+                logger.info(
+                    "Run cancelled at epoch {}; keeping the best checkpoint so far.",
+                    epoch,
+                )
+                break
+
             train_loss = self._train_epoch(model, train_loader, optimizer, criterion)
             val_loss, mse, rmse, mae, r2 = self._eval_epoch(
                 model, val_loader, criterion
