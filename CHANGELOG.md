@@ -13,6 +13,8 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-08-08
+
 ### Added
 
 - **Detecção passa a reportar intervalo de confiança no mAP.** Era a única das
