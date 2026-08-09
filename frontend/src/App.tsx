@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   fetchQueue,
   fetchSchema,
@@ -14,6 +14,7 @@ import type { CvPayload } from "./components/CvCard";
 import type { PanelStrategy } from "./components/ExperimentHeader";
 import type { SweepPayload } from "./components/SweepCard";
 import type { ReplicatesPayload } from "./lib/replicates-form";
+import { announce, requestPermission, resetTitle } from "./lib/run-notify";
 import { BottomBar } from "./components/BottomBar";
 import type { DeviceSelection } from "./components/DeviceSelector";
 import { Header } from "./components/Header";
@@ -137,6 +138,25 @@ export default function App() {
     Record<string, PanelStrategy>
   >({});
   const [runSignal, setRunSignal] = useState(0);
+
+  // Runs are meant to be left alone, so the tab has to say when one ends.
+  // Permission is asked when a run actually starts, never on load: a prompt
+  // before the user has done anything is the one people reflexively deny, and
+  // a denial sticks.
+  const announced = useRef<string | null>(null);
+  useEffect(() => {
+    if (status.status === "running") {
+      void requestPermission();
+      announced.current = null;
+      resetTitle();
+      return;
+    }
+    if (status.status !== "completed" && status.status !== "failed") return;
+    const key = `${status.run_id ?? ""}:${status.status}`;
+    if (announced.current === key) return;
+    announced.current = key;
+    announce(status.status, status.run_id ?? "treino", status.error ?? undefined);
+  }, [status.status, status.run_id, status.error]);
 
   // The overlay stays MOUNTED for the whole life of a run (hidden via CSS when
   // minimized) so its logs and progress survive minimize/reopen.

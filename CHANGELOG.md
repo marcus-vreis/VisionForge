@@ -15,6 +15,12 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Added
 
+- **O treino avisa quando termina.** O título da aba passa a `✓ <run> —
+  VisionForge` (ou `✗` se falhou), e uma notificação do navegador aparece quando
+  a página está em segundo plano. A permissão é pedida ao iniciar um treino, não
+  ao abrir a página — prompt antes de você ter feito qualquer coisa é o que se
+  nega por reflexo, e a negativa gruda ([ADR-089](docs/dev/DECISIONS.md)).
+
 - **Dá para parar um treino em andamento**, e ele mantém o que já conquistou —
   melhor checkpoint, métricas, gráficos e `run.json`, com `total_epochs`
   registrando até onde foi. A parada acontece na virada de época, que é onde o

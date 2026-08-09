@@ -2748,3 +2748,40 @@ run cancelled after epoch 3 stopped at the top of epoch 4, reported
 **Still not done:** resuming a cancelled run. That needs optimizer and scheduler
 state in the checkpoint, not just weights, which changes the checkpoint format
 and deserves its own decision.
+
+---
+
+## ADR-089 — A finished run announces itself
+
+**Date:** 2026-08-08
+**Status:** Accepted — shipped 2026-08-08
+**Extends:** ADR-075 (the run queue), ADR-088 (stopping a run)
+
+**Context:** the tool exists to let a researcher queue an evening of experiments
+and walk away. Until now the only way to learn that a run finished was to come
+back and look, which quietly undoes the point of the queue.
+
+**Decision:** two channels, chosen because they fail differently.
+
+**The tab title always changes** — `✓ coffee_v2 — VisionForge`. It needs no
+permission, cannot be suppressed, and is readable from the tab strip. The mark
+goes first because that is the end the strip does not clip. This is the channel
+that carries the guarantee.
+
+**A browser notification fires on top**, but only when the page is hidden and
+permission was granted. A toast for a window the researcher is already staring
+at is noise, and a `Notification` constructor that throws — an OS focus mode, a
+locked-down profile — changes nothing, because the title already said it.
+
+**Permission is requested when a run starts, never on page load.** A prompt
+before the user has done anything is the one people reflexively deny, and the
+denial is sticky: getting it wrong once costs the feature permanently. Asking at
+the moment a long job begins ties the prompt to a visible reason.
+
+**Announced once per run, keyed by `run_id:status`.** The status is polled, so
+the effect re-fires; without the key a completed run would toast on every tick.
+
+**No sound, no webhook, no desktop-toast dependency.** Sound needs its own
+consent dance and is worse than useless in a shared room; a webhook is a
+different feature for a different user (CI, a phone) and would need a place to
+configure it. The browser is already open — that is the cheapest true thing.
