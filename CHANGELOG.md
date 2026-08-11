@@ -15,12 +15,6 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Added
 
-- **Uma saudação no canto superior ao abrir a página** — `Bem-vindo, <nome>`,
-  com o nome vindo da conta do sistema operacional, já que a ferramenta roda
-  local e a máquina já sabe quem está nela. Aparece uma vez por sessão, some
-  sozinha, nunca pede clique, e respeita `prefers-reduced-motion`
-  ([ADR-090](docs/dev/DECISIONS.md)).
-
 - **O treino avisa quando termina.** O título da aba passa a `✓ <run> —
   VisionForge` (ou `✗` se falhou), e uma notificação do navegador aparece quando
   a página está em segundo plano. A permissão é pedida ao iniciar um treino, não
