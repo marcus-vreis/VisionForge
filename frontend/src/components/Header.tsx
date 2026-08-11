@@ -49,7 +49,10 @@ function Logo() {
 }
 
 /** Top header with logo, brand name, and clock. Device selection lives only in the BottomBar. */
-export function Header() {
+export function Header({
+  userName,
+  onChangeName,
+}: { userName?: string; onChangeName?: () => void } = {}) {
   const [time, setTime] = useState(() => new Date());
   // Read from the backend rather than hardcoded: a screenshot of a bug then
   // carries the version that produced it, and the two can never drift.
@@ -126,16 +129,69 @@ export function Header() {
         </div>
       </div>
 
-      <div
-        style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: 11,
-          color: "var(--vf-text-muted)",
-          letterSpacing: "0.12em",
-          textTransform: "uppercase",
-        }}
-      >
-        {dateStr} · {timeStr}
+      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+        {userName && (
+          <button
+            type="button"
+            onClick={onChangeName}
+            title="Trocar nome"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 9,
+              padding: "9px 14px",
+              background: "rgba(255,255,255,0.025)",
+              border: "1px solid var(--vf-panel-stroke)",
+              borderRadius: 10,
+              cursor: "pointer",
+              animation: "fadeUp 700ms ease both",
+            }}
+          >
+            <span
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: "50%",
+                background: "var(--accent-vf)",
+                boxShadow: "0 0 8px var(--accent-glow)",
+                animation: "pulse-dot 2.6s ease-in-out infinite",
+              }}
+            />
+            <span
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: 11,
+                letterSpacing: "0.12em",
+                textTransform: "uppercase",
+                color: "var(--vf-text-dim)",
+              }}
+            >
+              Bem-vindo,
+            </span>
+            {/* Sem text-transform: o nome aparece exatamente como foi digitado. */}
+            <span
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: 11,
+                letterSpacing: "0.12em",
+                color: "var(--vf-text)",
+              }}
+            >
+              {userName}
+            </span>
+          </button>
+        )}
+        <div
+          style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: 11,
+            color: "var(--vf-text-muted)",
+            letterSpacing: "0.12em",
+            textTransform: "uppercase",
+          }}
+        >
+          {dateStr} · {timeStr}
+        </div>
       </div>
     </header>
   );

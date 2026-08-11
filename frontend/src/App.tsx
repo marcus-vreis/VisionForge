@@ -18,6 +18,8 @@ import { announce, requestPermission, resetTitle } from "./lib/run-notify";
 import { BottomBar } from "./components/BottomBar";
 import type { DeviceSelection } from "./components/DeviceSelector";
 import { Header } from "./components/Header";
+import { WelcomeOverlay } from "./components/WelcomeOverlay";
+import { readUserName } from "./lib/user-name";
 import { DatasetsOverlay } from "./components/DatasetsOverlay";
 import { HistoryOverlay } from "./components/HistoryOverlay";
 import { QueueOverlay } from "./components/QueueOverlay";
@@ -97,6 +99,9 @@ export default function App() {
     kind: "cuda",
     gpu_ids: null,
   });
+  const [userName, setUserName] = useState(() => readUserName());
+  // Set by the header chip: remounts the overlay so the intro replays clean.
+  const [askName, setAskName] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [showDatasets, setShowDatasets] = useState(false);
   const [showQueue, setShowQueue] = useState(false);
@@ -471,7 +476,7 @@ export default function App() {
         color: "var(--vf-text)",
       }}
     >
-      <Header />
+      <Header userName={userName} onChangeName={() => setAskName(true)} />
 
       <TabBar tasks={tasks} activeKey={activeKey} setActiveKey={setActiveKey} />
 
@@ -679,6 +684,14 @@ export default function App() {
           }}
         />
       )}
+      <WelcomeOverlay
+        key={askName ? "ask" : "boot"}
+        forceAsk={askName}
+        onName={(n) => {
+          setUserName(n);
+          setAskName(false);
+        }}
+      />
     </div>
   );
 }
