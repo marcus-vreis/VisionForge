@@ -13,6 +13,8 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-08-11
+
 ### Added
 
 - **Uma introdução na primeira execução.** A tela escurece, "Bem-vindo" entra e
