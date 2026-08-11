@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import getpass
 import re
 from pathlib import Path
 
@@ -35,6 +36,21 @@ def _read_spa_bundle() -> str:
     return match.group(1) if match else ""
 
 
+def _current_user() -> str:
+    """Whoever is logged in, for the greeting. Empty string when unknowable.
+
+    VisionForge runs locally, for one researcher, on their own machine — the OS
+    already knows the name, so asking them to type it into a settings field
+    would be inventing a form to answer a question already answered. Returns
+    empty rather than raising: a greeting is not worth a failed request, and the
+    banner simply drops the name.
+    """
+    try:
+        return getpass.getuser()
+    except Exception:  # noqa: BLE001 - no account name is not an error here
+        return ""
+
+
 _BOOT_SPA_BUNDLE = _read_spa_bundle()
 
 app = FastAPI(title="VisionForge", version=__version__)
@@ -55,13 +71,17 @@ async def _sweep_filtered_datasets() -> None:
 
 @app.get("/api/health")
 async def health() -> dict[str, str]:
-    """Version and the SPA build this process booted against.
+    """Version, the SPA build this process booted against, and who is running it.
 
     `spa_bundle` is what lets the running page detect that the server predates
     it and needs restarting, rather than leaving the researcher to conclude the
     feature is broken.
     """
-    return {"version": __version__, "spa_bundle": _BOOT_SPA_BUNDLE}
+    return {
+        "version": __version__,
+        "spa_bundle": _BOOT_SPA_BUNDLE,
+        "user": _current_user(),
+    }
 
 
 app.add_middleware(

@@ -79,3 +79,24 @@ class TestHealthReportsTheBootBundle:
 
         with patch.object(server_mod, "STATIC_DIR", tmp_path):
             assert server_mod._read_spa_bundle() == ""
+
+
+class TestHealthReportsTheUser:
+    """The greeting's name comes from the OS, not from a settings field."""
+
+    def test_health_carries_a_user(self) -> None:
+        body = TestClient(app).get("/api/health").json()
+
+        assert "user" in body
+        assert isinstance(body["user"], str)
+
+    def test_an_unknowable_user_is_empty_rather_than_an_error(self) -> None:
+        """A greeting is not worth failing a request over."""
+        from unittest.mock import patch
+
+        from visionforge.gui import server as server_mod
+
+        with patch.object(
+            server_mod.getpass, "getuser", side_effect=OSError("no account")
+        ):
+            assert server_mod._current_user() == ""

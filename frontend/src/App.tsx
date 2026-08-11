@@ -18,6 +18,7 @@ import { announce, requestPermission, resetTitle } from "./lib/run-notify";
 import { BottomBar } from "./components/BottomBar";
 import type { DeviceSelection } from "./components/DeviceSelector";
 import { Header } from "./components/Header";
+import { WelcomeBanner } from "./components/WelcomeBanner";
 import { DatasetsOverlay } from "./components/DatasetsOverlay";
 import { HistoryOverlay } from "./components/HistoryOverlay";
 import { QueueOverlay } from "./components/QueueOverlay";
@@ -471,6 +472,8 @@ export default function App() {
         color: "var(--vf-text)",
       }}
     >
+      <WelcomeBanner />
+
       <Header />
 
       <TabBar tasks={tasks} activeKey={activeKey} setActiveKey={setActiveKey} />
