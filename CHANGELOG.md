@@ -15,6 +15,13 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Added
 
+- **Uma introdução na primeira execução.** A tela escurece, "Bem-vindo" entra e
+  sai, e a interface pergunta o seu nome. Nas visitas seguintes só o
+  cumprimento `Bem-vindo, <nome>` por ~2s — nunca pergunta de novo. O nome fica
+  no header e trocar é um clique nele. Guardado localmente, porque é preferência
+  de quem está na máquina, não estado do servidor
+  ([ADR-090](docs/dev/DECISIONS.md)).
+
 - **O treino avisa quando termina.** O título da aba passa a `✓ <run> —
   VisionForge` (ou `✗` se falhou), e uma notificação do navegador aparece quando
   a página está em segundo plano. A permissão é pedida ao iniciar um treino, não

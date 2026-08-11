@@ -2785,3 +2785,44 @@ the effect re-fires; without the key a completed run would toast on every tick.
 consent dance and is worse than useless in a shared room; a webhook is a
 different feature for a different user (CI, a phone) and would need a place to
 configure it. The browser is already open — that is the cheapest true thing.
+
+---
+
+## ADR-090 — A first-run introduction that asks the researcher's name
+
+**Date:** 2026-08-11
+**Status:** Accepted — shipped 2026-08-11
+
+**First visit:** the screen dims, "Bem-vindo" arrives and leaves, and "Qual é o
+seu nome?" opens a single line in the middle of the screen. The name is saved
+and from then on sits in the header as `Bem-vindo, <nome>`.
+
+**Every visit after:** only the greeting, for about two seconds, and the app is
+there. It never asks again. Changing the name is a click on the header chip,
+which remounts the overlay and replays the whole sequence.
+
+**The name lives in `localStorage`, not the backend.** It is an interface
+preference belonging to whoever is at the machine, not server state — a shared
+local install must not overwrite one person's name with another's on each visit.
+
+**Reading and writing tolerate blocked storage** (private mode). With no saved
+name the introduction simply runs again; nothing breaks and nothing is reported
+as an error, because a greeting is not worth a failure.
+
+**A first draft of this took the name from the OS account instead**, on the
+reasoning that a local single-user tool already knows who is sitting at it. That
+was wrong, and worth recording: an account name is not what someone wants to be
+called. `marcu` is a login, not a name. Asking once costs one screen, and the
+answer is the name they actually use — which is the entire point of greeting
+someone by it. That version was reverted.
+
+**The overlay unmounts when it finishes** rather than staying at zero opacity,
+so it can never intercept a click meant for the app behind it.
+
+**`prefers-reduced-motion` is honoured by the global rule already in
+`index.css`:** the transitions collapse to a single static frame. Someone who
+asked not to be moved still gets the greeting, just without the movement.
+
+**Verified end to end in the running GUI:** typing a name saved it to
+`vf.welcome.name`, the overlay left the DOM, and the header chip rendered
+`Bem-vindo, Marcus`.
