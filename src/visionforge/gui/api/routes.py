@@ -2968,6 +2968,11 @@ def _gradcam_class_names(data: dict[str, Any]) -> list[str]:
     config = data.get("config", {})
     if config.get("task") not in ("binary", "multiclass"):
         return []
+    # Runs written from 0.7.1 on record the mapping, which is the only form that
+    # survives the dataset being renamed or moved.
+    recorded = data.get("class_names")
+    if isinstance(recorded, list) and recorded:
+        return [str(c) for c in recorded]
     data_config = config.get("data", {})
     base_dir = data_config.get("base_dir")
     if not base_dir:

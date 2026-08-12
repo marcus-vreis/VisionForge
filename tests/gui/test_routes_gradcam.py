@@ -199,3 +199,50 @@ class TestSegmentationGradcam:
             assert Path(item.overlay).is_file()
             assert item.predicted_class == 1  # the requested target class
             assert item.prediction is not None and "class 1" in item.prediction
+
+
+class TestClassNamesSurviveARename:
+    """Recovering them from the training folder breaks when a dataset moves."""
+
+    def test_recorded_names_are_used_even_with_the_folder_gone(self) -> None:
+        from visionforge.gui.api.routes import _gradcam_class_names
+
+        data = {
+            "class_names": ["defect", "longberry", "peaberry", "premium"],
+            "config": {
+                "task": "multiclass",
+                "data": {"base_dir": "/dataset/that/was/renamed"},
+            },
+        }
+
+        assert _gradcam_class_names(data) == [
+            "defect",
+            "longberry",
+            "peaberry",
+            "premium",
+        ]
+
+    def test_falls_back_to_the_folder_for_runs_written_before(self, tmp_path) -> None:
+        base = tmp_path / "ds"
+        for cls in ("b_class", "a_class"):
+            (base / "train" / cls).mkdir(parents=True)
+
+        from visionforge.gui.api.routes import _gradcam_class_names
+
+        data = {"config": {"task": "multiclass", "data": {"base_dir": str(base)}}}
+
+        # Sorted, because that is the order ImageFolder assigned at training time.
+        assert _gradcam_class_names(data) == ["a_class", "b_class"]
+
+    def test_an_empty_recorded_list_does_not_shadow_the_folder(self, tmp_path) -> None:
+        base = tmp_path / "ds"
+        (base / "train" / "only").mkdir(parents=True)
+
+        from visionforge.gui.api.routes import _gradcam_class_names
+
+        data = {
+            "class_names": [],
+            "config": {"task": "multiclass", "data": {"base_dir": str(base)}},
+        }
+
+        assert _gradcam_class_names(data) == ["only"]

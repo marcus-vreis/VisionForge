@@ -307,7 +307,9 @@ class Trainer:
             history=history,
             model_path=model_path,
         )
-        self._write_run_json(run_dir, train_result)
+        self._write_run_json(
+            run_dir, train_result, getattr(data_module, "class_names", None)
+        )
         tb.close()
 
         # Release VRAM held by activations / optimizer state so back-to-back
@@ -463,7 +465,9 @@ class Trainer:
         acc = correct / total if total > 0 else 0.0
         return (total_loss / n if n > 0 else 0.0), acc
 
-    def _write_run_json(self, run_dir: Path, result: TrainResult) -> None:
+    def _write_run_json(
+        self, run_dir: Path, result: TrainResult, class_names: list[str] | None = None
+    ) -> None:
         """Write the run.json file with full run metadata."""
         run_json: dict[str, Any] = {
             "id": f"{self._config.name}_{run_dir.name}",
@@ -475,6 +479,12 @@ class Trainer:
             # Proves two runs saw the same data, not just the same path.
             "dataset_fingerprint": fingerprint_from_config(self._config),
             "run_dir": str(run_dir.resolve()),
+            # The index->name mapping the checkpoint was trained with. Recorded
+            # because it used to be recovered by re-reading the training folder,
+            # which silently stopped working the moment a dataset was renamed or
+            # moved: Grad-CAM fell back to bare indices and dropped the ground
+            # truth without saying why.
+            "class_names": class_names or [],
             "config": self._config.model_dump(mode="json"),
             "metrics": {
                 "best_val_loss": result.best_val_loss,

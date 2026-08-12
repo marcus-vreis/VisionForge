@@ -2826,3 +2826,41 @@ asked not to be moved still gets the greeting, just without the movement.
 **Verified end to end in the running GUI:** typing a name saved it to
 `vf.welcome.name`, the overlay left the DOM, and the header chip rendered
 `Bem-vindo, Marcus`.
+
+---
+
+## ADR-091 — `run.json` records the class-name mapping
+
+**Date:** 2026-08-12
+**Status:** Accepted — shipped 2026-08-12
+**Fixes a regression from:** the dataset rename of 2026-08-11
+
+**What broke.** Grad-CAM stopped showing whether a prediction was right. Not a
+Grad-CAM bug: `_gradcam_class_names` recovered the index→name mapping by
+re-reading the run's *training folder*, because `run.json` never stored it.
+`ImageFolder` assigns indices by sorting the class sub-directories, so the sorted
+folder names genuinely are the mapping the checkpoint was trained with — as long
+as the folder is still there.
+
+Renaming `datasets/USK-COFFEE` to `datasets/Classification - USK-COFFEE` took it
+away. The function returned an empty list, `true_class` could no longer match
+anything, and the overlay quietly fell back to bare indices with no ground truth.
+
+**Silence is what made it expensive.** The researcher reasonably concluded their
+environment was out of date. A feature that degrades without saying so costs more
+than one that fails loudly.
+
+**Decision:** `run.json` records `class_names` at training time, and Grad-CAM
+prefers it, falling back to the folder for runs written before this. The mapping
+is a property of the trained checkpoint, not of where the data happens to live,
+so storing it is what should have been done from the start.
+
+**The seven existing runs were backfilled**, and that is defensible where
+rewriting `base_dir` would not have been: the class list is invariant — the
+dataset's *contents* never changed, only the folder's name — so recording it
+states a fact rather than inventing a history. Rewriting the path would claim a
+run trained somewhere that did not exist on that date.
+
+**An empty recorded list does not shadow the folder**, so a future writer that
+sets `class_names: []` degrades to the old behaviour instead of asserting a
+model has no classes.

@@ -13,6 +13,16 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ## [Unreleased]
 
+### Fixed
+
+- **O Grad-CAM voltou a mostrar se o modelo acertou.** Ele recuperava os nomes
+  das classes relendo a pasta de treino do run, porque o `run.json` nunca os
+  guardava — então renomear um dataset fazia a verdade sumir em silêncio, e a
+  sobreposição caía para índices sem dizer por quê. O mapeamento agora é gravado
+  no `run.json`, que é onde deveria estar desde o início: ele é propriedade do
+  checkpoint treinado, não de onde os dados moram
+  ([ADR-091](docs/dev/DECISIONS.md)).
+
 ## [0.7.0] — 2026-08-11
 
 ### Added
