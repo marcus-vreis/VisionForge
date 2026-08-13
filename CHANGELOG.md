@@ -15,6 +15,13 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Added
 
+- **Qualquer tarefa interrompida pode continuar de onde parou.** Regressão,
+  segmentação e o autoencoder de anomalia passam a gravar o mesmo `resume.pt` da
+  classificação. Na detecção, quem retoma é o próprio Ultralytics — ele já guarda
+  o otimizador e a EMA no `weights/last.pt`, e as épocas já registradas voltam do
+  `run.json` para a curva não começar no meio; só o laço torchvision, que é
+  nosso, ganha `resume.pt`. O PatchCore fica de fora de propósito: não tem
+  época para retomar ([ADR-093](docs/dev/DECISIONS.md)).
 - **Um treino de classificação interrompido pode continuar de onde parou.** O
   estado do otimizador e do scheduler passa a ser gravado a cada época num
   `resume.pt` ao lado do checkpoint — separado de propósito, porque o
@@ -24,6 +31,11 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Fixed
 
+- **Retomar não deixa mais uma pasta de run vazia para trás.** O treino criava a
+  pasta nova com data e hora, apontava o TensorBoard para ela e só depois
+  descobria que tinha estado para continuar — abandonando a pasta e mandando os
+  eventos do run retomado para onde ninguém ia olhar. A pasta agora é decidida
+  antes de qualquer coisa ser criada ([ADR-093](docs/dev/DECISIONS.md)).
 - **O Grad-CAM voltou a mostrar se o modelo acertou.** Ele recuperava os nomes
   das classes relendo a pasta de treino do run, porque o `run.json` nunca os
   guardava — então renomear um dataset fazia a verdade sumir em silêncio, e a

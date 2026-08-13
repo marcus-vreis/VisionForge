@@ -13,7 +13,7 @@ from __future__ import annotations
 import json
 import sys
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -29,6 +29,12 @@ from visionforge.core.detection_dataset import DetectionDataset, detection_colla
 from visionforge.core.detection_metrics import mean_average_precision_50
 from visionforge.core.materialized_dataset import materialize_dataset
 from visionforge.core.plotter import MetricsPlotter
+from visionforge.core.resume import (
+    ResumeState,
+    clear_resume_state,
+    load_resume_state,
+    save_resume_state,
+)
 from visionforge.core.tracking import TensorBoardLogger
 from visionforge.core.trainer import _seed_everything
 from visionforge.models.detection_factory import build_torchvision_detector
@@ -224,6 +230,7 @@ class DetectionTrainer:
         self,
         progress_callback: Callable[[dict[str, Any]], None] | None = None,
         cancel_token: CancellationToken | None = None,
+        resume_dir: Path | None = None,
     ) -> DetectionTrainResult:
         """Run training for the configured backend and return the result.
 
@@ -246,8 +253,12 @@ class DetectionTrainer:
             ) as prepared:
                 self._images_root = prepared.path if prepared.filtered else None
                 if self._config.model.backend == "torchvision":
-                    return self._fit_torchvision(progress_callback, cancel_token)
-                return self._fit_ultralytics(progress_callback, cancel_token)
+                    return self._fit_torchvision(
+                        progress_callback, cancel_token, resume_dir
+                    )
+                return self._fit_ultralytics(
+                    progress_callback, cancel_token, resume_dir
+                )
         except (OSError, RuntimeError, EOFError) as exc:
             if sys.platform == "win32" and _is_worker_spawn_crash(str(exc)):
                 raise RuntimeError(
@@ -265,6 +276,7 @@ class DetectionTrainer:
         self,
         progress_callback: Callable[[dict[str, Any]], None] | None = None,
         cancel_token: CancellationToken | None = None,
+        resume_dir: Path | None = None,
     ) -> DetectionTrainResult:
         """Drive Ultralytics YOLO/RT-DETR training.
 
@@ -278,13 +290,35 @@ class DetectionTrainer:
             )
 
         cfg = self._config.training
-        run_dir = self._make_run_dir()
+
+        # Ultralytics owns its loop, so it also owns its resume: `last.pt` carries
+        # the optimizer, the EMA and the epoch counter, and `resume=True` reads the
+        # rest from the args.yaml it wrote. Writing our own resume.pt beside it
+        # would be a second, worse copy of state it already keeps.
+        last_weights = (
+            resume_dir / "weights" / "last.pt" if resume_dir is not None else None
+        )
+        resuming = last_weights is not None and last_weights.is_file()
+        history: list[DetectionEpochResult] = []
+        if resuming and resume_dir is not None:
+            run_dir = resume_dir
+            model = YOLO(str(last_weights))
+            # Ultralytics restarts its epoch numbering from the checkpoint, so the
+            # epochs already recorded have to come back from run.json or the run
+            # would end up with a history that begins mid-training.
+            history = self._history_from_run_json(run_dir)
+            logger.info(
+                "Resuming {} at epoch {} of {}.",
+                run_dir.name,
+                len(history) + 1,
+                cfg.epochs,
+            )
+        else:
+            run_dir = self._make_run_dir()
+            model = YOLO(self._resolve_weights())
         data_yaml = DetectionDataModule(self._config).resolve_data_yaml(
             out_dir=run_dir, images_root=self._images_root
         )
-
-        model = YOLO(self._resolve_weights())
-        history: list[DetectionEpochResult] = []
 
         if progress_callback is not None:
             progress_callback(
@@ -315,6 +349,10 @@ class DetectionTrainer:
                 **train_losses,
                 **val_losses,
             )
+            # On a resumed run the seeded history can overlap what Ultralytics
+            # re-reports, so the epoch replaces its own record instead of
+            # appending a second one under the same number.
+            history[:] = [h for h in history if h.epoch < epoch]
             history.append(result)
             if progress_callback is not None:
                 progress_callback(_epoch_event(result, cfg.epochs))
@@ -346,6 +384,7 @@ class DetectionTrainer:
             name=run_dir.name,
             exist_ok=True,
             verbose=False,
+            resume=resuming,
             **self._ultralytics_train_kwargs(),
         )
 
@@ -355,12 +394,25 @@ class DetectionTrainer:
             progress_callback({"event": "end", "total_epochs": len(history)})
         return result
 
+    def _history_from_run_json(self, run_dir: Path) -> list[DetectionEpochResult]:
+        """Read the epochs a previous attempt recorded, or none when unreadable."""
+        path = run_dir / "run.json"
+        if not path.is_file():
+            return []
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            return [DetectionEpochResult(**h) for h in data.get("history", [])]
+        except (OSError, ValueError, TypeError) as exc:
+            logger.warning("Could not read the history of {}: {}", run_dir, exc)
+            return []
+
     # ── torchvision backend ─────────────────────────────────────────────────────
 
     def _fit_torchvision(
         self,
         progress_callback: Callable[[dict[str, Any]], None] | None = None,
         cancel_token: CancellationToken | None = None,
+        resume_dir: Path | None = None,
     ) -> DetectionTrainResult:
         """Train a torchvision detector with a loss-dict loop.
 
@@ -383,7 +435,15 @@ class DetectionTrainer:
         # were unseeded and `seed: 42` in the config was a claim nothing backed.
         _seed_everything(cfg.seed, deterministic=cfg.deterministic)
 
-        run_dir = self._make_run_dir()
+        # Resolved before anything is created: a resumed run must continue in its
+        # own directory, or it leaves an empty one behind and writes its
+        # TensorBoard events somewhere nothing will look.
+        resumed = load_resume_state(resume_dir) if resume_dir is not None else None
+        run_dir = (
+            resume_dir
+            if resumed is not None and resume_dir is not None
+            else self._make_run_dir()
+        )
         device = self._resolve_torch_device()
 
         # Build the model before the data so an unsupported model (SSD/RetinaNet)
@@ -405,6 +465,28 @@ class DetectionTrainer:
         train_losses: list[float | None] = []
         best_map = -1.0
         best_epoch = 0
+        start_epoch = 1
+
+        # Weights alone cannot continue: the optimizer comes back too, or the
+        # search restarts somewhere the loss curve never was.
+        if resumed is not None:
+            model.load_state_dict(resumed.model)
+            optimizer.load_state_dict(resumed.optimizer)
+            best_map = resumed.best_metric
+            best_epoch = resumed.best_epoch
+            # The plot needs the train loss per epoch, which is not part of
+            # DetectionEpochResult, so it rides along in the same records.
+            for entry in resumed.history:
+                record = dict(entry)
+                train_losses.append(record.pop("train_loss", None))
+                history.append(DetectionEpochResult(**record))
+            start_epoch = resumed.epoch + 1
+            logger.info(
+                "Resuming {} at epoch {} of {}.",
+                run_dir.name,
+                start_epoch,
+                cfg.epochs,
+            )
 
         if progress_callback is not None:
             progress_callback(
@@ -423,7 +505,7 @@ class DetectionTrainer:
         )
         tb = TensorBoardLogger(run_dir / "tensorboard")
         try:
-            for epoch in range(1, cfg.epochs + 1):
+            for epoch in range(start_epoch, cfg.epochs + 1):
                 if is_cancelled(cancel_token):
                     logger.info(
                         "Run cancelled at epoch {}; keeping the best checkpoint.",
@@ -453,6 +535,27 @@ class DetectionTrainer:
                         "map50/val": map50,
                     },
                 )
+                # Every epoch, not only on improvement: a run dies on its
+                # worst epochs too, and stale state resumes into a past already
+                # left.
+                save_resume_state(
+                    run_dir,
+                    ResumeState(
+                        epoch=epoch,
+                        model=model.state_dict(),
+                        optimizer=optimizer.state_dict(),
+                        scheduler=None,
+                        scaler=None,
+                        best_metric=best_map,
+                        best_epoch=best_epoch,
+                        patience_counter=0,
+                        history=[
+                            {**asdict(h), "train_loss": tl}
+                            for h, tl in zip(history, train_losses, strict=False)
+                        ],
+                    ),
+                )
+
                 # Select by validation mAP@50 (higher is better).
                 if map50 > best_map:
                     best_map = map50
@@ -470,6 +573,9 @@ class DetectionTrainer:
                     )
         finally:
             tb.close()
+
+        if not is_cancelled(cancel_token):
+            clear_resume_state(run_dir)
 
         if not model_path.exists():  # epochs=0 guard
             torch.save(model.state_dict(), model_path)

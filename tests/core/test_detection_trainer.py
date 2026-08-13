@@ -10,10 +10,12 @@ from PIL import Image
 from torch import nn
 
 from visionforge.core import detection_trainer as dt_mod
+from visionforge.core.cancellation import CancellationToken
 from visionforge.core.detection_trainer import (
     DetectionTrainer,
     _is_worker_spawn_crash,
 )
+from visionforge.core.resume import RESUME_FILENAME
 from visionforge.utils.detection_config import DetectionConfig
 
 
@@ -371,6 +373,117 @@ class TestTorchvisionPath:
         run_json = json.loads((result.run_dir / "run.json").read_text("utf-8"))
         graphics = run_json["artifacts"]["graphics"]
         assert any(g.endswith("results.png") for g in graphics)
+
+
+class TestUltralyticsResume:
+    """Ultralytics keeps its own resume state; the trainer must use it, not ours."""
+
+    @staticmethod
+    def _fake_yolo_resuming(record: dict[str, Any]) -> type:
+        """Fake that continues its epoch numbering the way `resume=True` does."""
+
+        class _FakeYOLO:
+            def __init__(self, weights: str) -> None:
+                record["weights"] = weights
+
+            def add_callback(self, event: str, fn: Any) -> None:
+                record.setdefault("callbacks", []).append(fn)
+
+            def train(self, **kwargs: Any) -> object:
+                record["train_kwargs"] = kwargs
+                run_dir = Path(kwargs["project"]) / kwargs["name"]
+                (run_dir / "weights").mkdir(parents=True, exist_ok=True)
+                (run_dir / "weights" / "best.pt").write_bytes(b"fake")
+                (run_dir / "weights" / "last.pt").write_bytes(b"fake")
+                first = int(record.get("resume_from", 0))
+                for e in range(first, int(kwargs["epochs"])):
+                    for fn in record.get("callbacks", []):
+                        fn(_FakeUTrainer(e, int(kwargs["epochs"])))
+                return object()
+
+        return _FakeYOLO
+
+    def test_continues_from_last_pt_in_the_same_run(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        record: dict[str, Any] = {}
+        monkeypatch.setattr(dt_mod, "YOLO", self._fake_yolo_resuming(record))
+        cfg = _config(tmp_path)
+        first = DetectionTrainer(cfg).fit()
+
+        # Second attempt: only the last epoch is missing.
+        record["callbacks"] = []
+        record["resume_from"] = 1
+        second = DetectionTrainer(cfg).fit(resume_dir=first.run_dir)
+
+        assert record["train_kwargs"]["resume"] is True
+        assert record["weights"].endswith("last.pt")
+        assert second.run_dir == first.run_dir
+        # The epochs already recorded came back from run.json, so the history is
+        # continuous rather than starting where the second attempt did.
+        assert [h.epoch for h in second.history] == [1, 2]
+
+    def test_a_fresh_run_never_asks_to_resume(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        record: dict[str, Any] = {}
+        monkeypatch.setattr(dt_mod, "YOLO", _make_fake_yolo(record))
+        DetectionTrainer(_config(tmp_path)).fit()
+
+        assert record["train_kwargs"]["resume"] is False
+
+
+class TestTorchvisionResume:
+    def test_continues_the_same_run(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A stopped run continues in its own directory, with one history."""
+        monkeypatch.setattr(
+            dt_mod, "build_torchvision_detector", lambda *a, **k: _FakeDetector()
+        )
+        cfg = _tv_config(tmp_path)
+        token = CancellationToken()
+
+        def _stop_after_first(event: dict[str, Any]) -> None:
+            if event.get("event") == "epoch_end" and event.get("epoch") == 1:
+                token.cancel()
+
+        stopped = DetectionTrainer(cfg).fit(
+            progress_callback=_stop_after_first, cancel_token=token
+        )
+        assert stopped.total_epochs == 1
+        assert (stopped.run_dir / RESUME_FILENAME).is_file()
+
+        finished = DetectionTrainer(cfg).fit(resume_dir=stopped.run_dir)
+
+        assert finished.run_dir == stopped.run_dir
+        assert [h.epoch for h in finished.history] == [1, 2]
+        assert not (finished.run_dir / RESUME_FILENAME).exists()
+        # The plot needs one train loss per epoch, including the restored ones.
+        assert (finished.run_dir / "results.png").exists()
+
+    def test_unreadable_state_starts_a_fresh_run(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(
+            dt_mod, "build_torchvision_detector", lambda *a, **k: _FakeDetector()
+        )
+        cfg = _tv_config(tmp_path)
+        token = CancellationToken()
+
+        def _stop_after_first(event: dict[str, Any]) -> None:
+            if event.get("event") == "epoch_end" and event.get("epoch") == 1:
+                token.cancel()
+
+        stopped = DetectionTrainer(cfg).fit(
+            progress_callback=_stop_after_first, cancel_token=token
+        )
+        (stopped.run_dir / RESUME_FILENAME).write_bytes(b"not a checkpoint")
+
+        finished = DetectionTrainer(cfg).fit(resume_dir=stopped.run_dir)
+
+        assert finished.run_dir != stopped.run_dir
+        assert [h.epoch for h in finished.history] == [1, 2]
 
 
 class TestTorchvisionOptimizer:

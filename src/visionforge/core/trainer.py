@@ -187,7 +187,15 @@ class Trainer:
         # a FutureWarning since torch 2.4). The generic namespace exists since 2.3,
         # which is the project's floor (pyproject torch>=2.3), so this is safe.
         scaler = torch.amp.GradScaler("cuda", enabled=use_amp) if use_amp else None
-        run_dir = self._make_run_dir()
+        # Resolved before anything is created: a resumed run must continue in its
+        # own directory, or it leaves an empty one behind and writes its
+        # TensorBoard events somewhere nothing will look.
+        resumed = load_resume_state(resume_dir) if resume_dir is not None else None
+        run_dir = (
+            resume_dir
+            if resumed is not None and resume_dir is not None
+            else self._make_run_dir()
+        )
         model_path = run_dir / "best_model.pth"
         tb = TensorBoardLogger(run_dir / "tensorboard")
 
@@ -199,28 +207,24 @@ class Trainer:
 
         # Continuing means restoring the optimizer and scheduler too: weights
         # alone restart the search somewhere the loss curve never was.
-        if resume_dir is not None:
-            state = load_resume_state(resume_dir)
-            if state is not None:
-                model.load_state_dict(state.model)
-                optimizer.load_state_dict(state.optimizer)
-                if scheduler is not None and state.scheduler is not None:
-                    scheduler.load_state_dict(state.scheduler)
-                if scaler is not None and state.scaler is not None:
-                    scaler.load_state_dict(state.scaler)
-                best_val_loss = state.best_metric
-                best_epoch = state.best_epoch
-                patience_counter = state.patience_counter
-                history = [EpochResult(**h) for h in state.history]
-                start_epoch = state.epoch + 1
-                run_dir = resume_dir
-                model_path = run_dir / "best_model.pth"
-                logger.info(
-                    "Resuming {} at epoch {} of {}.",
-                    run_dir.name,
-                    start_epoch,
-                    cfg.epochs,
-                )
+        if resumed is not None:
+            model.load_state_dict(resumed.model)
+            optimizer.load_state_dict(resumed.optimizer)
+            if scheduler is not None and resumed.scheduler is not None:
+                scheduler.load_state_dict(resumed.scheduler)
+            if scaler is not None and resumed.scaler is not None:
+                scaler.load_state_dict(resumed.scaler)
+            best_val_loss = resumed.best_metric
+            best_epoch = resumed.best_epoch
+            patience_counter = resumed.patience_counter
+            history = [EpochResult(**h) for h in resumed.history]
+            start_epoch = resumed.epoch + 1
+            logger.info(
+                "Resuming {} at epoch {} of {}.",
+                run_dir.name,
+                start_epoch,
+                cfg.epochs,
+            )
         t0 = time.monotonic()
 
         if progress_callback is not None:

@@ -2916,5 +2916,60 @@ resume file.
 
 **Not done: the GUI action.** The trainer accepts `resume_dir` and everything
 above works from Python, but nothing in the interface offers a resumable run a
-button yet, and the standalone trainers (regression, segmentation, anomaly,
-detection) still write no resume state.
+button yet. The standalone trainers gained the same ability in ADR-093.
+
+---
+
+## ADR-093 — Every task can be resumed, each with the state its loop actually owns
+
+**Date:** 2026-08-13
+**Status:** Accepted
+**Extends:** ADR-092 (resume state beside the checkpoint)
+
+**Context:** ADR-092 gave classification a resume file and left the four
+standalone trainers without one. That is the wrong place to stop: a
+segmentation run is no shorter than a classification run, and the researcher who
+loses ninety epochs does not care which task they were training.
+
+**Regression, segmentation and the autoencoder use the same `resume.pt`** as
+classification — the same format, written every epoch, cleared when the run
+reaches its last one. Only the field names differ (`best_val_miou` instead of
+`best_val_loss`), and they map onto `ResumeState.best_metric`, which is
+deliberately named for what it is rather than for one task's metric.
+
+**Ultralytics resumes itself.** The YOLO/RT-DETR backend owns its loop, its
+optimizer and its EMA, and it already writes `weights/last.pt` plus the
+`args.yaml` that `resume=True` reads. Writing a second, worse copy of that state
+beside it would be duplication with two ways to disagree. So the detection
+trainer hands Ultralytics its own `last.pt` and lets it continue; only the
+torchvision loop, which VisionForge does own, gets a `resume.pt`.
+
+**The epochs already recorded come back from `run.json`.** Ultralytics restarts
+its epoch counter from the checkpoint, so a resumed run would otherwise finish
+with a history that begins mid-training. The recorded epochs are read back and
+seeded, and an epoch that is re-reported replaces its own record rather than
+appending a duplicate — the history stays monotone whatever the backend does.
+
+**PatchCore is excluded, not silently ignored.** It has no gradient loop and no
+epochs: there is nothing to continue. Resume state is therefore never even
+loaded for it, so an accidental `resume_dir` cannot make a memory-bank fit look
+resumable.
+
+**The run directory is now resolved before anything is created.** The first
+implementation made a fresh timestamped directory, pointed the TensorBoard
+writer at it, and only then discovered it had state to continue — leaving an
+empty orphan directory behind and sending the resumed run's events into it. The
+state is loaded first, and the directory is the resumed one when there is
+something to resume. This also fixes the same bug in the classification trainer
+shipped with ADR-092.
+
+**A resume file that will not load starts a fresh run** rather than continuing
+into the old directory. Continuing there would mean training from epoch 1 on top
+of another run's `run.json` and checkpoint — the one outcome worse than losing
+the ability to resume.
+
+**Verified per task:** each of the four loops is stopped at its first epoch and
+handed its own directory back; all four continue in the same directory with a
+`1, 2, 3` history, one `run.json`, and no resume file left behind. The
+Ultralytics path is covered for the two things only it can get wrong: it asks to
+resume from `last.pt`, and a fresh run never asks to resume at all.

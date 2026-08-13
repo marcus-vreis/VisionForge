@@ -14,7 +14,7 @@ import math
 import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -26,6 +26,12 @@ from loguru import logger
 
 from visionforge.core.cancellation import CancellationToken, is_cancelled
 from visionforge.core.dataset_fingerprint import fingerprint_from_config
+from visionforge.core.resume import (
+    ResumeState,
+    clear_resume_state,
+    load_resume_state,
+    save_resume_state,
+)
 from visionforge.core.tracking import TensorBoardLogger
 from visionforge.core.trainer import _seed_everything, resolve_device
 from visionforge.utils.environment import capture_environment
@@ -110,6 +116,7 @@ class RegressionTrainer:
         optimizer: torch.optim.Optimizer | None = None,
         progress_callback: Callable[[dict[str, Any]], None] | None = None,
         cancel_token: CancellationToken | None = None,
+        resume_dir: Path | None = None,
     ) -> RegressionTrainResult:
         """Run the regression training loop.
 
@@ -129,7 +136,15 @@ class RegressionTrainer:
         optimizer = optimizer if optimizer is not None else self._build_optimizer(model)
         criterion = self._build_criterion()
         scheduler = self._build_scheduler(optimizer)
-        run_dir = self._make_run_dir()
+        # Resolved before anything is created: a resumed run must continue in its
+        # own directory, or it leaves an empty one behind and writes its
+        # TensorBoard events somewhere nothing will look.
+        resumed = load_resume_state(resume_dir) if resume_dir is not None else None
+        run_dir = (
+            resume_dir
+            if resumed is not None and resume_dir is not None
+            else self._make_run_dir()
+        )
         model_path = run_dir / "best_model.pth"
         tb = TensorBoardLogger(run_dir / "tensorboard")
 
@@ -137,6 +152,26 @@ class RegressionTrainer:
         best_val_loss = float("inf")
         best_epoch = 0
         patience_counter = 0
+        start_epoch = 1
+
+        # Weights alone cannot continue: the optimizer and scheduler come back
+        # too, or the search restarts where the loss curve never was.
+        if resumed is not None:
+            model.load_state_dict(resumed.model)
+            optimizer.load_state_dict(resumed.optimizer)
+            if scheduler is not None and resumed.scheduler is not None:
+                scheduler.load_state_dict(resumed.scheduler)
+            best_val_loss = resumed.best_metric
+            best_epoch = resumed.best_epoch
+            patience_counter = resumed.patience_counter
+            history = [RegressionEpochResult(**h) for h in resumed.history]
+            start_epoch = resumed.epoch + 1
+            logger.info(
+                "Resuming {} at epoch {} of {}.",
+                run_dir.name,
+                start_epoch,
+                cfg.epochs,
+            )
         t0 = time.monotonic()
 
         if progress_callback is not None:
@@ -153,7 +188,7 @@ class RegressionTrainer:
         save_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="ckpt")
         save_future = None
 
-        for epoch in range(1, cfg.epochs + 1):
+        for epoch in range(start_epoch, cfg.epochs + 1):
             # The safe point: the previous epoch's checkpoint is written and its
             # metrics emitted, so stopping here leaves the run directory whole.
             if is_cancelled(cancel_token):
@@ -223,6 +258,23 @@ class RegressionTrainer:
                     }
                 )
 
+            # Every epoch, not only on improvement: a run dies on its worst
+            # epochs too, and stale state resumes into a past already left.
+            save_resume_state(
+                run_dir,
+                ResumeState(
+                    epoch=epoch,
+                    model=model.state_dict(),
+                    optimizer=optimizer.state_dict(),
+                    scheduler=scheduler.state_dict() if scheduler is not None else None,
+                    scaler=None,
+                    best_metric=best_val_loss,
+                    best_epoch=best_epoch,
+                    patience_counter=patience_counter,
+                    history=[asdict(h) for h in history],
+                ),
+            )
+
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
                 best_epoch = epoch
@@ -240,6 +292,9 @@ class RegressionTrainer:
                 if patience_counter >= cfg.early_stopping_patience:
                     logger.info("Early stopping at epoch {}.", epoch)
                     break
+
+        if not is_cancelled(cancel_token):
+            clear_resume_state(run_dir)
 
         if save_future is not None:
             save_future.result()
