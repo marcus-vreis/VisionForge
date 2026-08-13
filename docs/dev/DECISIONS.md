@@ -2864,3 +2864,57 @@ run trained somewhere that did not exist on that date.
 **An empty recorded list does not shadow the folder**, so a future writer that
 sets `class_names: []` degrades to the old behaviour instead of asserting a
 model has no classes.
+
+---
+
+## ADR-092 — Resume keeps the training state beside the checkpoint, not inside it
+
+**Date:** 2026-08-12
+**Status:** Accepted — trainer shipped 2026-08-12; GUI action not yet wired
+**Extends:** ADR-081 (runs die), ADR-088 (runs are stoppable)
+
+**Context:** a run that stopped at epoch 90 of 120 cost all ninety. The only
+thing on disk was the best weights, and weights cannot continue: an optimizer
+that has forgotten its momentum and a scheduler that has forgotten its step
+restart the search somewhere the loss curve never was.
+
+**The deliverable checkpoint is deliberately not the resume file.** `best_model.pth`
+stays a bare `state_dict`, because five separate things load it — evaluation,
+Grad-CAM, batch prediction, ONNX export and the per-model test — every one with
+`weights_only=True`. Making it a dict of dicts would break all five to serve a
+feature none of them use. The training state lives beside it in `resume.pt`,
+which is disposable: deleting it costs the ability to continue and nothing else.
+
+**Written every epoch, not only on improvement.** The best-checkpoint write is
+conditional because only improvements are worth keeping; resume state is not,
+because a run dies on its worst epochs too, and state from three epochs ago
+would resume into a past the optimizer has already left.
+
+**Written atomically.** A half-written resume file is the one failure this
+feature must not introduce — it would be found on the next attempt, refuse to
+load, and leave the researcher believing resume is broken rather than that the
+run died. `torch.save` to a temporary, then `os.replace`.
+
+**Loading never raises.** An unreadable file, a payload that is not a dict, a
+different `format_version`, missing fields — all return `None`, meaning start
+fresh. A version mismatch is refused rather than partially applied: restoring
+half a training state is worse than restoring none, because the run would look
+continued and not be.
+
+**The file's presence is the answer to "can this be resumed".** It is removed
+when a run reaches its configured last epoch, and kept when a run was stopped —
+so no separate flag can disagree with reality.
+
+**Resuming continues the same run directory** rather than starting a new one.
+The history is restored and appended to, so a resumed run has one continuous
+curve and one `run.json`, not two halves a reader has to stitch together.
+
+**Verified on a real training:** six epochs configured, stopped after two,
+resumed — the second pass ran epochs 3, 4, 5 and 6 with no repeats and no gaps,
+finished with a six-epoch history in the original run directory, and removed its
+resume file.
+
+**Not done: the GUI action.** The trainer accepts `resume_dir` and everything
+above works from Python, but nothing in the interface offers a resumable run a
+button yet, and the standalone trainers (regression, segmentation, anomaly,
+detection) still write no resume state.

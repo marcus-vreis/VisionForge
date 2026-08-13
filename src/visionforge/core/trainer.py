@@ -5,7 +5,7 @@ import random
 import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -17,6 +17,12 @@ from loguru import logger
 
 from visionforge.core.cancellation import CancellationToken, is_cancelled
 from visionforge.core.dataset_fingerprint import fingerprint_from_config
+from visionforge.core.resume import (
+    ResumeState,
+    clear_resume_state,
+    load_resume_state,
+    save_resume_state,
+)
 from visionforge.core.tracking import TensorBoardLogger
 from visionforge.utils.config import DeviceConfig, ExperimentConfig
 from visionforge.utils.cuda import check_cuda
@@ -152,6 +158,7 @@ class Trainer:
         optimizer: torch.optim.Optimizer | None = None,
         progress_callback: Callable[[dict[str, Any]], None] | None = None,
         cancel_token: CancellationToken | None = None,
+        resume_dir: Path | None = None,
     ) -> TrainResult:
         """Run the training loop.
 
@@ -188,6 +195,32 @@ class Trainer:
         best_val_loss = float("inf")
         best_epoch = 0
         patience_counter = 0
+        start_epoch = 1
+
+        # Continuing means restoring the optimizer and scheduler too: weights
+        # alone restart the search somewhere the loss curve never was.
+        if resume_dir is not None:
+            state = load_resume_state(resume_dir)
+            if state is not None:
+                model.load_state_dict(state.model)
+                optimizer.load_state_dict(state.optimizer)
+                if scheduler is not None and state.scheduler is not None:
+                    scheduler.load_state_dict(state.scheduler)
+                if scaler is not None and state.scaler is not None:
+                    scaler.load_state_dict(state.scaler)
+                best_val_loss = state.best_metric
+                best_epoch = state.best_epoch
+                patience_counter = state.patience_counter
+                history = [EpochResult(**h) for h in state.history]
+                start_epoch = state.epoch + 1
+                run_dir = resume_dir
+                model_path = run_dir / "best_model.pth"
+                logger.info(
+                    "Resuming {} at epoch {} of {}.",
+                    run_dir.name,
+                    start_epoch,
+                    cfg.epochs,
+                )
         t0 = time.monotonic()
 
         if progress_callback is not None:
@@ -208,7 +241,7 @@ class Trainer:
         save_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="ckpt")
         save_future = None
 
-        for epoch in range(1, cfg.epochs + 1):
+        for epoch in range(start_epoch, cfg.epochs + 1):
             # The safe point: the previous epoch's checkpoint is written and its
             # metrics emitted, so stopping here leaves the run directory whole.
             if is_cancelled(cancel_token):
@@ -273,6 +306,27 @@ class Trainer:
                     }
                 )
 
+            # Written every epoch, not only on improvement: the point is to be
+            # current when the run dies, and a run dies on its worst epochs too.
+            save_resume_state(
+                run_dir,
+                ResumeState(
+                    epoch=epoch,
+                    model=(
+                        model.module.state_dict()  # type: ignore[union-attr]
+                        if isinstance(model, nn.DataParallel)
+                        else model.state_dict()
+                    ),
+                    optimizer=optimizer.state_dict(),
+                    scheduler=scheduler.state_dict() if scheduler is not None else None,
+                    scaler=scaler.state_dict() if scaler is not None else None,
+                    best_metric=best_val_loss,
+                    best_epoch=best_epoch,
+                    patience_counter=patience_counter,
+                    history=[asdict(h) for h in history],
+                ),
+            )
+
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
                 best_epoch = epoch
@@ -293,6 +347,9 @@ class Trainer:
                 if patience_counter >= cfg.early_stopping_patience:
                     logger.info("Early stopping at epoch {}.", epoch)
                     break
+
+        if not is_cancelled(cancel_token):
+            clear_resume_state(run_dir)
 
         # Ensure the last checkpoint is fully written before proceeding.
         if save_future is not None:

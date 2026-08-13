@@ -13,6 +13,15 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ## [Unreleased]
 
+### Added
+
+- **Um treino de classificação interrompido pode continuar de onde parou.** O
+  estado do otimizador e do scheduler passa a ser gravado a cada época num
+  `resume.pt` ao lado do checkpoint — separado de propósito, porque o
+  `best_model.pth` é carregado por cinco coisas que só querem os pesos. Retomar
+  continua o mesmo run: uma curva contínua, um `run.json`
+  ([ADR-092](docs/dev/DECISIONS.md)).
+
 ### Fixed
 
 - **O Grad-CAM voltou a mostrar se o modelo acertou.** Ele recuperava os nomes
