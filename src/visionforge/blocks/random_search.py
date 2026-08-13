@@ -5,6 +5,7 @@ import random
 from collections.abc import Callable
 from typing import Any, Literal
 
+from loguru import logger
 from pydantic import BaseModel, Field
 
 from visionforge.blocks._search_utils import (
@@ -16,6 +17,7 @@ from visionforge.blocks._search_utils import (
     write_trials_csv,
 )
 from visionforge.blocks.base import ExperimentBlock
+from visionforge.core.cancellation import is_cancelled
 from visionforge.utils.config import ExperimentConfig
 
 # ── search param types (private, flat within this module) ─────────────────────
@@ -155,8 +157,16 @@ class RandomSearchBlock(ExperimentBlock):
                 progress_callback=make_trial_progress_wrapper(
                     self._progress_callback, trial_idx, n_trials
                 ),
+                cancel_token=self._cancel_token,
             )
             self._trials.append(trial_record)
+
+            # A cancelled sweep stops between trials: the trial that was
+            # training already stopped at its own epoch boundary, and the ones
+            # not yet started would only burn GPU time nobody asked for.
+            if is_cancelled(self._cancel_token):
+                logger.info("Sweep cancelled after {} trials.", len(self._trials))
+                break
 
         self._write_artifacts()
 

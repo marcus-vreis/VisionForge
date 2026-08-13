@@ -7,6 +7,7 @@ import pytest
 
 from visionforge.blocks import detection as det_mod
 from visionforge.blocks.detection import DetectionBlock
+from visionforge.core.cancellation import CancellationToken
 from visionforge.core.detection_trainer import DetectionTrainResult
 from visionforge.utils.detection_config import DetectionConfig
 
@@ -31,8 +32,11 @@ def _fake_trainer(captured: dict[str, Any], tmp_path: Path) -> type:
         def __init__(self, config: DetectionConfig) -> None:
             captured["config"] = config
 
-        def fit(self, progress_callback: Any = None) -> DetectionTrainResult:
+        def fit(
+            self, progress_callback: Any = None, cancel_token: Any = None
+        ) -> DetectionTrainResult:
             captured["callback"] = progress_callback
+            captured["cancel_token"] = cancel_token
             return DetectionTrainResult(
                 best_epoch=2,
                 best_map50_95=0.4,
@@ -84,3 +88,22 @@ class TestDetectionBlock:
         block._progress_callback = cb
         block.run()
         assert captured["callback"] is cb
+
+
+class TestCancellationReachesTheTrainer:
+    """The queue's stop request is worthless unless the loop receives it."""
+
+    def test_the_blocks_token_is_handed_to_the_trainer(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        captured: dict[str, Any] = {}
+        monkeypatch.setattr(
+            det_mod, "DetectionTrainer", _fake_trainer(captured, tmp_path)
+        )
+        token = CancellationToken()
+        block = DetectionBlock()
+        block.setup(_config(tmp_path))
+        block._cancel_token = token
+        block.run()
+
+        assert captured["cancel_token"] is token

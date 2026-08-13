@@ -10,6 +10,7 @@ import yaml
 from loguru import logger
 
 from visionforge.blocks.classification import ClassificationBlock
+from visionforge.core.cancellation import CancellationToken
 from visionforge.utils.config import ExperimentConfig
 
 
@@ -114,6 +115,7 @@ def run_trial(
     trial_overrides: dict[str, Any],
     trial_record: dict[str, Any],
     progress_callback: Callable[[dict[str, Any]], None] | None = None,
+    cancel_token: CancellationToken | None = None,
 ) -> None:
     """Execute one trial and mutate trial_record in place with results or error.
 
@@ -128,6 +130,8 @@ def run_trial(
         trial_record: mutable dict that receives status, metrics, and error fields.
         progress_callback: injected onto the inner block so the trial's Trainer
             streams epoch progress to the GUI; None disables streaming.
+        cancel_token: injected the same way, so "stop this run" reaches the
+            trial that is training rather than only the sweep around it.
     """
     base_raw: dict[str, Any] = base_config.model_dump(mode="json")
     base_raw["training"]["seed"] = trial_seed
@@ -139,6 +143,7 @@ def run_trial(
         trial_config = ExperimentConfig.model_validate(base_raw)
         block.setup(trial_config)
         block._progress_callback = progress_callback
+        block._cancel_token = cancel_token
         block.run()
         report = block.report()
 

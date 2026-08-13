@@ -3,11 +3,18 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any
 
+from visionforge.core.cancellation import CancellationToken
 from visionforge.utils.config import ExperimentConfig
 
 
 class ExperimentBlock(ABC):
     """Base class for all experiment strategies."""
+
+    # Set by the GUI layer when a queued job starts, so "stop this run" reaches
+    # the trainer that is actually looping (ADR-088). Declared here rather than
+    # in each block because the route layer assigns it without knowing which
+    # block it built; None is the CLI case, where nobody can press a button.
+    _cancel_token: CancellationToken | None = None
 
     @abstractmethod
     def setup(self, config: ExperimentConfig) -> None:

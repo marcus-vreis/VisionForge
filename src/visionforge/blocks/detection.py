@@ -11,6 +11,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
+from visionforge.core.cancellation import CancellationToken
 from visionforge.core.detection_trainer import DetectionTrainer, DetectionTrainResult
 from visionforge.utils.detection_config import DetectionConfig
 
@@ -23,10 +24,14 @@ class DetectionBlock:
         self._result: DetectionTrainResult | None = None
         # Injected by the GUI layer to stream live epoch progress via SSE.
         self._progress_callback: Callable[[dict[str, Any]], None] | None = None
+        # Set by the GUI layer when a queued job starts, so "stop this run"
+        # reaches the trainer that is looping (ADR-088). None is the CLI case.
+        self._cancel_token: CancellationToken | None = None
 
     def run(self) -> None:
         self._result = DetectionTrainer(self._config).fit(
-            progress_callback=self._progress_callback
+            progress_callback=self._progress_callback,
+            cancel_token=self._cancel_token,
         )
 
     def report(self) -> dict[str, Any]:

@@ -31,6 +31,13 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Fixed
 
+- **O botão de parar um treino agora para o treino.** A fila criava o sinal de
+  cancelamento e o marcava quando você pedia para parar, mas nada entregava esse
+  sinal ao trainer: o endpoint respondia 200, o log dizia "vai parar na próxima
+  época" e o treino ia até o fim. O sinal agora percorre o mesmo caminho do
+  progresso — a rota entrega ao bloco, o bloco entrega ao trainer — e uma busca
+  de hiperparâmetros cancelada para entre os trials em vez de começar o próximo
+  ([ADR-094](docs/dev/DECISIONS.md)).
 - **Retomar não deixa mais uma pasta de run vazia para trás.** O treino criava a
   pasta nova com data e hora, apontava o TensorBoard para ela e só depois
   descobria que tinha estado para continuar — abandonando a pasta e mandando os

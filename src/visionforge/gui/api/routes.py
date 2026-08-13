@@ -42,6 +42,7 @@ from visionforge.blocks.segmentation import SegmentationBlock
 from visionforge.blocks.segmentation_cv import run_segmentation_cross_validation
 from visionforge.blocks.segmentation_runner import SegmentationRunner
 from visionforge.blocks.transfer_learning import TransferLearningBlock
+from visionforge.core.cancellation import CancellationToken
 from visionforge.core.comparison import ComparisonTrial, run_model_comparison
 from visionforge.core.data import DataModule
 from visionforge.core.dataset_fingerprint import dataset_identity
@@ -173,6 +174,11 @@ _current_run: dict[str, Any] | None = None
 # A None sentinel signals end-of-stream so the generator can close cleanly.
 _event_queue: asyncio.Queue[dict[str, Any] | None] | None = None
 
+# Cancellation token of the job executing right now; None when idle. Handed to
+# the block so DELETE /api/queue/{id} reaches the trainer's epoch boundary
+# (ADR-088) instead of only flipping a flag nobody reads.
+_active_cancel_token: CancellationToken | None = None
+
 # Default location where Trainer writes run directories.
 _MODELS_DIR = Path("outputs/models")
 
@@ -183,10 +189,16 @@ def _begin_job(job: QueuedJob) -> None:
     The fresh SSE queue is created here rather than at submission time: doing it
     in the request handler was safe only while a second submit was refused, and
     with queueing it would replace the live queue of the job still running.
+
+    The job's cancellation token is stashed for the same reason: the executor
+    coroutine is built at submission time and cannot close over a job that does
+    not exist yet, so it reads the token here — the queue calls this immediately
+    before it awaits ``job.start()``.
     """
-    global _current_run, _event_queue
+    global _current_run, _event_queue, _active_cancel_token
 
     _event_queue = asyncio.Queue()
+    _active_cancel_token = job.cancel_token
     _current_run = {
         "run_id": job.run_id,
         "status": "running",
@@ -3272,6 +3284,7 @@ async def _execute_experiment(config: ExperimentConfig, run_id: str) -> None:
             | TransferLearningBlock,
         ):
             block._progress_callback = _put_event
+        block._cancel_token = _active_cancel_token
 
         logger.info("GUI: Starting experiment {} (block={})", run_id, config.block)
         await asyncio.to_thread(block.run)
@@ -3330,6 +3343,7 @@ async def _execute_detection(config: DetectionConfig, run_id: str) -> None:
         block = DetectionBlock()
         block.setup(config)
         block._progress_callback = _put_event
+        block._cancel_token = _active_cancel_token
 
         logger.info("GUI: Starting detection {} ({})", run_id, config.model.name)
         await asyncio.to_thread(block.run)
@@ -3377,6 +3391,7 @@ async def _execute_regression(config: RegressionConfig, run_id: str) -> None:
         block = RegressionBlock()
         block.setup(config)
         block._progress_callback = _put_event
+        block._cancel_token = _active_cancel_token
 
         logger.info("GUI: Starting regression {} ({})", run_id, config.model.name)
         await asyncio.to_thread(block.run)
@@ -3424,6 +3439,7 @@ async def _execute_segmentation(config: SegmentationConfig, run_id: str) -> None
         block = SegmentationBlock()
         block.setup(config)
         block._progress_callback = _put_event
+        block._cancel_token = _active_cancel_token
 
         logger.info("GUI: Starting segmentation {} ({})", run_id, config.model.name)
         await asyncio.to_thread(block.run)
@@ -3471,6 +3487,7 @@ async def _execute_anomaly(config: AnomalyConfig, run_id: str) -> None:
         block = AnomalyBlock()
         block.setup(config)
         block._progress_callback = _put_event
+        block._cancel_token = _active_cancel_token
 
         logger.info("GUI: Starting anomaly {} ({})", run_id, config.model.name)
         await asyncio.to_thread(block.run)

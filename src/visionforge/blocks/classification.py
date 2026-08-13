@@ -78,7 +78,10 @@ class ClassificationBlock(ExperimentBlock):
         # processes outlive the run and each retry stacks more of them.
         try:
             self._train_result = Trainer(self._config).fit(
-                model, data, progress_callback=self._progress_callback
+                model,
+                data,
+                progress_callback=self._progress_callback,
+                cancel_token=self._cancel_token,
             )
 
             # Reload best checkpoint for test-set evaluation.

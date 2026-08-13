@@ -16,6 +16,7 @@ from typing import Any
 
 import torch
 
+from visionforge.core.cancellation import CancellationToken
 from visionforge.core.metric_ci import MetricCI, bootstrap_regression_cis
 from visionforge.core.plotter import MetricsPlotter
 from visionforge.core.regression_data import RegressionDataModule
@@ -38,6 +39,9 @@ class RegressionBlock:
         self._test_predictions: tuple[Any, Any] | None = None
         # Injected by the GUI layer to stream live epoch progress via SSE.
         self._progress_callback: Callable[[dict[str, Any]], None] | None = None
+        # Set by the GUI layer when a queued job starts, so "stop this run"
+        # reaches the trainer that is looping (ADR-088). None is the CLI case.
+        self._cancel_token: CancellationToken | None = None
 
     def run(self) -> None:
         model = RegressionModelFactory.create(self._config.model)
@@ -49,7 +53,10 @@ class RegressionBlock:
         # processes outlive the run and each retry stacks more of them.
         try:
             self._train_result = trainer.fit(
-                model, data, progress_callback=self._progress_callback
+                model,
+                data,
+                progress_callback=self._progress_callback,
+                cancel_token=self._cancel_token,
             )
 
             # Reload the best checkpoint before test-set evaluation.

@@ -18,6 +18,7 @@ import torch
 
 from visionforge.core.anomaly_data import AnomalyDataModule
 from visionforge.core.anomaly_trainer import AnomalyTrainer, AnomalyTrainResult
+from visionforge.core.cancellation import CancellationToken
 from visionforge.core.metric_ci import MetricCI, bootstrap_anomaly_cis
 from visionforge.core.plotter import MetricsPlotter
 from visionforge.models.anomaly_factory import AnomalyModelFactory
@@ -35,6 +36,9 @@ class AnomalyBlock:
         self._test_scores: tuple[Any, Any] | None = None
         # Injected by the GUI layer to stream live progress via SSE.
         self._progress_callback: Callable[[dict[str, Any]], None] | None = None
+        # Set by the GUI layer when a queued job starts, so "stop this run"
+        # reaches the trainer that is looping (ADR-088). None is the CLI case.
+        self._cancel_token: CancellationToken | None = None
 
     def run(self) -> None:
         model = AnomalyModelFactory.create(self._config.model)
@@ -46,7 +50,10 @@ class AnomalyBlock:
         # processes outlive the run and each retry stacks more of them.
         try:
             self._train_result = trainer.fit(
-                model, data, progress_callback=self._progress_callback
+                model,
+                data,
+                progress_callback=self._progress_callback,
+                cancel_token=self._cancel_token,
             )
 
             # Reload the best checkpoint before final scoring.

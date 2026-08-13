@@ -2704,7 +2704,8 @@ bare number.
 ## ADR-088 — A running job can be stopped, and keeps what it earned
 
 **Date:** 2026-08-08
-**Status:** Accepted — shipped 2026-08-08
+**Status:** Accepted — trainers shipped 2026-08-08; the GUI never delivered the
+token until ADR-094
 **Revises:** ADR-075 (the run queue)
 
 **Context:** ADR-075 refused to cancel a running job, and its reasoning was
@@ -2747,7 +2748,12 @@ run cancelled after epoch 3 stopped at the top of epoch 4, reported
 
 **Still not done:** resuming a cancelled run. That needs optimizer and scheduler
 state in the checkpoint, not just weights, which changes the checkpoint format
-and deserves its own decision.
+and deserves its own decision. *(Done in ADR-092/093.)*
+
+**Correction (2026-08-13):** the verification above was run against the trainer
+directly. The GUI path was never wired — the queue created a token and cancelled
+it, and no block ever handed it to a trainer, so the button reported success and
+training ran to the end. Fixed in ADR-094.
 
 ---
 
@@ -2973,3 +2979,48 @@ handed its own directory back; all four continue in the same directory with a
 `1, 2, 3` history, one `run.json`, and no resume file left behind. The
 Ultralytics path is covered for the two things only it can get wrong: it asks to
 resume from `last.pt`, and a fresh run never asks to resume at all.
+
+---
+
+## ADR-094 — The stop button had nothing on the other end
+
+**Date:** 2026-08-13
+**Status:** Accepted
+**Fixes:** ADR-088 (a running job can be stopped)
+
+**Context:** found while giving the standalone trainers resume (ADR-093).
+ADR-088 gave every trainer a cancellation token and an epoch boundary to read it
+at, and the run queue created a token per job and cancelled it on
+`DELETE /api/queue/{id}`. Nothing connected the two. The endpoint answered 200,
+the queue logged "asked to stop at the next epoch", the test asserted the flag
+had flipped — and the trainer, which was never given the token, trained to its
+last epoch. The one observable that mattered was the only one nobody checked.
+
+**The token now travels the same road as the progress callback.** That road
+already exists and is already understood: the route layer sets
+`block._progress_callback` on the block it just built, and the block hands it to
+its trainer. `_cancel_token` is assigned in the same place and passed in the same
+call. Nothing new is invented, so there is one pattern for "things the GUI
+injects into a run" rather than two.
+
+**The executor reads the token from the module, not from a closure.** The
+coroutine that runs a job is built when the job is *submitted*, and at that
+moment the job — and its token — do not exist yet. `_begin_job` therefore
+publishes the active token immediately before the queue awaits `job.start()`.
+That ordering is guaranteed by the queue's own drain loop, not by timing.
+
+**A cancelled sweep stops between trials.** Grid and random search run many
+trainings inside one job: the trial that is training stops at its own epoch
+boundary, and the loop then breaks rather than starting the next trial. Without
+that, cancelling a 40-trial sweep would stop one trial and immediately begin
+another, which is indistinguishable from the button doing nothing.
+
+**Declared on the base class where there is one.** `ExperimentBlock` carries
+`_cancel_token = None`, so the route layer can assign it without knowing which
+block it built. The standalone task blocks are deliberately not subclasses
+(ADR-033/036/037), so each declares it beside its own `_progress_callback`.
+
+**The test asserts delivery, not intent.** ADR-088's test checked that the token
+was cancelled, which was true the whole time it was broken. The new ones check
+that the block hands its token to the trainer, and that the running job's token
+is the one the executor can reach.

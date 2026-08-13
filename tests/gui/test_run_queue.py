@@ -380,6 +380,28 @@ class TestQueueEndpoints:
         finally:
             release_queue(routes_mod)
 
+    def test_the_running_jobs_token_is_published_for_its_executor(self) -> None:
+        """Cancelling only works if the executor can find the token.
+
+        The executor coroutine is built at submission time and cannot close over
+        a job that does not exist yet, so it reads the active token from the
+        module. Without this the DELETE flips a flag no trainer ever sees.
+        """
+        from .conftest import occupy_queue, release_queue
+
+        client, routes_mod = self._client_and_routes()
+        occupy_queue(routes_mod, run_id="holding")
+        try:
+            job = routes_mod._RUN_QUEUE._active
+            routes_mod._begin_job(job)
+
+            assert routes_mod._active_cancel_token is job.cancel_token
+
+            client.delete("/api/queue/holding")
+            assert routes_mod._active_cancel_token.cancelled is True
+        finally:
+            release_queue(routes_mod)
+
     def test_cancelling_an_unknown_id_is_a_404(self) -> None:
         from .conftest import release_queue
 
