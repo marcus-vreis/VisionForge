@@ -99,10 +99,10 @@ function useDebouncedStats<T>(
 ): T | null {
   const [stats, setStats] = useState<T | null>(null);
   useEffect(() => {
-    if (!enabled) {
-      setStats(null);
-      return;
-    }
+    // Disabled means "no stats to show", which is a question about the current
+    // render rather than a state change -- clearing it here would be a setState
+    // in an effect body, and a cascading render for a value already derivable.
+    if (!enabled) return;
     let alive = true;
     const timer = setTimeout(() => {
       fetcher()
@@ -118,7 +118,7 @@ function useDebouncedStats<T>(
       clearTimeout(timer);
     };
   }, [key, enabled]); // eslint-disable-line react-hooks/exhaustive-deps
-  return stats;
+  return enabled ? stats : null;
 }
 
 // ---------------------------------------------------------------- segmentation

@@ -643,8 +643,8 @@ export default function App() {
         onReopenTraining={() => setOverlayVisible(true)}
       />
 
+      {showHistory && (
       <HistoryOverlay
-        open={showHistory}
         onClose={() => setShowHistory(false)}
         onCountChange={setHistoryCount}
         // `activeKey` is already the family the history groups by: the task
@@ -654,6 +654,7 @@ export default function App() {
           isCustomTask(activeTask) ? `custom:${activeKey}` : activeKey
         }
       />
+      )}
 
       <DatasetsOverlay
         open={showDatasets}

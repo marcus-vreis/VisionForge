@@ -161,8 +161,10 @@ jobs:
         working-directory: frontend
         run: npx vitest run
 
-      # `npm run lint` is deliberately not gated yet: six pre-existing
-      # react-hooks/react-refresh errors would make this job red on arrival.
+      - name: Lint (eslint)
+        working-directory: frontend
+        run: npm run lint
+
       # `tsc -b`, not `tsc --noEmit`: the root tsconfig is a solution file with
       # `"files": []`, so a plain --noEmit run type-checks nothing and always
       # passes. Building the SPA is what actually type-checks it.

@@ -1,5 +1,6 @@
 import { NumberField, SelectField, Segmented, TextField, Toggle } from "./controls";
 import { resolveKind } from "./field-renderer";
+import { orderSections, resolveSchema, visibleChildren } from "../lib/schema-form";
 import type { ValidationError } from "../hooks/useExperiment";
 import type { JsonSchema } from "../types/schema";
 
@@ -42,8 +43,6 @@ const SECTION_LABELS: Record<string, string> = {
 /** Canonical section order (ADR-059), adapted: the researcher's own fields
  *  come first, then the inherited blocks in the same order every built-in
  *  panel uses. Anything unlisted keeps schema order after these. */
-const SECTION_ORDER = ["model", "training", "data", "transforms", "preprocessing", "output"];
-
 const sectionLabel: React.CSSProperties = {
   fontFamily: "var(--font-mono)",
   fontSize: 10,
@@ -67,41 +66,6 @@ const grid: React.CSSProperties = {
   gap: 14,
 };
 
-/** Follow $ref / anyOf until a concrete schema is reached. */
-export function resolveSchema(
-  schema: JsonSchema,
-  defs: Record<string, JsonSchema>,
-): JsonSchema {
-  if (schema.$ref) {
-    const name = schema.$ref.split("/").pop();
-    const target = name ? defs[name] : undefined;
-    return target ? resolveSchema(target, defs) : schema;
-  }
-  if (schema.anyOf) {
-    const nonNull = schema.anyOf.find((s) => s.type !== "null");
-    if (nonNull) return resolveSchema(nonNull, defs);
-  }
-  return schema;
-}
-
-/** Properties of an object schema that will actually render a control. */
-export function visibleChildren(
-  schema: JsonSchema,
-  defs: Record<string, JsonSchema>,
-): [string, JsonSchema][] {
-  if (schema.type !== "object" || !schema.properties) return [];
-  const out: [string, JsonSchema][] = [];
-  for (const [name, child] of Object.entries(schema.properties)) {
-    const resolved = resolveSchema(child, defs);
-    const kind = resolveKind(name, resolved);
-    if (kind === "skip") continue;
-    // Recurse: a block whose children are all skipped is itself invisible.
-    if (kind === "object" && visibleChildren(resolved, defs).length === 0) continue;
-    out.push([name, child]);
-  }
-  return out;
-}
-
 /** Friendly heading: the curated label wins over the Pydantic class name. */
 function sectionLabel_(name: string, resolved: JsonSchema): string {
   const curated = SECTION_LABELS[name];
@@ -111,13 +75,6 @@ function sectionLabel_(name: string, resolved: JsonSchema): string {
   const title = resolved.title;
   if (!title || /Config$/.test(title)) return name.replace(/_/g, " ");
   return title;
-}
-
-/** Canonical order first, then whatever else the schema declared. */
-export function orderSections(names: string[]): string[] {
-  const known = SECTION_ORDER.filter((n) => names.includes(n));
-  const rest = names.filter((n) => !SECTION_ORDER.includes(n));
-  return [...known, ...rest];
 }
 
 function errorFor(

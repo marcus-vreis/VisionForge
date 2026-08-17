@@ -36,8 +36,21 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
   continua o mesmo run: uma curva contínua, um `run.json`
   ([ADR-092](docs/dev/DECISIONS.md)).
 
+### Changed
+
+- **O `eslint` virou porta no CI.** Ele estava fora do gate porque seis erros
+  antigos deixariam o job vermelho no dia em que entrasse. Os seis foram
+  corrigidos — inclusive o histórico, que ficava montado enquanto fechado e
+  refazia à mão doze `setState` de reset que uma montagem nova já dá de graça
+  ([ADR-096](docs/dev/DECISIONS.md)).
+
 ### Fixed
 
+- **Um `useContext` chamado depois de um `return` antecipado.** No bloco de
+  scheduler do painel de parâmetros, o hook só rodava em parte dos renders — na
+  primeira vez que aquele schema viesse sem propriedades, a ordem dos hooks
+  saía do lugar. Nunca disparou, mas era questão de tempo
+  ([ADR-096](docs/dev/DECISIONS.md)).
 - **O botão de parar um treino agora para o treino.** A fila criava o sinal de
   cancelamento e o marcava quando você pedia para parar, mas nada entregava esse
   sinal ao trainer: o endpoint respondia 200, o log dizia "vai parar na próxima

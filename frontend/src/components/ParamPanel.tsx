@@ -239,6 +239,10 @@ function SchedulerFields({
   onChange,
   errors,
 }: SchedulerFieldsProps) {
+  // Read before the early return: a hook that runs only on some renders puts
+  // the whole hook order out of step the first time this schema has no
+  // properties.
+  const grid = useContext(GridContext);
   const resolved = resolveSchema(schema, defs);
   if (!resolved.properties) return null;
 
@@ -257,7 +261,6 @@ function SchedulerFields({
   // currently showing, and their parameters have to be reachable — otherwise
   // adding "step" to the grid silently runs it on the default step_size/gamma,
   // with no way to see or sweep them (ADR-078).
-  const grid = useContext(GridContext);
   const axisKinds = grid.enabled
     ? (grid.hyperparameters["training.scheduler.kind"] ?? []).map(String)
     : [];

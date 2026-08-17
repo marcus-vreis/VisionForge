@@ -6,7 +6,6 @@ import { MenuSelect } from "./controls";
 import { RunDetailPanel } from "./RunDetailPanel";
 
 interface HistoryOverlayProps {
-  open: boolean;
   onClose: () => void;
   onCountChange?: (count: number) => void;
   /** Task family the app is currently on. Opening the history from the
@@ -612,13 +611,13 @@ function RunCard({
 
 /** History overlay — fetches and displays past experiment runs from /api/runs. */
 export function HistoryOverlay({
-  open,
   onClose,
   onCountChange,
   initialTask,
 }: HistoryOverlayProps) {
   const [runs, setRuns] = useState<RunSummary[]>([]);
-  const [loading, setLoading] = useState(false);
+  // Mounted means opening, and opening always fetches.
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [selectMode, setSelectMode] = useState(false);
@@ -652,7 +651,6 @@ export function HistoryOverlay({
   }, [selectedRunId, compareActiveIds, onClose]);
 
   useEffect(() => {
-    if (!open) return;
     const onKey = (e: KeyboardEvent) => {
       // The lightbox is on top and owns Esc while it is open; it stops there.
       if (e.key === "Escape" && !document.querySelector("[data-lightbox]")) {
@@ -661,22 +659,13 @@ export function HistoryOverlay({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, stepBack]);
+  }, [stepBack]);
 
   useEffect(() => {
-    if (!open) return;
-    setLoading(true);
-    setError(null);
-    setSelectedRunId(null);
-    setSelectMode(false);
-    setSelection([]);
-    setCompareActiveIds(null);
-    setQuery("");
-    setTaskFilter("all");
-    setStatusFilter("all");
-    setBlockFilter("all");
-    setSubtypeFilter("all");
-    setSortBy("recent");
+    // No resetting here: this component is mounted when the sheet opens, so the
+    // initial state *is* the reset. It used to stay mounted and re-clear twelve
+    // pieces of state on the way in, which is a cascade of renders to reach the
+    // values a fresh mount already has.
     fetchRuns()
       .then((data) => {
         setRuns(data);
@@ -692,7 +681,7 @@ export function HistoryOverlay({
         setError(msg);
       })
       .finally(() => setLoading(false));
-  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggleSelect = (runId: string) => {
     setSelection((prev) =>
@@ -811,7 +800,6 @@ export function HistoryOverlay({
   const selectedRuns = runs.filter((r) => selection.includes(r.run_id));
   const busyDeleting = deletingIds.length > 0;
 
-  if (!open) return null;
 
   return (
     <div

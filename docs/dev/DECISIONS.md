@@ -3070,3 +3070,43 @@ was stopped after epoch 2 of 4, appeared in History with a `⏸ 2/4` badge, show
 `Resuming 20260817_191703_145266 at epoch 3 of 4`, ran epochs 3 and 4 in that
 same directory, and left the run reporting `total_epochs: 4`, a `1,2,3,4`
 history and `resumable: false`.
+
+---
+
+## ADR-096 — The frontend lint became a gate, which meant fixing what it found
+
+**Date:** 2026-08-13
+**Status:** Accepted
+**Extends:** ADR-085 (the frontend joined CI)
+
+**Context:** ADR-085 added a frontend CI job and deliberately left `npm run lint`
+out of it, because six pre-existing errors would have made the job red the day it
+arrived. A check nobody can turn on is not a check — and the six were not style
+nits.
+
+**One was a real bug.** `SchedulerFields` called `useContext` *after* an early
+`return null`, so the first render where the schema had no properties would have
+shifted every later hook by one. It never fired because that schema always has
+properties, which is the kind of latent defect a lint rule exists to catch.
+
+**Two were "setState synchronously in an effect", and both had a better shape
+underneath.** The history sheet stayed mounted while closed and re-cleared twelve
+pieces of state on the way in, reproducing by hand exactly what a fresh mount
+gives for free; it is now mounted only while open, and its effect does nothing
+but fetch. The debounced dataset stats cleared themselves when disabled, which is
+a question about the current render (`enabled ? stats : null`), not a state
+change.
+
+**Three were Fast Refresh warnings that pointed at the right seam.**
+`SchemaForm.tsx` exported three schema-walking helpers alongside its components,
+so editing the form during development remounted it and threw away whatever the
+researcher had typed. The helpers moved to `lib/schema-form.ts`, where they were
+always going to belong.
+
+**Verified in the browser, because two of these changed component lifetimes:**
+history opens and lists its runs, a typed filter is gone when the sheet is
+reopened (the behavior those twelve resets existed for), the count badge still
+tracks, and the dataset-stats endpoint still answers. No console errors.
+
+**The gate is now on**, so the next one of these is caught on the pull request
+rather than accumulating into a list too big to turn on.
