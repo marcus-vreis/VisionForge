@@ -329,7 +329,21 @@ class DetectionTrainer:
                 }
             )
 
+        # Ultralytics fires `on_fit_epoch_end` one extra time after the loop,
+        # from `final_eval`, deliberately at `epoch + 1` -- its own comment says
+        # "log best metrics at step epochs+1". That pass re-measures best.pt; it
+        # is not an epoch. Recording it gave every YOLO run a phantom trailing
+        # epoch (a 10-epoch run reporting 11), and when its numbers beat the real
+        # ones it also made `best_epoch` point at an epoch that never ran -- a
+        # 5-epoch run reporting best_epoch=6. Comparing against `cfg.epochs` is
+        # not enough: a cancelled run's phantom is still within the configured
+        # count, so what closes the door is the loop ending, either way it can.
+        finished = False
+
         def _on_epoch_end(trainer: Any) -> None:
+            nonlocal finished
+            if finished:
+                return
             epoch = int(getattr(trainer, "epoch", len(history))) + 1
             metrics: dict[str, Any] = getattr(trainer, "metrics", {}) or {}
             map50 = _extract(metrics, _MAP50_KEY)
@@ -361,6 +375,9 @@ class DetectionTrainer:
             if is_cancelled(cancel_token):
                 logger.info("Run cancelled at epoch {}; stopping after it.", epoch)
                 trainer.stop = True
+                finished = True
+            elif epoch >= cfg.epochs:
+                finished = True
 
         model.add_callback("on_fit_epoch_end", _on_epoch_end)
         logger.info(

@@ -46,6 +46,14 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Fixed
 
+- **Todo treino YOLO registrava uma época fantasma.** O Ultralytics dispara o
+  mesmo callback de fim de época mais uma vez depois do laço, para anotar as
+  métricas do `best.pt` — e essa passada era gravada como época. Um treino de 10
+  épocas dizia 11, um de 100 dizia 101; e quando os números dessa passada
+  empatavam ou superavam os da melhor época, o `best_epoch` passava a apontar
+  para uma época que nunca rodou (dois runs aqui dizem `best_epoch=6` num treino
+  de 5 épocas). Achado por um teste que treina de verdade, e não com o YOLO
+  simulado ([ADR-097](docs/dev/DECISIONS.md)).
 - **Um `useContext` chamado depois de um `return` antecipado.** No bloco de
   scheduler do painel de parâmetros, o hook só rodava em parte dos renders — na
   primeira vez que aquele schema viesse sem propriedades, a ordem dos hooks

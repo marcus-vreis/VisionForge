@@ -78,10 +78,22 @@ def _make_fake_yolo(record: dict[str, Any]) -> type:
             run_dir = Path(kwargs["project"]) / kwargs["name"]
             (run_dir / "weights").mkdir(parents=True, exist_ok=True)
             (run_dir / "weights" / "best.pt").write_bytes(b"fake")
-            for e in range(int(kwargs["epochs"])):
-                ft = _FakeUTrainer(e, int(kwargs["epochs"]))
+            epochs = int(kwargs["epochs"])
+            for e in range(epochs):
+                ft = _FakeUTrainer(e, epochs)
                 for fn in self._callbacks.get("on_fit_epoch_end", []):
                     fn(ft)
+                if getattr(ft, "stop", False):
+                    break
+            # `final_eval` fires the same callback once more, at epoch + 1, to
+            # log the metrics of best.pt. Real Ultralytics does this; the fake
+            # has to, or the tests cannot see the phantom epoch it caused.
+            final = _FakeUTrainer(epochs, epochs)
+            # Better numbers than any real epoch, which is what made the phantom
+            # steal `best_epoch` instead of merely padding the history.
+            final.metrics = {k: v + 1.0 for k, v in final.metrics.items()}
+            for fn in self._callbacks.get("on_fit_epoch_end", []):
+                fn(final)
             return object()
 
     return _FakeYOLO
@@ -373,6 +385,54 @@ class TestTorchvisionPath:
         run_json = json.loads((result.run_dir / "run.json").read_text("utf-8"))
         graphics = run_json["artifacts"]["graphics"]
         assert any(g.endswith("results.png") for g in graphics)
+
+
+class TestFinalValidationIsNotAnEpoch:
+    """Ultralytics logs best.pt's metrics through the same callback, at epochs+1."""
+
+    def test_the_history_stops_at_the_configured_epochs(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(dt_mod, "YOLO", _make_fake_yolo({}))
+
+        result = DetectionTrainer(_config(tmp_path)).fit()
+
+        assert [h.epoch for h in result.history] == [1, 2]
+        assert result.total_epochs == 2
+
+    def test_it_cannot_steal_best_epoch(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """It reports the best epoch's own numbers; crediting them to a step
+        past the last epoch pointed the researcher at a run that never ran."""
+        monkeypatch.setattr(dt_mod, "YOLO", _make_fake_yolo({}))
+
+        result = DetectionTrainer(_config(tmp_path)).fit()
+
+        assert result.best_epoch == 2
+
+    def test_a_cancelled_run_does_not_gain_one_either(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Its phantom is within the configured count, so the epoch number alone
+        cannot tell it apart -- only the loop having ended can."""
+        monkeypatch.setattr(dt_mod, "YOLO", _make_fake_yolo({}))
+        cfg = _config(tmp_path)
+        cfg = cfg.model_copy(
+            update={"training": cfg.training.model_copy(update={"epochs": 3})}
+        )
+        token = CancellationToken()
+
+        def stop_after_first(event: dict[str, Any]) -> None:
+            if event.get("event") == "epoch_end" and event.get("epoch") == 1:
+                token.cancel()
+
+        result = DetectionTrainer(cfg).fit(
+            progress_callback=stop_after_first, cancel_token=token
+        )
+
+        assert [h.epoch for h in result.history] == [1]
+        assert result.total_epochs == 1
 
 
 class TestUltralyticsResume:

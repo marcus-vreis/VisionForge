@@ -3110,3 +3110,56 @@ tracks, and the dataset-stats endpoint still answers. No console errors.
 
 **The gate is now on**, so the next one of these is caught on the pull request
 rather than accumulating into a list too big to turn on.
+
+---
+
+## ADR-097 — Training Ultralytics for real, once, found a phantom epoch in every YOLO run
+
+**Date:** 2026-08-13
+**Status:** Accepted
+**Fixes:** ADR-034 (the Ultralytics backend), ADR-088 (stopping a run)
+
+**Context:** every detection test handed `DetectionTrainer` a fake `YOLO` class.
+That is the right shape for testing our argument translation, and it proves
+nothing about the integration — which is the default backend, and whose failures
+have been about how Ultralytics behaves rather than about which kwargs it gets
+(ADR-079 was one: a relative `project` wrote the entire run somewhere else). The
+self-test harness avoids it too, deliberately, so it can run offline.
+
+So one test was written that actually trains: `yolo11n` from the checkpoint in
+the repo, one epoch, four synthetic images, `@pytest.mark.slow`, skipped when the
+extra is absent. **It failed on its first assertion**, and the bug it found was
+in every YOLO run this project has ever produced.
+
+**Ultralytics fires `on_fit_epoch_end` one extra time after the loop.** Its
+`final_eval` re-validates `best.pt` and raises its own counter first — the source
+comment reads "log best metrics at step epochs+1, not overwriting last epoch".
+That callback is our only window into its loop, so the extra call was recorded as
+an epoch. Every completed run reported one epoch too many: a 10-epoch run said
+11, a 100-epoch run said 101.
+
+**And sometimes it stole `best_epoch`.** The final pass reports the best
+checkpoint's metrics, so when they came out at or above the best real epoch's,
+the phantom won: two of the runs on this machine name `best_epoch=6` for a
+5-epoch run, and one names `best_epoch=3` for a 2-epoch run. A number that points
+at an epoch that never ran is worse than a wrong count.
+
+**Comparing the epoch number against the configured total is not enough.** A
+cancelled run stops early, so its phantom lands *within* the configured count and
+looks exactly like the next epoch. What separates them is not the number but the
+loop having ended — either by reaching the last epoch or by being asked to stop.
+The callback now closes itself in both cases, and ignores everything after.
+
+**The fake now fires the extra callback too,** with better metrics than any real
+epoch, so the fast tests fail without the guard — they were verified failing
+before the fix went in, on all three assertions.
+
+**Old `run.json` files are left alone.** They record what was measured, and the
+phantom's numbers are real (they are `best.pt`'s), only mislabelled as an epoch.
+Rewriting them would invent a history; the runs affected are already known to be
+from before several corrections.
+
+**What this says about the deferral.** Not testing the real library was a
+reasonable trade while the concern was "does it get the right arguments". It
+stopped being reasonable the moment the questions became about behaviour, and one
+26-second test answered a question three months of mocked tests could not.
