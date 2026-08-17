@@ -515,6 +515,7 @@ class TestRun:
                 optimizer: Any = None,
                 progress_callback: Any = None,
                 cancel_token: Any = None,
+                resume_dir: Any = None,
             ) -> Any:
                 if optimizer is not None:
                     captured_optimizer.append(optimizer)

@@ -503,6 +503,29 @@ function RunCard({
             🗂 {run.dataset_name}
           </span>
         )}
+        {run.resumable && (
+          <span
+            title={
+              run.configured_epochs
+                ? `Parou na época ${run.epochs_completed} de ${run.configured_epochs} — dá para continuar`
+                : "Parou antes do fim — dá para continuar"
+            }
+            style={{
+              padding: "2px 8px",
+              background: "oklch(0.80 0.16 85 / 0.14)",
+              border: "1px solid oklch(0.80 0.16 85 / 0.45)",
+              borderRadius: 999,
+              fontFamily: "var(--font-mono)",
+              fontSize: 10,
+              color: "oklch(0.90 0.15 85)",
+              letterSpacing: "0.10em",
+              textTransform: "uppercase",
+            }}
+          >
+            ⏸ {run.epochs_completed}
+            {run.configured_epochs ? `/${run.configured_epochs}` : ""}
+          </span>
+        )}
         {run.block && run.block !== "classification" && (
           <span
             title={`Bloco de experimento: ${run.block}`}

@@ -33,10 +33,14 @@ def _fake_trainer(captured: dict[str, Any], tmp_path: Path) -> type:
             captured["config"] = config
 
         def fit(
-            self, progress_callback: Any = None, cancel_token: Any = None
+            self,
+            progress_callback: Any = None,
+            cancel_token: Any = None,
+            resume_dir: Any = None,
         ) -> DetectionTrainResult:
             captured["callback"] = progress_callback
             captured["cancel_token"] = cancel_token
+            captured["resume_dir"] = resume_dir
             return DetectionTrainResult(
                 best_epoch=2,
                 best_map50_95=0.4,
@@ -107,3 +111,32 @@ class TestCancellationReachesTheTrainer:
         block.run()
 
         assert captured["cancel_token"] is token
+
+
+class TestResumeReachesTheTrainer:
+    def test_the_blocks_resume_dir_is_handed_to_the_trainer(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        captured: dict[str, Any] = {}
+        monkeypatch.setattr(
+            det_mod, "DetectionTrainer", _fake_trainer(captured, tmp_path)
+        )
+        block = DetectionBlock()
+        block.setup(_config(tmp_path))
+        block._resume_dir = tmp_path / "old_run"
+        block.run()
+
+        assert captured["resume_dir"] == tmp_path / "old_run"
+
+    def test_a_fresh_run_passes_none(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        captured: dict[str, Any] = {}
+        monkeypatch.setattr(
+            det_mod, "DetectionTrainer", _fake_trainer(captured, tmp_path)
+        )
+        block = DetectionBlock()
+        block.setup(_config(tmp_path))
+        block.run()
+
+        assert captured["resume_dir"] is None

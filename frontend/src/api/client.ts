@@ -793,6 +793,9 @@ export interface RunDetail {
   };
   tests: TestRecord[];
   dataset?: DatasetInfo | null;
+  /** See RunSummary: the run stopped short and can be continued (ADR-092/093). */
+  resumable?: boolean;
+  configured_epochs?: number | null;
 }
 
 export interface TestRecord {
@@ -806,6 +809,15 @@ export interface TestRecord {
 
 export async function fetchRunDetail(runId: string): Promise<RunDetail> {
   return request<RunDetail>(`/runs/${encodeURIComponent(runId)}`);
+}
+
+/** Continue a run that stopped before its last epoch (ADR-092/093). The config
+ *  comes from the run's own run.json, so the continued run is the same
+ *  experiment; the backend answers 409 when there is nothing left to continue. */
+export async function resumeRun(runId: string): Promise<RunResponse> {
+  return request<RunResponse>(`/runs/${encodeURIComponent(runId)}/resume`, {
+    method: "POST",
+  });
 }
 
 /** Permanently delete a run directory. The backend refuses to delete the

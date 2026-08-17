@@ -64,6 +64,7 @@ class TransferLearningBlock(ExperimentBlock):
                 self._optimizer,
                 progress_callback=self._progress_callback,
                 cancel_token=self._cancel_token,
+                resume_dir=self._resume_dir,
             )
 
             state_dict = torch.load(

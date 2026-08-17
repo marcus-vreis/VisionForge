@@ -76,6 +76,12 @@ export interface RunSummary {
    *  config.data.base_dir so it resolves on runs older than the fingerprint. */
   dataset_name?: string | null;
   dataset_root?: string | null;
+  /** True when the run stopped before its last epoch and left state behind
+   *  (ADR-092/093). Derived server-side from what is on disk. */
+  resumable?: boolean;
+  /** How many epochs it was configured to run, so the button can say how many
+   *  are missing. */
+  configured_epochs?: number | null;
 }
 
 /** The dataset a run trained on, as far as its run.json can prove it.

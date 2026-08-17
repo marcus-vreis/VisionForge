@@ -15,6 +15,13 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Added
 
+- **A GUI agora oferece continuar um treino que parou.** No histórico, o run
+  ganha um selo `⏸ 2/4` e, no detalhe, um botão `▶ RETOMAR`. A configuração vem
+  do `run.json` do próprio run, não do formulário: continuar com outros
+  hiperparâmetros criaria uma pasta cujo histórico descreve dois experimentos
+  diferentes. Sweeps e K-fold não aparecem — os treinos deles ficam em
+  subpastas, e continuar a pasta-mãe não continuaria nada
+  ([ADR-095](docs/dev/DECISIONS.md)).
 - **Qualquer tarefa interrompida pode continuar de onde parou.** Regressão,
   segmentação e o autoencoder de anomalia passam a gravar o mesmo `resume.pt` da
   classificação. Na detecção, quem retoma é o próprio Ultralytics — ele já guarda

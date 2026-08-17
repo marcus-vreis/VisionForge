@@ -42,6 +42,9 @@ class RegressionBlock:
         # Set by the GUI layer when a queued job starts, so "stop this run"
         # reaches the trainer that is looping (ADR-088). None is the CLI case.
         self._cancel_token: CancellationToken | None = None
+        # Set the same way to continue a stopped run in its own directory
+        # (ADR-092/093); None is a fresh run.
+        self._resume_dir: Path | None = None
 
     def run(self) -> None:
         model = RegressionModelFactory.create(self._config.model)
@@ -57,6 +60,7 @@ class RegressionBlock:
                 data,
                 progress_callback=self._progress_callback,
                 cancel_token=self._cancel_token,
+                resume_dir=self._resume_dir,
             )
 
             # Reload the best checkpoint before test-set evaluation.

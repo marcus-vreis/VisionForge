@@ -195,6 +195,12 @@ class RunSummary(BaseModel):
     # to config.data.base_dir, so it resolves on every run ever written.
     dataset_name: str | None = None
     dataset_root: str | None = None
+    # True when the run stopped before its configured last epoch and left usable
+    # state behind (ADR-092/093). Derived from the resume file's presence, not
+    # from `status`, so no stored flag can disagree with what is on disk.
+    resumable: bool = False
+    # How far it got and where it was going, so the button can say so.
+    configured_epochs: int | None = None
 
 
 class DatasetDetectRequest(BaseModel):
@@ -279,6 +285,9 @@ class RunDetail(BaseModel):
     tests: list[dict[str, Any]] = []
     # None when the run.json records no dataset path at all.
     dataset: DatasetInfo | None = None
+    # See RunSummary: derived from the resume file on disk (ADR-092/093).
+    resumable: bool = False
+    configured_epochs: int | None = None
 
 
 class RunTestRequest(BaseModel):

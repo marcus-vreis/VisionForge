@@ -6,6 +6,7 @@ import {
   downloadRunMarkdown,
   exportRunToOnnx,
   fetchRunDetail,
+  resumeRun,
   gradcamRun,
   pickDatasetFolder,
   testRunOnDataset,
@@ -152,6 +153,13 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
   const [batchResult, setBatchResult] = useState<BatchPredictResponse | null>(null);
   const [batchMsg, setBatchMsg] = useState<{ kind: "info" | "error" | "success"; text: string } | null>(null);
 
+  // Resume state — a run that stopped short can be continued in its own
+  // directory (ADR-092/093); the config comes from its run.json, not from here.
+  const [resuming, setResuming] = useState(false);
+  const [resumeMsg, setResumeMsg] = useState<
+    { kind: "info" | "error" | "success"; text: string } | null
+  >(null);
+
   // Grad-CAM state — independent single-shot explainability action.
   const [showGradcamForm, setShowGradcamForm] = useState(false);
   const [gradcamForm, setGradcamForm] = useState({ input_dir: "", num_samples: 8 });
@@ -200,6 +208,29 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
       alive = false;
     };
   }, [runId]);
+
+  const doResume = async () => {
+    setResuming(true);
+    setResumeMsg({ kind: "info", text: "Enfileirando a continuação…" });
+    try {
+      const res = await resumeRun(runId);
+      setResumeMsg({
+        kind: "success",
+        text:
+          res.status === "running"
+            ? "Continuando este run — acompanhe no painel de treino."
+            : "Na fila: começa quando o treino atual terminar.",
+      });
+      await reload();
+    } catch (e) {
+      setResumeMsg({
+        kind: "error",
+        text: e instanceof Error ? e.message : "Falha ao retomar.",
+      });
+    } finally {
+      setResuming(false);
+    }
+  };
 
   const reload = async () => {
     try {
@@ -413,12 +444,43 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
         <div style={{ fontFamily: "var(--font-mono)", fontSize: 14, color: "var(--vf-text)" }}>
           {runId}
         </div>
+        {detail?.resumable && (
+          <button
+            type="button"
+            onClick={() => void doResume()}
+            disabled={resuming}
+            title={
+              detail.configured_epochs
+                ? `Continuar da época ${(detail.metrics?.["total_epochs"] as number) ?? 0} até ${detail.configured_epochs}, na mesma pasta`
+                : "Continuar este run na mesma pasta"
+            }
+            style={{
+              marginLeft: "auto",
+              padding: "6px 12px",
+              background: "oklch(0.80 0.16 85 / 0.14)",
+              border: "1px solid oklch(0.80 0.16 85 / 0.45)",
+              borderRadius: 8,
+              color: "oklch(0.90 0.15 85)",
+              fontFamily: "var(--font-mono)",
+              fontSize: 11,
+              letterSpacing: "0.10em",
+              textTransform: "uppercase",
+              cursor: resuming ? "wait" : "pointer",
+              opacity: resuming ? 0.6 : 1,
+            }}
+          >
+            ▶ retomar
+            {detail.configured_epochs
+              ? ` ${(detail.metrics?.["total_epochs"] as number) ?? 0}/${detail.configured_epochs}`
+              : ""}
+          </button>
+        )}
         <button
           type="button"
           onClick={() => void downloadRunMarkdown(runId)}
           title="Baixar model card (markdown) deste run"
           style={{
-            marginLeft: "auto",
+            marginLeft: detail?.resumable ? 0 : "auto",
             padding: "6px 12px",
             background: "var(--accent-soft)",
             border: "1px solid var(--accent-vf)",
@@ -434,6 +496,28 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
           ↓ markdown
         </button>
       </div>
+
+      {resumeMsg && (
+        <div
+          style={{
+            padding: "8px 12px",
+            borderRadius: 8,
+            fontFamily: "var(--font-mono)",
+            fontSize: 11,
+            background:
+              resumeMsg.kind === "error"
+                ? "oklch(0.704 0.191 22.216 / 0.10)"
+                : "rgba(255,255,255,0.04)",
+            border: "1px solid var(--vf-panel-stroke)",
+            color:
+              resumeMsg.kind === "error"
+                ? "oklch(0.80 0.17 22)"
+                : "var(--vf-text-dim)",
+          }}
+        >
+          {resumeMsg.text}
+        </div>
+      )}
 
       {loading && (
         <div style={{ padding: 32, textAlign: "center", color: "var(--vf-text-muted)" }}>

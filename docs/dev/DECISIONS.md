@@ -3024,3 +3024,49 @@ block it built. The standalone task blocks are deliberately not subclasses
 was cancelled, which was true the whole time it was broken. The new ones check
 that the block hands its token to the trainer, and that the running job's token
 is the one the executor can reach.
+
+---
+
+## ADR-095 — The button that continues a run reads the run, not the form
+
+**Date:** 2026-08-13
+**Status:** Accepted
+**Completes:** ADR-092/093 (resume), which shipped without an interface
+
+**Context:** the trainers could continue a stopped run from Python, and nothing
+in the interface offered it. A capability only reachable by writing a script is
+not a capability for the person this tool is for.
+
+**The config comes from the run's own `run.json`, never from the browser.**
+Resuming with different hyperparameters would produce one directory whose
+history describes two different experiments — and the history is the thing the
+researcher will later read as if it were one curve. The endpoint takes a run id
+and nothing else for exactly that reason.
+
+**"Can this be continued" is computed from disk on every read.** ADR-092 made
+the resume file's presence the answer; the API repeats that rather than storing
+a flag, because a stored flag can disagree with what is there. It costs one
+`torch.load` per listed run, which is why the check refuses early on anything
+whose config has no epoch count.
+
+**Ultralytics is judged by its own state.** A YOLO run writes no `resume.pt` — it
+keeps `weights/last.pt` (ADR-093) — so asking the resume file about it would
+answer "no" for every detection run there is. Its test is `last.pt` plus a
+history shorter than the configured epochs.
+
+**A sweep's directory is never offered.** Grid search, random search and K-fold
+write their real trainings into sub-directories with their own `run.json`; the
+parent holds no training, so "continue" there would continue nothing. The
+whitelist is by block, and it errs toward not offering.
+
+**A resumed job goes through the queue like any other**, with its own job id and
+SSE stream, while the training itself lands in the original run directory. The
+queue id identifies the job; the directory identifies the experiment, and those
+are different questions.
+
+**Verified end to end in the browser, not only in tests:** a classification run
+was stopped after epoch 2 of 4, appeared in History with a `⏸ 2/4` badge, showed
+`▶ RETOMAR 2/4` in its detail panel, and clicking it logged
+`Resuming 20260817_191703_145266 at epoch 3 of 4`, ran epochs 3 and 4 in that
+same directory, and left the run reporting `total_epochs: 4`, a `1,2,3,4`
+history and `resumable: false`.

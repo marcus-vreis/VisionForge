@@ -60,6 +60,7 @@ from visionforge.core.replicates import (
     aggregate_replicates,
     run_replicates,
 )
+from visionforge.core.resume import can_resume
 from visionforge.core.sweep import SweepTrial, run_sweep, validate_sweep_space
 from visionforge.core.task_runner import TaskRunner
 from visionforge.gui.api.dataset_download import download_dataset
@@ -351,6 +352,7 @@ async def get_run_detail(run_id: str) -> RunDetail:
     finished = started if status == "completed" else None
 
     dataset_name, dataset_root = dataset_identity(data)
+    resumable, configured_epochs = _resume_status(run_dir, data)
     fingerprint = data.get("dataset_fingerprint") or {}
     dataset = (
         DatasetInfo(
@@ -382,6 +384,62 @@ async def get_run_detail(run_id: str) -> RunDetail:
         artifacts=data.get("artifacts", {}),
         tests=data.get("tests", []),
         dataset=dataset,
+        resumable=resumable,
+        configured_epochs=configured_epochs,
+    )
+
+
+@router.post("/runs/{run_id}/resume")
+async def resume_run(run_id: str) -> RunResponse:
+    """Continue a stopped run in its own directory (ADR-092/093).
+
+    The config comes from the run's own ``run.json`` rather than from the
+    browser: continuing with different hyperparameters would produce one
+    directory whose history describes two different experiments.
+    """
+    run_dir = _find_run_dir(run_id)
+    if run_dir is None:
+        raise HTTPException(404, f"Run '{run_id}' not found.")
+    try:
+        data: dict[str, Any] = json.loads(
+            (run_dir / "run.json").read_text(encoding="utf-8")
+        )
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(500, f"Failed to parse run.json: {exc}") from exc
+
+    resumable, _ = _resume_status(run_dir, data)
+    if not resumable:
+        raise HTTPException(409, f"Run '{run_id}' has nothing left to continue.")
+
+    # Built here rather than at module level: the executors are defined further
+    # down this file and do not exist yet while it is being imported.
+    task = _run_task(data)
+    executors: dict[str, tuple[Any, Any]] = {
+        "classification": (ExperimentConfig, _execute_experiment),
+        "detection": (DetectionConfig, _execute_detection),
+        "regression": (RegressionConfig, _execute_regression),
+        "segmentation": (SegmentationConfig, _execute_segmentation),
+        "anomaly": (AnomalyConfig, _execute_anomaly),
+    }
+    if task not in executors:
+        raise HTTPException(400, f"Task '{task}' cannot be resumed.")
+    config_cls, executor = executors[task]
+
+    try:
+        config = config_cls.model_validate(data["config"])
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(
+            400, f"The stored config of '{run_id}' is no longer valid: {exc}"
+        ) from exc
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    job_id = f"{config.name}_{timestamp}"
+    return _submit_job(
+        job_id,
+        f"{config.name} (retomando)",
+        task,
+        "simple",
+        lambda: executor(config, job_id, resume_dir=run_dir),
     )
 
 
@@ -2717,6 +2775,42 @@ def _run_task(data: dict[str, Any]) -> str:
     return "classification"
 
 
+# Blocks whose run directory is one training. A sweep or a K-fold writes its
+# real trainings into sub-directories with their own run.json, so offering
+# "continue" on the parent would continue nothing.
+_RESUMABLE_BLOCKS = {"classification", "transfer_learning"}
+
+
+def _resume_status(run_dir: Path, data: dict[str, Any]) -> tuple[bool, int | None]:
+    """Whether this run can be continued, and how many epochs it was going to run.
+
+    Derived from what is on disk rather than from ``status``: ADR-092 made the
+    resume file's presence the answer, so no stored flag can disagree with it.
+    Ultralytics keeps its own state instead (ADR-093), so a YOLO run is judged
+    by its ``last.pt`` and how far its history got.
+    """
+    config: dict[str, Any] = data.get("config") or {}
+    epochs = (config.get("training") or {}).get("epochs")
+    if not isinstance(epochs, int):
+        return False, None
+
+    task = _run_task(data)
+    if task == "classification":
+        block = config.get("block") or data.get("block") or "classification"
+        if block not in _RESUMABLE_BLOCKS:
+            return False, epochs
+    elif task not in ("regression", "segmentation", "anomaly", "detection"):
+        return False, epochs
+
+    if task == "detection" and (config.get("model") or {}).get("backend") != (
+        "torchvision"
+    ):
+        done = (data.get("metrics") or {}).get("total_epochs") or 0
+        return (run_dir / "weights" / "last.pt").is_file() and done < epochs, epochs
+
+    return can_resume(run_dir, epochs), epochs
+
+
 def _evaluate_standalone_run(
     run_dir: Path, req: RunTestRequest, data: dict[str, Any], task: str
 ) -> RunTestResponse:
@@ -3213,6 +3307,7 @@ def _parse_run_summary(run_dir: Path, data: dict[str, Any]) -> RunSummary:
     model_arch = (config.get("model") or {}).get("name") or data.get("task_label", task)
 
     dataset_name, dataset_root = dataset_identity(data)
+    resumable, configured_epochs = _resume_status(run_dir, data)
 
     return RunSummary(
         run_id=run_dir.name,
@@ -3230,10 +3325,14 @@ def _parse_run_summary(run_dir: Path, data: dict[str, Any]) -> RunSummary:
         block=block,
         dataset_name=dataset_name,
         dataset_root=dataset_root,
+        resumable=resumable,
+        configured_epochs=configured_epochs,
     )
 
 
-async def _execute_experiment(config: ExperimentConfig, run_id: str) -> None:
+async def _execute_experiment(
+    config: ExperimentConfig, run_id: str, resume_dir: Path | None = None
+) -> None:
     """Run the experiment in a background thread."""
     global _current_run, _event_queue
 
@@ -3285,6 +3384,7 @@ async def _execute_experiment(config: ExperimentConfig, run_id: str) -> None:
         ):
             block._progress_callback = _put_event
         block._cancel_token = _active_cancel_token
+        block._resume_dir = resume_dir
 
         logger.info("GUI: Starting experiment {} (block={})", run_id, config.block)
         await asyncio.to_thread(block.run)
@@ -3328,7 +3428,9 @@ async def _execute_experiment(config: ExperimentConfig, run_id: str) -> None:
             await queue.put(None)
 
 
-async def _execute_detection(config: DetectionConfig, run_id: str) -> None:
+async def _execute_detection(
+    config: DetectionConfig, run_id: str, resume_dir: Path | None = None
+) -> None:
     """Run an Ultralytics detection training in a background thread."""
     global _current_run, _event_queue
 
@@ -3344,6 +3446,7 @@ async def _execute_detection(config: DetectionConfig, run_id: str) -> None:
         block.setup(config)
         block._progress_callback = _put_event
         block._cancel_token = _active_cancel_token
+        block._resume_dir = resume_dir
 
         logger.info("GUI: Starting detection {} ({})", run_id, config.model.name)
         await asyncio.to_thread(block.run)
@@ -3376,7 +3479,9 @@ async def _execute_detection(config: DetectionConfig, run_id: str) -> None:
             await queue.put(None)
 
 
-async def _execute_regression(config: RegressionConfig, run_id: str) -> None:
+async def _execute_regression(
+    config: RegressionConfig, run_id: str, resume_dir: Path | None = None
+) -> None:
     """Run an image-regression training in a background thread."""
     global _current_run, _event_queue
 
@@ -3392,6 +3497,7 @@ async def _execute_regression(config: RegressionConfig, run_id: str) -> None:
         block.setup(config)
         block._progress_callback = _put_event
         block._cancel_token = _active_cancel_token
+        block._resume_dir = resume_dir
 
         logger.info("GUI: Starting regression {} ({})", run_id, config.model.name)
         await asyncio.to_thread(block.run)
@@ -3424,7 +3530,9 @@ async def _execute_regression(config: RegressionConfig, run_id: str) -> None:
             await queue.put(None)
 
 
-async def _execute_segmentation(config: SegmentationConfig, run_id: str) -> None:
+async def _execute_segmentation(
+    config: SegmentationConfig, run_id: str, resume_dir: Path | None = None
+) -> None:
     """Run a semantic-segmentation training in a background thread."""
     global _current_run, _event_queue
 
@@ -3440,6 +3548,7 @@ async def _execute_segmentation(config: SegmentationConfig, run_id: str) -> None
         block.setup(config)
         block._progress_callback = _put_event
         block._cancel_token = _active_cancel_token
+        block._resume_dir = resume_dir
 
         logger.info("GUI: Starting segmentation {} ({})", run_id, config.model.name)
         await asyncio.to_thread(block.run)
@@ -3472,7 +3581,9 @@ async def _execute_segmentation(config: SegmentationConfig, run_id: str) -> None
             await queue.put(None)
 
 
-async def _execute_anomaly(config: AnomalyConfig, run_id: str) -> None:
+async def _execute_anomaly(
+    config: AnomalyConfig, run_id: str, resume_dir: Path | None = None
+) -> None:
     """Run an anomaly-detection training in a background thread."""
     global _current_run, _event_queue
 
@@ -3488,6 +3599,7 @@ async def _execute_anomaly(config: AnomalyConfig, run_id: str) -> None:
         block.setup(config)
         block._progress_callback = _put_event
         block._cancel_token = _active_cancel_token
+        block._resume_dir = resume_dir
 
         logger.info("GUI: Starting anomaly {} ({})", run_id, config.model.name)
         await asyncio.to_thread(block.run)

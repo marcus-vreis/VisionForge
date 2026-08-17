@@ -82,6 +82,7 @@ class ClassificationBlock(ExperimentBlock):
                 data,
                 progress_callback=self._progress_callback,
                 cancel_token=self._cancel_token,
+                resume_dir=self._resume_dir,
             )
 
             # Reload best checkpoint for test-set evaluation.

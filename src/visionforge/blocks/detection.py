@@ -9,6 +9,7 @@ it is dispatched directly by the detection run endpoint, not the block registry.
 from __future__ import annotations
 
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 from visionforge.core.cancellation import CancellationToken
@@ -27,11 +28,15 @@ class DetectionBlock:
         # Set by the GUI layer when a queued job starts, so "stop this run"
         # reaches the trainer that is looping (ADR-088). None is the CLI case.
         self._cancel_token: CancellationToken | None = None
+        # Set the same way to continue a stopped run in its own directory
+        # (ADR-092/093); None is a fresh run.
+        self._resume_dir: Path | None = None
 
     def run(self) -> None:
         self._result = DetectionTrainer(self._config).fit(
             progress_callback=self._progress_callback,
             cancel_token=self._cancel_token,
+            resume_dir=self._resume_dir,
         )
 
     def report(self) -> dict[str, Any]:
