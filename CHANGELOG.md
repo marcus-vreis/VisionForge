@@ -22,19 +22,17 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
   diferentes. Sweeps e K-fold não aparecem — os treinos deles ficam em
   subpastas, e continuar a pasta-mãe não continuaria nada
   ([ADR-095](docs/dev/DECISIONS.md)).
-- **Qualquer tarefa interrompida pode continuar de onde parou.** Regressão,
-  segmentação e o autoencoder de anomalia passam a gravar o mesmo `resume.pt` da
-  classificação. Na detecção, quem retoma é o próprio Ultralytics — ele já guarda
-  o otimizador e a EMA no `weights/last.pt`, e as épocas já registradas voltam do
-  `run.json` para a curva não começar no meio; só o laço torchvision, que é
-  nosso, ganha `resume.pt`. O PatchCore fica de fora de propósito: não tem
-  época para retomar ([ADR-093](docs/dev/DECISIONS.md)).
-- **Um treino de classificação interrompido pode continuar de onde parou.** O
-  estado do otimizador e do scheduler passa a ser gravado a cada época num
+- **Um treino interrompido pode continuar de onde parou, em qualquer tarefa.**
+  O estado do otimizador e do scheduler passa a ser gravado a cada época num
   `resume.pt` ao lado do checkpoint — separado de propósito, porque o
   `best_model.pth` é carregado por cinco coisas que só querem os pesos. Retomar
-  continua o mesmo run: uma curva contínua, um `run.json`
-  ([ADR-092](docs/dev/DECISIONS.md)).
+  continua o mesmo run: uma curva contínua, um `run.json`. Vale para
+  classificação, regressão, segmentação, o autoencoder de anomalia e o laço
+  torchvision de detecção; no YOLO quem retoma é o próprio Ultralytics, que já
+  guarda otimizador e EMA no `weights/last.pt` (as épocas já registradas voltam
+  do `run.json` para a curva não começar no meio). O PatchCore fica de fora de
+  propósito: não tem época para retomar
+  ([ADR-092](docs/dev/DECISIONS.md), [ADR-093](docs/dev/DECISIONS.md)).
 
 ### Changed
 
