@@ -38,6 +38,10 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Changed
 
+- **O CI voltou a rodar antes da promoção.** O gatilho de push apontava para um
+  branch `develop` que não existe neste repositório, então as verificações só
+  rodavam quando a `main` era promovida — depois do ponto em que achar um
+  problema é barato. Agora roda em `development` também.
 - **O CI agora treina uma época de YOLO de verdade.** O backend padrão de
   detecção só era exercitado com um `YOLO` simulado — foi assim que uma época
   fantasma passou meses despercebida. Um job `detection` instala o extra e treina

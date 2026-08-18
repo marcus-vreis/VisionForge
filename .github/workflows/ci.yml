@@ -2,7 +2,10 @@ name: Code quality
 
 on:
   push:
-    branches: ["main", "develop"]
+    # "development", not "develop": this repository has no branch by that name,
+    # so for months these checks ran only when main was promoted — after the
+    # point where finding a problem is cheap.
+    branches: ["main", "development"]
   pull_request:
 
 concurrency:
