@@ -42,6 +42,11 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
   branch `develop` que não existe neste repositório, então as verificações só
   rodavam quando a `main` era promovida — depois do ponto em que achar um
   problema é barato. Agora roda em `development` também.
+- **O CI agora roda o self-test inteiro.** As seis tarefas × cinco estratégias
+  (27 casos, cada um um treino real através de um servidor de verdade) só rodavam
+  quando alguém digitava `visionforge selftest`. Agora rodam a cada push — é a
+  única verificação que exercita API, SSE, trainers e `run.json` juntos, que é
+  onde os últimos defeitos moravam ([ADR-097](docs/dev/DECISIONS.md)).
 - **O CI agora treina uma época de YOLO de verdade.** O backend padrão de
   detecção só era exercitado com um `YOLO` simulado — foi assim que uma época
   fantasma passou meses despercebida. Um job `detection` instala o extra e treina

@@ -3168,8 +3168,13 @@ reasonable trade while the concern was "does it get the right arguments". It
 stopped being reasonable the moment the questions became about behaviour, and one
 26-second test answered a question three months of mocked tests could not.
 
-**Follow-up (same day): it runs in CI.** A `detection` job installs the extra and
-trains that epoch on every pull request. The test no longer requires the local
+**Follow-up (same day): it runs in CI, and so does everything else.** A
+`detection` job installs the extra and trains that epoch on every pull request.
+A `selftest` job runs the ADR-060 harness in full — six tasks × five strategies,
+27 cases, every one a real training through a live server — which had until then
+only ever run when somebody typed `visionforge selftest` by hand. Locally the
+whole matrix takes 172 seconds, which is the actual reason it can be a gate
+rather than a ritual. The test no longer requires the local
 `yolo11n.pt` — that file is gitignored, so requiring it would have made the test
 skip everywhere but this machine, and a skipped test in CI is indistinguishable
 from a passing one. Without a checkpoint it builds `yolo11n.yaml` from scratch,

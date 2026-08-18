@@ -174,6 +174,45 @@ jobs:
           source .venv/bin/activate
           pytest tests/e2e/test_ultralytics_training.py -m slow --no-cov -p no:randomly
 
+  selftest:
+    name: selftest (every task, trained)
+    runs-on: ubuntu-latest
+    needs: main
+
+    # The harness from ADR-060, which until now only ran when somebody typed
+    # `visionforge selftest`. It drives a live server through every task and
+    # every strategy with real (tiny) trainings — 27 cases, ~3 minutes locally.
+    # It is the only check that exercises the API, the SSE stream, the trainers
+    # and run.json together, which is where the last few defects lived.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Install dependencies
+        run: |
+          uv venv
+          source .venv/bin/activate
+          uv pip install -e ".[dev,detection]"
+          uv pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Run every task through a live server
+        run: |
+          source .venv/bin/activate
+          visionforge selftest --json selftest.json
+
+      - name: Upload the outcomes
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: selftest-outcomes
+          path: selftest.json
+          retention-days: 7
+
   frontend:
     name: frontend
     runs-on: ubuntu-latest
