@@ -140,6 +140,37 @@ jobs:
           path: htmlcov/
           retention-days: 1
 
+  detection:
+    name: detection (ultralytics)
+    runs-on: ubuntu-latest
+    needs: main
+
+    # The default detection backend, actually trained. Every other detection
+    # test hands the trainer a fake YOLO class, which proved our argument
+    # translation and nothing about the library's behaviour — a phantom epoch
+    # sat in every YOLO run for months because of it (ADR-097). Its own job
+    # because installing the extra costs more than the rest of the suite.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Install dependencies
+        run: |
+          uv venv
+          source .venv/bin/activate
+          uv pip install -e ".[dev,detection]"
+          uv pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Train one epoch for real
+        run: |
+          source .venv/bin/activate
+          pytest tests/e2e/test_ultralytics_training.py -m slow --no-cov -p no:randomly
+
   frontend:
     name: frontend
     runs-on: ubuntu-latest

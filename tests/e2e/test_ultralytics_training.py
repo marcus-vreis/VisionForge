@@ -27,18 +27,24 @@ ultralytics = pytest.importorskip("ultralytics", reason="detection extra not ins
 pytestmark = pytest.mark.slow
 
 
-def _config(tmp_path: Path, weights: Path) -> DetectionConfig:
+def _config(tmp_path: Path, weights: Path | None) -> DetectionConfig:
     base = build_detection_dataset(tmp_path / "ds", size=64, per_split=4)
+    # With a local checkpoint the run starts from COCO weights; without one it
+    # builds `yolo11n.yaml` from scratch. Either exercises the same integration,
+    # and the second needs no download -- which is what lets this run in CI.
+    model: dict[str, Any] = {
+        "backend": "ultralytics",
+        "name": "yolo11n",
+        "num_classes": 1,
+    }
+    if weights is not None:
+        model["weights_path"] = str(weights)
+    else:
+        model["pretrained"] = False
     return DetectionConfig.model_validate(
         {
             "name": "ultra_smoke",
-            "model": {
-                "backend": "ultralytics",
-                "name": "yolo11n",
-                "num_classes": 1,
-                # The checkpoint in the repo root, so the test never downloads.
-                "weights_path": str(weights),
-            },
+            "model": model,
             "data": {"base_dir": str(base), "image_size": 64},
             "training": {
                 "epochs": 1,
@@ -54,17 +60,20 @@ def _config(tmp_path: Path, weights: Path) -> DetectionConfig:
 
 
 @pytest.fixture(scope="module")
-def weights() -> Path:
-    """The repo's own yolo11n.pt; skip rather than download one."""
+def weights() -> Path | None:
+    """The repo's own yolo11n.pt when it is there, else None (train from scratch).
+
+    The checkpoint is gitignored, so requiring it would have made this test skip
+    on every machine but this one -- including CI, where a skipped test is
+    indistinguishable from a passing one.
+    """
     path = Path(__file__).resolve().parents[2] / "yolo11n.pt"
-    if not path.is_file():
-        pytest.skip("yolo11n.pt is not in the repo root")
-    return path
+    return path if path.is_file() else None
 
 
 class TestUltralyticsTrainsForReal:
     def test_one_epoch_lands_where_the_run_directory_says(
-        self, tmp_path: Path, weights: Path
+        self, tmp_path: Path, weights: Path | None
     ) -> None:
         from visionforge.core.detection_trainer import DetectionTrainer
 
@@ -92,7 +101,7 @@ class TestUltralyticsTrainsForReal:
         assert run_json["metrics"]["total_epochs"] == 1
 
     def test_a_stopped_run_can_be_continued_by_ultralytics(
-        self, tmp_path: Path, weights: Path
+        self, tmp_path: Path, weights: Path | None
     ) -> None:
         """ADR-093 hands it `last.pt` and `resume=True`; only a real run proves it."""
         from visionforge.core.cancellation import CancellationToken

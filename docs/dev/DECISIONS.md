@@ -396,7 +396,11 @@
 
 **Reason:** A correct mAP implementation needs either `pycocotools`/`torchmetrics` (a heavy, Windows-fragile dependency surface, against ADR-005/ADR-010's lean-CI stance) or a carefully-tested hand-rolled metric — too much to bundle into the same change as the loop without risking correctness. Shipping a working, fully-tested loss-based loop first (mocked-model unit tests, no weight downloads) delivers a usable torchvision trainer now and isolates mAP as its own verifiable module. Validation loss is a legitimate selection signal for detection and mirrors the classification `Trainer`'s best-checkpoint contract, so `run.json`/history stay uniform across backends.
 
-**Update (2026-06-01):** the deferred mAP module landed — `core/detection_metrics.py` (`mean_average_precision_50`, VOC all-points AP via `torchvision.ops.box_iou`, no extra deps). The torchvision loop now selects the best checkpoint by **validation mAP@50** and records `map50` per epoch in `run.json`; validation loss is kept as a secondary logged signal. SSD/RetinaNet head replacement remains the open follow-up.
+**Update (2026-06-01):** the deferred mAP module landed — `core/detection_metrics.py` (`mean_average_precision_50`, VOC all-points AP via `torchvision.ops.box_iou`, no extra deps). The torchvision loop now selects the best checkpoint by **validation mAP@50** and records `map50` per epoch in `run.json`; validation loss is kept as a secondary logged signal. SSD/RetinaNet head replacement also landed (`_build_ssd` /
+`_build_retinanet` in `models/detection_factory.py`, covered in
+`tests/models/test_detection_factory.py`), so nothing from this ADR is open.
+*(Corrected 2026-08-13: this line still called it a follow-up long after it
+shipped, which is how a closed item stays on a backlog.)*
 
 ---
 
@@ -3163,3 +3167,10 @@ from before several corrections.
 reasonable trade while the concern was "does it get the right arguments". It
 stopped being reasonable the moment the questions became about behaviour, and one
 26-second test answered a question three months of mocked tests could not.
+
+**Follow-up (same day): it runs in CI.** A `detection` job installs the extra and
+trains that epoch on every pull request. The test no longer requires the local
+`yolo11n.pt` — that file is gitignored, so requiring it would have made the test
+skip everywhere but this machine, and a skipped test in CI is indistinguishable
+from a passing one. Without a checkpoint it builds `yolo11n.yaml` from scratch,
+which needs no download and exercises the same integration.

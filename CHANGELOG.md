@@ -38,6 +38,11 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Changed
 
+- **O CI agora treina uma época de YOLO de verdade.** O backend padrão de
+  detecção só era exercitado com um `YOLO` simulado — foi assim que uma época
+  fantasma passou meses despercebida. Um job `detection` instala o extra e treina
+  em cada pull request; sem checkpoint local ele monta o `yolo11n.yaml` do zero,
+  então não depende de download ([ADR-097](docs/dev/DECISIONS.md)).
 - **O `eslint` virou porta no CI.** Ele estava fora do gate porque seis erros
   antigos deixariam o job vermelho no dia em que entrasse. Os seis foram
   corrigidos — inclusive o histórico, que ficava montado enquanto fechado e
