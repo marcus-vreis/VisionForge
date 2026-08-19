@@ -3211,6 +3211,9 @@ def _load_runs(models_dir: Path) -> list[RunSummary]:
 # Per-task projection of run.json metrics onto the compact set the history
 # card shows. Adding a task is one row; the frontend RunCard mirrors these keys.
 # Unknown tasks fall back to the classification row.
+# Tasks whose config tree is their own (ADR-033/036/037/038).
+_STANDALONE_TASKS = frozenset({"detection", "regression", "segmentation", "anomaly"})
+
 _SUMMARY_METRIC_KEYS: dict[str, dict[str, str]] = {
     "classification": {
         "accuracy": "test_accuracy",
@@ -3220,6 +3223,24 @@ _SUMMARY_METRIC_KEYS: dict[str, dict[str, str]] = {
     "detection": {
         "map50": "map50",
         "map50_95": "map50_95",
+    },
+    # Without these three the history fell back to the classification keys,
+    # which these tasks never write: a segmentation run showed an empty metric
+    # cell and a regression run showed its loss instead of its R². The headline
+    # numbers are on disk either way — the list just could not find them.
+    "regression": {
+        "r2": "test_r2",
+        "mae": "test_mae",
+        "rmse": "test_rmse",
+    },
+    "segmentation": {
+        "miou": "test_miou",
+        "dice": "test_dice",
+        "pixel_acc": "test_pixel_acc",
+    },
+    "anomaly": {
+        "auroc": "test_auroc",
+        "f1": "test_image_f1",
     },
 }
 
@@ -3296,10 +3317,14 @@ def _parse_run_summary(run_dir: Path, data: dict[str, Any]) -> RunSummary:
     # it, so fall back to the config dict (also written by every block) and
     # finally infer from the task (detection writes no block marker) before
     # defaulting to classification.
+    # Standalone tasks (ADR-033/036/037/038) have no `block` field in their
+    # config, so the old fallback labelled every one of them "classification" —
+    # a segmentation run filed under the wrong block in the very filter meant to
+    # separate them. Their task *is* their block.
     block = (
         data.get("block")
         or config.get("block")
-        or ("detection" if task == "detection" else "classification")
+        or (task if task in _STANDALONE_TASKS else "classification")
     )
 
     # Custom tasks declare no architecture; the researcher's label is the most

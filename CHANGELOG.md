@@ -58,6 +58,14 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Fixed
 
+- **O histórico mostrava as métricas erradas para três das cinco tarefas.**
+  Segmentação e anomalia apareciam com a célula de métricas **vazia**, e
+  regressão mostrava a loss em vez do R² — o mapa de métricas do histórico só
+  tinha entradas para classificação e detecção, e as outras caíam nas chaves da
+  classificação, que elas nunca escrevem. Os números sempre estiveram no
+  `run.json`; a lista é que não sabia procurá-los. Pelo mesmo motivo, toda
+  tarefa standalone aparecia arquivada no bloco "classification", justamente no
+  filtro que existe para separá-las.
 - **Todo treino YOLO registrava uma época fantasma.** O Ultralytics dispara o
   mesmo callback de fim de época mais uma vez depois do laço, para anotar as
   métricas do `best.pt` — e essa passada era gravada como época. Um treino de 10
