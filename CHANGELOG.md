@@ -13,6 +13,8 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ## [Unreleased]
 
+## [0.8.0] — 2026-08-21
+
 ### Added
 
 - **A GUI agora oferece continuar um treino que parou.** No histórico, o run

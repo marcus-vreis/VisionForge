@@ -1,7 +1,7 @@
 [project]
 name = "visionforge-studio"
 authors = [{ name = "Marcus Reis", email = "marcusvinicius0083@gmail.com" }]
-version = "0.7.0"
+version = "0.8.0"
 dynamic = []
 description = "Local-first computer-vision experimentation platform: five task families, multi-seed replicates with confidence intervals, K-fold CV, sweeps and full run provenance — on your own GPU."
 readme = "README.md"
@@ -141,7 +141,7 @@ skip = ".venv,*.lock,outputs,htmlcov,*.egg-info,package-lock.json,src/visionforg
 ignore-words = ".codespell-ignore-words.txt"
 
 [tool.bumpversion]
-current_version = "0.7.0"
+current_version = "0.8.0"
 parse           = "(?P<major>\\d+)\\.(?P<minor>\\d+)\\.(?P<patch>\\d+)"
 serialize       = ["{major}.{minor}.{patch}"]
 commit          = true
