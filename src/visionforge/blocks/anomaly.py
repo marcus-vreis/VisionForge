@@ -17,7 +17,11 @@ from typing import Any
 import torch
 
 from visionforge.core.anomaly_data import AnomalyDataModule
-from visionforge.core.anomaly_trainer import AnomalyTrainer, AnomalyTrainResult
+from visionforge.core.anomaly_trainer import (
+    AnomalyTrainer,
+    AnomalyTrainResult,
+    _calibration_loader,
+)
 from visionforge.core.cancellation import CancellationToken
 from visionforge.core.metric_ci import MetricCI, bootstrap_anomaly_cis
 from visionforge.core.plotter import MetricsPlotter
@@ -69,7 +73,7 @@ class AnomalyBlock:
             model.load_state_dict(state_dict)  # type: ignore[arg-type]
 
             self._test_metrics, labels, scores = trainer.evaluate_with_scores(
-                model, data.train_loader(), data.test_loader()
+                model, _calibration_loader(data), data.test_loader()
             )
             self._metric_cis = bootstrap_anomaly_cis(
                 labels,

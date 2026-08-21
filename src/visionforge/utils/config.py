@@ -122,10 +122,10 @@ class SchedulerConfig(BaseModel):
 # Shared by every task's training config (ADR-062): the knob means the same
 # thing everywhere, so it is described once instead of drifting five times.
 DETERMINISTIC_DESCRIPTION = (
-    "When True, forces cuDNN deterministic algorithms and disables "
-    "auto-tuning. Guarantees bit-exact reproducibility across runs "
-    "but significantly reduces GPU utilization and throughput. "
-    "Leave False (default) for normal training."
+    "When True (default), forces cuDNN deterministic algorithms and disables "
+    "auto-tuning, so the same config and seed reproduce the same numbers. "
+    "Set False to let cuDNN auto-tune, which can pay off over many epochs but "
+    "makes a run impossible to reproduce exactly."
 )
 
 
@@ -139,7 +139,7 @@ class TrainingConfig(BaseModel):
     optimizer: Literal["adam", "sgd", "adamw"] = "adam"
     weight_decay: float = Field(default=0.0, ge=0.0)
     seed: int = Field(default=42, ge=0)
-    deterministic: bool = Field(default=False, description=DETERMINISTIC_DESCRIPTION)
+    deterministic: bool = Field(default=True, description=DETERMINISTIC_DESCRIPTION)
     mixed_precision: bool = Field(
         default=False,
         description=(

@@ -132,7 +132,7 @@ class SegmentationTrainingConfig(BaseModel):
     weight_decay: float = Field(default=0.0, ge=0.0)
     loss: Literal["cross_entropy", "dice", "combined"] = "cross_entropy"
     seed: int = Field(default=42, ge=0)
-    deterministic: bool = Field(default=False, description=DETERMINISTIC_DESCRIPTION)
+    deterministic: bool = Field(default=True, description=DETERMINISTIC_DESCRIPTION)
     scheduler: SchedulerConfig = Field(default_factory=SchedulerConfig)
 
 

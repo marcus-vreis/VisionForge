@@ -155,7 +155,8 @@ class TestBaseTaskConfig:
         cfg = BaseTaskConfig.model_validate({"data": {"base_dir": str(tmp_path)}})
         assert cfg.schema_version == 1
         assert cfg.training.epochs == 10
-        assert cfg.training.deterministic is False
+        # True since ADR-098: a custom task's runs reproduce like every other.
+        assert cfg.training.deterministic is True
         assert cfg.data.transforms.horizontal_flip is True
 
     def test_subclass_extends_with_task_fields(self, tmp_path: Path) -> None:

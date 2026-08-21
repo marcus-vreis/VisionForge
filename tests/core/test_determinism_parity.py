@@ -22,7 +22,7 @@ from visionforge.core.segmentation_trainer import SegmentationTrainer
 from visionforge.models.anomaly_factory import ConvAutoencoder
 from visionforge.tasks.base import TaskTrainingConfig
 from visionforge.utils.anomaly_config import AnomalyConfig, AnomalyTrainingConfig
-from visionforge.utils.config import TrainingConfig
+from visionforge.utils.config import DETERMINISTIC_DESCRIPTION, TrainingConfig
 from visionforge.utils.detection_config import DetectionConfig, DetectionTrainingConfig
 from visionforge.utils.regression_config import (
     RegressionConfig,
@@ -33,16 +33,18 @@ from visionforge.utils.segmentation_config import (
     SegmentationTrainingConfig,
 )
 
-# Every training config in the project, with the default each one documents.
-# Detection is True because its stated contract is that an unmodified config
-# trains exactly like a bare `YOLO.train` call, and Ultralytics defaults to True.
+# Every training config in the project. All True since ADR-098: a run whose
+# config and seed do not reproduce its own numbers is not evidence, and the
+# throughput this was traded for turned out not to exist on 2-epoch runs — two
+# of the three shapes measured were *faster* deterministic. Detection was
+# already True (its contract is to match a bare `YOLO.train` call).
 TRAINING_CONFIGS = [
-    pytest.param(TrainingConfig, False, id="classification"),
-    pytest.param(RegressionTrainingConfig, False, id="regression"),
-    pytest.param(SegmentationTrainingConfig, False, id="segmentation"),
-    pytest.param(AnomalyTrainingConfig, False, id="anomaly"),
+    pytest.param(TrainingConfig, True, id="classification"),
+    pytest.param(RegressionTrainingConfig, True, id="regression"),
+    pytest.param(SegmentationTrainingConfig, True, id="segmentation"),
+    pytest.param(AnomalyTrainingConfig, True, id="anomaly"),
     pytest.param(DetectionTrainingConfig, True, id="detection"),
-    pytest.param(TaskTrainingConfig, False, id="custom-sdk"),
+    pytest.param(TaskTrainingConfig, True, id="custom-sdk"),
 ]
 
 
@@ -70,10 +72,15 @@ class TestConfigParity:
     def test_the_description_is_shared_not_retyped(
         self, config_cls: type[BaseModel], _default: bool
     ) -> None:
-        """A GUI reads these descriptions; four hand-copies would drift."""
+        """A GUI reads these descriptions; four hand-copies would drift.
+
+        Compared against the constant rather than a phrase inside it: matching
+        on wording made this fail the first time the shared text was reworded,
+        which is the one change it should not have objected to.
+        """
         description = config_cls.model_fields["deterministic"].description
-        assert description is not None
-        assert "bit-exact reproducibility" in description
+
+        assert description == DETERMINISTIC_DESCRIPTION
 
 
 # ── the knob actually reaches the seeder ──────────────────────────────────────

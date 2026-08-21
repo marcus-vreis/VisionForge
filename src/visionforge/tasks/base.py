@@ -44,7 +44,7 @@ class TaskTrainingConfig(BaseModel):
     weight_decay: float = Field(default=0.0, ge=0)
     early_stopping_patience: int = Field(default=10, ge=1)
     seed: int = Field(default=42, ge=0)
-    deterministic: bool = Field(default=False, description=DETERMINISTIC_DESCRIPTION)
+    deterministic: bool = Field(default=True, description=DETERMINISTIC_DESCRIPTION)
     mixed_precision: bool = False
     scheduler: SchedulerConfig = Field(default_factory=SchedulerConfig)
 

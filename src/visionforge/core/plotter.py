@@ -6,6 +6,7 @@ import numpy as np
 import seaborn as sns
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.figure import Figure
+from matplotlib.ticker import MaxNLocator
 from sklearn.metrics import auc, precision_recall_curve, roc_curve
 
 from visionforge.core.trainer import EpochResult
@@ -34,6 +35,9 @@ class MetricsPlotter:
         ax.set_xlabel("Epoch")
         ax.set_ylabel("Loss")
         ax.set_title("Training & Validation Loss")
+        # There is no epoch 1.5, and a figure that implies one invites the
+        # question in a review.
+        ax.xaxis.set_major_locator(MaxNLocator(integer=True))
         ax.legend()
         ax.grid(True, alpha=0.3)
 
@@ -417,7 +421,11 @@ class MetricsPlotter:
             roc_auc = auc(fpr, tpr)
             ax.plot(fpr, tpr, linewidth=2, label=f"ROC (AUC = {roc_auc:.3f})")
         else:
-            # One-vs-rest per class.
+            # One-vs-rest per class, plus the macro average over them — the
+            # single number `test_auc_roc` records, which until now appeared
+            # nowhere on the figure that is supposed to show it.
+            grid = np.linspace(0.0, 1.0, 201)
+            interpolated: list[np.ndarray] = []
             for i in range(n_classes):
                 y_bin = (y == i).astype(int)
                 if y_bin.sum() == 0:
@@ -426,6 +434,17 @@ class MetricsPlotter:
                 roc_auc = auc(fpr, tpr)
                 label = class_names[i] if i < len(class_names) else f"class {i}"
                 ax.plot(fpr, tpr, linewidth=1.6, label=f"{label} (AUC = {roc_auc:.3f})")
+                interpolated.append(np.interp(grid, fpr, tpr))
+            if len(interpolated) > 1:
+                macro = np.mean(interpolated, axis=0)
+                ax.plot(
+                    grid,
+                    macro,
+                    linewidth=2.4,
+                    color="#111827",
+                    linestyle=":",
+                    label=f"macro (AUC = {auc(grid, macro):.3f})",
+                )
 
         ax.plot([0, 1], [0, 1], "--", color="#94a3b8", linewidth=1, label="chance")
         ax.set_xlabel("False Positive Rate")

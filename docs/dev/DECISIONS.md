@@ -3179,3 +3179,97 @@ rather than a ritual. The test no longer requires the local
 skip everywhere but this machine, and a skipped test in CI is indistinguishable
 from a passing one. Without a checkpoint it builds `yolo11n.yaml` from scratch,
 which needs no download and exercises the same integration.
+
+---
+
+## ADR-098 — Four findings from training the tool like a researcher would
+
+**Date:** 2026-08-21
+**Status:** Accepted
+**Revises:** ADR-062 (the determinism knob), ADR-081 (worker caps), ADR-038 (the
+anomaly threshold)
+
+**Context:** twenty-seven runs across five tasks — ablations, folds, seeds, a
+sweep, both anomaly families, both detection backends — driven through the HTTP
+API the way the GUI drives it, then read back through History and checked
+against independent recomputation. Four things came out of it, and three of them
+were invisible from the code alone.
+
+### 1. The default made runs unreproducible, for a speed-up that is not there
+
+Two runs of a byte-identical config under the same seed came out **0.8263 and
+0.7481**. The cause is `deterministic: False` — cuDNN auto-tuning plus
+non-deterministic kernels. That was a documented trade, and the docstring priced
+it at "3-5× slower".
+
+Measured on an RTX 5060 Ti over 2-epoch runs:
+
+| shape | `benchmark` | `deterministic` | |
+|---|---|---|---|
+| resnet18 @224 | 65s | 65s | even |
+| resnet50 @224 | 96s | 78s | **-19%** |
+| resnet18 @320 | 75s | 63s | **-16%** |
+
+Deterministic was *faster* in two of three. Auto-tuning costs time up front and
+only repays it over many epochs at a stable shape, which is not the shape of an
+experiment. So the default is now `True` for every task (detection already was),
+and with it two runs of one config produce bit-identical accuracy, F1 and loss.
+
+**Why this is worth a default and not a note.** The variance is not academic:
+across three seeds the spread was 0.117 and across five folds 0.135, while the
+effects being measured — augmentation, transfer learning, freezing — were 0.117,
+0.103 and 0.091. Run-to-run noise was the same size as every conclusion. A tool
+whose *default* hides that is arguing against its own purpose. Long training may
+still prefer `False`; it stays a knob.
+
+### 2. The anomaly threshold was calibrated on images the model never sees
+
+An autoencoder reported **AUROC 0.79 and F1 0.00** — a bootstrap interval of
+[0.0, 0.0] over 1000 resamples, so not an accident. The decision threshold is a
+percentile of the normal-score distribution, and that distribution was collected
+from the **training loader**, which augments: rotation pads corners, flips move
+structure, both raise reconstruction error. The percentile therefore sat above
+every score the model produces on clean images, and nothing was ever flagged.
+
+The threshold now comes from a `calibration_loader` — the same training normals,
+read the way inference reads them. Retrained on the same data: **threshold
+0.0323 → 0.0150, F1 0.0000 → 0.3373**. The AUROC is unchanged in meaning; it
+never depended on the threshold, which is exactly why the run looked healthy
+while its operating point was useless.
+
+### 3. `num_workers` can be capped, because the cost is now measured
+
+ADR-081 declined to cap workers: the per-worker cost was a guess, and guessing
+wrong either throttles a healthy machine or fails to save a doomed one. It is not
+a guess. A worker never holds the model — it loads images while the model sits on
+the GPU — so what it costs is **commit**, and on Windows that is readable.
+`utils/workers.suggested_workers` divides half the free commit by ~1 GB per
+worker per loader pool, capped by CPU count and a ceiling of 8.
+
+Scaling with model size or GPU, the intuitive heuristic, measures the wrong
+quantity entirely. On the machine where the reported WinError 1455 happened —
+10.7 GB free commit, three pools, 8 requested — this yields 1, and the run would
+have trained instead of dying. Requests above budget are lowered with a warning
+rather than silently, so the limit is the machine's, stated.
+
+### 4. The history showed three of five tasks the wrong numbers
+
+Segmentation and anomaly listed an empty metric cell and regression listed its
+loss instead of its R², because the summary map only had classification and
+detection and everything else fell through to keys it never writes. The same
+fallback filed every standalone task under the "classification" block, in the
+filter that exists to separate them. Fixed and covered; the numbers were in
+`run.json` all along.
+
+**Also corrected, minor:** the ROC figure now draws the macro-average its
+docstring always promised — the one number `test_auc_roc` reports — and the loss
+curve's x-axis is integers, because there is no epoch 1.5.
+
+**What the audit did not find.** Worth recording, because it was checked: per-fold
+normalization statistics computed from the training fold only, stratified folds,
+augmentation confined to training, model and sweep-trial selection by validation
+loss and never by test, macro-F1, one-vs-rest macro AUC, VOC mAP matching each
+ground-truth box once, mIoU honouring `ignore_index`, bootstrap resampling images
+rather than pixels, paired significance testing with Holm correction and an
+explicit underpowered flag. Recomputing a run's metrics from its checkpoint with
+plain sklearn reproduced accuracy, F1, precision and recall to the digit.

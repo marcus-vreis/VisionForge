@@ -20,6 +20,7 @@ from torch.utils.data import DataLoader, Dataset
 from visionforge.core.data import _build_transforms
 from visionforge.core.loader_lifecycle import LoaderCache
 from visionforge.utils.anomaly_config import AnomalyConfig
+from visionforge.utils.workers import suggested_workers
 
 _SMALL_DATASET_THRESHOLD = 500
 _IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp")
@@ -33,6 +34,9 @@ def _list_images(directory: Path) -> list[Path]:
         for p in directory.iterdir()
         if p.is_file() and p.suffix.lower() in _IMAGE_EXTS
     )
+
+
+_LOADER_POOLS = 2
 
 
 class AnomalyImageDataset(Dataset):  # type: ignore[type-arg]
@@ -122,6 +126,17 @@ class AnomalyDataModule:
             preprocessing_cfg=pp,
             is_train=False,
         )
+        # The same normal images as `_train`, read without augmentation. The
+        # decision threshold is a percentile of the normal score distribution,
+        # and calibrating it on flipped and rotated copies measures a
+        # distribution the model is never applied to (ADR-098).
+        self._calibration = AnomalyImageDataset(
+            train_items,
+            image_size=cfg.image_size,
+            transform_cfg=tc,
+            preprocessing_cfg=pp,
+            is_train=False,
+        )
 
         if self._num_workers > 0 and self.train_size < _SMALL_DATASET_THRESHOLD:
             from loguru import logger
@@ -132,6 +147,24 @@ class AnomalyDataModule:
                 _SMALL_DATASET_THRESHOLD,
             )
             self._num_workers = 0
+
+        # Cap by what this machine can commit, not by what the config asked for:
+        # each spawned worker re-imports torch and its CUDA DLLs, and a request
+        # for more than the budget is how a run dies with WinError 1455 before
+        # its first epoch (ADR-081/098). Lowering silently would hide the
+        # machine's limit, so it says so.
+        affordable = suggested_workers(loader_pools=_LOADER_POOLS)
+        if self._num_workers > affordable:
+            from loguru import logger
+
+            logger.warning(
+                "num_workers={} exceeds what this machine can commit for {} "
+                "loader pools; using {}.",
+                self._num_workers,
+                _LOADER_POOLS,
+                affordable,
+            )
+            self._num_workers = affordable
 
     def _loader_kwargs(self, *, persistent: bool) -> dict[str, Any]:
         kwargs: dict[str, Any] = {
@@ -150,6 +183,24 @@ class AnomalyDataModule:
             "train",
             lambda: DataLoader(
                 self._train, shuffle=True, **self._loader_kwargs(persistent=True)
+            ),
+        )
+
+    def calibration_loader(self) -> DataLoader:  # type: ignore[type-arg]
+        """The training normals without augmentation, for the threshold.
+
+        Training on augmented copies is deliberate; calibrating on them is not.
+        Rotation pads the corners and flips move structure, both of which raise
+        reconstruction error, so a percentile taken there sits above scores the
+        model produces on clean images — and every test image lands below the
+        threshold. That is how a model with AUROC 0.79 reported F1 = 0.00.
+        """
+        return self._cache.cached(
+            "calibration",
+            lambda: DataLoader(
+                self._calibration,
+                shuffle=False,
+                **self._loader_kwargs(persistent=False),
             ),
         )
 

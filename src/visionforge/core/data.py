@@ -15,6 +15,9 @@ from visionforge.utils.config import (
     PreprocessingConfig,
     TransformConfig,
 )
+from visionforge.utils.workers import suggested_workers
+
+_LOADER_POOLS = 3
 
 
 class _PreprocessingTransform:
@@ -134,6 +137,24 @@ class DataModule:
                 _SMALL_DATASET_THRESHOLD,
             )
             self._num_workers = 0
+
+        # Cap by what this machine can commit, not by what the config asked for:
+        # each spawned worker re-imports torch and its CUDA DLLs, and a request
+        # for more than the budget is how a run dies with WinError 1455 before
+        # its first epoch (ADR-081/098). Lowering silently would hide the
+        # machine's limit, so it says so.
+        affordable = suggested_workers(loader_pools=_LOADER_POOLS)
+        if self._num_workers > affordable:
+            from loguru import logger
+
+            logger.warning(
+                "num_workers={} exceeds what this machine can commit for {} "
+                "loader pools; using {}.",
+                self._num_workers,
+                _LOADER_POOLS,
+                affordable,
+            )
+            self._num_workers = affordable
 
     def _loader_kwargs(self, *, persistent: bool) -> dict[str, Any]:
         """Common DataLoader kwargs with GPU-friendly defaults.

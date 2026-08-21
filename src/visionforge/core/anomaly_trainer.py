@@ -101,6 +101,20 @@ class AnomalyTrainResult:
     model_path: Path = field(default_factory=lambda: Path("."))
 
 
+def _calibration_loader(data_module: Any) -> Any:
+    """The loader whose normals calibrate the threshold.
+
+    Prefers the module's non-augmented view of the training normals; falls back
+    to the training loader for a data module that predates it (and for the
+    hand-rolled ones in tests), so this is an improvement where available
+    rather than a new requirement.
+    """
+    getter = getattr(data_module, "calibration_loader", None)
+    if callable(getter):
+        return getter()
+    return data_module.train_loader()
+
+
 class AnomalyTrainer:
     """Manages training/scoring for one anomaly-detection experiment."""
 
@@ -187,17 +201,17 @@ class AnomalyTrainer:
         return result
 
     def evaluate(
-        self, model: nn.Module, train_loader: Any, test_loader: Any
+        self, model: nn.Module, calibration_loader: Any, test_loader: Any
     ) -> tuple[float, float, float]:
         """Return (auroc, threshold, image_f1) for ``model`` on the test split.
 
-        The threshold is derived from the normal (train) score distribution; the
+        The threshold is a percentile of the *unaugmented* training normals; the
         F1 uses that threshold against the binary test labels.
         """
-        return self.evaluate_with_scores(model, train_loader, test_loader)[0]
+        return self.evaluate_with_scores(model, calibration_loader, test_loader)[0]
 
     def evaluate_with_scores(
-        self, model: nn.Module, train_loader: Any, test_loader: Any
+        self, model: nn.Module, calibration_loader: Any, test_loader: Any
     ) -> tuple[tuple[float, float, float], np.ndarray, np.ndarray]:
         """As ``evaluate``, plus the per-image test labels and anomaly scores.
 
@@ -207,7 +221,7 @@ class AnomalyTrainer:
         """
         model = model.to(self._device)
         model.eval()
-        normal_scores = self._collect_scores(model, train_loader)[0]
+        normal_scores = self._collect_scores(model, calibration_loader)[0]
         test_scores, test_labels = self._collect_scores(model, test_loader)
         metrics = self._metrics(normal_scores, test_scores, test_labels)
         return (
@@ -283,7 +297,9 @@ class AnomalyTrainer:
             n = len(train_loader)
             train_loss = total / n if n > 0 else 0.0
 
-            normal_scores = self._collect_scores(model, train_loader)[0]
+            normal_scores = self._collect_scores(
+                model, _calibration_loader(data_module)
+            )[0]
             test_scores, test_labels = self._collect_scores(model, test_loader)
             auroc, threshold, f1 = self._metrics(
                 normal_scores, test_scores, test_labels
@@ -386,7 +402,7 @@ class AnomalyTrainer:
                 patches.append(feats.cpu())
             model.fit(torch.cat(patches, dim=0).to(self._device))
 
-        normal_scores = self._collect_scores(model, train_loader)[0]
+        normal_scores = self._collect_scores(model, _calibration_loader(data_module))[0]
         test_scores, test_labels = self._collect_scores(model, test_loader)
         auroc, threshold, f1 = self._metrics(normal_scores, test_scores, test_labels)
         torch.save(model.state_dict(), model_path)

@@ -57,14 +57,19 @@ def _seed_everything(seed: int, *, deterministic: bool = False) -> None:
 
     Args:
         seed: integer seed applied to stdlib, numpy, and PyTorch RNGs.
-        deterministic: when True, forces cuDNN to use deterministic
-            algorithms and disables benchmark auto-tuning.  This
-            guarantees bitwise reproducibility but **significantly**
-            reduces GPU throughput (often 3-5× slower on CNNs).
-            When False (default), ``cudnn.benchmark`` is enabled so
-            cuDNN auto-selects the fastest convolution algorithm for
-            each input shape — the single largest factor in GPU
-            utilization for CNN workloads.
+        deterministic: when True (the default), cuDNN uses deterministic
+            algorithms and benchmark auto-tuning is off, so the same config
+            and seed reproduce the same numbers. When False, ``cudnn.benchmark``
+            lets cuDNN auto-select a convolution algorithm per input shape.
+
+            The cost of determinism was measured rather than assumed (ADR-098),
+            because this docstring used to claim "3-5× slower" and that is not
+            what a RTX 5060 Ti shows on 2-epoch runs: resnet18@224 came out even,
+            and resnet50@224 and resnet18@320 were both *faster* deterministic
+            (-19% and -16%). Auto-tuning costs time up front and only pays for
+            itself over many epochs with a stable shape, which is not the shape
+            of an experiment. Long training may still favour ``False``; that is
+            why it remains a knob.
     """
     random.seed(seed)
     np.random.seed(seed)

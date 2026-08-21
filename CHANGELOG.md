@@ -36,6 +36,23 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Changed
 
+- **Todo treino agora é reprodutível por padrão.** Dois runs da mesma config com
+  a mesma seed davam 0.8263 e 0.7481 — `deterministic` era `False` por padrão, e
+  o docstring justificava isso com "3-5× mais lento". Medimos: em runs de 2
+  épocas numa RTX 5060 Ti, resnet18@224 empatou e resnet50@224 e resnet18@320
+  ficaram **mais rápidos** determinísticos (-19% e -16%). O auto-tuning do cuDNN
+  cobra adiantado e só se paga em treinos longos. Agora o padrão é `True` em
+  todas as tarefas, e dois runs da mesma config saem idênticos até o último
+  dígito. Importa porque o ruído entre execuções (0.117 entre seeds, 0.135 entre
+  folds) era **do mesmo tamanho** dos efeitos medidos em ablações
+  ([ADR-098](docs/dev/DECISIONS.md)).
+- **O `num_workers` agora é limitado pela memória que a máquina tem.** Um worker
+  não carrega o modelo — ele carrega imagens, enquanto o modelo vive na GPU — então
+  o que ele custa é *commit* de memória, ~1 GB por worker por pool de loader. O
+  projeto agora lê esse orçamento e reduz o pedido quando não cabe, avisando. Na
+  máquina onde o WinError 1455 aconteceu (10.7 GB livres, 3 pools, 8 pedidos) o
+  cálculo dá 1 worker, e o treino teria rodado ([ADR-098](docs/dev/DECISIONS.md)).
+
 - **O CI voltou a rodar antes da promoção.** O gatilho de push apontava para um
   branch `develop` que não existe neste repositório, então as verificações só
   rodavam quando a `main` era promovida — depois do ponto em que achar um
@@ -57,6 +74,20 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
   ([ADR-096](docs/dev/DECISIONS.md)).
 
 ### Fixed
+
+- **O F1 da anomalia era sempre zero no autoencoder.** Um modelo com AUROC 0.79
+  reportava F1 0.00 (intervalo bootstrap [0.0, 0.0] em 1000 reamostragens). O
+  limiar de decisão vinha do percentil dos scores do **loader de treino**, que
+  aplica augmentation: rotação preenche cantos e flip move estrutura, os dois
+  aumentam o erro de reconstrução. O percentil ficava acima de qualquer score que
+  o modelo produz em imagem limpa, e nada era marcado como anomalia. Agora o
+  limiar vem das mesmas imagens de treino lidas como a inferência as lê —
+  retreinando nos mesmos dados: limiar 0.0323 → 0.0150 e **F1 0.0000 → 0.3373**
+  ([ADR-098](docs/dev/DECISIONS.md)).
+- **A curva ROC não desenhava a macro-média** que seu próprio docstring prometia
+  — justamente o número que o `test_auc_roc` reporta — e o eixo de épocas da
+  curva de loss marcava 1.5 e 2.5, que não existem
+  ([ADR-098](docs/dev/DECISIONS.md)).
 
 - **O histórico mostrava as métricas erradas para três das cinco tarefas.**
   Segmentação e anomalia apareciam com a célula de métricas **vazia**, e

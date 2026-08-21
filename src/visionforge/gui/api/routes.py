@@ -148,6 +148,7 @@ from visionforge.utils.cuda import check_cuda
 from visionforge.utils.detection_config import DetectionConfig
 from visionforge.utils.regression_config import RegressionConfig
 from visionforge.utils.segmentation_config import SegmentationConfig
+from visionforge.utils.workers import suggested_workers as worker_budget
 
 # Common split folder names per role. Lowercased, accent-stripped at match time.
 _TRAIN_ALIASES = {"train", "training", "treino", "trains", "tr"}
@@ -302,7 +303,10 @@ async def get_system_info() -> SystemInfo:
     cpu = os.cpu_count() or 1
     return SystemInfo(
         cpu_count=cpu,
-        suggested_workers=min(cpu, 8),
+        # What the machine can commit, not just how many cores it has: workers
+        # are processes that re-import torch, and the CPU count says nothing
+        # about whether there is memory for them (ADR-098).
+        suggested_workers=worker_budget(loader_pools=3),
         platform=platform.system(),
         version=__version__,
     )
@@ -2905,11 +2909,12 @@ def _evaluate_standalone_run(
             torch.load(checkpoint, map_location="cpu", weights_only=True)
         )
         modules = AnomalyDataModule(anom_config)
-        # The threshold comes from the *normal training* distribution, so the
-        # train loader is still needed even though only the chosen folder is
-        # being scored (ADR-076).
+        # The threshold comes from the *normal training* distribution, so that
+        # split is still needed even though only the chosen folder is being
+        # scored (ADR-076) — read without augmentation, which is the
+        # distribution the model is applied to (ADR-098).
         auroc, threshold, image_f1 = AnomalyTrainer(anom_config).evaluate(
-            anom_model, modules.train_loader(), modules.test_loader()
+            anom_model, modules.calibration_loader(), modules.test_loader()
         )
         metrics = {"auroc": auroc, "threshold": threshold, "image_f1": image_f1}
 
