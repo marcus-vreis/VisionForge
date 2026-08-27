@@ -648,6 +648,31 @@ class RegressionDatasetStatsResponse(BaseModel):
     message: str | None = None
 
 
+class ModelDefaultsRequest(BaseModel):
+    """Ask what settings suit an architecture, before training with it."""
+
+    architecture: str
+    base_dir: str | None = None
+    pretrained: bool = True
+
+
+class ModelDefaultsResponse(BaseModel):
+    """Starting points measured for this architecture (ADR-099/100).
+
+    ``collapse_prone`` marks the pairs that were watched to predict a single
+    class at the previous default, which is what makes this worth surfacing
+    rather than quietly applying.
+    """
+
+    architecture: str
+    optimizer: str
+    learning_rate: float
+    image_size: int | None = None
+    dataset_median_side: int | None = None
+    collapse_prone: bool = False
+    note: str | None = None
+
+
 class SystemInfo(BaseModel):
     """System probe for sensible UI defaults (workers, threads)."""
 

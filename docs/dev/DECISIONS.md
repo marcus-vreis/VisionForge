@@ -3336,3 +3336,59 @@ detector stays quiet on a healthy run, which is what keeps it worth reading.
 all of those were checked in ADR-098 and recomputed against plain sklearn. The
 defect was a default that fits half the model list, and a report that presented
 the consequence as a measurement.
+
+
+---
+
+## ADR-100 — Defaults measured per task, and three attention architectures
+
+**Date:** 2026-08-27
+**Status:** Accepted
+**Extends:** ADR-099 (the collapse)
+
+**Context:** with collapse detection in place, the remaining question was which
+defaults a first run should start from — across all five tasks, not only
+classification — and whether the model list should reach past the CNNs.
+
+**The new architectures were measured before being offered, not after.**
+`vit_b_16`, `swin_t` and `convnext_tiny` come from torchvision, so they cost no
+new dependency. Run on the same data and seed as ADR-099's grid:
+
+| model         | Adam 1e-3         | AdamW 1e-4 |
+|---------------|-------------------|------------|
+| vit_b_16      | 0.41              | 0.85       |
+| swin_t        | **0.25 collapse** | 0.88       |
+| convnext_tiny | **0.25 collapse** | **0.91**   |
+
+Two of the three collapse at the rate that was the default until this week —
+the same failure as VGG and AlexNet, for the same practical reason. Adding them
+without measuring would have shipped three models that fail out of the box.
+`convnext_tiny` at its own rate is now the strongest classifier in the list.
+
+**Defaults, per task.** Classification and regression start at `resnet18`
+instead of `resnet50` (a first run should be quick; the bigger model is one
+click away) and at 20 epochs instead of 10, because the curves in the audit were
+still climbing when the run ended. Segmentation starts at `unet` instead of
+`deeplabv3_resnet50`, which at the default 512px exhausts a modest GPU.
+**Anomaly (30 epochs) and detection (100, Ultralytics' own) were left alone** —
+both are already calibrated for what those tasks need, and changing them for
+symmetry would be worse than the asymmetry.
+
+**Image size can be read from the data, and only suggested.** CIFAR-10 ships
+32×32; training it at 224 upscales sevenfold and spends roughly fifty times the
+computation on pixels the resize invented. `core/image_size.py` samples the
+dataset's median short side and proposes a size, floored at 64 and rounded to
+the stride of 32. It never decides, for two reasons: ImageNet weights expect
+~224, so smaller is cheaper rather than better; and ViT and Swin build fixed
+position embeddings, so for them another size is not slower — it is an error,
+and the suggestion is pinned to 224 regardless of the data.
+
+**The interface offers, the researcher consents.** `POST /api/model/defaults`
+answers with the measured optimizer, rate and size, and the form shows it as a
+note with a button. Silently rewriting the learning rate would repeat the
+original sin of ADR-099 — a number arriving without the researcher knowing where
+it came from — wearing a friendlier face.
+
+**Verified in the browser:** choosing `swin_t` raises "prevê uma classe só:
+medimos 0.25 de acurácia", clicking the button sets AdamW and 1e-4 in the form,
+and the note disappears because the settings now match what was measured.

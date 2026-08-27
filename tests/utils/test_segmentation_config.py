@@ -39,7 +39,8 @@ class TestDefaults:
 
     def test_model_defaults(self) -> None:
         m = SegmentationModelConfig()
-        assert m.name == "deeplabv3_resnet50"
+        # unet since ADR-100: deeplabv3_resnet50 at 512px exhausts modest GPUs.
+        assert m.name == "unet"
         assert m.num_classes == 2
         assert m.pretrained is True
         assert m.weights_path is None

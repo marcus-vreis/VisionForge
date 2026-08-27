@@ -39,6 +39,9 @@ _REGRESSION_BACKBONES = (
     "vgg16",
     "vgg19",
     "alexnet",
+    "vit_b_16",
+    "swin_t",
+    "convnext_tiny",
 )
 
 
@@ -55,7 +58,13 @@ class RegressionModelConfig(BaseModel):
         "vgg16",
         "vgg19",
         "alexnet",
-    ] = "resnet50"
+        "vit_b_16",
+        "swin_t",
+        "convnext_tiny",
+        "vit_b_16",
+        "swin_t",
+        "convnext_tiny",
+    ] = "resnet18"  # see classification: a first run should be quick
     num_targets: int = Field(default=1, ge=1)
     pretrained: bool = True
     weights_path: Path | None = None
@@ -152,7 +161,9 @@ class RegressionTrainingConfig(BaseModel):
     """
 
     learning_rate: float = Field(default=0.001, gt=0.0)
-    epochs: int = Field(default=10, ge=1)
+    # Ten rarely reaches convergence on a real dataset — the curves in the
+    # audit were still climbing when they ran out (ADR-100).
+    epochs: int = Field(default=20, ge=1)
     batch_size: int = Field(default=32, ge=1)
     # Zero by default because the previous default never fired: with
     # `epochs=10` it took ten consecutive epochs without improvement inside

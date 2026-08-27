@@ -15,6 +15,23 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Added
 
+- **Três arquiteturas de atenção: `vit_b_16`, `swin_t` e `convnext_tiny`.** Vêm
+  do torchvision, sem dependência nova. Foram medidas antes de entrar, e ainda
+  bem: `swin_t` e `convnext_tiny` **colapsam** com Adam a 1e-3 (0.25 em quatro
+  classes) exatamente como VGG e AlexNet. Com AdamW a 1e-4 chegam a 0.88 e 0.91 —
+  o `convnext_tiny` é hoje o melhor classificador da lista
+  ([ADR-100](docs/dev/DECISIONS.md)).
+- **O formulário sugere o que foi medido para cada arquitetura.** Escolher
+  `swin_t` mostra "prevê uma classe só: medimos 0.25 de acurácia" com um botão
+  que aplica AdamW e 1e-4. Sugere e explica; não reescreve o seu campo por conta
+  própria ([ADR-100](docs/dev/DECISIONS.md)).
+- **`image_size` sugerido a partir do dataset.** O CIFAR-10 tem imagens de
+  32×32 e treiná-lo a 224 amplia sete vezes, gastando ~50× mais computação em
+  pixels que o redimensionamento inventou. O tamanho é lido da mediana do
+  dataset, com piso de 64. Para ViT e Swin fica fixo em 224 — neles outro
+  tamanho não é mais lento, é erro ([ADR-100](docs/dev/DECISIONS.md)).
+
+
 - **O treino avisa quando não aprendeu nada.** Um modelo que prevê a mesma
   classe para todas as imagens ainda reporta uma acurácia — e num problema
   binário balanceado ela é exatamente 0.50, fácil de confundir com "aprendeu
@@ -34,6 +51,14 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
   anomalia e tarefas próprias.
 
 ### Changed
+
+- **Defaults revistos por tarefa.** Classificação e regressão começam em
+  `resnet18` (em vez de `resnet50`) e 20 épocas (em vez de 10); segmentação
+  começa em `unet`, porque `deeplabv3_resnet50` a 512px esgota uma GPU modesta.
+  **Anomalia (30 épocas) e detecção (100, o padrão do Ultralytics) ficaram como
+  estavam** — já são adequados ao que essas tarefas precisam, e mexer neles por
+  simetria seria pior que a assimetria ([ADR-100](docs/dev/DECISIONS.md)).
+
 
 - **`early_stopping_patience = 0` agora desliga o early stopping, e é o
   padrão**, nas cinco tarefas e no SDK de tarefas próprias. Antes o valor era

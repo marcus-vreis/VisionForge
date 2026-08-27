@@ -48,7 +48,13 @@ class ModelConfig(BaseModel):
         "vgg16",
         "vgg19",
         "alexnet",
-    ] = "resnet50"
+        "vit_b_16",
+        "swin_t",
+        "convnext_tiny",
+        "vit_b_16",
+        "swin_t",
+        "convnext_tiny",
+    ] = "resnet18"  # a first run should be quick; resnet50 is one click away
     num_classes: int = Field(default=2, ge=1)
     pretrained: bool = True
     weights_path: Path | None = None
@@ -133,7 +139,9 @@ class TrainingConfig(BaseModel):
     """Hyperparameters and training loop settings."""
 
     learning_rate: float = Field(default=0.001, gt=0.0)
-    epochs: int = Field(default=10, ge=1)
+    # Ten rarely reaches convergence on a real dataset — the curves in the
+    # audit were still climbing when they ran out (ADR-100).
+    epochs: int = Field(default=20, ge=1)
     batch_size: int = Field(default=32, ge=1)
     # Zero by default because the previous default never fired: with
     # `epochs=10` it took ten consecutive epochs without improvement inside
@@ -314,6 +322,9 @@ _ArchitectureLiteral = Literal[
     "vgg16",
     "vgg19",
     "alexnet",
+    "vit_b_16",
+    "swin_t",
+    "convnext_tiny",
 ]
 
 

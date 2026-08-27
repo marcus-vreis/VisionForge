@@ -50,7 +50,7 @@ class SegmentationModelConfig(BaseModel):
         "fcn_resnet50",
         "fcn_resnet101",
         "lraspp_mobilenet_v3_large",
-    ] = "deeplabv3_resnet50"
+    ] = "unet"  # deeplabv3_resnet50 at image_size 512 exhausts modest GPUs
     num_classes: int = Field(default=2, ge=1)
     pretrained: bool = True
     weights_path: Path | None = None
@@ -125,7 +125,9 @@ class SegmentationTrainingConfig(BaseModel):
     """
 
     learning_rate: float = Field(default=0.001, gt=0.0)
-    epochs: int = Field(default=10, ge=1)
+    # Ten rarely reaches convergence on a real dataset — the curves in the
+    # audit were still climbing when they ran out (ADR-100).
+    epochs: int = Field(default=20, ge=1)
     batch_size: int = Field(default=8, ge=1)
     # Zero by default because the previous default never fired: with
     # `epochs=10` it took ten consecutive epochs without improvement inside

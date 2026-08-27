@@ -762,6 +762,30 @@ export interface SystemInfo {
   version: string;
 }
 
+export interface ModelDefaults {
+  architecture: string;
+  optimizer: string;
+  learning_rate: number;
+  image_size: number | null;
+  dataset_median_side: number | null;
+  collapse_prone: boolean;
+  note: string | null;
+}
+
+/** Settings measured to train a given architecture (ADR-099/100). Offered to
+ *  the form, never applied behind the researcher. */
+export async function fetchModelDefaults(
+  architecture: string,
+  baseDir?: string,
+  pretrained = true,
+): Promise<ModelDefaults> {
+  return request<ModelDefaults>("/model/defaults", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ architecture, base_dir: baseDir ?? null, pretrained }),
+  });
+}
+
 export async function fetchSystemInfo(): Promise<SystemInfo> {
   return request<SystemInfo>("/system/info");
 }

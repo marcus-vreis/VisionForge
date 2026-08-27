@@ -57,14 +57,14 @@ class TestZeroIsTheDefault:
     def test_every_task_defaults_to_disabled(self, config_cls: type[BaseModel]) -> None:
         assert config_cls().early_stopping_patience == 0  # type: ignore[attr-defined]
 
-    def test_the_old_default_could_not_fire_with_the_default_epochs(self) -> None:
-        from visionforge.utils.config import TrainingConfig
+    def test_the_old_default_could_not_fire_with_the_epochs_it_shipped_with(
+        self,
+    ) -> None:
+        """The pair as it stood before ADR-099: patience 10, epochs 10."""
+        old_patience, old_epochs = 10, 10
 
-        cfg = TrainingConfig()
-        old_patience = 10
-
-        # It would have taken more epochs without improvement than the run has.
-        assert old_patience >= cfg.epochs
+        # It would have taken as many epochs without improvement as the whole run.
+        assert old_patience >= old_epochs
 
 
 class TestZeroRunsEveryEpoch:

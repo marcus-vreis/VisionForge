@@ -48,7 +48,13 @@ from visionforge.core.data import DataModule
 from visionforge.core.dataset_fingerprint import dataset_identity
 from visionforge.core.detection_data import resolve_yolo_split
 from visionforge.core.evaluator import Evaluator
+from visionforge.core.image_size import median_image_side, suggested_image_size
 from visionforge.core.latex_export import report_to_latex
+from visionforge.core.learning_rate import (
+    is_collapse_prone,
+    suggested_learning_rate,
+    suggested_optimizer,
+)
 from visionforge.core.loader_lifecycle import describe_worker_spawn_failure
 from visionforge.core.plotter import MetricsPlotter
 from visionforge.core.replicated_comparison import (
@@ -102,6 +108,8 @@ from visionforge.gui.api.schemas import (
     GradCamItem,
     GradCamRequest,
     GradCamResponse,
+    ModelDefaultsRequest,
+    ModelDefaultsResponse,
     PreprocessPreviewRequest,
     PreprocessPreviewResponse,
     PreprocessPreviewStep,
@@ -330,6 +338,48 @@ async def get_device_info() -> DeviceInfoResponse:
         cuda_version=info.cuda_version,
         cpu_name=platform.processor() or platform.machine() or "CPU",
         gpus=gpus,
+    )
+
+
+@router.post("/model/defaults")
+async def model_defaults(req: ModelDefaultsRequest) -> ModelDefaultsResponse:
+    """Settings measured to train this architecture (ADR-099/100).
+
+    Offered to the form so choosing a model updates the fields in front of the
+    researcher, rather than substituting values behind them: the failure this
+    comes from is a number that appeared without anyone knowing why.
+    """
+    arch = req.architecture
+    optimizer = suggested_optimizer(arch)
+    rate = suggested_learning_rate(arch, optimizer)
+
+    median: int | None = None
+    size: int | None = None
+    if req.base_dir:
+        root = Path(req.base_dir)
+        median = median_image_side(root)
+        size = suggested_image_size(root, arch, pretrained=req.pretrained)
+
+    note: str | None = None
+    if is_collapse_prone(arch, "adam", 1e-3):
+        note = (
+            f"{arch} com Adam a 1e-3 prevê uma classe só: medimos 0.25 de "
+            f"acurácia em 4 classes. Com {optimizer} a {rate:g} treina normal."
+        )
+    elif median is not None and size is not None and median < size:
+        note = (
+            f"As imagens têm cerca de {median}px de lado; treinar acima disso "
+            f"amplia a imagem sem acrescentar detalhe."
+        )
+
+    return ModelDefaultsResponse(
+        architecture=arch,
+        optimizer=optimizer,
+        learning_rate=rate,
+        image_size=size,
+        dataset_median_side=median,
+        collapse_prone=is_collapse_prone(arch, "adam", 1e-3),
+        note=note,
     )
 
 

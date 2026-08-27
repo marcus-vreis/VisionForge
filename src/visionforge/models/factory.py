@@ -30,6 +30,12 @@ def build_backbone(name: str, *, use_imagenet: bool) -> nn.Module:
         "vgg16": tv_models.vgg16,
         "vgg19": tv_models.vgg19,
         "alexnet": tv_models.alexnet,
+        # Attention-based and modern-convolutional families, from torchvision —
+        # no new dependency (ADR-100). They expect the input size they were
+        # trained at (224); `timm` remains the door to everything else.
+        "vit_b_16": tv_models.vit_b_16,
+        "swin_t": tv_models.swin_t,
+        "convnext_tiny": tv_models.convnext_tiny,
     }
     weights = "DEFAULT" if use_imagenet else None
     return builders[name](weights=weights)
@@ -52,6 +58,20 @@ def replace_final_layer(model: nn.Module, name: str, num_outputs: int) -> None:
         )  # type: ignore[union-attr]
         old = cast(nn.Linear, eff[1])
         eff[1] = nn.Linear(old.in_features, num_outputs)
+    elif name.startswith("vit"):
+        # ViT keeps its classifier under `heads.head`.
+        vit = cast(nn.Module, model)
+        old_head = cast(nn.Linear, vit.heads.head)  # type: ignore[union-attr]
+        vit.heads.head = nn.Linear(old_head.in_features, num_outputs)  # type: ignore[union-attr]
+    elif name.startswith("swin"):
+        swin = cast(nn.Module, model)
+        old_swin = cast(nn.Linear, swin.head)  # type: ignore[union-attr]
+        swin.head = nn.Linear(old_swin.in_features, num_outputs)  # type: ignore[union-attr]
+    elif name.startswith("convnext"):
+        # classifier is [LayerNorm2d, Flatten, Linear]; only the last moves.
+        conv_clf = cast(nn.Sequential, model.classifier)  # type: ignore[union-attr]
+        old_conv = cast(nn.Linear, conv_clf[-1])
+        conv_clf[-1] = nn.Linear(old_conv.in_features, num_outputs)
     elif name.startswith("vgg") or name == "alexnet":
         clf = cast(
             nn.Sequential,

@@ -40,7 +40,8 @@ class TestDefaults:
 
     def test_model_defaults(self) -> None:
         m = RegressionModelConfig()
-        assert m.name == "resnet50"
+        # resnet18 since ADR-100: a first run should be quick.
+        assert m.name == "resnet18"
         assert m.num_targets == 1
         assert m.pretrained is True
         assert m.weights_path is None

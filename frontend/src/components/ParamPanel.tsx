@@ -17,6 +17,7 @@ import {
 } from "./PreprocessingPanel";
 import { resolveKind } from "./field-renderer";
 import { paramHelp } from "../lib/param-help";
+import { ModelAdvice } from "./ModelAdvice";
 import {
   coerceGridValue,
   isGridableField,
@@ -2455,6 +2456,17 @@ export function ParamPanel({
             ) : null,
         )}
       </div>
+      <ModelAdvice
+        architecture={String(modelData["name"] ?? "")}
+        optimizer={String(trainingData["optimizer"] ?? "adam")}
+        learningRate={Number(trainingData["learning_rate"] ?? 0)}
+        baseDir={String(dataData["base_dir"] ?? "") || undefined}
+        pretrained={modelData["pretrained"] !== false}
+        onApply={(next) => {
+          setField("training", "optimizer", next.optimizer);
+          setField("training", "learning_rate", next.learning_rate);
+        }}
+      />
 
       {/* Scheduler section — nested under training */}
       {trainingProps["scheduler"] && (
