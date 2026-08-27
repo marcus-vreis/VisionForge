@@ -13,6 +13,46 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ## [Unreleased]
 
+### Added
+
+- **O treino avisa quando não aprendeu nada.** Um modelo que prevê a mesma
+  classe para todas as imagens ainda reporta uma acurácia — e num problema
+  binário balanceado ela é exatamente 0.50, fácil de confundir com "aprendeu
+  pouco". Agora o run detecta isso (uma classe só prevista, ou loss que nunca
+  caiu) e diz, no log e no `run.json`, com a causa mais provável e o que mudar
+  ([ADR-099](docs/dev/DECISIONS.md)).
+- **Learning rate sugerido por arquitetura e otimizador.** Medimos a grade
+  inteira: VGG16 e AlexNet com Adam a 1e-3 **colapsam** (0.25 em 4 classes),
+  enquanto resnet50 e efficientnet com SGD a 1e-3 subtreinam. A separação segue
+  o batch normalization. A sugestão é 1e-4 para Adam em VGG/AlexNet, 1e-2 para
+  SGD e 1e-3 no resto — oferecida, nunca imposta
+  ([ADR-099](docs/dev/DECISIONS.md)).
+- **Ponto de info em cada parâmetro.** As explicações saíram de baixo dos campos
+  e foram para um `i` ao lado do rótulo. O texto é o mesmo; o que muda é que as
+  linhas do formulário voltam a ter a mesma altura — que era o que fazia o painel
+  parecer desalinhado. Vale para classificação, detecção, regressão, segmentação,
+  anomalia e tarefas próprias.
+
+### Changed
+
+- **`early_stopping_patience = 0` agora desliga o early stopping**, nas cinco
+  tarefas e no SDK de tarefas próprias. Antes o valor era recusado (`ge=1`) e a
+  leitura ingênua do laço faria o oposto do esperado: a primeira época sem
+  melhora já satisfaz `1 >= 0` e encerraria o treino.
+- **Campo numérico vazio virou uma intenção, não um engano.** Ele restaurava o
+  valor anterior em silêncio; onde zero desliga o parâmetro, esvaziar agora
+  significa zero.
+
+### Fixed
+
+- **A seta dos seletores girava torta.** Era o caractere `▾` girando dentro da
+  própria caixa de texto — e o centro da caixa de um glifo não é o centro do
+  triângulo, então ele descrevia um arco em vez de girar no lugar. Virou um SVG
+  centrado no próprio eixo, nos três lugares onde aparecia.
+- **O rótulo "Determinístico (lento)" deixou de mentir** depois que a medição do
+  ADR-098 mostrou que ele é neutro ou mais rápido em treinos curtos.
+
+
 ## [0.8.0] — 2026-08-21
 
 ### Added

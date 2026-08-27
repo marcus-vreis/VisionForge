@@ -1,3 +1,4 @@
+import { Chevron } from "./Chevron";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import type { SelectOption } from "./SelectField";
@@ -95,17 +96,7 @@ export function MenuSelect({
         }}
       >
         {label}
-        <span
-          style={{
-            color: "var(--vf-text-muted)",
-            transform: open ? "rotate(180deg)" : "none",
-            transition: "transform 200ms ease",
-            display: "inline-block",
-            fontSize: 10,
-          }}
-        >
-          ▾
-        </span>
+        <Chevron open={open} size={10} />
       </button>
 
       {open &&

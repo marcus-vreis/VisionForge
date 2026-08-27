@@ -1,6 +1,8 @@
 import { FieldLabel } from "./FieldLabel";
 
 interface ToggleProps {
+  /** Explanation shown in the label info dot. */
+  help?: string;
   label: string;
   value: boolean;
   onChange: (v: boolean) => void;
@@ -8,10 +10,10 @@ interface ToggleProps {
 }
 
 /** Full-width toggle button with an inline track indicator. */
-export function Toggle({ label, value, onChange, hint }: ToggleProps) {
+export function Toggle({ label, value, onChange, hint, help }: ToggleProps) {
   return (
     <div>
-      <FieldLabel dot hint={hint}>
+      <FieldLabel dot hint={hint} help={help}>
         {label}
       </FieldLabel>
       <button

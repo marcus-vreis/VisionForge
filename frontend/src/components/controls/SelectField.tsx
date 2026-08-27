@@ -1,3 +1,4 @@
+import { Chevron } from "./Chevron";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { FieldLabel } from "./FieldLabel";
@@ -10,6 +11,8 @@ export interface SelectOption {
 }
 
 interface SelectFieldProps {
+  /** Explanation shown in the label info dot. */
+  help?: string;
   label: string;
   value: string;
   onChange: (v: string) => void;
@@ -28,6 +31,7 @@ export function SelectField({
   onChange,
   options,
   hint,
+  help,
 }: SelectFieldProps) {
   const [open, setOpen] = useState(false);
   const { pos, wrapRef, btnRef, menuRef, closeRef } = useAnchoredMenu(open);
@@ -44,7 +48,7 @@ export function SelectField({
 
   return (
     <div ref={wrapRef} style={{ position: "relative" }}>
-      <FieldLabel dot hint={hint}>
+      <FieldLabel dot hint={hint} help={help}>
         {label}
       </FieldLabel>
       <button
@@ -79,16 +83,8 @@ export function SelectField({
         >
           {currentLabel}
         </span>
-        <span
-          style={{
-            paddingRight: 14,
-            color: "var(--vf-text-muted)",
-            transform: open ? "rotate(180deg)" : "none",
-            transition: "transform 200ms ease",
-            display: "inline-block",
-          }}
-        >
-          ▾
+        <span style={{ paddingRight: 14, display: "flex" }}>
+          <Chevron open={open} size={11} />
         </span>
       </button>
 

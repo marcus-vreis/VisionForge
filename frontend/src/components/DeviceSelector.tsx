@@ -1,3 +1,4 @@
+import { Chevron } from "./controls";
 import { useEffect, useRef, useState } from "react";
 import { fetchDeviceInfo, type DeviceInfoResponse, type GPUInfo } from "../api/client";
 
@@ -135,7 +136,7 @@ export function DeviceSelector({ selection, onChange, variant = "bottom" }: Devi
         >
           {label}
         </span>
-        <span style={{ fontSize: 9, color: "var(--vf-text-muted)" }}>▾</span>
+        <Chevron open={open} size={9} />
       </button>
 
       {open && (

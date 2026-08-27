@@ -24,6 +24,11 @@ from visionforge.core.resume import (
     save_resume_state,
 )
 from visionforge.core.tracking import TensorBoardLogger
+from visionforge.core.training_health import (
+    collapsed_predictions,
+    stagnant_loss,
+    summarize,
+)
 from visionforge.utils.config import DeviceConfig, ExperimentConfig
 from visionforge.utils.cuda import check_cuda
 from visionforge.utils.environment import capture_environment
@@ -50,6 +55,9 @@ class TrainResult:
     device_used: str
     history: list[EpochResult] = field(default_factory=list)
     model_path: Path = field(default_factory=lambda: Path("."))
+    # Things about this run the researcher has to be told, because the metrics
+    # alone would look like a result (ADR-099).
+    warnings: list[dict[str, str]] = field(default_factory=list)
 
 
 def _seed_everything(seed: int, *, deterministic: bool = False) -> None:
@@ -150,6 +158,9 @@ class Trainer:
         # Cache last-epoch val probs/labels so callers (block, evaluator) can plot ROC.
         self._last_val_labels: list[int] = []
         self._last_val_probs: list[float] = []
+        # Kept so the run can be checked for collapse: a model predicting one
+        # class still reports an accuracy, and it is the class prior (ADR-099).
+        self._last_val_preds: list[int] = []
 
     @property
     def device_label(self) -> str:
@@ -353,12 +364,34 @@ class Trainer:
                 save_future = save_pool.submit(torch.save, state_dict, model_path)
             else:
                 patience_counter += 1
-                if patience_counter >= cfg.early_stopping_patience:
+                # 0 disables early stopping outright. Without this guard it
+                # would mean the opposite -- the very first epoch without an
+                # improvement satisfies `1 >= 0` and ends the run.
+                if (
+                    cfg.early_stopping_patience > 0
+                    and patience_counter >= cfg.early_stopping_patience
+                ):
                     logger.info("Early stopping at epoch {}.", epoch)
                     break
 
         if not is_cancelled(cancel_token):
             clear_resume_state(run_dir)
+
+        # A run that collapsed still reports an accuracy, so say so out loud
+        # rather than letting the number stand on its own (ADR-099).
+        health = summarize(
+            [
+                collapsed_predictions(
+                    self._last_val_preds,
+                    2
+                    if self._config.task == "binary"
+                    else self._config.model.num_classes,
+                ),
+                stagnant_loss([h.train_loss for h in history]),
+            ]
+        )
+        for warning in health:
+            logger.warning("{}", warning["message"])
 
         # Ensure the last checkpoint is fully written before proceeding.
         if save_future is not None:
@@ -372,6 +405,7 @@ class Trainer:
             device_used=self._device_label,
             history=history,
             model_path=model_path,
+            warnings=health,
         )
         self._write_run_json(
             run_dir, train_result, getattr(data_module, "class_names", None)
@@ -505,6 +539,7 @@ class Trainer:
         total = 0
         all_labels: list[int] = []
         all_probs: list[float] = []
+        all_preds: list[int] = []
         with torch.no_grad():
             for inputs, labels in loader:
                 inputs = inputs.to(self._device, non_blocking=True)
@@ -524,9 +559,11 @@ class Trainer:
                 total += labels.size(0)
                 all_labels.extend(labels.cpu().tolist())
                 all_probs.extend(probs.cpu().tolist())
-        # Cache for downstream ROC plotting.
+                all_preds.extend(preds.cpu().tolist())
+        # Cache for downstream ROC plotting and the health check.
         self._last_val_labels = all_labels
         self._last_val_probs = all_probs
+        self._last_val_preds = all_preds
         n = len(loader)
         acc = correct / total if total > 0 else 0.0
         return (total_loss / n if n > 0 else 0.0), acc
@@ -573,6 +610,9 @@ class Trainer:
                 "report": None,
             },
             "tests": [],
+            # Empty on a healthy run. When it is not, the metrics above need
+            # reading with it in hand (ADR-099).
+            "warnings": result.warnings,
         }
         (run_dir / "run.json").write_text(
             json.dumps(run_json, indent=2), encoding="utf-8"

@@ -3273,3 +3273,66 @@ ground-truth box once, mIoU honouring `ignore_index`, bootstrap resampling image
 rather than pixels, paired significance testing with Holm correction and an
 explicit underpowered flag. Recomputing a run's metrics from its checkpoint with
 plain sklearn reproduced accuracy, F1, precision and recall to the digit.
+
+---
+
+## ADR-099 — Accuracy 0.50 was not a weak result, it was a collapsed run
+
+**Date:** 2026-08-27
+**Status:** Accepted
+**Extends:** ADR-098 (the researcher audit)
+
+**Context:** a user reported that some trainings land on 0.5 accuracy as if the
+model "guessed one class for everything", that it depends on the optimizer and
+the model, and that longer training does not fix it. It does not fix it, and the
+model really is guessing one class.
+
+**The grid, same data and seed throughout** (USK-COFFEE, 4 classes, 3 epochs, at
+the default `learning_rate = 1e-3`):
+
+| model           | Adam              | SGD                  |
+|-----------------|-------------------|----------------------|
+| resnet50        | 0.72              | 0.53 (undertrained)  |
+| vgg16           | **0.25 collapse** | 0.80                 |
+| alexnet         | **0.25 collapse** | 0.81                 |
+| efficientnet_b1 | 0.86              | 0.34 (undertrained)  |
+
+The collapsed runs predict a single class for every image: the confusion matrix
+has one occupied column, and the training loss barely moves (1.446 → 1.393).
+Repeated on a balanced two-class problem, the same pair reports **exactly
+0.5000** with a confusion matrix of `[[300, 0], [300, 0]]` — which is the number
+the report showed and called a result.
+
+**The split follows batch normalization.** VGG and AlexNet predate it and carry
+very large fully-connected heads; an Adam step of 1e-3 saturates them in the
+first iterations and they never recover. The normalized architectures take that
+step comfortably and instead undertrain under plain SGD at the same rate. No
+single default serves both halves, which is why one existed and half the grid
+failed under it.
+
+**Three changes, in order of what matters.**
+
+**1. A collapsed run says so.** `core/training_health.py` checks, at the end of
+every run, whether the model predicted one class for the whole validation set
+and whether the loss ever meaningfully fell. Warnings ride in `TrainResult` and
+in `run.json`, and are logged. The stagnation threshold is 10%, calibrated on
+the grid above rather than chosen: runs that learned nothing fell 3.7% and 4.4%,
+runs that learned fell 49% and 62%. This is the part that had to exist —
+detection is what turns a misleading number into a message, and a default can
+always be overridden back into the same hole.
+
+**2. The suggestion knows the pair.** `core/learning_rate.py` maps architecture
+and optimizer to a starting rate that trains it: 1e-4 for Adam on VGG/AlexNet,
+1e-2 for plain SGD, 1e-3 otherwise. Offered, never imposed — a value silently
+substituted into a config the researcher wrote is the same class of problem as a
+number appearing without explanation.
+
+**3. Verified end to end on the failing pair.** VGG16 + Adam, binary: at 1e-3,
+accuracy 0.5000 with every image on one side and the collapse warning raised; at
+the suggested 1e-4, accuracy 0.8800 with a balanced matrix and no warnings. The
+detector stays quiet on a healthy run, which is what keeps it worth reading.
+
+**What this was not.** Not a bug in the loss, the metrics or the data pipeline —
+all of those were checked in ADR-098 and recomputed against plain sklearn. The
+defect was a default that fits half the model list, and a report that presented
+the consequence as a measurement.

@@ -36,6 +36,7 @@ from visionforge.core.resume import (
 )
 from visionforge.core.tracking import TensorBoardLogger
 from visionforge.core.trainer import _seed_everything, resolve_device
+from visionforge.core.training_health import stagnant_loss, summarize
 from visionforge.models.segmentation_factory import segmentation_logits
 from visionforge.utils.environment import capture_environment
 from visionforge.utils.segmentation_config import SegmentationConfig
@@ -63,6 +64,9 @@ class SegmentationTrainResult:
     device_used: str
     history: list[SegmentationEpochResult] = field(default_factory=list)
     model_path: Path = field(default_factory=lambda: Path("."))
+    # Things about this run the researcher has to be told, because the
+    # metrics alone would look like a result (ADR-099).
+    warnings: list[dict[str, str]] = field(default_factory=list)
 
 
 def per_image_confusion(
@@ -383,7 +387,13 @@ class SegmentationTrainer:
                 save_future = save_pool.submit(torch.save, state_dict, model_path)
             else:
                 patience_counter += 1
-                if patience_counter >= cfg.early_stopping_patience:
+                # 0 disables early stopping outright. Without this guard it
+                # would mean the opposite -- the very first epoch without an
+                # improvement satisfies `1 >= 0` and ends the run.
+                if (
+                    cfg.early_stopping_patience > 0
+                    and patience_counter >= cfg.early_stopping_patience
+                ):
                     logger.info("Early stopping at epoch {}.", epoch)
                     break
 
@@ -393,6 +403,11 @@ class SegmentationTrainer:
         if save_future is not None:
             save_future.result()
         save_pool.shutdown(wait=False)
+
+        # A run that never moved still reports metrics; say so (ADR-099).
+        health = summarize([stagnant_loss([h.train_loss for h in history])])
+        for warning in health:
+            logger.warning("{}", warning["message"])
 
         # Guard: if mIoU never improved past the -1 sentinel (degenerate run),
         # still persist the final weights so the block can reload something.
@@ -413,6 +428,7 @@ class SegmentationTrainer:
             device_used=self._device_label,
             history=history,
             model_path=model_path,
+            warnings=health,
         )
         self._write_run_json(run_dir, train_result)
         tb.close()
@@ -663,6 +679,8 @@ class SegmentationTrainer:
                 "report": None,
             },
             "tests": [],
+            # Empty on a healthy run (ADR-099).
+            "warnings": result.warnings,
         }
         (run_dir / "run.json").write_text(
             json.dumps(run_json, indent=2), encoding="utf-8"

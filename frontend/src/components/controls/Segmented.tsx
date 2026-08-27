@@ -6,6 +6,8 @@ interface SegmentedOption {
 }
 
 interface SegmentedProps {
+  /** Explanation shown in the label info dot. */
+  help?: string;
   label: string;
   value: string;
   onChange: (v: string) => void;
@@ -20,13 +22,14 @@ export function Segmented({
   onChange,
   options,
   hint,
+  help,
 }: SegmentedProps) {
   const normalize = (opt: string | SegmentedOption): SegmentedOption =>
     typeof opt === "string" ? { value: opt, label: opt } : opt;
 
   return (
     <div>
-      <FieldLabel dot hint={hint}>
+      <FieldLabel dot hint={hint} help={help}>
         {label}
       </FieldLabel>
       <div

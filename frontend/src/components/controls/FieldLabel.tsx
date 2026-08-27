@@ -1,12 +1,17 @@
-/** Monospaced label with an optional accent dot and trailing hint. */
+import { InfoDot } from "./InfoDot";
+
+/** Monospaced label with an optional accent dot, info dot and trailing hint. */
 export function FieldLabel({
   children,
   hint,
   dot = false,
+  help,
 }: {
   children: React.ReactNode;
   hint?: string;
   dot?: boolean;
+  /** Explanation for this field, shown in an info dot beside the label. */
+  help?: string;
 }) {
   return (
     <div
@@ -35,6 +40,7 @@ export function FieldLabel({
         />
       )}
       <span>{children}</span>
+      {help && <InfoDot text={help} />}
       {hint && (
         <span
           style={{

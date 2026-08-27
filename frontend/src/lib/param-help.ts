@@ -39,7 +39,8 @@ export const PARAM_HELP: Record<string, string> = {
   warmup_epochs: "Épocas iniciais com learning rate crescendo devagar, para o modelo não desestabilizar no começo.",
 
   // ── avançado: parada e regularização ──────────────────────────────────────
-  early_stopping_patience: "Épocas sem melhora antes de parar sozinho. Evita queimar GPU depois que o modelo parou de aprender.",
+  early_stopping_patience:
+    "Épocas sem melhora antes de parar sozinho. Evita queimar GPU depois que o modelo parou de aprender. Deixe 0 (ou vazio) para desligar e rodar todas as épocas.",
   patience: "Épocas sem melhora antes de parar sozinho.",
   label_smoothing: "Suaviza os rótulos para o modelo não ficar excessivamente confiante.",
   dropout: "Desliga neurônios ao acaso durante o treino, forçando o modelo a não depender de poucos.",
@@ -47,7 +48,8 @@ export const PARAM_HELP: Record<string, string> = {
 
   // ── avançado: mecânica ────────────────────────────────────────────────────
   amp: "Precisão mista: usa 16 bits onde dá. Treina mais rápido e ocupa menos VRAM, com risco baixo de instabilidade.",
-  deterministic: "Força operações reprodutíveis. Torna o resultado repetível e o treino mais lento.",
+  deterministic:
+    "Faz o mesmo config com a mesma seed devolver exatamente os mesmos números. Ligado por padrão: medimos o custo e ele é nulo ou negativo em treinos curtos.",
   num_workers: "Processos que carregam as imagens. No Windows cada um recarrega o torch e as DLLs da CUDA, ~1 GB — valor alto demais não deixa o treino lento, ele impede o treino de começar (WinError 1455).",
   workers: "Processos que carregam as imagens. No Windows cada um recarrega o torch e as DLLs da CUDA, ~1 GB — valor alto demais não deixa o treino lento, ele impede o treino de começar (WinError 1455).",
   pin_memory: "Acelera a cópia das imagens para a GPU. Deixe ligado, exceto se faltar RAM.",

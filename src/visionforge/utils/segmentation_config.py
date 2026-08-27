@@ -127,7 +127,11 @@ class SegmentationTrainingConfig(BaseModel):
     learning_rate: float = Field(default=0.001, gt=0.0)
     epochs: int = Field(default=10, ge=1)
     batch_size: int = Field(default=8, ge=1)
-    early_stopping_patience: int = Field(default=10, ge=1)
+    early_stopping_patience: int = Field(
+        default=10,
+        ge=0,
+        description="Épocas sem melhora antes de parar sozinho. **0 desliga** o early stopping: o treino roda todas as épocas configuradas.",
+    )
     optimizer: Literal["adam", "sgd", "adamw"] = "adam"
     weight_decay: float = Field(default=0.0, ge=0.0)
     loss: Literal["cross_entropy", "dice", "combined"] = "cross_entropy"

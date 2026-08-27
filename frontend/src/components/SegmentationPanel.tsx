@@ -1,3 +1,4 @@
+import { paramHelp } from "../lib/param-help";
 import { useState } from "react";
 import { fetchTaskSchema, pickDatasetFolder } from "../api/client";
 import {
@@ -236,6 +237,7 @@ export function SegmentationPanel({
             onChange={(v) => setTraining({ epochs: Math.round(v) })}
             min={1}
             step={1}
+            help={paramHelp("epochs")}
           />
           <NumberField
             label="Batch size"
@@ -244,6 +246,7 @@ export function SegmentationPanel({
             min={1}
             step={1}
             hint="qualquer inteiro"
+            help={paramHelp("batch_size")}
           />
           <NumberField
             label="Learning rate"
@@ -251,6 +254,7 @@ export function SegmentationPanel({
             onChange={(v) => setTraining({ learning_rate: v })}
             min={0.000001}
             step={0.0001}
+            help={paramHelp("learning_rate")}
           />
           <Segmented
             label="Loss"
@@ -268,6 +272,7 @@ export function SegmentationPanel({
               { value: "sgd", label: "SGD" },
               { value: "adamw", label: "AdamW" },
             ]}
+            help={paramHelp("optimizer")}
           />
           <NumberField
             label="Early stop"
@@ -276,6 +281,8 @@ export function SegmentationPanel({
             min={1}
             step={1}
             hint="paciência"
+            help={paramHelp("early_stopping_patience")}
+            emptyValue={0}
           />
           <NumberField
             label="Seed"
@@ -283,12 +290,14 @@ export function SegmentationPanel({
             onChange={(v) => setTraining({ seed: Math.round(v) })}
             min={0}
             step={1}
+            help={paramHelp("seed")}
           />
           <Toggle
             label="Determinístico"
             value={formData.training.deterministic}
             onChange={(v) => setTraining({ deterministic: v })}
             hint="reprodutível, mais lento"
+            help={paramHelp("deterministic")}
           />
         </div>
       </div>
@@ -410,6 +419,7 @@ export function SegmentationPanel({
             min={32}
             step={32}
             suffix="px"
+            help={paramHelp("image_size")}
           />
           <NumberField
             label="ignore_index"

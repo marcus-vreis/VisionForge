@@ -49,3 +49,4 @@ vEw
 valeu
 variantes
 versão
+caractere

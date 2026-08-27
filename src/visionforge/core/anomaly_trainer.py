@@ -41,6 +41,7 @@ from visionforge.core.resume import (
 )
 from visionforge.core.tracking import TensorBoardLogger
 from visionforge.core.trainer import _seed_everything, resolve_device
+from visionforge.core.training_health import stagnant_loss, summarize
 from visionforge.models.anomaly_factory import ConvAutoencoder, PatchCore
 from visionforge.utils.anomaly_config import AnomalyConfig
 from visionforge.utils.environment import capture_environment
@@ -99,6 +100,9 @@ class AnomalyTrainResult:
     device_used: str
     history: list[AnomalyEpochResult] = field(default_factory=list)
     model_path: Path = field(default_factory=lambda: Path("."))
+    # Things about this run the researcher has to be told, because the
+    # metrics alone would look like a result (ADR-099).
+    warnings: list[dict[str, str]] = field(default_factory=list)
 
 
 def _calibration_loader(data_module: Any) -> Any:
@@ -361,7 +365,13 @@ class AnomalyTrainer:
                 torch.save(model.state_dict(), model_path)
             else:
                 patience += 1
-                if patience >= cfg.early_stopping_patience:
+                # 0 disables early stopping outright. Without this guard it
+                # would mean the opposite -- the very first epoch without an
+                # improvement satisfies `1 >= 0` and ends the run.
+                if (
+                    cfg.early_stopping_patience > 0
+                    and patience >= cfg.early_stopping_patience
+                ):
                     logger.info("Early stopping at epoch {}.", epoch)
                     break
 
@@ -372,7 +382,12 @@ class AnomalyTrainer:
             torch.save(model.state_dict(), model_path)
             best_epoch = best_epoch or len(history)
         best = next((r for r in history if r.epoch == best_epoch), history[-1])
+        health = summarize([stagnant_loss([h.train_loss for h in history])])
+        for warning in health:
+            logger.warning("{}", warning["message"])
+
         return AnomalyTrainResult(
+            warnings=health,
             best_epoch=best_epoch,
             best_auroc=best.val_auroc,
             total_epochs=len(history),
@@ -524,6 +539,8 @@ class AnomalyTrainer:
                 "report": None,
             },
             "tests": [],
+            # Empty on a healthy run (ADR-099).
+            "warnings": result.warnings,
         }
         (run_dir / "run.json").write_text(
             json.dumps(run_json, indent=2), encoding="utf-8"

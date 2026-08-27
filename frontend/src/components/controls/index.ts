@@ -1,3 +1,5 @@
+export { InfoDot } from "./InfoDot";
+export { Chevron } from "./Chevron";
 export { FieldLabel } from "./FieldLabel";
 export { NumberField } from "./NumberField";
 export { TextField } from "./TextField";

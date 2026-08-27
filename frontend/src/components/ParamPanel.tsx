@@ -66,7 +66,7 @@ const FIELD_LABELS: Record<string, string> = {
   optimizer: "Otimizador",
   weight_decay: "Weight decay",
   seed: "Seed",
-  deterministic: "Determinístico (lento)",
+  deterministic: "Determinístico",
   mixed_precision: "Precisão mista (AMP)",
   kind: "Tipo",
   step_size: "Step size",
@@ -119,27 +119,6 @@ function resolveSchema(
 const IMAGE_KEYS = ["image_size", "normalize_mean", "normalize_std"];
 const AUGMENT_KEYS = ["horizontal_flip", "rotation_degrees", "color_jitter"];
 
-/** The one-line explanation for a field, under the control it explains.
- *
- * The hint slot in FieldLabel is right-aligned beside the label and sized for a
- * word or two ("treino", "0 = desliga"); a sentence belongs on its own line.
- */
-function ParamHelp({ name }: { name: string }) {
-  const text = paramHelp(name);
-  if (!text) return null;
-  return (
-    <p
-      style={{
-        fontSize: 11,
-        lineHeight: 1.5,
-        color: "var(--vf-text-muted)",
-        marginTop: 4,
-      }}
-    >
-      {text}
-    </p>
-  );
-}
 
 
 /** Render a chosen subset of an object schema's fields, flat.
@@ -1750,6 +1729,7 @@ function SchemaFieldVF({
     return (
       <div>
         <SelectField
+          help={paramHelp(name)}
           label={label}
           value={String(value ?? resolved.default ?? resolved.enum?.[0] ?? "")}
           onChange={(v) => handleChange(v)}
@@ -1767,7 +1747,6 @@ function SchemaFieldVF({
             {errorMsg}
           </p>
         )}
-        <ParamHelp name={name} />
         {gridExt}
       </div>
     );
@@ -1781,6 +1760,7 @@ function SchemaFieldVF({
     return (
       <div>
         <Segmented
+          help={paramHelp(name)}
           label={label}
           value={String(value ?? resolved.default ?? resolved.enum?.[0] ?? "")}
           onChange={(v) => handleChange(v)}
@@ -1798,7 +1778,6 @@ function SchemaFieldVF({
             {errorMsg}
           </p>
         )}
-        <ParamHelp name={name} />
         {gridExt}
       </div>
     );
@@ -1808,6 +1787,7 @@ function SchemaFieldVF({
     return (
       <div>
         <Toggle
+          help={paramHelp(name)}
           label={label}
           value={Boolean(value)}
           onChange={(v) => onChange(v)}
@@ -1832,6 +1812,7 @@ function SchemaFieldVF({
     return (
       <div>
         <NumberField
+          help={paramHelp(name)}
           label={label}
           value={(value as number) ?? 0}
           onChange={(v) => handleChange(v)}
@@ -1850,7 +1831,6 @@ function SchemaFieldVF({
             {errorMsg}
           </p>
         )}
-        <ParamHelp name={name} />
         {gridExt}
       </div>
     );
@@ -1861,6 +1841,7 @@ function SchemaFieldVF({
     return (
       <div>
         <TextField
+          help={paramHelp(name)}
           label={label}
           value={arrVal.join(", ")}
           onChange={(v) => {
@@ -1894,6 +1875,7 @@ function SchemaFieldVF({
   return (
     <div>
       <TextField
+        help={paramHelp(name)}
         label={label}
         value={String(value ?? "")}
         onChange={(v) => onChange(v)}

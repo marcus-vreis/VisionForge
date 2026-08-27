@@ -10,6 +10,8 @@ const shellStyle: React.CSSProperties = {
 };
 
 interface TextFieldProps {
+  /** Explanation shown in the label info dot. */
+  help?: string;
   label: string;
   value: string;
   onChange: (v: string) => void;
@@ -26,10 +28,11 @@ export function TextField({
   placeholder,
   hint,
   mono = false,
+  help,
 }: TextFieldProps) {
   return (
     <div>
-      <FieldLabel dot hint={hint}>
+      <FieldLabel dot hint={hint} help={help}>
         {label}
       </FieldLabel>
       <div style={shellStyle}>
