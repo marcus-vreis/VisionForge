@@ -42,10 +42,13 @@ class TaskTrainingConfig(BaseModel):
     learning_rate: float = Field(default=0.001, gt=0)
     optimizer: Literal["adam", "sgd", "adamw"] = "adam"
     weight_decay: float = Field(default=0.0, ge=0)
+    # Zero by default because the previous default never fired: with
+    # `epochs=10` it took ten consecutive epochs without improvement inside
+    # ten epochs. It read as a protection that was not there.
     early_stopping_patience: int = Field(
-        default=10,
+        default=0,
         ge=0,
-        description="Épocas sem melhora antes de parar sozinho. **0 desliga** o early stopping: o treino roda todas as épocas configuradas.",
+        description="Épocas seguidas sem melhora antes de encerrar o treino. 0 (padrão) desliga: roda todas as épocas configuradas.",
     )
     seed: int = Field(default=42, ge=0)
     deterministic: bool = Field(default=True, description=DETERMINISTIC_DESCRIPTION)

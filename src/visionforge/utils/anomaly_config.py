@@ -85,10 +85,13 @@ class AnomalyTrainingConfig(BaseModel):
     learning_rate: float = Field(default=0.001, gt=0.0)
     epochs: int = Field(default=30, ge=1)
     batch_size: int = Field(default=32, ge=1)
+    # Zero by default because the previous default never fired: with
+    # `epochs=10` it took ten consecutive epochs without improvement inside
+    # ten epochs. It read as a protection that was not there.
     early_stopping_patience: int = Field(
-        default=10,
+        default=0,
         ge=0,
-        description="Épocas sem melhora antes de parar sozinho. **0 desliga** o early stopping: o treino roda todas as épocas configuradas.",
+        description="Épocas seguidas sem melhora antes de encerrar o treino. 0 (padrão) desliga: roda todas as épocas configuradas.",
     )
     optimizer: Literal["adam", "sgd", "adamw"] = "adam"
     weight_decay: float = Field(default=0.0, ge=0.0)

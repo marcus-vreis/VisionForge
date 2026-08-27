@@ -35,10 +35,13 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Changed
 
-- **`early_stopping_patience = 0` agora desliga o early stopping**, nas cinco
-  tarefas e no SDK de tarefas próprias. Antes o valor era recusado (`ge=1`) e a
-  leitura ingênua do laço faria o oposto do esperado: a primeira época sem
-  melhora já satisfaz `1 >= 0` e encerraria o treino.
+- **`early_stopping_patience = 0` agora desliga o early stopping, e é o
+  padrão**, nas cinco tarefas e no SDK de tarefas próprias. Antes o valor era
+  recusado (`ge=1`) e a leitura ingênua do laço faria o oposto do esperado: a
+  primeira época sem melhora já satisfaz `1 >= 0` e encerraria o treino. O
+  padrão virou 0 porque o anterior nunca disparava — com `epochs=10` ele exigia
+  dez épocas seguidas sem melhora dentro de dez épocas, ou seja, prometia uma
+  proteção que não existia.
 - **Campo numérico vazio virou uma intenção, não um engano.** Ele restaurava o
   valor anterior em silêncio; onde zero desliga o parâmetro, esvaziar agora
   significa zero.
@@ -49,6 +52,11 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
   própria caixa de texto — e o centro da caixa de um glifo não é o centro do
   triângulo, então ele descrevia um arco em vez de girar no lugar. Virou um SVG
   centrado no próprio eixo, nos três lugares onde aparecia.
+- **A explicação de um parâmetro não é mais cortada pela borda do painel.** Os
+  cards do formulário usam `backdrop-filter`, que cria um contexto de
+  empilhamento por card e prendia a caixa dentro dele. Ela agora é renderizada
+  num portal, como os menus já eram, e é encaixada dentro da janela — um campo
+  colado na margem mostra a explicação inteira.
 - **O rótulo "Determinístico (lento)" deixou de mentir** depois que a medição do
   ADR-098 mostrou que ele é neutro ou mais rápido em treinos curtos.
 

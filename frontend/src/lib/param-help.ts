@@ -40,7 +40,7 @@ export const PARAM_HELP: Record<string, string> = {
 
   // ── avançado: parada e regularização ──────────────────────────────────────
   early_stopping_patience:
-    "Épocas sem melhora antes de parar sozinho. Evita queimar GPU depois que o modelo parou de aprender. Deixe 0 (ou vazio) para desligar e rodar todas as épocas.",
+    "Épocas seguidas sem melhora antes de encerrar o treino. Deixe 0 (ou vazio) para rodar todas as épocas configuradas.",
   patience: "Épocas sem melhora antes de parar sozinho.",
   label_smoothing: "Suaviza os rótulos para o modelo não ficar excessivamente confiante.",
   dropout: "Desliga neurônios ao acaso durante o treino, forçando o modelo a não depender de poucos.",

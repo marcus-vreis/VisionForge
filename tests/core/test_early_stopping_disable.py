@@ -44,7 +44,27 @@ class TestZeroIsAccepted:
         description = config_cls.model_fields["early_stopping_patience"].description
 
         assert description is not None
-        assert "0 desliga" in description
+        assert "0 (padrão) desliga" in description
+
+
+class TestZeroIsTheDefault:
+    """The previous default of 10 never fired: with `epochs=10` it needed ten
+    consecutive epochs without improvement inside ten epochs. It read as a
+    protection that was not there, so the honest default is the one that says
+    early stopping is off."""
+
+    @pytest.mark.parametrize("config_cls", CONFIGS)
+    def test_every_task_defaults_to_disabled(self, config_cls: type[BaseModel]) -> None:
+        assert config_cls().early_stopping_patience == 0  # type: ignore[attr-defined]
+
+    def test_the_old_default_could_not_fire_with_the_default_epochs(self) -> None:
+        from visionforge.utils.config import TrainingConfig
+
+        cfg = TrainingConfig()
+        old_patience = 10
+
+        # It would have taken more epochs without improvement than the run has.
+        assert old_patience >= cfg.epochs
 
 
 class TestZeroRunsEveryEpoch:
