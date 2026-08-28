@@ -253,13 +253,13 @@ comments referencing ADRs or narrating change history.
 
 **Decision (ADR-046), two parts:**
 
-- **Docs:** the live, canonical set is `CLAUDE.md` (root), `ARCHITECTURE.md`,
+- **Docs:** the live, canonical set is `CONTRIBUTING.md` (root), `ARCHITECTURE.md`,
   `DECISIONS.md`, `TASKS.md`, `ROADMAP.md` (this file), plus the active specs
   (`CROSS_TASK_PARITY_PLAN.md`, `DOCKER_PLAN.md`). The `PHASE*_PLAN.md` and
   `GRADCAM_PLAN.md` move to `documentation/archive/` (history, not deleted — they
   show how a task was built). `PROJECT_CONTEXT.md` is also archive-tier (it lags
   the 5-task reality). *File moves happen on Windows* (the mount can't unlink).
-- **Comment policy (refines CLAUDE.md §9):** a one-line **pointer** to an ADR is
+- **Comment policy (refines the contributing guide):** a one-line **pointer** to an ADR is
   good (`# standalone per ADR-033`) — it links the code to its decision. What's
   noise and should go: comments that **re-litigate a decision inline** (a
   paragraph re-explaining *why* when the ADR already does) or **narrate the edit

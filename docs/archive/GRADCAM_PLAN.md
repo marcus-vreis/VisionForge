@@ -7,7 +7,7 @@
 > Kickoff 2026-06-04 · author: tech-leader iteration
 
 Grad-CAM (Gradient-weighted Class Activation Mapping) is the first item from the
-**medium-term scientific expansion** backlog (CLAUDE.md §7.2 — "Explainability
+**medium-term scientific expansion** backlog ("Explainability
 Block: Grad-CAM, LIME, SHAP"). It answers *"where did the classifier look?"* — a
 heatmap over the input highlighting the regions most responsible for a predicted
 class. Essential for academic interpretation of a trained model.

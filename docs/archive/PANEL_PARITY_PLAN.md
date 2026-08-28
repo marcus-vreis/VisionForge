@@ -8,7 +8,7 @@
 > hiperparâmetros."
 > Verdict after code audit: **the critique is factually correct** (details below).
 
-## Audit (2026-07-01, branch claude/research-grade-review)
+## Audit (2026-07-01, research-grade review branch)
 
 | Capacidade | Classif. | Detecção | Regressão | Segment. | Anomalia |
 |---|---|---|---|---|---|

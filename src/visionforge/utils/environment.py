@@ -2,7 +2,7 @@
 
 A run is only reproducible if you know *which versions* produced it — the config
 alone is not enough when PyTorch/torchvision/numpy can change numerical behavior
-across releases (CLAUDE.md §7.4). ``capture_environment`` collects the Python,
+across releases (ADR-013). ``capture_environment`` collects the Python,
 platform, and key-library versions so they can be persisted into ``run.json``.
 """
 

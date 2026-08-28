@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 # Bumped whenever a breaking change is made to the experiment config schema. A
 # config carries the version it was written with so old YAML/run.json files can
 # be migrated forward (see ``migrate_config_dict``) without losing traceability —
-# the reproducibility guarantee depends on this (CLAUDE.md §6.2).
+# the reproducibility guarantee depends on this (ADR-039).
 CURRENT_SCHEMA_VERSION = 1
 
 
