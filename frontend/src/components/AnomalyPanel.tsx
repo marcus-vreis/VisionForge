@@ -12,6 +12,7 @@ import {
 import { exportConfigToYaml, validateParsedConfig } from "../lib/yaml-config";
 import type { ValidationError } from "../hooks/useExperiment";
 import { NumberField, SelectField, Segmented, TextField, Toggle } from "./controls";
+import { AdvancedFields } from "./AdvancedFields";
 import { ExperimentHeader, type PanelStrategy } from "./ExperimentHeader";
 import { ReplicatesCard } from "./ReplicatesCard";
 import { AnomalyDatasetStats } from "./TaskDatasetStats";
@@ -258,6 +259,16 @@ export function AnomalyPanel({
             help={paramHelp("learning_rate")}
           />
           <NumberField
+            label="Seed"
+            value={formData.training.seed}
+            onChange={(v) => setTraining({ seed: Math.round(v) })}
+            min={0}
+            step={1}
+            help={paramHelp("seed")}
+          />
+        </div>
+        <AdvancedFields count={4}>
+            <NumberField
             label="Threshold %ile"
             value={formData.training.threshold_percentile}
             onChange={(v) => setTraining({ threshold_percentile: v })}
@@ -266,7 +277,7 @@ export function AnomalyPanel({
             step={1}
             hint="corte sobre scores normais"
           />
-          <Segmented
+            <Segmented
             label="Otimizador"
             value={formData.training.optimizer}
             onChange={(v) => setTraining({ optimizer: v })}
@@ -277,7 +288,7 @@ export function AnomalyPanel({
             ]}
             help={paramHelp("optimizer")}
           />
-          <NumberField
+            <NumberField
             label="Early stop"
             value={formData.training.early_stopping_patience}
             onChange={(v) => setTraining({ early_stopping_patience: Math.round(v) })}
@@ -287,22 +298,14 @@ export function AnomalyPanel({
             help={paramHelp("early_stopping_patience")}
             emptyValue={0}
           />
-          <NumberField
-            label="Seed"
-            value={formData.training.seed}
-            onChange={(v) => setTraining({ seed: Math.round(v) })}
-            min={0}
-            step={1}
-            help={paramHelp("seed")}
-          />
-          <Toggle
+            <Toggle
             label="Determinístico"
             value={formData.training.deterministic}
             onChange={(v) => setTraining({ deterministic: v })}
-            hint="reprodutível, mais lento"
+            hint="reprodutível"
             help={paramHelp("deterministic")}
           />
-        </div>
+        </AdvancedFields>
       </div>
 
       {/* Dataset */}

@@ -15,12 +15,13 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Added
 
-- **Parâmetros básicos na frente, avançados recolhidos.** A classificação
-  básico/avançado existia desde a reclamação "muita coisa junta" e nunca tinha
-  sido usada. Ficam à vista os quatro que mudam entre um experimento e outro
-  (épocas, learning rate, batch size, seed); o resto entra numa seção que abre
-  sozinha se algum valor ali dentro estiver fora do padrão
-  ([ADR-102](docs/dev/DECISIONS.md)).
+- **Parâmetros básicos na frente, avançados recolhidos — nas cinco tarefas.** A
+  classificação básico/avançado existia desde a reclamação "muita coisa junta" e
+  nunca tinha sido usada. Ficam à vista os que mudam entre um experimento e
+  outro (épocas, learning rate, batch size, seed, e a loss onde ela existe); o
+  resto entra numa seção que abre sozinha se algum valor ali dentro estiver fora
+  do padrão. Recolhidos: 6 na classificação e na detecção, 4 na anomalia, 3 na
+  regressão e na segmentação ([ADR-102](docs/dev/DECISIONS.md)).
 
 
 - **Três arquiteturas de atenção: `vit_b_16`, `swin_t` e `convnext_tiny`.** Vêm
@@ -122,7 +123,9 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
   empilhamento por card e prendia a caixa dentro dele. Ela agora é renderizada
   num portal, como os menus já eram, e é encaixada dentro da janela — um campo
   colado na margem mostra a explicação inteira.
-- **O rótulo "Determinístico (lento)" deixou de mentir** depois que a medição do
+- **O rótulo e a dica do determinístico deixaram de mentir** — o "(lento)" no
+  painel de classificação e o "reprodutível, mais lento" nos quatro painéis de
+  tarefa, depois que a medição do
   ADR-098 mostrou que ele é neutro ou mais rápido em treinos curtos.
 
 

@@ -22,6 +22,7 @@ import {
 import { exportConfigToYaml, validateParsedConfig } from "../lib/yaml-config";
 import type { ValidationError } from "../hooks/useExperiment";
 import { NumberField, SelectField, Segmented, TextField, Toggle } from "./controls";
+import { AdvancedFields } from "./AdvancedFields";
 import { DetectionDatasetStats } from "./DetectionDatasetStats";
 import { PreprocessingPanel } from "./PreprocessingPanel";
 import { ExperimentHeader, type PanelStrategy } from "./ExperimentHeader";
@@ -296,6 +297,16 @@ export function DetectionPanel({
             help={paramHelp("learning_rate")}
           />
           <NumberField
+            label="Seed"
+            value={formData.training.seed}
+            onChange={(v) => setTraining({ seed: Math.round(v) })}
+            min={0}
+            step={1}
+            help={paramHelp("seed")}
+          />
+        </div>
+        <AdvancedFields count={6}>
+            <NumberField
             label="Patience"
             value={formData.training.patience}
             onChange={(v) => setTraining({ patience: Math.round(v) })}
@@ -305,22 +316,14 @@ export function DetectionPanel({
             help={paramHelp("patience")}
             emptyValue={0}
           />
-          <NumberField
-            label="Seed"
-            value={formData.training.seed}
-            onChange={(v) => setTraining({ seed: Math.round(v) })}
-            min={0}
-            step={1}
-            help={paramHelp("seed")}
-          />
-          <Toggle
+            <Toggle
             label="Determinístico"
             value={formData.training.deterministic}
             onChange={(v) => setTraining({ deterministic: v })}
-            hint="reprodutível, mais lento"
+            hint="reprodutível"
             help={paramHelp("deterministic")}
           />
-          <NumberField
+            <NumberField
             label="Workers"
             value={formData.training.workers}
             onChange={(v) => setTraining({ workers: Math.round(v) })}
@@ -330,7 +333,7 @@ export function DetectionPanel({
             help={paramHelp("workers")}
             emptyValue={0}
           />
-          <SelectField
+            <SelectField
             label="Optimizer"
             value={formData.training.optimizer}
             onChange={(v) =>
@@ -340,7 +343,7 @@ export function DetectionPanel({
             hint="auto = Ultralytics escolhe"
             help={paramHelp("optimizer")}
           />
-          <NumberField
+            <NumberField
             label="Momentum"
             value={formData.training.momentum}
             onChange={(v) => setTraining({ momentum: v })}
@@ -350,7 +353,7 @@ export function DetectionPanel({
             hint="SGD momentum / Adam β1"
             help={paramHelp("momentum")}
           />
-          <NumberField
+            <NumberField
             label="Weight decay"
             value={formData.training.weight_decay}
             onChange={(v) => setTraining({ weight_decay: v })}
@@ -360,7 +363,7 @@ export function DetectionPanel({
             help={paramHelp("weight_decay")}
             emptyValue={0}
           />
-        </div>
+        </AdvancedFields>
       </div>
 
       {isUltralytics && (

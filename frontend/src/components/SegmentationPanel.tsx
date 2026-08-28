@@ -1,5 +1,6 @@
 import { paramHelp } from "../lib/param-help";
 import { ModelAdvice } from "./ModelAdvice";
+import { AdvancedFields } from "./AdvancedFields";
 import { useState } from "react";
 import { fetchTaskSchema, pickDatasetFolder } from "../api/client";
 import {
@@ -264,7 +265,17 @@ export function SegmentationPanel({
             options={SEGMENTATION_LOSSES}
             hint="critério por pixel"
           />
-          <Segmented
+          <NumberField
+            label="Seed"
+            value={formData.training.seed}
+            onChange={(v) => setTraining({ seed: Math.round(v) })}
+            min={0}
+            step={1}
+            help={paramHelp("seed")}
+          />
+        </div>
+        <AdvancedFields count={3}>
+            <Segmented
             label="Otimizador"
             value={formData.training.optimizer}
             onChange={(v) => setTraining({ optimizer: v })}
@@ -275,7 +286,7 @@ export function SegmentationPanel({
             ]}
             help={paramHelp("optimizer")}
           />
-          <NumberField
+            <NumberField
             label="Early stop"
             value={formData.training.early_stopping_patience}
             onChange={(v) => setTraining({ early_stopping_patience: Math.round(v) })}
@@ -285,22 +296,14 @@ export function SegmentationPanel({
             help={paramHelp("early_stopping_patience")}
             emptyValue={0}
           />
-          <NumberField
-            label="Seed"
-            value={formData.training.seed}
-            onChange={(v) => setTraining({ seed: Math.round(v) })}
-            min={0}
-            step={1}
-            help={paramHelp("seed")}
-          />
-          <Toggle
+            <Toggle
             label="Determinístico"
             value={formData.training.deterministic}
             onChange={(v) => setTraining({ deterministic: v })}
-            hint="reprodutível, mais lento"
+            hint="reprodutível"
             help={paramHelp("deterministic")}
           />
-        </div>
+        </AdvancedFields>
         <ModelAdvice
           architecture={formData.model.name}
           optimizer={formData.training.optimizer}
