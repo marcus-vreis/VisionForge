@@ -13,6 +13,8 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ## [Unreleased]
 
+## [0.9.0] — 2026-08-28
+
 ### Added
 
 - **Um guia de primeira execução.** Depois do nome, quem nunca viu recebe um
