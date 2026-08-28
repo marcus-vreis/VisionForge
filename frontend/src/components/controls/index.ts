@@ -8,3 +8,4 @@ export type { SelectOption } from "./SelectField";
 export { MenuSelect } from "./MenuSelect";
 export { Segmented } from "./Segmented";
 export { Toggle } from "./Toggle";
+export { WorkersField } from "./WorkersField";

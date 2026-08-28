@@ -15,6 +15,17 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Added
 
+- **Um guia de primeira execução.** Depois do nome, quem nunca viu recebe um
+  convite para uma volta de sete paradas: as abas de tarefa, a pasta do dataset,
+  a divisão básico/avançado, GPU ou CPU, o botão de treinar, o histórico e os
+  datasets. Cada parada acende o elemento de que está falando e traz um cartão
+  ao lado; sai com ✕, "Pular" ou Esc, e o botão "guia" no cabeçalho reabre
+  quando quiser ([ADR-104](docs/dev/DECISIONS.md)).
+- **Ponto de info no dataset.** O diretório base e as três subpastas ganharam o
+  mesmo "i" dos hiperparâmetros, explicando o que o VisionForge procura dentro
+  da pasta raiz e para que serve cada divisão — inclusive por que o teste é
+  avaliado uma vez só ([ADR-104](docs/dev/DECISIONS.md)).
+
 - **Parâmetros básicos na frente, avançados recolhidos — nas cinco tarefas.** A
   classificação básico/avançado existia desde a reclamação "muita coisa junta" e
   nunca tinha sido usada. Ficam à vista os que mudam entre um experimento e
@@ -60,6 +71,18 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
   anomalia e tarefas próprias.
 
 ### Changed
+
+- **O número de workers agora se decide sozinho.** O padrão passou a ser `-1`,
+  que na hora de carregar mede a memória livre da máquina e divide pelo custo de
+  um worker (no Windows, ~1 GB cada, por pool de loader). O campo continua na
+  tela mostrando o que resolveu — "automático ≈ 3 agora" — e o botão "auto"
+  entrega o número para quem quiser fixá-lo. O `0` mantém o sentido de sempre
+  (carregar no processo principal) e um valor acima do orçamento continua sendo
+  cortado com aviso, porque não começar é pior do que começar com menos
+  ([ADR-103](docs/dev/DECISIONS.md)).
+- **A detecção não manda mais `workers: 2` fixo.** O formulário do YOLO carregava
+  esse literal desde o primeiro WinError 1455; agora usa o mesmo campo
+  automático das outras tarefas ([ADR-103](docs/dev/DECISIONS.md)).
 
 - **Defaults revistos por tarefa.** Classificação e regressão começam em
   `resnet18` (em vez de `resnet50`) e 20 épocas (em vez de 10); segmentação

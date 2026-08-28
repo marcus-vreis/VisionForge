@@ -145,7 +145,17 @@ class RegressionDataModule:
         # its first epoch (ADR-081/098). Lowering silently would hide the
         # machine's limit, so it says so.
         affordable = suggested_workers(loader_pools=_LOADER_POOLS)
-        if self._num_workers > affordable:
+        if self._num_workers < 0:
+            # The automatic setting: what this machine can actually afford.
+            from loguru import logger
+
+            self._num_workers = affordable
+            logger.info(
+                "num_workers automático: {} para {} pools de loader.",
+                affordable,
+                _LOADER_POOLS,
+            )
+        elif self._num_workers > affordable:
             from loguru import logger
 
             logger.warning(

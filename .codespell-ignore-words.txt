@@ -52,3 +52,7 @@ versão
 caractere
 ative
 Ative
+interpolar
+Rever
+rever
+excede

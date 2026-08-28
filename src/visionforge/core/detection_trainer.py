@@ -41,6 +41,7 @@ from visionforge.core.training_health import no_detections, summarize
 from visionforge.models.detection_factory import build_torchvision_detector
 from visionforge.utils.detection_config import DetectionConfig
 from visionforge.utils.environment import capture_environment
+from visionforge.utils.workers import suggested_workers
 
 try:  # ultralytics is an optional extra ([detection]); bound lazily.
     from ultralytics import YOLO as _YOLO  # type: ignore[import-not-found]
@@ -685,10 +686,30 @@ class DetectionTrainer:
                     gts.append({"boxes": t["boxes"].cpu(), "labels": t["labels"].cpu()})
         return mean_average_precision_50(preds, gts).map50
 
+    def _resolved_workers(self) -> int:
+        """The worker count to use, resolving the automatic setting (ADR-103).
+
+        Both backends need this: Ultralytics is handed the number in its train
+        kwargs, and the torchvision loop builds its own DataLoaders.
+        """
+        requested = self._config.training.workers
+        affordable = suggested_workers(loader_pools=2)
+        if requested < 0:
+            logger.info("workers automático: {}.", affordable)
+            return affordable
+        if requested > affordable:
+            logger.warning(
+                "workers={} excede o que esta máquina consegue reservar; usando {}.",
+                requested,
+                affordable,
+            )
+            return affordable
+        return requested
+
     def _build_loaders(self, base_dir: Path) -> tuple[DataLoader, DataLoader]:
         train_ds = DetectionDataset(*self._resolve_split_dirs(base_dir, "train"))
         val_ds = DetectionDataset(*self._resolve_split_dirs(base_dir, "val"))
-        workers = self._config.training.workers
+        workers = self._resolved_workers()
         train_loader = DataLoader(
             train_ds,
             batch_size=self._config.training.batch_size,
@@ -764,7 +785,7 @@ class DetectionTrainer:
             "patience": cfg.patience,
             "seed": cfg.seed,
             "deterministic": cfg.deterministic,
-            "workers": cfg.workers,
+            "workers": self._resolved_workers(),
             # optimizer
             "optimizer": cfg.optimizer,
             "momentum": cfg.momentum,

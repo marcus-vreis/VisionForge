@@ -3497,3 +3497,86 @@ the same as not having one. An unknown default is now not evidence of a change.
 **Verified in the browser:** the training section shows four fields and
 "avançado (6)" closed; the regression panel opens on ResNet-18; picking Swin-T
 there raises the same measured warning classification shows.
+
+## ADR-103 — The worker count decides itself
+
+**Date:** 2026-08-28
+**Status:** Accepted
+**Supersedes:** the fixed `workers: 2` of the detection form
+
+**Context:** `num_workers` is the only field in the interface whose right value
+depends on the machine and not on the experiment. It also has the sharpest
+failure mode we ship: on Windows every DataLoader worker is a spawned process
+that re-imports torch and the CUDA DLLs, about 1 GB of commit charge each, per
+loader pool. Too high does not make training slow — it stops training from
+starting, with `[WinError 1455] The paging file is too small`.
+
+The form already had an "auto" button, and it was the wrong shape: it copied
+`min(cpu_count, 8)` into the box. From that moment on the value was a literal
+frozen at whatever the machine looked like on the day the form was filled in,
+and `cpu_count` is not the constraint anyway — free memory is.
+
+**Decision:** `-1` is the resting default of every worker field, and it means
+"decide at load time". `utils/workers.suggested_workers(loader_pools=N)` asks
+Windows for the free commit charge through `GlobalMemoryStatusEx`, spends at
+most half of it, divides by 1 GB per worker per pool, and caps the result at
+`cpu_count` and at 8. Each data module declares how many pools it opens —
+classification, regression and segmentation open three (train/val/test),
+anomaly two — because the budget is spent per pool, not per run.
+
+An explicit number is still honoured, and still capped with a warning when it
+exceeds the budget: refusing to start is worse than running with fewer workers.
+`0` keeps its own meaning (load in the main process) and is not "automatic",
+which is why the bound is `ge=-1` rather than a nullable field.
+
+**The field stays on screen, showing what it resolved to.** Removing it would
+hide the one number a researcher debugging WinError 1455 needs to see. It reads
+"automático ≈ 3 agora", with the count coming from `/api/system/info`, and the
+"auto" toggle hands the number over to whoever wants it.
+
+**Verified in the browser:** the field reads `automático · ≈ 3 agora` on this
+machine, the toggle switches to a number input pre-filled with 3, and toggling
+back returns to automatic. 22 tests cover the contract, including that `0`
+survives validation and `-2` does not.
+
+## ADR-104 — A guided tour, offered once
+
+**Date:** 2026-08-28
+**Status:** Accepted
+**Builds on:** ADR-090 (the first-run welcome)
+
+**Context:** the welcome asks for a name and then drops the researcher into a
+screen with five task tabs, a strategy row, four form sections and a fixed
+bottom bar. Everything on it is discoverable and nothing on it is announced —
+the "eu nem sei o que é o anomalia" reaction was about exactly this.
+
+**Decision:** after the name is set, and only on a machine that has never been
+offered it, a card asks whether the researcher wants a quick tour. Seven stops:
+the task tabs, the dataset folder, the basic/advanced split, GPU vs CPU, the
+train button, the history, and the datasets overlay. Every stop can be left with
+✕, "Pular" or Esc, and the header keeps a "guia" button so it is never lost.
+
+**The stops point at real elements**, marked with `data-tour` where they are
+rendered, and are found in the DOM at the time the step opens. A stop whose
+element is not on screen — because the active task has no such field — becomes a
+centred card instead of disappearing, which is what lets one script serve the
+five tasks.
+
+**Two implementation notes worth keeping:**
+
+The darkness is four panels around the highlight, not a `box-shadow` with a
+9999px spread on the highlight itself. The shadow is the shorter way to write
+it, and it makes the browser rasterise a layer some 20000px on a side on every
+frame of the transition; on this page it held up painting for seconds at a time.
+Four panels interpolate the same way and cost what any four divs cost.
+
+The card's position is clamped to the viewport, and that is not defensive
+padding: the smooth scroll to the next target has not finished when the step
+opens, so "above the target" is briefly a coordinate nobody can see. The
+geometry lives in `lib/tour.ts` rather than in the component so it can be tested
+against a viewport smaller than the card.
+
+**Verified in the browser:** the invitation appears after the name on a fresh
+`localStorage`, the first stop highlights the tab row with the card beneath it,
+and the second scrolls to the dataset card and follows it. The placement is
+covered by seven unit tests, including the two off-screen cases.

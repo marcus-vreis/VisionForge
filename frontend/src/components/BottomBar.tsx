@@ -83,6 +83,7 @@ export function BottomBar({
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
       <button
         type="button"
+        data-tour="history"
         onClick={onHistory}
         style={{
           display: "flex",
@@ -121,6 +122,7 @@ export function BottomBar({
 
       <button
         type="button"
+        data-tour="datasets"
         onClick={onDatasets}
         title="Baixar um dataset para uma pasta local"
         style={{
@@ -187,6 +189,7 @@ export function BottomBar({
 
       <button
         type="button"
+        data-tour="train"
         onClick={handleCenterClick}
         disabled={disabled && !trainingMinimized}
         style={{
@@ -227,11 +230,13 @@ export function BottomBar({
         <span style={{ position: "relative" }}>{centerLabel}</span>
       </button>
 
-      <DeviceSelector
-        selection={selection}
-        onChange={onSelectionChange}
-        variant="bottom"
-      />
+      <div data-tour="device">
+        <DeviceSelector
+          selection={selection}
+          onChange={onSelectionChange}
+          variant="bottom"
+        />
+      </div>
     </div>
   );
 }

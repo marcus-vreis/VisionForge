@@ -52,8 +52,16 @@ export const PARAM_HELP: Record<string, string> = {
     "Faz parte das contas em 16 bits. Acelera o treino e ocupa menos VRAM em GPUs recentes; em modelos sensíveis pode custar precisão numérica.",
   deterministic:
     "Faz o mesmo config com a mesma seed devolver exatamente os mesmos números. Ligado por padrão: medimos o custo e ele é nulo ou negativo em treinos curtos.",
-  num_workers: "Processos que carregam as imagens. No Windows cada um recarrega o torch e as DLLs da CUDA, ~1 GB — valor alto demais não deixa o treino lento, ele impede o treino de começar (WinError 1455).",
-  workers: "Processos que carregam as imagens. No Windows cada um recarrega o torch e as DLLs da CUDA, ~1 GB — valor alto demais não deixa o treino lento, ele impede o treino de começar (WinError 1455).",
+  base_dir:
+    "Pasta raiz do dataset. Dentro dela ficam as subpastas de treino, validação e teste — o VisionForge procura os nomes usuais (train/val/test, treino/validacao/teste) e preenche sozinho quando encontra. O conteúdo de cada subpasta depende da tarefa: uma pasta por classe na classificação, imagens e labels na detecção, imagens e máscaras na segmentação.",
+  train_dir:
+    "Subpasta usada para ajustar os pesos. É a única que o modelo vê durante o treino.",
+  val_dir:
+    "Subpasta usada a cada época para medir o progresso e escolher o melhor checkpoint. Não entra no ajuste dos pesos.",
+  test_dir:
+    "Subpasta avaliada uma única vez, no fim. Serve para reportar o resultado sem que ele tenha influenciado nenhuma escolha.",
+  num_workers: "Processos que carregam as imagens em paralelo. No automático o VisionForge divide a memória livre da máquina pelo custo de um worker — no Windows cada um recarrega o torch e as DLLs da CUDA, ~1 GB, e um número alto demais não deixa o treino lento: impede o treino de começar (WinError 1455).",
+  workers: "Processos que carregam as imagens em paralelo. No automático o VisionForge divide a memória livre da máquina pelo custo de um worker — no Windows cada um recarrega o torch e as DLLs da CUDA, ~1 GB, e um número alto demais não deixa o treino lento: impede o treino de começar (WinError 1455).",
   pin_memory: "Acelera a cópia das imagens para a GPU. Deixe ligado, exceto se faltar RAM.",
   image_size: "Resolução de treino. Maior enxerga mais detalhe e custa VRAM e tempo ao quadrado.",
   nbs: "Batch nominal para normalizar o weight decay quando o batch real é menor.",

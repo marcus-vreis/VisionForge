@@ -5,6 +5,7 @@ import {
   pickDatasetFolder,
 } from "../api/client";
 import { SelectField, type SelectOption } from "./controls/SelectField";
+import { paramHelp } from "../lib/param-help";
 import { TextField } from "./controls/TextField";
 
 interface DatasetPickerProps {
@@ -174,6 +175,7 @@ export function DatasetPicker({
     value: string,
     onChangeKey: "train_dir" | "val_dir" | "test_dir",
   ) => {
+    const help = paramHelp(onChangeKey);
     if (candidates.length > 0) {
       const opts: SelectOption[] = value && !candidates.includes(value)
         ? [{ value, label: `${value} (manual)` }, ...splitOptions]
@@ -184,6 +186,7 @@ export function DatasetPicker({
           value={value || ""}
           onChange={(v) => onChange({ [onChangeKey]: v })}
           options={opts}
+          help={help}
         />
       );
     }
@@ -193,6 +196,7 @@ export function DatasetPicker({
         value={value}
         onChange={(v) => onChange({ [onChangeKey]: v })}
         mono
+        help={help}
       />
     );
   };
@@ -202,6 +206,7 @@ export function DatasetPicker({
   return (
     <div>
       <div
+        data-tour="dataset"
         style={{
           padding: 18,
           background: "rgba(255,255,255,0.02)",
@@ -222,6 +227,7 @@ export function DatasetPicker({
               placeholder="ex: C:/datasets/coffee  ou  /home/user/data"
               mono
               hint="Pasta raiz que contém treino, validação e teste."
+              help={paramHelp("base_dir")}
             />
           </div>
           <button

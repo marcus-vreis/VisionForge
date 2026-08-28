@@ -128,7 +128,14 @@ class RegressionDataConfig(BaseModel):
     test_csv: str = "test.csv"
     image_column: str = "image"
     target_columns: list[str] = Field(default_factory=lambda: ["target"])
-    num_workers: int = Field(default=4, ge=0)
+    # -1 is the automatic budget (ADR-103). Scaling with the model or
+    # the GPU would measure the wrong thing: a worker never holds the
+    # model, it loads images while the model sits on the GPU.
+    num_workers: int = Field(
+        default=-1,
+        ge=-1,
+        description="Processos paralelos que carregam as imagens. **-1 (padrão) decide sozinho** pela memória livre da máquina: cada worker é um processo que recarrega o torch e custa cerca de 1 GB, e pedir mais do que cabe faz o treino morrer antes da primeira época. 0 carrega no processo principal.",
+    )
     pin_memory: bool = True
     transforms: TransformConfig = Field(default_factory=TransformConfig)
     preprocessing: PreprocessingConfig = Field(default_factory=PreprocessingConfig)

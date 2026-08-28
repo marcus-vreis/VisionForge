@@ -19,6 +19,8 @@ import { BottomBar } from "./components/BottomBar";
 import type { DeviceSelection } from "./components/DeviceSelector";
 import { Header } from "./components/Header";
 import { WelcomeOverlay } from "./components/WelcomeOverlay";
+import { GuidedTour } from "./components/GuidedTour";
+import { readTourSeen } from "./lib/tour";
 import { readUserName } from "./lib/user-name";
 import { DatasetsOverlay } from "./components/DatasetsOverlay";
 import { HistoryOverlay } from "./components/HistoryOverlay";
@@ -100,6 +102,8 @@ export default function App() {
     gpu_ids: null,
   });
   const [userName, setUserName] = useState(() => readUserName());
+  // "convite" na primeira visita, "guia" quando pedido pelo cabeçalho.
+  const [tour, setTour] = useState<"none" | "convite" | "guia">("none");
   // Set by the header chip: remounts the overlay so the intro replays clean.
   const [askName, setAskName] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
@@ -476,7 +480,11 @@ export default function App() {
         color: "var(--vf-text)",
       }}
     >
-      <Header userName={userName} onChangeName={() => setAskName(true)} />
+      <Header
+        userName={userName}
+        onChangeName={() => setAskName(true)}
+        onGuide={() => setTour("guia")}
+      />
 
       <TabBar tasks={tasks} activeKey={activeKey} setActiveKey={setActiveKey} />
 
@@ -691,8 +699,17 @@ export default function App() {
         onName={(n) => {
           setUserName(n);
           setAskName(false);
+          // Só na primeira vez: quem já viu (ou dispensou) o guia entra direto.
+          if (!readTourSeen()) setTour("convite");
         }}
       />
+      {tour !== "none" && (
+        <GuidedTour
+          key={tour}
+          invite={tour === "convite"}
+          onClose={() => setTour("none")}
+        />
+      )}
     </div>
   );
 }

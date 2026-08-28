@@ -7,7 +7,6 @@ mAP instead of accuracy, dataset is boxes not ImageFolder). It does reuse
 identical across tasks.
 """
 
-import sys
 from pathlib import Path
 from typing import Any, Literal
 
@@ -220,11 +219,17 @@ class DetectionTrainingConfig(BaseModel):
     # and Ultralytics defaults `deterministic` to True. The torchvision backend
     # reads the same field through `_seed_everything`.
     deterministic: bool = Field(default=True, description=DETERMINISTIC_DESCRIPTION)
-    # Ultralytics' default (8) except on Windows: each DataLoader worker is a
-    # spawned process that reloads torch's CUDA DLLs (gigabytes of commit
-    # charge each), and 8 of them exhausts the page file — WinError 1455.
+    # -1 asks the machine (ADR-103) instead of guessing per platform, which is
+    # what the old default did: Ultralytics ships 8, and 8 spawned processes
+    # each reloading torch's CUDA DLLs exhausts a Windows page file
+    # (WinError 1455), so this used to hard-code 2 there.
     workers: int = Field(
-        default_factory=lambda: 2 if sys.platform == "win32" else 8, ge=0
+        default=-1,
+        ge=-1,
+        description=(
+            "Processos paralelos que carregam as imagens. -1 (padrão) decide "
+            "pela memória livre da máquina; 0 carrega no processo principal."
+        ),
     )
 
     # Optimizer

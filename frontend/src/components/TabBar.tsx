@@ -10,6 +10,7 @@ interface TabBarProps {
 export function TabBar({ tasks, activeKey, setActiveKey }: TabBarProps) {
   return (
     <nav
+      data-tour="tabs"
       style={{
         position: "relative",
         zIndex: 3,

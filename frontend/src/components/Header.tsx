@@ -52,7 +52,13 @@ function Logo() {
 export function Header({
   userName,
   onChangeName,
-}: { userName?: string; onChangeName?: () => void } = {}) {
+  onGuide,
+}: {
+  userName?: string;
+  onChangeName?: () => void;
+  /** Reabre o guia de primeira execução (ADR-104) a qualquer momento. */
+  onGuide?: () => void;
+} = {}) {
   const [time, setTime] = useState(() => new Date());
   // Read from the backend rather than hardcoded: a screenshot of a bug then
   // carries the version that produced it, and the two can never drift.
@@ -130,6 +136,32 @@ export function Header({
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+        {onGuide && (
+          <button
+            type="button"
+            onClick={onGuide}
+            title="Rever o guia da interface"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "9px 13px",
+              background: "rgba(255,255,255,0.025)",
+              border: "1px solid var(--vf-panel-stroke)",
+              borderRadius: 10,
+              color: "var(--vf-text-dim)",
+              fontFamily: "var(--font-mono)",
+              fontSize: 11,
+              letterSpacing: "0.12em",
+              textTransform: "uppercase",
+              cursor: "pointer",
+              animation: "fadeUp 700ms ease both",
+            }}
+          >
+            <span style={{ fontSize: 13, lineHeight: 1 }}>◎</span>
+            guia
+          </button>
+        )}
         {userName && (
           <button
             type="button"

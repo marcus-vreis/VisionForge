@@ -182,13 +182,26 @@ class TestTrainingHyperparameters:
         assert a.auto_augment == "randaugment"
         assert a.erasing == pytest.approx(0.4)
 
-    def test_workers_default_is_platform_aware(self) -> None:
-        """Ultralytics' 8 on POSIX; 2 on Windows, where 8 spawned workers
-        reloading torch's CUDA DLLs exhaust the page file (WinError 1455)."""
-        import sys
+    def test_workers_defaults_to_automatic(self) -> None:
+        """-1, not Ultralytics' 8 and not the old fixed 2 (ADR-103).
 
-        expected = 2 if sys.platform == "win32" else 8
-        assert DetectionTrainingConfig().workers == expected
+        The number that works depends on the free memory of the machine, not on
+        the platform: on Windows every worker is a spawned process reloading
+        torch's CUDA DLLs, and too many exhaust the page file (WinError 1455).
+        `-1` asks the trainer to measure that at load time.
+        """
+        assert DetectionTrainingConfig().workers == -1
+
+    def test_an_explicit_worker_count_is_still_honoured(self) -> None:
+        assert DetectionTrainingConfig(workers=4).workers == 4
+
+    def test_zero_workers_keeps_its_own_meaning(self) -> None:
+        """Load in the main process — a real choice, not "automatic"."""
+        assert DetectionTrainingConfig(workers=0).workers == 0
+
+    def test_below_automatic_is_refused(self) -> None:
+        with pytest.raises(ValidationError):
+            DetectionTrainingConfig(workers=-2)
 
     def test_accepts_overrides(self, tmp_path: Path) -> None:
         raw = _base_config(

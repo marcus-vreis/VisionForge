@@ -288,10 +288,11 @@ export function makeDefaultDetectionTraining(): DetectionTrainingForm {
     patience: 50,
     seed: 0,
     deterministic: true,
-    // 2, not Ultralytics' 8: on Windows every DataLoader worker is a spawned
-    // process reloading torch's CUDA DLLs — 8 exhausts the page file
-    // (WinError 1455). Linux users can raise it for throughput.
-    workers: 2,
+    // -1, not Ultralytics' 8: on Windows every DataLoader worker is a spawned
+    // process reloading torch's CUDA DLLs (~1 GB), and 8 exhausts the page file
+    // (WinError 1455). -1 asks the backend to divide the free commit charge by
+    // that cost at load time (ADR-103), which no fixed number can do.
+    workers: -1,
     optimizer: "auto",
     momentum: 0.937,
     weight_decay: 0.0005,

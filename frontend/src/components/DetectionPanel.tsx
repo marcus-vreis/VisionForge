@@ -21,7 +21,14 @@ import {
 } from "../lib/detection-models";
 import { exportConfigToYaml, validateParsedConfig } from "../lib/yaml-config";
 import type { ValidationError } from "../hooks/useExperiment";
-import { NumberField, SelectField, Segmented, TextField, Toggle } from "./controls";
+import {
+  NumberField,
+  SelectField,
+  Segmented,
+  TextField,
+  Toggle,
+  WorkersField,
+} from "./controls";
 import { AdvancedFields } from "./AdvancedFields";
 import { DetectionDatasetStats } from "./DetectionDatasetStats";
 import { PreprocessingPanel } from "./PreprocessingPanel";
@@ -323,15 +330,9 @@ export function DetectionPanel({
             hint="reprodutível"
             help={paramHelp("deterministic")}
           />
-            <NumberField
-            label="Workers"
+            <WorkersField
             value={formData.training.workers}
-            onChange={(v) => setTraining({ workers: Math.round(v) })}
-            min={0}
-            step={1}
-            hint="no Windows, >2 pode estourar a paginação"
-            help={paramHelp("workers")}
-            emptyValue={0}
+            onChange={(v) => setTraining({ workers: v })}
           />
             <SelectField
             label="Optimizer"
