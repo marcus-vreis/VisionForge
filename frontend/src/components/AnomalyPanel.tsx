@@ -281,7 +281,7 @@ export function AnomalyPanel({
             label="Early stop"
             value={formData.training.early_stopping_patience}
             onChange={(v) => setTraining({ early_stopping_patience: Math.round(v) })}
-            min={1}
+            min={0}
             step={1}
             hint="paciência"
             help={paramHelp("early_stopping_patience")}

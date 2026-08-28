@@ -1,4 +1,5 @@
 import { paramHelp } from "../lib/param-help";
+import { ModelAdvice } from "./ModelAdvice";
 import { useState } from "react";
 import { fetchTaskSchema, pickDatasetFolder } from "../api/client";
 import {
@@ -278,7 +279,7 @@ export function SegmentationPanel({
             label="Early stop"
             value={formData.training.early_stopping_patience}
             onChange={(v) => setTraining({ early_stopping_patience: Math.round(v) })}
-            min={1}
+            min={0}
             step={1}
             hint="paciência"
             help={paramHelp("early_stopping_patience")}
@@ -300,6 +301,19 @@ export function SegmentationPanel({
             help={paramHelp("deterministic")}
           />
         </div>
+        <ModelAdvice
+          architecture={formData.model.name}
+          optimizer={formData.training.optimizer}
+          learningRate={formData.training.learning_rate}
+          baseDir={String(formData.data.base_dir || "") || undefined}
+          pretrained={formData.model.pretrained !== false}
+          onApply={(next) => {
+            setTraining({
+              optimizer: next.optimizer as typeof formData.training.optimizer,
+              learning_rate: next.learning_rate,
+            });
+          }}
+        />
       </div>
 
       {/* Transfer learning */}

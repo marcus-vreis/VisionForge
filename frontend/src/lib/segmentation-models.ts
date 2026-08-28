@@ -90,7 +90,7 @@ export interface SegmentationForm {
 export function makeDefaultSegmentationForm(): SegmentationForm {
   return {
     name: "segmentation_001",
-    model: { name: "deeplabv3_resnet50", num_classes: 2, pretrained: true },
+    model: { name: "unet", num_classes: 2, pretrained: true },
     transfer: "none",
     backbone_lr_multiplier: 0.1,
     data: {
@@ -104,14 +104,14 @@ export function makeDefaultSegmentationForm(): SegmentationForm {
       ignore_index: 255,
     },
     training: {
-      epochs: 50,
+      epochs: 20,
       batch_size: 8,
       learning_rate: 0.001,
       loss: "cross_entropy",
       optimizer: "adam",
-      early_stopping_patience: 10,
+      early_stopping_patience: 0,
       seed: 42,
-      deterministic: false,
+      deterministic: true,
     },
     preprocessing: [],
     transforms: makeDefaultTransformsForm(),

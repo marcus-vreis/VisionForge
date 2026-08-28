@@ -3448,3 +3448,52 @@ paints one class over every pixel, detection finds nothing (mAP@50 of zero).
 R² = −0.157 with predictions spread over 5.95 — bad, but not collapsed, and the
 warning correctly stays quiet. A detector that finds nothing and a segmenter
 whose other classes sit at IoU zero do raise it.
+
+
+---
+
+## ADR-102 — The form had its own defaults, and they were the old ones
+
+**Date:** 2026-08-28
+**Status:** Accepted
+**Completes:** ADR-098/099/100 (determinism, early stopping, per-task defaults)
+
+**Context:** finishing the proposed work meant putting the basic/advanced split
+in front of the researcher. Doing that exposed something worse: the four
+standalone panels build their form state from their own literals in
+`lib/*-models.ts`, so every default corrected over the last three ADRs was
+still the old value for anyone using the interface.
+
+| field | project | the form said |
+|---|---|---|
+| `deterministic` | True (ADR-098) | **false** |
+| `early_stopping_patience` | 0 (ADR-099) | 10 |
+| `epochs` (regression) | 20 (ADR-100) | 50 |
+| `model.name` (regression) | resnet18 | resnet50 |
+| `model.name` (segmentation) | unet | deeplabv3_resnet50 |
+
+The determinism one is the reason this is an ADR rather than a line in the
+changelog: ADR-098 flipped the default so that two runs of one config reproduce
+each other, and the form kept sending `false`. Every GUI run since then was
+still unreproducible, and the fix looked done from the backend's side.
+
+**Also found while checking**: three panels capped the early-stop field at
+`min={1}`, so typing 0 — the value ADR-099 introduced to disable it — was
+silently rounded up to 1. Backend permission means nothing when the input
+refuses the number.
+
+**The basic/advanced split is now on.** `param-help.ts` has classified every
+parameter since the "muita coisa junta" complaint, and nothing read it: the
+panel showed all nine training fields at once. Four stay visible (epochs,
+learning rate, batch size, seed — what changes between two experiments) and the
+rest sit behind a collapsed section that opens by itself when any field inside
+differs from its default.
+
+That auto-open needed a fix of its own. `hasNonDefaultAdvanced` compared against
+schema defaults, and a nested object like the scheduler carries no `default` at
+its own level — so it always differed, and the section always opened, which is
+the same as not having one. An unknown default is now not evidence of a change.
+
+**Verified in the browser:** the training section shows four fields and
+"avançado (6)" closed; the regression panel opens on ResNet-18; picking Swin-T
+there raises the same measured warning classification shows.

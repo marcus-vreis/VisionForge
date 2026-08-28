@@ -79,3 +79,23 @@ describe("hasNonDefaultAdvanced", () => {
     expect(hasNonDefaultAdvanced({ freeze: [0, 2] }, d)).toBe(true);
   });
 });
+
+describe("quando a seção avançada abre sozinha", () => {
+  it("não abre por um default que o schema não declara", () => {
+    // The scheduler is a nested object and carries no `default` of its own, so
+    // treating "undefined" as different opened the section on every load.
+    expect(
+      hasNonDefaultAdvanced({ scheduler: { kind: "none" } }, { scheduler: undefined }),
+    ).toBe(false);
+  });
+
+  it("abre quando um avançado foi realmente alterado", () => {
+    expect(hasNonDefaultAdvanced({ optimizer: "sgd" }, { optimizer: "adam" })).toBe(
+      true,
+    );
+  });
+
+  it("ignora mudanças em campos básicos", () => {
+    expect(hasNonDefaultAdvanced({ epochs: 50 }, { epochs: 20 })).toBe(false);
+  });
+});

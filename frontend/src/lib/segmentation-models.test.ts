@@ -6,9 +6,10 @@ import {
 } from "./segmentation-models";
 
 describe("segmentation-models", () => {
-  it("defaults to deeplabv3_resnet50 with 2 classes and ignore_index 255", () => {
+  it("defaults to unet with 2 classes and ignore_index 255", () => {
     const form = makeDefaultSegmentationForm();
-    expect(form.model.name).toBe("deeplabv3_resnet50");
+    // unet since ADR-100: deeplabv3_resnet50 at 512px exhausts modest GPUs.
+    expect(form.model.name).toBe("unet");
     expect(form.model.num_classes).toBe(2);
     expect(form.data.ignore_index).toBe(255);
   });

@@ -11,9 +11,10 @@ describe("regression-models", () => {
     expect(parseTargetColumns("  ")).toEqual([]);
   });
 
-  it("defaults to a single resnet50 target", () => {
+  it("defaults to a single resnet18 target", () => {
+    // resnet18 since ADR-100: a first run should be quick.
     const form = makeDefaultRegressionForm();
-    expect(form.model.name).toBe("resnet50");
+    expect(form.model.name).toBe("resnet18");
     expect(form.data.target_columns).toBe("target");
   });
 

@@ -15,6 +15,14 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Added
 
+- **Parâmetros básicos na frente, avançados recolhidos.** A classificação
+  básico/avançado existia desde a reclamação "muita coisa junta" e nunca tinha
+  sido usada. Ficam à vista os quatro que mudam entre um experimento e outro
+  (épocas, learning rate, batch size, seed); o resto entra numa seção que abre
+  sozinha se algum valor ali dentro estiver fora do padrão
+  ([ADR-102](docs/dev/DECISIONS.md)).
+
+
 - **Três arquiteturas de atenção: `vit_b_16`, `swin_t` e `convnext_tiny`.** Vêm
   do torchvision, sem dependência nova. Foram medidas antes de entrar, e ainda
   bem: `swin_t` e `convnext_tiny` **colapsam** com Adam a 1e-3 (0.25 em quatro
@@ -72,6 +80,18 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
   significa zero.
 
 ### Fixed
+
+- **O formulário tinha os defaults antigos.** Os painéis das tarefas montam o
+  estado inicial a partir de literais próprios, então cada default corrigido nos
+  últimos dias continuava com o valor velho para quem usa a interface — inclusive
+  `deterministic: false`, que **anulava a correção de reprodutibilidade**: todo
+  treino iniciado pela GUI continuava não reprodutível. Também `early stop` em 10
+  (em vez de 0), regressão em `resnet50`/50 épocas e segmentação em
+  `deeplabv3_resnet50` ([ADR-102](docs/dev/DECISIONS.md)).
+- **O campo de early stopping recusava 0.** Três painéis tinham `min={1}`, então
+  digitar 0 — o valor que desliga — virava 1 em silêncio. Permitir no backend não
+  adianta se a entrada arredonda ([ADR-102](docs/dev/DECISIONS.md)).
+
 
 - **O "feature extraction" não congelava a rede em VGG e AlexNet.** A regra era
   congelar todos os filhos menos o último — e nessas duas o último filho é um

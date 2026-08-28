@@ -16,7 +16,8 @@ import {
   type PreprocessingStep as PreprocessingUIStep,
 } from "./PreprocessingPanel";
 import { resolveKind } from "./field-renderer";
-import { paramHelp } from "../lib/param-help";
+import { hasNonDefaultAdvanced, isAdvanced, paramHelp } from "../lib/param-help";
+import { AdvancedFields } from "./AdvancedFields";
 import { ModelAdvice } from "./ModelAdvice";
 import {
   coerceGridValue,
@@ -42,6 +43,26 @@ interface ParamPanelProps {
 }
 
 /** Section labels for config sub-models. */
+/** The order the training fields are read in, basics first.
+ *
+ * Ordered by *what a researcher changes between two experiments*, which is not
+ * the same as what matters most: the optimizer decides a great deal and is
+ * still further down, because it gets set once. `param-help` classifies each
+ * one; this list only fixes the sequence within each tier.
+ */
+const TRAINING_FIELD_ORDER = [
+  "epochs",
+  "learning_rate",
+  "batch_size",
+  "seed",
+  "optimizer",
+  "scheduler",
+  "weight_decay",
+  "early_stopping_patience",
+  "deterministic",
+  "mixed_precision",
+];
+
 const SECTION_LABELS: Record<string, string> = {
   model: "Modelo",
   training: "Treinamento",
@@ -2440,22 +2461,52 @@ export function ParamPanel({
           position: "relative",
         }}
       >
-        {["epochs", "learning_rate", "batch_size", "optimizer", "early_stopping_patience", "weight_decay", "seed", "deterministic", "mixed_precision"].map(
-          (key) =>
-            trainingProps[key] ? (
-              <SchemaFieldVF
-                key={key}
-                name={key}
-                schema={trainingProps[key]}
-                defs={defs}
-                value={trainingData[key]}
-                onChange={(v) => setField("training", key, v)}
-                errors={validationErrors}
-                path={["training", key]}
-              />
-            ) : null,
+        {TRAINING_FIELD_ORDER.filter((key) => !isAdvanced(key)).map((key) =>
+          trainingProps[key] ? (
+            <SchemaFieldVF
+              key={key}
+              name={key}
+              schema={trainingProps[key]}
+              defs={defs}
+              value={trainingData[key]}
+              onChange={(v) => setField("training", key, v)}
+              errors={validationErrors}
+              path={["training", key]}
+            />
+          ) : null,
         )}
       </div>
+      <AdvancedFields
+        count={
+          TRAINING_FIELD_ORDER.filter(
+            (key) => isAdvanced(key) && trainingProps[key],
+          ).length
+        }
+        startOpen={hasNonDefaultAdvanced(
+          trainingData,
+          Object.fromEntries(
+            Object.entries(trainingProps).map(([k, v]) => [
+              k,
+              resolveSchema(v, defs).default,
+            ]),
+          ),
+        )}
+      >
+        {TRAINING_FIELD_ORDER.filter((key) => isAdvanced(key)).map((key) =>
+          trainingProps[key] ? (
+            <SchemaFieldVF
+              key={key}
+              name={key}
+              schema={trainingProps[key]}
+              defs={defs}
+              value={trainingData[key]}
+              onChange={(v) => setField("training", key, v)}
+              errors={validationErrors}
+              path={["training", key]}
+            />
+          ) : null,
+        )}
+      </AdvancedFields>
       <ModelAdvice
         architecture={String(modelData["name"] ?? "")}
         optimizer={String(trainingData["optimizer"] ?? "adam")}

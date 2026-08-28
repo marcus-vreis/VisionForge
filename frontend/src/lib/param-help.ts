@@ -48,6 +48,8 @@ export const PARAM_HELP: Record<string, string> = {
 
   // ── avançado: mecânica ────────────────────────────────────────────────────
   amp: "Precisão mista: usa 16 bits onde dá. Treina mais rápido e ocupa menos VRAM, com risco baixo de instabilidade.",
+  mixed_precision:
+    "Faz parte das contas em 16 bits. Acelera o treino e ocupa menos VRAM em GPUs recentes; em modelos sensíveis pode custar precisão numérica.",
   deterministic:
     "Faz o mesmo config com a mesma seed devolver exatamente os mesmos números. Ligado por padrão: medimos o custo e ele é nulo ou negativo em treinos curtos.",
   num_workers: "Processos que carregam as imagens. No Windows cada um recarrega o torch e as DLLs da CUDA, ~1 GB — valor alto demais não deixa o treino lento, ele impede o treino de começar (WinError 1455).",
@@ -88,6 +90,7 @@ export const PARAM_TIER: Record<string, ParamTier> = {
   freeze: "advanced",
   amp: "advanced",
   deterministic: "advanced",
+  mixed_precision: "advanced",
   num_workers: "advanced",
   workers: "advanced",
   pin_memory: "advanced",
@@ -125,9 +128,13 @@ export function hasNonDefaultAdvanced(
   form: Record<string, unknown>,
   defaults: Record<string, unknown>,
 ): boolean {
-  return Object.keys(form).some(
-    (key) =>
-      isAdvanced(key) &&
-      JSON.stringify(form[key]) !== JSON.stringify(defaults[key]),
-  );
+  return Object.keys(form).some((key) => {
+    if (!isAdvanced(key)) return false;
+    // A default we do not know is not evidence of a change. Nested objects
+    // (the scheduler) carry no `default` at their own level in the schema, and
+    // counting them as different made the section open every single time —
+    // which is the same as not having a section.
+    if (defaults[key] === undefined) return false;
+    return JSON.stringify(form[key]) !== JSON.stringify(defaults[key]);
+  });
 }

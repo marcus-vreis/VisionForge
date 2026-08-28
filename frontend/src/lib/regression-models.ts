@@ -33,6 +33,9 @@ export const REGRESSION_MODELS: RegressionModelOption[] = [
   { value: "vgg16", label: "VGG-16", sub: "clássico · 138M" },
   { value: "vgg19", label: "VGG-19", sub: "144M" },
   { value: "alexnet", label: "AlexNet", sub: "baseline · 61M" },
+  { value: "vit_b_16", label: "ViT-B/16", sub: "transformer · 86M" },
+  { value: "swin_t", label: "Swin-T", sub: "transformer · 28M" },
+  { value: "convnext_tiny", label: "ConvNeXt-T", sub: "moderno · 28M" },
 ];
 
 export const REGRESSION_LOSSES: { value: string; label: string }[] = [
@@ -84,7 +87,7 @@ export interface RegressionForm {
 export function makeDefaultRegressionForm(): RegressionForm {
   return {
     name: "regression_001",
-    model: { name: "resnet50", num_targets: 1, pretrained: true },
+    model: { name: "resnet18", num_targets: 1, pretrained: true },
     transfer: "none",
     backbone_lr_multiplier: 0.1,
     data: {
@@ -98,14 +101,14 @@ export function makeDefaultRegressionForm(): RegressionForm {
       image_size: 224,
     },
     training: {
-      epochs: 50,
+      epochs: 20,
       batch_size: 32,
       learning_rate: 0.001,
       loss: "mse",
       optimizer: "adam",
-      early_stopping_patience: 10,
+      early_stopping_patience: 0,
       seed: 42,
-      deterministic: false,
+      deterministic: true,
     },
     preprocessing: [],
     transforms: makeDefaultTransformsForm(),
