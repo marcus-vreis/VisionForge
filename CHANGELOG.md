@@ -13,6 +13,18 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ## [Unreleased]
 
+### Changed
+
+- **"Congelado" agora diz o que congela de verdade.** No `feature_extraction` os
+  pesos do backbone realmente não se movem — medido: só `fc.weight` e `fc.bias`
+  mudam. Mas as estatísticas do BatchNorm sim. Elas são buffers escritos no
+  forward, não parâmetros, e um módulo congelado em `train()` segue atualizando
+  os 60 deles (20 módulos × média, variância e contador). O comportamento fica
+  como está — é o usual, e trocá-lo invalidaria em silêncio toda execução já
+  registrada. O que mudou foi cada texto que dizia o contrário, no código, no
+  schema e na interface: num artigo, "o backbone foi congelado" afirma mais do
+  que de fato acontece ([ADR-105](docs/dev/DECISIONS.md)).
+
 ## [0.9.0] — 2026-08-28
 
 ### Added

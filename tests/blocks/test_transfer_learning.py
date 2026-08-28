@@ -294,6 +294,90 @@ class TestFeatureExtractionFreezing:
         assert len(all_params) == len(head_params)
 
 
+class TestFrozenBatchNormStillRecalibrates:
+    """The documented boundary of "frozen" (ADR-105).
+
+    `requires_grad = False` stops the optimizer from moving a parameter. The
+    BatchNorm running statistics are buffers written inside the forward pass, so
+    a frozen module left in `train()` mode keeps updating them. That behaviour
+    is deliberate; these tests exist so it cannot change unnoticed, because a
+    paper saying "the backbone was frozen" claims something stronger than what
+    actually happens.
+    """
+
+    @staticmethod
+    def _frozen_resnet() -> nn.Module:
+        from torchvision import models
+
+        model = models.resnet18(weights=None)
+        model.fc = nn.Linear(model.fc.in_features, 4)
+        for param in model.parameters():
+            param.requires_grad = False
+        for param in model.fc.parameters():
+            param.requires_grad = True
+        return model
+
+    @staticmethod
+    def _train_a_few_batches(model: nn.Module) -> None:
+        optimizer = torch.optim.SGD(
+            [p for p in model.parameters() if p.requires_grad], lr=0.1
+        )
+        model.train()
+        for _ in range(3):
+            optimizer.zero_grad()
+            logits = model(torch.randn(4, 3, 64, 64))
+            nn.functional.cross_entropy(logits, torch.randint(0, 4, (4,))).backward()
+            optimizer.step()
+
+    def test_only_the_head_weights_move(self) -> None:
+        model = self._frozen_resnet()
+        before = {n: p.detach().clone() for n, p in model.named_parameters()}
+
+        self._train_a_few_batches(model)
+
+        moved = [
+            n
+            for n, p in model.named_parameters()
+            if not torch.equal(p.detach(), before[n])
+        ]
+        assert moved == ["fc.weight", "fc.bias"]
+
+    def test_the_normalization_statistics_do_move(self) -> None:
+        """The part "frozen" does not cover."""
+        model = self._frozen_resnet()
+        before = {n: b.detach().clone() for n, b in model.named_buffers()}
+
+        self._train_a_few_batches(model)
+
+        moved = [
+            n
+            for n, b in model.named_buffers()
+            if not torch.equal(b.detach(), before[n])
+        ]
+
+        # 20 BatchNorm modules × mean, variance, batch counter.
+        assert len(moved) == 60
+        assert any(n.endswith("running_mean") for n in moved)
+
+    def test_eval_mode_would_hold_them_still(self) -> None:
+        """The alternative ADR-105 declined: a different method, not a fix."""
+        model = self._frozen_resnet()
+        before = {n: b.detach().clone() for n, b in model.named_buffers()}
+
+        model.eval()
+        with torch.no_grad():
+            for _ in range(3):
+                model(torch.randn(4, 3, 64, 64))
+
+        moved = [
+            n
+            for n, b in model.named_buffers()
+            if not torch.equal(b.detach(), before[n])
+        ]
+
+        assert moved == []
+
+
 # ── fine-tuning layer selection ───────────────────────────────────────────────
 
 

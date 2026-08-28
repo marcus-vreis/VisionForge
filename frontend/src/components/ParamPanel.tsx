@@ -560,8 +560,10 @@ function BlockSelector({
           }}
         >
           Feature extraction (só treina o head) ou fine-tuning (head + backbone
-          parcial com LR menor). Útil para fine-tunar em datasets pequenos sem
-          destruir as features pré-treinadas.
+          parcial com LR menor). Útil em datasets pequenos, sem destruir as
+          features pré-treinadas. Em feature extraction os pesos do backbone não
+          se movem, mas as estatísticas de BatchNorm se recalibram no seu
+          dataset — o backbone fica congelado, não idêntico.
         </div>
       )}
       {value === "grid_search" && (

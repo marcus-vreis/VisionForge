@@ -3580,3 +3580,45 @@ against a viewport smaller than the card.
 `localStorage`, the first stop highlights the tab row with the card beneath it,
 and the second scrolls to the dataset card and follows it. The placement is
 covered by seven unit tests, including the two off-screen cases.
+
+## ADR-105 — "Frozen" freezes weights, not BatchNorm statistics
+
+**Date:** 2026-08-28
+**Status:** Accepted
+**Follows:** ADR-101 (feature extraction was leaving 89% of VGG trainable)
+
+**Context:** the 27-run audit reported that `feature_extraction` does not fully
+freeze the backbone, and the claim deserved measuring rather than repeating.
+Frozen ResNet-18, five batches, `train()` mode:
+
+| what | moved |
+|---|---|
+| parameters | **2** — `fc.weight`, `fc.bias` |
+| buffers | **60** — 20 BatchNorm modules × mean, variance, batch counter |
+
+The same model in `eval()` moves none of the 60.
+
+The cause is not a bug in the freeze: `requires_grad = False` stops the
+optimizer from moving a *parameter*, and `running_mean` / `running_var` are not
+parameters. They are buffers, written inside the forward pass, and a module
+whose weights are frozen still updates them as long as it is in training mode.
+
+**Decision: document it, do not change it.** Two reasons.
+
+It is the behaviour most transfer-learning code has, and it is usually the one
+you want — the pretrained features stay put while the normalization stops being
+ImageNet's and becomes this dataset's. Switching frozen modules to `eval()` is a
+defensible alternative, but it is a different method, not a bug fix.
+
+And it would silently invalidate comparisons. Every run recorded so far trained
+with recalibrating statistics; flipping the behaviour would make a rerun of an
+old config produce a different number for a reason nothing in the config
+records. If it ever changes, it needs a config field, so a `run.json` says which
+of the two produced it.
+
+**What changed instead** is every place that described it: the `_apply_freeze`
+docstring, the `TransferLearningConfig` docstring, the `mode` field description
+that reaches the form schema, and the caption under the strategy selector. All
+of them now say "frozen weights, recalibrated normalization" rather than
+implying the backbone is untouched — the distinction matters in a paper, where
+"the backbone was frozen" reads as "identical to pretrained".

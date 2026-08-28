@@ -145,6 +145,22 @@ class TransferLearningBlock(ExperimentBlock):
         onward is left trainable. If unfreeze_from_layer is None, all layers
         remain trainable.
 
+        **What "frozen" does not cover: BatchNorm statistics.** `requires_grad`
+        stops the optimizer from moving a *parameter*; `running_mean` and
+        `running_var` are buffers, updated inside the forward pass, and a frozen
+        module in `train()` mode still updates them. Measured on a frozen
+        ResNet-18 over five batches: 2 parameters moved (the head's weight and
+        bias, as intended) and 60 buffers moved — 20 BatchNorm modules times
+        mean, variance and the batch counter. The same model in `eval()` moves
+        none of them.
+
+        So the backbone is frozen, not identical: its weights are the pretrained
+        ones, and its normalization is recalibrated to this dataset. That is the
+        common behaviour and it is usually what you want — the features stay
+        put while the statistics stop being ImageNet's. It is documented rather
+        than changed because switching frozen modules to `eval()` would silently
+        move every result recorded before the change (ADR-105).
+
         Raises:
             ValueError: if unfreeze_from_layer names a layer that does not exist.
         """

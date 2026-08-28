@@ -311,9 +311,22 @@ class DeviceConfig(BaseModel):
 
 
 class TransferLearningConfig(BaseModel):
-    """Settings for feature extraction and fine-tuning transfer learning."""
+    """Settings for feature extraction and fine-tuning transfer learning.
 
-    mode: Literal["feature_extraction", "fine_tuning"] = "feature_extraction"
+    Note on `feature_extraction`: the backbone's *weights* do not move, but its
+    BatchNorm statistics do — they are buffers updated in the forward pass, not
+    parameters the optimizer touches. Report it as "frozen weights, recalibrated
+    normalization" rather than "the backbone is unchanged" (ADR-105).
+    """
+
+    mode: Literal["feature_extraction", "fine_tuning"] = Field(
+        default="feature_extraction",
+        description=(
+            "feature_extraction trains only the head, leaving the backbone "
+            "weights fixed (its BatchNorm statistics still recalibrate). "
+            "fine_tuning also trains the backbone, at a reduced learning rate."
+        ),
+    )
     unfreeze_from_layer: str | None = None
     backbone_lr_multiplier: float = Field(default=0.1, gt=0.0, le=1.0)
 
