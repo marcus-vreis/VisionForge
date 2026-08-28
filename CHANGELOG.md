@@ -13,6 +13,8 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ## [Unreleased]
 
+## [0.9.1] — 2026-08-28
+
 ### Changed
 
 - **"Congelado" agora diz o que congela de verdade.** No `feature_extraction` os
