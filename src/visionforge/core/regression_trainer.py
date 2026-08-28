@@ -35,6 +35,7 @@ from visionforge.core.resume import (
 from visionforge.core.tracking import TensorBoardLogger
 from visionforge.core.trainer import _seed_everything, resolve_device
 from visionforge.core.training_health import stagnant_loss, summarize
+from visionforge.models.factory import final_linear
 from visionforge.utils.environment import capture_environment
 from visionforge.utils.regression_config import RegressionConfig
 
@@ -406,18 +407,27 @@ class RegressionTrainer:
     def _split_named_params(
         model: nn.Module,
     ) -> tuple[list[nn.Parameter], list[nn.Parameter]]:
-        """Return (head_params, backbone_params) split by the last named child.
+        """Return (head_params, backbone_params) split at the final Linear.
+
+        The head is the last ``nn.Linear``, not the last named child: on VGG and
+        AlexNet that child is a `classifier` block holding three Linear layers,
+        so the old split called 119M parameters "head" and froze almost nothing
+        under feature extraction (ADR-101).
 
         Unwraps DataParallel so the head is the model's own final layer, not the
         ``module`` wrapper.
         """
         core = getattr(model, "module", model)
-        children = list(core.named_children())
-        head_name = children[-1][0] if children else None
+        head_module = final_linear(core)
+        head_ids = (
+            {id(p) for p in head_module.parameters()}
+            if head_module is not None
+            else set()
+        )
         head: list[nn.Parameter] = []
         backbone: list[nn.Parameter] = []
-        for name, child in children:
-            (head if name == head_name else backbone).extend(child.parameters())
+        for param in core.parameters():
+            (head if id(param) in head_ids else backbone).append(param)
         return head, backbone
 
     def _build_optimizer(self, model: nn.Module) -> torch.optim.Optimizer:

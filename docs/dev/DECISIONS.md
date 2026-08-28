@@ -3392,3 +3392,59 @@ it came from — wearing a friendlier face.
 **Verified in the browser:** choosing `swin_t` raises "prevê uma classe só:
 medimos 0.25 de acurácia", clicking the button sets AdamW and 1e-4 in the form,
 and the note disappears because the settings now match what was measured.
+
+---
+
+## ADR-101 — Feature extraction was not freezing the backbone on two architectures
+
+**Date:** 2026-08-28
+**Status:** Accepted
+**Extends:** ADR-099/100 (collapse detection and measured defaults)
+
+**Context:** the previous two ADRs were validated on classification only. Asked
+whether they held for the other tasks, and whether transfer learning does what
+it says, the answer to both was no.
+
+**Feature extraction froze the wrong thing.** The rule was "freeze every named
+child except the last", which is the head on ResNet (`fc`), ViT (`heads`), Swin
+(`head`) and EfficientNet (a two-element `classifier`). On VGG and AlexNet the
+last child is a `classifier` block of **three** Linear layers — 102M + 16M + 4M —
+so the mode whose entire promise is that the backbone stays put left this much
+trainable:
+
+| architecture    | before | after |
+|-----------------|--------|-------|
+| vgg16           | **89.04%** (119M) | 0.01% (16,388) |
+| alexnet         | **95.67%** (54M)  | 0.03% (16,388) |
+| everything else | ≤0.08% | unchanged |
+
+The head is the last `nn.Linear` — the layer `replace_final_layer` creates — not
+the last child, and `models/factory.final_linear` now says so once for both the
+classification block and the regression trainer, which had the same rule and the
+same defect. Verified red-green: eight of the twenty-two tests fail with the old
+rule restored.
+
+**Segmentation was already right**, and it matters to say why rather than to
+"fix" it: there the last child is a decoder (ASPP for DeepLab, 16M parameters),
+and training the decoder over a frozen backbone is what segmentation transfer
+learning *is*. Applying the Linear rule there would have broken a working thing.
+
+**Fine-tuning does what it claims.** Two parameter groups, backbone at
+`learning_rate * backbone_lr_multiplier` and head at the full rate — checked on
+resnet18, vgg16 and vit_b_16, at 1e-4 and 1e-3 with the default multiplier.
+
+**New: freezing weights that were never trained.** Feature extraction is worth
+doing because the frozen weights know something. On a `unet` without pretrained
+weights it freezes 31.4M random parameters and trains 195 against them. That is
+now a warning rather than a silent waste of an evening.
+
+**The health checks reached the other four tasks.** ADR-099 shipped collapse
+detection in the classification trainer and stagnation everywhere; detection had
+neither. Now each task is asked the same question in its own vocabulary:
+classification predicts one class, regression outputs one value, segmentation
+paints one class over every pixel, detection finds nothing (mAP@50 of zero).
+
+**Measured, not assumed, in both directions.** A VGG regressor at 1e-3 reaches
+R² = −0.157 with predictions spread over 5.95 — bad, but not collapsed, and the
+warning correctly stays quiet. A detector that finds nothing and a segmenter
+whose other classes sit at IoU zero do raise it.

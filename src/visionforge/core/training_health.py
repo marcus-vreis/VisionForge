@@ -122,6 +122,78 @@ def constant_predictions(
     )
 
 
+def frozen_random_backbone(
+    *, pretrained: bool, mode: str | None, frozen_params: int
+) -> HealthWarning | None:
+    """Warn when feature extraction is freezing weights that were never trained.
+
+    Feature extraction is worth doing because the frozen weights already know
+    something. Applied to a randomly initialised network it freezes noise and
+    trains only the head against it — a unet without pretrained weights leaves
+    31.4M random parameters fixed and 195 trainable (ADR-101).
+    """
+    if mode != "feature_extraction" or pretrained:
+        return None
+    return HealthWarning(
+        code="frozen_random_backbone",
+        message=(
+            f"Feature extraction congelou {frozen_params:,} pesos que nunca "
+            f"foram treinados (o modelo está sem pesos pré-treinados). Congelar "
+            f"faz sentido quando os pesos já aprenderam algo; aqui eles são "
+            f"aleatórios. Ative os pesos pré-treinados, ou use fine-tuning para "
+            f"treinar a rede inteira."
+        ).replace(",", "."),
+    )
+
+
+def collapsed_segmentation(
+    per_class_iou: Sequence[float], *, present_classes: int
+) -> HealthWarning | None:
+    """Warn when the segmenter painted every pixel the same class.
+
+    The giveaway is one class with a real IoU and the rest at zero: the mask is
+    uniform, and the mIoU that gets reported is that one class divided by the
+    number of classes.
+    """
+    values = [float(v) for v in per_class_iou]
+    if len(values) < 2 or present_classes < 2:
+        return None
+    scored = [v for v in values if v > 0.01]
+    if len(scored) > 1:
+        return None
+    return HealthWarning(
+        code="collapsed_segmentation",
+        message=(
+            "A segmentação previu uma única classe em todos os pixels — as "
+            "outras ficaram com IoU zero. O mIoU mostrado é o dessa classe "
+            "dividido pelo número de classes, não uma medida de qualidade. "
+            "Revise o learning rate e verifique se as máscaras têm os índices "
+            "de classe esperados."
+        ),
+    )
+
+
+def no_detections(map50: float | None, epochs_done: int) -> HealthWarning | None:
+    """Warn when a detector finished without finding anything.
+
+    mAP is zero both when a model predicts nothing and when everything it
+    predicts is wrong; either way there is no result to read.
+    """
+    if epochs_done < 1 or map50 is None:
+        return None
+    if map50 > 0.001:
+        return None
+    return HealthWarning(
+        code="no_detections",
+        message=(
+            f"O modelo terminou {epochs_done} época(s) com mAP@50 igual a zero: "
+            f"ele não acertou nenhuma caixa. Confira se os rótulos estão no "
+            f"formato YOLO esperado e se o número de classes bate com o "
+            f"data.yaml; depois disso, o learning rate."
+        ),
+    )
+
+
 def summarize(warnings: Sequence[HealthWarning | None]) -> list[dict[str, str]]:
     """Drop the Nones and hand back what run.json should carry."""
     return [w.to_dict() for w in warnings if w is not None]
@@ -130,6 +202,9 @@ def summarize(warnings: Sequence[HealthWarning | None]) -> list[dict[str, str]]:
 __all__ = [
     "HealthWarning",
     "collapsed_predictions",
+    "collapsed_segmentation",
+    "frozen_random_backbone",
+    "no_detections",
     "constant_predictions",
     "stagnant_loss",
     "summarize",

@@ -14,7 +14,7 @@ from visionforge.core.data import DataModule
 from visionforge.core.evaluator import EvalResult, Evaluator, bootstrap_eval_cis
 from visionforge.core.metric_ci import MetricCI
 from visionforge.core.trainer import Trainer, TrainResult
-from visionforge.models.factory import ModelFactory
+from visionforge.models.factory import ModelFactory, final_linear
 from visionforge.utils.config import ExperimentConfig
 
 
@@ -130,8 +130,15 @@ class TransferLearningBlock(ExperimentBlock):
     def _apply_freeze(self, model: nn.Module) -> None:
         """Freeze backbone parameters according to the configured mode.
 
-        For feature_extraction: freeze all layers except the classifier head
-        (the last named child of the model).
+        For feature_extraction: freeze everything except the final linear layer
+        — the one `replace_final_layer` created for this task's outputs.
+
+        Not "the last named child": on VGG and AlexNet that child is a
+        `classifier` block holding *three* Linear layers, so freezing around it
+        left 119M and 54M parameters trainable — 89% and 96% of the network,
+        under a mode whose whole promise is that the backbone does not move
+        (ADR-101). Every architecture here ends in exactly one head Linear, and
+        that is the thing to thaw.
 
         For fine_tuning: if unfreeze_from_layer is set, freeze every layer
         that appears before it in named_children(); everything from that layer
@@ -147,17 +154,22 @@ class TransferLearningBlock(ExperimentBlock):
         children = list(model.named_children())
 
         if tl.mode == "feature_extraction":
-            # Freeze everything except the final child (classifier head).
-            head_name = children[-1][0] if children else None
-            for name, child in children:
-                if name != head_name:
-                    for param in child.parameters():
-                        param.requires_grad = False
-                    self._frozen_layers.append(name)
-                    logger.debug("Froze layer: {}", name)
-                else:
-                    for param in child.parameters():
-                        param.requires_grad = True
+            head = final_linear(model)
+            if head is None:
+                raise ValueError(
+                    "feature_extraction needs a final Linear layer to train, "
+                    f"and {type(model).__name__} has none."
+                )
+            for param in model.parameters():
+                param.requires_grad = False
+            for param in head.parameters():
+                param.requires_grad = True
+            for name, _child in children:
+                self._frozen_layers.append(name)
+            logger.debug(
+                "Feature extraction: {} trainable parameters in the head.",
+                sum(p.numel() for p in head.parameters()),
+            )
 
         elif tl.mode == "fine_tuning":
             if tl.unfreeze_from_layer is None:

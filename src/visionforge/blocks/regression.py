@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 import torch
+from loguru import logger
 
 from visionforge.core.cancellation import CancellationToken
 from visionforge.core.metric_ci import MetricCI, bootstrap_regression_cis
@@ -24,6 +25,7 @@ from visionforge.core.regression_trainer import (
     RegressionTrainer,
     RegressionTrainResult,
 )
+from visionforge.core.training_health import constant_predictions
 from visionforge.models.regression_factory import RegressionModelFactory
 from visionforge.utils.regression_config import RegressionConfig
 
@@ -80,6 +82,13 @@ class RegressionBlock:
                     y_true, y_pred, seed=self._config.training.seed
                 )
                 self._test_predictions = (y_true, y_pred)
+                # A regressor that outputs the mean for every image still
+                # reports an R² — a negative one, which reads as "bad model"
+                # rather than "did not use the image" (ADR-101).
+                collapse = constant_predictions(y_pred.ravel().tolist())
+                if collapse is not None:
+                    logger.warning("{}", collapse.message)
+                    self._train_result.warnings.append(collapse.to_dict())
 
             run_dir = self._train_result.model_path.parent
             graphics = self._render_plots(run_dir)

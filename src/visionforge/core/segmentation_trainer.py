@@ -36,7 +36,11 @@ from visionforge.core.resume import (
 )
 from visionforge.core.tracking import TensorBoardLogger
 from visionforge.core.trainer import _seed_everything, resolve_device
-from visionforge.core.training_health import stagnant_loss, summarize
+from visionforge.core.training_health import (
+    collapsed_segmentation,
+    stagnant_loss,
+    summarize,
+)
 from visionforge.models.segmentation_factory import segmentation_logits
 from visionforge.utils.environment import capture_environment
 from visionforge.utils.segmentation_config import SegmentationConfig
@@ -110,6 +114,8 @@ class SegmentationMetricAccumulator:
     """
 
     def __init__(self, num_classes: int, ignore_index: int) -> None:
+        self.per_class_iou: list[float] = []
+        self.present_classes: int = 0
         self._k = num_classes
         self._ignore = ignore_index
         self._cm = torch.zeros(num_classes, num_classes, dtype=torch.long)
@@ -144,8 +150,14 @@ class SegmentationMetricAccumulator:
             dice = (2.0 * diag[present]) / (row + col)[present].clamp_min(1e-9)
             mean_iou = float(iou.mean().item())
             mean_dice = float(dice.mean().item())
+            # Kept for the collapse check: a uniform mask shows up as one class
+            # with a real IoU and the rest at zero (ADR-101).
+            self.per_class_iou = [float(v) for v in iou.tolist()]
+            self.present_classes = int(present.sum().item())
         else:
             mean_iou = mean_dice = 0.0
+            self.per_class_iou = []
+            self.present_classes = 0
 
         pixel_acc = float(diag.sum().item() / total)
         return mean_iou, mean_dice, pixel_acc
@@ -405,7 +417,16 @@ class SegmentationTrainer:
         save_pool.shutdown(wait=False)
 
         # A run that never moved still reports metrics; say so (ADR-099).
-        health = summarize([stagnant_loss([h.train_loss for h in history])])
+        last = getattr(self, "_last_metrics", None)
+        health = summarize(
+            [
+                stagnant_loss([h.train_loss for h in history]),
+                collapsed_segmentation(
+                    getattr(last, "per_class_iou", []),
+                    present_classes=getattr(last, "present_classes", 0),
+                ),
+            ]
+        )
         for warning in health:
             logger.warning("{}", warning["message"])
 
@@ -459,6 +480,7 @@ class SegmentationTrainer:
         model = model.to(self._device)
         model.eval()
         metrics = SegmentationMetricAccumulator(self._num_classes, self._ignore_index)
+        self._last_metrics = metrics
         per_image: list[np.ndarray] = []
         with torch.no_grad():
             for inputs, targets in loader:

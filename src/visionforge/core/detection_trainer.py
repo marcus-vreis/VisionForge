@@ -13,7 +13,7 @@ from __future__ import annotations
 import json
 import sys
 from collections.abc import Callable
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -37,6 +37,7 @@ from visionforge.core.resume import (
 )
 from visionforge.core.tracking import TensorBoardLogger
 from visionforge.core.trainer import _seed_everything
+from visionforge.core.training_health import no_detections, summarize
 from visionforge.models.detection_factory import build_torchvision_detector
 from visionforge.utils.detection_config import DetectionConfig
 from visionforge.utils.environment import capture_environment
@@ -139,6 +140,8 @@ class DetectionTrainResult:
     history: list[DetectionEpochResult]
     model_path: Path
     run_dir: Path
+    # Things about this run the researcher has to be told (ADR-099/101).
+    warnings: list[dict[str, str]] = field(default_factory=list)
 
 
 def _extract(metrics: dict[str, Any], key: str) -> float | None:
@@ -601,7 +604,13 @@ class DetectionTrainer:
         # loss + mAP history chart the GUI shows for YOLO runs.
         self._render_torchvision_plot(run_dir, history, train_losses)
 
+        tv_health = summarize(
+            [no_detections(best_map if best_map >= 0 else None, len(history))]
+        )
+        for warning in tv_health:
+            logger.warning("{}", warning["message"])
         result = DetectionTrainResult(
+            warnings=tv_health,
             best_epoch=best_epoch,
             best_map50_95=None,
             total_epochs=len(history),
@@ -724,7 +733,12 @@ class DetectionTrainer:
     ) -> DetectionTrainResult:
         scored = [h for h in history if h.map50_95 is not None]
         best = max(scored, key=lambda h: h.map50_95 or 0.0, default=None)
+        map50 = best.map50 if best else None
+        health = summarize([no_detections(map50, len(history))])
+        for warning in health:
+            logger.warning("{}", warning["message"])
         return DetectionTrainResult(
+            warnings=health,
             best_epoch=best.epoch if best else 0,
             best_map50_95=best.map50_95 if best else None,
             total_epochs=len(history),
@@ -920,6 +934,8 @@ class DetectionTrainer:
                 "report": None,
             },
             "tests": [],
+            # Empty on a healthy run (ADR-099/101).
+            "warnings": result.warnings,
         }
         (run_dir / "run.json").write_text(
             json.dumps(run_json, indent=2), encoding="utf-8"

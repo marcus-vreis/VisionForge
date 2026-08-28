@@ -50,3 +50,5 @@ valeu
 variantes
 versão
 caractere
+ative
+Ative

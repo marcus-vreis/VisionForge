@@ -81,6 +81,25 @@ def replace_final_layer(model: nn.Module, name: str, num_outputs: int) -> None:
         clf[6] = nn.Linear(old.in_features, num_outputs)
 
 
+def final_linear(model: nn.Module) -> nn.Module | None:
+    """The last ``nn.Linear`` in the model — the head `replace_final_layer` made.
+
+    `named_modules()` walks in definition order, so the last Linear is the one
+    producing the outputs, wherever it sits: `fc` (ResNet), `heads.head` (ViT),
+    `head` (Swin), `classifier[-1]` (VGG, AlexNet, EfficientNet, ConvNeXt).
+
+    Feature extraction needs this rather than "the last named child", because on
+    VGG and AlexNet that child is a `classifier` block of three Linear layers —
+    freezing around it left 89% and 96% of the network trainable under a mode
+    that promises the backbone stays put (ADR-101).
+    """
+    last: nn.Module | None = None
+    for _name, module in model.named_modules():
+        if isinstance(module, nn.Linear):
+            last = module
+    return last
+
+
 def load_local_weights(model: nn.Module, weights_path: Path) -> None:
     """Load weights from a local .pth file into the model (non-strict)."""
     from loguru import logger

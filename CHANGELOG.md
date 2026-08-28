@@ -73,6 +73,26 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Fixed
 
+- **O "feature extraction" não congelava a rede em VGG e AlexNet.** A regra era
+  congelar todos os filhos menos o último — e nessas duas o último filho é um
+  bloco `classifier` com **três** camadas densas (102M + 16M + 4M). O modo cuja
+  promessa inteira é manter o backbone parado deixava **89% e 96%** da rede
+  treinável. A cabeça é a última camada Linear, não o último filho; corrigido na
+  classificação e na regressão, que tinham a mesma regra e o mesmo defeito. A
+  segmentação já estava certa e foi deixada como está: lá o último filho é o
+  decoder, e treiná-lo com o backbone congelado é justamente o que se faz
+  ([ADR-101](docs/dev/DECISIONS.md)).
+- **As checagens de colapso chegaram às outras quatro tarefas.** Antes só a
+  classificação detectava; a detecção não tinha nenhuma. Agora cada tarefa é
+  perguntada no próprio vocabulário: regressão prevendo sempre o mesmo valor,
+  segmentação pintando tudo de uma classe, detecção sem achar nenhuma caixa
+  ([ADR-101](docs/dev/DECISIONS.md)).
+- **Aviso ao congelar pesos que nunca foram treinados.** Feature extraction sobre
+  um modelo sem pesos pré-treinados congela ruído: num `unet` são 31,4 milhões de
+  parâmetros aleatórios fixos e 195 treináveis
+  ([ADR-101](docs/dev/DECISIONS.md)).
+
+
 - **A seta dos seletores girava torta.** Era o caractere `▾` girando dentro da
   própria caixa de texto — e o centro da caixa de um glifo não é o centro do
   triângulo, então ele descrevia um arco em vez de girar no lugar. Virou um SVG
