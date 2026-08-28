@@ -1,5 +1,44 @@
 # Contributing
 
+## Getting set up
+
+```bash
+git clone https://github.com/marcus-vreis/VisionForge.git
+cd VisionForge
+uv venv
+.venv\Scripts\activate        # Linux/macOS: source .venv/bin/activate
+```
+
+PyTorch is deliberately **not** a plain dependency: its build has to match the
+hardware, and a resolver cannot choose between the CPU and CUDA wheels. Pick
+one through a hardware extra — the right index is already wired up for it:
+
+```bash
+uv pip install -e ".[cu128,dev]"    # cu118 / cu121 / cu124 / cu126 / cu128 / cpu
+```
+
+Not sure which? `visionforge doctor` reads the driver *and* any torch already
+installed, and prints the exact line for the machine.
+
+The web UI is served by the Python backend, so it has to be built once (end
+users never need Node — the published wheel ships it built):
+
+```bash
+cd frontend && npm install && npm run build && cd ..
+```
+
+Then confirm the checkout actually trains, on synthetic data, offline:
+
+```bash
+visionforge selftest --quick
+```
+
+**While working:** rebuild after changing anything under `frontend/`, and
+**restart `visionforge gui` after changing anything under `src/`**. Python
+imports its modules once, at start, so a running server keeps serving the old
+backend no matter how many times you rebuild or reload the page. The GUI shows
+a warning when it detects this.
+
 ## Code style
 
 All code is formatted and linted with **ruff**

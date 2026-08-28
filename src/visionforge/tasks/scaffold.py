@@ -27,7 +27,8 @@ dataset, model, loss and metrics.
 
 [PT] Este arquivo já funciona: registra a tarefa e treina um modelo de
 demonstração em dados sintéticos. Substitua cada TODO pelo seu dataset,
-modelo, loss e métricas reais. Guia completo: user_tasks/README.md.
+modelo, loss e métricas reais. Guia completo:
+https://github.com/marcus-vreis/VisionForge/blob/main/docs/custom/TASKS.md
 
 Endpoints you get for free once this file exists (no server restart needed):
 

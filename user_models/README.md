@@ -1,44 +1,29 @@
-# Custom models (drop-in)
+# user_models/ — your own architectures · suas próprias arquiteturas
 
-Define your own architectures here and reference them from a config — no edits to
-VisionForge's source. See ADR-048/049.
+Drop a `.py` file here, register a builder, and any config can use your model:
 
-## How it works
+```python
+import torch.nn as nn
 
-1. Create a `.py` file in this folder (any name not starting with `_`).
-2. Register a builder with `@register_model("your_name")`. The builder receives a
-   single int — the task's **output dimension** — and returns an `nn.Module`
-   emitting that many outputs:
+from visionforge.models.registry import register_model
 
-   ```python
-   import torch.nn as nn
-   from visionforge.models.registry import register_model
 
-   @register_model("your_name")
-   def build(num_outputs: int) -> nn.Module:
-       return MyNet(out=num_outputs)
-   ```
+@register_model("my_net")
+def build(num_outputs: int) -> nn.Module:
+    return MyNet(out=num_outputs)
+```
 
-3. Point a config at it via `model.custom_model` (classification, regression, or
-   segmentation):
+Then set `model.custom_model: my_net` in a config, or pick it in the **Modelo**
+section of the interface. The int is the task's output dimension —
+`num_classes` for classification and segmentation, `num_targets` for
+regression.
 
-   ```yaml
-   model:
-     custom_model: your_name   # builtin `name`/`pretrained` are ignored
-     num_classes: 10           # classification/segmentation; regression uses num_targets
-     # weights_path: path/to/checkpoint.pth   # optional, loaded non-strictly
-   ```
+Coloque um `.py` aqui, registre um builder e qualquer config pode usar o seu
+modelo. Depois é só apontar `model.custom_model: seu_nome`.
 
-VisionForge imports every `.py` file in this folder on demand to discover the
-registered builders. `example_custom_model.py` is a working template — copy it,
-or delete it if you don't need it.
+**Full guide · Guia completo:**
+[`docs/custom/MODELS.md`](https://github.com/marcus-vreis/VisionForge/blob/main/docs/custom/MODELS.md)
 
-## Notes
-
-- The builder's int is the task's output dimension: `num_classes` for
-  classification, `num_classes` (per-pixel logits) for segmentation, `num_targets`
-  for regression. One model can serve any CNN-headed task. Detection and anomaly
-  use their own model paths and don't read `custom_model`.
-- This runs your own local Python. VisionForge is local-first (ADR-005); nothing
-  is fetched from the network. The trust boundary is your own machine.
-- Files starting with `_` are ignored, so shared helpers can live here too.
+`example_custom_model.py` is a working template — copy it, or delete it if you
+don't need it. Files starting with `_` are ignored, so shared helpers can live
+here too.

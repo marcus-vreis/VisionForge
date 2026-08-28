@@ -1,389 +1,407 @@
 # VisionForge
 
 [![CI](https://github.com/marcus-vreis/VisionForge/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/marcus-vreis/VisionForge/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/marcus-vreis/VisionForge/blob/main/LICENSE)
 
-**A local-first computer-vision experimentation platform for researchers.**
-Train, validate and compare models on your own GPU — no cloud, no notebooks,
-no copy-pasted training loops. PyTorch + FastAPI + React in one Python process.
+**Train, compare and defend computer-vision models on your own GPU.**
+Five task families, one interface, no cloud and no notebooks.
 
-VisionForge replaces ad-hoc Jupyter workflows with a clean, testable, reproducible
-system where the numbers you report are numbers you can defend: every run records
-its full provenance, and every comparison can be replicated across seeds with
-confidence intervals.
+> 🇧🇷 **Este README também está em português** — [role até a versão em
+> português](#português-pt-br).
 
-![VisionForge — classification panel](docs/images/vf-classification.png)
+![VisionForge — classification panel](https://raw.githubusercontent.com/marcus-vreis/VisionForge/main/docs/images/vf-classification.png)
 
-## Five task families, one interface
+## Install
 
-| Task | Models | Metrics |
-|---|---|---|
-| **Classification** | ResNet 18/34/50/101, EfficientNet B1/B7, VGG 16/19, AlexNet, timm, custom | Accuracy, F1, Precision, Recall, AUC-ROC, confusion matrix, ROC/PR curves |
-| **Object detection** | Ultralytics YOLOv8/9/10/11/12/26, RT-DETR · torchvision Faster R-CNN, SSD, RetinaNet | mAP@50, mAP@50-95, box loss |
-| **Image regression** | CNN backbones + linear head (CSV manifest datasets), timm, custom | MSE, RMSE, MAE, R² |
-| **Semantic segmentation** | DeepLabV3, FCN, LR-ASPP, U-Net, custom | mean IoU, Dice, pixel accuracy |
-| **Anomaly detection** | Convolutional autoencoder, PatchCore (unsupervised, MVTec-style) | image AUROC, threshold, F1 |
-| **Your own task** (SDK) | any `nn.Module` — you write 4 hooks in one Python file | any metrics you declare (`higher`/`lower` direction-aware) |
-
-Every task panel follows the same canonical layout: experiment name + YAML
-export/import, a strategy selector, model, training, dataset (with pre-training
-stats), preprocessing filters and augmentation with live preview.
-
-## Built for defensible results
-
-![Multi-seed replicates — same config, N seeds, mean ± 95% CI](docs/images/vf-replicates.png)
-
-- **Multi-seed replicates** — train the same config N times under different
-  seeds and report `metric = mean ± 95% CI` (Student-t) instead of a single
-  point estimate.
-- **K-fold cross-validation** — classification, regression and segmentation;
-  per-fold metrics + mean ± std, with fold-leakage-safe transforms.
-- **Hyperparameter sweeps** — grid, random, or Optuna TPE over any config field
-  by dot-path; one-click architecture-comparison preset.
-- **Paired significance testing** — compare N configurations over the *same*
-  seeds and get the difference, its bootstrap CI, a paired t or Wilcoxon test
-  (chosen and justified per comparison), Cohen's `d_z`, and Holm-Bonferroni
-  correction across the family. It refuses to compare runs whose seeds do not
-  line up, and flags when the seed count makes significance unreachable — so
-  "not significant" is never mistaken for "no effect".
-- **Paper-ready output** — every replicates / sweep / K-fold / comparison
-  report is also written as a `booktabs` LaTeX table, with notes stating what
-  each interval covers and which correction was applied.
-- **Full provenance** — every run writes a versioned `run.json` with the exact
-  config, seed, per-epoch history, environment (Python, torch/torchvision,
-  numpy, CUDA, cuDNN, GPU model) and a **dataset fingerprint**, so "same data"
-  is a checkable claim rather than a shared path.
-- **Reproducibility knobs** — seeded runs, optional deterministic cuDNN mode,
-  config schema versioning with migrations, YAML round-trip (export from the
-  GUI, re-run from the CLI).
-- **Post-training tooling** — run history with multi-run comparison and config
-  diff, per-checkpoint testing on new datasets, batch prediction to CSV,
-  Grad-CAM explainability, ONNX export with PyTorch-vs-runtime latency
-  benchmark, TensorBoard scalars per run.
-- **Dataset utilities** — split auto-detection, per-split stats (class balance,
-  image/mask pairing, manifest checks with target distributions), one-shot
-  download from torchvision / Roboflow / Kaggle / Hugging Face — see
-  [`docs/DATASETS.md`](docs/DATASETS.md) for what each provider needs.
-
-## Installation
-
-Requirements: **Python 3.13+**. Node.js is only needed to build the frontend
-from source — the published package already ships the built UI.
-
-> **On PyPI the distribution is `visionforge-studio`** — the bare
-> `visionforge` name belongs to an unrelated project. The import name, the CLI
-> command and the project itself are still `visionforge`.
+You need **Python 3.13+** and about five minutes. Nothing else — the published
+package already carries the built interface.
 
 ```bash
-mkdir my-research && cd my-research    # one folder per project (see Workspace)
-pip install "visionforge-studio[cu128]"
-visionforge doctor
+mkdir my-research && cd my-research
+python -m venv .venv
+.venv\Scripts\activate
+```
+
+On Linux or macOS the last line is `source .venv/bin/activate` instead.
+
+```bash
+pip install visionforge-studio
+```
+
+Now let VisionForge look at your machine and install the matching PyTorch build
+— it reads your GPU driver, names the wheel you need, and installs it after you
+answer `y`:
+
+```bash
+visionforge doctor --fix
+```
+
+That is the whole install. Start the interface:
+
+```bash
 visionforge gui
 ```
 
-The extra picks the torch build: `cu118` · `cu121` · `cu124` · `cu126` ·
-`cu128` · `cpu`. `cu128` is the broadest — its kernels span Turing (sm_75)
-through Blackwell (sm_120), and it is the only one that runs on an RTX
-50-series card at all. Not sure which? Install the bare package first, run
-`visionforge doctor`, and it prints the exact line for your machine — then
-re-run the install with the extra it names.
+It opens on <http://127.0.0.1:8000>. The first screen asks your name and offers
+a short guided tour of the interface.
 
-### With Docker
+<details>
+<summary>Why PyTorch is installed separately</summary>
 
-Skips the PyTorch install entirely — the image carries a matching torch build.
-The host needs the NVIDIA driver and `nvidia-container-toolkit`; an image
-cannot ship those.
+Its build has to match your hardware, and no dependency resolver can choose
+between the CPU and CUDA wheels for you. `doctor` makes that choice from what
+it actually finds on the machine. To pick by hand, install the extra directly:
 
 ```bash
-docker compose up            # GPU, GUI on http://localhost:8000
+pip install "visionforge-studio[cu128]"
 ```
 
-```bash
-docker compose --profile cpu up      # machines without a GPU
-```
+Available: `cu118` · `cu121` · `cu124` · `cu126` · `cu128` · `cpu`. `cu128` is
+the broadest — it spans Turing (sm_75) through Blackwell, and is the only one
+that runs on an RTX 50-series card at all.
 
-`datasets/` is mounted read-only, `outputs/` read-write, and `user_models/` +
-`user_tasks/` exactly as they work outside Docker — so runs, checkpoints and
-your own code live on the host, not inside the image. Saved provider keys
-persist in a named volume.
+**On PyPI the distribution is `visionforge-studio`** — the bare `visionforge`
+name belongs to an unrelated project. The import name, the CLI command and the
+project itself are still `visionforge`.
 
-The default is CUDA 12.8, whose kernels span Turing through Blackwell. The
-build is a build arg rather than a hardcoded base, so one Dockerfile serves
-every supported version:
+</details>
 
-```bash
-docker build \
-  --build-arg CUDA_TAG=cu126 \
-  --build-arg BASE_IMAGE=nvidia/cuda:12.6.3-runtime-ubuntu22.04 \
-  -t visionforge:cu126 .
-```
+<details>
+<summary>Optional extras</summary>
 
-Change both args together: the wheel tag and the CUDA runtime it needs.
-
-One difference inside the container: the native folder picker needs a display,
-so it explains itself and you type the mounted path (`/work/datasets/...`)
-instead.
-
-### pip and Docker side by side
-
-They are the same code and the same version — Docker only removes the PyTorch
-install step. Pick per machine, not per project:
-
-| | shared between the two | why |
-|---|---|---|
-| `outputs/` — runs, checkpoints, `run.json`, reports | **yes** | it is a mounted host folder, so a run trained via pip shows up in the Docker GUI's history and vice versa |
-| `datasets/`, `user_models/`, `user_tasks/` | **yes** | also mounted from the host |
-| saved provider API keys | **no** | pip keeps them in `~/.visionforge/credentials.json` on the host; the container keeps them in its own `visionforge-config` volume, so you save the key once per form (set `VISIONFORGE_HOME` to point elsewhere) |
-| the run queue | **no** | it lives in the server process, so each running server has its own |
-
-**Run one at a time.** Both serve port 8000, and both want the same GPU —
-starting the container while a pip-installed server is training does not divide
-the card between them, it just makes two processes compete for its memory.
-
-### From source
-
-For development, or to run an unreleased commit:
-
-```bash
-git clone https://github.com/marcus-vreis/VisionForge.git
-cd VisionForge
-uv venv
-# Windows: .venv\Scripts\activate     Linux/macOS: source .venv/bin/activate
-```
-
-PyTorch is intentionally **not** a plain dependency — its build must match your
-hardware, and a resolver cannot pick correctly between the CPU and CUDA wheels
-You choose one via a **hardware extra**, and the right index is
-already wired up for it:
-
-```bash
-uv pip install -e ".[cu128,dev]"    # NVIDIA CUDA 12.8 — widest GPU coverage
-# also available: cu118 · cu121 · cu124 · cu126 · cpu
-```
-
-Not sure which? Ask, and it prints the exact line for your machine:
-
-```bash
-visionforge doctor
-```
-
-It reads your driver *and* any torch already installed, so on a machine whose
-GPU works it says so instead of recommending a downgrade.
-
-Build the web UI (it is then served by the Python backend — end users never
-need Node):
-
-```bash
-cd frontend && npm install && npm run build && cd ..
-```
-
-Working on the code? Rebuild after changing anything under `frontend/`, and
-**restart `visionforge gui` after changing anything under `src/`** — Python
-imports its modules once, at start, so a running server keeps serving the old
-backend no matter how many times you rebuild or reload. The GUI shows a warning
-when it detects this.
-
-Check the install actually works before pointing it at your data:
-
-```bash
-visionforge --version
-visionforge selftest --quick     # trains every task on synthetic data, ~15s
-```
-
-### Optional extras
+Some capabilities are separate installs, so a plain install stays small:
 
 | Extra | Enables |
 |---|---|
-| `detection` | Ultralytics YOLO / RT-DETR backends |
-| `timm` | hundreds of extra backbones via `model.timm_model` |
-| `optuna` | TPE-guided sweeps (`mode="optuna"`) |
+| `detection` | the YOLO / RT-DETR backends |
+| `timm` | hundreds of extra backbones |
+| `optuna` | TPE-guided sweeps |
 | `tensorboard` | per-epoch scalars under `<run_dir>/tensorboard/` |
-| `roboflow` / `kaggle` / `huggingface` | one-shot dataset download providers |
+| `roboflow` / `kaggle` / `huggingface` | those dataset download providers |
 
 ```bash
-uv pip install -e ".[detection,optuna,tensorboard]"
+pip install "visionforge-studio[detection,timm]"
 ```
 
-## Quickstart
+</details>
 
-> New here? The step-by-step walkthrough — install → built-in dataset download
-> → first run → replicates with confidence intervals → YAML re-run — lives in
-> [`docs/QUICKSTART.md`](docs/QUICKSTART.md).
+## First run
 
-**GUI** (recommended):
+Point the dataset picker at a folder, pick a task tab, press *Treinar*. If you
+have no dataset yet, the **⤓ datasets** button downloads one (CIFAR-10, for
+example) already in the layout the task expects.
+
+The step-by-step walkthrough — dataset download, first run, confidence
+intervals, re-running from YAML — is in
+[`docs/QUICKSTART.md`](https://github.com/marcus-vreis/VisionForge/blob/main/docs/QUICKSTART.md).
+
+For automation, the CLI runs the same configs the GUI exports:
 
 ```bash
-visionforge gui           # opens http://127.0.0.1:8000
+visionforge run configs/baseline.yaml
 ```
 
-Pick a task tab, point the dataset picker at your data (stats render
-immediately), choose a strategy — single run, K-fold, sweep or replicates —
-and press *Treinar*. A live monitor streams epochs; results land in the run
-history with plots, markdown model cards and artifact paths.
+## The five tasks
 
-**CLI** (automation):
+| Task | Models | Main metrics |
+|---|---|---|
+| **Classification** | ResNet, EfficientNet, ViT, Swin, ConvNeXt, VGG, AlexNet, timm | Accuracy, F1, AUC-ROC, confusion matrix |
+| **Object detection** | YOLOv8–v26, RT-DETR, Faster R-CNN, SSD, RetinaNet | mAP@50, mAP@50-95 |
+| **Image regression** | CNN backbones + linear head (CSV manifests) | MSE, RMSE, MAE, R² |
+| **Semantic segmentation** | DeepLabV3, FCN, LR-ASPP, U-Net | mean IoU, Dice, pixel accuracy |
+| **Anomaly detection** | Convolutional autoencoder, PatchCore | image AUROC, F1, threshold |
 
-```bash
-visionforge run configs/baseline.yaml        # classification
-visionforge run configs/detection.yaml       # any task — dispatched by config
-```
+Every panel has the same shape: experiment name, strategy, model, training,
+dataset, preprocessing. Learning what one task looks like teaches you all five.
 
-Configs exported from the GUI are the exact wire payload, so they re-run
-identically from the CLI. All artifacts (checkpoints, plots, `run.json`,
-reports) are written under `outputs/`.
+Need something else? You can [add your own models and whole task
+families](https://github.com/marcus-vreis/VisionForge/tree/main/docs/custom)
+without touching the package.
+
+## Results you can defend
+
+![Multi-seed replicates — same config, N seeds, mean ± 95% CI](https://raw.githubusercontent.com/marcus-vreis/VisionForge/main/docs/images/vf-replicates.png)
+
+- **Replicates** — the same config over N seeds, reported as
+  `mean ± 95% CI` instead of one lucky number.
+- **K-fold cross-validation** — per-fold metrics plus mean ± std, with
+  fold-safe transforms.
+- **Sweeps** — grid, random or Optuna over any config field.
+- **Paired significance tests** — compare configurations over the *same* seeds,
+  with bootstrap CIs, a paired t or Wilcoxon test, Cohen's `d_z` and
+  Holm-Bonferroni correction. It refuses to compare runs whose seeds do not
+  line up, and says when the seed count makes significance unreachable — so
+  "not significant" is never mistaken for "no effect".
+- **Full provenance** — every run writes a `run.json` with the config, the
+  seed, the per-epoch history, the environment (torch, CUDA, GPU model) and a
+  dataset fingerprint, so "same data" is a checkable claim.
+- **Paper-ready output** — every report is also written as a `booktabs` LaTeX
+  table, with notes stating what each interval covers.
+
+After training: run history with config diffs, per-checkpoint testing on new
+data, batch prediction to CSV, Grad-CAM, ONNX export, TensorBoard.
 
 ## Your workspace
 
-VisionForge looks for your own models and tasks in folders **next to wherever
-you run it** — no repository needed, and nothing to edit inside the package:
+VisionForge reads your own code from folders **next to wherever you run it** —
+no repository needed, nothing to edit inside the package:
 
 ```
 my-research/            ← run `visionforge gui` from here
-├── user_models/        ← your architectures  (see below)
-├── user_tasks/         ← your task families  (`visionforge new-task`)
+├── user_models/        ← your architectures
+├── user_tasks/         ← your task families
 ├── datasets/           ← whatever you point the picker at
 └── outputs/            ← runs, checkpoints, reports, run.json
 ```
 
-`visionforge doctor` prints the exact resolved paths, so you can always see
-where it is looking. Run it from a different folder and it looks there instead
-— pick one working directory per project and stay in it.
+Run it from a different folder and it looks there instead — so keep one folder
+per project. `visionforge doctor` always prints the paths it resolved.
 
-## Custom models
-
-Drop a Python file into `user_models/` and register it:
-
-```python
-from visionforge.models.registry import register_model
-
-@register_model("my_net")
-def build_my_net(num_outputs: int) -> nn.Module: ...
-```
-
-Select it via `model.custom_model` — works for classification, regression and
-segmentation. See `user_models/README.md`.
-
-## Custom tasks — define a whole new task family
-
-When your research doesn't fit the five built-in tasks, define your own in
-**one documented Python file** — no React, no FastAPI, no training loop:
+## Checking the install
 
 ```bash
-visionforge new-task cell_counting     # writes user_tasks/cell_counting.py
+visionforge doctor               # environment: driver, torch, workspace
+visionforge selftest --quick     # trains every task on synthetic data, ~15s
 ```
 
-The generated template **trains out of the box** on synthetic data. Fill four
-hooks — `build_model`, `build_loaders`, `compute_loss`, `compute_metrics` —
-and a Pydantic `Config` whose fields become a validated form schema. You get,
-with zero extra code:
-
-- `GET /api/tasks` · `GET /api/custom/<key>/schema` · `POST /api/custom/<key>/run`
-  (live SSE monitor, TensorBoard, versioned `run.json` provenance)
-- `POST /api/custom/<key>/sweep` — grid/random/Optuna over **any** config
-  field, including the ones you declared
-- `POST /api/custom/<key>/replicates` — N seeds → mean ± std ± 95% CI
-
-Training not epoch-shaped (GANs, EM loops)? Override `run(cfg, ctx)` and own
-the loop while keeping every contract. A working example ships in
-`user_tasks/example_counting/` (a CNN counting dots in synthetic images —
-trains in seconds on CPU). Full walkthrough: [`user_tasks/README.md`](user_tasks/README.md) (PT + EN).
-
-## Verifying the install
-
-`visionforge doctor` checks your environment; **`visionforge selftest` checks
-the pipeline** — it builds tiny synthetic datasets, starts the real API, and
-trains every task through the same endpoints the browser uses, asserting that
-each run completes, streams live progress, and stores its report:
-
-```bash
-visionforge selftest --quick     # one run per task (~15s, CPU, offline)
-visionforge selftest             # every task x strategy: simple, K-fold, sweep, replicates, comparison
-```
-
-```
-case                       result    time  detail
-classification/replicates  PASS      2.7s  accuracy=1.0000±0.0000
-segmentation/cv            PASS      2.0s  miou=0.0783
-custom/sweep               PASS      0.6s  best mae=2.4231
-regression/comparison      PASS      6.5s  best=baseline 1/1 signif.
-...
-27/27 cases passed
-```
-
-Filters: `--tasks classification,custom`, `--strategies sweep,replicates`,
-`--json out.json`. Exit code is non-zero if any case fails, so it drops into
-CI as-is. It verifies integrity, not model quality — one epoch on synthetic
-data says nothing about accuracy.
-
-## Status
-
-**v0.1.0 — first public release.** Usable for real work and under active
-development. Below 1.0 the config schema and HTTP API may change between minor
-releases; configs carry a `schema_version` and are migrated on load, so a YAML
-exported from an older release keeps working.
-
-Verified, not asserted: 1370 backend tests and 121 frontend tests gated in CI,
-plus a full matrix of 21 (task × strategy) cases trained on **real** datasets —
-the corpus, the numbers and the one defect it caught are in
-[`docs/dev/VALIDATION.md`](docs/dev/VALIDATION.md).
-
-Known limits worth knowing before you start:
-
-- **One training at a time — but submissions queue.** The card runs one job;
-  extra submissions line up and start on their own as it frees, so you can
-  stack an evening's experiments and leave. The bottom bar shows
-  `⧗ fila N` when something is waiting, and a job that has not started yet can
-  be dropped. A job already training cannot be cancelled: the trainers have no
-  stop point, and interrupting one would leave a half-written run directory.
-  The queue lives in the server process, so restarting the server clears what
-  had not started.
-- **One-click dataset download covers classification only** (the torchvision
-  built-ins produce an `ImageFolder`). Detection, regression, segmentation and
-  anomaly need a dataset already in their layout — see
-  [`docs/archive/TRAINING_PLAN.md`](docs/archive/TRAINING_PLAN.md).
-- **No K-fold for detection or anomaly**, by design: Ultralytics owns its
-  training loop, and an unsupervised validation fold without anomalies measures
-  nothing.
-- **Windows**: keep `training.workers` at 0–2. Each DataLoader worker is a
-  process that reloads torch's CUDA DLLs, and eight of them exhaust the page
-  file (`WinError 1455`). The default is already 2 there.
-- Dark theme only; a light palette is not designed yet.
-
-Found something? [Open an issue](https://github.com/marcus-vreis/VisionForge/issues/new/choose)
-— the template asks for `visionforge --version` and `visionforge doctor`, which
-answers most of the questions up front.
+`selftest` starts the real API and trains through the same endpoints the
+browser uses. It checks that the pipeline works, not that a model is good — one
+epoch on synthetic data says nothing about accuracy.
 
 ## Documentation
 
-**Using it** — these are written in Portuguese, like the interface itself:
+- [`docs/QUICKSTART.md`](https://github.com/marcus-vreis/VisionForge/blob/main/docs/QUICKSTART.md) — first run, start to finish
+- [`docs/DATASETS.md`](https://github.com/marcus-vreis/VisionForge/blob/main/docs/DATASETS.md) — dataset layouts and the download providers
+- [`docs/custom/`](https://github.com/marcus-vreis/VisionForge/tree/main/docs/custom) — your own models and task families
+- [`CHANGELOG.md`](https://github.com/marcus-vreis/VisionForge/blob/main/CHANGELOG.md) — what shipped in each release
 
-- [`docs/QUICKSTART.md`](docs/QUICKSTART.md) — first run, start to finish
-- [`docs/DATASETS.md`](docs/DATASETS.md) — dataset layouts and the download providers
-- [`CHANGELOG.md`](CHANGELOG.md) — what shipped in each release
+Working on VisionForge itself?
+[`CONTRIBUTING.md`](https://github.com/marcus-vreis/VisionForge/blob/main/CONTRIBUTING.md)
+has the dev setup, and
+[`docs/dev/`](https://github.com/marcus-vreis/VisionForge/tree/main/docs/dev)
+has the architecture, the decision log and the validation record.
 
-**Working on it** — English, for contributors:
+## Status
 
-- [`CONTRIBUTING.md`](CONTRIBUTING.md) — dev setup, the check gauntlet, PR flow
-- [`docs/dev/ARCHITECTURE.md`](docs/dev/ARCHITECTURE.md) — layers, modules, boundaries
-- [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md) — every architecture decision and
-  the reasoning behind it, as ADRs
-- [`docs/dev/VALIDATION.md`](docs/dev/VALIDATION.md) — the real-dataset validation record
-- [`docs/dev/DOCKER.md`](docs/dev/DOCKER.md) — image layout and the CUDA variants
-- [`docs/dev/RELEASING.md`](docs/dev/RELEASING.md) — how a version gets cut and published
+Under active development and usable for real work. Below 1.0 the config schema
+and the HTTP API may change between minor releases — configs carry a
+`schema_version` and are migrated on load, so an exported YAML keeps working.
 
-[`docs/archive/`](docs/archive) holds superseded planning documents, kept for
-history. Nothing there describes current behaviour.
+Worth knowing before you start:
 
-Backend checks: `pytest` · `ruff check src/ tests/` · `mypy src/`.
-Frontend: `cd frontend && npx vitest run && npm run typecheck`.
-End-to-end: `visionforge selftest` (or `pytest -m slow` for the harness's own
-live cases — they are deselected from the default run).
+- **One training at a time**, but submissions queue and start on their own. A
+  job already training cannot be cancelled.
+- **One-click dataset download covers classification only.** The other tasks
+  need a dataset already in their layout.
+- **No K-fold for detection or anomaly**, by design: Ultralytics owns its
+  training loop, and an unsupervised fold without anomalies measures nothing.
+- Dark theme only.
+
+Found something?
+[Open an issue](https://github.com/marcus-vreis/VisionForge/issues/new/choose).
 
 ## Citing
 
 If VisionForge is useful in your research, please cite it — see
-[`CITATION.cff`](CITATION.cff) (GitHub renders a “Cite this repository” button).
+[`CITATION.cff`](https://github.com/marcus-vreis/VisionForge/blob/main/CITATION.cff).
 
 ## License
 
-[MIT](LICENSE)
+[MIT](https://github.com/marcus-vreis/VisionForge/blob/main/LICENSE)
+
+---
+
+# Português (pt-BR)
+
+**Treine, compare e defenda modelos de visão computacional na sua própria
+GPU.** Cinco tipos de tarefa, uma interface só, sem nuvem e sem notebooks.
+
+## Instalação
+
+Você precisa de **Python 3.13+** e uns cinco minutos. Nada além disso — o
+pacote publicado já vem com a interface pronta.
+
+```bash
+mkdir minha-pesquisa && cd minha-pesquisa
+python -m venv .venv
+.venv\Scripts\activate
+```
+
+No Linux ou no macOS a última linha vira `source .venv/bin/activate`.
+
+```bash
+pip install visionforge-studio
+```
+
+Agora deixe o VisionForge olhar a sua máquina e instalar o PyTorch certo — ele
+lê o driver da sua GPU, diz qual wheel você precisa e instala depois que você
+responder `y`:
+
+```bash
+visionforge doctor --fix
+```
+
+A instalação acaba aqui. Para abrir a interface:
+
+```bash
+visionforge gui
+```
+
+Ela abre em <http://127.0.0.1:8000>. A primeira tela pergunta o seu nome e
+oferece um guia rápido da interface.
+
+<details>
+<summary>Por que o PyTorch é instalado à parte</summary>
+
+Porque a build dele precisa combinar com o seu hardware, e nenhum resolvedor de
+dependências consegue escolher entre a wheel de CPU e a de CUDA por você. O
+`doctor` faz essa escolha a partir do que ele realmente encontra na máquina.
+Para escolher na mão, instale o extra direto:
+
+```bash
+pip install "visionforge-studio[cu128]"
+```
+
+Disponíveis: `cu118` · `cu121` · `cu124` · `cu126` · `cu128` · `cpu`. O `cu128`
+é o mais abrangente — vai de Turing (sm_75) até Blackwell, e é o único que roda
+numa RTX série 50.
+
+**No PyPI a distribuição chama `visionforge-studio`** — o nome `visionforge`
+puro pertence a um projeto sem relação com este. O nome de import, o comando e
+o projeto continuam sendo `visionforge`.
+
+</details>
+
+<details>
+<summary>Extras opcionais</summary>
+
+Algumas capacidades são instaladas à parte, para que a instalação normal
+continue pequena:
+
+| Extra | Habilita |
+|---|---|
+| `detection` | os backends YOLO / RT-DETR |
+| `timm` | centenas de backbones a mais |
+| `optuna` | buscas guiadas por TPE |
+| `tensorboard` | escalares por época em `<run_dir>/tensorboard/` |
+| `roboflow` / `kaggle` / `huggingface` | esses provedores de download |
+
+```bash
+pip install "visionforge-studio[detection,timm]"
+```
+
+</details>
+
+## Primeiro treino
+
+Aponte o seletor de dataset para uma pasta, escolha a aba da tarefa e clique em
+*Treinar*. Se você ainda não tem dataset, o botão **⤓ datasets** baixa um
+(CIFAR-10, por exemplo) já no formato que a tarefa espera.
+
+O passo a passo completo — baixar dataset, primeiro treino, intervalos de
+confiança, repetir a partir do YAML — está em
+[`docs/QUICKSTART.md`](https://github.com/marcus-vreis/VisionForge/blob/main/docs/QUICKSTART.md).
+
+Para automação, o CLI roda os mesmos configs que a interface exporta:
+
+```bash
+visionforge run configs/baseline.yaml
+```
+
+## As cinco tarefas
+
+| Tarefa | Modelos | Métricas principais |
+|---|---|---|
+| **Classificação** | ResNet, EfficientNet, ViT, Swin, ConvNeXt, VGG, AlexNet, timm | Acurácia, F1, AUC-ROC, matriz de confusão |
+| **Detecção de objetos** | YOLOv8–v26, RT-DETR, Faster R-CNN, SSD, RetinaNet | mAP@50, mAP@50-95 |
+| **Regressão em imagens** | Backbones CNN + cabeça linear (manifesto CSV) | MSE, RMSE, MAE, R² |
+| **Segmentação semântica** | DeepLabV3, FCN, LR-ASPP, U-Net | IoU médio, Dice, acurácia por pixel |
+| **Detecção de anomalias** | Autoencoder convolucional, PatchCore | AUROC por imagem, F1, limiar |
+
+Todos os painéis têm a mesma forma: nome do experimento, estratégia, modelo,
+treinamento, dataset, pré-processamento. Aprender uma tarefa ensina as cinco.
+
+Precisa de outra coisa? Dá para [adicionar seus próprios modelos e até tarefas
+inteiras](https://github.com/marcus-vreis/VisionForge/tree/main/docs/custom)
+sem tocar no pacote.
+
+## Resultados que você consegue defender
+
+- **Réplicas** — o mesmo config em N sementes, reportado como
+  `média ± IC 95%` em vez de um número de sorte.
+- **Validação cruzada K-fold** — métrica por fold mais média ± desvio, com
+  transformações que não vazam entre folds.
+- **Buscas** — grid, aleatória ou Optuna sobre qualquer campo do config.
+- **Testes de significância pareados** — compare configurações nas *mesmas*
+  sementes, com IC por bootstrap, teste t pareado ou Wilcoxon, `d_z` de Cohen e
+  correção de Holm-Bonferroni. Ele se recusa a comparar execuções cujas
+  sementes não batem, e avisa quando o número de sementes torna a significância
+  inalcançável — para que "não significativo" nunca seja lido como "sem
+  efeito".
+- **Procedência completa** — toda execução escreve um `run.json` com o config,
+  a semente, o histórico por época, o ambiente (torch, CUDA, modelo da GPU) e
+  uma impressão digital do dataset, para que "mesmos dados" seja uma afirmação
+  verificável.
+- **Saída pronta para artigo** — todo relatório sai também como tabela LaTeX
+  `booktabs`, com notas dizendo o que cada intervalo cobre.
+
+Depois do treino: histórico com diff de config, teste de checkpoints em dados
+novos, predição em lote para CSV, Grad-CAM, exportação ONNX, TensorBoard.
+
+## Sua pasta de trabalho
+
+O VisionForge lê o seu código de pastas **ao lado de onde você o executa** —
+sem repositório, sem editar nada dentro do pacote:
+
+```
+minha-pesquisa/         ← rode `visionforge gui` daqui
+├── user_models/        ← suas arquiteturas
+├── user_tasks/         ← suas tarefas
+├── datasets/           ← o que você apontar no seletor
+└── outputs/            ← execuções, checkpoints, relatórios, run.json
+```
+
+Se rodar de outra pasta, ele procura lá — então mantenha uma pasta por projeto.
+O `visionforge doctor` sempre imprime os caminhos que resolveu.
+
+## Conferindo a instalação
+
+```bash
+visionforge doctor               # ambiente: driver, torch, pastas
+visionforge selftest --quick     # treina todas as tarefas em dados sintéticos, ~15s
+```
+
+O `selftest` sobe a API de verdade e treina pelos mesmos endpoints que o
+navegador usa. Ele confere que o caminho funciona, não que o modelo é bom — uma
+época em dado sintético não diz nada sobre acurácia.
+
+## Documentação
+
+- [`docs/QUICKSTART.md`](https://github.com/marcus-vreis/VisionForge/blob/main/docs/QUICKSTART.md) — o primeiro treino, do início ao fim
+- [`docs/DATASETS.md`](https://github.com/marcus-vreis/VisionForge/blob/main/docs/DATASETS.md) — formatos de dataset e os provedores de download
+- [`docs/custom/`](https://github.com/marcus-vreis/VisionForge/tree/main/docs/custom) — seus próprios modelos e tarefas
+- [`CHANGELOG.md`](https://github.com/marcus-vreis/VisionForge/blob/main/CHANGELOG.md) — o que entrou em cada versão
+
+## Situação atual
+
+Em desenvolvimento ativo e já utilizável para trabalho de verdade. Abaixo da
+1.0 o schema de config e a API HTTP podem mudar entre versões menores — os
+configs carregam `schema_version` e são migrados ao abrir, então um YAML
+exportado antes continua funcionando.
+
+Vale saber antes de começar:
+
+- **Um treino por vez**, mas os envios entram numa fila e começam sozinhos. Um
+  treino já em andamento não pode ser cancelado.
+- **O download em um clique cobre só classificação.** As outras tarefas
+  precisam de um dataset já no formato delas.
+- **Sem K-fold em detecção e anomalia**, de propósito: o Ultralytics é dono do
+  próprio laço de treino, e um fold de validação sem anomalias não mede nada.
+- Só tema escuro.
+
+Achou algum problema?
+[Abra uma issue](https://github.com/marcus-vreis/VisionForge/issues/new/choose).
+
+## Licença
+
+[MIT](https://github.com/marcus-vreis/VisionForge/blob/main/LICENSE)

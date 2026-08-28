@@ -11,6 +11,12 @@ from typing import Any
 from visionforge import __version__
 
 # Map ExperimentConfig.block snake_case literals to BlockRegistry class names.
+# A URL, not `user_tasks/README.md`: that file ships only in the source tree,
+# and whoever runs `new-task` most likely installed from PyPI (ADR-058).
+_TASK_GUIDE_URL = (
+    "https://github.com/marcus-vreis/VisionForge/blob/main/docs/custom/TASKS.md"
+)
+
 _BLOCK_ALIASES: dict[str, str] = {
     "classification": "ClassificationBlock",
     "cross_validation": "CrossValidationBlock",
@@ -246,9 +252,10 @@ def main() -> None:
         logger.success("Task template created: {}", target)
         logger.info(
             "Next: edit the TODOs in {}, then `visionforge gui` — the "
-            "'{}' tab appears automatically. Guide: user_tasks/README.md",
+            "'{}' tab appears automatically. Guide: {}",
             target,
             args.key,
+            _TASK_GUIDE_URL,
         )
         return
 

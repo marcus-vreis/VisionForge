@@ -56,3 +56,4 @@ interpolar
 Rever
 rever
 excede
+registre

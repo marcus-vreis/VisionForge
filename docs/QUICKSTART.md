@@ -11,31 +11,20 @@ takes:
 
 ```bash
 mkdir my-research && cd my-research       # runs and your code land here
-pip install "visionforge-studio[cu128]"   # or [cpu]; doctor names yours
-visionforge doctor
+python -m venv .venv
+.venv\Scripts\activate                   # Linux/macOS: source .venv/bin/activate
+pip install visionforge-studio
+visionforge doctor --fix                  # reads your GPU, installs the matching torch
 ```
 
-`doctor` reads your driver and any torch already present, and prints the exact
-install line for your machine. If it names a different hardware extra than the
-one above, re-run the install with that one.
+`doctor` reads your driver and any torch already present, names the wheel your
+machine needs, and installs it once you answer `y`. To choose by hand instead,
+install the hardware extra directly: `pip install "visionforge-studio[cu128]"`
+(`cu118` · `cu121` · `cu124` · `cu126` · `cu128` · `cpu`).
 
-Prefer Docker (no PyTorch install at all) or a source checkout for development?
-Both are in the [README](../README.md#installation) — the rest of this
-walkthrough is identical either way.
-
-<details>
-<summary>From a clone instead</summary>
-
-```bash
-git clone https://github.com/marcus-vreis/VisionForge.git
-cd VisionForge
-uv venv && .venv\Scripts\activate        # Linux/macOS: source .venv/bin/activate
-uv pip install -e ".[cu128,dev]"
-cd frontend && npm install && npm run build && cd ..
-```
-
-The frontend build is only needed from source: the published wheel ships it.
-</details>
+Working from a source checkout instead? That path is in
+[`CONTRIBUTING.md`](../CONTRIBUTING.md) — the rest of this walkthrough is
+identical either way.
 
 Before pointing it at real data, confirm the install actually trains — this
 runs every task through the real API on synthetic data and needs no dataset,
@@ -112,12 +101,11 @@ visionforge new-task my_task      # generates user_tasks/my_task.py — it alrea
 
 Fill the four hooks with your model/data/loss/metrics and the task gets the
 run endpoint, live monitor, `run.json` provenance, sweeps and replicates for
-free. Walkthrough: `user_tasks/README.md`.
+free. Walkthrough: [`docs/custom/TASKS.md`](custom/TASKS.md).
 
 ## Where to go next
 
-- `README.md` — feature overview and optional extras (`detection`, `timm`,
-  `optuna`, `tensorboard`, dataset providers)
-- `user_models/README.md` — drop in your own architectures
-- `user_tasks/README.md` — define whole new task families (ADR-058)
-- `docs/dev/ARCHITECTURE.md` — how the pieces fit
+- [`README.md`](../README.md) — what VisionForge does, in English and Portuguese
+- [`docs/DATASETS.md`](DATASETS.md) — dataset layouts and the download providers
+- [`docs/custom/`](custom/) — your own architectures and whole task families
+- [`docs/dev/ARCHITECTURE.md`](dev/ARCHITECTURE.md) — how the pieces fit
