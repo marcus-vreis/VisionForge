@@ -147,6 +147,18 @@ uma de rótulo. Um dataset de detecção ou de texto no HF não tem como virar
 `ImageFolder`, e o erro diz isso —
 `has no image+label features to materialize into an ImageFolder`.
 
+**Segundo limite:** não há `limite` para este provedor — todos os splits vêm
+inteiros. O campo "limite por classe" da interface só aparece no torchvision
+porque só ele o respeita. Um dataset grande como o `food101` (101 mil imagens)
+sai como 101 mil PNGs, e isso demora.
+
+**Verificado em 2026-08-28** com `AI-Lab-Makerere/beans`: 1295 imagens em 90 s,
+três splits (1034/133/128) e três classes lidas do `ClassLabel`. O
+`/api/dataset/detect` reconheceu `train` / `validation` / `test` sozinho, o
+`/api/dataset/stats` contou as classes equilibradas, e uma época de ResNet-18
+treinou em cima, chegando a AUC-ROC 0.932. É o único dos três provedores com
+credencial que foi exercitado ponta a ponta.
+
 ---
 
 ## Depois de baixar, em qualquer provedor
