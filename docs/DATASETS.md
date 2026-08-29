@@ -71,8 +71,11 @@ API Keys.
 
 **O que informar:**
 
-- **Dataset**: `workspace/project` (está na URL do projeto)
-- **Versão**: o número da versão do export (obrigatório)
+- **Dataset**: cole a URL do projeto (`app.roboflow.com/workspace/projeto/1`)
+  ou só o par `workspace/projeto`. Barra sobrando na frente ou no fim não
+  atrapalha, e a URL já traz a versão junto.
+- **Versão**: o número do export. Obrigatório, a menos que a URL colada já o
+  tenha; um valor digitado aqui vence o da URL.
 - **Formato**: `yolov8` para detecção; `folder` para classificação
 
 **Validando:**

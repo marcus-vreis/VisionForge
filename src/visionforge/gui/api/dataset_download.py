@@ -179,6 +179,43 @@ def _count_images(root: Path) -> tuple[int, dict[str, int]]:
     return total, splits
 
 
+def _parse_roboflow_dataset(dataset: str) -> tuple[str, str, int | None]:
+    """Pull ``workspace``, ``project`` and an optional version out of what was typed.
+
+    The obvious thing to paste is the project URL from the browser, and the
+    second most obvious is the path with its leading slash. Both used to survive
+    the `"/" in dataset` check and then split into nonsense — a leading slash
+    gave an empty workspace, a full URL gave `https:` — so Roboflow answered
+    about a workspace nobody had asked for. Accepting all three forms is a few
+    lines here and removes an error that reads as our bug.
+
+    The version comes back too when the URL carried one, so pasting the URL
+    fills the version field's job as well.
+
+    Returns:
+        ``(workspace, project, version_or_None)``.
+
+    Raises:
+        ValueError: when either half is missing after normalizing.
+    """
+    text = dataset.strip()
+    for prefix in ("https://", "http://"):
+        if text.lower().startswith(prefix):
+            text = text[len(prefix) :]
+            text = text.partition("/")[2]  # drop app.roboflow.com
+            break
+    parts = [p for p in text.split("/") if p]
+    if len(parts) < 2:
+        raise ValueError(
+            "Roboflow dataset must be 'workspace/project' — paste the project "
+            "URL or the workspace/project pair."
+        )
+    version: int | None = None
+    if len(parts) >= 3 and parts[2].isdigit():
+        version = int(parts[2])
+    return parts[0], parts[1], version
+
+
 def download_roboflow(
     dataset: str,
     out_dir: str | Path,
@@ -199,10 +236,10 @@ def download_roboflow(
     """
     if not api_key:
         raise ValueError("Roboflow requires an api_key.")
+    workspace, project_name, url_version = _parse_roboflow_dataset(dataset)
+    version = version if version is not None else url_version
     if version is None:
         raise ValueError("Roboflow requires a version number.")
-    if "/" not in dataset:
-        raise ValueError("Roboflow dataset must be 'workspace/project'.")
     try:
         from roboflow import Roboflow
     except ImportError as exc:  # pragma: no cover - only on a damaged install
@@ -211,7 +248,6 @@ def download_roboflow(
             f"{missing_package_hint('roboflow')}"
         ) from exc
 
-    workspace, project_name = dataset.split("/", 1)
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
 

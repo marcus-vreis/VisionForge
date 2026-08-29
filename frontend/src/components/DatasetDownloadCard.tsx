@@ -163,7 +163,8 @@ export function DatasetDownloadCard({
                   label="Dataset (workspace/project)"
                   value={form.dataset}
                   onChange={(v) => set({ dataset: v })}
-                  placeholder="meu-workspace/meu-projeto"
+                  placeholder="cole a URL do projeto, ou workspace/projeto"
+                  hint="a URL preenche a versão"
                   mono
                 />
                 <TextField

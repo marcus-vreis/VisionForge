@@ -34,6 +34,15 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Fixed
 
+- **O Roboflow não aceitava o que se cola de verdade.** A coisa mais natural é
+  copiar a URL do projeto do navegador, e a segunda é o caminho com a barra na
+  frente. As duas passavam pela checagem de "tem barra" e depois quebravam em
+  bobagem: a barra na frente dava workspace vazio, a URL inteira dava workspace
+  `https:`. O Roboflow então respondia sobre um workspace que ninguém pediu, e o
+  erro parecia nosso. Agora as duas formas funcionam, com ou sem barra sobrando,
+  e a URL colada já traz a versão junto — um valor digitado no campo continua
+  vencendo o dela.
+
 - **O Kaggle autenticava como ninguém.** O código montava `KAGGLE_USERNAME` +
   `KAGGLE_KEY` a partir de um `usuario:chave`, e esse par **não aparece uma
   única vez** no cliente kaggle 2.2.3 — o Kaggle trocou por um token único

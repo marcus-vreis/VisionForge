@@ -10,6 +10,7 @@ import pytest
 from PIL import Image
 
 from visionforge.gui.api.dataset_download import (
+    _parse_roboflow_dataset,
     download_dataset,
     download_huggingface,
     download_kaggle,
@@ -236,6 +237,61 @@ class TestRoboflowDownload:
     def test_malformed_dataset_raises(self, tmp_path: Path) -> None:
         with pytest.raises(ValueError, match="workspace/project"):
             download_roboflow("justproject", tmp_path, api_key="KEY", version=1)
+
+
+class TestRoboflowDatasetString:
+    """What a person actually pastes, versus what the field asks for.
+
+    The obvious move is to copy the project URL from the browser; the next most
+    obvious is the path with its leading slash. Both used to pass the "has a
+    slash" check and then split into nonsense — an empty workspace, or one
+    called `https:` — so Roboflow answered about a workspace nobody asked for
+    and the error read as ours.
+    """
+
+    @pytest.mark.parametrize(
+        "typed",
+        [
+            "ws/proj",
+            "/ws/proj",
+            "ws/proj/",
+            "  ws/proj  ",
+            "https://app.roboflow.com/ws/proj",
+            "http://app.roboflow.com/ws/proj",
+        ],
+    )
+    def test_every_shape_finds_the_same_pair(self, typed: str) -> None:
+        workspace, project, _version = _parse_roboflow_dataset(typed)
+
+        assert (workspace, project) == ("ws", "proj")
+
+    def test_a_pasted_url_carries_its_version(self) -> None:
+        """So pasting the URL fills the version field's job too."""
+        assert _parse_roboflow_dataset("https://app.roboflow.com/ws/proj/7") == (
+            "ws",
+            "proj",
+            7,
+        )
+
+    def test_an_explicit_version_wins_over_the_url(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        rec: dict[str, Any] = {}
+        _install_fake_roboflow(monkeypatch, rec)
+
+        download_roboflow(
+            "https://app.roboflow.com/ws/proj/7",
+            tmp_path / "ds",
+            api_key="KEY",
+            version=2,
+        )
+
+        assert rec["version"] == 2
+
+    @pytest.mark.parametrize("typed", ["justproject", "/", "  ", "ws"])
+    def test_a_string_with_no_pair_is_refused(self, typed: str) -> None:
+        with pytest.raises(ValueError, match="workspace/project"):
+            _parse_roboflow_dataset(typed)
 
 
 def _install_fake_kaggle(monkeypatch: pytest.MonkeyPatch, rec: dict[str, Any]) -> None:
