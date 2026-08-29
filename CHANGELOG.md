@@ -34,6 +34,15 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Fixed
 
+- **O Kaggle autenticava como ninguém.** O código montava `KAGGLE_USERNAME` +
+  `KAGGLE_KEY` a partir de um `usuario:chave`, e esse par **não aparece uma
+  única vez** no cliente kaggle 2.2.3 — o Kaggle trocou por um token único
+  (`KGAT_…`), lido de `KAGGLE_API_TOKEN` ou `~/.kaggle/access_token`. O campo da
+  interface pedia um formato que deixou de existir, então a credencial salva
+  falhava com um erro que apontava para o lugar errado. Agora o token novo vai
+  para a variável certa, o formato antigo é recusado na hora com a instrução de
+  gerar o novo, e o rótulo do campo virou *API token*.
+
 - **Dois learning-rate schedulers na mesma tela.** O `scheduler` estava na lista
   de campos genéricos *e* tinha card próprio: o renderizador genérico empilhava
   os seis parâmetros numa coluna estreita no meio do avançado, ao lado do card

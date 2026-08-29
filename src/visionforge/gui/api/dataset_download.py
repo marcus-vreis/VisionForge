@@ -234,8 +234,9 @@ def download_roboflow(
 def download_kaggle(dataset: str, out_dir: str | Path) -> DatasetDownloadResult:
     """Download and unzip a Kaggle dataset into ``out_dir``.
 
-    ``dataset`` is ``"owner/dataset-slug"``. Authenticates via ``kaggle.json`` or the
-    ``KAGGLE_USERNAME`` / ``KAGGLE_KEY`` env vars. Counts the extracted images.
+    ``dataset`` is ``"owner/dataset-slug"``. Authenticates with the API token
+    from the Kaggle settings page, via ``KAGGLE_API_TOKEN`` or
+    ``~/.kaggle/access_token``. Counts the extracted images.
 
     Raises:
         ValueError: if ``dataset`` is malformed or credentials are missing.
@@ -244,14 +245,26 @@ def download_kaggle(dataset: str, out_dir: str | Path) -> DatasetDownloadResult:
     if "/" not in dataset:
         raise ValueError("Kaggle dataset must be 'owner/dataset-slug'.")
 
-    # The kaggle client reads credentials from kaggle.json or the environment
-    # and authenticates *at import time*, so a stored key has to be in place
-    # before the import below — not passed as an argument.
+    # The kaggle client authenticates *at import time*, so the token has to be
+    # in the environment before the import below — it cannot be an argument.
+    #
+    # It reads `KAGGLE_API_TOKEN` (or `~/.kaggle/access_token`). The old
+    # `KAGGLE_USERNAME` + `KAGGLE_KEY` pair, which this function used to set,
+    # appears *zero* times in the client as of 2.2.3 — Kaggle replaced it with
+    # a single `KGAT_…` token and the pair is now silently ignored. Setting it
+    # produced the confusing failure of a saved credential that authenticated
+    # as nobody.
     stored = load_credential("kaggle")
-    if stored and ":" in stored and not os.environ.get("KAGGLE_KEY"):
-        username, _, key = stored.partition(":")
-        os.environ["KAGGLE_USERNAME"] = username.strip()
-        os.environ["KAGGLE_KEY"] = key.strip()
+    if stored and not os.environ.get("KAGGLE_API_TOKEN"):
+        token = stored.strip()
+        if ":" in token:
+            raise ValueError(
+                "This looks like the old Kaggle 'username:key' pair, which the "
+                "current client ignores. Generate an API token at "
+                "kaggle.com/settings/api ('Create New Token') and save that "
+                "value instead — it starts with 'KGAT_'."
+            )
+        os.environ["KAGGLE_API_TOKEN"] = token
 
     try:
         from kaggle.api.kaggle_api_extended import KaggleApi
@@ -262,8 +275,9 @@ def download_kaggle(dataset: str, out_dir: str | Path) -> DatasetDownloadResult:
         ) from exc
     except OSError as exc:  # kaggle auto-authenticates on import; missing creds raise
         raise ValueError(
-            "Kaggle credentials not found (set kaggle.json or "
-            f"KAGGLE_USERNAME/KAGGLE_KEY): {exc}"
+            "Kaggle credentials not found. Create an API token at "
+            "kaggle.com/settings/api and save it in the credential field, "
+            f"or write it to ~/.kaggle/access_token: {exc}"
         ) from exc
 
     out = Path(out_dir)
@@ -273,8 +287,9 @@ def download_kaggle(dataset: str, out_dir: str | Path) -> DatasetDownloadResult:
         api.authenticate()
     except OSError as exc:
         raise ValueError(
-            "Kaggle credentials not found (set kaggle.json or "
-            f"KAGGLE_USERNAME/KAGGLE_KEY): {exc}"
+            "Kaggle credentials not found. Create an API token at "
+            "kaggle.com/settings/api and save it in the credential field, "
+            f"or write it to ~/.kaggle/access_token: {exc}"
         ) from exc
     api.dataset_download_files(dataset, path=str(out), unzip=True)
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import sys
 import types
 from pathlib import Path
@@ -287,6 +288,57 @@ class TestKaggleDownload:
     def test_malformed_dataset_raises(self, tmp_path: Path) -> None:
         with pytest.raises(ValueError, match="owner/dataset-slug"):
             download_kaggle("justslug", tmp_path)
+
+    def test_saved_token_reaches_the_client_env(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """The client reads `KAGGLE_API_TOKEN`, and only at import time.
+
+        It used to be `KAGGLE_USERNAME` + `KAGGLE_KEY`; that pair appears zero
+        times in kaggle 2.2.3, so setting it authenticated as nobody.
+        """
+        _install_fake_kaggle(monkeypatch, {})
+        monkeypatch.delenv("KAGGLE_API_TOKEN", raising=False)
+        monkeypatch.setattr(
+            "visionforge.gui.api.dataset_download.load_credential",
+            lambda _provider: "KGAT_exemplo",
+        )
+
+        download_kaggle("owner/slug", tmp_path / "ds")
+
+        assert os.environ["KAGGLE_API_TOKEN"] == "KGAT_exemplo"
+
+    def test_the_old_username_key_pair_is_refused_with_an_explanation(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """Someone with the old credential saved gets told what to do.
+
+        Passing it through would have failed inside Kaggle's client with an
+        error about the token file, which points nowhere near the real cause.
+        """
+        _install_fake_kaggle(monkeypatch, {})
+        monkeypatch.delenv("KAGGLE_API_TOKEN", raising=False)
+        monkeypatch.setattr(
+            "visionforge.gui.api.dataset_download.load_credential",
+            lambda _provider: "meu-usuario:minha-chave",
+        )
+
+        with pytest.raises(ValueError, match="KGAT_"):
+            download_kaggle("owner/slug", tmp_path / "ds")
+
+    def test_an_explicit_env_token_wins_over_the_saved_one(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        _install_fake_kaggle(monkeypatch, {})
+        monkeypatch.setenv("KAGGLE_API_TOKEN", "KGAT_do_ambiente")
+        monkeypatch.setattr(
+            "visionforge.gui.api.dataset_download.load_credential",
+            lambda _provider: "KGAT_salvado",
+        )
+
+        download_kaggle("owner/slug", tmp_path / "ds")
+
+        assert os.environ["KAGGLE_API_TOKEN"] == "KGAT_do_ambiente"
 
 
 def _install_fake_datasets(

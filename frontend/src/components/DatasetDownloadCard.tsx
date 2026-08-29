@@ -198,8 +198,8 @@ export function DatasetDownloadCard({
                 />
                 <CredentialField
                   provider="kaggle"
-                  label="Credencial (usuario:chave)"
-                  placeholder="seu-usuario:sua-chave"
+                  label="API token"
+                  placeholder="KGAT_…"
                   hint="kaggle.com → Settings → API → Create New Token"
                 />
               </>

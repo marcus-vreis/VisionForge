@@ -8,7 +8,7 @@ quatro provedores, e eles diferem no que exigem de você.
 |---|---|---|
 | **torchvision** | nenhuma | classificação (`ImageFolder`) |
 | **Roboflow** | API key | detecção (layout YOLO) e classificação |
-| **Kaggle** | `kaggle.json` ou variáveis de ambiente | qualquer layout — vem como o autor publicou |
+| **Kaggle** | API token (`KGAT_...`) | qualquer layout — vem como o autor publicou |
 | **Hugging Face** | token só se o dataset for privado | classificação (`ImageFolder`) |
 
 Os quatro já vêm instalados (ADR-106) — não há extra para adicionar. O que
@@ -95,16 +95,22 @@ barra.
 ## 3. Kaggle — o mais amplo, e o menos padronizado
 
 **Credencial:** em `kaggle.com` → seu perfil → Settings → API → *Create New
-Token*. Baixa um `kaggle.json`. Coloque-o em:
-
-- **Windows:** `C:\Users\<você>\.kaggle\kaggle.json`
-- **Linux/macOS:** `~/.kaggle/kaggle.json` (e `chmod 600`)
-
-Ou, sem arquivo, exporte as variáveis:
+Token*. O valor começa com `KGAT_` e **só aparece uma vez** — copie ali mesmo.
+Cole no campo *API token* da interface e clique em 💾 Salvar, ou deixe no
+ambiente:
 
 ```bash
-$env:KAGGLE_USERNAME = "seu-usuario"; $env:KAGGLE_KEY = "sua-chave"
+$env:KAGGLE_API_TOKEN = "KGAT_..."
 ```
+
+Ou num arquivo, que o cliente lê sozinho: `~/.kaggle/access_token` (no Windows,
+`C:\Users\<você>\.kaggle\access_token`).
+
+> **O formato mudou.** O par `KAGGLE_USERNAME` + `KAGGLE_KEY` do `kaggle.json`
+> antigo **não é mais lido** pelo cliente — verificado no kaggle 2.2.3, onde
+> `KAGGLE_USERNAME` não aparece uma única vez no código-fonte. Se você salvar
+> algo no formato `usuario:chave`, o VisionForge recusa na hora e explica, em
+> vez de tentar autenticar como ninguém.
 
 **O que informar:** `owner/dataset-slug`, que é o final da URL do dataset.
 
@@ -120,8 +126,8 @@ língua, ou com tudo solto numa pasta só. Depois de baixar, abra a pasta e
 confira antes de treinar; o seletor de dataset da GUI mostra o que encontrou e
 diz o que está faltando.
 
-Se as credenciais não estiverem no lugar, o erro é explícito sobre onde pôr o
-`kaggle.json`.
+Se a credencial não estiver no lugar, o erro diz onde criar o token e onde
+guardá-lo.
 
 ---
 
