@@ -34,6 +34,14 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Fixed
 
+- **O download do Roboflow nunca baixava nada.** O cliente sai na hora, sem
+  escrever nada, quando a pasta de destino já existe e `overwrite` é falso — e o
+  padrão é falso. Nós criávamos essa pasta duas linhas antes de chamar. Ou seja:
+  toda exportação rodava no servidor, o log dizia "Version export complete", a
+  extração nunca acontecia, e sobrava uma pasta vazia. O teste que cobria isso
+  usava um dublê que escrevia sempre; agora ele reproduz a regra do cliente de
+  verdade, e falha sem a correção.
+
 - **Download vazio passava por sucesso.** O Roboflow imprime "export complete" e
   o Kaggle descompacta sem reclamar, então a saída do provedor parecia boa; nós
   contávamos zero imagens e devolvíamos um resultado que também parecia bom. A

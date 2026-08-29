@@ -155,9 +155,16 @@ def _install_fake_roboflow(
         def __init__(self, num: int) -> None:
             self.num = num
 
-        def download(self, fmt: str, location: str) -> None:
+        def download(self, fmt: str, location: str, overwrite: bool = False) -> None:
             rec["format"] = fmt
             rec["location"] = location
+            rec["overwrite"] = overwrite
+            # Faithful to roboflow/core/version.py: an existing location with
+            # `overwrite=False` returns immediately, writing nothing. We create
+            # the output folder ourselves before calling, so without the flag
+            # this branch is always the one taken.
+            if Path(location).exists() and not overwrite:
+                return
             d = Path(location) / "train" / "cat"
             d.mkdir(parents=True, exist_ok=True)
             (d / "a.jpg").write_bytes(b"x")
@@ -203,8 +210,12 @@ class TestRoboflowDownload:
         assert result.dataset == "ws/proj:v3"
         assert result.total_images == 2
         assert result.splits == {"train": 2}
+        # `overwrite` is the whole ballgame: without it the client returns
+        # early on the folder we just created and writes nothing.
+        assert rec["overwrite"] is True
         assert rec == {
             "api_key": "KEY",
+            "overwrite": True,
             "workspace": "ws",
             "project": "proj",
             "version": 3,
@@ -308,7 +319,9 @@ class TestAnEmptyDownloadIsNotSuccess:
         """A Roboflow whose download() writes an export with no images in it."""
 
         class FakeVersion:
-            def download(self, fmt: str, location: str) -> None:
+            def download(
+                self, fmt: str, location: str, overwrite: bool = False
+            ) -> None:
                 Path(location).mkdir(parents=True, exist_ok=True)
                 (Path(location) / "README.roboflow.txt").write_text("empty")
 

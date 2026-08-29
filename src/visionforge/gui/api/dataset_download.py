@@ -275,7 +275,13 @@ def download_roboflow(
 
     rf = Roboflow(api_key=api_key)
     project = rf.workspace(workspace).project(project_name)
-    project.version(version).download(dataset_format, location=str(out))
+    # `overwrite=True` is not a preference here, it is required. The client
+    # returns early — writing nothing — when `location` already exists and the
+    # flag is false, and we create that directory ourselves two lines up. So
+    # every download silently did nothing: the server-side export ran and
+    # logged "Version export complete", the extraction never happened, and the
+    # result was an empty folder reported as success.
+    project.version(version).download(dataset_format, location=str(out), overwrite=True)
 
     total, splits = _count_images(out)
     if total == 0:
