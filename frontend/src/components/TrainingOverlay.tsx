@@ -92,14 +92,33 @@ export function TrainingOverlay({
       ? currentEpoch / totalEpochs
       : 0;
 
+  // Trabalho longo que não é época. O PatchCore não tem épocas — ele extrai
+  // features, monta um banco de memória e pontua, e o banco leva de minutos a
+  // horas. Antes disso a barra ficava em 0% o caminho inteiro e só pulava para
+  // 100% no fim, que é indistinguível de um processo travado.
+  const phaseEvents = progressEvents.filter(
+    (e): e is Extract<TrainingEvent, { event: "phase" }> => e.event === "phase",
+  );
+  const latestPhase = phaseEvents.at(-1);
+  const phaseFraction =
+    latestPhase && latestPhase.total > 0
+      ? Math.min(1, latestPhase.done / latestPhase.total)
+      : 0;
+
   // Fall back to synthetic crawl when SSE has not delivered an epoch yet.
   const [fakeProgress, setFakeProgress] = useState(0);
-  const hasRealProgress = currentEpoch > 0 || trialEndCount > 0;
+  const hasRealProgress =
+    currentEpoch > 0 || trialEndCount > 0 || latestPhase !== undefined;
   const realProgress = isMultiTrial
     ? Math.min(1, (trialEndCount + epochFraction) / totalTrials)
-    : totalEpochs > 0
-      ? currentEpoch / totalEpochs
-      : 0;
+    : // Sem época ainda, mas com fase em andamento: a fase é o progresso real
+      // que existe. `totalEpochs` já vale 1 aqui (veio do evento `start`), então
+      // sem esta preferência a conta daria 0/1 o tempo todo.
+      latestEpoch === undefined && latestPhase
+      ? phaseFraction
+      : totalEpochs > 0
+        ? currentEpoch / totalEpochs
+        : 0;
 
   const [logs, setLogs] = useState<string[]>([
     `$ visionforge train --task ${taskKey}`,
@@ -195,6 +214,18 @@ export function TrainingOverlay({
     }, 0);
     return () => clearTimeout(timer);
   }, [latestEpoch]);
+
+  // Uma linha por fase, não por atualização: a montagem do banco reporta ~100
+  // vezes, e cem linhas iguais empurrariam para fora do log tudo que interessa.
+  const phaseLabel = latestPhase?.label;
+  useEffect(() => {
+    if (!phaseLabel) return;
+    const line = `> ${phaseLabel}…`;
+    const timer = setTimeout(() => {
+      setLogs((prev) => (prev.at(-1) === line ? prev : [...prev.slice(-24), line]));
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [phaseLabel]);
 
   // Handle terminal states — subscribe to status.status changes as an external signal.
   useEffect(() => {
@@ -297,7 +328,11 @@ export function TrainingOverlay({
                   : "training complete"
                 : isQueued
                   ? `na fila · ${taskLabel}`
-                  : `training · ${taskLabel}`}
+                  : latestEpoch === undefined && latestPhase
+                    ? // Diz o que está acontecendo: "montando o banco" por uma
+                      // hora é espera; uma barra muda sem legenda é suspeita.
+                      `${latestPhase.label} · ${latestPhase.done}/${latestPhase.total}`
+                    : `training · ${taskLabel}`}
             </div>
             <div
               style={{

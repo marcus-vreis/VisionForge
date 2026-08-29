@@ -14,6 +14,7 @@ Two model families behind one factory:
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import cast
 
 import torch
@@ -134,28 +135,55 @@ class PatchCore(nn.Module):
     def memory_size(self) -> int:
         return int(self._memory.shape[0])
 
-    def fit(self, features: torch.Tensor) -> None:
+    def fit(
+        self,
+        features: torch.Tensor,
+        progress: Callable[[int, int], None] | None = None,
+    ) -> None:
         """Build the memory bank from ``[M, C]`` normal patch features.
 
         Greedy k-center coreset keeps ``coreset_ratio`` of the patches (≥ 1).
+        ``progress`` is called with ``(selected, k)`` as the bank fills.
         """
         m = features.shape[0]
         k = max(1, int(round(self._coreset_ratio * m)))
-        memory = self._greedy_coreset(features, k)
+        memory = self._greedy_coreset(features, k, progress=progress)
         self._memory = memory
 
     @staticmethod
-    def _greedy_coreset(features: torch.Tensor, k: int) -> torch.Tensor:
+    def _greedy_coreset(
+        features: torch.Tensor,
+        k: int,
+        progress: Callable[[int, int], None] | None = None,
+    ) -> torch.Tensor:
+        """Pick ``k`` patches that are as spread out as possible.
+
+        One `cdist` over all M patches per selection, so the cost is O(k·M) —
+        and since k is a fraction of M, linear in `coreset_ratio` and quadratic
+        in the dataset. On a real dataset this is minutes to hours, which is why
+        it reports progress: a run with no output for an hour reads as hung.
+
+        ``progress`` fires at most ~100 times regardless of k. Calling it on
+        every iteration would put hundreds of thousands of events on a stream
+        whose only reader is a progress bar.
+        """
         m = features.shape[0]
         if k >= m:
+            if progress is not None:
+                progress(m, m)
             return features.clone()
         selected = [0]
         min_dist = torch.cdist(features, features[0:1]).squeeze(1)
-        for _ in range(1, k):
+        step = max(1, k // 100)
+        for i in range(1, k):
             idx = int(torch.argmax(min_dist).item())
             selected.append(idx)
             d = torch.cdist(features, features[idx : idx + 1]).squeeze(1)
             min_dist = torch.minimum(min_dist, d)
+            if progress is not None and i % step == 0:
+                progress(i, k)
+        if progress is not None:
+            progress(k, k)
         return features[selected].clone()
 
     def score(self, x: torch.Tensor) -> torch.Tensor:

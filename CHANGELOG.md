@@ -25,6 +25,13 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
   extras seguem existindo, vazios, para não quebrar uma linha de instalação já
   salva em algum lugar ([ADR-106](docs/dev/DECISIONS.md)).
 
+- **O PatchCore agora mostra em que pé está.** Ele não tem épocas: extrai
+  features, monta um banco de memória e pontua — e o banco leva de minutos a
+  horas. O único evento saía no fim, então a barra ficava em 0% o caminho todo e
+  pulava para 100%, o que é indistinguível de um processo travado. Cada fase
+  agora reporta, com nome e contagem ("montando o banco · 4200/8000"), no máximo
+  ~100 atualizações por fase para não inundar o stream.
+
 ### Fixed
 
 - **Dois learning-rate schedulers na mesma tela.** O `scheduler` estava na lista

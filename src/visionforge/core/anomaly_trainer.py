@@ -409,16 +409,41 @@ class AnomalyTrainer:
         test_loader = data_module.test_loader()
         t0 = time.monotonic()
 
+        # PatchCore has no epochs, so the one `epoch_end` at the end used to be
+        # the only output — and the memory bank takes minutes to hours to build.
+        # An hour of silence reads as a hung process, so each phase reports.
+        def phase(label: str, done: int, total: int) -> None:
+            if progress_callback is None:
+                return
+            progress_callback(
+                {
+                    "event": "phase",
+                    "label": label,
+                    "done": done,
+                    "total": total,
+                    "elapsed_s": round(time.monotonic() - t0, 1),
+                }
+            )
+
         with torch.no_grad():
             patches = []
-            for inputs, _ in train_loader:
+            n_batches = len(train_loader)
+            phase("extraindo features", 0, n_batches)
+            for i, (inputs, _) in enumerate(train_loader, start=1):
                 inputs = inputs.to(self._device, non_blocking=True)
                 feats = model.extract(inputs).reshape(-1, model.feature_dim)
                 patches.append(feats.cpu())
-            model.fit(torch.cat(patches, dim=0).to(self._device))
+                phase("extraindo features", i, n_batches)
+            model.fit(
+                torch.cat(patches, dim=0).to(self._device),
+                progress=lambda done, total: phase("montando o banco", done, total),
+            )
 
+        phase("pontuando", 0, 2)
         normal_scores = self._collect_scores(model, _calibration_loader(data_module))[0]
+        phase("pontuando", 1, 2)
         test_scores, test_labels = self._collect_scores(model, test_loader)
+        phase("pontuando", 2, 2)
         auroc, threshold, f1 = self._metrics(normal_scores, test_scores, test_labels)
         torch.save(model.state_dict(), model_path)
         tb.log_scalars(

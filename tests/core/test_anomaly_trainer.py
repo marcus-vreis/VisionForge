@@ -137,6 +137,50 @@ class TestFitPatchCore:
         assert result.model_path.is_file()
         assert result.total_epochs == 1  # single fit pass
 
+    def test_patchcore_streams_its_phases(self, tmp_path: Path) -> None:
+        """PatchCore has no epochs, and building the bank can take an hour.
+
+        Before this, the single `epoch_end` at the very end was the only output,
+        so the overlay sat at 0% for the whole run — indistinguishable from a
+        hung process. Each phase now reports, and the phases must arrive in
+        order, complete, and before the epoch that closes the run.
+        """
+        cfg = _config(
+            tmp_path,
+            {
+                "model": {
+                    "name": "patchcore",
+                    "backbone": "resnet18",
+                    "pretrained": False,
+                    "coreset_ratio": 0.5,
+                },
+                "data": {"base_dir": str(tmp_path), "image_size": 64},
+            },
+        )
+        events: list[dict[str, object]] = []
+        trainer = AnomalyTrainer(cfg)
+        model = PatchCore(backbone="resnet18", pretrained=False, coreset_ratio=0.5)
+
+        trainer.fit(
+            model,
+            FakeAnomalyDataModule(size=64),
+            progress_callback=events.append,
+        )
+
+        phases = [e for e in events if e["event"] == "phase"]
+        assert phases, "the run reported no phase at all"
+        labels = list(dict.fromkeys(str(e["label"]) for e in phases))
+        assert labels == ["extraindo features", "montando o banco", "pontuando"]
+        # Every phase ends complete, and nothing reports past its own total.
+        for label in labels:
+            of_label = [e for e in phases if e["label"] == label]
+            assert of_label[-1]["done"] == of_label[-1]["total"], label
+            assert all(int(str(e["done"])) <= int(str(e["total"])) for e in of_label)
+        # The closing epoch_end comes after the work, not instead of it.
+        assert events.index(phases[-1]) < events.index(
+            next(e for e in events if e["event"] == "epoch_end")
+        )
+
     def test_evaluate_returns_metrics(self, tmp_path: Path) -> None:
         trainer = AnomalyTrainer(_config(tmp_path))
         dm = FakeAnomalyDataModule()

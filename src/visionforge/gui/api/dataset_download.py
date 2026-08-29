@@ -195,7 +195,7 @@ def download_roboflow(
 
     Raises:
         ValueError: if api_key/version are missing or ``dataset`` is malformed.
-        ImportError: if the optional ``roboflow`` extra is not installed.
+        ImportError: if ``roboflow`` is missing from the install.
     """
     if not api_key:
         raise ValueError("Roboflow requires an api_key.")
@@ -239,7 +239,7 @@ def download_kaggle(dataset: str, out_dir: str | Path) -> DatasetDownloadResult:
 
     Raises:
         ValueError: if ``dataset`` is malformed or credentials are missing.
-        ImportError: if the optional ``kaggle`` extra is not installed.
+        ImportError: if ``kaggle`` is missing from the install.
     """
     if "/" not in dataset:
         raise ValueError("Kaggle dataset must be 'owner/dataset-slug'.")
@@ -346,7 +346,7 @@ def download_huggingface(
 
     Raises:
         ValueError: if the dataset has no image+label features to materialize.
-        ImportError: if the optional ``huggingface`` extra (``datasets``) is missing.
+        ImportError: if ``datasets`` is missing from the install.
     """
     try:
         from datasets import load_dataset  # type: ignore[attr-defined]

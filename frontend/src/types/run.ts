@@ -150,4 +150,14 @@ export type TrainingEvent =
       trial_index: number;
       total_trials: number;
     }
+  // Trabalho longo que não é uma época. O PatchCore não tem épocas e leva de
+  // minutos a horas montando o banco de memória; sem isso a tela ficava parada
+  // o tempo todo e o treino parecia travado.
+  | {
+      event: "phase";
+      label: string;
+      done: number;
+      total: number;
+      elapsed_s?: number;
+    }
   | { event: "end"; total_epochs: number; total_trials?: number };

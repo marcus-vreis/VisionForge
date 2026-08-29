@@ -44,6 +44,45 @@ class TestPatchCore:
         # coreset keeps ~ratio of the patches, at least 1
         assert 1 <= pc.memory_size <= 40
 
+    def test_fit_reports_progress_as_the_bank_fills(self) -> None:
+        """Building the bank takes minutes to hours; silence reads as hung."""
+        pc = PatchCore(backbone="resnet18", pretrained=False, coreset_ratio=0.5)
+        seen: list[tuple[int, int]] = []
+
+        pc.fit(
+            torch.randn(40, 8), progress=lambda done, total: seen.append((done, total))
+        )
+
+        assert seen, "fit reported nothing"
+        assert seen[-1][0] == seen[-1][1], "the last report must be complete"
+        # Monotonic and bounded — a bar that goes backwards is worse than none.
+        assert all(a[0] <= b[0] for a, b in zip(seen, seen[1:], strict=False))
+        assert all(0 <= done <= total for done, total in seen)
+
+    def test_progress_is_throttled_for_a_large_bank(self) -> None:
+        """~100 reports whatever k is: one per selection would be a flood."""
+        pc = PatchCore(backbone="resnet18", pretrained=False, coreset_ratio=1.0)
+        calls = 0
+
+        def count(done: int, total: int) -> None:
+            nonlocal calls
+            calls += 1
+
+        # 2000 patches, ratio 1.0 clamps to "keep everything" — use a real
+        # subsample instead so the greedy loop actually runs.
+        pc._coreset_ratio = 0.5
+        pc.fit(torch.randn(2000, 8), progress=count)
+
+        assert calls <= 110, f"{calls} progress calls is a flood"
+        assert calls >= 50, f"{calls} progress calls is too coarse to watch"
+
+    def test_fit_without_a_callback_still_works(self) -> None:
+        pc = PatchCore(backbone="resnet18", pretrained=False, coreset_ratio=0.5)
+
+        pc.fit(torch.randn(40, 8))
+
+        assert pc.is_fitted
+
     def test_score_returns_one_value_per_image(self) -> None:
         pc = PatchCore(backbone="resnet18", pretrained=False, coreset_ratio=0.5).eval()
         x = torch.randn(3, 3, 64, 64)
