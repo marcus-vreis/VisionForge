@@ -43,7 +43,7 @@ from visionforge.utils.detection_config import DetectionConfig
 from visionforge.utils.environment import capture_environment
 from visionforge.utils.workers import suggested_workers
 
-try:  # ultralytics is an optional extra ([detection]); bound lazily.
+try:  # ultralytics ships with the package (ADR-106); still bound lazily.
     from ultralytics import YOLO as _YOLO  # type: ignore[import-not-found]
 except ImportError:  # pragma: no cover - exercised via monkeypatch in tests
     # The ignore matters only when ultralytics IS installed, where mypy binds
@@ -289,8 +289,8 @@ class DetectionTrainer:
         """
         if YOLO is None:
             raise RuntimeError(
-                "ultralytics is not installed. Install the detection extra: "
-                "pip install 'visionforge-studio[detection]'."
+                "ultralytics ships with VisionForge and is missing — the install "
+                "looks damaged: pip install --force-reinstall 'visionforge-studio'."
             )
 
         cfg = self._config.training

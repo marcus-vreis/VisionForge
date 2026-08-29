@@ -57,7 +57,10 @@ const TRAINING_FIELD_ORDER = [
   "batch_size",
   "seed",
   "optimizer",
-  "scheduler",
+  // `scheduler` fica fora desta lista: é um objeto aninhado com card próprio
+  // (`SchedulerFields`), que mostra só os parâmetros do tipo escolhido. Deixá-lo
+  // aqui fazia o renderizador genérico desenhar os seis de uma vez, empilhados
+  // numa coluna, ao lado do card dedicado — dois schedulers na mesma tela.
   "weight_decay",
   "early_stopping_patience",
   "deterministic",
@@ -2002,6 +2005,12 @@ export function ParamPanel({
   const modelData = (formData["model"] ?? {}) as Record<string, unknown>;
   const trainingData = (formData["training"] ?? {}) as Record<string, unknown>;
   const dataData = (formData["data"] ?? {}) as Record<string, unknown>;
+  // O scheduler mora dentro do avançado; se já houver um escolhido, a seção abre
+  // sozinha — esconder uma decisão que a pessoa tomou é pior que mostrar demais.
+  const schedulerChosen =
+    String(
+      ((trainingData["scheduler"] ?? {}) as Record<string, unknown>)["kind"] ?? "none",
+    ) !== "none";
   // Absent means on: a config written before the flag existed trained augmented.
   const augmentOn =
     ((dataData["transforms"] ?? {}) as Record<string, unknown>)["augment"] !== false;
@@ -2378,19 +2387,21 @@ export function ParamPanel({
       </div>
       <AdvancedFields
         count={
-          TRAINING_FIELD_ORDER.filter(
-            (key) => isAdvanced(key) && trainingProps[key],
-          ).length
+          TRAINING_FIELD_ORDER.filter((key) => isAdvanced(key) && trainingProps[key])
+            .length + (trainingProps["scheduler"] ? 1 : 0)
         }
-        startOpen={hasNonDefaultAdvanced(
-          trainingData,
-          Object.fromEntries(
-            Object.entries(trainingProps).map(([k, v]) => [
-              k,
-              resolveSchema(v, defs).default,
-            ]),
-          ),
-        )}
+        startOpen={
+          schedulerChosen ||
+          hasNonDefaultAdvanced(
+            trainingData,
+            Object.fromEntries(
+              Object.entries(trainingProps).map(([k, v]) => [
+                k,
+                resolveSchema(v, defs).default,
+              ]),
+            ),
+          )
+        }
       >
         {TRAINING_FIELD_ORDER.filter((key) => isAdvanced(key)).map((key) =>
           trainingProps[key] ? (
@@ -2406,6 +2417,17 @@ export function ParamPanel({
             />
           ) : null,
         )}
+        {trainingProps["scheduler"] && (
+          <div style={{ gridColumn: "1 / -1" }}>
+            <SchedulerFields
+              schema={trainingProps["scheduler"]}
+              defs={defs}
+              value={(trainingData["scheduler"] ?? {}) as Record<string, unknown>}
+              onChange={(v) => setField("training", "scheduler", v)}
+              errors={validationErrors}
+            />
+          </div>
+        )}
       </AdvancedFields>
       <ModelAdvice
         architecture={String(modelData["name"] ?? "")}
@@ -2418,17 +2440,6 @@ export function ParamPanel({
           setField("training", "learning_rate", next.learning_rate);
         }}
       />
-
-      {/* Scheduler section — nested under training */}
-      {trainingProps["scheduler"] && (
-        <SchedulerFields
-          schema={trainingProps["scheduler"]}
-          defs={defs}
-          value={(trainingData["scheduler"] ?? {}) as Record<string, unknown>}
-          onChange={(v) => setField("training", "scheduler", v)}
-          errors={validationErrors}
-        />
-      )}
 
       {/* Divider */}
       <div

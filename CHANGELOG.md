@@ -13,6 +13,27 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ## [Unreleased]
 
+### Changed
+
+- **Uma instalação só, com tudo dentro.** Os sete extras — `detection`, `timm`,
+  `optuna`, `tensorboard`, `roboflow`, `kaggle`, `huggingface` — passaram a ser
+  dependências normais. A separação existia para a instalação ficar pequena, mas
+  o custo caía no usuário: a aba de detecção aparecia inteira na interface e o
+  treino falhava no último passo pedindo um extra. Medido, o conjunto soma
+  ~83 MB, contra os 2–3 GB que uma build CUDA do PyTorch já baixa. O PyTorch
+  continua à parte, porque a build precisa combinar com o hardware. Os nomes dos
+  extras seguem existindo, vazios, para não quebrar uma linha de instalação já
+  salva em algum lugar ([ADR-106](docs/dev/DECISIONS.md)).
+
+### Fixed
+
+- **Dois learning-rate schedulers na mesma tela.** O `scheduler` estava na lista
+  de campos genéricos *e* tinha card próprio: o renderizador genérico empilhava
+  os seis parâmetros numa coluna estreita no meio do avançado, ao lado do card
+  dedicado que mostra só os do tipo escolhido. Ficou só o dedicado, agora dentro
+  do avançado e ocupando a linha inteira — e a seção abre sozinha quando já há um
+  scheduler escolhido.
+
 ## [0.9.1] — 2026-08-28
 
 ### Changed

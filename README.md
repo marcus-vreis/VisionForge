@@ -67,21 +67,16 @@ project itself are still `visionforge`.
 </details>
 
 <details>
-<summary>Optional extras</summary>
+<summary>What comes with it</summary>
 
-Some capabilities are separate installs, so a plain install stays small:
+Everything the five tasks need is in that one install — the YOLO and RT-DETR
+detection backends, the extra `timm` backbones, Optuna-guided sweeps,
+TensorBoard scalars, and the Roboflow / Kaggle / Hugging Face dataset
+downloaders. They used to be optional extras; the split cost more than it
+saved, and they add about 83 MB against the gigabytes PyTorch already pulls.
 
-| Extra | Enables |
-|---|---|
-| `detection` | the YOLO / RT-DETR backends |
-| `timm` | hundreds of extra backbones |
-| `optuna` | TPE-guided sweeps |
-| `tensorboard` | per-epoch scalars under `<run_dir>/tensorboard/` |
-| `roboflow` / `kaggle` / `huggingface` | those dataset download providers |
-
-```bash
-pip install "visionforge-studio[detection,timm]"
-```
+The only thing chosen separately is PyTorch itself, because its build has to
+match your hardware.
 
 </details>
 
@@ -273,22 +268,16 @@ o projeto continuam sendo `visionforge`.
 </details>
 
 <details>
-<summary>Extras opcionais</summary>
+<summary>O que já vem junto</summary>
 
-Algumas capacidades são instaladas à parte, para que a instalação normal
-continue pequena:
+Tudo que as cinco tarefas precisam está naquela instalação: os backends de
+detecção YOLO e RT-DETR, os backbones extras do `timm`, as buscas guiadas por
+Optuna, os escalares do TensorBoard e os downloaders de dataset do Roboflow,
+Kaggle e Hugging Face. Eram extras opcionais; a separação custava mais do que
+economizava, e eles somam uns 83 MB contra os gigabytes que o PyTorch já baixa.
 
-| Extra | Habilita |
-|---|---|
-| `detection` | os backends YOLO / RT-DETR |
-| `timm` | centenas de backbones a mais |
-| `optuna` | buscas guiadas por TPE |
-| `tensorboard` | escalares por época em `<run_dir>/tensorboard/` |
-| `roboflow` / `kaggle` / `huggingface` | esses provedores de download |
-
-```bash
-pip install "visionforge-studio[detection,timm]"
-```
+A única coisa escolhida à parte é o próprio PyTorch, porque a build dele
+precisa combinar com o seu hardware.
 
 </details>
 

@@ -3622,3 +3622,47 @@ that reaches the form schema, and the caption under the strategy selector. All
 of them now say "frozen weights, recalibrated normalization" rather than
 implying the backbone is untouched — the distinction matters in a paper, where
 "the backbone was frozen" reads as "identical to pretrained".
+
+## ADR-106 — Everything ships in one install
+
+**Date:** 2026-08-28
+**Status:** Accepted
+**Supersedes:** the per-feature extras of ADR-005 (the hardware extras stay)
+
+**Context:** seven capabilities were optional extras — `detection`, `timm`,
+`optuna`, `tensorboard`, `roboflow`, `kaggle`, `huggingface`. The reasoning was
+that a plain install should stay small. In practice the split moved a cost from
+the download to the researcher: the detection tab was fully present in the
+interface, with its models, its form and its strategy selector, and training
+failed at the last step with "install the detection extra". A capability you can
+see and cannot use is worse than one that took a few seconds longer to download.
+
+Measured, per extra, as what it actually adds on top of the base install:
+
+| extra | adds |
+|---|---|
+| `detection` (ultralytics) | 3.9 MB |
+| `timm` | 12.9 MB |
+| `optuna` | 1.9 MB |
+| `tensorboard` | 8.6 MB |
+| `roboflow` | 1.5 MB |
+| `kaggle` | 4.5 MB |
+| `huggingface` (datasets) | ~50 MB, of which 46.8 is pyarrow |
+| **total** | **~83 MB** |
+
+Against the 2–3 GB a CUDA build of PyTorch downloads, the whole set is about 3%.
+The number that justified the split does not survive being measured.
+
+**Decision:** the seven move into `dependencies`. PyTorch stays out, for the
+reason it always did (ADR-005): its build has to match the hardware and no
+resolver can choose. The extra *names* stay defined and empty, so an install
+line saved in a requirements file or someone's notes keeps resolving instead of
+failing on an unknown extra.
+
+**Two things this changed beyond the dependency list.** Seven error messages
+told the reader to add an extra; that advice now names a flag that does nothing,
+so they say the package should be there and the install looks damaged, and
+`doctor.extra_install_hint` became `missing_package_hint`. And `kaggle`
+authenticates *at import time*, which is why bundling it is safe only because
+every provider import already sits inside its function behind `except ImportError`
+and `except OSError` — checked before making the change, not after.

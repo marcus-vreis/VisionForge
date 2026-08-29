@@ -22,8 +22,8 @@ def build_timm_model(name: str, *, num_outputs: int, pretrained: bool) -> nn.Mod
         import timm
     except ImportError as exc:  # pragma: no cover - only without the timm extra
         raise ImportError(
-            "timm is not installed. Add the optional extra: "
-            'pip install -e ".[timm]"  (or: uv sync --extra timm).'
+            "timm ships with VisionForge and is missing — the install "
+            'looks damaged: pip install --force-reinstall "visionforge-studio".'
         ) from exc
 
     model: nn.Module = timm.create_model(

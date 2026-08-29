@@ -1,10 +1,10 @@
 """Best-effort TensorBoard logging (ADR-054).
 
-``TensorBoardLogger`` writes per-epoch scalars to ``<run_dir>/tensorboard/`` when
-the optional ``tensorboard`` extra is installed; otherwise every method is a no-op,
-so training runs unchanged without the dependency. Zero-config: install the extra
-(``pip install -e ".[tensorboard]"``) to enable, then ``tensorboard --logdir
-outputs/models``. The ``SummaryWriter`` import is lazy and failure-tolerant.
+``TensorBoardLogger`` writes per-epoch scalars to ``<run_dir>/tensorboard/``.
+TensorBoard ships with the package (ADR-106), so this is on by default; read the
+scalars with ``tensorboard --logdir outputs/models``. Every method stays a no-op
+when the import fails, so a damaged install degrades instead of failing a run —
+the ``SummaryWriter`` import is lazy and failure-tolerant.
 """
 
 from __future__ import annotations

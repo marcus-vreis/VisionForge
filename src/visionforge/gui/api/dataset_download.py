@@ -23,7 +23,7 @@ from typing import Any
 from loguru import logger
 
 from visionforge.utils.credentials import load_credential, resolve_credential
-from visionforge.utils.doctor import extra_install_hint
+from visionforge.utils.doctor import missing_package_hint
 
 # name -> torchvision.datasets class name. All take a ``train`` kwarg and expose
 # ``.classes``; items are ``(PIL.Image, int)``.
@@ -205,10 +205,10 @@ def download_roboflow(
         raise ValueError("Roboflow dataset must be 'workspace/project'.")
     try:
         from roboflow import Roboflow
-    except ImportError as exc:  # pragma: no cover - only without the roboflow extra
+    except ImportError as exc:  # pragma: no cover - only on a damaged install
         raise ImportError(
-            f"roboflow is not installed. Add the optional extra: "
-            f"{extra_install_hint('roboflow')}"
+            f"roboflow ships with VisionForge and is missing: "
+            f"{missing_package_hint('roboflow')}"
         ) from exc
 
     workspace, project_name = dataset.split("/", 1)
@@ -255,10 +255,10 @@ def download_kaggle(dataset: str, out_dir: str | Path) -> DatasetDownloadResult:
 
     try:
         from kaggle.api.kaggle_api_extended import KaggleApi
-    except ImportError as exc:  # pragma: no cover - only without the kaggle extra
+    except ImportError as exc:  # pragma: no cover - only on a damaged install
         raise ImportError(
-            f"kaggle is not installed. Add the optional extra: "
-            f"{extra_install_hint('kaggle')}"
+            f"kaggle ships with VisionForge and is missing: "
+            f"{missing_package_hint('kaggle')}"
         ) from exc
     except OSError as exc:  # kaggle auto-authenticates on import; missing creds raise
         raise ValueError(
@@ -350,10 +350,10 @@ def download_huggingface(
     """
     try:
         from datasets import load_dataset  # type: ignore[attr-defined]
-    except ImportError as exc:  # pragma: no cover - only without the extra
+    except ImportError as exc:  # pragma: no cover - only on a damaged install
         raise ImportError(
-            f"datasets is not installed. Add the optional extra: "
-            f"{extra_install_hint('huggingface')}"
+            f"datasets ships with VisionForge and is missing: "
+            f"{missing_package_hint('datasets')}"
         ) from exc
 
     out = Path(out_dir)

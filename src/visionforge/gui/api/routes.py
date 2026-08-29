@@ -776,8 +776,8 @@ async def pick_dataset_folder() -> DatasetPickResponse:
 async def dataset_download(req: DatasetDownloadRequest) -> DatasetDownloadResponse:
     """One-shot download of a dataset to a local folder (ADR-055).
 
-    Runs in a worker thread (downloads can be slow). A missing optional extra or
-    credential surfaces as a 400 with a clear message.
+    Runs in a worker thread (downloads can be slow). A missing credential — or a
+    damaged install — surfaces as a 400 with a clear message.
     """
     try:
         return await asyncio.to_thread(_execute_dataset_download, req)

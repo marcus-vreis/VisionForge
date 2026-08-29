@@ -4,21 +4,15 @@ A aba **⤓ DATASETS** (barra inferior) baixa um dataset uma vez para uma pasta
 local; depois é só apontar o campo de dataset de qualquer task para ela. São
 quatro provedores, e eles diferem no que exigem de você.
 
-| Provedor | Extra a instalar | Credencial | Serve para |
-|---|---|---|---|
-| **torchvision** | nenhum | nenhuma | classificação (`ImageFolder`) |
-| **Roboflow** | `roboflow` | API key | detecção (layout YOLO) e classificação |
-| **Kaggle** | `kaggle` | `kaggle.json` ou variáveis de ambiente | qualquer layout — vem como o autor publicou |
-| **Hugging Face** | `huggingface` | token só se o dataset for privado | classificação (`ImageFolder`) |
+| Provedor | Credencial | Serve para |
+|---|---|---|
+| **torchvision** | nenhuma | classificação (`ImageFolder`) |
+| **Roboflow** | API key | detecção (layout YOLO) e classificação |
+| **Kaggle** | `kaggle.json` ou variáveis de ambiente | qualquer layout — vem como o autor publicou |
+| **Hugging Face** | token só se o dataset for privado | classificação (`ImageFolder`) |
 
-Instale o extra que for usar:
-
-```bash
-pip install "visionforge-studio[roboflow,kaggle,huggingface]"
-```
-
-Se esquecer, o erro diz a linha exata para a sua instalação — não é preciso
-adivinhar.
+Os quatro já vêm instalados (ADR-106) — não há extra para adicionar. O que
+separa um provedor do outro é só a credencial.
 
 ## A chave se digita uma vez
 

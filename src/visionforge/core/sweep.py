@@ -201,8 +201,8 @@ def _optuna_trials(
         import optuna
     except ImportError as exc:  # pragma: no cover - only without the optuna extra
         raise ImportError(
-            "optuna is not installed. Add the optional extra: "
-            'pip install -e ".[optuna]"  (or: uv sync --extra optuna).'
+            "optuna ships with VisionForge and is missing — the install "
+            'looks damaged: pip install --force-reinstall "visionforge-studio".'
         ) from exc
 
     optuna.logging.set_verbosity(optuna.logging.WARNING)

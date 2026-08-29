@@ -123,17 +123,20 @@ def installed_from_source() -> bool:
     return bool(info.get("dir_info", {}).get("editable"))
 
 
-def extra_install_hint(extra: str) -> str:
-    """The command that installs an optional extra *for this install*.
+def missing_package_hint(package: str) -> str:
+    """What to run when a bundled dependency turns out to be missing.
 
-    Same split as `build_install_command`: `pip install -e ".[x]"` only works
-    inside a checkout, so a pip-installed user needs the distribution name.
-    Optional features raise ImportError with this string, and a hint that
-    cannot be pasted is no hint at all.
+    Since ADR-106 these ship with the package, so an ImportError means the
+    install is damaged or partial — not that an extra was skipped. Telling
+    someone to "add the optional extra" would send them looking for a flag that
+    no longer exists.
+
+    Same split as `build_install_command`: an editable checkout reinstalls from
+    the source tree, a wheel install from the distribution name.
     """
     if installed_from_source():
-        return f'pip install -e ".[{extra}]"'
-    return f'pip install "{_DIST_NAME}[{extra}]"'
+        return f'pip install -e "." --force-reinstall  (missing: {package})'
+    return f'pip install --force-reinstall "{_DIST_NAME}"  (missing: {package})'
 
 
 def build_install_command(tag: str) -> tuple[str, str]:

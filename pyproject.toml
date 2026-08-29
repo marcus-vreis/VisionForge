@@ -29,6 +29,18 @@ dependencies = [
   # GUI (React SPA served by FastAPI)
     "fastapi>=0.115",
     "uvicorn>=0.30",
+
+  # Everything the five tasks and the dataset providers need (ADR-106). These
+  # were optional extras, and the split cost more than it saved: the detection
+  # tab shipped without a backend until you found the right install line. They
+  # add ~83 MB, against the 2-3 GB a CUDA torch already pulls.
+    "ultralytics>=8.3",      # YOLO / RT-DETR backends
+    "timm>=1.0",             # extra backbones via model.timm_model
+    "optuna>=3.0",           # TPE-guided sweeps
+    "tensorboard>=2.0",      # per-epoch scalars under <run_dir>/tensorboard/
+    "roboflow>=1.1",         # dataset download provider
+    "kaggle>=1.6",           # dataset download provider
+    "datasets>=2.0",         # Hugging Face dataset download provider
 ]
 
 [project.scripts]
@@ -51,39 +63,17 @@ cu121 = ["torch>=2.3", "torchvision>=0.18"]
 cu124 = ["torch>=2.3", "torchvision>=0.18"]
 cu126 = ["torch>=2.3", "torchvision>=0.18"]
 cu128 = ["torch>=2.3", "torchvision>=0.18"]
-# Object detection (Phase 7). Ultralytics drives YOLO/RT-DETR training; it pulls
-# torch/torchvision, which still come from the hardware extra the user selected.
-detection = [
-    "ultralytics>=8.3",
-]
-# Extra model backbones (ADR-051): timm exposes hundreds of pretrained
-# architectures usable as classification/regression heads via the `timm_model`
-# config field. Pulls torch/torchvision from the hardware extra the user selected.
-timm = [
-    "timm>=1.0",
-]
-# Optuna-guided hyperparameter sweep (ADR-052): the `optuna` sweep mode uses a TPE
-# sampler over the random search-space grammar. Optional; imported lazily.
-optuna = [
-    "optuna>=3.0",
-]
-# TensorBoard experiment tracking (ADR-054): when installed, trainers write
-# per-epoch scalars to <run_dir>/tensorboard/. Optional; logging is a best-effort
-# no-op without it.
-tensorboard = [
-    "tensorboard>=2.0",
-]
-# Online dataset download providers (ADR-055): each is an optional, lazily-imported
-# source for the one-shot GUI dataset fetch. torchvision built-ins need no extra.
-roboflow = [
-    "roboflow>=1.1",
-]
-kaggle = [
-    "kaggle>=1.6",
-]
-huggingface = [
-    "datasets>=2.0",
-]
+# These extras are now empty: everything they used to install ships with the
+# package (ADR-106). The names stay so an install line saved in a requirements
+# file or a README elsewhere keeps resolving instead of failing.
+detection = []
+timm = []
+optuna = []
+tensorboard = []
+roboflow = []
+kaggle = []
+huggingface = []
+
 dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
