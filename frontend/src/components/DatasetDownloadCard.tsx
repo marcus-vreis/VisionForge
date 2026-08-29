@@ -133,7 +133,16 @@ export function DatasetDownloadCard({
             <Segmented
               label="Provedor"
               value={form.provider}
-              onChange={(v) => set({ provider: v as DatasetProvider })}
+              // Trocar de provedor limpa o dataset: o campo guardava o
+              // `cifar10` do torchvision e o mostrava como se fosse um
+              // workspace/projeto do Roboflow, que é um jeito silencioso de
+              // mandar a pessoa baixar a coisa errada.
+              onChange={(v) =>
+                set({
+                  provider: v as DatasetProvider,
+                  dataset: v === "torchvision" ? "cifar10" : "",
+                })
+              }
               options={PROVIDERS}
             />
           </div>
@@ -159,12 +168,13 @@ export function DatasetDownloadCard({
               </>
             ) : form.provider === "roboflow" ? (
               <>
+                {/* Sem `hint`: o rótulo já é longo, e numa coluna de 200px o
+                    texto da dica quebrava por cima do campo vizinho. */}
                 <TextField
-                  label="Dataset (workspace/project)"
+                  label="Dataset ou URL"
                   value={form.dataset}
                   onChange={(v) => set({ dataset: v })}
-                  placeholder="cole a URL do projeto, ou workspace/projeto"
-                  hint="a URL preenche a versão"
+                  placeholder="workspace/projeto — ou cole a URL"
                   mono
                 />
                 <TextField

@@ -294,6 +294,73 @@ class TestRoboflowDatasetString:
             _parse_roboflow_dataset(typed)
 
 
+class TestAnEmptyDownloadIsNotSuccess:
+    """A finished export that produced nothing must say so.
+
+    Roboflow prints "export complete" and Kaggle unzips without complaint, so
+    the provider's own output looks fine; we then counted zero images and
+    returned a result that also looked fine. The only clue was a `0 images` log
+    line next to a green outcome, which is not something anyone can act on.
+    """
+
+    @staticmethod
+    def _empty_roboflow(monkeypatch: pytest.MonkeyPatch) -> None:
+        """A Roboflow whose download() writes an export with no images in it."""
+
+        class FakeVersion:
+            def download(self, fmt: str, location: str) -> None:
+                Path(location).mkdir(parents=True, exist_ok=True)
+                (Path(location) / "README.roboflow.txt").write_text("empty")
+
+        class FakeProject:
+            def version(self, num: int) -> FakeVersion:
+                return FakeVersion()
+
+        class FakeWorkspace:
+            def project(self, name: str) -> FakeProject:
+                return FakeProject()
+
+        class FakeRoboflow:
+            def __init__(self, api_key: str) -> None:
+                pass
+
+            def workspace(self, ws: str) -> FakeWorkspace:
+                return FakeWorkspace()
+
+        mod = types.ModuleType("roboflow")
+        mod.Roboflow = FakeRoboflow  # type: ignore[attr-defined]
+        monkeypatch.setitem(sys.modules, "roboflow", mod)
+
+    def test_roboflow_names_the_folder_it_looked_in(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        self._empty_roboflow(monkeypatch)
+        out = tmp_path / "ds"
+
+        with pytest.raises(ValueError, match="no images landed") as exc:
+            download_roboflow("ws/proj", out, api_key="KEY", version=1)
+
+        assert str(out) in str(exc.value)
+
+    def test_it_lists_what_did_arrive(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """So "the export has no images" is separable from "we cannot read them"."""
+        self._empty_roboflow(monkeypatch)
+
+        with pytest.raises(ValueError, match=r"\.txt"):
+            download_roboflow("ws/proj", tmp_path / "ds", api_key="KEY", version=1)
+
+    def test_a_download_with_images_still_succeeds(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        _install_fake_roboflow(monkeypatch, {})
+
+        result = download_roboflow("ws/proj", tmp_path / "ds", api_key="KEY", version=1)
+
+        assert result.total_images == 2
+
+
 def _install_fake_kaggle(monkeypatch: pytest.MonkeyPatch, rec: dict[str, Any]) -> None:
     """Inject a fake kaggle SDK whose dataset_download_files() writes images."""
 

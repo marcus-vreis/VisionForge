@@ -163,6 +163,28 @@ def download_torchvision(
 _IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tif", ".tiff"}
 
 
+def _require_images(root: Path, provider: str, dataset: str) -> None:
+    """Fail when a finished download left no image behind.
+
+    The provider reports its own success — Roboflow prints "export complete",
+    Kaggle unzips without complaint — and we then counted zero and returned a
+    result that looked fine. "0 images" in a log line next to a green outcome is
+    the worst of both: nothing to act on, and no reason to distrust it.
+
+    Raises:
+        ValueError: naming the folder actually inspected, so the next step is
+            to go look at it.
+    """
+    stray = sorted({f.suffix.lower() for f in root.rglob("*") if f.is_file()})
+    detail = f" Found files with these extensions: {', '.join(stray)}." if stray else ""
+    raise ValueError(
+        f"{provider} finished but no images landed in '{root}'. The export "
+        f"itself succeeded, so the usual cause is an empty or unannotated "
+        f"version of '{dataset}' — open it in the provider and check that the "
+        f"version you asked for has images.{detail}"
+    )
+
+
 def _count_images(root: Path) -> tuple[int, dict[str, int]]:
     """Count image files under ``root``, grouped by top-level subdir (split)."""
     total = 0
@@ -256,6 +278,8 @@ def download_roboflow(
     project.version(version).download(dataset_format, location=str(out))
 
     total, splits = _count_images(out)
+    if total == 0:
+        _require_images(out, "Roboflow", f"{dataset} v{version}")
     logger.info("roboflow {} v{}: {} images", dataset, version, total)
     return DatasetDownloadResult(
         provider="roboflow",
@@ -330,6 +354,8 @@ def download_kaggle(dataset: str, out_dir: str | Path) -> DatasetDownloadResult:
     api.dataset_download_files(dataset, path=str(out), unzip=True)
 
     total, splits = _count_images(out)
+    if total == 0:
+        _require_images(out, "Kaggle", dataset)
     logger.info("kaggle {}: {} images", dataset, total)
     return DatasetDownloadResult(
         provider="kaggle",

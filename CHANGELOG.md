@@ -34,6 +34,18 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Fixed
 
+- **Download vazio passava por sucesso.** O Roboflow imprime "export complete" e
+  o Kaggle descompacta sem reclamar, então a saída do provedor parecia boa; nós
+  contávamos zero imagens e devolvíamos um resultado que também parecia bom. A
+  única pista era um `0 images` no log ao lado de um resultado verde — nada
+  sobre o que agir. Agora falha dizendo em que pasta procurou e quais extensões
+  encontrou, o que separa "a versão está vazia" de "não sabemos ler o formato".
+
+- **A troca de provedor levava o dataset junto.** O campo guardava o `cifar10`
+  do torchvision e o exibia como se fosse um `workspace/projeto` do Roboflow.
+  Agora ele limpa ao trocar, e o rótulo longo perdeu a dica que quebrava por
+  cima do campo da versão.
+
 - **O Roboflow não aceitava o que se cola de verdade.** A coisa mais natural é
   copiar a URL do projeto do navegador, e a segunda é o caminho com a barra na
   frente. As duas passavam pela checagem de "tem barra" e depois quebravam em
