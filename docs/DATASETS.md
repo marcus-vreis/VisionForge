@@ -165,8 +165,28 @@ sai como 101 mil PNGs, e isso demora.
 três splits (1034/133/128) e três classes lidas do `ClassLabel`. O
 `/api/dataset/detect` reconheceu `train` / `validation` / `test` sozinho, o
 `/api/dataset/stats` contou as classes equilibradas, e uma época de ResNet-18
-treinou em cima, chegando a AUC-ROC 0.932. É o único dos três provedores com
-credencial que foi exercitado ponta a ponta.
+treinou em cima, chegando a AUC-ROC 0.932.
+
+---
+
+## Estado da verificação
+
+**Os quatro provedores baixam de verdade, verificado em 2026-08-29.** Até então
+só o torchvision tinha sido exercitado; os outros três estavam no código sem
+nunca terem rodado contra o serviço real, e cada um escondia um defeito que
+nenhum teste pegava:
+
+| Provedor | O que estava quebrado |
+|---|---|
+| **Roboflow** | O download **nunca escrevia nada**. O cliente sai antes de extrair quando a pasta de destino já existe e `overwrite` é negativo — e nós criávamos a pasta duas linhas antes de chamar. A exportação no servidor rodava e logava sucesso, o que fazia a falha parecer um projeto vazio. |
+| **Kaggle** | Autenticava com `KAGGLE_USERNAME` + `KAGGLE_KEY`, par que o cliente 2.2.3 não lê mais — o Kaggle trocou por um token único `KGAT_…`. |
+| **Hugging Face** | Funcionava; o que faltava era alguém rodar. |
+
+Os três dublês de teste eram fiéis demais ao caminho feliz: escreviam arquivos
+incondicionalmente e aceitavam qualquer credencial. Hoje o do Roboflow obedece a
+mesma regra de `overwrite` do cliente real, e sem a correção quatro testes
+falham. **A lição vale para o resto do projeto:** um dublê que não recusa nada
+não prova que a integração funciona, só que a nossa chamada compila.
 
 ---
 
