@@ -13,6 +13,8 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ## [Unreleased]
 
+## [0.10.0] — 2026-08-29
+
 ### Changed
 
 - **Uma instalação só, com tudo dentro.** Os sete extras — `detection`, `timm`,

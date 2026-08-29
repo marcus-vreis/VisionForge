@@ -8,7 +8,7 @@ authors:
 repository-code: "https://github.com/marcus-vreis/VisionForge"
 url: "https://github.com/marcus-vreis/VisionForge"
 license: MIT
-version: 0.9.1
+version: 0.10.0
 date-released: 2026-07-02
 keywords:
   - computer-vision
