@@ -13,6 +13,8 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ## [Unreleased]
 
+## [0.11.0] — 2026-09-23
+
 ### Changed
 
 - **O PatchCore guarda 1% do "normal", não mais 10%.** Medido no dataset de
