@@ -3666,3 +3666,59 @@ so they say the package should be there and the install looks damaged, and
 authenticates *at import time*, which is why bundling it is safe only because
 every provider import already sits inside its function behind `except ImportError`
 and `except OSError` — checked before making the change, not after.
+
+## ADR-107 — `doctor --fix` replaces torch instead of reinstalling the package
+
+**Date:** 2026-09-23
+**Status:** Accepted
+**Fixes:** a regression introduced by ADR-106
+
+**Context:** before a first batch of testers got the install line, the published
+0.10.0 was installed into a clean venv the way they would. The plain install
+works and trains every task — but on Windows it now always brings a CPU torch:
+`ultralytics`, a base dependency since ADR-106, requires torch, and PyPI only
+carries CPU builds for Windows. `doctor` noticed the mismatch correctly. The
+`--fix` it offered did not fix it:
+
+```
+pip install "visionforge-studio[cu128]" --index-url https://download.pytorch.org/whl/cu128
+→ Requirement already satisfied: torch>=2.3 ... (2.14.0)
+```
+
+The CPU torch satisfies `torch>=2.3`, so pip stops there. Before ADR-106 the
+first install had no torch at all and the same command worked, which is why
+nothing ever flagged it. The hardware extras do not help either: from PyPI they
+are identical lists (`torch`, `torchvision`), and only a source checkout with
+uv honours the `[tool.uv.sources]` that maps them to an index. `pip install
+"visionforge-studio[cu128]"` — which the README recommended as the manual
+route — also lands the CPU build.
+
+`--upgrade` is not an answer. The CUDA index trails PyPI (2.11.0+cu128 against
+2.14.0+cpu at the time), so the CUDA build looks older and pip keeps what is
+there.
+
+**Decision:** the fix only ever touches torch, in two steps — uninstall
+`torch torchvision`, then install them from the PyTorch index for the detected
+tag. Measured in the clean venv: the second step, dry-run after the first,
+resolves `torch-2.11.0+cu128 torchvision-0.26.0+cu128` downloading 29 kB of
+metadata; applying it leaves `cuda_available=True` and doctor reporting the
+environment good.
+
+Three details worth keeping:
+
+- The steps run as `sys.executable -m pip`, not the first `pip` on PATH — with
+  the venv not activated that is another interpreter and the CUDA build lands
+  where nothing imports it. An environment without pip (made by `uv venv`, like
+  the dev checkout) gets `uv pip --python` instead.
+- They print as two lines, not one joined with `&&`: Windows PowerShell 5.1 has
+  no `&&`, and that is where most of these users are.
+- Because the fix now *starts* by uninstalling, doctor must not print it to a
+  setup that is already right. "torch sees a GPU" is not enough to say so — an
+  older CUDA build on an RTX 50 imports, reports the GPU and fails at the first
+  kernel — so the test is the build: when `torch.version.cuda` is at least what
+  the driver calls for, doctor says "keep the current install".
+
+Upgrading the package keeps the torch in place: `pip install --upgrade
+visionforge-studio` from 0.9.1 with a CUDA torch installed resolved to exactly
+one package, `visionforge-studio-0.10.0` — pip's default only-if-needed
+strategy leaves a satisfied torch alone.

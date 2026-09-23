@@ -49,16 +49,24 @@ a short guided tour of the interface.
 <summary>Why PyTorch is installed separately</summary>
 
 Its build has to match your hardware, and no dependency resolver can choose
-between the CPU and CUDA wheels for you. `doctor` makes that choice from what
-it actually finds on the machine. To pick by hand, install the extra directly:
+between the CPU and CUDA wheels for you — on Windows, PyPI only carries the CPU
+one, so that is what a plain install brings. `doctor --fix` replaces it with
+the build your driver calls for.
+
+Already know you want CUDA? Install torch **first**, from the PyTorch index, and
+the package after — that skips downloading the CPU build at all:
 
 ```bash
-pip install "visionforge-studio[cu128]"
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
+pip install visionforge-studio
 ```
 
-Available: `cu118` · `cu121` · `cu124` · `cu126` · `cu128` · `cpu`. `cu128` is
-the broadest — it spans Turing (sm_75) through Blackwell, and is the only one
-that runs on an RTX 50-series card at all.
+Available in place of `cu128`: `cu118` · `cu121` · `cu124` · `cu126` · `cpu`.
+`cu128` is the broadest — it spans Turing (sm_75) through Blackwell, and is the
+only one that runs on an RTX 50-series card at all.
+
+To update later, `pip install --upgrade visionforge-studio` — it keeps the
+torch you have.
 
 **On PyPI the distribution is `visionforge-studio`** — the bare `visionforge`
 name belongs to an unrelated project. The import name, the CLI command and the
@@ -249,17 +257,24 @@ oferece um guia rápido da interface.
 <summary>Por que o PyTorch é instalado à parte</summary>
 
 Porque a build dele precisa combinar com o seu hardware, e nenhum resolvedor de
-dependências consegue escolher entre a wheel de CPU e a de CUDA por você. O
-`doctor` faz essa escolha a partir do que ele realmente encontra na máquina.
-Para escolher na mão, instale o extra direto:
+dependências consegue escolher entre a wheel de CPU e a de CUDA por você — no
+Windows o PyPI só tem a de CPU, então é ela que a instalação normal traz. O
+`doctor --fix` troca pela build que o seu driver pede.
+
+Já sabe que quer CUDA? Instale o torch **antes**, pelo índice do PyTorch, e o
+pacote depois — assim a build de CPU nem é baixada:
 
 ```bash
-pip install "visionforge-studio[cu128]"
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
+pip install visionforge-studio
 ```
 
-Disponíveis: `cu118` · `cu121` · `cu124` · `cu126` · `cu128` · `cpu`. O `cu128`
-é o mais abrangente — vai de Turing (sm_75) até Blackwell, e é o único que roda
-numa RTX série 50.
+Disponíveis no lugar de `cu128`: `cu118` · `cu121` · `cu124` · `cu126` · `cpu`.
+O `cu128` é o mais abrangente — vai de Turing (sm_75) até Blackwell, e é o único
+que roda numa RTX série 50.
+
+Para atualizar depois, `pip install --upgrade visionforge-studio` — ele mantém o
+torch que você já tem.
 
 **No PyPI a distribuição chama `visionforge-studio`** — o nome `visionforge`
 puro pertence a um projeto sem relação com este. O nome de import, o comando e

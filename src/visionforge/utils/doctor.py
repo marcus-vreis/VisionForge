@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import re
+import shutil
 import subprocess
 import sys
 from collections.abc import Callable
@@ -103,6 +104,17 @@ def select_wheel_tag(driver_cuda: str | None) -> str:
     return selected
 
 
+def _cuda_int(version: str | None) -> int | None:
+    """``"12.8"`` → ``128``, the same scale as `_WHEEL_THRESHOLDS`; None if unreadable."""
+    if not version:
+        return None
+    try:
+        major, minor = version.split(".")[:2]
+        return int(major) * 10 + int(minor)
+    except ValueError:
+        return None
+
+
 def installed_from_source() -> bool:
     """True when this install points at a checkout (``pip install -e .``).
 
@@ -131,22 +143,61 @@ def missing_package_hint(package: str) -> str:
     someone to "add the optional extra" would send them looking for a flag that
     no longer exists.
 
-    Same split as `build_install_command`: an editable checkout reinstalls from
-    the source tree, a wheel install from the distribution name.
+    An editable checkout reinstalls from the source tree, a wheel install from
+    the distribution name — `pip install -e .` only works inside a checkout.
     """
     if installed_from_source():
         return f'pip install -e "." --force-reinstall  (missing: {package})'
     return f'pip install --force-reinstall "{_DIST_NAME}"  (missing: {package})'
 
 
-def build_install_command(tag: str) -> tuple[str, str]:
-    """Return the pip install command and index URL for the given wheel tag."""
-    if installed_from_source():
-        cmd = f'pip install -e ".[{tag}]"'
-    else:
-        cmd = f'pip install "{_DIST_NAME}[{tag}]"'
+def build_install_command(tag: str) -> tuple[list[str], str]:
+    """Return the commands that put the ``tag`` build of torch in place, and its index.
+
+    Only torch and torchvision — the package itself is already installed, that
+    is how doctor is running. And two steps, because since ADR-106 there is
+    always a torch here already: `ultralytics` pulls one from PyPI on the first
+    install, and on Windows PyPI only carries CPU builds. Asking pip to install
+    `visionforge-studio[cu128]` against the CUDA index then changed nothing —
+    the CPU torch already satisfies `torch>=2.3`, so pip printed "Requirement
+    already satisfied" and stopped (ADR-107).
+
+    `--upgrade` does not rescue it either: the CUDA index trails PyPI (2.11+cu128
+    against 2.14+cpu when this was written), so the CUDA build looks *older* and
+    pip keeps what is installed. Removing the CPU build first is what leaves the
+    CUDA index as the only candidate.
+    """
     url = f"{_INDEX_BASE}/{tag}"
-    return cmd, url
+    return (
+        [
+            "pip uninstall -y torch torchvision",
+            f"pip install torch torchvision --index-url {url}",
+        ],
+        url,
+    )
+
+
+def torch_swap_steps(tag: str) -> list[list[str]]:
+    """The argv lists `--fix` runs, aimed at *this* interpreter's environment.
+
+    `sys.executable -m pip`, not whatever `pip` is first on PATH: with the venv
+    not activated, that is another Python and the install lands where nothing
+    will import it. An environment made by `uv venv` has no pip at all, so there
+    the same two steps go through `uv pip --python`.
+    """
+    url = f"{_INDEX_BASE}/{tag}"
+    uv = shutil.which("uv")
+    if importlib.util.find_spec("pip") is None and uv:
+        target = ["--python", sys.executable]
+        return [
+            [uv, "pip", "uninstall", "torch", "torchvision", *target],
+            [uv, "pip", "install", "torch", "torchvision", "--index-url", url, *target],
+        ]
+    pip = [sys.executable, "-m", "pip"]
+    return [
+        [*pip, "uninstall", "-y", "torch", "torchvision"],
+        [*pip, "install", "torch", "torchvision", "--index-url", url],
+    ]
 
 
 def probe_torch() -> TorchProbe:
@@ -197,11 +248,17 @@ def _default_confirm(prompt: str) -> bool:
     return answer == "y"
 
 
-def _run_install(cmd: str, index_url: str) -> int:
-    """Shell out to run the pip install command; returns the subprocess exit code."""
-    full_cmd = f"{cmd} --index-url {index_url}"
-    result = subprocess.run(full_cmd, shell=True, check=False)  # noqa: S602
-    return result.returncode
+def _run_install(tag: str) -> int:
+    """Replace this environment's torch with the ``tag`` build; returns the exit code.
+
+    The uninstall's exit code is not the answer — removing a torch that is not
+    there is fine. The install's is.
+    """
+    uninstall, install = torch_swap_steps(tag)
+    print("  $ " + " ".join(uninstall))
+    subprocess.run(uninstall, check=False)
+    print("  $ " + " ".join(install))
+    return subprocess.run(install, check=False).returncode
 
 
 def run_doctor(
@@ -250,17 +307,33 @@ def run_doctor(
         print("[INFO] No CUDA-capable GPU detected (nvidia-smi not found or failed)")
 
     # --- Wheel recommendation (always shown — this is doctor's primary value) ---
-    already_working = torch_says_cuda and not driver_cuda
     tag = select_wheel_tag(driver_cuda)
-    cmd, index_url = build_install_command(tag)
+    # "Runs on GPU" alone is not enough to keep an install: an older CUDA build on
+    # an RTX 50 imports, reports the GPU, and fails at the first kernel. What
+    # settles it is the build — as new as the one this driver calls for, keep it.
+    # This matters more since ADR-107, because the fix now *uninstalls* torch;
+    # printing that to someone whose setup is already right would be sabotage.
+    installed_build = _cuda_int(torch_info["cuda_build"])
+    wanted_build = _cuda_int(tag[2:4] + "." + tag[4:]) if tag.startswith("cu") else None
+    already_working = torch_says_cuda and (
+        not driver_cuda
+        or (
+            installed_build is not None
+            and wanted_build is not None
+            and installed_build >= wanted_build
+        )
+    )
+    commands, _index_url = build_install_command(tag)
+    steps = "\n".join(f"         {line}" for line in commands)
     print()
     if already_working:
         print("  Recommended wheel: keep the current install")
         print(f"  Reason           : torch {torch_info['version']} already runs on GPU")
     else:
         print(f"  Recommended wheel: {tag}")
-        print(f"  Install command  : {cmd}")
-        print(f"  Index URL        : --index-url {index_url}")
+        print("  Install commands :")
+        for line in commands:
+            print(f"    {line}")
     print()
 
     # --- torch probe ---
@@ -270,8 +343,9 @@ def run_doctor(
         # discover it on their first run instead of here.
         print(
             "[FAIL] torch is not installed — nothing can train yet.\n"
-            f"       Install it with the hardware extra:\n"
-            f"         {cmd}"
+            "       Install the build for this machine (or run "
+            "`visionforge doctor --fix`):\n"
+            f"{steps}"
         )
         issues.append("torch-missing")
     else:
@@ -286,10 +360,11 @@ def run_doctor(
         if driver_cuda and not cuda_ok:
             print(
                 "[FAIL] GPU driver detected but torch.cuda.is_available() is False.\n"
-                "       You likely have a CPU-only torch wheel on a CUDA machine.\n"
-                "       Reinstall with the GPU extra to fix this mismatch:\n"
-                f"         {cmd}\n"
-                f"         --index-url {index_url}"
+                "       You have a CPU-only torch on a CUDA machine — training\n"
+                "       would run, slowly, on the CPU. Reinstall torch from the\n"
+                "       CUDA index to fix this mismatch (`visionforge doctor "
+                "--fix` does both):\n"
+                f"{steps}"
             )
             issues.append("torch-cuda-mismatch")
 
@@ -323,8 +398,12 @@ def run_doctor(
 
     # --- Optional install ---
     if fix:
-        prompt = f"\nRun '{cmd} --index-url {index_url}' now? [y/N] "
+        prompt = (
+            f"\nReplace torch with the {tag} build now? This runs:\n"
+            + "\n".join(f"  {line}" for line in commands)
+            + "\n[y/N] "
+        )
         if confirm_fn(prompt):
-            _run_install(cmd, index_url)
+            _run_install(tag)
 
     return exit_code

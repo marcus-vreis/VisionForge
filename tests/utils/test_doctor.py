@@ -14,6 +14,7 @@ from visionforge.utils.doctor import (
     probe_torch,
     run_doctor,
     select_wheel_tag,
+    torch_swap_steps,
 )
 
 # ---------------------------------------------------------------------------
@@ -122,43 +123,92 @@ class TestDetectDriverCuda:
 
 
 class TestBuildInstallCommand:
-    """The command has to match how *this* install got here.
+    """The fix has to replace the torch that is already here (ADR-107).
 
-    `pip install -e ".[cpu]"` only works inside a checkout. Someone who
-    installed the wheel from PyPI has no source tree, so that line just fails —
-    and it was the first thing doctor told them to run.
+    Since ADR-106 the first install always brings a torch — `ultralytics` pulls
+    one from PyPI, and on Windows PyPI only has CPU builds. The old advice,
+    `pip install "visionforge-studio[cu128]" --index-url …/cu128`, then printed
+    "Requirement already satisfied: torch>=2.3" and changed nothing, so a GPU
+    user who answered `y` to `--fix` kept training on the CPU.
     """
 
-    @pytest.fixture
-    def from_wheel(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr(
-            "visionforge.utils.doctor.installed_from_source", lambda: False
-        )
+    @pytest.mark.parametrize("tag", ["cpu", "cu118", "cu124", "cu128"])
+    def test_removes_then_installs_from_that_index(self, tag: str) -> None:
+        commands, url = build_install_command(tag)
 
-    @pytest.fixture
-    def from_source(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr(
-            "visionforge.utils.doctor.installed_from_source", lambda: True
-        )
+        assert url == f"https://download.pytorch.org/whl/{tag}"
+        assert commands == [
+            "pip uninstall -y torch torchvision",
+            f"pip install torch torchvision --index-url {url}",
+        ]
 
-    def test_wheel_install_uses_the_distribution_name(self, from_wheel: None) -> None:
-        cmd, url = build_install_command("cu124")
-        assert cmd == 'pip install "visionforge-studio[cu124]"'
-        assert url == "https://download.pytorch.org/whl/cu124"
+    def test_never_reinstalls_the_package_itself(self) -> None:
+        """It is already installed — that is how doctor is running — and it is
+        not on the PyTorch index, so naming it there could only fail."""
+        commands, _ = build_install_command("cu128")
 
-    def test_editable_install_keeps_the_source_form(self, from_source: None) -> None:
-        cmd, _ = build_install_command("cu124")
-        assert cmd == 'pip install -e ".[cu124]"'
+        assert not any("visionforge" in line for line in commands)
 
-    def test_cpu_tag(self, from_wheel: None) -> None:
-        cmd, url = build_install_command("cpu")
-        assert cmd == 'pip install "visionforge-studio[cpu]"'
-        assert url == "https://download.pytorch.org/whl/cpu"
+    def test_one_command_per_line(self) -> None:
+        """Windows PowerShell 5.1 has no `&&`, so a chained line would fail
+        exactly where most of these users are."""
+        commands, _ = build_install_command("cu128")
 
-    def test_cu118_tag(self, from_wheel: None) -> None:
-        cmd, url = build_install_command("cu118")
-        assert cmd == 'pip install "visionforge-studio[cu118]"'
-        assert url == "https://download.pytorch.org/whl/cu118"
+        assert not any("&&" in line for line in commands)
+
+
+class TestTorchSwapSteps:
+    """What `--fix` actually executes, and into which environment."""
+
+    def test_uses_this_interpreters_pip(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Not whatever `pip` is first on PATH: with the venv not activated that
+        is another Python, and the CUDA build lands where nothing imports it."""
+        monkeypatch.setattr("importlib.util.find_spec", lambda _name: object())
+
+        uninstall, install = torch_swap_steps("cu128")
+
+        assert uninstall[:3] == [sys.executable, "-m", "pip"]
+        assert uninstall[3:] == ["uninstall", "-y", "torch", "torchvision"]
+        assert install[:3] == [sys.executable, "-m", "pip"]
+        assert install[-2:] == ["--index-url", "https://download.pytorch.org/whl/cu128"]
+
+    def test_falls_back_to_uv_where_there_is_no_pip(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """`uv venv` makes environments without pip; the dev checkout is one."""
+        monkeypatch.setattr("importlib.util.find_spec", lambda _name: None)
+        monkeypatch.setattr("shutil.which", lambda _name: "C:/bin/uv.exe")
+
+        uninstall, install = torch_swap_steps("cu128")
+
+        assert uninstall[:3] == ["C:/bin/uv.exe", "pip", "uninstall"]
+        assert uninstall[-2:] == ["--python", sys.executable]
+        assert install[-2:] == ["--python", sys.executable]
+        assert "--index-url" in install
+
+    def test_uninstall_runs_first_and_the_install_decides_the_exit_code(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from visionforge.utils import doctor
+
+        calls: list[list[str]] = []
+
+        def fake_run(argv: list[str], check: bool) -> MagicMock:
+            calls.append(argv)
+            result = MagicMock()
+            # A torch that is not there to remove is fine; the install failing
+            # is what the caller has to hear about.
+            result.returncode = 1 if "uninstall" in argv else 0
+            return result
+
+        monkeypatch.setattr("importlib.util.find_spec", lambda _name: object())
+        monkeypatch.setattr(doctor.subprocess, "run", fake_run)
+
+        code = doctor._run_install("cu128")
+
+        assert code == 0
+        assert "uninstall" in calls[0]
+        assert "install" in calls[1] and "uninstall" not in calls[1]
 
     def test_the_distribution_name_is_not_the_import_name(self) -> None:
         """Plain `visionforge` on PyPI is an unrelated project; pointing users
@@ -357,6 +407,49 @@ class TestRunDoctor:
             or "gpu extra" in out.lower()
             or "mismatch" in out.lower()
         )
+
+    @staticmethod
+    def _cuda_torch(version: str, build: str) -> MagicMock:
+        fake = MagicMock()
+        fake.__version__ = version
+        fake.cuda.is_available.return_value = True
+        fake.version.cuda = build
+        return fake
+
+    def test_a_right_install_is_never_told_to_uninstall(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """The fix now starts with `pip uninstall` (ADR-107). Printing that to
+        someone whose CUDA build is already the one this driver calls for would
+        be advice to break a working setup."""
+        with (
+            patch("subprocess.run", return_value=self._make_smi_output("13.3")),
+            patch("importlib.util.find_spec", return_value=MagicMock()),
+            patch.dict(
+                sys.modules, {"torch": self._cuda_torch("2.11.0+cu128", "12.8")}
+            ),
+        ):
+            run_doctor(fix=False, confirm_fn=MagicMock())
+
+        out = capsys.readouterr().out
+        assert "keep the current install" in out
+        assert "uninstall" not in out
+
+    def test_an_older_cuda_build_still_gets_the_commands(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """ "Runs on GPU" is not enough: an older build on an RTX 50 imports,
+        reports the GPU, and fails at the first kernel launch."""
+        with (
+            patch("subprocess.run", return_value=self._make_smi_output("13.3")),
+            patch("importlib.util.find_spec", return_value=MagicMock()),
+            patch.dict(sys.modules, {"torch": self._cuda_torch("2.4.0+cu124", "12.4")}),
+        ):
+            run_doctor(fix=False, confirm_fn=MagicMock())
+
+        out = capsys.readouterr().out
+        assert "Recommended wheel: cu128" in out
+        assert "--index-url https://download.pytorch.org/whl/cu128" in out
 
     def test_all_ok_returns_zero(self) -> None:
         fake_torch = MagicMock()

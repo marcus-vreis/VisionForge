@@ -13,6 +13,20 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ## [Unreleased]
 
+### Fixed
+
+- **O `doctor --fix` não instalava a versão CUDA do torch.** Desde que tudo passou
+  a vir numa instalação só (ADR-106), o `ultralytics` puxa um torch logo na
+  primeira instalação — e no Windows o PyPI só tem torch de CPU. O `--fix` então
+  pedia `visionforge-studio[cu128]` ao índice do PyTorch, o pip respondia
+  "Requirement already satisfied: torch" e parava: quem tinha GPU respondia `y` e
+  continuava treinando na CPU. Agora o `--fix` só mexe no torch — desinstala a
+  build de CPU e instala a do índice certo —, roda no Python do próprio ambiente
+  e não no primeiro `pip` do PATH, e não sugere mais desinstalar nada a quem já
+  está com a build certa. A instrução manual do README, que também recomendava o
+  extra, foi trocada pelo caminho que funciona: torch primeiro, pelo índice do
+  PyTorch, e o pacote depois ([ADR-107](docs/dev/DECISIONS.md)).
+
 ## [0.10.0] — 2026-08-29
 
 ### Changed
