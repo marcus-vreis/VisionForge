@@ -3722,3 +3722,55 @@ Upgrading the package keeps the torch in place: `pip install --upgrade
 visionforge-studio` from 0.9.1 with a CUDA torch installed resolved to exactly
 one package, `visionforge-studio-0.10.0` — pip's default only-if-needed
 strategy leaves a satisfied torch alone.
+
+## ADR-108 — PatchCore keeps 1% of the patches by default, not 10%
+
+**Date:** 2026-09-23
+**Status:** Accepted
+**Follows:** ADR-038 (exact `cdist` coreset, no approximation)
+
+**Context:** the 27-run audit timed PatchCore at ~114 min for 2000 training
+images with `coreset_ratio=0.1`. The greedy coreset makes one `cdist` over every
+patch per selection, so its cost is O(k·M) with k = ratio·M: linear in the
+ratio, quadratic in the dataset. The phase-progress events (0.10.0) made the
+wait visible; they did not make it shorter. The PatchCore paper's operating
+point is 1%.
+
+The paper's claim that 1% loses little was not taken on faith — it was measured
+on the anomaly dataset in this repository (coffee beans: 300 normal training
+images, the full test set of 400 good + 400 defective), ResNet-18 at 256 px, one
+run per ratio on an RTX 5060 Ti, changing nothing but the ratio:
+
+| ratio | bank | wall time | image AUROC | image F1 |
+|---|---|---|---|---|
+| 0.1% | 307 | 12.0 s | 0.685 | 0.388 |
+| **1%** | 3,072 | **40.5 s** | **0.703** | 0.314 |
+| 10% | 30,720 | 373.7 s | 0.686 | 0.299 |
+
+10% cost 9.2× the time of 1% and bought nothing: its AUROC was the lower of the
+two. The spread across all three rows (~0.02) is the same size as what changing
+nothing but the device produced — the 0.1% configuration scored 0.666 on CPU
+with torch 2.14 and 0.685 on GPU with torch 2.11, because small float
+differences change which patches the greedy selection picks. So the defensible
+reading is "no measurable difference", not "1% is better".
+
+**Decision:** the default moves to 0.01 in the config, the model's own default
+and the form. On the full 1200-image training set the quadratic term scales the
+coreset by 16× from the 300-image run — roughly 10 minutes at 1% instead of an
+hour and a half at 10% (an extrapolation, not a measurement).
+
+The field also gained its info dot: "what is this coreset?" was the first
+question the maintainer asked about it, which makes it the first question a
+tester will ask.
+
+**Limits of the evidence:** one dataset, one backbone, one subset size, one run
+per ratio. It is enough to say the 10× slower default was not buying accuracy
+here; it is not a general result about PatchCore. A config that sets 0.1
+explicitly still trains exactly as before, and a run recorded with it keeps its
+number — only the default moved.
+
+**Found on the way:** the first attempt at this measurement ran on the CPU. The
+development environment had been switched to `torch 2.14.0+cpu` (with a
+non-editable 0.10.0 from PyPI shadowing `src/`), and the trainer's CPU fallback
+said so only in `run.json`. The measurement was repeated in an isolated
+environment with the CUDA build, and every row above carries its device.

@@ -41,7 +41,19 @@ class AnomalyModelConfig(BaseModel):
         "resnet18"
     )
     latent_dim: int = Field(default=512, ge=1)
-    coreset_ratio: float = Field(default=0.1, gt=0.0, le=1.0)
+    # 0.01, the operating point of the PatchCore paper. The greedy coreset costs
+    # O(k·M) with k = ratio·M, so the ratio scales the dominant phase linearly:
+    # 0.1 took ~114 min on 2000 images, a wait long enough to read as hung
+    # (ADR-108).
+    coreset_ratio: float = Field(
+        default=0.01,
+        gt=0.0,
+        le=1.0,
+        description=(
+            "Fraction of the normal patches PatchCore keeps as its memory bank. "
+            "Build time grows linearly with it."
+        ),
+    )
     pretrained: bool = True
 
 

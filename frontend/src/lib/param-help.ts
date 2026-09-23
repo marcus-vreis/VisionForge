@@ -60,6 +60,8 @@ export const PARAM_HELP: Record<string, string> = {
     "Subpasta usada a cada época para medir o progresso e escolher o melhor checkpoint. Não entra no ajuste dos pesos.",
   test_dir:
     "Subpasta avaliada uma única vez, no fim. Serve para reportar o resultado sem que ele tenha influenciado nenhuma escolha.",
+  coreset_ratio:
+    "Quanto do \"normal\" o PatchCore guarda para comparar depois. Ele corta as imagens de treino em pedaços pequenos e mantém uma amostra deles, a mais variada possível; uma imagem nova é anômala quando algum pedaço dela não se parece com nada guardado. 1% é o valor do artigo original. Aumentar deixa o banco mais completo, mas o tempo de montagem cresce na mesma proporção: 10% leva dez vezes mais.",
   num_workers: "Processos que carregam as imagens em paralelo. No automático o VisionForge divide a memória livre da máquina pelo custo de um worker — no Windows cada um recarrega o torch e as DLLs da CUDA, ~1 GB, e um número alto demais não deixa o treino lento: impede o treino de começar (WinError 1455).",
   workers: "Processos que carregam as imagens em paralelo. No automático o VisionForge divide a memória livre da máquina pelo custo de um worker — no Windows cada um recarrega o torch e as DLLs da CUDA, ~1 GB, e um número alto demais não deixa o treino lento: impede o treino de começar (WinError 1455).",
   pin_memory: "Acelera a cópia das imagens para a GPU. Deixe ligado, exceto se faltar RAM.",

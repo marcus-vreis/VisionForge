@@ -81,7 +81,7 @@ class PatchCore(nn.Module):
         self,
         backbone: str = "resnet18",
         pretrained: bool = True,
-        coreset_ratio: float = 0.1,
+        coreset_ratio: float = 0.01,
     ) -> None:
         super().__init__()
         self._coreset_ratio = coreset_ratio

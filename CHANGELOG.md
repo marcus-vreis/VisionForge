@@ -13,7 +13,27 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ## [Unreleased]
 
+### Changed
+
+- **O PatchCore guarda 1% do "normal", não mais 10%.** Medido no dataset de
+  anomalia do café (300 imagens de treino, teste inteiro, GPU): 10% levou 374 s e
+  1% levou 40 s — e 10% não comprou nada, com AUROC 0,686 contra 0,703. A
+  diferença entre as linhas está dentro do que mudar só de CPU para GPU já
+  produz, então a leitura é "nenhuma diferença mensurável", a 9× menos tempo. 1%
+  é também o ponto de operação do artigo original. Um config que peça 0,1
+  explicitamente continua treinando igual; só o padrão mudou. O campo ganhou o
+  "i" explicando o que é o coreset ([ADR-108](docs/dev/DECISIONS.md)).
+
 ### Fixed
+
+- **O link "Documentation" da página do PyPI dava 404.** Apontava para
+  `documentation/`, pasta renomeada para `docs/` há meses. O pacote também não
+  tinha nenhum classificador nem palavra-chave, então não aparecia em nenhum
+  filtro de tópico ou versão de Python do PyPI; ganhou os dois, e links para o
+  CHANGELOG e as issues.
+- **O `CITATION.cff` saía com a data de lançamento errada.** O corte de versão
+  atualizava o número mas não a data, e a 0.10.0 foi publicada dizendo ter
+  saído em 2026-07-02. Agora a data muda junto com a versão.
 
 - **O `doctor --fix` não instalava a versão CUDA do torch.** Desde que tudo passou
   a vir numa instalação só (ADR-106), o `ultralytics` puxa um torch logo na

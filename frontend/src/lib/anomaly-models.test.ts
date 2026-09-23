@@ -29,7 +29,7 @@ describe("anomaly-models", () => {
     expect(data.base_dir).toBe("/data/mvtec/bottle");
     expect(data.normal_dir).toBe("good");
     expect(model.name).toBe("autoencoder");
-    expect(model.coreset_ratio).toBe(0.1);
+    expect(model.coreset_ratio).toBe(0.01);
   });
 });
 

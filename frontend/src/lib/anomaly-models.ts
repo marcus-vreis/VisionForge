@@ -74,7 +74,7 @@ export function makeDefaultAnomalyForm(): AnomalyForm {
       name: "autoencoder",
       backbone: "resnet18",
       latent_dim: 512,
-      coreset_ratio: 0.1,
+      coreset_ratio: 0.01,
       pretrained: true,
     },
     data: {

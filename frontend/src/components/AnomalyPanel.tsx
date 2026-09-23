@@ -207,6 +207,7 @@ export function AnomalyPanel({
                 max={1}
                 step={0.01}
                 hint="subamostra do banco"
+                help={paramHelp("coreset_ratio")}
               />
               <Toggle
                 label="Backbone pré-treinado"
