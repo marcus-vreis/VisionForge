@@ -100,6 +100,9 @@ jobs:
     name: tests (${{ matrix.os }}, py${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}
     needs: main
+    # A Windows-only hang (a stuck DataLoader worker) would otherwise hold the
+    # runner for GitHub's 6-hour default.
+    timeout-minutes: 30
     strategy:
       # One red leg must not hide the others: a Windows-only failure and a
       # 3.12-only failure are different bugs, and both should be visible.
@@ -127,13 +130,13 @@ jobs:
         run: |
           uv venv --python ${{ matrix.python-version }}
           # bin/ on Linux, Scripts/ on Windows.
-          source .venv/bin/activate 2>/dev/null || source .venv/Scripts/activate
+          if [ "$RUNNER_OS" = "Windows" ]; then source .venv/Scripts/activate; else source .venv/bin/activate; fi
           uv pip install -e ".[dev]"
           uv pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
 
       - name: Run tests
         run: |
-          source .venv/bin/activate 2>/dev/null || source .venv/Scripts/activate
+          if [ "$RUNNER_OS" = "Windows" ]; then source .venv/Scripts/activate; else source .venv/bin/activate; fi
           pytest \
             --cov=src \
             --cov-report=xml \
