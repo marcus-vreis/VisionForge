@@ -307,7 +307,11 @@ class TestCheckPython:
     def test_the_doctor_fails_below_the_floor_and_names_it(
         self, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        with patch.object(sys, "version_info", (3, 11, 9, "final", 0)):
+        with (
+            patch.object(sys, "version_info", (3, 11, 9, "final", 0)),
+            patch("subprocess.run", side_effect=FileNotFoundError),
+            patch("importlib.util.find_spec", return_value=None),
+        ):
             code = run_doctor(fix=False)
         out = capsys.readouterr().out
         assert "[FAIL] Python 3.11.9" in out
