@@ -40,7 +40,7 @@ Behaviour:
   `pip install -e ".[cu124]"` (or the `uv pip` equivalent), and the matching
   `--index-url`.
 - `--fix` flag: optionally run the install (with confirmation), never silently.
-- Also report: Python version vs `requires-python>=3.13`, whether torch is
+- Also report: Python version vs `requires-python`, whether torch is
   importable and CUDA-visible, and a one-line verdict.
 
 Why first: it's a self-contained CLI addition (no new heavy deps), CPU-CI
@@ -55,7 +55,7 @@ working GPU torch, no host install beyond the NVIDIA driver + container toolkit.
 Design:
 - **Base**: an `nvidia/cuda:<ver>-runtime-ubuntu22.04` image matching a supported
   wheel (pick one default CUDA, e.g. cu124; document how to rebuild for others).
-- **Python 3.13** installed in-image (the project floor).
+- **Python 3.13** installed in-image (the newest supported version; the floor is 3.12).
 - **Multi-stage build**: stage 1 builds the React SPA (`npm run build` →
   `gui/static`); stage 2 is the runtime with the Python package + the matching
   torch wheel baked in. Keeps the final image lean (no Node in runtime).

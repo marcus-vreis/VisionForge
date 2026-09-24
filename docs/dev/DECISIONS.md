@@ -3774,3 +3774,37 @@ development environment had been switched to `torch 2.14.0+cpu` (with a
 non-editable 0.10.0 from PyPI shadowing `src/`), and the trainer's CPU fallback
 said so only in `run.json`. The measurement was repeated in an isolated
 environment with the CUDA build, and every row above carries its device.
+
+## ADR-109 — Python 3.12 is supported, and CI tests on Windows
+
+**Context:** `requires-python = ">=3.13"` was inherited from the first
+scaffold, not from anything the code used. On 2026-09-23 the dependencies were
+installed by hand into a 3.12.12 environment — pip refused the package itself —
+and the full suite passed: 1702 passed, 2 skipped. Python 3.11 is a different
+story: the source does not compile there.
+
+CI ran only on `ubuntu-latest`, while the author and the first testers train on
+Windows. A Linux-only CI protected the platform nobody here uses.
+
+**Decision:** the floor moves to 3.12 in `pyproject.toml`, in ruff's and mypy's
+targets, and in `visionforge doctor`, through a single `MIN_PYTHON` that a test
+holds equal to `requires-python`, so the doctor can never approve an
+interpreter pip refuses. The `tests` job becomes a matrix of Ubuntu and Windows
+× 3.12 and 3.13 with `fail-fast: false` (a Windows-only and a 3.12-only failure
+are different bugs), a 30-minute timeout (a Windows-only hang would otherwise
+hold a runner for six hours), and the venv activated by `$RUNNER_OS` rather
+than by trying one path and falling back, which would report the wrong error.
+Coverage is still uploaded once, from Ubuntu/3.13. The Docker image,
+`.python-version` and the release build stay on 3.13: they are environments,
+not the support floor, and the wheel is `py3-none-any`.
+
+**Verified:** after the change, `uv pip install -e ".[dev]"` on 3.12.12
+succeeds, the suite passes (1705 passed, 2 skipped), `visionforge doctor`
+reports `[OK] Python 3.12.12`, and `visionforge selftest` passes 27/27. mypy
+targeting 3.12 finds no issues, and no 3.13-only standard-library API or syntax
+is used in `src/`.
+
+**Consequences:** four test legs instead of one, and Windows runners are
+slower. `python-multipart`, which a `pip-audit` of the development environment
+flagged, is not a dependency of the package — it is absent from `uv.lock`,
+pulled in by a stray `gradio` — so it needs no floor.

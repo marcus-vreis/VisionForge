@@ -75,8 +75,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
-# uv brings its own Python 3.13 — no distro PPA needed, and the floor in
-# pyproject.toml is met exactly rather than approximately.
+# uv brings its own Python 3.13 — no distro PPA needed. The image uses the
+# newest version the package supports; the floor in pyproject.toml is 3.12.
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 RUN uv python install 3.13
 

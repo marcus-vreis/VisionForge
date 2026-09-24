@@ -13,7 +13,7 @@ Five task families, one interface, no cloud and no notebooks.
 
 ## Install
 
-You need **Python 3.13+** and about five minutes. Nothing else — the published
+You need **Python 3.12+** and about five minutes. Nothing else — the published
 package already carries the built interface.
 
 ```bash
@@ -221,7 +221,7 @@ GPU.** Cinco tipos de tarefa, uma interface só, sem nuvem e sem notebooks.
 
 ## Instalação
 
-Você precisa de **Python 3.13+** e uns cinco minutos. Nada além disso — o
+Você precisa de **Python 3.12+** e uns cinco minutos. Nada além disso — o
 pacote publicado já vem com a interface pronta.
 
 ```bash

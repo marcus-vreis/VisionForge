@@ -13,6 +13,17 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ## [Unreleased]
 
+### Changed
+
+- **Python 3.12 também é suportado.** O pacote só instalava no 3.13, mas nada
+  nele dependia do 3.13: a suíte inteira passou no 3.12.12 sem mudança nenhuma,
+  e depois da troca a instalação normal, o `visionforge doctor` e o
+  `visionforge selftest` (27/27) também passaram. Ubuntu 24.04 e muitas
+  máquinas de universidade vêm com 3.12, então este era o motivo mais comum
+  para uma instalação parar em `requires-python` (ADR-109).
+- O CI agora roda os testes no Windows além do Linux, nas duas versões do
+  Python. O Windows é onde a maior parte de quem usa o VisionForge treina.
+
 ## [0.11.0] — 2026-09-23
 
 ### Changed
