@@ -6,7 +6,7 @@ dynamic = []
 description = "Local-first computer-vision experimentation platform: five task families, multi-seed replicates with confidence intervals, K-fold CV, sweeps and full run provenance — on your own GPU."
 readme = "README.md"
 license = { file = "LICENSE" }
-requires-python = ">=3.13"
+requires-python = ">=3.12"
 keywords = [
     "computer-vision", "deep-learning", "pytorch", "experiment-tracking",
     "reproducibility", "statistical-testing", "confidence-intervals",
@@ -24,6 +24,7 @@ classifiers = [
     "Operating System :: Microsoft :: Windows",
     "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Topic :: Scientific/Engineering :: Image Recognition",
@@ -127,7 +128,7 @@ visionforge = ["gui/static/**"]
 
 [tool.ruff]
 line-length    = 88
-target-version = "py313"
+target-version = "py312"
 exclude        = [".venv", "build", "dist", "__pycache__", "outputs"]
 
 [tool.ruff.lint]
@@ -190,7 +191,7 @@ search   = "## [Unreleased]"
 replace  = "## [Unreleased]\n\n## [{new_version}] — {now:%Y-%m-%d}"
 
 [tool.mypy]
-python_version         = "3.13"
+python_version         = "3.12"
 warn_return_any        = true
 ignore_missing_imports = true
 exclude                = ["outputs/", "configs/", ".venv/"]

@@ -231,14 +231,19 @@ def probe_torch() -> TorchProbe:
         )
 
 
+# The oldest interpreter the package installs on; kept equal to pyproject's
+# requires-python by a test, so the doctor never approves a Python pip refuses.
+MIN_PYTHON: tuple[int, int] = (3, 12)
+
+
 def check_python() -> PythonCheck:
-    """Report current Python version and whether it meets the >=3.13 requirement."""
+    """Report current Python version and whether it meets ``MIN_PYTHON``."""
     # Index by position so the function also works when tests patch version_info
     # with a plain tuple (patch.object replaces the namedtuple with a tuple).
     vi = sys.version_info
     major, minor, micro = vi[0], vi[1], vi[2]
     version = f"{major}.{minor}.{micro}"
-    ok = (major, minor) >= (3, 13)
+    ok = (major, minor) >= MIN_PYTHON
     return PythonCheck(version=version, ok=ok)
 
 
@@ -282,7 +287,7 @@ def run_doctor(
     py_marker = "OK" if py["ok"] else "FAIL"
     print(f"[{py_marker}] Python {py['version']}", end="")
     if not py["ok"]:
-        print("  (requires >=3.13)")
+        print(f"  (requires >={MIN_PYTHON[0]}.{MIN_PYTHON[1]})")
         issues.append("python-version")
     else:
         print()

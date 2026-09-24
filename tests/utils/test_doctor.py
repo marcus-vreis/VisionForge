@@ -269,24 +269,40 @@ class TestProbeTorch:
 
 
 class TestCheckPython:
-    def test_current_python_is_313_or_above(self) -> None:
-        # CI runs Python 3.13+ per pyproject.toml requires-python
+    def test_reports_a_version_string(self) -> None:
         result = check_python()
         assert isinstance(result["version"], str)
         assert isinstance(result["ok"], bool)
-        # The version string must be non-empty
         assert result["version"]
 
-    def test_old_python_reports_not_ok(self) -> None:
-        with patch.object(sys, "version_info", (3, 12, 0, "final", 0)):
+    def test_python_311_reports_not_ok(self) -> None:
+        with patch.object(sys, "version_info", (3, 11, 9, "final", 0)):
             result = check_python()
         assert result["ok"] is False
-        assert "3.12" in result["version"]
+        assert "3.11" in result["version"]
+
+    def test_python_312_reports_ok(self) -> None:
+        with patch.object(sys, "version_info", (3, 12, 0, "final", 0)):
+            result = check_python()
+        assert result["ok"] is True
 
     def test_python_313_reports_ok(self) -> None:
         with patch.object(sys, "version_info", (3, 13, 0, "final", 0)):
             result = check_python()
         assert result["ok"] is True
+
+    def test_the_floor_matches_pyproject(self) -> None:
+        # The doctor and the installer must refuse the same interpreters: a
+        # doctor that says "OK" on a Python pip would refuse is worse than none.
+        import tomllib
+        from pathlib import Path
+
+        from visionforge.utils.doctor import MIN_PYTHON
+
+        root = Path(__file__).resolve().parents[2]
+        spec = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
+        floor = spec["project"]["requires-python"]
+        assert floor == f">={MIN_PYTHON[0]}.{MIN_PYTHON[1]}"
 
 
 # ---------------------------------------------------------------------------
