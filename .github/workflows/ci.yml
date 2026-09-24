@@ -97,31 +97,43 @@ jobs:
           fi
 
   tests:
-    name: tests
-    runs-on: ubuntu-latest
+    name: tests (${{ matrix.os }}, py${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
     needs: main
+    strategy:
+      # One red leg must not hide the others: a Windows-only failure and a
+      # 3.12-only failure are different bugs, and both should be visible.
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.12", "3.13"]
+    defaults:
+      run:
+        # Git Bash on the Windows runner, so the steps below are one script.
+        shell: bash
 
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0 
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
+          python-version: ${{ matrix.python-version }}
 
       - uses: astral-sh/setup-uv@v5
 
       - name: Install dependencies
         run: |
-          uv venv
-          source .venv/bin/activate
+          uv venv --python ${{ matrix.python-version }}
+          # bin/ on Linux, Scripts/ on Windows.
+          source .venv/bin/activate 2>/dev/null || source .venv/Scripts/activate
           uv pip install -e ".[dev]"
           uv pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
 
       - name: Run tests
         run: |
-          source .venv/bin/activate
+          source .venv/bin/activate 2>/dev/null || source .venv/Scripts/activate
           pytest \
             --cov=src \
             --cov-report=xml \
@@ -129,7 +141,10 @@ jobs:
             --cov-report=term-missing \
             --cov-fail-under=70
 
+      # Coverage is reported once: every leg measures the same code, and
+      # SonarCloud takes a single report.
       - name: Upload coverage XML (for SonarCloud)
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.13'
         uses: actions/upload-artifact@v4
         with:
           name: coverage-xml
@@ -137,6 +152,7 @@ jobs:
           retention-days: 1
 
       - name: Upload HTML coverage report
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.13'
         uses: actions/upload-artifact@v4
         with:
           name: coverage-html
