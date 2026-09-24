@@ -3777,6 +3777,10 @@ environment with the CUDA build, and every row above carries its device.
 
 ## ADR-109 — Python 3.12 is supported, and CI tests on Windows
 
+**Date:** 2026-09-24
+**Status:** Accepted
+**Follows:** ADR-106 (one install; the floor is what that install requires)
+
 **Context:** `requires-python = ">=3.13"` was inherited from the first
 scaffold, not from anything the code used. On 2026-09-23 the dependencies were
 installed by hand into a 3.12.12 environment — pip refused the package itself —
