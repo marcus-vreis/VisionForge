@@ -13,6 +13,8 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ## [Unreleased]
 
+## [0.12.0] — 2026-09-24
+
 ### Changed
 
 - **Python 3.12 também é suportado.** O pacote só instalava no 3.13, mas nada
