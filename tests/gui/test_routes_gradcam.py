@@ -246,3 +246,57 @@ class TestClassNamesSurviveARename:
         }
 
         assert _gradcam_class_names(data) == ["only"]
+
+
+class TestGradCamRoute:
+    @staticmethod
+    def _setup(tmp_path, monkeypatch, raises):  # type: ignore[no-untyped-def]
+        import json
+
+        from fastapi.testclient import TestClient
+
+        from visionforge.gui.api import routes as routes_mod
+        from visionforge.gui.server import app
+
+        run_dir = tmp_path / "models" / "e" / "20260923_000000_000000"
+        run_dir.mkdir(parents=True)
+        (run_dir / "run.json").write_text(
+            json.dumps({"experiment": "e", "config": {"task": "multiclass"}}),
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(routes_mod, "_MODELS_DIR", tmp_path / "models")
+
+        def boom(_run_dir, _req):  # type: ignore[no-untyped-def]
+            raise raises
+
+        monkeypatch.setattr(routes_mod, "_execute_run_gradcam", boom)
+        return TestClient(app), run_dir.name
+
+    def test_an_unknown_run_is_a_404(self, tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+        client, _ = self._setup(tmp_path, monkeypatch, RuntimeError())
+
+        resp = client.post("/api/runs/nope/gradcam", json={"input_dir": "x"})
+
+        assert resp.status_code == 404
+
+    def test_a_missing_folder_is_the_users_error(self, tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+        client, run_id = self._setup(
+            tmp_path, monkeypatch, FileNotFoundError("sem imagens")
+        )
+
+        resp = client.post(f"/api/runs/{run_id}/gradcam", json={"input_dir": "x"})
+
+        assert resp.status_code == 400
+        assert resp.json()["detail"] == "sem imagens"
+
+    def test_anything_else_is_a_500_that_names_the_exception(
+        self,
+        tmp_path,
+        monkeypatch,  # type: ignore[no-untyped-def]
+    ) -> None:
+        client, run_id = self._setup(tmp_path, monkeypatch, RuntimeError("cuda oom"))
+
+        resp = client.post(f"/api/runs/{run_id}/gradcam", json={"input_dir": "x"})
+
+        assert resp.status_code == 500
+        assert resp.json()["detail"] == "RuntimeError: cuda oom"
