@@ -22,6 +22,7 @@ import { WelcomeOverlay } from "./components/WelcomeOverlay";
 import { GuidedTour } from "./components/GuidedTour";
 import { readTourSeen } from "./lib/tour";
 import { readUserName } from "./lib/user-name";
+import { useT } from "./i18n/useT";
 import { DatasetsOverlay } from "./components/DatasetsOverlay";
 import { HistoryOverlay } from "./components/HistoryOverlay";
 import { QueueOverlay } from "./components/QueueOverlay";
@@ -70,14 +71,6 @@ import { TASKS, type TaskDefinition } from "./types/tasks";
 /** Standalone tasks that expose the comparison/sweep advanced surface. */
 type AdvancedTask = "regression" | "segmentation" | "detection" | "anomaly";
 
-/** The main button says what it will actually run (ADR-059 follow-up). */
-const TRAIN_LABELS: Record<PanelStrategy, string> = {
-  simple: "▶ Treinar",
-  cv: "▶ Rodar K-fold",
-  sweep: "▶ Rodar sweep",
-  replicates: "▶ Rodar réplicas",
-};
-
 /** Read the queue depth for the bottom-bar badge, ignoring transport hiccups.
  *
  * A failed read leaves the previous number alone on purpose: the badge is
@@ -93,6 +86,7 @@ async function readQueueDepth(set: (n: number) => void): Promise<void> {
 }
 
 export default function App() {
+  const t = useT();
   const { status, result, error, validationErrors, progressEvents, submit, reset } =
     useExperiment();
 
@@ -164,8 +158,12 @@ export default function App() {
     const key = `${status.run_id ?? ""}:${status.status}`;
     if (announced.current === key) return;
     announced.current = key;
-    announce(status.status, status.run_id ?? "treino", status.error ?? undefined);
-  }, [status.status, status.run_id, status.error]);
+    announce(
+      status.status,
+      status.run_id ?? t.app.unnamedRun,
+      status.error ?? undefined,
+    );
+  }, [status.status, status.run_id, status.error, t.app.unnamedRun]);
 
   // The overlay stays MOUNTED for the whole life of a run (hidden via CSS when
   // minimized) so its logs and progress survive minimize/reopen.
@@ -175,7 +173,7 @@ export default function App() {
     status.status === "completed" ||
     status.status === "failed";
   const showOverlay = overlayVisible && runActive;
-  const activeTask = tasks.find((t) => t.key === activeKey) ?? tasks[0];
+  const activeTask = tasks.find((task) => task.key === activeKey) ?? tasks[0];
   // While this tab has a run in flight its own polling is authoritative;
   // otherwise fall back to what was on the server when the page loaded.
   const queuedCount = runActive ? (status.queued ?? 0) : seededQueueCount;
@@ -221,7 +219,7 @@ export default function App() {
         // A hidden or deleted task must not stay selected — its panel would
         // fetch a schema for a tab that no longer exists.
         setActiveKey((current) =>
-          merged.some((t) => t.key === current) ? current : merged[0].key,
+          merged.some((task) => task.key === current) ? current : merged[0].key,
         );
       })
       .catch(() => {
@@ -628,7 +626,7 @@ export default function App() {
             }}
           >
             <div style={{ fontSize: 10, letterSpacing: "0.16em", textTransform: "uppercase", color: "oklch(0.7 0.18 22)", marginBottom: 4 }}>
-              Erro
+              {t.app.error}
             </div>
             {error}
           </div>
@@ -641,7 +639,7 @@ export default function App() {
         onQueue={() => setShowQueue(true)}
         onTrain={() => void handleTrain()}
         disabled={status.status === "running"}
-        trainLabel={TRAIN_LABELS[activeStrategy] ?? "▶ Treinar"}
+        trainLabel={t.app.train[activeStrategy] ?? t.app.train.simple}
         historyCount={historyCount}
         queuedCount={queuedCount}
         selection={device}

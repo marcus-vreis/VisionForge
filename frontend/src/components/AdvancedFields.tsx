@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useT } from "../i18n/useT";
 import { Chevron } from "./controls";
 
 /** Holds the knobs that get set once and then left alone.
@@ -23,6 +24,7 @@ export function AdvancedFields({
   startOpen?: boolean;
   children: React.ReactNode;
 }) {
+  const t = useT();
   const [open, setOpen] = useState(startOpen);
 
   if (count === 0) return null;
@@ -50,11 +52,11 @@ export function AdvancedFields({
         }}
       >
         <Chevron open={open} size={10} />
-        <span>avançado</span>
+        <span>{t.advancedFields.advanced}</span>
         <span style={{ color: "var(--vf-text-muted)" }}>({count})</span>
         {startOpen && !open && (
           <span style={{ marginLeft: "auto", textTransform: "none", letterSpacing: 0 }}>
-            valores alterados
+            {t.advancedFields.changed}
           </span>
         )}
       </button>

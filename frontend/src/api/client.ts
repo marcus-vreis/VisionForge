@@ -1,3 +1,6 @@
+import { en } from "../i18n/en";
+import { initialLang, readStoredLang } from "../i18n/lang";
+import { pt, type Dict } from "../i18n/pt";
 import type { TaskDescriptor } from "../lib/custom-tasks";
 import type { JsonSchema } from "../types/schema";
 import type {
@@ -12,6 +15,23 @@ import type {
 
 const BASE = "/api";
 
+/**
+ * The texts of the errors raised here, in the language on screen.
+ *
+ * This module is not a component, so it cannot call useT(), and threading the
+ * dictionary through every request would touch each of its ~50 callers. The
+ * language is resolved the way the provider seeds it: setLang() stores the
+ * choice before anything can fail, so this follows the header toggle, and a
+ * message is built at the moment it is thrown, which is also when it is shown.
+ */
+function errorTexts(): Dict["errors"] {
+  const lang = initialLang(
+    readStoredLang(),
+    typeof navigator === "undefined" ? undefined : navigator.language,
+  );
+  return (lang === "pt" ? pt : en).errors;
+}
+
 export interface FastApiValidationError {
   loc: (string | number)[];
   msg: string;
@@ -25,7 +45,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   } catch (e) {
     throw new ApiError(
       0,
-      "Não foi possível conectar ao servidor. Verifique se o backend está rodando.",
+      errorTexts().cannotConnect,
       e instanceof Error ? e.message : String(e),
     );
   }
@@ -47,7 +67,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     ) {
       throw new ApiError(
         res.status,
-        "Erros de validação no formulário.",
+        errorTexts().validation,
         undefined,
         (body as { detail: FastApiValidationError[] }).detail,
       );
@@ -872,7 +892,7 @@ export async function testRunOnDataset(
 export async function downloadRunMarkdown(runId: string): Promise<void> {
   const res = await fetch(`${BASE}/runs/${encodeURIComponent(runId)}/export_md`);
   if (!res.ok) {
-    throw new ApiError(res.status, `HTTP ${res.status} ao gerar markdown.`);
+    throw new ApiError(res.status, errorTexts().markdownExport(res.status));
   }
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);

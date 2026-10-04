@@ -15,12 +15,8 @@ import { describe, expect, it } from "vitest";
 const SRC = join(__dirname, "..");
 
 const NOT_YET_MIGRATED = new Set([
-  "App.tsx",
-  "api/client.ts",
-  "components/AdvancedFields.tsx",
   "components/AnomalyPanel.tsx",
   "components/AugmentPreview.tsx",
-  "components/BottomBar.tsx",
   "components/CompareRunsPanel.tsx",
   "components/CredentialField.tsx",
   "components/CustomTaskManageCard.tsx",
@@ -29,16 +25,11 @@ const NOT_YET_MIGRATED = new Set([
   "components/DatasetDownloadCard.tsx",
   "components/DatasetPicker.tsx",
   "components/DatasetStats.tsx",
-  "components/DatasetsOverlay.tsx",
   "components/DetectionDatasetStats.tsx",
   "components/DetectionPanel.tsx",
-  "components/DeviceSelector.tsx",
   "components/ExperimentHeader.tsx",
-  "components/ExperimentRunner.tsx",
   "components/GuidedTour.tsx",
   "components/HistoryOverlay.tsx",
-  "components/Lightbox.tsx",
-  "components/ModelAdvice.tsx",
   "components/ParamPanel.tsx",
   "components/PreprocessingPanel.tsx",
   "components/QueueOverlay.tsx",
@@ -50,12 +41,8 @@ const NOT_YET_MIGRATED = new Set([
   "components/SegmentationPanel.tsx",
   "components/SweepCard.tsx",
   "components/TaskDatasetStats.tsx",
-  "components/TaskHero.tsx",
   "components/TrainingOverlay.tsx",
   "components/TransformsSection.tsx",
-  "components/WelcomeOverlay.tsx",
-  "components/controls/InfoDot.tsx",
-  "components/controls/WorkersField.tsx",
   "hooks/useExperiment.ts",
   "lib/anomaly-models.ts",
   "lib/dataset-identity.ts",
@@ -77,6 +64,10 @@ const ALLOWED = new Set([
   "CPU", "GPU", "CUDA", "MPS", "ONNX", "YOLO",
   "AUROC", "mIoU", "F1", "R²", "RMSE", "MAE", "MSE", "Dice",
   "px", "×", "·", "auto",
+  // PyTorch's multi-GPU wrapper, shown as the "Multi-GPU" device subtitle.
+  "DataParallel",
+  // The glyph on the help dot.
+  "i",
 ]);
 
 const VISIBLE_PROPS = new Set([

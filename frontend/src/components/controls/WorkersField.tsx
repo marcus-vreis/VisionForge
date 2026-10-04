@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { fetchSystemInfo } from "../../api/client";
+import { useT } from "../../i18n/useT";
 import { paramHelp } from "../../lib/param-help";
 import { InfoDot } from "./InfoDot";
 
@@ -23,6 +24,7 @@ export function WorkersField({
   value: number;
   onChange: (v: number) => void;
 }) {
+  const t = useT();
   const [suggested, setSuggested] = useState<number | null>(null);
   const auto = value < 0;
 
@@ -52,7 +54,7 @@ export function WorkersField({
           gap: 8,
         }}
       >
-        <span>Workers</span>
+        <span>{t.workersField.label}</span>
         <InfoDot text={paramHelp("num_workers") ?? ""} />
         <button
           type="button"
@@ -72,8 +74,8 @@ export function WorkersField({
           }}
           title={
             auto
-              ? "Definir o número manualmente"
-              : "Voltar a decidir pela memória livre da máquina"
+              ? t.workersField.setManually
+              : t.workersField.backToAuto
           }
         >
           auto
@@ -94,10 +96,10 @@ export function WorkersField({
             gap: 8,
           }}
         >
-          <span>automático</span>
+          <span>{t.workersField.automatic}</span>
           {suggested !== null && (
             <span style={{ fontSize: 11, color: "var(--vf-text-muted)" }}>
-              ≈ {suggested} agora
+              {t.workersField.suggestedNow(suggested)}
             </span>
           )}
         </div>

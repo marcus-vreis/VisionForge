@@ -1,3 +1,4 @@
+import { useT } from "../i18n/useT";
 import { DatasetDownloadCard } from "./DatasetDownloadCard";
 
 interface DatasetsOverlayProps {
@@ -14,6 +15,7 @@ interface DatasetsOverlayProps {
  * and the panels are back to being only about their experiment.
  */
 export function DatasetsOverlay({ open, onClose }: DatasetsOverlayProps) {
+  const t = useT();
   if (!open) return null;
 
   return (
@@ -67,7 +69,7 @@ export function DatasetsOverlay({ open, onClose }: DatasetsOverlayProps) {
                 marginBottom: 6,
               }}
             >
-              // datasets
+              {t.datasetsOverlay.kicker}
             </div>
             <div
               style={{
@@ -77,7 +79,7 @@ export function DatasetsOverlay({ open, onClose }: DatasetsOverlayProps) {
                 color: "var(--vf-text)",
               }}
             >
-              Obter dados
+              {t.datasetsOverlay.title}
             </div>
             <div
               style={{
@@ -88,8 +90,7 @@ export function DatasetsOverlay({ open, onClose }: DatasetsOverlayProps) {
                 lineHeight: 1.6,
               }}
             >
-              Baixe uma vez para uma pasta local; depois aponte o campo de
-              dataset de qualquer task para ela.
+              {t.datasetsOverlay.description}
             </div>
           </div>
           <button

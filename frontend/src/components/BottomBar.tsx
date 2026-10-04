@@ -1,3 +1,4 @@
+import { useT } from "../i18n/useT";
 import { DeviceSelector, type DeviceSelection } from "./DeviceSelector";
 
 interface BottomBarProps {
@@ -38,6 +39,7 @@ export function BottomBar({
   onReopenTraining,
   trainLabel,
 }: BottomBarProps) {
+  const t = useT();
   // While a run is minimized, the central button reopens the overlay rather
   // than triggering a new training (a duplicate run would race with the
   // current one). The label flips to make the action obvious.
@@ -50,10 +52,10 @@ export function BottomBar({
   };
 
   const centerLabel = trainingMinimized
-    ? "🔬 abrir treino"
+    ? t.bottomBar.reopenTraining
     : isRunning
-      ? "Executando…"
-      : (trainLabel ?? "▶ Treinar");
+      ? t.bottomBar.running
+      : (trainLabel ?? t.app.train.simple);
   return (
     <div
       style={{
@@ -102,7 +104,7 @@ export function BottomBar({
         }}
       >
         <span style={{ fontSize: 14 }}>⤺</span>
-        history
+        {t.bottomBar.history}
         {historyCount > 0 && (
           <span
             style={{
@@ -124,7 +126,7 @@ export function BottomBar({
         type="button"
         data-tour="datasets"
         onClick={onDatasets}
-        title="Baixar um dataset para uma pasta local"
+        title={t.bottomBar.datasetsTitle}
         style={{
           display: "flex",
           alignItems: "center",
@@ -142,7 +144,7 @@ export function BottomBar({
         }}
       >
         <span style={{ fontSize: 14 }}>⤓</span>
-        datasets
+        {t.bottomBar.datasets}
       </button>
 
       {/* Only shown once something is waiting: an always-visible "fila 0" would
@@ -151,7 +153,7 @@ export function BottomBar({
         <button
           type="button"
           onClick={onQueue}
-          title="Ver e reordenar os treinos que estão esperando a GPU"
+          title={t.bottomBar.queueTitle}
           style={{
             display: "flex",
             alignItems: "center",
@@ -169,7 +171,7 @@ export function BottomBar({
           }}
         >
           <span style={{ fontSize: 14 }}>⧗</span>
-          fila
+          {t.bottomBar.queue}
           <span
             style={{
               marginLeft: 4,

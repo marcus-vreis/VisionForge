@@ -1,6 +1,7 @@
 import { Chevron } from "./controls";
 import { useEffect, useRef, useState } from "react";
 import { fetchDeviceInfo, type DeviceInfoResponse, type GPUInfo } from "../api/client";
+import { useT } from "../i18n/useT";
 
 export interface DeviceSelection {
   kind: "cpu" | "cuda" | "multi_cuda";
@@ -36,6 +37,7 @@ function labelForSelection(
 
 /** Real device picker — fetches GPUs from the backend and stores the choice. */
 export function DeviceSelector({ selection, onChange, variant = "bottom" }: DeviceSelectorProps) {
+  const t = useT();
   const [info, setInfo] = useState<DeviceInfoResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -59,7 +61,7 @@ export function DeviceSelector({ selection, onChange, variant = "bottom" }: Devi
       })
       .catch((e: unknown) => {
         if (!alive) return;
-        setError(e instanceof Error ? e.message : "Falha ao consultar dispositivos.");
+        setError(e instanceof Error ? e.message : t.errors.deviceInfo);
         setLoading(false);
       });
     return () => {
@@ -88,12 +90,12 @@ export function DeviceSelector({ selection, onChange, variant = "bottom" }: Devi
         onClick={() => setOpen((v) => !v)}
         title={
           loading
-            ? "Carregando dispositivos…"
+            ? t.deviceSelector.loadingTitle
             : error
               ? error
               : info?.cuda_available
                 ? `CUDA ${info.cuda_version ?? ""} · ${info.gpus.length} GPU(s)`
-                : "CUDA indisponível — somente CPU"
+                : t.deviceSelector.cudaUnavailableTitle
         }
         style={{
           display: "flex",
@@ -127,7 +129,7 @@ export function DeviceSelector({ selection, onChange, variant = "bottom" }: Devi
             flexShrink: 0,
           }}
         />
-        <span style={{ color: "var(--vf-text-dim)" }}>usando</span>
+        <span style={{ color: "var(--vf-text-dim)" }}>{t.deviceSelector.using}</span>
         <span
           style={{
             color: cudaActive ? "oklch(0.85 0.16 150)" : "oklch(0.85 0.10 70)",
@@ -169,18 +171,18 @@ export function DeviceSelector({ selection, onChange, variant = "bottom" }: Devi
             }}
           >
             {loading
-              ? "carregando…"
+              ? t.deviceSelector.loadingShort
               : error
-                ? `erro: ${error}`
+                ? t.deviceSelector.errorPrefix(error)
                 : info?.cuda_available
                   ? `cuda ${info.cuda_version ?? ""} · ${info.gpus.length} gpu(s)`
-                  : "cuda não detectado"}
+                  : t.deviceSelector.cudaNotDetected}
           </div>
 
           <DeviceOption
             active={selection.kind === "cpu"}
             title={info?.cpu_name || "CPU"}
-            subtitle="Treinar usando processador"
+            subtitle={t.deviceSelector.cpuSubtitle}
             onClick={() => {
               onChange({ kind: "cpu", gpu_ids: null });
               setOpen(false);

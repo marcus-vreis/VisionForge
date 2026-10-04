@@ -1,5 +1,7 @@
 import { useEffect } from "react";
 
+import { useT } from "../i18n/useT";
+
 interface LightboxProps {
   src: string;
   alt?: string;
@@ -9,6 +11,7 @@ interface LightboxProps {
 
 /** Full-screen image overlay — Esc / click outside to close. */
 export function Lightbox({ src, alt, caption, onClose }: LightboxProps) {
+  const t = useT();
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -52,7 +55,7 @@ export function Lightbox({ src, alt, caption, onClose }: LightboxProps) {
         <button
           type="button"
           onClick={onClose}
-          title="Fechar (Esc)"
+          title={t.lightbox.closeTitle}
           style={{
             width: 38,
             height: 38,

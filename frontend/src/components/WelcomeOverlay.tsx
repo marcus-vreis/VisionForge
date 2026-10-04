@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
+import { useT } from "../i18n/useT";
 import {
   normalizeUserName,
   readUserName,
@@ -25,6 +26,7 @@ interface WelcomeOverlayProps {
  * nunca pergunta de novo. Quem quiser trocar clica no chip do header.
  */
 export function WelcomeOverlay({ onName, forceAsk = false }: WelcomeOverlayProps) {
+  const t = useT();
   const saved = forceAsk ? "" : readUserName();
   const [phase, setPhase] = useState<Phase>("boot");
   const [name, setName] = useState(saved);
@@ -145,7 +147,7 @@ export function WelcomeOverlay({ onName, forceAsk = false }: WelcomeOverlayProps
             color: "var(--vf-text)",
           }}
         >
-          {returning ? `Bem-vindo, ${name}` : "Bem-vindo"}
+          {returning ? t.welcome.helloName(name) : t.welcome.hello}
         </div>
       </div>
 
@@ -175,7 +177,7 @@ export function WelcomeOverlay({ onName, forceAsk = false }: WelcomeOverlayProps
             textAlign: "center",
           }}
         >
-          Qual é o seu nome?
+          {t.welcome.askName}
         </div>
 
         <form
@@ -202,11 +204,11 @@ export function WelcomeOverlay({ onName, forceAsk = false }: WelcomeOverlayProps
               type="text"
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
-              placeholder="digite aqui"
+              placeholder={t.welcome.placeholder}
               autoComplete="off"
               spellCheck={false}
               maxLength={40}
-              aria-label="Seu nome"
+              aria-label={t.welcome.nameLabel}
               style={{
                 width: "100%",
                 textAlign: "center",
@@ -252,7 +254,7 @@ export function WelcomeOverlay({ onName, forceAsk = false }: WelcomeOverlayProps
               transition: "all 400ms ease",
             }}
           >
-            Entrar ↵
+            {t.welcome.enter}
           </button>
         </form>
       </div>

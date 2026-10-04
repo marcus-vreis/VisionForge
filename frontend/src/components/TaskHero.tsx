@@ -1,3 +1,4 @@
+import { useT } from "../i18n/useT";
 import type { TaskDefinition } from "../types/tasks";
 
 interface DataPillProps {
@@ -47,6 +48,7 @@ interface TaskHeroProps {
 
 /** Hero section with task title, description, and dataset pills. */
 export function TaskHero({ task, baseDir }: TaskHeroProps) {
+  const t = useT();
   const words = task.label.split(" ");
   return (
     <div
@@ -71,7 +73,7 @@ export function TaskHero({ task, baseDir }: TaskHeroProps) {
             textTransform: "uppercase",
           }}
         >
-          // task / {task.short}
+          {t.taskHero.kicker(task.short)}
         </div>
         <h1
           style={{
@@ -126,8 +128,8 @@ export function TaskHero({ task, baseDir }: TaskHeroProps) {
           flexWrap: "wrap",
         }}
       >
-        {baseDir && <DataPill label="Dataset" value={baseDir} />}
-        <DataPill label="Task" value={task.short} />
+        {baseDir && <DataPill label={t.taskHero.dataset} value={baseDir} />}
+        <DataPill label={t.taskHero.task} value={task.short} />
       </div>
     </div>
   );

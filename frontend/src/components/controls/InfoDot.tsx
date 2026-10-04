@@ -1,5 +1,6 @@
 import { useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useT } from "../../i18n/useT";
 
 /** The "i" next to a field label, holding the explanation on demand.
  *
@@ -31,6 +32,7 @@ interface Placement {
 }
 
 export function InfoDot({ text }: { text: string }) {
+  const t = useT();
   const [placement, setPlacement] = useState<Placement | null>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
   const id = useId();
@@ -74,7 +76,7 @@ export function InfoDot({ text }: { text: string }) {
       <button
         ref={btnRef}
         type="button"
-        aria-label="Explicação"
+        aria-label={t.infoDot.label}
         aria-describedby={open ? id : undefined}
         aria-expanded={open}
         onClick={() => (open ? hide() : show())}

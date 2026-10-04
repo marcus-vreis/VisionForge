@@ -1,3 +1,4 @@
+import { useT } from "../i18n/useT";
 import type { RunStatus } from "../types/run";
 import { Alert, AlertDescription } from "./ui/alert";
 
@@ -7,6 +8,7 @@ interface ExperimentRunnerProps {
 }
 
 export function ExperimentRunner({ status, error }: ExperimentRunnerProps) {
+  const t = useT();
   if (error) {
     return (
       <Alert variant="destructive">
@@ -20,9 +22,9 @@ export function ExperimentRunner({ status, error }: ExperimentRunnerProps) {
       <div className="flex items-center gap-3 rounded-md border border-border/50 p-4">
         <div className="h-4 w-4 rounded-full border-2 border-primary border-t-transparent animate-spin" />
         <div>
-          <p className="text-sm font-medium">Training in progress...</p>
+          <p className="text-sm font-medium">{t.experimentRunner.inProgress}</p>
           <p className="text-xs text-muted-foreground">
-            Run ID: {status.run_id}
+            {t.experimentRunner.runId} {status.run_id}
           </p>
         </div>
       </div>

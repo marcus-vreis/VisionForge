@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { fetchModelDefaults, type ModelDefaults } from "../api/client";
+import { useT } from "../i18n/useT";
 
 /** Says when the chosen architecture and optimizer were measured to fail.
  *
@@ -28,6 +29,7 @@ export function ModelAdvice({
   pretrained?: boolean;
   onApply: (next: { optimizer: string; learning_rate: number }) => void;
 }) {
+  const t = useT();
   const [advice, setAdvice] = useState<ModelDefaults | null>(null);
 
   useEffect(() => {
@@ -67,7 +69,7 @@ export function ModelAdvice({
     >
       <div style={{ marginBottom: 8 }}>
         {advice.note ??
-          `Para ${architecture}, o valor medido é ${advice.optimizer} a ${advice.learning_rate}.`}
+          t.modelAdvice.measured(architecture, advice.optimizer, advice.learning_rate)}
       </div>
       <button
         type="button"
@@ -90,7 +92,7 @@ export function ModelAdvice({
           cursor: "pointer",
         }}
       >
-        usar {advice.optimizer} · {advice.learning_rate}
+        {t.modelAdvice.apply(advice.optimizer, advice.learning_rate)}
       </button>
     </div>
   );
