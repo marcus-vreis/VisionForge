@@ -84,3 +84,40 @@ jobs:
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+
+  github-release:
+    name: GitHub Release (archived by Zenodo)
+    # After PyPI, so a Release — and the DOI Zenodo mints for it — only ever
+    # exists for a version people can actually install.
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: publish-pypi
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist-packages
+          path: dist/
+
+      # The notes are this version's CHANGELOG section. index() instead of a
+      # regex: the heading has brackets and dots, which a dynamic awk regex
+      # reads as a bracket expression and wildcards.
+      - name: Release notes from CHANGELOG
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          awk -v h="## [$VERSION]" \
+            'index($0, h) == 1 {grab=1; next} grab && /^## \[/ {exit} grab {print}' \
+            CHANGELOG.md > release-notes.md
+          test -s release-notes.md || echo "See CHANGELOG.md." > release-notes.md
+
+      - name: Create the Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: release-notes.md
+          files: dist/*
