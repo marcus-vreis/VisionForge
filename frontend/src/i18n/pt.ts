@@ -336,6 +336,215 @@ export const pt = {
     hiddenParams: (n: number) => `${n} parâmetros ocultos — ligue para ajustar`,
     fieldErrors: (n: number) => `${n} campo(s) com erro:`,
   },
+  // The panel for one run (components/RunDetailPanel.tsx). Config keys, measure
+  // names and file names (opset_version, max_diff, best_model.onnx) read the same
+  // in every language; they are repeated in both dictionaries only because every
+  // word on screen comes from here. Metric names (F1, AUC-ROC, mAP@50) stay in the
+  // component: only the words around them are translated.
+  runDetail: {
+    back: "← histórico",
+    loading: "carregando…",
+    loadFailed: "Falha ao carregar detalhes.",
+    cancel: "cancelar",
+    browse: "📁 Escolher",
+    copy: "copy",
+    copyPath: "Copiar caminho",
+    imageFolder: "Pasta de imagens",
+    resume: {
+      button: "▶ retomar",
+      title: (done: number, total: number) =>
+        `Continuar da época ${done} até ${total}, na mesma pasta`,
+      titleNoTotal: "Continuar este run na mesma pasta",
+      queuing: "Enfileirando a continuação…",
+      running: "Continuando este run — acompanhe no painel de treino.",
+      queued: "Na fila: começa quando o treino atual terminar.",
+      failed: "Falha ao retomar.",
+    },
+    modelCard: {
+      button: "↓ markdown",
+      title: "Baixar model card (markdown) deste run",
+    },
+    // The native folder picker the three forms below share.
+    picker: {
+      opening: "Abrindo seletor…",
+      cancelled: "Cancelado.",
+      picked: (path: string) => `Pasta: ${path}`,
+      failed: "Falha ao escolher pasta.",
+    },
+    dataset: {
+      title: "Dataset",
+      name: "Nome",
+      path: "Caminho",
+      contents: "Conteúdo",
+      files: (n: number | null | undefined, size: string) => `${n ?? "—"} arquivos · ${size}`,
+      fingerprint: "Fingerprint",
+      noFingerprint: "sem fingerprint — run anterior a 26/07/2026",
+    },
+    location: {
+      title: "Localização no disco",
+      runFolder: "Pasta do run",
+      checkpoint: "Checkpoint",
+      deviceUsed: "Dispositivo usado",
+      env: (key: string) => `env · ${key}`,
+    },
+    training: {
+      title: "Configuração de treino",
+      transferLearning: "transfer learning",
+    },
+    pipeline: {
+      title: "Pipeline aplicado (preprocessing + augmentation)",
+      preprocessing: "// pré-processamento (ordem)",
+      augmentation: "// augmentation & normalize",
+    },
+    onnx: {
+      title: "Exportar para ONNX",
+      open: "↗ exportar onnx",
+      // `file` follows this text, in <code>.
+      hint: "Converte o checkpoint para ONNX, valida diff numérico contra PyTorch e mede latência de inferência. O arquivo é salvo ao lado do checkpoint como",
+      file: "best_model.onnx",
+      opsetVersion: "opset_version",
+      benchmarkRuns: "benchmark_runs",
+      dynamicAxes: "dynamic_axes",
+      validate: "validate",
+      benchmark: "benchmark",
+      run: "▶ Rodar export",
+      running: "Exportando…",
+      exporting: "Exportando para ONNX…",
+      saved: (path: string) => `ONNX salvo em ${path}`,
+      failed: "Falha ao exportar ONNX.",
+      stats: {
+        fileSize: "file_size",
+        maxDiff: "max_diff",
+        onnxLatency: "onnx latency μ",
+        onnxP95: "onnx p95",
+        torchLatency: "torch latency μ",
+        speedup: "speedup (torch/onnx)",
+        runs: "n_runs",
+      },
+    },
+    batch: {
+      title: "Inferência em lote (CSV)",
+      open: "+ inferência em lote",
+      folderPlaceholder: "ex: C:/datasets/inbox",
+      recursive: "recursive (subpastas)",
+      run: "▶ Rodar inferência",
+      running: "Processando…",
+      hint: "Roda o checkpoint sobre uma pasta de imagens e escreve um CSV com uma linha por imagem (probabilidades + classe predita). Útil para classificar batches de dados novos sem retreinar.",
+      needFolder: "Informe a pasta de imagens para inferência.",
+      starting: "Rodando inferência em lote…",
+      done: (ok: number, csv: string) => `${ok} imagens processadas · CSV em ${csv}`,
+      doneWithFailures: (ok: number, failed: number, csv: string) =>
+        `${ok} ok · ${failed} falharam · CSV em ${csv}`,
+      failed: "Falha na inferência em lote.",
+      processed: "processadas",
+      failedCount: "falharam",
+      csv: "csv",
+      failedFiles: (n: number) => `${n} arquivos falharam (clique para ver até 5)`,
+      more: (n: number) => `…+${n} mais`,
+    },
+    gradcam: {
+      title: "Grad-CAM (explicabilidade)",
+      open: "🔥 Grad-CAM",
+      folderPlaceholder: "ex: C:/datasets/amostras",
+      samples: "Nº de amostras (1–64)",
+      run: "▶ Gerar Grad-CAM",
+      running: "Gerando…",
+      hint: "Gera mapas de calor Grad-CAM sobre imagens de exemplo, destacando as regiões que mais influenciaram a classe predita pelo checkpoint. Útil para interpretar o que o modelo aprendeu.",
+      needFolder: "Informe a pasta de imagens.",
+      starting: "Gerando mapas Grad-CAM…",
+      done: (count: number, layer: string) => `${count} mapa(s) gerado(s) · camada ${layer}`,
+      failed: "Falha ao gerar Grad-CAM.",
+      // Caption under an overlay: the model's answer, and the true class when known.
+      classNumber: (n: number) => `classe ${n}`,
+      predictedIs: (label: string) => `predito: ${label}`,
+      actual: "real",
+      predicted: "predito",
+    },
+    metrics: {
+      title: "Métricas",
+      none: "Sem métricas registradas.",
+      // Keys are the backend's metric names. F1, Recall, AUC-ROC and the mAP
+      // family are not here: they read the same everywhere.
+      labels: {
+        accuracy: "Acurácia",
+        precision: "Precisão",
+        best_val_loss: "Melhor val loss",
+        best_epoch: "Melhor epoch",
+        total_epochs: "Epochs treinados",
+      },
+      // `name` is a metric label: "Acurácia (teste)", "F1 (teste)".
+      onTestSet: (name: string) => `${name} (teste)`,
+      ciTooltip: (percent: number, resamples: number, samples: number) =>
+        `IC ${percent}% por bootstrap percentil: ` +
+        `${resamples} reamostragens das ${samples} imagens de ` +
+        `teste. Mede o ruído de amostragem do split com este modelo ` +
+        `fixo — não a variação entre treinos.`,
+    },
+    // The plot files the backend writes, by file name.
+    graphs: {
+      title: "Gráficos (clique para expandir)",
+      labels: {
+        "loss.png": "Loss (train + val)",
+        "accuracy.png": "Accuracy (train + val)",
+        "confusion_matrix.png": "Matriz de confusão",
+        "confusion_matrix_normalized.png": "Matriz de confusão (normalizada)",
+        "roc_curve.png": "Curva ROC",
+        "precision_recall_curve.png": "Curva Precision-Recall",
+        // Detection (Ultralytics / torchvision).
+        "results.png": "Resultados (loss + mAP)",
+        "BoxPR_curve.png": "Curva Precision-Recall (box)",
+        "BoxF1_curve.png": "Curva F1 (box)",
+        // Test-set diagnostics per task.
+        "auroc.png": "AUROC por época",
+        "BoxP_curve.png": "Curva Precision (box)",
+        "BoxR_curve.png": "Curva Recall (box)",
+        "val_batch0_pred.jpg": "Predições na validação",
+        "pred_vs_true.png": "Predito vs real",
+        "residuals.png": "Distribuição dos resíduos",
+        "iou_per_class.png": "IoU por classe",
+        "score_histogram.png": "Escores: normal vs defeito",
+      },
+    },
+    tests: {
+      title: "Testes neste modelo",
+      open: "+ testar",
+      empty: "Nenhum teste executado ainda neste modelo.",
+      folder: "Pasta de teste",
+      manifest: "Manifesto de teste (.csv)",
+      folderPlaceholder: "ex: C:/datasets/coffee_v2/test",
+      manifestPlaceholder: "ex: C:/datasets/idade/test.csv",
+      // What the folder has to contain, by the task the run was trained on.
+      folderHint: {
+        detection: "Uma pasta no layout YOLO: imagens e os .txt de rótulo correspondentes.",
+        segmentation:
+          "Uma pasta com as subpastas de imagens e de máscaras, pareadas pelo nome do arquivo.",
+        anomaly: "Uma pasta com a subpasta de imagens normais e as de defeito, como no treino.",
+        regression:
+          "O .csv com a coluna de imagem e a(s) coluna(s) alvo. As imagens seguem a mesma pasta do treino.",
+        classification: "Uma pasta com uma subpasta por classe — a mesma convenção do treino.",
+      },
+      label: "Rótulo (opcional)",
+      labelPlaceholder: "ex: holdout_2026",
+      run: "▶ Rodar teste",
+      running: "Avaliando…",
+      needFolder: "Informe o diretório base do dataset de teste.",
+      starting: "Avaliando modelo no novo dataset…",
+      recorded: (id: string) => `Teste registrado: ${id}`,
+      failed: "Falha no teste.",
+    },
+    cv: {
+      title: (ok: number, total: number, failed: number) =>
+        `Cross-validation · ${ok}/${total} folds ok${failed > 0 ? ` · ${failed} falharam` : ""}`,
+      meanAccuracy: "Acurácia média ± std",
+      meanF1: "F1 média ± std",
+      fold: "Fold",
+      train: "train",
+      val: "val",
+      valLoss: "val_loss",
+      accuracy: "accuracy",
+      status: "status",
+    },
+  },
 };
 
 export type Dict = typeof pt;

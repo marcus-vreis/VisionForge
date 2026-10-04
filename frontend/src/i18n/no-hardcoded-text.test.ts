@@ -34,7 +34,6 @@ const NOT_YET_MIGRATED = new Set([
   "components/RegressionPanel.tsx",
   "components/ReplicatesCard.tsx",
   "components/ResultsView.tsx",
-  "components/RunDetailPanel.tsx",
   "components/SchemaForm.tsx",
   "components/SegmentationPanel.tsx",
   "components/SweepCard.tsx",

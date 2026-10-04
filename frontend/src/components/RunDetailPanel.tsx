@@ -17,6 +17,8 @@ import {
   type RunDetail,
   type TestRecord,
 } from "../api/client";
+import type { Dict } from "../i18n/pt";
+import { useI18n, useT } from "../i18n/useT";
 import { formatBytes, shortDigest } from "../lib/dataset-identity";
 import { metricCi } from "../lib/metric-ci";
 import type { MetricCI } from "../types/run";
@@ -27,50 +29,28 @@ interface RunDetailPanelProps {
   onBack: () => void;
 }
 
-/** Plot file naming convention from the backend; used to humanize labels. */
-const GRAPH_LABELS: Record<string, string> = {
-  "loss.png": "Loss (train + val)",
-  "accuracy.png": "Accuracy (train + val)",
-  "confusion_matrix.png": "Matriz de confusão",
-  "confusion_matrix_normalized.png": "Matriz de confusão (normalizada)",
-  "roc_curve.png": "Curva ROC",
-  "precision_recall_curve.png": "Curva Precision-Recall",
-  // Detection (Ultralytics / torchvision) plot names.
-  "results.png": "Resultados (loss + mAP)",
-  "BoxPR_curve.png": "Curva Precision-Recall (box)",
-  "BoxF1_curve.png": "Curva F1 (box)",
-  // Test-set diagnostics per task (ADR-077).
-  "auroc.png": "AUROC por época",
-  "BoxP_curve.png": "Curva Precision (box)",
-  "BoxR_curve.png": "Curva Recall (box)",
-  "val_batch0_pred.jpg": "Predições na validação",
-  "pred_vs_true.png": "Predito vs real",
-  "residuals.png": "Distribuição dos resíduos",
-  "iou_per_class.png": "IoU por classe",
-  "score_histogram.png": "Escores: normal vs defeito",
+/** Metric names read the same in every language; only the words around them are translated. */
+const METRIC_NAMES: Record<string, string> = {
+  f1: "F1",
+  recall: "Recall",
+  auc_roc: "AUC-ROC",
+  // Detection metrics (mAP @ IoU thresholds; box validation loss).
+  map50: "mAP@50",
+  map50_95: "mAP@50-95",
+  box_loss: "Box loss (val)",
 };
 
-function metricLabel(key: string): string {
-  const labels: Record<string, string> = {
-    accuracy: "Acurácia",
-    f1: "F1",
-    precision: "Precisão",
-    recall: "Recall",
-    auc_roc: "AUC-ROC",
-    test_accuracy: "Acurácia (teste)",
-    test_f1: "F1 (teste)",
-    test_precision: "Precisão (teste)",
-    test_recall: "Recall (teste)",
-    test_auc_roc: "AUC-ROC (teste)",
-    best_val_loss: "Melhor val loss",
-    best_epoch: "Melhor epoch",
-    total_epochs: "Epochs treinados",
-    // Detection metrics (mAP @ IoU thresholds; box validation loss).
-    map50: "mAP@50",
-    map50_95: "mAP@50-95",
-    box_loss: "Box loss (val)",
-  };
-  return labels[key] ?? key;
+/** The metrics a test run reports under a `test_` prefix. */
+const TEST_METRICS = ["accuracy", "f1", "precision", "recall", "auc_roc"];
+
+function metricLabel(t: Dict, key: string): string {
+  const words: Record<string, string> = t.runDetail.metrics.labels;
+  const label = METRIC_NAMES[key] ?? words[key];
+  if (label) return label;
+  if (key.startsWith("test_") && TEST_METRICS.includes(key.slice(5))) {
+    return t.runDetail.metrics.onTestSet(metricLabel(t, key.slice(5)));
+  }
+  return key;
 }
 
 function fmtMetric(v: unknown): string {
@@ -116,6 +96,7 @@ function getConfigRecord(
 }
 
 export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
+  const t = useT();
   const [detail, setDetail] = useState<RunDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -201,7 +182,8 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
       })
       .catch((e: unknown) => {
         if (!alive) return;
-        setError(e instanceof Error ? e.message : "Falha ao carregar detalhes.");
+        // Empty means "no message from the server": the banner then shows its own text.
+        setError(e instanceof Error ? e.message : "");
       })
       .finally(() => alive && setLoading(false));
     return () => {
@@ -211,21 +193,21 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
 
   const doResume = async () => {
     setResuming(true);
-    setResumeMsg({ kind: "info", text: "Enfileirando a continuação…" });
+    setResumeMsg({ kind: "info", text: t.runDetail.resume.queuing });
     try {
       const res = await resumeRun(runId);
       setResumeMsg({
         kind: "success",
         text:
           res.status === "running"
-            ? "Continuando este run — acompanhe no painel de treino."
-            : "Na fila: começa quando o treino atual terminar.",
+            ? t.runDetail.resume.running
+            : t.runDetail.resume.queued,
       });
       await reload();
     } catch (e) {
       setResumeMsg({
         kind: "error",
-        text: e instanceof Error ? e.message : "Falha ao retomar.",
+        text: e instanceof Error ? e.message : t.runDetail.resume.failed,
       });
     } finally {
       setResuming(false);
@@ -242,35 +224,35 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
   };
 
   const pickFolder = async () => {
-    setTestMsg({ kind: "info", text: "Abrindo seletor…" });
+    setTestMsg({ kind: "info", text: t.runDetail.picker.opening });
     try {
       const res = await pickDatasetFolder();
       if (res.cancelled) {
-        setTestMsg({ kind: "info", text: res.message ?? "Cancelado." });
+        setTestMsg({ kind: "info", text: res.message ?? t.runDetail.picker.cancelled });
         return;
       }
       setTestForm((f) => ({ ...f, data_dir: res.path }));
-      setTestMsg({ kind: "success", text: `Pasta: ${res.path}` });
+      setTestMsg({ kind: "success", text: t.runDetail.picker.picked(res.path) });
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Falha ao escolher pasta.";
+      const msg = e instanceof Error ? e.message : t.runDetail.picker.failed;
       setTestMsg({ kind: "error", text: msg });
     }
   };
 
   const pickBatchFolder = async () => {
-    setBatchMsg({ kind: "info", text: "Abrindo seletor…" });
+    setBatchMsg({ kind: "info", text: t.runDetail.picker.opening });
     try {
       const res = await pickDatasetFolder();
       if (res.cancelled) {
-        setBatchMsg({ kind: "info", text: res.message ?? "Cancelado." });
+        setBatchMsg({ kind: "info", text: res.message ?? t.runDetail.picker.cancelled });
         return;
       }
       setBatchForm((f) => ({ ...f, input_dir: res.path }));
-      setBatchMsg({ kind: "success", text: `Pasta: ${res.path}` });
+      setBatchMsg({ kind: "success", text: t.runDetail.picker.picked(res.path) });
     } catch (e) {
       setBatchMsg({
         kind: "error",
-        text: e instanceof Error ? e.message : "Falha ao escolher pasta.",
+        text: e instanceof Error ? e.message : t.runDetail.picker.failed,
       });
     }
   };
@@ -279,13 +261,13 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
     if (!batchForm.input_dir.trim()) {
       setBatchMsg({
         kind: "error",
-        text: "Informe a pasta de imagens para inferência.",
+        text: t.runDetail.batch.needFolder,
       });
       return;
     }
     setBatchRunning(true);
     setBatchResult(null);
-    setBatchMsg({ kind: "info", text: "Rodando inferência em lote…" });
+    setBatchMsg({ kind: "info", text: t.runDetail.batch.starting });
     try {
       const result = await batchPredictRun(runId, {
         input_dir: batchForm.input_dir,
@@ -298,8 +280,8 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
         kind: failed === 0 ? "success" : "info",
         text:
           failed === 0
-            ? `${okCount} imagens processadas · CSV em ${result.output_csv}`
-            : `${okCount} ok · ${failed} falharam · CSV em ${result.output_csv}`,
+            ? t.runDetail.batch.done(okCount, result.output_csv)
+            : t.runDetail.batch.doneWithFailures(okCount, failed, result.output_csv),
       });
     } catch (e) {
       const msg =
@@ -307,7 +289,7 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
           ? e.message
           : e instanceof Error
             ? e.message
-            : "Falha na inferência em lote.";
+            : t.runDetail.batch.failed;
       setBatchMsg({ kind: "error", text: msg });
     } finally {
       setBatchRunning(false);
@@ -315,31 +297,31 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
   };
 
   const pickGradcamFolder = async () => {
-    setGradcamMsg({ kind: "info", text: "Abrindo seletor…" });
+    setGradcamMsg({ kind: "info", text: t.runDetail.picker.opening });
     try {
       const res = await pickDatasetFolder();
       if (res.cancelled) {
-        setGradcamMsg({ kind: "info", text: res.message ?? "Cancelado." });
+        setGradcamMsg({ kind: "info", text: res.message ?? t.runDetail.picker.cancelled });
         return;
       }
       setGradcamForm((f) => ({ ...f, input_dir: res.path }));
-      setGradcamMsg({ kind: "success", text: `Pasta: ${res.path}` });
+      setGradcamMsg({ kind: "success", text: t.runDetail.picker.picked(res.path) });
     } catch (e) {
       setGradcamMsg({
         kind: "error",
-        text: e instanceof Error ? e.message : "Falha ao escolher pasta.",
+        text: e instanceof Error ? e.message : t.runDetail.picker.failed,
       });
     }
   };
 
   const runGradcam = async () => {
     if (!gradcamForm.input_dir.trim()) {
-      setGradcamMsg({ kind: "error", text: "Informe a pasta de imagens." });
+      setGradcamMsg({ kind: "error", text: t.runDetail.gradcam.needFolder });
       return;
     }
     setGradcamRunning(true);
     setGradcamResult(null);
-    setGradcamMsg({ kind: "info", text: "Gerando mapas Grad-CAM…" });
+    setGradcamMsg({ kind: "info", text: t.runDetail.gradcam.starting });
     try {
       const result = await gradcamRun(runId, {
         input_dir: gradcamForm.input_dir,
@@ -348,7 +330,7 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
       setGradcamResult(result);
       setGradcamMsg({
         kind: "success",
-        text: `${result.count} mapa(s) gerado(s) · camada ${result.target_layer}`,
+        text: t.runDetail.gradcam.done(result.count, result.target_layer),
       });
     } catch (e) {
       const msg =
@@ -356,7 +338,7 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
           ? e.message
           : e instanceof Error
             ? e.message
-            : "Falha ao gerar Grad-CAM.";
+            : t.runDetail.gradcam.failed;
       setGradcamMsg({ kind: "error", text: msg });
     } finally {
       setGradcamRunning(false);
@@ -365,7 +347,7 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
 
   const runExport = async () => {
     setExporting(true);
-    setExportMsg({ kind: "info", text: "Exportando para ONNX…" });
+    setExportMsg({ kind: "info", text: t.runDetail.onnx.exporting });
     setExportResult(null);
     try {
       const result = await exportRunToOnnx(runId, {
@@ -378,7 +360,7 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
       setExportResult(result);
       setExportMsg({
         kind: "success",
-        text: `ONNX salvo em ${result.output_onnx}`,
+        text: t.runDetail.onnx.saved(result.output_onnx),
       });
     } catch (e) {
       const msg =
@@ -386,7 +368,7 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
           ? e.message
           : e instanceof Error
             ? e.message
-            : "Falha ao exportar ONNX.";
+            : t.runDetail.onnx.failed;
       setExportMsg({ kind: "error", text: msg });
     } finally {
       setExporting(false);
@@ -395,11 +377,11 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
 
   const runTest = async () => {
     if (!testForm.data_dir.trim()) {
-      setTestMsg({ kind: "error", text: "Informe o diretório base do dataset de teste." });
+      setTestMsg({ kind: "error", text: t.runDetail.tests.needFolder });
       return;
     }
     setTesting(true);
-    setTestMsg({ kind: "info", text: "Avaliando modelo no novo dataset…" });
+    setTestMsg({ kind: "info", text: t.runDetail.tests.starting });
     try {
       const record = await testRunOnDataset(runId, {
         data_dir: testForm.data_dir,
@@ -407,13 +389,13 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
       });
       setTestMsg({
         kind: "success",
-        text: `Teste registrado: ${record.test_id}`,
+        text: t.runDetail.tests.recorded(record.test_id),
       });
       setShowTestForm(false);
       await reload();
     } catch (e) {
       const msg =
-        e instanceof ApiError ? e.message : e instanceof Error ? e.message : "Falha no teste.";
+        e instanceof ApiError ? e.message : e instanceof Error ? e.message : t.runDetail.tests.failed;
       setTestMsg({ kind: "error", text: msg });
     } finally {
       setTesting(false);
@@ -439,7 +421,7 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
             cursor: "pointer",
           }}
         >
-          ← histórico
+          {t.runDetail.back}
         </button>
         <div style={{ fontFamily: "var(--font-mono)", fontSize: 14, color: "var(--vf-text)" }}>
           {runId}
@@ -451,8 +433,11 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
             disabled={resuming}
             title={
               detail.configured_epochs
-                ? `Continuar da época ${(detail.metrics?.["total_epochs"] as number) ?? 0} até ${detail.configured_epochs}, na mesma pasta`
-                : "Continuar este run na mesma pasta"
+                ? t.runDetail.resume.title(
+                    (detail.metrics?.["total_epochs"] as number) ?? 0,
+                    detail.configured_epochs,
+                  )
+                : t.runDetail.resume.titleNoTotal
             }
             style={{
               marginLeft: "auto",
@@ -469,7 +454,7 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
               opacity: resuming ? 0.6 : 1,
             }}
           >
-            ▶ retomar
+            {t.runDetail.resume.button}
             {detail.configured_epochs
               ? ` ${(detail.metrics?.["total_epochs"] as number) ?? 0}/${detail.configured_epochs}`
               : ""}
@@ -478,7 +463,7 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
         <button
           type="button"
           onClick={() => void downloadRunMarkdown(runId)}
-          title="Baixar model card (markdown) deste run"
+          title={t.runDetail.modelCard.title}
           style={{
             marginLeft: detail?.resumable ? 0 : "auto",
             padding: "6px 12px",
@@ -493,7 +478,7 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
             cursor: "pointer",
           }}
         >
-          ↓ markdown
+          {t.runDetail.modelCard.button}
         </button>
       </div>
 
@@ -521,11 +506,11 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
 
       {loading && (
         <div style={{ padding: 32, textAlign: "center", color: "var(--vf-text-muted)" }}>
-          carregando…
+          {t.runDetail.loading}
         </div>
       )}
 
-      {error && (
+      {error !== null && (
         <div
           style={{
             padding: 14,
@@ -537,26 +522,27 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
             fontSize: 12,
           }}
         >
-          {error}
+          {error || t.runDetail.loadFailed}
         </div>
       )}
 
       {detail && (
         <>
           {detail.dataset && (
-            <Section title="Dataset">
-              <KeyRow label="Nome" value={detail.dataset.name} />
-              <PathRow label="Caminho" value={detail.dataset.root} />
+            <Section title={t.runDetail.dataset.title}>
+              <KeyRow label={t.runDetail.dataset.name} value={detail.dataset.name} />
+              <PathRow label={t.runDetail.dataset.path} value={detail.dataset.root} />
               {detail.dataset.digest ? (
                 <>
                   <KeyRow
-                    label="Conteúdo"
-                    value={`${detail.dataset.n_files} arquivos · ${formatBytes(
-                      detail.dataset.total_bytes,
-                    )}`}
+                    label={t.runDetail.dataset.contents}
+                    value={t.runDetail.dataset.files(
+                      detail.dataset.n_files,
+                      formatBytes(detail.dataset.total_bytes),
+                    )}
                   />
                   <KeyRow
-                    label="Fingerprint"
+                    label={t.runDetail.dataset.fingerprint}
                     value={`${detail.dataset.method} ${shortDigest(detail.dataset.digest)}`}
                   />
                 </>
@@ -564,24 +550,24 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
                 // Saying nothing here would read as "no dataset"; the run has one,
                 // it just predates the fingerprint (ADR-061, 2026-07-26).
                 <KeyRow
-                  label="Fingerprint"
-                  value="sem fingerprint — run anterior a 26/07/2026"
+                  label={t.runDetail.dataset.fingerprint}
+                  value={t.runDetail.dataset.noFingerprint}
                 />
               )}
             </Section>
           )}
 
-          <Section title="Localização no disco">
-            <PathRow label="Pasta do run" value={detail.run_dir} />
+          <Section title={t.runDetail.location.title}>
+            <PathRow label={t.runDetail.location.runFolder} value={detail.run_dir} />
             {detail.artifacts.model && (
-              <PathRow label="Checkpoint" value={detail.artifacts.model} />
+              <PathRow label={t.runDetail.location.checkpoint} value={detail.artifacts.model} />
             )}
             {detail.device_used && (
-              <KeyRow label="Dispositivo usado" value={detail.device_used} />
+              <KeyRow label={t.runDetail.location.deviceUsed} value={detail.device_used} />
             )}
             {detail.environment &&
               Object.entries(detail.environment).map(([k, v]) => (
-                <KeyRow key={k} label={`env · ${k}`} value={v} />
+                <KeyRow key={k} label={t.runDetail.location.env(k)} value={v} />
               ))}
           </Section>
 
@@ -591,7 +577,7 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
 
           {detail.artifacts.model && canExportOnnx && (
             <Section
-              title="Exportar para ONNX"
+              title={t.runDetail.onnx.title}
               action={
                 <button
                   type="button"
@@ -612,7 +598,7 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
                     textTransform: "uppercase",
                   }}
                 >
-                  {showExportForm ? "cancelar" : "↗ exportar onnx"}
+                  {showExportForm ? t.runDetail.cancel : t.runDetail.onnx.open}
                 </button>
               }
             >
@@ -635,7 +621,7 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
                     }}
                   >
                     <label style={exportLabelStyle}>
-                      <span>opset_version</span>
+                      <span>{t.runDetail.onnx.opsetVersion}</span>
                       <input
                         type="number"
                         min={11}
@@ -651,7 +637,7 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
                       />
                     </label>
                     <label style={exportLabelStyle}>
-                      <span>benchmark_runs</span>
+                      <span>{t.runDetail.onnx.benchmarkRuns}</span>
                       <input
                         type="number"
                         min={5}
@@ -672,21 +658,21 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
                   </div>
                   <div style={{ display: "flex", gap: 18, flexWrap: "wrap" }}>
                     <ExportToggle
-                      label="dynamic_axes"
+                      label={t.runDetail.onnx.dynamicAxes}
                       value={exportForm.dynamic_axes}
                       onChange={(v) =>
                         setExportForm((f) => ({ ...f, dynamic_axes: v }))
                       }
                     />
                     <ExportToggle
-                      label="validate"
+                      label={t.runDetail.onnx.validate}
                       value={exportForm.validate}
                       onChange={(v) =>
                         setExportForm((f) => ({ ...f, validate: v }))
                       }
                     />
                     <ExportToggle
-                      label="benchmark"
+                      label={t.runDetail.onnx.benchmark}
                       value={exportForm.benchmark}
                       onChange={(v) =>
                         setExportForm((f) => ({ ...f, benchmark: v }))
@@ -713,7 +699,7 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
                       opacity: exporting ? 0.6 : 1,
                     }}
                   >
-                    {exporting ? "Exportando…" : "▶ Rodar export"}
+                    {exporting ? t.runDetail.onnx.running : t.runDetail.onnx.run}
                   </button>
                   {exportMsg && (
                     <div
@@ -750,9 +736,7 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
                     lineHeight: 1.5,
                   }}
                 >
-                  Converte o checkpoint para ONNX, valida diff numérico contra
-                  PyTorch e mede latência de inferência. O arquivo é salvo ao
-                  lado do checkpoint como <code>best_model.onnx</code>.
+                  {t.runDetail.onnx.hint} <code>{t.runDetail.onnx.file}</code>.
                 </div>
               )}
               {exportResult && (
@@ -763,7 +747,7 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
 
           {detail.artifacts.model && canBatchPredict && (
             <Section
-              title="Inferência em lote (CSV)"
+              title={t.runDetail.batch.title}
               action={
                 <button
                   type="button"
@@ -784,7 +768,7 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
                     textTransform: "uppercase",
                   }}
                 >
-                  {showBatchForm ? "cancelar" : "+ inferência em lote"}
+                  {showBatchForm ? t.runDetail.cancel : t.runDetail.batch.open}
                 </button>
               }
             >
@@ -801,12 +785,12 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
                 >
                   <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
                     <FormField
-                      label="Pasta de imagens"
+                      label={t.runDetail.imageFolder}
                       value={batchForm.input_dir}
                       onChange={(v) =>
                         setBatchForm((f) => ({ ...f, input_dir: v }))
                       }
-                      placeholder="ex: C:/datasets/inbox"
+                      placeholder={t.runDetail.batch.folderPlaceholder}
                     />
                     <button
                       type="button"
@@ -823,11 +807,11 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
                         whiteSpace: "nowrap",
                       }}
                     >
-                      📁 Escolher
+                      {t.runDetail.browse}
                     </button>
                   </div>
                   <ExportToggle
-                    label="recursive (subpastas)"
+                    label={t.runDetail.batch.recursive}
                     value={batchForm.recursive}
                     onChange={(v) =>
                       setBatchForm((f) => ({ ...f, recursive: v }))
@@ -853,7 +837,7 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
                       opacity: batchRunning ? 0.6 : 1,
                     }}
                   >
-                    {batchRunning ? "Processando…" : "▶ Rodar inferência"}
+                    {batchRunning ? t.runDetail.batch.running : t.runDetail.batch.run}
                   </button>
                   {batchMsg && (
                     <div
@@ -890,9 +874,7 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
                     lineHeight: 1.5,
                   }}
                 >
-                  Roda o checkpoint sobre uma pasta de imagens e escreve um CSV
-                  com uma linha por imagem (probabilidades + classe predita).
-                  Útil para classificar batches de dados novos sem retreinar.
+                  {t.runDetail.batch.hint}
                 </div>
               )}
               {batchResult && <BatchResultPanel result={batchResult} />}
@@ -901,7 +883,7 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
 
           {detail.artifacts.model && canGradcam && (
             <Section
-              title="Grad-CAM (explicabilidade)"
+              title={t.runDetail.gradcam.title}
               action={
                 <button
                   type="button"
@@ -922,7 +904,7 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
                     textTransform: "uppercase",
                   }}
                 >
-                  {showGradcamForm ? "cancelar" : "🔥 Grad-CAM"}
+                  {showGradcamForm ? t.runDetail.cancel : t.runDetail.gradcam.open}
                 </button>
               }
             >
@@ -939,12 +921,12 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
                 >
                   <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
                     <FormField
-                      label="Pasta de imagens"
+                      label={t.runDetail.imageFolder}
                       value={gradcamForm.input_dir}
                       onChange={(v) =>
                         setGradcamForm((f) => ({ ...f, input_dir: v }))
                       }
-                      placeholder="ex: C:/datasets/amostras"
+                      placeholder={t.runDetail.gradcam.folderPlaceholder}
                     />
                     <button
                       type="button"
@@ -961,11 +943,11 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
                         whiteSpace: "nowrap",
                       }}
                     >
-                      📁 Escolher
+                      {t.runDetail.browse}
                     </button>
                   </div>
                   <FormField
-                    label="Nº de amostras (1–64)"
+                    label={t.runDetail.gradcam.samples}
                     value={String(gradcamForm.num_samples)}
                     onChange={(v) =>
                       setGradcamForm((f) => ({
@@ -994,7 +976,7 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
                       opacity: gradcamRunning ? 0.6 : 1,
                     }}
                   >
-                    {gradcamRunning ? "Gerando…" : "▶ Gerar Grad-CAM"}
+                    {gradcamRunning ? t.runDetail.gradcam.running : t.runDetail.gradcam.run}
                   </button>
                   {gradcamMsg && (
                     <div
@@ -1088,9 +1070,7 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
                     lineHeight: 1.5,
                   }}
                 >
-                  Gera mapas de calor Grad-CAM sobre imagens de exemplo,
-                  destacando as regiões que mais influenciaram a classe predita
-                  pelo checkpoint. Útil para interpretar o que o modelo aprendeu.
+                  {t.runDetail.gradcam.hint}
                 </div>
               )}
             </Section>
@@ -1098,12 +1078,12 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
 
           <CrossValidationDetail metrics={detail.metrics} />
 
-          <Section title="Métricas">
+          <Section title={t.runDetail.metrics.title}>
             <MetricsGrid metrics={detail.metrics} metricCis={detail.metric_cis} />
           </Section>
 
           {detail.artifacts.graphics && detail.artifacts.graphics.length > 0 && (
-            <Section title="Gráficos (clique para expandir)">
+            <Section title={t.runDetail.graphs.title}>
               <div
                 style={{
                   display: "grid",
@@ -1113,7 +1093,8 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
               >
                 {detail.artifacts.graphics.map((g) => {
                   const filename = g.replace(/\\/g, "/").split("/").pop() ?? g;
-                  const label = GRAPH_LABELS[filename] ?? filename;
+                  const graphLabels: Record<string, string> = t.runDetail.graphs.labels;
+                  const label = graphLabels[filename] ?? filename;
                   const url = artifactUrl(g);
                   return (
                     <button
@@ -1166,7 +1147,7 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
           )}
 
           <Section
-            title="Testes neste modelo"
+            title={t.runDetail.tests.title}
             action={
               <button
                 type="button"
@@ -1184,7 +1165,7 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
                   textTransform: "uppercase",
                 }}
               >
-                {showTestForm ? "cancelar" : "+ testar"}
+                {showTestForm ? t.runDetail.cancel : t.runDetail.tests.open}
               </button>
             }
           >
@@ -1202,13 +1183,13 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
               >
                 <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
                   <FormField
-                    label={testFolderLabel(detail)}
+                    label={testFolderLabel(t, detail)}
                     value={testForm.data_dir}
                     onChange={(v) => setTestForm((f) => ({ ...f, data_dir: v }))}
                     placeholder={
                       task === "regression"
-                        ? "ex: C:/datasets/idade/test.csv"
-                        : "ex: C:/datasets/coffee_v2/test"
+                        ? t.runDetail.tests.manifestPlaceholder
+                        : t.runDetail.tests.folderPlaceholder
                     }
                   />
                   <button
@@ -1226,7 +1207,7 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
                       whiteSpace: "nowrap",
                     }}
                   >
-                    📁 Escolher
+                    {t.runDetail.browse}
                   </button>
                 </div>
                 <div
@@ -1237,13 +1218,13 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
                     color: "var(--vf-text-muted)",
                   }}
                 >
-                  {testFolderHint(detail)}
+                  {testFolderHint(t, detail)}
                 </div>
                 <FormField
-                  label="Rótulo (opcional)"
+                  label={t.runDetail.tests.label}
                   value={testForm.label}
                   onChange={(v) => setTestForm((f) => ({ ...f, label: v }))}
-                  placeholder="ex: holdout_2026"
+                  placeholder={t.runDetail.tests.labelPlaceholder}
                 />
                 <button
                   type="button"
@@ -1265,7 +1246,7 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
                     opacity: testing ? 0.6 : 1,
                   }}
                 >
-                  {testing ? "Avaliando…" : "▶ Rodar teste"}
+                  {testing ? t.runDetail.tests.running : t.runDetail.tests.run}
                 </button>
                 {testMsg && (
                   <div
@@ -1306,12 +1287,12 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
                   borderRadius: 10,
                 }}
               >
-                Nenhum teste executado ainda neste modelo.
+                {t.runDetail.tests.empty}
               </div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {detail.tests.map((t) => (
-                  <TestRow key={t.test_id} test={t} onOpenImage={(src, caption) => setLightbox({ src, caption })} />
+                {detail.tests.map((test) => (
+                  <TestRow key={test.test_id} test={test} onOpenImage={(src, caption) => setLightbox({ src, caption })} />
                 ))}
               </div>
             )}
@@ -1354,6 +1335,7 @@ interface CVAggregate {
 /** Per-fold detail section, only rendered when the run.json carries
  *  ``fold_results`` (i.e. it was produced by CrossValidationBlock). */
 function CrossValidationDetail({ metrics }: { metrics: Record<string, unknown> }) {
+  const t = useT();
   const folds = metrics["fold_results"];
   const agg = metrics["cv_aggregate"];
   if (!Array.isArray(folds) || folds.length === 0) return null;
@@ -1363,9 +1345,11 @@ function CrossValidationDetail({ metrics }: { metrics: Record<string, unknown> }
 
   return (
     <Section
-      title={`Cross-validation · ${a.n_folds_ok ?? typed.length}/${a.n_folds ?? typed.length} folds ok${
-        (a.n_folds_failed ?? 0) > 0 ? ` · ${a.n_folds_failed} falharam` : ""
-      }`}
+      title={t.runDetail.cv.title(
+        a.n_folds_ok ?? typed.length,
+        a.n_folds ?? typed.length,
+        a.n_folds_failed ?? 0,
+      )}
     >
       <div
         style={{
@@ -1377,7 +1361,7 @@ function CrossValidationDetail({ metrics }: { metrics: Record<string, unknown> }
       >
         {a.mean_accuracy !== null && a.mean_accuracy !== undefined && (
           <CVAggregateCard
-            label="Acurácia média ± std"
+            label={t.runDetail.cv.meanAccuracy}
             mean={a.mean_accuracy}
             std={a.std_accuracy ?? 0}
             highlight
@@ -1385,7 +1369,7 @@ function CrossValidationDetail({ metrics }: { metrics: Record<string, unknown> }
         )}
         {a.mean_f1 !== null && a.mean_f1 !== undefined && (
           <CVAggregateCard
-            label="F1 média ± std"
+            label={t.runDetail.cv.meanF1}
             mean={a.mean_f1}
             std={a.std_f1 ?? 0}
           />
@@ -1411,13 +1395,13 @@ function CrossValidationDetail({ metrics }: { metrics: Record<string, unknown> }
         >
           <thead>
             <tr>
-              <th style={cvThStyle}>Fold</th>
-              <th style={cvThStyle}>train</th>
-              <th style={cvThStyle}>val</th>
-              <th style={cvThStyle}>val_loss</th>
-              <th style={cvThStyle}>accuracy</th>
+              <th style={cvThStyle}>{t.runDetail.cv.fold}</th>
+              <th style={cvThStyle}>{t.runDetail.cv.train}</th>
+              <th style={cvThStyle}>{t.runDetail.cv.val}</th>
+              <th style={cvThStyle}>{t.runDetail.cv.valLoss}</th>
+              <th style={cvThStyle}>{t.runDetail.cv.accuracy}</th>
               <th style={cvThStyle}>F1</th>
-              <th style={cvThStyle}>status</th>
+              <th style={cvThStyle}>{t.runDetail.cv.status}</th>
             </tr>
           </thead>
           <tbody>
@@ -1577,6 +1561,7 @@ function Section({ title, children, action }: SectionProps) {
 }
 
 function PathRow({ label, value }: { label: string; value: string }) {
+  const t = useT();
   return (
     <div
       style={{
@@ -1614,7 +1599,7 @@ function PathRow({ label, value }: { label: string; value: string }) {
       <button
         type="button"
         onClick={() => void navigator.clipboard.writeText(value)}
-        title="Copiar caminho"
+        title={t.runDetail.copyPath}
         style={{
           padding: "4px 8px",
           background: "rgba(255,255,255,0.04)",
@@ -1626,7 +1611,7 @@ function PathRow({ label, value }: { label: string; value: string }) {
           cursor: "pointer",
         }}
       >
-        copy
+        {t.runDetail.copy}
       </button>
     </div>
   );
@@ -1673,10 +1658,10 @@ function runTask(detail: RunDetail | null): string {
 }
 
 /** What the single test input is called for this task (ADR-080). */
-function testFolderLabel(detail: RunDetail | null): string {
+function testFolderLabel(t: Dict, detail: RunDetail | null): string {
   return runTask(detail) === "regression"
-    ? "Manifesto de teste (.csv)"
-    : "Pasta de teste";
+    ? t.runDetail.tests.manifest
+    : t.runDetail.tests.folder;
 }
 
 /** What that folder has to contain — the label shape the run was trained with.
@@ -1685,18 +1670,19 @@ function testFolderLabel(detail: RunDetail | null): string {
  * where the labels live, and getting it wrong is a failed evaluation rather
  * than a validation error.
  */
-function testFolderHint(detail: RunDetail | null): string {
+function testFolderHint(t: Dict, detail: RunDetail | null): string {
+  const hints = t.runDetail.tests.folderHint;
   switch (runTask(detail)) {
     case "detection":
-      return "Uma pasta no layout YOLO: imagens e os .txt de rótulo correspondentes.";
+      return hints.detection;
     case "segmentation":
-      return "Uma pasta com as subpastas de imagens e de máscaras, pareadas pelo nome do arquivo.";
+      return hints.segmentation;
     case "anomaly":
-      return "Uma pasta com a subpasta de imagens normais e as de defeito, como no treino.";
+      return hints.anomaly;
     case "regression":
-      return "O .csv com a coluna de imagem e a(s) coluna(s) alvo. As imagens seguem a mesma pasta do treino.";
+      return hints.regression;
     default:
-      return "Uma pasta com uma subpasta por classe — a mesma convenção do treino.";
+      return hints.classification;
   }
 }
 
@@ -1706,20 +1692,21 @@ function testFolderHint(detail: RunDetail | null): string {
  * the "real" line is omitted rather than filled with a guess (ADR-077).
  */
 function GradCamCaption({ item }: { item: GradCamItem }) {
+  const t = useT();
   const predicted =
     item.predicted_label ??
-    (item.predicted_class !== null ? `classe ${item.predicted_class}` : null);
+    (item.predicted_class !== null ? t.runDetail.gradcam.classNumber(item.predicted_class) : null);
 
   if (item.true_class === null || item.true_class === undefined) {
-    return <>{item.prediction ?? (predicted ? `predito: ${predicted}` : "—")}</>;
+    return <>{item.prediction ?? (predicted ? t.runDetail.gradcam.predictedIs(predicted) : "—")}</>;
   }
   return (
     <>
       <div>
-        <span style={{ color: "var(--vf-text-muted)" }}>real</span> {item.true_class}
+        <span style={{ color: "var(--vf-text-muted)" }}>{t.runDetail.gradcam.actual}</span> {item.true_class}
       </div>
       <div style={{ color: item.correct ? "inherit" : "oklch(0.8 0.16 22)" }}>
-        <span style={{ color: "var(--vf-text-muted)" }}>predito</span> {predicted}
+        <span style={{ color: "var(--vf-text-muted)" }}>{t.runDetail.gradcam.predicted}</span> {predicted}
         {item.correct === false ? " ✗" : " ✓"}
       </div>
     </>
@@ -1733,9 +1720,10 @@ function MetricsGrid({
   metrics: Record<string, unknown>;
   metricCis?: Record<string, MetricCI>;
 }) {
+  const t = useT();
   const entries = Object.entries(metrics);
   if (entries.length === 0) {
-    return <div style={{ color: "var(--vf-text-muted)", fontSize: 12 }}>Sem métricas registradas.</div>;
+    return <div style={{ color: "var(--vf-text-muted)", fontSize: 12 }}>{t.runDetail.metrics.none}</div>;
   }
   return (
     <div
@@ -1766,7 +1754,7 @@ function MetricsGrid({
                 color: "var(--vf-text-muted)",
               }}
             >
-              {metricLabel(k)}
+              {metricLabel(t, k)}
             </div>
             <div
               style={{
@@ -1781,12 +1769,11 @@ function MetricsGrid({
             </div>
             {ci && (
               <div
-                title={
-                  `IC ${Math.round(ci.confidence * 100)}% por bootstrap percentil: ` +
-                  `${ci.n_resamples} reamostragens das ${ci.n_samples} imagens de ` +
-                  `teste. Mede o ruído de amostragem do split com este modelo ` +
-                  `fixo — não a variação entre treinos.`
-                }
+                title={t.runDetail.metrics.ciTooltip(
+                  Math.round(ci.confidence * 100),
+                  ci.n_resamples,
+                  ci.n_samples,
+                )}
                 style={{
                   marginTop: 3,
                   fontFamily: "var(--font-mono)",
@@ -1812,6 +1799,7 @@ interface TestRowProps {
 }
 
 function TestRow({ test, onOpenImage }: TestRowProps) {
+  const { locale } = useI18n();
   return (
     <div
       style={{
@@ -1827,7 +1815,7 @@ function TestRow({ test, onOpenImage }: TestRowProps) {
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <span style={{ fontWeight: 600, fontSize: 13 }}>{test.label}</span>
         <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--vf-text-muted)" }}>
-          {new Date(test.timestamp).toLocaleString("pt-BR")}
+          {new Date(test.timestamp).toLocaleString(locale)}
         </span>
       </div>
       <code
@@ -1882,6 +1870,7 @@ interface FormFieldProps {
  * Only scalar knobs are shown; nested config (scheduler) is skipped.
  */
 function TrainingSection({ config }: { config: Record<string, unknown> }) {
+  const t = useT();
   const training = getConfigRecord(config, "training");
   if (!training) return null;
 
@@ -1906,13 +1895,13 @@ function TrainingSection({ config }: { config: Record<string, unknown> }) {
   if (rows.length === 0 && !tl) return null;
 
   return (
-    <Section title="Configuração de treino">
+    <Section title={t.runDetail.training.title}>
       {rows.map(([k, v]) => (
         <KeyRow key={k} label={k.replace(/_/g, " ")} value={String(v)} />
       ))}
       {tl && (
         <KeyRow
-          label="transfer learning"
+          label={t.runDetail.training.transferLearning}
           value={
             tl["mode"] === "fine_tuning"
               ? `fine-tuning · backbone lr × ${String(tl["backbone_lr_multiplier"])}`
@@ -1931,6 +1920,7 @@ function TrainingSection({ config }: { config: Record<string, unknown> }) {
  * forgotten by the researcher months later, so we surface them up front.
  */
 function PipelineSection({ config }: { config: Record<string, unknown> }) {
+  const t = useT();
   const data = getDataSection(config);
   if (!data) return null;
 
@@ -1945,7 +1935,7 @@ function PipelineSection({ config }: { config: Record<string, unknown> }) {
   if (ppSteps.length === 0 && transformEntries.length === 0) return null;
 
   return (
-    <Section title="Pipeline aplicado (preprocessing + augmentation)">
+    <Section title={t.runDetail.pipeline.title}>
       {ppSteps.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
           <div
@@ -1957,7 +1947,7 @@ function PipelineSection({ config }: { config: Record<string, unknown> }) {
               color: "var(--vf-text-muted)",
             }}
           >
-            // pré-processamento (ordem)
+            {t.runDetail.pipeline.preprocessing}
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
             {ppSteps.map((step, i) => {
@@ -2008,7 +1998,7 @@ function PipelineSection({ config }: { config: Record<string, unknown> }) {
               color: "var(--vf-text-muted)",
             }}
           >
-            // augmentation & normalize
+            {t.runDetail.pipeline.augmentation}
           </div>
           <div
             style={{
@@ -2121,6 +2111,8 @@ function ExportToggle({
 }
 
 function ExportResultPanel({ result }: { result: ExportOnnxResponse }) {
+  const t = useT();
+  const stats = t.runDetail.onnx.stats;
   const sizeMb = (result.file_size_bytes / (1024 * 1024)).toFixed(2);
   const val = result.validation;
   const bench = result.benchmark;
@@ -2138,10 +2130,10 @@ function ExportResultPanel({ result }: { result: ExportOnnxResponse }) {
         fontFamily: "var(--font-mono)",
       }}
     >
-      <ExportStat label="file_size" value={`${sizeMb} MB`} />
+      <ExportStat label={stats.fileSize} value={`${sizeMb} MB`} />
       {val && (
         <ExportStat
-          label="max_diff"
+          label={stats.maxDiff}
           value={
             typeof val.max_diff === "number" ? val.max_diff.toExponential(3) : "—"
           }
@@ -2151,7 +2143,7 @@ function ExportResultPanel({ result }: { result: ExportOnnxResponse }) {
       {bench && (
         <>
           <ExportStat
-            label="onnx latency μ"
+            label={stats.onnxLatency}
             value={
               typeof bench.mean_ms === "number"
                 ? `${bench.mean_ms.toFixed(2)} ms`
@@ -2159,13 +2151,13 @@ function ExportResultPanel({ result }: { result: ExportOnnxResponse }) {
             }
           />
           <ExportStat
-            label="onnx p95"
+            label={stats.onnxP95}
             value={
               typeof bench.p95_ms === "number" ? `${bench.p95_ms.toFixed(2)} ms` : "—"
             }
           />
           <ExportStat
-            label="torch latency μ"
+            label={stats.torchLatency}
             value={
               typeof bench.torch_mean_ms === "number"
                 ? `${bench.torch_mean_ms.toFixed(2)} ms`
@@ -2173,7 +2165,7 @@ function ExportResultPanel({ result }: { result: ExportOnnxResponse }) {
             }
           />
           <ExportStat
-            label="speedup (torch/onnx)"
+            label={stats.speedup}
             value={
               typeof bench.speedup === "number" ? `${bench.speedup.toFixed(2)}×` : "—"
             }
@@ -2183,7 +2175,7 @@ function ExportResultPanel({ result }: { result: ExportOnnxResponse }) {
                 : undefined
             }
           />
-          <ExportStat label="n_runs" value={String(bench.runs ?? "—")} />
+          <ExportStat label={stats.runs} value={String(bench.runs ?? "—")} />
         </>
       )}
     </div>
@@ -2191,6 +2183,7 @@ function ExportResultPanel({ result }: { result: ExportOnnxResponse }) {
 }
 
 function BatchResultPanel({ result }: { result: BatchPredictResponse }) {
+  const t = useT();
   const failedHead = result.failed_files.slice(0, 5);
   const more = result.failed_files.length - failedHead.length;
   return (
@@ -2215,12 +2208,12 @@ function BatchResultPanel({ result }: { result: BatchPredictResponse }) {
         }}
       >
         <ExportStat
-          label="processadas"
+          label={t.runDetail.batch.processed}
           value={String(result.total_processed)}
           accent="oklch(0.85 0.16 150)"
         />
         <ExportStat
-          label="falharam"
+          label={t.runDetail.batch.failedCount}
           value={String(result.failed_count)}
           accent={
             result.failed_count === 0
@@ -2245,7 +2238,7 @@ function BatchResultPanel({ result }: { result: BatchPredictResponse }) {
             minWidth: 70,
           }}
         >
-          csv
+          {t.runDetail.batch.csv}
         </span>
         <code
           style={{
@@ -2260,7 +2253,7 @@ function BatchResultPanel({ result }: { result: BatchPredictResponse }) {
         <button
           type="button"
           onClick={() => void navigator.clipboard.writeText(result.output_csv)}
-          title="Copiar caminho"
+          title={t.runDetail.copyPath}
           style={{
             padding: "4px 8px",
             background: "rgba(255,255,255,0.04)",
@@ -2272,13 +2265,13 @@ function BatchResultPanel({ result }: { result: BatchPredictResponse }) {
             cursor: "pointer",
           }}
         >
-          copy
+          {t.runDetail.copy}
         </button>
       </div>
       {failedHead.length > 0 && (
         <details style={{ fontSize: 11, color: "var(--vf-text-muted)" }}>
           <summary style={{ cursor: "pointer", color: "oklch(0.85 0.14 22)" }}>
-            {result.failed_count} arquivos falharam (clique para ver até 5)
+            {t.runDetail.batch.failedFiles(result.failed_count)}
           </summary>
           <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
             {failedHead.map((p) => (
@@ -2289,7 +2282,7 @@ function BatchResultPanel({ result }: { result: BatchPredictResponse }) {
           </ul>
           {more > 0 && (
             <div style={{ marginTop: 4, fontSize: 10 }}>
-              …+{more} mais
+              {t.runDetail.batch.more(more)}
             </div>
           )}
         </details>
