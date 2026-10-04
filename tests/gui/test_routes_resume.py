@@ -67,6 +67,22 @@ def _classification(epochs: int = 5, block: str = "classification") -> dict[str,
     }
 
 
+def _classification_full(base_dir: Path, epochs: int = 5) -> dict[str, Any]:
+    """A config ExperimentConfig validates, for tests that reach the executor.
+
+    ``base_dir`` must exist: the config validator checks it.
+    """
+    return {
+        "name": "e",
+        "task": "multiclass",
+        "block": "classification",
+        "model": {"name": "resnet18", "num_classes": 2, "pretrained": False},
+        "data": {"base_dir": str(base_dir)},
+        "training": {"epochs": epochs, "learning_rate": 1e-3},
+        "device": {"kind": "cpu"},
+    }
+
+
 class TestDerivedFromDisk:
     def test_a_stopped_run_with_state_can_be_continued(self, tmp_path: Path) -> None:
         run_dir, data = _run(tmp_path, _classification(), resume_file=True)
@@ -170,3 +186,65 @@ class TestResumeEndpoint:
 
         assert resp.status_code == 409
         assert "continue" in resp.json()["detail"]
+
+    def test_a_stopped_run_is_submitted_in_its_own_directory(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from visionforge.gui.api.schemas import RunResponse
+
+        client, routes_mod = self._client_and_routes()
+        run_dir, _ = _run(
+            tmp_path / "models" / "e", _classification_full(tmp_path), resume_file=True
+        )
+        monkeypatch.setattr(routes_mod, "_MODELS_DIR", tmp_path / "models")
+        submitted: dict[str, Any] = {}
+
+        def fake_submit(job_id, label, task, strategy, start):  # type: ignore[no-untyped-def]
+            submitted.update(job_id=job_id, label=label, task=task, start=start)
+            return RunResponse(run_id=job_id)
+
+        monkeypatch.setattr(routes_mod, "_submit_job", fake_submit)
+        seen: dict[str, Any] = {}
+
+        async def fake_execute(config, job_id, *, resume_dir):  # type: ignore[no-untyped-def]
+            seen.update(config=config, resume_dir=resume_dir)
+
+        monkeypatch.setattr(routes_mod, "_execute_experiment", fake_execute)
+
+        resp = client.post(f"/api/runs/{run_dir.name}/resume")
+
+        assert resp.status_code == 200
+        assert submitted["task"] == "classification"
+        assert "retomando" in submitted["label"]
+        import asyncio
+
+        asyncio.run(submitted["start"]())
+        assert seen["resume_dir"] == run_dir
+        assert seen["config"].training.epochs == 5
+
+    def test_a_stored_config_that_no_longer_validates_is_a_400(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        client, routes_mod = self._client_and_routes()
+        broken = _classification_full(tmp_path)
+        broken["training"]["learning_rate"] = -1.0
+        run_dir, _ = _run(tmp_path / "models" / "e", broken, resume_file=True)
+        monkeypatch.setattr(routes_mod, "_MODELS_DIR", tmp_path / "models")
+
+        resp = client.post(f"/api/runs/{run_dir.name}/resume")
+
+        assert resp.status_code == 400
+        assert "no longer valid" in resp.json()["detail"]
+
+    def test_an_unreadable_run_json_is_a_500(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        client, routes_mod = self._client_and_routes()
+        run_dir = tmp_path / "models" / "e" / "20260923_000000_000000"
+        run_dir.mkdir(parents=True)
+        (run_dir / "run.json").write_text("{not json", encoding="utf-8")
+        monkeypatch.setattr(routes_mod, "_MODELS_DIR", tmp_path / "models")
+
+        resp = client.post(f"/api/runs/{run_dir.name}/resume")
+
+        assert resp.status_code == 500
