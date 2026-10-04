@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { fetchSystemInfo } from "../api/client";
+import { useI18n } from "../i18n/useT";
 
 function Logo() {
   return (
@@ -75,11 +76,13 @@ export function Header({
       .catch(() => setVersion(""));
   }, []);
 
-  const dateStr = time.toLocaleDateString("pt-BR", {
+  const { t, lang, locale, setLang } = useI18n();
+
+  const dateStr = time.toLocaleDateString(locale, {
     day: "2-digit",
     month: "short",
   });
-  const timeStr = time.toLocaleTimeString("pt-BR", {
+  const timeStr = time.toLocaleTimeString(locale, {
     hour: "2-digit",
     minute: "2-digit",
   });
@@ -136,11 +139,43 @@ export function Header({
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+        <button
+          type="button"
+          onClick={() => setLang(lang === "pt" ? "en" : "pt")}
+          title={t.language.switchTo}
+          aria-label={t.language.label}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            padding: "9px 11px",
+            background: "rgba(255,255,255,0.025)",
+            border: "1px solid var(--vf-panel-stroke)",
+            borderRadius: 10,
+            fontFamily: "var(--font-mono)",
+            fontSize: 11,
+            letterSpacing: "0.12em",
+            cursor: "pointer",
+            animation: "fadeUp 700ms ease both",
+          }}
+        >
+          {(["pt", "en"] as const).map((code) => (
+            <span
+              key={code}
+              style={{
+                color: code === lang ? "var(--accent-vf)" : "var(--vf-text-muted)",
+                fontWeight: code === lang ? 600 : 400,
+              }}
+            >
+              {code.toUpperCase()}
+            </span>
+          ))}
+        </button>
         {onGuide && (
           <button
             type="button"
             onClick={onGuide}
-            title="Rever o guia da interface"
+            title={t.header.guideTitle}
             style={{
               display: "flex",
               alignItems: "center",
@@ -159,14 +194,14 @@ export function Header({
             }}
           >
             <span style={{ fontSize: 13, lineHeight: 1 }}>◎</span>
-            guia
+            {t.header.guide}
           </button>
         )}
         {userName && (
           <button
             type="button"
             onClick={onChangeName}
-            title="Trocar nome"
+            title={t.header.changeName}
             style={{
               display: "flex",
               alignItems: "center",
@@ -198,7 +233,7 @@ export function Header({
                 color: "var(--vf-text-dim)",
               }}
             >
-              Bem-vindo,
+              {t.header.welcome}
             </span>
             {/* Sem text-transform: o nome aparece exatamente como foi digitado. */}
             <span

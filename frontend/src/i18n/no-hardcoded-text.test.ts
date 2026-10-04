@@ -36,7 +36,6 @@ const NOT_YET_MIGRATED = new Set([
   "components/ExperimentHeader.tsx",
   "components/ExperimentRunner.tsx",
   "components/GuidedTour.tsx",
-  "components/Header.tsx",
   "components/HistoryOverlay.tsx",
   "components/Lightbox.tsx",
   "components/ModelAdvice.tsx",

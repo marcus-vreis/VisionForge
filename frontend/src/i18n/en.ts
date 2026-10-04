@@ -11,6 +11,12 @@ export const en: Dict = {
     save: "Save",
     loading: "Loading…",
   },
+  header: {
+    guide: "guide",
+    guideTitle: "Show the interface guide again",
+    changeName: "Change name",
+    welcome: "Welcome,",
+  },
   language: {
     label: "Language",
     switchTo: "Switch to Portuguese",

@@ -19,6 +19,12 @@ export const pt = {
     save: "Salvar",
     loading: "Carregando…",
   },
+  header: {
+    guide: "guia",
+    guideTitle: "Rever o guia da interface",
+    changeName: "Trocar nome",
+    welcome: "Bem-vindo,",
+  },
   language: {
     label: "Idioma",
     switchTo: "Mudar para inglês",
