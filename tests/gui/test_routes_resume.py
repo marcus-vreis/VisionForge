@@ -8,6 +8,7 @@ where the file is the wrong thing to look at: Ultralytics keeps its own state
 
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 from typing import Any
@@ -16,6 +17,7 @@ import pytest
 
 from visionforge.core.resume import ResumeState, save_resume_state
 from visionforge.gui.api.routes import _resume_status
+from visionforge.utils.config import ExperimentConfig
 
 
 def _run(
@@ -193,21 +195,22 @@ class TestResumeEndpoint:
         from visionforge.gui.api.schemas import RunResponse
 
         client, routes_mod = self._client_and_routes()
-        run_dir, _ = _run(
-            tmp_path / "models" / "e", _classification_full(tmp_path), resume_file=True
-        )
+        stored = _classification_full(tmp_path)
+        run_dir, _ = _run(tmp_path / "models" / "e", stored, resume_file=True)
         monkeypatch.setattr(routes_mod, "_MODELS_DIR", tmp_path / "models")
         submitted: dict[str, Any] = {}
 
         def fake_submit(job_id, label, task, strategy, start):  # type: ignore[no-untyped-def]
-            submitted.update(job_id=job_id, label=label, task=task, start=start)
+            submitted.update(
+                job_id=job_id, label=label, task=task, strategy=strategy, start=start
+            )
             return RunResponse(run_id=job_id)
 
         monkeypatch.setattr(routes_mod, "_submit_job", fake_submit)
         seen: dict[str, Any] = {}
 
         async def fake_execute(config, job_id, *, resume_dir):  # type: ignore[no-untyped-def]
-            seen.update(config=config, resume_dir=resume_dir)
+            seen.update(config=config, job_id=job_id, resume_dir=resume_dir)
 
         monkeypatch.setattr(routes_mod, "_execute_experiment", fake_execute)
 
@@ -216,11 +219,11 @@ class TestResumeEndpoint:
         assert resp.status_code == 200
         assert submitted["task"] == "classification"
         assert "retomando" in submitted["label"]
-        import asyncio
-
+        assert submitted["strategy"] == "simple"
         asyncio.run(submitted["start"]())
         assert seen["resume_dir"] == run_dir
-        assert seen["config"].training.epochs == 5
+        assert seen["job_id"] == submitted["job_id"] == resp.json()["run_id"]
+        assert seen["config"] == ExperimentConfig.model_validate(stored)
 
     def test_a_stored_config_that_no_longer_validates_is_a_400(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -248,3 +251,4 @@ class TestResumeEndpoint:
         resp = client.post(f"/api/runs/{run_dir.name}/resume")
 
         assert resp.status_code == 500
+        assert "run.json" in resp.json()["detail"]

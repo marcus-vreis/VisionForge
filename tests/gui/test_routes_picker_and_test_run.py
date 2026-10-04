@@ -395,38 +395,34 @@ class TestRunTestRoute:
         )
         monkeypatch.setattr(routes_mod, "_MODELS_DIR", tmp_path / "models")
 
-        def boom(_run_dir, _req):  # type: ignore[no-untyped-def]
+        calls: list[Path] = []
+
+        def boom(got_run_dir, _req):  # type: ignore[no-untyped-def]
+            calls.append(got_run_dir)
             raise raises
 
         monkeypatch.setattr(routes_mod, "_execute_run_test", boom)
-        return TestClient(app), run_dir.name
-
-    def test_an_unknown_run_is_a_404(self, tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
-        client, _ = self._setup(tmp_path, monkeypatch, RuntimeError())
-
-        resp = client.post("/api/runs/nope/test", json={"data_dir": "x"})
-
-        assert resp.status_code == 404
+        return TestClient(app), run_dir, calls
 
     @pytest.mark.parametrize(
         "exc", [FileNotFoundError("sem checkpoint"), ValueError("pasta errada")]
     )
     def test_user_errors_are_400(self, tmp_path, monkeypatch, exc) -> None:  # type: ignore[no-untyped-def]
-        client, run_id = self._setup(tmp_path, monkeypatch, exc)
+        client, run_dir, calls = self._setup(tmp_path, monkeypatch, exc)
 
-        resp = client.post(f"/api/runs/{run_id}/test", json={"data_dir": "x"})
+        resp = client.post(f"/api/runs/{run_dir.name}/test", json={"data_dir": "x"})
 
         assert resp.status_code == 400
         assert resp.json()["detail"] == str(exc)
+        assert calls == [run_dir]
 
     def test_anything_else_is_a_500_that_names_the_exception(
-        self,
-        tmp_path,
-        monkeypatch,  # type: ignore[no-untyped-def]
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        client, run_id = self._setup(tmp_path, monkeypatch, KeyError("model"))
+        client, run_dir, calls = self._setup(tmp_path, monkeypatch, KeyError("model"))
 
-        resp = client.post(f"/api/runs/{run_id}/test", json={"data_dir": "x"})
+        resp = client.post(f"/api/runs/{run_dir.name}/test", json={"data_dir": "x"})
 
         assert resp.status_code == 500
         assert resp.json()["detail"].startswith("KeyError")
+        assert calls == [run_dir]

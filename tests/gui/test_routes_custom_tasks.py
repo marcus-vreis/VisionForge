@@ -195,8 +195,8 @@ class TestDeleteCustomTaskRoute:
     def test_a_confirmed_delete_reports_what_was_removed(self, monkeypatch) -> None:  # type: ignore[no-untyped-def]
         calls: list[tuple[str, str]] = []
 
-        def ok(key: str, confirm: str) -> Path:
-            calls.append((key, confirm))
+        def ok(key: str, confirmation: str) -> Path:
+            calls.append((key, confirmation))
             return Path("user_tasks/toy.py")
 
         client = self._client(monkeypatch, ok)
@@ -209,7 +209,7 @@ class TestDeleteCustomTaskRoute:
         assert calls == [("toy", "toy")]
 
     def test_a_wrong_confirmation_is_a_400(self, monkeypatch) -> None:  # type: ignore[no-untyped-def]
-        def refuse(key: str, confirm: str) -> Path:
+        def refuse(key: str, confirmation: str) -> Path:
             raise ValueError("confirme digitando 'toy'")
 
         client = self._client(monkeypatch, refuse)
@@ -217,9 +217,10 @@ class TestDeleteCustomTaskRoute:
         resp = client.delete("/api/custom/toy", params={"confirm": "oops"})
 
         assert resp.status_code == 400
+        assert resp.json()["detail"] == "confirme digitando 'toy'"
 
     def test_an_unknown_task_is_a_404(self, monkeypatch) -> None:  # type: ignore[no-untyped-def]
-        def missing(key: str, confirm: str) -> Path:
+        def missing(key: str, confirmation: str) -> Path:
             raise FileNotFoundError("não existe")
 
         client = self._client(monkeypatch, missing)
@@ -227,3 +228,4 @@ class TestDeleteCustomTaskRoute:
         resp = client.delete("/api/custom/ghost", params={"confirm": "ghost"})
 
         assert resp.status_code == 404
+        assert resp.json()["detail"] == "não existe"

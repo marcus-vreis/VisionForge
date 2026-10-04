@@ -266,37 +266,43 @@ class TestGradCamRoute:
         )
         monkeypatch.setattr(routes_mod, "_MODELS_DIR", tmp_path / "models")
 
-        def boom(_run_dir, _req):  # type: ignore[no-untyped-def]
+        calls: list[Path] = []
+
+        def boom(got_run_dir, _req):  # type: ignore[no-untyped-def]
+            calls.append(got_run_dir)
             raise raises
 
         monkeypatch.setattr(routes_mod, "_execute_run_gradcam", boom)
-        return TestClient(app), run_dir.name
+        return TestClient(app), run_dir, calls
 
     def test_an_unknown_run_is_a_404(self, tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
-        client, _ = self._setup(tmp_path, monkeypatch, RuntimeError())
+        client, _, _ = self._setup(tmp_path, monkeypatch, RuntimeError())
 
         resp = client.post("/api/runs/nope/gradcam", json={"input_dir": "x"})
 
         assert resp.status_code == 404
 
-    def test_a_missing_folder_is_the_users_error(self, tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
-        client, run_id = self._setup(
-            tmp_path, monkeypatch, FileNotFoundError("sem imagens")
-        )
+    @pytest.mark.parametrize(
+        "exc", [FileNotFoundError("sem imagens"), ValueError("pasta errada")]
+    )
+    def test_user_errors_are_400(self, tmp_path, monkeypatch, exc) -> None:  # type: ignore[no-untyped-def]
+        client, run_dir, calls = self._setup(tmp_path, monkeypatch, exc)
 
-        resp = client.post(f"/api/runs/{run_id}/gradcam", json={"input_dir": "x"})
+        resp = client.post(f"/api/runs/{run_dir.name}/gradcam", json={"input_dir": "x"})
 
         assert resp.status_code == 400
-        assert resp.json()["detail"] == "sem imagens"
+        assert resp.json()["detail"] == str(exc)
+        assert calls == [run_dir]
 
     def test_anything_else_is_a_500_that_names_the_exception(
-        self,
-        tmp_path,
-        monkeypatch,  # type: ignore[no-untyped-def]
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        client, run_id = self._setup(tmp_path, monkeypatch, RuntimeError("cuda oom"))
+        client, run_dir, calls = self._setup(
+            tmp_path, monkeypatch, RuntimeError("cuda oom")
+        )
 
-        resp = client.post(f"/api/runs/{run_id}/gradcam", json={"input_dir": "x"})
+        resp = client.post(f"/api/runs/{run_dir.name}/gradcam", json={"input_dir": "x"})
 
         assert resp.status_code == 500
         assert resp.json()["detail"] == "RuntimeError: cuda oom"
+        assert calls == [run_dir]

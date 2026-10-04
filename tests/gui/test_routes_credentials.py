@@ -48,6 +48,7 @@ class TestSaveCredential:
         )
 
         assert resp.status_code == 400
+        assert "empty" in resp.json()["detail"]
 
     def test_an_unknown_provider_is_rejected_by_the_schema(
         self, client: TestClient
