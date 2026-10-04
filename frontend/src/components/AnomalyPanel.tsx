@@ -1,4 +1,5 @@
 import { paramHelp } from "../lib/param-help";
+import { useT } from "../i18n/useT";
 import { useState } from "react";
 import { fetchTaskSchema, pickDatasetFolder } from "../api/client";
 import {
@@ -72,6 +73,7 @@ export function AnomalyPanel({
   onStrategyChange,
   runSignal,
 }: AnomalyPanelProps) {
+  const t = useT();
   const [picking, setPicking] = useState(false);
   const [strategy, setStrategy] = useState<PanelStrategy>("simple");
 
@@ -207,7 +209,7 @@ export function AnomalyPanel({
                 max={1}
                 step={0.01}
                 hint="subamostra do banco"
-                help={paramHelp("coreset_ratio")}
+                help={paramHelp(t, "coreset_ratio")}
               />
               <Toggle
                 label="Backbone pré-treinado"
@@ -240,7 +242,7 @@ export function AnomalyPanel({
             min={1}
             step={1}
             hint={patchcore ? "ignorado no PatchCore" : undefined}
-            help={paramHelp("epochs")}
+            help={paramHelp(t, "epochs")}
           />
           <NumberField
             label="Batch size"
@@ -249,7 +251,7 @@ export function AnomalyPanel({
             min={1}
             step={1}
             hint="qualquer inteiro"
-            help={paramHelp("batch_size")}
+            help={paramHelp(t, "batch_size")}
           />
           <NumberField
             label="Learning rate"
@@ -257,7 +259,7 @@ export function AnomalyPanel({
             onChange={(v) => setTraining({ learning_rate: v })}
             min={0.000001}
             step={0.0001}
-            help={paramHelp("learning_rate")}
+            help={paramHelp(t, "learning_rate")}
           />
           <NumberField
             label="Seed"
@@ -265,7 +267,7 @@ export function AnomalyPanel({
             onChange={(v) => setTraining({ seed: Math.round(v) })}
             min={0}
             step={1}
-            help={paramHelp("seed")}
+            help={paramHelp(t, "seed")}
           />
         </div>
         <AdvancedFields count={4}>
@@ -287,7 +289,7 @@ export function AnomalyPanel({
               { value: "sgd", label: "SGD" },
               { value: "adamw", label: "AdamW" },
             ]}
-            help={paramHelp("optimizer")}
+            help={paramHelp(t, "optimizer")}
           />
             <NumberField
             label="Early stop"
@@ -296,7 +298,7 @@ export function AnomalyPanel({
             min={0}
             step={1}
             hint="paciência"
-            help={paramHelp("early_stopping_patience")}
+            help={paramHelp(t, "early_stopping_patience")}
             emptyValue={0}
           />
             <Toggle
@@ -304,7 +306,7 @@ export function AnomalyPanel({
             value={formData.training.deterministic}
             onChange={(v) => setTraining({ deterministic: v })}
             hint="reprodutível"
-            help={paramHelp("deterministic")}
+            help={paramHelp(t, "deterministic")}
           />
         </AdvancedFields>
       </div>
@@ -376,7 +378,7 @@ export function AnomalyPanel({
             min={32}
             step={32}
             suffix="px"
-            help={paramHelp("image_size")}
+            help={paramHelp(t, "image_size")}
           />
         </div>
         <AnomalyDatasetStats

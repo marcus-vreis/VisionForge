@@ -1,26 +1,44 @@
 import { describe, expect, it } from "vitest";
 
+import { en } from "../i18n/en";
+import { pt } from "../i18n/pt";
 import {
-  PARAM_HELP,
   PARAM_TIER,
   hasNonDefaultAdvanced,
   isAdvanced,
   paramHelp,
 } from "./param-help";
 
+// The help texts live in the dictionaries, one per language. `paramHelp` is an
+// open record (the keys are the backend's field names), so the compiler cannot
+// check coverage there: these tests do, for every language.
+const LANGUAGES = { pt, en };
+
 describe("completude", () => {
-  it("explica todo parâmetro que classifica", () => {
-    // The complaint was not knowing what the fields do, so a classified field
-    // with no explanation is the exact failure this file exists to prevent.
-    for (const key of Object.keys(PARAM_TIER)) {
-      expect(PARAM_HELP[key], `sem explicação: ${key}`).toBeTruthy();
-    }
+  for (const [lang, dict] of Object.entries(LANGUAGES)) {
+    it(`explica todo parâmetro que classifica (${lang})`, () => {
+      // The complaint was not knowing what the fields do, so a classified field
+      // with no explanation is the exact failure this file exists to prevent.
+      for (const key of Object.keys(PARAM_TIER)) {
+        expect(dict.paramHelp[key], `sem explicação em ${lang}: ${key}`).toBeTruthy();
+      }
+    });
+
+    it(`não deixa explicação vazia passar (${lang})`, () => {
+      for (const [key, text] of Object.entries(dict.paramHelp)) {
+        expect(text.trim().length, `explicação vazia em ${lang}: ${key}`).toBeGreaterThan(20);
+      }
+    });
+  }
+
+  it("explica os mesmos campos nos dois idiomas", () => {
+    expect(Object.keys(en.paramHelp).sort()).toEqual(Object.keys(pt.paramHelp).sort());
   });
 
-  it("não deixa explicação vazia passar", () => {
-    for (const [key, text] of Object.entries(PARAM_HELP)) {
-      expect(text.trim().length, `explicação vazia: ${key}`).toBeGreaterThan(20);
-    }
+  it("devolve a explicação do idioma ativo, ou nada para um campo sem ajuda", () => {
+    expect(paramHelp(pt, "epochs")).toBe(pt.paramHelp.epochs);
+    expect(paramHelp(en, "epochs")).toBe(en.paramHelp.epochs);
+    expect(paramHelp(en, "um_campo_novo")).toBeUndefined();
   });
 });
 
@@ -46,12 +64,16 @@ describe("o corte básico/avançado", () => {
 describe("advertências específicas", () => {
   it("avisa que num_workers impede o treino, não o deixa lento", () => {
     // ADR-081: this is the one knob whose wrong value stops training outright.
-    expect(paramHelp("num_workers")).toMatch(/impede o treino/i);
-    expect(paramHelp("num_workers")).toMatch(/1455/);
+    expect(paramHelp(pt, "num_workers")).toMatch(/impede o treino/i);
+    expect(paramHelp(pt, "num_workers")).toMatch(/1455/);
+    expect(paramHelp(en, "num_workers")).toMatch(/keeps training from starting/i);
+    expect(paramHelp(en, "num_workers")).toMatch(/1455/);
   });
 
   it("diz qual knob mexer primeiro quando falta VRAM", () => {
-    expect(paramHelp("batch_size")).toMatch(/VRAM/i);
+    expect(paramHelp(pt, "batch_size")).toMatch(/VRAM/i);
+    expect(paramHelp(en, "batch_size")).toMatch(/VRAM/i);
+    expect(paramHelp(en, "batch_size")).toMatch(/lower this one first/i);
   });
 });
 

@@ -1,4 +1,5 @@
 import { paramHelp } from "../lib/param-help";
+import { useT } from "../i18n/useT";
 import { ModelAdvice } from "./ModelAdvice";
 import { AdvancedFields } from "./AdvancedFields";
 import { useState } from "react";
@@ -78,6 +79,7 @@ export function RegressionPanel({
   runSignal,
   onCv,
 }: RegressionPanelProps) {
+  const t = useT();
   const [picking, setPicking] = useState(false);
   const [strategy, setStrategy] = useState<PanelStrategy>("simple");
 
@@ -246,7 +248,7 @@ export function RegressionPanel({
             onChange={(v) => setTraining({ epochs: Math.round(v) })}
             min={1}
             step={1}
-            help={paramHelp("epochs")}
+            help={paramHelp(t, "epochs")}
           />
           <NumberField
             label="Batch size"
@@ -255,7 +257,7 @@ export function RegressionPanel({
             min={1}
             step={1}
             hint="qualquer inteiro"
-            help={paramHelp("batch_size")}
+            help={paramHelp(t, "batch_size")}
           />
           <NumberField
             label="Learning rate"
@@ -263,7 +265,7 @@ export function RegressionPanel({
             onChange={(v) => setTraining({ learning_rate: v })}
             min={0.000001}
             step={0.0001}
-            help={paramHelp("learning_rate")}
+            help={paramHelp(t, "learning_rate")}
           />
           <Segmented
             label="Loss"
@@ -278,7 +280,7 @@ export function RegressionPanel({
             onChange={(v) => setTraining({ seed: Math.round(v) })}
             min={0}
             step={1}
-            help={paramHelp("seed")}
+            help={paramHelp(t, "seed")}
           />
         </div>
         <AdvancedFields count={3}>
@@ -291,7 +293,7 @@ export function RegressionPanel({
               { value: "sgd", label: "SGD" },
               { value: "adamw", label: "AdamW" },
             ]}
-            help={paramHelp("optimizer")}
+            help={paramHelp(t, "optimizer")}
           />
             <NumberField
             label="Early stop"
@@ -300,7 +302,7 @@ export function RegressionPanel({
             min={0}
             step={1}
             hint="paciência"
-            help={paramHelp("early_stopping_patience")}
+            help={paramHelp(t, "early_stopping_patience")}
             emptyValue={0}
           />
             <Toggle
@@ -308,7 +310,7 @@ export function RegressionPanel({
             value={formData.training.deterministic}
             onChange={(v) => setTraining({ deterministic: v })}
             hint="reprodutível"
-            help={paramHelp("deterministic")}
+            help={paramHelp(t, "deterministic")}
           />
         </AdvancedFields>
         <ModelAdvice
@@ -444,7 +446,7 @@ export function RegressionPanel({
             min={32}
             step={32}
             suffix="px"
-            help={paramHelp("image_size")}
+            help={paramHelp(t, "image_size")}
           />
         </div>
         <RegressionDatasetStats

@@ -6,6 +6,7 @@ import {
 } from "../api/client";
 import { SelectField, type SelectOption } from "./controls/SelectField";
 import { paramHelp } from "../lib/param-help";
+import { useT } from "../i18n/useT";
 import { TextField } from "./controls/TextField";
 
 interface DatasetPickerProps {
@@ -78,6 +79,7 @@ export function DatasetPicker({
   testDir,
   onChange,
 }: DatasetPickerProps) {
+  const t = useT();
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [candidates, setCandidates] = useState<string[]>([]);
 
@@ -175,7 +177,7 @@ export function DatasetPicker({
     value: string,
     onChangeKey: "train_dir" | "val_dir" | "test_dir",
   ) => {
-    const help = paramHelp(onChangeKey);
+    const help = paramHelp(t, onChangeKey);
     if (candidates.length > 0) {
       const opts: SelectOption[] = value && !candidates.includes(value)
         ? [{ value, label: `${value} (manual)` }, ...splitOptions]
@@ -227,7 +229,7 @@ export function DatasetPicker({
               placeholder="ex: C:/datasets/coffee  ou  /home/user/data"
               mono
               hint="Pasta raiz que contém treino, validação e teste."
-              help={paramHelp("base_dir")}
+              help={paramHelp(t, "base_dir")}
             />
           </div>
           <button

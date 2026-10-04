@@ -117,6 +117,225 @@ export const pt = {
     automatic: "automático",
     suggestedNow: (n: number) => `≈ ${n} agora`,
   },
+  // What each hyperparameter does, in terms of what changes if you move it. Keys
+  // are the backend's field names and are open (hence the cast), so the test in
+  // lib/param-help.test.ts, not the compiler, checks every language covers them.
+  paramHelp: {
+    // ── básico ────────────────────────────────────────────────────────────────
+    epochs:
+      "Quantas vezes o modelo vê o dataset inteiro. Mais épocas aprendem mais, até começarem a decorar.",
+    batch_size:
+      "Quantas imagens por passo. Maior estabiliza o gradiente e ocupa mais VRAM; se estourar memória, reduza este primeiro.",
+    learning_rate:
+      "O tamanho do passo a cada ajuste. Alto demais diverge, baixo demais nunca chega.",
+    seed:
+      "Fixa o sorteio (pesos iniciais, ordem dos dados). Mesmo seed e mesmos dados devolvem o mesmo resultado.",
+
+    // ── avançado: otimização ──────────────────────────────────────────────────
+    optimizer:
+      "O algoritmo que aplica o gradiente. adam converge rápido sem ajuste fino; sgd costuma generalizar melhor com tempo.",
+    momentum:
+      "Quanto o passo anterior influencia o atual. Suaviza a trajetória e ajuda a atravessar platôs.",
+    weight_decay:
+      "Puxa os pesos para perto de zero. Combate overfitting; alto demais impede o modelo de aprender.",
+    learning_rate_final: "Fração do learning rate inicial ao término do treino.",
+    lrf: "Fração do learning rate inicial ao término do treino.",
+
+    // ── avançado: agendamento ─────────────────────────────────────────────────
+    scheduler: "Como o learning rate cai ao longo do treino. Quase sempre ajuda deixar cair.",
+    step_size: "De quantas em quantas épocas o learning rate é reduzido.",
+    gamma: "Por quanto o learning rate é multiplicado a cada redução.",
+    cos_lr: "Faz o learning rate cair numa curva de cosseno em vez de degraus.",
+    warmup_epochs:
+      "Épocas iniciais com learning rate crescendo devagar, para o modelo não desestabilizar no começo.",
+
+    // ── avançado: parada e regularização ──────────────────────────────────────
+    early_stopping_patience:
+      "Épocas seguidas sem melhora antes de encerrar o treino. Deixe 0 (ou vazio) para rodar todas as épocas configuradas.",
+    patience: "Épocas sem melhora antes de parar sozinho.",
+    label_smoothing: "Suaviza os rótulos para o modelo não ficar excessivamente confiante.",
+    dropout:
+      "Desliga neurônios ao acaso durante o treino, forçando o modelo a não depender de poucos.",
+    freeze: "Congela as primeiras N camadas. Útil em transfer learning com pouco dado.",
+
+    // ── avançado: mecânica ────────────────────────────────────────────────────
+    amp:
+      "Precisão mista: usa 16 bits onde dá. Treina mais rápido e ocupa menos VRAM, com risco baixo de instabilidade.",
+    mixed_precision:
+      "Faz parte das contas em 16 bits. Acelera o treino e ocupa menos VRAM em GPUs recentes; em modelos sensíveis pode custar precisão numérica.",
+    deterministic:
+      "Faz o mesmo config com a mesma seed devolver exatamente os mesmos números. Ligado por padrão: medimos o custo e ele é nulo ou negativo em treinos curtos.",
+    base_dir:
+      "Pasta raiz do dataset. Dentro dela ficam as subpastas de treino, validação e teste — o VisionForge procura os nomes usuais (train/val/test, treino/validacao/teste) e preenche sozinho quando encontra. O conteúdo de cada subpasta depende da tarefa: uma pasta por classe na classificação, imagens e labels na detecção, imagens e máscaras na segmentação.",
+    train_dir: "Subpasta usada para ajustar os pesos. É a única que o modelo vê durante o treino.",
+    val_dir:
+      "Subpasta usada a cada época para medir o progresso e escolher o melhor checkpoint. Não entra no ajuste dos pesos.",
+    test_dir:
+      "Subpasta avaliada uma única vez, no fim. Serve para reportar o resultado sem que ele tenha influenciado nenhuma escolha.",
+    coreset_ratio:
+      "Quanto do \"normal\" o PatchCore guarda para comparar depois. Ele corta as imagens de treino em pedaços pequenos e mantém uma amostra deles, a mais variada possível; uma imagem nova é anômala quando algum pedaço dela não se parece com nada guardado. 1% é o valor do artigo original. Aumentar deixa o banco mais completo, mas o tempo de montagem cresce na mesma proporção: 10% leva dez vezes mais.",
+    num_workers:
+      "Processos que carregam as imagens em paralelo. No automático o VisionForge divide a memória livre da máquina pelo custo de um worker — no Windows cada um recarrega o torch e as DLLs da CUDA, ~1 GB, e um número alto demais não deixa o treino lento: impede o treino de começar (WinError 1455).",
+    workers:
+      "Processos que carregam as imagens em paralelo. No automático o VisionForge divide a memória livre da máquina pelo custo de um worker — no Windows cada um recarrega o torch e as DLLs da CUDA, ~1 GB, e um número alto demais não deixa o treino lento: impede o treino de começar (WinError 1455).",
+    pin_memory: "Acelera a cópia das imagens para a GPU. Deixe ligado, exceto se faltar RAM.",
+    image_size: "Resolução de treino. Maior enxerga mais detalhe e custa VRAM e tempo ao quadrado.",
+    nbs: "Batch nominal para normalizar o weight decay quando o batch real é menor.",
+    single_cls: "Trata todas as classes como uma só. Serve para medir só a localização das caixas.",
+    rect:
+      "Agrupa imagens de proporção parecida em vez de forçar quadrado. Mais rápido, menos uniforme.",
+    multi_scale:
+      "Varia a resolução entre passos, para o modelo aguentar objetos de tamanhos diferentes.",
+    close_mosaic:
+      "Desliga o mosaico nas últimas N épocas, para o modelo terminar treinando em imagens reais.",
+    box: "Peso da perda de localização das caixas.",
+    cls: "Peso da perda de classificação.",
+    dfl: "Peso da perda de distribuição das bordas da caixa.",
+  } as Record<string, string>,
+  // The hyperparameter form (components/ParamPanel.tsx). Sentences with inline
+  // emphasis are written whole, with `code`, **strong** and __emphasis__ marks
+  // that ParamPanel's <Rich> turns into elements, so a translation can reorder
+  // the words around them.
+  paramPanel: {
+    sectionLabels: {
+      model: "Modelo",
+      training: "Treinamento",
+      data: "Dataset",
+      output: "Saída",
+      classification: "Classificação",
+      transforms: "Transformações",
+    },
+    // Dot-path keys win over leaf names: `model.name` is the architecture.
+    fieldLabels: {
+      "model.name": "Arquitetura",
+      name: "Nome do experimento",
+      task: "Tipo de tarefa",
+      block: "Bloco",
+      num_classes: "Nº de classes",
+      pretrained: "Pesos pré-treinados",
+      weights_path: "Caminho dos pesos",
+      learning_rate: "Learning Rate",
+      epochs: "Épocas",
+      batch_size: "Batch size",
+      early_stopping_patience: "Early stop (paciência)",
+      optimizer: "Otimizador",
+      weight_decay: "Weight decay",
+      seed: "Seed",
+      deterministic: "Determinístico",
+      mixed_precision: "Precisão mista (AMP)",
+      kind: "Tipo",
+      step_size: "Step size",
+      gamma: "Gamma",
+      patience: "Paciência",
+      factor: "Fator",
+      min_lr: "LR mínimo",
+      base_dir: "Diretório base",
+      train_dir: "Subdir treino",
+      val_dir: "Subdir validação",
+      test_dir: "Subdir teste",
+      num_workers: "Workers",
+      pin_memory: "Pin memory",
+      image_size: "Tamanho da imagem",
+      horizontal_flip: "Flip horizontal",
+      rotation_degrees: "Rotação (graus)",
+      color_jitter: "Color jitter",
+      normalize_mean: "Normalização (média)",
+      normalize_std: "Normalização (std)",
+      n_folds: "Nº de folds",
+      stratified: "Stratified",
+      shuffle: "Shuffle",
+      fold_seed: "Fold seed",
+      mode: "Modo",
+      unfreeze_from_layer: "Descongelar a partir de",
+      backbone_lr_multiplier: "LR do backbone (×)",
+      model_names: "Arquiteturas",
+      metric: "Métrica de ranking",
+    },
+    kickers: {
+      strategy: "// estratégia de experimento",
+      scheduler: "// learning-rate scheduler",
+      crossValidation: "// k-fold cross-validation",
+      transferLearning: "// transfer learning",
+      model: "// modelo",
+      training: "// treinamento",
+      dataset: "// dataset",
+      classes: "// classes",
+      image: "// imagem",
+      augmentation: "// data augmentation",
+      comingSoon: "// em breve",
+    },
+    blocks: {
+      simple: "Treino simples",
+      crossValidation: "K-Fold (CV)",
+      transferLearning: "Transfer learning",
+      gridSearch: "Grid search",
+      randomSearch: "Random search",
+    },
+    blockHints: {
+      crossValidation:
+        "Treina N modelos em N folds da pasta de treino. Validação por fold; normalize_mean/std são recalculados por fold para evitar data leakage. Não usa o split de teste — agregação em `cv_summary.json`.",
+      transferLearning:
+        "Feature extraction (só treina o head) ou fine-tuning (head + backbone parcial com LR menor). Útil em datasets pequenos, sem destruir as features pré-treinadas. Em feature extraction os pesos do backbone não se movem, mas as estatísticas de BatchNorm se recalibram no seu dataset — o backbone fica congelado, não idêntico.",
+      gridSearch:
+        'Treina **uma vez por combinação** do produto cartesiano do espaço definido abaixo. Cada chave é um dot-path (ex: `training.learning_rate`); o valor é uma lista. Cuidado: 3×3×2 já são 18 treinos. Para **comparar arquiteturas**, adicione valores ao campo "Arquitetura" (botão "+ valor ao grid") — um grid de um eixo só; compare os runs no histórico.',
+      randomSearch:
+        "Amostra `n_trials` configurações independentes do espaço abaixo. Cada parâmetro tem um tipo: `uniform`, `log_uniform` (LR e weight_decay) ou `choice` (listas discretas).",
+    },
+    weights: {
+      label: "Checkpoint custom (.pth)",
+      clearTitle: "Remover checkpoint custom (volta a usar pesos pretrained / random)",
+      clear: "limpar",
+      placeholder: "opcional — sobrescreve ImageNet",
+      browse: "Escolher",
+      cancelled: "Cancelado.",
+      pickFailed: "Falha ao abrir o seletor.",
+    },
+    grid: {
+      addValue: "+ valor ao grid",
+      addAnother: "+ valor",
+      removeValue: "Remover valor",
+      axisTag: (values: number) => `grade · ${values} valores`,
+      banner:
+        "**Grid search ativo.** Clique em `+ valor ao grid` nos hiperparâmetros de __Modelo__ e __Treinamento__ para varrer múltiplos valores.",
+      trials: (n: number) =>
+        `// ${n} trial${n === 1 ? "" : "s"}${n > 12 ? " ⚠️ alto" : ""}`,
+    },
+    randomSearch: {
+      kicker: (trials: number) =>
+        `// random search · ${trials} trial${trials === 1 ? "" : "s"}`,
+      add: "+ adicionar",
+      trialsLabel: "n_trials",
+      seedLabel: "seed",
+      empty: 'Espaço de busca vazio — clique em "+ adicionar".',
+      example: "Exemplo: `training.learning_rate` = log_uniform(1e-5, 1e-2).",
+      keyPlaceholder: "dot-path (ex: training.learning_rate)",
+      choicesPlaceholder: "csv: resnet18, resnet50",
+      low: "low",
+      high: "high",
+      removeRow: "Remover linha",
+    },
+    modelComparison: {
+      kicker: (selected: number) =>
+        `// comparação de modelos · ${selected} selecionado${selected === 1 ? "" : "s"}`,
+      needTwo: "Selecione pelo menos 2 arquiteturas para iniciar a comparação.",
+    },
+    lockedClasses: {
+      title: "Tarefa binária — fixado em 1",
+      badge: "🔒 binário",
+    },
+    normalizePlaceholder: "ex: 0.485, 0.456, 0.406",
+    exportYaml: "↓ Exportar YAML",
+    exportTitle: "Exportar configuração atual como arquivo .yaml",
+    importYaml: "↑ Importar YAML",
+    importTitle: "Importar configuração a partir de um arquivo .yaml",
+    importWarnings: (count: number, summary: string, extra: number) =>
+      `YAML importado com ${count} aviso(s) estrutural(is):\n${summary}${extra > 0 ? `\n…(+${extra} mais)` : ""}\n\nCorrija antes de treinar — o backend rejeita por validação Pydantic.`,
+    unavailable: (task: string) => `${task} ainda não está disponível`,
+    unavailableBody: "Esta tarefa será implementada em uma próxima fase do VisionForge.",
+    loadingSchema: "carregando schema…",
+    hiddenParams: (n: number) => `${n} parâmetros ocultos — ligue para ajustar`,
+    fieldErrors: (n: number) => `${n} campo(s) com erro:`,
+  },
 };
 
 export type Dict = typeof pt;

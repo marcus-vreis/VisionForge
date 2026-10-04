@@ -55,7 +55,7 @@ export function WorkersField({
         }}
       >
         <span>{t.workersField.label}</span>
-        <InfoDot text={paramHelp("num_workers") ?? ""} />
+        <InfoDot text={paramHelp(t, "num_workers") ?? ""} />
         <button
           type="button"
           onClick={() => onChange(auto ? (suggested ?? 2) : -1)}

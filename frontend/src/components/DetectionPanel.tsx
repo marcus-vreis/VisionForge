@@ -1,4 +1,5 @@
 import { paramHelp } from "../lib/param-help";
+import { useT } from "../i18n/useT";
 import { useState } from "react";
 import {
   fetchTaskSchema,
@@ -89,6 +90,7 @@ export function DetectionPanel({
   onStrategyChange,
   runSignal,
 }: DetectionPanelProps) {
+  const t = useT();
   const [picking, setPicking] = useState(false);
   const [strategy, setStrategy] = useState<PanelStrategy>("simple");
 
@@ -283,7 +285,7 @@ export function DetectionPanel({
             onChange={(v) => setTraining({ epochs: Math.round(v) })}
             min={1}
             step={1}
-            help={paramHelp("epochs")}
+            help={paramHelp(t, "epochs")}
           />
           <NumberField
             label="Batch size"
@@ -292,7 +294,7 @@ export function DetectionPanel({
             min={1}
             step={1}
             hint="qualquer inteiro"
-            help={paramHelp("batch_size")}
+            help={paramHelp(t, "batch_size")}
           />
           <NumberField
             label="Learning rate"
@@ -301,7 +303,7 @@ export function DetectionPanel({
             min={0.000001}
             step={0.001}
             hint="lr0"
-            help={paramHelp("learning_rate")}
+            help={paramHelp(t, "learning_rate")}
           />
           <NumberField
             label="Seed"
@@ -309,7 +311,7 @@ export function DetectionPanel({
             onChange={(v) => setTraining({ seed: Math.round(v) })}
             min={0}
             step={1}
-            help={paramHelp("seed")}
+            help={paramHelp(t, "seed")}
           />
         </div>
         <AdvancedFields count={6}>
@@ -320,7 +322,7 @@ export function DetectionPanel({
             min={0}
             step={1}
             hint="early stop"
-            help={paramHelp("patience")}
+            help={paramHelp(t, "patience")}
             emptyValue={0}
           />
             <Toggle
@@ -328,7 +330,7 @@ export function DetectionPanel({
             value={formData.training.deterministic}
             onChange={(v) => setTraining({ deterministic: v })}
             hint="reprodutível"
-            help={paramHelp("deterministic")}
+            help={paramHelp(t, "deterministic")}
           />
             <WorkersField
             value={formData.training.workers}
@@ -342,7 +344,7 @@ export function DetectionPanel({
             }
             options={DETECTION_OPTIMIZERS.map((o) => ({ value: o, label: o }))}
             hint="auto = Ultralytics escolhe"
-            help={paramHelp("optimizer")}
+            help={paramHelp(t, "optimizer")}
           />
             <NumberField
             label="Momentum"
@@ -352,7 +354,7 @@ export function DetectionPanel({
             max={1}
             step={0.001}
             hint="SGD momentum / Adam β1"
-            help={paramHelp("momentum")}
+            help={paramHelp(t, "momentum")}
           />
             <NumberField
             label="Weight decay"
@@ -361,7 +363,7 @@ export function DetectionPanel({
             min={0}
             step={0.0001}
             hint="L2"
-            help={paramHelp("weight_decay")}
+            help={paramHelp(t, "weight_decay")}
             emptyValue={0}
           />
         </AdvancedFields>
@@ -380,14 +382,14 @@ export function DetectionPanel({
                 min={0.000001}
                 step={0.001}
                 hint="LR final = lr0 × lrf"
-                help={paramHelp("lrf")}
+                help={paramHelp(t, "lrf")}
               />
               <Toggle
                 label="Cosine LR"
                 value={formData.training.cos_lr}
                 onChange={(v) => setTraining({ cos_lr: v })}
                 hint="schedule cosseno"
-                help={paramHelp("cos_lr")}
+                help={paramHelp(t, "cos_lr")}
               />
               <NumberField
                 label="Warmup epochs"
@@ -395,7 +397,7 @@ export function DetectionPanel({
                 onChange={(v) => setTraining({ warmup_epochs: v })}
                 min={0}
                 step={0.5}
-                help={paramHelp("warmup_epochs")}
+                help={paramHelp(t, "warmup_epochs")}
               />
               <NumberField
                 label="Warmup momentum"
@@ -419,7 +421,7 @@ export function DetectionPanel({
                 min={0}
                 step={0.1}
                 hint="box"
-                help={paramHelp("box")}
+                help={paramHelp(t, "box")}
               />
               <NumberField
                 label="Cls loss gain"
@@ -428,7 +430,7 @@ export function DetectionPanel({
                 min={0}
                 step={0.1}
                 hint="cls"
-                help={paramHelp("cls")}
+                help={paramHelp(t, "cls")}
               />
               <NumberField
                 label="DFL loss gain"
@@ -437,7 +439,7 @@ export function DetectionPanel({
                 min={0}
                 step={0.1}
                 hint="dfl"
-                help={paramHelp("dfl")}
+                help={paramHelp(t, "dfl")}
               />
             </div>
           </div>
@@ -453,7 +455,7 @@ export function DetectionPanel({
                 min={0}
                 max={1}
                 step={0.01}
-                help={paramHelp("label_smoothing")}
+                help={paramHelp(t, "label_smoothing")}
                 emptyValue={0}
               />
               <NumberField
@@ -463,7 +465,7 @@ export function DetectionPanel({
                 min={0}
                 max={1}
                 step={0.05}
-                help={paramHelp("dropout")}
+                help={paramHelp(t, "dropout")}
                 emptyValue={0}
               />
               <NumberField
@@ -472,7 +474,7 @@ export function DetectionPanel({
                 onChange={(v) => setTraining({ nbs: Math.round(v) })}
                 min={1}
                 step={1}
-                help={paramHelp("nbs")}
+                help={paramHelp(t, "nbs")}
               />
               <NumberField
                 label="Freeze layers"
@@ -481,7 +483,7 @@ export function DetectionPanel({
                 min={0}
                 step={1}
                 hint="0 = nenhuma"
-                help={paramHelp("freeze")}
+                help={paramHelp(t, "freeze")}
               />
               <NumberField
                 label="Close mosaic"
@@ -490,35 +492,35 @@ export function DetectionPanel({
                 min={0}
                 step={1}
                 hint="desliga mosaico nas últimas N épocas"
-                help={paramHelp("close_mosaic")}
+                help={paramHelp(t, "close_mosaic")}
               />
               <Toggle
                 label="AMP"
                 value={formData.training.amp}
                 onChange={(v) => setTraining({ amp: v })}
                 hint="precisão mista"
-                help={paramHelp("amp")}
+                help={paramHelp(t, "amp")}
               />
               <Toggle
                 label="Single class"
                 value={formData.training.single_cls}
                 onChange={(v) => setTraining({ single_cls: v })}
                 hint="trata tudo como 1 classe"
-                help={paramHelp("single_cls")}
+                help={paramHelp(t, "single_cls")}
               />
               <Toggle
                 label="Rect"
                 value={formData.training.rect}
                 onChange={(v) => setTraining({ rect: v })}
                 hint="batches retangulares"
-                help={paramHelp("rect")}
+                help={paramHelp(t, "rect")}
               />
               <Toggle
                 label="Multi-scale"
                 value={formData.training.multi_scale}
                 onChange={(v) => setTraining({ multi_scale: v })}
                 hint="varia imgsz ±50%"
-                help={paramHelp("multi_scale")}
+                help={paramHelp(t, "multi_scale")}
               />
             </div>
           </div>
@@ -598,7 +600,7 @@ export function DetectionPanel({
             step={32}
             suffix="px"
             hint="imgsz"
-            help={paramHelp("image_size")}
+            help={paramHelp(t, "image_size")}
           />
         </div>
         <div style={{ ...grid, marginTop: 14 }}>

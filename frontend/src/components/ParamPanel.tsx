@@ -1,6 +1,7 @@
 import { createContext, useContext, useRef, useState } from "react";
 import { pickCheckpointFile } from "../api/client";
 import { humanizeFieldPath, type ValidationError } from "../hooks/useExperiment";
+import { useT } from "../i18n/useT";
 import type { JsonSchema } from "../types/schema";
 import type { TaskDefinition } from "../types/tasks";
 import {
@@ -67,64 +68,22 @@ const TRAINING_FIELD_ORDER = [
   "mixed_precision",
 ];
 
-const SECTION_LABELS: Record<string, string> = {
-  model: "Modelo",
-  training: "Treinamento",
-  data: "Dataset",
-  output: "Saída",
-  classification: "Classificação",
-  transforms: "Transformações",
-};
-
-/** Human-readable field labels. Dot-path keys override leaf-name keys. */
-const FIELD_LABELS: Record<string, string> = {
-  "model.name": "Arquitetura",
-  name: "Nome do experimento",
-  task: "Tipo de tarefa",
-  block: "Bloco",
-  num_classes: "Nº de classes",
-  pretrained: "Pesos pré-treinados",
-  weights_path: "Caminho dos pesos",
-  learning_rate: "Learning Rate",
-  epochs: "Épocas",
-  batch_size: "Batch size",
-  early_stopping_patience: "Early stop (paciência)",
-  optimizer: "Otimizador",
-  weight_decay: "Weight decay",
-  seed: "Seed",
-  deterministic: "Determinístico",
-  mixed_precision: "Precisão mista (AMP)",
-  kind: "Tipo",
-  step_size: "Step size",
-  gamma: "Gamma",
-  patience: "Paciência",
-  factor: "Fator",
-  min_lr: "LR mínimo",
-  base_dir: "Diretório base",
-  train_dir: "Subdir treino",
-  val_dir: "Subdir validação",
-  test_dir: "Subdir teste",
-  num_workers: "Workers",
-  pin_memory: "Pin memory",
-  image_size: "Tamanho da imagem",
-  horizontal_flip: "Flip horizontal",
-  rotation_degrees: "Rotação (graus)",
-  color_jitter: "Color jitter",
-  normalize_mean: "Normalização (média)",
-  normalize_std: "Normalização (std)",
-  // Cross-validation
-  n_folds: "Nº de folds",
-  stratified: "Stratified",
-  shuffle: "Shuffle",
-  fold_seed: "Fold seed",
-  // Transfer learning
-  mode: "Modo",
-  unfreeze_from_layer: "Descongelar a partir de",
-  backbone_lr_multiplier: "LR do backbone (×)",
-  // Model comparison
-  model_names: "Arquiteturas",
-  metric: "Métrica de ranking",
-};
+/** A dictionary sentence with inline marks: `code`, **strong**, __emphasis__.
+ *
+ * The whole sentence lives in the dictionary, so a translation is free to put
+ * the marked words wherever its grammar wants them. */
+function Rich({ text }: { text: string }) {
+  return (
+    <>
+      {text.split(/(`[^`]+`|\*\*[^*]+\*\*|__[^_]+__)/).map((part, i) => {
+        if (part.startsWith("`")) return <code key={i}>{part.slice(1, -1)}</code>;
+        if (part.startsWith("**")) return <strong key={i}>{part.slice(2, -2)}</strong>;
+        if (part.startsWith("__")) return <em key={i}>{part.slice(2, -2)}</em>;
+        return part;
+      })}
+    </>
+  );
+}
 
 function resolveSchema(
   schema: JsonSchema,
@@ -247,6 +206,7 @@ function SchedulerFields({
   // Read before the early return: a hook that runs only on some renders puts
   // the whole hook order out of step the first time this schema has no
   // properties.
+  const t = useT();
   const grid = useContext(GridContext);
   const resolved = resolveSchema(schema, defs);
   if (!resolved.properties) return null;
@@ -296,7 +256,7 @@ function SchedulerFields({
           color: "var(--vf-text-muted)",
         }}
       >
-        // learning-rate scheduler
+        {t.paramPanel.kickers.scheduler}
       </div>
       <div
         style={{
@@ -349,6 +309,7 @@ function WeightsPathField({
   value: string;
   onChange: (v: string) => void;
 }) {
+  const t = useT();
   const [picking, setPicking] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -358,12 +319,12 @@ function WeightsPathField({
     try {
       const res = await pickCheckpointFile();
       if (res.cancelled) {
-        setMessage(res.message ?? "Cancelado.");
+        setMessage(res.message ?? t.paramPanel.weights.cancelled);
         return;
       }
       onChange(res.path);
     } catch (e) {
-      setMessage(e instanceof Error ? e.message : "Falha ao abrir o seletor.");
+      setMessage(e instanceof Error ? e.message : t.paramPanel.weights.pickFailed);
     } finally {
       setPicking(false);
     }
@@ -384,12 +345,12 @@ function WeightsPathField({
           gap: 8,
         }}
       >
-        <span>Checkpoint custom (.pth)</span>
+        <span>{t.paramPanel.weights.label}</span>
         {value && (
           <button
             type="button"
             onClick={() => onChange("")}
-            title="Remover checkpoint custom (volta a usar pesos pretrained / random)"
+            title={t.paramPanel.weights.clearTitle}
             style={{
               padding: "2px 8px",
               background: "transparent",
@@ -403,7 +364,7 @@ function WeightsPathField({
               cursor: "pointer",
             }}
           >
-            limpar
+            {t.paramPanel.weights.clear}
           </button>
         )}
       </span>
@@ -411,7 +372,7 @@ function WeightsPathField({
         <input
           type="text"
           value={value}
-          placeholder="opcional — sobrescreve ImageNet"
+          placeholder={t.paramPanel.weights.placeholder}
           onChange={(e) => onChange(e.target.value)}
           style={{
             flex: 1,
@@ -440,7 +401,7 @@ function WeightsPathField({
             whiteSpace: "nowrap",
           }}
         >
-          📁 {picking ? "…" : "Escolher"}
+          📁 {picking ? "…" : t.paramPanel.weights.browse}
         </button>
       </div>
       {message && (
@@ -476,12 +437,13 @@ function BlockSelector({
   // é um grid de um eixo só sobre "Arquitetura" (+ valor ao grid) — um conceito,
   // uma superfície. O ModelComparisonBlock continua no backend; configs YAML
   // legadas com block=model_comparison seguem editáveis e executáveis.
+  const t = useT();
   const options = [
-    { value: "classification", label: "Treino simples" },
-    { value: "cross_validation", label: "K-Fold (CV)" },
-    { value: "transfer_learning", label: "Transfer learning" },
-    { value: "grid_search", label: "Grid search" },
-    { value: "random_search", label: "Random search" },
+    { value: "classification", label: t.paramPanel.blocks.simple },
+    { value: "cross_validation", label: t.paramPanel.blocks.crossValidation },
+    { value: "transfer_learning", label: t.paramPanel.blocks.transferLearning },
+    { value: "grid_search", label: t.paramPanel.blocks.gridSearch },
+    { value: "random_search", label: t.paramPanel.blocks.randomSearch },
   ];
   return (
     <div
@@ -505,7 +467,7 @@ function BlockSelector({
           color: "var(--vf-text-muted)",
         }}
       >
-        // estratégia de experimento
+        {t.paramPanel.kickers.strategy}
       </div>
       <div style={{ display: "flex", gap: 8 }}>
         {options.map((o) => {
@@ -547,9 +509,7 @@ function BlockSelector({
             marginTop: 2,
           }}
         >
-          Treina N modelos em N folds da pasta de treino. Validação por fold;
-          normalize_mean/std são recalculados por fold para evitar data leakage.
-          Não usa o split de teste — agregação em <code>cv_summary.json</code>.
+          <Rich text={t.paramPanel.blockHints.crossValidation} />
         </div>
       )}
       {value === "transfer_learning" && (
@@ -562,11 +522,7 @@ function BlockSelector({
             marginTop: 2,
           }}
         >
-          Feature extraction (só treina o head) ou fine-tuning (head + backbone
-          parcial com LR menor). Útil em datasets pequenos, sem destruir as
-          features pré-treinadas. Em feature extraction os pesos do backbone não
-          se movem, mas as estatísticas de BatchNorm se recalibram no seu
-          dataset — o backbone fica congelado, não idêntico.
+          <Rich text={t.paramPanel.blockHints.transferLearning} />
         </div>
       )}
       {value === "grid_search" && (
@@ -579,12 +535,7 @@ function BlockSelector({
             marginTop: 2,
           }}
         >
-          Treina <strong>uma vez por combinação</strong> do produto cartesiano
-          do espaço definido abaixo. Cada chave é um dot-path (ex:{" "}
-          <code>training.learning_rate</code>); o valor é uma lista. Cuidado:
-          3×3×2 já são 18 treinos. Para <strong>comparar arquiteturas</strong>,
-          adicione valores ao campo "Arquitetura" (botão "+ valor ao grid") —
-          um grid de um eixo só; compare os runs no histórico.
+          <Rich text={t.paramPanel.blockHints.gridSearch} />
         </div>
       )}
       {value === "random_search" && (
@@ -597,10 +548,7 @@ function BlockSelector({
             marginTop: 2,
           }}
         >
-          Amostra <code>n_trials</code> configurações independentes do espaço
-          abaixo. Cada parâmetro tem um tipo: <code>uniform</code>,{" "}
-          <code>log_uniform</code> (LR e weight_decay) ou <code>choice</code>{" "}
-          (listas discretas).
+          <Rich text={t.paramPanel.blockHints.randomSearch} />
         </div>
       )}
     </div>
@@ -622,6 +570,7 @@ function CrossValidationFields({
   onChange: (v: Record<string, unknown>) => void;
   errors: ValidationError[];
 }) {
+  const t = useT();
   const resolved = resolveSchema(schema, defs);
   if (!resolved.properties) return null;
 
@@ -650,7 +599,7 @@ function CrossValidationFields({
           color: "var(--vf-text-muted)",
         }}
       >
-        // k-fold cross-validation
+        {t.paramPanel.kickers.crossValidation}
       </div>
       <div
         style={{
@@ -794,6 +743,7 @@ function GridAxisExtension({
   schema: JsonSchema;
   primaryValue: unknown;
 }) {
+  const t = useT();
   const ctx = useContext(GridContext);
   const axis = ctx.hyperparameters[dotPath];
   const values = Array.isArray(axis) ? axis : [];
@@ -818,7 +768,7 @@ function GridAxisExtension({
   if (extras.length === 0) {
     return (
       <button type="button" onClick={addValue} style={gridAddBtnStyle}>
-        + valor ao grid
+        {t.paramPanel.grid.addValue}
       </button>
     );
   }
@@ -827,7 +777,7 @@ function GridAxisExtension({
     <div
       style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}
     >
-      <div style={gridAxisTagStyle}>grade · {values.length} valores</div>
+      <div style={gridAxisTagStyle}>{t.paramPanel.grid.axisTag(values.length)}</div>
       {extras.map((v, i) => {
         const err = validateGridValue(name, schema, v);
         return (
@@ -852,7 +802,7 @@ function GridAxisExtension({
               <button
                 type="button"
                 onClick={() => removeExtra(i)}
-                title="Remover valor"
+                title={t.paramPanel.grid.removeValue}
                 style={gridRemoveBtnStyle}
               >
                 ×
@@ -863,7 +813,7 @@ function GridAxisExtension({
         );
       })}
       <button type="button" onClick={addValue} style={gridAddBtnStyle}>
-        + valor
+        {t.paramPanel.grid.addAnother}
       </button>
     </div>
   );
@@ -876,6 +826,7 @@ function GridSearchBanner({
 }: {
   hyperparameters: Record<string, unknown[]>;
 }) {
+  const t = useT();
   const axes = Object.entries(hyperparameters).filter(
     ([, v]) => Array.isArray(v) && v.length > 1,
   );
@@ -888,9 +839,7 @@ function GridSearchBanner({
       <div
         style={{ fontFamily: "var(--font-mono)", fontSize: 11, lineHeight: 1.6 }}
       >
-        <strong>Grid search ativo.</strong> Clique em{" "}
-        <code>+ valor ao grid</code> nos hiperparâmetros de <em>Modelo</em> e{" "}
-        <em>Treinamento</em> para varrer múltiplos valores.
+        <Rich text={t.paramPanel.grid.banner} />
       </div>
       {axes.length > 0 && (
         <div
@@ -902,8 +851,7 @@ function GridSearchBanner({
           }}
         >
           <div style={gridAxisTagStyle}>
-            // {totalTrials} trial{totalTrials === 1 ? "" : "s"}
-            {totalTrials > 12 ? " ⚠️ alto" : ""}
+            {t.paramPanel.grid.trials(totalTrials)}
           </div>
           {axes.map(([k, v]) => (
             <div
@@ -957,6 +905,7 @@ function RandomSearchFields({
   value: Record<string, unknown>;
   onChange: (v: Record<string, unknown>) => void;
 }) {
+  const t = useT();
   const n_trials = typeof value["n_trials"] === "number"
     ? (value["n_trials"] as number)
     : 10;
@@ -1042,7 +991,7 @@ function RandomSearchFields({
             color: "var(--vf-text-muted)",
           }}
         >
-          // random search · {n_trials} trial{n_trials === 1 ? "" : "s"}
+          {t.paramPanel.randomSearch.kicker(n_trials)}
         </div>
         <button
           type="button"
@@ -1060,20 +1009,20 @@ function RandomSearchFields({
             cursor: "pointer",
           }}
         >
-          + adicionar
+          {t.paramPanel.randomSearch.add}
         </button>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
         <NumberField
-          label="n_trials"
+          label={t.paramPanel.randomSearch.trialsLabel}
           value={n_trials}
           onChange={(v) => onChange({ ...value, n_trials: Math.max(1, Math.round(v)) })}
           min={1}
           step={1}
         />
         <NumberField
-          label="seed"
+          label={t.paramPanel.randomSearch.seedLabel}
           value={seed}
           onChange={(v) => onChange({ ...value, seed: Math.max(0, Math.round(v)) })}
           min={0}
@@ -1094,9 +1043,9 @@ function RandomSearchFields({
             lineHeight: 1.6,
           }}
         >
-          Espaço de busca vazio — clique em "+ adicionar".
+          {t.paramPanel.randomSearch.empty}
           <div style={{ fontSize: 10, marginTop: 4, opacity: 0.7 }}>
-            Exemplo: <code>training.learning_rate</code> = log_uniform(1e-5, 1e-2).
+            <Rich text={t.paramPanel.randomSearch.example} />
           </div>
         </div>
       ) : (
@@ -1107,7 +1056,7 @@ function RandomSearchFields({
               paramKey={key}
               def={def}
               onRenameKey={(nk) => renameKey(key, nk)}
-              onChangeType={(t) => setParamType(key, t)}
+              onChangeType={(type) => setParamType(key, type)}
               onChangeField={(field, raw) => setParamField(key, field, raw)}
               onChangeChoices={(csv) => setChoiceOptions(key, csv)}
               onRemove={() => removeRow(key)}
@@ -1136,6 +1085,7 @@ function RandomSearchRow({
   onChangeChoices: (csv: string) => void;
   onRemove: () => void;
 }) {
+  const t = useT();
   const isChoice = def.type === "choice";
   return (
     <div
@@ -1150,7 +1100,7 @@ function RandomSearchRow({
         type="text"
         value={paramKey}
         onChange={(e) => onRenameKey(e.target.value)}
-        placeholder="dot-path (ex: training.learning_rate)"
+        placeholder={t.paramPanel.randomSearch.keyPlaceholder}
         style={rsInputStyle}
       />
       <MenuSelect
@@ -1166,7 +1116,7 @@ function RandomSearchRow({
             Array.isArray(def.options) ? def.options.map(String).join(", ") : ""
           }
           onChange={(e) => onChangeChoices(e.target.value)}
-          placeholder="csv: resnet18, resnet50"
+          placeholder={t.paramPanel.randomSearch.choicesPlaceholder}
           style={rsInputStyle}
         />
       ) : (
@@ -1176,7 +1126,7 @@ function RandomSearchRow({
             value={def.low ?? 0}
             step="any"
             onChange={(e) => onChangeField("low", e.target.value)}
-            placeholder="low"
+            placeholder={t.paramPanel.randomSearch.low}
             style={rsInputStyle}
           />
           <input
@@ -1184,7 +1134,7 @@ function RandomSearchRow({
             value={def.high ?? 1}
             step="any"
             onChange={(e) => onChangeField("high", e.target.value)}
-            placeholder="high"
+            placeholder={t.paramPanel.randomSearch.high}
             style={rsInputStyle}
           />
         </>
@@ -1192,7 +1142,7 @@ function RandomSearchRow({
       <button
         type="button"
         onClick={onRemove}
-        title="Remover linha"
+        title={t.paramPanel.randomSearch.removeRow}
         style={{
           width: 32,
           height: 32,
@@ -1242,6 +1192,7 @@ function ModelComparisonFields({
   onChange: (v: Record<string, unknown>) => void;
   errors: ValidationError[];
 }) {
+  const t = useT();
   const resolved = resolveSchema(schema, defs);
   if (!resolved.properties) return null;
 
@@ -1305,8 +1256,7 @@ function ModelComparisonFields({
             color: "var(--vf-text-muted)",
           }}
         >
-          // comparação de modelos · {selectedNames.length} selecionado
-          {selectedNames.length === 1 ? "" : "s"}
+          {t.paramPanel.modelComparison.kicker(selectedNames.length)}
         </div>
         <div style={{ minWidth: 200 }}>
           {resolved.properties["metric"] && (
@@ -1386,7 +1336,7 @@ function ModelComparisonFields({
             fontStyle: "italic",
           }}
         >
-          Selecione pelo menos 2 arquiteturas para iniciar a comparação.
+          {t.paramPanel.modelComparison.needTwo}
         </p>
       )}
     </div>
@@ -1408,6 +1358,7 @@ function TransferLearningFields({
   onChange: (v: Record<string, unknown>) => void;
   errors: ValidationError[];
 }) {
+  const t = useT();
   const resolved = resolveSchema(schema, defs);
   if (!resolved.properties) return null;
 
@@ -1440,7 +1391,7 @@ function TransferLearningFields({
           color: "var(--vf-text-muted)",
         }}
       >
-        // transfer learning
+        {t.paramPanel.kickers.transferLearning}
       </div>
       <div
         style={{
@@ -1494,6 +1445,7 @@ function TransferLearningFields({
 
 /** Read-only display for num_classes when task=binary forces it to 1. */
 function LockedNumClasses() {
+  const t = useT();
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
       <span
@@ -1505,10 +1457,10 @@ function LockedNumClasses() {
           color: "var(--vf-text-muted)",
         }}
       >
-        Nº de classes
+        {t.paramPanel.fieldLabels.num_classes}
       </span>
       <div
-        title="Tarefa binária — fixado em 1"
+        title={t.paramPanel.lockedClasses.title}
         style={{
           padding: "8px 12px",
           background: "rgba(0,0,0,0.35)",
@@ -1532,7 +1484,7 @@ function LockedNumClasses() {
             textTransform: "uppercase",
           }}
         >
-          🔒 binário
+          {t.paramPanel.lockedClasses.badge}
         </span>
       </div>
     </div>
@@ -1560,12 +1512,14 @@ function SchemaFieldVF({
   errors,
   path,
 }: FieldProps) {
+  const t = useT();
   const resolved = resolveSchema(schema, defs);
   const kind = resolveKind(name, resolved);
   // Path-qualified labels win over leaf-name labels: `model.name` is the
-  // architecture, not the experiment name.
-  const label =
-    FIELD_LABELS[path.join(".")] ?? FIELD_LABELS[name] ?? resolved.title ?? name;
+  // architecture, not the experiment name. The keys are the backend's field
+  // names, so the lookup is open even though the dictionaries pin the set.
+  const labels: Record<string, string> = t.paramPanel.fieldLabels;
+  const label = labels[path.join(".")] ?? labels[name] ?? resolved.title ?? name;
   const errorMsg = errors.find(
     (e) =>
       e.field.length === path.length && e.field.every((f, i) => f === path[i]),
@@ -1628,7 +1582,7 @@ function SchemaFieldVF({
             marginBottom: 4,
           }}
         >
-          {SECTION_LABELS[name] ?? resolved.title ?? name}
+          {(t.paramPanel.sectionLabels as Record<string, string>)[name] ?? resolved.title ?? name}
         </div>
         {Object.entries(inner.properties).map(([key, propSchema]) => (
           <SchemaFieldVF
@@ -1654,7 +1608,7 @@ function SchemaFieldVF({
     return (
       <div>
         <SelectField
-          help={paramHelp(name)}
+          help={paramHelp(t, name)}
           label={label}
           value={String(value ?? resolved.default ?? resolved.enum?.[0] ?? "")}
           onChange={(v) => handleChange(v)}
@@ -1685,7 +1639,7 @@ function SchemaFieldVF({
     return (
       <div>
         <Segmented
-          help={paramHelp(name)}
+          help={paramHelp(t, name)}
           label={label}
           value={String(value ?? resolved.default ?? resolved.enum?.[0] ?? "")}
           onChange={(v) => handleChange(v)}
@@ -1712,7 +1666,7 @@ function SchemaFieldVF({
     return (
       <div>
         <Toggle
-          help={paramHelp(name)}
+          help={paramHelp(t, name)}
           label={label}
           value={Boolean(value)}
           onChange={(v) => onChange(v)}
@@ -1737,7 +1691,7 @@ function SchemaFieldVF({
     return (
       <div>
         <NumberField
-          help={paramHelp(name)}
+          help={paramHelp(t, name)}
           label={label}
           value={(value as number) ?? 0}
           onChange={(v) => handleChange(v)}
@@ -1766,7 +1720,7 @@ function SchemaFieldVF({
     return (
       <div>
         <TextField
-          help={paramHelp(name)}
+          help={paramHelp(t, name)}
           label={label}
           value={arrVal.join(", ")}
           onChange={(v) => {
@@ -1777,7 +1731,7 @@ function SchemaFieldVF({
               .map(Number);
             onChange(parts);
           }}
-          placeholder="ex: 0.485, 0.456, 0.406"
+          placeholder={t.paramPanel.normalizePlaceholder}
           mono
         />
         {errorMsg && (
@@ -1800,7 +1754,7 @@ function SchemaFieldVF({
   return (
     <div>
       <TextField
-        help={paramHelp(name)}
+        help={paramHelp(t, name)}
         label={label}
         value={String(value ?? "")}
         onChange={(v) => onChange(v)}
@@ -1852,6 +1806,7 @@ export function ParamPanel({
   setFormData,
   validationErrors,
 }: ParamPanelProps) {
+  const t = useT();
   const [importError, setImportError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -1896,10 +1851,12 @@ export function ParamPanel({
             (iss) => `· ${humanizeFieldPath(iss.field)} — ${iss.message}`,
           )
           .join("\n");
-        const more =
-          issues.length > 5 ? `\n…(+${issues.length - 5} mais)` : "";
         setImportError(
-          `YAML importado com ${issues.length} aviso(s) estrutural(is):\n${summary}${more}\n\nCorrija antes de treinar — o backend rejeita por validação Pydantic.`,
+          t.paramPanel.importWarnings(
+            issues.length,
+            summary,
+            Math.max(0, issues.length - 5),
+          ),
         );
       }
     });
@@ -1929,7 +1886,7 @@ export function ParamPanel({
             marginBottom: 12,
           }}
         >
-          // em breve
+          {t.paramPanel.kickers.comingSoon}
         </div>
         <div
           style={{
@@ -1938,7 +1895,7 @@ export function ParamPanel({
             color: "var(--vf-text-dim)",
           }}
         >
-          {task.label} ainda não está disponível
+          {t.paramPanel.unavailable(task.label)}
         </div>
         <p
           style={{
@@ -1947,7 +1904,7 @@ export function ParamPanel({
             marginTop: 8,
           }}
         >
-          Esta tarefa será implementada em uma próxima fase do VisionForge.
+          {t.paramPanel.unavailableBody}
         </p>
       </section>
     );
@@ -1969,7 +1926,7 @@ export function ParamPanel({
           letterSpacing: "0.08em",
         }}
       >
-        carregando schema…
+        {t.paramPanel.loadingSchema}
       </section>
     );
   }
@@ -2112,17 +2069,17 @@ export function ParamPanel({
             type="button"
             onClick={handleExport}
             style={yamlBtnStyle}
-            title="Exportar configuração atual como arquivo .yaml"
+            title={t.paramPanel.exportTitle}
           >
-            ↓ Exportar YAML
+            {t.paramPanel.exportYaml}
           </button>
           <button
             type="button"
             onClick={handleImportClick}
             style={yamlBtnSecondaryStyle}
-            title="Importar configuração a partir de um arquivo .yaml"
+            title={t.paramPanel.importTitle}
           >
-            ↑ Importar YAML
+            {t.paramPanel.importYaml}
           </button>
         </div>
       </div>
@@ -2297,7 +2254,7 @@ export function ParamPanel({
           marginBottom: 14,
         }}
       >
-        // modelo
+        {t.paramPanel.kickers.model}
       </div>
       <div
         style={{
@@ -2359,7 +2316,7 @@ export function ParamPanel({
           marginBottom: 14,
         }}
       >
-        // treinamento
+        {t.paramPanel.kickers.training}
       </div>
       <div
         style={{
@@ -2463,7 +2420,7 @@ export function ParamPanel({
           marginBottom: 14,
         }}
       >
-        // dataset
+        {t.paramPanel.kickers.dataset}
       </div>
 
       <DatasetPicker
@@ -2513,7 +2470,7 @@ export function ParamPanel({
           textTransform: "uppercase",
         }}
       >
-        // classes
+        {t.paramPanel.kickers.classes}
       </div>
       <div
         style={{
@@ -2649,7 +2606,7 @@ export function ParamPanel({
               marginBottom: 14,
             }}
           >
-            // imagem
+            {t.paramPanel.kickers.image}
           </div>
           <TransformFields
             keys={IMAGE_KEYS}
@@ -2670,7 +2627,7 @@ export function ParamPanel({
               margin: "20px 0 14px",
             }}
           >
-            // data augmentation
+            {t.paramPanel.kickers.augmentation}
           </div>
           <TransformFields
             keys={["augment"]}
@@ -2706,7 +2663,7 @@ export function ParamPanel({
                 marginTop: 10,
               }}
             >
-              {AUGMENT_KEYS.length} parâmetros ocultos — ligue para ajustar
+              {t.paramPanel.hiddenParams(AUGMENT_KEYS.length)}
             </div>
           )}
         </>
@@ -2727,7 +2684,7 @@ export function ParamPanel({
           }}
         >
           <div style={{ fontWeight: 600, marginBottom: 8 }}>
-            {validationErrors.length} campo(s) com erro:
+            {t.paramPanel.fieldErrors(validationErrors.length)}
           </div>
           <ul style={{ margin: 0, paddingLeft: 18, lineHeight: 1.65 }}>
             {validationErrors.map((err, i) => (
