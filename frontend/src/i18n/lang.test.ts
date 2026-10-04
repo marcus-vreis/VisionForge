@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { initialLang } from "./lang";
+import { initialLang, localeOf, readStoredLang, storeLang } from "./lang";
 
 describe("initialLang", () => {
   it("keeps what the user chose before", () => {
@@ -20,5 +20,24 @@ describe("initialLang", () => {
 
   it("falls back to English with no browser hint", () => {
     expect(initialLang(null, undefined)).toBe("en");
+  });
+});
+
+describe("localeOf", () => {
+  it("gives each language its BCP 47 tag", () => {
+    expect(localeOf("pt")).toBe("pt-BR");
+    expect(localeOf("en")).toBe("en-US");
+  });
+});
+
+describe("storage", () => {
+  // These run in vitest's node environment, which has no localStorage: both
+  // functions have to swallow that instead of taking the page down with them.
+  it("reads nothing when storage is unavailable", () => {
+    expect(readStoredLang()).toBeNull();
+  });
+
+  it("does not throw when storage is unavailable", () => {
+    expect(() => storeLang("en")).not.toThrow();
   });
 });

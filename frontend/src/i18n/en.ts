@@ -50,6 +50,12 @@ export const en: Dict = {
     using: "using",
     loadingTitle: "Loading devices…",
     cudaUnavailableTitle: "CUDA unavailable — CPU only",
+    cudaTitle: (version: string, gpus: number) =>
+      `CUDA ${version} · ${gpus} ${gpus === 1 ? "GPU" : "GPUs"}`,
+    cudaSummary: (version: string, gpus: number) =>
+      `cuda ${version} · ${gpus} ${gpus === 1 ? "gpu" : "gpus"}`,
+    gpuName: (index: number, name: string) => `GPU ${index} · ${name}`,
+    multiGpu: (gpus: number) => `Multi-GPU (${gpus} GPUs)`,
     loadingShort: "loading…",
     errorPrefix: (message: string) => `error: ${message}`,
     cudaNotDetected: "cuda not detected",

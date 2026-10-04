@@ -6,7 +6,6 @@
  * NOT_YET_MIGRATED lists the files still being moved over; the test fails
  * when a listed file is already clean, so the list can only shrink.
  */
-/// <reference types="node" />
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import ts from "typescript";
@@ -43,13 +42,16 @@ const NOT_YET_MIGRATED = new Set([
   "components/TaskDatasetStats.tsx",
   "components/TrainingOverlay.tsx",
   "components/TransformsSection.tsx",
+  "components/controls/Toggle.tsx",
   "hooks/useExperiment.ts",
   "lib/anomaly-models.ts",
+  "lib/custom-tasks.ts",
   "lib/dataset-identity.ts",
   "lib/grid-axis.ts",
   "lib/param-help.ts",
   "lib/queue-format.ts",
   "lib/regression-models.ts",
+  "lib/replicates-form.ts",
   "lib/run-notify.ts",
   "lib/segmentation-models.ts",
   "lib/tour.ts",
@@ -68,6 +70,8 @@ const ALLOWED = new Set([
   "DataParallel",
   // The glyph on the help dot.
   "i",
+  // The version prefix in the header: `· v${version}`.
+  "· v",
 ]);
 
 const VISIBLE_PROPS = new Set([
@@ -76,9 +80,10 @@ const VISIBLE_PROPS = new Set([
 ]);
 
 const PORTUGUESE =
-  /[ãõçáéíóúâêôàÃÕÇÁÉÍÓÚÂÊÔÀ]|\b(nenhum|nenhuma|carregando|treinar|salvar|escolha|pasta|arquivo|você|voltar|continuar|pular|abrir|fechar|limpar|baixar|rodar|parar|retomar|apagar|dispositivos?|imagens?|de|do|da|dos|das|para|com|sem|uma?)\b/i;
+  /[ãõçáéíóúâêôàÃÕÇÁÉÍÓÚÂÊÔÀ]|\b(nenhum|nenhuma|carregando|treinar|salvar|escolha|pasta|arquivo|você|voltar|continuar|pular|abrir|fechar|limpar|baixar|rodar|parar|retomar|apagar|dispositivos?|imagens?|de|do|da|dos|das|para|com|sem|uma?|pel[oa]s?|menos)\b/i;
 
 const HAS_LETTER = /[A-Za-zÀ-ÿ]/;
+const PROSE = /[a-zà-ÿ]{2,}\s+[a-zà-ÿ]{2,}/;
 
 interface Finding {
   file: string;
@@ -98,6 +103,32 @@ function sourceFiles(dir: string, out: string[] = []): string[] {
   return out;
 }
 
+/** The literals an expression in a JSX child or visible prop can put on screen. */
+function shownLiterals(expr: ts.Expression | undefined): ts.Expression[] {
+  if (!expr) return [];
+  if (ts.isParenthesizedExpression(expr)) return shownLiterals(expr.expression);
+  if (ts.isStringLiteral(expr) || ts.isNoSubstitutionTemplateLiteral(expr) || ts.isTemplateExpression(expr)) return [expr];
+  if (ts.isConditionalExpression(expr)) return [...shownLiterals(expr.whenTrue), ...shownLiterals(expr.whenFalse)];
+  if (ts.isBinaryExpression(expr)) {
+    switch (expr.operatorToken.kind) {
+      case ts.SyntaxKind.PlusToken:
+        return [...shownLiterals(expr.left), ...shownLiterals(expr.right)];
+      case ts.SyntaxKind.BarBarToken:
+      case ts.SyntaxKind.QuestionQuestionToken:
+      case ts.SyntaxKind.AmpersandAmpersandToken:
+        return shownLiterals(expr.right);
+    }
+  }
+  return [];
+}
+
+/** The fixed text of a literal; a template's `${}` holes read as spaces. */
+function literalText(lit: ts.Expression): string {
+  return ts.isTemplateExpression(lit)
+    ? [lit.head.text, ...lit.templateSpans.map((s) => s.literal.text)].join(" ")
+    : (lit as ts.StringLiteralLike).text;
+}
+
 function findings(path: string): Finding[] {
   const text = readFileSync(path, "utf8");
   const kind = path.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
@@ -106,6 +137,8 @@ function findings(path: string): Finding[] {
   const out: Finding[] = [];
   const add = (node: ts.Node, s: string) =>
     out.push({ file, line: sf.getLineAndCharacterOfPosition(node.getStart()).line + 1, text: s.trim().slice(0, 60) });
+  // Literals already judged as on-screen text, so the Portuguese check below skips them.
+  const seen = new Set<ts.Node>();
 
   const visit = (node: ts.Node): void => {
     if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) return;
@@ -122,11 +155,41 @@ function findings(path: string): Finding[] {
       if (HAS_LETTER.test(s) && !ALLOWED.has(s)) add(node, s);
       return;
     } else if (
-      ts.isStringLiteral(node) ||
-      ts.isNoSubstitutionTemplateLiteral(node) ||
-      ts.isTemplateHead(node) ||
-      ts.isTemplateMiddle(node) ||
-      ts.isTemplateTail(node)
+      ts.isJsxExpression(node) &&
+      (ts.isJsxElement(node.parent) ||
+        ts.isJsxFragment(node.parent) ||
+        (ts.isJsxAttribute(node.parent) && VISIBLE_PROPS.has(node.parent.name.getText())))
+    ) {
+      // {"..."}, {`...${n}`}, {ok ? "..." : "..."}, {x || "..."}, title={"..."}: on screen like JSX text.
+      for (const lit of shownLiterals(node.expression)) {
+        seen.add(lit);
+        if (ts.isTemplateExpression(lit)) [lit.head, ...lit.templateSpans.map((s) => s.literal)].forEach((p) => seen.add(p));
+        const s = literalText(lit).trim();
+        if (HAS_LETTER.test(s) && !ALLOWED.has(s)) add(lit, s);
+      }
+    } else if (
+      ts.isPropertyAssignment(node) &&
+      (ts.isIdentifier(node.name) || ts.isStringLiteral(node.name)) &&
+      VISIBLE_PROPS.has(node.name.text)
+    ) {
+      // { label: "…", placeholder: "…" } in config objects: only prose (two lower-case words), so
+      // model and dataset names such as "YOLO11-n" or "Faster R-CNN" stay out. What is not prose
+      // still gets the Portuguese check below.
+      for (const lit of shownLiterals(node.initializer)) {
+        const s = literalText(lit).trim();
+        if (PROSE.test(s) && !ALLOWED.has(s)) {
+          seen.add(lit);
+          if (ts.isTemplateExpression(lit)) [lit.head, ...lit.templateSpans.map((p) => p.literal)].forEach((p) => seen.add(p));
+          add(lit, s);
+        }
+      }
+    } else if (
+      !seen.has(node) &&
+      (ts.isStringLiteral(node) ||
+        ts.isNoSubstitutionTemplateLiteral(node) ||
+        ts.isTemplateHead(node) ||
+        ts.isTemplateMiddle(node) ||
+        ts.isTemplateTail(node))
     ) {
       const s = node.text;
       if (s.trim() && (PORTUGUESE.test(s) || s === "pt-BR")) add(node, s);

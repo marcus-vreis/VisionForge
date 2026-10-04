@@ -139,38 +139,44 @@ export function Header({
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-        <button
-          type="button"
-          onClick={() => setLang(lang === "pt" ? "en" : "pt")}
-          title={t.language.switchTo}
+        {/* Two real buttons rather than one that flips: each language is a
+            target of its own, and aria-pressed says which one is on. */}
+        <div
+          role="group"
           aria-label={t.language.label}
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 6,
-            padding: "9px 11px",
+            padding: "0 5px",
             background: "rgba(255,255,255,0.025)",
             border: "1px solid var(--vf-panel-stroke)",
             borderRadius: 10,
-            fontFamily: "var(--font-mono)",
-            fontSize: 11,
-            letterSpacing: "0.12em",
-            cursor: "pointer",
             animation: "fadeUp 700ms ease both",
           }}
         >
           {(["pt", "en"] as const).map((code) => (
-            <span
+            <button
               key={code}
+              type="button"
+              aria-pressed={code === lang}
+              onClick={() => setLang(code)}
+              title={code === lang ? undefined : t.language.switchTo}
               style={{
+                padding: "9px 6px",
+                background: "none",
+                border: "none",
+                fontFamily: "var(--font-mono)",
+                fontSize: 11,
+                letterSpacing: "0.12em",
                 color: code === lang ? "var(--accent-vf)" : "var(--vf-text-muted)",
                 fontWeight: code === lang ? 600 : 400,
+                cursor: "pointer",
               }}
             >
               {code.toUpperCase()}
-            </span>
+            </button>
           ))}
-        </button>
+        </div>
         {onGuide && (
           <button
             type="button"

@@ -94,7 +94,7 @@ export function DeviceSelector({ selection, onChange, variant = "bottom" }: Devi
             : error
               ? error
               : info?.cuda_available
-                ? `CUDA ${info.cuda_version ?? ""} · ${info.gpus.length} GPU(s)`
+                ? t.deviceSelector.cudaTitle(info.cuda_version ?? "", info.gpus.length)
                 : t.deviceSelector.cudaUnavailableTitle
         }
         style={{
@@ -175,7 +175,7 @@ export function DeviceSelector({ selection, onChange, variant = "bottom" }: Devi
               : error
                 ? t.deviceSelector.errorPrefix(error)
                 : info?.cuda_available
-                  ? `cuda ${info.cuda_version ?? ""} · ${info.gpus.length} gpu(s)`
+                  ? t.deviceSelector.cudaSummary(info.cuda_version ?? "", info.gpus.length)
                   : t.deviceSelector.cudaNotDetected}
           </div>
 
@@ -196,7 +196,7 @@ export function DeviceSelector({ selection, onChange, variant = "bottom" }: Devi
                 selection.kind === "cuda" &&
                 (selection.gpu_ids?.[0] ?? 0) === g.index
               }
-              title={`GPU ${g.index} · ${g.name}`}
+              title={t.deviceSelector.gpuName(g.index, g.name)}
               subtitle={[formatMem(g.total_memory_mb), g.compute_capability && `CC ${g.compute_capability}`]
                 .filter(Boolean)
                 .join(" · ")}
@@ -210,7 +210,7 @@ export function DeviceSelector({ selection, onChange, variant = "bottom" }: Devi
           {info && info.gpus.length >= 2 && (
             <DeviceOption
               active={selection.kind === "multi_cuda"}
-              title={`Multi-GPU (${info.gpus.length} GPUs)`}
+              title={t.deviceSelector.multiGpu(info.gpus.length)}
               subtitle="DataParallel"
               onClick={() => {
                 onChange({
