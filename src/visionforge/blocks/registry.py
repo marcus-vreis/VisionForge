@@ -21,7 +21,10 @@ class BlockRegistry:
 
     @classmethod
     def _all_subclasses(cls, base: type) -> list[type]:
-        result = []
+        # Both annotated: from mypy 2.4 on, `type.__subclasses__()` no longer
+        # tells it what the loop variable is.
+        result: list[type] = []
+        sub: type
         for sub in base.__subclasses__():
             result.append(sub)
             result.extend(cls._all_subclasses(sub))
