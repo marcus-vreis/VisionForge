@@ -181,3 +181,49 @@ class TestCustomRun:
         client = TestClient(app, raise_server_exceptions=True)
         resp = client.post("/api/custom/ghost/run", json=_payload(tmp_path))
         assert resp.status_code == 404
+
+
+class TestDeleteCustomTaskRoute:
+    @staticmethod
+    def _client(monkeypatch, behaviour):  # type: ignore[no-untyped-def]
+        import visionforge.tasks.manage as manage
+        from visionforge.gui.server import app
+
+        monkeypatch.setattr(manage, "delete_task", behaviour)
+        return TestClient(app)
+
+    def test_a_confirmed_delete_reports_what_was_removed(self, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+        calls: list[tuple[str, str]] = []
+
+        def ok(key: str, confirm: str) -> Path:
+            calls.append((key, confirm))
+            return Path("user_tasks/toy.py")
+
+        client = self._client(monkeypatch, ok)
+
+        resp = client.delete("/api/custom/toy", params={"confirm": "toy"})
+
+        assert resp.status_code == 200
+        assert resp.json()["action"] == "deleted"
+        assert "toy.py" in resp.json()["detail"]
+        assert calls == [("toy", "toy")]
+
+    def test_a_wrong_confirmation_is_a_400(self, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+        def refuse(key: str, confirm: str) -> Path:
+            raise ValueError("confirme digitando 'toy'")
+
+        client = self._client(monkeypatch, refuse)
+
+        resp = client.delete("/api/custom/toy", params={"confirm": "oops"})
+
+        assert resp.status_code == 400
+
+    def test_an_unknown_task_is_a_404(self, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+        def missing(key: str, confirm: str) -> Path:
+            raise FileNotFoundError("não existe")
+
+        client = self._client(monkeypatch, missing)
+
+        resp = client.delete("/api/custom/ghost", params={"confirm": "ghost"})
+
+        assert resp.status_code == 404
