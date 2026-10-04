@@ -9,6 +9,8 @@ meaningless, but whether they are computed, recorded and validated is not.
 from __future__ import annotations
 
 import json
+import math
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -68,13 +70,20 @@ def _regression_run(tmp_path: Path, *, with_checkpoint: bool = True) -> Path:
 class TestRegressionTestRun:
     def test_scores_the_chosen_manifest_and_records_it(self, tmp_path: Path) -> None:
         run_dir = _regression_run(tmp_path)
-        manifest = tmp_path / "ds" / "test.csv"
+        # Another dataset, under another manifest name, with the run's own
+        # dataset gone: only the redirect to the chosen file can evaluate this.
+        other = build_regression_dataset(tmp_path / "other", size=32, rows=12)
+        manifest = other / "holdout.csv"
+        (other / "test.csv").rename(manifest)
+        shutil.rmtree(tmp_path / "ds")
 
         resp = _execute_run_test(
             run_dir, RunTestRequest(data_dir=str(manifest), label="held-out")
         )
 
         assert set(resp.metrics) == {"mse", "rmse", "mae", "r2"}
+        assert all(math.isfinite(v) for v in resp.metrics.values())
+        assert resp.metrics["rmse"] == pytest.approx(math.sqrt(resp.metrics["mse"]))
         assert resp.label == "held-out"
         saved = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
         assert len(saved["tests"]) == 1
@@ -93,7 +102,8 @@ class TestRegressionTestRun:
     def test_a_folder_is_refused_because_regression_reads_a_manifest(
         self, tmp_path: Path
     ) -> None:
-        run_dir = _regression_run(tmp_path)
+        # No checkpoint on purpose: the folder complaint must come first.
+        run_dir = _regression_run(tmp_path, with_checkpoint=False)
 
         with pytest.raises(ValueError, match="manifesto"):
             _execute_run_test(run_dir, RunTestRequest(data_dir=str(tmp_path / "ds")))

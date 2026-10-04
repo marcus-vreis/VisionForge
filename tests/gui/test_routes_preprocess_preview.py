@@ -19,6 +19,9 @@ def client_and_cache(
 
     cache = tmp_path / "preview_cache"
     monkeypatch.setattr(routes_mod, "_PREVIEW_CACHE_DIR", cache)
+    # A preview registers its dataset root in a module-level allow-list; keep
+    # that from leaking into the other tests.
+    monkeypatch.setattr(routes_mod, "_ALLOWED_DATASET_ROOTS", set())
     return TestClient(app), cache
 
 
@@ -63,16 +66,26 @@ class TestPreprocessPreview:
         assert Path(body["source_image"]).parent.name == "bad"
         assert "grayscale" in body["available_kinds"]
 
+        # The pipeline really ran: the original keeps its colour, the grayscale
+        # step and the final image do not.
+        assert body["final"] != body["original"]
+        with Image.open(body["original"]) as original:
+            assert original.convert("RGB").getpixel((0, 0)) == (200, 30, 30)
+        for path in (body["steps"][0]["artifact"], body["final"]):
+            with Image.open(path) as rendered:
+                r, g, b = rendered.convert("RGB").getpixel((0, 0))
+            assert r == g == b
+
     def test_the_requested_class_is_used(
         self, tmp_path: Path, client_and_cache: tuple[TestClient, Path]
     ) -> None:
         client, _ = client_and_cache
         root = _imagefolder(tmp_path / "ds")
 
-        body = _post(
-            client, {"base_dir": str(root), "class_name": "good", "steps": []}
-        ).json()
+        resp = _post(client, {"base_dir": str(root), "class_name": "good", "steps": []})
 
+        assert resp.status_code == 200
+        body = resp.json()
         assert Path(body["source_image"]).parent.name == "good"
         # Without steps the final image is the original itself.
         assert body["final"] == body["original"]
@@ -95,12 +108,12 @@ class TestPreprocessPreview:
         client, _ = client_and_cache
         root = _imagefolder(tmp_path / "ds")
 
-        body = _post(
-            client, {"base_dir": str(root), "split": "val", "steps": []}
-        ).json()
+        resp = _post(client, {"base_dir": str(root), "split": "val", "steps": []})
 
+        assert resp.status_code == 200
+        body = resp.json()
         assert body["original"] == ""
-        assert "val" in body["message"]
+        assert "'val'" in body["message"]
 
     def test_a_split_without_classes_says_so(
         self, tmp_path: Path, client_and_cache: tuple[TestClient, Path]
@@ -108,8 +121,10 @@ class TestPreprocessPreview:
         client, _ = client_and_cache
         (tmp_path / "ds" / "train").mkdir(parents=True)
 
-        body = _post(client, {"base_dir": str(tmp_path / "ds"), "steps": []}).json()
+        resp = _post(client, {"base_dir": str(tmp_path / "ds"), "steps": []})
 
+        assert resp.status_code == 200
+        body = resp.json()
         assert body["original"] == ""
         assert "classe" in body["message"].lower()
 
@@ -119,8 +134,10 @@ class TestPreprocessPreview:
         client, _ = client_and_cache
         (tmp_path / "ds" / "train" / "empty").mkdir(parents=True)
 
-        body = _post(client, {"base_dir": str(tmp_path / "ds"), "steps": []}).json()
+        resp = _post(client, {"base_dir": str(tmp_path / "ds"), "steps": []})
 
+        assert resp.status_code == 200
+        body = resp.json()
         assert body["original"] == ""
         assert "Sem imagens" in body["message"]
 
