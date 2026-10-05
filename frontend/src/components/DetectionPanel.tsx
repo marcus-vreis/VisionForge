@@ -678,7 +678,9 @@ export function DetectionPanel({
                   color: "var(--vf-text-muted)",
                 }}
               >
-                {t.paramPanel.hiddenParams(15)}
+                {t.paramPanel.hiddenParams(
+                  Object.keys(formData.training.augmentation).filter((k) => k !== "augment").length,
+                )}
               </div>
             )}
             <div

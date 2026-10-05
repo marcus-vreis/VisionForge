@@ -68,8 +68,10 @@ export const pt = {
     using: "usando",
     loadingTitle: "Carregando dispositivos…",
     cudaUnavailableTitle: "CUDA indisponível — somente CPU",
-    cudaTitle: (version: string, gpus: number) => `CUDA ${version} · ${gpus} GPU(s)`,
-    cudaSummary: (version: string, gpus: number) => `cuda ${version} · ${gpus} gpu(s)`,
+    cudaTitle: (version: string, gpus: number) =>
+      `CUDA ${version} · ${gpus} ${gpus === 1 ? "GPU" : "GPUs"}`,
+    cudaSummary: (version: string, gpus: number) =>
+      `cuda ${version} · ${gpus} ${gpus === 1 ? "gpu" : "gpus"}`,
     gpuName: (index: number, name: string) => `GPU ${index} · ${name}`,
     multiGpu: (gpus: number) => `Multi-GPU (${gpus} GPUs)`,
     loadingShort: "carregando…",
@@ -152,7 +154,7 @@ export const pt = {
     scheduler: "Como o learning rate cai ao longo do treino. Quase sempre ajuda deixar cair.",
     step_size: "De quantas em quantas épocas o learning rate é reduzido.",
     gamma: "Por quanto o learning rate é multiplicado a cada redução.",
-    cos_lr: "Faz o learning rate cair numa curva de cosseno em vez de cair em linha reta.",
+    cos_lr: "Faz o learning rate cair numa curva de cosseno em vez de linearmente.",
     warmup_epochs:
       "Épocas iniciais com learning rate crescendo devagar, para o modelo não desestabilizar no começo.",
 
@@ -436,7 +438,7 @@ export const pt = {
       recursive: "recursive (subpastas)",
       run: "▶ Rodar inferência",
       running: "Processando…",
-      hint: "Roda o checkpoint sobre uma pasta de imagens e escreve um CSV com uma linha por imagem e a saída do modelo para a tarefa (classe e probabilidades, valores previstos ou score de anomalia). Útil para processar batches de dados novos sem retreinar.",
+      hint: "Roda o checkpoint sobre uma pasta de imagens e escreve um CSV com uma linha por imagem e a saída do modelo para a tarefa (classe e probabilidades, valores previstos ou score e decisão de anomalia). Útil para processar batches de dados novos sem retreinar.",
       needFolder: "Informe a pasta de imagens para inferência.",
       starting: "Rodando inferência em lote…",
       done: (ok: number, csv: string) => `${ok} imagens processadas · CSV em ${csv}`,
@@ -456,7 +458,7 @@ export const pt = {
       samples: "Nº de amostras (1–64)",
       run: "▶ Gerar Grad-CAM",
       running: "Gerando…",
-      hint: "Gera mapas de calor Grad-CAM sobre imagens de exemplo, destacando as regiões que mais influenciaram a saída do modelo (a classe predita, o valor previsto ou a classe segmentada, conforme a tarefa). Útil para interpretar o que o modelo aprendeu.",
+      hint: "Gera mapas de calor Grad-CAM sobre imagens de exemplo, destacando as regiões que mais influenciaram a saída do modelo: a classe predita na classificação, o primeiro alvo na regressão e a classe 0 na segmentação. Útil para interpretar o que o modelo aprendeu.",
       needFolder: "Informe a pasta de imagens.",
       starting: "Gerando mapas Grad-CAM…",
       done: (count: number, layer: string) => `${count} mapa(s) gerado(s) · camada ${layer}`,
@@ -530,7 +532,7 @@ export const pt = {
           "O .csv com a coluna de imagem e a(s) coluna(s) alvo. Os caminhos das imagens são resolvidos a partir da subpasta de imagens ao lado do .csv, como no treino.",
         classification: "Uma pasta com uma subpasta por classe — a mesma convenção do treino.",
       },
-      label: "Rótulo (opcional)",
+      label: "Nome (opcional)",
       labelPlaceholder: "ex: holdout_2026",
       run: "▶ Rodar teste",
       running: "Avaliando…",
@@ -649,7 +651,7 @@ export const pt = {
     augmentation: {
       title: "Data augmentation",
       toggle: "Augmentation",
-      toggleHint: "desligada, os 15 valores abaixo ficam guardados",
+      toggleHint: "desligada, os valores abaixo ficam guardados",
       hsvHue: "HSV — hue",
       hsvSaturation: "HSV — saturation",
       hsvValue: "HSV — value",
