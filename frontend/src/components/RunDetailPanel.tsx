@@ -21,6 +21,7 @@ import type { Dict } from "../i18n/pt";
 import { useI18n, useT } from "../i18n/useT";
 import { formatBytes, shortDigest } from "../lib/dataset-identity";
 import { metricCi } from "../lib/metric-ci";
+import { PREPROCESS_KIND_LABELS } from "../lib/preprocess-kinds";
 import type { MetricCI } from "../types/run";
 import { Lightbox } from "./Lightbox";
 
@@ -58,19 +59,6 @@ function fmtMetric(v: unknown): string {
   if (typeof v === "number") return v % 1 === 0 ? String(v) : v.toFixed(4);
   return String(v);
 }
-
-/** Human-friendly name for a preprocessing filter kind. */
-const PREPROCESS_KIND_LABELS: Record<string, string> = {
-  gaussian_blur: "Gaussian blur",
-  median_blur: "Median blur",
-  unsharp: "Unsharp mask",
-  edges: "Edges (Sobel)",
-  emboss: "Emboss",
-  grayscale: "Grayscale",
-  equalize: "Equalize (CLAHE)",
-  autocontrast: "Autocontrast",
-  wavelet: "Wavelet (Haar)",
-};
 
 interface ConfigData {
   preprocessing?: { steps?: Array<Record<string, unknown>> };

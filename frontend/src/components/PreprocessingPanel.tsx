@@ -6,6 +6,7 @@ import {
 } from "../api/client";
 import { MenuSelect } from "./controls";
 import { Rich } from "./Rich";
+import { PREPROCESS_KIND_LABELS } from "../lib/preprocess-kinds";
 import { useT } from "../i18n/useT";
 
 export interface PreprocessingStep {
@@ -30,18 +31,6 @@ const KNOWN_KINDS = [
   "autocontrast",
   "wavelet",
 ] as const;
-
-const KIND_LABELS: Record<string, string> = {
-  gaussian_blur: "Gaussian blur",
-  median_blur: "Median blur",
-  unsharp: "Unsharp mask",
-  edges: "Edges (Sobel)",
-  emboss: "Emboss",
-  grayscale: "Grayscale",
-  equalize: "Equalize (CLAHE)",
-  autocontrast: "Autocontrast",
-  wavelet: "Wavelet (Haar)",
-};
 
 const DEFAULT_PARAMS: Record<string, Record<string, string | number>> = {
   gaussian_blur: { radius: 2.0 },
@@ -213,7 +202,7 @@ export function PreprocessingPanel({
             onChange={(v) => addStep(v)}
             options={KNOWN_KINDS.map((k) => ({
               value: k,
-              label: KIND_LABELS[k] ?? k,
+              label: PREPROCESS_KIND_LABELS[k] ?? k,
             }))}
           />
           <button
@@ -302,7 +291,7 @@ export function PreprocessingPanel({
           {preview.steps.map((s, i) => (
             <PreviewTile
               key={`${s.kind}-${i}`}
-              label={`${i + 1}. ${KIND_LABELS[s.kind] ?? s.kind}`}
+              label={`${i + 1}. ${PREPROCESS_KIND_LABELS[s.kind] ?? s.kind}`}
               artifact={s.artifact}
             />
           ))}
@@ -365,7 +354,7 @@ function StepRow({
           color: "var(--vf-text)",
         }}
       >
-        {KIND_LABELS[step.kind] ?? step.kind}
+        {PREPROCESS_KIND_LABELS[step.kind] ?? step.kind}
       </span>
       <div style={{ display: "flex", gap: 8, flex: 1, flexWrap: "wrap" }}>
         {Object.entries(step.params).map(([k, v]) => (

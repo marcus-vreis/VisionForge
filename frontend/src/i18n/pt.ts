@@ -239,10 +239,10 @@ export const pt = {
       patience: "Paciência",
       factor: "Fator",
       min_lr: "LR mínimo",
-      base_dir: "Diretório base",
-      train_dir: "Subdir treino",
-      val_dir: "Subdir validação",
-      test_dir: "Subdir teste",
+      base_dir: "Pasta base",
+      train_dir: "Subpasta treino",
+      val_dir: "Subpasta validação",
+      test_dir: "Subpasta teste",
       num_workers: "Workers",
       pin_memory: "Pin memory",
       image_size: "Tamanho da imagem",
@@ -443,12 +443,13 @@ export const pt = {
       starting: "Rodando inferência em lote…",
       done: (ok: number, csv: string) => `${ok} imagens processadas · CSV em ${csv}`,
       doneWithFailures: (ok: number, failed: number, csv: string) =>
-        `${ok} ok · ${failed} falharam · CSV em ${csv}`,
+        `${ok} ok · ${failed} ${failed === 1 ? "falhou" : "falharam"} · CSV em ${csv}`,
       failed: "Falha na inferência em lote.",
       processed: "processadas",
       failedCount: "falharam",
       csv: "csv",
-      failedFiles: (n: number) => `${n} arquivos falharam (clique para ver até 5)`,
+      failedFiles: (n: number) =>
+        `${n} ${n === 1 ? "arquivo falhou" : "arquivos falharam"} (clique para ver até 5)`,
       more: (n: number) => `…+${n} mais`,
     },
     gradcam: {
@@ -485,9 +486,10 @@ export const pt = {
       onTestSet: (name: string) => `${name} (teste)`,
       ciTooltip: (percent: number, resamples: number, samples: number) =>
         `IC ${percent}% por bootstrap percentil: ` +
-        `${resamples} reamostragens das ${samples} imagens de ` +
+        `${resamples} reamostragens ${samples === 1 ? "da única imagem" : `das ${samples} imagens`} de ` +
         `teste. Mede o ruído de amostragem do split com este modelo ` +
-        `fixo — não a variação entre treinos.`,
+        `fixo — não a variação entre treinos, que réplicas com várias ` +
+        `seeds medem.`,
     },
     graphs: {
       title: "Gráficos (clique para expandir)",
@@ -521,7 +523,7 @@ export const pt = {
     },
     cv: {
       title: (ok: number, total: number, failed: number) =>
-        `Cross-validation · ${ok}/${total} folds ok${failed > 0 ? ` · ${failed} falharam` : ""}`,
+        `Cross-validation · ${ok}/${total} folds ok${failed > 0 ? ` · ${failed} ${failed === 1 ? "falhou" : "falharam"}` : ""}`,
       meanAccuracy: "Acurácia média ± std",
       meanF1: "F1 média ± std",
       fold: "Fold",
@@ -703,7 +705,7 @@ export const pt = {
     },
     ciTooltip: (percent: number, resamples: number, samples: number) =>
       `IC ${percent}% por bootstrap percentil: ` +
-      `${resamples} reamostragens das ${samples} imagens de teste. ` +
+      `${resamples} reamostragens ${samples === 1 ? "da única imagem" : `das ${samples} imagens`} de teste. ` +
       `Mede o ruído de amostragem do split com este modelo fixo — não a ` +
       `variação entre treinos, que réplicas com várias seeds medem.`,
     graphsTitle: "// gráficos · clique para expandir",
@@ -917,7 +919,7 @@ export const pt = {
       numClassesHint: "inclui fundo",
       pretrainedHint: "backbone ImageNet",
     },
-    lossHint: "critério por pixel",
+    lossHint: "por pixel (CE) ou sobreposição (Dice)",
     transferHint: "backbone pré-treinado (torchvision)",
     dataset: {
       title: "Dataset (imagens + máscaras)",
@@ -934,12 +936,12 @@ export const pt = {
     namePlaceholder: "regression_001",
     model: {
       title: "Modelo · regressão",
-      backboneHint: "CNN",
+      backboneHint: "CNN ou transformer",
       numTargets: "Nº de alvos",
       numTargetsHint: "derivado das colunas-alvo",
     },
     lossHint: "critério",
-    transferHint: "backbone compartilhado",
+    transferHint: "backbone pré-treinado (torchvision)",
     dataset: {
       title: "Dataset (CSV manifest)",
       baseDirPlaceholder: "…/dataset (train.csv, val.csv, images/)",
@@ -970,7 +972,7 @@ export const pt = {
       latentDim: "Latent dim",
       latentDimHint: "gargalo do autoencoder",
     },
-    epochsHint: "ignorado no PatchCore",
+    epochsHint: "ignoradas no PatchCore",
     threshold: "Threshold %ile",
     thresholdHint: "corte sobre scores normais",
     dataset: {
@@ -1052,7 +1054,7 @@ export const pt = {
     cancelled: "Seleção cancelada.",
     picked: (path: string) => `Pasta selecionada: ${path}`,
     pickFailed: "Falha ao abrir o seletor de pastas.",
-    baseDir: "Diretório base do dataset",
+    baseDir: "Pasta base do dataset",
     baseDirPlaceholder: "ex: C:/datasets/coffee  ou  /home/user/data",
     baseDirHint: "Pasta raiz que contém treino, validação e teste.",
     browseTitle: "Abrir seletor nativo do sistema (retorna o caminho absoluto)",
@@ -1132,7 +1134,7 @@ export const pt = {
   // The preprocessing pipeline builder (components/PreprocessingPanel.tsx). The
   // filter names (Gaussian blur, Unsharp mask…) are the same in every language.
   preprocessing: {
-    needBaseDir: "Defina um diretório base antes de gerar preview.",
+    needBaseDir: "Defina uma pasta base antes de gerar preview.",
     previewFailed: "Falha ao gerar preview.",
     kicker: "// pré-processamento (filtros)",
     active: (n: number) => `${n} filtro${n === 1 ? "" : "s"} ativo${n === 1 ? "" : "s"} no treino`,
@@ -1155,7 +1157,7 @@ export const pt = {
   },
   // The augmentation preview strip (components/AugmentPreview.tsx).
   augmentPreview: {
-    needBaseDir: "Defina o diretório base do dataset primeiro.",
+    needBaseDir: "Defina a pasta base do dataset primeiro.",
     failed: "Falha ao gerar preview.",
     generating: "Gerando…",
     button: "🎲 preview de augmentation",
