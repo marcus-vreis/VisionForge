@@ -21,11 +21,6 @@ import { SweepCard, type SweepPayload } from "./SweepCard";
 import { TransformsSection } from "./TransformsSection";
 import type { ReplicatesPayload } from "../lib/replicates-form";
 
-const COMPARE_METRICS = [
-  { value: "auroc", label: "AUROC" },
-  { value: "image_f1", label: "F1 (imagem)" },
-];
-
 const SWEEP_PATH_HINTS = [
   "model.latent_dim",
   "model.coreset_ratio",
@@ -74,6 +69,10 @@ export function AnomalyPanel({
   runSignal,
 }: AnomalyPanelProps) {
   const t = useT();
+  const compareMetrics = [
+    { value: "auroc", label: "AUROC" },
+    { value: "image_f1", label: t.anomalyPanel.imageF1 },
+  ];
   const [picking, setPicking] = useState(false);
   const [strategy, setStrategy] = useState<PanelStrategy>("simple");
 
@@ -134,7 +133,7 @@ export function AnomalyPanel({
       <ExperimentHeader
         name={formData.name}
         onNameChange={(v) => setFormData((p) => ({ ...p, name: v }))}
-        placeholder="anomaly_001"
+        placeholder={t.anomalyPanel.namePlaceholder}
         strategy={strategy}
         onStrategyChange={(s) => {
           setStrategy(s);
@@ -162,7 +161,7 @@ export function AnomalyPanel({
       />
       {strategy === "sweep" && onSweep && (
         <SweepCard
-          metrics={COMPARE_METRICS}
+          metrics={compareMetrics}
           pathHints={SWEEP_PATH_HINTS}
           modelOptions={ANOMALY_MODELS}
           accent={accent}
@@ -173,7 +172,7 @@ export function AnomalyPanel({
       )}
       {strategy === "replicates" && onReplicates && (
         <ReplicatesCard
-          metrics={COMPARE_METRICS}
+          metrics={compareMetrics}
           accent={accent}
           disabled={busy}
           onReplicates={onReplicates}
@@ -183,49 +182,49 @@ export function AnomalyPanel({
 
       {/* Modelo */}
       <div style={card}>
-        <div style={sectionLabel}>Modelo · anomalia</div>
+        <div style={sectionLabel}>{t.anomalyPanel.model.title}</div>
         <div style={grid}>
           <Segmented
-            label="Método"
+            label={t.anomalyPanel.model.method}
             value={formData.model.name}
             onChange={(v) => setModel({ name: v })}
             options={ANOMALY_MODELS}
-            hint="abordagem"
+            hint={t.anomalyPanel.model.methodHint}
           />
           {patchcore ? (
             <>
               <SelectField
-                label="Backbone"
+                label={t.taskPanel.backbone}
                 value={formData.model.backbone}
                 onChange={(v) => setModel({ backbone: v })}
                 options={ANOMALY_BACKBONES}
-                hint="extrator congelado"
+                hint={t.anomalyPanel.model.backboneHint}
               />
               <NumberField
-                label="Coreset ratio"
+                label={t.anomalyPanel.model.coresetRatio}
                 value={formData.model.coreset_ratio}
                 onChange={(v) => setModel({ coreset_ratio: v })}
                 min={0.01}
                 max={1}
                 step={0.01}
-                hint="subamostra do banco"
+                hint={t.anomalyPanel.model.coresetRatioHint}
                 help={paramHelp(t, "coreset_ratio")}
               />
               <Toggle
-                label="Backbone pré-treinado"
+                label={t.anomalyPanel.model.pretrainedBackbone}
                 value={formData.model.pretrained}
                 onChange={(v) => setModel({ pretrained: v })}
-                hint="ImageNet"
+                hint={t.taskPanel.imageNet}
               />
             </>
           ) : (
             <NumberField
-              label="Latent dim"
+              label={t.anomalyPanel.model.latentDim}
               value={formData.model.latent_dim}
               onChange={(v) => setModel({ latent_dim: Math.round(v) })}
               min={1}
               step={1}
-              hint="gargalo do autoencoder"
+              hint={t.anomalyPanel.model.latentDimHint}
             />
           )}
         </div>
@@ -233,28 +232,28 @@ export function AnomalyPanel({
 
       {/* Treinamento */}
       <div style={card}>
-        <div style={sectionLabel}>Treinamento</div>
+        <div style={sectionLabel}>{t.taskPanel.training.title}</div>
         <div style={grid}>
           <NumberField
-            label="Épocas"
+            label={t.taskPanel.training.epochs}
             value={formData.training.epochs}
             onChange={(v) => setTraining({ epochs: Math.round(v) })}
             min={1}
             step={1}
-            hint={patchcore ? "ignorado no PatchCore" : undefined}
+            hint={patchcore ? t.anomalyPanel.epochsHint : undefined}
             help={paramHelp(t, "epochs")}
           />
           <NumberField
-            label="Batch size"
+            label={t.taskPanel.training.batchSize}
             value={formData.training.batch_size}
             onChange={(v) => setTraining({ batch_size: Math.round(v) })}
             min={1}
             step={1}
-            hint="qualquer inteiro"
+            hint={t.taskPanel.training.batchSizeHint}
             help={paramHelp(t, "batch_size")}
           />
           <NumberField
-            label="Learning rate"
+            label={t.taskPanel.training.learningRate}
             value={formData.training.learning_rate}
             onChange={(v) => setTraining({ learning_rate: v })}
             min={0.000001}
@@ -262,7 +261,7 @@ export function AnomalyPanel({
             help={paramHelp(t, "learning_rate")}
           />
           <NumberField
-            label="Seed"
+            label={t.taskPanel.training.seed}
             value={formData.training.seed}
             onChange={(v) => setTraining({ seed: Math.round(v) })}
             min={0}
@@ -272,16 +271,16 @@ export function AnomalyPanel({
         </div>
         <AdvancedFields count={4}>
             <NumberField
-            label="Threshold %ile"
+            label={t.anomalyPanel.threshold}
             value={formData.training.threshold_percentile}
             onChange={(v) => setTraining({ threshold_percentile: v })}
             min={0}
             max={100}
             step={1}
-            hint="corte sobre scores normais"
+            hint={t.anomalyPanel.thresholdHint}
           />
             <Segmented
-            label="Otimizador"
+            label={t.taskPanel.training.optimizer}
             value={formData.training.optimizer}
             onChange={(v) => setTraining({ optimizer: v })}
             options={[
@@ -292,20 +291,20 @@ export function AnomalyPanel({
             help={paramHelp(t, "optimizer")}
           />
             <NumberField
-            label="Early stop"
+            label={t.taskPanel.training.earlyStop}
             value={formData.training.early_stopping_patience}
             onChange={(v) => setTraining({ early_stopping_patience: Math.round(v) })}
             min={0}
             step={1}
-            hint="paciência"
+            hint={t.taskPanel.training.earlyStopHint}
             help={paramHelp(t, "early_stopping_patience")}
             emptyValue={0}
           />
             <Toggle
-            label="Determinístico"
+            label={t.taskPanel.training.deterministic}
             value={formData.training.deterministic}
             onChange={(v) => setTraining({ deterministic: v })}
-            hint="reprodutível"
+            hint={t.taskPanel.training.deterministicHint}
             help={paramHelp(t, "deterministic")}
           />
         </AdvancedFields>
@@ -313,7 +312,7 @@ export function AnomalyPanel({
 
       {/* Dataset */}
       <div style={card}>
-        <div style={sectionLabel}>Dataset (MVTec · normal-only no treino)</div>
+        <div style={sectionLabel}>{t.anomalyPanel.dataset.title}</div>
         <div style={grid}>
           <div
             style={{
@@ -325,11 +324,11 @@ export function AnomalyPanel({
           >
             <div style={{ flex: 1 }}>
               <TextField
-                label="Pasta base"
+                label={t.taskPanel.dataset.baseDir}
                 value={formData.data.base_dir}
                 onChange={(v) => setData({ base_dir: v })}
-                placeholder="…/categoria (train/good, test/good, test/<defeito>)"
-                hint="raiz do dataset"
+                placeholder={t.anomalyPanel.dataset.baseDirPlaceholder}
+                hint={t.taskPanel.dataset.baseDirHint}
                 mono
               />
             </div>
@@ -349,30 +348,30 @@ export function AnomalyPanel({
                 whiteSpace: "nowrap",
               }}
             >
-              {picking ? "…" : "📁 Escolher"}
+              {picking ? "…" : t.taskPanel.dataset.browse}
             </button>
           </div>
           <TextField
-            label="Split de treino"
+            label={t.taskPanel.dataset.trainSplit}
             value={formData.data.train_dir}
             onChange={(v) => setData({ train_dir: v })}
             mono
           />
           <TextField
-            label="Split de teste"
+            label={t.taskPanel.dataset.testSplit}
             value={formData.data.test_dir}
             onChange={(v) => setData({ test_dir: v })}
             mono
           />
           <TextField
-            label="Subpasta normal"
+            label={t.anomalyPanel.dataset.normalDir}
             value={formData.data.normal_dir}
             onChange={(v) => setData({ normal_dir: v })}
-            hint="label 0 (ex. good)"
+            hint={t.anomalyPanel.dataset.normalDirHint}
             mono
           />
           <NumberField
-            label="Image size"
+            label={t.taskPanel.dataset.imageSize}
             value={formData.data.image_size}
             onChange={(v) => setData({ image_size: Math.round(v) })}
             min={32}

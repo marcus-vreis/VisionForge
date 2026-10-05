@@ -140,17 +140,17 @@ export function RegressionPanel({
       <ExperimentHeader
         name={formData.name}
         onNameChange={(v) => setFormData((p) => ({ ...p, name: v }))}
-        placeholder="regression_001"
+        placeholder={t.regressionPanel.namePlaceholder}
         strategy={strategy}
         onStrategyChange={(s) => {
           setStrategy(s);
           onStrategyChange?.(s);
         }}
         strategies={[
-          { value: "simple", label: "Treino simples" },
-          { value: "cv", label: "K-Fold (CV)" },
-          { value: "sweep", label: "Sweep" },
-          { value: "replicates", label: "Réplicas" },
+          { value: "simple", label: t.paramPanel.blocks.simple },
+          { value: "cv", label: t.paramPanel.blocks.crossValidation },
+          { value: "sweep", label: t.taskPanel.sweep },
+          { value: "replicates", label: t.taskPanel.replicates },
         ]}
         onExportYaml={() =>
           exportConfigToYaml(buildRegressionPayload(formData), formData.name)
@@ -198,17 +198,17 @@ export function RegressionPanel({
 
       {/* Modelo */}
       <div style={card}>
-        <div style={sectionLabel}>Modelo · regressão</div>
+        <div style={sectionLabel}>{t.regressionPanel.model.title}</div>
         <div style={grid}>
           <SelectField
-            label="Backbone"
+            label={t.taskPanel.backbone}
             value={formData.model.name}
             onChange={(v) => setModel({ name: v })}
             options={REGRESSION_MODELS}
-            hint="CNN"
+            hint={t.regressionPanel.model.backboneHint}
           />
           <div>
-            <div style={sectionLabel}>Nº de alvos</div>
+            <div style={sectionLabel}>{t.regressionPanel.model.numTargets}</div>
             <div
               style={{
                 fontFamily: "var(--font-mono)",
@@ -225,25 +225,25 @@ export function RegressionPanel({
                   marginLeft: 8,
                 }}
               >
-                derivado das colunas-alvo
+                {t.regressionPanel.model.numTargetsHint}
               </span>
             </div>
           </div>
           <Toggle
-            label="Pesos pré-treinados"
+            label={t.taskPanel.pretrained}
             value={formData.model.pretrained}
             onChange={(v) => setModel({ pretrained: v })}
-            hint="ImageNet"
+            hint={t.taskPanel.imageNet}
           />
         </div>
       </div>
 
       {/* Treinamento */}
       <div style={card}>
-        <div style={sectionLabel}>Treinamento</div>
+        <div style={sectionLabel}>{t.taskPanel.training.title}</div>
         <div style={grid}>
           <NumberField
-            label="Épocas"
+            label={t.taskPanel.training.epochs}
             value={formData.training.epochs}
             onChange={(v) => setTraining({ epochs: Math.round(v) })}
             min={1}
@@ -251,16 +251,16 @@ export function RegressionPanel({
             help={paramHelp(t, "epochs")}
           />
           <NumberField
-            label="Batch size"
+            label={t.taskPanel.training.batchSize}
             value={formData.training.batch_size}
             onChange={(v) => setTraining({ batch_size: Math.round(v) })}
             min={1}
             step={1}
-            hint="qualquer inteiro"
+            hint={t.taskPanel.training.batchSizeHint}
             help={paramHelp(t, "batch_size")}
           />
           <NumberField
-            label="Learning rate"
+            label={t.taskPanel.training.learningRate}
             value={formData.training.learning_rate}
             onChange={(v) => setTraining({ learning_rate: v })}
             min={0.000001}
@@ -268,14 +268,14 @@ export function RegressionPanel({
             help={paramHelp(t, "learning_rate")}
           />
           <Segmented
-            label="Loss"
+            label={t.taskPanel.training.loss}
             value={formData.training.loss}
             onChange={(v) => setTraining({ loss: v })}
             options={REGRESSION_LOSSES}
-            hint="critério"
+            hint={t.regressionPanel.lossHint}
           />
           <NumberField
-            label="Seed"
+            label={t.taskPanel.training.seed}
             value={formData.training.seed}
             onChange={(v) => setTraining({ seed: Math.round(v) })}
             min={0}
@@ -285,7 +285,7 @@ export function RegressionPanel({
         </div>
         <AdvancedFields count={3}>
             <Segmented
-            label="Otimizador"
+            label={t.taskPanel.training.optimizer}
             value={formData.training.optimizer}
             onChange={(v) => setTraining({ optimizer: v })}
             options={[
@@ -296,20 +296,20 @@ export function RegressionPanel({
             help={paramHelp(t, "optimizer")}
           />
             <NumberField
-            label="Early stop"
+            label={t.taskPanel.training.earlyStop}
             value={formData.training.early_stopping_patience}
             onChange={(v) => setTraining({ early_stopping_patience: Math.round(v) })}
             min={0}
             step={1}
-            hint="paciência"
+            hint={t.taskPanel.training.earlyStopHint}
             help={paramHelp(t, "early_stopping_patience")}
             emptyValue={0}
           />
             <Toggle
-            label="Determinístico"
+            label={t.taskPanel.training.deterministic}
             value={formData.training.deterministic}
             onChange={(v) => setTraining({ deterministic: v })}
-            hint="reprodutível"
+            hint={t.taskPanel.training.deterministicHint}
             help={paramHelp(t, "deterministic")}
           />
         </AdvancedFields>
@@ -330,10 +330,10 @@ export function RegressionPanel({
 
       {/* Transfer learning */}
       <div style={card}>
-        <div style={sectionLabel}>Transfer learning</div>
+        <div style={sectionLabel}>{t.taskPanel.transfer.title}</div>
         <div style={grid}>
           <Segmented
-            label="Modo"
+            label={t.taskPanel.transfer.mode}
             value={formData.transfer}
             onChange={(v) =>
               setFormData((p) => ({
@@ -342,15 +342,15 @@ export function RegressionPanel({
               }))
             }
             options={[
-              { value: "none", label: "Completo" },
-              { value: "feature_extraction", label: "Feature extr." },
-              { value: "fine_tuning", label: "Fine-tuning" },
+              { value: "none", label: t.taskPanel.transfer.full },
+              { value: "feature_extraction", label: t.taskPanel.transfer.featureExtraction },
+              { value: "fine_tuning", label: t.taskPanel.transfer.fineTuning },
             ]}
-            hint="backbone compartilhado"
+            hint={t.regressionPanel.transferHint}
           />
           {formData.transfer === "fine_tuning" && (
             <NumberField
-              label="Backbone LR ×"
+              label={t.taskPanel.transfer.backboneLr}
               value={formData.backbone_lr_multiplier}
               onChange={(v) =>
                 setFormData((p) => ({ ...p, backbone_lr_multiplier: v }))
@@ -358,7 +358,7 @@ export function RegressionPanel({
               min={0.0001}
               max={1}
               step={0.05}
-              hint="LR do backbone = LR × isto"
+              hint={t.taskPanel.transfer.backboneLrHint}
             />
           )}
         </div>
@@ -366,16 +366,16 @@ export function RegressionPanel({
 
       {/* Dataset */}
       <div style={card}>
-        <div style={sectionLabel}>Dataset (CSV manifest)</div>
+        <div style={sectionLabel}>{t.regressionPanel.dataset.title}</div>
         <div style={grid}>
           <div style={{ gridColumn: "1 / -1", display: "flex", gap: 10, alignItems: "flex-end" }}>
             <div style={{ flex: 1 }}>
               <TextField
-                label="Pasta base"
+                label={t.taskPanel.dataset.baseDir}
                 value={formData.data.base_dir}
                 onChange={(v) => setData({ base_dir: v })}
-                placeholder="…/dataset (train.csv, val.csv, images/)"
-                hint="raiz do dataset"
+                placeholder={t.regressionPanel.dataset.baseDirPlaceholder}
+                hint={t.taskPanel.dataset.baseDirHint}
                 mono
               />
             </div>
@@ -395,52 +395,52 @@ export function RegressionPanel({
                 whiteSpace: "nowrap",
               }}
             >
-              {picking ? "…" : "📁 Escolher"}
+              {picking ? "…" : t.taskPanel.dataset.browse}
             </button>
           </div>
           <TextField
-            label="Subpasta de imagens"
+            label={t.taskPanel.dataset.imagesSubdir}
             value={formData.data.images_dir}
             onChange={(v) => setData({ images_dir: v })}
-            hint="relativa à base"
+            hint={t.regressionPanel.dataset.imagesDirHint}
             mono
           />
           <TextField
-            label="Coluna da imagem"
+            label={t.regressionPanel.dataset.imageColumn}
             value={formData.data.image_column}
             onChange={(v) => setData({ image_column: v })}
-            hint="cabeçalho do CSV"
+            hint={t.regressionPanel.dataset.imageColumnHint}
             mono
           />
           <TextField
-            label="Colunas-alvo"
+            label={t.regressionPanel.dataset.targetColumns}
             value={formData.data.target_columns}
             onChange={(v) => setData({ target_columns: v })}
-            placeholder="target  ou  x,y,z"
-            hint="separadas por vírgula"
+            placeholder={t.regressionPanel.dataset.targetColumnsPlaceholder}
+            hint={t.regressionPanel.dataset.targetColumnsHint}
             mono
           />
           <TextField
-            label="CSV de treino"
+            label={t.regressionPanel.dataset.trainCsv}
             value={formData.data.train_csv}
             onChange={(v) => setData({ train_csv: v })}
             mono
           />
           <TextField
-            label="CSV de validação"
+            label={t.regressionPanel.dataset.valCsv}
             value={formData.data.val_csv}
             onChange={(v) => setData({ val_csv: v })}
             mono
           />
           <TextField
-            label="CSV de teste"
+            label={t.regressionPanel.dataset.testCsv}
             value={formData.data.test_csv}
             onChange={(v) => setData({ test_csv: v })}
-            hint="opcional"
+            hint={t.taskPanel.dataset.optional}
             mono
           />
           <NumberField
-            label="Image size"
+            label={t.taskPanel.dataset.imageSize}
             value={formData.data.image_size}
             onChange={(v) => setData({ image_size: Math.round(v) })}
             min={32}

@@ -23,12 +23,6 @@ import { SweepCard, type SweepPayload } from "./SweepCard";
 import { TransformsSection } from "./TransformsSection";
 import type { ReplicatesPayload } from "../lib/replicates-form";
 
-const COMPARE_METRICS = [
-  { value: "miou", label: "mIoU" },
-  { value: "dice", label: "Dice" },
-  { value: "pixel_acc", label: "Pixel acc." },
-];
-
 const SWEEP_PATH_HINTS = [
   "training.learning_rate",
   "training.batch_size",
@@ -79,6 +73,11 @@ export function SegmentationPanel({
   onCv,
 }: SegmentationPanelProps) {
   const t = useT();
+  const compareMetrics = [
+    { value: "miou", label: "mIoU" },
+    { value: "dice", label: "Dice" },
+    { value: "pixel_acc", label: t.segmentationPanel.pixelAcc },
+  ];
   const [picking, setPicking] = useState(false);
   const [strategy, setStrategy] = useState<PanelStrategy>("simple");
 
@@ -137,9 +136,10 @@ export function SegmentationPanel({
 
       {collides && (
         <div style={warnBanner}>
-          ignore_index ({formData.data.ignore_index}) colide com um id de classe
-          real (0…{formData.model.num_classes - 1}). Use um valor fora desse
-          intervalo (ex. 255 ou -1).
+          {t.segmentationPanel.ignoreIndexCollision(
+            formData.data.ignore_index,
+            formData.model.num_classes - 1,
+          )}
         </div>
       )}
 
@@ -147,17 +147,17 @@ export function SegmentationPanel({
       <ExperimentHeader
         name={formData.name}
         onNameChange={(v) => setFormData((p) => ({ ...p, name: v }))}
-        placeholder="segmentation_001"
+        placeholder={t.segmentationPanel.namePlaceholder}
         strategy={strategy}
         onStrategyChange={(s) => {
           setStrategy(s);
           onStrategyChange?.(s);
         }}
         strategies={[
-          { value: "simple", label: "Treino simples" },
-          { value: "cv", label: "K-Fold (CV)" },
-          { value: "sweep", label: "Sweep" },
-          { value: "replicates", label: "Réplicas" },
+          { value: "simple", label: t.paramPanel.blocks.simple },
+          { value: "cv", label: t.paramPanel.blocks.crossValidation },
+          { value: "sweep", label: t.taskPanel.sweep },
+          { value: "replicates", label: t.taskPanel.replicates },
         ]}
         onExportYaml={() =>
           exportConfigToYaml(buildSegmentationPayload(formData), formData.name)
@@ -181,7 +181,7 @@ export function SegmentationPanel({
       />
       {strategy === "sweep" && onSweep && (
         <SweepCard
-          metrics={COMPARE_METRICS}
+          metrics={compareMetrics}
           pathHints={SWEEP_PATH_HINTS}
           modelOptions={SEGMENTATION_MODELS}
           accent={accent}
@@ -192,7 +192,7 @@ export function SegmentationPanel({
       )}
       {strategy === "replicates" && onReplicates && (
         <ReplicatesCard
-          metrics={COMPARE_METRICS}
+          metrics={compareMetrics}
           accent={accent}
           disabled={busy}
           onReplicates={onReplicates}
@@ -205,38 +205,38 @@ export function SegmentationPanel({
 
       {/* Modelo */}
       <div style={card}>
-        <div style={sectionLabel}>Modelo · segmentação</div>
+        <div style={sectionLabel}>{t.segmentationPanel.model.title}</div>
         <div style={grid}>
           <SelectField
-            label="Arquitetura"
+            label={t.segmentationPanel.model.architecture}
             value={formData.model.name}
             onChange={(v) => setModel({ name: v })}
             options={SEGMENTATION_MODELS}
-            hint="dense head"
+            hint={t.segmentationPanel.model.architectureHint}
           />
           <NumberField
-            label="Nº de classes"
+            label={t.segmentationPanel.model.numClasses}
             value={formData.model.num_classes}
             onChange={(v) => setModel({ num_classes: Math.round(v) })}
             min={1}
             step={1}
-            hint="inclui fundo"
+            hint={t.segmentationPanel.model.numClassesHint}
           />
           <Toggle
-            label="Pesos pré-treinados"
+            label={t.taskPanel.pretrained}
             value={formData.model.pretrained}
             onChange={(v) => setModel({ pretrained: v })}
-            hint="backbone ImageNet"
+            hint={t.segmentationPanel.model.pretrainedHint}
           />
         </div>
       </div>
 
       {/* Treinamento */}
       <div style={card}>
-        <div style={sectionLabel}>Treinamento</div>
+        <div style={sectionLabel}>{t.taskPanel.training.title}</div>
         <div style={grid}>
           <NumberField
-            label="Épocas"
+            label={t.taskPanel.training.epochs}
             value={formData.training.epochs}
             onChange={(v) => setTraining({ epochs: Math.round(v) })}
             min={1}
@@ -244,16 +244,16 @@ export function SegmentationPanel({
             help={paramHelp(t, "epochs")}
           />
           <NumberField
-            label="Batch size"
+            label={t.taskPanel.training.batchSize}
             value={formData.training.batch_size}
             onChange={(v) => setTraining({ batch_size: Math.round(v) })}
             min={1}
             step={1}
-            hint="qualquer inteiro"
+            hint={t.taskPanel.training.batchSizeHint}
             help={paramHelp(t, "batch_size")}
           />
           <NumberField
-            label="Learning rate"
+            label={t.taskPanel.training.learningRate}
             value={formData.training.learning_rate}
             onChange={(v) => setTraining({ learning_rate: v })}
             min={0.000001}
@@ -261,14 +261,14 @@ export function SegmentationPanel({
             help={paramHelp(t, "learning_rate")}
           />
           <Segmented
-            label="Loss"
+            label={t.taskPanel.training.loss}
             value={formData.training.loss}
             onChange={(v) => setTraining({ loss: v })}
             options={SEGMENTATION_LOSSES}
-            hint="critério por pixel"
+            hint={t.segmentationPanel.lossHint}
           />
           <NumberField
-            label="Seed"
+            label={t.taskPanel.training.seed}
             value={formData.training.seed}
             onChange={(v) => setTraining({ seed: Math.round(v) })}
             min={0}
@@ -278,7 +278,7 @@ export function SegmentationPanel({
         </div>
         <AdvancedFields count={3}>
             <Segmented
-            label="Otimizador"
+            label={t.taskPanel.training.optimizer}
             value={formData.training.optimizer}
             onChange={(v) => setTraining({ optimizer: v })}
             options={[
@@ -289,20 +289,20 @@ export function SegmentationPanel({
             help={paramHelp(t, "optimizer")}
           />
             <NumberField
-            label="Early stop"
+            label={t.taskPanel.training.earlyStop}
             value={formData.training.early_stopping_patience}
             onChange={(v) => setTraining({ early_stopping_patience: Math.round(v) })}
             min={0}
             step={1}
-            hint="paciência"
+            hint={t.taskPanel.training.earlyStopHint}
             help={paramHelp(t, "early_stopping_patience")}
             emptyValue={0}
           />
             <Toggle
-            label="Determinístico"
+            label={t.taskPanel.training.deterministic}
             value={formData.training.deterministic}
             onChange={(v) => setTraining({ deterministic: v })}
-            hint="reprodutível"
+            hint={t.taskPanel.training.deterministicHint}
             help={paramHelp(t, "deterministic")}
           />
         </AdvancedFields>
@@ -323,10 +323,10 @@ export function SegmentationPanel({
 
       {/* Transfer learning */}
       <div style={card}>
-        <div style={sectionLabel}>Transfer learning</div>
+        <div style={sectionLabel}>{t.taskPanel.transfer.title}</div>
         <div style={grid}>
           <Segmented
-            label="Modo"
+            label={t.taskPanel.transfer.mode}
             value={formData.transfer}
             onChange={(v) =>
               setFormData((p) => ({
@@ -335,15 +335,15 @@ export function SegmentationPanel({
               }))
             }
             options={[
-              { value: "none", label: "Completo" },
-              { value: "feature_extraction", label: "Feature extr." },
-              { value: "fine_tuning", label: "Fine-tuning" },
+              { value: "none", label: t.taskPanel.transfer.full },
+              { value: "feature_extraction", label: t.taskPanel.transfer.featureExtraction },
+              { value: "fine_tuning", label: t.taskPanel.transfer.fineTuning },
             ]}
-            hint="backbone pré-treinado (torchvision)"
+            hint={t.segmentationPanel.transferHint}
           />
           {formData.transfer === "fine_tuning" && (
             <NumberField
-              label="Backbone LR ×"
+              label={t.taskPanel.transfer.backboneLr}
               value={formData.backbone_lr_multiplier}
               onChange={(v) =>
                 setFormData((p) => ({ ...p, backbone_lr_multiplier: v }))
@@ -351,7 +351,7 @@ export function SegmentationPanel({
               min={0.0001}
               max={1}
               step={0.05}
-              hint="LR do backbone = LR × isto"
+              hint={t.taskPanel.transfer.backboneLrHint}
             />
           )}
         </div>
@@ -359,7 +359,7 @@ export function SegmentationPanel({
 
       {/* Dataset */}
       <div style={card}>
-        <div style={sectionLabel}>Dataset (imagens + máscaras)</div>
+        <div style={sectionLabel}>{t.segmentationPanel.dataset.title}</div>
         <div style={grid}>
           <div
             style={{
@@ -371,11 +371,11 @@ export function SegmentationPanel({
           >
             <div style={{ flex: 1 }}>
               <TextField
-                label="Pasta base"
+                label={t.taskPanel.dataset.baseDir}
                 value={formData.data.base_dir}
                 onChange={(v) => setData({ base_dir: v })}
-                placeholder="…/dataset (train/{images,masks}, val/…)"
-                hint="raiz do dataset"
+                placeholder={t.segmentationPanel.dataset.baseDirPlaceholder}
+                hint={t.taskPanel.dataset.baseDirHint}
                 mono
               />
             </div>
@@ -395,44 +395,44 @@ export function SegmentationPanel({
                 whiteSpace: "nowrap",
               }}
             >
-              {picking ? "…" : "📁 Escolher"}
+              {picking ? "…" : t.taskPanel.dataset.browse}
             </button>
           </div>
           <TextField
-            label="Subpasta de imagens"
+            label={t.taskPanel.dataset.imagesSubdir}
             value={formData.data.images_subdir}
             onChange={(v) => setData({ images_subdir: v })}
-            hint="por split"
+            hint={t.segmentationPanel.dataset.imagesSubdirHint}
             mono
           />
           <TextField
-            label="Subpasta de máscaras"
+            label={t.segmentationPanel.dataset.masksSubdir}
             value={formData.data.masks_subdir}
             onChange={(v) => setData({ masks_subdir: v })}
-            hint="PNG · id por pixel"
+            hint={t.segmentationPanel.dataset.masksSubdirHint}
             mono
           />
           <TextField
-            label="Split de treino"
+            label={t.taskPanel.dataset.trainSplit}
             value={formData.data.train_dir}
             onChange={(v) => setData({ train_dir: v })}
             mono
           />
           <TextField
-            label="Split de validação"
+            label={t.taskPanel.dataset.valSplit}
             value={formData.data.val_dir}
             onChange={(v) => setData({ val_dir: v })}
             mono
           />
           <TextField
-            label="Split de teste"
+            label={t.taskPanel.dataset.testSplit}
             value={formData.data.test_dir}
             onChange={(v) => setData({ test_dir: v })}
-            hint="opcional"
+            hint={t.taskPanel.dataset.optional}
             mono
           />
           <NumberField
-            label="Image size"
+            label={t.taskPanel.dataset.imageSize}
             value={formData.data.image_size}
             onChange={(v) => setData({ image_size: Math.round(v) })}
             min={32}
@@ -441,11 +441,11 @@ export function SegmentationPanel({
             help={paramHelp(t, "image_size")}
           />
           <NumberField
-            label="ignore_index"
+            label={t.segmentationPanel.dataset.ignoreIndex}
             value={formData.data.ignore_index}
             onChange={(v) => setData({ ignore_index: Math.round(v) })}
             step={1}
-            hint="pixels void"
+            hint={t.segmentationPanel.dataset.ignoreIndexHint}
           />
         </div>
         <SegmentationDatasetStats

@@ -14,7 +14,6 @@ import { describe, expect, it } from "vitest";
 const SRC = join(__dirname, "..");
 
 const NOT_YET_MIGRATED = new Set([
-  "components/AnomalyPanel.tsx",
   "components/AugmentPreview.tsx",
   "components/CompareRunsPanel.tsx",
   "components/CredentialField.tsx",
@@ -29,10 +28,8 @@ const NOT_YET_MIGRATED = new Set([
   "components/GuidedTour.tsx",
   "components/PreprocessingPanel.tsx",
   "components/QueueOverlay.tsx",
-  "components/RegressionPanel.tsx",
   "components/ReplicatesCard.tsx",
   "components/SchemaForm.tsx",
-  "components/SegmentationPanel.tsx",
   "components/SweepCard.tsx",
   "components/TaskDatasetStats.tsx",
   "components/TrainingOverlay.tsx",

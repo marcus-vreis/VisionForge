@@ -869,6 +869,133 @@ export const pt = {
       submit: (n: number) => `🗑 Excluir${n > 1 ? ` ${n}` : ""}`,
     },
   },
+  // What the segmentation, regression and anomaly forms (components/
+  // SegmentationPanel.tsx, RegressionPanel.tsx, AnomalyPanel.tsx) have in common:
+  // the training block, the transfer-learning block and the dataset basics. Model
+  // names, metric names and config keys (ignore_index, backbone) read the same in
+  // every language and are repeated in both dictionaries.
+  taskPanel: {
+    // The experiment-strategy selector; "Treino simples" and "K-Fold (CV)" are
+    // `paramPanel.blocks`.
+    sweep: "Sweep",
+    replicates: "Réplicas",
+    pretrained: "Pesos pré-treinados",
+    backbone: "Backbone",
+    imageNet: "ImageNet",
+    training: {
+      title: "Treinamento",
+      epochs: "Épocas",
+      batchSize: "Batch size",
+      batchSizeHint: "qualquer inteiro",
+      learningRate: "Learning rate",
+      loss: "Loss",
+      seed: "Seed",
+      optimizer: "Otimizador",
+      earlyStop: "Early stop",
+      earlyStopHint: "paciência",
+      deterministic: "Determinístico",
+      deterministicHint: "reprodutível",
+    },
+    transfer: {
+      title: "Transfer learning",
+      mode: "Modo",
+      full: "Completo",
+      featureExtraction: "Feature extr.",
+      fineTuning: "Fine-tuning",
+      backboneLr: "Backbone LR ×",
+      backboneLrHint: "LR do backbone = LR × isto",
+    },
+    dataset: {
+      baseDir: "Pasta base",
+      baseDirHint: "raiz do dataset",
+      browse: "📁 Escolher",
+      imageSize: "Image size",
+      trainSplit: "Split de treino",
+      valSplit: "Split de validação",
+      testSplit: "Split de teste",
+      optional: "opcional",
+      imagesSubdir: "Subpasta de imagens",
+    },
+  },
+  // The segmentation form (components/SegmentationPanel.tsx).
+  segmentationPanel: {
+    namePlaceholder: "segmentation_001",
+    // The metric the sweep and the replicates rank by.
+    pixelAcc: "Pixel acc.",
+    // `ignore_index` is the config key; `maxClass` is the highest real class id.
+    ignoreIndexCollision: (index: number, maxClass: number) =>
+      `ignore_index (${index}) colide com um id de classe real (0…${maxClass}). Use um valor fora desse intervalo (ex. 255 ou -1).`,
+    model: {
+      title: "Modelo · segmentação",
+      architecture: "Arquitetura",
+      architectureHint: "dense head",
+      numClasses: "Nº de classes",
+      numClassesHint: "inclui fundo",
+      pretrainedHint: "backbone ImageNet",
+    },
+    lossHint: "critério por pixel",
+    transferHint: "backbone pré-treinado (torchvision)",
+    dataset: {
+      title: "Dataset (imagens + máscaras)",
+      baseDirPlaceholder: "…/dataset (train/{images,masks}, val/…)",
+      imagesSubdirHint: "por split",
+      masksSubdir: "Subpasta de máscaras",
+      masksSubdirHint: "PNG · id por pixel",
+      ignoreIndex: "ignore_index",
+      ignoreIndexHint: "pixels void",
+    },
+  },
+  // The regression form (components/RegressionPanel.tsx).
+  regressionPanel: {
+    namePlaceholder: "regression_001",
+    model: {
+      title: "Modelo · regressão",
+      backboneHint: "CNN",
+      numTargets: "Nº de alvos",
+      numTargetsHint: "derivado das colunas-alvo",
+    },
+    lossHint: "critério",
+    transferHint: "backbone compartilhado",
+    dataset: {
+      title: "Dataset (CSV manifest)",
+      baseDirPlaceholder: "…/dataset (train.csv, val.csv, images/)",
+      imagesDirHint: "relativa à base",
+      imageColumn: "Coluna da imagem",
+      imageColumnHint: "cabeçalho do CSV",
+      targetColumns: "Colunas-alvo",
+      targetColumnsPlaceholder: "target  ou  x,y,z",
+      targetColumnsHint: "separadas por vírgula",
+      trainCsv: "CSV de treino",
+      valCsv: "CSV de validação",
+      testCsv: "CSV de teste",
+    },
+  },
+  // The anomaly-detection form (components/AnomalyPanel.tsx).
+  anomalyPanel: {
+    namePlaceholder: "anomaly_001",
+    // The image-level F1 the sweep and the replicates can rank by.
+    imageF1: "F1 (imagem)",
+    model: {
+      title: "Modelo · anomalia",
+      method: "Método",
+      methodHint: "abordagem",
+      backboneHint: "extrator congelado",
+      coresetRatio: "Coreset ratio",
+      coresetRatioHint: "subamostra do banco",
+      pretrainedBackbone: "Backbone pré-treinado",
+      latentDim: "Latent dim",
+      latentDimHint: "gargalo do autoencoder",
+    },
+    epochsHint: "ignorado no PatchCore",
+    threshold: "Threshold %ile",
+    thresholdHint: "corte sobre scores normais",
+    dataset: {
+      title: "Dataset (MVTec · normal-only no treino)",
+      baseDirPlaceholder: "…/categoria (train/good, test/good, test/<defeito>)",
+      normalDir: "Subpasta normal",
+      normalDirHint: "label 0 (ex. good)",
+    },
+  },
 };
 
 export type Dict = typeof pt;
