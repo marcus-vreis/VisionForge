@@ -25,7 +25,6 @@ const NOT_YET_MIGRATED = new Set([
   "components/DatasetPicker.tsx",
   "components/DatasetStats.tsx",
   "components/DetectionDatasetStats.tsx",
-  "components/DetectionPanel.tsx",
   "components/ExperimentHeader.tsx",
   "components/GuidedTour.tsx",
   "components/HistoryOverlay.tsx",

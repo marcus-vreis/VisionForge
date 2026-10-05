@@ -34,6 +34,7 @@ import { AdvancedFields } from "./AdvancedFields";
 import { DetectionDatasetStats } from "./DetectionDatasetStats";
 import { PreprocessingPanel } from "./PreprocessingPanel";
 import { ExperimentHeader, type PanelStrategy } from "./ExperimentHeader";
+import { Rich } from "./Rich";
 import { ReplicatesCard } from "./ReplicatesCard";
 import { SweepCard, type SweepPayload } from "./SweepCard";
 import type { ReplicatesPayload } from "../lib/replicates-form";
@@ -187,7 +188,7 @@ export function DetectionPanel({
       <ExperimentHeader
         name={formData.name}
         onNameChange={(v) => setFormData((p) => ({ ...p, name: v }))}
-        placeholder="detection_001"
+        placeholder={t.detectionPanel.namePlaceholder}
         strategy={strategy}
         onStrategyChange={(s) => {
           setStrategy(s);
@@ -244,43 +245,43 @@ export function DetectionPanel({
 
       {/* Modelo */}
       <div style={card}>
-        <div style={sectionLabel}>Modelo · detecção</div>
+        <div style={sectionLabel}>{t.detectionPanel.model.title}</div>
         <div style={grid}>
           <Segmented
-            label="Backend"
+            label={t.detectionPanel.model.backend}
             value={formData.model.backend}
             onChange={onBackendChange}
             options={DETECTION_BACKENDS.map((b) => ({
               value: b,
               label: b === "ultralytics" ? "Ultralytics" : "Torchvision",
             }))}
-            hint="origem do modelo"
+            hint={t.detectionPanel.model.backendHint}
           />
           <SelectField
-            label="Arquitetura"
+            label={t.detectionPanel.model.architecture}
             value={formData.model.name}
             onChange={(v) => setModel({ name: v })}
             options={DETECTION_MODELS[formData.model.backend]}
-            hint="detector"
+            hint={t.detectionPanel.model.architectureHint}
           />
           {/* Nº de classes vive na seção Dataset, ao lado de onde o dataset é
               escolhido — é dele que o número sai. Classificação já fazia isso;
               detecção pedia o número aqui e só confirmava lá embaixo. */}
           <Toggle
-            label="Pesos pré-treinados"
+            label={t.detectionPanel.model.pretrained}
             value={formData.model.pretrained}
             onChange={(v) => setModel({ pretrained: v })}
-            hint="COCO"
+            hint={t.detectionPanel.model.pretrainedHint}
           />
         </div>
       </div>
 
       {/* Treinamento */}
       <div style={card}>
-        <div style={sectionLabel}>Treinamento</div>
+        <div style={sectionLabel}>{t.detectionPanel.training.title}</div>
         <div style={grid}>
           <NumberField
-            label="Épocas"
+            label={t.detectionPanel.training.epochs}
             value={formData.training.epochs}
             onChange={(v) => setTraining({ epochs: Math.round(v) })}
             min={1}
@@ -288,25 +289,25 @@ export function DetectionPanel({
             help={paramHelp(t, "epochs")}
           />
           <NumberField
-            label="Batch size"
+            label={t.detectionPanel.training.batchSize}
             value={formData.training.batch_size}
             onChange={(v) => setTraining({ batch_size: Math.round(v) })}
             min={1}
             step={1}
-            hint="qualquer inteiro"
+            hint={t.detectionPanel.training.batchSizeHint}
             help={paramHelp(t, "batch_size")}
           />
           <NumberField
-            label="Learning rate"
+            label={t.detectionPanel.training.learningRate}
             value={formData.training.learning_rate}
             onChange={(v) => setTraining({ learning_rate: v })}
             min={0.000001}
             step={0.001}
-            hint="lr0"
+            hint={t.detectionPanel.training.learningRateHint}
             help={paramHelp(t, "learning_rate")}
           />
           <NumberField
-            label="Seed"
+            label={t.detectionPanel.training.seed}
             value={formData.training.seed}
             onChange={(v) => setTraining({ seed: Math.round(v) })}
             min={0}
@@ -316,20 +317,20 @@ export function DetectionPanel({
         </div>
         <AdvancedFields count={6}>
             <NumberField
-            label="Patience"
+            label={t.detectionPanel.training.patience}
             value={formData.training.patience}
             onChange={(v) => setTraining({ patience: Math.round(v) })}
             min={0}
             step={1}
-            hint="early stop"
+            hint={t.detectionPanel.training.patienceHint}
             help={paramHelp(t, "patience")}
             emptyValue={0}
           />
             <Toggle
-            label="Determinístico"
+            label={t.detectionPanel.training.deterministic}
             value={formData.training.deterministic}
             onChange={(v) => setTraining({ deterministic: v })}
-            hint="reprodutível"
+            hint={t.detectionPanel.training.deterministicHint}
             help={paramHelp(t, "deterministic")}
           />
             <WorkersField
@@ -337,32 +338,32 @@ export function DetectionPanel({
             onChange={(v) => setTraining({ workers: v })}
           />
             <SelectField
-            label="Optimizer"
+            label={t.detectionPanel.training.optimizer}
             value={formData.training.optimizer}
             onChange={(v) =>
               setTraining({ optimizer: v as DetectionOptimizer })
             }
             options={DETECTION_OPTIMIZERS.map((o) => ({ value: o, label: o }))}
-            hint="auto = Ultralytics escolhe"
+            hint={t.detectionPanel.training.optimizerHint}
             help={paramHelp(t, "optimizer")}
           />
             <NumberField
-            label="Momentum"
+            label={t.detectionPanel.training.momentum}
             value={formData.training.momentum}
             onChange={(v) => setTraining({ momentum: v })}
             min={0}
             max={1}
             step={0.001}
-            hint="SGD momentum / Adam β1"
+            hint={t.detectionPanel.training.momentumHint}
             help={paramHelp(t, "momentum")}
           />
             <NumberField
-            label="Weight decay"
+            label={t.detectionPanel.training.weightDecay}
             value={formData.training.weight_decay}
             onChange={(v) => setTraining({ weight_decay: v })}
             min={0}
             step={0.0001}
-            hint="L2"
+            hint={t.detectionPanel.training.weightDecayHint}
             help={paramHelp(t, "weight_decay")}
             emptyValue={0}
           />
@@ -373,26 +374,26 @@ export function DetectionPanel({
         <>
           {/* Schedule & loss */}
           <div style={card}>
-            <div style={sectionLabel}>Schedule de LR & pesos de loss</div>
+            <div style={sectionLabel}>{t.detectionPanel.schedule.title}</div>
             <div style={grid}>
               <NumberField
-                label="lrf"
+                label={t.detectionPanel.schedule.lrf}
                 value={formData.training.lrf}
                 onChange={(v) => setTraining({ lrf: v })}
                 min={0.000001}
                 step={0.001}
-                hint="LR final = lr0 × lrf"
+                hint={t.detectionPanel.schedule.lrfHint}
                 help={paramHelp(t, "lrf")}
               />
               <Toggle
-                label="Cosine LR"
+                label={t.detectionPanel.schedule.cosLr}
                 value={formData.training.cos_lr}
                 onChange={(v) => setTraining({ cos_lr: v })}
-                hint="schedule cosseno"
+                hint={t.detectionPanel.schedule.cosLrHint}
                 help={paramHelp(t, "cos_lr")}
               />
               <NumberField
-                label="Warmup epochs"
+                label={t.detectionPanel.schedule.warmupEpochs}
                 value={formData.training.warmup_epochs}
                 onChange={(v) => setTraining({ warmup_epochs: v })}
                 min={0}
@@ -400,7 +401,7 @@ export function DetectionPanel({
                 help={paramHelp(t, "warmup_epochs")}
               />
               <NumberField
-                label="Warmup momentum"
+                label={t.detectionPanel.schedule.warmupMomentum}
                 value={formData.training.warmup_momentum}
                 onChange={(v) => setTraining({ warmup_momentum: v })}
                 min={0}
@@ -408,37 +409,37 @@ export function DetectionPanel({
                 step={0.05}
               />
               <NumberField
-                label="Warmup bias LR"
+                label={t.detectionPanel.schedule.warmupBiasLr}
                 value={formData.training.warmup_bias_lr}
                 onChange={(v) => setTraining({ warmup_bias_lr: v })}
                 min={0}
                 step={0.01}
               />
               <NumberField
-                label="Box loss gain"
+                label={t.detectionPanel.schedule.boxGain}
                 value={formData.training.box}
                 onChange={(v) => setTraining({ box: v })}
                 min={0}
                 step={0.1}
-                hint="box"
+                hint={t.detectionPanel.schedule.boxHint}
                 help={paramHelp(t, "box")}
               />
               <NumberField
-                label="Cls loss gain"
+                label={t.detectionPanel.schedule.clsGain}
                 value={formData.training.cls}
                 onChange={(v) => setTraining({ cls: v })}
                 min={0}
                 step={0.1}
-                hint="cls"
+                hint={t.detectionPanel.schedule.clsHint}
                 help={paramHelp(t, "cls")}
               />
               <NumberField
-                label="DFL loss gain"
+                label={t.detectionPanel.schedule.dflGain}
                 value={formData.training.dfl}
                 onChange={(v) => setTraining({ dfl: v })}
                 min={0}
                 step={0.1}
-                hint="dfl"
+                hint={t.detectionPanel.schedule.dflHint}
                 help={paramHelp(t, "dfl")}
               />
             </div>
@@ -446,10 +447,10 @@ export function DetectionPanel({
 
           {/* Regularization & mechanics */}
           <div style={card}>
-            <div style={sectionLabel}>Regularização & mecânica</div>
+            <div style={sectionLabel}>{t.detectionPanel.mechanics.title}</div>
             <div style={grid}>
               <NumberField
-                label="Label smoothing"
+                label={t.detectionPanel.mechanics.labelSmoothing}
                 value={formData.training.label_smoothing}
                 onChange={(v) => setTraining({ label_smoothing: v })}
                 min={0}
@@ -459,7 +460,7 @@ export function DetectionPanel({
                 emptyValue={0}
               />
               <NumberField
-                label="Dropout"
+                label={t.detectionPanel.mechanics.dropout}
                 value={formData.training.dropout}
                 onChange={(v) => setTraining({ dropout: v })}
                 min={0}
@@ -469,7 +470,7 @@ export function DetectionPanel({
                 emptyValue={0}
               />
               <NumberField
-                label="Nominal batch (nbs)"
+                label={t.detectionPanel.mechanics.nbs}
                 value={formData.training.nbs}
                 onChange={(v) => setTraining({ nbs: Math.round(v) })}
                 min={1}
@@ -477,49 +478,49 @@ export function DetectionPanel({
                 help={paramHelp(t, "nbs")}
               />
               <NumberField
-                label="Freeze layers"
+                label={t.detectionPanel.mechanics.freeze}
                 value={formData.training.freeze}
                 onChange={(v) => setTraining({ freeze: Math.round(v) })}
                 min={0}
                 step={1}
-                hint="0 = nenhuma"
+                hint={t.detectionPanel.mechanics.freezeHint}
                 help={paramHelp(t, "freeze")}
               />
               <NumberField
-                label="Close mosaic"
+                label={t.detectionPanel.mechanics.closeMosaic}
                 value={formData.training.close_mosaic}
                 onChange={(v) => setTraining({ close_mosaic: Math.round(v) })}
                 min={0}
                 step={1}
-                hint="desliga mosaico nas últimas N épocas"
+                hint={t.detectionPanel.mechanics.closeMosaicHint}
                 help={paramHelp(t, "close_mosaic")}
               />
               <Toggle
-                label="AMP"
+                label={t.detectionPanel.mechanics.amp}
                 value={formData.training.amp}
                 onChange={(v) => setTraining({ amp: v })}
-                hint="precisão mista"
+                hint={t.detectionPanel.mechanics.ampHint}
                 help={paramHelp(t, "amp")}
               />
               <Toggle
-                label="Single class"
+                label={t.detectionPanel.mechanics.singleCls}
                 value={formData.training.single_cls}
                 onChange={(v) => setTraining({ single_cls: v })}
-                hint="trata tudo como 1 classe"
+                hint={t.detectionPanel.mechanics.singleClsHint}
                 help={paramHelp(t, "single_cls")}
               />
               <Toggle
-                label="Rect"
+                label={t.detectionPanel.mechanics.rect}
                 value={formData.training.rect}
                 onChange={(v) => setTraining({ rect: v })}
-                hint="batches retangulares"
+                hint={t.detectionPanel.mechanics.rectHint}
                 help={paramHelp(t, "rect")}
               />
               <Toggle
-                label="Multi-scale"
+                label={t.detectionPanel.mechanics.multiScale}
                 value={formData.training.multi_scale}
                 onChange={(v) => setTraining({ multi_scale: v })}
-                hint="varia imgsz ±50%"
+                hint={t.detectionPanel.mechanics.multiScaleHint}
                 help={paramHelp(t, "multi_scale")}
               />
             </div>
@@ -529,22 +530,22 @@ export function DetectionPanel({
 
       {/* Dataset — depois dos cards de treinamento (ordem canônica ADR-059) */}
       <div style={card}>
-        <div style={sectionLabel}>Dataset</div>
+        <div style={sectionLabel}>{t.detectionPanel.dataset.title}</div>
         <div style={{ marginBottom: 14, maxWidth: 360 }}>
           <Segmented
-            label="Fonte do dataset"
+            label={t.detectionPanel.dataset.source}
             value={formData.data.source}
             onChange={(v) =>
               setData({ source: v as DetectionForm["data"]["source"] })
             }
             options={[
-              { value: "folder", label: "Pasta YOLO" },
-              { value: "yaml", label: "data.yaml" },
+              { value: "folder", label: t.detectionPanel.dataset.folderOption },
+              { value: "yaml", label: t.detectionPanel.dataset.yamlOption },
             ]}
             hint={
               formData.data.source === "folder"
-                ? "gera o data.yaml a partir da pasta"
-                : "usa um data.yaml existente"
+                ? t.detectionPanel.dataset.folderHint
+                : t.detectionPanel.dataset.yamlHint
             }
           />
         </div>
@@ -553,11 +554,11 @@ export function DetectionPanel({
             <div style={{ gridColumn: "1 / -1", display: "flex", gap: 10, alignItems: "flex-end" }}>
               <div style={{ flex: 1 }}>
                 <TextField
-                  label="Pasta base"
+                  label={t.detectionPanel.dataset.baseDir}
                   value={formData.data.base_dir}
                   onChange={(v) => setData({ base_dir: v })}
-                  placeholder="…/dataset (images/train, images/val)"
-                  hint="raiz YOLO"
+                  placeholder={t.detectionPanel.dataset.baseDirPlaceholder}
+                  hint={t.detectionPanel.dataset.baseDirHint}
                   mono
                 />
               </div>
@@ -567,18 +568,18 @@ export function DetectionPanel({
                 disabled={picking}
                 style={pickButton}
               >
-                {picking ? "…" : "📁 Escolher"}
+                {picking ? "…" : t.detectionPanel.dataset.browseFolder}
               </button>
             </div>
           ) : (
             <div style={{ gridColumn: "1 / -1", display: "flex", gap: 10, alignItems: "flex-end" }}>
               <div style={{ flex: 1 }}>
                 <TextField
-                  label="Arquivo data.yaml"
+                  label={t.detectionPanel.dataset.yamlFile}
                   value={formData.data.data_yaml}
                   onChange={(v) => setData({ data_yaml: v })}
-                  placeholder="…/dataset/data.yaml"
-                  hint="Ultralytics / Roboflow"
+                  placeholder={t.detectionPanel.dataset.yamlPlaceholder}
+                  hint={t.detectionPanel.dataset.yamlFileHint}
                   mono
                 />
               </div>
@@ -588,29 +589,29 @@ export function DetectionPanel({
                 disabled={picking}
                 style={pickButton}
               >
-                {picking ? "…" : "📄 Escolher"}
+                {picking ? "…" : t.detectionPanel.dataset.browseYaml}
               </button>
             </div>
           )}
           <NumberField
-            label="Image size"
+            label={t.detectionPanel.dataset.imageSize}
             value={formData.data.image_size}
             onChange={(v) => setData({ image_size: Math.round(v) })}
             min={32}
             step={32}
             suffix="px"
-            hint="imgsz"
+            hint={t.detectionPanel.dataset.imageSizeHint}
             help={paramHelp(t, "image_size")}
           />
         </div>
         <div style={{ ...grid, marginTop: 14 }}>
           <NumberField
-            label="Nº de classes"
+            label={t.detectionPanel.dataset.numClasses}
             value={formData.model.num_classes}
             onChange={(v) => setModel({ num_classes: Math.round(v) })}
             min={1}
             step={1}
-            hint="preenchido pelo dataset abaixo; editável"
+            hint={t.detectionPanel.dataset.numClassesHint}
           />
         </div>
         {formData.data.source === "folder" ? (
@@ -628,8 +629,7 @@ export function DetectionPanel({
               color: "var(--vf-text-muted)",
             }}
           >
-            O data.yaml define splits e nomes de classe. Confirme que{" "}
-            <code>nc</code> bate com o nº de classes acima.
+            <Rich text={t.detectionPanel.dataset.yamlNote} />
           </p>
         )}
       </div>
@@ -653,9 +653,7 @@ export function DetectionPanel({
               color: "var(--vf-text-muted)",
             }}
           >
-            Os filtros são aplicados uma vez e gravados numa cópia temporária do
-            dataset, usada só durante o treino e apagada ao fim. Os rótulos vão
-            junto, inalterados.
+            {t.detectionPanel.dataset.preprocessingNote}
           </p>
         )}
       </div>
@@ -664,12 +662,12 @@ export function DetectionPanel({
         <>
           {/* Augmentation */}
           <div style={card}>
-            <div style={sectionLabel}>Data augmentation</div>
+            <div style={sectionLabel}>{t.detectionPanel.augmentation.title}</div>
             <Toggle
-              label="Augmentation"
+              label={t.detectionPanel.augmentation.toggle}
               value={formData.training.augmentation.augment}
               onChange={(v) => setAug({ augment: v })}
-              hint="desligada, os 15 valores abaixo ficam guardados"
+              hint={t.detectionPanel.augmentation.toggleHint}
             />
             {!formData.training.augmentation.augment && (
               <div
@@ -680,7 +678,7 @@ export function DetectionPanel({
                   color: "var(--vf-text-muted)",
                 }}
               >
-                15 parâmetros ocultos — ligue para ajustar
+                {t.paramPanel.hiddenParams(15)}
               </div>
             )}
             <div
@@ -691,7 +689,7 @@ export function DetectionPanel({
               }}
             >
               <NumberField
-                label="HSV — hue"
+                label={t.detectionPanel.augmentation.hsvHue}
                 value={formData.training.augmentation.hsv_h}
                 onChange={(v) => setAug({ hsv_h: v })}
                 min={0}
@@ -699,7 +697,7 @@ export function DetectionPanel({
                 step={0.005}
               />
               <NumberField
-                label="HSV — saturation"
+                label={t.detectionPanel.augmentation.hsvSaturation}
                 value={formData.training.augmentation.hsv_s}
                 onChange={(v) => setAug({ hsv_s: v })}
                 min={0}
@@ -707,7 +705,7 @@ export function DetectionPanel({
                 step={0.05}
               />
               <NumberField
-                label="HSV — value"
+                label={t.detectionPanel.augmentation.hsvValue}
                 value={formData.training.augmentation.hsv_v}
                 onChange={(v) => setAug({ hsv_v: v })}
                 min={0}
@@ -715,7 +713,7 @@ export function DetectionPanel({
                 step={0.05}
               />
               <NumberField
-                label="Degrees"
+                label={t.detectionPanel.augmentation.degrees}
                 value={formData.training.augmentation.degrees}
                 onChange={(v) => setAug({ degrees: v })}
                 min={-180}
@@ -724,7 +722,7 @@ export function DetectionPanel({
                 suffix="°"
               />
               <NumberField
-                label="Translate"
+                label={t.detectionPanel.augmentation.translate}
                 value={formData.training.augmentation.translate}
                 onChange={(v) => setAug({ translate: v })}
                 min={0}
@@ -732,14 +730,14 @@ export function DetectionPanel({
                 step={0.05}
               />
               <NumberField
-                label="Scale"
+                label={t.detectionPanel.augmentation.scale}
                 value={formData.training.augmentation.scale}
                 onChange={(v) => setAug({ scale: v })}
                 min={0}
                 step={0.05}
               />
               <NumberField
-                label="Shear"
+                label={t.detectionPanel.augmentation.shear}
                 value={formData.training.augmentation.shear}
                 onChange={(v) => setAug({ shear: v })}
                 min={-180}
@@ -748,7 +746,7 @@ export function DetectionPanel({
                 suffix="°"
               />
               <NumberField
-                label="Perspective"
+                label={t.detectionPanel.augmentation.perspective}
                 value={formData.training.augmentation.perspective}
                 onChange={(v) => setAug({ perspective: v })}
                 min={0}
@@ -756,61 +754,61 @@ export function DetectionPanel({
                 step={0.0001}
               />
               <NumberField
-                label="Flip up-down"
+                label={t.detectionPanel.augmentation.flipUpDown}
                 value={formData.training.augmentation.flipud}
                 onChange={(v) => setAug({ flipud: v })}
                 min={0}
                 max={1}
                 step={0.05}
-                hint="probabilidade"
+                hint={t.detectionPanel.augmentation.probability}
               />
               <NumberField
-                label="Flip left-right"
+                label={t.detectionPanel.augmentation.flipLeftRight}
                 value={formData.training.augmentation.fliplr}
                 onChange={(v) => setAug({ fliplr: v })}
                 min={0}
                 max={1}
                 step={0.05}
-                hint="probabilidade"
+                hint={t.detectionPanel.augmentation.probability}
               />
               <NumberField
-                label="BGR swap"
+                label={t.detectionPanel.augmentation.bgrSwap}
                 value={formData.training.augmentation.bgr}
                 onChange={(v) => setAug({ bgr: v })}
                 min={0}
                 max={1}
                 step={0.05}
-                hint="probabilidade"
+                hint={t.detectionPanel.augmentation.probability}
               />
               <NumberField
-                label="Mosaic"
+                label={t.detectionPanel.augmentation.mosaic}
                 value={formData.training.augmentation.mosaic}
                 onChange={(v) => setAug({ mosaic: v })}
                 min={0}
                 max={1}
                 step={0.05}
-                hint="probabilidade"
+                hint={t.detectionPanel.augmentation.probability}
               />
               <NumberField
-                label="Mixup"
+                label={t.detectionPanel.augmentation.mixup}
                 value={formData.training.augmentation.mixup}
                 onChange={(v) => setAug({ mixup: v })}
                 min={0}
                 max={1}
                 step={0.05}
-                hint="probabilidade"
+                hint={t.detectionPanel.augmentation.probability}
               />
               <NumberField
-                label="Copy-paste"
+                label={t.detectionPanel.augmentation.copyPaste}
                 value={formData.training.augmentation.copy_paste}
                 onChange={(v) => setAug({ copy_paste: v })}
                 min={0}
                 max={1}
                 step={0.05}
-                hint="probabilidade"
+                hint={t.detectionPanel.augmentation.probability}
               />
               <SelectField
-                label="Auto augment"
+                label={t.detectionPanel.augmentation.autoAugment}
                 value={formData.training.augmentation.auto_augment}
                 onChange={(v) =>
                   setAug({
@@ -822,17 +820,17 @@ export function DetectionPanel({
                   { value: "randaugment", label: "RandAugment" },
                   { value: "autoaugment", label: "AutoAugment" },
                   { value: "augmix", label: "AugMix" },
-                  { value: "none", label: "Desativado" },
+                  { value: "none", label: t.detectionPanel.augmentation.disabled },
                 ]}
               />
               <NumberField
-                label="Random erasing"
+                label={t.detectionPanel.augmentation.randomErasing}
                 value={formData.training.augmentation.erasing}
                 onChange={(v) => setAug({ erasing: v })}
                 min={0}
                 max={1}
                 step={0.05}
-                hint="probabilidade"
+                hint={t.detectionPanel.augmentation.probability}
               />
             </div>
           </div>
