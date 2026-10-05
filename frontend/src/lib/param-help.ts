@@ -70,9 +70,15 @@ export function isAdvanced(key: string): boolean {
 
 /** The explanation for a parameter in the active language, or undefined if it
  * has none yet. Not a hook, so the dictionary comes in as an argument:
- * `paramHelp(t, "epochs")` with `const t = useT()`. */
+ * `paramHelp(t, "epochs")` with `const t = useT()`.
+ *
+ * `key` is a backend field name, or the dot-path of a field whose meaning
+ * depends on where it sits (`training.scheduler.patience`). The dictionary pins
+ * the set of keys per language; here they are widened to open strings because
+ * the caller's key is not known at compile time. */
 export function paramHelp(t: Dict, key: string): string | undefined {
-  return t.paramHelp[key];
+  const help: Record<string, string> = t.paramHelp;
+  return help[key];
 }
 
 /** Whether any advanced field differs from its default.

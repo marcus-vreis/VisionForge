@@ -76,11 +76,18 @@ const VISIBLE_PROPS = new Set([
   "help", "caption", "hint", "description", "tooltip", "emptyText",
 ]);
 
+// Keys that carry visible text in config and state objects ({ text: "…" }, { message: "…" }) but are
+// not attributes a JSX element would show on its own.
+const OBJECT_PROPS = new Set([...VISIBLE_PROPS, "text", "message"]);
+
+// Plain-ASCII Portuguese has no accent to give it away, so the words that tend to stand alone in a
+// status line ("Cancelado.", "Falha …") are listed here too.
 const PORTUGUESE =
-  /[ãõçáéíóúâêôàÃÕÇÁÉÍÓÚÂÊÔÀ]|\b(nenhum|nenhuma|carregando|treinar|salvar|escolha|pasta|arquivo|você|voltar|continuar|pular|abrir|fechar|limpar|baixar|rodar|parar|retomar|apagar|dispositivos?|imagens?|de|do|da|dos|das|para|com|sem|uma?|pel[oa]s?|menos)\b/i;
+  /[ãõçáéíóúâêôàÃÕÇÁÉÍÓÚÂÊÔÀ]|\b(nenhum|nenhuma|carregando|treinar|salvar|escolha|pasta|arquivo|você|voltar|continuar|pular|abrir|fechar|limpar|baixar|rodar|parar|retomar|apagar|dispositivos?|imagens?|de|do|da|dos|das|para|com|sem|uma?|pel[oa]s?|menos|cancelad[oa]|falha|abrindo|aguarde)\b/i;
 
 const HAS_LETTER = /[A-Za-zÀ-ÿ]/;
 const PROSE = /[a-zà-ÿ]{2,}\s+[a-zà-ÿ]{2,}/;
+const SINGLE_WORD = /^\S+$/;
 
 interface Finding {
   file: string;
@@ -167,14 +174,14 @@ function findings(path: string): Finding[] {
     } else if (
       ts.isPropertyAssignment(node) &&
       (ts.isIdentifier(node.name) || ts.isStringLiteral(node.name)) &&
-      VISIBLE_PROPS.has(node.name.text)
+      OBJECT_PROPS.has(node.name.text)
     ) {
-      // { label: "…", placeholder: "…" } in config objects: only prose (two lower-case words), so
-      // model and dataset names such as "YOLO11-n" or "Faster R-CNN" stay out. What is not prose
-      // still gets the Portuguese check below.
+      // { label: "…", text: "…", message: "…" } in config objects: only prose (two lower-case words)
+      // or a single word from the Portuguese list, so model and dataset names such as "YOLO11-n" or
+      // "Faster R-CNN" stay out. What is neither still gets the Portuguese check below.
       for (const lit of shownLiterals(node.initializer)) {
         const s = literalText(lit).trim();
-        if (PROSE.test(s) && !ALLOWED.has(s)) {
+        if ((PROSE.test(s) || (SINGLE_WORD.test(s) && PORTUGUESE.test(s))) && !ALLOWED.has(s)) {
           seen.add(lit);
           if (ts.isTemplateExpression(lit)) [lit.head, ...lit.templateSpans.map((p) => p.literal)].forEach((p) => seen.add(p));
           add(lit, s);

@@ -1,3 +1,9 @@
+// Help texts shared by two field names (the same knob under two spellings, one
+// per task family). One constant each, so the copies cannot drift apart.
+const workersHelp =
+  "Processos que carregam as imagens em paralelo. No automático o VisionForge divide a memória livre da máquina pelo custo de um worker — no Windows cada um recarrega o torch e as DLLs da CUDA, ~1 GB, e um número alto demais não deixa o treino lento: impede o treino de começar (WinError 1455).";
+const lrFinalHelp = "Fração do learning rate inicial ao término do treino.";
+
 /**
  * Portuguese — the source dictionary. Its shape *is* the type every other
  * language must match, so a key added here and forgotten in en.ts fails the
@@ -118,8 +124,9 @@ export const pt = {
     suggestedNow: (n: number) => `≈ ${n} agora`,
   },
   // What each hyperparameter does, in terms of what changes if you move it. Keys
-  // are the backend's field names and are open (hence the cast), so the test in
-  // lib/param-help.test.ts, not the compiler, checks every language covers them.
+  // are the backend's field names (plus the dot-path of a field whose meaning
+  // depends on where it sits). `satisfies` keeps the literal keys, so en.ts must
+  // list exactly the same ones; the lookup widens them back to open strings.
   paramHelp: {
     // ── básico ────────────────────────────────────────────────────────────────
     epochs:
@@ -138,14 +145,14 @@ export const pt = {
       "Quanto o passo anterior influencia o atual. Suaviza a trajetória e ajuda a atravessar platôs.",
     weight_decay:
       "Puxa os pesos para perto de zero. Combate overfitting; alto demais impede o modelo de aprender.",
-    learning_rate_final: "Fração do learning rate inicial ao término do treino.",
-    lrf: "Fração do learning rate inicial ao término do treino.",
+    learning_rate_final: lrFinalHelp,
+    lrf: lrFinalHelp,
 
     // ── avançado: agendamento ─────────────────────────────────────────────────
     scheduler: "Como o learning rate cai ao longo do treino. Quase sempre ajuda deixar cair.",
     step_size: "De quantas em quantas épocas o learning rate é reduzido.",
     gamma: "Por quanto o learning rate é multiplicado a cada redução.",
-    cos_lr: "Faz o learning rate cair numa curva de cosseno em vez de degraus.",
+    cos_lr: "Faz o learning rate cair numa curva de cosseno em vez de cair em linha reta.",
     warmup_epochs:
       "Épocas iniciais com learning rate crescendo devagar, para o modelo não desestabilizar no começo.",
 
@@ -153,6 +160,9 @@ export const pt = {
     early_stopping_patience:
       "Épocas seguidas sem melhora antes de encerrar o treino. Deixe 0 (ou vazio) para rodar todas as épocas configuradas.",
     patience: "Épocas sem melhora antes de parar sozinho.",
+    // O `patience` do scheduler (reduzir no platô) não é o do early stopping; o
+    // ParamPanel procura o dot-path antes do nome da folha.
+    "training.scheduler.patience": "Épocas sem melhora antes de reduzir o learning rate.",
     label_smoothing: "Suaviza os rótulos para o modelo não ficar excessivamente confiante.",
     dropout:
       "Desliga neurônios ao acaso durante o treino, forçando o modelo a não depender de poucos.",
@@ -167,17 +177,15 @@ export const pt = {
       "Faz o mesmo config com a mesma seed devolver exatamente os mesmos números. Ligado por padrão: medimos o custo e ele é nulo ou negativo em treinos curtos.",
     base_dir:
       "Pasta raiz do dataset. Dentro dela ficam as subpastas de treino, validação e teste — o VisionForge procura os nomes usuais (train/val/test, treino/validacao/teste) e preenche sozinho quando encontra. O conteúdo de cada subpasta depende da tarefa: uma pasta por classe na classificação, imagens e labels na detecção, imagens e máscaras na segmentação.",
-    train_dir: "Subpasta usada para ajustar os pesos. É a única que o modelo vê durante o treino.",
+    train_dir: "Subpasta usada para ajustar os pesos. É a única com que o modelo aprende.",
     val_dir:
       "Subpasta usada a cada época para medir o progresso e escolher o melhor checkpoint. Não entra no ajuste dos pesos.",
     test_dir:
       "Subpasta avaliada uma única vez, no fim. Serve para reportar o resultado sem que ele tenha influenciado nenhuma escolha.",
     coreset_ratio:
       "Quanto do \"normal\" o PatchCore guarda para comparar depois. Ele corta as imagens de treino em pedaços pequenos e mantém uma amostra deles, a mais variada possível; uma imagem nova é anômala quando algum pedaço dela não se parece com nada guardado. 1% é o valor do artigo original. Aumentar deixa o banco mais completo, mas o tempo de montagem cresce na mesma proporção: 10% leva dez vezes mais.",
-    num_workers:
-      "Processos que carregam as imagens em paralelo. No automático o VisionForge divide a memória livre da máquina pelo custo de um worker — no Windows cada um recarrega o torch e as DLLs da CUDA, ~1 GB, e um número alto demais não deixa o treino lento: impede o treino de começar (WinError 1455).",
-    workers:
-      "Processos que carregam as imagens em paralelo. No automático o VisionForge divide a memória livre da máquina pelo custo de um worker — no Windows cada um recarrega o torch e as DLLs da CUDA, ~1 GB, e um número alto demais não deixa o treino lento: impede o treino de começar (WinError 1455).",
+    num_workers: workersHelp,
+    workers: workersHelp,
     pin_memory: "Acelera a cópia das imagens para a GPU. Deixe ligado, exceto se faltar RAM.",
     image_size: "Resolução de treino. Maior enxerga mais detalhe e custa VRAM e tempo ao quadrado.",
     nbs: "Batch nominal para normalizar o weight decay quando o batch real é menor.",
@@ -191,7 +199,7 @@ export const pt = {
     box: "Peso da perda de localização das caixas.",
     cls: "Peso da perda de classificação.",
     dfl: "Peso da perda de distribuição das bordas da caixa.",
-  } as Record<string, string>,
+  } satisfies Record<string, string>,
   // The hyperparameter form (components/ParamPanel.tsx). Sentences with inline
   // emphasis are written whole, with `code`, **strong** and __emphasis__ marks
   // that ParamPanel's <Rich> turns into elements, so a translation can reorder
@@ -214,7 +222,7 @@ export const pt = {
       num_classes: "Nº de classes",
       pretrained: "Pesos pré-treinados",
       weights_path: "Caminho dos pesos",
-      learning_rate: "Learning Rate",
+      learning_rate: "Learning rate",
       epochs: "Épocas",
       batch_size: "Batch size",
       early_stopping_patience: "Early stop (paciência)",
@@ -273,7 +281,7 @@ export const pt = {
     },
     blockHints: {
       crossValidation:
-        "Treina N modelos em N folds da pasta de treino. Validação por fold; normalize_mean/std são recalculados por fold para evitar data leakage. Não usa o split de teste — agregação em `cv_summary.json`.",
+        "Treina N modelos em N folds da pasta de treino. Validação por fold; `normalize_mean/std` são recalculados por fold para evitar data leakage. Não usa o split de teste — agregação em `cv_summary.json`.",
       transferLearning:
         "Feature extraction (só treina o head) ou fine-tuning (head + backbone parcial com LR menor). Útil em datasets pequenos, sem destruir as features pré-treinadas. Em feature extraction os pesos do backbone não se movem, mas as estatísticas de BatchNorm se recalibram no seu dataset — o backbone fica congelado, não idêntico.",
       gridSearch:

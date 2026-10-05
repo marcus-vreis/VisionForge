@@ -20,7 +20,7 @@ describe("completude", () => {
       // The complaint was not knowing what the fields do, so a classified field
       // with no explanation is the exact failure this file exists to prevent.
       for (const key of Object.keys(PARAM_TIER)) {
-        expect(dict.paramHelp[key], `sem explicação em ${lang}: ${key}`).toBeTruthy();
+        expect(paramHelp(dict, key), `sem explicação em ${lang}: ${key}`).toBeTruthy();
       }
     });
 
@@ -33,6 +33,17 @@ describe("completude", () => {
 
   it("explica os mesmos campos nos dois idiomas", () => {
     expect(Object.keys(en.paramHelp).sort()).toEqual(Object.keys(pt.paramHelp).sort());
+  });
+
+  it("explica o patience do scheduler à parte do patience do early stopping", () => {
+    // Same leaf name, different knob: one reduces the learning rate on a
+    // plateau, the other ends the run. Only the dot-path tells them apart.
+    for (const [lang, dict] of Object.entries(LANGUAGES)) {
+      const scheduler = paramHelp(dict, "training.scheduler.patience");
+      expect(scheduler, lang).toBeTruthy();
+      expect(scheduler, lang).not.toBe(paramHelp(dict, "patience"));
+      expect(scheduler, lang).toMatch(/learning rate/i);
+    }
   });
 
   it("devolve a explicação do idioma ativo, ou nada para um campo sem ajuda", () => {

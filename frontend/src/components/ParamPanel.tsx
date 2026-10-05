@@ -20,6 +20,7 @@ import { resolveKind } from "./field-renderer";
 import { hasNonDefaultAdvanced, isAdvanced, paramHelp } from "../lib/param-help";
 import { AdvancedFields } from "./AdvancedFields";
 import { ModelAdvice } from "./ModelAdvice";
+import { Rich } from "./Rich";
 import {
   coerceGridValue,
   isGridableField,
@@ -67,23 +68,6 @@ const TRAINING_FIELD_ORDER = [
   "deterministic",
   "mixed_precision",
 ];
-
-/** A dictionary sentence with inline marks: `code`, **strong**, __emphasis__.
- *
- * The whole sentence lives in the dictionary, so a translation is free to put
- * the marked words wherever its grammar wants them. */
-function Rich({ text }: { text: string }) {
-  return (
-    <>
-      {text.split(/(`[^`]+`|\*\*[^*]+\*\*|__[^_]+__)/).map((part, i) => {
-        if (part.startsWith("`")) return <code key={i}>{part.slice(1, -1)}</code>;
-        if (part.startsWith("**")) return <strong key={i}>{part.slice(2, -2)}</strong>;
-        if (part.startsWith("__")) return <em key={i}>{part.slice(2, -2)}</em>;
-        return part;
-      })}
-    </>
-  );
-}
 
 function resolveSchema(
   schema: JsonSchema,
@@ -1080,7 +1064,7 @@ function RandomSearchRow({
   paramKey: string;
   def: RandomParamDef;
   onRenameKey: (k: string) => void;
-  onChangeType: (t: RandomParamType) => void;
+  onChangeType: (type: RandomParamType) => void;
   onChangeField: (field: "low" | "high", raw: string) => void;
   onChangeChoices: (csv: string) => void;
   onRemove: () => void;
@@ -1519,7 +1503,11 @@ function SchemaFieldVF({
   // architecture, not the experiment name. The keys are the backend's field
   // names, so the lookup is open even though the dictionaries pin the set.
   const labels: Record<string, string> = t.paramPanel.fieldLabels;
+  const sectionLabels: Record<string, string> = t.paramPanel.sectionLabels;
   const label = labels[path.join(".")] ?? labels[name] ?? resolved.title ?? name;
+  // Same rule for the explanation: the scheduler's `patience` (reduce on
+  // plateau) is not early stopping's, and only its dot-path tells them apart.
+  const help = paramHelp(t, path.join(".")) ?? paramHelp(t, name);
   const errorMsg = errors.find(
     (e) =>
       e.field.length === path.length && e.field.every((f, i) => f === path[i]),
@@ -1582,7 +1570,7 @@ function SchemaFieldVF({
             marginBottom: 4,
           }}
         >
-          {(t.paramPanel.sectionLabels as Record<string, string>)[name] ?? resolved.title ?? name}
+          {sectionLabels[name] ?? resolved.title ?? name}
         </div>
         {Object.entries(inner.properties).map(([key, propSchema]) => (
           <SchemaFieldVF
@@ -1608,7 +1596,7 @@ function SchemaFieldVF({
     return (
       <div>
         <SelectField
-          help={paramHelp(t, name)}
+          help={help}
           label={label}
           value={String(value ?? resolved.default ?? resolved.enum?.[0] ?? "")}
           onChange={(v) => handleChange(v)}
@@ -1639,7 +1627,7 @@ function SchemaFieldVF({
     return (
       <div>
         <Segmented
-          help={paramHelp(t, name)}
+          help={help}
           label={label}
           value={String(value ?? resolved.default ?? resolved.enum?.[0] ?? "")}
           onChange={(v) => handleChange(v)}
@@ -1666,7 +1654,7 @@ function SchemaFieldVF({
     return (
       <div>
         <Toggle
-          help={paramHelp(t, name)}
+          help={help}
           label={label}
           value={Boolean(value)}
           onChange={(v) => onChange(v)}
@@ -1691,7 +1679,7 @@ function SchemaFieldVF({
     return (
       <div>
         <NumberField
-          help={paramHelp(t, name)}
+          help={help}
           label={label}
           value={(value as number) ?? 0}
           onChange={(v) => handleChange(v)}
@@ -1720,7 +1708,7 @@ function SchemaFieldVF({
     return (
       <div>
         <TextField
-          help={paramHelp(t, name)}
+          help={help}
           label={label}
           value={arrVal.join(", ")}
           onChange={(v) => {
@@ -1754,7 +1742,7 @@ function SchemaFieldVF({
   return (
     <div>
       <TextField
-        help={paramHelp(t, name)}
+        help={help}
         label={label}
         value={String(value ?? "")}
         onChange={(v) => onChange(v)}

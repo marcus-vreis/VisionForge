@@ -1,5 +1,11 @@
 import type { Dict } from "./pt";
 
+// Help texts shared by two field names; see the same pair in pt.ts.
+const workersHelp =
+  "DataLoader processes that load images in parallel. When set to automatic, VisionForge divides the machine's free memory by the cost of one worker. On Windows each worker reloads torch and the CUDA DLLs (~1 GB), so too high a value doesn't make training slow: it keeps training from starting (WinError 1455).";
+const lrFinalHelp =
+  "The learning rate at the end of training, as a fraction of the initial one.";
+
 /** English. Typed as the Portuguese dictionary, so the two cannot drift. */
 export const en: Dict = {
   common: {
@@ -110,37 +116,41 @@ export const en: Dict = {
   paramHelp: {
     // ── basic ─────────────────────────────────────────────────────────────────
     epochs:
-      "How many times the model sees the whole dataset. More epochs learn more, until it starts memorizing.",
+      "How many times the model sees the whole dataset. More epochs mean more learning, until the model starts memorizing the data.",
     batch_size:
-      "How many images per step. Larger gives a steadier gradient and uses more VRAM; if you run out of memory, lower this one first.",
+      "How many images per step. A larger batch gives steadier gradients and uses more VRAM; if you run out of memory, lower this one first.",
     learning_rate:
       "The size of each update step. Too high and it diverges, too low and it never gets there.",
     seed:
-      "Fixes the randomness (initial weights, data order). The same seed on the same data gives the same result.",
+      "Pins down the random draws (initial weights, data order). The same seed on the same data gives the same result.",
 
     // ── advanced: optimization ────────────────────────────────────────────────
     optimizer:
-      "The algorithm that applies the gradient. adam converges fast without fine tuning; sgd usually generalizes better if you give it time.",
+      "The algorithm that turns gradients into weight updates. Adam converges fast with little tuning; SGD usually generalizes better if you give it time.",
     momentum:
       "How much the previous step carries into the current one. Smooths the trajectory and helps cross plateaus.",
     weight_decay:
       "Pulls the weights toward zero. Fights overfitting; too high and the model can't learn.",
-    learning_rate_final: "Fraction of the initial learning rate at the end of training.",
-    lrf: "Fraction of the initial learning rate at the end of training.",
+    learning_rate_final: lrFinalHelp,
+    lrf: lrFinalHelp,
 
     // ── advanced: scheduling ──────────────────────────────────────────────────
     scheduler:
       "How the learning rate decreases during training. Letting it decay almost always helps.",
     step_size: "How many epochs between learning rate reductions.",
-    gamma: "What the learning rate is multiplied by at each reduction.",
-    cos_lr: "Makes the learning rate follow a cosine curve instead of dropping in steps.",
+    gamma: "The factor the learning rate is multiplied by at each reduction.",
+    cos_lr: "Makes the learning rate follow a cosine curve instead of decaying linearly.",
     warmup_epochs:
-      "Initial epochs with the learning rate ramping up slowly, so the model doesn't destabilize at the start.",
+      "Epochs at the start during which the learning rate ramps up gradually, so early training stays stable.",
 
     // ── advanced: stopping and regularization ─────────────────────────────────
     early_stopping_patience:
-      "Consecutive epochs without improvement before training stops. Leave at 0 (or empty) to run all configured epochs.",
-    patience: "Epochs without improvement before it stops on its own.",
+      "Consecutive epochs without improvement before training stops. Set to 0 (or leave empty) to run every configured epoch.",
+    patience: "Epochs without improvement before training stops early.",
+    // The scheduler's own `patience` (reduce on plateau) is a different knob from
+    // early stopping; ParamPanel looks the dot-path up before the leaf name.
+    "training.scheduler.patience":
+      "Epochs without improvement before the learning rate is reduced.",
     label_smoothing: "Softens the labels so the model doesn't become overconfident.",
     dropout:
       "Randomly switches off neurons during training, so the model can't rely on just a few.",
@@ -148,29 +158,27 @@ export const en: Dict = {
 
     // ── advanced: mechanics ───────────────────────────────────────────────────
     amp:
-      "Mixed precision: uses 16 bits where it can. Trains faster and uses less VRAM, with a low risk of instability.",
+      "Mixed precision: computes in 16-bit where it can. Trains faster and uses less VRAM, with a low risk of instability.",
     mixed_precision:
-      "Does part of the math in 16 bits. Speeds up training and uses less VRAM on recent GPUs; on sensitive models it can cost numerical precision.",
+      "Runs part of the math in 16-bit precision. Speeds up training and uses less VRAM on recent GPUs; on sensitive models it can cost numerical precision.",
     deterministic:
-      "Makes the same config with the same seed return exactly the same numbers. On by default: we measured the cost, and it is zero or negative on short runs.",
+      "Makes the same config with the same seed return exactly the same numbers. On by default: we measured the cost, and it is zero, or even negative, on short runs.",
     base_dir:
-      "Root folder of the dataset. Inside it are the train, validation and test subfolders — VisionForge looks for the usual names (train/val/test, treino/validacao/teste) and fills them in on its own when it finds them. What each subfolder holds depends on the task: one folder per class for classification, images and labels for detection, images and masks for segmentation.",
+      "Root folder of the dataset. Inside it are the train, validation and test subfolders — VisionForge looks for the usual names (train/val/test, treino/validacao/teste) and fills them in automatically when it finds them. What each subfolder holds depends on the task: one folder per class for classification, images and labels for detection, images and masks for segmentation.",
     train_dir:
-      "Subfolder used to fit the weights. It's the only one the model sees during training.",
+      "Subfolder used to fit the weights. It's the only one the model learns from.",
     val_dir:
-      "Subfolder used every epoch to measure progress and pick the best checkpoint. It never goes into fitting the weights.",
+      "Subfolder used every epoch to measure progress and pick the best checkpoint. It plays no part in fitting the weights.",
     test_dir:
-      "Subfolder evaluated a single time, at the end. It lets you report a result that hasn't influenced any decision.",
+      "Subfolder evaluated only once, at the end, so the result you report hasn't influenced any decision.",
     coreset_ratio:
-      "How much of the \"normal\" PatchCore keeps to compare against later. It cuts the training images into small patches and keeps a sample of them, as varied as possible; a new image is anomalous when some patch of it looks like nothing that was kept. 1% is the original paper's value. Raising it makes the memory bank more complete, but build time grows in the same proportion: 10% takes ten times longer.",
-    num_workers:
-      "Processes that load the images in parallel. On automatic, VisionForge divides the machine's free memory by the cost of one worker — on Windows each one reloads torch and the CUDA DLLs, ~1 GB, and a number that is too high doesn't make training slow: it keeps training from starting (WinError 1455).",
-    workers:
-      "Processes that load the images in parallel. On automatic, VisionForge divides the machine's free memory by the cost of one worker — on Windows each one reloads torch and the CUDA DLLs, ~1 GB, and a number that is too high doesn't make training slow: it keeps training from starting (WinError 1455).",
+      "How much of the \"normal\" data PatchCore keeps to compare against later. It cuts the training images into small patches and keeps a sample of them, as varied as possible; a new image is anomalous when one of its patches looks unlike anything kept. 1% is the value from the original paper. Raising it makes the memory bank more complete, but build time grows proportionally: 10% takes ten times as long.",
+    num_workers: workersHelp,
+    workers: workersHelp,
     pin_memory: "Speeds up copying the images to the GPU. Leave it on unless you're short on RAM.",
     image_size:
-      "Training resolution. Larger sees more detail, and the VRAM and time it costs grow with the square.",
-    nbs: "Nominal batch size used to normalize weight decay when the real batch is smaller.",
+      "Training resolution. Larger captures more detail, but VRAM and time grow with the square of the size.",
+    nbs: "Nominal batch size used to normalize weight decay when the actual batch is smaller.",
     single_cls:
       "Treats all classes as one. Use it to measure only how well the boxes are localized.",
     rect:
@@ -178,11 +186,11 @@ export const en: Dict = {
     multi_scale:
       "Varies the resolution between steps, so the model copes with objects of different sizes.",
     close_mosaic:
-      "Turns mosaic off for the last N epochs, so the model finishes training on real images.",
+      "Turns off mosaic augmentation for the last N epochs, so the model finishes training on regular, unstitched images.",
     box: "Weight of the box localization loss.",
     cls: "Weight of the classification loss.",
-    dfl: "Weight of the loss on the distribution of the box edges.",
-  } as Record<string, string>,
+    dfl: "Weight of the distribution focal loss (DFL), which refines the box edges.",
+  },
   paramPanel: {
     sectionLabels: {
       model: "Model",
@@ -200,7 +208,7 @@ export const en: Dict = {
       num_classes: "Number of classes",
       pretrained: "Pretrained weights",
       weights_path: "Weights path",
-      learning_rate: "Learning Rate",
+      learning_rate: "Learning rate",
       epochs: "Epochs",
       batch_size: "Batch size",
       early_stopping_patience: "Early stop (patience)",
@@ -239,7 +247,7 @@ export const en: Dict = {
     },
     kickers: {
       strategy: "// experiment strategy",
-      scheduler: "// learning-rate scheduler",
+      scheduler: "// learning rate scheduler",
       crossValidation: "// k-fold cross-validation",
       transferLearning: "// transfer learning",
       model: "// model",
@@ -251,34 +259,34 @@ export const en: Dict = {
       comingSoon: "// coming soon",
     },
     blocks: {
-      simple: "Simple training",
-      crossValidation: "K-Fold (CV)",
+      simple: "Single run",
+      crossValidation: "K-fold (CV)",
       transferLearning: "Transfer learning",
       gridSearch: "Grid search",
       randomSearch: "Random search",
     },
     blockHints: {
       crossValidation:
-        "Trains N models on N folds of the training folder. Validation per fold; normalize_mean/std are recomputed per fold to avoid data leakage. Doesn't use the test split — results are aggregated in `cv_summary.json`.",
+        "Trains N models, one per fold of the training folder, each validated on its own held-out fold. `normalize_mean/std` are recomputed per fold to avoid data leakage. The test split is not used; results are aggregated in `cv_summary.json`.",
       transferLearning:
-        "Feature extraction (trains only the head) or fine-tuning (head + part of the backbone with a smaller LR). Useful on small datasets, without destroying the pretrained features. In feature extraction the backbone weights don't move, but the BatchNorm statistics recalibrate to your dataset — the backbone is frozen, not identical.",
+        "Feature extraction (trains only the head) or fine-tuning (head + part of the backbone with a smaller LR). Useful for small datasets, since it keeps the pretrained features intact. In feature extraction the backbone weights don't move, but the BatchNorm statistics recalibrate to your dataset — the backbone is frozen, but not untouched.",
       gridSearch:
-        'Trains **once per combination** of the Cartesian product of the space defined below. Each key is a dot-path (e.g. `training.learning_rate`); the value is a list. Careful: 3×3×2 is already 18 runs. To **compare architectures**, add values to the "Architecture" field ("+ add to grid" button) — a single-axis grid; compare the runs in the history.',
+        'Trains **once per combination** of the Cartesian product of the space defined below. Each key is a dot-path (e.g. `training.learning_rate`); the value is a list. Careful: 3×3×2 is already 18 trials. To **compare architectures**, add values to the "Architecture" field ("+ add to grid" button) — a single-axis grid — then compare the runs in history.',
       randomSearch:
-        "Samples `n_trials` independent configurations from the space below. Each parameter has a type: `uniform`, `log_uniform` (LR and weight_decay) or `choice` (discrete lists).",
+        "Samples `n_trials` independent configurations from the space below. Each parameter has a type: `uniform`, `log_uniform` (learning rate, weight decay) or `choice` (discrete lists).",
     },
     weights: {
       label: "Custom checkpoint (.pth)",
-      clearTitle: "Remove custom checkpoint (go back to pretrained / random weights)",
+      clearTitle: "Remove the custom checkpoint (falls back to pretrained / random weights)",
       clear: "clear",
-      placeholder: "optional — overrides ImageNet",
+      placeholder: "optional — replaces the ImageNet weights",
       browse: "Browse",
       cancelled: "Cancelled.",
       pickFailed: "Failed to open the file picker.",
     },
     grid: {
       addValue: "+ add to grid",
-      addAnother: "+ value",
+      addAnother: "+ add value",
       removeValue: "Remove value",
       axisTag: (values: number) => `grid · ${values} values`,
       banner:
@@ -314,11 +322,11 @@ export const en: Dict = {
     importYaml: "↑ Import YAML",
     importTitle: "Import a configuration from a .yaml file",
     importWarnings: (count: number, summary: string, extra: number) =>
-      `YAML imported with ${count} structural ${count === 1 ? "warning" : "warnings"}:\n${summary}${extra > 0 ? `\n…(+${extra} more)` : ""}\n\nFix these before training — the backend rejects the config on Pydantic validation.`,
+      `YAML imported with ${count} structural ${count === 1 ? "warning" : "warnings"}:\n${summary}${extra > 0 ? `\n…(+${extra} more)` : ""}\n\nFix them before training — the backend's Pydantic validation will reject the config.`,
     unavailable: (task: string) => `${task} is not available yet`,
     unavailableBody: "This task will be implemented in an upcoming phase of VisionForge.",
     loadingSchema: "loading schema…",
-    hiddenParams: (n: number) => `${n} hidden parameters — turn it on to adjust`,
+    hiddenParams: (n: number) => `${n} hidden parameters — turn on to adjust them`,
     fieldErrors: (n: number) => `${n} ${n === 1 ? "field" : "fields"} with errors:`,
   },
   runDetail: {
