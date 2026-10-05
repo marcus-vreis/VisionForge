@@ -99,7 +99,7 @@ export function DatasetPicker({
           return;
         }
         void (async () => {
-          setFeedback({ kind: "info", message: "Analisando subpastas…" });
+          setFeedback({ kind: "info", message: t.datasetPicker.analyzing });
           try {
             const result = await detectDatasetSplits(trimmed);
             if (!alive) return;
@@ -127,7 +127,7 @@ export function DatasetPicker({
                 ? e.message
                 : e instanceof Error
                   ? e.message
-                  : "Falha ao detectar splits do dataset.";
+                  : t.datasetPicker.detectFailed;
             setFeedback({ kind: "error", message: msg });
           }
         })();
@@ -141,20 +141,20 @@ export function DatasetPicker({
   }, [baseDir]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handlePickFolder = async () => {
-    setFeedback({ kind: "info", message: "Abrindo seletor nativo do sistema…" });
+    setFeedback({ kind: "info", message: t.datasetPicker.opening });
     try {
       const res = await pickDatasetFolder();
       if (res.cancelled) {
         setFeedback({
           kind: "info",
-          message: res.message ?? "Seleção cancelada.",
+          message: res.message ?? t.datasetPicker.cancelled,
         });
         return;
       }
       onChange({ base_dir: res.path });
       setFeedback({
         kind: "success",
-        message: `Pasta selecionada: ${res.path}`,
+        message: t.datasetPicker.picked(res.path),
       });
     } catch (e) {
       const msg =
@@ -162,7 +162,7 @@ export function DatasetPicker({
           ? e.message
           : e instanceof Error
             ? e.message
-            : "Falha ao abrir o seletor de pastas.";
+            : t.datasetPicker.pickFailed;
       setFeedback({ kind: "error", message: msg });
     }
   };
@@ -180,7 +180,7 @@ export function DatasetPicker({
     const help = paramHelp(t, onChangeKey);
     if (candidates.length > 0) {
       const opts: SelectOption[] = value && !candidates.includes(value)
-        ? [{ value, label: `${value} (manual)` }, ...splitOptions]
+        ? [{ value, label: t.datasetPicker.manual(value) }, ...splitOptions]
         : splitOptions;
       return (
         <SelectField
@@ -223,12 +223,12 @@ export function DatasetPicker({
         <div style={{ display: "flex", alignItems: "flex-end", gap: 12 }}>
           <div style={{ flex: 1 }}>
             <TextField
-              label="Diretório base do dataset"
+              label={t.datasetPicker.baseDir}
               value={baseDir}
               onChange={(v) => onChange({ base_dir: v })}
-              placeholder="ex: C:/datasets/coffee  ou  /home/user/data"
+              placeholder={t.datasetPicker.baseDirPlaceholder}
               mono
-              hint="Pasta raiz que contém treino, validação e teste."
+              hint={t.datasetPicker.baseDirHint}
               help={paramHelp(t, "base_dir")}
             />
           </div>
@@ -241,9 +241,9 @@ export function DatasetPicker({
               border: "1px solid var(--vf-panel-stroke)",
               color: "var(--vf-text-dim)",
             }}
-            title="Abrir seletor nativo do sistema (retorna o caminho absoluto)"
+            title={t.datasetPicker.browseTitle}
           >
-            📁 Escolher pasta
+            {t.datasetPicker.browse}
           </button>
         </div>
 
@@ -273,9 +273,9 @@ export function DatasetPicker({
           marginBottom: 16,
         }}
       >
-        {splitField("Subpasta treino", trainDir, "train_dir")}
-        {splitField("Subpasta validação", valDir, "val_dir")}
-        {splitField("Subpasta teste", testDir, "test_dir")}
+        {splitField(t.datasetPicker.trainSubdir, trainDir, "train_dir")}
+        {splitField(t.datasetPicker.valSubdir, valDir, "val_dir")}
+        {splitField(t.datasetPicker.testSubdir, testDir, "test_dir")}
       </div>
     </div>
   );

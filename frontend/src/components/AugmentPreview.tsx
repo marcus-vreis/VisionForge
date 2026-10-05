@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { artifactUrl, previewAugment, type AugmentPreviewResponse } from "../api/client";
+import { useT } from "../i18n/useT";
 
 interface AugmentPreviewProps {
   baseDir: string;
@@ -10,13 +11,14 @@ interface AugmentPreviewProps {
  *  can see the train-time augmentation effect (flip/rotation/jitter) before
  *  training. Mirrors the preprocessing preview, but for the random augmentations. */
 export function AugmentPreview({ baseDir, transforms }: AugmentPreviewProps) {
+  const t = useT();
   const [preview, setPreview] = useState<AugmentPreviewResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
   const run = async () => {
     if (!baseDir.trim()) {
-      setMsg("Defina o diretório base do dataset primeiro.");
+      setMsg(t.augmentPreview.needBaseDir);
       return;
     }
     setLoading(true);
@@ -30,7 +32,7 @@ export function AugmentPreview({ baseDir, transforms }: AugmentPreviewProps) {
         setPreview(resp);
       }
     } catch (e) {
-      setMsg(e instanceof Error ? e.message : "Falha ao gerar preview.");
+      setMsg(e instanceof Error ? e.message : t.augmentPreview.failed);
     } finally {
       setLoading(false);
     }
@@ -73,7 +75,7 @@ export function AugmentPreview({ baseDir, transforms }: AugmentPreviewProps) {
             opacity: loading ? 0.6 : 1,
           }}
         >
-          {loading ? "Gerando…" : "🎲 preview de augmentation"}
+          {loading ? t.augmentPreview.generating : t.augmentPreview.button}
         </button>
         {preview && preview.active.length > 0 && (
           <span
@@ -83,7 +85,7 @@ export function AugmentPreview({ baseDir, transforms }: AugmentPreviewProps) {
               color: "var(--vf-text-dim)",
             }}
           >
-            ativos: {preview.active.join(" · ")}
+            {t.augmentPreview.active} {preview.active.join(" · ")}
           </span>
         )}
         {preview && preview.active.length === 0 && (
@@ -94,7 +96,7 @@ export function AugmentPreview({ baseDir, transforms }: AugmentPreviewProps) {
               color: "var(--vf-text-muted)",
             }}
           >
-            nenhum aumento ativo — apenas resize
+            {t.augmentPreview.noneActive}
           </span>
         )}
       </div>
@@ -123,13 +125,13 @@ export function AugmentPreview({ baseDir, transforms }: AugmentPreviewProps) {
           }}
         >
           <div>
-            <img src={artifactUrl(preview.original)} alt="original" style={thumb} />
-            <div style={cap}>original</div>
+            <img src={artifactUrl(preview.original)} alt={t.augmentPreview.original} style={thumb} />
+            <div style={cap}>{t.augmentPreview.original}</div>
           </div>
           {preview.variants.map((v, i) => (
             <div key={v}>
-              <img src={artifactUrl(v)} alt={`variante ${i + 1}`} style={thumb} />
-              <div style={cap}>variante {i + 1}</div>
+              <img src={artifactUrl(v)} alt={t.augmentPreview.variant(i + 1)} style={thumb} />
+              <div style={cap}>{t.augmentPreview.variant(i + 1)}</div>
             </div>
           ))}
         </div>

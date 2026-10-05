@@ -7,17 +7,12 @@ import {
   type RegressionDatasetStatsResponse,
   type SegmentationDatasetStatsResponse,
 } from "../api/client";
+import { useT } from "../i18n/useT";
 
 /** Pre-training dataset overviews for segmentation / anomaly / regression
  *  (ADR-059) — the task-specific analogues of `DetectionDatasetStats`,
  *  rendered inside each panel's Dataset section. Fetches are debounced and
  *  skipped while the base dir is empty. */
-
-const SPLIT_LABELS: Record<string, string> = {
-  train: "treino",
-  val: "validação",
-  test: "teste",
-};
 
 const box: React.CSSProperties = {
   marginTop: 12,
@@ -83,10 +78,11 @@ const smallLine: React.CSSProperties = {
 const warnColor = "oklch(0.85 0.14 75)";
 
 function MissingSplitCard({ label }: { label: string }) {
+  const t = useT();
   return (
     <div style={{ ...splitCard, border: "1px dashed var(--vf-panel-stroke)", opacity: 0.55 }}>
       <div style={splitLabel}>{label}</div>
-      <div style={{ ...smallLine, fontSize: 12, marginTop: 4 }}>ausente</div>
+      <div style={{ ...smallLine, fontSize: 12, marginTop: 4 }}>{t.datasetStats.missing}</div>
     </div>
   );
 }
@@ -135,6 +131,7 @@ interface SegmentationDatasetStatsProps {
 }
 
 export function SegmentationDatasetStats(props: SegmentationDatasetStatsProps) {
+  const t = useT();
   const { baseDir, onApplyClasses } = props;
   const body = {
     base_dir: baseDir,
@@ -165,13 +162,11 @@ export function SegmentationDatasetStats(props: SegmentationDatasetStatsProps) {
     <div style={box}>
       {looksInterpolated && (
         <div style={{ ...warnBox, marginTop: 0 }}>
-          ⚠ {classIds.length} ids distintos na amostra — as máscaras parecem
-          interpoladas (anti-aliasing). Use máscaras com um id de classe por
-          pixel (resample NEAREST).
+          {t.taskDatasetStats.interpolated(classIds.length)}
         </div>
       )}
       <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
-        <span style={{ ...kicker, fontSize: 9 }}>ids nas máscaras (amostra):</span>
+        <span style={{ ...kicker, fontSize: 9 }}>{t.taskDatasetStats.maskIds}</span>
         {shownIds.map((id) => (
           <span
             key={id}
@@ -184,7 +179,7 @@ export function SegmentationDatasetStats(props: SegmentationDatasetStatsProps) {
               fontSize: 10,
               color: id >= 200 ? warnColor : "var(--vf-text-dim)",
             }}
-            title={id >= 200 ? "provável ignore_index (void)" : undefined}
+            title={id >= 200 ? t.taskDatasetStats.voidTitle : undefined}
           >
             {id}
           </span>
@@ -212,31 +207,30 @@ export function SegmentationDatasetStats(props: SegmentationDatasetStatsProps) {
               cursor: "pointer",
             }}
           >
-            🎯 aplicar {suggested} classes
+            {t.taskDatasetStats.applyClasses(suggested)}
           </button>
         )}
       </div>
 
-      <div style={kicker}>// pareamento imagem ↔ máscara</div>
+      <div style={kicker}>{t.taskDatasetStats.pairing}</div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
         {(["train", "val", "test"] as const).map((key) => {
           const split = stats.splits[key];
           if (!split) return null;
-          if (split.missing) return <MissingSplitCard key={key} label={SPLIT_LABELS[key]} />;
+          if (split.missing) return <MissingSplitCard key={key} label={t.datasetStats.splits[key]} />;
           const mismatch = split.unpaired_images + split.unpaired_masks > 0;
           return (
             <div key={key} style={splitCard}>
               <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
-                <span style={splitLabel}>{SPLIT_LABELS[key]}</span>
-                <span style={bigNumber}>{split.paired} pares</span>
+                <span style={splitLabel}>{t.datasetStats.splits[key]}</span>
+                <span style={bigNumber}>{t.taskDatasetStats.pairs(split.paired)}</span>
               </div>
               <div style={smallLine}>
-                {split.images} img · {split.masks} másc
+                {t.taskDatasetStats.pairCounts(split.images, split.masks)}
               </div>
               {mismatch && (
                 <div style={{ ...smallLine, color: warnColor }}>
-                  ⚠ {split.unpaired_images} img sem máscara ·{" "}
-                  {split.unpaired_masks} másc sem img
+                  {t.taskDatasetStats.unpaired(split.unpaired_images, split.unpaired_masks)}
                 </div>
               )}
             </div>
@@ -257,6 +251,7 @@ interface AnomalyDatasetStatsProps {
 }
 
 export function AnomalyDatasetStats(props: AnomalyDatasetStatsProps) {
+  const t = useT();
   const body = {
     base_dir: props.baseDir,
     train_dir: props.trainDir,
@@ -276,21 +271,21 @@ export function AnomalyDatasetStats(props: AnomalyDatasetStatsProps) {
 
   return (
     <div style={box}>
-      <div style={kicker}>// distribuição normal vs. anômalo</div>
+      <div style={kicker}>{t.taskDatasetStats.anomalyKicker}</div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
         <div style={splitCard}>
-          <span style={splitLabel}>treino (normal)</span>
-          <span style={bigNumber}>{stats.train_normal} img</span>
+          <span style={splitLabel}>{t.taskDatasetStats.trainNormal}</span>
+          <span style={bigNumber}>{t.taskDatasetStats.images(stats.train_normal)}</span>
         </div>
         <div style={splitCard}>
-          <span style={splitLabel}>teste · normal</span>
-          <span style={bigNumber}>{stats.test_normal} img</span>
+          <span style={splitLabel}>{t.taskDatasetStats.testNormal}</span>
+          <span style={bigNumber}>{t.taskDatasetStats.images(stats.test_normal)}</span>
         </div>
         <div style={splitCard}>
-          <span style={splitLabel}>teste · anômalo</span>
-          <span style={bigNumber}>{totalAnomalous} img</span>
+          <span style={splitLabel}>{t.taskDatasetStats.testAnomalous}</span>
+          <span style={bigNumber}>{t.taskDatasetStats.images(totalAnomalous)}</span>
           {stats.missing_test && (
-            <span style={{ ...smallLine, color: warnColor }}>pasta de teste ausente</span>
+            <span style={{ ...smallLine, color: warnColor }}>{t.taskDatasetStats.missingTestDir}</span>
           )}
         </div>
       </div>
@@ -333,6 +328,7 @@ interface RegressionDatasetStatsProps {
 }
 
 export function RegressionDatasetStats(props: RegressionDatasetStatsProps) {
+  const t = useT();
   const targets = props.targetColumns
     .split(",")
     .map((c) => c.trim())
@@ -359,33 +355,37 @@ export function RegressionDatasetStats(props: RegressionDatasetStatsProps) {
 
   return (
     <div style={box}>
-      <div style={kicker}>// manifest &amp; distribuição dos alvos</div>
+      <div style={kicker}>{t.taskDatasetStats.regressionKicker}</div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
         {(["train", "val", "test"] as const).map((key) => {
           const split = stats.splits[key];
           if (!split) return null;
-          if (split.missing) return <MissingSplitCard key={key} label={SPLIT_LABELS[key]} />;
+          if (split.missing) return <MissingSplitCard key={key} label={t.datasetStats.splits[key]} />;
           return (
             <div key={key} style={splitCard}>
               <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
-                <span style={splitLabel}>{SPLIT_LABELS[key]}</span>
-                <span style={bigNumber}>{split.rows} linhas</span>
+                <span style={splitLabel}>{t.datasetStats.splits[key]}</span>
+                <span style={bigNumber}>{t.taskDatasetStats.rows(split.rows)}</span>
               </div>
               {split.missing_columns.length > 0 && (
                 <div style={{ ...smallLine, color: warnColor }}>
-                  ⚠ colunas ausentes: {split.missing_columns.join(", ")}
+                  {t.taskDatasetStats.missingColumns(split.missing_columns.join(", "))}
                 </div>
               )}
               {split.missing_images > 0 && (
                 <div style={{ ...smallLine, color: warnColor }}>
-                  ⚠ {split.missing_images}/{split.checked_images} imagens não
-                  encontradas
+                  {t.taskDatasetStats.missingImages(split.missing_images, split.checked_images)}
                 </div>
               )}
-              {Object.entries(split.targets).map(([col, t]) => (
+              {Object.entries(split.targets).map(([col, target]) => (
                 <div key={col} style={smallLine}>
-                  {col}: μ {fmt(t.mean)} · [{fmt(t.min)}, {fmt(t.max)}] · n=
-                  {t.count}
+                  {t.taskDatasetStats.target(
+                    col,
+                    fmt(target.mean),
+                    fmt(target.min),
+                    fmt(target.max),
+                    target.count,
+                  )}
                 </div>
               ))}
             </div>

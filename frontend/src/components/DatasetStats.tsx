@@ -6,6 +6,7 @@ import {
   type DatasetSamplesResponse,
   type DatasetStatsResponse,
 } from "../api/client";
+import { useT } from "../i18n/useT";
 
 interface DatasetStatsProps {
   baseDir: string;
@@ -18,14 +19,9 @@ interface DatasetStatsProps {
   onApplyClasses?: (numClasses: number, classNames: string[]) => void;
 }
 
-const SPLIT_LABELS: Record<string, string> = {
-  train: "treino",
-  val: "validação",
-  test: "teste",
-};
-
 /** Compact pre-training dataset overview: image counts + imbalance flag. */
 export function DatasetStats({ baseDir, trainDir, valDir, testDir, onApplyClasses }: DatasetStatsProps) {
+  const t = useT();
   const [stats, setStats] = useState<DatasetStatsResponse | null>(null);
   const [samples, setSamples] = useState<DatasetSamplesResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -36,11 +32,11 @@ export function DatasetStats({ baseDir, trainDir, valDir, testDir, onApplyClasse
   useEffect(() => {
     if (!baseDir.trim()) {
       // Defer the reset so it does not run synchronously in the effect body.
-      const t = setTimeout(() => {
+      const reset = setTimeout(() => {
         setStats(null);
         setSamples(null);
       }, 0);
-      return () => clearTimeout(t);
+      return () => clearTimeout(reset);
     }
     let alive = true;
     // Defer the loading flag out of the synchronous effect body; cleared in
@@ -100,7 +96,7 @@ export function DatasetStats({ baseDir, trainDir, valDir, testDir, onApplyClasse
           borderRadius: 10,
         }}
       >
-        Analisando dataset…
+        {t.datasetStats.analyzing}
       </div>
     );
   }
@@ -120,7 +116,7 @@ export function DatasetStats({ baseDir, trainDir, valDir, testDir, onApplyClasse
           borderRadius: 10,
         }}
       >
-        {stats.message ?? "Nenhuma classe encontrada."}
+        {stats.message ?? t.datasetStats.noClasses}
       </div>
     );
   }
@@ -156,7 +152,7 @@ export function DatasetStats({ baseDir, trainDir, valDir, testDir, onApplyClasse
             color: "var(--vf-text-muted)",
           }}
         >
-          mapeamento (ImageFolder):
+          {t.datasetStats.classMap}
         </span>
         {stats.class_names.map((cn, idx) => (
           <span
@@ -179,8 +175,8 @@ export function DatasetStats({ baseDir, trainDir, valDir, testDir, onApplyClasse
           <span
             title={
               stats.class_names.length === 2
-                ? "Detectado e aplicado ao config: task=binary, num_classes=1"
-                : `Detectado e aplicado ao config: task=multiclass, num_classes=${stats.class_names.length}`
+                ? t.datasetStats.appliedBinaryTitle
+                : t.datasetStats.appliedMulticlassTitle(stats.class_names.length)
             }
             style={{
               marginLeft: "auto",
@@ -195,7 +191,7 @@ export function DatasetStats({ baseDir, trainDir, valDir, testDir, onApplyClasse
               color: "oklch(0.85 0.16 150)",
             }}
           >
-            ✓ {stats.class_names.length === 2 ? "binary aplicado" : `multiclass · ${stats.class_names.length} aplicado`}
+            ✓ {stats.class_names.length === 2 ? t.datasetStats.appliedBinary : t.datasetStats.appliedMulticlass(stats.class_names.length)}
           </span>
         )}
       </div>
@@ -216,7 +212,7 @@ export function DatasetStats({ baseDir, trainDir, valDir, testDir, onApplyClasse
             color: "var(--vf-text-muted)",
           }}
         >
-          // distribuição do dataset
+          {t.datasetStats.distribution}
         </div>
         {stats.imbalanced && (
           <span
@@ -232,7 +228,7 @@ export function DatasetStats({ baseDir, trainDir, valDir, testDir, onApplyClasse
               textTransform: "uppercase",
             }}
           >
-            ⚠ desbalanceado
+            {t.datasetStats.imbalanced}
           </span>
         )}
       </div>
@@ -250,7 +246,7 @@ export function DatasetStats({ baseDir, trainDir, valDir, testDir, onApplyClasse
           return (
             <SplitCard
               key={splitKey}
-              label={SPLIT_LABELS[splitKey]}
+              label={t.datasetStats.splits[splitKey]}
               split={split}
               classNames={stats.class_names}
             />
@@ -278,7 +274,7 @@ export function DatasetStats({ baseDir, trainDir, valDir, testDir, onApplyClasse
               color: "var(--vf-text-muted)",
             }}
           >
-            // amostras (split: {samples.split}) — sanity-check de labels
+            {t.datasetStats.samples(samples.split)}
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {Object.entries(samples.samples).map(([cn, paths]) => (
@@ -297,6 +293,7 @@ interface ClassSampleRowProps {
 }
 
 function ClassSampleRow({ className, paths }: ClassSampleRowProps) {
+  const t = useT();
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
       <div
@@ -315,7 +312,7 @@ function ClassSampleRow({ className, paths }: ClassSampleRowProps) {
           <img
             key={p}
             src={datasetFileUrl(p)}
-            alt={`${className} sample`}
+            alt={t.datasetStats.sampleAlt(className)}
             title={p}
             style={{
               width: 56,
@@ -339,7 +336,7 @@ function ClassSampleRow({ className, paths }: ClassSampleRowProps) {
               opacity: 0.6,
             }}
           >
-            sem imagens
+            {t.datasetStats.noImages}
           </div>
         )}
       </div>
@@ -354,6 +351,7 @@ interface SplitCardProps {
 }
 
 function SplitCard({ label, split, classNames }: SplitCardProps) {
+  const t = useT();
   if (split.missing) {
     return (
       <div
@@ -384,7 +382,7 @@ function SplitCard({ label, split, classNames }: SplitCardProps) {
             color: "var(--vf-text-muted)",
           }}
         >
-          ausente
+          {t.datasetStats.missing}
         </div>
       </div>
     );

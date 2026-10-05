@@ -13,6 +13,7 @@ import {
 } from "../lib/dataset-download";
 import { SelectField, Segmented, TextField } from "./controls";
 import { CredentialField } from "./CredentialField";
+import { useT } from "../i18n/useT";
 
 const PROVIDERS: { value: DatasetProvider; label: string }[] = [
   { value: "torchvision", label: "torchvision" },
@@ -47,6 +48,7 @@ export function DatasetDownloadCard({
    * a collapse toggle would just hide the only thing on screen. */
   collapsible?: boolean;
 }) {
+  const t = useT();
   const [open, setOpen] = useState(!collapsible);
   const [form, setForm] = useState<DatasetDownloadForm>(makeDefaultDatasetForm());
   const [running, setRunning] = useState(false);
@@ -66,23 +68,23 @@ export function DatasetDownloadCard({
 
   const run = async () => {
     if (!form.dataset.trim() || !form.out_dir.trim()) {
-      setMsg({ kind: "error", text: "Informe o dataset e a pasta de saída." });
+      setMsg({ kind: "error", text: t.datasetDownload.needDatasetAndFolder });
       return;
     }
     setRunning(true);
     setResult(null);
-    setMsg({ kind: "info", text: "Baixando… (pode demorar)" });
+    setMsg({ kind: "info", text: t.datasetDownload.downloadingWait });
     try {
       const res = await datasetDownload(buildDatasetDownloadPayload(form));
       setResult(res);
       setMsg({
         kind: "success",
-        text: `${res.total_images} imagens em ${res.out_dir}`,
+        text: t.datasetDownload.done(res.total_images, res.out_dir),
       });
     } catch (e) {
       setMsg({
         kind: "error",
-        text: e instanceof Error ? e.message : "Falha no download.",
+        text: e instanceof Error ? e.message : t.datasetDownload.failed,
       });
     } finally {
       setRunning(false);
@@ -101,7 +103,7 @@ export function DatasetDownloadCard({
   return (
     <div style={card}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div style={sectionLabel}>Baixar dataset (online → pasta local)</div>
+        <div style={sectionLabel}>{t.datasetDownload.title}</div>
         {collapsible && (
           <button
             type="button"
@@ -122,7 +124,7 @@ export function DatasetDownloadCard({
               textTransform: "uppercase",
             }}
           >
-            {open ? "cancelar" : "+ baixar dataset"}
+            {open ? t.datasetDownload.cancel : t.datasetDownload.open}
           </button>
         )}
       </div>
@@ -131,7 +133,7 @@ export function DatasetDownloadCard({
         <>
           <div style={{ maxWidth: 360, marginTop: 14 }}>
             <Segmented
-              label="Provedor"
+              label={t.datasetDownload.provider}
               value={form.provider}
               // Trocar de provedor limpa o dataset: o campo guardava o
               // `cifar10` do torchvision e o mostrava como se fosse um
@@ -151,18 +153,18 @@ export function DatasetDownloadCard({
             {form.provider === "torchvision" ? (
               <>
                 <SelectField
-                  label="Dataset"
+                  label={t.datasetDownload.torchvision.dataset}
                   value={form.dataset}
                   onChange={(v) => set({ dataset: v })}
                   options={TORCHVISION_DATASETS}
-                  hint="built-in"
+                  hint={t.datasetDownload.torchvision.datasetHint}
                 />
                 <TextField
-                  label="Limite por classe"
+                  label={t.datasetDownload.torchvision.limit}
                   value={form.limit}
                   onChange={(v) => set({ limit: v })}
-                  placeholder="vazio = tudo"
-                  hint="opcional"
+                  placeholder={t.datasetDownload.torchvision.limitPlaceholder}
+                  hint={t.datasetDownload.torchvision.limitHint}
                   mono
                 />
               </>
@@ -171,14 +173,14 @@ export function DatasetDownloadCard({
                 {/* Sem `hint`: o rótulo já é longo, e numa coluna de 200px o
                     texto da dica quebrava por cima do campo vizinho. */}
                 <TextField
-                  label="Dataset ou URL"
+                  label={t.datasetDownload.roboflow.dataset}
                   value={form.dataset}
                   onChange={(v) => set({ dataset: v })}
-                  placeholder="workspace/projeto — ou cole a URL"
+                  placeholder={t.datasetDownload.roboflow.datasetPlaceholder}
                   mono
                 />
                 <TextField
-                  label="Versão"
+                  label={t.datasetDownload.roboflow.version}
                   value={form.version}
                   onChange={(v) => set({ version: v })}
                   placeholder="1"
@@ -186,47 +188,47 @@ export function DatasetDownloadCard({
                 />
                 <CredentialField
                   provider="roboflow"
-                  label="API key"
-                  hint="app.roboflow.com → Settings → API Keys"
+                  label={t.datasetDownload.roboflow.apiKey}
+                  hint={t.datasetDownload.roboflow.apiKeyHint}
                 />
                 <TextField
-                  label="Formato"
+                  label={t.datasetDownload.roboflow.format}
                   value={form.dataset_format}
                   onChange={(v) => set({ dataset_format: v })}
-                  placeholder="folder"
-                  hint="folder p/ classificação"
+                  placeholder={t.datasetDownload.roboflow.formatPlaceholder}
+                  hint={t.datasetDownload.roboflow.formatHint}
                   mono
                 />
               </>
             ) : form.provider === "kaggle" ? (
               <>
                 <TextField
-                  label="Dataset (owner/slug)"
+                  label={t.datasetDownload.kaggle.dataset}
                   value={form.dataset}
                   onChange={(v) => set({ dataset: v })}
-                  placeholder="zalando-research/fashionmnist"
+                  placeholder={t.datasetDownload.kaggle.datasetPlaceholder}
                   mono
                 />
                 <CredentialField
                   provider="kaggle"
-                  label="API token"
-                  placeholder="KGAT_…"
-                  hint="kaggle.com → Settings → API → Create New Token"
+                  label={t.datasetDownload.kaggle.token}
+                  placeholder={t.datasetDownload.kaggle.tokenPlaceholder}
+                  hint={t.datasetDownload.kaggle.tokenHint}
                 />
               </>
             ) : (
               <>
                 <TextField
-                  label="Dataset (id do HF Hub)"
+                  label={t.datasetDownload.huggingface.dataset}
                   value={form.dataset}
                   onChange={(v) => set({ dataset: v })}
-                  placeholder="owner/dataset"
+                  placeholder={t.datasetDownload.huggingface.datasetPlaceholder}
                   mono
                 />
                 <CredentialField
                   provider="huggingface"
-                  label="Token"
-                  hint="opcional — só para datasets privados"
+                  label={t.datasetDownload.huggingface.token}
+                  hint={t.datasetDownload.huggingface.tokenHint}
                 />
               </>
             )}
@@ -234,11 +236,11 @@ export function DatasetDownloadCard({
             <div style={{ gridColumn: "1 / -1", display: "flex", gap: 10, alignItems: "flex-end" }}>
               <div style={{ flex: 1 }}>
                 <TextField
-                  label="Pasta de saída"
+                  label={t.datasetDownload.outDir}
                   value={form.out_dir}
                   onChange={(v) => set({ out_dir: v })}
-                  placeholder="…/datasets/baixado"
-                  hint="onde gravar"
+                  placeholder={t.datasetDownload.outDirPlaceholder}
+                  hint={t.datasetDownload.outDirHint}
                   mono
                 />
               </div>
@@ -257,7 +259,7 @@ export function DatasetDownloadCard({
                   whiteSpace: "nowrap",
                 }}
               >
-                📁 Escolher
+                {t.datasetDownload.browse}
               </button>
             </div>
           </div>
@@ -281,7 +283,7 @@ export function DatasetDownloadCard({
               opacity: running ? 0.6 : 1,
             }}
           >
-            {running ? "Baixando…" : "▶ Baixar"}
+            {running ? t.datasetDownload.downloading : t.datasetDownload.download}
           </button>
 
           {msg && (
@@ -315,7 +317,7 @@ export function DatasetDownloadCard({
               {Object.entries(result.splits)
                 .map(([s, n]) => `${s}: ${n}`)
                 .join(" · ")}
-              {result.classes.length > 0 && ` · ${result.classes.length} classes`}
+              {result.classes.length > 0 && t.datasetDownload.classes(result.classes.length)}
             </div>
           )}
         </>

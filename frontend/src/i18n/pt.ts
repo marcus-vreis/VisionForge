@@ -980,6 +980,201 @@ export const pt = {
       normalDirHint: "label 0 (ex. good)",
     },
   },
+  // The one-shot dataset download (components/DatasetDownloadCard.tsx). Provider
+  // names, the Kaggle token format and the example dataset ids stay as they are
+  // in both languages; the sentences that carry them are whole strings.
+  datasetDownload: {
+    title: "Baixar dataset (online → pasta local)",
+    cancel: "cancelar",
+    open: "+ baixar dataset",
+    provider: "Provedor",
+    torchvision: {
+      dataset: "Dataset",
+      datasetHint: "built-in",
+      limit: "Limite por classe",
+      limitPlaceholder: "vazio = tudo",
+      limitHint: "opcional",
+    },
+    roboflow: {
+      dataset: "Dataset ou URL",
+      datasetPlaceholder: "workspace/projeto — ou cole a URL",
+      version: "Versão",
+      apiKey: "API key",
+      apiKeyHint: "app.roboflow.com → Settings → API Keys",
+      format: "Formato",
+      formatPlaceholder: "folder",
+      formatHint: "folder p/ classificação",
+    },
+    kaggle: {
+      dataset: "Dataset (owner/slug)",
+      datasetPlaceholder: "zalando-research/fashionmnist",
+      token: "API token",
+      tokenPlaceholder: "KGAT_…",
+      tokenHint: "kaggle.com → Settings → API → Create New Token",
+    },
+    huggingface: {
+      dataset: "Dataset (id do HF Hub)",
+      datasetPlaceholder: "owner/dataset",
+      token: "Token",
+      tokenHint: "opcional — só para datasets privados",
+    },
+    outDir: "Pasta de saída",
+    outDirPlaceholder: "…/datasets/baixado",
+    outDirHint: "onde gravar",
+    browse: "📁 Escolher",
+    download: "▶ Baixar",
+    downloading: "Baixando…",
+    needDatasetAndFolder: "Informe o dataset e a pasta de saída.",
+    downloadingWait: "Baixando… (pode demorar)",
+    done: (images: number, dir: string) => `${images} ${images === 1 ? "imagem" : "imagens"} em ${dir}`,
+    failed: "Falha no download.",
+    classes: (n: number) => ` · ${n} ${n === 1 ? "classe" : "classes"}`,
+  },
+  // A provider key you type once (components/CredentialField.tsx). The key
+  // itself is never shown: a saved one appears masked.
+  credentialField: {
+    typeFirst: "Digite a chave antes de salvar.",
+    saved: "Salva — não precisa digitar de novo.",
+    saveFailed: "Falha ao salvar.",
+    removed: "Chave removida deste computador.",
+    removeFailed: "Falha ao remover.",
+    savedPlaceholder: (masked: string) => `salva: ${masked}`,
+    savedHint: "deixe em branco para usar a salva",
+    replace: "↻ Substituir",
+    save: "💾 Salvar",
+    forget: "Esquecer",
+  },
+  // The dataset folder input with the split pickers (components/DatasetPicker.tsx).
+  datasetPicker: {
+    analyzing: "Analisando subpastas…",
+    detectFailed: "Falha ao detectar splits do dataset.",
+    opening: "Abrindo seletor nativo do sistema…",
+    cancelled: "Seleção cancelada.",
+    picked: (path: string) => `Pasta selecionada: ${path}`,
+    pickFailed: "Falha ao abrir o seletor de pastas.",
+    baseDir: "Diretório base do dataset",
+    baseDirPlaceholder: "ex: C:/datasets/coffee  ou  /home/user/data",
+    baseDirHint: "Pasta raiz que contém treino, validação e teste.",
+    browseTitle: "Abrir seletor nativo do sistema (retorna o caminho absoluto)",
+    browse: "📁 Escolher pasta",
+    trainSubdir: "Subpasta treino",
+    valSubdir: "Subpasta validação",
+    testSubdir: "Subpasta teste",
+    // A subfolder typed by hand that the auto-detection did not list.
+    manual: (value: string) => `${value} (manual)`,
+  },
+  // The pre-training overview of a classification dataset (components/DatasetStats.tsx).
+  // Its split names, "missing", the imbalance flag and the sample strip title are
+  // also used by the detection and task overviews below.
+  datasetStats: {
+    splits: {
+      train: "treino",
+      val: "validação",
+      test: "teste",
+    },
+    missing: "ausente",
+    imbalanced: "⚠ desbalanceado",
+    samples: (split: string) => `// amostras (split: ${split}) — sanity-check de labels`,
+    analyzing: "Analisando dataset…",
+    noClasses: "Nenhuma classe encontrada.",
+    classMap: "mapeamento (ImageFolder):",
+    appliedBinaryTitle: "Detectado e aplicado ao config: task=binary, num_classes=1",
+    appliedMulticlassTitle: (classes: number) =>
+      `Detectado e aplicado ao config: task=multiclass, num_classes=${classes}`,
+    appliedBinary: "binary aplicado",
+    appliedMulticlass: (classes: number) => `multiclass · ${classes} aplicado`,
+    distribution: "// distribuição do dataset",
+    sampleAlt: (className: string) => `${className} sample`,
+    noImages: "sem imagens",
+  },
+  // The YOLO dataset overview (components/DetectionDatasetStats.tsx).
+  detectionDatasetStats: {
+    noSplits: "Nenhum split YOLO encontrado (images/<split>).",
+    classMap: "mapeamento (YOLO):",
+    appliedTitle: (classes: number) => `Detectado e aplicado ao config: num_classes=${classes}`,
+    applied: (classes: number) => `${classes} classe(s) aplicada(s)`,
+    exampleAlt: (className: string, n: number) => `${className} — exemplo ${n}`,
+    distribution: "// distribuição de anotações (instâncias)",
+    layoutTitle: "Layout YOLO detectado neste split",
+    images: (n: number) => `${n} img`,
+    boxes: (n: number) => `${n} ${n === 1 ? "caixa" : "caixas"}`,
+    unlabeled: (n: number) => `${n} sem label`,
+  },
+  // The segmentation, anomaly and regression dataset overviews
+  // (components/TaskDatasetStats.tsx). Counts and column names come from the
+  // server; `ignore_index` and NEAREST are identifiers.
+  taskDatasetStats: {
+    interpolated: (ids: number) =>
+      `⚠ ${ids} ids distintos na amostra — as máscaras parecem interpoladas (anti-aliasing). Use máscaras com um id de classe por pixel (resample NEAREST).`,
+    maskIds: "ids nas máscaras (amostra):",
+    voidTitle: "provável ignore_index (void)",
+    applyClasses: (n: number) => `🎯 aplicar ${n} ${n === 1 ? "classe" : "classes"}`,
+    pairing: "// pareamento imagem ↔ máscara",
+    pairs: (n: number) => `${n} ${n === 1 ? "par" : "pares"}`,
+    pairCounts: (images: number, masks: number) => `${images} img · ${masks} másc`,
+    unpaired: (images: number, masks: number) =>
+      `⚠ ${images} img sem máscara · ${masks} másc sem img`,
+    anomalyKicker: "// distribuição normal vs. anômalo",
+    trainNormal: "treino (normal)",
+    testNormal: "teste · normal",
+    testAnomalous: "teste · anômalo",
+    images: (n: number) => `${n} img`,
+    missingTestDir: "pasta de teste ausente",
+    regressionKicker: "// manifest & distribuição dos alvos",
+    rows: (n: number) => `${n} ${n === 1 ? "linha" : "linhas"}`,
+    missingColumns: (columns: string) => `⚠ colunas ausentes: ${columns}`,
+    missingImages: (missing: number, checked: number) =>
+      `⚠ ${missing}/${checked} imagens não encontradas`,
+    // `μ` is the mean, `[min, max]` the range, `n` the number of values.
+    target: (column: string, mean: string, min: string, max: string, n: number) =>
+      `${column}: μ ${mean} · [${min}, ${max}] · n=${n}`,
+  },
+  // The preprocessing pipeline builder (components/PreprocessingPanel.tsx). The
+  // filter names (Gaussian blur, Unsharp mask…) are the same in every language.
+  preprocessing: {
+    needBaseDir: "Defina um diretório base antes de gerar preview.",
+    previewFailed: "Falha ao gerar preview.",
+    kicker: "// pré-processamento (filtros)",
+    active: (n: number) => `${n} filtro${n === 1 ? "" : "s"} ativo${n === 1 ? "" : "s"} no treino`,
+    activeTitle:
+      "Estes filtros serão aplicados durante o treino, antes de augmentation e normalização",
+    clearTitle: "Remover todos os filtros do pipeline",
+    clear: "limpar",
+    addFilter: "+ adicionar filtro",
+    generating: "Gerando…",
+    preview: "▶ Ver preview",
+    empty: 'Pipeline vazio — clique em "+ adicionar filtro".',
+    // Marks: **antes** is emphasised.
+    emptyNote:
+      "O pipeline configurado aqui roda **antes** de augmentation e normalização, em todos os splits (treino / val / teste).",
+    original: "Original",
+    final: "Final",
+    moveUp: "Mover para cima",
+    moveDown: "Mover para baixo",
+    remove: "Remover",
+  },
+  // The augmentation preview strip (components/AugmentPreview.tsx).
+  augmentPreview: {
+    needBaseDir: "Defina o diretório base do dataset primeiro.",
+    failed: "Falha ao gerar preview.",
+    generating: "Gerando…",
+    button: "🎲 preview de augmentation",
+    active: "ativos:",
+    noneActive: "nenhum aumento ativo — apenas resize",
+    original: "original",
+    variant: (n: number) => `variante ${n}`,
+  },
+  // Normalization and augmentation of the standalone task panels
+  // (components/TransformsSection.tsx). The field names are `paramPanel.fieldLabels`.
+  transforms: {
+    image: "Imagem",
+    normalizeHint: "R, G, B — aplicada a treino, validação e teste",
+    augmentation: "Data augmentation",
+    augmentToggle: "Augmentation",
+    augmentHint: "só no treino; desligada, os valores abaixo ficam guardados",
+    flipHint: "treino",
+    rotationHint: "0 = desliga",
+  },
 };
 
 export type Dict = typeof pt;

@@ -5,6 +5,8 @@ import {
   type PreprocessPreviewResponse,
 } from "../api/client";
 import { MenuSelect } from "./controls";
+import { Rich } from "./Rich";
+import { useT } from "../i18n/useT";
 
 export interface PreprocessingStep {
   kind: string;
@@ -61,6 +63,7 @@ export function PreprocessingPanel({
   steps,
   onChange,
 }: PreprocessingPanelProps) {
+  const t = useT();
   const [preview, setPreview] = useState<PreprocessPreviewResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -107,7 +110,7 @@ export function PreprocessingPanel({
 
   const runPreview = async () => {
     if (!baseDir.trim()) {
-      setError("Defina um diretório base antes de gerar preview.");
+      setError(t.preprocessing.needBaseDir);
       return;
     }
     setLoading(true);
@@ -122,7 +125,7 @@ export function PreprocessingPanel({
         setPreview(resp);
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Falha ao gerar preview.");
+      setError(e instanceof Error ? e.message : t.preprocessing.previewFailed);
       setPreview(null);
     } finally {
       setLoading(false);
@@ -161,11 +164,11 @@ export function PreprocessingPanel({
               color: "var(--vf-text-muted)",
             }}
           >
-            // pré-processamento (filtros)
+            {t.preprocessing.kicker}
           </div>
           {steps.length > 0 && (
             <span
-              title="Estes filtros serão aplicados durante o treino, antes de augmentation e normalização"
+              title={t.preprocessing.activeTitle}
               style={{
                 padding: "3px 9px",
                 fontFamily: "var(--font-mono)",
@@ -178,8 +181,7 @@ export function PreprocessingPanel({
                 borderRadius: 999,
               }}
             >
-              {steps.length} filtro{steps.length === 1 ? "" : "s"} ativo
-              {steps.length === 1 ? "" : "s"} no treino
+              {t.preprocessing.active(steps.length)}
             </span>
           )}
         </div>
@@ -188,7 +190,7 @@ export function PreprocessingPanel({
             <button
               type="button"
               onClick={clearSteps}
-              title="Remover todos os filtros do pipeline"
+              title={t.preprocessing.clearTitle}
               style={{
                 padding: "8px 12px",
                 background: "transparent",
@@ -202,12 +204,12 @@ export function PreprocessingPanel({
                 cursor: "pointer",
               }}
             >
-              limpar
+              {t.preprocessing.clear}
             </button>
           )}
           <MenuSelect
             value=""
-            placeholder="+ adicionar filtro"
+            placeholder={t.preprocessing.addFilter}
             onChange={(v) => addStep(v)}
             options={KNOWN_KINDS.map((k) => ({
               value: k,
@@ -232,7 +234,7 @@ export function PreprocessingPanel({
               opacity: loading || steps.length === 0 ? 0.5 : 1,
             }}
           >
-            {loading ? "Gerando…" : "▶ Ver preview"}
+            {loading ? t.preprocessing.generating : t.preprocessing.preview}
           </button>
         </div>
       </div>
@@ -250,10 +252,9 @@ export function PreprocessingPanel({
             lineHeight: 1.6,
           }}
         >
-          Pipeline vazio — clique em "+ adicionar filtro".
+          {t.preprocessing.empty}
           <div style={{ fontSize: 10, marginTop: 4, opacity: 0.7 }}>
-            O pipeline configurado aqui roda <strong>antes</strong> de augmentation
-            e normalização, em todos os splits (treino / val / teste).
+            <Rich text={t.preprocessing.emptyNote} />
           </div>
         </div>
       ) : (
@@ -297,7 +298,7 @@ export function PreprocessingPanel({
             gap: 10,
           }}
         >
-          <PreviewTile label="Original" artifact={preview.original} />
+          <PreviewTile label={t.preprocessing.original} artifact={preview.original} />
           {preview.steps.map((s, i) => (
             <PreviewTile
               key={`${s.kind}-${i}`}
@@ -306,7 +307,7 @@ export function PreprocessingPanel({
             />
           ))}
           {preview.steps.length > 0 && preview.final !== preview.steps[preview.steps.length - 1].artifact && (
-            <PreviewTile label="Final" artifact={preview.final} />
+            <PreviewTile label={t.preprocessing.final} artifact={preview.final} />
           )}
         </div>
       )}
@@ -333,6 +334,7 @@ function StepRow({
   onMoveDown,
   onParamChange,
 }: StepRowProps) {
+  const t = useT();
   return (
     <div
       style={{
@@ -411,7 +413,7 @@ function StepRow({
           type="button"
           onClick={onMoveUp}
           disabled={index === 0}
-          title="Mover para cima"
+          title={t.preprocessing.moveUp}
           style={btnIconStyle(index === 0)}
         >
           ↑
@@ -420,7 +422,7 @@ function StepRow({
           type="button"
           onClick={onMoveDown}
           disabled={index === total - 1}
-          title="Mover para baixo"
+          title={t.preprocessing.moveDown}
           style={btnIconStyle(index === total - 1)}
         >
           ↓
@@ -428,7 +430,7 @@ function StepRow({
         <button
           type="button"
           onClick={onRemove}
-          title="Remover"
+          title={t.preprocessing.remove}
           style={btnIconStyle(false)}
         >
           ×

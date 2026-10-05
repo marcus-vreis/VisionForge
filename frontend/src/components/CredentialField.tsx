@@ -6,6 +6,7 @@ import {
   type CredentialEntry,
 } from "../api/client";
 import { TextField } from "./controls";
+import { useT } from "../i18n/useT";
 
 interface CredentialFieldProps {
   provider: "roboflow" | "kaggle" | "huggingface";
@@ -33,6 +34,7 @@ export function CredentialField({
   placeholder,
   refreshToken = 0,
 }: CredentialFieldProps) {
+  const t = useT();
   const [value, setValue] = useState("");
   const [entry, setEntry] = useState<CredentialEntry | null>(null);
   const [busy, setBusy] = useState(false);
@@ -51,7 +53,7 @@ export function CredentialField({
 
   const save = async () => {
     if (!value.trim()) {
-      setFeedback({ kind: "error", text: "Digite a chave antes de salvar." });
+      setFeedback({ kind: "error", text: t.credentialField.typeFirst });
       return;
     }
     setBusy(true);
@@ -59,11 +61,11 @@ export function CredentialField({
       const r = await saveCredential(provider, value.trim());
       setEntry(r.providers[provider] ?? null);
       setValue("");
-      setFeedback({ kind: "ok", text: "Salva — não precisa digitar de novo." });
+      setFeedback({ kind: "ok", text: t.credentialField.saved });
     } catch (e) {
       setFeedback({
         kind: "error",
-        text: e instanceof Error ? e.message : "Falha ao salvar.",
+        text: e instanceof Error ? e.message : t.credentialField.saveFailed,
       });
     } finally {
       setBusy(false);
@@ -75,11 +77,11 @@ export function CredentialField({
     try {
       const r = await forgetCredential(provider);
       setEntry(r.providers[provider] ?? null);
-      setFeedback({ kind: "ok", text: "Chave removida deste computador." });
+      setFeedback({ kind: "ok", text: t.credentialField.removed });
     } catch (e) {
       setFeedback({
         kind: "error",
-        text: e instanceof Error ? e.message : "Falha ao remover.",
+        text: e instanceof Error ? e.message : t.credentialField.removeFailed,
       });
     } finally {
       setBusy(false);
@@ -94,8 +96,8 @@ export function CredentialField({
         label={label}
         value={value}
         onChange={setValue}
-        placeholder={saved ? `salva: ${entry?.masked}` : (placeholder ?? "")}
-        hint={saved ? "deixe em branco para usar a salva" : hint}
+        placeholder={saved ? t.credentialField.savedPlaceholder(entry?.masked ?? "") : (placeholder ?? "")}
+        hint={saved ? t.credentialField.savedHint : hint}
         mono
       />
       <div
@@ -125,7 +127,7 @@ export function CredentialField({
             opacity: busy ? 0.6 : 1,
           }}
         >
-          {saved ? "↻ Substituir" : "💾 Salvar"}
+          {saved ? t.credentialField.replace : t.credentialField.save}
         </button>
         {saved && (
           <button
@@ -145,7 +147,7 @@ export function CredentialField({
               cursor: busy ? "wait" : "pointer",
             }}
           >
-            Esquecer
+            {t.credentialField.forget}
           </button>
         )}
         {feedback && (

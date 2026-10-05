@@ -8,6 +8,7 @@ import {
   buildTransformsPayload,
   type TransformsForm,
 } from "../lib/transforms-form";
+import { useT } from "../i18n/useT";
 
 interface TransformsSectionProps {
   baseDir: string;
@@ -56,6 +57,7 @@ export function TransformsSection({
   onTransformsChange,
   imageSize,
 }: TransformsSectionProps) {
+  const t = useT();
   return (
     <>
       <div style={card}>
@@ -70,52 +72,52 @@ export function TransformsSection({
           alike, so it stays visible when augmentation is switched off. The old
           combined section said otherwise by putting them under one heading. */}
       <div style={card}>
-        <div style={sectionLabel}>Imagem</div>
+        <div style={sectionLabel}>{t.transforms.image}</div>
         <div style={grid}>
           <TextField
-            label="Normalização (média)"
+            label={t.paramPanel.fieldLabels.normalize_mean}
             value={transforms.normalize_mean}
             onChange={(v) => onTransformsChange({ normalize_mean: v })}
-            hint="R, G, B — aplicada a treino, validação e teste"
+            hint={t.transforms.normalizeHint}
           />
           <TextField
-            label="Normalização (std)"
+            label={t.paramPanel.fieldLabels.normalize_std}
             value={transforms.normalize_std}
             onChange={(v) => onTransformsChange({ normalize_std: v })}
-            hint="R, G, B — aplicada a treino, validação e teste"
+            hint={t.transforms.normalizeHint}
           />
         </div>
       </div>
 
       <div style={card}>
-        <div style={sectionLabel}>Data augmentation</div>
+        <div style={sectionLabel}>{t.transforms.augmentation}</div>
         <Toggle
-          label="Augmentation"
+          label={t.transforms.augmentToggle}
           value={transforms.augment}
           onChange={(v) => onTransformsChange({ augment: v })}
-          hint="só no treino; desligada, os valores abaixo ficam guardados"
+          hint={t.transforms.augmentHint}
         />
         {transforms.augment ? (
           <>
             <div style={{ ...grid, marginTop: 14 }}>
               <Toggle
-                label="Flip horizontal"
+                label={t.paramPanel.fieldLabels.horizontal_flip}
                 value={transforms.horizontal_flip}
                 onChange={(v) => onTransformsChange({ horizontal_flip: v })}
-                hint="treino"
+                hint={t.transforms.flipHint}
               />
               <NumberField
-                label="Rotação (graus)"
+                label={t.paramPanel.fieldLabels.rotation_degrees}
                 value={transforms.rotation_degrees}
                 onChange={(v) =>
                   onTransformsChange({ rotation_degrees: Math.max(Math.round(v), 0) })
                 }
                 min={0}
                 step={1}
-                hint="0 = desliga"
+                hint={t.transforms.rotationHint}
               />
               <Toggle
-                label="Color jitter"
+                label={t.paramPanel.fieldLabels.color_jitter}
                 value={transforms.color_jitter}
                 onChange={(v) => onTransformsChange({ color_jitter: v })}
               />
@@ -138,7 +140,7 @@ export function TransformsSection({
               color: "var(--vf-text-muted)",
             }}
           >
-            3 parâmetros ocultos — ligue para ajustar
+            {t.paramPanel.hiddenParams(3)}
           </div>
         )}
       </div>

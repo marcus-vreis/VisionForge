@@ -6,6 +6,7 @@ import {
   type DetectionDatasetStatsResponse,
   type DetectionSplitStats,
 } from "../api/client";
+import { useT } from "../i18n/useT";
 
 interface DetectionDatasetStatsProps {
   baseDir: string;
@@ -13,16 +14,11 @@ interface DetectionDatasetStatsProps {
   onApplyClasses?: (numClasses: number, classNames: string[]) => void;
 }
 
-const SPLIT_LABELS: Record<string, string> = {
-  train: "treino",
-  val: "validação",
-  test: "teste",
-};
-
 /** Pre-training overview for a YOLO dataset: image/instance counts per split,
  * per-class annotation distribution, unlabeled images, and imbalance flag.
  * The detection analogue of `DatasetStats` (which assumes ImageFolder). */
 export function DetectionDatasetStats({ baseDir, onApplyClasses }: DetectionDatasetStatsProps) {
+  const t = useT();
   const [stats, setStats] = useState<DetectionDatasetStatsResponse | null>(null);
   const [samples, setSamples] = useState<DetectionDatasetSamplesResponse | null>(
     null,
@@ -89,7 +85,7 @@ export function DetectionDatasetStats({ baseDir, onApplyClasses }: DetectionData
           borderRadius: 10,
         }}
       >
-        {stats.message ?? "Nenhum split YOLO encontrado (images/<split>)."}
+        {stats.message ?? t.detectionDatasetStats.noSplits}
       </div>
     );
   }
@@ -118,7 +114,7 @@ export function DetectionDatasetStats({ baseDir, onApplyClasses }: DetectionData
             color: "var(--vf-text-muted)",
           }}
         >
-          mapeamento (YOLO):
+          {t.detectionDatasetStats.classMap}
         </span>
         {stats.class_names.map((cn, idx) => (
           <span
@@ -139,7 +135,7 @@ export function DetectionDatasetStats({ baseDir, onApplyClasses }: DetectionData
         ))}
         {onApplyClasses && stats.class_names.length > 0 && (
           <span
-            title={`Detectado e aplicado ao config: num_classes=${stats.class_names.length}`}
+            title={t.detectionDatasetStats.appliedTitle(stats.class_names.length)}
             style={{
               marginLeft: "auto",
               padding: "3px 9px",
@@ -153,7 +149,7 @@ export function DetectionDatasetStats({ baseDir, onApplyClasses }: DetectionData
               color: "oklch(0.85 0.16 150)",
             }}
           >
-            ✓ {stats.class_names.length} classe(s) aplicada(s)
+            ✓ {t.detectionDatasetStats.applied(stats.class_names.length)}
           </span>
         )}
       </div>
@@ -170,7 +166,7 @@ export function DetectionDatasetStats({ baseDir, onApplyClasses }: DetectionData
               marginBottom: 10,
             }}
           >
-            // amostras (split: {samples.split}) — sanity-check de labels
+            {t.datasetStats.samples(samples.split)}
           </div>
           {Object.entries(samples.crops).map(([cn, uris]) => (
             <div
@@ -191,7 +187,7 @@ export function DetectionDatasetStats({ baseDir, onApplyClasses }: DetectionData
                 <img
                   key={i}
                   src={uri}
-                  alt={`${cn} — exemplo ${i + 1}`}
+                  alt={t.detectionDatasetStats.exampleAlt(cn, i + 1)}
                   style={{
                     height: 56,
                     borderRadius: 6,
@@ -214,7 +210,7 @@ export function DetectionDatasetStats({ baseDir, onApplyClasses }: DetectionData
             color: "var(--vf-text-muted)",
           }}
         >
-          // distribuição de anotações (instâncias)
+          {t.detectionDatasetStats.distribution}
         </div>
         {stats.imbalanced && (
           <span
@@ -230,7 +226,7 @@ export function DetectionDatasetStats({ baseDir, onApplyClasses }: DetectionData
               textTransform: "uppercase",
             }}
           >
-            ⚠ desbalanceado
+            {t.datasetStats.imbalanced}
           </span>
         )}
       </div>
@@ -242,7 +238,7 @@ export function DetectionDatasetStats({ baseDir, onApplyClasses }: DetectionData
           return (
             <DetectionSplitCard
               key={splitKey}
-              label={SPLIT_LABELS[splitKey]}
+              label={t.datasetStats.splits[splitKey]}
               split={split}
               classNames={stats.class_names}
             />
@@ -261,6 +257,7 @@ interface DetectionSplitCardProps {
 
 /** The resolved layout, so a half-converted dataset is caught before the GPU. */
 function ResolvedLayout({ split }: { split: DetectionSplitStats }) {
+  const t = useT();
   if (!split.images_dir || !split.labels_dir) return null;
   return (
     <div
@@ -270,7 +267,7 @@ function ResolvedLayout({ split }: { split: DetectionSplitStats }) {
         color: "var(--vf-text-muted)",
         marginTop: 4,
       }}
-      title="Layout YOLO detectado neste split"
+      title={t.detectionDatasetStats.layoutTitle}
     >
       {split.images_dir} · {split.labels_dir}
     </div>
@@ -278,6 +275,7 @@ function ResolvedLayout({ split }: { split: DetectionSplitStats }) {
 }
 
 function DetectionSplitCard({ label, split, classNames }: DetectionSplitCardProps) {
+  const t = useT();
   if (split.missing) {
     return (
       <div
@@ -308,7 +306,7 @@ function DetectionSplitCard({ label, split, classNames }: DetectionSplitCardProp
             color: "var(--vf-text-muted)",
           }}
         >
-          ausente
+          {t.datasetStats.missing}
         </div>
       </div>
     );
@@ -347,7 +345,7 @@ function DetectionSplitCard({ label, split, classNames }: DetectionSplitCardProp
             color: "var(--vf-text)",
           }}
         >
-          {split.total_images} img
+          {t.detectionDatasetStats.images(split.total_images)}
         </span>
       </div>
       <ResolvedLayout split={split} />
@@ -360,10 +358,10 @@ function DetectionSplitCard({ label, split, classNames }: DetectionSplitCardProp
           justifyContent: "space-between",
         }}
       >
-        <span>{totalAnn} caixas</span>
+        <span>{t.detectionDatasetStats.boxes(totalAnn)}</span>
         {split.unlabeled_images > 0 && (
           <span style={{ color: "oklch(0.85 0.14 75)" }}>
-            {split.unlabeled_images} sem label
+            {t.detectionDatasetStats.unlabeled(split.unlabeled_images)}
           </span>
         )}
       </div>
