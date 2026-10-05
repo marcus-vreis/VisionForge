@@ -332,8 +332,7 @@ export const en: Dict = {
   runDetail: {
     back: "← history",
     loading: "loading…",
-    loadFailed: "Failed to load details.",
-    cancel: "cancel",
+    loadFailed: "Failed to load run details.",
     browse: "📁 Browse",
     copy: "copy",
     copyPath: "Copy path",
@@ -341,11 +340,11 @@ export const en: Dict = {
     resume: {
       button: "▶ resume",
       title: (done: number, total: number) =>
-        `Continue from epoch ${done} to ${total}, in the same folder`,
-      titleNoTotal: "Continue this run in the same folder",
-      queuing: "Queuing the continuation…",
-      running: "Continuing this run — follow it in the training panel.",
-      queued: "Queued: starts when the current training finishes.",
+        `Resume from epoch ${done} up to ${total} in the same folder`,
+      titleNoTotal: "Resume this run in the same folder",
+      queuing: "Queuing the run to resume…",
+      running: "Resuming this run — follow it in the training panel.",
+      queued: "Queued: starts when the current run finishes.",
       failed: "Failed to resume.",
     },
     modelCard: {
@@ -353,10 +352,10 @@ export const en: Dict = {
       title: "Download this run's model card (markdown)",
     },
     picker: {
-      opening: "Opening the picker…",
+      opening: "Opening the folder picker…",
       cancelled: "Cancelled.",
       picked: (path: string) => `Folder: ${path}`,
-      failed: "Failed to pick the folder.",
+      failed: "Failed to open the folder picker.",
     },
     dataset: {
       title: "Dataset",
@@ -380,14 +379,14 @@ export const en: Dict = {
       transferLearning: "transfer learning",
     },
     pipeline: {
-      title: "Pipeline applied (preprocessing + augmentation)",
-      preprocessing: "// preprocessing (order)",
+      title: "Applied pipeline (preprocessing + augmentation)",
+      preprocessing: "// preprocessing (in order)",
       augmentation: "// augmentation & normalize",
     },
     onnx: {
       title: "Export to ONNX",
       open: "↗ export onnx",
-      hint: "Converts the checkpoint to ONNX, checks the numeric diff against PyTorch and measures inference latency. The file is saved next to the checkpoint as",
+      hint: "Converts the checkpoint to ONNX, checks its outputs against PyTorch for numerical differences and measures inference latency. The file is saved next to the checkpoint as",
       file: "best_model.onnx",
       opsetVersion: "opset_version",
       benchmarkRuns: "benchmark_runs",
@@ -416,7 +415,7 @@ export const en: Dict = {
       recursive: "recursive (subfolders)",
       run: "▶ Run inference",
       running: "Processing…",
-      hint: "Runs the checkpoint over a folder of images and writes a CSV with one row per image (probabilities + predicted class). Useful for classifying batches of new data without retraining.",
+      hint: "Runs the checkpoint over a folder of images and writes a CSV with one row per image and the model's output for the task (class and probabilities, predicted values or anomaly score). Useful for processing batches of new data without retraining.",
       needFolder: "Enter the image folder for inference.",
       starting: "Running batch inference…",
       done: (ok: number, csv: string) =>
@@ -435,14 +434,14 @@ export const en: Dict = {
       title: "Grad-CAM (explainability)",
       open: "🔥 Grad-CAM",
       folderPlaceholder: "e.g. C:/datasets/samples",
-      samples: "Samples (1–64)",
+      samples: "Number of samples (1–64)",
       run: "▶ Generate Grad-CAM",
       running: "Generating…",
-      hint: "Generates Grad-CAM heatmaps over sample images, highlighting the regions that most influenced the class the checkpoint predicted. Useful for interpreting what the model learned.",
+      hint: "Generates Grad-CAM heatmaps over sample images, highlighting the regions that most influenced the model's output (the predicted class, the predicted value or the segmented class, depending on the task). Useful for interpreting what the model learned.",
       needFolder: "Enter the image folder.",
       starting: "Generating Grad-CAM maps…",
       done: (count: number, layer: string) =>
-        `${count} ${count === 1 ? "map" : "maps"} generated · layer ${layer}`,
+        `${count} ${count === 1 ? "map" : "maps"} generated · target layer: ${layer}`,
       failed: "Failed to generate Grad-CAM.",
       classNumber: (n: number) => `class ${n}`,
       predictedIs: (label: string) => `predicted: ${label}`,
@@ -461,10 +460,10 @@ export const en: Dict = {
       },
       onTestSet: (name: string) => `${name} (test)`,
       ciTooltip: (percent: number, resamples: number, samples: number) =>
-        `${percent}% CI by percentile bootstrap: ` +
-        `${resamples} resamples of the ${samples} test images. ` +
-        `Measures the sampling noise of the split with this model ` +
-        `held fixed — not the variation between training runs.`,
+        `${percent}% CI (percentile bootstrap): ` +
+        `${resamples} resamples of the ${samples} test ${samples === 1 ? "image" : "images"}. ` +
+        `Captures the sampling uncertainty of the test split with this model ` +
+        `held fixed — not the variation across training runs.`,
     },
     graphs: {
       title: "Plots (click to expand)",
@@ -478,10 +477,10 @@ export const en: Dict = {
         "results.png": "Results (loss + mAP)",
         "BoxPR_curve.png": "Precision-Recall curve (box)",
         "BoxF1_curve.png": "F1 curve (box)",
-        "auroc.png": "AUROC per epoch",
+        "auroc.png": "AUROC over epochs",
         "BoxP_curve.png": "Precision curve (box)",
         "BoxR_curve.png": "Recall curve (box)",
-        "val_batch0_pred.jpg": "Predictions on validation",
+        "val_batch0_pred.jpg": "Validation batch predictions",
         "pred_vs_true.png": "Predicted vs actual",
         "residuals.png": "Residual distribution",
         "iou_per_class.png": "IoU per class",
@@ -501,19 +500,19 @@ export const en: Dict = {
         segmentation:
           "A folder with an images subfolder and a masks subfolder, paired by file name.",
         anomaly:
-          "A folder with a subfolder of normal images and one of defect images, as in training.",
+          "A folder with the normal-images subfolder plus one or more defect subfolders, as in training.",
         regression:
-          "The .csv with the image column and the target column(s). Images are read from the same folder as in training.",
+          "The .csv with the image column and the target column(s). Image paths are resolved against the images subfolder next to the .csv, as in training.",
         classification: "A folder with one subfolder per class — the same convention as training.",
       },
-      label: "Label (optional)",
+      label: "Name (optional)",
       labelPlaceholder: "e.g. holdout_2026",
       run: "▶ Run test",
       running: "Evaluating…",
-      needFolder: "Enter the base directory of the test dataset.",
+      needFolder: "Enter the test folder or .csv manifest.",
       starting: "Evaluating the model on the new dataset…",
       recorded: (id: string) => `Test recorded: ${id}`,
-      failed: "Test failed.",
+      failed: "Couldn't run the test.",
     },
     cv: {
       title: (ok: number, total: number, failed: number) =>

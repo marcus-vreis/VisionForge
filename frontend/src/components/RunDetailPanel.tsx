@@ -97,6 +97,7 @@ function getConfigRecord(
 
 export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
   const t = useT();
+  const graphLabels: Record<string, string> = t.runDetail.graphs.labels;
   const [detail, setDetail] = useState<RunDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -598,7 +599,7 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
                     textTransform: "uppercase",
                   }}
                 >
-                  {showExportForm ? t.runDetail.cancel : t.runDetail.onnx.open}
+                  {showExportForm ? t.common.cancel : t.runDetail.onnx.open}
                 </button>
               }
             >
@@ -768,7 +769,7 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
                     textTransform: "uppercase",
                   }}
                 >
-                  {showBatchForm ? t.runDetail.cancel : t.runDetail.batch.open}
+                  {showBatchForm ? t.common.cancel : t.runDetail.batch.open}
                 </button>
               }
             >
@@ -904,7 +905,7 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
                     textTransform: "uppercase",
                   }}
                 >
-                  {showGradcamForm ? t.runDetail.cancel : t.runDetail.gradcam.open}
+                  {showGradcamForm ? t.common.cancel : t.runDetail.gradcam.open}
                 </button>
               }
             >
@@ -1093,7 +1094,6 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
               >
                 {detail.artifacts.graphics.map((g) => {
                   const filename = g.replace(/\\/g, "/").split("/").pop() ?? g;
-                  const graphLabels: Record<string, string> = t.runDetail.graphs.labels;
                   const label = graphLabels[filename] ?? filename;
                   const url = artifactUrl(g);
                   return (
@@ -1165,7 +1165,7 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
                   textTransform: "uppercase",
                 }}
               >
-                {showTestForm ? t.runDetail.cancel : t.runDetail.tests.open}
+                {showTestForm ? t.common.cancel : t.runDetail.tests.open}
               </button>
             }
           >
