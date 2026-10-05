@@ -1,38 +1,16 @@
 import { useState } from "react";
 import { artifactUrl, downloadRunMarkdown } from "../api/client";
+import { useT } from "../i18n/useT";
 import { metricCi } from "../lib/metric-ci";
 import type { MetricCI, RunResult } from "../types/run";
 import { Lightbox } from "./Lightbox";
+import { Rich } from "./Rich";
 
 interface ResultsViewProps {
   result: RunResult;
   onClose: () => void;
   taskAccent: string;
 }
-
-/** Plot file naming convention from the backend — kept in sync with
- * MetricsPlotter so users see human labels instead of raw filenames. */
-const GRAPH_LABELS: Record<string, string> = {
-  "loss.png": "Loss (train + val)",
-  "accuracy.png": "Accuracy (train + val)",
-  "confusion_matrix.png": "Matriz de confusão",
-  "confusion_matrix_normalized.png": "Matriz de confusão (normalizada)",
-  "roc_curve.png": "Curva ROC",
-  "precision_recall_curve.png": "Curva Precision-Recall",
-  // Detection (Ultralytics) plot names.
-  "results.png": "Curvas de treino (Ultralytics)",
-  "BoxPR_curve.png": "Curva Precision-Recall (box)",
-  "BoxF1_curve.png": "Curva F1 (box)",
-  // Test-set diagnostics per task (ADR-077).
-  "auroc.png": "AUROC por época",
-  "BoxP_curve.png": "Curva Precision (box)",
-  "BoxR_curve.png": "Curva Recall (box)",
-  "val_batch0_pred.jpg": "Predições na validação",
-  "pred_vs_true.png": "Predito vs real",
-  "residuals.png": "Distribuição dos resíduos",
-  "iou_per_class.png": "IoU por classe",
-  "score_histogram.png": "Escores: normal vs defeito",
-};
 
 /** Format metric values for display. */
 function formatMetric(value: unknown): string {
@@ -42,24 +20,6 @@ function formatMetric(value: unknown): string {
   }
   return String(value);
 }
-
-/** Human-readable metric labels. */
-const METRIC_LABELS: Record<string, string> = {
-  best_val_loss: "Best Val Loss",
-  best_epoch: "Best Epoch",
-  total_epochs: "Total Epochs",
-  test_accuracy: "Accuracy",
-  test_f1: "F1 Score",
-  test_precision: "Precision",
-  test_recall: "Recall",
-  test_auc_roc: "AUC-ROC",
-  // Detection metrics.
-  map50: "mAP@50",
-  map50_95: "mAP@50-95",
-  precision: "Precision (box)",
-  recall: "Recall (box)",
-  box_loss: "Box loss (val)",
-};
 
 interface MetricCardProps {
   label: string;
@@ -72,14 +32,14 @@ interface MetricCardProps {
 
 /** `0.7294 – 0.7713` under the value, with the split size it was resampled from. */
 function CiFootnote({ ci }: { ci: MetricCI }) {
+  const t = useT();
   return (
     <div
-      title={
-        `IC ${Math.round(ci.confidence * 100)}% por bootstrap percentil: ` +
-        `${ci.n_resamples} reamostragens das ${ci.n_samples} imagens de teste. ` +
-        `Mede o ruído de amostragem do split com este modelo fixo — não a ` +
-        `variação entre treinos, que réplicas com várias seeds medem.`
-      }
+      title={t.resultsView.ciTooltip(
+        Math.round(ci.confidence * 100),
+        ci.n_resamples,
+        ci.n_samples,
+      )}
       style={{
         marginTop: 4,
         fontFamily: "var(--font-mono)",
@@ -151,6 +111,7 @@ function MetricCard({ label, value, accent, highlight, ci }: MetricCardProps) {
 
 /** Results sheet that slides up over the param panel. */
 export function ResultsView({ result, onClose, taskAccent }: ResultsViewProps) {
+  const t = useT();
   const graphics = result.artifacts?.graphics ?? [];
   const metricsEntries = Object.entries(result.metrics);
   const [lightbox, setLightbox] = useState<{ src: string; caption: string } | null>(null);
@@ -196,7 +157,7 @@ export function ResultsView({ result, onClose, taskAccent }: ResultsViewProps) {
               marginBottom: 6,
             }}
           >
-            // resultados
+            {t.resultsView.title}
           </div>
           <div
             style={{
@@ -212,7 +173,7 @@ export function ResultsView({ result, onClose, taskAccent }: ResultsViewProps) {
         <button
           type="button"
           onClick={() => void downloadRunMarkdown(result.run_id)}
-          title="Baixar model card (markdown) deste run"
+          title={t.resultsView.modelCard.title}
           style={{
             padding: "8px 14px",
             background: "var(--accent-soft)",
@@ -226,7 +187,7 @@ export function ResultsView({ result, onClose, taskAccent }: ResultsViewProps) {
             cursor: "pointer",
           }}
         >
-          ↓ markdown
+          {t.resultsView.modelCard.button}
         </button>
         <button
           type="button"
@@ -263,7 +224,7 @@ export function ResultsView({ result, onClose, taskAccent }: ResultsViewProps) {
           {metricsEntries.map(([key, value]) => (
             <MetricCard
               key={key}
-              label={METRIC_LABELS[key] ?? key}
+              label={(t.resultsView.metricLabels as Record<string, string>)[key] ?? key}
               value={formatMetric(value)}
               accent={taskAccent}
               highlight={key === highlightKey}
@@ -286,7 +247,7 @@ export function ResultsView({ result, onClose, taskAccent }: ResultsViewProps) {
               marginBottom: 14,
             }}
           >
-            // gráficos · clique para expandir
+            {t.resultsView.graphsTitle}
           </div>
           <div
             style={{
@@ -297,7 +258,8 @@ export function ResultsView({ result, onClose, taskAccent }: ResultsViewProps) {
           >
             {graphics.map((path, idx) => {
               const filename = path.replace(/\\/g, "/").split("/").pop() ?? path;
-              const label = GRAPH_LABELS[filename] ?? filename;
+              const label =
+                (t.resultsView.graphLabels as Record<string, string>)[filename] ?? filename;
               const url = artifactUrl(path);
               return (
                 <button
@@ -374,7 +336,7 @@ export function ResultsView({ result, onClose, taskAccent }: ResultsViewProps) {
                 marginBottom: 14,
               }}
             >
-              // report
+              {t.resultsView.reportTitle}
             </div>
             <pre
               style={{
@@ -430,6 +392,7 @@ function CrossValidationReport({
   report: Record<string, unknown>;
   accent: string;
 }) {
+  const t = useT();
   const folds = (report["fold_results"] as FoldRecord[]) ?? [];
   const meanAcc = report["mean_accuracy"] as number;
   const stdAcc = report["std_accuracy"] as number;
@@ -450,8 +413,7 @@ function CrossValidationReport({
           color: "var(--vf-text-muted)",
         }}
       >
-        // k-fold cross-validation · {successful.length}/{folds.length} folds ok
-        {failed.length > 0 ? ` · ${failed.length} falharam` : ""}
+        {t.resultsView.cv.title(successful.length, folds.length, failed.length)}
       </div>
 
       {/* Headline: mean ± std for accuracy and F1 */}
@@ -463,14 +425,14 @@ function CrossValidationReport({
         }}
       >
         <AggregateCard
-          label="Acurácia (média ± std)"
+          label={t.resultsView.cv.accuracyMeanStd}
           mean={meanAcc}
           std={stdAcc}
           accent={accent}
           highlight
         />
         <AggregateCard
-          label="F1 (média ± std)"
+          label={t.resultsView.cv.f1MeanStd}
           mean={meanF1}
           std={stdF1}
           accent={accent}
@@ -497,13 +459,13 @@ function CrossValidationReport({
         >
           <thead>
             <tr>
-              <th style={cvThStyle}>Fold</th>
-              <th style={cvThStyle}>train_size</th>
-              <th style={cvThStyle}>val_size</th>
-              <th style={cvThStyle}>val_loss</th>
-              <th style={cvThStyle}>accuracy</th>
+              <th style={cvThStyle}>{t.resultsView.cv.fold}</th>
+              <th style={cvThStyle}>{t.resultsView.cv.trainSize}</th>
+              <th style={cvThStyle}>{t.resultsView.cv.valSize}</th>
+              <th style={cvThStyle}>{t.resultsView.cv.valLoss}</th>
+              <th style={cvThStyle}>{t.resultsView.cv.accuracy}</th>
               <th style={cvThStyle}>F1</th>
-              <th style={cvThStyle}>status</th>
+              <th style={cvThStyle}>{t.resultsView.cols.status}</th>
             </tr>
           </thead>
           <tbody>
@@ -624,6 +586,7 @@ function TaskCvReport({
   report: Record<string, unknown>;
   accent: string;
 }) {
+  const t = useT();
   const folds = (report["fold_results"] as TaskCvFoldRow[]) ?? [];
   const aggregate =
     (report["aggregate"] as Record<string, { mean: number; std: number }>) ?? {};
@@ -644,7 +607,7 @@ function TaskCvReport({
           color: "var(--vf-text-muted)",
         }}
       >
-        // k-fold · {ok}/{nFolds} folds ok · destaque {metric}
+        {t.resultsView.taskCv.title(ok, nFolds, metric)}
       </div>
 
       {headline && (
@@ -662,7 +625,7 @@ function TaskCvReport({
           {metric} = <span style={{ color: accent }}>{formatMetric(headline.mean)}</span>
           <span style={{ color: "var(--vf-text-dim)" }}> ± {formatMetric(headline.std)}</span>
           <span style={{ fontSize: 11, color: "var(--vf-text-muted)", marginLeft: 10 }}>
-            média ± desvio sobre os folds
+            {t.resultsView.taskCv.meanStd}
           </span>
         </div>
       )}
@@ -686,14 +649,14 @@ function TaskCvReport({
         >
           <thead>
             <tr>
-              <th style={cvThStyle}>fold</th>
+              <th style={cvThStyle}>{t.resultsView.taskCv.fold}</th>
               {metricKeys.map((k) => (
                 <th key={k} style={cvThStyle}>
                   {k}
                 </th>
               ))}
-              <th style={cvThStyle}>treino/val</th>
-              <th style={cvThStyle}>status</th>
+              <th style={cvThStyle}>{t.resultsView.taskCv.trainVal}</th>
+              <th style={cvThStyle}>{t.resultsView.cols.status}</th>
             </tr>
           </thead>
           <tbody>
@@ -714,7 +677,9 @@ function TaskCvReport({
                     color: f.status === "success" ? "var(--vf-text)" : "oklch(0.72 0.19 22)",
                   }}
                 >
-                  {f.status === "success" ? "ok" : `falhou · ${f.error}`}
+                  {f.status === "success"
+                    ? t.resultsView.outcome.ok
+                    : t.resultsView.outcome.failed(f.error)}
                 </td>
               </tr>
             ))}
@@ -774,6 +739,7 @@ function ReplicatesReport({
   report: Record<string, unknown>;
   accent: string;
 }) {
+  const t = useT();
   const trials = (report["trials"] as ReplicateTrialRow[]) ?? [];
   const metric = report["metric"] as string;
   const aggregates =
@@ -798,7 +764,7 @@ function ReplicatesReport({
           color: "var(--vf-text-muted)",
         }}
       >
-        // réplicas multi-seed · {ok}/{total} seeds ok · destaque {metric}
+        {t.resultsView.replicates.title(ok, total, metric)}
       </div>
 
       {headline && (
@@ -820,7 +786,7 @@ function ReplicatesReport({
               marginBottom: 8,
             }}
           >
-            🎯 resultado citável
+            {t.resultsView.replicates.citable}
           </div>
           <div style={{ fontSize: 20, color: "var(--vf-text)" }}>
             {metric} = <span style={{ color: accent }}>{formatMetric(headline.mean)}</span>
@@ -828,7 +794,7 @@ function ReplicatesReport({
               <span style={{ color: "var(--vf-text-dim)" }}> ± {formatMetric(ciHalf)}</span>
             )}
             <span style={{ fontSize: 11, color: "var(--vf-text-muted)", marginLeft: 10 }}>
-              {ciHalf !== null ? "IC 95% · " : ""}n={headline.n}
+              {t.resultsView.replicates.headlineMeta(ciHalf !== null, headline.n)}
             </span>
           </div>
         </div>
@@ -853,13 +819,13 @@ function ReplicatesReport({
         >
           <thead>
             <tr>
-              <th style={cvThStyle}>métrica</th>
-              <th style={cvThStyle}>n</th>
-              <th style={cvThStyle}>média</th>
-              <th style={cvThStyle}>desvio</th>
-              <th style={cvThStyle}>min</th>
-              <th style={cvThStyle}>max</th>
-              <th style={cvThStyle}>IC 95%</th>
+              <th style={cvThStyle}>{t.resultsView.replicates.metric}</th>
+              <th style={cvThStyle}>{t.resultsView.replicates.n}</th>
+              <th style={cvThStyle}>{t.resultsView.replicates.mean}</th>
+              <th style={cvThStyle}>{t.resultsView.replicates.std}</th>
+              <th style={cvThStyle}>{t.resultsView.replicates.min}</th>
+              <th style={cvThStyle}>{t.resultsView.replicates.max}</th>
+              <th style={cvThStyle}>{t.resultsView.replicates.ci}</th>
             </tr>
           </thead>
           <tbody>
@@ -909,27 +875,29 @@ function ReplicatesReport({
         >
           <thead>
             <tr>
-              <th style={cvThStyle}>seed</th>
+              <th style={cvThStyle}>{t.resultsView.cols.seed}</th>
               <th style={cvThStyle}>{metric}</th>
-              <th style={cvThStyle}>tempo (s)</th>
-              <th style={cvThStyle}>status</th>
+              <th style={cvThStyle}>{t.resultsView.cols.time}</th>
+              <th style={cvThStyle}>{t.resultsView.cols.status}</th>
             </tr>
           </thead>
           <tbody>
-            {trials.map((t) => (
-              <tr key={t.seed}>
-                <td style={cvTdLabelStyle}>{t.seed}</td>
-                <td style={cvTdStyle}>{formatMetric(t.metrics?.[metric])}</td>
+            {trials.map((trial) => (
+              <tr key={trial.seed}>
+                <td style={cvTdLabelStyle}>{trial.seed}</td>
+                <td style={cvTdStyle}>{formatMetric(trial.metrics?.[metric])}</td>
                 <td style={cvTdStyle}>
-                  {t.training_time_s === null ? "—" : t.training_time_s.toFixed(1)}
+                  {trial.training_time_s === null ? "—" : trial.training_time_s.toFixed(1)}
                 </td>
                 <td
                   style={{
                     ...cvTdStyle,
-                    color: t.status === "success" ? "var(--vf-text)" : "oklch(0.72 0.19 22)",
+                    color: trial.status === "success" ? "var(--vf-text)" : "oklch(0.72 0.19 22)",
                   }}
                 >
-                  {t.status === "success" ? "ok" : `falhou · ${t.error}`}
+                  {trial.status === "success"
+                    ? t.resultsView.outcome.ok
+                    : t.resultsView.outcome.failed(trial.error)}
                 </td>
               </tr>
             ))}
@@ -967,14 +935,15 @@ function TaskComparisonReport({
   report: Record<string, unknown>;
   accent: string;
 }) {
+  const t = useT();
   const trials = (report["trials"] as TaskComparisonTrial[]) ?? [];
   const metric = report["metric"] as string;
   const totalRan = report["total_ran"] as number;
   const failedCount = report["failed_count"] as number;
 
-  const successful = trials.filter((t) => t.status === "success");
+  const successful = trials.filter((trial) => trial.status === "success");
   const otherKeys = Array.from(
-    new Set(successful.flatMap((t) => Object.keys(t.metrics ?? {}))),
+    new Set(successful.flatMap((trial) => Object.keys(trial.metrics ?? {}))),
   ).filter((k) => k !== metric);
   const metricCols = [metric, ...otherKeys];
 
@@ -989,8 +958,7 @@ function TaskComparisonReport({
           color: "var(--vf-text-muted)",
         }}
       >
-        // comparação de arquiteturas · {totalRan - failedCount}/{totalRan} ok
-        {failedCount > 0 ? ` · ${failedCount} falharam` : ""} · ranking por {metric}
+        {t.resultsView.comparison.title(totalRan - failedCount, totalRan, failedCount, metric)}
       </div>
 
       <div
@@ -1012,15 +980,15 @@ function TaskComparisonReport({
         >
           <thead>
             <tr>
-              <th style={cvThStyle}>Rank</th>
-              <th style={cvThStyle}>Arquitetura</th>
+              <th style={cvThStyle}>{t.resultsView.cols.rank}</th>
+              <th style={cvThStyle}>{t.resultsView.cols.architecture}</th>
               {metricCols.map((k) => (
                 <th key={k} style={cvThStyle}>
                   {k}
                 </th>
               ))}
-              <th style={cvThStyle}>tempo (s)</th>
-              <th style={cvThStyle}>status</th>
+              <th style={cvThStyle}>{t.resultsView.cols.time}</th>
+              <th style={cvThStyle}>{t.resultsView.cols.status}</th>
             </tr>
           </thead>
           <tbody>
@@ -1123,6 +1091,7 @@ function TaskSweepReport({
   report: Record<string, unknown>;
   accent: string;
 }) {
+  const t = useT();
   const trials = (report["trials"] as TaskSweepTrial[]) ?? [];
   const mode = report["mode"] as string;
   const metric = report["metric"] as string;
@@ -1141,7 +1110,7 @@ function TaskSweepReport({
           color: "var(--vf-text-muted)",
         }}
       >
-        // sweep {mode} · {successful}/{total} trials ok · ranking por {metric}
+        {t.resultsView.sweep.title(mode, successful, total, metric)}
       </div>
 
       {best && (
@@ -1165,7 +1134,7 @@ function TaskSweepReport({
               color: "var(--vf-text-muted)",
             }}
           >
-            👑 melhor trial · {metric}=
+            {t.resultsView.sweep.best(metric)}
             <span style={{ color: accent, marginLeft: 4 }}>
               {formatMetric(best.metrics?.[metric])}
             </span>
@@ -1193,11 +1162,11 @@ function TaskSweepReport({
         >
           <thead>
             <tr>
-              <th style={cvThStyle}>Rank</th>
+              <th style={cvThStyle}>{t.resultsView.cols.rank}</th>
               <th style={cvThStyle}>{metric}</th>
-              <th style={cvThStyle}>overrides</th>
-              <th style={cvThStyle}>tempo (s)</th>
-              <th style={cvThStyle}>status</th>
+              <th style={cvThStyle}>{t.resultsView.cols.overrides}</th>
+              <th style={cvThStyle}>{t.resultsView.cols.time}</th>
+              <th style={cvThStyle}>{t.resultsView.cols.status}</th>
             </tr>
           </thead>
           <tbody>
@@ -1275,6 +1244,7 @@ function ModelComparisonReport({
   report: Record<string, unknown>;
   accent: string;
 }) {
+  const t = useT();
   const top3 = (report["top_3"] as ModelComparisonTrial[]) ?? [];
   const totalRan = report["total_ran"] as number;
   const failedCount = report["failed_count"] as number;
@@ -1290,8 +1260,7 @@ function ModelComparisonReport({
           color: "var(--vf-text-muted)",
         }}
       >
-        // comparação de modelos · {totalRan - failedCount}/{totalRan} ok
-        {failedCount > 0 ? ` · ${failedCount} falharam` : ""}
+        {t.resultsView.modelComparison.title(totalRan - failedCount, totalRan, failedCount)}
       </div>
 
       <div
@@ -1313,12 +1282,12 @@ function ModelComparisonReport({
         >
           <thead>
             <tr>
-              <th style={cvThStyle}>Rank</th>
-              <th style={cvThStyle}>Arquitetura</th>
-              <th style={cvThStyle}>Accuracy</th>
+              <th style={cvThStyle}>{t.resultsView.cols.rank}</th>
+              <th style={cvThStyle}>{t.resultsView.cols.architecture}</th>
+              <th style={cvThStyle}>{t.resultsView.modelComparison.accuracy}</th>
               <th style={cvThStyle}>F1</th>
-              <th style={cvThStyle}>AUC-ROC</th>
-              <th style={cvThStyle}>tempo (s)</th>
+              <th style={cvThStyle}>{t.resultsView.modelComparison.aucRoc}</th>
+              <th style={cvThStyle}>{t.resultsView.cols.time}</th>
             </tr>
           </thead>
           <tbody>
@@ -1370,11 +1339,7 @@ function ModelComparisonReport({
           fontStyle: "italic",
         }}
       >
-        Top-3 acima. O ranking completo está em
-        <code style={{ marginLeft: 6 }}>
-          outputs/reports/&lt;experiment&gt;/ranking.csv
-        </code>
-        .
+        <Rich text={t.resultsView.modelComparison.footer} />
       </div>
     </div>
   );
@@ -1445,6 +1410,7 @@ function GridSearchReport({
   report: Record<string, unknown>;
   accent: string;
 }) {
+  const t = useT();
   const best = (report["best_trial"] ?? {}) as Record<string, unknown>;
   const total = report["total_trials"] as number;
   const successful = report["successful_trials"] as number;
@@ -1490,8 +1456,11 @@ function GridSearchReport({
           color: "var(--vf-text-muted)",
         }}
       >
-        // grid search · {successful}/{total} trials ok · 👑 melhor trial #
-        {String(best["trial_index"] ?? "?")}
+        {t.resultsView.gridSearch.title(
+          successful,
+          total,
+          String(best["trial_index"] ?? "?"),
+        )}
       </div>
 
       <div
@@ -1529,7 +1498,7 @@ function GridSearchReport({
                 color: "var(--vf-text-muted)",
               }}
             >
-              // overrides do trial vencedor
+              {t.resultsView.gridSearch.overrides}
             </div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
               {overrides.map(([k, v]) => (
@@ -1562,8 +1531,7 @@ function GridSearchReport({
           fontStyle: "italic",
         }}
       >
-        Tabela completa em <code>outputs/reports/&lt;experiment&gt;/grid_search_summary.csv</code>
-        · config vencedora em <code>best_config.yaml</code>.
+        <Rich text={t.resultsView.gridSearch.footer} />
       </div>
     </div>
   );

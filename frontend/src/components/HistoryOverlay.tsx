@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { deleteRun, fetchRuns } from "../api/client";
+import type { Dict } from "../i18n/pt";
+import { useI18n, useT } from "../i18n/useT";
 import type { RunSummary } from "../types/run";
 import { CompareRunsPanel } from "./CompareRunsPanel";
 import { MenuSelect } from "./controls";
@@ -53,7 +55,8 @@ function FilterChips({
   options: { value: string; label: string }[];
   onChange: (v: string) => void;
 }) {
-  const entries = [{ value: "all", label: "todos" }, ...options];
+  const t = useT();
+  const entries = [{ value: "all", label: t.history.allChip }, ...options];
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
       <FilterLabel>{label}</FilterLabel>
@@ -97,17 +100,9 @@ const TASK_ACCENT: Record<string, string> = {
   anomaly: "oklch(0.80 0.15 75)",
 };
 
-/** Tab label per task family; custom tasks (ADR-058) keep their own key. */
-const FAMILY_LABELS: Record<string, string> = {
-  classification: "Classificação",
-  detection: "Detecção",
-  regression: "Regressão",
-  segmentation: "Segmentação",
-  anomaly: "Anomalia",
-};
-
 /** Order the family tabs the way the app's own task bar orders them, so the
- * history reads like the rest of the GUI instead of alphabetically. */
+ * history reads like the rest of the GUI instead of alphabetically. Custom
+ * tasks (ADR-058) keep their own key and come after these. */
 const FAMILY_ORDER = [
   "classification",
   "detection",
@@ -126,13 +121,14 @@ const FAMILY_ORDER = [
  */
 function taskFamily(task: string): string {
   if (task.startsWith("custom:")) return task;
-  if (FAMILY_LABELS[task] !== undefined && task !== "classification") return task;
+  if (FAMILY_ORDER.includes(task) && task !== "classification") return task;
   return "classification";
 }
 
-function familyLabel(family: string): string {
+/** Tab label per task family, from the dictionary; a custom task is its own name. */
+function familyLabel(t: Dict, family: string): string {
   if (family.startsWith("custom:")) return family.slice("custom:".length);
-  return FAMILY_LABELS[family] ?? family;
+  return (t.history.families as Record<string, string>)[family] ?? family;
 }
 
 /** One history tab per task, each scoped to that task's runs.
@@ -154,9 +150,14 @@ function TaskTabs({
   onSelect: (task: string) => void;
   total: number;
 }) {
+  const t = useT();
   const entries: { key: string; label: string; count: number }[] = [
-    { key: "all", label: "Todos", count: total },
-    ...tasks.map((t) => ({ key: t, label: familyLabel(t), count: counts[t] ?? 0 })),
+    { key: "all", label: t.history.allTab, count: total },
+    ...tasks.map((task) => ({
+      key: task,
+      label: familyLabel(t, task),
+      count: counts[task] ?? 0,
+    })),
   ];
   return (
     <div
@@ -223,10 +224,10 @@ function statusColor(status: string): string {
   return "var(--vf-text-muted)";
 }
 
-/** Format an ISO date string using pt-BR locale. */
-function fmtDate(iso: string): string {
+/** Format an ISO date string in the interface language's locale. */
+function fmtDate(iso: string, locale: string): string {
   try {
-    return new Date(iso).toLocaleString("pt-BR", {
+    return new Date(iso).toLocaleString(locale, {
       day: "2-digit",
       month: "2-digit",
       year: "numeric",
@@ -254,11 +255,7 @@ const METRIC_LABELS: Record<string, string> = {
 /** Ordering options for the run list. */
 type SortKey = "recent" | "oldest" | "epochs";
 
-const SORT_LABELS: Record<SortKey, string> = {
-  recent: "mais recente",
-  oldest: "mais antigo",
-  epochs: "mais épocas",
-};
+const SORT_KEYS: SortKey[] = ["recent", "oldest", "epochs"];
 
 /** One run card inside the history list. */
 function RunCard({
@@ -278,6 +275,7 @@ function RunCard({
   onDelete?: () => void;
   deleting?: boolean;
 }) {
+  const { t, locale } = useI18n();
   // Keyed by family: a classification run records `binary`/`multiclass`, which
   // has no accent of its own — the card used to fall back to grey for the most
   // common task in the list.
@@ -352,7 +350,7 @@ function RunCard({
             onDelete();
           }}
           disabled={deleting}
-          title="Excluir este run permanentemente"
+          title={t.history.card.deleteTitle}
           style={{
             position: "absolute",
             top: 8,
@@ -462,7 +460,7 @@ function RunCard({
         </span>
         {run.preprocessing_count !== undefined && run.preprocessing_count > 0 && (
           <span
-            title={`${run.preprocessing_count} filtro(s) de pré-processamento aplicados ao treino`}
+            title={t.history.card.preprocessingTitle(run.preprocessing_count)}
             style={{
               padding: "2px 8px",
               background: "oklch(0.72 0.16 150 / 0.14)",
@@ -475,8 +473,7 @@ function RunCard({
               textTransform: "uppercase",
             }}
           >
-            ⚗ {run.preprocessing_count} filtro
-            {run.preprocessing_count === 1 ? "" : "s"}
+            {t.history.card.preprocessing(run.preprocessing_count)}
           </span>
         )}
         {run.dataset_name && (
@@ -506,8 +503,8 @@ function RunCard({
           <span
             title={
               run.configured_epochs
-                ? `Parou na época ${run.epochs_completed} de ${run.configured_epochs} — dá para continuar`
-                : "Parou antes do fim — dá para continuar"
+                ? t.history.card.resumeTitle(run.epochs_completed, run.configured_epochs)
+                : t.history.card.resumeTitleNoTotal
             }
             style={{
               padding: "2px 8px",
@@ -527,7 +524,7 @@ function RunCard({
         )}
         {run.block && run.block !== "classification" && (
           <span
-            title={`Bloco de experimento: ${run.block}`}
+            title={t.history.card.blockTitle(run.block)}
             style={{
               padding: "2px 8px",
               background: "rgba(180, 140, 255, 0.12)",
@@ -551,7 +548,7 @@ function RunCard({
             color: "var(--vf-text-muted)",
           }}
         >
-          {run.epochs_completed} epoch{run.epochs_completed !== 1 ? "s" : ""}
+          {t.history.card.epochs(run.epochs_completed)}
         </span>
       </div>
 
@@ -602,8 +599,10 @@ function RunCard({
           letterSpacing: "0.06em",
         }}
       >
-        {fmtDate(run.started_at)}
-        {run.finished_at ? ` → ${fmtDate(run.finished_at)}` : " · em andamento"}
+        {fmtDate(run.started_at, locale)}
+        {run.finished_at
+          ? ` → ${fmtDate(run.finished_at, locale)}`
+          : ` · ${t.history.card.inProgress}`}
       </div>
     </button>
   );
@@ -615,6 +614,7 @@ export function HistoryOverlay({
   onCountChange,
   initialTask,
 }: HistoryOverlayProps) {
+  const t = useT();
   const [runs, setRuns] = useState<RunSummary[]>([]);
   // Mounted means opening, and opening always fetches.
   const [loading, setLoading] = useState(true);
@@ -676,9 +676,9 @@ export function HistoryOverlay({
         }
       })
       .catch((e: unknown) => {
-        const msg =
-          e instanceof Error ? e.message : "Erro ao carregar histórico.";
-        setError(msg);
+        // Empty means "no message of its own": the view then shows the
+        // dictionary's text, in whichever language is active when it renders.
+        setError(e instanceof Error ? e.message : "");
       })
       .finally(() => setLoading(false));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -710,7 +710,7 @@ export function HistoryOverlay({
         await deleteRun(id);
         deleted.push(id);
       } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message : "erro desconhecido";
+        const msg = e instanceof Error ? e.message : t.history.confirm.unknownError;
         failures.push(`${id}: ${msg}`);
       }
     }
@@ -726,7 +726,7 @@ export function HistoryOverlay({
 
     if (failures.length > 0) {
       setDeleteError(
-        `${failures.length} de ${targets.length} não puderam ser excluídos:\n${failures.join("\n")}`,
+        `${t.history.confirm.failed(failures.length, targets.length)}\n${failures.join("\n")}`,
       );
       // Keep the dialog open on the ones that survived so the message has a
       // subject; dismissing it is the researcher's call.
@@ -858,7 +858,7 @@ export function HistoryOverlay({
                 marginBottom: 6,
               }}
             >
-              // training history
+              {t.history.eyebrow}
             </div>
             <div
               style={{
@@ -868,7 +868,7 @@ export function HistoryOverlay({
                 color: "var(--vf-text)",
               }}
             >
-              Treinamentos recentes
+              {t.history.title}
               {runs.length > 0 && (
                 <span
                   style={{
@@ -913,7 +913,7 @@ export function HistoryOverlay({
                   cursor: "pointer",
                 }}
               >
-                {selectMode ? "Cancelar seleção" : "✓ Selecionar"}
+                {selectMode ? t.history.cancelSelect : t.history.select}
               </button>
             )}
             {selectMode && selection.length >= 2 && (
@@ -934,7 +934,7 @@ export function HistoryOverlay({
                   fontWeight: 600,
                 }}
               >
-                ↔ Comparar {selection.length}
+                {t.history.compare(selection.length)}
               </button>
             )}
             {selectMode && selection.length >= 1 && (
@@ -944,7 +944,7 @@ export function HistoryOverlay({
                   setDeleteError(null);
                   setPendingDeletes(selectedRuns);
                 }}
-                title={`Excluir ${selection.length} run(s) permanentemente`}
+                title={t.history.deleteSelectedTitle(selection.length)}
                 style={{
                   padding: "8px 14px",
                   background: "oklch(0.704 0.191 22.216 / 0.18)",
@@ -959,7 +959,7 @@ export function HistoryOverlay({
                   fontWeight: 600,
                 }}
               >
-                🗑 Excluir {selection.length}
+                {t.history.deleteSelected(selection.length)}
               </button>
             )}
             <button
@@ -995,8 +995,8 @@ export function HistoryOverlay({
               tasks={availableTasks}
               counts={taskCounts}
               active={taskFilter}
-              onSelect={(t) => {
-                setTaskFilter(t);
+              onSelect={(task) => {
+                setTaskFilter(task);
                 // All three are scoped to the tab; carrying them across would
                 // show an empty list under a filter the new tab cannot satisfy.
                 setStatusFilter("all");
@@ -1040,7 +1040,7 @@ export function HistoryOverlay({
                   letterSpacing: "0.08em",
                 }}
               >
-                carregando histórico…
+                {t.history.loading}
               </span>
             </div>
           )}
@@ -1068,9 +1068,9 @@ export function HistoryOverlay({
                   marginBottom: 4,
                 }}
               >
-                Erro
+                {t.history.errorTitle}
               </div>
-              {error}
+              {error || t.history.loadFailed}
             </div>
           )}
 
@@ -1099,7 +1099,7 @@ export function HistoryOverlay({
                   marginBottom: 8,
                 }}
               >
-                Nenhum treinamento ainda
+                {t.history.emptyTitle}
               </div>
               <div
                 style={{
@@ -1108,7 +1108,7 @@ export function HistoryOverlay({
                   color: "var(--vf-text-muted)",
                 }}
               >
-                Execute o primeiro experimento para vê-lo aqui.
+                {t.history.emptyHint}
               </div>
             </div>
           )}
@@ -1149,8 +1149,8 @@ export function HistoryOverlay({
               }}
             >
               {selection.length === 0
-                ? "Modo seleção — marque os runs que quer excluir ou comparar."
-                : `${selection.length} selecionado(s) — 🗑 exclui; ↔ compara a partir de 2.`}
+                ? t.history.selectModeTip
+                : t.history.selectedTip(selection.length)}
             </div>
           )}
 
@@ -1170,7 +1170,7 @@ export function HistoryOverlay({
                   type="text"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="🔍 buscar por nome, arquitetura ou run_id…"
+                  placeholder={t.history.searchPlaceholder}
                   style={{
                     width: "100%",
                     padding: "9px 36px 9px 12px",
@@ -1186,7 +1186,7 @@ export function HistoryOverlay({
                   <button
                     type="button"
                     onClick={() => setQuery("")}
-                    title="Limpar busca"
+                    title={t.history.clearSearch}
                     style={{
                       position: "absolute",
                       right: 6,
@@ -1239,7 +1239,7 @@ export function HistoryOverlay({
             >
               {availableSubtypes.length > 1 && (
                 <FilterChips
-                  label="tipo"
+                  label={t.history.filterType}
                   value={subtypeFilter}
                   options={availableSubtypes.map((s) => ({
                     value: s,
@@ -1250,7 +1250,7 @@ export function HistoryOverlay({
               )}
               {availableBlocks.length > 1 && (
                 <FilterChips
-                  label="bloco"
+                  label={t.history.filterBlock}
                   value={blockFilter}
                   options={availableBlocks.map((b) => ({ value: b, label: b }))}
                   onChange={setBlockFilter}
@@ -1258,20 +1258,20 @@ export function HistoryOverlay({
               )}
               {availableStatuses.length > 1 && (
                 <FilterChips
-                  label="status"
+                  label={t.history.filterStatus}
                   value={statusFilter}
                   options={availableStatuses.map((s) => ({ value: s, label: s }))}
                   onChange={setStatusFilter}
                 />
               )}
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <FilterLabel>ordenar</FilterLabel>
+                <FilterLabel>{t.history.sortLabel}</FilterLabel>
                 <MenuSelect
                   value={sortBy}
                   onChange={(v) => setSortBy(v as SortKey)}
-                  options={(Object.keys(SORT_LABELS) as SortKey[]).map((k) => ({
+                  options={SORT_KEYS.map((k) => ({
                     value: k,
-                    label: SORT_LABELS[k],
+                    label: t.history.sort[k],
                   }))}
                   minWidth={150}
                 />
@@ -1294,7 +1294,7 @@ export function HistoryOverlay({
                     borderRadius: 10,
                   }}
                 >
-                  Nenhum run combina com o filtro atual.
+                  {t.history.noMatch}
                 </div>
               ) : (
                 filteredRuns.map((run) => (
@@ -1363,8 +1363,7 @@ export function HistoryOverlay({
                 color: "oklch(0.78 0.16 22)",
               }}
             >
-              // excluir {pendingDeletes.length === 1 ? "run" : `${pendingDeletes.length} runs`}{" "}
-              permanentemente
+              {t.history.confirm.title(pendingDeletes.length)}
             </div>
             {/* Every run is named, however many: "excluir 12 runs" without the
                 list is a destructive action taken on trust. Scrolls past ~6. */}
@@ -1404,9 +1403,7 @@ export function HistoryOverlay({
                 lineHeight: 1.6,
               }}
             >
-              {pendingDeletes.length === 1 ? "A pasta do run" : "As pastas dos runs"},
-              checkpoints e todos os plots/relatórios serão removidos do disco.
-              Esta ação é irreversível.
+              {t.history.confirm.body(pendingDeletes.length)}
             </div>
             {deleteError && (
               <div
@@ -1445,7 +1442,7 @@ export function HistoryOverlay({
                   opacity: busyDeleting ? 0.5 : 1,
                 }}
               >
-                {deleteError ? "Fechar" : "Cancelar"}
+                {deleteError ? t.common.close : t.common.cancel}
               </button>
               <button
                 type="button"
@@ -1467,8 +1464,8 @@ export function HistoryOverlay({
                 }}
               >
                 {busyDeleting
-                  ? "Excluindo…"
-                  : `🗑 Excluir${pendingDeletes.length > 1 ? ` ${pendingDeletes.length}` : ""}`}
+                  ? t.history.confirm.deleting
+                  : t.history.confirm.submit(pendingDeletes.length)}
               </button>
             </div>
           </div>

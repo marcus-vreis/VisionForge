@@ -639,4 +639,179 @@ export const en: Dict = {
       disabled: "Disabled",
     },
   },
+  resultsView: {
+    title: "// results",
+    modelCard: {
+      button: "↓ markdown",
+      title: "Download this run's model card (markdown)",
+    },
+    metricLabels: {
+      best_val_loss: "Best val loss",
+      best_epoch: "Best epoch",
+      total_epochs: "Total epochs",
+      test_accuracy: "Accuracy",
+      test_f1: "F1 score",
+      test_precision: "Precision",
+      test_recall: "Recall",
+      test_auc_roc: "AUC-ROC",
+      map50: "mAP@50",
+      map50_95: "mAP@50-95",
+      precision: "Precision (box)",
+      recall: "Recall (box)",
+      box_loss: "Box loss (val)",
+    },
+    ciTooltip: (percent: number, resamples: number, samples: number) =>
+      `${percent}% CI (percentile bootstrap): ` +
+      `${resamples} resamples of the ${samples} test ${samples === 1 ? "image" : "images"}. ` +
+      `Captures the sampling uncertainty of the test split with this model ` +
+      `held fixed — not the variation across training runs, which replicates ` +
+      `with several seeds capture.`,
+    graphsTitle: "// plots · click to expand",
+    graphLabels: {
+      "loss.png": "Loss (train + val)",
+      "accuracy.png": "Accuracy (train + val)",
+      "confusion_matrix.png": "Confusion matrix",
+      "confusion_matrix_normalized.png": "Confusion matrix (normalized)",
+      "roc_curve.png": "ROC curve",
+      "precision_recall_curve.png": "Precision-Recall curve",
+      "results.png": "Training curves (Ultralytics)",
+      "BoxPR_curve.png": "Precision-Recall curve (box)",
+      "BoxF1_curve.png": "F1 curve (box)",
+      "auroc.png": "AUROC over epochs",
+      "BoxP_curve.png": "Precision curve (box)",
+      "BoxR_curve.png": "Recall curve (box)",
+      "val_batch0_pred.jpg": "Validation batch predictions",
+      "pred_vs_true.png": "Predicted vs actual",
+      "residuals.png": "Residual distribution",
+      "iou_per_class.png": "IoU per class",
+      "score_histogram.png": "Scores: normal vs defect",
+    },
+    reportTitle: "// report",
+    cols: {
+      rank: "Rank",
+      architecture: "Architecture",
+      time: "time (s)",
+      status: "status",
+      seed: "seed",
+      overrides: "overrides",
+    },
+    outcome: {
+      ok: "ok",
+      failed: (error: string) => `failed · ${error}`,
+    },
+    cv: {
+      title: (ok: number, total: number, failed: number) =>
+        `// k-fold cross-validation · ${ok}/${total} folds ok${failed > 0 ? ` · ${failed} failed` : ""}`,
+      accuracyMeanStd: "Accuracy (mean ± std)",
+      f1MeanStd: "F1 (mean ± std)",
+      fold: "Fold",
+      trainSize: "train_size",
+      valSize: "val_size",
+      valLoss: "val_loss",
+      accuracy: "accuracy",
+    },
+    taskCv: {
+      title: (ok: number, total: number, metric: string) =>
+        `// k-fold · ${ok}/${total} folds ok · headline metric ${metric}`,
+      meanStd: "mean ± std over the folds",
+      fold: "fold",
+      trainVal: "train/val",
+    },
+    replicates: {
+      title: (ok: number, total: number, metric: string) =>
+        `// multi-seed replicates · ${ok}/${total} seeds ok · headline metric ${metric}`,
+      citable: "🎯 citable result",
+      headlineMeta: (hasCi: boolean, n: number) => `${hasCi ? "95% CI · " : ""}n=${n}`,
+      metric: "metric",
+      n: "n",
+      mean: "mean",
+      std: "std",
+      min: "min",
+      max: "max",
+      ci: "95% CI",
+    },
+    comparison: {
+      title: (ok: number, total: number, failed: number, metric: string) =>
+        `// architecture comparison · ${ok}/${total} ok${failed > 0 ? ` · ${failed} failed` : ""} · ranked by ${metric}`,
+    },
+    sweep: {
+      title: (mode: string, ok: number, total: number, metric: string) =>
+        `// sweep ${mode} · ${ok}/${total} trials ok · ranked by ${metric}`,
+      best: (metric: string) => `👑 best trial · ${metric}=`,
+    },
+    modelComparison: {
+      title: (ok: number, total: number, failed: number) =>
+        `// model comparison · ${ok}/${total} ok${failed > 0 ? ` · ${failed} failed` : ""}`,
+      accuracy: "Accuracy",
+      aucRoc: "AUC-ROC",
+      footer: "Top 3 above. The full ranking is in `outputs/reports/<experiment>/ranking.csv`.",
+    },
+    gridSearch: {
+      title: (ok: number, total: number, index: string) =>
+        `// grid search · ${ok}/${total} trials ok · 👑 best trial #${index}`,
+      overrides: "// winning trial's overrides",
+      footer:
+        "Full table in `outputs/reports/<experiment>/grid_search_summary.csv` · winning config in `best_config.yaml`.",
+    },
+  },
+  history: {
+    eyebrow: "// training history",
+    title: "Recent runs",
+    select: "✓ Select",
+    cancelSelect: "Cancel selection",
+    compare: (n: number) => `↔ Compare ${n}`,
+    deleteSelected: (n: number) => `🗑 Delete ${n}`,
+    deleteSelectedTitle: (n: number) =>
+      `Permanently delete ${n} ${n === 1 ? "run" : "runs"}`,
+    loading: "loading history…",
+    errorTitle: "Error",
+    loadFailed: "Failed to load the history.",
+    emptyTitle: "No runs yet",
+    emptyHint: "Run your first experiment to see it here.",
+    selectModeTip: "Selection mode — check the runs you want to delete or compare.",
+    selectedTip: (n: number) => `${n} selected — 🗑 deletes; ↔ compares from 2.`,
+    searchPlaceholder: "🔍 search by name, architecture or run_id…",
+    clearSearch: "Clear search",
+    noMatch: "No runs match the current filter.",
+    allTab: "All",
+    families: {
+      classification: "Classification",
+      detection: "Detection",
+      regression: "Regression",
+      segmentation: "Segmentation",
+      anomaly: "Anomaly",
+    },
+    allChip: "all",
+    filterType: "type",
+    filterBlock: "block",
+    filterStatus: "status",
+    sortLabel: "sort",
+    sort: {
+      recent: "most recent",
+      oldest: "oldest",
+      epochs: "most epochs",
+    },
+    card: {
+      deleteTitle: "Permanently delete this run",
+      preprocessing: (n: number) => `⚗ ${n} ${n === 1 ? "filter" : "filters"}`,
+      preprocessingTitle: (n: number) =>
+        `${n} preprocessing ${n === 1 ? "filter" : "filters"} applied to training`,
+      resumeTitle: (done: number, total: number) =>
+        `Stopped at epoch ${done} of ${total} — can be resumed`,
+      resumeTitleNoTotal: "Stopped before the end — can be resumed",
+      blockTitle: (block: string) => `Experiment block: ${block}`,
+      epochs: (n: number) => `${n} epoch${n !== 1 ? "s" : ""}`,
+      inProgress: "in progress",
+    },
+    confirm: {
+      title: (n: number) => `// permanently delete ${n === 1 ? "1 run" : `${n} runs`}`,
+      body: (n: number) =>
+        `${n === 1 ? "The run's folder" : "The runs' folders"}, checkpoints and all plots/reports will be removed from disk. This cannot be undone.`,
+      failed: (failed: number, total: number) =>
+        `${failed} of ${total} couldn't be deleted:`,
+      unknownError: "unknown error",
+      deleting: "Deleting…",
+      submit: (n: number) => `🗑 Delete${n > 1 ? ` ${n}` : ""}`,
+    },
+  },
 };

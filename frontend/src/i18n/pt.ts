@@ -670,6 +670,203 @@ export const pt = {
       disabled: "Desativado",
     },
   },
+  // The results sheet that opens after a run (components/ResultsView.tsx). Metric
+  // names, the code-style table columns (train_size, val_loss…) and the `// `
+  // section prefix read the same in every language.
+  resultsView: {
+    title: "// resultados",
+    modelCard: {
+      button: "↓ markdown",
+      title: "Baixar model card (markdown) deste run",
+    },
+    // Keys are the backend's metric names.
+    metricLabels: {
+      best_val_loss: "Best Val Loss",
+      best_epoch: "Best Epoch",
+      total_epochs: "Total Epochs",
+      test_accuracy: "Accuracy",
+      test_f1: "F1 Score",
+      test_precision: "Precision",
+      test_recall: "Recall",
+      test_auc_roc: "AUC-ROC",
+      map50: "mAP@50",
+      map50_95: "mAP@50-95",
+      precision: "Precision (box)",
+      recall: "Recall (box)",
+      box_loss: "Box loss (val)",
+    },
+    ciTooltip: (percent: number, resamples: number, samples: number) =>
+      `IC ${percent}% por bootstrap percentil: ` +
+      `${resamples} reamostragens das ${samples} imagens de teste. ` +
+      `Mede o ruído de amostragem do split com este modelo fixo — não a ` +
+      `variação entre treinos, que réplicas com várias seeds medem.`,
+    graphsTitle: "// gráficos · clique para expandir",
+    // The plot files the backend writes, by file name.
+    graphLabels: {
+      "loss.png": "Loss (train + val)",
+      "accuracy.png": "Accuracy (train + val)",
+      "confusion_matrix.png": "Matriz de confusão",
+      "confusion_matrix_normalized.png": "Matriz de confusão (normalizada)",
+      "roc_curve.png": "Curva ROC",
+      "precision_recall_curve.png": "Curva Precision-Recall",
+      // Detection (Ultralytics) plot names.
+      "results.png": "Curvas de treino (Ultralytics)",
+      "BoxPR_curve.png": "Curva Precision-Recall (box)",
+      "BoxF1_curve.png": "Curva F1 (box)",
+      // Test-set diagnostics per task.
+      "auroc.png": "AUROC por época",
+      "BoxP_curve.png": "Curva Precision (box)",
+      "BoxR_curve.png": "Curva Recall (box)",
+      "val_batch0_pred.jpg": "Predições na validação",
+      "pred_vs_true.png": "Predito vs real",
+      "residuals.png": "Distribuição dos resíduos",
+      "iou_per_class.png": "IoU por classe",
+      "score_histogram.png": "Escores: normal vs defeito",
+    },
+    // A report whose shape the view does not know is shown as JSON under this.
+    reportTitle: "// report",
+    // Columns the report tables share.
+    cols: {
+      rank: "Rank",
+      architecture: "Arquitetura",
+      time: "tempo (s)",
+      status: "status",
+      seed: "seed",
+      overrides: "overrides",
+    },
+    // A trial's or fold's outcome cell.
+    outcome: {
+      ok: "ok",
+      failed: (error: string) => `falhou · ${error}`,
+    },
+    // K-fold on the classification task.
+    cv: {
+      title: (ok: number, total: number, failed: number) =>
+        `// k-fold cross-validation · ${ok}/${total} folds ok${failed > 0 ? ` · ${failed} falharam` : ""}`,
+      accuracyMeanStd: "Acurácia (média ± std)",
+      f1MeanStd: "F1 (média ± std)",
+      fold: "Fold",
+      trainSize: "train_size",
+      valSize: "val_size",
+      valLoss: "val_loss",
+      accuracy: "accuracy",
+    },
+    // K-fold on the other tasks.
+    taskCv: {
+      title: (ok: number, total: number, metric: string) =>
+        `// k-fold · ${ok}/${total} folds ok · destaque ${metric}`,
+      meanStd: "média ± desvio sobre os folds",
+      fold: "fold",
+      trainVal: "treino/val",
+    },
+    replicates: {
+      title: (ok: number, total: number, metric: string) =>
+        `// réplicas multi-seed · ${ok}/${total} seeds ok · destaque ${metric}`,
+      citable: "🎯 resultado citável",
+      // After the headline value: the interval it carries, and the sample size.
+      headlineMeta: (hasCi: boolean, n: number) => `${hasCi ? "IC 95% · " : ""}n=${n}`,
+      metric: "métrica",
+      n: "n",
+      mean: "média",
+      std: "desvio",
+      min: "min",
+      max: "max",
+      ci: "IC 95%",
+    },
+    // Model comparison on the other tasks.
+    comparison: {
+      title: (ok: number, total: number, failed: number, metric: string) =>
+        `// comparação de arquiteturas · ${ok}/${total} ok${failed > 0 ? ` · ${failed} falharam` : ""} · ranking por ${metric}`,
+    },
+    sweep: {
+      title: (mode: string, ok: number, total: number, metric: string) =>
+        `// sweep ${mode} · ${ok}/${total} trials ok · ranking por ${metric}`,
+      // Followed by the metric's value.
+      best: (metric: string) => `👑 melhor trial · ${metric}=`,
+    },
+    // Model comparison on classification.
+    modelComparison: {
+      title: (ok: number, total: number, failed: number) =>
+        `// comparação de modelos · ${ok}/${total} ok${failed > 0 ? ` · ${failed} falharam` : ""}`,
+      accuracy: "Accuracy",
+      aucRoc: "AUC-ROC",
+      // The path goes in backticks, for <Rich>.
+      footer: "Top-3 acima. O ranking completo está em `outputs/reports/<experiment>/ranking.csv`.",
+    },
+    gridSearch: {
+      title: (ok: number, total: number, index: string) =>
+        `// grid search · ${ok}/${total} trials ok · 👑 melhor trial #${index}`,
+      overrides: "// overrides do trial vencedor",
+      footer:
+        "Tabela completa em `outputs/reports/<experiment>/grid_search_summary.csv` · config vencedora em `best_config.yaml`.",
+    },
+  },
+  // The run-history sheet (components/HistoryOverlay.tsx). The status and the task
+  // pill on each card are the backend's own values, shown as the server wrote them.
+  history: {
+    eyebrow: "// training history",
+    title: "Treinamentos recentes",
+    select: "✓ Selecionar",
+    cancelSelect: "Cancelar seleção",
+    compare: (n: number) => `↔ Comparar ${n}`,
+    deleteSelected: (n: number) => `🗑 Excluir ${n}`,
+    deleteSelectedTitle: (n: number) => `Excluir ${n} run(s) permanentemente`,
+    loading: "carregando histórico…",
+    errorTitle: "Erro",
+    loadFailed: "Erro ao carregar histórico.",
+    emptyTitle: "Nenhum treinamento ainda",
+    emptyHint: "Execute o primeiro experimento para vê-lo aqui.",
+    selectModeTip: "Modo seleção — marque os runs que quer excluir ou comparar.",
+    selectedTip: (n: number) => `${n} selecionado(s) — 🗑 exclui; ↔ compara a partir de 2.`,
+    searchPlaceholder: "🔍 buscar por nome, arquitetura ou run_id…",
+    clearSearch: "Limpar busca",
+    noMatch: "Nenhum run combina com o filtro atual.",
+    // The task tabs; a custom task keeps its own key.
+    allTab: "Todos",
+    families: {
+      classification: "Classificação",
+      detection: "Detecção",
+      regression: "Regressão",
+      segmentation: "Segmentação",
+      anomaly: "Anomalia",
+    },
+    // The refinement rows inside a tab.
+    allChip: "todos",
+    filterType: "tipo",
+    filterBlock: "bloco",
+    filterStatus: "status",
+    sortLabel: "ordenar",
+    sort: {
+      recent: "mais recente",
+      oldest: "mais antigo",
+      epochs: "mais épocas",
+    },
+    card: {
+      deleteTitle: "Excluir este run permanentemente",
+      preprocessing: (n: number) => `⚗ ${n} filtro${n === 1 ? "" : "s"}`,
+      preprocessingTitle: (n: number) =>
+        `${n} filtro(s) de pré-processamento aplicados ao treino`,
+      resumeTitle: (done: number, total: number) =>
+        `Parou na época ${done} de ${total} — dá para continuar`,
+      resumeTitleNoTotal: "Parou antes do fim — dá para continuar",
+      blockTitle: (block: string) => `Bloco de experimento: ${block}`,
+      epochs: (n: number) => `${n} epoch${n !== 1 ? "s" : ""}`,
+      // Where a finished run shows `→ end date`, a running one shows `· this`.
+      inProgress: "em andamento",
+    },
+    // The confirmation modal.
+    confirm: {
+      title: (n: number) => `// excluir ${n === 1 ? "run" : `${n} runs`} permanentemente`,
+      body: (n: number) =>
+        `${n === 1 ? "A pasta do run" : "As pastas dos runs"}, checkpoints e todos os plots/relatórios serão removidos do disco. Esta ação é irreversível.`,
+      // Runs go one at a time; the ones that failed are listed under this line.
+      failed: (failed: number, total: number) =>
+        `${failed} de ${total} não puderam ser excluídos:`,
+      unknownError: "erro desconhecido",
+      deleting: "Excluindo…",
+      submit: (n: number) => `🗑 Excluir${n > 1 ? ` ${n}` : ""}`,
+    },
+  },
 };
 
 export type Dict = typeof pt;
