@@ -208,7 +208,7 @@ export function DetectionPanel({
         onImportConfig={async (data) => {
           try {
             const schema = await fetchTaskSchema("detection");
-            const issues = validateParsedConfig(data, schema, schema.$defs ?? {});
+            const issues = validateParsedConfig(t, data, schema, schema.$defs ?? {});
             if (issues.length > 0) {
               return issues
                 .slice(0, 5)

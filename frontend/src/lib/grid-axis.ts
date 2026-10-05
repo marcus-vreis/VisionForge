@@ -8,6 +8,7 @@
  * and suggest the next value when the user clicks "+".
  */
 import type { ControlKind } from "../components/field-renderer";
+import type { Dict } from "../i18n/pt";
 import type { JsonSchema } from "../types/schema";
 
 /** Field names never offered as a grid axis even though their control qualifies. */
@@ -29,27 +30,29 @@ export function coerceGridValue(raw: string, isEnum: boolean): unknown {
 }
 
 /** Validate one candidate grid value against the field schema + known rules.
- * Returns an inline error message, or null when valid. */
+ * Returns an inline error message in the language of `t`, or null when valid. */
 export function validateGridValue(
+  t: Dict,
   name: string,
   schema: JsonSchema,
   value: unknown,
 ): string | null {
+  const msg = t.gridAxis;
   if (schema.enum) {
     return schema.enum.map(String).includes(String(value))
       ? null
-      : "fora das opções";
+      : msg.notAnOption;
   }
   const n = typeof value === "number" ? value : Number(value);
-  if (value === "" || value === null || Number.isNaN(n)) return "valor inválido";
+  if (value === "" || value === null || Number.isNaN(n)) return msg.invalidValue;
   if (schema.type === "integer" && !Number.isInteger(n))
-    return "precisa ser inteiro";
+    return msg.mustBeInteger;
   if (typeof schema.exclusiveMinimum === "number" && n <= schema.exclusiveMinimum)
-    return `precisa ser > ${schema.exclusiveMinimum}`;
+    return msg.mustBeAbove(schema.exclusiveMinimum);
   if (typeof schema.minimum === "number" && n < schema.minimum)
-    return `precisa ser ≥ ${schema.minimum}`;
+    return msg.mustBeAtLeast(schema.minimum);
   if (name === "batch_size" && (n < 1 || (n & (n - 1)) !== 0))
-    return "precisa ser potência de 2";
+    return msg.mustBePowerOfTwo;
   return null;
 }
 

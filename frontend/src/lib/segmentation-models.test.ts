@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { en } from "../i18n/en";
+import { pt } from "../i18n/pt";
 import {
   buildSegmentationPayload,
   ignoreIndexCollides,
   makeDefaultSegmentationForm,
+  segmentationModels,
 } from "./segmentation-models";
 
 describe("segmentation-models", () => {
@@ -108,5 +111,24 @@ describe("segmentation-models · YAML round-trip (ADR-059 header)", () => {
       buildSegmentationPayload(form),
     );
     expect(roundTripped).toEqual(form);
+  });
+});
+
+describe("segmentation-models · dropdown text", () => {
+  it("keeps the same models in both languages and words only the sub-line", () => {
+    const ptList = segmentationModels(pt);
+    const enList = segmentationModels(en);
+    expect(enList.map((m) => [m.value, m.label])).toEqual(ptList.map((m) => [m.value, m.label]));
+    expect(ptList.every((m) => m.sub)).toBe(true);
+    expect(enList.every((m) => m.sub)).toBe(true);
+  });
+
+  it("words the sub-line in the active language", () => {
+    const sub = (dict: typeof pt, value: string) =>
+      segmentationModels(dict).find((m) => m.value === value)?.sub;
+    expect(sub(pt, "deeplabv3_mobilenet_v3_large")).toBe("leve · 11M");
+    expect(sub(en, "deeplabv3_mobilenet_v3_large")).toBe("light · 11M");
+    expect(sub(pt, "unet")).toBe("clássico · 31M");
+    expect(sub(en, "unet")).toBe("classic · 31M");
   });
 });

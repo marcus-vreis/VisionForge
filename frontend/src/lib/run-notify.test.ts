@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { en } from "../i18n/en";
+import { pt } from "../i18n/pt";
 import {
   announce,
   canNotify,
@@ -30,12 +32,27 @@ describe("titleFor", () => {
 
 describe("messageFor", () => {
   it("names the run and its outcome", () => {
-    expect(messageFor("completed", "coffee_v2").title).toMatch(/concluído.*coffee_v2/);
-    expect(messageFor("failed", "coffee_v2").title).toMatch(/falhou.*coffee_v2/);
+    expect(messageFor(pt, "completed", "coffee_v2").title).toMatch(/concluído.*coffee_v2/);
+    expect(messageFor(pt, "failed", "coffee_v2").title).toMatch(/falhou.*coffee_v2/);
+  });
+
+  it("speaks the language it is given", () => {
+    expect(messageFor(pt, "completed", "x")).toEqual({
+      title: "Treino concluído — x",
+      body: "Abra o VisionForge para ver os resultados.",
+    });
+    expect(messageFor(en, "completed", "x")).toEqual({
+      title: "Training finished — x",
+      body: "Open VisionForge to see the results.",
+    });
+    expect(messageFor(en, "failed", "x")).toEqual({
+      title: "Training failed — x",
+      body: "Open VisionForge to see the error.",
+    });
   });
 
   it("prefers a real detail over the generic line", () => {
-    expect(messageFor("completed", "x", "accuracy 0.87").body).toBe("accuracy 0.87");
+    expect(messageFor(pt, "completed", "x", "accuracy 0.87").body).toBe("accuracy 0.87");
   });
 });
 
@@ -59,7 +76,7 @@ describe("announce", () => {
     // The title is the channel that carries the guarantee.
     const doc = fakeDoc();
 
-    announce("completed", "run_a", undefined, {
+    announce(pt, "completed", "run_a", undefined, {
       doc,
       notification: fakeNotification("denied"),
     });
@@ -70,7 +87,7 @@ describe("announce", () => {
   it("notifies when the page is hidden and permission is granted", () => {
     const calls: unknown[] = [];
 
-    announce("completed", "run_a", "accuracy 0.87", {
+    announce(pt, "completed", "run_a", "accuracy 0.87", {
       doc: fakeDoc(true),
       notification: fakeNotification("granted", calls),
       hidden: true,
@@ -79,11 +96,28 @@ describe("announce", () => {
     expect(calls).toHaveLength(1);
   });
 
+  it("puts the notification in the language it is given", () => {
+    const calls: Array<{ title: string; opts?: NotificationOptions }> = [];
+
+    announce(en, "failed", "run_a", undefined, {
+      doc: fakeDoc(true),
+      notification: fakeNotification("granted", calls),
+      hidden: true,
+    });
+
+    expect(calls).toEqual([
+      {
+        title: "Training failed — run_a",
+        opts: { body: "Open VisionForge to see the error.", tag: "visionforge-run" },
+      },
+    ]);
+  });
+
   it("stays silent when the researcher is already looking at the page", () => {
     // A toast for a window in front of you is noise.
     const calls: unknown[] = [];
 
-    announce("completed", "run_a", undefined, {
+    announce(pt, "completed", "run_a", undefined, {
       doc: fakeDoc(false),
       notification: fakeNotification("granted", calls),
       hidden: false,
@@ -100,7 +134,7 @@ describe("announce", () => {
     const doc = fakeDoc(true);
 
     expect(() =>
-      announce("failed", "run_a", undefined, { doc, notification: ctor, hidden: true }),
+      announce(pt, "failed", "run_a", undefined, { doc, notification: ctor, hidden: true }),
     ).not.toThrow();
     expect(doc.title).toBe("✗ run_a — VisionForge");
   });

@@ -3,6 +3,7 @@
  *  Keep in sync: a name the backend rejects produces a 422 on submit. */
 
 import type { PreprocessingStep } from "../components/PreprocessingPanel";
+import type { Dict } from "../i18n/pt";
 import {
   mergeFormShape,
   stepsFromPayload,
@@ -22,23 +23,28 @@ export interface SegmentationModelOption {
   sub?: string;
 }
 
-export const SEGMENTATION_MODELS: SegmentationModelOption[] = [
-  { value: "deeplabv3_resnet50", label: "DeepLabV3 · R50", sub: "imagenet · 42M" },
-  { value: "deeplabv3_resnet101", label: "DeepLabV3 · R101", sub: "deep · 61M" },
-  {
-    value: "deeplabv3_mobilenet_v3_large",
-    label: "DeepLabV3 · MobileNetV3",
-    sub: "leve · 11M",
-  },
-  { value: "fcn_resnet50", label: "FCN · R50", sub: "32.9M" },
-  { value: "fcn_resnet101", label: "FCN · R101", sub: "51.9M" },
-  {
-    value: "lraspp_mobilenet_v3_large",
-    label: "LR-ASPP · MobileNetV3",
-    sub: "mobile · 3.2M",
-  },
-  { value: "unet", label: "U-Net", sub: "clássico · 31M" },
-];
+/** The architectures of the dropdown. The names are identifiers; the sub-line is
+ *  worded in the language of `t` (`segmentationModels(t)` with `const t = useT()`). */
+export function segmentationModels(t: Dict): SegmentationModelOption[] {
+  const sub = t.segmentationModels;
+  return [
+    { value: "deeplabv3_resnet50", label: "DeepLabV3 · R50", sub: sub.deeplabv3_resnet50 },
+    { value: "deeplabv3_resnet101", label: "DeepLabV3 · R101", sub: sub.deeplabv3_resnet101 },
+    {
+      value: "deeplabv3_mobilenet_v3_large",
+      label: "DeepLabV3 · MobileNetV3",
+      sub: sub.deeplabv3_mobilenet_v3_large,
+    },
+    { value: "fcn_resnet50", label: "FCN · R50", sub: sub.fcn_resnet50 },
+    { value: "fcn_resnet101", label: "FCN · R101", sub: sub.fcn_resnet101 },
+    {
+      value: "lraspp_mobilenet_v3_large",
+      label: "LR-ASPP · MobileNetV3",
+      sub: sub.lraspp_mobilenet_v3_large,
+    },
+    { value: "unet", label: "U-Net", sub: sub.unet },
+  ];
+}
 
 export const SEGMENTATION_LOSSES: { value: string; label: string }[] = [
   { value: "cross_entropy", label: "Cross-Entropy" },

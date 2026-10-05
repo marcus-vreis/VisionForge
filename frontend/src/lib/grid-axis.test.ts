@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { en } from "../i18n/en";
+import { pt } from "../i18n/pt";
 import type { JsonSchema } from "../types/schema";
 import {
   coerceGridValue,
@@ -47,33 +49,45 @@ describe("coerceGridValue", () => {
 
 describe("validateGridValue", () => {
   it("flags learning_rate <= 0 (exclusiveMinimum)", () => {
-    expect(validateGridValue("learning_rate", lrSchema, 0)).toMatch(/> 0/);
-    expect(validateGridValue("learning_rate", lrSchema, 0.001)).toBeNull();
+    expect(validateGridValue(pt, "learning_rate", lrSchema, 0)).toMatch(/> 0/);
+    expect(validateGridValue(pt, "learning_rate", lrSchema, 0.001)).toBeNull();
   });
 
   it("requires integers for integer fields", () => {
-    expect(validateGridValue("epochs", intSchema, 2.5)).toMatch(/inteiro/);
-    expect(validateGridValue("epochs", intSchema, 10)).toBeNull();
+    expect(validateGridValue(pt, "epochs", intSchema, 2.5)).toMatch(/inteiro/);
+    expect(validateGridValue(pt, "epochs", intSchema, 10)).toBeNull();
   });
 
   it("enforces minimum", () => {
-    expect(validateGridValue("epochs", intSchema, 0)).toMatch(/≥ 1/);
+    expect(validateGridValue(pt, "epochs", intSchema, 0)).toMatch(/≥ 1/);
   });
 
   it("enforces power-of-two for batch_size", () => {
-    expect(validateGridValue("batch_size", intSchema, 24)).toMatch(/potência/);
-    expect(validateGridValue("batch_size", intSchema, 32)).toBeNull();
+    expect(validateGridValue(pt, "batch_size", intSchema, 24)).toMatch(/potência/);
+    expect(validateGridValue(pt, "batch_size", intSchema, 32)).toBeNull();
   });
 
   it("restricts enums to declared options", () => {
-    expect(validateGridValue("optimizer", enumSchema, "rmsprop")).toMatch(
+    expect(validateGridValue(pt, "optimizer", enumSchema, "rmsprop")).toMatch(
       /fora das opções/,
     );
-    expect(validateGridValue("optimizer", enumSchema, "adam")).toBeNull();
+    expect(validateGridValue(pt, "optimizer", enumSchema, "adam")).toBeNull();
   });
 
   it("flags empty / NaN entries", () => {
-    expect(validateGridValue("learning_rate", lrSchema, "")).toMatch(/inválido/);
+    expect(validateGridValue(pt, "learning_rate", lrSchema, "")).toMatch(/inválido/);
+  });
+
+  it("says each problem in the language it is given", () => {
+    expect(validateGridValue(en, "learning_rate", lrSchema, 0)).toBe("must be > 0");
+    expect(validateGridValue(en, "epochs", intSchema, 2.5)).toBe("must be an integer");
+    expect(validateGridValue(en, "epochs", intSchema, 0)).toBe("must be ≥ 1");
+    expect(validateGridValue(en, "batch_size", intSchema, 24)).toBe("must be a power of 2");
+    expect(validateGridValue(en, "optimizer", enumSchema, "rmsprop")).toBe(
+      "not one of the options",
+    );
+    expect(validateGridValue(en, "learning_rate", lrSchema, "")).toBe("invalid value");
+    expect(validateGridValue(pt, "learning_rate", lrSchema, 0)).toBe("precisa ser > 0");
   });
 });
 

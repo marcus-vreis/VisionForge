@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { en } from "../i18n/en";
+import { pt } from "../i18n/pt";
 import {
   buildRegressionPayload,
   makeDefaultRegressionForm,
   parseTargetColumns,
+  regressionModels,
 } from "./regression-models";
 
 describe("regression-models", () => {
@@ -145,5 +148,25 @@ describe("regression-models · YAML round-trip (ADR-059 header)", () => {
     // num_targets is forced from the parsed target list on export
     const expected = { ...form, model: { ...form.model, num_targets: 2 } };
     expect(roundTripped).toEqual(expected);
+  });
+});
+
+describe("regression-models · dropdown text", () => {
+  it("keeps the same models in both languages and words only the sub-line", () => {
+    const ptList = regressionModels(pt);
+    const enList = regressionModels(en);
+    expect(enList.map((m) => [m.value, m.label])).toEqual(ptList.map((m) => [m.value, m.label]));
+    expect(ptList.every((m) => m.sub)).toBe(true);
+    expect(enList.every((m) => m.sub)).toBe(true);
+  });
+
+  it("words the sub-line in the active language", () => {
+    const sub = (dict: typeof pt, value: string) =>
+      regressionModels(dict).find((m) => m.value === value)?.sub;
+    expect(sub(pt, "efficientnet_b1")).toBe("eficiente · 7.8M");
+    expect(sub(en, "efficientnet_b1")).toBe("efficient · 7.8M");
+    expect(sub(pt, "convnext_tiny")).toBe("moderno · 28M");
+    expect(sub(en, "convnext_tiny")).toBe("modern · 28M");
+    expect(sub(en, "vit_b_16")).toBe("transformer · 86M");
   });
 });

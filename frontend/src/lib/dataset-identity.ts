@@ -1,3 +1,4 @@
+import type { Dict } from "../i18n/pt";
 import type { DatasetInfo } from "../types/run";
 
 export type DatasetVerdict =
@@ -14,25 +15,30 @@ export type DatasetVerdict =
  * reporting it as "different" would be worse than saying nothing.
  */
 export function compareDatasets(
+  t: Dict,
   a: DatasetInfo | null | undefined,
   b: DatasetInfo | null | undefined,
 ): DatasetVerdict {
   if (!a?.digest || !b?.digest) {
     return {
       kind: "unknown",
-      reason: "um dos runs não tem fingerprint (anterior a 26/07/2026)",
+      reason: t.datasetIdentity.noFingerprint,
     };
   }
   if (a.method !== b.method) {
-    return { kind: "unknown", reason: "os dois runs usaram método diferente" };
+    return { kind: "unknown", reason: t.datasetIdentity.differentMethod };
   }
   return a.digest === b.digest ? { kind: "same" } : { kind: "different" };
 }
 
 const UNITS = ["B", "KB", "MB", "GB", "TB"];
 
-/** `123456789` → `117,7 MB`. Comma is the decimal separator in pt-BR. */
-export function formatBytes(bytes: number | null | undefined): string {
+/** `123456789` → `117,7 MB` in pt-BR and `117.7 MB` in en-US: the decimal
+ *  separator follows `locale`, the one `useI18n()` hands out. */
+export function formatBytes(
+  bytes: number | null | undefined,
+  locale: string,
+): string {
   if (bytes == null) return "—";
   let value = bytes;
   let unit = 0;
@@ -40,7 +46,14 @@ export function formatBytes(bytes: number | null | undefined): string {
     value /= 1024;
     unit += 1;
   }
-  const shown = unit === 0 ? String(value) : value.toFixed(1).replace(".", ",");
+  const shown =
+    unit === 0
+      ? String(value)
+      : new Intl.NumberFormat(locale, {
+          minimumFractionDigits: 1,
+          maximumFractionDigits: 1,
+          useGrouping: false,
+        }).format(value);
   return `${shown} ${UNITS[unit]}`;
 }
 

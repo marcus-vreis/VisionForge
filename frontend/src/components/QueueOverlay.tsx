@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { ApiError, cancelQueuedRun, fetchQueue } from "../api/client";
+import { useT } from "../i18n/useT";
 import { strategyLabel, taskLabel, waitedFor } from "../lib/queue-format";
 import type { QueuedJobInfo } from "../types/run";
 
@@ -249,6 +250,7 @@ function JobRow({
   onCancel?: () => void;
   cancelling?: boolean;
 }) {
+  const t = useT();
   return (
     <div
       style={{
@@ -301,7 +303,7 @@ function JobRow({
             color: "var(--vf-text-muted)",
           }}
         >
-          {taskLabel(job.task)} · {strategyLabel(job.strategy)} ·{" "}
+          {taskLabel(t, job.task)} · {strategyLabel(t, job.strategy)} ·{" "}
           {running ? "em execução" : `esperando ${waitedFor(job.submitted_at)}`}
         </div>
       </div>

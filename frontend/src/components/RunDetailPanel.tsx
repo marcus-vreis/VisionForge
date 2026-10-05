@@ -84,7 +84,7 @@ function getConfigRecord(
 }
 
 export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
-  const t = useT();
+  const { t, locale } = useI18n();
   const graphLabels: Record<string, string> = t.plots.labels;
   const [detail, setDetail] = useState<RunDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -527,7 +527,7 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
                     label={t.runDetail.dataset.contents}
                     value={t.runDetail.dataset.files(
                       detail.dataset.n_files,
-                      formatBytes(detail.dataset.total_bytes),
+                      formatBytes(detail.dataset.total_bytes, locale),
                     )}
                   />
                   <KeyRow

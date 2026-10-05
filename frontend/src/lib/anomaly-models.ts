@@ -3,6 +3,7 @@
  *  produces a 422 on submit. */
 
 import type { PreprocessingStep } from "../components/PreprocessingPanel";
+import type { Dict } from "../i18n/pt";
 import {
   mergeFormShape,
   stepsFromPayload,
@@ -21,17 +22,25 @@ export interface AnomalyModelOption {
   sub?: string;
 }
 
-export const ANOMALY_MODELS: AnomalyModelOption[] = [
-  { value: "autoencoder", label: "Autoencoder", sub: "reconstrução · treinável" },
-  { value: "patchcore", label: "PatchCore", sub: "memory bank · backbone" },
-];
+/** The anomaly methods of the dropdown. The names are identifiers; the sub-line
+ *  is worded in the language of `t` (`anomalyModels(t)` with `const t = useT()`). */
+export function anomalyModels(t: Dict): AnomalyModelOption[] {
+  return [
+    { value: "autoencoder", label: "Autoencoder", sub: t.anomalyModels.autoencoder },
+    { value: "patchcore", label: "PatchCore", sub: t.anomalyModels.patchcore },
+  ];
+}
 
-export const ANOMALY_BACKBONES: AnomalyModelOption[] = [
-  { value: "resnet18", label: "ResNet-18", sub: "light" },
-  { value: "resnet34", label: "ResNet-34" },
-  { value: "resnet50", label: "ResNet-50" },
-  { value: "wide_resnet50_2", label: "Wide-ResNet-50-2", sub: "patchcore padrão" },
-];
+/** The feature extractors PatchCore can read, as `anomalyModels` words them. */
+export function anomalyBackbones(t: Dict): AnomalyModelOption[] {
+  const sub = t.anomalyModels.backbones;
+  return [
+    { value: "resnet18", label: "ResNet-18", sub: sub.resnet18 },
+    { value: "resnet34", label: "ResNet-34" },
+    { value: "resnet50", label: "ResNet-50" },
+    { value: "wide_resnet50_2", label: "Wide-ResNet-50-2", sub: sub.wide_resnet50_2 },
+  ];
+}
 
 /** Controlled form state for an anomaly run — mirrors AnomalyConfig. */
 export interface AnomalyForm {

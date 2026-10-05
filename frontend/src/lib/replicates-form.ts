@@ -2,6 +2,8 @@
  *  seed list and shaping the backend request. Kept out of the component so the
  *  validation rules are unit-testable. */
 
+import type { Dict } from "../i18n/pt";
+
 export type ReplicatesSeedMode = "auto" | "explicit";
 
 export interface ReplicatesPayload {
@@ -23,10 +25,11 @@ export function parseSeeds(raw: string): number[] {
 }
 
 /** Explicit seeds are valid when there are ≥2 and no duplicates — mirrors the
- *  backend's 422 rules so the button can disable before a doomed submit. */
-export function seedsProblem(seeds: number[]): string | null {
-  if (seeds.length < 2) return "informe pelo menos 2 seeds";
-  if (new Set(seeds).size !== seeds.length) return "seeds duplicadas";
+ *  backend's 422 rules so the button can disable before a doomed submit. The
+ *  problem is worded in the language of `t`. */
+export function seedsProblem(t: Dict, seeds: number[]): string | null {
+  if (seeds.length < 2) return t.replicatesForm.needTwoSeeds;
+  if (new Set(seeds).size !== seeds.length) return t.replicatesForm.duplicateSeeds;
   return null;
 }
 

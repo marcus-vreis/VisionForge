@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { useT } from "../i18n/useT";
 import { Segmented, TextField } from "./controls";
 import { importConfigFromYaml } from "../lib/yaml-config";
 
@@ -88,6 +89,7 @@ export function ExperimentHeader({
   onExportYaml,
   onImportConfig,
 }: ExperimentHeaderProps) {
+  const t = useT();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const [importOk, setImportOk] = useState<string | null>(null);
@@ -95,7 +97,7 @@ export function ExperimentHeader({
   const handleFile = async (file: File) => {
     setImportError(null);
     setImportOk(null);
-    const parsed = await importConfigFromYaml(file);
+    const parsed = await importConfigFromYaml(t, file);
     if ("error" in parsed) {
       setImportError(parsed.error);
       return;

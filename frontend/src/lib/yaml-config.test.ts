@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { en } from "../i18n/en";
+import { pt } from "../i18n/pt";
 import {
+  importConfigFromYaml,
   YamlParseError,
   parseYamlToConfig,
   sanitizeForExport,
@@ -164,31 +167,85 @@ describe("validateParsedConfig", () => {
 
   it("returns no errors for a valid config", () => {
     const data = { name: "test", task: "binary", model: { name: "resnet50", num_classes: 1 } };
-    expect(validateParsedConfig(data, SIMPLE_SCHEMA)).toEqual([]);
+    expect(validateParsedConfig(pt, data, SIMPLE_SCHEMA)).toEqual([]);
   });
 
   it("flags a missing required top-level field", () => {
     const data = { task: "binary", model: { name: "resnet50", num_classes: 1 } };
-    const errors = validateParsedConfig(data, SIMPLE_SCHEMA);
+    const errors = validateParsedConfig(pt, data, SIMPLE_SCHEMA);
     expect(errors.some((e) => e.field[0] === "name")).toBe(true);
   });
 
   it("flags a missing required nested field", () => {
     const data = { name: "test", task: "binary", model: { name: "resnet50" } };
-    const errors = validateParsedConfig(data, SIMPLE_SCHEMA);
+    const errors = validateParsedConfig(pt, data, SIMPLE_SCHEMA);
     expect(errors.some((e) => e.field.join(".") === "model.num_classes")).toBe(true);
   });
 
   it("flags an invalid enum value", () => {
     const data = { name: "test", task: "detection", model: { name: "resnet50", num_classes: 1 } };
-    const errors = validateParsedConfig(data, SIMPLE_SCHEMA);
+    const errors = validateParsedConfig(pt, data, SIMPLE_SCHEMA);
     expect(errors.some((e) => e.field[0] === "task")).toBe(true);
+  });
+
+  it("words each problem in the language it is given", () => {
+    const data = { task: "detection", model: { name: "resnet50", num_classes: "many" } };
+    const say = (dict: typeof pt) =>
+      Object.fromEntries(
+        validateParsedConfig(dict, data, {
+          ...SIMPLE_SCHEMA,
+          properties: {
+            ...SIMPLE_SCHEMA.properties,
+            model: {
+              type: "object",
+              properties: { num_classes: { type: "integer" }, name: { type: "string" } },
+            },
+          },
+        }).map((e) => [e.field.join("."), e.message]),
+      );
+    expect(say(pt)).toEqual({
+      name: "Campo obrigatório ausente.",
+      task: "Deve ser um de: binary, multiclass.",
+      "model.num_classes": "Esperado um inteiro.",
+    });
+    expect(say(en)).toEqual({
+      name: "Required field is missing.",
+      task: "Must be one of: binary, multiclass.",
+      "model.num_classes": "Expected an integer.",
+    });
   });
 
   it("does NOT flag task/num_classes cross-field mismatch (server-side only)", () => {
     // task=binary but num_classes=5 — client validation must pass this through
     const data = { name: "test", task: "binary", model: { name: "resnet50", num_classes: 5 } };
-    const errors = validateParsedConfig(data, SIMPLE_SCHEMA);
+    const errors = validateParsedConfig(pt, data, SIMPLE_SCHEMA);
     expect(errors).toEqual([]);
+  });
+});
+
+describe("importConfigFromYaml", () => {
+  const file = (text: string) => new File([text], "config.yaml");
+
+  it("hands back the parsed config", async () => {
+    expect(await importConfigFromYaml(pt, file("name: run_1\n"))).toEqual({
+      data: { name: "run_1" },
+    });
+  });
+
+  it("reports a file that is not a YAML mapping in the language it is given", async () => {
+    const asPt = await importConfigFromYaml(pt, file("- a\n- b\n"));
+    const asEn = await importConfigFromYaml(en, file("- a\n- b\n"));
+    expect("error" in asPt && asPt.error).toMatch(/^Arquivo YAML inválido: /);
+    expect("error" in asEn && asEn.error).toMatch(/^Invalid YAML file: /);
+  });
+
+  it("reports a file it cannot read in the language it is given", async () => {
+    const unreadable = { text: () => Promise.reject(new Error("boom")) } as unknown as File;
+    expect(await importConfigFromYaml(pt, unreadable)).toEqual({
+      error: "Não foi possível ler o arquivo YAML: boom",
+    });
+    expect(await importConfigFromYaml(en, unreadable)).toEqual({
+      error: "Could not read the YAML file: boom",
+    });
   });
 });

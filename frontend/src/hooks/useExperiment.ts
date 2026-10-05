@@ -10,6 +10,8 @@ import {
   runRegression,
   runSegmentation,
 } from "../api/client";
+import { useT } from "../i18n/useT";
+import type { Dict } from "../i18n/pt";
 import type {
   RunResponse,
   RunResult,
@@ -43,21 +45,10 @@ export interface ValidationError {
   message: string;
 }
 
-const SECTION_LABELS: Record<string, string> = {
-  model: "Modelo",
-  training: "Treinamento",
-  data: "Dataset",
-  output: "Saída",
-  classification: "Classificação",
-  transforms: "Transformações",
-  preprocessing: "Pré-processamento",
-  steps: "Filtro",
-  scheduler: "Scheduler",
-  device: "Dispositivo",
-};
-
 /** Preprocessing filter ids whose Pydantic errors should appear with a
- * human-friendly name in field path summaries. */
+ * human-friendly name in field path summaries. These are the filters' own
+ * technical names, which read the same in every language, so they stay here
+ * rather than in the dictionaries. */
 const PREPROCESS_KIND_LABELS: Record<string, string> = {
   gaussian_blur: "Gaussian blur",
   median_blur: "Median blur",
@@ -70,41 +61,17 @@ const PREPROCESS_KIND_LABELS: Record<string, string> = {
   wavelet: "Wavelet",
 };
 
-const FIELD_LABELS: Record<string, string> = {
-  name: "Nome",
-  task: "Tipo de tarefa",
-  num_classes: "Nº de classes",
-  pretrained: "Pesos pré-treinados",
-  weights_path: "Caminho dos pesos",
-  learning_rate: "Learning Rate",
-  epochs: "Épocas",
-  batch_size: "Batch size",
-  early_stopping_patience: "Early stop",
-  optimizer: "Otimizador",
-  weight_decay: "Weight decay",
-  seed: "Seed",
-  base_dir: "Diretório base",
-  train_dir: "Subpasta treino",
-  val_dir: "Subpasta validação",
-  test_dir: "Subpasta teste",
-  num_workers: "Workers",
-  pin_memory: "Pin memory",
-  image_size: "Tamanho da imagem",
-  horizontal_flip: "Flip horizontal",
-  rotation_degrees: "Rotação",
-  color_jitter: "Color jitter",
-  normalize_mean: "Normalização (média)",
-  normalize_std: "Normalização (std)",
-};
-
-/** Build a user-readable path like "Treinamento › Learning Rate".
+/** Build a user-readable path like "Treinamento › Learning Rate", with the
+ * section and field names in the language of `t` (`const t = useT()`).
  *
  * Numeric segments (Pydantic list index) become "#N" so the user can tell
  * which filter slot in the pipeline failed validation. A known filter kind
  * (passed alongside via the special "kind=foo" pseudo-segment) gets its
  * human label inserted next to the index.
  */
-export function humanizeFieldPath(loc: (string | number)[]): string {
+export function humanizeFieldPath(t: Dict, loc: (string | number)[]): string {
+  const sections: Record<string, string> = t.experiment.sections;
+  const fields: Record<string, string> = t.experiment.fields;
   return loc
     .filter((p) => p !== "body")
     .map((p) => {
@@ -116,13 +83,21 @@ export function humanizeFieldPath(loc: (string | number)[]): string {
       const k = String(p);
       const known = PREPROCESS_KIND_LABELS[k];
       if (known) return known;
-      return SECTION_LABELS[k] ?? FIELD_LABELS[k] ?? k;
+      return sections[k] ?? fields[k] ?? k;
     })
     .filter((s) => s !== "")
     .join(" › ");
 }
 
 export function useExperiment(): ExperimentState {
+  const t = useT();
+  // The polling timer and the submit callback outlive the render that made them,
+  // so they word their messages from this ref and not from the dictionary they
+  // closed over: a language switched mid-run still applies to what comes next.
+  const tRef = useRef(t);
+  useEffect(() => {
+    tRef.current = t;
+  }, [t]);
   const [status, setStatus] = useState<RunStatus>({
     status: "idle",
     run_id: null,
@@ -192,7 +167,7 @@ export function useExperiment(): ExperimentState {
         const msg =
           e instanceof ApiError
             ? e.message
-            : "Falha ao buscar resultados do experimento.";
+            : tRef.current.experiment.resultFetchFailed;
         setError(msg);
         setStatus({ status: "failed", run_id: runId, error: msg });
       }
@@ -245,7 +220,7 @@ export function useExperiment(): ExperimentState {
           } else if (s.status === "failed") {
             stopPolling();
             setError(
-              s.error ?? "O experimento falhou sem mensagem detalhada.",
+              s.error ?? tRef.current.experiment.failedNoDetail,
             );
           }
         } catch (e) {
@@ -253,7 +228,7 @@ export function useExperiment(): ExperimentState {
           const msg =
             e instanceof ApiError
               ? e.message
-              : "Conexão com o servidor perdida durante o polling.";
+              : tRef.current.experiment.connectionLost;
           setError(msg);
           setStatus((prev) => ({
             status: "failed",
@@ -324,14 +299,14 @@ export function useExperiment(): ExperimentState {
               })),
             );
             setError(
-              `${e.validationErrors.length} campo(s) com erro de validação. Confira os destaques no formulário.`,
+              tRef.current.experiment.validationFailed(e.validationErrors.length),
             );
             return;
           }
           if (e.status === 409) {
             // Kept for older servers: since ADR-075 a busy server queues the
             // submission instead of refusing it.
-            setError("Já existe um experimento em execução. Aguarde terminar.");
+            setError(tRef.current.experiment.alreadyRunning);
             return;
           }
           if (e.status === 0) {
@@ -342,10 +317,10 @@ export function useExperiment(): ExperimentState {
           return;
         }
         if (e instanceof Error) {
-          setError(`Erro inesperado: ${e.message}`);
+          setError(tRef.current.experiment.unexpected(e.message));
           return;
         }
-        setError("Erro desconhecido ao iniciar o experimento.");
+        setError(tRef.current.experiment.unknown);
       }
     },
     [startPolling, openEventSource],

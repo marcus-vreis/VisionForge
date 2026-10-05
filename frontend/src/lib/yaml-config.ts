@@ -1,4 +1,5 @@
 import * as jsyaml from "js-yaml";
+import type { Dict } from "../i18n/pt";
 import type { JsonSchema } from "../types/schema";
 import type { ValidationError } from "../hooks/useExperiment";
 
@@ -26,9 +27,10 @@ export function exportConfigToYaml(
 
 /**
  * Read a File, parse it as YAML, and return either the parsed config object
- * or a PT-BR friendly error message string.
+ * or an error message in the language of `t`.
  */
 export async function importConfigFromYaml(
+  t: Dict,
   file: File,
 ): Promise<{ data: Record<string, unknown> } | { error: string }> {
   let text: string;
@@ -36,7 +38,7 @@ export async function importConfigFromYaml(
     text = await file.text();
   } catch (e) {
     const reason = e instanceof Error ? e.message : String(e);
-    return { error: `Não foi possível ler o arquivo YAML: ${reason}` };
+    return { error: t.yamlConfig.cannotRead(reason) };
   }
 
   try {
@@ -44,10 +46,10 @@ export async function importConfigFromYaml(
     return { data };
   } catch (e) {
     if (e instanceof YamlParseError) {
-      return { error: `Arquivo YAML inválido: ${e.message}` };
+      return { error: t.yamlConfig.invalidFile(e.message) };
     }
     const reason = e instanceof Error ? e.message : String(e);
-    return { error: `Não foi possível ler o arquivo YAML: ${reason}` };
+    return { error: t.yamlConfig.cannotRead(reason) };
   }
 }
 
@@ -105,25 +107,28 @@ export function parseYamlToConfig(yamlText: string): Record<string, unknown> {
  * Checks shape, required fields, and basic leaf types only.
  * Cross-field invariants (e.g. task ↔ num_classes) are intentionally excluded —
  * those are enforced server-side via Pydantic and surfaced through the 422 path.
+ * The messages are worded in the language of `t`.
  */
 export function validateParsedConfig(
+  t: Dict,
   data: unknown,
   schema: JsonSchema,
   defs: Record<string, JsonSchema> = {},
   path: string[] = [],
 ): ValidationError[] {
   const errors: ValidationError[] = [];
+  const msg = t.yamlConfig;
   const resolved = resolveRef(schema, defs);
 
   if (resolved.anyOf) {
     const nonNull = resolved.anyOf.find((s) => s.type !== "null");
-    if (nonNull) return validateParsedConfig(data, nonNull, defs, path);
+    if (nonNull) return validateParsedConfig(t, data, nonNull, defs, path);
     return errors;
   }
 
   if (resolved.type === "object" && resolved.properties) {
     if (data === null || typeof data !== "object" || Array.isArray(data)) {
-      errors.push({ field: path, message: "Expected an object." });
+      errors.push({ field: path, message: msg.expectedObject });
       return errors;
     }
     const obj = data as Record<string, unknown>;
@@ -131,11 +136,11 @@ export function validateParsedConfig(
       const childPath = [...path, key];
       if (!(key in obj)) {
         if (resolved.required?.includes(key)) {
-          errors.push({ field: childPath, message: "Required field is missing." });
+          errors.push({ field: childPath, message: msg.requiredMissing });
         }
         continue;
       }
-      errors.push(...validateParsedConfig(obj[key], propSchema, defs, childPath));
+      errors.push(...validateParsedConfig(t, obj[key], propSchema, defs, childPath));
     }
     return errors;
   }
@@ -144,14 +149,14 @@ export function validateParsedConfig(
     if (!resolved.enum.includes(data as string | number | boolean)) {
       errors.push({
         field: path,
-        message: `Must be one of: ${resolved.enum.map(String).join(", ")}.`,
+        message: msg.mustBeOneOf(resolved.enum.map(String).join(", ")),
       });
     }
     return errors;
   }
 
   if (resolved.type === "boolean" && typeof data !== "boolean") {
-    errors.push({ field: path, message: "Expected a boolean." });
+    errors.push({ field: path, message: msg.expectedBoolean });
     return errors;
   }
 
@@ -159,12 +164,15 @@ export function validateParsedConfig(
     (resolved.type === "number" || resolved.type === "integer") &&
     typeof data !== "number"
   ) {
-    errors.push({ field: path, message: `Expected a ${resolved.type}.` });
+    errors.push({
+      field: path,
+      message: resolved.type === "integer" ? msg.expectedInteger : msg.expectedNumber,
+    });
     return errors;
   }
 
   if (resolved.type === "string" && typeof data !== "string") {
-    errors.push({ field: path, message: "Expected a string." });
+    errors.push({ field: path, message: msg.expectedString });
     return errors;
   }
 

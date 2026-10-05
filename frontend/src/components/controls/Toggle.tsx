@@ -1,3 +1,4 @@
+import { useT } from "../../i18n/useT";
 import { FieldLabel } from "./FieldLabel";
 
 interface ToggleProps {
@@ -11,6 +12,7 @@ interface ToggleProps {
 
 /** Full-width toggle button with an inline track indicator. */
 export function Toggle({ label, value, onChange, hint, help }: ToggleProps) {
+  const t = useT();
   return (
     <div>
       <FieldLabel dot hint={hint} help={help}>
@@ -65,7 +67,7 @@ export function Toggle({ label, value, onChange, hint, help }: ToggleProps) {
             textTransform: "uppercase",
           }}
         >
-          {value ? "ATIVADO" : "DESATIVADO"}
+          {value ? t.toggle.on : t.toggle.off}
         </span>
       </button>
     </div>

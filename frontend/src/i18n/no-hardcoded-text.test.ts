@@ -25,20 +25,7 @@ const NOT_YET_MIGRATED = new Set([
   "components/SchemaForm.tsx",
   "components/SweepCard.tsx",
   "components/TrainingOverlay.tsx",
-  "components/controls/Toggle.tsx",
-  "hooks/useExperiment.ts",
-  "lib/anomaly-models.ts",
-  "lib/custom-tasks.ts",
-  "lib/dataset-identity.ts",
-  "lib/grid-axis.ts",
-  "lib/queue-format.ts",
-  "lib/regression-models.ts",
-  "lib/replicates-form.ts",
-  "lib/run-notify.ts",
-  "lib/segmentation-models.ts",
   "lib/tour.ts",
-  "lib/yaml-config.ts",
-  "types/tasks.ts",
 ]);
 
 /** Exact texts that read the same in every language. */

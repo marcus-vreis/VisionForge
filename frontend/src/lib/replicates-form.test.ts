@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { en } from "../i18n/en";
+import { pt } from "../i18n/pt";
 import {
   buildReplicatesPayload,
   parseSeeds,
@@ -13,9 +15,12 @@ describe("replicates-form", () => {
   });
 
   it("flags fewer than two seeds and duplicates (mirrors the backend 422s)", () => {
-    expect(seedsProblem([42])).toMatch(/pelo menos 2/);
-    expect(seedsProblem([1, 1, 2])).toMatch(/duplicadas/);
-    expect(seedsProblem([1, 2])).toBeNull();
+    expect(seedsProblem(pt, [42])).toMatch(/pelo menos 2/);
+    expect(seedsProblem(pt, [1, 1, 2])).toMatch(/duplicadas/);
+    expect(seedsProblem(pt, [1, 2])).toBeNull();
+    expect(seedsProblem(en, [42])).toBe("enter at least 2 seeds");
+    expect(seedsProblem(en, [1, 1, 2])).toBe("duplicate seeds");
+    expect(seedsProblem(en, [1, 2])).toBeNull();
   });
 
   it("auto mode sends n_replicates and omits seeds", () => {

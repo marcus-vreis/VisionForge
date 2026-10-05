@@ -1,36 +1,64 @@
 import { describe, expect, it } from "vitest";
 
+import { en } from "../i18n/en";
+import { pt } from "../i18n/pt";
 import { strategyLabel, taskLabel, waitedFor } from "./queue-format";
 
 describe("taskLabel", () => {
   it("translates the built-in task keys", () => {
-    expect(taskLabel("segmentation")).toBe("Segmentação");
+    expect(taskLabel(pt, "segmentation")).toBe("Segmentação");
+    expect(taskLabel(en, "segmentation")).toBe("Segmentation");
   });
 
   it("shows a researcher's task under its own name", () => {
-    expect(taskLabel("custom:example_counting")).toBe("example_counting");
+    expect(taskLabel(pt, "custom:example_counting")).toBe("example_counting");
+    expect(taskLabel(en, "custom:example_counting")).toBe("example_counting");
   });
 
   it("falls back to the raw key rather than hiding an unknown task", () => {
-    expect(taskLabel("something_new")).toBe("something_new");
+    expect(taskLabel(pt, "something_new")).toBe("something_new");
   });
 });
 
 describe("strategyLabel", () => {
   it("translates the plain path submitted as a classification block", () => {
-    expect(strategyLabel("classification")).toBe("treino simples");
+    expect(strategyLabel(pt, "classification")).toBe("treino simples");
+    expect(strategyLabel(en, "classification")).toBe("single run");
+    expect(strategyLabel(pt, "simple")).toBe(strategyLabel(pt, "classification"));
   });
 
   it("keeps the sweep mode visible", () => {
-    expect(strategyLabel("sweep:optuna")).toBe("sweep · optuna");
+    expect(strategyLabel(pt, "sweep:optuna")).toBe("sweep · optuna");
+    expect(strategyLabel(en, "sweep:optuna")).toBe("sweep · optuna");
   });
 
   it("translates the hyphenated strategy name", () => {
-    expect(strategyLabel("replicated-comparison")).toBe("comparação replicada");
+    expect(strategyLabel(pt, "replicated-comparison")).toBe("comparação replicada");
+    expect(strategyLabel(en, "replicated-comparison")).toBe("replicated comparison");
   });
 
   it("falls back to the raw value", () => {
-    expect(strategyLabel("brand_new")).toBe("brand_new");
+    expect(strategyLabel(pt, "brand_new")).toBe("brand_new");
+  });
+
+  it("names every strategy the backend sends, in both languages", () => {
+    const expected: Record<string, [string, string]> = {
+      simple: ["treino simples", "single run"],
+      classification: ["treino simples", "single run"],
+      cross_validation: ["K-fold", "K-fold"],
+      cv: ["K-fold", "K-fold"],
+      transfer_learning: ["transfer learning", "transfer learning"],
+      grid_search: ["grid search", "grid search"],
+      random_search: ["random search", "random search"],
+      sweep: ["sweep", "sweep"],
+      replicates: ["réplicas", "replicates"],
+      comparison: ["comparação", "comparison"],
+      "replicated-comparison": ["comparação replicada", "replicated comparison"],
+    };
+    for (const [strategy, [ptText, enText]] of Object.entries(expected)) {
+      expect(strategyLabel(pt, strategy), strategy).toBe(ptText);
+      expect(strategyLabel(en, strategy), strategy).toBe(enText);
+    }
   });
 });
 

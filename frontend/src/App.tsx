@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   fetchQueue,
   fetchSchema,
@@ -57,6 +57,7 @@ import {
   buildCustomPayload,
   isCustomTask,
   mergeTasks,
+  type TaskDescriptor,
 } from "./lib/custom-tasks";
 import { CustomTaskPanel } from "./components/CustomTaskPanel";
 import { ResultsView } from "./components/ResultsView";
@@ -66,7 +67,7 @@ import { TrainingOverlay } from "./components/TrainingOverlay";
 import { useExperiment } from "./hooks/useExperiment";
 import type { RunResponse } from "./types/run";
 import type { JsonSchema } from "./types/schema";
-import { TASKS, type TaskDefinition } from "./types/tasks";
+import { taskDefinitions } from "./types/tasks";
 
 /** Standalone tasks that expose the comparison/sweep advanced surface. */
 type AdvancedTask = "regression" | "segmentation" | "detection" | "anomaly";
@@ -126,10 +127,15 @@ export default function App() {
   const [anomalyForm, setAnomalyForm] = useState<AnomalyForm>(
     makeDefaultAnomalyForm,
   );
-  // Tabs are data-driven: built-ins are local, custom tasks arrive from
+  // Tabs are data-driven: built-ins are local (their text comes from the
+  // dictionary, so it follows the language), custom tasks arrive from
   // /api/tasks (ADR-058). One form per custom key so switching tabs
   // preserves what the researcher typed.
-  const [tasks, setTasks] = useState<TaskDefinition[]>(TASKS);
+  const [taskRows, setTaskRows] = useState<TaskDescriptor[]>([]);
+  const tasks = useMemo(
+    () => mergeTasks(t, taskDefinitions(t), taskRows),
+    [t, taskRows],
+  );
   const [customForms, setCustomForms] = useState<
     Record<string, Record<string, unknown>>
   >({});
@@ -147,6 +153,13 @@ export default function App() {
   // before the user has done anything is the one people reflexively deny, and
   // a denial sticks.
   const announced = useRef<string | null>(null);
+  // The latest dictionary for code that must not re-run when only the language
+  // changes: the effect below (mid-run that would ask for notification
+  // permission a second time) and the tasks reload.
+  const tRef = useRef(t);
+  useEffect(() => {
+    tRef.current = t;
+  }, [t]);
   useEffect(() => {
     if (status.status === "running") {
       void requestPermission();
@@ -159,6 +172,7 @@ export default function App() {
     if (announced.current === key) return;
     announced.current = key;
     announce(
+      tRef.current,
       status.status,
       status.run_id ?? t.app.unnamedRun,
       status.error ?? undefined,
@@ -214,10 +228,14 @@ export default function App() {
   const reloadTasks = useCallback(() => {
     fetchTasks()
       .then((res) => {
-        const merged = mergeTasks(TASKS, res.tasks);
-        setTasks(merged);
+        setTaskRows(res.tasks);
         // A hidden or deleted task must not stay selected — its panel would
         // fetch a schema for a tab that no longer exists.
+        const merged = mergeTasks(
+          tRef.current,
+          taskDefinitions(tRef.current),
+          res.tasks,
+        );
         setActiveKey((current) =>
           merged.some((task) => task.key === current) ? current : merged[0].key,
         );

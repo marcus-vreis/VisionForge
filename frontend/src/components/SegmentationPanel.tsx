@@ -6,7 +6,7 @@ import { useState } from "react";
 import { fetchTaskSchema, pickDatasetFolder } from "../api/client";
 import {
   SEGMENTATION_LOSSES,
-  SEGMENTATION_MODELS,
+  segmentationModels,
   buildSegmentationPayload,
   ignoreIndexCollides,
   segmentationFormFromPayload,
@@ -165,7 +165,7 @@ export function SegmentationPanel({
         onImportConfig={async (data) => {
           try {
             const schema = await fetchTaskSchema("segmentation");
-            const issues = validateParsedConfig(data, schema, schema.$defs ?? {});
+            const issues = validateParsedConfig(t, data, schema, schema.$defs ?? {});
             if (issues.length > 0) {
               return issues
                 .slice(0, 5)
@@ -183,7 +183,7 @@ export function SegmentationPanel({
         <SweepCard
           metrics={compareMetrics}
           pathHints={SWEEP_PATH_HINTS}
-          modelOptions={SEGMENTATION_MODELS}
+          modelOptions={segmentationModels(t)}
           accent={accent}
           disabled={busy}
           onSweep={onSweep}
@@ -211,7 +211,7 @@ export function SegmentationPanel({
             label={t.segmentationPanel.model.architecture}
             value={formData.model.name}
             onChange={(v) => setModel({ name: v })}
-            options={SEGMENTATION_MODELS}
+            options={segmentationModels(t)}
             hint={t.segmentationPanel.model.architectureHint}
           />
           <NumberField

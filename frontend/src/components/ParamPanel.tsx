@@ -763,7 +763,7 @@ function GridAxisExtension({
     >
       <div style={gridAxisTagStyle}>{t.paramPanel.grid.axisTag(values.length)}</div>
       {extras.map((v, i) => {
-        const err = validateGridValue(name, schema, v);
+        const err = validateGridValue(t, name, schema, v);
         return (
           <div key={i}>
             <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
@@ -1813,7 +1813,7 @@ export function ParamPanel({
     if (!file) return;
     // Reset input so the same file can be re-imported if needed
     e.target.value = "";
-    void importConfigFromYaml(file).then((result) => {
+    void importConfigFromYaml(t, file).then((result) => {
       if ("error" in result) {
         setImportError(result.error);
         return;
@@ -1826,6 +1826,7 @@ export function ParamPanel({
         return;
       }
       const issues = validateParsedConfig(
+        t,
         result.data,
         schema,
         schema.$defs ?? {},
@@ -1836,7 +1837,7 @@ export function ParamPanel({
         const summary = issues
           .slice(0, 5)
           .map(
-            (iss) => `· ${humanizeFieldPath(iss.field)} — ${iss.message}`,
+            (iss) => `· ${humanizeFieldPath(t, iss.field)} — ${iss.message}`,
           )
           .join("\n");
         setImportError(
@@ -2678,7 +2679,7 @@ export function ParamPanel({
             {validationErrors.map((err, i) => (
               <li key={i}>
                 <span style={{ color: "var(--vf-text)" }}>
-                  {humanizeFieldPath(err.field)}
+                  {humanizeFieldPath(t, err.field)}
                 </span>
                 <span style={{ color: "oklch(0.85 0.14 22)" }}>
                   {" — "}

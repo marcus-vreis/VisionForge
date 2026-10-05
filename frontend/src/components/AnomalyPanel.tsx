@@ -3,8 +3,8 @@ import { useT } from "../i18n/useT";
 import { useState } from "react";
 import { fetchTaskSchema, pickDatasetFolder } from "../api/client";
 import {
-  ANOMALY_BACKBONES,
-  ANOMALY_MODELS,
+  anomalyBackbones,
+  anomalyModels,
   anomalyFormFromPayload,
   buildAnomalyPayload,
   isPatchCore,
@@ -145,7 +145,7 @@ export function AnomalyPanel({
         onImportConfig={async (data) => {
           try {
             const schema = await fetchTaskSchema("anomaly");
-            const issues = validateParsedConfig(data, schema, schema.$defs ?? {});
+            const issues = validateParsedConfig(t, data, schema, schema.$defs ?? {});
             if (issues.length > 0) {
               return issues
                 .slice(0, 5)
@@ -163,7 +163,7 @@ export function AnomalyPanel({
         <SweepCard
           metrics={compareMetrics}
           pathHints={SWEEP_PATH_HINTS}
-          modelOptions={ANOMALY_MODELS}
+          modelOptions={anomalyModels(t)}
           accent={accent}
           disabled={busy}
           onSweep={onSweep}
@@ -188,7 +188,7 @@ export function AnomalyPanel({
             label={t.anomalyPanel.model.method}
             value={formData.model.name}
             onChange={(v) => setModel({ name: v })}
-            options={ANOMALY_MODELS}
+            options={anomalyModels(t)}
             hint={t.anomalyPanel.model.methodHint}
           />
           {patchcore ? (
@@ -197,7 +197,7 @@ export function AnomalyPanel({
                 label={t.taskPanel.backbone}
                 value={formData.model.backbone}
                 onChange={(v) => setModel({ backbone: v })}
-                options={ANOMALY_BACKBONES}
+                options={anomalyBackbones(t)}
                 hint={t.anomalyPanel.model.backboneHint}
               />
               <NumberField

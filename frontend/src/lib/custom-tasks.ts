@@ -8,6 +8,7 @@
  * metadata — because its whole form is generated from the Config's JSON
  * Schema at runtime. No user-supplied JavaScript, ever.
  */
+import type { Dict } from "../i18n/pt";
 import type { JsonSchema } from "../types/schema";
 import type { TaskDefinition } from "../types/tasks";
 
@@ -35,14 +36,18 @@ export function isCustomTask(
   return (task as CustomTaskDefinition).custom === true;
 }
 
-/** Turn a custom descriptor into the shape TabBar/TaskHero already render. */
-export function descriptorToDefinition(d: TaskDescriptor): CustomTaskDefinition {
+/** Turn a custom descriptor into the shape TabBar/TaskHero already render.
+ *  The dictionary only supplies the description of a task that declared none. */
+export function descriptorToDefinition(
+  t: Dict,
+  d: TaskDescriptor,
+): CustomTaskDefinition {
   return {
     key: d.key,
     label: d.label,
     // The hero's "short" tag: the key is more useful than a truncated label.
     short: d.key,
-    description: d.description || "Tarefa definida pelo pesquisador",
+    description: d.description || t.customTasks.fallbackDescription,
     accent: d.accent,
     // Empty: a custom task has no curated model list or param cards — the
     // form comes from its schema.
@@ -63,6 +68,7 @@ export function descriptorToDefinition(d: TaskDescriptor): CustomTaskDefinition 
  * broken user file cannot break the five tabs that always work.
  */
 export function mergeTasks(
+  t: Dict,
   builtins: TaskDefinition[],
   descriptors: TaskDescriptor[],
 ): TaskDefinition[] {
@@ -70,7 +76,7 @@ export function mergeTasks(
   const customs = descriptors
     .filter((d) => d.custom && !builtinKeys.has(d.key))
     .sort((a, b) => a.label.localeCompare(b.label))
-    .map(descriptorToDefinition);
+    .map((d) => descriptorToDefinition(t, d));
   return [...builtins, ...customs];
 }
 

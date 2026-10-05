@@ -3,6 +3,7 @@
  *  Keep in sync: a name the backend rejects produces a 422 on submit. */
 
 import type { PreprocessingStep } from "../components/PreprocessingPanel";
+import type { Dict } from "../i18n/pt";
 import {
   joinList,
   mergeFormShape,
@@ -23,20 +24,25 @@ export interface RegressionModelOption {
   sub?: string;
 }
 
-export const REGRESSION_MODELS: RegressionModelOption[] = [
-  { value: "resnet18", label: "ResNet-18", sub: "light · 11.7M" },
-  { value: "resnet34", label: "ResNet-34", sub: "21.8M" },
-  { value: "resnet50", label: "ResNet-50", sub: "imagenet · 25.6M" },
-  { value: "resnet101", label: "ResNet-101", sub: "deep · 44.5M" },
-  { value: "efficientnet_b1", label: "EfficientNet-B1", sub: "eficiente · 7.8M" },
-  { value: "efficientnet_b7", label: "EfficientNet-B7", sub: "grande · 66M" },
-  { value: "vgg16", label: "VGG-16", sub: "clássico · 138M" },
-  { value: "vgg19", label: "VGG-19", sub: "144M" },
-  { value: "alexnet", label: "AlexNet", sub: "baseline · 61M" },
-  { value: "vit_b_16", label: "ViT-B/16", sub: "transformer · 86M" },
-  { value: "swin_t", label: "Swin-T", sub: "transformer · 28M" },
-  { value: "convnext_tiny", label: "ConvNeXt-T", sub: "moderno · 28M" },
-];
+/** The backbones of the dropdown. The names are identifiers; the sub-line is
+ *  worded in the language of `t` (`regressionModels(t)` with `const t = useT()`). */
+export function regressionModels(t: Dict): RegressionModelOption[] {
+  const sub = t.regressionModels;
+  return [
+    { value: "resnet18", label: "ResNet-18", sub: sub.resnet18 },
+    { value: "resnet34", label: "ResNet-34", sub: sub.resnet34 },
+    { value: "resnet50", label: "ResNet-50", sub: sub.resnet50 },
+    { value: "resnet101", label: "ResNet-101", sub: sub.resnet101 },
+    { value: "efficientnet_b1", label: "EfficientNet-B1", sub: sub.efficientnet_b1 },
+    { value: "efficientnet_b7", label: "EfficientNet-B7", sub: sub.efficientnet_b7 },
+    { value: "vgg16", label: "VGG-16", sub: sub.vgg16 },
+    { value: "vgg19", label: "VGG-19", sub: sub.vgg19 },
+    { value: "alexnet", label: "AlexNet", sub: sub.alexnet },
+    { value: "vit_b_16", label: "ViT-B/16", sub: sub.vit_b_16 },
+    { value: "swin_t", label: "Swin-T", sub: sub.swin_t },
+    { value: "convnext_tiny", label: "ConvNeXt-T", sub: sub.convnext_tiny },
+  ];
+}
 
 export const REGRESSION_LOSSES: { value: string; label: string }[] = [
   { value: "mse", label: "MSE" },

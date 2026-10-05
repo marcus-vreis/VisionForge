@@ -10,6 +10,8 @@
  * carries the guarantee, and the notification is the bonus on top.
  */
 
+import type { Dict } from "../i18n/pt";
+
 export type RunOutcome = "completed" | "failed";
 
 const BASE_TITLE = "VisionForge — Local AI Training";
@@ -20,21 +22,24 @@ export function titleFor(outcome: RunOutcome, label: string): string {
   return `${mark} ${label} — VisionForge`;
 }
 
-/** What the notification says. Kept to one line: OS toasts truncate the rest. */
+/** What the notification says, in the language of `t`. Kept to one line: OS
+ * toasts truncate the rest. */
 export function messageFor(
+  t: Dict,
   outcome: RunOutcome,
   label: string,
   detail?: string,
 ): { title: string; body: string } {
+  const words = t.runNotify;
   if (outcome === "completed") {
     return {
-      title: `Treino concluído — ${label}`,
-      body: detail ? detail : "Abra o VisionForge para ver os resultados.",
+      title: words.completedTitle(label),
+      body: detail ? detail : words.completedBody,
     };
   }
   return {
-    title: `Treino falhou — ${label}`,
-    body: detail ? detail : "Abra o VisionForge para ver o erro.",
+    title: words.failedTitle(label),
+    body: detail ? detail : words.failedBody,
   };
 }
 
@@ -75,6 +80,7 @@ export function resetTitle(doc: Document = document): void {
  * is noise.
  */
 export function announce(
+  t: Dict,
   outcome: RunOutcome,
   label: string,
   detail?: string,
@@ -91,7 +97,7 @@ export function announce(
   doc.title = titleFor(outcome, label);
   if (!hidden || !canNotify(notification)) return;
 
-  const { title, body } = messageFor(outcome, label, detail);
+  const { title, body } = messageFor(t, outcome, label, detail);
   try {
     new notification!(title, { body, tag: "visionforge-run" });
   } catch {

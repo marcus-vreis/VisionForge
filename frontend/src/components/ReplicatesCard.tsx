@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useT } from "../i18n/useT";
 import { NumberField, SelectField, Segmented, TextField } from "./controls";
 import {
   buildReplicatesPayload,
@@ -51,13 +52,14 @@ export function ReplicatesCard({
   onReplicates,
   runSignal,
 }: ReplicatesCardProps) {
+  const t = useT();
   const [seedMode, setSeedMode] = useState<ReplicatesSeedMode>("auto");
   const [nReplicates, setNReplicates] = useState(5);
   const [rawSeeds, setRawSeeds] = useState("42, 43, 44, 45, 46");
   const [metric, setMetric] = useState(metrics[0]?.value ?? "");
 
   const seeds = parseSeeds(rawSeeds);
-  const problem = seedMode === "explicit" ? seedsProblem(seeds) : null;
+  const problem = seedMode === "explicit" ? seedsProblem(t, seeds) : null;
   const count = seedMode === "explicit" ? seeds.length : nReplicates;
   const canRun = !disabled && problem === null && count >= 2;
 

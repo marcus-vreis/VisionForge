@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
+import { en } from "../i18n/en";
+import { pt } from "../i18n/pt";
 import {
   buildAnomalyPayload,
   isPatchCore,
   makeDefaultAnomalyForm,
+  anomalyBackbones,
+  anomalyModels,
 } from "./anomaly-models";
 
 describe("anomaly-models", () => {
@@ -81,5 +85,31 @@ describe("anomaly-models · YAML round-trip (ADR-059 header)", () => {
 
     const roundTripped = anomalyFormFromPayload(buildAnomalyPayload(form));
     expect(roundTripped).toEqual(form);
+  });
+});
+
+describe("anomaly-models · dropdown text", () => {
+  it("keeps the same methods and backbones in both languages", () => {
+    for (const make of [anomalyModels, anomalyBackbones]) {
+      expect(make(en).map((m) => [m.value, m.label])).toEqual(
+        make(pt).map((m) => [m.value, m.label]),
+      );
+    }
+  });
+
+  it("words the sub-line in the active language", () => {
+    const method = (dict: typeof pt, value: string) =>
+      anomalyModels(dict).find((m) => m.value === value)?.sub;
+    expect(method(pt, "autoencoder")).toBe("reconstrução · treinável");
+    expect(method(en, "autoencoder")).toBe("reconstruction · trainable");
+    expect(method(en, "patchcore")).toBe("memory bank · backbone");
+
+    const backbone = (dict: typeof pt, value: string) =>
+      anomalyBackbones(dict).find((m) => m.value === value)?.sub;
+    expect(backbone(pt, "wide_resnet50_2")).toBe("patchcore padrão");
+    expect(backbone(en, "wide_resnet50_2")).toBe("patchcore default");
+    // ResNet-34 and ResNet-50 carry no note, in either language.
+    expect(backbone(pt, "resnet34")).toBeUndefined();
+    expect(backbone(en, "resnet50")).toBeUndefined();
   });
 });

@@ -6,7 +6,7 @@ import { useState } from "react";
 import { fetchTaskSchema, pickDatasetFolder } from "../api/client";
 import {
   REGRESSION_LOSSES,
-  REGRESSION_MODELS,
+  regressionModels,
   buildRegressionPayload,
   parseTargetColumns,
   regressionFormFromPayload,
@@ -158,7 +158,7 @@ export function RegressionPanel({
         onImportConfig={async (data) => {
           try {
             const schema = await fetchTaskSchema("regression");
-            const issues = validateParsedConfig(data, schema, schema.$defs ?? {});
+            const issues = validateParsedConfig(t, data, schema, schema.$defs ?? {});
             if (issues.length > 0) {
               return issues
                 .slice(0, 5)
@@ -176,7 +176,7 @@ export function RegressionPanel({
         <SweepCard
           metrics={COMPARE_METRICS}
           pathHints={SWEEP_PATH_HINTS}
-          modelOptions={REGRESSION_MODELS}
+          modelOptions={regressionModels(t)}
           accent={accent}
           disabled={busy}
           onSweep={onSweep}
@@ -204,7 +204,7 @@ export function RegressionPanel({
             label={t.taskPanel.backbone}
             value={formData.model.name}
             onChange={(v) => setModel({ name: v })}
-            options={REGRESSION_MODELS}
+            options={regressionModels(t)}
             hint={t.regressionPanel.model.backboneHint}
           />
           <div>

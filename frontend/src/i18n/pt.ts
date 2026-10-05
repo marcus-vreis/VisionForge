@@ -1177,6 +1177,224 @@ export const pt = {
     flipHint: "treino",
     rotationHint: "0 = desliga",
   },
+  // The on/off button of every switch (components/controls/Toggle.tsx). The
+  // button sets them in capitals.
+  toggle: {
+    on: "ATIVADO",
+    off: "DESATIVADO",
+  },
+  // The five built-in tasks (types/tasks.ts): the tab name and the sentence under
+  // the hero title. A researcher-defined task brings its own from the server.
+  // `models` and `params` hold the texts of the per-task tables kept beside them,
+  // keyed by model value and by parameter.
+  tasks: {
+    classification: {
+      label: "Classificação",
+      description: "Categorize imagens em rótulos discretos",
+    },
+    detection: {
+      label: "Detecção de Objeto",
+      description: "Localize e classifique objetos com bounding boxes",
+    },
+    regression: {
+      label: "Regressão",
+      description: "Estime valores contínuos a partir das entradas",
+    },
+    segmentation: {
+      label: "Segmentação",
+      description: "Máscaras a nível de pixel para cada categoria",
+    },
+    anomaly: {
+      label: "Anomalia",
+      description: "Detecte defeitos treinando só com imagens normais",
+    },
+    models: {
+      resnet50: "imagenet · 25.6M params",
+      resnet18: "light · 11.7M params",
+      resnet34: "imagenet · 21.8M params",
+      resnet101: "deep · 44.5M params",
+      efficientnet_b1: "eficiente · 7.8M params",
+      efficientnet_b7: "grande · 66M params",
+      vgg16: "clássico · 138M params",
+      vgg19: "clássico · 144M params",
+      alexnet: "baseline · 61M params",
+      yolov8n: "nano · 3.2M",
+      yolov8s: "small · 11.2M",
+      mlp: "baseline",
+      unet: "clássico · 31M params",
+      autoencoder: "reconstrução",
+      patchcore: "memory bank",
+    },
+    params: {
+      epochs: "Épocas",
+      epochsHint: "iterações",
+      learningRate: "Learning Rate",
+      learningRateHint: "lr",
+      batchSize: "Batch size",
+      batchSizeHint: "amostras",
+      optimizer: "Otimizador",
+      earlyStop: "Early stop",
+      earlyStopHint: "paciência",
+      seed: "Seed",
+      seedHint: "reprodução",
+      augment: "Data augmentation",
+      pretrained: "Pesos pré-treinados",
+    },
+  },
+  // The sub-line of each entry in the model dropdowns (lib/regression-models.ts,
+  // lib/segmentation-models.ts, lib/anomaly-models.ts), keyed by model value. The
+  // model names themselves are identifiers and stay in the code.
+  regressionModels: {
+    resnet18: "light · 11.7M",
+    resnet34: "21.8M",
+    resnet50: "imagenet · 25.6M",
+    resnet101: "deep · 44.5M",
+    efficientnet_b1: "eficiente · 7.8M",
+    efficientnet_b7: "grande · 66M",
+    vgg16: "clássico · 138M",
+    vgg19: "144M",
+    alexnet: "baseline · 61M",
+    vit_b_16: "transformer · 86M",
+    swin_t: "transformer · 28M",
+    convnext_tiny: "moderno · 28M",
+  },
+  segmentationModels: {
+    deeplabv3_resnet50: "imagenet · 42M",
+    deeplabv3_resnet101: "deep · 61M",
+    deeplabv3_mobilenet_v3_large: "leve · 11M",
+    fcn_resnet50: "32.9M",
+    fcn_resnet101: "51.9M",
+    lraspp_mobilenet_v3_large: "mobile · 3.2M",
+    unet: "clássico · 31M",
+  },
+  anomalyModels: {
+    autoencoder: "reconstrução · treinável",
+    patchcore: "memory bank · backbone",
+    // The feature extractor PatchCore reads; ResNet-34 and ResNet-50 carry no note.
+    backbones: {
+      resnet18: "light",
+      wide_resnet50_2: "patchcore padrão",
+    },
+  },
+  // How a queued job is named (lib/queue-format.ts). The server sends the task and
+  // the strategy as identifiers; a custom task shows as its own key.
+  queueFormat: {
+    tasks: {
+      classification: "Classificação",
+      detection: "Detecção",
+      regression: "Regressão",
+      segmentation: "Segmentação",
+      anomaly: "Anomalia",
+    },
+    strategies: {
+      simple: "treino simples",
+      kfold: "K-fold",
+      transferLearning: "transfer learning",
+      gridSearch: "grid search",
+      randomSearch: "random search",
+      sweep: "sweep",
+      replicates: "réplicas",
+      comparison: "comparação",
+      replicatedComparison: "comparação replicada",
+    },
+  },
+  // Why a candidate value of a grid-search axis is refused (lib/grid-axis.ts).
+  gridAxis: {
+    notAnOption: "fora das opções",
+    invalidValue: "valor inválido",
+    mustBeInteger: "precisa ser inteiro",
+    mustBeAbove: (min: number) => `precisa ser > ${min}`,
+    mustBeAtLeast: (min: number) => `precisa ser ≥ ${min}`,
+    mustBePowerOfTwo: "precisa ser potência de 2",
+  },
+  // The tab title and the notification that announce a finished run
+  // (lib/run-notify.ts). One line each: OS toasts truncate the rest.
+  runNotify: {
+    completedTitle: (label: string) => `Treino concluído — ${label}`,
+    completedBody: "Abra o VisionForge para ver os resultados.",
+    failedTitle: (label: string) => `Treino falhou — ${label}`,
+    failedBody: "Abra o VisionForge para ver o erro.",
+  },
+  // The YAML import (lib/yaml-config.ts). `reason` is the parser's own message,
+  // which stays as the parser wrote it.
+  yamlConfig: {
+    cannotRead: (reason: string) => `Não foi possível ler o arquivo YAML: ${reason}`,
+    invalidFile: (reason: string) => `Arquivo YAML inválido: ${reason}`,
+    expectedObject: "Esperado um objeto.",
+    requiredMissing: "Campo obrigatório ausente.",
+    mustBeOneOf: (options: string) => `Deve ser um de: ${options}.`,
+    expectedBoolean: "Esperado um booleano.",
+    expectedInteger: "Esperado um inteiro.",
+    expectedNumber: "Esperado um número.",
+    expectedString: "Esperado um texto.",
+  },
+  // Whether two runs saw the same data (lib/dataset-identity.ts); only the
+  // "cannot tell" answers carry a reason.
+  datasetIdentity: {
+    noFingerprint: "um dos runs não tem fingerprint (anterior a 26/07/2026)",
+    differentMethod: "os dois runs usaram método diferente",
+  },
+  // The tab description of a researcher-defined task that declared none
+  // (lib/custom-tasks.ts).
+  customTasks: {
+    fallbackDescription: "Tarefa definida pelo pesquisador",
+  },
+  // Why an explicit seed list is refused (lib/replicates-form.ts).
+  replicatesForm: {
+    needTwoSeeds: "informe pelo menos 2 seeds",
+    duplicateSeeds: "seeds duplicadas",
+  },
+  // The run hook's messages and the breadcrumb that names a field in a validation
+  // error, "Treinamento › Learning Rate" (hooks/useExperiment.ts). Filter names in
+  // the breadcrumb are technical and stay in the code.
+  experiment: {
+    resultFetchFailed: "Falha ao buscar resultados do experimento.",
+    failedNoDetail: "O experimento falhou sem mensagem detalhada.",
+    connectionLost: "Conexão com o servidor perdida durante o polling.",
+    validationFailed: (n: number) =>
+      `${n} campo(s) com erro de validação. Confira os destaques no formulário.`,
+    alreadyRunning: "Já existe um experimento em execução. Aguarde terminar.",
+    unexpected: (message: string) => `Erro inesperado: ${message}`,
+    unknown: "Erro desconhecido ao iniciar o experimento.",
+    sections: {
+      model: "Modelo",
+      training: "Treinamento",
+      data: "Dataset",
+      output: "Saída",
+      classification: "Classificação",
+      transforms: "Transformações",
+      preprocessing: "Pré-processamento",
+      steps: "Filtro",
+      scheduler: "Scheduler",
+      device: "Dispositivo",
+    },
+    fields: {
+      name: "Nome",
+      task: "Tipo de tarefa",
+      num_classes: "Nº de classes",
+      pretrained: "Pesos pré-treinados",
+      weights_path: "Caminho dos pesos",
+      learning_rate: "Learning Rate",
+      epochs: "Épocas",
+      batch_size: "Batch size",
+      early_stopping_patience: "Early stop",
+      optimizer: "Otimizador",
+      weight_decay: "Weight decay",
+      seed: "Seed",
+      base_dir: "Diretório base",
+      train_dir: "Subpasta treino",
+      val_dir: "Subpasta validação",
+      test_dir: "Subpasta teste",
+      num_workers: "Workers",
+      pin_memory: "Pin memory",
+      image_size: "Tamanho da imagem",
+      horizontal_flip: "Flip horizontal",
+      rotation_degrees: "Rotação",
+      color_jitter: "Color jitter",
+      normalize_mean: "Normalização (média)",
+      normalize_std: "Normalização (std)",
+    },
+  },
 };
 
 export type Dict = typeof pt;

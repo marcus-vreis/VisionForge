@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { en } from "../i18n/en";
+import { pt } from "../i18n/pt";
 import {
   buildCustomForm,
   buildCustomPayload,
@@ -10,7 +12,9 @@ import {
   type TaskDescriptor,
 } from "./custom-tasks";
 import type { JsonSchema } from "../types/schema";
-import { TASKS } from "../types/tasks";
+import { taskDefinitions } from "../types/tasks";
+
+const TASKS = taskDefinitions(pt);
 
 function descriptor(over: Partial<TaskDescriptor> = {}): TaskDescriptor {
   return {
@@ -27,7 +31,7 @@ function descriptor(over: Partial<TaskDescriptor> = {}): TaskDescriptor {
 
 describe("mergeTasks", () => {
   it("keeps the five built-ins first and in order", () => {
-    const merged = mergeTasks(TASKS, [descriptor()]);
+    const merged = mergeTasks(pt, TASKS, [descriptor()]);
     expect(merged.slice(0, TASKS.length).map((t) => t.key)).toEqual(
       TASKS.map((t) => t.key),
     );
@@ -36,14 +40,14 @@ describe("mergeTasks", () => {
 
   it("ignores built-in rows from the API (they are already local)", () => {
     const builtinRow = descriptor({ key: "classification", custom: false });
-    expect(mergeTasks(TASKS, [builtinRow])).toHaveLength(TASKS.length);
+    expect(mergeTasks(pt, TASKS, [builtinRow])).toHaveLength(TASKS.length);
   });
 
   it("never lets a custom task shadow a built-in key", () => {
     // Defence in depth: the backend rejects these keys, but a stale/hand-made
     // response must not replace a tab that always works.
     const shadow = descriptor({ key: "detection", custom: true });
-    const merged = mergeTasks(TASKS, [shadow]);
+    const merged = mergeTasks(pt, TASKS, [shadow]);
     expect(merged).toHaveLength(TASKS.length);
     expect(merged.find((t) => t.key === "detection")?.label).toBe(
       TASKS.find((t) => t.key === "detection")?.label,
@@ -51,7 +55,7 @@ describe("mergeTasks", () => {
   });
 
   it("sorts several customs by label", () => {
-    const merged = mergeTasks(TASKS, [
+    const merged = mergeTasks(pt, TASKS, [
       descriptor({ key: "zeta", label: "Zeta" }),
       descriptor({ key: "alpha", label: "Alpha" }),
     ]);
@@ -62,13 +66,13 @@ describe("mergeTasks", () => {
   });
 
   it("survives an empty task list", () => {
-    expect(mergeTasks(TASKS, [])).toHaveLength(TASKS.length);
+    expect(mergeTasks(pt, TASKS, [])).toHaveLength(TASKS.length);
   });
 });
 
 describe("descriptorToDefinition", () => {
   it("carries identity and metric metadata, and no curated params", () => {
-    const def = descriptorToDefinition(descriptor());
+    const def = descriptorToDefinition(pt, descriptor());
     expect(def.accent).toBe("#2dd4bf");
     expect(def.label).toBe("Contagem de células");
     expect(def.models).toEqual([]);
@@ -78,8 +82,14 @@ describe("descriptorToDefinition", () => {
   });
 
   it("falls back to a description when the researcher left it empty", () => {
-    expect(descriptorToDefinition(descriptor({ description: "" })).description)
-      .toContain("pesquisador");
+    expect(descriptorToDefinition(pt, descriptor({ description: "" })).description)
+      .toBe("Tarefa definida pelo pesquisador");
+    expect(descriptorToDefinition(en, descriptor({ description: "" })).description)
+      .toBe("Researcher-defined task");
+  });
+
+  it("keeps the description the researcher wrote, in either language", () => {
+    expect(descriptorToDefinition(en, descriptor()).description).toBe("Conte objetos");
   });
 
   it("marks built-in definitions as not custom", () => {
@@ -136,6 +146,7 @@ describe("buildCustomPayload", () => {
 describe("metricOptions", () => {
   it("puts the primary metric first and shows each direction", () => {
     const def = descriptorToDefinition(
+      pt,
       descriptor({ metrics: { rmse: "lower", score: "higher" }, primary_metric: "score" }),
     );
     expect(metricOptions(def)).toEqual([

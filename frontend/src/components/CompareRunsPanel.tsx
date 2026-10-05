@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { fetchRunDetail, type RunDetail } from "../api/client";
+import { useT } from "../i18n/useT";
 import { compareDatasets } from "../lib/dataset-identity";
 
 interface CompareRunsPanelProps {
@@ -152,9 +153,10 @@ const VERDICT_STYLE = {
  * would overclaim.
  */
 function DatasetVerdictRow({ details }: { details: RunDetail[] }) {
+  const t = useT();
   if (details.length < 2) return null;
 
-  const verdicts = details.slice(1).map((d) => compareDatasets(details[0].dataset, d.dataset));
+  const verdicts = details.slice(1).map((d) => compareDatasets(t, details[0].dataset, d.dataset));
   const verdict =
     verdicts.find((v) => v.kind === "unknown") ??
     verdicts.find((v) => v.kind === "different") ??
