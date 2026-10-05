@@ -489,30 +489,8 @@ export const pt = {
         `teste. Mede o ruído de amostragem do split com este modelo ` +
         `fixo — não a variação entre treinos.`,
     },
-    // The plot files the backend writes, by file name.
     graphs: {
       title: "Gráficos (clique para expandir)",
-      labels: {
-        "loss.png": "Loss (train + val)",
-        "accuracy.png": "Accuracy (train + val)",
-        "confusion_matrix.png": "Matriz de confusão",
-        "confusion_matrix_normalized.png": "Matriz de confusão (normalizada)",
-        "roc_curve.png": "Curva ROC",
-        "precision_recall_curve.png": "Curva Precision-Recall",
-        // Detection (Ultralytics / torchvision).
-        "results.png": "Resultados (loss + mAP)",
-        "BoxPR_curve.png": "Curva Precision-Recall (box)",
-        "BoxF1_curve.png": "Curva F1 (box)",
-        // Test-set diagnostics per task.
-        "auroc.png": "AUROC por época",
-        "BoxP_curve.png": "Curva Precision (box)",
-        "BoxR_curve.png": "Curva Recall (box)",
-        "val_batch0_pred.jpg": "Predições na validação",
-        "pred_vs_true.png": "Predito vs real",
-        "residuals.png": "Distribuição dos resíduos",
-        "iou_per_class.png": "IoU por classe",
-        "score_histogram.png": "Escores: normal vs defeito",
-      },
     },
     tests: {
       title: "Testes neste modelo",
@@ -672,6 +650,32 @@ export const pt = {
       disabled: "Desativado",
     },
   },
+  // The plot files the backend writes, by file name. The run panel
+  // (RunDetailPanel) and the results sheet (ResultsView) show the same ones under
+  // the same names.
+  plots: {
+    labels: {
+      "loss.png": "Loss (train + val)",
+      "accuracy.png": "Accuracy (train + val)",
+      "confusion_matrix.png": "Matriz de confusão",
+      "confusion_matrix_normalized.png": "Matriz de confusão (normalizada)",
+      "roc_curve.png": "Curva ROC",
+      "precision_recall_curve.png": "Curva Precision-Recall",
+      // Detection (Ultralytics / torchvision).
+      "results.png": "Curvas de treino (loss + mAP)",
+      "BoxPR_curve.png": "Curva Precision-Recall (box)",
+      "BoxF1_curve.png": "Curva F1 (box)",
+      // Test-set diagnostics per task.
+      "auroc.png": "AUROC por época",
+      "BoxP_curve.png": "Curva Precision (box)",
+      "BoxR_curve.png": "Curva Recall (box)",
+      "val_batch0_pred.jpg": "Predições na validação",
+      "pred_vs_true.png": "Predito vs real",
+      "residuals.png": "Distribuição dos resíduos",
+      "iou_per_class.png": "IoU por classe",
+      "score_histogram.png": "Escores: normal vs defeito",
+    },
+  },
   // The results sheet that opens after a run (components/ResultsView.tsx). Metric
   // names, the code-style table columns (train_size, val_loss…) and the `// `
   // section prefix read the same in every language.
@@ -703,28 +707,6 @@ export const pt = {
       `Mede o ruído de amostragem do split com este modelo fixo — não a ` +
       `variação entre treinos, que réplicas com várias seeds medem.`,
     graphsTitle: "// gráficos · clique para expandir",
-    // The plot files the backend writes, by file name.
-    graphLabels: {
-      "loss.png": "Loss (train + val)",
-      "accuracy.png": "Accuracy (train + val)",
-      "confusion_matrix.png": "Matriz de confusão",
-      "confusion_matrix_normalized.png": "Matriz de confusão (normalizada)",
-      "roc_curve.png": "Curva ROC",
-      "precision_recall_curve.png": "Curva Precision-Recall",
-      // Detection (Ultralytics) plot names.
-      "results.png": "Curvas de treino (Ultralytics)",
-      "BoxPR_curve.png": "Curva Precision-Recall (box)",
-      "BoxF1_curve.png": "Curva F1 (box)",
-      // Test-set diagnostics per task.
-      "auroc.png": "AUROC por época",
-      "BoxP_curve.png": "Curva Precision (box)",
-      "BoxR_curve.png": "Curva Recall (box)",
-      "val_batch0_pred.jpg": "Predições na validação",
-      "pred_vs_true.png": "Predito vs real",
-      "residuals.png": "Distribuição dos resíduos",
-      "iou_per_class.png": "IoU por classe",
-      "score_histogram.png": "Escores: normal vs defeito",
-    },
     // A report whose shape the view does not know is shown as JSON under this.
     reportTitle: "// report",
     // Columns the report tables share.
@@ -744,7 +726,7 @@ export const pt = {
     // K-fold on the classification task.
     cv: {
       title: (ok: number, total: number, failed: number) =>
-        `// k-fold cross-validation · ${ok}/${total} folds ok${failed > 0 ? ` · ${failed} falharam` : ""}`,
+        `// k-fold cross-validation · ${ok}/${total} folds ok${failed > 0 ? ` · ${failed} ${failed === 1 ? "falhou" : "falharam"}` : ""}`,
       accuracyMeanStd: "Acurácia (média ± std)",
       f1MeanStd: "F1 (média ± std)",
       fold: "Fold",
@@ -778,7 +760,7 @@ export const pt = {
     // Model comparison on the other tasks.
     comparison: {
       title: (ok: number, total: number, failed: number, metric: string) =>
-        `// comparação de arquiteturas · ${ok}/${total} ok${failed > 0 ? ` · ${failed} falharam` : ""} · ranking por ${metric}`,
+        `// comparação de arquiteturas · ${ok}/${total} ok${failed > 0 ? ` · ${failed} ${failed === 1 ? "falhou" : "falharam"}` : ""} · ranking por ${metric}`,
     },
     sweep: {
       title: (mode: string, ok: number, total: number, metric: string) =>
@@ -789,7 +771,7 @@ export const pt = {
     // Model comparison on classification.
     modelComparison: {
       title: (ok: number, total: number, failed: number) =>
-        `// comparação de modelos · ${ok}/${total} ok${failed > 0 ? ` · ${failed} falharam` : ""}`,
+        `// comparação de modelos · ${ok}/${total} ok${failed > 0 ? ` · ${failed} ${failed === 1 ? "falhou" : "falharam"}` : ""}`,
       accuracy: "Accuracy",
       aucRoc: "AUC-ROC",
       // The path goes in backticks, for <Rich>.
@@ -812,14 +794,16 @@ export const pt = {
     cancelSelect: "Cancelar seleção",
     compare: (n: number) => `↔ Comparar ${n}`,
     deleteSelected: (n: number) => `🗑 Excluir ${n}`,
-    deleteSelectedTitle: (n: number) => `Excluir ${n} run(s) permanentemente`,
+    deleteSelectedTitle: (n: number) =>
+      `Excluir ${n} ${n === 1 ? "run" : "runs"} permanentemente`,
     loading: "carregando histórico…",
     errorTitle: "Erro",
     loadFailed: "Erro ao carregar histórico.",
     emptyTitle: "Nenhum treinamento ainda",
     emptyHint: "Execute o primeiro experimento para vê-lo aqui.",
     selectModeTip: "Modo seleção — marque os runs que quer excluir ou comparar.",
-    selectedTip: (n: number) => `${n} selecionado(s) — 🗑 exclui; ↔ compara a partir de 2.`,
+    selectedTip: (n: number) =>
+      `${n} ${n === 1 ? "selecionado" : "selecionados"} — 🗑 exclui; ↔ compara a partir de 2.`,
     searchPlaceholder: "🔍 buscar por nome, arquitetura ou run_id…",
     clearSearch: "Limpar busca",
     noMatch: "Nenhum run combina com o filtro atual.",
@@ -847,7 +831,7 @@ export const pt = {
       deleteTitle: "Excluir este run permanentemente",
       preprocessing: (n: number) => `⚗ ${n} filtro${n === 1 ? "" : "s"}`,
       preprocessingTitle: (n: number) =>
-        `${n} filtro(s) de pré-processamento aplicados ao treino`,
+        `${n} ${n === 1 ? "filtro de pré-processamento aplicado" : "filtros de pré-processamento aplicados"} ao treino`,
       resumeTitle: (done: number, total: number) =>
         `Parou na época ${done} de ${total} — dá para continuar`,
       resumeTitleNoTotal: "Parou antes do fim — dá para continuar",
@@ -863,7 +847,7 @@ export const pt = {
         `${n === 1 ? "A pasta do run" : "As pastas dos runs"}, checkpoints e todos os plots/relatórios serão removidos do disco. Esta ação é irreversível.`,
       // Runs go one at a time; the ones that failed are listed under this line.
       failed: (failed: number, total: number) =>
-        `${failed} de ${total} não puderam ser excluídos:`,
+        `${failed} de ${total} ${failed === 1 ? "não pôde ser excluído" : "não puderam ser excluídos"}:`,
       unknownError: "erro desconhecido",
       deleting: "Excluindo…",
       submit: (n: number) => `🗑 Excluir${n > 1 ? ` ${n}` : ""}`,

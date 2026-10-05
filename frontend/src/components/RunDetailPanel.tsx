@@ -97,7 +97,7 @@ function getConfigRecord(
 
 export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
   const t = useT();
-  const graphLabels: Record<string, string> = t.runDetail.graphs.labels;
+  const graphLabels: Record<string, string> = t.plots.labels;
   const [detail, setDetail] = useState<RunDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

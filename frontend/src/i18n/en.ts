@@ -467,25 +467,6 @@ export const en: Dict = {
     },
     graphs: {
       title: "Plots (click to expand)",
-      labels: {
-        "loss.png": "Loss (train + val)",
-        "accuracy.png": "Accuracy (train + val)",
-        "confusion_matrix.png": "Confusion matrix",
-        "confusion_matrix_normalized.png": "Confusion matrix (normalized)",
-        "roc_curve.png": "ROC curve",
-        "precision_recall_curve.png": "Precision-Recall curve",
-        "results.png": "Results (loss + mAP)",
-        "BoxPR_curve.png": "Precision-Recall curve (box)",
-        "BoxF1_curve.png": "F1 curve (box)",
-        "auroc.png": "AUROC over epochs",
-        "BoxP_curve.png": "Precision curve (box)",
-        "BoxR_curve.png": "Recall curve (box)",
-        "val_batch0_pred.jpg": "Validation batch predictions",
-        "pred_vs_true.png": "Predicted vs actual",
-        "residuals.png": "Residual distribution",
-        "iou_per_class.png": "IoU per class",
-        "score_histogram.png": "Scores: normal vs defect",
-      },
     },
     tests: {
       title: "Tests on this model",
@@ -639,6 +620,27 @@ export const en: Dict = {
       disabled: "Disabled",
     },
   },
+  plots: {
+    labels: {
+      "loss.png": "Loss (train + val)",
+      "accuracy.png": "Accuracy (train + val)",
+      "confusion_matrix.png": "Confusion matrix",
+      "confusion_matrix_normalized.png": "Confusion matrix (normalized)",
+      "roc_curve.png": "ROC curve",
+      "precision_recall_curve.png": "Precision-Recall curve",
+      "results.png": "Training curves (loss + mAP)",
+      "BoxPR_curve.png": "Precision-Recall curve (box)",
+      "BoxF1_curve.png": "F1 curve (box)",
+      "auroc.png": "AUROC over epochs",
+      "BoxP_curve.png": "Precision curve (box)",
+      "BoxR_curve.png": "Recall curve (box)",
+      "val_batch0_pred.jpg": "Validation batch predictions",
+      "pred_vs_true.png": "Predicted vs actual",
+      "residuals.png": "Residual distribution",
+      "iou_per_class.png": "IoU per class",
+      "score_histogram.png": "Scores: normal vs defect",
+    },
+  },
   resultsView: {
     title: "// results",
     modelCard: {
@@ -648,7 +650,7 @@ export const en: Dict = {
     metricLabels: {
       best_val_loss: "Best val loss",
       best_epoch: "Best epoch",
-      total_epochs: "Total epochs",
+      total_epochs: "Epochs trained",
       test_accuracy: "Accuracy",
       test_f1: "F1 score",
       test_precision: "Precision",
@@ -664,28 +666,9 @@ export const en: Dict = {
       `${percent}% CI (percentile bootstrap): ` +
       `${resamples} resamples of the ${samples} test ${samples === 1 ? "image" : "images"}. ` +
       `Captures the sampling uncertainty of the test split with this model ` +
-      `held fixed — not the variation across training runs, which replicates ` +
-      `with several seeds capture.`,
+      `held fixed — not the variation between training runs, which multi-seed ` +
+      `replicates measure.`,
     graphsTitle: "// plots · click to expand",
-    graphLabels: {
-      "loss.png": "Loss (train + val)",
-      "accuracy.png": "Accuracy (train + val)",
-      "confusion_matrix.png": "Confusion matrix",
-      "confusion_matrix_normalized.png": "Confusion matrix (normalized)",
-      "roc_curve.png": "ROC curve",
-      "precision_recall_curve.png": "Precision-Recall curve",
-      "results.png": "Training curves (Ultralytics)",
-      "BoxPR_curve.png": "Precision-Recall curve (box)",
-      "BoxF1_curve.png": "F1 curve (box)",
-      "auroc.png": "AUROC over epochs",
-      "BoxP_curve.png": "Precision curve (box)",
-      "BoxR_curve.png": "Recall curve (box)",
-      "val_batch0_pred.jpg": "Validation batch predictions",
-      "pred_vs_true.png": "Predicted vs actual",
-      "residuals.png": "Residual distribution",
-      "iou_per_class.png": "IoU per class",
-      "score_histogram.png": "Scores: normal vs defect",
-    },
     reportTitle: "// report",
     cols: {
       rank: "Rank",
@@ -712,14 +695,14 @@ export const en: Dict = {
     },
     taskCv: {
       title: (ok: number, total: number, metric: string) =>
-        `// k-fold · ${ok}/${total} folds ok · headline metric ${metric}`,
-      meanStd: "mean ± std over the folds",
+        `// k-fold · ${ok}/${total} folds ok · headline metric: ${metric}`,
+      meanStd: "mean ± std across folds",
       fold: "fold",
       trainVal: "train/val",
     },
     replicates: {
       title: (ok: number, total: number, metric: string) =>
-        `// multi-seed replicates · ${ok}/${total} seeds ok · headline metric ${metric}`,
+        `// multi-seed replicates · ${ok}/${total} seeds ok · headline metric: ${metric}`,
       citable: "🎯 citable result",
       headlineMeta: (hasCi: boolean, n: number) => `${hasCi ? "95% CI · " : ""}n=${n}`,
       metric: "metric",
@@ -736,7 +719,7 @@ export const en: Dict = {
     },
     sweep: {
       title: (mode: string, ok: number, total: number, metric: string) =>
-        `// sweep ${mode} · ${ok}/${total} trials ok · ranked by ${metric}`,
+        `// ${mode} sweep · ${ok}/${total} trials ok · ranked by ${metric}`,
       best: (metric: string) => `👑 best trial · ${metric}=`,
     },
     modelComparison: {
@@ -765,11 +748,12 @@ export const en: Dict = {
       `Permanently delete ${n} ${n === 1 ? "run" : "runs"}`,
     loading: "loading history…",
     errorTitle: "Error",
-    loadFailed: "Failed to load the history.",
+    loadFailed: "Failed to load run history.",
     emptyTitle: "No runs yet",
     emptyHint: "Run your first experiment to see it here.",
-    selectModeTip: "Selection mode — check the runs you want to delete or compare.",
-    selectedTip: (n: number) => `${n} selected — 🗑 deletes; ↔ compares from 2.`,
+    selectModeTip: "Selection mode — select the runs you want to delete or compare.",
+    selectedTip: (n: number) =>
+      `${n} selected — 🗑 deletes; ↔ compares (needs at least 2).`,
     searchPlaceholder: "🔍 search by name, architecture or run_id…",
     clearSearch: "Clear search",
     noMatch: "No runs match the current filter.",
@@ -785,9 +769,9 @@ export const en: Dict = {
     filterType: "type",
     filterBlock: "block",
     filterStatus: "status",
-    sortLabel: "sort",
+    sortLabel: "sort by",
     sort: {
-      recent: "most recent",
+      recent: "newest",
       oldest: "oldest",
       epochs: "most epochs",
     },
@@ -808,7 +792,7 @@ export const en: Dict = {
       body: (n: number) =>
         `${n === 1 ? "The run's folder" : "The runs' folders"}, checkpoints and all plots/reports will be removed from disk. This cannot be undone.`,
       failed: (failed: number, total: number) =>
-        `${failed} of ${total} couldn't be deleted:`,
+        `${failed} of ${total} runs couldn't be deleted:`,
       unknownError: "unknown error",
       deleting: "Deleting…",
       submit: (n: number) => `🗑 Delete${n > 1 ? ` ${n}` : ""}`,

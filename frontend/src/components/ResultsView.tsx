@@ -112,6 +112,8 @@ function MetricCard({ label, value, accent, highlight, ci }: MetricCardProps) {
 /** Results sheet that slides up over the param panel. */
 export function ResultsView({ result, onClose, taskAccent }: ResultsViewProps) {
   const t = useT();
+  const metricLabels: Record<string, string> = t.resultsView.metricLabels;
+  const plotLabels: Record<string, string> = t.plots.labels;
   const graphics = result.artifacts?.graphics ?? [];
   const metricsEntries = Object.entries(result.metrics);
   const [lightbox, setLightbox] = useState<{ src: string; caption: string } | null>(null);
@@ -224,7 +226,7 @@ export function ResultsView({ result, onClose, taskAccent }: ResultsViewProps) {
           {metricsEntries.map(([key, value]) => (
             <MetricCard
               key={key}
-              label={(t.resultsView.metricLabels as Record<string, string>)[key] ?? key}
+              label={metricLabels[key] ?? key}
               value={formatMetric(value)}
               accent={taskAccent}
               highlight={key === highlightKey}
@@ -258,8 +260,7 @@ export function ResultsView({ result, onClose, taskAccent }: ResultsViewProps) {
           >
             {graphics.map((path, idx) => {
               const filename = path.replace(/\\/g, "/").split("/").pop() ?? path;
-              const label =
-                (t.resultsView.graphLabels as Record<string, string>)[filename] ?? filename;
+              const label = plotLabels[filename] ?? filename;
               const url = artifactUrl(path);
               return (
                 <button
