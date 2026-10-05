@@ -1395,6 +1395,286 @@ export const pt = {
       normalize_std: "Normalização (std)",
     },
   },
+  // The card every task panel opens with (components/ExperimentHeader.tsx): the
+  // experiment name, the YAML round trip and the strategy selector. The strategy
+  // names themselves are `paramPanel.blocks.simple`, `taskPanel.sweep` and
+  // `taskPanel.replicates`.
+  experimentHeader: {
+    title: "Experimento",
+    nameLabel: "Nome do experimento",
+    nameHint: "usado na pasta de saída e no histórico",
+    exportTitle: "Exportar configuração atual como arquivo .yaml",
+    exportYaml: "↓ Exportar YAML",
+    importTitle: "Importar configuração a partir de um arquivo .yaml",
+    importYaml: "↑ Importar YAML",
+    imported: (file: string) => `✓ ${file} importado`,
+    strategyTitle: "Estratégia de experimento",
+    mode: "Modo",
+    // What the selected strategy does, under the selector.
+    hints: {
+      simple: "um treino com a config abaixo (botão Treinar)",
+      cv: "K folds sobre o treino → métricas fold a fold + média ± desvio",
+      sweep: "grid / random / optuna sobre a config abaixo",
+      replicates: "mesma config, N seeds → média ± IC 95%",
+    },
+  },
+  // The K-fold launcher (components/CvCard.tsx).
+  cvCard: {
+    title: "Cross-validation (K-fold)",
+    description:
+      "Divide as linhas de treino em K folds: cada fold treina um modelo novo em K-1 partes e avalia na parte restante (nunca augmentada). O split de teste não é usado.",
+    folds: "Nº de folds",
+    shuffle: "Shuffle",
+    shuffleHint: "antes do split",
+    foldSeed: "Seed do split",
+    run: (folds: number) => `⛓ Rodar CV · ${folds} folds`,
+  },
+  // The multi-seed launcher (components/ReplicatesCard.tsx).
+  replicatesCard: {
+    title: "Réplicas multi-seed · rigor estatístico",
+    description:
+      "Treina a mesma config N vezes sob seeds diferentes e agrega cada métrica em média ± IC 95% (t de Student). Um run único é uma amostra de uma distribuição — réplicas tornam o número defensável.",
+    seeds: "Seeds",
+    automatic: "Automáticas",
+    explicit: "Explícitas",
+    automaticHint: "consecutivas a partir do training.seed",
+    explicitHint: "lista exata, reproduzível",
+    count: "Nº de réplicas",
+    seedList: "Seeds (vírgula)",
+    seedCount: (n: number) => `${n} seeds`,
+    headlineMetric: "Métrica destaque",
+    run: (seeds: number) => `🎲 Rodar réplicas · ${seeds} seed${seeds === 1 ? "" : "s"}`,
+  },
+  // The hyperparameter sweep editor (components/SweepCard.tsx). Grid, Random and
+  // Optuna are algorithm names; dot-paths and the model names in the placeholders
+  // read the same in every language.
+  sweepCard: {
+    title: "Sweep de hiperparâmetros · modo avançado",
+    // `paths` is the task's suggested dot-paths, joined with commas.
+    description: (paths: string) =>
+      `Varre hiperparâmetros por dot-path (ex.: ${paths}) e ranqueia pela métrica. Grid = produto cartesiano; Random = amostras; Optuna = busca TPE adaptativa (requer o extra opcional).`,
+    strategy: "Estratégia",
+    presetTitle: "preset · arquiteturas → eixo model.name",
+    compareArchitectures: (n: number) => `⇒ comparar ${n} arquitetura${n === 1 ? "" : "s"}`,
+    parameter: "Parâmetro (dot-path)",
+    values: "Valores (vírgula)",
+    distribution: "Distribuição",
+    kinds: {
+      uniform: "Uniforme",
+      logUniform: "Log-uniforme",
+      choice: "Escolha",
+    },
+    options: "Opções (vírgula)",
+    low: "low",
+    high: "high",
+    removeParameter: "Remover parâmetro",
+    addParameter: "+ adicionar parâmetro",
+    rankingMetric: "Métrica de ranking",
+    trials: "Nº de trials",
+    seed: "Seed",
+    run: (trials: number) => `⛓ Rodar sweep · ${trials} trial${trials === 1 ? "" : "s"}`,
+  },
+  // The generic form of a researcher-defined task (components/SchemaForm.tsx). The
+  // fields' own titles and descriptions come from the task's schema and are shown
+  // as written; only the card headings and the list hint are ours.
+  schemaForm: {
+    // Keys are the names of the blocks every custom task inherits.
+    sections: {
+      training: "Treinamento",
+      data: "Dataset",
+      transforms: "Aumentos & normalização",
+      preprocessing: "Pré-processamento (filtros)",
+      scheduler: "Learning-rate scheduler",
+      output: "Saída",
+      model: "Modelo",
+    },
+    taskParameters: "Parâmetros da tarefa",
+    listHint: "valores separados por vírgula",
+  },
+  // The panel a researcher-defined task gets (components/CustomTaskPanel.tsx).
+  customTaskPanel: {
+    // Followed by the task key in bold, a colon and the server's reason.
+    schemaLoadFailed: "Não foi possível carregar o schema de",
+    // The path goes in backticks, for <Rich>.
+    schemaLoadHint:
+      "Verifique o arquivo em `user_tasks/` — um erro de import é registrado no log do servidor e a tarefa fica sem formulário.",
+    loadingForm: (task: string) => `Carregando o formulário de ${task}…`,
+  },
+  // Hide or delete a researcher-defined task (components/CustomTaskManageCard.tsx).
+  // Deleting removes the file the researcher wrote, so it asks for the key to be typed.
+  customTaskManage: {
+    heading: "// gerenciar esta task",
+    close: "fechar",
+    options: "⚙ opções",
+    hideTitle: "Some com a aba; o arquivo continua em user_tasks/",
+    hide: "👁 Ocultar aba",
+    hideNote: "reversível — o arquivo fica",
+    hideFailed: "Falha ao ocultar.",
+    delete: "🗑 Excluir do disco",
+    deleteNote: "apaga o .py que você escreveu — sem desfazer",
+    // The task's label goes in bold between these two, then its key in bold after them.
+    confirmBefore: "Isto remove o arquivo de",
+    confirmAfter: "do disco. Para confirmar, digite a chave da task:",
+    typeKeyTitle: "Digite a chave exata para habilitar",
+    deleting: "Excluindo…",
+    deleteForever: "Excluir definitivamente",
+    deleteFailed: "Falha ao excluir.",
+  },
+  // The run queue sheet (components/QueueOverlay.tsx). Task and strategy names are
+  // `queueFormat`.
+  queueOverlay: {
+    readFailed: "Não foi possível ler a fila.",
+    cancelFailed: "Não foi possível cancelar esse treino.",
+    kicker: "// fila",
+    title: "Treinos na fila",
+    description:
+      "Uma GPU, um treino por vez. Submeta quantos quiser — eles rodam em ordem de envio, sozinhos.",
+    emptyTitle: "A GPU está livre e nada está esperando.",
+    emptyHint: "Envie um treino e, se enviar outro em seguida, ele aparece aqui.",
+    position: (n: number) => `${n}º`,
+    running: "em execução",
+    waiting: (waited: string) => `esperando ${waited}`,
+    removeTitle: "Remover da fila (não afeta treinos já iniciados)",
+    stop: "■ parar",
+    remove: "🗑 remover",
+    cannotCancel: "sem cancelar",
+    cannotCancelTitle:
+      "Um treino em andamento não pode ser cancelado: os trainers não têm ponto de parada, e interromper deixaria a pasta do run pela metade.",
+  },
+  // The live training sheet (components/TrainingOverlay.tsx). The phase labels
+  // ("extraindo features", "montando o banco", "pontuando") and a failed run's
+  // error text come from the server and are shown as it wrote them; the epoch and
+  // trial lines of the log are the trainer's own vocabulary and read the same in
+  // every language. Grid and random search are `paramPanel.blocks`.
+  trainingOverlay: {
+    blocks: {
+      modelComparison: "Comparação de modelos",
+      crossValidation: "K-Fold CV",
+      replicates: "Réplicas multi-seed",
+    },
+    // The first two lines of the log.
+    initializing: (runId: string) => `> inicializando runtime · ${runId}`,
+    loadingDataset: "> carregando dataset…",
+    trainingFailed: "training failed",
+    trainingComplete: "training complete",
+    queued: (task: string) => `na fila · ${task}`,
+    training: (task: string) => `training · ${task}`,
+    starting: "iniciando…",
+    // `position` is the run's place in line and `queued` how many are waiting; both
+    // may be missing.
+    queuedNote: (position: number | undefined, queued: number | undefined) =>
+      `${position ? `aguardando a GPU — ${position}º na fila` : "aguardando a GPU"}${
+        typeof queued === "number" && queued > 1 ? ` · ${queued} submissões esperando` : ""
+      }. O treino começa sozinho quando chegar a vez.`,
+    errorDetail: "Detalhe do erro",
+    unknownError: "Erro desconhecido — verifique os logs do servidor.",
+    // The same, as it reads in the log line.
+    logUnknownError: "erro desconhecido",
+    queueBanner: (block: string, runs: number | undefined) =>
+      `⛓ fila de treinos · ${block}${runs && runs > 1 ? ` · ${runs} runs` : ""}`,
+    queueBannerBody:
+      'Este bloco executa múltiplos treinos sequencialmente. A barra de progresso reflete o trial corrente; o resultado agregado aparece em "Ver resultados" ao final.',
+    pipeline: (n: number) => `⚗ pipeline ativo · ${n} filtro${n === 1 ? "" : "s"}`,
+    minimize: "Minimizar",
+    viewResults: "↗ Ver resultados",
+  },
+  // Side-by-side comparison of two or more runs (components/CompareRunsPanel.tsx).
+  compareRuns: {
+    back: "← histórico",
+    comparing: (n: number) => `Comparando ${n} runs`,
+    loading: "carregando runs…",
+    loadFailed: "Falha ao carregar runs.",
+    // Whether the runs saw the same data; the reason of an unverifiable pair is
+    // `datasetIdentity`.
+    verdict: {
+      same: "mesmos dados",
+      different: "dados diferentes",
+      unknown: "não verificável",
+    },
+    metric: "Métrica",
+    device: "Dispositivo",
+    field: "Campo",
+    // Keys are the backend's metric names.
+    metrics: {
+      best_val_loss: "Melhor val loss",
+      best_epoch: "Melhor epoch",
+      total_epochs: "Total de epochs",
+      test_accuracy: "Acurácia (teste)",
+      test_f1: "F1 (teste)",
+      test_precision: "Precisão (teste)",
+      test_recall: "Recall (teste)",
+      test_auc_roc: "AUC-ROC (teste)",
+    },
+    configDiffTitle: "// diff de configuração (células destacadas = diferentes da 1ª run)",
+    // The rows of the configuration table.
+    config: {
+      architecture: "Arquitetura",
+      numClasses: "Num classes",
+      pretrained: "Pretrained",
+      task: "Task",
+      learningRate: "Learning rate",
+      optimizer: "Optimizer",
+      batchSize: "Batch size",
+      epochsMax: "Epochs (max)",
+      weightDecay: "Weight decay",
+      seed: "Seed",
+      mixedPrecision: "Mixed precision",
+      scheduler: "Scheduler",
+      imageSize: "Image size",
+      horizontalFlip: "Horizontal flip",
+      rotation: "Rotation (°)",
+      colorJitter: "Color jitter",
+      preprocessing: "Preprocessing",
+    },
+    preprocessingTitle: "// pipelines de pré-processamento",
+    noPreprocessing: "sem pré-processamento",
+    valLossChart: "Val loss × epoch",
+    valAccuracyChart: "Val accuracy × epoch",
+  },
+  // The first-run guide (components/GuidedTour.tsx). The steps are `tour`.
+  guidedTour: {
+    dialogLabel: "Guia do VisionForge",
+    closeLabel: "Fechar o guia",
+    eyebrow: "Primeira vez por aqui",
+    inviteTitle: "Quer uma volta rápida?",
+    inviteBody:
+      "Sete paradas curtas pelos pontos principais: onde escolher a tarefa, como apontar o dataset, o que já vem decidido para você e onde os resultados ficam guardados. Dá para sair a qualquer momento — e o guia continua disponível no cabeçalho depois.",
+    notNow: "Agora não",
+    seeGuide: "Ver o guia →",
+    next: "Continuar →",
+    finish: "Concluir",
+  },
+  // The seven stops of the guide (lib/tour.ts `tourSteps`).
+  tour: {
+    tabs: {
+      title: "Escolha o tipo de treino",
+      body: "Cada aba é uma tarefa completa: classificação, detecção, regressão, segmentação e anomalia. Trocar de aba troca o formulário inteiro, as métricas e a cor da interface — nada é compartilhado por acidente entre elas.",
+    },
+    dataset: {
+      title: "Aponte a pasta do dataset",
+      body: "Escolha a pasta raiz e o VisionForge procura sozinho as subpastas de treino, validação e teste pelos nomes usuais. Se o seu dataset usa outros nomes, os seletores ao lado deixam você corrigir sem renomear nada no disco.",
+    },
+    parameters: {
+      title: "Os parâmetros que importam ficam na frente",
+      body: "Cada painel mostra primeiro o essencial — épocas, batch, taxa de aprendizado — e guarda o resto em “Avançado”, recolhido. Os valores que já vêm preenchidos foram medidos por tarefa, então começar sem mexer em nada é uma escolha válida. O “i” ao lado de cada rótulo explica o que aquele campo faz.",
+    },
+    device: {
+      title: "GPU ou CPU",
+      body: "O VisionForge detecta o que existe na máquina e escolhe a GPU quando ela está disponível. Dá para forçar a CPU aqui: é mais lento, mas roda em qualquer lugar e serve para conferir se um erro é do código ou da placa.",
+    },
+    train: {
+      title: "Treinar",
+      body: "O botão roda exatamente o que está selecionado — um treino simples, uma busca em grade, validação cruzada ou réplicas. Enquanto roda, uma tela mostra as curvas ao vivo e você pode minimizá-la ou cancelar sem perder o que já foi feito.",
+    },
+    history: {
+      title: "Tudo fica salvo",
+      body: "Cada execução guarda em disco a configuração, as métricas de todas as épocas, os gráficos e os pesos. O histórico deixa você reabrir, comparar duas execuções lado a lado, continuar um treino interrompido e testar o modelo em imagens novas.",
+    },
+    datasets: {
+      title: "Seus datasets",
+      body: "Aqui você inspeciona o que tem no disco, vê a distribuição das classes, filtra imagens ruins e prepara divisões novas. Vale abrir antes do primeiro treino: quase todo resultado estranho começa em um dataset desbalanceado.",
+    },
+  },
 };
 
 export type Dict = typeof pt;

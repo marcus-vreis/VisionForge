@@ -3,8 +3,6 @@
  *
  * Parsed with the TypeScript compiler rather than grepped, so comments,
  * imports and CSS values never count, and JSX text is told apart from code.
- * NOT_YET_MIGRATED lists the files still being moved over; the test fails
- * when a listed file is already clean, so the list can only shrink.
  */
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
@@ -12,21 +10,6 @@ import ts from "typescript";
 import { describe, expect, it } from "vitest";
 
 const SRC = join(__dirname, "..");
-
-const NOT_YET_MIGRATED = new Set([
-  "components/CompareRunsPanel.tsx",
-  "components/CustomTaskManageCard.tsx",
-  "components/CustomTaskPanel.tsx",
-  "components/CvCard.tsx",
-  "components/ExperimentHeader.tsx",
-  "components/GuidedTour.tsx",
-  "components/QueueOverlay.tsx",
-  "components/ReplicatesCard.tsx",
-  "components/SchemaForm.tsx",
-  "components/SweepCard.tsx",
-  "components/TrainingOverlay.tsx",
-  "lib/tour.ts",
-]);
 
 /** Exact texts that read the same in every language. */
 const ALLOWED = new Set([
@@ -41,6 +24,8 @@ const ALLOWED = new Set([
   "i",
   // The version prefix in the header: `· v${version}`.
   "· v",
+  // Example values in the sweep editor's placeholders: a config dot-path and model names.
+  "training.learning_rate", "resnet18, resnet50",
 ]);
 
 const VISIBLE_PROPS = new Set([
@@ -179,16 +164,10 @@ function findings(path: string): Finding[] {
 describe("no hard-coded interface text", () => {
   const byFile = new Map(sourceFiles(SRC).map((p) => [relative(SRC, p).replace(/\\/g, "/"), findings(p)]));
 
-  it("migrated files take every word from the dictionaries", () => {
+  it("every file takes its words from the dictionaries", () => {
     const offending = [...byFile]
-      .filter(([file]) => !NOT_YET_MIGRATED.has(file))
       .flatMap(([, list]) => list)
       .map((f) => `${f.file}:${f.line}  ${f.text}`);
     expect(offending, "move these into src/i18n/pt.ts and en.ts").toEqual([]);
-  });
-
-  it("the not-yet-migrated list only holds files that still need it", () => {
-    const done = [...NOT_YET_MIGRATED].filter((file) => (byFile.get(file) ?? []).length === 0);
-    expect(done, "remove these from NOT_YET_MIGRATED").toEqual([]);
   });
 });

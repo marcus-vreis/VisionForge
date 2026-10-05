@@ -1,3 +1,5 @@
+import { useT } from "../i18n/useT";
+import type { Dict } from "../i18n/pt";
 import { NumberField, SelectField, Segmented, TextField, Toggle } from "./controls";
 import { resolveKind } from "./field-renderer";
 import { orderSections, resolveSchema, visibleChildren } from "../lib/schema-form";
@@ -23,22 +25,6 @@ interface SchemaFormProps {
   /** Field names hidden because another surface owns them. */
   omit?: string[];
 }
-
-/**
- * Human labels for the blocks every custom task inherits from
- * `BaseTaskConfig`. Without these the card headings would be the Pydantic
- * class names the schema carries as `title` (TASKDATACONFIG, SCHEDULERCONFIG),
- * which is noise to a researcher.
- */
-const SECTION_LABELS: Record<string, string> = {
-  training: "Treinamento",
-  data: "Dataset",
-  transforms: "Aumentos & normalização",
-  preprocessing: "Pré-processamento (filtros)",
-  scheduler: "Learning-rate scheduler",
-  output: "Saída",
-  model: "Modelo",
-};
 
 /** Canonical section order (ADR-059), adapted: the researcher's own fields
  *  come first, then the inherited blocks in the same order every built-in
@@ -66,9 +52,14 @@ const grid: React.CSSProperties = {
   gap: 14,
 };
 
-/** Friendly heading: the curated label wins over the Pydantic class name. */
-function sectionLabel_(name: string, resolved: JsonSchema): string {
-  const curated = SECTION_LABELS[name];
+/** Friendly heading: the curated label wins over the Pydantic class name.
+ *
+ * The curated labels (`schemaForm.sections` in src/i18n) name the blocks every
+ * custom task inherits from `BaseTaskConfig`. Without them the card headings
+ * would be the Pydantic class names the schema carries as `title`
+ * (TASKDATACONFIG, SCHEDULERCONFIG), which is noise to a researcher. */
+function sectionLabel_(t: Dict, name: string, resolved: JsonSchema): string {
+  const curated = (t.schemaForm.sections as Record<string, string>)[name];
   if (curated) return curated;
   // Pydantic titles a nested model with its class name (TaskDataConfig);
   // for a plain field the title is the researcher's own wording, keep it.
@@ -105,6 +96,7 @@ function SchemaField({
   errors,
   path,
 }: FieldProps) {
+  const t = useT();
   const resolved = resolveSchema(schema, defs);
   const kind = resolveKind(name, resolved);
   if (kind === "skip") return null;
@@ -115,7 +107,7 @@ function SchemaField({
     return null;
   }
 
-  const label = sectionLabel_(name, resolved);
+  const label = sectionLabel_(t, name, resolved);
   const hint = resolved.description;
   const message = errorFor(errors, path);
 
@@ -226,7 +218,7 @@ function SchemaField({
               .filter((n) => !Number.isNaN(n)),
           )
         }
-        hint={hint ?? "valores separados por vírgula"}
+        hint={hint ?? t.schemaForm.listHint}
         mono
       />,
     );
@@ -251,6 +243,7 @@ export function SchemaForm({
   validationErrors,
   omit = [],
 }: SchemaFormProps) {
+  const t = useT();
   const defs = schema.$defs ?? {};
   const hidden = new Set(omit);
 
@@ -275,7 +268,7 @@ export function SchemaForm({
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
       {scalars.length > 0 && (
         <div style={card}>
-          <div style={sectionLabel}>Parâmetros da tarefa</div>
+          <div style={sectionLabel}>{t.schemaForm.taskParameters}</div>
           <div style={grid}>
             {scalars.map(([name, child]) => (
               <SchemaField

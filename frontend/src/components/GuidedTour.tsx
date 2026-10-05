@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { CARD_WIDTH, TOUR_STEPS, markTourSeen, placeCard } from "../lib/tour";
+import { useT } from "../i18n/useT";
+import { CARD_WIDTH, markTourSeen, placeCard, tourSteps, type TourStep } from "../lib/tour";
 
 /** O guia de primeira execução (ADR-104).
  *
@@ -30,6 +31,8 @@ interface GuidedTourProps {
 }
 
 export function GuidedTour({ invite = false, onClose }: GuidedTourProps) {
+  const t = useT();
+  const steps = useMemo(() => tourSteps(t), [t]);
   const [step, setStep] = useState(invite ? -1 : 0);
   const [rect, setRect] = useState<DOMRect | null>(null);
   const [animate, setAnimate] = useState(true);
@@ -47,9 +50,9 @@ export function GuidedTour({ invite = false, onClose }: GuidedTourProps) {
     observer.current = ro;
   }, []);
 
-  const current = step >= 0 ? TOUR_STEPS[step] : null;
+  const current = step >= 0 ? steps[step] : null;
   const anchor = current?.anchor;
-  const last = step === TOUR_STEPS.length - 1;
+  const last = step === steps.length - 1;
 
   const finish = useCallback(() => {
     markTourSeen();
@@ -114,14 +117,14 @@ export function GuidedTour({ invite = false, onClose }: GuidedTourProps) {
       if (e.key === "Escape") {
         finish();
       } else if (e.key === "ArrowRight") {
-        setStep((s) => (s + 1 >= TOUR_STEPS.length ? s : s + 1));
+        setStep((s) => (s + 1 >= steps.length ? s : s + 1));
       } else if (e.key === "ArrowLeft") {
         setStep((s) => (s > 0 ? s - 1 : s));
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [finish]);
+  }, [finish, steps.length]);
 
   // O cartão vai abaixo do alvo, ou acima quando não sobra espaço; o convite e
   // os passos sem alvo ficam no centro.
@@ -170,7 +173,7 @@ export function GuidedTour({ invite = false, onClose }: GuidedTourProps) {
       <div
         ref={cardRef}
         role="dialog"
-        aria-label="Guia do VisionForge"
+        aria-label={t.guidedTour.dialogLabel}
         style={{
           position: "fixed",
           left: card.left,
@@ -191,8 +194,8 @@ export function GuidedTour({ invite = false, onClose }: GuidedTourProps) {
         <button
           type="button"
           onClick={finish}
-          aria-label="Fechar o guia"
-          title="Fechar o guia"
+          aria-label={t.guidedTour.closeLabel}
+          title={t.guidedTour.closeLabel}
           style={{
             position: "absolute",
             top: 12,
@@ -223,7 +226,7 @@ export function GuidedTour({ invite = false, onClose }: GuidedTourProps) {
         </button>
 
         {current ? (
-          <StepBody step={step} title={current.title} body={current.body} />
+          <StepBody step={step} steps={steps} title={current.title} body={current.body} />
         ) : (
           <InviteBody />
         )}
@@ -243,7 +246,7 @@ export function GuidedTour({ invite = false, onClose }: GuidedTourProps) {
             onMouseEnter={(e) => (e.currentTarget.style.color = "var(--vf-text-dim)")}
             onMouseLeave={(e) => (e.currentTarget.style.color = "var(--vf-text-muted)")}
           >
-            {current ? "Pular" : "Agora não"}
+            {current ? t.common.skip : t.guidedTour.notNow}
           </button>
           <div style={{ flex: 1 }} />
           {step > 0 && (
@@ -252,7 +255,7 @@ export function GuidedTour({ invite = false, onClose }: GuidedTourProps) {
               onClick={() => setStep((s) => s - 1)}
               style={secondaryStyle}
             >
-              Voltar
+              {t.common.back}
             </button>
           )}
           <button
@@ -260,7 +263,11 @@ export function GuidedTour({ invite = false, onClose }: GuidedTourProps) {
             onClick={() => (last ? finish() : setStep((s) => s + 1))}
             style={primaryStyle}
           >
-            {current ? (last ? "Concluir" : "Continuar →") : "Ver o guia →"}
+            {current
+              ? last
+                ? t.guidedTour.finish
+                : t.guidedTour.next
+              : t.guidedTour.seeGuide}
           </button>
         </div>
       </div>
@@ -295,26 +302,24 @@ function Shade({
 
 
 function InviteBody() {
+  const t = useT();
   return (
     <>
-      <div style={eyebrowStyle}>Primeira vez por aqui</div>
-      <div style={titleStyle}>Quer uma volta rápida?</div>
-      <p style={bodyStyle}>
-        Sete paradas curtas pelos pontos principais: onde escolher a tarefa, como
-        apontar o dataset, o que já vem decidido para você e onde os resultados
-        ficam guardados. Dá para sair a qualquer momento — e o guia continua
-        disponível no cabeçalho depois.
-      </p>
+      <div style={eyebrowStyle}>{t.guidedTour.eyebrow}</div>
+      <div style={titleStyle}>{t.guidedTour.inviteTitle}</div>
+      <p style={bodyStyle}>{t.guidedTour.inviteBody}</p>
     </>
   );
 }
 
 function StepBody({
   step,
+  steps,
   title,
   body,
 }: {
   step: number;
+  steps: TourStep[];
   title: string;
   body: string;
 }) {
@@ -329,10 +334,10 @@ function StepBody({
         }}
       >
         <span>
-          {String(step + 1).padStart(2, "0")} / {String(TOUR_STEPS.length).padStart(2, "0")}
+          {String(step + 1).padStart(2, "0")} / {String(steps.length).padStart(2, "0")}
         </span>
         <span style={{ display: "flex", gap: 5, alignItems: "center" }}>
-          {TOUR_STEPS.map((s, i) => (
+          {steps.map((s, i) => (
             <span
               key={s.title}
               style={{

@@ -7,6 +7,8 @@
  * cinco tarefas sem precisar de uma versão por painel.
  */
 
+import type { Dict } from "../i18n/pt";
+
 export interface TourStep {
   /** Valor de `data-tour` do elemento destacado. Sem ele, o cartão centraliza. */
   anchor?: string;
@@ -14,49 +16,21 @@ export interface TourStep {
   body: string;
 }
 
-export const TOUR_STEPS: TourStep[] = [
-  {
-    anchor: "tabs",
-    title: "Escolha o tipo de treino",
-    body:
-      "Cada aba é uma tarefa completa: classificação, detecção, regressão, segmentação e anomalia. Trocar de aba troca o formulário inteiro, as métricas e a cor da interface — nada é compartilhado por acidente entre elas.",
-  },
-  {
-    anchor: "dataset",
-    title: "Aponte a pasta do dataset",
-    body:
-      "Escolha a pasta raiz e o VisionForge procura sozinho as subpastas de treino, validação e teste pelos nomes usuais. Se o seu dataset usa outros nomes, os seletores ao lado deixam você corrigir sem renomear nada no disco.",
-  },
-  {
-    title: "Os parâmetros que importam ficam na frente",
-    body:
-      "Cada painel mostra primeiro o essencial — épocas, batch, taxa de aprendizado — e guarda o resto em “Avançado”, recolhido. Os valores que já vêm preenchidos foram medidos por tarefa, então começar sem mexer em nada é uma escolha válida. O “i” ao lado de cada rótulo explica o que aquele campo faz.",
-  },
-  {
-    anchor: "device",
-    title: "GPU ou CPU",
-    body:
-      "O VisionForge detecta o que existe na máquina e escolhe a GPU quando ela está disponível. Dá para forçar a CPU aqui: é mais lento, mas roda em qualquer lugar e serve para conferir se um erro é do código ou da placa.",
-  },
-  {
-    anchor: "train",
-    title: "Treinar",
-    body:
-      "O botão roda exatamente o que está selecionado — um treino simples, uma busca em grade, validação cruzada ou réplicas. Enquanto roda, uma tela mostra as curvas ao vivo e você pode minimizá-la ou cancelar sem perder o que já foi feito.",
-  },
-  {
-    anchor: "history",
-    title: "Tudo fica salvo",
-    body:
-      "Cada execução guarda em disco a configuração, as métricas de todas as épocas, os gráficos e os pesos. O histórico deixa você reabrir, comparar duas execuções lado a lado, continuar um treino interrompido e testar o modelo em imagens novas.",
-  },
-  {
-    anchor: "datasets",
-    title: "Seus datasets",
-    body:
-      "Aqui você inspeciona o que tem no disco, vê a distribuição das classes, filtra imagens ruins e prepara divisões novas. Vale abrir antes do primeiro treino: quase todo resultado estranho começa em um dataset desbalanceado.",
-  },
-];
+/** Os sete passos, com os textos no idioma do dicionário recebido.
+ *
+ * Só as âncoras moram aqui; títulos e corpos estão em `tour` (src/i18n). */
+export function tourSteps(t: Dict): TourStep[] {
+  const s = t.tour;
+  return [
+    { anchor: "tabs", title: s.tabs.title, body: s.tabs.body },
+    { anchor: "dataset", title: s.dataset.title, body: s.dataset.body },
+    { title: s.parameters.title, body: s.parameters.body },
+    { anchor: "device", title: s.device.title, body: s.device.body },
+    { anchor: "train", title: s.train.title, body: s.train.body },
+    { anchor: "history", title: s.history.title, body: s.history.body },
+    { anchor: "datasets", title: s.datasets.title, body: s.datasets.body },
+  ];
+}
 
 const KEY = "vf.tour.seen";
 

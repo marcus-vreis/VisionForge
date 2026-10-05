@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { fetchCustomSchema } from "../api/client";
+import { useT } from "../i18n/useT";
 import {
   buildCustomForm,
   metricOptions,
@@ -11,6 +12,7 @@ import type { ValidationError } from "../hooks/useExperiment";
 import type { JsonSchema } from "../types/schema";
 import { ExperimentHeader, type PanelStrategy } from "./ExperimentHeader";
 import { CustomTaskManageCard } from "./CustomTaskManageCard";
+import { Rich } from "./Rich";
 import { ReplicatesCard } from "./ReplicatesCard";
 import { SchemaForm } from "./SchemaForm";
 import { SweepCard, type SweepPayload } from "./SweepCard";
@@ -42,12 +44,6 @@ interface CustomTaskPanelProps {
   onRemoved?: () => void;
 }
 
-const STRATEGIES: { value: PanelStrategy; label: string }[] = [
-  { value: "simple", label: "Treino simples" },
-  { value: "sweep", label: "Sweep" },
-  { value: "replicates", label: "Réplicas" },
-];
-
 const noticeStyle: React.CSSProperties = {
   padding: "14px 18px",
   background: "var(--vf-panel)",
@@ -71,6 +67,7 @@ export function CustomTaskPanel({
   runSignal,
   onRemoved,
 }: CustomTaskPanelProps) {
+  const t = useT();
   const [schema, setSchema] = useState<JsonSchema | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [strategy, setStrategy] = useState<PanelStrategy>("simple");
@@ -101,22 +98,27 @@ export function CustomTaskPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [task.key, setFormData]);
 
+  // Custom tasks have no K-fold endpoint, so the selector offers exactly what the API supports.
+  const strategies: { value: PanelStrategy; label: string }[] = [
+    { value: "simple", label: t.paramPanel.blocks.simple },
+    { value: "sweep", label: t.taskPanel.sweep },
+    { value: "replicates", label: t.taskPanel.replicates },
+  ];
   const metrics = metricOptions(task);
   const name = typeof formData.name === "string" ? formData.name : "";
 
   if (error) {
     return (
       <div style={{ ...noticeStyle, color: "oklch(0.85 0.14 22)" }}>
-        Não foi possível carregar o schema de <strong>{task.key}</strong>: {error}
+        {t.customTaskPanel.schemaLoadFailed} <strong>{task.key}</strong>: {error}
         <br />
-        Verifique o arquivo em <code>user_tasks/</code> — um erro de import é
-        registrado no log do servidor e a tarefa fica sem formulário.
+        <Rich text={t.customTaskPanel.schemaLoadHint} />
       </div>
     );
   }
 
   if (!schema) {
-    return <div style={noticeStyle}>Carregando o formulário de {task.label}…</div>;
+    return <div style={noticeStyle}>{t.customTaskPanel.loadingForm(task.label)}</div>;
   }
 
   return (
@@ -130,7 +132,7 @@ export function CustomTaskPanel({
           setStrategy(s);
           onStrategyChange?.(s);
         }}
-        strategies={STRATEGIES}
+        strategies={strategies}
         onExportYaml={() => exportConfigToYaml(formData, name || task.key)}
         onImportConfig={(data) => {
           // The task's own Config validates on submit (422 with field paths),

@@ -6,6 +6,14 @@ const workersHelp =
 const lrFinalHelp =
   "The learning rate at the end of training, as a fraction of the initial one.";
 
+/** 1st, 2nd, 3rd, 4th…: a place in the run queue. */
+const ordinal = (n: number): string => {
+  const lastTwo = n % 100;
+  if (lastTwo >= 11 && lastTwo <= 13) return `${n}th`;
+  const suffixes: Record<number, string> = { 1: "st", 2: "nd", 3: "rd" };
+  return `${n}${suffixes[n % 10] ?? "th"}`;
+};
+
 /** English. Typed as the Portuguese dictionary, so the two cannot drift. */
 export const en: Dict = {
   common: {
@@ -1279,6 +1287,247 @@ export const en: Dict = {
       color_jitter: "Color jitter",
       normalize_mean: "Normalization (mean)",
       normalize_std: "Normalization (std)",
+    },
+  },
+  experimentHeader: {
+    title: "Experiment",
+    nameLabel: "Experiment name",
+    nameHint: "used for the output folder and in the history",
+    exportTitle: "Export the current configuration as a .yaml file",
+    exportYaml: "↓ Export YAML",
+    importTitle: "Import a configuration from a .yaml file",
+    importYaml: "↑ Import YAML",
+    imported: (file: string) => `✓ ${file} imported`,
+    strategyTitle: "Experiment strategy",
+    mode: "Mode",
+    hints: {
+      simple: "one run with the config below (Train button)",
+      cv: "K folds over the training set → per-fold metrics + mean ± std",
+      sweep: "grid / random / optuna over the config below",
+      replicates: "same config, N seeds → mean ± 95% CI",
+    },
+  },
+  cvCard: {
+    title: "Cross-validation (K-fold)",
+    description:
+      "Splits the training rows into K folds: each fold trains a new model on K-1 parts and evaluates on the remaining part (never augmented). The test split is not used.",
+    folds: "Number of folds",
+    shuffle: "Shuffle",
+    shuffleHint: "before the split",
+    foldSeed: "Split seed",
+    run: (folds: number) => `⛓ Run CV · ${folds} folds`,
+  },
+  replicatesCard: {
+    title: "Multi-seed replicates · statistical rigor",
+    description:
+      "Trains the same config N times under different seeds and aggregates each metric as mean ± 95% CI (Student's t). A single run is one sample from a distribution — replicates make the number defensible.",
+    seeds: "Seeds",
+    automatic: "Automatic",
+    explicit: "Explicit",
+    automaticHint: "consecutive, starting from training.seed",
+    explicitHint: "exact list, reproducible",
+    count: "Number of replicates",
+    seedList: "Seeds (comma-separated)",
+    seedCount: (n: number) => `${n} seeds`,
+    headlineMetric: "Headline metric",
+    run: (seeds: number) => `🎲 Run replicates · ${seeds} seed${seeds === 1 ? "" : "s"}`,
+  },
+  sweepCard: {
+    title: "Hyperparameter sweep · advanced mode",
+    description: (paths: string) =>
+      `Sweeps hyperparameters by dot-path (e.g. ${paths}) and ranks them by the metric. Grid = cartesian product; Random = samples; Optuna = adaptive TPE search (needs the optional extra).`,
+    strategy: "Strategy",
+    presetTitle: "preset · architectures → model.name axis",
+    compareArchitectures: (n: number) => `⇒ compare ${n} architecture${n === 1 ? "" : "s"}`,
+    parameter: "Parameter (dot-path)",
+    values: "Values (comma-separated)",
+    distribution: "Distribution",
+    kinds: {
+      uniform: "Uniform",
+      logUniform: "Log-uniform",
+      choice: "Choice",
+    },
+    options: "Options (comma-separated)",
+    low: "low",
+    high: "high",
+    removeParameter: "Remove parameter",
+    addParameter: "+ add parameter",
+    rankingMetric: "Ranking metric",
+    trials: "Number of trials",
+    seed: "Seed",
+    run: (trials: number) => `⛓ Run sweep · ${trials} trial${trials === 1 ? "" : "s"}`,
+  },
+  schemaForm: {
+    sections: {
+      training: "Training",
+      data: "Dataset",
+      transforms: "Augmentation & normalization",
+      preprocessing: "Preprocessing (filters)",
+      scheduler: "Learning-rate scheduler",
+      output: "Output",
+      model: "Model",
+    },
+    taskParameters: "Task parameters",
+    listHint: "comma-separated values",
+  },
+  customTaskPanel: {
+    schemaLoadFailed: "Could not load the schema for",
+    schemaLoadHint:
+      "Check the file in `user_tasks/` — an import error is logged by the server and the task is left without a form.",
+    loadingForm: (task: string) => `Loading the form for ${task}…`,
+  },
+  customTaskManage: {
+    heading: "// manage this task",
+    close: "close",
+    options: "⚙ options",
+    hideTitle: "Hides the tab; the file stays in user_tasks/",
+    hide: "👁 Hide tab",
+    hideNote: "reversible — the file stays",
+    hideFailed: "Failed to hide the task.",
+    delete: "🗑 Delete from disk",
+    deleteNote: "deletes the .py you wrote — cannot be undone",
+    confirmBefore: "This deletes the file for",
+    confirmAfter: "from disk. To confirm, type the task key:",
+    typeKeyTitle: "Type the exact key to enable",
+    deleting: "Deleting…",
+    deleteForever: "Delete permanently",
+    deleteFailed: "Failed to delete the task.",
+  },
+  queueOverlay: {
+    readFailed: "Could not read the queue.",
+    cancelFailed: "Could not cancel that run.",
+    kicker: "// queue",
+    title: "Runs in the queue",
+    description:
+      "One GPU, one run at a time. Submit as many as you like — they run on their own, in the order they were sent.",
+    emptyTitle: "The GPU is free and nothing is waiting.",
+    emptyHint: "Submit a run and, if you submit another right after, it shows up here.",
+    position: (n: number) => ordinal(n),
+    running: "running",
+    waiting: (waited: string) => `waiting ${waited}`,
+    removeTitle: "Remove from the queue (does not affect runs already started)",
+    stop: "■ stop",
+    remove: "🗑 remove",
+    cannotCancel: "can't cancel",
+    cannotCancelTitle:
+      "A run in progress can't be cancelled: the trainers have no stopping point, and interrupting would leave the run's folder half-written.",
+  },
+  trainingOverlay: {
+    blocks: {
+      modelComparison: "Model comparison",
+      crossValidation: "K-Fold CV",
+      replicates: "Multi-seed replicates",
+    },
+    initializing: (runId: string) => `> initializing runtime · ${runId}`,
+    loadingDataset: "> loading dataset…",
+    trainingFailed: "training failed",
+    trainingComplete: "training complete",
+    queued: (task: string) => `queued · ${task}`,
+    training: (task: string) => `training · ${task}`,
+    starting: "starting…",
+    queuedNote: (position: number | undefined, queued: number | undefined) =>
+      `${position ? `waiting for the GPU — ${ordinal(position)} in line` : "waiting for the GPU"}${
+        typeof queued === "number" && queued > 1 ? ` · ${queued} submissions waiting` : ""
+      }. The run starts on its own when its turn comes.`,
+    errorDetail: "Error detail",
+    unknownError: "Unknown error — check the server logs.",
+    logUnknownError: "unknown error",
+    queueBanner: (block: string, runs: number | undefined) =>
+      `⛓ run queue · ${block}${runs && runs > 1 ? ` · ${runs} runs` : ""}`,
+    queueBannerBody:
+      'This block runs several trainings one after another. The progress bar follows the current trial; the aggregated result appears under "View results" at the end.',
+    pipeline: (n: number) => `⚗ active pipeline · ${n} filter${n === 1 ? "" : "s"}`,
+    minimize: "Minimize",
+    viewResults: "↗ View results",
+  },
+  compareRuns: {
+    back: "← history",
+    comparing: (n: number) => `Comparing ${n} runs`,
+    loading: "loading runs…",
+    loadFailed: "Failed to load runs.",
+    verdict: {
+      same: "same data",
+      different: "different data",
+      unknown: "can't be verified",
+    },
+    metric: "Metric",
+    device: "Device",
+    field: "Field",
+    metrics: {
+      best_val_loss: "Best val loss",
+      best_epoch: "Best epoch",
+      total_epochs: "Total epochs",
+      test_accuracy: "Accuracy (test)",
+      test_f1: "F1 (test)",
+      test_precision: "Precision (test)",
+      test_recall: "Recall (test)",
+      test_auc_roc: "AUC-ROC (test)",
+    },
+    configDiffTitle: "// config diff (highlighted cells = different from the 1st run)",
+    config: {
+      architecture: "Architecture",
+      numClasses: "Number of classes",
+      pretrained: "Pretrained",
+      task: "Task",
+      learningRate: "Learning rate",
+      optimizer: "Optimizer",
+      batchSize: "Batch size",
+      epochsMax: "Epochs (max)",
+      weightDecay: "Weight decay",
+      seed: "Seed",
+      mixedPrecision: "Mixed precision",
+      scheduler: "Scheduler",
+      imageSize: "Image size",
+      horizontalFlip: "Horizontal flip",
+      rotation: "Rotation (°)",
+      colorJitter: "Color jitter",
+      preprocessing: "Preprocessing",
+    },
+    preprocessingTitle: "// preprocessing pipelines",
+    noPreprocessing: "no preprocessing",
+    valLossChart: "Val loss × epoch",
+    valAccuracyChart: "Val accuracy × epoch",
+  },
+  guidedTour: {
+    dialogLabel: "VisionForge guide",
+    closeLabel: "Close the guide",
+    eyebrow: "First time here",
+    inviteTitle: "Want a quick tour?",
+    inviteBody:
+      "Seven short stops through the main points: where to choose the task, how to point at the dataset, what is already decided for you and where the results are kept. You can leave at any time — and the guide stays available in the header afterwards.",
+    notNow: "Not now",
+    seeGuide: "See the guide →",
+    next: "Continue →",
+    finish: "Finish",
+  },
+  tour: {
+    tabs: {
+      title: "Choose the kind of training",
+      body: "Each tab is a complete task: classification, detection, regression, segmentation and anomaly. Switching tabs switches the whole form, the metrics and the interface color — nothing is shared between them by accident.",
+    },
+    dataset: {
+      title: "Point to the dataset folder",
+      body: "Choose the root folder and VisionForge finds the train, validation and test subfolders by their usual names. If your dataset uses other names, the selectors next to it let you fix that without renaming anything on disk.",
+    },
+    parameters: {
+      title: "The parameters that matter come first",
+      body: "Each panel shows the essentials first — epochs, batch size, learning rate — and keeps the rest under “Advanced”, collapsed. The prefilled values were measured per task, so starting without touching anything is a valid choice. The “i” next to each label explains what that field does.",
+    },
+    device: {
+      title: "GPU or CPU",
+      body: "VisionForge detects what the machine has and picks the GPU when one is available. You can force the CPU here: it is slower, but it runs anywhere and helps you tell whether an error comes from the code or from the card.",
+    },
+    train: {
+      title: "Train",
+      body: "The button runs exactly what is selected — a single run, a grid search, cross-validation or replicates. While it runs, a screen shows the live curves, and you can minimize it or cancel without losing what has already been done.",
+    },
+    history: {
+      title: "Everything is saved",
+      body: "Each run stores its configuration, the metrics of every epoch, the plots and the weights on disk. The history lets you reopen a run, compare two runs side by side, resume an interrupted training and test the model on new images.",
+    },
+    datasets: {
+      title: "Your datasets",
+      body: "Here you inspect what is on disk, see the class distribution, filter out bad images and prepare new splits. Worth opening before the first training: almost every odd result starts with an unbalanced dataset.",
     },
   },
 };

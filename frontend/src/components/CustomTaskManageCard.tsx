@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { deleteCustomTask, hideCustomTask } from "../api/client";
+import { useT } from "../i18n/useT";
 
 interface CustomTaskManageCardProps {
   taskKey: string;
@@ -29,6 +30,7 @@ export function CustomTaskManageCard({
   label,
   onRemoved,
 }: CustomTaskManageCardProps) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [typed, setTyped] = useState("");
@@ -42,7 +44,7 @@ export function CustomTaskManageCard({
       await hideCustomTask(taskKey);
       onRemoved();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Falha ao ocultar.");
+      setError(e instanceof Error ? e.message : t.customTaskManage.hideFailed);
     } finally {
       setBusy(false);
     }
@@ -55,7 +57,7 @@ export function CustomTaskManageCard({
       await deleteCustomTask(taskKey, typed);
       onRemoved();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Falha ao excluir.");
+      setError(e instanceof Error ? e.message : t.customTaskManage.deleteFailed);
     } finally {
       setBusy(false);
     }
@@ -79,7 +81,7 @@ export function CustomTaskManageCard({
           gap: 12,
         }}
       >
-        <div style={sectionLabel}>// gerenciar esta task</div>
+        <div style={sectionLabel}>{t.customTaskManage.heading}</div>
         <button
           type="button"
           onClick={() => {
@@ -101,7 +103,7 @@ export function CustomTaskManageCard({
             cursor: "pointer",
           }}
         >
-          {open ? "fechar" : "⚙ opções"}
+          {open ? t.customTaskManage.close : t.customTaskManage.options}
         </button>
       </div>
 
@@ -119,7 +121,7 @@ export function CustomTaskManageCard({
               type="button"
               onClick={() => void hide()}
               disabled={busy}
-              title="Some com a aba; o arquivo continua em user_tasks/"
+              title={t.customTaskManage.hideTitle}
               style={{
                 padding: "8px 14px",
                 background: "rgba(255,255,255,0.04)",
@@ -133,7 +135,7 @@ export function CustomTaskManageCard({
                 cursor: busy ? "wait" : "pointer",
               }}
             >
-              👁 Ocultar aba
+              {t.customTaskManage.hide}
             </button>
             <span
               style={{
@@ -142,7 +144,7 @@ export function CustomTaskManageCard({
                 color: "var(--vf-text-muted)",
               }}
             >
-              reversível — o arquivo fica
+              {t.customTaskManage.hideNote}
             </span>
           </div>
 
@@ -174,7 +176,7 @@ export function CustomTaskManageCard({
                   cursor: "pointer",
                 }}
               >
-                🗑 Excluir do disco
+                {t.customTaskManage.delete}
               </button>
               <span
                 style={{
@@ -183,7 +185,7 @@ export function CustomTaskManageCard({
                   color: "var(--vf-text-muted)",
                 }}
               >
-                apaga o .py que você escreveu — sem desfazer
+                {t.customTaskManage.deleteNote}
               </span>
             </div>
           ) : (
@@ -196,8 +198,9 @@ export function CustomTaskManageCard({
                   lineHeight: 1.6,
                 }}
               >
-                Isto remove o arquivo de <b>{label}</b> do disco. Para confirmar,
-                digite a chave da task: <b style={{ color: "var(--vf-text)" }}>{taskKey}</b>
+                {t.customTaskManage.confirmBefore} <b>{label}</b>{" "}
+                {t.customTaskManage.confirmAfter}{" "}
+                <b style={{ color: "var(--vf-text)" }}>{taskKey}</b>
               </div>
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                 <input
@@ -223,7 +226,7 @@ export function CustomTaskManageCard({
                   onClick={() => void remove()}
                   disabled={busy || typed !== taskKey}
                   title={
-                    typed !== taskKey ? "Digite a chave exata para habilitar" : undefined
+                    typed !== taskKey ? t.customTaskManage.typeKeyTitle : undefined
                   }
                   style={{
                     padding: "9px 16px",
@@ -243,7 +246,7 @@ export function CustomTaskManageCard({
                     cursor: typed === taskKey && !busy ? "pointer" : "not-allowed",
                   }}
                 >
-                  {busy ? "Excluindo…" : "Excluir definitivamente"}
+                  {busy ? t.customTaskManage.deleting : t.customTaskManage.deleteForever}
                 </button>
                 <button
                   type="button"
@@ -265,7 +268,7 @@ export function CustomTaskManageCard({
                     cursor: "pointer",
                   }}
                 >
-                  Cancelar
+                  {t.common.cancel}
                 </button>
               </div>
             </div>

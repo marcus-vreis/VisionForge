@@ -25,6 +25,7 @@ export function QueueOverlay({
   onClose,
   onCountChange,
 }: QueueOverlayProps) {
+  const t = useT();
   const [active, setActive] = useState<QueuedJobInfo | null>(null);
   const [pending, setPending] = useState<QueuedJobInfo[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -39,10 +40,10 @@ export function QueueOverlay({
       setError(null);
     } catch (e) {
       setError(
-        e instanceof ApiError ? e.message : "Não foi possível ler a fila.",
+        e instanceof ApiError ? e.message : t.queueOverlay.readFailed,
       );
     }
-  }, [onCountChange]);
+  }, [onCountChange, t]);
 
   // Poll while open: the queue advances on its own as jobs finish.
   useEffect(() => {
@@ -61,7 +62,7 @@ export function QueueOverlay({
       setError(
         e instanceof ApiError
           ? e.message
-          : "Não foi possível cancelar esse treino.",
+          : t.queueOverlay.cancelFailed,
       );
     } finally {
       setBusyId(null);
@@ -121,7 +122,7 @@ export function QueueOverlay({
                 marginBottom: 6,
               }}
             >
-              // fila
+              {t.queueOverlay.kicker}
             </div>
             <div
               style={{
@@ -131,7 +132,7 @@ export function QueueOverlay({
                 color: "var(--vf-text)",
               }}
             >
-              Treinos na fila
+              {t.queueOverlay.title}
             </div>
             <div
               style={{
@@ -142,8 +143,7 @@ export function QueueOverlay({
                 lineHeight: 1.6,
               }}
             >
-              Uma GPU, um treino por vez. Submeta quantos quiser — eles rodam em
-              ordem de envio, sozinhos.
+              {t.queueOverlay.description}
             </div>
           </div>
           <button
@@ -205,9 +205,9 @@ export function QueueOverlay({
                 lineHeight: 1.7,
               }}
             >
-              A GPU está livre e nada está esperando.
+              {t.queueOverlay.emptyTitle}
               <br />
-              Envie um treino e, se enviar outro em seguida, ele aparece aqui.
+              {t.queueOverlay.emptyHint}
             </div>
           )}
 
@@ -277,7 +277,7 @@ function JobRow({
           flexShrink: 0,
         }}
       >
-        {running ? "▶" : `${position}º`}
+        {running ? "▶" : t.queueOverlay.position(position ?? 0)}
       </span>
 
       <div style={{ flex: 1, minWidth: 0 }}>
@@ -304,7 +304,9 @@ function JobRow({
           }}
         >
           {taskLabel(t, job.task)} · {strategyLabel(t, job.strategy)} ·{" "}
-          {running ? "em execução" : `esperando ${waitedFor(job.submitted_at)}`}
+          {running
+            ? t.queueOverlay.running
+            : t.queueOverlay.waiting(waitedFor(job.submitted_at))}
         </div>
       </div>
 
@@ -313,7 +315,7 @@ function JobRow({
           type="button"
           onClick={onCancel}
           disabled={cancelling}
-          title="Remover da fila (não afeta treinos já iniciados)"
+          title={t.queueOverlay.removeTitle}
           style={{
             padding: "7px 12px",
             borderRadius: 9,
@@ -327,11 +329,11 @@ function JobRow({
             flexShrink: 0,
           }}
         >
-          {cancelling ? "…" : running ? "■ parar" : "🗑 remover"}
+          {cancelling ? "…" : running ? t.queueOverlay.stop : t.queueOverlay.remove}
         </button>
       ) : (
         <span
-          title="Um treino em andamento não pode ser cancelado: os trainers não têm ponto de parada, e interromper deixaria a pasta do run pela metade."
+          title={t.queueOverlay.cannotCancelTitle}
           style={{
             fontFamily: "var(--font-mono)",
             fontSize: 10,
@@ -340,7 +342,7 @@ function JobRow({
             flexShrink: 0,
           }}
         >
-          sem cancelar
+          {t.queueOverlay.cannotCancel}
         </span>
       )}
     </div>

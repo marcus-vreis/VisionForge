@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { fetchRunDetail, type RunDetail } from "../api/client";
 import { useT } from "../i18n/useT";
+import type { Dict } from "../i18n/pt";
 import { compareDatasets } from "../lib/dataset-identity";
 
 interface CompareRunsPanelProps {
@@ -17,15 +18,16 @@ const PALETTE = [
   "oklch(0.78 0.16 200)", // teal
 ];
 
-const METRIC_ROWS: Array<{ key: string; label: string }> = [
-  { key: "best_val_loss", label: "Melhor val loss" },
-  { key: "best_epoch", label: "Melhor epoch" },
-  { key: "total_epochs", label: "Total de epochs" },
-  { key: "test_accuracy", label: "Acurácia (teste)" },
-  { key: "test_f1", label: "F1 (teste)" },
-  { key: "test_precision", label: "Precisão (teste)" },
-  { key: "test_recall", label: "Recall (teste)" },
-  { key: "test_auc_roc", label: "AUC-ROC (teste)" },
+/** The metric rows, in display order; the labels are `compareRuns.metrics`. */
+const METRIC_KEYS: Array<keyof Dict["compareRuns"]["metrics"]> = [
+  "best_val_loss",
+  "best_epoch",
+  "total_epochs",
+  "test_accuracy",
+  "test_f1",
+  "test_precision",
+  "test_recall",
+  "test_auc_roc",
 ];
 
 function fmtMetric(v: unknown): string {
@@ -36,6 +38,7 @@ function fmtMetric(v: unknown): string {
 
 /** Side-by-side metric + overlaid epoch-curve view for 2+ historical runs. */
 export function CompareRunsPanel({ runIds, onBack }: CompareRunsPanelProps) {
+  const t = useT();
   const [details, setDetails] = useState<RunDetail[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -53,7 +56,7 @@ export function CompareRunsPanel({ runIds, onBack }: CompareRunsPanelProps) {
       })
       .catch((e: unknown) => {
         if (alive) {
-          setError(e instanceof Error ? e.message : "Falha ao carregar runs.");
+          setError(e instanceof Error ? e.message : t.compareRuns.loadFailed);
         }
       })
       .finally(() => {
@@ -85,16 +88,16 @@ export function CompareRunsPanel({ runIds, onBack }: CompareRunsPanelProps) {
             cursor: "pointer",
           }}
         >
-          ← histórico
+          {t.compareRuns.back}
         </button>
         <div style={{ fontFamily: "var(--font-mono)", fontSize: 14, color: "var(--vf-text)" }}>
-          Comparando {runIds.length} runs
+          {t.compareRuns.comparing(runIds.length)}
         </div>
       </div>
 
       {loading && (
         <div style={{ padding: 32, textAlign: "center", color: "var(--vf-text-muted)" }}>
-          carregando runs…
+          {t.compareRuns.loading}
         </div>
       )}
 
@@ -124,13 +127,13 @@ export function CompareRunsPanel({ runIds, onBack }: CompareRunsPanelProps) {
           <OverlayChart
             details={details}
             yKey="val_loss"
-            title="Val loss × epoch"
+            title={t.compareRuns.valLossChart}
             invertGood
           />
           <OverlayChart
             details={details}
             yKey="val_accuracy"
-            title="Val accuracy × epoch"
+            title={t.compareRuns.valAccuracyChart}
           />
         </>
       )}
@@ -139,9 +142,9 @@ export function CompareRunsPanel({ runIds, onBack }: CompareRunsPanelProps) {
 }
 
 const VERDICT_STYLE = {
-  same: { icon: "✓", color: "oklch(0.80 0.15 150)", text: "mesmos dados" },
-  different: { icon: "✗", color: "oklch(0.72 0.19 25)", text: "dados diferentes" },
-  unknown: { icon: "⚠", color: "oklch(0.80 0.13 85)", text: "não verificável" },
+  same: { icon: "✓", color: "oklch(0.80 0.15 150)" },
+  different: { icon: "✗", color: "oklch(0.72 0.19 25)" },
+  unknown: { icon: "⚠", color: "oklch(0.80 0.13 85)" },
 };
 
 /** Whether the runs being compared saw the same data.
@@ -181,7 +184,7 @@ function DatasetVerdictRow({ details }: { details: RunDetail[] }) {
     >
       <span>{style.icon}</span>
       <span>
-        {style.text}
+        {t.compareRuns.verdict[verdict.kind]}
         {verdict.kind === "unknown" ? ` — ${verdict.reason}` : ""}
       </span>
       {names.length > 0 && (
@@ -233,6 +236,7 @@ function Legend({ details }: { details: RunDetail[] }) {
 }
 
 function MetricsTable({ details }: { details: RunDetail[] }) {
+  const t = useT();
   return (
     <div
       style={{
@@ -246,7 +250,7 @@ function MetricsTable({ details }: { details: RunDetail[] }) {
       <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "var(--font-mono)", fontSize: 12 }}>
         <thead>
           <tr>
-            <th style={thStyle}>Métrica</th>
+            <th style={thStyle}>{t.compareRuns.metric}</th>
             {details.map((d, i) => (
               <th key={d.run_id} style={{ ...thStyle, color: PALETTE[i % PALETTE.length] }}>
                 {d.experiment_name}
@@ -255,7 +259,8 @@ function MetricsTable({ details }: { details: RunDetail[] }) {
           </tr>
         </thead>
         <tbody>
-          {METRIC_ROWS.map(({ key, label }) => {
+          {METRIC_KEYS.map((key) => {
+            const label = t.compareRuns.metrics[key];
             const present = details.some((d) => d.metrics[key] !== undefined);
             if (!present) return null;
             return (
@@ -270,7 +275,7 @@ function MetricsTable({ details }: { details: RunDetail[] }) {
             );
           })}
           <tr>
-            <td style={tdLabelStyle}>Dispositivo</td>
+            <td style={tdLabelStyle}>{t.compareRuns.device}</td>
             {details.map((d) => (
               <td key={d.run_id} style={tdStyle}>
                 {d.device_used ?? "—"}
@@ -310,20 +315,20 @@ const tdLabelStyle: React.CSSProperties = {
 // ── Config diff ──────────────────────────────────────────────────────────────
 
 /** Selectors that pull comparable scalar values from RunDetail.config. */
-const CONFIG_ROWS: Array<{ label: string; pick: (cfg: Record<string, unknown>) => unknown }> = [
-  { label: "Arquitetura", pick: (c) => (c.model as Record<string, unknown> | undefined)?.name },
-  { label: "Num classes", pick: (c) => (c.model as Record<string, unknown> | undefined)?.num_classes },
-  { label: "Pretrained", pick: (c) => (c.model as Record<string, unknown> | undefined)?.pretrained },
-  { label: "Task", pick: (c) => c.task },
-  { label: "Learning rate", pick: (c) => (c.training as Record<string, unknown> | undefined)?.learning_rate },
-  { label: "Optimizer", pick: (c) => (c.training as Record<string, unknown> | undefined)?.optimizer },
-  { label: "Batch size", pick: (c) => (c.training as Record<string, unknown> | undefined)?.batch_size },
-  { label: "Epochs (max)", pick: (c) => (c.training as Record<string, unknown> | undefined)?.epochs },
-  { label: "Weight decay", pick: (c) => (c.training as Record<string, unknown> | undefined)?.weight_decay },
-  { label: "Seed", pick: (c) => (c.training as Record<string, unknown> | undefined)?.seed },
-  { label: "Mixed precision", pick: (c) => (c.training as Record<string, unknown> | undefined)?.mixed_precision },
+const CONFIG_ROWS: Array<{ id: keyof Dict["compareRuns"]["config"]; pick: (cfg: Record<string, unknown>) => unknown }> = [
+  { id: "architecture", pick: (c) => (c.model as Record<string, unknown> | undefined)?.name },
+  { id: "numClasses", pick: (c) => (c.model as Record<string, unknown> | undefined)?.num_classes },
+  { id: "pretrained", pick: (c) => (c.model as Record<string, unknown> | undefined)?.pretrained },
+  { id: "task", pick: (c) => c.task },
+  { id: "learningRate", pick: (c) => (c.training as Record<string, unknown> | undefined)?.learning_rate },
+  { id: "optimizer", pick: (c) => (c.training as Record<string, unknown> | undefined)?.optimizer },
+  { id: "batchSize", pick: (c) => (c.training as Record<string, unknown> | undefined)?.batch_size },
+  { id: "epochsMax", pick: (c) => (c.training as Record<string, unknown> | undefined)?.epochs },
+  { id: "weightDecay", pick: (c) => (c.training as Record<string, unknown> | undefined)?.weight_decay },
+  { id: "seed", pick: (c) => (c.training as Record<string, unknown> | undefined)?.seed },
+  { id: "mixedPrecision", pick: (c) => (c.training as Record<string, unknown> | undefined)?.mixed_precision },
   {
-    label: "Scheduler",
+    id: "scheduler",
     pick: (c) => {
       const s = (c.training as Record<string, unknown> | undefined)?.scheduler as
         | Record<string, unknown>
@@ -331,12 +336,12 @@ const CONFIG_ROWS: Array<{ label: string; pick: (cfg: Record<string, unknown>) =
       return s?.kind ?? "none";
     },
   },
-  { label: "Image size", pick: (c) => pickDataTransforms(c)?.image_size },
-  { label: "Horizontal flip", pick: (c) => pickDataTransforms(c)?.horizontal_flip },
-  { label: "Rotation (°)", pick: (c) => pickDataTransforms(c)?.rotation_degrees },
-  { label: "Color jitter", pick: (c) => pickDataTransforms(c)?.color_jitter },
+  { id: "imageSize", pick: (c) => pickDataTransforms(c)?.image_size },
+  { id: "horizontalFlip", pick: (c) => pickDataTransforms(c)?.horizontal_flip },
+  { id: "rotation", pick: (c) => pickDataTransforms(c)?.rotation_degrees },
+  { id: "colorJitter", pick: (c) => pickDataTransforms(c)?.color_jitter },
   {
-    label: "Preprocessing",
+    id: "preprocessing",
     pick: (c) => {
       const steps = pickPreprocessingSteps(c);
       if (steps.length === 0) return "—";
@@ -376,6 +381,7 @@ function fmtConfigValue(v: unknown): string {
  * of guessing why one curve beats another.
  */
 function ConfigDiffTable({ details }: { details: RunDetail[] }) {
+  const t = useT();
   return (
     <div
       style={{
@@ -396,7 +402,7 @@ function ConfigDiffTable({ details }: { details: RunDetail[] }) {
           marginBottom: 10,
         }}
       >
-        // diff de configuração (células destacadas = diferentes da 1ª run)
+        {t.compareRuns.configDiffTitle}
       </div>
       <table
         style={{
@@ -408,7 +414,7 @@ function ConfigDiffTable({ details }: { details: RunDetail[] }) {
       >
         <thead>
           <tr>
-            <th style={thStyle}>Campo</th>
+            <th style={thStyle}>{t.compareRuns.field}</th>
             {details.map((d, i) => (
               <th key={d.run_id} style={{ ...thStyle, color: PALETTE[i % PALETTE.length] }}>
                 {d.experiment_name}
@@ -417,13 +423,13 @@ function ConfigDiffTable({ details }: { details: RunDetail[] }) {
           </tr>
         </thead>
         <tbody>
-          {CONFIG_ROWS.map(({ label, pick }) => {
+          {CONFIG_ROWS.map(({ id, pick }) => {
             const values = details.map((d) => pick(d.config));
             const reference = values[0];
             const anyDiff = values.some((v) => !sameConfigValue(v, reference));
             return (
-              <tr key={label}>
-                <td style={tdLabelStyle}>{label}</td>
+              <tr key={id}>
+                <td style={tdLabelStyle}>{t.compareRuns.config[id]}</td>
                 {values.map((v, i) => {
                   const isDifferent = anyDiff && i > 0 && !sameConfigValue(v, reference);
                   return (
@@ -462,6 +468,7 @@ function sameConfigValue(a: unknown, b: unknown): boolean {
 /** When any run has a preprocessing pipeline, render each one as an ordered
  * list side by side so the differences are inspectable at a glance. */
 function PreprocessingCompare({ details }: { details: RunDetail[] }) {
+  const t = useT();
   const pipelines = details.map((d) => pickPreprocessingSteps(d.config));
   const anyPipeline = pipelines.some((p) => p.length > 0);
   if (!anyPipeline) return null;
@@ -485,7 +492,7 @@ function PreprocessingCompare({ details }: { details: RunDetail[] }) {
           marginBottom: 10,
         }}
       >
-        // pipelines de pré-processamento
+        {t.compareRuns.preprocessingTitle}
       </div>
       <div
         style={{
@@ -527,7 +534,7 @@ function PreprocessingCompare({ details }: { details: RunDetail[] }) {
                     fontStyle: "italic",
                   }}
                 >
-                  sem pré-processamento
+                  {t.compareRuns.noPreprocessing}
                 </div>
               ) : (
                 <ol

@@ -1,12 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { en } from "../i18n/en";
+import { pt } from "../i18n/pt";
 import {
   CARD_WIDTH,
-  TOUR_STEPS,
   clearTourSeen,
   markTourSeen,
   placeCard,
   readTourSeen,
+  tourSteps,
 } from "./tour";
 
 const KEY = "vf.tour.seen";
@@ -73,6 +75,8 @@ describe("the seen flag", () => {
 });
 
 describe("the script", () => {
+  const steps = tourSteps(pt);
+
   it("names an existing anchor or none at all", () => {
     // A typo here would silently centre the card instead of pointing at the
     // element, so the set of anchors is pinned to what the components mark.
@@ -85,15 +89,17 @@ describe("the script", () => {
       "datasets",
     ]);
 
-    for (const step of TOUR_STEPS) {
+    for (const step of steps) {
       if (step.anchor) expect(marked).toContain(step.anchor);
     }
   });
 
-  it("gives every step something to say", () => {
-    for (const step of TOUR_STEPS) {
-      expect(step.title.length).toBeGreaterThan(0);
-      expect(step.body.length).toBeGreaterThan(40);
+  it("gives every step something to say, in both languages", () => {
+    for (const dict of [pt, en]) {
+      for (const step of tourSteps(dict)) {
+        expect(step.title.length).toBeGreaterThan(0);
+        expect(step.body.length).toBeGreaterThan(40);
+      }
     }
   });
 });

@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import type { Dict } from "../i18n/pt";
+import { useT } from "../i18n/useT";
 import type { RunStatus, TrainingEvent } from "../types/run";
 
 interface TrainingOverlayProps {
@@ -22,13 +24,8 @@ interface TrainingOverlayProps {
   onViewResults?: () => void;
 }
 
-const QUEUE_BLOCKS: Record<string, string> = {
-  grid_search: "Grid search",
-  random_search: "Random search",
-  model_comparison: "Comparação de modelos",
-  cross_validation: "K-Fold CV",
-  replicates: "Réplicas multi-seed",
-};
+/** A log line: the trainer's own text, or one of ours that follows the language. */
+type LogLine = string | ((t: Dict) => string);
 
 /** Modal overlay shown while an experiment is running or just completed. */
 export function TrainingOverlay({
@@ -44,7 +41,16 @@ export function TrainingOverlay({
   onClose,
   onViewResults,
 }: TrainingOverlayProps) {
-  const queueLabel = blockKind ? QUEUE_BLOCKS[blockKind] : undefined;
+  const t = useT();
+  // The blocks that run several trainings in a row.
+  const queueBlocks: Record<string, string> = {
+    grid_search: t.paramPanel.blocks.gridSearch,
+    random_search: t.paramPanel.blocks.randomSearch,
+    model_comparison: t.trainingOverlay.blocks.modelComparison,
+    cross_validation: t.trainingOverlay.blocks.crossValidation,
+    replicates: t.trainingOverlay.blocks.replicates,
+  };
+  const queueLabel = blockKind ? queueBlocks[blockKind] : undefined;
   const isRunning = status.status === "running";
   const isCompleted = status.status === "completed";
   const hasFailed = status.status === "failed";
@@ -120,10 +126,12 @@ export function TrainingOverlay({
         ? currentEpoch / totalEpochs
         : 0;
 
-  const [logs, setLogs] = useState<string[]>([
+  // The lines that are our own words are kept as functions of the dictionary, so
+  // they follow a language switch made while the run is going.
+  const [logs, setLogs] = useState<LogLine[]>([
     `$ visionforge train --task ${taskKey}`,
-    `> inicializando runtime · ${status.run_id ?? "..."}`,
-    `> carregando dataset…`,
+    (d) => d.trainingOverlay.initializing(status.run_id ?? "..."),
+    (d) => d.trainingOverlay.loadingDataset,
   ]);
   const logRef = useRef<HTMLDivElement>(null);
   // Tracks which terminal status we already processed so the effect only runs once.
@@ -233,17 +241,21 @@ export function TrainingOverlay({
     if (isCompleted) {
       handledStatusRef.current = status.status;
       const timer = setTimeout(() => {
-        setLogs((prev) => [...prev.slice(-24), "$ training complete"]);
+        setLogs((prev) => [
+          ...prev.slice(-24),
+          (d) => `$ ${d.trainingOverlay.trainingComplete}`,
+        ]);
       }, 0);
       return () => clearTimeout(timer);
     }
     if (hasFailed) {
       handledStatusRef.current = status.status;
-      const msg = status.error ?? "erro desconhecido";
+      const error = status.error;
       const timer = setTimeout(() => {
         setLogs((prev) => [
           ...prev.slice(-24),
-          `$ training failed · ${msg}`,
+          (d) =>
+            `$ ${d.trainingOverlay.trainingFailed} · ${error ?? d.trainingOverlay.logUnknownError}`,
         ]);
       }, 0);
       return () => clearTimeout(timer);
@@ -324,15 +336,15 @@ export function TrainingOverlay({
             >
               {isFinished
                 ? hasFailed
-                  ? "training failed"
-                  : "training complete"
+                  ? t.trainingOverlay.trainingFailed
+                  : t.trainingOverlay.trainingComplete
                 : isQueued
-                  ? `na fila · ${taskLabel}`
+                  ? t.trainingOverlay.queued(taskLabel)
                   : latestEpoch === undefined && latestPhase
                     ? // Diz o que está acontecendo: "montando o banco" por uma
                       // hora é espera; uma barra muda sem legenda é suspeita.
                       `${latestPhase.label} · ${latestPhase.done}/${latestPhase.total}`
-                    : `training · ${taskLabel}`}
+                    : t.trainingOverlay.training(taskLabel)}
             </div>
             <div
               style={{
@@ -343,7 +355,7 @@ export function TrainingOverlay({
                 color: "var(--vf-text)",
               }}
             >
-              {status.run_id ?? "iniciando…"}
+              {status.run_id ?? t.trainingOverlay.starting}
             </div>
             {isQueued && (
               <div
@@ -354,13 +366,7 @@ export function TrainingOverlay({
                   color: "var(--vf-text-muted)",
                 }}
               >
-                {status.position
-                  ? `aguardando a GPU — ${status.position}º na fila`
-                  : "aguardando a GPU"}
-                {typeof status.queued === "number" && status.queued > 1
-                  ? ` · ${status.queued} submissões esperando`
-                  : ""}
-                . O treino começa sozinho quando chegar a vez.
+                {t.trainingOverlay.queuedNote(status.position, status.queued)}
               </div>
             )}
           </div>
@@ -427,9 +433,9 @@ export function TrainingOverlay({
                 marginBottom: 6,
               }}
             >
-              Detalhe do erro
+              {t.trainingOverlay.errorDetail}
             </div>
-            {status.error ?? "Erro desconhecido — verifique os logs do servidor."}
+            {status.error ?? t.trainingOverlay.unknownError}
           </div>
         )}
 
@@ -459,8 +465,7 @@ export function TrainingOverlay({
                 color: "rgba(220, 190, 255, 0.85)",
               }}
             >
-              ⛓ fila de treinos · {queueLabel}
-              {queueSize && queueSize > 1 ? ` · ${queueSize} runs` : ""}
+              {t.trainingOverlay.queueBanner(queueLabel, queueSize)}
             </div>
             <div
               style={{
@@ -470,9 +475,7 @@ export function TrainingOverlay({
                 lineHeight: 1.5,
               }}
             >
-              Este bloco executa múltiplos treinos sequencialmente. A barra de
-              progresso reflete o trial corrente; o resultado agregado aparece
-              em "Ver resultados" ao final.
+              {t.trainingOverlay.queueBannerBody}
             </div>
           </div>
         )}
@@ -501,8 +504,7 @@ export function TrainingOverlay({
                 color: "oklch(0.85 0.14 150)",
               }}
             >
-              ⚗ pipeline ativo · {pipelineSummary.length} filtro
-              {pipelineSummary.length === 1 ? "" : "s"}
+              {t.trainingOverlay.pipeline(pipelineSummary.length)}
             </div>
             <div
               style={{
@@ -533,20 +535,23 @@ export function TrainingOverlay({
             lineHeight: 1.6,
           }}
         >
-          {logs.map((line, i) => (
-            <div
-              key={i}
-              style={{
-                color: line.startsWith("$")
-                  ? taskAccent
-                  : line.startsWith(">")
-                    ? "var(--vf-text)"
-                    : "var(--vf-text-muted)",
-              }}
-            >
-              {line}
-            </div>
-          ))}
+          {logs.map((entry, i) => {
+            const line = typeof entry === "function" ? entry(t) : entry;
+            return (
+              <div
+                key={i}
+                style={{
+                  color: line.startsWith("$")
+                    ? taskAccent
+                    : line.startsWith(">")
+                      ? "var(--vf-text)"
+                      : "var(--vf-text-muted)",
+                }}
+              >
+                {line}
+              </div>
+            );
+          })}
         </div>
 
         {/* Action buttons */}
@@ -575,7 +580,7 @@ export function TrainingOverlay({
                 cursor: "pointer",
               }}
             >
-              Minimizar
+              {t.trainingOverlay.minimize}
             </button>
           )}
           {isFinished && (
@@ -596,7 +601,7 @@ export function TrainingOverlay({
                   cursor: "pointer",
                 }}
               >
-                Fechar
+                {t.common.close}
               </button>
               {!hasFailed && onViewResults && (
                 <button
@@ -616,7 +621,7 @@ export function TrainingOverlay({
                     cursor: "pointer",
                   }}
                 >
-                  ↗ Ver resultados
+                  {t.trainingOverlay.viewResults}
                 </button>
               )}
             </>

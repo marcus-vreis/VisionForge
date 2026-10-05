@@ -2,16 +2,19 @@ import { useRef, useState } from "react";
 import { useT } from "../i18n/useT";
 import { Segmented, TextField } from "./controls";
 import { importConfigFromYaml } from "../lib/yaml-config";
+import type { Dict } from "../i18n/pt";
 
 /** Which experiment strategy the standalone-task panel is set to. The strategy
  *  cards (SweepCard / ReplicatesCard / CV) render only for the selected mode. */
 export type PanelStrategy = "simple" | "cv" | "sweep" | "replicates";
 
-const DEFAULT_STRATEGIES: { value: PanelStrategy; label: string }[] = [
-  { value: "simple", label: "Treino simples" },
-  { value: "sweep", label: "Sweep" },
-  { value: "replicates", label: "Réplicas" },
-];
+function defaultStrategies(t: Dict): { value: PanelStrategy; label: string }[] {
+  return [
+    { value: "simple", label: t.paramPanel.blocks.simple },
+    { value: "sweep", label: t.taskPanel.sweep },
+    { value: "replicates", label: t.taskPanel.replicates },
+  ];
+}
 
 interface ExperimentHeaderProps {
   name: string;
@@ -69,13 +72,6 @@ const yamlBtnSecondaryStyle: React.CSSProperties = {
   color: "var(--vf-text-dim)",
 };
 
-const STRATEGY_HINTS: Record<PanelStrategy, string> = {
-  simple: "um treino com a config abaixo (botão Treinar)",
-  cv: "K folds sobre o treino → métricas fold a fold + média ± desvio",
-  sweep: "grid / random / optuna sobre a config abaixo",
-  replicates: "mesma config, N seeds → média ± IC 95%",
-};
-
 /** Canonical experiment header (ADR-059): every task panel opens with the same
  *  card — experiment name + YAML export/import side by side, and the strategy
  *  selector below, in the same box — mirroring the classification layout. */
@@ -85,18 +81,20 @@ export function ExperimentHeader({
   placeholder,
   strategy,
   onStrategyChange,
-  strategies = DEFAULT_STRATEGIES,
+  strategies,
   onExportYaml,
   onImportConfig,
 }: ExperimentHeaderProps) {
   const t = useT();
+  const strategyOptions = strategies ?? defaultStrategies(t);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importError, setImportError] = useState<string | null>(null);
-  const [importOk, setImportOk] = useState<string | null>(null);
+  // The file name, not the sentence: the sentence follows the language.
+  const [importedFile, setImportedFile] = useState<string | null>(null);
 
   const handleFile = async (file: File) => {
     setImportError(null);
-    setImportOk(null);
+    setImportedFile(null);
     const parsed = await importConfigFromYaml(t, file);
     if ("error" in parsed) {
       setImportError(parsed.error);
@@ -106,7 +104,7 @@ export function ExperimentHeader({
     if (problem) {
       setImportError(problem);
     } else {
-      setImportOk(`✓ ${file.name} importado`);
+      setImportedFile(file.name);
     }
   };
 
@@ -123,7 +121,7 @@ export function ExperimentHeader({
           e.target.value = "";
         }}
       />
-      <div style={sectionLabel}>Experimento</div>
+      <div style={sectionLabel}>{t.experimentHeader.title}</div>
       <div
         style={{
           display: "flex",
@@ -134,11 +132,11 @@ export function ExperimentHeader({
       >
         <div style={{ flex: "1 1 280px", maxWidth: 420 }}>
           <TextField
-            label="Nome do experimento"
+            label={t.experimentHeader.nameLabel}
             value={name}
             onChange={onNameChange}
             placeholder={placeholder}
-            hint="usado na pasta de saída e no histórico"
+            hint={t.experimentHeader.nameHint}
             mono
           />
         </div>
@@ -147,17 +145,17 @@ export function ExperimentHeader({
             type="button"
             onClick={onExportYaml}
             style={yamlBtnStyle}
-            title="Exportar configuração atual como arquivo .yaml"
+            title={t.experimentHeader.exportTitle}
           >
-            ↓ Exportar YAML
+            {t.experimentHeader.exportYaml}
           </button>
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
             style={yamlBtnSecondaryStyle}
-            title="Importar configuração a partir de um arquivo .yaml"
+            title={t.experimentHeader.importTitle}
           >
-            ↑ Importar YAML
+            {t.experimentHeader.importYaml}
           </button>
         </div>
       </div>
@@ -179,7 +177,7 @@ export function ExperimentHeader({
           {importError}
         </div>
       )}
-      {importOk && !importError && (
+      {importedFile && !importError && (
         <div
           style={{
             marginTop: 12,
@@ -188,7 +186,7 @@ export function ExperimentHeader({
             color: "oklch(0.85 0.16 150)",
           }}
         >
-          {importOk}
+          {t.experimentHeader.imported(importedFile)}
         </div>
       )}
 
@@ -199,14 +197,14 @@ export function ExperimentHeader({
           borderTop: "1px solid var(--vf-panel-stroke)",
         }}
       >
-        <div style={sectionLabel}>Estratégia de experimento</div>
+        <div style={sectionLabel}>{t.experimentHeader.strategyTitle}</div>
         <div style={{ maxWidth: 560 }}>
           <Segmented
-            label="Modo"
+            label={t.experimentHeader.mode}
             value={strategy}
             onChange={(v) => onStrategyChange(v as PanelStrategy)}
-            options={strategies}
-            hint={STRATEGY_HINTS[strategy]}
+            options={strategyOptions}
+            hint={t.experimentHeader.hints[strategy]}
           />
         </div>
       </div>

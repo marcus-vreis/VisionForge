@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useT } from "../i18n/useT";
 import { NumberField, Toggle } from "./controls";
 
 export interface CvPayload {
@@ -37,6 +38,7 @@ const sectionLabel: React.CSSProperties = {
  *  the pooled training rows into K folds and reports fold-a-fold metrics +
  *  mean ± std — the honest estimate when there is no big held-out val set. */
 export function CvCard({ accent, disabled, onCv, runSignal }: CvCardProps) {
+  const t = useT();
   const [nFolds, setNFolds] = useState(5);
   const [shuffle, setShuffle] = useState(true);
   const [foldSeed, setFoldSeed] = useState(42);
@@ -56,7 +58,7 @@ export function CvCard({ accent, disabled, onCv, runSignal }: CvCardProps) {
 
   return (
     <div style={card}>
-      <div style={sectionLabel}>Cross-validation (K-fold)</div>
+      <div style={sectionLabel}>{t.cvCard.title}</div>
       <p
         style={{
           margin: "0 0 14px",
@@ -66,14 +68,12 @@ export function CvCard({ accent, disabled, onCv, runSignal }: CvCardProps) {
           color: "var(--vf-text-muted)",
         }}
       >
-        Divide as linhas de treino em K folds: cada fold treina um modelo novo
-        em K-1 partes e avalia na parte restante (nunca augmentada). O split de
-        teste não é usado.
+        {t.cvCard.description}
       </p>
       <div style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
         <div style={{ width: 120 }}>
           <NumberField
-            label="Nº de folds"
+            label={t.cvCard.folds}
             value={nFolds}
             onChange={(v) => setNFolds(Math.min(20, Math.max(2, Math.round(v))))}
             min={2}
@@ -81,10 +81,10 @@ export function CvCard({ accent, disabled, onCv, runSignal }: CvCardProps) {
             step={1}
           />
         </div>
-        <Toggle label="Shuffle" value={shuffle} onChange={setShuffle} hint="antes do split" />
+        <Toggle label={t.cvCard.shuffle} value={shuffle} onChange={setShuffle} hint={t.cvCard.shuffleHint} />
         <div style={{ width: 120 }}>
           <NumberField
-            label="Seed do split"
+            label={t.cvCard.foldSeed}
             value={foldSeed}
             onChange={(v) => setFoldSeed(Math.max(0, Math.round(v)))}
             min={0}
@@ -109,7 +109,7 @@ export function CvCard({ accent, disabled, onCv, runSignal }: CvCardProps) {
             whiteSpace: "nowrap",
           }}
         >
-          ⛓ Rodar CV · {nFolds} folds
+          {t.cvCard.run(nFolds)}
         </button>
       </div>
     </div>

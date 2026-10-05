@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useT } from "../i18n/useT";
 import { NumberField, SelectField, Segmented, TextField } from "./controls";
 import {
   buildSearchSpace,
@@ -55,12 +56,6 @@ const sectionLabel: React.CSSProperties = {
   marginBottom: 12,
 };
 
-const RANDOM_KINDS: Option[] = [
-  { value: "uniform", label: "Uniforme" },
-  { value: "log_uniform", label: "Log-uniforme" },
-  { value: "choice", label: "Escolha" },
-];
-
 /** Advanced grid/random hyperparameter sweep editor for a standalone task
  *  (ADR-045). Builds the backend `search_space` from dot-path rows. */
 export function SweepCard({
@@ -72,6 +67,12 @@ export function SweepCard({
   onSweep,
   runSignal,
 }: SweepCardProps) {
+  const t = useT();
+  const randomKinds: Option[] = [
+    { value: "uniform", label: t.sweepCard.kinds.uniform },
+    { value: "log_uniform", label: t.sweepCard.kinds.logUniform },
+    { value: "choice", label: t.sweepCard.kinds.choice },
+  ];
   const [mode, setMode] = useState<SweepMode>("grid");
   const [rows, setRows] = useState<SweepRow[]>([makeSweepRow()]);
   const [metric, setMetric] = useState(metrics[0]?.value ?? "");
@@ -130,7 +131,7 @@ export function SweepCard({
 
   return (
     <div style={card}>
-      <div style={sectionLabel}>Sweep de hiperparâmetros · modo avançado</div>
+      <div style={sectionLabel}>{t.sweepCard.title}</div>
       <p
         style={{
           margin: "0 0 14px",
@@ -140,14 +141,12 @@ export function SweepCard({
           color: "var(--vf-text-muted)",
         }}
       >
-        Varre hiperparâmetros por dot-path (ex.: {pathHints.join(", ")}) e ranqueia
-        pela métrica. Grid = produto cartesiano; Random = amostras; Optuna = busca
-        TPE adaptativa (requer o extra opcional).
+        {t.sweepCard.description(pathHints.join(", "))}
       </p>
 
       <div style={{ maxWidth: 320, marginBottom: 16 }}>
         <Segmented
-          label="Estratégia"
+          label={t.sweepCard.strategy}
           value={mode}
           onChange={(v) => setMode(v as SweepMode)}
           options={[
@@ -178,7 +177,7 @@ export function SweepCard({
               marginBottom: 10,
             }}
           >
-            preset · arquiteturas → eixo model.name
+            {t.sweepCard.presetTitle}
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
             {modelOptions.map((m) => {
@@ -221,8 +220,7 @@ export function SweepCard({
               opacity: presetPicks.length < 2 ? 0.5 : 1,
             }}
           >
-            ⇒ comparar {presetPicks.length} arquitetura
-            {presetPicks.length === 1 ? "" : "s"}
+            {t.sweepCard.compareArchitectures(presetPicks.length)}
           </button>
         </div>
       )}
@@ -244,7 +242,7 @@ export function SweepCard({
           >
             <div style={{ flex: "1 1 200px" }}>
               <TextField
-                label="Parâmetro (dot-path)"
+                label={t.sweepCard.parameter}
                 value={row.path}
                 onChange={(v) => patchRow(i, { path: v })}
                 placeholder="training.learning_rate"
@@ -255,7 +253,7 @@ export function SweepCard({
             {mode === "grid" ? (
               <div style={{ flex: "1 1 220px" }}>
                 <TextField
-                  label="Valores (vírgula)"
+                  label={t.sweepCard.values}
                   value={row.values}
                   onChange={(v) => patchRow(i, { values: v })}
                   placeholder="0.001, 0.01, 0.1"
@@ -266,16 +264,16 @@ export function SweepCard({
               <>
                 <div style={{ flex: "0 0 150px" }}>
                   <SelectField
-                    label="Distribuição"
+                    label={t.sweepCard.distribution}
                     value={row.kind}
                     onChange={(v) => patchRow(i, { kind: v as RandomKind })}
-                    options={RANDOM_KINDS}
+                    options={randomKinds}
                   />
                 </div>
                 {row.kind === "choice" ? (
                   <div style={{ flex: "1 1 200px" }}>
                     <TextField
-                      label="Opções (vírgula)"
+                      label={t.sweepCard.options}
                       value={row.options}
                       onChange={(v) => patchRow(i, { options: v })}
                       placeholder="resnet18, resnet50"
@@ -286,7 +284,7 @@ export function SweepCard({
                   <>
                     <div style={{ flex: "0 0 110px" }}>
                       <TextField
-                        label="low"
+                        label={t.sweepCard.low}
                         value={row.low}
                         onChange={(v) => patchRow(i, { low: v })}
                         placeholder="0.001"
@@ -295,7 +293,7 @@ export function SweepCard({
                     </div>
                     <div style={{ flex: "0 0 110px" }}>
                       <TextField
-                        label="high"
+                        label={t.sweepCard.high}
                         value={row.high}
                         onChange={(v) => patchRow(i, { high: v })}
                         placeholder="0.1"
@@ -310,7 +308,7 @@ export function SweepCard({
             <button
               type="button"
               onClick={() => removeRow(i)}
-              title="Remover parâmetro"
+              title={t.sweepCard.removeParameter}
               disabled={rows.length === 1}
               style={{
                 padding: "10px 12px",
@@ -343,13 +341,13 @@ export function SweepCard({
           cursor: "pointer",
         }}
       >
-        + adicionar parâmetro
+        {t.sweepCard.addParameter}
       </button>
 
       <div style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
         <div style={{ minWidth: 180 }}>
           <SelectField
-            label="Métrica de ranking"
+            label={t.sweepCard.rankingMetric}
             value={metric}
             onChange={setMetric}
             options={metrics}
@@ -359,7 +357,7 @@ export function SweepCard({
           <>
             <div style={{ width: 120 }}>
               <NumberField
-                label="Nº de trials"
+                label={t.sweepCard.trials}
                 value={nTrials}
                 onChange={(v) => setNTrials(Math.max(1, Math.round(v)))}
                 min={1}
@@ -368,7 +366,7 @@ export function SweepCard({
             </div>
             <div style={{ width: 110 }}>
               <NumberField
-                label="Seed"
+                label={t.sweepCard.seed}
                 value={seed}
                 onChange={(v) => setSeed(Math.max(0, Math.round(v)))}
                 min={0}
@@ -397,7 +395,7 @@ export function SweepCard({
             whiteSpace: "nowrap",
           }}
         >
-          ⛓ Rodar sweep · {trialCount} trial{trialCount === 1 ? "" : "s"}
+          {t.sweepCard.run(trialCount)}
         </button>
       </div>
     </div>

@@ -78,7 +78,7 @@ export function ReplicatesCard({
 
   return (
     <div style={card}>
-      <div style={sectionLabel}>Réplicas multi-seed · rigor estatístico</div>
+      <div style={sectionLabel}>{t.replicatesCard.title}</div>
       <p
         style={{
           margin: "0 0 14px",
@@ -88,32 +88,26 @@ export function ReplicatesCard({
           color: "var(--vf-text-muted)",
         }}
       >
-        Treina a mesma config N vezes sob seeds diferentes e agrega cada métrica
-        em média ± IC 95% (t de Student). Um run único é uma amostra de uma
-        distribuição — réplicas tornam o número defensável.
+        {t.replicatesCard.description}
       </p>
 
       <div style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
         <div style={{ minWidth: 220 }}>
           <Segmented
-            label="Seeds"
+            label={t.replicatesCard.seeds}
             value={seedMode}
             onChange={(v) => setSeedMode(v as ReplicatesSeedMode)}
             options={[
-              { value: "auto", label: "Automáticas" },
-              { value: "explicit", label: "Explícitas" },
+              { value: "auto", label: t.replicatesCard.automatic },
+              { value: "explicit", label: t.replicatesCard.explicit },
             ]}
-            hint={
-              seedMode === "auto"
-                ? "consecutivas a partir do training.seed"
-                : "lista exata, reproduzível"
-            }
+            hint={seedMode === "auto" ? t.replicatesCard.automaticHint : t.replicatesCard.explicitHint}
           />
         </div>
         {seedMode === "auto" ? (
           <div style={{ width: 130 }}>
             <NumberField
-              label="Nº de réplicas"
+              label={t.replicatesCard.count}
               value={nReplicates}
               onChange={(v) => setNReplicates(Math.min(50, Math.max(2, Math.round(v))))}
               min={2}
@@ -124,18 +118,18 @@ export function ReplicatesCard({
         ) : (
           <div style={{ flex: "1 1 240px" }}>
             <TextField
-              label="Seeds (vírgula)"
+              label={t.replicatesCard.seedList}
               value={rawSeeds}
               onChange={setRawSeeds}
               placeholder="42, 43, 44, 45, 46"
-              hint={problem ?? `${seeds.length} seeds`}
+              hint={problem ?? t.replicatesCard.seedCount(seeds.length)}
               mono
             />
           </div>
         )}
         <div style={{ minWidth: 170 }}>
           <SelectField
-            label="Métrica destaque"
+            label={t.replicatesCard.headlineMetric}
             value={metric}
             onChange={setMetric}
             options={metrics}
@@ -159,7 +153,7 @@ export function ReplicatesCard({
             whiteSpace: "nowrap",
           }}
         >
-          🎲 Rodar réplicas · {count} seed{count === 1 ? "" : "s"}
+          {t.replicatesCard.run(count)}
         </button>
       </div>
     </div>
