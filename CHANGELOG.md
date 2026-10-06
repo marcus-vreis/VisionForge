@@ -32,8 +32,9 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 - **"Testar em outro dataset" não exige mais `train` e `val` ao lado.** Em
   regressão, escolher um `.csv` numa pasta sem `train.csv` e `val.csv` falhava
   com "Regression manifest not found", e em segmentação o mesmo acontecia com
-  uma pasta sem `train/` e `val/` ao lado; agora só o que foi escolhido é lido.
-  Em anomalias o conjunto normal de treino continua necessário (o limiar é
+  uma pasta sem `train/` e `val/` ao lado; agora só o que foi escolhido é lido,
+  e uma pasta de segmentação com `images/` mas sem `masks/` é apontada pelo
+  nome em vez de mostrar o erro do sistema. Em anomalias o conjunto normal de treino continua necessário (o limiar é
   calibrado nele), e o erro agora diz isso e aponta onde ele deveria estar.
 - **Importar um YAML com valor do tipo errado não derruba mais a página.** Na
   aba Classificação, um YAML com `name: 5` ou `data.base_dir: 7` deixava a tela

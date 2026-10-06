@@ -2958,6 +2958,19 @@ def _evaluate_standalone_run(
         from visionforge.utils.segmentation_config import SegmentationConfig
 
         seg_config = SegmentationConfig.model_validate(config_dict)
+        # Without this the pairing step walks into the missing folder and the
+        # operating system's own message (in its own language) reaches the screen.
+        test_split = seg_config.data.base_dir / seg_config.data.test_dir
+        masks_dir = test_split / seg_config.data.masks_subdir
+        if (test_split / seg_config.data.images_subdir).is_dir() and (
+            not masks_dir.is_dir()
+        ):
+            raise ValueError(
+                f"A pasta {test_split} tem '{seg_config.data.images_subdir}', mas "
+                f"não tem a pasta de máscaras '{seg_config.data.masks_subdir}' "
+                f"({masks_dir}). Segmentação pareia cada imagem com a máscara de "
+                "mesmo nome."
+            )
         seg_model = SegmentationModelFactory.create(seg_config.model)
         seg_model.load_state_dict(
             torch.load(checkpoint, map_location="cpu", weights_only=True)

@@ -110,13 +110,22 @@ def _segmentation_run(tmp_path: Path) -> Path:
     return _write_run(tmp_path, "seg", config, model)
 
 
-def _anomaly_run(tmp_path: Path) -> Path:
-    """A run.json whose checkpoint is an empty file: only the data check is reached."""
+def _anomaly_run(tmp_path: Path, *, real_checkpoint: bool = False) -> Path:
+    """A run.json over a synthetic MVTec layout; the checkpoint is empty unless real."""
+    from visionforge.models.anomaly_factory import AnomalyModelFactory
+    from visionforge.utils.anomaly_config import AnomalyModelConfig
+
     base = build_anomaly_dataset(tmp_path / "ds", size=32, normals=4)
+    model_cfg = {"name": "autoencoder", "latent_dim": 8}
+    model = (
+        AnomalyModelFactory.create(AnomalyModelConfig.model_validate(model_cfg))
+        if real_checkpoint
+        else None
+    )
     config: dict[str, Any] = {
         "name": "anom",
         "task": "anomaly",
-        "model": {"name": "autoencoder", "latent_dim": 8},
+        "model": model_cfg,
         "data": {
             "base_dir": str(base),
             "image_size": 32,
@@ -126,8 +135,10 @@ def _anomaly_run(tmp_path: Path) -> Path:
         "training": {"epochs": 1, "batch_size": 2},
         "device": {"kind": "cpu"},
     }
-    run_dir = _write_run(tmp_path, "anom", config, None)
-    (run_dir / "weights" / "best.pth").write_bytes(b"")
+    run_dir = _write_run(tmp_path, "anom", config, model)
+    if model is None:
+        # Only the data check is reached, so the file just has to exist.
+        (run_dir / "weights" / "best.pth").write_bytes(b"")
     return run_dir
 
 
@@ -236,8 +247,37 @@ class TestSegmentationTestRun:
         with pytest.raises(ValueError, match="Nenhum par imagem/máscara"):
             _execute_run_test(run_dir, RunTestRequest(data_dir=str(empty)))
 
+    def test_images_without_a_masks_folder_name_the_missing_folder(
+        self, tmp_path: Path
+    ) -> None:
+        run_dir = _segmentation_run(tmp_path)
+        other = build_segmentation_dataset(tmp_path / "other", size=32, pairs=4)
+        holdout = tmp_path / "holdout"
+        shutil.copytree(other / "test" / "images", holdout / "images")
+
+        with pytest.raises(ValueError, match="masks") as excinfo:
+            _execute_run_test(run_dir, RunTestRequest(data_dir=str(holdout)))
+
+        message = str(excinfo.value)
+        assert str(holdout / "masks") in message
+        assert "WinError" not in message
+
 
 class TestAnomalyTestRun:
+    def test_a_valid_mvtec_layout_is_scored(self, tmp_path: Path) -> None:
+        # Guards the missing-normal-split check against rejecting a good layout.
+        run_dir = _anomaly_run(tmp_path, real_checkpoint=True)
+
+        resp = _execute_run_test(
+            run_dir, RunTestRequest(data_dir=str(tmp_path / "ds" / "test"))
+        )
+
+        assert set(resp.metrics) == {"auroc", "threshold", "image_f1"}
+        assert all(math.isfinite(v) for v in resp.metrics.values())
+        assert 0.0 <= resp.metrics["auroc"] <= 1.0
+        saved = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+        assert saved["tests"][0]["metrics"] == resp.metrics
+
     def test_a_missing_normal_train_split_explains_why_it_is_needed(
         self, tmp_path: Path
     ) -> None:
