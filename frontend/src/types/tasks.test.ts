@@ -31,32 +31,21 @@ describe("taskDefinitions", () => {
   it("leaves no text empty or undefined, in either language", () => {
     for (const dict of [pt, en]) {
       for (const task of taskDefinitions(dict)) {
-        const texts = [
-          task.label,
-          task.description,
-          ...task.models.map((m) => m.sub),
-          ...task.params.flatMap((p) => [p.label, p.hint]),
-        ];
-        for (const text of texts) {
-          // A hint is optional (the switches have none); every other text is not.
-          if (text === undefined) continue;
+        for (const text of [task.label, task.description]) {
+          expect(text, task.key).toBeTruthy();
           expect(text.trim(), task.key).not.toBe("");
           expect(text, task.key).not.toContain("undefined");
         }
-        expect(task.models.every((m) => m.sub), task.key).toBe(true);
       }
     }
   });
 
-  it("keeps accents, keys and limits the same in every language", () => {
+  it("keeps accents and keys the same in every language", () => {
     const shape = (dict: typeof pt) =>
       taskDefinitions(dict).map((task) => ({
         key: task.key,
         short: task.short,
         accent: task.accent,
-        models: task.models.map((m) => m.value),
-        params: task.params.map((p) => [p.key, p.type, p.min, p.max, p.step]),
-        defaults: task.defaults,
       }));
     expect(shape(en)).toEqual(shape(pt));
   });

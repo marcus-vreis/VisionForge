@@ -71,12 +71,10 @@ describe("mergeTasks", () => {
 });
 
 describe("descriptorToDefinition", () => {
-  it("carries identity and metric metadata, and no curated params", () => {
+  it("carries identity and metric metadata", () => {
     const def = descriptorToDefinition(pt, descriptor());
     expect(def.accent).toBe("#2dd4bf");
     expect(def.label).toBe("Contagem de células");
-    expect(def.models).toEqual([]);
-    expect(def.params).toEqual([]);
     expect(isCustomTask(def)).toBe(true);
     expect(def.primaryMetric).toBe("mae");
   });

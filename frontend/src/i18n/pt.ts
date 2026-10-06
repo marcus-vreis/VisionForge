@@ -1185,8 +1185,6 @@ export const pt = {
   },
   // The five built-in tasks (types/tasks.ts): the tab name and the sentence under
   // the hero title. A researcher-defined task brings its own from the server.
-  // `models` and `params` hold the texts of the per-task tables kept beside them,
-  // keyed by model value and by parameter.
   tasks: {
     classification: {
       label: "Classificação",
@@ -1207,38 +1205,6 @@ export const pt = {
     anomaly: {
       label: "Anomalia",
       description: "Detecte defeitos treinando só com imagens normais",
-    },
-    models: {
-      resnet50: "imagenet · 25.6M params",
-      resnet18: "light · 11.7M params",
-      resnet34: "imagenet · 21.8M params",
-      resnet101: "deep · 44.5M params",
-      efficientnet_b1: "eficiente · 7.8M params",
-      efficientnet_b7: "grande · 66M params",
-      vgg16: "clássico · 138M params",
-      vgg19: "clássico · 144M params",
-      alexnet: "baseline · 61M params",
-      yolov8n: "nano · 3.2M",
-      yolov8s: "small · 11.2M",
-      mlp: "baseline",
-      unet: "clássico · 31M params",
-      autoencoder: "reconstrução",
-      patchcore: "memory bank",
-    },
-    params: {
-      epochs: "Épocas",
-      epochsHint: "iterações",
-      learningRate: "Learning Rate",
-      learningRateHint: "lr",
-      batchSize: "Batch size",
-      batchSizeHint: "amostras",
-      optimizer: "Otimizador",
-      earlyStop: "Early stop",
-      earlyStopHint: "paciência",
-      seed: "Seed",
-      seedHint: "reprodução",
-      augment: "Data augmentation",
-      pretrained: "Pesos pré-treinados",
     },
   },
   // The sub-line of each entry in the model dropdowns (lib/regression-models.ts,

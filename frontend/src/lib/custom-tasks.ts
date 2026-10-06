@@ -2,11 +2,11 @@
  * Merging researcher-defined tasks into the tab bar (ADR-058).
  *
  * `GET /api/tasks` returns the five built-in descriptors plus every task
- * registered from `user_tasks/`. The built-ins keep their rich local
- * definitions (model lists, curated params); a custom task carries only what
- * its `@register_task` declared — key, label, accent, description, metric
- * metadata — because its whole form is generated from the Config's JSON
- * Schema at runtime. No user-supplied JavaScript, ever.
+ * registered from `user_tasks/`. The built-ins keep their local definitions;
+ * a custom task carries only what its `@register_task` declared — key, label,
+ * accent, description, metric metadata — because its whole form is generated
+ * from the Config's JSON Schema at runtime (there is no curated model list or
+ * parameter card for it). No user-supplied JavaScript, ever.
  */
 import type { Dict } from "../i18n/pt";
 import type { JsonSchema } from "../types/schema";
@@ -49,11 +49,6 @@ export function descriptorToDefinition(
     short: d.key,
     description: d.description || t.customTasks.fallbackDescription,
     accent: d.accent,
-    // Empty: a custom task has no curated model list or param cards — the
-    // form comes from its schema.
-    models: [],
-    params: [],
-    defaults: {},
     custom: true,
     metrics: d.metrics ?? {},
     primaryMetric: d.primary_metric,
