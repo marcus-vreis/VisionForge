@@ -47,11 +47,23 @@ _COLON_NAME = r"(?:api[_-]?key|secret|password|passwd|(?<=[_-])token)"
 # Spaces and tabs only: a name at the end of one line must not reach for a value
 # on the next.
 _SP = r"[ \t]*"
-# A value ends at whitespace, a quote, or the delimiters that close a URL, a call
-# or a literal around it.
-_VALUE = r"""[^&\s"'<>)\]},;]+"""
+# A quote, possibly backslash-escaped: JSON inside a string and the repr of a dict
+# inside a message both carry `\"`.
+_Q = r"""\\?["']"""
+# The kind of credential, not the credential: in `x-auth-token: Bearer KEY` the
+# value is `KEY`, and the word before it stays visible. Without this a pattern
+# takes `Bearer` as the value and leaves the key behind in clear.
+_SCHEME = r"(?:(?:bearer|basic|token|digest|apikey)[ \t]+)?"
+# A value ends at whitespace, a quote, a backslash, or the delimiters that close
+# a URL, a call or a literal around it.
+_VALUE = r"""[^&\s"'<>)\]},;\\]+"""
 # The same, inside a percent-encoded URL: `%26` is an encoded `&`.
-_ENCODED_VALUE = r"""(?:(?!%26)[^&\s"'<>)\]},;])+"""
+_ENCODED_VALUE = r"""(?:(?!%26)[^&\s"'<>)\]},;\\])+"""
+# What sits between a pair's opening and closing quote: anything on the same line,
+# starting with a character that is not a space. The first-character rule keeps a
+# string literal that merely ends in the name (`"/?api_key=" + api_key`) from being
+# read as an opening quote.
+_QUOTED_VALUE = rf"(?P<oq>{_Q}){_SCHEME}(?P<val>[^\s][^\r\n]*?)(?P=oq)"
 # Query parameters that sign or authorize a link without being named like a
 # secret: Roboflow's export URL carries `?key=<token>`. Only right after `?` or
 # `&`, so "the primary key" and "key=value pairs" in prose are left alone.
@@ -60,16 +72,25 @@ _HEADER = r"(?:proxy-)?authorization|x-api-key|x-auth-token|x-access-token"
 _OPT_QUOTE = r"""(?:\\?["'])?"""
 
 _PATTERNS: tuple[re.Pattern[str], ...] = (
+    # `api_key='my key'`, `api_key=\"KEY\"` — a quoted value, masked up to its
+    # closing quote on the same line, with the quotes kept. Before the unquoted
+    # form, so a value with spaces is not cut at the first one.
+    re.compile(rf"{_NAME}{_SP}={_SP}{_QUOTED_VALUE}", re.IGNORECASE),
     # `?api_key=KEY`, `&token=KEY`, `access_token=KEY` — a URL or a form body —
-    # and `api_key='KEY'`, the repr of a request or a keyword argument. The
-    # quote, when there is one, is kept around the mask.
-    re.compile(rf"{_NAME}{_SP}={_SP}[\"']?(?P<val>{_VALUE})", re.IGNORECASE),
+    # and an unquoted or unterminated `api_key='KEY`.
+    re.compile(
+        rf"{_NAME}{_SP}={_SP}(?:{_Q})?{_SCHEME}(?P<val>{_VALUE})", re.IGNORECASE
+    ),
     # `?key=TOKEN`, `&sig=…` — a signed link.
-    re.compile(rf"(?<=[?&]){_SIGNING_PARAM}=(?P<val>{_VALUE})", re.IGNORECASE),
+    re.compile(rf"(?<=[?&]){_SIGNING_PARAM}={_SCHEME}(?P<val>{_VALUE})", re.IGNORECASE),
     # `api_key%3DKEY`, the same pair inside a percent-encoded URL.
     re.compile(rf"{_NAME}%3D(?P<val>{_ENCODED_VALUE})", re.IGNORECASE),
-    # `password: hunter22` — a log line or YAML-ish dump.
-    re.compile(rf"{_COLON_NAME}{_SP}:{_SP}[\"']?(?P<val>{_VALUE})", re.IGNORECASE),
+    # `password: "my phrase"` — a log line or YAML-ish dump, quoted…
+    re.compile(rf"{_COLON_NAME}{_SP}:{_SP}{_QUOTED_VALUE}", re.IGNORECASE),
+    # …and `password: hunter22`, unquoted or unterminated.
+    re.compile(
+        rf"{_COLON_NAME}{_SP}:{_SP}(?:{_Q})?{_SCHEME}(?P<val>{_VALUE})", re.IGNORECASE
+    ),
     # `"api_key": "KEY"` — JSON, or the repr of a dict (single quotes, or
     # escaped quotes when the JSON is itself inside a string).
     re.compile(
@@ -85,8 +106,12 @@ _PATTERNS: tuple[re.Pattern[str], ...] = (
     # A bare `Bearer KEY`. Eight characters or more, so the English word
     # ("the bearer of …") is not mistaken for the scheme.
     re.compile(r"\bbearer\s+(?P<val>[A-Za-z0-9._~+/=-]{8,})", re.IGNORECASE),
-    # `https://user:PASSWORD@host`, as in a proxy URL.
-    re.compile(r"\b[a-z][a-z0-9+.-]*://[^/\s:@]+:(?P<val>[^/\s@]+)@", re.IGNORECASE),
+    # `https://user:PASSWORD@host`, as in a proxy URL. The scheme is capped: an
+    # unbounded `[a-z0-9+.-]*` made every position of a long `a-a-a-…` run scan to
+    # the end of it, which is quadratic on text nobody controls.
+    re.compile(
+        r"\b[a-z][a-z0-9+.-]{0,30}://[^/\s:@]+:(?P<val>[^/\s@]+)@", re.IGNORECASE
+    ),
 )
 
 

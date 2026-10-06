@@ -8,11 +8,17 @@ that has been mangled into nothing is not an improvement.
 
 from __future__ import annotations
 
+import time
 from urllib.parse import quote
 
 import pytest
 
-from visionforge.utils.redact import MASK, redact_secrets
+from visionforge.utils.redact import (
+    _PATTERNS,
+    MASK,
+    _mask_value,
+    redact_secrets,
+)
 
 SECRET = "SECRET123"
 
@@ -183,6 +189,177 @@ class TestQuotedAndEncodedForms:
         once = redact_secrets(text)
 
         assert redact_secrets(once) == once
+
+
+class TestTheSchemeWordIsNotTheSecret:
+    """`Bearer` is the kind of credential, not the credential.
+
+    A value pattern that took the first word after the separator masked
+    "Bearer" and left the key itself in clear.
+    """
+
+    @pytest.mark.parametrize(
+        ("text", "expected"),
+        [
+            ("x-auth-token: Bearer abcdef123456", "x-auth-token: Bearer ***"),
+            ("X-Api-Key: Bearer abcdef123456", "X-Api-Key: Bearer ***"),
+            ("access_token: Bearer abcdef123456", "access_token: Bearer ***"),
+            ("password: Basic dXNlcjpwYXNz", "password: Basic ***"),
+            ("api_key=Bearer abcdef123456", "api_key=Bearer ***"),
+            ("token=Bearer abcdef123456", "token=Bearer ***"),
+            ("api_key='Bearer abcdef123456'", "api_key='Bearer ***'"),
+            ("Authorization=Basic abcdef123456", "Authorization=Basic ***"),
+            ("Authorization: Bearer abcdef123456", "Authorization: Bearer ***"),
+            ("?key=Bearer abcdef123456", "?key=Bearer ***"),
+            ("api_key%3DBearer%20abcdef123456", "api_key%3D***"),
+        ],
+    )
+    def test_the_scheme_stays_and_only_the_credential_is_masked(
+        self, text: str, expected: str
+    ) -> None:
+        out = redact_secrets(text)
+
+        assert "abcdef123456" not in out
+        assert "dXNlcjpwYXNz" not in out
+        assert out == expected
+
+    def test_a_value_that_is_only_a_scheme_word_is_still_masked(self) -> None:
+        assert redact_secrets("api_key=Bearer") == "api_key=***"
+
+
+class TestOneLineAtATime:
+    """A name at the end of a line must not reach for a value on the next one."""
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "api_key =\nvalue12345",
+            "api_key=\nvalue12345",
+            "password:\nvalue12345",
+            "password: \n  value12345",
+        ],
+    )
+    def test_a_value_on_the_next_line_is_not_taken(self, text: str) -> None:
+        assert redact_secrets(text) == text
+
+    def test_a_tab_before_the_value_is_still_the_same_line(self) -> None:
+        assert "value12345" not in redact_secrets("api_key =\tvalue12345")
+
+
+class TestEscapedQuotes:
+    """A message that contains JSON or a dict repr carries its quotes escaped."""
+
+    def test_an_escaped_quoted_value_is_masked_inside_its_escaped_quotes(self) -> None:
+        out = redact_secrets('api_key=\\"rf_abc123\\"')
+
+        assert out == 'api_key=\\"***\\"'
+
+    def test_the_colon_form_with_escaped_quotes(self) -> None:
+        assert redact_secrets('password: \\"hunter22\\"') == 'password: \\"***\\"'
+
+    def test_a_json_pair_inside_a_string(self) -> None:
+        out = redact_secrets('body={\\"api_key\\": \\"rf_abc123\\", \\"v\\": 1}')
+
+        assert "rf_abc123" not in out
+        assert '\\"v\\": 1' in out
+
+    def test_an_unterminated_escaped_quote_still_masks_the_value(self) -> None:
+        assert "rf_abc123" not in redact_secrets('api_key=\\"rf_abc123')
+
+    def test_a_backslash_ends_an_unquoted_value(self) -> None:
+        # `\n` in a repr is two characters; the text after it is not the secret.
+        out = redact_secrets("?api_key=rf_abc123\\nnext line")
+
+        assert out == "?api_key=***\\nnext line"
+
+
+class TestQuotedValuesWithSpaces:
+    @pytest.mark.parametrize(
+        ("text", "expected"),
+        [
+            ('password: "my long phrase"', 'password: "***"'),
+            ("password: 'my long phrase' and more", "password: '***' and more"),
+            ("api_key='two words'", "api_key='***'"),
+            ('secret = "a b c", next=1', 'secret = "***", next=1'),
+        ],
+    )
+    def test_everything_up_to_the_closing_quote_is_masked(
+        self, text: str, expected: str
+    ) -> None:
+        assert redact_secrets(text) == expected
+
+    def test_an_unterminated_quote_masks_the_first_word_at_least(self) -> None:
+        assert "abc" not in redact_secrets('password: "abc def')
+
+    def test_the_closing_quote_must_be_on_the_same_line(self) -> None:
+        out = redact_secrets('password: "abc\ndef"')
+
+        assert "abc" not in out
+        assert out.endswith('\ndef"')
+
+    def test_a_string_literal_that_ends_in_the_name_is_not_a_value(self) -> None:
+        # What a traceback prints for the Roboflow client's own request line.
+        line = 'response = requests.post(API_URL + "/?api_key=" + api_key + "/x")'
+
+        assert redact_secrets(line) == line
+
+
+# One adversarial line per way the patterns can backtrack. Each is ~50k characters:
+# long enough that a quadratic pattern needs seconds, short enough that a linear
+# one needs milliseconds.
+_N = 50_000
+_ADVERSARIAL = {
+    "scheme-like run": "a-" * (_N // 2),
+    "bare name": "token" * (_N // 5),
+    "named pair repeated": "api_key=" * (_N // 8),
+    "name then spaces": "api_key" + " " * _N,
+    "colon then spaces": "password:" + " " * _N,
+    "quotes opened and never closed": "password: '" * (_N // 11),
+    "one quote then a long line": "password: '" + "x " * (_N // 2),
+    "mixed quote kinds": "password:'password:\"api_key=\\'x" * (_N // 31),
+    "escaped quotes": 'api_key=\\"' * (_N // 10),
+    "signed link repeated": "?key=" * (_N // 5),
+    "encoded pair repeated": "api_key%3D" * (_N // 10),
+    "json pair repeated": '"api_key": "' * (_N // 12),
+    "json value never closed": '"api_key": "' + "x" * _N,
+    "header then spaces": "authorization" + " " * _N,
+    "header repeated": "authorization: " * (_N // 15),
+    "bearer then a long word": "bearer " + "a" * _N,
+    "bearer repeated": "bearer " * (_N // 7),
+    "userinfo colons": "x://" + "b:" * (_N // 2),
+    "userinfo user": "a://" + "b" * _N,
+    "scheme words": "bearer basic token " * (_N // 19),
+    "only colons": ":" * _N,
+    "only equals": "=" * _N,
+    "only backslashes": "\\" * _N,
+    "only quotes": "'" * _N,
+}
+
+
+class TestLinearTime:
+    """Redaction runs on traceback text inside a request, so it must stay linear.
+
+    The URL-userinfo pattern took ~10 s on 50k characters of `a-`.
+    """
+
+    @pytest.mark.parametrize("name", list(_ADVERSARIAL))
+    def test_every_pattern_is_fast_on_an_adversarial_line(self, name: str) -> None:
+        text = _ADVERSARIAL[name]
+        assert len(text) >= _N * 9 // 10
+        for pattern in _PATTERNS:
+            started = time.perf_counter()
+            pattern.sub(_mask_value, text)
+            elapsed = time.perf_counter() - started
+            assert elapsed < 0.5, (
+                f"{pattern.pattern[:70]!r} took {elapsed:.2f}s on {name!r}"
+            )
+
+    @pytest.mark.parametrize("name", list(_ADVERSARIAL))
+    def test_the_whole_redaction_is_fast_with_a_known_secret(self, name: str) -> None:
+        text = _ADVERSARIAL[name]
+        started = time.perf_counter()
+        redact_secrets(text, "KNOWN-SECRET-VALUE")
+        assert time.perf_counter() - started < 1.0
 
 
 class TestKnownSecrets:
