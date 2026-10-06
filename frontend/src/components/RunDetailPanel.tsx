@@ -452,7 +452,7 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
         <button
           type="button"
           onClick={() => void downloadRunMarkdown(runId)}
-          title={t.runDetail.modelCard.title}
+          title={t.modelCard.title}
           style={{
             marginLeft: detail?.resumable ? 0 : "auto",
             padding: "6px 12px",
@@ -467,7 +467,7 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
             cursor: "pointer",
           }}
         >
-          {t.runDetail.modelCard.button}
+          {t.modelCard.button}
         </button>
       </div>
 
@@ -1757,7 +1757,7 @@ function MetricsGrid({
             </div>
             {ci && (
               <div
-                title={t.runDetail.metrics.ciTooltip(
+                title={t.metrics.ciTooltip(
                   Math.round(ci.confidence * 100),
                   ci.n_resamples,
                   ci.n_samples,

@@ -8,7 +8,7 @@ export function useI18n(): LanguageContextValue {
   return ctx;
 }
 
-/** The active dictionary: `const t = useT(); t.common.save`. */
+/** The active dictionary: `const t = useT(); t.common.cancel`. */
 export function useT(): Dict {
   return useI18n().t;
 }

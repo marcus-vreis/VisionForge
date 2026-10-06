@@ -18,12 +18,33 @@ const ordinal = (n: number): string => {
 export const en: Dict = {
   common: {
     back: "Back",
-    next: "Continue",
     skip: "Skip",
     close: "Close",
     cancel: "Cancel",
-    save: "Save",
-    loading: "Loading…",
+  },
+  // The five task families by name: the history tabs and the queue rows.
+  taskNames: {
+    classification: "Classification",
+    detection: "Detection",
+    regression: "Regression",
+    segmentation: "Segmentation",
+    anomaly: "Anomaly",
+  },
+  // The button that downloads a run's model card, in the run detail and in the
+  // results view.
+  modelCard: {
+    button: "↓ markdown",
+    title: "Download this run's model card (markdown)",
+  },
+  // The confidence interval a metric's tooltip explains (the run detail and the
+  // results view show the same one).
+  metrics: {
+    ciTooltip: (percent: number, resamples: number, samples: number) =>
+      `${percent}% CI (percentile bootstrap): ` +
+      `${resamples} resamples of the ${samples} test ${samples === 1 ? "image" : "images"}. ` +
+      `Captures the sampling uncertainty of the test split with this model ` +
+      `held fixed — not the variation between training runs, which multi-seed ` +
+      `replicates measure.`,
   },
   header: {
     guide: "guide",
@@ -34,12 +55,15 @@ export const en: Dict = {
   language: {
     label: "Language",
     switchTo: "Switch to Portuguese",
+    names: { pt: "Português", en: "English" },
   },
   errors: {
-    cannotConnect: "Could not reach the server. Check that the backend is running.",
+    cannotConnect: "Couldn't reach the server. Check that the backend is running.",
     validation: "There are validation errors in the form.",
-    markdownExport: (status: number) => `Markdown export failed (HTTP ${status}).`,
+    markdownExport: (status: number) => `Failed to export Markdown (HTTP ${status}).`,
     deviceInfo: "Failed to load devices.",
+    // The preprocessing and augmentation previews fail with the same sentence.
+    previewFailed: "Failed to generate the preview.",
   },
   app: {
     train: {
@@ -49,7 +73,7 @@ export const en: Dict = {
       replicates: "▶ Run replicates",
     },
     error: "Error",
-    unnamedRun: "training",
+    unnamedRun: "unnamed run",
   },
   bottomBar: {
     reopenTraining: "🔬 open training",
@@ -98,7 +122,7 @@ export const en: Dict = {
     task: "Task",
   },
   experimentRunner: {
-    inProgress: "Training in progress...",
+    inProgress: "Training in progress…",
     runId: "Run ID:",
   },
   advancedFields: {
@@ -247,7 +271,7 @@ export const en: Dict = {
       color_jitter: "Color jitter",
       normalize_mean: "Normalization (mean)",
       normalize_std: "Normalization (std)",
-      n_folds: "Number of folds",
+      n_folds: "Folds",
       stratified: "Stratified",
       shuffle: "Shuffle",
       fold_seed: "Fold seed",
@@ -293,7 +317,7 @@ export const en: Dict = {
       clear: "clear",
       placeholder: "optional — replaces the ImageNet weights",
       browse: "Browse",
-      cancelled: "Cancelled.",
+      cancelled: "Canceled.",
       pickFailed: "Failed to open the file picker.",
     },
     grid: {
@@ -329,10 +353,6 @@ export const en: Dict = {
       badge: "🔒 binary",
     },
     normalizePlaceholder: "e.g. 0.485, 0.456, 0.406",
-    exportYaml: "↓ Export YAML",
-    exportTitle: "Export the current configuration as a .yaml file",
-    importYaml: "↑ Import YAML",
-    importTitle: "Import a configuration from a .yaml file",
     importWarnings: (count: number, summary: string, extra: number) =>
       `YAML imported with ${count} structural ${count === 1 ? "warning" : "warnings"}:\n${summary}${extra > 0 ? `\n…(+${extra} more)` : ""}\n\nFix them before training — the backend's Pydantic validation will reject the config.`,
     unavailable: (task: string) => `${task} is not available yet`,
@@ -360,13 +380,9 @@ export const en: Dict = {
       queued: "Queued: starts when the current run finishes.",
       failed: "Failed to resume.",
     },
-    modelCard: {
-      button: "↓ markdown",
-      title: "Download this run's model card (markdown)",
-    },
     picker: {
       opening: "Opening the folder picker…",
-      cancelled: "Cancelled.",
+      cancelled: "Canceled.",
       picked: (path: string) => `Folder: ${path}`,
       failed: "Failed to open the folder picker.",
     },
@@ -394,7 +410,7 @@ export const en: Dict = {
     pipeline: {
       title: "Applied pipeline (preprocessing + augmentation)",
       preprocessing: "// preprocessing (in order)",
-      augmentation: "// augmentation & normalize",
+      augmentation: "// augmentation & normalization",
     },
     onnx: {
       title: "Export to ONNX",
@@ -435,7 +451,7 @@ export const en: Dict = {
         `${ok} ${ok === 1 ? "image" : "images"} processed · CSV at ${csv}`,
       doneWithFailures: (ok: number, failed: number, csv: string) =>
         `${ok} ok · ${failed} failed · CSV at ${csv}`,
-      failed: "Batch inference failed.",
+      failed: "Failed to run batch inference.",
       processed: "processed",
       failedCount: "failed",
       csv: "csv",
@@ -472,12 +488,6 @@ export const en: Dict = {
         total_epochs: "Epochs trained",
       },
       onTestSet: (name: string) => `${name} (test)`,
-      ciTooltip: (percent: number, resamples: number, samples: number) =>
-        `${percent}% CI (percentile bootstrap): ` +
-        `${resamples} resamples of the ${samples} test ${samples === 1 ? "image" : "images"}. ` +
-        `Captures the sampling uncertainty of the test split with this model ` +
-        `held fixed — not the variation between training runs, which multi-seed ` +
-        `replicates measure.`,
     },
     graphs: {
       title: "Plots (click to expand)",
@@ -507,7 +517,7 @@ export const en: Dict = {
       needFolder: "Enter the test folder or .csv manifest.",
       starting: "Evaluating the model on the new dataset…",
       recorded: (id: string) => `Test recorded: ${id}`,
-      failed: "Couldn't run the test.",
+      failed: "Failed to run the test.",
     },
     cv: {
       title: (ok: number, total: number, failed: number) =>
@@ -657,16 +667,12 @@ export const en: Dict = {
   },
   resultsView: {
     title: "// results",
-    modelCard: {
-      button: "↓ markdown",
-      title: "Download this run's model card (markdown)",
-    },
     metricLabels: {
       best_val_loss: "Best val loss",
       best_epoch: "Best epoch",
       total_epochs: "Epochs trained",
       test_accuracy: "Accuracy",
-      test_f1: "F1 score",
+      test_f1: "F1",
       test_precision: "Precision",
       test_recall: "Recall",
       test_auc_roc: "AUC-ROC",
@@ -676,12 +682,6 @@ export const en: Dict = {
       recall: "Recall (box)",
       box_loss: "Box loss (val)",
     },
-    ciTooltip: (percent: number, resamples: number, samples: number) =>
-      `${percent}% CI (percentile bootstrap): ` +
-      `${resamples} resamples of the ${samples} test ${samples === 1 ? "image" : "images"}. ` +
-      `Captures the sampling uncertainty of the test split with this model ` +
-      `held fixed — not the variation between training runs, which multi-seed ` +
-      `replicates measure.`,
     graphsTitle: "// plots · click to expand",
     reportTitle: "// report",
     cols: {
@@ -772,13 +772,6 @@ export const en: Dict = {
     clearSearch: "Clear search",
     noMatch: "No runs match the current filter.",
     allTab: "All",
-    families: {
-      classification: "Classification",
-      detection: "Detection",
-      regression: "Regression",
-      segmentation: "Segmentation",
-      anomaly: "Anomaly",
-    },
     allChip: "all",
     filterType: "type",
     filterBlock: "block",
@@ -804,9 +797,9 @@ export const en: Dict = {
     confirm: {
       title: (n: number) => `// permanently delete ${n === 1 ? "1 run" : `${n} runs`}`,
       body: (n: number) =>
-        `${n === 1 ? "The run's folder" : "The runs' folders"}, checkpoints and all plots/reports will be removed from disk. This cannot be undone.`,
+        `${n === 1 ? "The run's folder" : "The runs' folders"}, checkpoints and all plots/reports will be removed from disk. This can't be undone.`,
       failed: (failed: number, total: number) =>
-        `${failed} of ${total} runs couldn't be deleted:`,
+        `${failed} of ${total} ${total === 1 ? "run" : "runs"} couldn't be deleted:`,
       unknownError: "unknown error",
       deleting: "Deleting…",
       submit: (n: number) => `🗑 Delete${n > 1 ? ` ${n}` : ""}`,
@@ -818,6 +811,8 @@ export const en: Dict = {
     pretrained: "Pretrained weights",
     backbone: "Backbone",
     imageNet: "ImageNet",
+    // The hint under "pretrained weights" in the segmentation and regression forms.
+    transferHint: "pretrained backbone (torchvision)",
     training: {
       title: "Training",
       epochs: "Epochs",
@@ -846,9 +841,9 @@ export const en: Dict = {
       baseDirHint: "dataset root",
       browse: "📁 Browse",
       imageSize: "Image size",
-      trainSplit: "Train split",
-      valSplit: "Validation split",
-      testSplit: "Test split",
+      trainSplit: "Train subfolder",
+      valSplit: "Validation subfolder",
+      testSplit: "Test subfolder",
       optional: "optional",
       imagesSubdir: "Image subfolder",
     },
@@ -867,7 +862,6 @@ export const en: Dict = {
       pretrainedHint: "ImageNet backbone",
     },
     lossHint: "per-pixel (CE) or overlap (Dice)",
-    transferHint: "pretrained backbone (torchvision)",
     dataset: {
       title: "Dataset (images + masks)",
       baseDirPlaceholder: "…/dataset (train/{images,masks}, val/…)",
@@ -887,7 +881,6 @@ export const en: Dict = {
       numTargetsHint: "derived from the target columns",
     },
     lossHint: "criterion",
-    transferHint: "pretrained backbone (torchvision)",
     dataset: {
       title: "Dataset (CSV manifest)",
       baseDirPlaceholder: "…/dataset (train.csv, val.csv, images/)",
@@ -970,7 +963,7 @@ export const en: Dict = {
     needDatasetAndFolder: "Enter the dataset and the output folder.",
     downloadingWait: "Downloading… (this may take a while)",
     done: (images: number, dir: string) => `${images} ${images === 1 ? "image" : "images"} in ${dir}`,
-    failed: "Download failed.",
+    failed: "Failed to download the dataset.",
     classes: (n: number) => ` · ${n} ${n === 1 ? "class" : "classes"}`,
   },
   credentialField: {
@@ -989,7 +982,7 @@ export const en: Dict = {
     analyzing: "Scanning subfolders…",
     detectFailed: "Failed to detect the dataset splits.",
     opening: "Opening the system folder picker…",
-    cancelled: "Selection cancelled.",
+    cancelled: "Selection canceled.",
     picked: (path: string) => `Selected folder: ${path}`,
     pickFailed: "Failed to open the folder picker.",
     baseDir: "Dataset base folder",
@@ -1063,7 +1056,6 @@ export const en: Dict = {
   },
   preprocessing: {
     needBaseDir: "Set the dataset base folder before generating a preview.",
-    previewFailed: "Failed to generate the preview.",
     kicker: "// preprocessing (filters)",
     active: (n: number) => `${n} ${n === 1 ? "filter" : "filters"} active in training`,
     activeTitle:
@@ -1084,7 +1076,6 @@ export const en: Dict = {
   },
   augmentPreview: {
     needBaseDir: "Set the dataset base folder first.",
-    failed: "Failed to generate the preview.",
     generating: "Generating…",
     button: "🎲 augmentation preview",
     active: "active:",
@@ -1159,13 +1150,6 @@ export const en: Dict = {
     },
   },
   queueFormat: {
-    tasks: {
-      classification: "Classification",
-      detection: "Detection",
-      regression: "Regression",
-      segmentation: "Segmentation",
-      anomaly: "Anomaly",
-    },
     strategies: {
       simple: "single run",
       kfold: "K-fold",
@@ -1193,7 +1177,7 @@ export const en: Dict = {
     failedBody: "Open VisionForge to see the error.",
   },
   yamlConfig: {
-    cannotRead: (reason: string) => `Could not read the YAML file: ${reason}`,
+    cannotRead: (reason: string) => `Failed to read the YAML file: ${reason}`,
     invalidFile: (reason: string) => `Invalid YAML file: ${reason}`,
     notMapping:
       "the content must be a mapping (key: value), not a single value or a list.",
@@ -1257,7 +1241,7 @@ export const en: Dict = {
     folds: "Folds",
     shuffle: "Shuffle",
     shuffleHint: "before splitting",
-    foldSeed: "Split seed",
+    foldSeed: "Fold seed",
     run: (folds: number) => `⛓ Run CV · ${folds} folds`,
   },
   replicatesCard: {
@@ -1306,7 +1290,7 @@ export const en: Dict = {
       data: "Dataset",
       transforms: "Augmentation & normalization",
       preprocessing: "Preprocessing (filters)",
-      scheduler: "Learning-rate scheduler",
+      scheduler: "Learning rate scheduler",
       output: "Output",
       model: "Model",
     },
@@ -1314,7 +1298,7 @@ export const en: Dict = {
     listHint: "comma-separated values",
   },
   customTaskPanel: {
-    schemaLoadFailed: "Could not load the schema for",
+    schemaLoadFailed: "Failed to load the schema for",
     schemaLoadHint:
       "Check the file in `user_tasks/` — an import error is logged by the server and the task is left without a form.",
     loadingForm: (task: string) => `Loading the form for ${task}…`,
@@ -1338,8 +1322,8 @@ export const en: Dict = {
     deleteFailed: "Failed to delete the task.",
   },
   queueOverlay: {
-    readFailed: "Could not read the queue.",
-    cancelFailed: "Could not cancel that run.",
+    readFailed: "Failed to read the queue.",
+    cancelFailed: "Failed to cancel that run.",
     kicker: "// queue",
     title: "Run queue",
     description:
@@ -1357,7 +1341,7 @@ export const en: Dict = {
   trainingOverlay: {
     blocks: {
       modelComparison: "Model comparison",
-      crossValidation: "K-Fold CV",
+      crossValidation: "K-fold CV",
       replicates: "Multi-seed replicates",
     },
     phases: {
@@ -1403,7 +1387,7 @@ export const en: Dict = {
     metrics: {
       best_val_loss: "Best val loss",
       best_epoch: "Best epoch",
-      total_epochs: "Total epochs",
+      total_epochs: "Epochs trained",
       test_accuracy: "Accuracy (test)",
       test_f1: "F1 (test)",
       test_precision: "Precision (test)",

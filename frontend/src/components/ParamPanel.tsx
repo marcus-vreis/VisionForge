@@ -2058,17 +2058,17 @@ export function ParamPanel({
             type="button"
             onClick={handleExport}
             style={yamlBtnStyle}
-            title={t.paramPanel.exportTitle}
+            title={t.experimentHeader.exportTitle}
           >
-            {t.paramPanel.exportYaml}
+            {t.experimentHeader.exportYaml}
           </button>
           <button
             type="button"
             onClick={handleImportClick}
             style={yamlBtnSecondaryStyle}
-            title={t.paramPanel.importTitle}
+            title={t.experimentHeader.importTitle}
           >
-            {t.paramPanel.importYaml}
+            {t.experimentHeader.importYaml}
           </button>
         </div>
       </div>

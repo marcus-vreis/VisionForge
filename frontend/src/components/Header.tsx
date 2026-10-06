@@ -158,6 +158,8 @@ export function Header({
             <button
               key={code}
               type="button"
+              lang={code}
+              aria-label={`${code.toUpperCase()} — ${t.language.names[code]}`}
               aria-pressed={code === lang}
               onClick={() => setLang(code)}
               title={code === lang ? undefined : t.language.switchTo}

@@ -32,7 +32,7 @@ export function AugmentPreview({ baseDir, transforms }: AugmentPreviewProps) {
         setPreview(resp);
       }
     } catch (e) {
-      setMsg(e instanceof Error ? e.message : t.augmentPreview.failed);
+      setMsg(e instanceof Error ? e.message : t.errors.previewFailed);
     } finally {
       setLoading(false);
     }

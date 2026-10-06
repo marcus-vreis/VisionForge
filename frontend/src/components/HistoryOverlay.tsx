@@ -128,7 +128,7 @@ function taskFamily(task: string): string {
 /** Tab label per task family, from the dictionary; a custom task is its own name. */
 function familyLabel(t: Dict, family: string): string {
   if (family.startsWith("custom:")) return family.slice("custom:".length);
-  const families: Record<string, string> = t.history.families;
+  const families: Record<string, string> = t.taskNames;
   return families[family] ?? family;
 }
 

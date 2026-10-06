@@ -339,7 +339,7 @@ export function SegmentationPanel({
               { value: "feature_extraction", label: t.taskPanel.transfer.featureExtraction },
               { value: "fine_tuning", label: t.taskPanel.transfer.fineTuning },
             ]}
-            hint={t.segmentationPanel.transferHint}
+            hint={t.taskPanel.transferHint}
           />
           {formData.transfer === "fine_tuning" && (
             <NumberField

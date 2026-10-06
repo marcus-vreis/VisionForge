@@ -18,12 +18,33 @@ const lrFinalHelp = "Fração do learning rate inicial ao término do treino.";
 export const pt = {
   common: {
     back: "Voltar",
-    next: "Continuar",
     skip: "Pular",
     close: "Fechar",
     cancel: "Cancelar",
-    save: "Salvar",
-    loading: "Carregando…",
+  },
+  // The five task families by name: the history tabs and the queue rows.
+  taskNames: {
+    classification: "Classificação",
+    detection: "Detecção",
+    regression: "Regressão",
+    segmentation: "Segmentação",
+    anomaly: "Anomalia",
+  },
+  // The button that downloads a run's model card, in the run detail and in the
+  // results view.
+  modelCard: {
+    button: "↓ markdown",
+    title: "Baixar model card (markdown) deste run",
+  },
+  // The confidence interval a metric's tooltip explains (the run detail and the
+  // results view show the same one).
+  metrics: {
+    // The bootstrap draws 1000 resamples by default and is skipped below 2: plural only.
+    ciTooltip: (percent: number, resamples: number, samples: number) =>
+      `IC ${percent}% por bootstrap percentil: ` +
+      `${resamples} reamostragens ${samples === 1 ? "da única imagem" : `das ${samples} imagens`} de teste. ` +
+      `Mede o ruído de amostragem do split com este modelo fixo — não a ` +
+      `variação entre treinos, que réplicas com várias seeds medem.`,
   },
   header: {
     guide: "guia",
@@ -34,6 +55,9 @@ export const pt = {
   language: {
     label: "Idioma",
     switchTo: "Mudar para inglês",
+    // Each language by its own name, whichever is on: they name the switch's two
+    // buttons for a screen reader.
+    names: { pt: "Português", en: "English" },
   },
   // Messages the API client raises. It is not a component, so it picks the
   // dictionary itself (see api/client.ts).
@@ -43,6 +67,8 @@ export const pt = {
     validation: "Erros de validação no formulário.",
     markdownExport: (status: number) => `HTTP ${status} ao gerar markdown.`,
     deviceInfo: "Falha ao consultar dispositivos.",
+    // The preprocessing and augmentation previews fail with the same sentence.
+    previewFailed: "Falha ao gerar preview.",
   },
   app: {
     train: {
@@ -53,7 +79,7 @@ export const pt = {
     },
     error: "Erro",
     // Names a run in the tab title when the server sent no run id.
-    unnamedRun: "treino",
+    unnamedRun: "sem nome",
   },
   bottomBar: {
     reopenTraining: "🔬 abrir treino",
@@ -102,7 +128,7 @@ export const pt = {
     task: "Task",
   },
   experimentRunner: {
-    inProgress: "Treino em andamento...",
+    inProgress: "Treino em andamento…",
     runId: "ID da execução:",
   },
   advancedFields: {
@@ -341,10 +367,6 @@ export const pt = {
       badge: "🔒 binário",
     },
     normalizePlaceholder: "ex: 0.485, 0.456, 0.406",
-    exportYaml: "↓ Exportar YAML",
-    exportTitle: "Exportar configuração atual como arquivo .yaml",
-    importYaml: "↑ Importar YAML",
-    importTitle: "Importar configuração a partir de um arquivo .yaml",
     importWarnings: (count: number, summary: string, extra: number) =>
       `YAML importado com ${count} ${count === 1 ? "aviso estrutural" : "avisos estruturais"}:\n${summary}${extra > 0 ? `\n…(+${extra} mais)` : ""}\n\nCorrija antes de treinar — o backend rejeita por validação Pydantic.`,
     unavailable: (task: string) => `${task} ainda não está disponível`,
@@ -376,10 +398,6 @@ export const pt = {
       running: "Continuando este run — acompanhe no painel de treino.",
       queued: "Na fila: começa quando o treino atual terminar.",
       failed: "Falha ao retomar.",
-    },
-    modelCard: {
-      button: "↓ markdown",
-      title: "Baixar model card (markdown) deste run",
     },
     // The native folder picker the three forms below share.
     picker: {
@@ -492,13 +510,6 @@ export const pt = {
       },
       // `name` is a metric label: "Acurácia (teste)", "F1 (teste)".
       onTestSet: (name: string) => `${name} (teste)`,
-      // The bootstrap draws 1000 resamples by default and is skipped below 2: plural only.
-      ciTooltip: (percent: number, resamples: number, samples: number) =>
-        `IC ${percent}% por bootstrap percentil: ` +
-        `${resamples} reamostragens ${samples === 1 ? "da única imagem" : `das ${samples} imagens`} de ` +
-        `teste. Mede o ruído de amostragem do split com este modelo ` +
-        `fixo — não a variação entre treinos, que réplicas com várias ` +
-        `seeds medem.`,
     },
     graphs: {
       title: "Gráficos (clique para expandir)",
@@ -692,10 +703,6 @@ export const pt = {
   // section prefix read the same in every language.
   resultsView: {
     title: "// resultados",
-    modelCard: {
-      button: "↓ markdown",
-      title: "Baixar model card (markdown) deste run",
-    },
     // Keys are the backend's metric names.
     metricLabels: {
       best_val_loss: "Best Val Loss",
@@ -712,12 +719,6 @@ export const pt = {
       recall: "Recall (box)",
       box_loss: "Box loss (val)",
     },
-    // The bootstrap draws 1000 resamples by default and is skipped below 2: plural only.
-    ciTooltip: (percent: number, resamples: number, samples: number) =>
-      `IC ${percent}% por bootstrap percentil: ` +
-      `${resamples} reamostragens ${samples === 1 ? "da única imagem" : `das ${samples} imagens`} de teste. ` +
-      `Mede o ruído de amostragem do split com este modelo fixo — não a ` +
-      `variação entre treinos, que réplicas com várias seeds medem.`,
     graphsTitle: "// gráficos · clique para expandir",
     // A report whose shape the view does not know is shown as JSON under this.
     reportTitle: "// report",
@@ -821,13 +822,6 @@ export const pt = {
     noMatch: "Nenhum run combina com o filtro atual.",
     // The task tabs; a custom task keeps its own key.
     allTab: "Todos",
-    families: {
-      classification: "Classificação",
-      detection: "Detecção",
-      regression: "Regressão",
-      segmentation: "Segmentação",
-      anomaly: "Anomalia",
-    },
     // The refinement rows inside a tab.
     allChip: "todos",
     filterType: "tipo",
@@ -878,6 +872,8 @@ export const pt = {
     pretrained: "Pesos pré-treinados",
     backbone: "Backbone",
     imageNet: "ImageNet",
+    // The hint under "pretrained weights" in the segmentation and regression forms.
+    transferHint: "backbone pré-treinado (torchvision)",
     training: {
       title: "Treinamento",
       epochs: "Épocas",
@@ -930,7 +926,6 @@ export const pt = {
       pretrainedHint: "backbone ImageNet",
     },
     lossHint: "por pixel (CE) ou sobreposição (Dice)",
-    transferHint: "backbone pré-treinado (torchvision)",
     dataset: {
       title: "Dataset (imagens + máscaras)",
       baseDirPlaceholder: "…/dataset (train/{images,masks}, val/…)",
@@ -951,7 +946,6 @@ export const pt = {
       numTargetsHint: "derivado das colunas-alvo",
     },
     lossHint: "critério",
-    transferHint: "backbone pré-treinado (torchvision)",
     dataset: {
       title: "Dataset (CSV manifest)",
       baseDirPlaceholder: "…/dataset (train.csv, val.csv, images/)",
@@ -1146,7 +1140,6 @@ export const pt = {
   // filter names (Gaussian blur, Unsharp mask…) are the same in every language.
   preprocessing: {
     needBaseDir: "Defina uma pasta base antes de gerar preview.",
-    previewFailed: "Falha ao gerar preview.",
     kicker: "// pré-processamento (filtros)",
     active: (n: number) => `${n} filtro${n === 1 ? "" : "s"} ativo${n === 1 ? "" : "s"} no treino`,
     activeTitle:
@@ -1169,7 +1162,6 @@ export const pt = {
   // The augmentation preview strip (components/AugmentPreview.tsx).
   augmentPreview: {
     needBaseDir: "Defina a pasta base do dataset primeiro.",
-    failed: "Falha ao gerar preview.",
     generating: "Gerando…",
     button: "🎲 preview de augmentation",
     active: "ativos:",
@@ -1256,13 +1248,6 @@ export const pt = {
   // How a queued job is named (lib/queue-format.ts). The server sends the task and
   // the strategy as identifiers; a custom task shows as its own key.
   queueFormat: {
-    tasks: {
-      classification: "Classificação",
-      detection: "Detecção",
-      regression: "Regressão",
-      segmentation: "Segmentação",
-      anomaly: "Anomalia",
-    },
     strategies: {
       simple: "treino simples",
       kfold: "K-fold",

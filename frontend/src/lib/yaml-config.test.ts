@@ -268,7 +268,7 @@ describe("importConfigFromYaml", () => {
       error: "Não foi possível ler o arquivo YAML: boom",
     });
     expect(await importConfigFromYaml(en, unreadable)).toEqual({
-      error: "Could not read the YAML file: boom",
+      error: "Failed to read the YAML file: boom",
     });
   });
 });

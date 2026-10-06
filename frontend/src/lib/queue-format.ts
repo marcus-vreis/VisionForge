@@ -31,7 +31,7 @@ const STRATEGY_KEYS: Record<string, keyof Dict["queueFormat"]["strategies"]> = {
 /** `custom:counting` renders as the researcher's own task name. */
 export function taskLabel(t: Dict, task: string): string {
   if (task.startsWith("custom:")) return task.slice("custom:".length);
-  const labels: Record<string, string> = t.queueFormat.tasks;
+  const labels: Record<string, string> = t.taskNames;
   return labels[task] ?? task;
 }
 

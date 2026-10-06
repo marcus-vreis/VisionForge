@@ -91,4 +91,48 @@ describe("dictionaries", () => {
     expect(en.taskDatasetStats.missingImages(1, 5)).toBe("⚠ 1/5 image not found");
     expect(en.taskDatasetStats.missingImages(2, 5)).toBe("⚠ 2/5 images not found");
   });
+
+  it("agree with the number in the count of runs that could not be deleted", () => {
+    expect(pt.history.confirm.failed(1, 1)).toBe("1 de 1 não pôde ser excluído:");
+    expect(pt.history.confirm.failed(2, 3)).toBe("2 de 3 não puderam ser excluídos:");
+    expect(en.history.confirm.failed(1, 1)).toBe("1 of 1 run couldn't be deleted:");
+    expect(en.history.confirm.failed(1, 3)).toBe("1 of 3 runs couldn't be deleted:");
+    expect(en.history.confirm.failed(2, 3)).toBe("2 of 3 runs couldn't be deleted:");
+  });
+
+  it("name an unnamed run so the notification does not say the same word twice", () => {
+    expect(pt.runNotify.completedTitle(pt.app.unnamedRun)).toBe("Treino concluído — sem nome");
+    expect(en.runNotify.completedTitle(en.app.unnamedRun)).toBe("Training finished — unnamed run");
+  });
+});
+
+describe("English terminology", () => {
+  const texts = [...leaves(en)]
+    .filter((entry): entry is [string, string] => typeof entry[1] === "string");
+
+  it("spells in the American way", () => {
+    for (const [path, text] of texts) expect(text, path).not.toMatch(/cancelled|cancelling/i);
+  });
+
+  it("writes an ellipsis as one character", () => {
+    for (const [path, text] of texts) expect(text, path).not.toMatch(/[A-Za-z]\.\.\.($|\s)/);
+  });
+
+  it("gives a field one name wherever it is asked for", () => {
+    expect(en.cvCard.foldSeed).toBe(en.paramPanel.fieldLabels.fold_seed);
+    expect(en.cvCard.folds).toBe(en.paramPanel.fieldLabels.n_folds);
+    expect(en.taskPanel.dataset.trainSplit).toBe(en.datasetPicker.trainSubdir);
+    expect(en.taskPanel.dataset.valSplit).toBe(en.datasetPicker.valSubdir);
+    expect(en.taskPanel.dataset.testSplit).toBe(en.datasetPicker.testSubdir);
+    expect(en.taskPanel.dataset.trainSplit).toBe(en.paramPanel.fieldLabels.train_dir);
+    expect(en.paramPanel.fieldLabels.weights_path).toBe(en.paramPanel.weights.label);
+    expect(en.compareRuns.metrics.total_epochs).toBe(en.resultsView.metricLabels.total_epochs);
+    expect(en.trainingOverlay.blocks.crossValidation).toBe(
+      en.paramPanel.blocks.crossValidation.replace("(CV)", "CV"),
+    );
+  });
+
+  it("words a failed operation as 'Failed to …', not 'Could not …'", () => {
+    for (const [path, text] of texts) expect(text, path).not.toMatch(/^Could not\b/);
+  });
 });

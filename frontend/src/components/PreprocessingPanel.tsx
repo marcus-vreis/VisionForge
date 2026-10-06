@@ -114,7 +114,7 @@ export function PreprocessingPanel({
         setPreview(resp);
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : t.preprocessing.previewFailed);
+      setError(e instanceof Error ? e.message : t.errors.previewFailed);
       setPreview(null);
     } finally {
       setLoading(false);

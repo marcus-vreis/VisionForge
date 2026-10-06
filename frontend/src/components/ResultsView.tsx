@@ -35,7 +35,7 @@ function CiFootnote({ ci }: { ci: MetricCI }) {
   const t = useT();
   return (
     <div
-      title={t.resultsView.ciTooltip(
+      title={t.metrics.ciTooltip(
         Math.round(ci.confidence * 100),
         ci.n_resamples,
         ci.n_samples,
@@ -175,7 +175,7 @@ export function ResultsView({ result, onClose, taskAccent }: ResultsViewProps) {
         <button
           type="button"
           onClick={() => void downloadRunMarkdown(result.run_id)}
-          title={t.resultsView.modelCard.title}
+          title={t.modelCard.title}
           style={{
             padding: "8px 14px",
             background: "var(--accent-soft)",
@@ -189,7 +189,7 @@ export function ResultsView({ result, onClose, taskAccent }: ResultsViewProps) {
             cursor: "pointer",
           }}
         >
-          {t.resultsView.modelCard.button}
+          {t.modelCard.button}
         </button>
         <button
           type="button"
