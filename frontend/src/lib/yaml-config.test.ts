@@ -4,6 +4,7 @@ import { pt } from "../i18n/pt";
 import {
   importConfigFromYaml,
   omitInvalidLeaves,
+  reviewImportedConfig,
   YamlParseError,
   parseYamlToConfig,
   sanitizeForExport,
@@ -272,6 +273,185 @@ describe("validateParsedConfig", () => {
       ]);
     });
   });
+
+  describe("lists and dicts", () => {
+    // These are the schema's own fragments for the two sweep blocks: the grid
+    // maps a dot-path to a list of values, the random search keeps its space as
+    // a free-form `dict[str, Any]`.
+    const SWEEPS: JsonSchema = {
+      type: "object",
+      properties: {
+        grid_search: {
+          anyOf: [{ $ref: "#/$defs/GridSearchConfig" }, { type: "null" }],
+        },
+        random_search: {
+          anyOf: [{ $ref: "#/$defs/RandomSearchConfig" }, { type: "null" }],
+        },
+        device: { $ref: "#/$defs/Device" },
+        extras: { type: "object", additionalProperties: true },
+        extensions: { type: "array", items: { type: "string" } },
+        models: { type: "array", items: { type: "string", enum: ["a", "b"] } },
+      },
+    };
+    const defs: Record<string, JsonSchema> = {
+      GridSearchConfig: {
+        type: "object",
+        properties: {
+          hyperparameters: {
+            type: "object",
+            additionalProperties: { type: "array", items: {} },
+          },
+        },
+      },
+      RandomSearchConfig: {
+        type: "object",
+        properties: {
+          n_trials: { type: "integer" },
+          search_space: { type: "object", additionalProperties: true },
+        },
+        required: ["n_trials"],
+      },
+      Device: {
+        type: "object",
+        properties: {
+          gpu_ids: {
+            anyOf: [{ type: "array", items: { type: "integer" } }, { type: "null" }],
+          },
+        },
+      },
+    };
+    const issues = (data: Record<string, unknown>) =>
+      validateParsedConfig(pt, data, SWEEPS, defs).map((e) => [e.field.join("."), e.message]);
+
+    it("flags a scalar where a list is expected, in both languages", () => {
+      expect(issues({ extensions: ".png" })).toEqual([["extensions", pt.yamlConfig.expectedArray]]);
+      const asEn = validateParsedConfig(en, { extensions: ".png" }, SWEEPS, defs);
+      expect(asEn.map((e) => e.message)).toEqual([en.yamlConfig.expectedArray]);
+      expect(pt.yamlConfig.expectedArray).toBe("Esperada uma lista.");
+      expect(en.yamlConfig.expectedArray).toBe("Expected a list.");
+    });
+
+    it("checks each list item against the items schema and names the index", () => {
+      expect(issues({ extensions: [".png", 7, ".jpg", null] })).toEqual([
+        ["extensions.1", pt.yamlConfig.expectedString],
+        ["extensions.3", pt.yamlConfig.expectedString],
+      ]);
+      expect(issues({ models: ["a", "zzz"] })).toEqual([
+        ["models.1", pt.yamlConfig.mustBeOneOf("a, b")],
+      ]);
+    });
+
+    it("accepts a good list, an empty one, and a nullable list left null", () => {
+      expect(issues({ extensions: [], models: ["a", "b"] })).toEqual([]);
+      expect(issues({ device: { gpu_ids: [0, 1] } })).toEqual([]);
+      expect(issues({ device: { gpu_ids: null } })).toEqual([]);
+    });
+
+    it("flags a nullable list that is neither a list nor null", () => {
+      expect(issues({ device: { gpu_ids: "0,1" } })).toEqual([
+        ["device.gpu_ids", pt.yamlConfig.expectedArray],
+      ]);
+      expect(issues({ device: { gpu_ids: [0, "x"] } })).toEqual([
+        ["device.gpu_ids.1", pt.yamlConfig.expectedInteger],
+      ]);
+    });
+
+    it("checks the values of a dict that gives an additionalProperties schema", () => {
+      expect(
+        issues({
+          grid_search: {
+            hyperparameters: {
+              "training.learning_rate": [0.1, 0.01],
+              "training.scheduler.kind": "cosine",
+            },
+          },
+        }),
+      ).toEqual([
+        ["grid_search.hyperparameters.training.scheduler.kind", pt.yamlConfig.expectedArray],
+      ]);
+    });
+
+    it("flags a dict field that is not a mapping, even when it declares no properties", () => {
+      expect(issues({ grid_search: { hyperparameters: [1, 2] } })).toEqual([
+        ["grid_search.hyperparameters", pt.yamlConfig.expectedObject],
+      ]);
+      expect(issues({ random_search: { n_trials: 3, search_space: "wide" } })).toEqual([
+        ["random_search.search_space", pt.yamlConfig.expectedObject],
+      ]);
+    });
+
+    it("leaves a free-form dict alone (the schema says nothing about its values)", () => {
+      expect(issues({ extras: { x: 5, y: ["a"], z: "s", w: null } })).toEqual([]);
+      expect(issues({ extras: [1] })).toEqual([["extras", pt.yamlConfig.expectedObject]]);
+    });
+
+    it("requires every entry of a random search space to be a mapping", () => {
+      // The form reads each entry as `{type, low, high}` / `{type, options}`.
+      expect(
+        issues({
+          random_search: {
+            n_trials: 3,
+            search_space: {
+              ok: { type: "uniform", low: 0, high: 1 },
+              nothing: null,
+              scalar: 5,
+              list: [1, 2],
+            },
+          },
+        }),
+      ).toEqual([
+        ["random_search.search_space.nothing", pt.yamlConfig.expectedObject],
+        ["random_search.search_space.scalar", pt.yamlConfig.expectedObject],
+        ["random_search.search_space.list", pt.yamlConfig.expectedObject],
+      ]);
+    });
+
+    describe("what the import does with them", () => {
+      const load = (yaml: string) => {
+        const parsed = parseYamlToConfig(yaml);
+        const found = validateParsedConfig(pt, parsed, SWEEPS, defs);
+        return omitInvalidLeaves(parsed, found).data;
+      };
+
+      it("keeps a scalar out of the grid axes the scheduler fields read as lists", () => {
+        // `block: grid_search` + a scalar axis used to reach `.map(String)` on a string.
+        const kept = load(
+          [
+            "grid_search:",
+            "  hyperparameters:",
+            "    training.scheduler.kind: cosine",
+            "    training.learning_rate: [0.1, 0.01]",
+          ].join("\n"),
+        ) as { grid_search: { hyperparameters: Record<string, unknown> } };
+        expect(kept.grid_search.hyperparameters).toEqual({
+          "training.learning_rate": [0.1, 0.01],
+        });
+        for (const axis of Object.values(kept.grid_search.hyperparameters)) {
+          expect(Array.isArray(axis)).toBe(true);
+        }
+      });
+
+      it("keeps a null entry out of the random search space the rows read `.type` from", () => {
+        // `random_search.search_space: {x: null}` used to reach `def.type` on null.
+        const kept = load(
+          [
+            "random_search:",
+            "  n_trials: 4",
+            "  search_space:",
+            "    x: null",
+            "    lr: {type: log_uniform, low: 0.0001, high: 0.1}",
+          ].join("\n"),
+        ) as { random_search: { search_space: Record<string, unknown> } };
+        expect(kept.random_search.search_space).toEqual({
+          lr: { type: "log_uniform", low: 0.0001, high: 0.1 },
+        });
+        for (const def of Object.values(kept.random_search.search_space)) {
+          expect(def).not.toBeNull();
+          expect(typeof def).toBe("object");
+        }
+      });
+    });
+  });
 });
 
 describe("omitInvalidLeaves", () => {
@@ -475,6 +655,119 @@ describe("omitInvalidLeaves", () => {
       training: { epochs: 10 },
       data: { train_dir: "train", class_names: ["x", "y"] },
     });
+  });
+
+  describe("a `__proto__` key in the file", () => {
+    const own = (o: object, key: string) => Object.hasOwn(o, key);
+    const polluted = (key: string) =>
+      key in Object.prototype || key in ({} as Record<string, unknown>);
+
+    it("stays an ordinary own key and pollutes nothing", () => {
+      const parsed = parseYamlToConfig(
+        [
+          "name: 5",
+          "task: binary",
+          "__proto__:",
+          "  pollutedTop: true",
+          "data:",
+          "  __proto__:",
+          "    pollutedNested: true",
+          "  base_dir: 7",
+          "  train_dir: train",
+        ].join("\n"),
+      );
+      // The parser's own guarantee, which the copy below must not undo.
+      expect(own(parsed, "__proto__")).toBe(true);
+
+      const { data: kept } = omitInvalidLeaves(parsed, [
+        { field: ["name"] },
+        { field: ["data", "base_dir"] },
+      ]);
+      const data = kept.data as Record<string, unknown>;
+
+      expect(own(kept, "__proto__")).toBe(true);
+      expect(Object.getOwnPropertyDescriptor(kept, "__proto__")?.value).toEqual({
+        pollutedTop: true,
+      });
+      expect(own(data, "__proto__")).toBe(true);
+      expect(Object.getOwnPropertyDescriptor(data, "__proto__")?.value).toEqual({
+        pollutedNested: true,
+      });
+      // A plain `out[key] = v` would have swapped these prototypes instead.
+      expect(Object.getPrototypeOf(kept)).toBe(Object.prototype);
+      expect(Object.getPrototypeOf(data)).toBe(Object.prototype);
+      expect(polluted("pollutedTop")).toBe(false);
+      expect(polluted("pollutedNested")).toBe(false);
+      // And the rest of the pruning still happened around it.
+      expect("name" in kept).toBe(false);
+      expect(data.train_dir).toBe("train");
+      expect("base_dir" in data).toBe(false);
+    });
+
+    it("can itself be the flagged key, and is dropped like any other", () => {
+      const parsed = parseYamlToConfig("task: binary\n__proto__:\n  pollutedTop: true\n");
+      const { data: kept, omitted } = omitInvalidLeaves(parsed, [{ field: ["__proto__"] }]);
+      expect(own(kept, "__proto__")).toBe(false);
+      expect(kept).toEqual({ task: "binary" });
+      expect(omitted).toEqual([["__proto__"]]);
+      expect(Object.getPrototypeOf(kept)).toBe(Object.prototype);
+      expect(polluted("pollutedTop")).toBe(false);
+    });
+  });
+});
+
+describe("reviewImportedConfig", () => {
+  const SCHEMA: JsonSchema = {
+    type: "object",
+    properties: {
+      name: { type: "string" },
+      note: { type: "string" },
+      epochs: { type: "integer" },
+      data: {
+        type: "object",
+        properties: { base_dir: { type: "string" }, val_dir: { type: "string" } },
+        required: ["base_dir"],
+      },
+    },
+    required: ["name", "data"],
+  };
+  const review = (yaml: string) =>
+    reviewImportedConfig(pt, parseYamlToConfig(yaml), SCHEMA, {});
+
+  it("has nothing to say about a clean file", () => {
+    const r = review("name: a\nepochs: 3\ndata:\n  base_dir: d\n");
+    expect(r.issues).toEqual([]);
+    expect(r.ignored).toBe(0);
+    expect(r.missing).toBe(0);
+    expect(r.data).toEqual({ name: "a", epochs: 3, data: { base_dir: "d" } });
+  });
+
+  it("an optional value of the wrong type is ignored and its field falls back to the default", () => {
+    const r = review("name: a\nnote: 5\nepochs: many\ndata:\n  base_dir: d\n  val_dir: 9\n");
+    expect(r.ignored).toBe(3);
+    expect(r.missing).toBe(0);
+    expect(r.data).toEqual({ name: "a", data: { base_dir: "d" } });
+  });
+
+  it("a required value of the wrong type has no default to fall back to: it is missing, not ignored", () => {
+    const r = review("name: 5\ndata:\n  base_dir: 7\n");
+    expect(r.ignored).toBe(0);
+    expect(r.missing).toBe(2);
+    expect(r.data).toEqual({ data: {} });
+  });
+
+  it("a required field the file never mentions is missing", () => {
+    const r = review("note: hi\n");
+    expect(r.ignored).toBe(0);
+    expect(r.missing).toBe(2);
+    expect(r.issues.map((i) => i.field.join("."))).toEqual(["name", "data"]);
+  });
+
+  it("tells the two apart in the same file, and still lists every issue it found", () => {
+    const r = review("name: 5\nnote: 5\ndata:\n  base_dir: d\n");
+    expect(r.ignored).toBe(1); // note
+    expect(r.missing).toBe(1); // name
+    expect(r.issues.map((i) => i.field.join("."))).toEqual(["name", "note"]);
   });
 });
 

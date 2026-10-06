@@ -57,17 +57,33 @@ describe("dictionaries", () => {
     expect(warnings(en, 2)).toBe("YAML imported with 2 structural warnings");
 
     expect(pt.paramPanel.importDropped(1)).toBe(
-      "1 valor com tipo inválido foi ignorado (o campo ficou sem valor).",
+      "1 valor com tipo inválido foi ignorado; o campo usa o valor padrão.",
     );
     expect(pt.paramPanel.importDropped(3)).toBe(
-      "3 valores com tipo inválido foram ignorados (os campos ficaram sem valor).",
+      "3 valores com tipo inválido foram ignorados; os campos usam o valor padrão.",
     );
     expect(en.paramPanel.importDropped(1)).toBe(
-      "1 value of the wrong type was ignored (the field was left unset).",
+      "1 value of the wrong type was ignored; the field uses its default.",
     );
     expect(en.paramPanel.importDropped(3)).toBe(
-      "3 values of the wrong type were ignored (the fields were left unset).",
+      "3 values of the wrong type were ignored; the fields use their defaults.",
     );
+    expect(pt.paramPanel.importMissing(1)).toBe(
+      "1 campo obrigatório está sem valor: preencha-o antes de treinar, senão o backend rejeita a configuração.",
+    );
+    expect(pt.paramPanel.importMissing(2)).toBe(
+      "2 campos obrigatórios estão sem valor: preencha-os antes de treinar, senão o backend rejeita a configuração.",
+    );
+    expect(en.paramPanel.importMissing(1)).toBe(
+      "1 required field has no value: fill it in before training, or the backend will reject the config.",
+    );
+    expect(en.paramPanel.importMissing(2)).toBe(
+      "2 required fields have no value: fill them in before training, or the backend will reject the config.",
+    );
+    // The list itself promises nothing: whether anything has to be fixed before
+    // training is what the two lines after it say, and only when it is so.
+    expect(pt.paramPanel.importWarnings(1, "x", 0)).not.toMatch(/treinar|backend/);
+    expect(en.paramPanel.importWarnings(1, "x", 0)).not.toMatch(/training|backend/);
 
     expect(pt.runDetail.gradcam.done(1, "layer4")).toBe("1 mapa gerado · camada layer4");
     expect(pt.runDetail.gradcam.done(3, "layer4")).toBe("3 mapas gerados · camada layer4");

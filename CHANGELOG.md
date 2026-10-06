@@ -44,6 +44,15 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
   também deixou de ser apontado como erro; nas outras tarefas isso fazia a
   importação recusar o YAML (por exemplo, um de detecção com `auto_augment`
   desligado).
+- **YAML de grid ou random search com valor do tipo errado também não quebra
+  mais a tela.** Um eixo do grid escrito como valor solto em vez de lista
+  (`training.scheduler.kind: cosine`) quebrava a aba Classificação ao abrir os
+  campos avançados, e uma entrada nula no espaço do random search
+  (`search_space: {x: null}`) quebrava a lista de parâmetros; agora a importação
+  confere listas e dicionários e ignora o que não serve. O aviso da importação
+  deixou de mandar corrigir tudo antes de treinar: ele diz quantos valores foram
+  ignorados (o campo usa o valor padrão) e quantos campos obrigatórios ficaram
+  sem valor (esses, sim, precisam ser preenchidos).
 
 ### Security
 

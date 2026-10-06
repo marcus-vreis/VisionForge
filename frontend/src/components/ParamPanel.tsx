@@ -7,8 +7,7 @@ import type { TaskDefinition } from "../types/tasks";
 import {
   exportConfigToYaml,
   importConfigFromYaml,
-  omitInvalidLeaves,
-  validateParsedConfig,
+  reviewImportedConfig,
 } from "../lib/yaml-config";
 import { AugmentPreview } from "./AugmentPreview";
 import { DatasetPicker } from "./DatasetPicker";
@@ -1827,13 +1826,12 @@ export function ParamPanel({
       // the wrong type: the panels call string methods on these fields, and one
       // number in `data.base_dir` blanks the whole page. A flagged value is
       // left out (as if the YAML had not set it) and reported below.
-      const issues = validateParsedConfig(
+      const { data, issues, ignored, missing } = reviewImportedConfig(
         t,
         result.data,
         schema,
         schema.$defs ?? {},
       );
-      const { data, omitted } = omitInvalidLeaves(result.data, issues);
       setFormData(data);
       if (issues.length === 0) {
         setImportError(null);
@@ -1844,16 +1842,18 @@ export function ParamPanel({
             (iss) => `· ${humanizeFieldPath(t, iss.field)} — ${iss.message}`,
           )
           .join("\n");
-        const warnings = t.paramPanel.importWarnings(
-          issues.length,
-          summary,
-          Math.max(0, issues.length - 5),
-        );
-        setImportError(
-          omitted.length > 0
-            ? `${warnings}\n\n${t.paramPanel.importDropped(omitted.length)}`
-            : warnings,
-        );
+        // The list says what was found; the lines after it say what that
+        // leaves to do, each only when it is so.
+        const lines = [
+          t.paramPanel.importWarnings(
+            issues.length,
+            summary,
+            Math.max(0, issues.length - 5),
+          ),
+        ];
+        if (ignored > 0) lines.push(t.paramPanel.importDropped(ignored));
+        if (missing > 0) lines.push(t.paramPanel.importMissing(missing));
+        setImportError(lines.join("\n\n"));
       }
     });
   };

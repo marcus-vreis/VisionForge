@@ -13,6 +13,8 @@ export interface JsonSchema {
   exclusiveMaximum?: number;
   minLength?: number;
   items?: JsonSchema;
+  /** A dict field's value schema, or `true` for `dict[str, Any]`. */
+  additionalProperties?: boolean | JsonSchema;
   anyOf?: JsonSchema[];
   $ref?: string;
   $defs?: Record<string, JsonSchema>;

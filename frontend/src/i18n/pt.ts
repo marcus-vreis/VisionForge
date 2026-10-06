@@ -380,12 +380,18 @@ export const pt = {
     },
     normalizePlaceholder: "ex: 0.485, 0.456, 0.406",
     importWarnings: (count: number, summary: string, extra: number) =>
-      `YAML importado com ${count} ${count === 1 ? "aviso estrutural" : "avisos estruturais"}:\n${summary}${extra > 0 ? `\n…(+${extra} mais)` : ""}\n\nCorrija antes de treinar — o backend rejeita por validação Pydantic.`,
-    // Appended to the warnings when a value of the wrong type was left out of the form.
+      `YAML importado com ${count} ${count === 1 ? "aviso estrutural" : "avisos estruturais"}:\n${summary}${extra > 0 ? `\n…(+${extra} mais)` : ""}`,
+    // The two lines that follow the list, each only when it applies (the counts come from
+    // reviewImportedConfig): optional values left out use their defaults; required fields
+    // left without a value are what the backend will refuse.
     importDropped: (count: number) =>
       count === 1
-        ? "1 valor com tipo inválido foi ignorado (o campo ficou sem valor)."
-        : `${count} valores com tipo inválido foram ignorados (os campos ficaram sem valor).`,
+        ? "1 valor com tipo inválido foi ignorado; o campo usa o valor padrão."
+        : `${count} valores com tipo inválido foram ignorados; os campos usam o valor padrão.`,
+    importMissing: (count: number) =>
+      count === 1
+        ? "1 campo obrigatório está sem valor: preencha-o antes de treinar, senão o backend rejeita a configuração."
+        : `${count} campos obrigatórios estão sem valor: preencha-os antes de treinar, senão o backend rejeita a configuração.`,
     unavailable: (task: string) => `${task} ainda não está disponível`,
     unavailableBody: "Esta tarefa será implementada em uma próxima fase do VisionForge.",
     loadingSchema: "carregando schema…",
@@ -1303,6 +1309,7 @@ export const pt = {
     notMapping:
       "o conteúdo deve ser um mapeamento (chave: valor), não um valor solto nem uma lista.",
     expectedObject: "Esperado um objeto.",
+    expectedArray: "Esperada uma lista.",
     requiredMissing: "Campo obrigatório ausente.",
     mustBeOneOf: (options: string) => `Deve ser um destes: ${options}.`,
     expectedBoolean: "Esperado um booleano.",

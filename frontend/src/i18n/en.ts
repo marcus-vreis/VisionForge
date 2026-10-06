@@ -363,12 +363,15 @@ export const en: Dict = {
     },
     normalizePlaceholder: "e.g. 0.485, 0.456, 0.406",
     importWarnings: (count: number, summary: string, extra: number) =>
-      `YAML imported with ${count} structural ${count === 1 ? "warning" : "warnings"}:\n${summary}${extra > 0 ? `\n…(+${extra} more)` : ""}\n\nFix them before training — the backend's Pydantic validation will reject the config.`,
-    // Appended to the warnings when a value of the wrong type was left out of the form.
+      `YAML imported with ${count} structural ${count === 1 ? "warning" : "warnings"}:\n${summary}${extra > 0 ? `\n…(+${extra} more)` : ""}`,
     importDropped: (count: number) =>
       count === 1
-        ? "1 value of the wrong type was ignored (the field was left unset)."
-        : `${count} values of the wrong type were ignored (the fields were left unset).`,
+        ? "1 value of the wrong type was ignored; the field uses its default."
+        : `${count} values of the wrong type were ignored; the fields use their defaults.`,
+    importMissing: (count: number) =>
+      count === 1
+        ? "1 required field has no value: fill it in before training, or the backend will reject the config."
+        : `${count} required fields have no value: fill them in before training, or the backend will reject the config.`,
     unavailable: (task: string) => `${task} is not available yet`,
     unavailableBody: "This task will be implemented in an upcoming phase of VisionForge.",
     loadingSchema: "loading schema…",
@@ -1196,6 +1199,7 @@ export const en: Dict = {
     notMapping:
       "the content must be a mapping (key: value), not a single value or a list.",
     expectedObject: "Expected an object.",
+    expectedArray: "Expected a list.",
     requiredMissing: "Required field is missing.",
     mustBeOneOf: (options: string) => `Must be one of: ${options}.`,
     expectedBoolean: "Expected a boolean.",

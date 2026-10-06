@@ -143,13 +143,14 @@ export function validateParsedConfig(
     return errors;
   }
 
-  if (resolved.type === "object" && resolved.properties) {
+  if (resolved.type === "object") {
     if (data === null || typeof data !== "object" || Array.isArray(data)) {
       errors.push({ field: path, message: msg.expectedObject });
       return errors;
     }
     const obj = data as Record<string, unknown>;
-    for (const [key, propSchema] of Object.entries(resolved.properties)) {
+    const properties = resolved.properties ?? {};
+    for (const [key, propSchema] of Object.entries(properties)) {
       const childPath = [...path, key];
       if (!(key in obj)) {
         if (resolved.required?.includes(key)) {
@@ -158,6 +159,29 @@ export function validateParsedConfig(
         continue;
       }
       errors.push(...validateParsedConfig(t, obj[key], propSchema, defs, childPath));
+    }
+    // A dict field (`dict[str, X]`) has no properties of its own; what it holds
+    // is checked against its value schema when the schema gives one.
+    const entrySchema = dictEntrySchema(resolved, path);
+    if (entrySchema) {
+      for (const [key, value] of Object.entries(obj)) {
+        if (Object.hasOwn(properties, key)) continue;
+        errors.push(...validateParsedConfig(t, value, entrySchema, defs, [...path, key]));
+      }
+    }
+    return errors;
+  }
+
+  if (resolved.type === "array") {
+    if (!Array.isArray(data)) {
+      errors.push({ field: path, message: msg.expectedArray });
+      return errors;
+    }
+    const items = resolved.items;
+    if (items) {
+      data.forEach((item, index) => {
+        errors.push(...validateParsedConfig(t, item, items, defs, [...path, String(index)]));
+      });
     }
     return errors;
   }
@@ -194,6 +218,61 @@ export function validateParsedConfig(
   }
 
   return errors;
+}
+
+/**
+ * Dicts the schema leaves open (`dict[str, Any]`, so no value type to check)
+ * whose entries the form nevertheless reads as mappings: each row of the
+ * random-search editor takes `{type, low, high}` or `{type, options}` from its
+ * entry, and a null there breaks the row. Keyed by the field's path from the
+ * root of the config.
+ */
+const MAPPING_ENTRY_DICTS: ReadonlySet<string> = new Set(["random_search.search_space"]);
+
+/** The schema each entry of a dict field must satisfy, or null when there is none to check. */
+function dictEntrySchema(dict: JsonSchema, path: string[]): JsonSchema | null {
+  const extra = dict.additionalProperties;
+  if (extra !== null && typeof extra === "object") return extra;
+  return MAPPING_ENTRY_DICTS.has(path.join(".")) ? { type: "object" } : null;
+}
+
+/** What loading an imported file amounts to; see `reviewImportedConfig`. */
+export interface ImportReview {
+  /** The config to load: the parsed file minus every value that failed validation. */
+  data: Record<string, unknown>;
+  /** Everything validation found in the file as written, before anything was dropped. */
+  issues: ValidationError[];
+  /** Values of the wrong type left out whose field has a default to fall back to. */
+  ignored: number;
+  /** Required fields without a value in `data`: the file never set them, or the
+   *  value it set was the wrong type and went out with the rest. */
+  missing: number;
+}
+
+/**
+ * Validate an imported file and prepare what the form may take. A value of the
+ * wrong type is dropped (see `omitInvalidLeaves`); the counts say what that
+ * leaves behind, so the warning shown to the user can be exact about it: an
+ * optional field just uses its default, a required one has to be filled in
+ * before the backend will accept the config.
+ */
+export function reviewImportedConfig(
+  t: Dict,
+  data: Record<string, unknown>,
+  schema: JsonSchema,
+  defs: Record<string, JsonSchema> = {},
+): ImportReview {
+  const issues = validateParsedConfig(t, data, schema, defs);
+  const { data: kept, omitted } = omitInvalidLeaves(data, issues);
+  // What is still flagged once the bad values are gone can only be absences.
+  const stillMissing = validateParsedConfig(t, kept, schema, defs);
+  const noValue = new Set(stillMissing.map((issue) => issue.field.join("\0")));
+  return {
+    data: kept,
+    issues,
+    ignored: omitted.filter((path) => !noValue.has(path.join("\0"))).length,
+    missing: stillMissing.length,
+  };
 }
 
 interface PathNode {
