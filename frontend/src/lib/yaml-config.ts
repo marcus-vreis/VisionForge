@@ -46,17 +46,30 @@ export async function importConfigFromYaml(
     return { data };
   } catch (e) {
     if (e instanceof YamlParseError) {
-      return { error: t.yamlConfig.invalidFile(e.message) };
+      // A syntax error keeps js-yaml's own message (it names the line); the
+      // other kind is VisionForge's, so it is worded from the dictionary.
+      const reason = e.kind === "notMapping" ? t.yamlConfig.notMapping : e.message;
+      return { error: t.yamlConfig.invalidFile(reason) };
     }
     const reason = e instanceof Error ? e.message : String(e);
     return { error: t.yamlConfig.cannotRead(reason) };
   }
 }
 
+/**
+ * "syntax": the text is not valid YAML; `message` is js-yaml's own.
+ * "notMapping": valid YAML whose root is a scalar or a list, not key-value
+ * pairs; the UI words it from the dictionary, `message` is for developers.
+ */
+export type YamlParseErrorKind = "syntax" | "notMapping";
+
 export class YamlParseError extends Error {
-  constructor(message: string) {
+  readonly kind: YamlParseErrorKind;
+
+  constructor(kind: YamlParseErrorKind, message: string) {
     super(message);
     this.name = "YamlParseError";
+    this.kind = kind;
   }
 }
 
@@ -92,10 +105,11 @@ export function parseYamlToConfig(yamlText: string): Record<string, unknown> {
     parsed = jsyaml.load(yamlText);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    throw new YamlParseError(`YAML parse error: ${msg}`);
+    throw new YamlParseError("syntax", msg);
   }
   if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
     throw new YamlParseError(
+      "notMapping",
       "YAML must contain a mapping (key-value object), not a scalar or list.",
     );
   }

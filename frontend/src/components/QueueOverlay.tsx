@@ -17,8 +17,8 @@ interface QueueOverlayProps {
  *
  * The training overlay shows the job you just submitted; this shows the whole
  * line, which is what you want after queueing an evening's work and coming back
- * to it. Only pending jobs can be dropped — a running one has no cooperative
- * stop point, so the backend answers 404 and the button is not offered.
+ * to it. A pending job is removed at once; the running one is stopped at its
+ * next epoch boundary and keeps what it has saved (ADR-088).
  */
 export function QueueOverlay({
   open,
@@ -247,7 +247,7 @@ function JobRow({
   job: QueuedJobInfo;
   running?: boolean;
   position?: number;
-  onCancel?: () => void;
+  onCancel: () => void;
   cancelling?: boolean;
 }) {
   const t = useT();
@@ -310,41 +310,26 @@ function JobRow({
         </div>
       </div>
 
-      {onCancel ? (
-        <button
-          type="button"
-          onClick={onCancel}
-          disabled={cancelling}
-          title={t.queueOverlay.removeTitle}
-          style={{
-            padding: "7px 12px",
-            borderRadius: 9,
-            border: "1px solid var(--vf-panel-stroke)",
-            background: "rgba(255,255,255,0.03)",
-            color: "var(--vf-text-dim)",
-            fontFamily: "var(--font-mono)",
-            fontSize: 11,
-            cursor: cancelling ? "wait" : "pointer",
-            opacity: cancelling ? 0.5 : 1,
-            flexShrink: 0,
-          }}
-        >
-          {cancelling ? "…" : running ? t.queueOverlay.stop : t.queueOverlay.remove}
-        </button>
-      ) : (
-        <span
-          title={t.queueOverlay.cannotCancelTitle}
-          style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: 10,
-            color: "var(--vf-text-muted)",
-            cursor: "help",
-            flexShrink: 0,
-          }}
-        >
-          {t.queueOverlay.cannotCancel}
-        </span>
-      )}
+      <button
+        type="button"
+        onClick={onCancel}
+        disabled={cancelling}
+        title={running ? t.queueOverlay.stopTitle : t.queueOverlay.removeTitle}
+        style={{
+          padding: "7px 12px",
+          borderRadius: 9,
+          border: "1px solid var(--vf-panel-stroke)",
+          background: "rgba(255,255,255,0.03)",
+          color: "var(--vf-text-dim)",
+          fontFamily: "var(--font-mono)",
+          fontSize: 11,
+          cursor: cancelling ? "wait" : "pointer",
+          opacity: cancelling ? 0.5 : 1,
+          flexShrink: 0,
+        }}
+      >
+        {cancelling ? "…" : running ? t.queueOverlay.stop : t.queueOverlay.remove}
+      </button>
     </div>
   );
 }

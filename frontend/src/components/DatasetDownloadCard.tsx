@@ -53,10 +53,15 @@ export function DatasetDownloadCard({
   const [form, setForm] = useState<DatasetDownloadForm>(makeDefaultDatasetForm());
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<DatasetDownloadResponse | null>(null);
-  const [msg, setMsg] = useState<{
-    kind: "info" | "error" | "success";
+  // The outcome of the last download. The "downloading…" notice is not stored:
+  // it is worded at render time from `running`, so it follows the language.
+  const [outcome, setOutcome] = useState<{
+    kind: "error" | "success";
     text: string;
   } | null>(null);
+  const msg: { kind: "info" | "error" | "success"; text: string } | null = running
+    ? { kind: "info", text: t.datasetDownload.downloadingWait }
+    : outcome;
 
   const set = (patch: Partial<DatasetDownloadForm>) =>
     setForm((f) => ({ ...f, ...patch }));
@@ -68,21 +73,21 @@ export function DatasetDownloadCard({
 
   const run = async () => {
     if (!form.dataset.trim() || !form.out_dir.trim()) {
-      setMsg({ kind: "error", text: t.datasetDownload.needDatasetAndFolder });
+      setOutcome({ kind: "error", text: t.datasetDownload.needDatasetAndFolder });
       return;
     }
     setRunning(true);
     setResult(null);
-    setMsg({ kind: "info", text: t.datasetDownload.downloadingWait });
+    setOutcome(null);
     try {
       const res = await datasetDownload(buildDatasetDownloadPayload(form));
       setResult(res);
-      setMsg({
+      setOutcome({
         kind: "success",
         text: t.datasetDownload.done(res.total_images, res.out_dir),
       });
     } catch (e) {
-      setMsg({
+      setOutcome({
         kind: "error",
         text: e instanceof Error ? e.message : t.datasetDownload.failed,
       });
@@ -109,7 +114,7 @@ export function DatasetDownloadCard({
             type="button"
             onClick={() => {
               setOpen((o) => !o);
-              setMsg(null);
+              setOutcome(null);
             }}
             style={{
               padding: "6px 12px",

@@ -63,9 +63,12 @@ describe("humanizeFieldPath", () => {
 });
 
 describe("run messages", () => {
-  it("counts the fields with a validation error, with the plural right in English", () => {
+  it("counts the fields with a validation error, with the plural right in both languages", () => {
+    expect(pt.experiment.validationFailed(1)).toBe(
+      "1 campo com erro de validação. Confira o destaque no formulário.",
+    );
     expect(pt.experiment.validationFailed(3)).toBe(
-      "3 campo(s) com erro de validação. Confira os destaques no formulário.",
+      "3 campos com erro de validação. Confira os destaques no formulário.",
     );
     expect(en.experiment.validationFailed(1)).toBe(
       "1 field has a validation error. Check the highlighted fields in the form.",

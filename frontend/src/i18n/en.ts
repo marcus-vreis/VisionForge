@@ -929,8 +929,8 @@ export const en: Dict = {
     torchvision: {
       dataset: "Dataset",
       datasetHint: "built-in",
-      limit: "Limit per class",
-      limitPlaceholder: "empty = all",
+      limit: "Max images per class",
+      limitPlaceholder: "blank = all",
       limitHint: "optional",
     },
     roboflow: {
@@ -951,9 +951,9 @@ export const en: Dict = {
       tokenHint: "kaggle.com → Settings → API → Create New Token",
     },
     huggingface: {
-      dataset: "Dataset (HF Hub id)",
+      dataset: "Dataset (HF Hub ID)",
       datasetPlaceholder: "owner/dataset",
-      token: "Token",
+      token: "Access token",
       tokenHint: "optional — only for private datasets",
     },
     outDir: "Output folder",
@@ -969,7 +969,7 @@ export const en: Dict = {
     classes: (n: number) => ` · ${n} ${n === 1 ? "class" : "classes"}`,
   },
   credentialField: {
-    typeFirst: "Type the key before saving.",
+    typeFirst: "Enter a key before saving.",
     saved: "Saved — no need to type it again.",
     saveFailed: "Failed to save.",
     removed: "Key removed from this computer.",
@@ -991,7 +991,7 @@ export const en: Dict = {
     baseDirPlaceholder: "e.g. C:/datasets/coffee  or  /home/user/data",
     baseDirHint: "Root folder that holds the train, validation and test sets.",
     browseTitle: "Open the system's native folder picker (returns the absolute path)",
-    browse: "📁 Browse folder",
+    browse: "📁 Browse",
     trainSubdir: "Train subfolder",
     valSubdir: "Validation subfolder",
     testSubdir: "Test subfolder",
@@ -1019,7 +1019,7 @@ export const en: Dict = {
     noImages: "no images",
   },
   detectionDatasetStats: {
-    noSplits: "No YOLO split found (images/<split>).",
+    noSplits: "No YOLO splits found (images/<split>).",
     classMap: "class mapping (YOLO):",
     appliedTitle: (classes: number) => `Detected and applied to the config: num_classes=${classes}`,
     applied: (classes: number) => `${classes} ${classes === 1 ? "class" : "classes"} applied`,
@@ -1032,8 +1032,8 @@ export const en: Dict = {
   },
   taskDatasetStats: {
     interpolated: (ids: number) =>
-      `⚠ ${ids} distinct ids in the sample — the masks look interpolated (anti-aliasing). Use masks with one class id per pixel (NEAREST resampling).`,
-    maskIds: "ids in the masks (sample):",
+      `⚠ ${ids} distinct values in the sampled masks — they look interpolated (anti-aliased). Use masks with one class index per pixel (NEAREST resampling).`,
+    maskIds: "mask values (sample):",
     voidTitle: "likely ignore_index (void)",
     applyClasses: (n: number) => `🎯 apply ${n} ${n === 1 ? "class" : "classes"}`,
     pairing: "// image ↔ mask pairing",
@@ -1057,7 +1057,7 @@ export const en: Dict = {
       `${column}: μ ${mean} · [${min}, ${max}] · n=${n}`,
   },
   preprocessing: {
-    needBaseDir: "Set a base folder before generating a preview.",
+    needBaseDir: "Set the dataset base folder before generating a preview.",
     previewFailed: "Failed to generate the preview.",
     kicker: "// preprocessing (filters)",
     active: (n: number) => `${n} ${n === 1 ? "filter" : "filters"} active in training`,
@@ -1068,7 +1068,7 @@ export const en: Dict = {
     addFilter: "+ add filter",
     generating: "Generating…",
     preview: "▶ Preview",
-    empty: 'Empty pipeline — click "+ add filter".',
+    empty: 'Pipeline is empty — click "+ add filter".',
     emptyNote:
       "The pipeline configured here runs **before** augmentation and normalization, on every split (train / val / test).",
     original: "Original",
@@ -1092,8 +1092,8 @@ export const en: Dict = {
     normalizeHint: "R, G, B — applied to train, validation and test",
     augmentation: "Data augmentation",
     augmentToggle: "Augmentation",
-    augmentHint: "training only; when off, the values below are kept",
-    flipHint: "training",
+    augmentHint: "training only; when off, the values below are saved for later",
+    flipHint: "training only",
     rotationHint: "0 = off",
   },
   toggle: {
@@ -1103,7 +1103,7 @@ export const en: Dict = {
   tasks: {
     classification: {
       label: "Classification",
-      description: "Sort images into discrete labels",
+      description: "Sort images into discrete classes",
     },
     detection: {
       label: "Object detection",
@@ -1222,6 +1222,8 @@ export const en: Dict = {
   yamlConfig: {
     cannotRead: (reason: string) => `Could not read the YAML file: ${reason}`,
     invalidFile: (reason: string) => `Invalid YAML file: ${reason}`,
+    notMapping:
+      "the content must be a mapping (key: value), not a single value or a list.",
     expectedObject: "Expected an object.",
     requiredMissing: "Required field is missing.",
     mustBeOneOf: (options: string) => `Must be one of: ${options}.`,
@@ -1231,8 +1233,8 @@ export const en: Dict = {
     expectedString: "Expected a string.",
   },
   datasetIdentity: {
-    noFingerprint: "one of the runs has no fingerprint (from before Jul 26, 2026)",
-    differentMethod: "the two runs used a different method",
+    noFingerprint: "one of the runs has no fingerprint (it predates 2026-07-26)",
+    differentMethod: "the two runs were fingerprinted with different methods",
   },
   customTasks: {
     fallbackDescription: "Researcher-defined task",
@@ -1243,13 +1245,13 @@ export const en: Dict = {
   },
   experiment: {
     resultFetchFailed: "Failed to fetch the experiment results.",
-    failedNoDetail: "The experiment failed with no detailed message.",
-    connectionLost: "Lost the connection to the server during polling.",
+    failedNoDetail: "The experiment failed without an error message.",
+    connectionLost: "Lost connection to the server while polling.",
     validationFailed: (n: number) =>
       `${n} ${n === 1 ? "field has a validation error" : "fields have validation errors"}. Check the highlighted fields in the form.`,
     alreadyRunning: "An experiment is already running. Wait for it to finish.",
     unexpected: (message: string) => `Unexpected error: ${message}`,
-    unknown: "Unknown error starting the experiment.",
+    unknown: "Unknown error while starting the experiment.",
     sections: {
       model: "Model",
       training: "Training",
@@ -1292,7 +1294,7 @@ export const en: Dict = {
   experimentHeader: {
     title: "Experiment",
     nameLabel: "Experiment name",
-    nameHint: "used for the output folder and in the history",
+    nameHint: "names the output folder and the history entry",
     exportTitle: "Export the current configuration as a .yaml file",
     exportYaml: "↓ Export YAML",
     importTitle: "Import a configuration from a .yaml file",
@@ -1310,23 +1312,23 @@ export const en: Dict = {
   cvCard: {
     title: "Cross-validation (K-fold)",
     description:
-      "Splits the training rows into K folds: each fold trains a new model on K-1 parts and evaluates on the remaining part (never augmented). The test split is not used.",
-    folds: "Number of folds",
+      "Splits the training set into K folds: each fold trains a fresh model on the other K−1 folds and evaluates it on the held-out one (never augmented). The test split is not used.",
+    folds: "Folds",
     shuffle: "Shuffle",
-    shuffleHint: "before the split",
+    shuffleHint: "before splitting",
     foldSeed: "Split seed",
     run: (folds: number) => `⛓ Run CV · ${folds} folds`,
   },
   replicatesCard: {
     title: "Multi-seed replicates · statistical rigor",
     description:
-      "Trains the same config N times under different seeds and aggregates each metric as mean ± 95% CI (Student's t). A single run is one sample from a distribution — replicates make the number defensible.",
+      "Trains the same config N times with different seeds and aggregates each metric as mean ± 95% CI (Student's t). A single run is one sample from a distribution — replicates make the number defensible.",
     seeds: "Seeds",
     automatic: "Automatic",
     explicit: "Explicit",
     automaticHint: "consecutive, starting from training.seed",
     explicitHint: "exact list, reproducible",
-    count: "Number of replicates",
+    count: "Replicates",
     seedList: "Seeds (comma-separated)",
     seedCount: (n: number) => `${n} seeds`,
     headlineMetric: "Headline metric",
@@ -1335,7 +1337,7 @@ export const en: Dict = {
   sweepCard: {
     title: "Hyperparameter sweep · advanced mode",
     description: (paths: string) =>
-      `Sweeps hyperparameters by dot-path (e.g. ${paths}) and ranks them by the metric. Grid = cartesian product; Random = samples; Optuna = adaptive TPE search (needs the optional extra).`,
+      `Sweeps hyperparameters by dot-path (e.g. ${paths}) and ranks the trials by the chosen metric. Grid = Cartesian product; Random = random sampling; Optuna = adaptive TPE search.`,
     strategy: "Strategy",
     presetTitle: "preset · architectures → model.name axis",
     compareArchitectures: (n: number) => `⇒ compare ${n} architecture${n === 1 ? "" : "s"}`,
@@ -1353,7 +1355,7 @@ export const en: Dict = {
     removeParameter: "Remove parameter",
     addParameter: "+ add parameter",
     rankingMetric: "Ranking metric",
-    trials: "Number of trials",
+    trials: "Trials",
     seed: "Seed",
     run: (trials: number) => `⛓ Run sweep · ${trials} trial${trials === 1 ? "" : "s"}`,
   },
@@ -1385,10 +1387,11 @@ export const en: Dict = {
     hideNote: "reversible — the file stays",
     hideFailed: "Failed to hide the task.",
     delete: "🗑 Delete from disk",
-    deleteNote: "deletes the .py you wrote — cannot be undone",
-    confirmBefore: "This deletes the file for",
-    confirmAfter: "from disk. To confirm, type the task key:",
-    typeKeyTitle: "Type the exact key to enable",
+    deleteNote: "deletes the .py file you wrote — can't be undone",
+    confirmBefore: "This deletes the .py file that defines",
+    confirmAfter: "from disk; this can't be undone. To confirm, type the task key:",
+    typeKeyTitle: "Type the task key exactly to enable this button",
+    confirmLabel: "Task key to confirm",
     deleting: "Deleting…",
     deleteForever: "Delete permanently",
     deleteFailed: "Failed to delete the task.",
@@ -1397,26 +1400,29 @@ export const en: Dict = {
     readFailed: "Could not read the queue.",
     cancelFailed: "Could not cancel that run.",
     kicker: "// queue",
-    title: "Runs in the queue",
+    title: "Run queue",
     description:
-      "One GPU, one run at a time. Submit as many as you like — they run on their own, in the order they were sent.",
+      "One GPU, one run at a time. Submit as many as you like — they run on their own, in the order they were submitted.",
     emptyTitle: "The GPU is free and nothing is waiting.",
-    emptyHint: "Submit a run and, if you submit another right after, it shows up here.",
+    emptyHint: "Runs you submit while another is training wait here.",
     position: (n: number) => ordinal(n),
     running: "running",
     waiting: (waited: string) => `waiting ${waited}`,
     removeTitle: "Remove from the queue (does not affect runs already started)",
+    stopTitle: "Stop this run (the work done so far is kept)",
     stop: "■ stop",
     remove: "🗑 remove",
-    cannotCancel: "can't cancel",
-    cannotCancelTitle:
-      "A run in progress can't be cancelled: the trainers have no stopping point, and interrupting would leave the run's folder half-written.",
   },
   trainingOverlay: {
     blocks: {
       modelComparison: "Model comparison",
       crossValidation: "K-Fold CV",
       replicates: "Multi-seed replicates",
+    },
+    phases: {
+      extractingFeatures: "extracting features",
+      buildingBank: "building the memory bank",
+      scoring: "scoring",
     },
     initializing: (runId: string) => `> initializing runtime · ${runId}`,
     loadingDataset: "> loading dataset…",
@@ -1427,15 +1433,15 @@ export const en: Dict = {
     starting: "starting…",
     queuedNote: (position: number | undefined, queued: number | undefined) =>
       `${position ? `waiting for the GPU — ${ordinal(position)} in line` : "waiting for the GPU"}${
-        typeof queued === "number" && queued > 1 ? ` · ${queued} submissions waiting` : ""
-      }. The run starts on its own when its turn comes.`,
-    errorDetail: "Error detail",
+        typeof queued === "number" && queued > 1 ? ` · ${queued} runs waiting` : ""
+      }. The run starts automatically when its turn comes.`,
+    errorDetail: "Error details",
     unknownError: "Unknown error — check the server logs.",
     logUnknownError: "unknown error",
     queueBanner: (block: string, runs: number | undefined) =>
-      `⛓ run queue · ${block}${runs && runs > 1 ? ` · ${runs} runs` : ""}`,
+      `⛓ multi-run block · ${block}${runs && runs > 1 ? ` · ${runs} runs` : ""}`,
     queueBannerBody:
-      'This block runs several trainings one after another. The progress bar follows the current trial; the aggregated result appears under "View results" at the end.',
+      'This block trains several models one after another. The progress bar tracks the current trial; the combined result appears under "View results" when it finishes.',
     pipeline: (n: number) => `⚗ active pipeline · ${n} filter${n === 1 ? "" : "s"}`,
     minimize: "Minimize",
     viewResults: "↗ View results",
@@ -1463,7 +1469,7 @@ export const en: Dict = {
       test_recall: "Recall (test)",
       test_auc_roc: "AUC-ROC (test)",
     },
-    configDiffTitle: "// config diff (highlighted cells = different from the 1st run)",
+    configDiffTitle: "// config diff (highlighted cells differ from the first run)",
     config: {
       architecture: "Architecture",
       numClasses: "Number of classes",
@@ -1494,40 +1500,40 @@ export const en: Dict = {
     eyebrow: "First time here",
     inviteTitle: "Want a quick tour?",
     inviteBody:
-      "Seven short stops through the main points: where to choose the task, how to point at the dataset, what is already decided for you and where the results are kept. You can leave at any time — and the guide stays available in the header afterwards.",
+      "Seven quick stops at the main spots: where to pick a task, how to point to your dataset, what's already set up for you and where your results are saved. You can leave at any time — the guide stays available from the header.",
     notNow: "Not now",
     seeGuide: "See the guide →",
-    next: "Continue →",
-    finish: "Finish",
+    next: "Next →",
+    finish: "Done",
   },
   tour: {
     tabs: {
-      title: "Choose the kind of training",
-      body: "Each tab is a complete task: classification, detection, regression, segmentation and anomaly. Switching tabs switches the whole form, the metrics and the interface color — nothing is shared between them by accident.",
+      title: "Pick a task",
+      body: "Each tab is a complete task: classification, detection, regression, segmentation or anomaly detection. Switching tabs swaps the whole form, the metrics and the accent color — nothing carries over between tasks by accident.",
     },
     dataset: {
-      title: "Point to the dataset folder",
-      body: "Choose the root folder and VisionForge finds the train, validation and test subfolders by their usual names. If your dataset uses other names, the selectors next to it let you fix that without renaming anything on disk.",
+      title: "Point to your dataset",
+      body: "Pick the root folder and VisionForge finds the train, validation and test subfolders by their usual names. If yours are named differently, the selectors next to it let you map them without renaming anything on disk.",
     },
     parameters: {
       title: "The parameters that matter come first",
-      body: "Each panel shows the essentials first — epochs, batch size, learning rate — and keeps the rest under “Advanced”, collapsed. The prefilled values were measured per task, so starting without touching anything is a valid choice. The “i” next to each label explains what that field does.",
+      body: "Each panel shows the essentials first — epochs, batch size, learning rate — and tucks the rest under “Advanced”. The defaults were tuned for each task, so starting without changing anything is a perfectly good choice. The “i” next to each label explains what the field does.",
     },
     device: {
       title: "GPU or CPU",
-      body: "VisionForge detects what the machine has and picks the GPU when one is available. You can force the CPU here: it is slower, but it runs anywhere and helps you tell whether an error comes from the code or from the card.",
+      body: "VisionForge detects your hardware and uses the GPU when one is available. You can force the CPU here: it's slower, but it runs anywhere, and it helps tell whether an error comes from the code or from the GPU.",
     },
     train: {
       title: "Train",
-      body: "The button runs exactly what is selected — a single run, a grid search, cross-validation or replicates. While it runs, a screen shows the live curves, and you can minimize it or cancel without losing what has already been done.",
+      body: "This button runs whatever is selected — a single run, a grid search, cross-validation or replicates. While it runs, a live view shows the progress and each epoch's metrics; you can minimize it and come back to it later.",
     },
     history: {
       title: "Everything is saved",
-      body: "Each run stores its configuration, the metrics of every epoch, the plots and the weights on disk. The history lets you reopen a run, compare two runs side by side, resume an interrupted training and test the model on new images.",
+      body: "Every run saves its configuration, per-epoch metrics, plots and weights to disk. From the history you can reopen a run, compare runs side by side, resume an interrupted run and test the model on new images.",
     },
     datasets: {
       title: "Your datasets",
-      body: "Here you inspect what is on disk, see the class distribution, filter out bad images and prepare new splits. Worth opening before the first training: almost every odd result starts with an unbalanced dataset.",
+      body: "Here you download a dataset (torchvision, Roboflow, Kaggle or Hugging Face) to a local folder and point any task at it. Once the folder is set, the task's panel shows the class distribution — worth a look before your first run: most odd results trace back to an imbalanced dataset.",
     },
   },
 };

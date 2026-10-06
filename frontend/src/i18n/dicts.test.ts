@@ -37,4 +37,11 @@ describe("dictionaries", () => {
       }
     }
   });
+
+  it("word a count with the plural right in both languages", () => {
+    expect(pt.detectionDatasetStats.applied(1)).toBe("1 classe aplicada");
+    expect(pt.detectionDatasetStats.applied(3)).toBe("3 classes aplicadas");
+    expect(en.detectionDatasetStats.applied(1)).toBe("1 class applied");
+    expect(en.detectionDatasetStats.applied(3)).toBe("3 classes applied");
+  });
 });

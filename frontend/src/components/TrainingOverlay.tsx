@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Dict } from "../i18n/pt";
 import { useT } from "../i18n/useT";
+import { phaseName } from "../lib/training-phase";
 import type { RunStatus, TrainingEvent } from "../types/run";
 
 interface TrainingOverlayProps {
@@ -228,9 +229,10 @@ export function TrainingOverlay({
   const phaseLabel = latestPhase?.label;
   useEffect(() => {
     if (!phaseLabel) return;
-    const line = `> ${phaseLabel}…`;
+    // A function of the dictionary, so a known label follows the language.
+    const line: LogLine = (d) => `> ${phaseName(d, phaseLabel)}…`;
     const timer = setTimeout(() => {
-      setLogs((prev) => (prev.at(-1) === line ? prev : [...prev.slice(-24), line]));
+      setLogs((prev) => [...prev.slice(-24), line]);
     }, 0);
     return () => clearTimeout(timer);
   }, [phaseLabel]);
@@ -343,7 +345,7 @@ export function TrainingOverlay({
                   : latestEpoch === undefined && latestPhase
                     ? // Diz o que está acontecendo: "montando o banco" por uma
                       // hora é espera; uma barra muda sem legenda é suspeita.
-                      `${latestPhase.label} · ${latestPhase.done}/${latestPhase.total}`
+                      `${phaseName(t, latestPhase.label)} · ${latestPhase.done}/${latestPhase.total}`
                     : t.trainingOverlay.training(taskLabel)}
             </div>
             <div

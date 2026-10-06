@@ -45,6 +45,16 @@ const BASELINE_CONFIG: Record<string, unknown> = {
   },
 };
 
+/** The YamlParseError a text raises, or null when it parses. */
+const parseError = (text: string) => {
+  try {
+    parseYamlToConfig(text);
+  } catch (e) {
+    return e instanceof YamlParseError ? e : null;
+  }
+  return null;
+};
+
 describe("sanitizeForExport", () => {
   it("drops undefined keys, keeps null keys", () => {
     const input = { a: 1, b: undefined, c: null, d: "x" };
@@ -129,21 +139,22 @@ describe("parseYamlToConfig", () => {
     expect(() => parseYamlToConfig("{ bad: yaml: here:")).toThrow(YamlParseError);
   });
 
-  it("throws YamlParseError with descriptive message on malformed YAML", () => {
-    try {
-      parseYamlToConfig("{ bad: yaml: here:");
-    } catch (e) {
-      expect(e).toBeInstanceOf(YamlParseError);
-      expect((e as YamlParseError).message).toMatch(/YAML parse error/);
-    }
+  it("tells a syntax error apart, carrying js-yaml's own message", () => {
+    const err = parseError("{ bad: yaml: here:");
+    expect(err?.kind).toBe("syntax");
+    // No wording of ours in front of the parser's message.
+    expect(err?.message).not.toMatch(/YAML parse error/);
+    expect(err?.message.length).toBeGreaterThan(0);
   });
 
   it("throws YamlParseError when root is a scalar", () => {
     expect(() => parseYamlToConfig("just a string")).toThrow(YamlParseError);
+    expect(parseError("just a string")?.kind).toBe("notMapping");
   });
 
   it("throws YamlParseError when root is a list", () => {
     expect(() => parseYamlToConfig("- item1\n- item2")).toThrow(YamlParseError);
+    expect(parseError("- item1\n- item2")?.kind).toBe("notMapping");
   });
 });
 
@@ -205,7 +216,7 @@ describe("validateParsedConfig", () => {
       );
     expect(say(pt)).toEqual({
       name: "Campo obrigatório ausente.",
-      task: "Deve ser um de: binary, multiclass.",
+      task: "Deve ser um destes: binary, multiclass.",
       "model.num_classes": "Esperado um inteiro.",
     });
     expect(say(en)).toEqual({
@@ -235,8 +246,20 @@ describe("importConfigFromYaml", () => {
   it("reports a file that is not a YAML mapping in the language it is given", async () => {
     const asPt = await importConfigFromYaml(pt, file("- a\n- b\n"));
     const asEn = await importConfigFromYaml(en, file("- a\n- b\n"));
-    expect("error" in asPt && asPt.error).toMatch(/^Arquivo YAML inválido: /);
-    expect("error" in asEn && asEn.error).toMatch(/^Invalid YAML file: /);
+    expect(asPt).toEqual({ error: `Arquivo YAML inválido: ${pt.yamlConfig.notMapping}` });
+    expect(asEn).toEqual({ error: `Invalid YAML file: ${en.yamlConfig.notMapping}` });
+    // None of VisionForge's own English leaks into the Portuguese message.
+    expect("error" in asPt && asPt.error).not.toMatch(/must contain/);
+  });
+
+  it("prefixes a syntax error once, followed by the parser's raw message", async () => {
+    const bad = "{ bad: yaml: here:";
+    const raw = parseError(bad)?.message ?? "";
+    const asPt = await importConfigFromYaml(pt, file(bad));
+    const asEn = await importConfigFromYaml(en, file(bad));
+    expect(asPt).toEqual({ error: `Arquivo YAML inválido: ${raw}` });
+    expect(asEn).toEqual({ error: `Invalid YAML file: ${raw}` });
+    expect("error" in asEn && asEn.error).not.toMatch(/parse error/i);
   });
 
   it("reports a file it cannot read in the language it is given", async () => {

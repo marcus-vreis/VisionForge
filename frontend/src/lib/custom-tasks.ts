@@ -72,7 +72,7 @@ export function mergeTasks(
   builtins: TaskDefinition[],
   descriptors: TaskDescriptor[],
 ): TaskDefinition[] {
-  const builtinKeys = new Set(builtins.map((t) => t.key));
+  const builtinKeys = new Set(builtins.map((task) => task.key));
   const customs = descriptors
     .filter((d) => d.custom && !builtinKeys.has(d.key))
     .sort((a, b) => a.label.localeCompare(b.label))

@@ -337,9 +337,9 @@ function StepBody({
           {String(step + 1).padStart(2, "0")} / {String(steps.length).padStart(2, "0")}
         </span>
         <span style={{ display: "flex", gap: 5, alignItems: "center" }}>
-          {steps.map((s, i) => (
+          {steps.map((_, i) => (
             <span
-              key={s.title}
+              key={i}
               style={{
                 width: i === step ? 16 : 5,
                 height: 5,

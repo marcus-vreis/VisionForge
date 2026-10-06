@@ -1094,7 +1094,7 @@ export const pt = {
     noSplits: "Nenhum split YOLO encontrado (images/<split>).",
     classMap: "mapeamento (YOLO):",
     appliedTitle: (classes: number) => `Detectado e aplicado ao config: num_classes=${classes}`,
-    applied: (classes: number) => `${classes} classe(s) aplicada(s)`,
+    applied: (classes: number) => `${classes} ${classes === 1 ? "classe aplicada" : "classes aplicadas"}`,
     exampleAlt: (className: string, n: number) => `${className} — exemplo ${n}`,
     distribution: "// distribuição de anotações (instâncias)",
     layoutTitle: "Layout YOLO detectado neste split",
@@ -1315,14 +1315,17 @@ export const pt = {
     failedTitle: (label: string) => `Treino falhou — ${label}`,
     failedBody: "Abra o VisionForge para ver o erro.",
   },
-  // The YAML import (lib/yaml-config.ts). `reason` is the parser's own message,
-  // which stays as the parser wrote it.
+  // The YAML import (lib/yaml-config.ts). `reason` of cannotRead/invalidFile
+  // is either the browser's or the parser's own message (it stays as they
+  // wrote it) or `notMapping`.
   yamlConfig: {
     cannotRead: (reason: string) => `Não foi possível ler o arquivo YAML: ${reason}`,
     invalidFile: (reason: string) => `Arquivo YAML inválido: ${reason}`,
+    notMapping:
+      "o conteúdo deve ser um mapeamento (chave: valor), não um valor solto nem uma lista.",
     expectedObject: "Esperado um objeto.",
     requiredMissing: "Campo obrigatório ausente.",
-    mustBeOneOf: (options: string) => `Deve ser um de: ${options}.`,
+    mustBeOneOf: (options: string) => `Deve ser um destes: ${options}.`,
     expectedBoolean: "Esperado um booleano.",
     expectedInteger: "Esperado um inteiro.",
     expectedNumber: "Esperado um número.",
@@ -1352,7 +1355,9 @@ export const pt = {
     failedNoDetail: "O experimento falhou sem mensagem detalhada.",
     connectionLost: "Conexão com o servidor perdida durante o polling.",
     validationFailed: (n: number) =>
-      `${n} campo(s) com erro de validação. Confira os destaques no formulário.`,
+      n === 1
+        ? "1 campo com erro de validação. Confira o destaque no formulário."
+        : `${n} campos com erro de validação. Confira os destaques no formulário.`,
     alreadyRunning: "Já existe um experimento em execução. Aguarde terminar.",
     unexpected: (message: string) => `Erro inesperado: ${message}`,
     unknown: "Erro desconhecido ao iniciar o experimento.",
@@ -1452,7 +1457,7 @@ export const pt = {
     title: "Sweep de hiperparâmetros · modo avançado",
     // `paths` is the task's suggested dot-paths, joined with commas.
     description: (paths: string) =>
-      `Varre hiperparâmetros por dot-path (ex.: ${paths}) e ranqueia pela métrica. Grid = produto cartesiano; Random = amostras; Optuna = busca TPE adaptativa (requer o extra opcional).`,
+      `Varre hiperparâmetros por dot-path (ex.: ${paths}) e ranqueia pela métrica. Grid = produto cartesiano; Random = amostras; Optuna = busca TPE adaptativa.`,
     strategy: "Estratégia",
     presetTitle: "preset · arquiteturas → eixo model.name",
     compareArchitectures: (n: number) => `⇒ comparar ${n} arquitetura${n === 1 ? "" : "s"}`,
@@ -1516,6 +1521,7 @@ export const pt = {
     confirmBefore: "Isto remove o arquivo de",
     confirmAfter: "do disco. Para confirmar, digite a chave da task:",
     typeKeyTitle: "Digite a chave exata para habilitar",
+    confirmLabel: "Chave da tarefa para confirmar",
     deleting: "Excluindo…",
     deleteForever: "Excluir definitivamente",
     deleteFailed: "Falha ao excluir.",
@@ -1535,22 +1541,27 @@ export const pt = {
     running: "em execução",
     waiting: (waited: string) => `esperando ${waited}`,
     removeTitle: "Remover da fila (não afeta treinos já iniciados)",
+    stopTitle: "Interromper este treino (o trabalho já feito é mantido)",
     stop: "■ parar",
     remove: "🗑 remover",
-    cannotCancel: "sem cancelar",
-    cannotCancelTitle:
-      "Um treino em andamento não pode ser cancelado: os trainers não têm ponto de parada, e interromper deixaria a pasta do run pela metade.",
   },
-  // The live training sheet (components/TrainingOverlay.tsx). The phase labels
-  // ("extraindo features", "montando o banco", "pontuando") and a failed run's
-  // error text come from the server and are shown as it wrote them; the epoch and
-  // trial lines of the log are the trainer's own vocabulary and read the same in
-  // every language. Grid and random search are `paramPanel.blocks`.
+  // The live training sheet (components/TrainingOverlay.tsx). A failed run's error
+  // text comes from the server and is shown as it wrote it; so is a phase label
+  // other than the three below; the epoch and trial lines of the log are the
+  // trainer's own vocabulary and read the same in every language. Grid and random
+  // search are `paramPanel.blocks`.
   trainingOverlay: {
     blocks: {
       modelComparison: "Comparação de modelos",
       crossValidation: "K-Fold CV",
       replicates: "Réplicas multi-seed",
+    },
+    // The three phases PatchCore reports, which the server labels in Portuguese
+    // (lib/training-phase.ts maps them).
+    phases: {
+      extractingFeatures: "extraindo features",
+      buildingBank: "montando o banco",
+      scoring: "pontuando",
     },
     // The first two lines of the log.
     initializing: (runId: string) => `> inicializando runtime · ${runId}`,
@@ -1571,7 +1582,7 @@ export const pt = {
     // The same, as it reads in the log line.
     logUnknownError: "erro desconhecido",
     queueBanner: (block: string, runs: number | undefined) =>
-      `⛓ fila de treinos · ${block}${runs && runs > 1 ? ` · ${runs} runs` : ""}`,
+      `⛓ bloco de treinos · ${block}${runs && runs > 1 ? ` · ${runs} runs` : ""}`,
     queueBannerBody:
       'Este bloco executa múltiplos treinos sequencialmente. A barra de progresso reflete o trial corrente; o resultado agregado aparece em "Ver resultados" ao final.',
     pipeline: (n: number) => `⚗ pipeline ativo · ${n} filtro${n === 1 ? "" : "s"}`,
@@ -1664,7 +1675,7 @@ export const pt = {
     },
     train: {
       title: "Treinar",
-      body: "O botão roda exatamente o que está selecionado — um treino simples, uma busca em grade, validação cruzada ou réplicas. Enquanto roda, uma tela mostra as curvas ao vivo e você pode minimizá-la ou cancelar sem perder o que já foi feito.",
+      body: "O botão roda exatamente o que está selecionado — um treino simples, uma busca em grade, validação cruzada ou réplicas. Enquanto roda, uma tela mostra o progresso e as métricas de cada época; você pode minimizá-la e voltar a ela depois.",
     },
     history: {
       title: "Tudo fica salvo",
@@ -1672,7 +1683,7 @@ export const pt = {
     },
     datasets: {
       title: "Seus datasets",
-      body: "Aqui você inspeciona o que tem no disco, vê a distribuição das classes, filtra imagens ruins e prepara divisões novas. Vale abrir antes do primeiro treino: quase todo resultado estranho começa em um dataset desbalanceado.",
+      body: "Aqui você baixa um dataset (torchvision, Roboflow, Kaggle ou Hugging Face) para uma pasta local e aponta qualquer tarefa para ela. Com a pasta definida, o painel da tarefa mostra a distribuição das classes — vale conferir antes do primeiro treino: quase todo resultado estranho começa em um dataset desbalanceado.",
     },
   },
 };

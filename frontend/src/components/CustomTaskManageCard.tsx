@@ -208,6 +208,7 @@ export function CustomTaskManageCard({
                   value={typed}
                   onChange={(e) => setTyped(e.target.value)}
                   placeholder={taskKey}
+                  aria-label={t.customTaskManage.confirmLabel}
                   autoComplete="off"
                   style={{
                     flex: 1,

@@ -154,8 +154,9 @@ export default function App() {
   // a denial sticks.
   const announced = useRef<string | null>(null);
   // The latest dictionary for code that must not re-run when only the language
-  // changes: the effect below (mid-run that would ask for notification
-  // permission a second time) and the tasks reload.
+  // changes: the effect below (a re-run mid-run would ask for notification
+  // permission again and reset the tab title) and the tasks reload. A ref is
+  // not a dependency, so the effect reads the words through it.
   const tRef = useRef(t);
   useEffect(() => {
     tRef.current = t;
@@ -174,10 +175,10 @@ export default function App() {
     announce(
       tRef.current,
       status.status,
-      status.run_id ?? t.app.unnamedRun,
+      status.run_id ?? tRef.current.app.unnamedRun,
       status.error ?? undefined,
     );
-  }, [status.status, status.run_id, status.error, t.app.unnamedRun]);
+  }, [status.status, status.run_id, status.error]);
 
   // The overlay stays MOUNTED for the whole life of a run (hidden via CSS when
   // minimized) so its logs and progress survive minimize/reopen.
