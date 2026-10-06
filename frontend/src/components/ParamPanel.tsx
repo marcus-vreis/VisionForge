@@ -7,6 +7,7 @@ import type { TaskDefinition } from "../types/tasks";
 import {
   exportConfigToYaml,
   importConfigFromYaml,
+  omitInvalidLeaves,
   validateParsedConfig,
 } from "../lib/yaml-config";
 import { AugmentPreview } from "./AugmentPreview";
@@ -1819,19 +1820,21 @@ export function ParamPanel({
         setImportError(result.error);
         return;
       }
-      // Always load the parsed data so the user sees it in the form; if any
-      // structural issues exist, warn them ahead of the submit round-trip.
-      setFormData(result.data);
-      if (!schema) {
-        setImportError(null);
-        return;
-      }
+      // Without the schema there is nothing to vouch for the types, and the
+      // panel only offers the import once it has loaded.
+      if (!schema) return;
+      // Load what we can so the user sees it in the form, but never a value of
+      // the wrong type: the panels call string methods on these fields, and one
+      // number in `data.base_dir` blanks the whole page. A flagged value is
+      // left out (as if the YAML had not set it) and reported below.
       const issues = validateParsedConfig(
         t,
         result.data,
         schema,
         schema.$defs ?? {},
       );
+      const { data, omitted } = omitInvalidLeaves(result.data, issues);
+      setFormData(data);
       if (issues.length === 0) {
         setImportError(null);
       } else {
@@ -1841,12 +1844,15 @@ export function ParamPanel({
             (iss) => `· ${humanizeFieldPath(t, iss.field)} — ${iss.message}`,
           )
           .join("\n");
+        const warnings = t.paramPanel.importWarnings(
+          issues.length,
+          summary,
+          Math.max(0, issues.length - 5),
+        );
         setImportError(
-          t.paramPanel.importWarnings(
-            issues.length,
-            summary,
-            Math.max(0, issues.length - 5),
-          ),
+          omitted.length > 0
+            ? `${warnings}\n\n${t.paramPanel.importDropped(omitted.length)}`
+            : warnings,
         );
       }
     });

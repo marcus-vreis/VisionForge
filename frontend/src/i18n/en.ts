@@ -75,6 +75,11 @@ export const en: Dict = {
     error: "Error",
     unnamedRun: "unnamed run",
   },
+  errorBoundary: {
+    title: "Something went wrong on this screen",
+    body: "An unexpected error interrupted this part of the interface. Reload the page to continue.",
+    reload: "Reload page",
+  },
   bottomBar: {
     reopenTraining: "🔬 open training",
     running: "Running…",
@@ -359,6 +364,11 @@ export const en: Dict = {
     normalizePlaceholder: "e.g. 0.485, 0.456, 0.406",
     importWarnings: (count: number, summary: string, extra: number) =>
       `YAML imported with ${count} structural ${count === 1 ? "warning" : "warnings"}:\n${summary}${extra > 0 ? `\n…(+${extra} more)` : ""}\n\nFix them before training — the backend's Pydantic validation will reject the config.`,
+    // Appended to the warnings when a value of the wrong type was left out of the form.
+    importDropped: (count: number) =>
+      count === 1
+        ? "1 value of the wrong type was ignored (the field was left unset)."
+        : `${count} values of the wrong type were ignored (the fields were left unset).`,
     unavailable: (task: string) => `${task} is not available yet`,
     unavailableBody: "This task will be implemented in an upcoming phase of VisionForge.",
     loadingSchema: "loading schema…",

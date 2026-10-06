@@ -56,6 +56,19 @@ describe("dictionaries", () => {
     expect(warnings(en, 1)).toBe("YAML imported with 1 structural warning");
     expect(warnings(en, 2)).toBe("YAML imported with 2 structural warnings");
 
+    expect(pt.paramPanel.importDropped(1)).toBe(
+      "1 valor com tipo inválido foi ignorado (o campo ficou sem valor).",
+    );
+    expect(pt.paramPanel.importDropped(3)).toBe(
+      "3 valores com tipo inválido foram ignorados (os campos ficaram sem valor).",
+    );
+    expect(en.paramPanel.importDropped(1)).toBe(
+      "1 value of the wrong type was ignored (the field was left unset).",
+    );
+    expect(en.paramPanel.importDropped(3)).toBe(
+      "3 values of the wrong type were ignored (the fields were left unset).",
+    );
+
     expect(pt.runDetail.gradcam.done(1, "layer4")).toBe("1 mapa gerado · camada layer4");
     expect(pt.runDetail.gradcam.done(3, "layer4")).toBe("3 mapas gerados · camada layer4");
     expect(en.runDetail.gradcam.done(1, "layer4")).toBe("1 map generated · target layer: layer4");

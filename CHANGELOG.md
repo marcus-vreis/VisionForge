@@ -27,6 +27,18 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
   formulário das tarefas próprias estão em português
   ([ADR-110](docs/dev/DECISIONS.md)).
 
+### Fixed
+
+- **Importar um YAML com valor do tipo errado não derruba mais a página.** Na
+  aba Classificação, um YAML com `name: 5` ou `data.base_dir: 7` deixava a tela
+  em branco (`e.trim is not a function`); agora esses valores são ignorados e
+  listados no aviso da importação, e um erro inesperado numa tela mostra um
+  aviso com o botão "Recarregar página" em vez de uma página vazia. O `null` de
+  um campo opcional (o `weights_path: null` que o próprio YAML exportado traz)
+  também deixou de ser apontado como erro; nas outras tarefas isso fazia a
+  importação recusar o YAML (por exemplo, um de detecção com `auto_augment`
+  desligado).
+
 ### Security
 
 - **Erros do download de dataset não expõem mais a chave do provedor.** O

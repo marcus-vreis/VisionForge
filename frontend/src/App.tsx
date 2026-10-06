@@ -60,6 +60,7 @@ import {
   type TaskDescriptor,
 } from "./lib/custom-tasks";
 import { CustomTaskPanel } from "./components/CustomTaskPanel";
+import { ContentBoundary } from "./components/ErrorBoundary";
 import { ResultsView } from "./components/ResultsView";
 import { TabBar } from "./components/TabBar";
 import { TaskHero } from "./components/TaskHero";
@@ -516,6 +517,9 @@ export default function App() {
       >
         <TaskHero task={activeTask} />
 
+        {/* A crash in a panel leaves the header, tabs and bottom bar up with a
+            notice in its place, instead of a blank page. */}
+        <ContentBoundary resetKey={activeKey}>
         {showResults ? (
           <ResultsView
             result={result}
@@ -627,6 +631,7 @@ export default function App() {
             validationErrors={validationErrors}
           />
         )}
+        </ContentBoundary>
 
         {error && !showOverlay && (
           <div

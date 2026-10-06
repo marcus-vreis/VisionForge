@@ -81,6 +81,13 @@ export const pt = {
     // Names a run in the tab title when the server sent no run id.
     unnamedRun: "sem nome",
   },
+  // The notice that stands in for the main content when it crashes
+  // (components/ErrorBoundary.tsx).
+  errorBoundary: {
+    title: "Algo deu errado nesta tela",
+    body: "Um erro inesperado interrompeu esta parte da interface. Recarregue a página para continuar.",
+    reload: "Recarregar página",
+  },
   bottomBar: {
     reopenTraining: "🔬 abrir treino",
     running: "Executando…",
@@ -374,6 +381,11 @@ export const pt = {
     normalizePlaceholder: "ex: 0.485, 0.456, 0.406",
     importWarnings: (count: number, summary: string, extra: number) =>
       `YAML importado com ${count} ${count === 1 ? "aviso estrutural" : "avisos estruturais"}:\n${summary}${extra > 0 ? `\n…(+${extra} mais)` : ""}\n\nCorrija antes de treinar — o backend rejeita por validação Pydantic.`,
+    // Appended to the warnings when a value of the wrong type was left out of the form.
+    importDropped: (count: number) =>
+      count === 1
+        ? "1 valor com tipo inválido foi ignorado (o campo ficou sem valor)."
+        : `${count} valores com tipo inválido foram ignorados (os campos ficaram sem valor).`,
     unavailable: (task: string) => `${task} ainda não está disponível`,
     unavailableBody: "Esta tarefa será implementada em uma próxima fase do VisionForge.",
     loadingSchema: "carregando schema…",

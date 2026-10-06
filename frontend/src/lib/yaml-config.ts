@@ -135,6 +135,9 @@ export function validateParsedConfig(
   const resolved = resolveRef(schema, defs);
 
   if (resolved.anyOf) {
+    // `Optional[X]`: an explicit null is a valid value, and the export writes
+    // one out for every unset optional, so our own files must import clean.
+    if (data === null && resolved.anyOf.some((s) => s.type === "null")) return errors;
     const nonNull = resolved.anyOf.find((s) => s.type !== "null");
     if (nonNull) return validateParsedConfig(t, data, nonNull, defs, path);
     return errors;
@@ -191,6 +194,83 @@ export function validateParsedConfig(
   }
 
   return errors;
+}
+
+interface PathNode {
+  /** The value at this path is what was flagged: remove it whole. */
+  drop: boolean;
+  children: Map<string, PathNode>;
+}
+
+/**
+ * Remove from a parsed config every value that `validateParsedConfig` flagged,
+ * so the form is never handed a leaf of the wrong type (a number where the
+ * panels call `.trim()` on a string, say). A removed leaf is simply absent,
+ * the same state as a field the YAML never mentioned, which every panel
+ * already renders.
+ *
+ * Takes the issues' `field` paths rather than the schema so it stays a plain
+ * tree edit. A path that points at nothing (a missing required field) is
+ * skipped without conjuring the parents; arrays are left intact except for an
+ * element a path names, which is dropped without leaving a hole. The input is
+ * never mutated and anything untouched keeps its identity.
+ *
+ * `omitted` lists the paths actually removed, so the caller can tell the user.
+ */
+export function omitInvalidLeaves(
+  data: Record<string, unknown>,
+  issues: ReadonlyArray<{ field: readonly (string | number)[] }>,
+): { data: Record<string, unknown>; omitted: string[][] } {
+  const root: PathNode = { drop: false, children: new Map() };
+  for (const { field } of issues) {
+    if (field.length === 0) continue; // the root is the file itself; nothing to drop
+    let node = root;
+    for (const segment of field) {
+      const key = String(segment);
+      let next = node.children.get(key);
+      if (!next) {
+        next = { drop: false, children: new Map() };
+        node.children.set(key, next);
+      }
+      node = next;
+    }
+    node.drop = true;
+  }
+  const omitted: string[][] = [];
+  const pruned = prune(data, root, [], omitted) as Record<string, unknown>;
+  return { data: pruned, omitted };
+}
+
+function prune(value: unknown, node: PathNode, at: string[], omitted: string[][]): unknown {
+  if (node.children.size === 0) return value;
+  const isList = Array.isArray(value);
+  if (!isList && (value === null || typeof value !== "object")) return value;
+
+  const entries: [string, unknown][] = isList
+    ? value.map((v, i) => [String(i), v])
+    : Object.entries(value as Record<string, unknown>);
+  const kept: [string, unknown][] = [];
+  let changed = false;
+  for (const [key, child] of entries) {
+    const sub = node.children.get(key);
+    if (!sub) {
+      kept.push([key, child]);
+      continue;
+    }
+    const path = [...at, key];
+    if (sub.drop) {
+      omitted.push(path);
+      changed = true;
+      continue;
+    }
+    const next = prune(child, sub, path, omitted);
+    if (next !== child) changed = true;
+    kept.push([key, next]);
+  }
+  if (!changed) return value;
+  // fromEntries defines own properties, so a hostile `__proto__` key in the
+  // YAML stays an ordinary key instead of swapping the prototype.
+  return isList ? kept.map(([, v]) => v) : Object.fromEntries(kept);
 }
 
 function resolveRef(schema: JsonSchema, defs: Record<string, JsonSchema>): JsonSchema {
