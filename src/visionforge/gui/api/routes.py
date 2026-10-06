@@ -9,6 +9,7 @@ import io
 import json
 import os
 import platform
+import traceback
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import asdict
@@ -69,7 +70,7 @@ from visionforge.core.replicates import (
 from visionforge.core.resume import can_resume
 from visionforge.core.sweep import SweepTrial, run_sweep, validate_sweep_space
 from visionforge.core.task_runner import TaskRunner
-from visionforge.gui.api.dataset_download import download_dataset
+from visionforge.gui.api.dataset_download import credentials_in_play, download_dataset
 from visionforge.gui.api.detection_export import export_detection_run
 from visionforge.gui.api.detection_testing import evaluate_detection_run
 from visionforge.gui.api.run_queue import QueuedJob, RunQueue
@@ -154,6 +155,7 @@ from visionforge.utils.anomaly_config import AnomalyConfig
 from visionforge.utils.config import ExperimentConfig
 from visionforge.utils.cuda import check_cuda
 from visionforge.utils.detection_config import DetectionConfig
+from visionforge.utils.redact import redact_secrets
 from visionforge.utils.regression_config import RegressionConfig
 from visionforge.utils.segmentation_config import SegmentationConfig
 from visionforge.utils.workers import suggested_workers as worker_budget
@@ -778,14 +780,30 @@ async def dataset_download(req: DatasetDownloadRequest) -> DatasetDownloadRespon
 
     Runs in a worker thread (downloads can be slow). A missing credential — or a
     damaged install — surfaces as a 400 with a clear message.
+
+    Nothing that leaves here — the HTTP detail or the log — may carry the
+    provider's key. The Roboflow client puts it in the URL it posts to, so an
+    offline machine raises "Max retries exceeded with url: /?api_key=<KEY>", and
+    that text used to be shown in the GUI and written to the server log. Both
+    messages go through ``redact_secrets`` with the credentials the request could
+    have used, and the exception itself is never handed to the logger: its
+    traceback repeats the message, and ``diagnose`` would add the variables.
     """
     try:
         return await asyncio.to_thread(_execute_dataset_download, req)
     except (ValueError, FileNotFoundError, ImportError) as exc:
-        raise HTTPException(400, str(exc)) from exc
+        secrets = credentials_in_play(req.api_key, req.token)
+        # `from None`: whoever formats this HTTPException must not walk back to
+        # the original exception and its unredacted message.
+        raise HTTPException(400, redact_secrets(str(exc), *secrets)) from None
     except Exception as exc:  # noqa: BLE001
-        logger.exception("Dataset download ({}) failed", req.provider)
-        raise HTTPException(500, f"{type(exc).__name__}: {exc}") from exc
+        secrets = credentials_in_play(req.api_key, req.token)
+        detail = redact_secrets(f"{type(exc).__name__}: {exc}", *secrets)
+        trace = redact_secrets("".join(traceback.format_exception(exc)), *secrets)
+        logger.error(
+            "Dataset download ({}) failed: {}\n{}", req.provider, detail, trace
+        )
+        raise HTTPException(500, detail) from None
 
 
 def _execute_dataset_download(req: DatasetDownloadRequest) -> DatasetDownloadResponse:

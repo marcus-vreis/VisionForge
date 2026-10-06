@@ -27,6 +27,21 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
   formulário das tarefas próprias estão em português
   ([ADR-110](docs/dev/DECISIONS.md)).
 
+### Security
+
+- **Erros do download de dataset não expõem mais a chave do provedor.** O
+  cliente do Roboflow põe a chave na URL da requisição, então uma falha de rede
+  (sem internet, DNS) produzia "Max retries exceeded with url: /?api_key=…", e
+  o servidor repassava esse texto à tela do download e ao log
+  (`outputs/logs/visionforge.log`, com o traceback). Isso valia para qualquer
+  erro inesperado do download pelo Roboflow, Kaggle ou Hugging Face, em todas as
+  versões desde a 0.1.0. Agora a mensagem de erro e o log passam por um filtro
+  que troca `api_key=…`, `token=…`, `Authorization: Bearer …` e o valor exato da
+  credencial usada por `***`, mantendo o tipo do erro e o resto do texto. Os
+  campos de chave também escondem o que se digita (com um botão para mostrar) e
+  não recebem preenchimento automático do navegador. Quem baixou do Roboflow
+  sem rede deve apagar o log (e os `.zip` rotacionados) ou trocar a chave.
+
 ## [0.12.0] — 2026-09-24
 
 ### Changed

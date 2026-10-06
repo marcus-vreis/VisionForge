@@ -21,11 +21,15 @@ type Feedback = { kind: "ok" | "error"; text: string } | null;
 
 /** A provider key you type once.
  *
- * When a key is already stored the field starts empty and the label carries
- * the masked value, so the state is visible without the secret being on
+ * When a key is already stored the field starts empty and its placeholder
+ * carries the masked value, so the state is visible without the secret being on
  * screen — a screenshot of this panel is not a leak. Typing a new value and
  * pressing Salvar replaces it; the download uses the stored key whenever the
  * field is left blank.
+ *
+ * What is typed is itself masked (a password input, with a reveal toggle) and
+ * kept out of autofill: it is a credential, so it is not plain text on screen
+ * while it is being entered either.
  */
 export function CredentialField({
   provider,
@@ -99,6 +103,7 @@ export function CredentialField({
         placeholder={saved ? t.credentialField.savedPlaceholder(entry?.masked ?? "") : (placeholder ?? "")}
         hint={saved ? t.credentialField.savedHint : hint}
         mono
+        secret
       />
       <div
         style={{

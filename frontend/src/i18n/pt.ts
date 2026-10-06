@@ -151,6 +151,11 @@ export const pt = {
   infoDot: {
     label: "Explicação",
   },
+  // The reveal toggle inside a credential field (components/controls/TextField.tsx).
+  textField: {
+    showSecret: "Mostrar o valor digitado",
+    hideSecret: "Ocultar o valor digitado",
+  },
   workersField: {
     label: "Workers",
     setManually: "Definir o número manualmente",

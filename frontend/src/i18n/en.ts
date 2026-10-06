@@ -142,6 +142,10 @@ export const en: Dict = {
   infoDot: {
     label: "Explanation",
   },
+  textField: {
+    showSecret: "Show what you typed",
+    hideSecret: "Hide what you typed",
+  },
   workersField: {
     label: "Workers",
     setManually: "Set the number manually",

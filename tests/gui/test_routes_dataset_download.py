@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from fastapi.testclient import TestClient
+from loguru import logger
 from PIL import Image
 
 from visionforge.gui.api.dataset_download import (
@@ -560,3 +562,273 @@ class TestExecuteRoute:
         assert resp.dataset == "cifar10"
         assert resp.total_images == 6
         assert resp.classes == ["cat", "dog"]
+
+
+# --- credentials never leave in an error ------------------------------------
+
+# A made-up value: every test here uses it, none uses a real credential.
+SECRET = "SECRET123"
+
+
+class _HTTPError(Exception):
+    """Stands in for `requests.HTTPError` / `huggingface_hub`'s, by name only.
+
+    The tests assert the exception *type name* survives redaction; a local class
+    keeps `requests` (which ships no type stubs) out of the test imports.
+    """
+
+
+@pytest.fixture
+def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
+    # Saved credentials live under VISIONFORGE_HOME; never touch the real one.
+    monkeypatch.setenv("VISIONFORGE_HOME", str(tmp_path / "home"))
+    from visionforge.gui.server import app
+
+    return TestClient(app)
+
+
+@pytest.fixture
+def server_log() -> Any:
+    """Everything loguru emitted while the test ran, tracebacks included.
+
+    `diagnose=True` is deliberate: it is the setting that prints variable
+    values inside a traceback, so it is the worst case for a key held in a local.
+    """
+    messages: list[Any] = []
+    sink = logger.add(
+        messages.append,
+        level="DEBUG",
+        backtrace=True,
+        diagnose=True,
+        format="{message}",
+    )
+
+    class _Log:
+        @property
+        def text(self) -> str:
+            return "\n".join(str(m) for m in messages)
+
+    yield _Log()
+    logger.remove(sink)
+
+
+def _post_download(client: TestClient, tmp_path: Path, **body: Any) -> Any:
+    payload = {"dataset": "ws/proj", "out_dir": str(tmp_path / "ds"), **body}
+    return client.post("/api/dataset/download", json=payload)
+
+
+def _use_stored_kaggle_token(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Save the token the way the GUI does, and keep the env var from outliving the test.
+
+    `download_kaggle` copies a saved token into `os.environ` directly, so the
+    variable is registered with monkeypatch first (set, then delete) to be
+    restored to "absent" at teardown.
+    """
+    from visionforge.utils.credentials import save_credential
+
+    monkeypatch.setenv("KAGGLE_API_TOKEN", "placeholder")
+    monkeypatch.delenv("KAGGLE_API_TOKEN")
+    save_credential("kaggle", SECRET)
+
+
+class TestADownloadErrorDoesNotLeakTheCredential:
+    """The Roboflow client puts the key in the URL, so a dropped connection spells it out.
+
+    `requests` reports "Max retries exceeded with url: /?api_key=<KEY>", and the
+    route used to forward that text as the HTTP detail (shown in the GUI) and to
+    `logger.exception` (written to the server log, traceback and all).
+    """
+
+    @pytest.mark.parametrize(
+        "message",
+        [
+            f"Max retries exceeded with url: /?api_key={SECRET} (Caused by X)",
+            f"401 Client Error: Unauthorized for url: https://hf.co/api/x?token={SECRET}",
+            f"GET /v1/export?format=folder&access_token={SECRET}&v=1 failed",
+            f"request headers {{'Authorization': 'Bearer {SECRET}'}}",
+            f"the server rejected {SECRET} as invalid",
+        ],
+        ids=["api_key", "token", "access_token", "authorization", "literal"],
+    )
+    def test_the_detail_and_the_log_are_clean(
+        self,
+        client: TestClient,
+        server_log: Any,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+        message: str,
+    ) -> None:
+        def boom(*args: Any, **kwargs: Any) -> None:
+            raise ConnectionError(message)
+
+        monkeypatch.setattr("visionforge.gui.api.routes.download_dataset", boom)
+
+        resp = _post_download(
+            client, tmp_path, provider="roboflow", api_key=SECRET, version=1
+        )
+
+        assert resp.status_code == 500
+        assert SECRET not in resp.text
+        assert SECRET not in server_log.text
+
+    def test_the_error_stays_useful(
+        self,
+        client: TestClient,
+        server_log: Any,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        """Redacted is not silenced: type and context reach the screen and the log."""
+
+        def boom(*args: Any, **kwargs: Any) -> None:
+            raise ConnectionError(
+                "HTTPSConnectionPool(host='api.roboflow.com', port=443): Max "
+                f"retries exceeded with url: /?api_key={SECRET}"
+            )
+
+        monkeypatch.setattr("visionforge.gui.api.routes.download_dataset", boom)
+
+        resp = _post_download(
+            client, tmp_path, provider="roboflow", api_key=SECRET, version=1
+        )
+
+        detail = resp.json()["detail"]
+        assert detail.startswith("ConnectionError: ")
+        assert "api.roboflow.com" in detail
+        assert "Max retries exceeded" in detail
+        # The operator still gets the failure, with provider and cause.
+        assert "roboflow" in server_log.text
+        assert "ConnectionError" in server_log.text
+        assert "Max retries exceeded" in server_log.text
+
+    @pytest.mark.parametrize("exc_type", [ValueError, FileNotFoundError, ImportError])
+    def test_a_400_detail_is_clean_too(
+        self,
+        client: TestClient,
+        server_log: Any,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+        exc_type: type[Exception],
+    ) -> None:
+        def boom(*args: Any, **kwargs: Any) -> None:
+            raise exc_type(f"cannot fetch /?api_key={SECRET} for {SECRET}")
+
+        monkeypatch.setattr("visionforge.gui.api.routes.download_dataset", boom)
+
+        resp = _post_download(
+            client, tmp_path, provider="roboflow", api_key=SECRET, version=1
+        )
+
+        assert resp.status_code == 400
+        assert SECRET not in resp.text
+        assert SECRET not in server_log.text
+
+    @pytest.mark.parametrize("source", ["typed", "saved"])
+    def test_roboflow_offline_with_the_real_download_path(
+        self,
+        client: TestClient,
+        server_log: Any,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+        source: str,
+    ) -> None:
+        """The key in use is either typed into the request or read from the store."""
+
+        class OfflineRoboflow:
+            def __init__(self, api_key: str) -> None:
+                try:
+                    raise OSError(f"getaddrinfo failed for /?api_key={api_key}")
+                except OSError as inner:
+                    raise ConnectionError(
+                        "HTTPSConnectionPool(host='api.roboflow.com', port=443): Max "
+                        f"retries exceeded with url: /?api_key={api_key}"
+                    ) from inner
+
+        fake = types.ModuleType("roboflow")
+        fake.Roboflow = OfflineRoboflow  # type: ignore[attr-defined]
+        monkeypatch.setitem(sys.modules, "roboflow", fake)
+        body: dict[str, Any] = {"provider": "roboflow", "version": 1}
+        if source == "typed":
+            body["api_key"] = SECRET
+        else:
+            from visionforge.utils.credentials import save_credential
+
+            save_credential("roboflow", SECRET)
+
+        resp = _post_download(client, tmp_path, **body)
+
+        assert resp.status_code == 500
+        assert "ConnectionError" in resp.json()["detail"]
+        assert SECRET not in resp.text
+        assert SECRET not in server_log.text
+
+    @pytest.mark.parametrize("source", ["environment", "saved"])
+    def test_kaggle_token_in_an_error(
+        self,
+        client: TestClient,
+        server_log: Any,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+        source: str,
+    ) -> None:
+        """Kaggle's token comes from the environment or the store, never the request."""
+        if source == "environment":
+            monkeypatch.setenv("KAGGLE_API_TOKEN", SECRET)
+        else:
+            _use_stored_kaggle_token(monkeypatch)
+
+        class FailingKaggleApi:
+            def authenticate(self) -> None:
+                return None
+
+            def dataset_download_files(self, *args: Any, **kwargs: Any) -> None:
+                raise RuntimeError(
+                    f"401 Unauthorized: token {os.environ['KAGGLE_API_TOKEN']} rejected"
+                )
+
+        pkg = types.ModuleType("kaggle")
+        api_mod = types.ModuleType("kaggle.api")
+        ext = types.ModuleType("kaggle.api.kaggle_api_extended")
+        ext.KaggleApi = FailingKaggleApi  # type: ignore[attr-defined]
+        monkeypatch.setitem(sys.modules, "kaggle", pkg)
+        monkeypatch.setitem(sys.modules, "kaggle.api", api_mod)
+        monkeypatch.setitem(sys.modules, "kaggle.api.kaggle_api_extended", ext)
+
+        resp = _post_download(client, tmp_path, provider="kaggle", dataset="owner/slug")
+
+        assert resp.status_code == 500
+        assert "RuntimeError" in resp.json()["detail"]
+        assert SECRET not in resp.text
+        assert SECRET not in server_log.text
+
+    @pytest.mark.parametrize("source", ["typed", "saved"])
+    def test_huggingface_token_in_an_error(
+        self,
+        client: TestClient,
+        server_log: Any,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+        source: str,
+    ) -> None:
+        def load_dataset(name: str, token: str | None = None) -> Any:
+            raise _HTTPError(
+                f"401 Client Error: Unauthorized for url: https://huggingface.co/api/x?token={token}"
+            )
+
+        fake = types.ModuleType("datasets")
+        fake.load_dataset = load_dataset  # type: ignore[attr-defined]
+        monkeypatch.setitem(sys.modules, "datasets", fake)
+        body: dict[str, Any] = {"provider": "huggingface", "dataset": "owner/ds"}
+        if source == "typed":
+            body["token"] = SECRET
+        else:
+            from visionforge.utils.credentials import save_credential
+
+            save_credential("huggingface", SECRET)
+
+        resp = _post_download(client, tmp_path, **body)
+
+        assert resp.status_code == 500
+        assert "_HTTPError" in resp.json()["detail"]
+        assert SECRET not in resp.text
+        assert SECRET not in server_log.text

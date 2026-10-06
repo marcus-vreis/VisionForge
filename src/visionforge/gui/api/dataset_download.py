@@ -22,7 +22,11 @@ from typing import Any
 
 from loguru import logger
 
-from visionforge.utils.credentials import load_credential, resolve_credential
+from visionforge.utils.credentials import (
+    PROVIDERS,
+    load_credential,
+    resolve_credential,
+)
 from visionforge.utils.doctor import missing_package_hint
 
 # name -> torchvision.datasets class name. All take a ``train`` kwarg and expose
@@ -473,6 +477,23 @@ def download_huggingface(
     )
 
 
+def credentials_in_play(api_key: str | None, token: str | None) -> list[str]:
+    """Every secret a failed download could have written into its own error.
+
+    The request's own ``api_key``/``token``, every key saved on this machine, and
+    Kaggle's environment variable (the client reads it from there, and the saved
+    token is copied into it). Broader than "the provider that was used" on
+    purpose: it costs nothing, and an error that names the wrong provider's key
+    is still an error that leaks a key.
+
+    Evaluated after the attempt, so a token ``download_kaggle`` just exported is
+    included.
+    """
+    secrets = [api_key, token, os.environ.get("KAGGLE_API_TOKEN")]
+    secrets.extend(load_credential(provider) for provider in PROVIDERS)
+    return [s for s in secrets if s]
+
+
 def download_dataset(
     provider: str,
     *,
@@ -515,6 +536,7 @@ def download_dataset(
 
 __all__ = [
     "DatasetDownloadResult",
+    "credentials_in_play",
     "download_dataset",
     "download_huggingface",
     "download_kaggle",

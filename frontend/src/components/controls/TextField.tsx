@@ -1,3 +1,6 @@
+import { Eye, EyeOff } from "lucide-react";
+import { useState } from "react";
+import { useT } from "../../i18n/useT";
 import { FieldLabel } from "./FieldLabel";
 
 const shellStyle: React.CSSProperties = {
@@ -18,6 +21,9 @@ interface TextFieldProps {
   placeholder?: string;
   hint?: string;
   mono?: boolean;
+  /** A credential: masked while typing (with a reveal toggle), never offered to
+   * the browser's autofill. Opt-in, so every other field stays plain text. */
+  secret?: boolean;
 }
 
 /** Text input field with accent dot label. */
@@ -29,7 +35,12 @@ export function TextField({
   hint,
   mono = false,
   help,
+  secret = false,
 }: TextFieldProps) {
+  const t = useT();
+  const [revealed, setRevealed] = useState(false);
+  const masked = secret && !revealed;
+
   return (
     <div>
       <FieldLabel dot hint={hint} help={help}>
@@ -37,7 +48,11 @@ export function TextField({
       </FieldLabel>
       <div style={shellStyle}>
         <input
-          type="text"
+          type={masked ? "password" : "text"}
+          // `off` is ignored by browsers for password inputs, which still offer
+          // to fill a saved *login* here; `new-password` is the value that stops it.
+          autoComplete={secret ? "new-password" : undefined}
+          spellCheck={secret ? false : undefined}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
@@ -54,6 +69,28 @@ export function TextField({
             width: "100%",
           }}
         />
+        {secret && (
+          <button
+            type="button"
+            onClick={() => setRevealed((r) => !r)}
+            aria-label={revealed ? t.textField.hideSecret : t.textField.showSecret}
+            aria-pressed={revealed}
+            title={revealed ? t.textField.hideSecret : t.textField.showSecret}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "0 12px",
+              alignSelf: "stretch",
+              background: "transparent",
+              border: "none",
+              color: "var(--vf-text-dim)",
+              cursor: "pointer",
+            }}
+          >
+            {revealed ? <EyeOff size={15} aria-hidden /> : <Eye size={15} aria-hidden />}
+          </button>
+        )}
       </div>
     </div>
   );
