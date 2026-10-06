@@ -12,6 +12,7 @@ import {
 } from "../api/client";
 import { useT } from "../i18n/useT";
 import type { Dict } from "../i18n/pt";
+import { PREPROCESS_KIND_LABELS } from "../lib/preprocess-kinds";
 import type {
   RunResponse,
   RunResult,
@@ -45,36 +46,27 @@ export interface ValidationError {
   message: string;
 }
 
-/** Preprocessing filter ids whose Pydantic errors should appear with a
- * human-friendly name in field path summaries. These are the filters' own
- * technical names, which read the same in every language, so they stay here
- * rather than in the dictionaries. */
-const PREPROCESS_KIND_LABELS: Record<string, string> = {
-  gaussian_blur: "Gaussian blur",
-  median_blur: "Median blur",
-  unsharp: "Unsharp mask",
-  edges: "Edges",
-  emboss: "Emboss",
-  grayscale: "Grayscale",
-  equalize: "Equalize",
-  autocontrast: "Autocontrast",
-  wavelet: "Wavelet",
-};
-
-/** Build a user-readable path like "Treinamento › Learning Rate", with the
+/** Build a user-readable path like "Treinamento › Learning rate", with the
  * section and field names in the language of `t` (`const t = useT()`).
  *
+ * The names are the form's own (`paramPanel.sectionLabels`/`fieldLabels`), so an
+ * error names a field exactly as the field is labelled; only the segments the
+ * form has no label for (the preprocessing pipeline, the scheduler block, the
+ * device) come from `experiment.sections`. As in the form, a path-qualified
+ * label wins over a leaf name: `model.name` is the architecture.
+ *
  * Numeric segments (Pydantic list index) become "#N" so the user can tell
- * which filter slot in the pipeline failed validation. A known filter kind
- * (passed alongside via the special "kind=foo" pseudo-segment) gets its
- * human label inserted next to the index.
+ * which filter slot in the pipeline failed validation. A preprocessing filter's
+ * id (the `edges` segment of a union error) is shown by its name in
+ * `lib/preprocess-kinds`.
  */
 export function humanizeFieldPath(t: Dict, loc: (string | number)[]): string {
-  const sections: Record<string, string> = t.experiment.sections;
-  const fields: Record<string, string> = t.experiment.fields;
-  return loc
-    .filter((p) => p !== "body")
-    .map((p) => {
+  const formSections: Record<string, string> = t.paramPanel.sectionLabels;
+  const formFields: Record<string, string> = t.paramPanel.fieldLabels;
+  const extraSections: Record<string, string> = t.experiment.sections;
+  const path = loc.filter((p) => p !== "body");
+  return path
+    .map((p, i) => {
       if (typeof p === "number") {
         // List index inside steps[] — show as "#N" so the user can tell
         // which filter slot in the pipeline failed validation.
@@ -83,7 +75,14 @@ export function humanizeFieldPath(t: Dict, loc: (string | number)[]): string {
       const k = String(p);
       const known = PREPROCESS_KIND_LABELS[k];
       if (known) return known;
-      return sections[k] ?? fields[k] ?? k;
+      const dotPath = path.slice(0, i + 1).join(".");
+      return (
+        formSections[k] ??
+        extraSections[k] ??
+        formFields[dotPath] ??
+        formFields[k] ??
+        k
+      );
     })
     .filter((s) => s !== "")
     .join(" › ");
