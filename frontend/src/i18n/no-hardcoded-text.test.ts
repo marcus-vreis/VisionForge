@@ -22,6 +22,9 @@ const ALLOWED = new Set([
   "DataParallel",
   // The glyph on the help dot.
   "i",
+  // The sentence the backend's native pickers send for a plain dismissal. It is matched, never
+  // shown: lib/picker-feedback.ts swaps it for the dictionary's text.
+  "Cancelado.",
   // The version prefix in the header: `· v${version}`.
   "· v",
   // Example values in the sweep editor's placeholders: a config dot-path and model names.
@@ -153,7 +156,7 @@ function findings(path: string): Finding[] {
         ts.isTemplateTail(node))
     ) {
       const s = node.text;
-      if (s.trim() && (PORTUGUESE.test(s) || s === "pt-BR")) add(node, s);
+      if (s.trim() && ((PORTUGUESE.test(s) && !ALLOWED.has(s.trim())) || s === "pt-BR")) add(node, s);
     }
     ts.forEachChild(node, visit);
   };

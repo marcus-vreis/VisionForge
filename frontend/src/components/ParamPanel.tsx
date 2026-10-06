@@ -18,6 +18,7 @@ import {
 } from "./PreprocessingPanel";
 import { resolveKind } from "./field-renderer";
 import { hasNonDefaultAdvanced, isAdvanced, paramHelp } from "../lib/param-help";
+import { pickerCancelText } from "../lib/picker-feedback";
 import { AdvancedFields } from "./AdvancedFields";
 import { ModelAdvice } from "./ModelAdvice";
 import { Rich } from "./Rich";
@@ -303,7 +304,7 @@ function WeightsPathField({
     try {
       const res = await pickCheckpointFile();
       if (res.cancelled) {
-        setMessage(res.message ?? t.paramPanel.weights.cancelled);
+        setMessage(pickerCancelText(res, t.paramPanel.weights.cancelled));
         return;
       }
       onChange(res.path);

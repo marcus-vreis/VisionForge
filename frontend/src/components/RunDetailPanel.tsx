@@ -21,6 +21,7 @@ import type { Dict } from "../i18n/pt";
 import { useI18n, useT } from "../i18n/useT";
 import { formatBytes, shortDigest } from "../lib/dataset-identity";
 import { metricCi } from "../lib/metric-ci";
+import { pickerCancelText } from "../lib/picker-feedback";
 import { PREPROCESS_KIND_LABELS } from "../lib/preprocess-kinds";
 import type { MetricCI } from "../types/run";
 import { Lightbox } from "./Lightbox";
@@ -217,7 +218,7 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
     try {
       const res = await pickDatasetFolder();
       if (res.cancelled) {
-        setTestMsg({ kind: "info", text: res.message ?? t.runDetail.picker.cancelled });
+        setTestMsg({ kind: "info", text: pickerCancelText(res, t.runDetail.picker.cancelled) });
         return;
       }
       setTestForm((f) => ({ ...f, data_dir: res.path }));
@@ -233,7 +234,7 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
     try {
       const res = await pickDatasetFolder();
       if (res.cancelled) {
-        setBatchMsg({ kind: "info", text: res.message ?? t.runDetail.picker.cancelled });
+        setBatchMsg({ kind: "info", text: pickerCancelText(res, t.runDetail.picker.cancelled) });
         return;
       }
       setBatchForm((f) => ({ ...f, input_dir: res.path }));
@@ -290,7 +291,7 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
     try {
       const res = await pickDatasetFolder();
       if (res.cancelled) {
-        setGradcamMsg({ kind: "info", text: res.message ?? t.runDetail.picker.cancelled });
+        setGradcamMsg({ kind: "info", text: pickerCancelText(res, t.runDetail.picker.cancelled) });
         return;
       }
       setGradcamForm((f) => ({ ...f, input_dir: res.path }));

@@ -6,6 +6,7 @@ import {
 } from "../api/client";
 import { SelectField, type SelectOption } from "./controls/SelectField";
 import { paramHelp } from "../lib/param-help";
+import { pickerCancelText } from "../lib/picker-feedback";
 import { useT } from "../i18n/useT";
 import { TextField } from "./controls/TextField";
 
@@ -147,7 +148,7 @@ export function DatasetPicker({
       if (res.cancelled) {
         setFeedback({
           kind: "info",
-          message: res.message ?? t.datasetPicker.cancelled,
+          message: pickerCancelText(res, t.datasetPicker.cancelled),
         });
         return;
       }

@@ -3884,9 +3884,10 @@ language today, checked against the code:
   the dataset-scan messages, which are the `message` of the split-detection,
   dataset-stats, samples and preview responses in `routes.py`; the titles of
   the native file and folder dialogs (`routes.py`, "Selecione …") and the
-  dialogs' own messages ("Cancelado.", "Falha ao abrir o seletor", the hint
-  that the picker does not open inside a container), which the interface shows
-  ahead of its dictionary's fallback; the title and axis labels of some plots
+  dialogs' own failure messages ("Falha ao abrir o seletor", the hint that
+  the picker does not open inside a container; a plain dismissal, "Cancelado.",
+  is not among them: `lib/picker-feedback.ts` swaps it for the dictionary's
+  text); the title and axis labels of some plots
   (`core/plotter.py`: the regression residuals, the anomaly score
   distribution); the WinError 1455 hint (`core/loader_lifecycle.py`,
   `core/detection_trainer.py`); the exceptions that the run-test, batch
