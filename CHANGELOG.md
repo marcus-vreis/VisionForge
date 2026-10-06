@@ -53,6 +53,14 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
   deixou de mandar corrigir tudo antes de treinar: ele diz quantos valores foram
   ignorados (o campo usa o valor padrão) e quantos campos obrigatórios ficaram
   sem valor (esses, sim, precisam ser preenchidos).
+- **A importação de YAML lê números entre aspas como o backend lê, e uma lista
+  com item inválido sai inteira.** `learning_rate: "0.001"`, `epochs: "10"`,
+  `normalize_mean: ['0.485', '0.456', '0.406']` e `gpu_ids: [0, '1']` carregam
+  como números (nas abas de detecção, regressão, segmentação e anomalia também,
+  que recusavam esses arquivos); `epochs: "10.5"` continua sendo apontado. Se um
+  item de uma lista é inválido (`normalize_std: [0.229, oops, 0.225]`), a lista
+  toda é ignorada e o campo usa o padrão, em vez de seguir com uma lista menor
+  que o backend aceitaria e o treino usaria.
 
 ### Security
 

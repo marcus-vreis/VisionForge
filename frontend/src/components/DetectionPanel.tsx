@@ -20,7 +20,7 @@ import {
   type DetectionForm,
   type DetectionOptimizer,
 } from "../lib/detection-models";
-import { exportConfigToYaml, validateParsedConfig } from "../lib/yaml-config";
+import { checkImportedConfig, exportConfigToYaml } from "../lib/yaml-config";
 import type { ValidationError } from "../hooks/useExperiment";
 import {
   NumberField,
@@ -206,19 +206,16 @@ export function DetectionPanel({
           )
         }
         onImportConfig={async (data) => {
+          let payload = data;
           try {
             const schema = await fetchTaskSchema("detection");
-            const issues = validateParsedConfig(t, data, schema, schema.$defs ?? {});
-            if (issues.length > 0) {
-              return issues
-                .slice(0, 5)
-                .map((i) => `${i.field.join(" › ")}: ${i.message}`)
-                .join("\n");
-            }
+            const checked = checkImportedConfig(t, data, schema, schema.$defs ?? {});
+            if ("problem" in checked) return checked.problem;
+            payload = checked.data;
           } catch {
             // schema unavailable → import tolerantly; o 422 do submit cobre.
           }
-          setFormData(() => detectionFormFromPayload(data));
+          setFormData(() => detectionFormFromPayload(payload));
           return null;
         }}
       />

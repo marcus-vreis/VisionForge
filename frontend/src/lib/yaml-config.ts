@@ -236,6 +236,106 @@ function dictEntrySchema(dict: JsonSchema, path: string[]): JsonSchema | null {
   return MAPPING_ENTRY_DICTS.has(path.join(".")) ? { type: "object" } : null;
 }
 
+const PLAIN_NUMBER = /^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/;
+
+/** The number a string spells out in plain decimal (what Pydantic reads), else
+ *  null: not hex, not "NaN" or "Infinity", not "1_000", not a fraction for an integer. */
+function numberFromString(text: string, integer: boolean): number | null {
+  const trimmed = text.trim();
+  if (!PLAIN_NUMBER.test(trimmed)) return null;
+  const n = Number(trimmed);
+  if (!Number.isFinite(n)) return null;
+  if (integer && !Number.isInteger(n)) return null;
+  return n;
+}
+
+/**
+ * Read a quoted number as the backend does. Pydantic converts `"0.001"` to
+ * 0.001 for a float field and `"10"` to 10 for an int one, so a file written
+ * that way trains as intended; a validator stricter than that would drop the
+ * value and swap in the default, which for a hyperparameter is worse than a
+ * refusal. This turns such strings into numbers wherever the schema says a
+ * number goes (a leaf, an item of a list, a value of a dict), and nothing else:
+ * a string that is not plainly a number stays as written for the validator to
+ * flag, and no other type is converted.
+ *
+ * Left alone on purpose: a field with a fixed set of values, and a field with
+ * more than one non-null way to read it (`int | str`), where the string may be
+ * what was meant. Returns the same object when nothing changed.
+ */
+export function coerceNumericStrings(
+  data: Record<string, unknown>,
+  schema: JsonSchema,
+  defs: Record<string, JsonSchema> = {},
+): Record<string, unknown> {
+  return coerceValue(data, schema, defs) as Record<string, unknown>;
+}
+
+function coerceValue(value: unknown, schema: JsonSchema, defs: Record<string, JsonSchema>): unknown {
+  const resolved = resolveRef(schema, defs);
+
+  if (resolved.anyOf) {
+    const branches = resolved.anyOf.filter((s) => s.type !== "null");
+    return branches.length === 1 ? coerceValue(value, branches[0], defs) : value;
+  }
+
+  if (resolved.type === "number" || resolved.type === "integer") {
+    if (typeof value !== "string" || resolved.enum || resolved.const !== undefined) return value;
+    return numberFromString(value, resolved.type === "integer") ?? value;
+  }
+
+  if (resolved.type === "array") {
+    const items = resolved.items;
+    if (!Array.isArray(value) || !items) return value;
+    const next = value.map((item) => coerceValue(item, items, defs));
+    return next.some((item, i) => item !== value[i]) ? next : value;
+  }
+
+  if (resolved.type === "object") {
+    if (value === null || typeof value !== "object" || Array.isArray(value)) return value;
+    const properties = resolved.properties ?? {};
+    const extra = resolved.additionalProperties;
+    const entries = Object.entries(value as Record<string, unknown>).map(
+      ([key, child]): [string, unknown] => {
+        const sub = Object.hasOwn(properties, key)
+          ? properties[key]
+          : extra !== null && typeof extra === "object"
+            ? extra
+            : null;
+        return [key, sub ? coerceValue(child, sub, defs) : child];
+      },
+    );
+    const original = Object.values(value as Record<string, unknown>);
+    // fromEntries, not assignment: a `__proto__` key stays an ordinary key.
+    return entries.some(([, child], i) => child !== original[i]) ? Object.fromEntries(entries) : value;
+  }
+
+  return value;
+}
+
+/**
+ * The import for the panels that refuse a file with problems instead of loading
+ * what they can: quoted numbers are read as the backend reads them, then the
+ * file either passes, with the data the form should take, or comes back as the
+ * text of the refusal (the first five issues, one per line).
+ */
+export function checkImportedConfig(
+  t: Dict,
+  parsed: Record<string, unknown>,
+  schema: JsonSchema,
+  defs: Record<string, JsonSchema> = {},
+): { data: Record<string, unknown> } | { problem: string } {
+  const data = coerceNumericStrings(parsed, schema, defs);
+  const issues = validateParsedConfig(t, data, schema, defs);
+  if (issues.length === 0) return { data };
+  return {
+    problem: issues
+      .slice(0, 5)
+      .map((issue) => `${issue.field.join(" › ")}: ${issue.message}`)
+      .join("\n"),
+  };
+}
+
 /** What loading an imported file amounts to; see `reviewImportedConfig`. */
 export interface ImportReview {
   /** The config to load: the parsed file minus every value that failed validation. */
@@ -250,18 +350,21 @@ export interface ImportReview {
 }
 
 /**
- * Validate an imported file and prepare what the form may take. A value of the
- * wrong type is dropped (see `omitInvalidLeaves`); the counts say what that
- * leaves behind, so the warning shown to the user can be exact about it: an
- * optional field just uses its default, a required one has to be filled in
- * before the backend will accept the config.
+ * Validate an imported file and prepare what the form may take. Quoted numbers
+ * are read as the backend reads them (see `coerceNumericStrings`) before
+ * anything is judged. A value of the wrong type is dropped (see
+ * `omitInvalidLeaves`); the counts say what that leaves behind, so the warning
+ * shown to the user can be exact about it: an optional field just uses its
+ * default, a required one has to be filled in before the backend will accept
+ * the config.
  */
 export function reviewImportedConfig(
   t: Dict,
-  data: Record<string, unknown>,
+  parsed: Record<string, unknown>,
   schema: JsonSchema,
   defs: Record<string, JsonSchema> = {},
 ): ImportReview {
+  const data = coerceNumericStrings(parsed, schema, defs);
   const issues = validateParsedConfig(t, data, schema, defs);
   const { data: kept, omitted } = omitInvalidLeaves(data, issues);
   // What is still flagged once the bad values are gone can only be absences.
@@ -290,9 +393,12 @@ interface PathNode {
  *
  * Takes the issues' `field` paths rather than the schema so it stays a plain
  * tree edit. A path that points at nothing (a missing required field) is
- * skipped without conjuring the parents; arrays are left intact except for an
- * element a path names, which is dropped without leaving a hole. The input is
- * never mutated and anything untouched keeps its identity.
+ * skipped without conjuring the parents. A list is all or nothing: when an
+ * issue sits inside a list (an item, or a leaf of an item), the whole list goes
+ * and the field falls back to its default, because a list with one item cut
+ * out still passes the backend and then trains on values nobody wrote (a mean
+ * of two channels, a GPU quietly lost). Lists nothing flagged are left intact.
+ * The input is never mutated and anything untouched keeps its identity.
  *
  * `omitted` lists the paths actually removed, so the caller can tell the user.
  */
@@ -302,10 +408,10 @@ export function omitInvalidLeaves(
 ): { data: Record<string, unknown>; omitted: string[][] } {
   const root: PathNode = { drop: false, children: new Map() };
   for (const { field } of issues) {
-    if (field.length === 0) continue; // the root is the file itself; nothing to drop
+    const path = removalPath(data, field);
+    if (path.length === 0) continue; // the root is the file itself; nothing to drop
     let node = root;
-    for (const segment of field) {
-      const key = String(segment);
+    for (const key of path) {
       let next = node.children.get(key);
       if (!next) {
         next = { drop: false, children: new Map() };
@@ -318,6 +424,31 @@ export function omitInvalidLeaves(
   const omitted: string[][] = [];
   const pruned = prune(data, root, [], omitted) as Record<string, unknown>;
   return { data: pruned, omitted };
+}
+
+/**
+ * What to remove for an issue at `field`: the nearest list the path runs
+ * through (its items are what the issue is about, and the list stands or falls
+ * as one), else the path itself. A path that does not resolve in `data` (a
+ * required field that is absent) is returned as it is and removes nothing.
+ */
+function removalPath(data: unknown, field: readonly (string | number)[]): string[] {
+  const path = field.map(String);
+  let value = data;
+  let list = -1;
+  for (let i = 0; i < path.length; i++) {
+    const key = path[i];
+    if (Array.isArray(value)) {
+      if (!/^\d+$/.test(key) || Number(key) >= value.length) return path;
+      list = i;
+      value = value[Number(key)];
+    } else if (value !== null && typeof value === "object" && Object.hasOwn(value, key)) {
+      value = (value as Record<string, unknown>)[key];
+    } else {
+      return path;
+    }
+  }
+  return list >= 0 ? path.slice(0, list) : path;
 }
 
 function prune(value: unknown, node: PathNode, at: string[], omitted: string[][]): unknown {

@@ -3,6 +3,8 @@ import { en } from "../i18n/en";
 import { pt } from "../i18n/pt";
 import {
   importConfigFromYaml,
+  checkImportedConfig,
+  coerceNumericStrings,
   omitInvalidLeaves,
   reviewImportedConfig,
   YamlParseError,
@@ -573,17 +575,54 @@ describe("omitInvalidLeaves", () => {
     expect(kept).toEqual({ data: { class_names: ["a", "b"] } });
   });
 
-  it("drops a flagged array element without leaving a hole", () => {
-    const parsed = { list: ["a", 2, "c", 4] };
-    const { data: kept, omitted } = omitInvalidLeaves(parsed, [
-      { field: ["list", "1"] },
-      { field: ["list", "3"] },
-    ]);
-    expect(kept).toEqual({ list: ["a", "c"] });
-    expect(omitted).toEqual([
-      ["list", "1"],
-      ["list", "3"],
-    ]);
+  describe("a list is all or nothing", () => {
+    // A list with an item cut out is still a list the backend accepts, and
+    // training then runs on values nobody wrote: a mean with two of three
+    // channels, a GPU quietly lost. So one bad item takes the whole list out,
+    // and the field falls back to its default.
+    it("drops the whole list when any item is flagged, reporting the list once", () => {
+      const parsed = { list: ["a", 2, "c", 4], other: ["x", "y"] };
+      const { data: kept, omitted } = omitInvalidLeaves(parsed, [
+        { field: ["list", "1"] },
+        { field: ["list", "3"] },
+      ]);
+      expect(kept).toEqual({ other: ["x", "y"] });
+      expect(omitted).toEqual([["list"]]);
+    });
+
+    it("drops the list a flagged leaf of an item belongs to", () => {
+      const parsed = { steps: [{ kind: "grayscale" }, { kind: 5 }], keep: [1] };
+      const { data: kept, omitted } = omitInvalidLeaves(parsed, [
+        { field: ["steps", "1", "kind"] },
+      ]);
+      expect(kept).toEqual({ keep: [1] });
+      expect(omitted).toEqual([["steps"]]);
+    });
+
+    it("stops at the nearest list: an inner list goes, the outer one stays", () => {
+      const parsed = { rows: [{ id: "a", cells: [1, "x"] }, { id: "b", cells: [3] }] };
+      const { data: kept, omitted } = omitInvalidLeaves(parsed, [
+        { field: ["rows", "0", "cells", "1"] },
+      ]);
+      expect(kept).toEqual({ rows: [{ id: "a" }, { id: "b", cells: [3] }] });
+      expect(omitted).toEqual([["rows", "0", "cells"]]);
+    });
+
+    it("still drops a leaf that is not inside a list on its own", () => {
+      const parsed = { data: { base_dir: 7, class_names: ["a"] } };
+      const { data: kept, omitted } = omitInvalidLeaves(parsed, [
+        { field: ["data", "base_dir"] },
+      ]);
+      expect(kept).toEqual({ data: { class_names: ["a"] } });
+      expect(omitted).toEqual([["data", "base_dir"]]);
+    });
+
+    it("ignores an index that points past the end of the list", () => {
+      const parsed = { list: ["a"] };
+      const { data: kept, omitted } = omitInvalidLeaves(parsed, [{ field: ["list", "5"] }]);
+      expect(kept).toEqual(parsed);
+      expect(omitted).toEqual([]);
+    });
   });
 
   it("does nothing for a required field that is simply absent", () => {
@@ -768,6 +807,275 @@ describe("reviewImportedConfig", () => {
     expect(r.ignored).toBe(1); // note
     expect(r.missing).toBe(1); // name
     expect(r.issues.map((i) => i.field.join("."))).toEqual(["name", "note"]);
+  });
+});
+
+/** The shape of the real classification schema where it matters here: a quoted
+ *  number at the top of a section, numeric lists, a nullable list. */
+const REAL_SHAPE: JsonSchema = {
+  type: "object",
+  properties: {
+    name: { type: "string" },
+    training: { $ref: "#/$defs/Training" },
+    data: { $ref: "#/$defs/Data" },
+    device: { $ref: "#/$defs/Device" },
+    labels: { type: "array", items: { type: "string" } },
+  },
+  required: ["data"],
+  $defs: {
+    Training: {
+      type: "object",
+      properties: {
+        learning_rate: { type: "number", exclusiveMinimum: 0 },
+        epochs: { type: "integer", minimum: 1 },
+        optimizer: { type: "string", enum: ["adam", "sgd"] },
+        pretrained: { type: "boolean" },
+      },
+    },
+    Data: {
+      type: "object",
+      properties: {
+        base_dir: { type: "string" },
+        transforms: { $ref: "#/$defs/Transforms" },
+      },
+      required: ["base_dir"],
+    },
+    Transforms: {
+      type: "object",
+      properties: {
+        normalize_mean: { type: "array", items: { type: "number" } },
+        normalize_std: { type: "array", items: { type: "number" } },
+        rotation_degrees: { type: "integer" },
+      },
+    },
+    Device: {
+      type: "object",
+      properties: {
+        gpu_ids: { anyOf: [{ type: "array", items: { type: "integer" } }, { type: "null" }] },
+      },
+    },
+  },
+};
+
+describe("a list with one bad item, as the real schema has them", () => {
+  const review = (yaml: string) =>
+    reviewImportedConfig(pt, parseYamlToConfig(yaml), REAL_SHAPE, REAL_SHAPE.$defs);
+  const transforms = (r: { data: Record<string, unknown> }) =>
+    ((r.data.data as Record<string, unknown>).transforms ?? {}) as Record<string, unknown>;
+
+  it("takes normalize_std out whole instead of keeping two of three values", () => {
+    const r = review(
+      "data:\n  base_dir: d\n  transforms:\n    normalize_std: [0.229, oops, 0.225]\n    rotation_degrees: 5\n",
+    );
+    expect("normalize_std" in transforms(r)).toBe(false);
+    expect(transforms(r).rotation_degrees).toBe(5);
+    expect(r.ignored).toBe(1);
+    expect(r.missing).toBe(0);
+    // The user is still told which item it was.
+    expect(r.issues.map((i) => i.field.join("."))).toEqual([
+      "data.transforms.normalize_std.1",
+    ]);
+  });
+
+  it("takes normalize_mean out whole when one item is not a number", () => {
+    const r = review(
+      "data:\n  base_dir: d\n  transforms:\n    normalize_mean: ['0.485', none, '0.406']\n",
+    );
+    expect("normalize_mean" in transforms(r)).toBe(false);
+    expect(r.ignored).toBe(1);
+  });
+
+  it("takes gpu_ids out whole instead of silently losing a GPU", () => {
+    const r = review("data:\n  base_dir: d\ndevice:\n  gpu_ids: [0, one]\n");
+    expect(r.data.device).toEqual({});
+    expect(r.ignored).toBe(1);
+  });
+
+  it("counts each dropped list once, however many of its items were bad", () => {
+    const r = review(
+      "data:\n  base_dir: d\n  transforms:\n    normalize_mean: [a, b, c]\n    normalize_std: [0.2, x, y]\ndevice:\n  gpu_ids: [z]\n",
+    );
+    expect(r.issues).toHaveLength(6);
+    expect(r.ignored).toBe(3);
+    expect(r.missing).toBe(0);
+  });
+
+  it("counts a required list that had to go as missing, not as ignored", () => {
+    const strict: JsonSchema = {
+      type: "object",
+      properties: { labels: { type: "array", items: { type: "string" } } },
+      required: ["labels"],
+    };
+    const r = reviewImportedConfig(pt, { labels: ["a", 5] }, strict, {});
+    expect(r.data).toEqual({});
+    expect(r.ignored).toBe(0);
+    expect(r.missing).toBe(1);
+  });
+});
+
+describe("coerceNumericStrings", () => {
+  const coerce = (data: Record<string, unknown>) =>
+    coerceNumericStrings(data, REAL_SHAPE, REAL_SHAPE.$defs);
+  const training = (data: Record<string, unknown>) =>
+    coerce({ training: data }).training as Record<string, unknown>;
+
+  it("reads a quoted number the way the backend does", () => {
+    expect(training({ learning_rate: "0.001" }).learning_rate).toBe(0.001);
+    expect(training({ epochs: "10" }).epochs).toBe(10);
+    expect(training({ learning_rate: "1e-4" }).learning_rate).toBe(0.0001);
+    expect(training({ learning_rate: " -0.5 " }).learning_rate).toBe(-0.5);
+    expect(training({ learning_rate: ".5" }).learning_rate).toBe(0.5);
+    expect(training({ epochs: "+5" }).epochs).toBe(5);
+  });
+
+  it("takes an integer written with a zero fraction, but not a real fraction", () => {
+    expect(training({ epochs: "10.0" }).epochs).toBe(10);
+    expect(training({ epochs: "10.5" }).epochs).toBe("10.5");
+  });
+
+  it("leaves anything that is not plainly a finite number alone", () => {
+    for (const text of ["abc", "", "   ", "0x10", "NaN", "Infinity", "-inf", "1,5", "1_000", "1e", "5 6"]) {
+      expect(training({ learning_rate: text }).learning_rate).toBe(text);
+    }
+  });
+
+  it("only touches what the schema says is a number", () => {
+    const out = coerce({
+      name: "123",
+      training: { optimizer: "5", pretrained: "1", epochs: 3, learning_rate: null },
+    });
+    expect(out.name).toBe("123");
+    expect(out.training).toEqual({ optimizer: "5", pretrained: "1", epochs: 3, learning_rate: null });
+  });
+
+  it("goes into the items of a list, and through a nullable list", () => {
+    const out = coerce({
+      data: { transforms: { normalize_mean: ["0.485", "0.456", "0.406"], normalize_std: [0.2, "0.3"] } },
+      device: { gpu_ids: [0, "1"] },
+      labels: ["1", "2"],
+    });
+    expect(out.data).toEqual({
+      transforms: { normalize_mean: [0.485, 0.456, 0.406], normalize_std: [0.2, 0.3] },
+    });
+    expect(out.device).toEqual({ gpu_ids: [0, 1] });
+    // A list of strings is still a list of strings.
+    expect(out.labels).toEqual(["1", "2"]);
+  });
+
+  it("keeps a list item that is not numeric where it is, for the validator to flag", () => {
+    const out = coerce({ data: { transforms: { normalize_std: [0.2, "oops", "0.4"] } } });
+    expect(out.data).toEqual({ transforms: { normalize_std: [0.2, "oops", 0.4] } });
+  });
+
+  it("does not read a string where the field is also allowed to be one, or a fixed set", () => {
+    const schema: JsonSchema = {
+      type: "object",
+      properties: {
+        either: { anyOf: [{ type: "integer" }, { type: "string" }] },
+        level: { type: "integer", enum: [1, 2] },
+      },
+    };
+    const data = { either: "5", level: "1" };
+    expect(coerceNumericStrings(data, schema, {})).toBe(data);
+  });
+
+  it("reads the values of a dict whose schema says they are numbers", () => {
+    const schema: JsonSchema = {
+      type: "object",
+      properties: { weights: { type: "object", additionalProperties: { type: "number" } } },
+    };
+    expect(coerceNumericStrings({ weights: { a: "1.5", b: 2 } }, schema, {})).toEqual({
+      weights: { a: 1.5, b: 2 },
+    });
+  });
+
+  it("returns the same object when nothing needed reading, and never edits its input", () => {
+    const clean = { training: { learning_rate: 0.01 }, name: "x" };
+    expect(coerce(clean)).toBe(clean);
+    const quoted = { training: { learning_rate: "0.01" }, name: "x" };
+    const snapshot = structuredClone(quoted);
+    const out = coerce(quoted);
+    expect(quoted).toEqual(snapshot);
+    expect(out).not.toBe(quoted);
+    expect(out.name).toBe("x");
+  });
+});
+
+describe("a quoted number in an imported file", () => {
+  const review = (yaml: string) =>
+    reviewImportedConfig(pt, parseYamlToConfig(yaml), REAL_SHAPE, REAL_SHAPE.$defs);
+  const training = (r: { data: Record<string, unknown> }) =>
+    (r.data.training ?? {}) as Record<string, unknown>;
+
+  it("keeps lr: '0.001' as 0.001 instead of swapping in the default", () => {
+    const r = review("data:\n  base_dir: d\ntraining:\n  learning_rate: '0.001'\n");
+    expect(training(r).learning_rate).toBe(0.001);
+    expect(r.issues).toEqual([]);
+    expect(r.ignored).toBe(0);
+  });
+
+  it("keeps epochs: '10' as 10", () => {
+    const r = review("data:\n  base_dir: d\ntraining:\n  epochs: '10'\n");
+    expect(training(r).epochs).toBe(10);
+    expect(r.issues).toEqual([]);
+  });
+
+  it("still flags epochs: '10.5', which the backend refuses too", () => {
+    const r = review("data:\n  base_dir: d\ntraining:\n  epochs: '10.5'\n");
+    expect("epochs" in training(r)).toBe(false);
+    expect(r.issues.map((i) => i.field.join("."))).toEqual(["training.epochs"]);
+    expect(r.ignored).toBe(1);
+  });
+
+  it("still flags a string that is not a number, and a boolean written as text", () => {
+    const r = review(
+      "data:\n  base_dir: d\ntraining:\n  learning_rate: fast\n  epochs: ten\n  pretrained: 'yes'\n",
+    );
+    expect(r.issues.map((i) => i.field.join("."))).toEqual([
+      "training.learning_rate",
+      "training.epochs",
+      "training.pretrained",
+    ]);
+    expect(r.ignored).toBe(3);
+  });
+
+  it("reads quoted numbers in lists, so normalize_mean and gpu_ids load whole", () => {
+    const r = review(
+      "data:\n  base_dir: d\n  transforms:\n    normalize_mean: ['0.485', '0.456', '0.406']\ndevice:\n  gpu_ids: [0, '1']\n",
+    );
+    expect(r.issues).toEqual([]);
+    expect(r.data.device).toEqual({ gpu_ids: [0, 1] });
+    expect((r.data.data as Record<string, unknown>).transforms).toEqual({
+      normalize_mean: [0.485, 0.456, 0.406],
+    });
+  });
+});
+
+describe("checkImportedConfig (the panels that refuse a file with problems)", () => {
+  const check = (t: typeof pt, yaml: string) =>
+    checkImportedConfig(t, parseYamlToConfig(yaml), REAL_SHAPE, REAL_SHAPE.$defs);
+
+  it("lets a file with quoted numbers through, carrying them as numbers", () => {
+    // The panels build their form from this data: a string in a number field
+    // would silently fall back to the default there.
+    const r = check(pt, "data:\n  base_dir: d\ntraining:\n  epochs: '5'\n  learning_rate: '0.02'\n");
+    expect(r).toEqual({
+      data: { data: { base_dir: "d" }, training: { epochs: 5, learning_rate: 0.02 } },
+    });
+  });
+
+  it("refuses what the backend refuses, naming the field, in the language it is given", () => {
+    const yaml = "data:\n  base_dir: d\ntraining:\n  epochs: '10.5'\n";
+    expect(check(pt, yaml)).toEqual({ problem: "training › epochs: Esperado um inteiro." });
+    expect(check(en, yaml)).toEqual({ problem: "training › epochs: Expected an integer." });
+  });
+
+  it("shows the first five problems and no more", () => {
+    const r = check(
+      pt,
+      "training:\n  learning_rate: a\n  epochs: b\n  optimizer: 1\n  pretrained: c\ndata:\n  base_dir: 1\n  transforms:\n    rotation_degrees: x\n",
+    );
+    expect("problem" in r && r.problem.split("\n")).toHaveLength(5);
   });
 });
 

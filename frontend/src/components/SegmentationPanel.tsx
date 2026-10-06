@@ -12,7 +12,7 @@ import {
   segmentationFormFromPayload,
   type SegmentationForm,
 } from "../lib/segmentation-models";
-import { exportConfigToYaml, validateParsedConfig } from "../lib/yaml-config";
+import { checkImportedConfig, exportConfigToYaml } from "../lib/yaml-config";
 import type { ValidationError } from "../hooks/useExperiment";
 import { NumberField, SelectField, Segmented, TextField, Toggle } from "./controls";
 import { CvCard, type CvPayload } from "./CvCard";
@@ -163,19 +163,16 @@ export function SegmentationPanel({
           exportConfigToYaml(buildSegmentationPayload(formData), formData.name)
         }
         onImportConfig={async (data) => {
+          let payload = data;
           try {
             const schema = await fetchTaskSchema("segmentation");
-            const issues = validateParsedConfig(t, data, schema, schema.$defs ?? {});
-            if (issues.length > 0) {
-              return issues
-                .slice(0, 5)
-                .map((i) => `${i.field.join(" › ")}: ${i.message}`)
-                .join("\n");
-            }
+            const checked = checkImportedConfig(t, data, schema, schema.$defs ?? {});
+            if ("problem" in checked) return checked.problem;
+            payload = checked.data;
           } catch {
             // schema unavailable → import tolerantly; o 422 do submit cobre.
           }
-          setFormData(() => segmentationFormFromPayload(data));
+          setFormData(() => segmentationFormFromPayload(payload));
           return null;
         }}
       />
