@@ -2896,7 +2896,8 @@ def _evaluate_standalone_run(
 
     Raises:
         FileNotFoundError: the run has no checkpoint on disk.
-        ValueError: the chosen path does not exist.
+        ValueError: the chosen path does not exist, or an anomaly run has no
+            normal training split to calibrate its threshold on.
     """
     import torch
 
@@ -2938,7 +2939,11 @@ def _evaluate_standalone_run(
         reg_model.load_state_dict(
             torch.load(checkpoint, map_location="cpu", weights_only=True)
         )
-        reg_loader = RegressionDataModule(reg_config).test_loader()
+        # The chosen manifest is the only split: a held-out set rarely has
+        # train.csv / val.csv beside it.
+        reg_loader = RegressionDataModule(
+            reg_config, evaluation_only=True
+        ).test_loader()
         if reg_loader is None:
             raise ValueError(f"Nenhuma linha utilizável em {chosen}.")
         mse, rmse, mae, r2 = RegressionTrainer(reg_config).evaluate(
@@ -2957,7 +2962,9 @@ def _evaluate_standalone_run(
         seg_model.load_state_dict(
             torch.load(checkpoint, map_location="cpu", weights_only=True)
         )
-        seg_loader = SegmentationDataModule(seg_config).test_loader()
+        seg_loader = SegmentationDataModule(
+            seg_config, evaluation_only=True
+        ).test_loader()
         if seg_loader is None:
             raise ValueError(f"Nenhum par imagem/máscara encontrado em {chosen}.")
         miou, dice, pixel_acc = SegmentationTrainer(seg_config).evaluate(
@@ -2972,6 +2979,22 @@ def _evaluate_standalone_run(
         from visionforge.utils.anomaly_config import AnomalyConfig
 
         anom_config = AnomalyConfig.model_validate(config_dict)
+        # Checked before the checkpoint is loaded: the data module's own message
+        # ("no normal training images") does not tell someone who just picked a
+        # test folder why a training folder is being asked for.
+        train_normal = (
+            anom_config.data.base_dir
+            / anom_config.data.train_dir
+            / anom_config.data.normal_dir
+        )
+        if not train_normal.is_dir():
+            raise ValueError(
+                "A detecção de anomalias calibra o limiar com as imagens normais "
+                f"de treino, e elas não existem em {train_normal}. Escolha uma "
+                f"pasta de teste que esteja ao lado da pasta '{anom_config.data.train_dir}' "
+                f"(layout MVTec: {anom_config.data.train_dir}/"
+                f"{anom_config.data.normal_dir}/ e a pasta de teste na mesma pasta pai)."
+            )
         anom_model = AnomalyModelFactory.create(anom_config.model)
         anom_model.load_state_dict(
             torch.load(checkpoint, map_location="cpu", weights_only=True)

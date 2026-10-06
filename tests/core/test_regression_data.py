@@ -167,6 +167,60 @@ class TestRegressionDataModule:
         dm = RegressionDataModule(_config(regression_root, {"num_workers": 4}))
         assert dm._num_workers == 0
 
+    def test_training_still_needs_train_csv_up_front(
+        self, regression_root: Path
+    ) -> None:
+        (regression_root / "train.csv").unlink()
+        with pytest.raises(FileNotFoundError, match=r"manifest not found.*train\.csv"):
+            RegressionDataModule(_config(regression_root))
+
+    def test_training_still_needs_val_csv_up_front(self, regression_root: Path) -> None:
+        (regression_root / "val.csv").unlink()
+        with pytest.raises(FileNotFoundError, match=r"manifest not found.*val\.csv"):
+            RegressionDataModule(_config(regression_root))
+
+
+class TestRegressionDataModuleEvaluationOnly:
+    def test_scores_the_test_manifest_without_train_or_val(
+        self, regression_root: Path
+    ) -> None:
+        (regression_root / "train.csv").unlink()
+        (regression_root / "val.csv").unlink()
+        dm = RegressionDataModule(_config(regression_root), evaluation_only=True)
+        loader = dm.test_loader()
+        assert loader is not None
+        assert sum(len(t) for _, t in loader) == 1
+
+    def test_does_not_read_a_train_manifest_that_is_there(
+        self, regression_root: Path
+    ) -> None:
+        # A train.csv with other columns would raise if it were parsed.
+        (regression_root / "train.csv").write_text("other\n1\n", encoding="utf-8")
+        dm = RegressionDataModule(_config(regression_root), evaluation_only=True)
+        assert dm.test_loader() is not None
+
+    def test_has_no_train_or_val_loader(self, regression_root: Path) -> None:
+        dm = RegressionDataModule(_config(regression_root), evaluation_only=True)
+        with pytest.raises(RuntimeError, match="train"):
+            dm.train_loader()
+        with pytest.raises(RuntimeError, match="val"):
+            dm.val_loader()
+
+    def test_small_test_set_downgrades_workers(self, regression_root: Path) -> None:
+        dm = RegressionDataModule(
+            _config(regression_root, {"num_workers": 4}), evaluation_only=True
+        )
+        assert dm._num_workers == 0
+
+    def test_without_a_test_manifest_there_is_no_loader(
+        self, regression_root: Path
+    ) -> None:
+        (regression_root / "test.csv").unlink()
+        dm = RegressionDataModule(
+            _config(regression_root, {"num_workers": 4}), evaluation_only=True
+        )
+        assert dm.test_loader() is None
+
     def test_dataset_is_picklable(self, regression_root: Path) -> None:
         # DataLoader workers must pickle the dataset under Windows 'spawn'.
         ds = RegressionCsvDataset(

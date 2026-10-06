@@ -216,3 +216,45 @@ class TestSegmentationDataModule:
         _make_split(tmp_path, "test", 2)
         dm = SegmentationDataModule(_config(tmp_path))
         assert dm.test_loader() is not None
+
+    def test_training_still_needs_the_train_split_up_front(
+        self, tmp_path: Path
+    ) -> None:
+        _make_split(tmp_path, "val", 2)
+        with pytest.raises(FileNotFoundError, match="train"):
+            SegmentationDataModule(_config(tmp_path))
+
+    def test_training_still_needs_the_val_split_up_front(self, tmp_path: Path) -> None:
+        _make_split(tmp_path, "train", 2)
+        with pytest.raises(FileNotFoundError, match="val"):
+            SegmentationDataModule(_config(tmp_path))
+
+
+class TestSegmentationDataModuleEvaluationOnly:
+    def test_scores_the_test_split_without_train_or_val(self, tmp_path: Path) -> None:
+        _make_split(tmp_path, "test", 3)
+        dm = SegmentationDataModule(_config(tmp_path), evaluation_only=True)
+        loader = dm.test_loader()
+        assert loader is not None
+        assert sum(len(xb) for xb, _ in loader) == 3
+
+    def test_has_no_train_or_val_loader(self, tmp_path: Path) -> None:
+        _make_split(tmp_path, "test", 2)
+        dm = SegmentationDataModule(_config(tmp_path), evaluation_only=True)
+        with pytest.raises(RuntimeError, match="train"):
+            dm.train_loader()
+        with pytest.raises(RuntimeError, match="val"):
+            dm.val_loader()
+
+    def test_small_test_set_downgrades_workers(self, tmp_path: Path) -> None:
+        _make_split(tmp_path, "test", 2)
+        dm = SegmentationDataModule(
+            _config(tmp_path, {"data": {"num_workers": 4}}), evaluation_only=True
+        )
+        assert dm._num_workers == 0
+
+    def test_without_a_test_split_there_is_no_loader(self, tmp_path: Path) -> None:
+        dm = SegmentationDataModule(
+            _config(tmp_path, {"data": {"num_workers": 4}}), evaluation_only=True
+        )
+        assert dm.test_loader() is None

@@ -162,10 +162,13 @@ class SegmentationDataModule:
     """Builds paired image/mask datasets and their DataLoaders.
 
     train and val are required; test is optional (``test_loader`` returns None
-    when the test split directory is absent).
+    when the test split directory is absent). ``evaluation_only`` skips train and
+    val, for scoring a checkpoint on a folder with no train/ or val/ beside it.
     """
 
-    def __init__(self, config: SegmentationConfig) -> None:
+    def __init__(
+        self, config: SegmentationConfig, *, evaluation_only: bool = False
+    ) -> None:
         cfg = config.data
         base = cfg.base_dir
 
@@ -186,18 +189,27 @@ class SegmentationDataModule:
                 is_train=is_train,
             )
 
-        self._train = _dataset(cfg.train_dir, is_train=True)
-        self._val = _dataset(cfg.val_dir, is_train=False)
+        self._train: SegmentationDataset | None = None
+        self._val: SegmentationDataset | None = None
+        if not evaluation_only:
+            self._train = _dataset(cfg.train_dir, is_train=True)
+            self._val = _dataset(cfg.val_dir, is_train=False)
         self._test: SegmentationDataset | None = None
         if (base / cfg.test_dir / cfg.images_subdir).is_dir():
             self._test = _dataset(cfg.test_dir, is_train=False)
 
-        if self._num_workers > 0 and len(self._train) < _SMALL_DATASET_THRESHOLD:
+        # Without a train split, the set being scored decides whether workers pay.
+        sized = self._train if self._train is not None else self._test
+        if (
+            self._num_workers > 0
+            and sized is not None
+            and len(sized) < _SMALL_DATASET_THRESHOLD
+        ):
             from loguru import logger
 
             logger.info(
                 "Segmentation set has {} images (< {}); setting num_workers=0.",
-                len(self._train),
+                len(sized),
                 _SMALL_DATASET_THRESHOLD,
             )
             self._num_workers = 0
@@ -243,19 +255,25 @@ class SegmentationDataModule:
 
     def train_loader(self) -> DataLoader:  # type: ignore[type-arg]
         """DataLoader for the training split (shuffled)."""
+        train = self._train
+        if train is None:
+            raise RuntimeError("evaluation_only data module has no train split.")
         return self._cache.cached(
             "train",
             lambda: DataLoader(
-                self._train, shuffle=True, **self._loader_kwargs(persistent=True)
+                train, shuffle=True, **self._loader_kwargs(persistent=True)
             ),
         )
 
     def val_loader(self) -> DataLoader:  # type: ignore[type-arg]
         """DataLoader for the validation split."""
+        val = self._val
+        if val is None:
+            raise RuntimeError("evaluation_only data module has no val split.")
         return self._cache.cached(
             "val",
             lambda: DataLoader(
-                self._val, shuffle=False, **self._loader_kwargs(persistent=True)
+                val, shuffle=False, **self._loader_kwargs(persistent=True)
             ),
         )
 
