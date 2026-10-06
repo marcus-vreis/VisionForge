@@ -87,7 +87,8 @@ export const en: Dict = {
     datasets: "datasets",
     datasetsTitle: "Download a dataset to a local folder",
     queue: "queue",
-    queueTitle: "View and reorder the runs waiting for the GPU",
+    queueTitle:
+      "View the run in progress and the ones waiting for the GPU — you can stop one or remove another",
   },
   deviceSelector: {
     using: "using",
@@ -1353,6 +1354,8 @@ export const en: Dict = {
     waiting: (waited: string) => `waiting ${waited}`,
     removeTitle: "Remove from the queue (does not affect runs already started)",
     stopTitle: "Stop this run (the work done so far is kept)",
+    stopUnavailableTitle:
+      "This kind of run cannot be stopped part-way: it goes on to the end.",
     stop: "■ stop",
     remove: "🗑 remove",
   },
@@ -1388,6 +1391,25 @@ export const en: Dict = {
     pipeline: (n: number) => `⚗ active pipeline · ${n} filter${n === 1 ? "" : "s"}`,
     minimize: "Minimize",
     viewResults: "↗ View results",
+    stop: "■ Stop",
+    stopTitle: "Stop the run at the end of the epoch in progress",
+    stopUnavailableTitle:
+      "This kind of run cannot be stopped part-way: it goes on to the end.",
+    stopConfirmEpoch:
+      "Stop this run? It finishes the epoch in progress and keeps the best checkpoint and the history so far. If it stops before the last epoch, you can resume it from the History.",
+    stopConfirmTrial:
+      "Stop this search? The trial in progress finishes its current epoch and the ones that have not started are skipped. Trials already finished are kept; a stopped search cannot be resumed.",
+    stopConfirmYes: "Stop the run",
+    stopConfirmNo: "Keep training",
+    stopSending: "Stopping…",
+    stopRequested:
+      "Stop requested: the run finishes the epoch in progress and then stops.",
+    stopFailed: "Failed to stop the run.",
+    stopped: "Training stopped",
+    stoppedLog: (epoch: number | null, total: number | null) =>
+      `stopped${epoch !== null && total !== null ? ` at epoch ${epoch}/${total}` : ""} · best checkpoint kept`,
+    stopTooLate:
+      "> the stop arrived during the last epoch: the run finished normally",
   },
   compareRuns: {
     back: "← history",
@@ -1468,7 +1490,7 @@ export const en: Dict = {
     },
     train: {
       title: "Train",
-      body: "This button runs whatever is selected — a single run, a grid search, cross-validation or replicates. While it runs, a live view shows the progress and each epoch's metrics; you can minimize it and come back to it later.",
+      body: "This button runs whatever is selected — a single run, a grid search, cross-validation or replicates. While it runs, a live view shows the progress and each epoch's metrics; you can minimize it and come back to it later. In single runs and searches it also has a Stop button: the run finishes the epoch in progress and keeps what it has done so far.",
     },
     history: {
       title: "Everything is saved",

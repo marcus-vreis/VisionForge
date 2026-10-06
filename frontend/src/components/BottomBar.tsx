@@ -1,4 +1,5 @@
 import { useT } from "../i18n/useT";
+import { showQueueButton } from "../lib/run-control";
 import { DeviceSelector, type DeviceSelection } from "./DeviceSelector";
 
 interface BottomBarProps {
@@ -10,6 +11,10 @@ interface BottomBarProps {
   historyCount: number;
   /** Submissions waiting behind the active run (ADR-075); 0 hides the badge. */
   queuedCount: number;
+  /** A job is executing on the server — this tab's or another's. Keeps the queue
+   *  button up even with nothing waiting, since its row is where a running job
+   *  is stopped once the training sheet is gone (e.g. after a reload). */
+  serverRunning: boolean;
   selection: DeviceSelection;
   onSelectionChange: (next: DeviceSelection) => void;
   isRunning: boolean;
@@ -32,6 +37,7 @@ export function BottomBar({
   disabled,
   historyCount,
   queuedCount,
+  serverRunning,
   selection,
   onSelectionChange,
   isRunning,
@@ -147,9 +153,12 @@ export function BottomBar({
         {t.bottomBar.datasets}
       </button>
 
-      {/* Only shown once something is waiting: an always-visible "fila 0" would
-          be a permanent reminder of a queue most sessions never form. */}
-      {queuedCount > 0 && (
+      {/* Shown while something is waiting or running: the running job's row is
+          how it gets stopped when this tab has no training sheet for it (after
+          a reload, or from another tab). An idle server with nothing waiting
+          shows nothing — an always-visible "fila 0" would be a permanent
+          reminder of a queue most sessions never form. */}
+      {showQueueButton(queuedCount, serverRunning) && (
         <button
           type="button"
           onClick={onQueue}
@@ -172,19 +181,21 @@ export function BottomBar({
         >
           <span style={{ fontSize: 14 }}>⧗</span>
           {t.bottomBar.queue}
-          <span
-            style={{
-              marginLeft: 4,
-              padding: "2px 7px",
-              background: "rgba(0,0,0,0.35)",
-              color: "var(--accent-vf)",
-              borderRadius: 999,
-              fontSize: 10,
-              letterSpacing: "0.04em",
-            }}
-          >
-            {queuedCount}
-          </span>
+          {queuedCount > 0 && (
+            <span
+              style={{
+                marginLeft: 4,
+                padding: "2px 7px",
+                background: "rgba(0,0,0,0.35)",
+                color: "var(--accent-vf)",
+                borderRadius: 999,
+                fontSize: 10,
+                letterSpacing: "0.04em",
+              }}
+            >
+              {queuedCount}
+            </span>
+          )}
         </button>
       )}
       </div>

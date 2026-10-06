@@ -15,6 +15,7 @@ import type { PanelStrategy } from "./components/ExperimentHeader";
 import type { SweepPayload } from "./components/SweepCard";
 import type { ReplicatesPayload } from "./lib/replicates-form";
 import { announce, requestPermission, resetTitle } from "./lib/run-notify";
+import { serverRunning } from "./lib/run-control";
 import { BottomBar } from "./components/BottomBar";
 import type { DeviceSelection } from "./components/DeviceSelector";
 import { Header } from "./components/Header";
@@ -79,9 +80,14 @@ type AdvancedTask = "regression" | "segmentation" | "detection" | "anomaly";
  * ambient information, and flickering it to zero on one dropped request would
  * be a worse lie than being a few seconds late.
  */
-async function readQueueDepth(set: (n: number) => void): Promise<void> {
+async function readQueueDepth(
+  setDepth: (n: number) => void,
+  setRunning: (running: boolean) => void,
+): Promise<void> {
   try {
-    set((await fetchQueue()).pending.length);
+    const snap = await fetchQueue();
+    setDepth(snap.pending.length);
+    setRunning(snap.active !== null);
   } catch {
     // keep the last known depth
   }
@@ -109,6 +115,10 @@ export default function App() {
   // Seeded once on mount so a reload mid-queue still shows the badge, then kept
   // live by the run status the training hook already polls (ADR-075).
   const [seededQueueCount, setSeededQueueCount] = useState(0);
+  // Whether the server is executing a job this tab did not start (or no longer
+  // follows): after a reload the running job has no training sheet, and the
+  // queue button is the way back to it.
+  const [seededRunning, setSeededRunning] = useState(false);
   const [overlayVisible, setOverlayVisible] = useState(false);
   const [resultsVisible, setResultsVisible] = useState(false);
   const [schema, setSchema] = useState<JsonSchema | null>(null);
@@ -193,24 +203,29 @@ export default function App() {
   // While this tab has a run in flight its own polling is authoritative;
   // otherwise fall back to what was on the server when the page loaded.
   const queuedCount = runActive ? (status.queued ?? 0) : seededQueueCount;
+  const serverBusy = serverRunning({
+    runActive,
+    status: status.status,
+    seededRunning,
+  });
 
   // A page reload does not clear the server's queue, so ask once whether
-  // anything is already waiting.
+  // anything is already running or waiting.
   useEffect(() => {
-    void readQueueDepth(setSeededQueueCount);
+    void readQueueDepth(setSeededQueueCount, setSeededRunning);
   }, []);
 
-  // Keep asking only while a badge is up and this tab has no run of its own to
-  // poll: those jobs still drain, and a stale badge is worse than no badge.
-  // Stops on its own once the queue empties.
+  // Keep asking only while a badge or the queue button is up and this tab has
+  // no run of its own to poll: those jobs still drain, and a stale badge is
+  // worse than no badge. Stops on its own once the server is idle.
   useEffect(() => {
-    if (runActive || seededQueueCount === 0) return;
+    if (runActive || (seededQueueCount === 0 && !seededRunning)) return;
     const id = setInterval(
-      () => void readQueueDepth(setSeededQueueCount),
+      () => void readQueueDepth(setSeededQueueCount, setSeededRunning),
       5000,
     );
     return () => clearInterval(id);
-  }, [runActive, seededQueueCount]);
+  }, [runActive, seededQueueCount, seededRunning]);
 
   useEffect(() => {
     fetchSchema()
@@ -666,6 +681,7 @@ export default function App() {
         trainLabel={t.app.train[activeStrategy] ?? t.app.train.simple}
         historyCount={historyCount}
         queuedCount={queuedCount}
+        serverRunning={serverBusy}
         selection={device}
         onSelectionChange={setDevice}
         isRunning={status.status === "running"}
@@ -695,6 +711,7 @@ export default function App() {
         open={showQueue}
         onClose={() => setShowQueue(false)}
         onCountChange={setSeededQueueCount}
+        onRunningChange={setSeededRunning}
       />
 
       {runActive && (

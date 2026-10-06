@@ -15,6 +15,19 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Added
 
+- **Dá para parar o treino em andamento pela tela de treino.** Um treino sem
+  nada na fila só podia ser parado matando o servidor: o botão de parar existia
+  apenas na linha do treino em execução da fila, e o botão da fila só aparecia
+  quando algo esperava. A tela de treino ganhou "■ Parar", que pede confirmação
+  (um clique errado encerra um treino longo) e diz o que acontece: o treino
+  termina a época em andamento e mantém o melhor checkpoint e o histórico — se
+  parou antes da última época, o Histórico oferece retomar. Uma busca em
+  grade/aleatória também pula os trials que ainda não começaram, e não pode ser
+  retomada. Quando o servidor encerra a execução, o cabeçalho passa a dizer
+  "Treino interrompido" (e não "concluído"), com a época em que parou. O botão
+  da fila agora aparece também enquanto um treino roda, mesmo sem nada
+  esperando: é o único caminho até o treino depois de recarregar a página
+  ([ADR-088](docs/dev/DECISIONS.md), [ADR-094](docs/dev/DECISIONS.md)).
 - **Interface bilíngue (pt/en).** Todas as telas da interface existem em
   português e em inglês, com um seletor PT/EN no cabeçalho. A escolha fica
   lembrada no navegador, e a primeira visita segue o idioma do navegador. Os
@@ -29,6 +42,15 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Fixed
 
+- **O botão de parar não promete mais o que o servidor não cumpre.** Parar uma
+  validação cruzada (K-fold), uma comparação de modelos, réplicas, o sweep de
+  uma tarefa que não é classificação ou uma tarefa própria respondia "ok" e o
+  treino seguia até o fim, porque o servidor só entrega o pedido de parada aos
+  treinos simples e às buscas de classificação
+  ([ADR-094](docs/dev/DECISIONS.md)). Nesses casos o botão de parar fica
+  desativado e diz por quê, tanto na fila quanto na tela de treino. O
+  PatchCore, que não tem épocas, também não para no meio; só a tela de treino
+  o reconhece, porque a fila não sabe qual modelo uma tarefa de anomalia usa.
 - **"Testar em outro dataset" não exige mais `train` e `val` ao lado.** Em
   regressão, escolher um `.csv` numa pasta sem `train.csv` e `val.csv` falhava
   com "Regression manifest not found", e em segmentação o mesmo acontecia com

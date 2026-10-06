@@ -95,7 +95,8 @@ export const pt = {
     datasets: "datasets",
     datasetsTitle: "Baixar um dataset para uma pasta local",
     queue: "fila",
-    queueTitle: "Ver e reordenar os treinos que estão esperando a GPU",
+    queueTitle:
+      "Ver o treino em execução e os que esperam a GPU — dá para parar um ou remover outro",
   },
   deviceSelector: {
     using: "usando",
@@ -1500,6 +1501,9 @@ export const pt = {
     waiting: (waited: string) => `esperando ${waited}`,
     removeTitle: "Remover da fila (não afeta treinos já iniciados)",
     stopTitle: "Interromper este treino (o trabalho já feito é mantido)",
+    // The running row of a kind of run the server cannot stop mid-way (lib/run-control.ts).
+    stopUnavailableTitle:
+      "Este tipo de execução não pode ser interrompida no meio: ela segue até o fim.",
     stop: "■ parar",
     remove: "🗑 remover",
   },
@@ -1546,6 +1550,29 @@ export const pt = {
     pipeline: (n: number) => `⚗ pipeline ativo · ${n} filtro${n === 1 ? "" : "s"}`,
     minimize: "Minimizar",
     viewResults: "↗ Ver resultados",
+    // The stop control of a running job. The server stops a run at the top of its next
+    // epoch, so it finishes the one in progress and keeps what it has saved; a search
+    // also skips the trials not yet started (lib/run-control.ts).
+    stop: "■ Parar",
+    stopTitle: "Parar o treino ao fim da época em andamento",
+    stopUnavailableTitle:
+      "Este tipo de execução não pode ser interrompida no meio: ela segue até o fim.",
+    stopConfirmEpoch:
+      "Parar este treino? Ele termina a época em andamento e mantém o melhor checkpoint e o histórico até aqui. Se parar antes da última época, dá para retomar pelo Histórico.",
+    stopConfirmTrial:
+      "Parar esta busca? O treino em andamento termina a época atual e os que ainda não começaram são pulados. Os trials já concluídos ficam salvos; uma busca interrompida não pode ser retomada.",
+    stopConfirmYes: "Parar o treino",
+    stopConfirmNo: "Continuar treinando",
+    stopSending: "Parando…",
+    stopRequested:
+      "Parada pedida: o treino termina a época em andamento e então para.",
+    stopFailed: "Não foi possível parar o treino.",
+    // Header, once a stopped run has ended; the status the server reports for it is still "completed".
+    stopped: "Treino interrompido",
+    stoppedLog: (epoch: number | null, total: number | null) =>
+      `interrompido${epoch !== null && total !== null ? ` na época ${epoch}/${total}` : ""} · melhor checkpoint mantido`,
+    stopTooLate:
+      "> a parada chegou na última época: o treino terminou normalmente",
   },
   // Side-by-side comparison of two or more runs (components/CompareRunsPanel.tsx).
   compareRuns: {
@@ -1634,7 +1661,7 @@ export const pt = {
     },
     train: {
       title: "Treinar",
-      body: "O botão roda exatamente o que está selecionado — um treino simples, uma busca em grade, validação cruzada ou réplicas. Enquanto roda, uma tela mostra o progresso e as métricas de cada época; você pode minimizá-la e voltar a ela depois.",
+      body: "O botão roda exatamente o que está selecionado — um treino simples, uma busca em grade, validação cruzada ou réplicas. Enquanto roda, uma tela mostra o progresso e as métricas de cada época; você pode minimizá-la e voltar a ela depois. Nos treinos simples e nas buscas ela também tem o botão Parar: o treino termina a época em andamento e guarda o que já foi feito.",
     },
     history: {
       title: "Tudo fica salvo",

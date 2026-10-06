@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ApiError, cancelQueuedRun, fetchQueue } from "../api/client";
 import { useT } from "../i18n/useT";
 import { strategyLabel, taskLabel, waitedFor } from "../lib/queue-format";
+import { stopMode } from "../lib/run-control";
 import type { QueuedJobInfo } from "../types/run";
 
 interface QueueOverlayProps {
@@ -11,6 +12,9 @@ interface QueueOverlayProps {
   /** Reports the pending count up so the bottom-bar badge cannot go stale —
    *  cancelling here changes a number this component does not own. */
   onCountChange?: (pending: number) => void;
+  /** Same for whether a job is running: the bottom bar keeps the queue button
+   *  up while one is, so it has to hear when that stops. */
+  onRunningChange?: (running: boolean) => void;
 }
 
 /** The run queue as a surface of its own (ADR-075).
@@ -24,6 +28,7 @@ export function QueueOverlay({
   open,
   onClose,
   onCountChange,
+  onRunningChange,
 }: QueueOverlayProps) {
   const t = useT();
   const [active, setActive] = useState<QueuedJobInfo | null>(null);
@@ -37,13 +42,14 @@ export function QueueOverlay({
       setActive(snap.active);
       setPending(snap.pending);
       onCountChange?.(snap.pending.length);
+      onRunningChange?.(snap.active !== null);
       setError(null);
     } catch (e) {
       setError(
         e instanceof ApiError ? e.message : t.queueOverlay.readFailed,
       );
     }
-  }, [onCountChange, t]);
+  }, [onCountChange, onRunningChange, t]);
 
   // Poll while open: the queue advances on its own as jobs finish.
   useEffect(() => {
@@ -212,11 +218,13 @@ export function QueueOverlay({
           )}
 
           {/* The running job can be stopped too (ADR-088): it finishes the epoch
-              it is in and keeps the best checkpoint, so the button is safe. */}
+              it is in and keeps the best checkpoint, so the button is safe — for
+              the kinds of run that read the stop at all (lib/run-control.ts). */}
           {active && (
             <JobRow
               job={active}
               running
+              stoppable={stopMode(active) !== "none"}
               onCancel={() => void cancel(active.run_id)}
               cancelling={busyId === active.run_id}
             />
@@ -240,12 +248,15 @@ export function QueueOverlay({
 function JobRow({
   job,
   running = false,
+  stoppable = true,
   position,
   onCancel,
   cancelling = false,
 }: {
   job: QueuedJobInfo;
   running?: boolean;
+  /** False for a running job the server cannot stop part-way. */
+  stoppable?: boolean;
   position?: number;
   onCancel: () => void;
   cancelling?: boolean;
@@ -313,8 +324,14 @@ function JobRow({
       <button
         type="button"
         onClick={onCancel}
-        disabled={cancelling}
-        title={running ? t.queueOverlay.stopTitle : t.queueOverlay.removeTitle}
+        disabled={cancelling || (running && !stoppable)}
+        title={
+          running
+            ? stoppable
+              ? t.queueOverlay.stopTitle
+              : t.queueOverlay.stopUnavailableTitle
+            : t.queueOverlay.removeTitle
+        }
         style={{
           padding: "7px 12px",
           borderRadius: 9,
@@ -323,8 +340,12 @@ function JobRow({
           color: "var(--vf-text-dim)",
           fontFamily: "var(--font-mono)",
           fontSize: 11,
-          cursor: cancelling ? "wait" : "pointer",
-          opacity: cancelling ? 0.5 : 1,
+          cursor: cancelling
+            ? "wait"
+            : running && !stoppable
+              ? "not-allowed"
+              : "pointer",
+          opacity: cancelling || (running && !stoppable) ? 0.5 : 1,
           flexShrink: 0,
         }}
       >

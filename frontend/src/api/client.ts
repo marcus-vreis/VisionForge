@@ -279,7 +279,14 @@ export async function fetchQueue(): Promise<QueueSnapshot> {
   return request<QueueSnapshot>("/queue");
 }
 
-/** Drop a submission that has not started. 404 once it is running. */
+/** Stop a submission, whether it is waiting or already training.
+ *
+ * A waiting job is removed at once. A running one is only *asked* to stop: the
+ * 200 means the request was delivered, and the trainer ends the run at the top
+ * of its next epoch, keeping the best checkpoint and the history so far
+ * (ADR-088, ADR-094). It is 404 when no job carries that id — already finished,
+ * or never submitted. Not every kind of run listens; lib/run-control.ts says
+ * which. */
 export async function cancelQueuedRun(
   runId: string,
 ): Promise<{ run_id: string; status: string }> {

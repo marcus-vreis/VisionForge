@@ -1,8 +1,15 @@
 import { useEffect, useRef, useState } from "react";
+import { ApiError, cancelQueuedRun, fetchQueue } from "../api/client";
 import type { Dict } from "../i18n/pt";
 import { useT } from "../i18n/useT";
+import {
+  hasEnded,
+  lastEpochOf,
+  stopMode,
+  stopOutcome,
+} from "../lib/run-control";
 import { phaseName } from "../lib/training-phase";
-import type { RunStatus, TrainingEvent } from "../types/run";
+import type { QueuedJobInfo, RunStatus, TrainingEvent } from "../types/run";
 
 interface TrainingOverlayProps {
   status: RunStatus;
@@ -27,6 +34,17 @@ interface TrainingOverlayProps {
 
 /** A log line: the trainer's own text, or one of ours that follows the language. */
 type LogLine = string | ((t: Dict) => string);
+
+/** Where a stop request stands. `requested` means the server accepted it, not
+ *  that the run has ended: it still finishes its epoch (ADR-088). */
+type StopPhase = "idle" | "confirming" | "sending" | "requested";
+
+/** The stop state belongs to one run: a different `run_id` reads as idle. */
+interface StopState {
+  runId: string | null;
+  phase: StopPhase;
+  error: string | null;
+}
 
 /** Modal overlay shown while an experiment is running or just completed. */
 export function TrainingOverlay({
@@ -237,15 +255,95 @@ export function TrainingOverlay({
     return () => clearTimeout(timer);
   }, [phaseLabel]);
 
+  // Stopping the running job (ADR-088). What a stop can promise depends on the
+  // kind of run, which the queue snapshot knows (task + strategy) and this sheet
+  // does not: read it once when the run starts executing.
+  const runId = status.run_id;
+  const [activeJob, setActiveJob] = useState<QueuedJobInfo | null>(null);
+  useEffect(() => {
+    if (!isRunning || !runId) return;
+    let alive = true;
+    fetchQueue()
+      .then((snap) => {
+        if (alive) setActiveJob(snap.active);
+      })
+      .catch(() => {
+        // Unreadable queue: the stop is offered as for a plain run (lib/run-control.ts).
+      });
+    return () => {
+      alive = false;
+    };
+  }, [isRunning, runId]);
+  const job = activeJob !== null && activeJob.run_id === runId ? activeJob : null;
+  // PatchCore reports phases instead of epochs and has no boundary to stop at.
+  const mode = stopMode(job, { phaseOnly: latestPhase !== undefined });
+
+  const [stop, setStop] = useState<StopState>({
+    runId: null,
+    phase: "idle",
+    error: null,
+  });
+  const stopPhase: StopPhase = stop.runId === runId ? stop.phase : "idle";
+  const stopError = stop.runId === runId ? stop.error : null;
+  const setStopPhase = (phase: StopPhase) =>
+    setStop({ runId, phase, error: null });
+
+  const confirmStop = async () => {
+    if (!runId) return;
+    setStop({ runId, phase: "sending", error: null });
+    try {
+      await cancelQueuedRun(runId);
+      setStop({ runId, phase: "requested", error: null });
+    } catch (e) {
+      setStop({
+        runId,
+        phase: "idle",
+        error:
+          e instanceof ApiError ? e.message : t.trainingOverlay.stopFailed,
+      });
+    }
+  };
+
+  // The server reports a stopped run as an ordinary completed one, so the
+  // outcome is read from the stream: the `end` event closes it, and a run that
+  // ends short of its configured length is the one that stopped.
+  const stopOutcomeNow = stopOutcome({
+    requested: stopPhase === "requested",
+    ended: hasEnded(progressEvents) || isFinished,
+    events: progressEvents,
+  });
+  const lastEpoch = lastEpochOf(progressEvents);
+  // Read by the terminal-state effect below through a ref: that effect appends
+  // its line once, and a dependency that changed under its pending timer would
+  // cancel the line without ever re-running it.
+  const stopSummaryRef = useRef({
+    outcome: stopOutcomeNow,
+    epoch: lastEpoch?.epoch ?? null,
+    total: lastEpoch?.total ?? null,
+  });
+  useEffect(() => {
+    stopSummaryRef.current = {
+      outcome: stopOutcomeNow,
+      epoch: lastEpoch?.epoch ?? null,
+      total: lastEpoch?.total ?? null,
+    };
+  });
+
   // Handle terminal states — subscribe to status.status changes as an external signal.
   useEffect(() => {
     if (handledStatusRef.current === status.status) return;
     if (isCompleted) {
       handledStatusRef.current = status.status;
+      const { outcome, epoch, total } = stopSummaryRef.current;
       const timer = setTimeout(() => {
         setLogs((prev) => [
           ...prev.slice(-24),
-          (d) => `$ ${d.trainingOverlay.trainingComplete}`,
+          outcome === "stopped"
+            ? (d) => `$ ${d.trainingOverlay.stoppedLog(epoch, total)}`
+            : (d) => `$ ${d.trainingOverlay.trainingComplete}`,
+          ...(outcome === "too-late"
+            ? [(d: Dict) => d.trainingOverlay.stopTooLate]
+            : []),
         ]);
       }, 0);
       return () => clearTimeout(timer);
@@ -339,7 +437,9 @@ export function TrainingOverlay({
               {isFinished
                 ? hasFailed
                   ? t.trainingOverlay.trainingFailed
-                  : t.trainingOverlay.trainingComplete
+                  : stopOutcomeNow === "stopped"
+                    ? t.trainingOverlay.stopped
+                    : t.trainingOverlay.trainingComplete
                 : isQueued
                   ? t.trainingOverlay.queued(taskLabel)
                   : latestEpoch === undefined && latestPhase
@@ -556,15 +656,158 @@ export function TrainingOverlay({
           })}
         </div>
 
+        {/* Stop: asks first, because one mis-click ends a long training. The
+            run still finishes its epoch and keeps what it has saved. */}
+        {isRunning && stopPhase === "confirming" && (
+          <div
+            role="group"
+            aria-label={t.trainingOverlay.stop}
+            style={{
+              marginTop: 14,
+              padding: "12px 14px",
+              background: "oklch(0.704 0.191 22.216 / 0.08)",
+              border: "1px solid oklch(0.78 0.16 22 / 0.45)",
+              borderRadius: 12,
+              display: "flex",
+              flexDirection: "column",
+              gap: 10,
+            }}
+          >
+            <div
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: 11.5,
+                color: "var(--vf-text-dim)",
+                lineHeight: 1.6,
+              }}
+            >
+              {mode === "trial"
+                ? t.trainingOverlay.stopConfirmTrial
+                : t.trainingOverlay.stopConfirmEpoch}
+            </div>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <button
+                type="button"
+                onClick={() => void confirmStop()}
+                style={{
+                  padding: "8px 14px",
+                  background: "oklch(0.704 0.191 22.216 / 0.24)",
+                  border: "1px solid oklch(0.78 0.16 22)",
+                  borderRadius: 8,
+                  color: "oklch(0.95 0.10 22)",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 11,
+                  letterSpacing: "0.10em",
+                  textTransform: "uppercase",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                {t.trainingOverlay.stopConfirmYes}
+              </button>
+              <button
+                type="button"
+                onClick={() => setStopPhase("idle")}
+                style={{
+                  padding: "8px 14px",
+                  background: "transparent",
+                  border: "1px solid var(--vf-panel-stroke)",
+                  borderRadius: 8,
+                  color: "var(--vf-text-dim)",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 11,
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  cursor: "pointer",
+                }}
+              >
+                {t.trainingOverlay.stopConfirmNo}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* What the server said, and what it will do next. The stop only
+            reports an outcome once the stream ends (the `end` event). */}
+        {(stopError !== null ||
+          (isRunning && stopOutcomeNow === "stopping")) && (
+          <div
+            role="status"
+            aria-live="polite"
+            style={{
+              marginTop: 12,
+              fontFamily: "var(--font-mono)",
+              fontSize: 11.5,
+              lineHeight: 1.6,
+              color:
+                stopError !== null
+                  ? "oklch(0.82 0.14 22)"
+                  : "var(--vf-text-dim)",
+            }}
+          >
+            {stopError ?? t.trainingOverlay.stopRequested}
+          </div>
+        )}
+
         {/* Action buttons */}
         <div
           style={{
             display: "flex",
             gap: 10,
             marginTop: 18,
+            alignItems: "center",
             justifyContent: "flex-end",
           }}
         >
+          {isRunning && mode === "none" && (
+            <span
+              style={{
+                flex: 1,
+                fontFamily: "var(--font-mono)",
+                fontSize: 11,
+                color: "var(--vf-text-muted)",
+                lineHeight: 1.5,
+              }}
+            >
+              {t.trainingOverlay.stopUnavailableTitle}
+            </span>
+          )}
+          {isRunning && (
+            <button
+              type="button"
+              onClick={() => setStopPhase("confirming")}
+              disabled={mode === "none" || stopPhase !== "idle"}
+              title={
+                mode === "none"
+                  ? t.trainingOverlay.stopUnavailableTitle
+                  : t.trainingOverlay.stopTitle
+              }
+              style={{
+                padding: "10px 18px",
+                background: "transparent",
+                border: "1px solid oklch(0.78 0.16 22 / 0.6)",
+                borderRadius: 10,
+                color: "oklch(0.88 0.14 22)",
+                fontFamily: "var(--font-mono)",
+                fontSize: 11,
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                cursor:
+                  mode === "none"
+                    ? "not-allowed"
+                    : stopPhase === "sending"
+                      ? "wait"
+                      : stopPhase === "idle"
+                        ? "pointer"
+                        : "default",
+                opacity: mode === "none" || stopPhase !== "idle" ? 0.5 : 1,
+              }}
+            >
+              {stopPhase === "sending" || stopPhase === "requested"
+                ? t.trainingOverlay.stopSending
+                : t.trainingOverlay.stop}
+            </button>
+          )}
           {isRunning && (
             <button
               type="button"
