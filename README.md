@@ -94,6 +94,8 @@ Point the dataset picker at a folder, pick a task tab, press *Treinar*. If you
 have no dataset yet, the **⤓ datasets** button downloads one (CIFAR-10, for
 example) already in the layout the task expects.
 
+The interface is available in English and Portuguese (PT/EN switch in the header).
+
 The step-by-step walkthrough — dataset download, first run, confidence
 intervals, re-running from YAML — is in
 [`docs/QUICKSTART.md`](https://github.com/marcus-vreis/VisionForge/blob/main/docs/QUICKSTART.md).
@@ -301,6 +303,8 @@ precisa combinar com o seu hardware.
 Aponte o seletor de dataset para uma pasta, escolha a aba da tarefa e clique em
 *Treinar*. Se você ainda não tem dataset, o botão **⤓ datasets** baixa um
 (CIFAR-10, por exemplo) já no formato que a tarefa espera.
+
+A interface está em português e inglês (seletor PT/EN no cabeçalho).
 
 O passo a passo completo — baixar dataset, primeiro treino, intervalos de
 confiança, repetir a partir do YAML — está em

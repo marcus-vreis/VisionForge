@@ -3812,3 +3812,60 @@ is used in `src/`.
 slower. `python-multipart`, which a `pip-audit` of the development environment
 flagged, is not a dependency of the package — it is absent from `uv.lock`,
 pulled in by a stray `gradio` — so it needs no floor.
+
+## ADR-110 — The interface is bilingual, from typed dictionaries
+
+**Date:** 2026-10-06
+**Status:** Accepted
+**Follows:** ADR-104 (a guided tour that a researcher cannot read is no guide)
+
+**Context:** the GUI was written in Portuguese only. That closes it to most of
+the researchers who could use it, and to a reviewer who does not read
+Portuguese — a JOSS submission among them. The README already ships in both
+languages; the screen a researcher actually spends their time on did not.
+
+**Decision:** no i18n library. The GUI has two languages and about a thousand
+entries (1081 at the time of writing), and what a library adds — plural rules
+for dozens of languages, message catalogues, runtime loading — is not needed to
+write two files. What is needed is that a missing translation cannot ship, and
+a type does that for free:
+
+- `src/i18n/pt.ts` is the source and its type is the contract: `en.ts` is
+  declared `Dict = typeof pt`, so a missing or extra key fails `tsc -b`. A test
+  also compares the two trees leaf by leaf (same keys, same kind of entry, same
+  arity for the functions).
+- A text that carries values is a function, `(n: number) => …`. That types the
+  interpolation, and it is how plurals are written: each language says
+  `n === 1 ? … : …` in its own grammar instead of a rule table choosing for it.
+- The language lives in a React context (`useT()`), persisted in
+  `localStorage` under `vf.lang`. The first visit takes it from
+  `navigator.language`: any Portuguese locale gets Portuguese, everything else
+  English. The provider also sets `<html lang>`; the static value in
+  `index.html` is `en`, which is what a crawler or a screen reader sees before
+  the JavaScript runs.
+- Modules that are not components (`lib/*.ts`) take the dictionary as an
+  argument, `validateParsedConfig(t, …)`, instead of reaching for a global, so
+  they stay pure and testable in either language.
+- Sentences with marked words (`code`, **strong**, __em__) are written whole in
+  the dictionary and rendered by a shared `Rich` component over a tested
+  parser (`lib/rich.ts`). Splitting a sentence around a bold word into three
+  keys is what makes translations read as if they were assembled, because the
+  other language wants the bold word somewhere else.
+- A vitest guard parses every source file with the TypeScript compiler and
+  fails on visible text outside `src/i18n/`: JSX text, string literals in JSX
+  expressions, visible props (`title`, `placeholder`, `aria-label`, …) and prose
+  in config or state objects. Grepping would have counted comments, imports and
+  CSS values; parsing tells them apart. The guard is what keeps the tree from
+  drifting back to Portuguese one literal at a time.
+- Node types are scoped to the tests through `tsconfig.test.json`: the guard
+  reads files with `node:fs`, and the application code must not be able to.
+
+**Consequences:** every screen's words live in two files, and adding a screen
+means adding them to both before the build passes. Messages that come from the
+server — validation errors, training warnings, figure labels, and the
+PatchCore phase labels beyond the three the GUI maps — stay in Portuguese until
+a second step decides between translating at the API edge and sending message
+codes that the interface words itself. Some messages are stored in component
+state when they happen (an import error, the result of a download) and keep the
+language they were created in until the next action; the ones that depend only
+on current state, such as the "downloading…" notice, are worded at render time.

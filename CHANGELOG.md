@@ -13,6 +13,16 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ## [Unreleased]
 
+### Added
+
+- **Interface bilíngue (pt/en).** Todas as telas da interface existem em
+  português e em inglês, com um seletor PT/EN no cabeçalho. A escolha fica
+  lembrada no navegador, e a primeira visita segue o idioma do navegador. As
+  mensagens que vêm do servidor — erros de validação, avisos de treino, rótulos
+  de figuras e os rótulos de etapa do PatchCore além dos três já mapeados —
+  continuam em português; traduzi-las é o próximo passo
+  ([ADR-110](docs/dev/DECISIONS.md)).
+
 ## [0.12.0] — 2026-09-24
 
 ### Changed
