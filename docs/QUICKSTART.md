@@ -43,6 +43,10 @@ visionforge selftest --quick
 visionforge gui                           # opens http://127.0.0.1:8000
 ```
 
+The interface comes in English and Portuguese: the **PT** / **EN** switch in the
+header changes it at any time, and the choice is remembered. This guide names
+the English labels.
+
 You don't need your own data to try it: click **⤓ datasets** in the bottom bar,
 pick the **torchvision** provider, dataset `CIFAR10`,
 choose an output folder and a per-class `limit` (e.g. 300 — keeps the first
@@ -52,14 +56,15 @@ classification task consumes.
 
 ## 3. First training run
 
-On the **Classificação** tab:
+On the **Classification** tab:
 
 1. Point the dataset picker at the folder you just downloaded — split
    auto-detection and per-class stats render immediately; click
-   **🎯 aplicar** to inject the detected class count.
+   **🎯 apply 10 classes** (the count it detected for CIFAR10) to inject the
+   class count.
 2. Keep the defaults (ResNet-50 pretrained, 10 epochs is plenty for a smoke
    run — lower it to 3 if you're on CPU).
-3. Press **Treinar**. The overlay streams per-epoch loss/accuracy live.
+3. Press **▶ Train**. The overlay streams per-epoch loss/accuracy live.
 
 When it finishes you get metric tiles, confusion matrices, ROC/PR curves, and
 a markdown model card. Everything is also on disk under
@@ -76,23 +81,23 @@ you happened to test on. It says nothing about whether retraining would land in
 the same place.
 
 For that, a single run is one sample from a noisy distribution. On a
-standalone-task panel (e.g. **Regressão**), the strategy selector has
-**Réplicas**: same config, N seeds, and the report gives you
+standalone-task panel (e.g. **Regression**), the strategy selector has
+**Replicates**: same config, N seeds, and the report gives you
 `metric = mean ± 95% CI` plus the per-seed table — the citable version of your
-result. For classification, use **K-Fold (CV)** in the strategy selector, or
-sweep architectures with **Grid search** (add values to the *Arquitetura*
-field with “+ valor ao grid”) and compare runs in the **History** overlay.
+result. For classification, use **K-fold (CV)** in the strategy selector, or
+sweep architectures with **Grid search** (add values to the *Architecture*
+field with “+ add to grid”) and compare runs in the **History** overlay.
 
 ## 5. Reproduce it anywhere
 
-Every panel's header has **↓ Exportar YAML** — the exported file is the exact
+Every panel's header has **↓ Export YAML** — the exported file is the exact
 config the API received, so this reruns the experiment identically:
 
 ```bash
-visionforge run experiment_meu_teste_2026-07-02.yaml
+visionforge run experiment_my_test_2026-07-02.yaml
 ```
 
-Import the same file back through **↑ Importar YAML** to restore the form.
+Import the same file back through **↑ Import YAML** to restore the form.
 
 ## 6. Define your own task (optional)
 

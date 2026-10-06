@@ -3830,10 +3830,10 @@ for dozens of languages, message catalogues, runtime loading — is not needed t
 write two files. What is needed is that a missing translation cannot ship, and
 a type does that for free:
 
-- `src/i18n/pt.ts` is the source and its type is the contract: `en.ts` is
-  declared `Dict = typeof pt`, so a missing or extra key fails `tsc -b`. A test
-  also compares the two trees leaf by leaf (same keys, same kind of entry, same
-  arity for the functions).
+- `src/i18n/pt.ts` is the source and its type is the contract: `Dict = typeof pt`
+  and `en.ts` is declared `const en: Dict`, so a missing or extra key fails
+  `tsc -b`. A test also compares the two trees leaf by leaf (same keys, same
+  kind of entry, same arity for the functions).
 - A text that carries values is a function, `(n: number) => …`. That types the
   interpolation, and it is how plurals are written: each language says
   `n === 1 ? … : …` in its own grammar instead of a rule table choosing for it.
@@ -3845,7 +3845,17 @@ a type does that for free:
   the JavaScript runs.
 - Modules that are not components (`lib/*.ts`) take the dictionary as an
   argument, `validateParsedConfig(t, …)`, instead of reaching for a global, so
-  they stay pure and testable in either language.
+  they stay pure and testable in either language. The one exception is
+  `api/client.ts`: it words its own errors (cannot reach the server, validation
+  failed) at the moment it throws them, from ~50 call sites that have no
+  provider to ask, so it reads the stored language (`vf.lang`, else the
+  browser's) the way the provider seeds it.
+- Numbers and dates: metric readouts are written with a dot as the decimal
+  separator in both languages, because they sit next to the CSV and JSON output
+  a researcher will paste them against. What is meant to be read as prose
+  follows the interface locale (`pt-BR` / `en-US`): the human-readable sizes
+  from `formatBytes` ("117,7 MB" / "117.7 MB") and the dates and times in the
+  header clock, the history and the test records.
 - Sentences with marked words (`code`, **strong**, __em__) are written whole in
   the dictionary and rendered by a shared `Rich` component over a tested
   parser (`lib/rich.ts`). Splitting a sentence around a bold word into three
@@ -3861,11 +3871,37 @@ a type does that for free:
   reads files with `node:fs`, and the application code must not be able to.
 
 **Consequences:** every screen's words live in two files, and adding a screen
-means adding them to both before the build passes. Messages that come from the
-server — validation errors, training warnings, figure labels, and the
-PatchCore phase labels beyond the three the GUI maps — stay in Portuguese until
-a second step decides between translating at the API edge and sending message
-codes that the interface words itself. Some messages are stored in component
-state when they happen (an import error, the result of a download) and keep the
-language they were created in until the next action; the ones that depend only
-on current state, such as the "downloading…" notice, are worded at render time.
+means adding them to both before the build passes. Texts that come from the
+server are shown as the server writes them — partly Portuguese, partly
+English — until a second step decides between translating at the API edge and
+sending message codes that the interface words itself. What is in each
+language today, checked against the code:
+
+- **English:** the `detail` of the HTTP errors that `gui/api/routes.py` writes
+  itself, and the messages of the Pydantic validators in `utils/*config*.py`.
+  A Portuguese-speaking user reads English there.
+- **Portuguese:** the training-health warnings (`core/training_health.py`);
+  the dataset-scan messages, which are the `message` of the split-detection,
+  dataset-stats, samples and preview responses in `routes.py`; the titles of
+  the native file and folder dialogs (`routes.py`, "Selecione …") and the
+  dialogs' own messages ("Cancelado.", "Falha ao abrir o seletor", the hint
+  that the picker does not open inside a container), which the interface shows
+  ahead of its dictionary's fallback; the title and axis labels of some plots
+  (`core/plotter.py`: the regression residuals, the anomaly score
+  distribution); the WinError 1455 hint (`core/loader_lifecycle.py`,
+  `core/detection_trainer.py`); the exceptions that the run-test, batch
+  inference and ONNX-export endpoints relay as an HTTP `detail` ("não tem um
+  checkpoint utilizável", "Caminho não encontrado"); and the `description` of
+  the training fields in the config schema (`early_stopping_patience`,
+  `num_workers`), which the custom-task form shows as written.
+- **Portuguese but not shown:** the `note` of `/api/model/defaults` (the
+  interface words the same two cases from the numbers in the response,
+  `lib/model-advice.ts`) and the `detail` that hiding, restoring or deleting a
+  custom task returns on success.
+- **Not an issue:** the PatchCore phase labels. The trainer sends three, all
+  Portuguese, and `lib/training-phase.ts` maps all three; there are no others.
+
+Some messages are stored in component state when they happen (an import error,
+the result of a download) and keep the language they were created in until the
+next action; the ones that depend only on current state, such as the
+"downloading…" notice, are worded at render time.

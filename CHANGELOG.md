@@ -17,10 +17,14 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 - **Interface bilíngue (pt/en).** Todas as telas da interface existem em
   português e em inglês, com um seletor PT/EN no cabeçalho. A escolha fica
-  lembrada no navegador, e a primeira visita segue o idioma do navegador. As
-  mensagens que vêm do servidor — erros de validação, avisos de treino, rótulos
-  de figuras e os rótulos de etapa do PatchCore além dos três já mapeados —
-  continuam em português; traduzi-las é o próximo passo
+  lembrada no navegador, e a primeira visita segue o idioma do navegador. Os
+  textos que vêm do servidor aparecem como o servidor os escreve, em parte em
+  português e em parte em inglês, até um segundo passo: os detalhes dos erros
+  HTTP e as mensagens dos validadores do Pydantic estão em inglês; os avisos de
+  saúde do treino, as mensagens da varredura do dataset, os títulos e as
+  mensagens dos seletores nativos de arquivo e de pasta, alguns títulos de
+  gráfico, a dica do WinError 1455 e a descrição dos campos de treino no
+  formulário das tarefas próprias estão em português
   ([ADR-110](docs/dev/DECISIONS.md)).
 
 ## [0.12.0] — 2026-09-24
