@@ -110,6 +110,10 @@ export const en: Dict = {
       `For ${architecture}, the measured setting is ${optimizer} at ${learningRate}.`,
     apply: (optimizer: string, learningRate: number) =>
       `use ${optimizer} · ${learningRate}`,
+    collapse: (architecture: string, optimizer: string, learningRate: number) =>
+      `${architecture} with Adam at 1e-3 predicts a single class: we measured 0.25 accuracy on 4 classes. With ${optimizer} at ${learningRate} it trains normally.`,
+    upscaling: (medianSide: number) =>
+      `The images are about ${medianSide}px on a side; training above that upsizes the image without adding detail.`,
   },
   infoDot: {
     label: "Explanation",

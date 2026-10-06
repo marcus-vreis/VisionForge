@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { fetchModelDefaults, type ModelDefaults } from "../api/client";
 import { useT } from "../i18n/useT";
+import { modelAdviceNote } from "../lib/model-advice";
 
 /** Says when the chosen architecture and optimizer were measured to fail.
  *
@@ -67,10 +68,7 @@ export function ModelAdvice({
         color: "var(--vf-text-dim)",
       }}
     >
-      <div style={{ marginBottom: 8 }}>
-        {advice.note ??
-          t.modelAdvice.measured(architecture, advice.optimizer, advice.learning_rate)}
-      </div>
+      <div style={{ marginBottom: 8 }}>{modelAdviceNote(t, advice)}</div>
       <button
         type="button"
         onClick={() =>

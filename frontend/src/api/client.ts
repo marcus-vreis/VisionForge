@@ -789,6 +789,8 @@ export interface ModelDefaults {
   image_size: number | null;
   dataset_median_side: number | null;
   collapse_prone: boolean;
+  /** The server's own sentence, in Portuguese. Not shown: ModelAdvice words the
+   *  same two cases from the fields above, in the language of the interface. */
   note: string | null;
 }
 

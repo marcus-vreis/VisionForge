@@ -114,6 +114,13 @@ export const pt = {
       `Para ${architecture}, o valor medido é ${optimizer} a ${learningRate}.`,
     apply: (optimizer: string, learningRate: number) =>
       `usar ${optimizer} · ${learningRate}`,
+    // What /api/model/defaults finds, worded here from the numbers it returns so
+    // the note is in the language of the interface (its own `note` is not shown).
+    // `optimizer` and `learningRate` are the suggestion, not the form's values.
+    collapse: (architecture: string, optimizer: string, learningRate: number) =>
+      `${architecture} com Adam a 1e-3 prevê uma classe só: medimos 0.25 de acurácia em 4 classes. Com ${optimizer} a ${learningRate} treina normal.`,
+    upscaling: (medianSide: number) =>
+      `As imagens têm cerca de ${medianSide}px de lado; treinar acima disso amplia a imagem sem acrescentar detalhe.`,
   },
   infoDot: {
     label: "Explicação",
