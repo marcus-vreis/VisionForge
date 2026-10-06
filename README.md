@@ -90,7 +90,7 @@ match your hardware.
 
 ## First run
 
-Point the dataset picker at a folder, pick a task tab, press *Treinar*. If you
+Point the dataset picker at a folder, pick a task tab, press *Train*. If you
 have no dataset yet, the **⤓ datasets** button downloads one (CIFAR-10, for
 example) already in the layout the task expects.
 

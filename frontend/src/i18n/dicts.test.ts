@@ -43,5 +43,22 @@ describe("dictionaries", () => {
     expect(pt.detectionDatasetStats.applied(3)).toBe("3 classes aplicadas");
     expect(en.detectionDatasetStats.applied(1)).toBe("1 class applied");
     expect(en.detectionDatasetStats.applied(3)).toBe("3 classes applied");
+
+    expect(pt.paramPanel.fieldErrors(1)).toBe("1 campo com erro:");
+    expect(pt.paramPanel.fieldErrors(3)).toBe("3 campos com erro:");
+    expect(en.paramPanel.fieldErrors(1)).toBe("1 field with errors:");
+    expect(en.paramPanel.fieldErrors(3)).toBe("3 fields with errors:");
+
+    const warnings = (dict: typeof pt, n: number) =>
+      dict.paramPanel.importWarnings(n, "x", 0).split(":")[0];
+    expect(warnings(pt, 1)).toBe("YAML importado com 1 aviso estrutural");
+    expect(warnings(pt, 2)).toBe("YAML importado com 2 avisos estruturais");
+    expect(warnings(en, 1)).toBe("YAML imported with 1 structural warning");
+    expect(warnings(en, 2)).toBe("YAML imported with 2 structural warnings");
+
+    expect(pt.runDetail.gradcam.done(1, "layer4")).toBe("1 mapa gerado · camada layer4");
+    expect(pt.runDetail.gradcam.done(3, "layer4")).toBe("3 mapas gerados · camada layer4");
+    expect(en.runDetail.gradcam.done(1, "layer4")).toBe("1 map generated · target layer: layer4");
+    expect(en.runDetail.gradcam.done(3, "layer4")).toBe("3 maps generated · target layer: layer4");
   });
 });

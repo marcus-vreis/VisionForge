@@ -339,12 +339,12 @@ export const pt = {
     importYaml: "↑ Importar YAML",
     importTitle: "Importar configuração a partir de um arquivo .yaml",
     importWarnings: (count: number, summary: string, extra: number) =>
-      `YAML importado com ${count} aviso(s) estrutural(is):\n${summary}${extra > 0 ? `\n…(+${extra} mais)` : ""}\n\nCorrija antes de treinar — o backend rejeita por validação Pydantic.`,
+      `YAML importado com ${count} ${count === 1 ? "aviso estrutural" : "avisos estruturais"}:\n${summary}${extra > 0 ? `\n…(+${extra} mais)` : ""}\n\nCorrija antes de treinar — o backend rejeita por validação Pydantic.`,
     unavailable: (task: string) => `${task} ainda não está disponível`,
     unavailableBody: "Esta tarefa será implementada em uma próxima fase do VisionForge.",
     loadingSchema: "carregando schema…",
     hiddenParams: (n: number) => `${n} parâmetros ocultos — ligue para ajustar`,
-    fieldErrors: (n: number) => `${n} campo(s) com erro:`,
+    fieldErrors: (n: number) => `${n} ${n === 1 ? "campo" : "campos"} com erro:`,
   },
   // The panel for one run (components/RunDetailPanel.tsx). Config keys, measure
   // names and file names (opset_version, max_diff, best_model.onnx) read the same
@@ -462,7 +462,7 @@ export const pt = {
       hint: "Gera mapas de calor Grad-CAM sobre imagens de exemplo, destacando as regiões que mais influenciaram a saída do modelo: a classe predita na classificação, o primeiro alvo na regressão e a classe 0 na segmentação. Útil para interpretar o que o modelo aprendeu.",
       needFolder: "Informe a pasta de imagens.",
       starting: "Gerando mapas Grad-CAM…",
-      done: (count: number, layer: string) => `${count} mapa(s) gerado(s) · camada ${layer}`,
+      done: (count: number, layer: string) => `${count} ${count === 1 ? "mapa gerado" : "mapas gerados"} · camada ${layer}`,
       failed: "Falha ao gerar Grad-CAM.",
       // Caption under an overlay: the model's answer, and the true class when known.
       classNumber: (n: number) => `classe ${n}`,

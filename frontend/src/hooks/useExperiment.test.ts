@@ -71,7 +71,7 @@ describe("run messages", () => {
       "3 campos com erro de validação. Confira os destaques no formulário.",
     );
     expect(en.experiment.validationFailed(1)).toBe(
-      "1 field has a validation error. Check the highlighted fields in the form.",
+      "1 field has a validation error. Check the highlighted field in the form.",
     );
     expect(en.experiment.validationFailed(3)).toBe(
       "3 fields have validation errors. Check the highlighted fields in the form.",

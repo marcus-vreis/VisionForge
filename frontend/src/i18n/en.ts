@@ -1216,7 +1216,7 @@ export const en: Dict = {
     failedNoDetail: "The experiment failed without an error message.",
     connectionLost: "Lost connection to the server while polling.",
     validationFailed: (n: number) =>
-      `${n} ${n === 1 ? "field has a validation error" : "fields have validation errors"}. Check the highlighted fields in the form.`,
+      `${n} ${n === 1 ? "field has a validation error" : "fields have validation errors"}. Check the highlighted ${n === 1 ? "field" : "fields"} in the form.`,
     alreadyRunning: "An experiment is already running. Wait for it to finish.",
     unexpected: (message: string) => `Unexpected error: ${message}`,
     unknown: "Unknown error while starting the experiment.",
