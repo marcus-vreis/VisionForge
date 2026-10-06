@@ -74,7 +74,6 @@ export function TextField({
             type="button"
             onClick={() => setRevealed((r) => !r)}
             aria-label={revealed ? t.textField.hideSecret : t.textField.showSecret}
-            aria-pressed={revealed}
             title={revealed ? t.textField.hideSecret : t.textField.showSecret}
             style={{
               display: "inline-flex",

@@ -30,21 +30,46 @@ from urllib.parse import quote, quote_plus
 
 MASK = "***"
 
-# Shorter than any real API key or token. Masking a one- or two-character
-# "secret" would turn every such letter in the message into a mask and leave
-# nothing readable; the by-shape patterns still catch it where it matters.
-_MIN_SECRET_LENGTH = 4
+# Shorter than any real API key or token (Roboflow, Kaggle and Hugging Face keys
+# are 20+ characters). A junk saved value such as `test` would otherwise turn a
+# trace path into `***s/foo/***_x.py` and leave nothing readable; the by-shape
+# patterns still catch a short one wherever it sits behind `api_key=` and the like.
+_MIN_SECRET_LENGTH = 8
 
 # What names a secret. No prefix is matched on purpose: `access_token`,
 # `x-api-key` and `KAGGLE_API_TOKEN` all end in one of these, and only the
 # *value* is replaced, so there is nothing to gain from consuming the prefix.
 _NAME = r"(?:api[_-]?key|token|secret|password|passwd)"
+# The names that may be followed by a colon (`password: hunter22`). `token` only
+# counts when it is part of a compound name (`access_token`, `x-auth-token`):
+# "Kaggle token: expired" is an ordinary sentence and must stay readable.
+_COLON_NAME = r"(?:api[_-]?key|secret|password|passwd|(?<=[_-])token)"
+# Spaces and tabs only: a name at the end of one line must not reach for a value
+# on the next.
+_SP = r"[ \t]*"
+# A value ends at whitespace, a quote, or the delimiters that close a URL, a call
+# or a literal around it.
+_VALUE = r"""[^&\s"'<>)\]},;]+"""
+# The same, inside a percent-encoded URL: `%26` is an encoded `&`.
+_ENCODED_VALUE = r"""(?:(?!%26)[^&\s"'<>)\]},;])+"""
+# Query parameters that sign or authorize a link without being named like a
+# secret: Roboflow's export URL carries `?key=<token>`. Only right after `?` or
+# `&`, so "the primary key" and "key=value pairs" in prose are left alone.
+_SIGNING_PARAM = r"(?:key|sig|signature|x-goog-signature|x-amz-signature)"
 _HEADER = r"(?:proxy-)?authorization|x-api-key|x-auth-token|x-access-token"
 _OPT_QUOTE = r"""(?:\\?["'])?"""
 
 _PATTERNS: tuple[re.Pattern[str], ...] = (
-    # `?api_key=KEY`, `&token=KEY`, `access_token=KEY` — a URL or a form body.
-    re.compile(rf"{_NAME}=(?P<val>[^&\s\"'<>)\]}},;]+)", re.IGNORECASE),
+    # `?api_key=KEY`, `&token=KEY`, `access_token=KEY` — a URL or a form body —
+    # and `api_key='KEY'`, the repr of a request or a keyword argument. The
+    # quote, when there is one, is kept around the mask.
+    re.compile(rf"{_NAME}{_SP}={_SP}[\"']?(?P<val>{_VALUE})", re.IGNORECASE),
+    # `?key=TOKEN`, `&sig=…` — a signed link.
+    re.compile(rf"(?<=[?&]){_SIGNING_PARAM}=(?P<val>{_VALUE})", re.IGNORECASE),
+    # `api_key%3DKEY`, the same pair inside a percent-encoded URL.
+    re.compile(rf"{_NAME}%3D(?P<val>{_ENCODED_VALUE})", re.IGNORECASE),
+    # `password: hunter22` — a log line or YAML-ish dump.
+    re.compile(rf"{_COLON_NAME}{_SP}:{_SP}[\"']?(?P<val>{_VALUE})", re.IGNORECASE),
     # `"api_key": "KEY"` — JSON, or the repr of a dict (single quotes, or
     # escaped quotes when the JSON is itself inside a string).
     re.compile(

@@ -477,19 +477,27 @@ def download_huggingface(
     )
 
 
+# Variables a provider's client reads a token from when none is passed.
+# `HUGGING_FACE_HUB_TOKEN` is huggingface_hub's older name for `HF_TOKEN`.
+_ENV_CREDENTIALS = ("KAGGLE_API_TOKEN", "HF_TOKEN", "HUGGING_FACE_HUB_TOKEN")
+
+
 def credentials_in_play(api_key: str | None, token: str | None) -> list[str]:
     """Every secret a failed download could have written into its own error.
 
     The request's own ``api_key``/``token``, every key saved on this machine, and
-    Kaggle's environment variable (the client reads it from there, and the saved
-    token is copied into it). Broader than "the provider that was used" on
-    purpose: it costs nothing, and an error that names the wrong provider's key
-    is still an error that leaks a key.
+    the environment variables the clients fall back to: Kaggle's (the client reads
+    it from there, and the saved token is copied into it) and Hugging Face's, which
+    ``load_dataset(token=None)`` picks up on its own, so a request without a token
+    can still be using one. Broader than "the provider that was used" on purpose:
+    it costs nothing, and an error that names the wrong provider's key is still an
+    error that leaks a key.
 
     Evaluated after the attempt, so a token ``download_kaggle`` just exported is
     included.
     """
-    secrets = [api_key, token, os.environ.get("KAGGLE_API_TOKEN")]
+    secrets = [api_key, token]
+    secrets.extend(os.environ.get(name) for name in _ENV_CREDENTIALS)
     secrets.extend(load_credential(provider) for provider in PROVIDERS)
     return [s for s in secrets if s]
 

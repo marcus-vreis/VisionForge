@@ -13,6 +13,7 @@ from PIL import Image
 
 from visionforge.gui.api.dataset_download import (
     _parse_roboflow_dataset,
+    credentials_in_play,
     download_dataset,
     download_huggingface,
     download_kaggle,
@@ -832,3 +833,72 @@ class TestADownloadErrorDoesNotLeakTheCredential:
         assert "_HTTPError" in resp.json()["detail"]
         assert SECRET not in resp.text
         assert SECRET not in server_log.text
+
+    @pytest.mark.parametrize("variable", ["HF_TOKEN", "HUGGING_FACE_HUB_TOKEN"])
+    def test_huggingface_token_read_from_the_environment(
+        self,
+        client: TestClient,
+        server_log: Any,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+        variable: str,
+    ) -> None:
+        """`load_dataset(token=None)` falls back to HF_TOKEN, so the request never carries it."""
+        monkeypatch.delenv("HF_TOKEN", raising=False)
+        monkeypatch.delenv("HUGGING_FACE_HUB_TOKEN", raising=False)
+        monkeypatch.setenv(variable, SECRET)
+
+        def load_dataset(name: str, token: str | None = None) -> Any:
+            raise _HTTPError(f"401 Unauthorized: {os.environ[variable]} is not valid")
+
+        fake = types.ModuleType("datasets")
+        fake.load_dataset = load_dataset  # type: ignore[attr-defined]
+        monkeypatch.setitem(sys.modules, "datasets", fake)
+
+        resp = _post_download(
+            client, tmp_path, provider="huggingface", dataset="owner/ds"
+        )
+
+        assert resp.status_code == 500
+        assert "_HTTPError" in resp.json()["detail"]
+        assert SECRET not in resp.text
+        assert SECRET not in server_log.text
+
+
+class TestCredentialsInPlay:
+    """What the redaction is told to look for."""
+
+    @pytest.fixture(autouse=True)
+    def _clean_environment(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("VISIONFORGE_HOME", str(tmp_path / "home"))
+        for name in ("KAGGLE_API_TOKEN", "HF_TOKEN", "HUGGING_FACE_HUB_TOKEN"):
+            monkeypatch.delenv(name, raising=False)
+
+    def test_the_request_values_are_included(self) -> None:
+        assert credentials_in_play("rf_request_key", "hf_request_tok") == [
+            "rf_request_key",
+            "hf_request_tok",
+        ]
+
+    def test_saved_credentials_are_included(self) -> None:
+        from visionforge.utils.credentials import save_credential
+
+        save_credential("roboflow", "rf_saved_key_123")
+
+        assert "rf_saved_key_123" in credentials_in_play(None, None)
+
+    @pytest.mark.parametrize(
+        "variable",
+        ["KAGGLE_API_TOKEN", "HF_TOKEN", "HUGGING_FACE_HUB_TOKEN"],
+    )
+    def test_the_environment_variables_the_clients_fall_back_to(
+        self, monkeypatch: pytest.MonkeyPatch, variable: str
+    ) -> None:
+        monkeypatch.setenv(variable, "value_from_the_env")
+
+        assert "value_from_the_env" in credentials_in_play(None, None)
+
+    def test_nothing_in_play_is_an_empty_list(self) -> None:
+        assert credentials_in_play(None, None) == []

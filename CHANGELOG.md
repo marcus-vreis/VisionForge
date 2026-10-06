@@ -36,11 +36,15 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
   (`outputs/logs/visionforge.log`, com o traceback). Isso valia para qualquer
   erro inesperado do download pelo Roboflow, Kaggle ou Hugging Face, em todas as
   versões desde a 0.1.0. Agora a mensagem de erro e o log passam por um filtro
-  que troca `api_key=…`, `token=…`, `Authorization: Bearer …` e o valor exato da
-  credencial usada por `***`, mantendo o tipo do erro e o resto do texto. Os
-  campos de chave também escondem o que se digita (com um botão para mostrar) e
-  não recebem preenchimento automático do navegador. Quem baixou do Roboflow
-  sem rede deve apagar o log (e os `.zip` rotacionados) ou trocar a chave.
+  que troca `api_key=…`, `token=…`, `?key=…` dos links assinados,
+  `Authorization: Bearer …` e o valor exato da credencial usada (a digitada, a
+  salva e as variáveis `KAGGLE_API_TOKEN` e `HF_TOKEN`) por `***`, mantendo o
+  tipo do erro e o resto do texto. Os campos de chave também escondem o que se
+  digita (com um botão para mostrar) e não recebem preenchimento automático do
+  navegador. Quem teve um download de dataset falhando nas versões afetadas deve
+  tratar a chave como exposta: trocá-la no provedor e apagar os logs. O log
+  fica em `outputs/logs/`, dentro da pasta de onde a interface foi iniciada,
+  então pode haver mais de um (inclusive os `.zip` rotacionados).
 
 ## [0.12.0] — 2026-09-24
 

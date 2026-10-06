@@ -92,6 +92,99 @@ class TestPatterns:
         assert out.count("\n") == text.count("\n")
 
 
+class TestSignedLinks:
+    """Roboflow's export URL carries its credential as `?key=<token>`."""
+
+    def test_the_roboflow_export_link_loses_its_key(self) -> None:
+        out = redact_secrets("Not Found for url: /ds/n9QwXwUK42?key=NnVCe2yMxP")
+
+        assert "NnVCe2yMxP" not in out
+        # Where it failed is the useful part.
+        assert "/ds/n9QwXwUK42?key=" in out
+
+    @pytest.mark.parametrize(
+        "name", ["key", "sig", "signature", "X-Goog-Signature", "X-Amz-Signature"]
+    )
+    def test_signing_parameters_are_masked_after_a_question_mark_or_ampersand(
+        self, name: str
+    ) -> None:
+        for lead in ("?", "?a=1&"):
+            out = redact_secrets(f"GET https://x.test/f{lead}{name}=ABCDEF123456&b=2")
+
+            assert "ABCDEF123456" not in out
+            assert f"{name}={MASK}&b=2" in out
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "key=value pairs are required",
+            "the primary key is missing",
+            "set key=1 and sig=2 in the config",
+            "dictionary key=name",
+            "bad request?a=1 key",
+        ],
+    )
+    def test_prose_that_mentions_key_is_left_alone(self, text: str) -> None:
+        assert redact_secrets(text) == text
+
+
+class TestQuotedAndEncodedForms:
+    def test_a_quoted_keyword_argument_is_masked_with_its_quotes_kept(self) -> None:
+        # What a pydantic repr or `Roboflow(api_key='…')` looks like.
+        for quote_char in ("'", '"'):
+            out = redact_secrets(
+                f"DatasetDownloadRequest(api_key={quote_char}rf_ABCdef123456{quote_char}, version=1)"
+            )
+
+            assert "rf_ABCdef123456" not in out
+            assert f"api_key={quote_char}{MASK}{quote_char}, version=1)" in out
+
+    def test_spaces_around_the_equals_sign_do_not_hide_it(self) -> None:
+        out = redact_secrets("api_key = 'rf_ABCdef123456'")
+
+        assert "rf_ABCdef123456" not in out
+
+    def test_the_url_encoded_equals_sign_is_masked(self) -> None:
+        out = redact_secrets("redirect=/export%3Fapi_key%3Drf_ABCdef123456%26v%3D1")
+
+        assert "rf_ABCdef123456" not in out
+        assert "%26v%3D1" in out
+
+    @pytest.mark.parametrize(
+        "text",
+        ["password: hunter22", "Password:   hunter22", "api_key: hunter22extra"],
+    )
+    def test_the_colon_form_after_a_credential_name_is_masked(self, text: str) -> None:
+        out = redact_secrets(text)
+
+        assert "hunter22" not in out
+        assert MASK in out
+
+    def test_a_compound_token_name_works_with_a_colon_too(self) -> None:
+        assert "tok12345" not in redact_secrets("access_token: tok12345")
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "Kaggle token: expired, create a new one",
+            "invalid token: the format is wrong",
+            "Error: user not found",
+            "Note: keep this somewhere safe",
+        ],
+    )
+    def test_the_colon_form_is_not_applied_to_ordinary_words(self, text: str) -> None:
+        assert redact_secrets(text) == text
+
+    def test_every_new_form_is_idempotent(self) -> None:
+        text = (
+            "api_key='rf_ABCdef123456' /x?key=NnVCe2yMxP&sig=ABCDEF123 "
+            "api_key%3Drf_ABCdef123456 password: hunter22"
+        )
+        once = redact_secrets(text)
+
+        assert redact_secrets(once) == once
+
+
 class TestKnownSecrets:
     def test_the_literal_value_is_masked_wherever_it_appears(self) -> None:
         out = redact_secrets(f"the server said {SECRET!r} is invalid", SECRET)
@@ -132,6 +225,22 @@ class TestKnownSecrets:
     def test_a_value_too_short_to_be_a_key_does_not_mangle_the_message(self) -> None:
         # A one-character "secret" would otherwise turn every letter into a mask.
         assert redact_secrets("a plain message", "a") == "a plain message"
+
+    def test_a_seven_character_value_is_not_masked_as_a_bare_substring(self) -> None:
+        # A junk saved value like "test" used to turn trace paths into
+        # "***s/foo/***_x.py". Real keys are 20+ characters.
+        text = "File tests/foo/test_x.py, line 3"
+
+        assert redact_secrets(text, "tests/f") == text
+        assert redact_secrets(text, "test") == text
+
+    def test_an_eight_character_value_is_masked(self) -> None:
+        out = redact_secrets("bad key abcd1234 here", "abcd1234")
+
+        assert "abcd1234" not in out
+
+    def test_a_short_value_is_still_caught_by_shape(self) -> None:
+        assert "abc123" not in redact_secrets("?api_key=abc123", "abc123")
 
     def test_surrounding_whitespace_in_the_secret_is_not_part_of_it(self) -> None:
         assert SECRET not in redact_secrets(f"bad key {SECRET}", f"  {SECRET}\n")
