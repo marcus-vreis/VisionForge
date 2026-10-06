@@ -272,6 +272,59 @@ class TestEscapedQuotes:
 
         assert out == "?api_key=***\\nnext line"
 
+    @pytest.mark.parametrize("letter", ["n", "r", "t"])
+    def test_an_escape_letter_ends_the_value(self, letter: str) -> None:
+        out = redact_secrets(f"api_key=abc12345\\{letter}next")
+
+        assert out == f"api_key=***\\{letter}next"
+
+    def test_a_backslash_that_escapes_a_quote_ends_the_value(self) -> None:
+        # The backslash belongs to the closing `\"`, not to the secret.
+        assert redact_secrets('x=\\"api_key=abc12345\\"') == 'x=\\"api_key=***\\"'
+
+
+class TestABackslashInsideAValueIsPartOfIt:
+    """Only an escape (`\\n`, `\\"`…) ends a value; any other backslash is the secret's."""
+
+    def test_a_backslash_in_the_middle_does_not_leak_the_tail(self) -> None:
+        assert redact_secrets("password=pa\\ss12345") == "password=***"
+
+    def test_a_value_may_start_with_a_backslash(self) -> None:
+        assert redact_secrets("api_key=\\abc12345") == "api_key=***"
+
+    def test_the_colon_form_too(self) -> None:
+        assert redact_secrets("password: pa\\ss12345") == "password: ***"
+
+    def test_the_signed_link_form_too(self) -> None:
+        assert redact_secrets("/ds/x?key=ab\\cd12345&v=1") == "/ds/x?key=***&v=1"
+
+    def test_the_percent_encoded_form_too(self) -> None:
+        assert (
+            redact_secrets("api_key%3Dab\\cd12345%26v%3D1") == "api_key%3D***%26v%3D1"
+        )
+
+
+class TestAnEmptyQuotedValueIsLeftAlone:
+    """`token=""` has nothing to mask, and must not eat the text up to the next quote."""
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            'download(token="", dataset="owner/ds")',
+            "api_key='' for workspace 'coffee'",
+            "password: \"\" and 'x'",
+            'token=\\"\\", x=\\"y\\"',
+            'token="" token=""',
+        ],
+    )
+    def test_the_text_is_unchanged(self, text: str) -> None:
+        assert redact_secrets(text) == text
+
+    def test_a_filled_value_next_to_an_empty_one_is_masked_alone(self) -> None:
+        out = redact_secrets('f(token="abc12345", dataset="owner/ds", api_key="")')
+
+        assert out == 'f(token="***", dataset="owner/ds", api_key="")'
+
 
 class TestQuotedValuesWithSpaces:
     @pytest.mark.parametrize(
@@ -332,6 +385,10 @@ _ADVERSARIAL = {
     "only colons": ":" * _N,
     "only equals": "=" * _N,
     "only backslashes": "\\" * _N,
+    "a value of backslash pairs": "api_key=" + "\\a" * (_N // 2),
+    "a value of escaped quotes": "api_key=" + '\\"' * (_N // 2),
+    "a value of escape letters": "password: " + "\\n" * (_N // 2),
+    "empty quoted values": 'token="" ' * (_N // 9),
     "only quotes": "'" * _N,
 }
 

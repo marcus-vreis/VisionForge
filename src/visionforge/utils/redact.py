@@ -54,16 +54,23 @@ _Q = r"""\\?["']"""
 # value is `KEY`, and the word before it stays visible. Without this a pattern
 # takes `Bearer` as the value and leaves the key behind in clear.
 _SCHEME = r"(?:(?:bearer|basic|token|digest|apikey)[ \t]+)?"
-# A value ends at whitespace, a quote, a backslash, or the delimiters that close
-# a URL, a call or a literal around it.
-_VALUE = r"""[^&\s"'<>)\]},;\\]+"""
+# One character of an unquoted value: anything but whitespace, a quote, or the
+# delimiters that close a URL, a call or a literal around it. A backslash counts
+# too, except where it starts an escape: `\"` (the closing quote of a value inside
+# a string) and `\n`, `\r`, `\t` (the line break a repr prints as two characters).
+# `abc\nnext` is the secret `abc` and the text `\nnext`; `pa\ss12345` is all
+# secret. Written as alternatives that cannot overlap, so matching stays linear.
+_VALUE_CHAR = r"""(?:[^&\s"'<>)\]},;\\]|\\(?!["'nrt]))"""
+_VALUE = rf"{_VALUE_CHAR}+"
 # The same, inside a percent-encoded URL: `%26` is an encoded `&`.
-_ENCODED_VALUE = r"""(?:(?!%26)[^&\s"'<>)\]},;\\])+"""
-# What sits between a pair's opening and closing quote: anything on the same line,
-# starting with a character that is not a space. The first-character rule keeps a
-# string literal that merely ends in the name (`"/?api_key=" + api_key`) from being
-# read as an opening quote.
-_QUOTED_VALUE = rf"(?P<oq>{_Q}){_SCHEME}(?P<val>[^\s][^\r\n]*?)(?P=oq)"
+_ENCODED_VALUE = rf"(?:(?!%26){_VALUE_CHAR})+"
+# What sits between a pair's opening and closing quote: anything on the same line.
+# It starts with a character that is neither a space nor a quote. The first rule
+# keeps a string literal that merely ends in the name (`"/?api_key=" + api_key`)
+# from being read as an opening quote. The second is what makes an empty value
+# (`token=""`) stay empty: otherwise its closing quote is taken for the first
+# character and the match runs on to the next quote on the line.
+_QUOTED_VALUE = rf"(?P<oq>{_Q}){_SCHEME}(?P<val>(?!{_Q})[^\s][^\r\n]*?)(?P=oq)"
 # Query parameters that sign or authorize a link without being named like a
 # secret: Roboflow's export URL carries `?key=<token>`. Only right after `?` or
 # `&`, so "the primary key" and "key=value pairs" in prose are left alone.
