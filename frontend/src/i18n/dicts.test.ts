@@ -61,4 +61,34 @@ describe("dictionaries", () => {
     expect(en.runDetail.gradcam.done(1, "layer4")).toBe("1 map generated · target layer: layer4");
     expect(en.runDetail.gradcam.done(3, "layer4")).toBe("3 maps generated · target layer: layer4");
   });
+
+  it("agree with the number in the counts that can read 1 on screen", () => {
+    expect(pt.paramPanel.grid.axisTag(1)).toBe("grade · 1 valor");
+    expect(pt.paramPanel.grid.axisTag(3)).toBe("grade · 3 valores");
+    expect(en.paramPanel.grid.axisTag(1)).toBe("grid · 1 value");
+    expect(en.paramPanel.grid.axisTag(3)).toBe("grid · 3 values");
+
+    expect(pt.paramPanel.hiddenParams(1)).toBe("1 parâmetro oculto — ligue para ajustar");
+    expect(pt.paramPanel.hiddenParams(3)).toBe("3 parâmetros ocultos — ligue para ajustar");
+    expect(en.paramPanel.hiddenParams(1)).toBe("1 hidden parameter — turn on to adjust it");
+    expect(en.paramPanel.hiddenParams(3)).toBe("3 hidden parameters — turn on to adjust them");
+
+    expect(pt.runDetail.dataset.files(1, "2 MB")).toBe("1 arquivo · 2 MB");
+    expect(pt.runDetail.dataset.files(3, "2 MB")).toBe("3 arquivos · 2 MB");
+    expect(pt.runDetail.dataset.files(null, "2 MB")).toBe("— arquivos · 2 MB");
+    expect(en.runDetail.dataset.files(1, "2 MB")).toBe("1 file · 2 MB");
+    expect(en.runDetail.dataset.files(3, "2 MB")).toBe("3 files · 2 MB");
+
+    expect(pt.runDetail.batch.done(1, "a.csv")).toBe("1 imagem processada · CSV em a.csv");
+    expect(pt.runDetail.batch.done(3, "a.csv")).toBe("3 imagens processadas · CSV em a.csv");
+    expect(en.runDetail.batch.done(1, "a.csv")).toBe("1 image processed · CSV at a.csv");
+    expect(en.runDetail.batch.done(3, "a.csv")).toBe("3 images processed · CSV at a.csv");
+
+    // The noun agrees with the number of missing images, not with the number checked.
+    expect(pt.taskDatasetStats.missingImages(1, 5)).toBe("⚠ 1/5 imagem não encontrada");
+    expect(pt.taskDatasetStats.missingImages(2, 5)).toBe("⚠ 2/5 imagens não encontradas");
+    expect(pt.taskDatasetStats.missingImages(1, 1)).toBe("⚠ 1/1 imagem não encontrada");
+    expect(en.taskDatasetStats.missingImages(1, 5)).toBe("⚠ 1/5 image not found");
+    expect(en.taskDatasetStats.missingImages(2, 5)).toBe("⚠ 2/5 images not found");
+  });
 });

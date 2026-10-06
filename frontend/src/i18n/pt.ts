@@ -304,7 +304,7 @@ export const pt = {
       addValue: "+ valor ao grid",
       addAnother: "+ valor",
       removeValue: "Remover valor",
-      axisTag: (values: number) => `grade · ${values} valores`,
+      axisTag: (values: number) => `grade · ${values} ${values === 1 ? "valor" : "valores"}`,
       banner:
         "**Grid search ativo.** Clique em `+ valor ao grid` nos hiperparâmetros de __Modelo__ e __Treinamento__ para varrer múltiplos valores.",
       trials: (n: number) =>
@@ -343,7 +343,8 @@ export const pt = {
     unavailable: (task: string) => `${task} ainda não está disponível`,
     unavailableBody: "Esta tarefa será implementada em uma próxima fase do VisionForge.",
     loadingSchema: "carregando schema…",
-    hiddenParams: (n: number) => `${n} parâmetros ocultos — ligue para ajustar`,
+    hiddenParams: (n: number) =>
+      `${n} ${n === 1 ? "parâmetro oculto" : "parâmetros ocultos"} — ligue para ajustar`,
     fieldErrors: (n: number) => `${n} ${n === 1 ? "campo" : "campos"} com erro:`,
   },
   // The panel for one run (components/RunDetailPanel.tsx). Config keys, measure
@@ -385,7 +386,7 @@ export const pt = {
       name: "Nome",
       path: "Caminho",
       contents: "Conteúdo",
-      files: (n: number | null | undefined, size: string) => `${n ?? "—"} arquivos · ${size}`,
+      files: (n: number | null | undefined, size: string) => `${n ?? "—"} ${n === 1 ? "arquivo" : "arquivos"} · ${size}`,
       fingerprint: "Fingerprint",
       noFingerprint: "sem fingerprint — run anterior a 26/07/2026",
     },
@@ -441,7 +442,7 @@ export const pt = {
       hint: "Roda o checkpoint sobre uma pasta de imagens e escreve um CSV com uma linha por imagem e a saída do modelo para a tarefa (classe e probabilidades, valores previstos ou score e decisão de anomalia). Útil para processar batches de dados novos sem retreinar.",
       needFolder: "Informe a pasta de imagens para inferência.",
       starting: "Rodando inferência em lote…",
-      done: (ok: number, csv: string) => `${ok} imagens processadas · CSV em ${csv}`,
+      done: (ok: number, csv: string) => `${ok} ${ok === 1 ? "imagem processada" : "imagens processadas"} · CSV em ${csv}`,
       doneWithFailures: (ok: number, failed: number, csv: string) =>
         `${ok} ok · ${failed} ${failed === 1 ? "falhou" : "falharam"} · CSV em ${csv}`,
       failed: "Falha na inferência em lote.",
@@ -484,6 +485,7 @@ export const pt = {
       },
       // `name` is a metric label: "Acurácia (teste)", "F1 (teste)".
       onTestSet: (name: string) => `${name} (teste)`,
+      // The bootstrap draws 1000 resamples by default and is skipped below 2: plural only.
       ciTooltip: (percent: number, resamples: number, samples: number) =>
         `IC ${percent}% por bootstrap percentil: ` +
         `${resamples} reamostragens ${samples === 1 ? "da única imagem" : `das ${samples} imagens`} de ` +
@@ -703,6 +705,7 @@ export const pt = {
       recall: "Recall (box)",
       box_loss: "Box loss (val)",
     },
+    // The bootstrap draws 1000 resamples by default and is skipped below 2: plural only.
     ciTooltip: (percent: number, resamples: number, samples: number) =>
       `IC ${percent}% por bootstrap percentil: ` +
       `${resamples} reamostragens ${samples === 1 ? "da única imagem" : `das ${samples} imagens`} de teste. ` +
@@ -1106,6 +1109,7 @@ export const pt = {
   // (components/TaskDatasetStats.tsx). Counts and column names come from the
   // server; `ignore_index` and NEAREST are identifiers.
   taskDatasetStats: {
+    // Shown only above 32 distinct ids, so the count is never 1: plural only.
     interpolated: (ids: number) =>
       `⚠ ${ids} ids distintos na amostra — as máscaras parecem interpoladas (anti-aliasing). Use máscaras com um id de classe por pixel (resample NEAREST).`,
     maskIds: "ids nas máscaras (amostra):",
@@ -1126,7 +1130,7 @@ export const pt = {
     rows: (n: number) => `${n} ${n === 1 ? "linha" : "linhas"}`,
     missingColumns: (columns: string) => `⚠ colunas ausentes: ${columns}`,
     missingImages: (missing: number, checked: number) =>
-      `⚠ ${missing}/${checked} imagens não encontradas`,
+      `⚠ ${missing}/${checked} ${missing === 1 ? "imagem não encontrada" : "imagens não encontradas"}`,
     // `μ` is the mean, `[min, max]` the range, `n` the number of values.
     target: (column: string, mean: string, min: string, max: string, n: number) =>
       `${column}: μ ${mean} · [${min}, ${max}] · n=${n}`,
@@ -1398,6 +1402,7 @@ export const pt = {
     shuffle: "Shuffle",
     shuffleHint: "antes do split",
     foldSeed: "Seed do split",
+    // K is at least 2 (the field's minimum), so "folds" is plural only.
     run: (folds: number) => `⛓ Rodar CV · ${folds} folds`,
   },
   // The multi-seed launcher (components/ReplicatesCard.tsx).
@@ -1558,6 +1563,7 @@ export const pt = {
   // Side-by-side comparison of two or more runs (components/CompareRunsPanel.tsx).
   compareRuns: {
     back: "← histórico",
+    // A comparison needs at least two runs, so "runs" is plural only.
     comparing: (n: number) => `Comparando ${n} runs`,
     loading: "carregando runs…",
     loadFailed: "Falha ao carregar runs.",

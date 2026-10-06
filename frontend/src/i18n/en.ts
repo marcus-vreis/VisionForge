@@ -296,7 +296,7 @@ export const en: Dict = {
       addValue: "+ add to grid",
       addAnother: "+ add value",
       removeValue: "Remove value",
-      axisTag: (values: number) => `grid · ${values} values`,
+      axisTag: (values: number) => `grid · ${values} ${values === 1 ? "value" : "values"}`,
       banner:
         "**Grid search is on.** Click `+ add to grid` on any __Model__ or __Training__ hyperparameter to sweep several values.",
       trials: (n: number) =>
@@ -334,7 +334,8 @@ export const en: Dict = {
     unavailable: (task: string) => `${task} is not available yet`,
     unavailableBody: "This task will be implemented in an upcoming phase of VisionForge.",
     loadingSchema: "loading schema…",
-    hiddenParams: (n: number) => `${n} hidden parameters — turn on to adjust them`,
+    hiddenParams: (n: number) =>
+      `${n} hidden ${n === 1 ? "parameter" : "parameters"} — turn on to adjust ${n === 1 ? "it" : "them"}`,
     fieldErrors: (n: number) => `${n} ${n === 1 ? "field" : "fields"} with errors:`,
   },
   runDetail: {
@@ -1052,7 +1053,7 @@ export const en: Dict = {
     rows: (n: number) => `${n} ${n === 1 ? "row" : "rows"}`,
     missingColumns: (columns: string) => `⚠ missing columns: ${columns}`,
     missingImages: (missing: number, checked: number) =>
-      `⚠ ${missing}/${checked} images not found`,
+      `⚠ ${missing}/${checked} ${missing === 1 ? "image" : "images"} not found`,
     target: (column: string, mean: string, min: string, max: string, n: number) =>
       `${column}: μ ${mean} · [${min}, ${max}] · n=${n}`,
   },
