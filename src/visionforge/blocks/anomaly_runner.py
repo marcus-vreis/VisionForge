@@ -6,6 +6,7 @@ import time
 from typing import Any
 
 from visionforge.blocks.anomaly import AnomalyBlock
+from visionforge.core.cancellation import CancellationToken
 from visionforge.core.task_runner import RunResult
 from visionforge.utils.anomaly_config import AnomalyConfig
 
@@ -22,11 +23,17 @@ class AnomalyRunner:
 
     config_type = AnomalyConfig
 
+    # Set by whoever drives the run (the route layer, or the block that owns the
+    # comparison) and handed to each block built here, so a stopped job also
+    # stops the training in flight (ADR-111). None when nobody can press stop.
+    _cancel_token: CancellationToken | None = None
+
     def run(self, cfg: Any) -> RunResult:
         """Run a single anomaly trial and return a uniform RunResult."""
         block = AnomalyBlock()
         try:
             block.setup(cfg)
+            block._cancel_token = self._cancel_token
             t0 = time.monotonic()
             block.run()
             elapsed = time.monotonic() - t0

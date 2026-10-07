@@ -590,7 +590,10 @@ class Trainer:
             "class_names": class_names or [],
             "config": self._config.model_dump(mode="json"),
             "metrics": {
-                "best_val_loss": result.best_val_loss,
+                # A run stopped before its first epoch has no best loss; the
+                # inf sentinel would be written as `Infinity`, which no JSON
+                # reader accepts and which turned the result endpoint into a 500.
+                "best_val_loss": result.best_val_loss if result.total_epochs else None,
                 "best_epoch": result.best_epoch,
                 "total_epochs": result.total_epochs,
             },
@@ -605,7 +608,11 @@ class Trainer:
                 for r in result.history
             ],
             "artifacts": {
-                "model": str(result.model_path),
+                # None when nothing was trained: every reader then says "no
+                # checkpoint" instead of failing to open a path (ADR-111).
+                "model": (
+                    str(result.model_path) if result.model_path.is_file() else None
+                ),
                 "graphics": [],
                 "report": None,
             },

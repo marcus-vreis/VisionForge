@@ -15,6 +15,7 @@ from __future__ import annotations
 import time
 from typing import Any
 
+from visionforge.core.cancellation import CancellationToken
 from visionforge.core.task_runner import RunResult
 from visionforge.tasks.engine import GenericTaskEngine
 from visionforge.tasks.registry import TaskInfo
@@ -22,6 +23,11 @@ from visionforge.tasks.registry import TaskInfo
 
 class CustomTaskRunner:
     """Drives one custom-task training per trial for the generic orchestrators."""
+
+    # Handed to the engine each trial, the way the built-in runners hand it to
+    # their blocks (ADR-111). A Level 2 task owns its loop and never reads it;
+    # the orchestrator still stops between trials.
+    _cancel_token: CancellationToken | None = None
 
     def __init__(self, info: TaskInfo) -> None:
         if info.spec_cls is None:
@@ -33,7 +39,9 @@ class CustomTaskRunner:
         """Run a single training trial and return a uniform RunResult."""
         try:
             t0 = time.monotonic()
-            result = GenericTaskEngine(self._info, cfg).run()
+            result = GenericTaskEngine(self._info, cfg).run(
+                cancel_token=self._cancel_token
+            )
             return RunResult(
                 metrics=dict(result.metrics),
                 status="success",

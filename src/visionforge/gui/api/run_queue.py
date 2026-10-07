@@ -34,7 +34,7 @@ from collections import deque
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from loguru import logger
 
@@ -44,6 +44,15 @@ from visionforge.core.cancellation import CancellationToken
 # Bounded because a long session would otherwise grow without limit, and the
 # durable record is run.json — this cache only serves the "just finished" fetch.
 _MAX_RECORDS = 100
+
+# Where a running job stops when asked (ADR-111): the boundary after which it
+# starts nothing new. Inside a multi-unit job the training in flight is still cut
+# at its own epoch where it has one; "phase" is PatchCore, which has no epochs.
+StopPoint = Literal["epoch", "trial", "fold", "model", "replicate", "phase"]
+
+
+class NotStoppableError(Exception):
+    """The running job never reads a stop request, so none was sent."""
 
 
 @dataclass
@@ -59,6 +68,9 @@ class QueuedJob:
     # Handed to the trainer so a running job can be asked to stop at its next
     # epoch boundary. Pending jobs never read it -- they are simply dropped.
     cancel_token: CancellationToken = field(default_factory=CancellationToken)
+    # None for a job whose executor never reads the token (a custom task that
+    # owns its loop): cancelling it would report a stop that does not happen.
+    stop_at: StopPoint | None = "epoch"
 
     def describe(self) -> dict[str, Any]:
         """JSON-ready form for the queue endpoint (never includes the callable)."""
@@ -68,6 +80,7 @@ class QueuedJob:
             "task": self.task,
             "strategy": self.strategy,
             "submitted_at": self.submitted_at.isoformat(),
+            "stop_at": self.stop_at,
         }
 
 
@@ -116,8 +129,12 @@ class RunQueue:
         ADR-075 refused this because the trainers had no safe place to stop, and
         ADR-088 gave them one — the epoch boundary, where the checkpoint is
         already written. So this returns True meaning "the request was
-        delivered", not "training has ended"; the run finishes its current epoch
-        and keeps the best checkpoint it has earned.
+        delivered", not "training has ended"; the run stops at its ``stop_at``
+        boundary and keeps the best checkpoint it has earned.
+
+        Raises:
+            NotStoppableError: the job is running and its ``stop_at`` is None.
+                The token is left untouched, so nothing claims a stop.
         """
         for job in list(self._pending):
             if job.run_id == run_id:
@@ -125,8 +142,14 @@ class RunQueue:
                 logger.info("Queue: {} cancelled before it started.", run_id)
                 return True
         if self._active is not None and self._active.run_id == run_id:
+            if self._active.stop_at is None:
+                raise NotStoppableError(run_id)
             self._active.cancel_token.cancel()
-            logger.info("Queue: {} asked to stop at the next epoch.", run_id)
+            logger.info(
+                "Queue: {} asked to stop at the next {} boundary.",
+                run_id,
+                self._active.stop_at,
+            )
             return True
         return False
 
@@ -193,4 +216,4 @@ class RunQueue:
             self._records.pop(next(iter(self._records)))
 
 
-__all__ = ["QueuedJob", "RunQueue"]
+__all__ = ["NotStoppableError", "QueuedJob", "RunQueue", "StopPoint"]

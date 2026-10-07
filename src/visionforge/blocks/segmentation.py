@@ -63,6 +63,11 @@ class SegmentationBlock:
                 resume_dir=self._resume_dir,
             )
 
+            # Stopped before its first epoch (ADR-111): no checkpoint exists,
+            # and the run.json the trainer wrote already says 0 epochs.
+            if self._train_result.total_epochs == 0:
+                return
+
             # Reload the best checkpoint before test-set evaluation.
             state_dict = torch.load(
                 str(self._train_result.model_path),
@@ -94,7 +99,8 @@ class SegmentationBlock:
             r = self._train_result
             result["train"] = {
                 "best_epoch": r.best_epoch,
-                "best_val_miou": r.best_val_miou,
+                # The -1 sentinel until an epoch runs (ADR-111).
+                "best_val_miou": r.best_val_miou if r.total_epochs else None,
                 "total_epochs": r.total_epochs,
                 "device_used": r.device_used,
                 "run_dir": str(r.model_path.parent),

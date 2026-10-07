@@ -79,6 +79,30 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
   desativado e diz por quê, tanto na fila quanto na tela de treino. O
   PatchCore, que não tem épocas, também não para no meio; só a tela de treino
   o reconhece, porque a fila não sabe qual modelo uma tarefa de anomalia usa.
+- **Parar funciona em validação cruzada, comparação, réplicas, varreduras e
+  tarefas próprias.** Antes, o botão de parar só chegava aos treinos simples e
+  ao grid/random search da classificação; nos demais o servidor respondia que
+  tinha parado e o trabalho ia até o fim (uma validação cruzada de 3 dobras
+  rodava as 3 inteiras). Agora o treino em andamento para no fim da época atual
+  e nada novo começa depois: nenhuma dobra, modelo, réplica ou tentativa a
+  mais. A unidade interrompida aparece como "parada", guarda as métricas que
+  chegou a ter e fica fora da média e do ranking, que passam a ser calculados só
+  sobre as que terminaram (com o `n` real). O PatchCore, que não tem épocas,
+  para entre as etapas: parado durante a extração de features não guarda nada;
+  parado enquanto monta o banco de memória termina o banco, salva e pula a
+  pontuação, que pode ser feita depois em "+ testar" no histórico. A fila
+  agora diz onde cada execução para (`stop_at`), e uma tarefa própria que
+  controla o próprio laço de treino, que não tem como parar no meio, recebe 409
+  em vez de um "parado" que não aconteceria; na fila de espera ela continua
+  podendo ser removida ([ADR-111](docs/dev/DECISIONS.md)).
+- **Parar antes da primeira época não quebra mais o run.** Um treino parado
+  enquanto ainda carregava os dados terminava com erro, porque o bloco tentava
+  carregar um checkpoint que nunca foi gravado; em segmentação e nas tarefas
+  próprias os pesos não treinados eram salvos e avaliados como se fossem
+  resultado, e na detecção torchvision eram salvos como `best.pt`. Agora o run termina normalmente, o `run.json` registra 0
+  épocas, métricas vazias em vez de 0.0 e nenhum checkpoint, e o run não aparece
+  como retomável, porque não há nada a continuar
+  ([ADR-111](docs/dev/DECISIONS.md)).
 - **"Testar em outro dataset" não exige mais `train` e `val` ao lado.** Em
   regressão, escolher um `.csv` numa pasta sem `train.csv` e `val.csv` falhava
   com "Regression manifest not found", e em segmentação o mesmo acontecia com

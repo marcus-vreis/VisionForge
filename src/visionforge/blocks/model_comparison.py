@@ -10,6 +10,7 @@ from loguru import logger
 
 from visionforge.blocks.base import ExperimentBlock
 from visionforge.blocks.classification_runner import ClassificationRunner
+from visionforge.core.cancellation import STOPPED, STOPPED_NOTE, is_cancelled
 from visionforge.utils.config import ExperimentConfig
 
 
@@ -40,6 +41,9 @@ class ModelComparisonBlock(ExperimentBlock):
         raw_base["model_comparison"] = None
 
         runner = ClassificationRunner()
+        # The architecture in flight stops at its epoch boundary; the loop
+        # below starts no new one after a stop (ADR-111).
+        runner._cancel_token = self._cancel_token
         unsorted: list[dict[str, Any]] = []
 
         for arch in mc.model_names:
@@ -91,7 +95,19 @@ class ModelComparisonBlock(ExperimentBlock):
                 gc.collect()
                 torch.cuda.empty_cache()
 
+            # Cut short by the stop: its metrics are kept in the record but it
+            # does not compete with architectures that trained to the end.
+            if is_cancelled(self._cancel_token):
+                trial_record["status"] = STOPPED
+                trial_record["error"] = STOPPED_NOTE
             unsorted.append(trial_record)
+            if is_cancelled(self._cancel_token):
+                logger.info(
+                    "ModelComparison stopped after {} of {} architectures.",
+                    len(unsorted),
+                    len(mc.model_names),
+                )
+                break
 
         # Sort successful trials by the chosen metric descending; failures go last.
         metric = mc.metric
@@ -110,6 +126,11 @@ class ModelComparisonBlock(ExperimentBlock):
         """
         successful = [t for t in self._trials if t["status"] == "success"]
         if not successful:
+            if is_cancelled(self._cancel_token):
+                raise RuntimeError(
+                    "Comparação parada antes de concluir a primeira arquitetura: "
+                    "não há ranking a reportar."
+                )
             raise RuntimeError(
                 "ModelComparisonBlock: all architectures failed — no ranking available."
             )
@@ -117,7 +138,8 @@ class ModelComparisonBlock(ExperimentBlock):
         return {
             "top_3": successful[:3],
             "total_ran": len(self._trials),
-            "failed_count": len(self._trials) - len(successful),
+            "failed_count": sum(1 for t in self._trials if t["status"] == "failed"),
+            "stopped_count": sum(1 for t in self._trials if t["status"] == STOPPED),
         }
 
     # ── private ───────────────────────────────────────────────────────────────

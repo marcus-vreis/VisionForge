@@ -22,13 +22,14 @@ from typing import Any, Literal
 
 from loguru import logger
 
+from visionforge.core.cancellation import is_cancelled
 from visionforge.core.replicates import (
     ReplicateTrial,
     aggregate_replicates,
     run_replicates,
 )
 from visionforge.core.significance import comparison_matrix, infer_direction
-from visionforge.core.task_runner import TaskRunner
+from visionforge.core.task_runner import TaskRunner, runner_cancel_token
 
 
 @dataclass
@@ -107,6 +108,10 @@ def run_replicated_comparison(
     kept in the report (with its error) but takes no part in the tests —
     silently dropping it would make the matrix look complete when it is not.
 
+    A stop carried by the runner (ADR-111) ends the variant in flight at its
+    current replicate and starts no further variant; the report then covers
+    the variants and seeds that actually ran, paired on the seeds they share.
+
     Raises:
         ValueError: for invalid variants (see :func:`validate_variants`) or
             fewer than two seeds, which leaves no dispersion to test.
@@ -159,6 +164,13 @@ def run_replicated_comparison(
                     else "failed",
                 }
             )
+        if is_cancelled(runner_cancel_token(runner)):
+            logger.info(
+                "Replicated comparison stopped after {} of {} variants.",
+                index + 1,
+                total,
+            )
+            break
 
     return build_report(results, seeds, metric, alpha=alpha, direction=direction)
 

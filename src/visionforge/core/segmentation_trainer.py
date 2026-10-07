@@ -432,7 +432,9 @@ class SegmentationTrainer:
 
         # Guard: if mIoU never improved past the -1 sentinel (degenerate run),
         # still persist the final weights so the block can reload something.
-        if not model_path.is_file():
+        # Not for a run stopped before its first epoch: those weights are
+        # untrained, and the block would score them as a result (ADR-111).
+        if history and not model_path.is_file():
             torch.save(
                 model.module.state_dict()  # type: ignore[union-attr]
                 if isinstance(model, nn.DataParallel)
@@ -677,12 +679,14 @@ class SegmentationTrainer:
             "run_dir": str(run_dir.resolve()),
             "config": self._config.model_dump(mode="json"),
             "metrics": {
-                "best_val_miou": result.best_val_miou,
+                # No epoch, no best: null rather than the -1 sentinel or a 0.0
+                # that reads as a measured result (ADR-111).
+                "best_val_miou": result.best_val_miou if result.total_epochs else None,
                 "best_epoch": result.best_epoch,
                 "total_epochs": result.total_epochs,
-                "miou": best.val_miou if best else 0.0,
-                "dice": best.val_dice if best else 0.0,
-                "pixel_acc": best.val_pixel_acc if best else 0.0,
+                "miou": best.val_miou if best else None,
+                "dice": best.val_dice if best else None,
+                "pixel_acc": best.val_pixel_acc if best else None,
             },
             "history": [
                 {
@@ -696,7 +700,11 @@ class SegmentationTrainer:
                 for r in result.history
             ],
             "artifacts": {
-                "model": str(result.model_path),
+                # None when nothing was trained: every reader then says "no
+                # checkpoint" instead of failing to open a path (ADR-111).
+                "model": (
+                    str(result.model_path) if result.model_path.is_file() else None
+                ),
                 "graphics": [],
                 "report": None,
             },

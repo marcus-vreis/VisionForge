@@ -25,8 +25,9 @@ from typing import Any
 
 from loguru import logger
 
+from visionforge.core.cancellation import STOPPED, STOPPED_NOTE, is_cancelled
 from visionforge.core.significance import bootstrap_ci
-from visionforge.core.task_runner import RunResult, TaskRunner
+from visionforge.core.task_runner import RunResult, TaskRunner, runner_cancel_token
 
 try:  # torch is the heavy hardware extra; the cache flush is best-effort.
     import torch
@@ -126,7 +127,12 @@ def run_replicates(
     memory is released between replicates. ``progress_callback`` receives
     ``trial_start``/``trial_end`` events so the GUI overlay tracks real
     progress across the set.
+
+    A stop carried by the runner (ADR-111) cuts the replicate in flight,
+    records it as ``stopped`` -- outside the aggregate, whose ``n`` then counts
+    only the replicates that ran to the end -- and starts no further seed.
     """
+    token = runner_cancel_token(runner)
     trials: list[ReplicateTrial] = []
     base_name = str(base_config_dict.get("name", "replicates"))
 
@@ -170,6 +176,9 @@ def run_replicates(
             gc.collect()
             if torch is not None and torch.cuda.is_available():
                 torch.cuda.empty_cache()
+        if is_cancelled(token):
+            trial.status = STOPPED
+            trial.error = STOPPED_NOTE
         if progress_callback is not None:
             progress_callback(
                 {
@@ -180,6 +189,11 @@ def run_replicates(
                 }
             )
         trials.append(trial)
+        if is_cancelled(token):
+            logger.info(
+                "Replicates stopped after {} of {} seeds.", index + 1, len(seeds)
+            )
+            break
 
     return trials
 

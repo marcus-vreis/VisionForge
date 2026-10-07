@@ -7,8 +7,11 @@ directory behind.
 
 The missing piece was never the mechanism — it was a safe point. Every trainer
 already pauses between epochs to write a checkpoint and emit progress. That is
-where a run can stop with everything on disk consistent, and it is the only
-place this token is ever read.
+where a run can stop with everything on disk consistent, and it is where the
+trainers read this token. The orchestrators that run several trainings in one
+job (K-fold, comparison, sweeps, replicates) also read it between units, so
+nothing new starts after a stop; PatchCore, which has no epochs, reads it
+between its phases (ADR-111).
 
 **Cancelling keeps what the run has earned.** A researcher usually cancels
 because the curve already answered the question, not because the work is
@@ -19,6 +22,13 @@ them would make the button something people avoid pressing, which defeats it.
 from __future__ import annotations
 
 import threading
+
+# Status of a unit (fold, trial, model, replicate) that was training when the
+# stop arrived (ADR-111). Its record keeps whatever metrics it reached, but it
+# stays out of every aggregate and ranking: a fold cut at epoch 2 averaged with
+# folds that ran to epoch 30 gives a mean that no configuration produced.
+STOPPED = "stopped"
+STOPPED_NOTE = "Parado a pedido antes de terminar; fica fora da agregação."
 
 
 class CancellationToken:
@@ -55,4 +65,4 @@ def is_cancelled(token: CancellationToken | None) -> bool:
     return token is not None and token.cancelled
 
 
-__all__ = ["CancellationToken", "is_cancelled"]
+__all__ = ["STOPPED", "STOPPED_NOTE", "CancellationToken", "is_cancelled"]

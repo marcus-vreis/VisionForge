@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Protocol, runtime_checkable
 
+from visionforge.core.cancellation import CancellationToken
+
 
 @dataclass
 class RunResult:
@@ -39,4 +41,22 @@ class TaskRunner(Protocol):
         ...
 
 
-__all__ = ["RunResult", "TaskRunner"]
+# The runner carries the job's stop signal the way a block carries
+# `_cancel_token` (ADR-094): it hands the token to every block it builds, so the
+# training in flight stops at its epoch boundary, and the orchestrator driving it
+# reads the same token between units, so nothing new starts (ADR-111). An
+# attribute rather than a `run()` argument, so the protocol every test double
+# implements stays as it is.
+def give_cancel_token(runner: Any, token: CancellationToken | None) -> None:
+    """Hand ``runner`` the job's stop signal, if it declares a slot for one."""
+    if hasattr(runner, "_cancel_token"):
+        runner._cancel_token = token
+
+
+def runner_cancel_token(runner: object) -> CancellationToken | None:
+    """The stop signal ``runner`` carries, or None when it has none."""
+    token = getattr(runner, "_cancel_token", None)
+    return token if isinstance(token, CancellationToken) else None
+
+
+__all__ = ["RunResult", "TaskRunner", "give_cancel_token", "runner_cancel_token"]

@@ -14,7 +14,8 @@ from typing import Any
 
 from loguru import logger
 
-from visionforge.core.task_runner import RunResult, TaskRunner
+from visionforge.core.cancellation import STOPPED, STOPPED_NOTE, is_cancelled
+from visionforge.core.task_runner import RunResult, TaskRunner, runner_cancel_token
 
 try:  # torch is the heavy hardware extra; the cache flush is best-effort.
     import torch
@@ -45,7 +46,12 @@ def run_model_comparison(
     better — the convention for every task's primary metric: accuracy, r2, miou,
     map50); failed trials keep their order at the end. GPU memory is released
     between architectures so a long sweep doesn't accumulate VRAM.
+
+    A stop carried by the runner (ADR-111) cuts the architecture in flight at
+    its epoch boundary, records it as ``stopped`` outside the ranking, and
+    starts no further architecture.
     """
+    token = runner_cancel_token(runner)
     trials: list[ComparisonTrial] = []
 
     for arch in model_names:
@@ -77,7 +83,17 @@ def run_model_comparison(
             gc.collect()
             if torch is not None and torch.cuda.is_available():
                 torch.cuda.empty_cache()
+        if is_cancelled(token):
+            trial.status = STOPPED
+            trial.error = STOPPED_NOTE
         trials.append(trial)
+        if is_cancelled(token):
+            logger.info(
+                "Comparison stopped after {} of {} architectures.",
+                len(trials),
+                len(model_names),
+            )
+            break
 
     successful = [t for t in trials if t.status == "success"]
     failed = [t for t in trials if t.status != "success"]

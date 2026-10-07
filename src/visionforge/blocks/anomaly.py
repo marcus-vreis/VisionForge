@@ -64,6 +64,12 @@ class AnomalyBlock:
                 resume_dir=self._resume_dir,
             )
 
+            # Nothing was scored: stopped before its first epoch, or a PatchCore
+            # stopped once its bank was built. The stop asked for no more work,
+            # and the run.json the trainer wrote already says so (ADR-111).
+            if not self._train_result.history:
+                return
+
             # Reload the best checkpoint before final scoring.
             state_dict = torch.load(
                 str(self._train_result.model_path),

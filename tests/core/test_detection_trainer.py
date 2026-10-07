@@ -435,6 +435,51 @@ class TestFinalValidationIsNotAnEpoch:
         assert result.total_epochs == 1
 
 
+class TestStoppedBeforeTheFirstEpoch:
+    """A stop that lands during setup must not cost an epoch, or leave weights."""
+
+    def test_ultralytics_is_never_entered(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Ultralytics reads its stop flag only at an epoch's end; handing over a
+        # stopped run would train one whole epoch nobody asked for.
+        record: dict[str, Any] = {}
+        monkeypatch.setattr(dt_mod, "YOLO", _make_fake_yolo(record))
+        token = CancellationToken()
+        token.cancel()
+        events: list[dict[str, Any]] = []
+
+        result = DetectionTrainer(_config(tmp_path)).fit(
+            progress_callback=events.append, cancel_token=token
+        )
+
+        assert "train_kwargs" not in record
+        assert result.total_epochs == 0
+        assert [e["event"] for e in events] == ["start", "end"]
+        run_json = json.loads((result.run_dir / "run.json").read_text("utf-8"))
+        assert run_json["metrics"]["total_epochs"] == 0
+        assert run_json["metrics"]["map50"] is None
+
+    def test_torchvision_saves_no_untrained_checkpoint(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(
+            dt_mod, "build_torchvision_detector", lambda *a, **k: _FakeDetector()
+        )
+        token = CancellationToken()
+        token.cancel()
+
+        result = DetectionTrainer(_tv_config(tmp_path)).fit(cancel_token=token)
+
+        assert result.total_epochs == 0
+        # The old "epochs=0 guard" saved these weights as best.pt, and every
+        # action on the run (test, export) then used a model nothing trained.
+        assert not result.model_path.exists()
+        run_json = json.loads((result.run_dir / "run.json").read_text("utf-8"))
+        assert run_json["metrics"]["total_epochs"] == 0
+        assert run_json["artifacts"]["model"] is None
+
+
 class TestUltralyticsResume:
     """Ultralytics keeps its own resume state; the trainer must use it, not ours."""
 

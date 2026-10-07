@@ -15,7 +15,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException
 from fastapi.exceptions import RequestValidationError
@@ -43,7 +43,7 @@ from visionforge.blocks.segmentation import SegmentationBlock
 from visionforge.blocks.segmentation_cv import run_segmentation_cross_validation
 from visionforge.blocks.segmentation_runner import SegmentationRunner
 from visionforge.blocks.transfer_learning import TransferLearningBlock
-from visionforge.core.cancellation import CancellationToken
+from visionforge.core.cancellation import STOPPED, CancellationToken, is_cancelled
 from visionforge.core.comparison import ComparisonTrial, run_model_comparison
 from visionforge.core.data import DataModule
 from visionforge.core.dataset_fingerprint import dataset_identity
@@ -70,12 +70,17 @@ from visionforge.core.replicates import (
 )
 from visionforge.core.resume import can_resume
 from visionforge.core.sweep import SweepTrial, run_sweep, validate_sweep_space
-from visionforge.core.task_runner import TaskRunner
+from visionforge.core.task_runner import TaskRunner, give_cancel_token
 from visionforge.gui.api.dataset_download import credentials_in_play, download_dataset
 from visionforge.gui.api.detection_export import export_detection_run
 from visionforge.gui.api.detection_testing import evaluate_detection_run
 from visionforge.gui.api.model_notes import collapse_note
-from visionforge.gui.api.run_queue import QueuedJob, RunQueue
+from visionforge.gui.api.run_queue import (
+    NotStoppableError,
+    QueuedJob,
+    RunQueue,
+    StopPoint,
+)
 from visionforge.gui.api.schemas import (
     AnomalyDatasetStatsRequest,
     AnomalyDatasetStatsResponse,
@@ -151,6 +156,7 @@ from visionforge.gui.api.torch_onnx_export import (
     export_segmentation_run,
 )
 from visionforge.models.factory import ModelFactory
+from visionforge.tasks.base import TaskSpec
 from visionforge.tasks.engine import GenericTaskEngine
 from visionforge.tasks.registry import get_task, registered_tasks
 from visionforge.tasks.runner import CustomTaskRunner
@@ -246,16 +252,56 @@ def _task_label_from_config(config_type: type[Any]) -> str:
     return config_type.__name__.removesuffix("Config").lower() or "experiment"
 
 
+# Where each kind of job stops when asked (ADR-111), by the strategy it is
+# queued under. A strategy missing here is reported as not stoppable: claiming a
+# stop that the executor never checks for is the ADR-094 failure mode.
+_STOP_POINTS: dict[str, StopPoint] = {
+    "simple": "epoch",
+    # Classification queues under `config.block`; these four all train through
+    # ClassificationBlock or TransferLearningBlock in _execute_experiment.
+    "classification": "epoch",
+    "transfer_learning": "epoch",
+    "batch_prediction": "epoch",
+    "export_onnx": "epoch",
+    "grid_search": "trial",
+    "random_search": "trial",
+    "sweep": "trial",
+    "cross_validation": "fold",
+    "cv": "fold",
+    "model_comparison": "model",
+    "comparison": "model",
+    "replicates": "replicate",
+    "replicated-comparison": "replicate",
+}
+
+
+def _stop_point(strategy: str) -> StopPoint | None:
+    """Where a job queued under ``strategy`` stops; ``sweep:grid`` reads as ``sweep``."""
+    return _STOP_POINTS.get(strategy.split(":", 1)[0])
+
+
 def _submit_job(
     run_id: str,
     label: str,
     task: str,
     strategy: str,
     start: Callable[[], Awaitable[None]],
+    stop_at: StopPoint | None | Literal["auto"] = "auto",
 ) -> RunResponse:
-    """Queue a training job and report whether it started or is waiting."""
+    """Queue a training job and report whether it started or is waiting.
+
+    ``stop_at`` defaults to what the strategy implies; the starters whose stop
+    depends on the config (PatchCore, a custom task that owns its loop) pass it.
+    """
     status = _RUN_QUEUE.submit(
-        QueuedJob(run_id=run_id, label=label, task=task, strategy=strategy, start=start)
+        QueuedJob(
+            run_id=run_id,
+            label=label,
+            task=task,
+            strategy=strategy,
+            start=start,
+            stop_at=_stop_point(strategy) if stop_at == "auto" else stop_at,
+        )
     )
     return RunResponse(run_id=run_id, status=status)  # type: ignore[arg-type]
 
@@ -1020,6 +1066,8 @@ async def run_anomaly(config: AnomalyConfig) -> RunResponse:
         "anomaly",
         "simple",
         lambda: _execute_anomaly(config, run_id),
+        # PatchCore has no epochs; it stops between its phases (ADR-111).
+        stop_at="phase" if config.model.name == "patchcore" else "epoch",
     )
 
 
@@ -1269,7 +1317,13 @@ async def run_custom_task(key: str, config: dict[str, Any]) -> RunResponse:
         f"custom:{info.key}",
         "simple",
         lambda: _execute_custom_task(info, cfg, run_id),
+        stop_at=None if _owns_its_loop(info) else "epoch",
     )
+
+
+def _owns_its_loop(info: Any) -> bool:
+    """True for a Level 2 custom task, whose own ``run`` never reads a stop request."""
+    return info.spec_cls is not None and info.spec_cls.run is not TaskSpec.run
 
 
 async def _execute_custom_task(info: Any, cfg: Any, run_id: str) -> None:
@@ -1286,7 +1340,7 @@ async def _execute_custom_task(info: Any, cfg: Any, run_id: str) -> None:
     try:
         engine = GenericTaskEngine(info, cfg)
         logger.info("GUI: Starting custom task '{}' run {}", info.key, run_id)
-        result = await asyncio.to_thread(engine.run, _put_event)
+        result = await asyncio.to_thread(engine.run, _put_event, _active_cancel_token)
 
         report = {
             "task": f"custom:{info.key}",
@@ -1492,15 +1546,26 @@ async def get_queue() -> QueueSnapshot:
 async def cancel_queued_run(run_id: str) -> dict[str, str]:
     """Stop a job, whether it is waiting or already training.
 
-    A pending job is dropped. A running one is asked to stop at its next epoch
-    boundary and keeps the best checkpoint it has earned (ADR-088), so a 200
-    here means the request was delivered, not that training has already ended.
+    A pending job is dropped. A running one is asked to stop at the boundary its
+    ``stop_at`` names and keeps the best checkpoint it has earned (ADR-088,
+    ADR-111), so a 200 here means the request was delivered, not that training
+    has already ended.
 
     Raises:
         HTTPException: 404 if no job carries that id — already finished, or
-            never submitted.
+            never submitted. 409 if the job is running and cannot be stopped
+            (``stop_at`` is null); nothing is asked of it.
     """
-    if not _RUN_QUEUE.cancel(run_id):
+    try:
+        found = _RUN_QUEUE.cancel(run_id)
+    except NotStoppableError:
+        raise HTTPException(
+            409,
+            "Esta execução não verifica pedidos de parada (uma tarefa própria "
+            "que controla o próprio laço de treino, por exemplo) e vai rodar "
+            "até o fim. Nada foi interrompido.",
+        ) from None
+    if not found:
         raise HTTPException(
             404, "No queued run with that id — it may have already started."
         )
@@ -3815,12 +3880,18 @@ async def _execute_comparison(
     """Run a model comparison in a background thread and store the ranked report."""
     global _current_run, _event_queue
     queue = _event_queue
+    token = _active_cancel_token
+    # The runner carries the stop into the architecture in flight, and the
+    # comparison reads it between architectures (ADR-111).
+    give_cancel_token(runner, token)
 
     try:
         trials = await asyncio.to_thread(
             run_model_comparison, runner, config_dict, model_names, metric
         )
         if not any(t.status == "success" for t in trials):
+            if is_cancelled(token):
+                raise RuntimeError(_nothing_finished("arquitetura"))
             raise RuntimeError("All architectures failed — no ranking available.")
         report = _comparison_report(trials, metric)
         report["report_dir"] = _write_advanced_summary(
@@ -3857,8 +3928,17 @@ def _comparison_report(trials: list[ComparisonTrial], metric: str) -> dict[str, 
         "trials": rows,
         "top_3": successful[:3],
         "total_ran": len(rows),
-        "failed_count": len(rows) - len(successful),
+        "failed_count": sum(1 for t in rows if t["status"] == "failed"),
+        "stopped_count": sum(1 for t in rows if t["status"] == STOPPED),
     }
+
+
+def _nothing_finished(unit: str) -> str:
+    """Why a job stopped before its first unit ended has no result (ADR-111)."""
+    return (
+        f"Parado antes de concluir a primeira {unit}: não há resultado a "
+        "reportar. As execuções feitas até aí continuam no histórico."
+    )
 
 
 def _start_sweep(
@@ -3911,6 +3991,11 @@ async def _execute_sweep(
         if queue is not None:
             asyncio.run_coroutine_threadsafe(queue.put(event), loop)
 
+    token = _active_cancel_token
+    # The runner carries the stop into the trial in flight, and the sweep reads
+    # it between trials (ADR-111).
+    give_cancel_token(runner, token)
+
     try:
         trials = await asyncio.to_thread(
             run_sweep,
@@ -3924,6 +4009,8 @@ async def _execute_sweep(
             progress_callback=_put_event,
         )
         if not any(t.status == "success" for t in trials):
+            if is_cancelled(token):
+                raise RuntimeError(_nothing_finished("tentativa"))
             raise RuntimeError("All sweep trials failed — no ranking available.")
         _require_reported_metric(metric, [t.metrics for t in trials], "sweep")
         report = _sweep_report(trials, req.mode, metric)
@@ -4037,6 +4124,8 @@ async def _execute_task_cv(
         if queue is not None:
             asyncio.run_coroutine_threadsafe(queue.put(event), loop)
 
+    token = _active_cancel_token
+
     try:
         cv = await asyncio.to_thread(
             cv_fn,
@@ -4045,8 +4134,11 @@ async def _execute_task_cv(
             shuffle=req.shuffle,
             seed=req.fold_seed,
             progress_callback=_put_event,
+            cancel_token=token,
         )
         if not any(f.status == "success" for f in cv.folds):
+            if is_cancelled(token):
+                raise RuntimeError(_nothing_finished("dobra"))
             raise RuntimeError("All folds failed — no aggregate available.")
         report: dict[str, Any] = {
             "n_folds": cv.n_folds,
@@ -4145,6 +4237,11 @@ async def _execute_replicated_comparison(
         if queue is not None:
             asyncio.run_coroutine_threadsafe(queue.put(event), loop)
 
+    token = _active_cancel_token
+    # The runner carries the stop into the replicate in flight, and the
+    # comparison reads it between replicates and variants (ADR-111).
+    give_cancel_token(runner, token)
+
     try:
         report = await asyncio.to_thread(
             run_replicated_comparison,
@@ -4156,7 +4253,13 @@ async def _execute_replicated_comparison(
             alpha=req.alpha,
             progress_callback=_put_event,
         )
-        if not report["comparisons"]:
+        # A stopped comparison reports the variants that did run, even with no
+        # pair left to test; one stopped before any replicate finished has
+        # nothing to report.
+        stopped = is_cancelled(token)
+        if stopped and not any(v["successful"] for v in report["variants"].values()):
+            raise RuntimeError(_nothing_finished("réplica"))
+        if not report["comparisons"] and not stopped:
             raise RuntimeError(
                 "No variant produced enough successful replicates to compare "
                 f"(skipped: {report['skipped_variants']})."
@@ -4250,6 +4353,11 @@ async def _execute_replicates(
         if queue is not None:
             asyncio.run_coroutine_threadsafe(queue.put(event), loop)
 
+    token = _active_cancel_token
+    # The runner carries the stop into the replicate in flight, and the set
+    # reads it between replicates (ADR-111).
+    give_cancel_token(runner, token)
+
     try:
         trials = await asyncio.to_thread(
             run_replicates,
@@ -4260,6 +4368,8 @@ async def _execute_replicates(
             progress_callback=_put_event,
         )
         if not any(t.status == "success" for t in trials):
+            if is_cancelled(token):
+                raise RuntimeError(_nothing_finished("réplica"))
             raise RuntimeError("All replicates failed — no aggregate available.")
         _require_reported_metric(metric, [t.metrics for t in trials], "replicate")
         report = _replicates_report(trials, seeds, metric)

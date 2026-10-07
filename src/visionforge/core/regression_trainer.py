@@ -565,13 +565,15 @@ class RegressionTrainer:
             "run_dir": str(run_dir.resolve()),
             "config": self._config.model_dump(mode="json"),
             "metrics": {
-                "best_val_loss": result.best_val_loss,
+                # No epoch, no best: null rather than the inf sentinel (not
+                # JSON) or a 0.0 that reads as a measured result (ADR-111).
+                "best_val_loss": result.best_val_loss if result.total_epochs else None,
                 "best_epoch": result.best_epoch,
                 "total_epochs": result.total_epochs,
-                "mse": best.val_mse if best else 0.0,
-                "rmse": best.val_rmse if best else 0.0,
-                "mae": best.val_mae if best else 0.0,
-                "r2": best.val_r2 if best else 0.0,
+                "mse": best.val_mse if best else None,
+                "rmse": best.val_rmse if best else None,
+                "mae": best.val_mae if best else None,
+                "r2": best.val_r2 if best else None,
             },
             "history": [
                 {
@@ -586,7 +588,11 @@ class RegressionTrainer:
                 for r in result.history
             ],
             "artifacts": {
-                "model": str(result.model_path),
+                # None when nothing was trained: every reader then says "no
+                # checkpoint" instead of failing to open a path (ADR-111).
+                "model": (
+                    str(result.model_path) if result.model_path.is_file() else None
+                ),
                 "graphics": [],
                 "report": None,
             },

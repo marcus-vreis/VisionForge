@@ -6,6 +6,7 @@ import time
 from typing import Any
 
 from visionforge.blocks.detection import DetectionBlock
+from visionforge.core.cancellation import CancellationToken
 from visionforge.core.task_runner import RunResult
 from visionforge.utils.detection_config import DetectionConfig
 
@@ -23,11 +24,17 @@ class DetectionRunner:
 
     config_type = DetectionConfig
 
+    # Set by whoever drives the run (the route layer, or the block that owns the
+    # comparison) and handed to each block built here, so a stopped job also
+    # stops the training in flight (ADR-111). None when nobody can press stop.
+    _cancel_token: CancellationToken | None = None
+
     def run(self, cfg: Any) -> RunResult:
         """Run a single detection trial and return a uniform RunResult."""
         block = DetectionBlock()
         try:
             block.setup(cfg)
+            block._cancel_token = self._cancel_token
             t0 = time.monotonic()
             block.run()
             elapsed = time.monotonic() - t0

@@ -183,6 +183,50 @@ class TestGenericTaskEngineLevel1:
         assert result.best_epoch == 2  # err=1.0 was the minimum
 
 
+class TestGenericTaskEngineStop:
+    """The engine owns a Level 1 loop, so it reads the stop like a trainer (ADR-111)."""
+
+    def test_stops_at_the_next_epoch_boundary(self, tmp_path: Path) -> None:
+        from visionforge.core.cancellation import CancellationToken
+
+        _register_toy()
+        token = CancellationToken()
+
+        def press_stop(event: dict[str, Any]) -> None:
+            if event["event"] == "epoch_end" and event["epoch"] == 1:
+                token.cancel()
+
+        result = GenericTaskEngine(
+            get_task("toyreg"), _config(tmp_path, early_stopping_patience=99)
+        ).run(press_stop, cancel_token=token)
+
+        assert result.total_epochs == 1  # of 3 configured
+        assert result.model_path is not None and result.model_path.is_file()
+        assert "mae" in result.metrics
+
+    def test_stopped_before_the_first_epoch_keeps_nothing(self, tmp_path: Path) -> None:
+        from visionforge.core.cancellation import CancellationToken
+
+        _register_toy()
+        token = CancellationToken()
+        token.cancel()
+        events: list[dict[str, Any]] = []
+
+        result = GenericTaskEngine(get_task("toyreg"), _config(tmp_path)).run(
+            events.append, cancel_token=token
+        )
+
+        assert [e["event"] for e in events] == ["start", "end"]
+        assert result.total_epochs == 0
+        assert result.metrics == {}
+        # Untrained weights are not saved and scored as if they were a result.
+        assert result.model_path is None
+        assert not (result.run_dir / "best_model.pth").exists()
+        run_json = json.loads((result.run_dir / "run.json").read_text("utf-8"))
+        assert run_json["metrics"]["total_epochs"] == 0
+        assert run_json["artifacts"]["model"] is None
+
+
 class TestGenericTaskEngineLevel2:
     def test_custom_run_bypasses_the_loop(self, tmp_path: Path) -> None:
         seen: dict[str, Any] = {}

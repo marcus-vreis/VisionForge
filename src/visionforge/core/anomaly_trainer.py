@@ -8,7 +8,8 @@ Handles both model families behind one interface:
   streamed each epoch for monitoring.
 - **PatchCore** — no gradient training: one pass builds the coreset memory bank
   from the normal train set, then the test set is scored. Emits a single fit
-  ``epoch_end``.
+  ``epoch_end``. Having no epochs, it reads the stop signal between its phases
+  instead (ADR-111).
 
 The metric is image-level AUROC over the labelled test split (sklearn), plus a
 decision threshold taken from a percentile of the normal-score distribution and
@@ -95,7 +96,9 @@ class AnomalyTrainResult:
     """Summary of a completed anomaly training run."""
 
     best_epoch: int
-    best_auroc: float
+    # None when nothing was scored: a run stopped before its first epoch, or a
+    # PatchCore stopped once its memory bank was built (ADR-111).
+    best_auroc: float | None
     total_epochs: int
     device_used: str
     history: list[AnomalyEpochResult] = field(default_factory=list)
@@ -181,7 +184,7 @@ class AnomalyTrainer:
         try:
             if isinstance(model, PatchCore):
                 result = self._fit_patchcore(
-                    model, data_module, model_path, progress_callback, tb
+                    model, data_module, model_path, progress_callback, tb, cancel_token
                 )
             else:
                 result = self._fit_autoencoder(
@@ -378,6 +381,18 @@ class AnomalyTrainer:
         if not is_cancelled(cancel_token):
             clear_resume_state(run_dir)
 
+        if not history:
+            # Stopped before its first epoch: there is nothing to keep, and
+            # saving the untrained weights would hand the block a "result" to
+            # score that nothing was trained for (ADR-111).
+            return AnomalyTrainResult(
+                best_epoch=0,
+                best_auroc=None,
+                total_epochs=0,
+                device_used=self._device_label,
+                model_path=model_path,
+            )
+
         if not model_path.is_file():
             torch.save(model.state_dict(), model_path)
             best_epoch = best_epoch or len(history)
@@ -403,6 +418,7 @@ class AnomalyTrainer:
         model_path: Path,
         progress_callback: Callable[[dict[str, Any]], None] | None,
         tb: TensorBoardLogger,
+        cancel_token: CancellationToken | None = None,
     ) -> AnomalyTrainResult:
         model.eval()
         train_loader = data_module.train_loader()
@@ -425,18 +441,48 @@ class AnomalyTrainer:
                 }
             )
 
+        # No epochs to stop at, so the stop signal is read between phases and
+        # between feature-extraction batches (ADR-111). The memory bank itself
+        # is one uninterruptible call: a stop that arrives while it is being
+        # built lands when it is done.
         with torch.no_grad():
             patches = []
             n_batches = len(train_loader)
             phase("extraindo features", 0, n_batches)
             for i, (inputs, _) in enumerate(train_loader, start=1):
+                if is_cancelled(cancel_token):
+                    break
                 inputs = inputs.to(self._device, non_blocking=True)
                 feats = model.extract(inputs).reshape(-1, model.feature_dim)
                 patches.append(feats.cpu())
                 phase("extraindo features", i, n_batches)
+            if is_cancelled(cancel_token):
+                # A bank from part of the normals would be a different model
+                # that looks like this one, so nothing is kept.
+                logger.info("PatchCore stopped before its memory bank was built.")
+                return AnomalyTrainResult(
+                    best_epoch=0,
+                    best_auroc=None,
+                    total_epochs=0,
+                    device_used=self._device_label,
+                    model_path=model_path,
+                )
             model.fit(
                 torch.cat(patches, dim=0).to(self._device),
                 progress=lambda done, total: phase("montando o banco", done, total),
+            )
+
+        if is_cancelled(cancel_token):
+            # The bank is the model and the expensive part, so it is kept; the
+            # scoring the stop asked to skip can be done later by testing the run.
+            torch.save(model.state_dict(), model_path)
+            logger.info("PatchCore stopped after its memory bank; kept unscored.")
+            return AnomalyTrainResult(
+                best_epoch=1,
+                best_auroc=None,
+                total_epochs=1,
+                device_used=self._device_label,
+                model_path=model_path,
             )
 
         phase("pontuando", 0, 2)
@@ -544,9 +590,11 @@ class AnomalyTrainer:
                 "best_auroc": result.best_auroc,
                 "best_epoch": result.best_epoch,
                 "total_epochs": result.total_epochs,
-                "auroc": best.val_auroc if best else 0.0,
-                "threshold": best.val_threshold if best else 0.0,
-                "image_f1": best.val_image_f1 if best else 0.0,
+                # Null when nothing was scored, not a 0.0 that reads as a
+                # measured AUROC (ADR-111).
+                "auroc": best.val_auroc if best else None,
+                "threshold": best.val_threshold if best else None,
+                "image_f1": best.val_image_f1 if best else None,
             },
             "history": [
                 {
@@ -559,7 +607,11 @@ class AnomalyTrainer:
                 for r in result.history
             ],
             "artifacts": {
-                "model": str(result.model_path),
+                # None when nothing was trained: every reader then says "no
+                # checkpoint" instead of failing to open a path (ADR-111).
+                "model": (
+                    str(result.model_path) if result.model_path.is_file() else None
+                ),
                 "graphics": [],
                 "report": None,
             },

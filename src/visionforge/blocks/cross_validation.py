@@ -15,6 +15,7 @@ from torchvision.datasets import ImageFolder
 
 from visionforge.blocks._search_utils import make_trial_progress_wrapper
 from visionforge.blocks.base import ExperimentBlock
+from visionforge.core.cancellation import STOPPED, STOPPED_NOTE, is_cancelled
 from visionforge.core.evaluator import Evaluator
 from visionforge.core.trainer import Trainer
 from visionforge.models.factory import ModelFactory
@@ -237,6 +238,9 @@ class CrossValidationBlock(ExperimentBlock):
                 "f1": None,
             }
 
+            # Whether the fold's trainer got as far as emitting its own "end",
+            # which the wrapper turns into this fold's trial_end.
+            trained = False
             try:
                 fold_mean, fold_std = _compute_fold_stats(
                     raw_dataset, train_indices, data_cfg.num_workers
@@ -274,57 +278,79 @@ class CrossValidationBlock(ExperimentBlock):
                     progress_callback=make_trial_progress_wrapper(
                         self._progress_callback, fold_idx, cv.n_folds
                     ),
+                    cancel_token=self._cancel_token,
                 )
+                trained = True
+                # 0 epochs only when stopped before the first: nothing to score.
+                if train_result.total_epochs:
+                    state_dict = torch.load(
+                        str(train_result.model_path),
+                        map_location="cpu",
+                        weights_only=True,
+                    )
+                    model.load_state_dict(state_dict)  # type: ignore[arg-type]
 
-                state_dict = torch.load(
-                    str(train_result.model_path),
-                    map_location="cpu",
-                    weights_only=True,
-                )
-                model.load_state_dict(state_dict)  # type: ignore[arg-type]
+                    eval_result = Evaluator(fold_config).evaluate(
+                        model, fold_data.val_loader()
+                    )
 
-                eval_result = Evaluator(fold_config).evaluate(
-                    model, fold_data.val_loader()
-                )
+                    fold_record["status"] = "success"
+                    fold_record["best_val_loss"] = train_result.best_val_loss
+                    fold_record["accuracy"] = eval_result.accuracy
+                    fold_record["f1"] = eval_result.f1
 
-                fold_record["status"] = "success"
-                fold_record["best_val_loss"] = train_result.best_val_loss
-                fold_record["accuracy"] = eval_result.accuracy
-                fold_record["f1"] = eval_result.f1
-
-                logger.info(
-                    "Fold {}/{} succeeded: val_loss={:.4f} accuracy={:.4f}",
-                    fold_idx + 1,
-                    cv.n_folds,
-                    train_result.best_val_loss,
-                    eval_result.accuracy,
-                )
+                    logger.info(
+                        "Fold {}/{} succeeded: val_loss={:.4f} accuracy={:.4f}",
+                        fold_idx + 1,
+                        cv.n_folds,
+                        train_result.best_val_loss,
+                        eval_result.accuracy,
+                    )
 
             except Exception as exc:  # noqa: BLE001
                 fold_record["error"] = str(exc)
                 logger.warning("Fold {}/{} failed: {}", fold_idx + 1, cv.n_folds, exc)
-                # On success the wrapped Trainer's terminal "end" was rewritten
-                # to trial_end; a fold that died before finishing emits it here.
-                if self._progress_callback is not None:
-                    self._progress_callback(
-                        {
-                            "event": "trial_end",
-                            "trial_index": fold_idx,
-                            "total_trials": cv.n_folds,
-                            "status": "failed",
-                        }
-                    )
 
             finally:
                 torch.cuda.empty_cache()
 
+            # The fold that was training when the stop arrived keeps its record
+            # but is not a fold of this K-fold any more (ADR-111).
+            if is_cancelled(self._cancel_token):
+                fold_record["status"] = STOPPED
+                fold_record["error"] = STOPPED_NOTE
+
+            # A fold whose Trainer finished emitted its own end, rewritten to
+            # trial_end; one that died first is closed here, exactly once.
+            if not trained and self._progress_callback is not None:
+                self._progress_callback(
+                    {
+                        "event": "trial_end",
+                        "trial_index": fold_idx,
+                        "total_trials": cv.n_folds,
+                        "status": fold_record["status"],
+                    }
+                )
+
             self._fold_results.append(fold_record)
+
+            if is_cancelled(self._cancel_token):
+                logger.info(
+                    "K-fold stopped after {} of {} folds.",
+                    len(self._fold_results),
+                    cv.n_folds,
+                )
+                break
 
         # Single terminal 'end' after all folds so the GUI closes the SSE
         # stream once — inner fold 'end's were rewritten to 'trial_end'.
         if self._progress_callback is not None:
             self._progress_callback(
-                {"event": "end", "total_epochs": 0, "total_trials": cv.n_folds}
+                {
+                    "event": "end",
+                    "total_epochs": 0,
+                    "total_trials": len(self._fold_results),
+                }
             )
 
         self._write_summary(base_name)
@@ -341,6 +367,11 @@ class CrossValidationBlock(ExperimentBlock):
         """
         successful = [r for r in self._fold_results if r["status"] == "success"]
         if not successful:
+            if is_cancelled(self._cancel_token):
+                raise RuntimeError(
+                    "Validação cruzada parada antes de concluir a primeira dobra: "
+                    "não há média a reportar."
+                )
             raise RuntimeError(
                 "CrossValidationBlock: all folds failed — no metrics available."
             )
@@ -432,10 +463,17 @@ class CrossValidationBlock(ExperimentBlock):
                 "best_val_loss": mean_val_loss,
                 # CV-specific keys consumed by RunDetailPanel:
                 "fold_results": self._fold_results,
+                # Means and stds are over the n_folds_ok folds only; a stopped
+                # run lists fewer folds than n_folds (ADR-111).
                 "cv_aggregate": {
                     "n_folds": cv.n_folds,
                     "n_folds_ok": len(successful),
-                    "n_folds_failed": len(self._fold_results) - len(successful),
+                    "n_folds_failed": sum(
+                        1 for r in self._fold_results if r["status"] == "failed"
+                    ),
+                    "n_folds_stopped": sum(
+                        1 for r in self._fold_results if r["status"] == STOPPED
+                    ),
                     "mean_accuracy": mean_acc,
                     "std_accuracy": std_acc,
                     "mean_f1": mean_f1,

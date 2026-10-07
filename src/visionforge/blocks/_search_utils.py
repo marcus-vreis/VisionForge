@@ -10,7 +10,12 @@ import yaml
 from loguru import logger
 
 from visionforge.blocks.classification import ClassificationBlock
-from visionforge.core.cancellation import CancellationToken
+from visionforge.core.cancellation import (
+    STOPPED,
+    STOPPED_NOTE,
+    CancellationToken,
+    is_cancelled,
+)
 from visionforge.utils.config import ExperimentConfig
 
 
@@ -167,6 +172,12 @@ def run_trial(
     finally:
         del block
         torch.cuda.empty_cache()
+
+    # A trial cut short by the stop must not be ranked against trials that ran
+    # to the end, nor written out as the best config (ADR-111).
+    if is_cancelled(cancel_token):
+        trial_record["status"] = STOPPED
+        trial_record["error"] = STOPPED_NOTE
 
 
 __all__ = [

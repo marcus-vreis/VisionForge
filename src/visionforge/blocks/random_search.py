@@ -185,6 +185,11 @@ class RandomSearchBlock(ExperimentBlock):
         """
         successful = [t for t in self._trials if t["status"] == "success"]
         if not successful:
+            if is_cancelled(self._cancel_token):
+                raise RuntimeError(
+                    "Busca parada antes de concluir a primeira tentativa: "
+                    "não há melhor configuração a reportar."
+                )
             raise RuntimeError(
                 "RandomSearchBlock: all trials failed — no best trial available."
             )

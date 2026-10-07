@@ -39,6 +39,11 @@ class QueuedJobInfo(BaseModel):
     task: str
     strategy: str
     submitted_at: str
+    # Where the job stops when asked (ADR-111); None means it cannot be stopped
+    # once running, and DELETE answers 409 for it.
+    stop_at: Literal["epoch", "trial", "fold", "model", "replicate", "phase"] | None = (
+        None
+    )
 
 
 class QueueSnapshot(BaseModel):

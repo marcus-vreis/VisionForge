@@ -7,9 +7,11 @@ import torch
 
 from visionforge.core.anomaly_trainer import (
     AnomalyTrainer,
+    AnomalyTrainResult,
     compute_auroc,
     compute_threshold,
 )
+from visionforge.core.cancellation import CancellationToken
 from visionforge.models.anomaly_factory import ConvAutoencoder, PatchCore
 from visionforge.utils.anomaly_config import AnomalyConfig
 
@@ -191,6 +193,73 @@ class TestFitPatchCore:
         assert 0.0 <= auroc <= 1.0
         assert 0.0 <= f1 <= 1.0
         assert isinstance(threshold, float)
+
+
+class TestPatchCoreStops:
+    """PatchCore has no epochs, so a stop lands between its phases (ADR-111)."""
+
+    @staticmethod
+    def _fit(
+        tmp_path: Path, stop_on_label: str
+    ) -> tuple[AnomalyTrainResult, list[dict]]:
+        cfg = _config(
+            tmp_path,
+            {
+                "model": {
+                    "name": "patchcore",
+                    "backbone": "resnet18",
+                    "pretrained": False,
+                    "coreset_ratio": 0.5,
+                },
+                "data": {"base_dir": str(tmp_path), "image_size": 64},
+            },
+        )
+        token = CancellationToken()
+        events: list[dict] = []
+
+        def press_stop(event: dict) -> None:
+            events.append(event)
+            if event.get("label") == stop_on_label and event.get("done") == 1:
+                token.cancel()
+
+        model = PatchCore(backbone="resnet18", pretrained=False, coreset_ratio=0.5)
+        result = AnomalyTrainer(cfg).fit(
+            model,
+            FakeAnomalyDataModule(size=64, n_batches=3),
+            progress_callback=press_stop,
+            cancel_token=token,
+        )
+        return result, events
+
+    def test_a_stop_during_extraction_keeps_no_bank(self, tmp_path: Path) -> None:
+        result, events = self._fit(tmp_path, "extraindo features")
+
+        extracted = [
+            e["done"] for e in events if e.get("label") == "extraindo features"
+        ]
+        assert extracted == [0, 1]  # stopped after the first of three batches
+        assert not any(e.get("label") == "montando o banco" for e in events)
+        # A bank from a third of the normals would be another model; none is kept.
+        assert result.total_epochs == 0
+        assert result.best_auroc is None
+        assert not result.model_path.exists()
+        assert events[-1]["event"] == "end"
+
+    def test_a_stop_during_the_bank_keeps_it_unscored(self, tmp_path: Path) -> None:
+        result, events = self._fit(tmp_path, "montando o banco")
+
+        # The bank is one call: it finishes, is saved, and scoring is skipped.
+        assert any(e.get("label") == "montando o banco" for e in events)
+        assert not any(e.get("label") == "pontuando" for e in events)
+        assert result.model_path.is_file()
+        assert result.total_epochs == 1
+        assert result.history == []
+        assert result.best_auroc is None
+        run_json = json.loads(
+            (result.model_path.parent / "run.json").read_text("utf-8")
+        )
+        assert run_json["metrics"]["auroc"] is None
+        assert run_json["metrics"]["total_epochs"] == 1
 
 
 class TestTensorBoardTracking:

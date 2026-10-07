@@ -3029,6 +3029,11 @@ was cancelled, which was true the whole time it was broken. The new ones check
 that the block hands its token to the trainer, and that the running job's token
 is the one the executor can reach.
 
+**Correction (2026-10-07):** "a cancelled sweep stops between trials" held for
+the classification grid and random search only. K-fold, comparison, replicates,
+the standalone sweeps and custom tasks never received the token. Fixed in
+ADR-111.
+
 ---
 
 ## ADR-095 — The button that continues a run reads the run, not the form
@@ -3906,3 +3911,131 @@ Some messages are stored in component state when they happen (an import error,
 the result of a download) and keep the language they were created in until the
 next action; the ones that depend only on current state, such as the
 "downloading…" notice, are worded at render time.
+
+---
+
+## ADR-111 — Stop honored by every executor; the queue says where it stops
+
+**Date:** 2026-10-07
+**Status:** Accepted
+**Fixes:** ADR-094 (the token reached single runs and the classification
+grid/random search, and nothing else)
+
+**Context:** `DELETE /api/queue/{id}` answered 200 for any running job and set
+its token. Only the single-run trainers and the classification grid/random
+search ever read it. Classification K-fold and model comparison; the sweep,
+K-fold, comparison, replicates and replicated comparison of the standalone
+tasks; custom tasks; and PatchCore all ignored it. A 3-fold K-fold stopped
+during its first fold was seen training all three folds to the end. That is the
+ADR-094 failure mode again, one level up: the interface promised a stop that
+did not happen.
+
+A second defect sat under the first: a run stopped before its first epoch
+crashed. The trainer broke out before epoch 1, and the block then loaded a
+`best_model.pth` that was never written. Segmentation, torchvision detection
+and the custom engine had "epochs=0" guards that saved the untrained weights
+instead, so their run was scored (or, for detection, kept as `best.pt`) as if
+it were a result; the autoencoder crashed on its empty history.
+
+**One mechanism, one more carrier.** Blocks carry `_cancel_token` (ADR-094).
+Runners now carry one too: the route executor hands the job's token to the
+runner (`give_cancel_token`), the runner hands it to every block it builds, and
+the orchestrator reads the same token off the runner between units
+(`runner_cancel_token`). It is an attribute rather than a `run()` argument so
+the `TaskRunner` protocol, and every test double that implements it, stays as
+it was. The K-fold functions take `cancel_token=` the way their trainers do,
+and the custom engine's `run()` takes it for its Level 1 loop.
+
+**Where each job stops** is published as `stop_at` on every entry of
+`GET /api/queue`: the boundary after which the job starts nothing new. Inside a
+multi-unit job, the training in flight is still cut at its own epoch where it
+has one.
+
+| Job | `stop_at` |
+|---|---|
+| single run of any task (and a resumed run) | `epoch` |
+| anomaly with PatchCore | `phase` |
+| classification grid/random search, standalone sweep (grid/random/optuna) | `trial` |
+| classification K-fold, standalone K-fold | `fold` |
+| classification model comparison, standalone comparison | `model` |
+| replicates, replicated comparison | `replicate` |
+| custom task, Level 1 (the engine owns the loop) | `epoch` |
+| custom task, Level 2 (its own `run` owns the loop) | `null` |
+| custom-task sweep / replicates | `trial` / `replicate` |
+
+The mapping lives beside `_submit_job`, keyed by the strategy the job is
+queued under; the two cases decided by the config (PatchCore, Level 2) are
+passed explicitly. A strategy missing from the table maps to `null`: the
+default is to not claim a stop. The field is additive, so a client that does
+not know it ignores it.
+
+**`null` means not stoppable, and DELETE says so.** A Level 2 custom task owns
+its loop and its `ctx` has no hook to read a token at, so there is no honest
+way to stop it. Faking one (killing the thread) is not available in Python and
+would leave a half-written run directory. `RunQueue.cancel` raises
+`NotStoppableError` for such a running job, the token is left untouched, and
+the endpoint answers 409 with a Portuguese detail. A pending job is dropped as
+before, whatever its `stop_at`. A sweep or replicate set of a Level 2 task is
+still stoppable between trials: its current trial runs to its end.
+
+**The unit that was training when the stop arrived is recorded as `stopped`.**
+It keeps whatever metrics it reached, and it is left out of every aggregate
+and ranking: a fold cut at epoch 2 averaged with folds that ran to epoch 30
+gives a mean no configuration produced, and a cut trial that happens to score
+well would be written out as the best config. The aggregates are therefore
+computed over the units that ran to the end, with their real `n`. K-fold's
+`cv_aggregate` gains `n_folds_stopped` next to `n_folds_ok` and
+`n_folds_failed`, the replicate aggregate's `n` counts only finished seeds, and
+the comparison report counts `stopped_count` apart from `failed_count`. The
+rule is conservative: the orchestrator cannot tell a unit cut at epoch 2 from
+one whose last epoch was already running when the stop arrived, so both are
+`stopped`. Excluding one complete unit is the cheaper error. The
+classification grid and random search, which already stopped between trials,
+follow the same rule; they used to rank a cut trial with complete ones.
+
+**A stopped job ends like a completed one, with the counts actually done.** It
+emits its normal `end`, writes its summary (and, for classification K-fold, its
+top-level `run.json`) with the folds, models, replicates or trials that ran,
+and its status is `completed`, the same convention as a stopped single run,
+which is `completed` with fewer epochs than configured. No new "interrupted"
+field was added: the `stopped` unit and the counts say it. When the stop
+landed before any unit finished there is no result to show, and the job fails
+with a message saying exactly that ("Parado antes de concluir a primeira
+dobra...") rather than "all folds failed". A stopped replicated comparison is
+reported even when no pair is left to test, because the variants that ran are
+still a result.
+
+**PatchCore stops between phases.** The token is read between
+feature-extraction batches and after each phase. Stopped during extraction, it
+keeps nothing: a memory bank built from part of the normals would be a
+different model that looks like this one. The bank itself is one call and is
+not interrupted; a stop that arrives while it is being built lands when it is
+done, the bank (which is the model, and the expensive part) is saved, and
+scoring is skipped. Its `run.json` then records one fit and a null AUROC, and
+the run can be scored later from History.
+
+**Ultralytics is checked once more before training starts.** It reads its stop
+flag only when an epoch ends, so a stop that landed during setup would
+otherwise still cost a whole epoch.
+
+**A run stopped before its first epoch ends coherently.** Every block checks
+`total_epochs == 0` (an empty history for anomaly) and skips the reload and the
+evaluation, and the trainers no longer save untrained weights in that case.
+`run.json` records 0 epochs and `null` for the best metric: the classification
+and regression `inf` sentinel was written as `Infinity`, which is not JSON, so
+the result endpoint could not serve it. Metrics that were never measured are
+`null` instead of `0.0`, and `artifacts.model` is `null` when no checkpoint
+file exists, so the actions that need one say "no checkpoint" instead of
+failing to open a path. Such a run is not resumable, by the rule that already
+decides it (ADR-092): no `resume.pt` is written before the first epoch, so
+`_resume_status` says no. `_RESUMABLE_BLOCKS` is unchanged, and no multi-unit
+job became resumable.
+
+**Not done:**
+
+- The frontend does not read `stop_at` yet. Until it does, a `stopped` unit
+  renders like a failed one, with the note as its error text.
+- A unit cut by a stop inside a standalone sweep or comparison is an ordinary
+  run with a `resume.pt`, so History offers to continue it. That finishes the
+  training, but not the sweep: its summary keeps the unit as `stopped`.
+- PatchCore's memory bank cannot be interrupted while it is being built.

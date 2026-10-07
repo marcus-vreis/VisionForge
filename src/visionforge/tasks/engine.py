@@ -25,6 +25,7 @@ import torch
 from loguru import logger
 from torch import nn
 
+from visionforge.core.cancellation import CancellationToken, is_cancelled
 from visionforge.core.dataset_fingerprint import fingerprint_from_config
 from visionforge.core.plotter import MetricsPlotter
 from visionforge.core.tracking import TensorBoardLogger
@@ -86,8 +87,16 @@ class GenericTaskEngine:
         self._config = config
         self._device, _, self._device_label = resolve_device(config.device)
 
-    def run(self, progress_callback: ProgressCallback | None = None) -> TaskRunResult:
+    def run(
+        self,
+        progress_callback: ProgressCallback | None = None,
+        cancel_token: CancellationToken | None = None,
+    ) -> TaskRunResult:
         """Train per the spec and return the aggregated result.
+
+        ``cancel_token`` is read at the top of each Level 1 epoch, like the
+        built-in trainers do (ADR-088). A Level 2 ``run`` owns its loop and has
+        no hook to read it at, so it always runs to its end (ADR-111).
 
         Raises:
             ValueError: when a hook reports no value for the primary metric.
@@ -123,7 +132,7 @@ class GenericTaskEngine:
             emit({"event": "end", "total_epochs": 1})
             return result
 
-        return self._run_level1(spec, cfg, run_dir, emit)
+        return self._run_level1(spec, cfg, run_dir, emit, cancel_token)
 
     # ── level 1 loop ─────────────────────────────────────────────────────────
 
@@ -133,6 +142,7 @@ class GenericTaskEngine:
         cfg: BaseTaskConfig,
         run_dir: Path,
         emit: ProgressCallback,
+        cancel_token: CancellationToken | None = None,
     ) -> TaskRunResult:
         model = spec.build_model(cfg).to(self._device)
         train_loader, val_loader, test_loader = spec.build_loaders(cfg)
@@ -160,6 +170,14 @@ class GenericTaskEngine:
         )
         try:
             for epoch in range(1, cfg.training.epochs + 1):
+                # The same safe point as the built-in trainers: the previous
+                # epoch's checkpoint is written and its metrics emitted.
+                if is_cancelled(cancel_token):
+                    logger.info(
+                        "Run cancelled at epoch {}; keeping the best checkpoint.",
+                        epoch,
+                    )
+                    break
                 model.train()
                 total = 0.0
                 batches = 0
@@ -224,7 +242,22 @@ class GenericTaskEngine:
         finally:
             tb.close()
 
-        if not model_path.is_file():  # epochs=0-like guard; keep a checkpoint
+        if not history:
+            # Stopped before its first epoch. Saving the untrained weights here
+            # and scoring them would report a result nothing was trained for.
+            empty = TaskRunResult(
+                metrics={},
+                best_epoch=0,
+                total_epochs=0,
+                device_used=self._device_label,
+                run_dir=run_dir,
+                model_path=None,
+            )
+            self._write_run_json(empty)
+            emit({"event": "end", "total_epochs": 0})
+            return empty
+
+        if not model_path.is_file():  # no epoch improved (NaN); keep a checkpoint
             torch.save(model.state_dict(), model_path)
             best_epoch = best_epoch or len(history)
 

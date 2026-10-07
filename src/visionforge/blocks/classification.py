@@ -49,7 +49,12 @@ class ClassificationBlock(ExperimentBlock):
         if self._train_result is not None:
             result["train"] = {
                 "best_epoch": self._train_result.best_epoch,
-                "best_val_loss": self._train_result.best_val_loss,
+                # inf until an epoch runs, and inf is not JSON (ADR-111).
+                "best_val_loss": (
+                    self._train_result.best_val_loss
+                    if self._train_result.total_epochs
+                    else None
+                ),
                 "total_epochs": self._train_result.total_epochs,
                 "device_used": self._train_result.device_used,
             }
@@ -84,6 +89,11 @@ class ClassificationBlock(ExperimentBlock):
                 cancel_token=self._cancel_token,
                 resume_dir=self._resume_dir,
             )
+
+            # Stopped before its first epoch (ADR-111): no checkpoint exists,
+            # and the run.json the trainer wrote already says 0 epochs.
+            if self._train_result.total_epochs == 0:
+                return
 
             # Reload best checkpoint for test-set evaluation.
             state_dict = torch.load(

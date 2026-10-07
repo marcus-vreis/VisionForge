@@ -25,6 +25,12 @@ from sklearn.model_selection import KFold
 from torch.utils.data import DataLoader, Subset
 
 from visionforge.blocks._search_utils import make_trial_progress_wrapper
+from visionforge.core.cancellation import (
+    STOPPED,
+    STOPPED_NOTE,
+    CancellationToken,
+    is_cancelled,
+)
 from visionforge.core.data import _build_transforms
 from visionforge.core.regression_data import RegressionCsvDataset
 from visionforge.core.regression_trainer import RegressionTrainer
@@ -100,6 +106,7 @@ def run_regression_cross_validation(
     shuffle: bool = True,
     seed: int = 42,
     progress_callback: Callable[[dict[str, Any]], None] | None = None,
+    cancel_token: CancellationToken | None = None,
 ) -> CrossValidationReport:
     """Run K-fold CV over the regression training manifest and aggregate metrics.
 
@@ -166,6 +173,9 @@ def run_regression_cross_validation(
             train_size=len(train_idx),
             val_size=len(val_idx),
         )
+        # Whether the fold's trainer got as far as emitting its own "end",
+        # which the wrapper turns into this fold's trial_end.
+        trained = False
         try:
             fold_config = config.model_copy(
                 update={"name": f"{base_name}_fold{fold_idx}"}
@@ -183,24 +193,27 @@ def run_regression_cross_validation(
                 progress_callback=make_trial_progress_wrapper(
                     progress_callback, fold_idx, n_folds
                 ),
+                cancel_token=cancel_token,
             )
+            trained = True
+            # 0 epochs only when stopped before the first: nothing to score.
+            if result.total_epochs:
+                state = torch.load(
+                    str(result.model_path), map_location="cpu", weights_only=True
+                )
+                model.load_state_dict(state)  # type: ignore[arg-type]
+                mse, rmse, mae, r2 = trainer.evaluate(model, fold_data.val_loader())
 
-            state = torch.load(
-                str(result.model_path), map_location="cpu", weights_only=True
-            )
-            model.load_state_dict(state)  # type: ignore[arg-type]
-            mse, rmse, mae, r2 = trainer.evaluate(model, fold_data.val_loader())
-
-            record.status = "success"
-            record.metrics = {
-                "mse": float(mse),
-                "rmse": float(rmse),
-                "mae": float(mae),
-                "r2": float(r2),
-            }
-            logger.info(
-                "Fold {}/{}: r2={:.4f} rmse={:.4f}", fold_idx + 1, n_folds, r2, rmse
-            )
+                record.status = "success"
+                record.metrics = {
+                    "mse": float(mse),
+                    "rmse": float(rmse),
+                    "mae": float(mae),
+                    "r2": float(r2),
+                }
+                logger.info(
+                    "Fold {}/{}: r2={:.4f} rmse={:.4f}", fold_idx + 1, n_folds, r2, rmse
+                )
         except Exception as exc:  # noqa: BLE001 — one bad fold must not abort the sweep
             record.error = str(exc)
             logger.warning("Fold {}/{} failed: {}", fold_idx + 1, n_folds, exc)
@@ -208,10 +221,16 @@ def run_regression_cross_validation(
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
 
+        # The fold that was training when the stop arrived keeps its record
+        # but is not a fold of this K-fold any more (ADR-111).
+        if is_cancelled(cancel_token):
+            record.status = STOPPED
+            record.error = STOPPED_NOTE
+
         folds.append(record)
-        # On success the wrapped trainer's terminal "end" was already rewritten
-        # to trial_end; emit one here only when the fold died before finishing.
-        if progress_callback is not None and record.status != "success":
+        # A fold whose trainer finished already emitted its own end, rewritten
+        # to trial_end; one that died first is closed here, exactly once.
+        if progress_callback is not None and not trained:
             progress_callback(
                 {
                     "event": "trial_end",
@@ -220,6 +239,9 @@ def run_regression_cross_validation(
                     "status": record.status,
                 }
             )
+        if is_cancelled(cancel_token):
+            logger.info("K-fold stopped after {} of {} folds.", len(folds), n_folds)
+            break
 
     return CrossValidationReport(
         n_folds=n_folds,

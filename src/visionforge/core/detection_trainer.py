@@ -383,6 +383,17 @@ class DetectionTrainer:
             elif epoch >= cfg.epochs:
                 finished = True
 
+        # Ultralytics reads `trainer.stop` only when an epoch ends, so a stop
+        # that arrived during the setup above would still cost a whole epoch
+        # once its loop is entered. Checked once more before handing over.
+        if is_cancelled(cancel_token):
+            logger.info("Run cancelled before its first epoch; nothing trained.")
+            result = self._build_result(run_dir, history)
+            self._write_run_json(run_dir, result)
+            if progress_callback is not None:
+                progress_callback({"event": "end", "total_epochs": len(history)})
+            return result
+
         model.add_callback("on_fit_epoch_end", _on_epoch_end)
         logger.info(
             "Detection training: {} ({} epochs) on {}",
@@ -598,7 +609,10 @@ class DetectionTrainer:
         if not is_cancelled(cancel_token):
             clear_resume_state(run_dir)
 
-        if not model_path.exists():  # epochs=0 guard
+        # No epoch improved on the -1 sentinel (NaN mAP): keep the weights so
+        # the run has a checkpoint. Not for a run stopped before its first
+        # epoch -- those weights were never trained (ADR-111).
+        if history and not model_path.exists():
             torch.save(model.state_dict(), model_path)
 
         # torchvision has no Ultralytics results.png, so synthesize the same
@@ -950,7 +964,11 @@ class DetectionTrainer:
                 for h in result.history
             ],
             "artifacts": {
-                "model": str(result.model_path),
+                # None when nothing was trained: every reader then says "no
+                # checkpoint" instead of failing to open a path (ADR-111).
+                "model": (
+                    str(result.model_path) if result.model_path.is_file() else None
+                ),
                 "graphics": graphics,
                 "report": None,
             },

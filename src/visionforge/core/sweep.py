@@ -24,7 +24,13 @@ from typing import Any
 
 from loguru import logger
 
-from visionforge.core.task_runner import RunResult, TaskRunner
+from visionforge.core.cancellation import (
+    STOPPED,
+    STOPPED_NOTE,
+    CancellationToken,
+    is_cancelled,
+)
+from visionforge.core.task_runner import RunResult, TaskRunner, runner_cancel_token
 
 try:  # torch is the heavy hardware extra; the cache flush is best-effort.
     import torch
@@ -108,6 +114,7 @@ def _execute_trial(
     metric: str,
     total: int,
     progress_callback: Callable[[dict[str, Any]], None] | None = None,
+    cancel_token: CancellationToken | None = None,
 ) -> SweepTrial:
     """Apply ``overrides`` to the base config, run one trial, and record the result.
 
@@ -153,6 +160,10 @@ def _execute_trial(
         gc.collect()
         if torch is not None and torch.cuda.is_available():
             torch.cuda.empty_cache()
+    # Cut short by the stop: kept in the list, never ranked (ADR-111).
+    if is_cancelled(cancel_token):
+        trial.status = STOPPED
+        trial.error = STOPPED_NOTE
     if progress_callback is not None:
         progress_callback(
             {
@@ -207,6 +218,7 @@ def _optuna_trials(
 
     optuna.logging.set_verbosity(optuna.logging.WARNING)
     trials: list[SweepTrial] = []
+    token = runner_cancel_token(runner)
 
     def objective(trial: Any) -> float:
         overrides = {
@@ -220,8 +232,12 @@ def _optuna_trials(
             metric,
             n_trials,
             progress_callback=progress_callback,
+            cancel_token=token,
         )
         trials.append(st)
+        if is_cancelled(token):
+            # Optuna's own way out of `optimize`: no further trial is sampled.
+            study.stop()
         value = st.metrics.get(metric)
         if st.status != "success" or value is None:
             raise optuna.TrialPruned()
@@ -250,40 +266,40 @@ def run_sweep(
     ``base_config_dict`` must be a fully-populated (validated then dumped) task
     config so every dot-path resolves. Successful trials come first, sorted by
     ``metric`` descending; failures keep their order at the end. GPU memory is
-    released between trials.
+    released between trials. A stop carried by the runner (ADR-111) cuts the
+    trial in flight, records it as ``stopped`` outside the ranking, and starts
+    no further trial.
 
     Raises:
         ValueError: if ``mode`` is not 'grid', 'random' or 'optuna'.
         ImportError: for mode 'optuna' when the optuna extra is not installed.
     """
-    if mode == "grid":
-        points = _grid_points(search_space)
-        trials = [
-            _execute_trial(
-                runner,
-                base_config_dict,
-                ov,
-                i,
-                metric,
-                len(points),
-                progress_callback=progress_callback,
+    if mode in ("grid", "random"):
+        points = (
+            _grid_points(search_space)
+            if mode == "grid"
+            else _random_points(search_space, n_trials, seed)
+        )
+        token = runner_cancel_token(runner)
+        trials: list[SweepTrial] = []
+        for i, ov in enumerate(points):
+            trials.append(
+                _execute_trial(
+                    runner,
+                    base_config_dict,
+                    ov,
+                    i,
+                    metric,
+                    len(points),
+                    progress_callback=progress_callback,
+                    cancel_token=token,
+                )
             )
-            for i, ov in enumerate(points)
-        ]
-    elif mode == "random":
-        points = _random_points(search_space, n_trials, seed)
-        trials = [
-            _execute_trial(
-                runner,
-                base_config_dict,
-                ov,
-                i,
-                metric,
-                len(points),
-                progress_callback=progress_callback,
-            )
-            for i, ov in enumerate(points)
-        ]
+            # The trial in flight already stopped at its epoch boundary; the
+            # rest would only burn GPU time nobody asked for (ADR-111).
+            if is_cancelled(token):
+                logger.info("Sweep stopped after {} of {} trials.", i + 1, len(points))
+                break
     elif mode == "optuna":
         trials = _optuna_trials(
             runner,

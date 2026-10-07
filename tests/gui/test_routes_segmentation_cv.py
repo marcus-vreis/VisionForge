@@ -46,7 +46,9 @@ class TestSegmentationCv:
 
         captured: dict[str, object] = {}
 
-        def fake_cv(config, *, n_folds, shuffle, seed, progress_callback=None):  # type: ignore[no-untyped-def]
+        def fake_cv(  # type: ignore[no-untyped-def]
+            config, *, n_folds, shuffle, seed, progress_callback=None, cancel_token=None
+        ):
             captured["n_folds"] = n_folds
             captured["config_type"] = type(config).__name__
             folds = [
