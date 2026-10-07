@@ -50,9 +50,9 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
   (0.25, uma classe só) e `vit_b_16` (0.41, aprendeu pouco)
   ([ADR-099](docs/dev/DECISIONS.md), [ADR-100](docs/dev/DECISIONS.md)). A nota
   agora nomeia o modelo medido, diz que o `vgg19` é só da mesma família ("este
-  modelo não foi medido") e diz "aprendeu pouco" para o `vit_b_16`. Nos
-  formulários de regressão e de segmentação, onde esses números não foram
-  medidos, a nota diz "Em classificação, …" e "esta tarefa não foi medida". O
+  modelo não foi medido") e diz "aprendeu pouco" para o `vit_b_16`. No
+  formulário de regressão, a nota diz "Em classificação, …" para deixar claro de
+  onde vem o número, em vez de apresentá-lo como medido em regressão. O
   servidor devolve o que foi medido em `collapse_evidence` (`measured_on`,
   `accuracy`, `outcome`); uma resposta sem esse campo, de um servidor mais
   antigo, mostra só a sugestão, sem número. Pela API, que casa pelo prefixo da
@@ -67,7 +67,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
   experimento, e o `alexnet` nunca. A nota agora cita a acurácia da recuperação
   só para o próprio modelo medido (`recovered_accuracy` em `collapse_evidence`)
   e, para os demais, diz apenas "Sugerimos adam a 0.0001" (ou "adamw", conforme
-  o modelo); em regressão e segmentação nunca cita a recuperação. E a nota dos
+  o modelo); em regressão nunca cita a recuperação. E a nota dos
   modelos que nunca foram sinalizados (`resnet18`, `efficientnet_b1`...) dizia
   "o valor medido é adam a 0.001" para qualquer um; agora diz "sugerimos".
 - **O botão de parar não promete mais o que o servidor não cumpre.** Parar uma

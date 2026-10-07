@@ -17,18 +17,18 @@ const suggestedRemedy = (
     : `Com ${optimizer} a ${learningRate}, a acurácia foi ${recoveredAccuracy.toFixed(2)} nas mesmas condições.`;
 
 // The measured part of the collapse note. Every number was measured on classification, so on any
-// other form the note says "Em classificação" and that this task was not measured, and it never
-// carries the recovery over: "nas mesmas condições" would not be true there.
+// other form the note says "Em classificação" and nothing more about the task (a VGG regressor was
+// run too, ADR-101, so "esta tarefa não foi medida" would be false), and it never carries the
+// recovery over: "nas mesmas condições" would not be true there.
 const measuredNote = (facts: CollapseFacts, whatHappened: string): string => {
   const { architecture, measuredOn, accuracy, recoveredAccuracy, optimizer, learningRate } = facts;
   const result = `(acurácia ${accuracy.toFixed(2)} em 4 classes)`;
   const measuredItself = architecture.toLowerCase() === measuredOn;
   if (facts.task !== "classification") {
-    const who = measuredItself ? `o ${measuredOn}` : `o ${measuredOn}, da mesma família do ${architecture},`;
-    const notMeasured = measuredItself
-      ? "esta tarefa não foi medida"
-      : `nem o ${architecture} nem esta tarefa foram medidos`;
-    return `Em classificação, ${who} ${whatHappened} com Adam a 1e-3 ${result}; ${notMeasured}. ${suggestedRemedy(null, optimizer, learningRate)}`;
+    const finding = measuredItself
+      ? `Em classificação, o ${measuredOn} ${whatHappened} com Adam a 1e-3 ${result}.`
+      : `Em classificação, o ${measuredOn}, da mesma família do ${architecture}, ${whatHappened} com Adam a 1e-3 ${result}; o ${architecture} não foi medido.`;
+    return `${finding} ${suggestedRemedy(null, optimizer, learningRate)}`;
   }
   const finding = measuredItself
     ? `${architecture} ${whatHappened} com Adam a 1e-3 ${result}.`

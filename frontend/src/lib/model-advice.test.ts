@@ -209,31 +209,41 @@ describe("modelAdviceNote", () => {
     const vit = prone("vit_b_16", vitEvidence, "adamw");
     const swin = prone("swin_t", swinEvidence, "adamw");
 
-    it("says in English that it is classification, and that this task was not measured", () => {
+    it("says in English that the number is classification's", () => {
       expect(note(en, vgg16, "regression")).toBe(
-        "In classification, vgg16 predicted a single class with Adam at 1e-3 (accuracy 0.25 on 4 classes); this task was not measured. We suggest adam at 0.0001.",
+        "In classification, vgg16 predicted a single class with Adam at 1e-3 (accuracy 0.25 on 4 classes). We suggest adam at 0.0001.",
       );
       expect(note(en, vit, "regression")).toBe(
-        "In classification, vit_b_16 learned little with Adam at 1e-3 (accuracy 0.41 on 4 classes); this task was not measured. We suggest adamw at 0.0001.",
+        "In classification, vit_b_16 learned little with Adam at 1e-3 (accuracy 0.41 on 4 classes). We suggest adamw at 0.0001.",
       );
     });
 
     it("says it in Portuguese too", () => {
       expect(note(pt, vgg16, "regression")).toBe(
-        "Em classificação, o vgg16 previu uma classe só com Adam a 1e-3 (acurácia 0.25 em 4 classes); esta tarefa não foi medida. Sugerimos adam a 0.0001.",
+        "Em classificação, o vgg16 previu uma classe só com Adam a 1e-3 (acurácia 0.25 em 4 classes). Sugerimos adam a 0.0001.",
       );
       expect(note(pt, vit, "regression")).toBe(
-        "Em classificação, o vit_b_16 aprendeu pouco com Adam a 1e-3 (acurácia 0.41 em 4 classes); esta tarefa não foi medida. Sugerimos adamw a 0.0001.",
+        "Em classificação, o vit_b_16 aprendeu pouco com Adam a 1e-3 (acurácia 0.41 em 4 classes). Sugerimos adamw a 0.0001.",
       );
     });
 
-    it("names the sibling and the task as both unmeasured", () => {
+    it("names the sibling as unmeasured", () => {
       expect(note(en, vgg19, "regression")).toBe(
-        "In classification, vgg16, from the same family as vgg19, predicted a single class with Adam at 1e-3 (accuracy 0.25 on 4 classes); neither vgg19 nor this task was measured. We suggest adam at 0.0001.",
+        "In classification, vgg16, from the same family as vgg19, predicted a single class with Adam at 1e-3 (accuracy 0.25 on 4 classes); vgg19 was not measured. We suggest adam at 0.0001.",
       );
       expect(note(pt, vgg19, "regression")).toBe(
-        "Em classificação, o vgg16, da mesma família do vgg19, previu uma classe só com Adam a 1e-3 (acurácia 0.25 em 4 classes); nem o vgg19 nem esta tarefa foram medidos. Sugerimos adam a 0.0001.",
+        "Em classificação, o vgg16, da mesma família do vgg19, previu uma classe só com Adam a 1e-3 (acurácia 0.25 em 4 classes); o vgg19 não foi medido. Sugerimos adam a 0.0001.",
       );
+    });
+
+    it("does not say the task was not measured", () => {
+      // ADR-101 ran a VGG regressor at 1e-3 (R2 = -0.157: bad, not collapsed), so
+      // "this task was not measured" would be false. "In classification" labels
+      // the number, and that is all the note claims about the task.
+      for (const advice of [vgg16, vgg19, vit]) {
+        expect(note(en, advice, "regression")).not.toMatch(/this task/);
+        expect(note(pt, advice, "regression")).not.toMatch(/esta tarefa|nem esta/);
+      }
     });
 
     it("never carries the classification recovery over", () => {
