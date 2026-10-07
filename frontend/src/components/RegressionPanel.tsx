@@ -311,6 +311,7 @@ export function RegressionPanel({
           />
         </AdvancedFields>
         <ModelAdvice
+          task="regression"
           architecture={formData.model.name}
           optimizer={formData.training.optimizer}
           learningRate={formData.training.learning_rate}

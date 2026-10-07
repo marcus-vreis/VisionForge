@@ -1,4 +1,4 @@
-import type { Dict } from "./pt";
+import type { CollapseFacts, Dict } from "./pt";
 
 // Help texts shared by two field names; see the same pair in pt.ts.
 const workersHelp =
@@ -6,7 +6,6 @@ const workersHelp =
 const lrFinalHelp =
   "The learning rate at the end of training, as a fraction of the initial one.";
 
-/** 1st, 2nd, 3rd, 4th…: a place in the run queue. */
 // What the collapse note says about the suggested setting (components/ModelAdvice). "Trains
 // normally" is a claim, so it is only ever a number, and only for the model whose recovery was run
 // on the same setup; everywhere else the setting is just suggested.
@@ -19,6 +18,27 @@ const suggestedRemedy = (
     ? `We suggest ${optimizer} at ${learningRate}.`
     : `With ${optimizer} at ${learningRate}, accuracy was ${recoveredAccuracy.toFixed(2)} under the same conditions.`;
 
+// The measured part of the collapse note. Every number was measured on classification, so on any
+// other form the note says "In classification" and that this task was not measured, and it never
+// carries the recovery over: "under the same conditions" would not be true there.
+const measuredNote = (facts: CollapseFacts, whatHappened: string): string => {
+  const { architecture, measuredOn, accuracy, recoveredAccuracy, optimizer, learningRate } = facts;
+  const result = `(accuracy ${accuracy.toFixed(2)} on 4 classes)`;
+  const measuredItself = architecture.toLowerCase() === measuredOn;
+  if (facts.task !== "classification") {
+    const who = measuredItself ? measuredOn : `${measuredOn}, from the same family as ${architecture},`;
+    const notMeasured = measuredItself
+      ? "this task was not measured"
+      : `neither ${architecture} nor this task was measured`;
+    return `In classification, ${who} ${whatHappened} with Adam at 1e-3 ${result}; ${notMeasured}. ${suggestedRemedy(null, optimizer, learningRate)}`;
+  }
+  const finding = measuredItself
+    ? `${architecture} ${whatHappened} with Adam at 1e-3 ${result}.`
+    : `${architecture}: ${measuredOn}, from the same family, ${whatHappened} with Adam at 1e-3 ${result}; this model was not measured.`;
+  return `${finding} ${suggestedRemedy(measuredItself ? recoveredAccuracy : null, optimizer, learningRate)}`;
+};
+
+/** 1st, 2nd, 3rd, 4th…: a place in the run queue. */
 const ordinal = (n: number): string => {
   const lastTwo = n % 100;
   if (lastTwo >= 11 && lastTwo <= 13) return `${n}th`;
@@ -155,36 +175,8 @@ export const en: Dict = {
     // Only what was measured is said (ADR-099/100): one model per family, on 4
     // classes. When `measuredOn` is not `architecture`, the note says so rather
     // than letting a sibling borrow the number.
-    collapseMeasured: (
-      architecture: string,
-      measuredOn: string,
-      accuracy: number,
-      recoveredAccuracy: number | null,
-      optimizer: string,
-      learningRate: number,
-    ) => {
-      const result = `(accuracy ${accuracy.toFixed(2)} on 4 classes)`;
-      const measuredItself = architecture.toLowerCase() === measuredOn;
-      const finding = measuredItself
-        ? `${architecture} predicted a single class with Adam at 1e-3 ${result}.`
-        : `${architecture}: ${measuredOn}, from the same family, predicted a single class with Adam at 1e-3 ${result}; this model was not measured.`;
-      return `${finding} ${suggestedRemedy(measuredItself ? recoveredAccuracy : null, optimizer, learningRate)}`;
-    },
-    failsToLearnMeasured: (
-      architecture: string,
-      measuredOn: string,
-      accuracy: number,
-      recoveredAccuracy: number | null,
-      optimizer: string,
-      learningRate: number,
-    ) => {
-      const result = `(accuracy ${accuracy.toFixed(2)} on 4 classes)`;
-      const measuredItself = architecture.toLowerCase() === measuredOn;
-      const finding = measuredItself
-        ? `${architecture} did not learn with Adam at 1e-3 ${result}.`
-        : `${architecture}: ${measuredOn}, from the same family, did not learn with Adam at 1e-3 ${result}; this model was not measured.`;
-      return `${finding} ${suggestedRemedy(measuredItself ? recoveredAccuracy : null, optimizer, learningRate)}`;
-    },
+    collapseMeasured: (facts: CollapseFacts) => measuredNote(facts, "predicted a single class"),
+    failsToLearnMeasured: (facts: CollapseFacts) => measuredNote(facts, "learned little"),
     unmeasured: (architecture: string, optimizer: string, learningRate: number) =>
       `${architecture}: Adam at 1e-3 was not measured for this family; we suggest ${optimizer} at ${learningRate}, the same as the measured attention families.`,
     upscaling: (medianSide: number) =>

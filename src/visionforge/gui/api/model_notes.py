@@ -6,6 +6,10 @@ that model, says how it failed, and says plainly when the model being asked
 about is not the one that was run. A family that was never run gets no number
 at all, only the suggestion.
 
+Every number here comes from classification runs. The route does not know the
+task, so this note (which the interface does not show; it words its own from the
+response's numbers) is the classification one.
+
 The suggested setting is worded the same way. "It trains normally" is a claim,
 so it is made only as a number, only for the model whose recovery was run on the
 same setup (``recovered_accuracy``); everywhere else the setting is just
@@ -46,7 +50,7 @@ def collapse_note(
 
     accuracy = f"acurácia {evidence.accuracy:.2f} em {_MEASURED_CLASSES} classes"
     failure = (
-        "previu uma classe só" if evidence.outcome == "collapse" else "não aprendeu"
+        "previu uma classe só" if evidence.outcome == "collapse" else "aprendeu pouco"
     )
     measured_itself = architecture.lower() == evidence.measured_on
     if measured_itself:

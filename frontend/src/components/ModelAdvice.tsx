@@ -1,18 +1,20 @@
 import { useEffect, useState } from "react";
 import { fetchModelDefaults, type ModelDefaults } from "../api/client";
 import { useT } from "../i18n/useT";
-import { isAlarming, modelAdviceNote } from "../lib/model-advice";
+import { isAlarming, modelAdviceNote, type ModelAdviceTask } from "../lib/model-advice";
 
 /** Says when the chosen architecture and optimizer were measured to fail.
  *
  * ADR-099 found that vgg16 and alexnet predict a single class for every image
  * at the previous default of 1e-3 — an accuracy of 0.25 on four classes, or
  * exactly 0.50 on two, reported without comment. ADR-100 found the same for
- * swin_t and convnext_tiny, while vit_b_16 merely failed to learn (0.41), and
+ * swin_t and convnext_tiny, while vit_b_16 learned little (0.41), and
  * measured the rate that trains each. The note quotes only that: one model per
  * family, named, and no number at all for a family that was never run. The alarm
  * colour goes with the measurement: a family flagged without one (maxvit) still
- * gets the suggestion, in the plain style of the other notes.
+ * gets the suggestion, in the plain style of the other notes. The numbers were
+ * measured on classification, so the regression and segmentation forms pass
+ * their `task` and the note labels them as classification's.
  *
  * It suggests rather than applies. The whole failure being addressed is a
  * number arriving without the researcher knowing where it came from, and
@@ -20,6 +22,7 @@ import { isAlarming, modelAdviceNote } from "../lib/model-advice";
  * friendlier face. The button is the consent.
  */
 export function ModelAdvice({
+  task,
   architecture,
   optimizer,
   learningRate,
@@ -27,6 +30,7 @@ export function ModelAdvice({
   pretrained = true,
   onApply,
 }: {
+  task: ModelAdviceTask;
   architecture: string;
   optimizer: string;
   learningRate: number;
@@ -55,7 +59,7 @@ export function ModelAdvice({
   const optimizerDiffers = advice.optimizer !== optimizer;
   if (!rateDiffers && !optimizerDiffers) return null;
 
-  const severe = isAlarming(advice);
+  const severe = isAlarming(advice, task);
 
   return (
     <div
@@ -72,7 +76,7 @@ export function ModelAdvice({
         color: "var(--vf-text-dim)",
       }}
     >
-      <div style={{ marginBottom: 8 }}>{modelAdviceNote(t, advice)}</div>
+      <div style={{ marginBottom: 8 }}>{modelAdviceNote(t, advice, task)}</div>
       <button
         type="button"
         onClick={() =>

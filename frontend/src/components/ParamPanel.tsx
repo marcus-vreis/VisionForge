@@ -2383,6 +2383,7 @@ export function ParamPanel({
         )}
       </AdvancedFields>
       <ModelAdvice
+        task="classification"
         architecture={String(modelData["name"] ?? "")}
         optimizer={String(trainingData["optimizer"] ?? "adam")}
         learningRate={Number(trainingData["learning_rate"] ?? 0)}

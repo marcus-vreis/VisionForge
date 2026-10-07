@@ -111,10 +111,13 @@ class TestModelDefaults:
         # AdamW at 1e-4 was run on the same data (ADR-100), so the recovery is
         # stated as a number, not as a promise.
         assert body["note"] == (
-            "vit_b_16 não aprendeu com Adam a 1e-3 (acurácia 0.41 em 4 "
+            "vit_b_16 aprendeu pouco com Adam a 1e-3 (acurácia 0.41 em 4 "
             "classes). Com adamw a 0.0001, a acurácia foi 0.85 nas mesmas "
             "condições."
         )
+        # One-class guessing on 4 classes gives 0.25, so 0.41 is "little", not
+        # "nothing".
+        assert "não aprendeu" not in body["note"]
         # 0.41 is above the 0.25 of a one-class prediction: not what happened.
         assert "uma classe só" not in body["note"]
         assert "0.25" not in body["note"]
@@ -127,7 +130,7 @@ class TestModelDefaults:
         ).json()
 
         assert body["note"] == (
-            "vit_l_16: o vit_b_16, da mesma família, não aprendeu com Adam a "
+            "vit_l_16: o vit_b_16, da mesma família, aprendeu pouco com Adam a "
             "1e-3 (acurácia 0.41 em 4 classes); este modelo não foi medido. "
             "Sugerimos adamw a 0.0001."
         )

@@ -16,6 +16,26 @@ const suggestedRemedy = (
     ? `Sugerimos ${optimizer} a ${learningRate}.`
     : `Com ${optimizer} a ${learningRate}, a acurácia foi ${recoveredAccuracy.toFixed(2)} nas mesmas condições.`;
 
+// The measured part of the collapse note. Every number was measured on classification, so on any
+// other form the note says "Em classificação" and that this task was not measured, and it never
+// carries the recovery over: "nas mesmas condições" would not be true there.
+const measuredNote = (facts: CollapseFacts, whatHappened: string): string => {
+  const { architecture, measuredOn, accuracy, recoveredAccuracy, optimizer, learningRate } = facts;
+  const result = `(acurácia ${accuracy.toFixed(2)} em 4 classes)`;
+  const measuredItself = architecture.toLowerCase() === measuredOn;
+  if (facts.task !== "classification") {
+    const who = measuredItself ? `o ${measuredOn}` : `o ${measuredOn}, da mesma família do ${architecture},`;
+    const notMeasured = measuredItself
+      ? "esta tarefa não foi medida"
+      : `nem o ${architecture} nem esta tarefa foram medidos`;
+    return `Em classificação, ${who} ${whatHappened} com Adam a 1e-3 ${result}; ${notMeasured}. ${suggestedRemedy(null, optimizer, learningRate)}`;
+  }
+  const finding = measuredItself
+    ? `${architecture} ${whatHappened} com Adam a 1e-3 ${result}.`
+    : `${architecture}: o ${measuredOn}, da mesma família, ${whatHappened} com Adam a 1e-3 ${result}; este modelo não foi medido.`;
+  return `${finding} ${suggestedRemedy(measuredItself ? recoveredAccuracy : null, optimizer, learningRate)}`;
+};
+
 /**
  * Portuguese — the source dictionary. Its shape *is* the type every other
  * language must match, so a key added here and forgotten in en.ts fails the
@@ -168,37 +188,10 @@ export const pt = {
     // classes. `measuredOn` is that model; when it is not `architecture`, the
     // note says so rather than letting a sibling borrow its number. The recovery
     // (`recoveredAccuracy`) is the measured model's alone: a sibling only gets the suggestion.
-    collapseMeasured: (
-      architecture: string,
-      measuredOn: string,
-      accuracy: number,
-      recoveredAccuracy: number | null,
-      optimizer: string,
-      learningRate: number,
-    ) => {
-      const result = `(acurácia ${accuracy.toFixed(2)} em 4 classes)`;
-      const measuredItself = architecture.toLowerCase() === measuredOn;
-      const finding = measuredItself
-        ? `${architecture} previu uma classe só com Adam a 1e-3 ${result}.`
-        : `${architecture}: o ${measuredOn}, da mesma família, previu uma classe só com Adam a 1e-3 ${result}; este modelo não foi medido.`;
-      return `${finding} ${suggestedRemedy(measuredItself ? recoveredAccuracy : null, optimizer, learningRate)}`;
-    },
-    // ViT did not collapse: 0.41 on 4 classes is above a one-class prediction.
-    failsToLearnMeasured: (
-      architecture: string,
-      measuredOn: string,
-      accuracy: number,
-      recoveredAccuracy: number | null,
-      optimizer: string,
-      learningRate: number,
-    ) => {
-      const result = `(acurácia ${accuracy.toFixed(2)} em 4 classes)`;
-      const measuredItself = architecture.toLowerCase() === measuredOn;
-      const finding = measuredItself
-        ? `${architecture} não aprendeu com Adam a 1e-3 ${result}.`
-        : `${architecture}: o ${measuredOn}, da mesma família, não aprendeu com Adam a 1e-3 ${result}; este modelo não foi medido.`;
-      return `${finding} ${suggestedRemedy(measuredItself ? recoveredAccuracy : null, optimizer, learningRate)}`;
-    },
+    collapseMeasured: (facts: CollapseFacts) => measuredNote(facts, "previu uma classe só"),
+    // ViT did not collapse: 0.41 on 4 classes is above the 0.25 of a one-class prediction, so it
+    // "learned little", not "learned nothing".
+    failsToLearnMeasured: (facts: CollapseFacts) => measuredNote(facts, "aprendeu pouco"),
     // The family shares the remedy but was never run: no number at all.
     unmeasured: (architecture: string, optimizer: string, learningRate: number) =>
       `${architecture}: Adam a 1e-3 não foi medido para esta família; sugerimos ${optimizer} a ${learningRate}, o mesmo das famílias de atenção medidas.`,
@@ -1732,3 +1725,19 @@ export const pt = {
 };
 
 export type Dict = typeof pt;
+
+/** The form a ModelAdvice note appears on. The measured numbers are classification's. */
+export type ModelAdviceTask = "classification" | "regression" | "segmentation";
+
+/** What the collapse note is worded from: the response's evidence and where it is shown. */
+export interface CollapseFacts {
+  architecture: string;
+  /** The one model of the family that was actually run. */
+  measuredOn: string;
+  accuracy: number;
+  /** What `measuredOn` reached at the suggested setting; null where that was not run. */
+  recoveredAccuracy: number | null;
+  optimizer: string;
+  learningRate: number;
+  task: ModelAdviceTask;
+}

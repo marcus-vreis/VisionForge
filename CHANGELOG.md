@@ -42,21 +42,22 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Fixed
 
-- **A nota de colapso só cita o que foi medido.** Ao escolher `vgg11`,
-  `vit_l_16` ou `maxvit_t`, o formulário dizia "prevê uma classe só: medimos 0.25
-  de acurácia em 4 classes" para todas as famílias com a sugestão de 1e-4 (VGG,
-  AlexNet, ViT, Swin, ConvNeXt e MaxViT), como se cada modelo tivesse sido
-  medido. Foi medido um modelo por família, com Adam a 1e-3: `vgg16` e `alexnet` (0.25, uma classe só),
-  `swin_t` e `convnext_tiny` (0.25, uma classe só) e `vit_b_16`, que não colapsa
-  mas também não aprende (0.41); o `maxvit` nunca foi medido
+- **A nota de colapso só cita o que foi medido.** Ao escolher o `vgg19`, o
+  formulário dizia "prevê uma classe só: medimos 0.25 de acurácia em 4 classes"
+  como se o `vgg19` tivesse sido medido, e o `vit_b_16` recebia a mesma frase
+  embora tenha ficado em 0.41 sem colapsar. Foi medido um modelo por família,
+  com Adam a 1e-3 e 4 classes: `vgg16`, `alexnet`, `swin_t` e `convnext_tiny`
+  (0.25, uma classe só) e `vit_b_16` (0.41, aprendeu pouco)
   ([ADR-099](docs/dev/DECISIONS.md), [ADR-100](docs/dev/DECISIONS.md)). A nota
-  agora nomeia o modelo medido, diz quando o modelo escolhido é só da mesma
-  família ("este modelo não foi medido"), diz "não aprendeu" para o ViT em vez de
-  "uma classe só" e, para o `maxvit`, não cita acurácia nenhuma. A sugestão de
-  AdamW/Adam a 1e-4 continua a mesma. O servidor passa a devolver o que foi
-  medido em `collapse_evidence` (`measured_on`, `accuracy`, `outcome`); uma
-  resposta sem esse campo, de um servidor mais antigo, cai na redação "não
-  medido" em vez de imprimir um número que não veio.
+  agora nomeia o modelo medido, diz que o `vgg19` é só da mesma família ("este
+  modelo não foi medido") e diz "aprendeu pouco" para o `vit_b_16`. Nos
+  formulários de regressão e de segmentação, onde esses números não foram
+  medidos, a nota diz "Em classificação, …" e "esta tarefa não foi medida". O
+  servidor devolve o que foi medido em `collapse_evidence` (`measured_on`,
+  `accuracy`, `outcome`); uma resposta sem esse campo, de um servidor mais
+  antigo, mostra só a sugestão, sem número. Pela API, que casa pelo prefixo da
+  família, o mesmo vale para `vgg11` e `vit_l_16`, e o `maxvit_t`, que nunca foi
+  medido, não recebe número nenhum.
 - **A nota de colapso não promete mais que a sugestão treina.** O trecho "Com
   adamw a 0.0001 treina normal" afirmava uma recuperação medida para todo modelo
   sinalizado. Ela só foi medida, com os mesmos dados de 4 classes, para
@@ -65,10 +66,9 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
   duas classes (0.50 contra 0.88, [ADR-099](docs/dev/DECISIONS.md)), que é outro
   experimento, e o `alexnet` nunca. A nota agora cita a acurácia da recuperação
   só para o próprio modelo medido (`recovered_accuracy` em `collapse_evidence`)
-  e, para os demais e para os parentes (`vgg19`, `vit_l_16`), diz apenas
-  "Sugerimos adam a 0.0001". O `maxvit`, que nunca foi medido, deixa de ganhar o
-  aviso amarelo de alarme: a sugestão continua, o alarme não. E a nota dos
-  modelos que nunca foram sinalizados (`resnet18`, `mobilenet_v3_small`...) dizia
+  e, para os demais, diz apenas "Sugerimos adam a 0.0001" (ou "adamw", conforme
+  o modelo); em regressão e segmentação nunca cita a recuperação. E a nota dos
+  modelos que nunca foram sinalizados (`resnet18`, `efficientnet_b1`...) dizia
   "o valor medido é adam a 0.001" para qualquer um; agora diz "sugerimos".
 - **O botão de parar não promete mais o que o servidor não cumpre.** Parar uma
   validação cruzada (K-fold), uma comparação de modelos, réplicas, o sweep de
