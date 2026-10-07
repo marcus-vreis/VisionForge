@@ -4,6 +4,18 @@ const workersHelp =
   "Processos que carregam as imagens em paralelo. No automático o VisionForge divide a memória livre da máquina pelo custo de um worker — no Windows cada um recarrega o torch e as DLLs da CUDA, ~1 GB, e um número alto demais não deixa o treino lento: impede o treino de começar (WinError 1455).";
 const lrFinalHelp = "Fração do learning rate inicial ao término do treino.";
 
+// What the collapse note says about the suggested setting (components/ModelAdvice). "Treina normal"
+// is a claim, so it is only ever a number, and only for the model whose recovery was run on the
+// same setup; everywhere else the setting is just suggested.
+const suggestedRemedy = (
+  recoveredAccuracy: number | null,
+  optimizer: string,
+  learningRate: number,
+): string =>
+  recoveredAccuracy === null
+    ? `Sugerimos ${optimizer} a ${learningRate}.`
+    : `Com ${optimizer} a ${learningRate}, a acurácia foi ${recoveredAccuracy.toFixed(2)} nas mesmas condições.`;
+
 /**
  * Portuguese — the source dictionary. Its shape *is* the type every other
  * language must match, so a key added here and forgotten in en.ts fails the
@@ -144,8 +156,9 @@ export const pt = {
     changed: "valores alterados",
   },
   modelAdvice: {
-    measured: (architecture: string, optimizer: string, learningRate: number) =>
-      `Para ${architecture}, o valor medido é ${optimizer} a ${learningRate}.`,
+    // Not "measured": only a few models were run, and this is shown for any other.
+    suggested: (architecture: string, optimizer: string, learningRate: number) =>
+      `Para ${architecture}, sugerimos ${optimizer} a ${learningRate}.`,
     apply: (optimizer: string, learningRate: number) =>
       `usar ${optimizer} · ${learningRate}`,
     // What /api/model/defaults finds, worded here from the numbers it returns so
@@ -153,35 +166,38 @@ export const pt = {
     // `optimizer` and `learningRate` are the suggestion, not the form's values.
     // Only what was measured is said (ADR-099/100): one model per family, on 4
     // classes. `measuredOn` is that model; when it is not `architecture`, the
-    // note says so rather than letting a sibling borrow its number.
+    // note says so rather than letting a sibling borrow its number. The recovery
+    // (`recoveredAccuracy`) is the measured model's alone: a sibling only gets the suggestion.
     collapseMeasured: (
       architecture: string,
       measuredOn: string,
       accuracy: number,
+      recoveredAccuracy: number | null,
       optimizer: string,
       learningRate: number,
     ) => {
       const result = `(acurácia ${accuracy.toFixed(2)} em 4 classes)`;
-      const finding =
-        architecture.toLowerCase() === measuredOn
-          ? `${architecture} previu uma classe só com Adam a 1e-3 ${result}.`
-          : `${architecture}: o ${measuredOn}, da mesma família, previu uma classe só com Adam a 1e-3 ${result}; este modelo não foi medido.`;
-      return `${finding} Com ${optimizer} a ${learningRate} treina normal.`;
+      const measuredItself = architecture.toLowerCase() === measuredOn;
+      const finding = measuredItself
+        ? `${architecture} previu uma classe só com Adam a 1e-3 ${result}.`
+        : `${architecture}: o ${measuredOn}, da mesma família, previu uma classe só com Adam a 1e-3 ${result}; este modelo não foi medido.`;
+      return `${finding} ${suggestedRemedy(measuredItself ? recoveredAccuracy : null, optimizer, learningRate)}`;
     },
     // ViT did not collapse: 0.41 on 4 classes is above a one-class prediction.
     failsToLearnMeasured: (
       architecture: string,
       measuredOn: string,
       accuracy: number,
+      recoveredAccuracy: number | null,
       optimizer: string,
       learningRate: number,
     ) => {
       const result = `(acurácia ${accuracy.toFixed(2)} em 4 classes)`;
-      const finding =
-        architecture.toLowerCase() === measuredOn
-          ? `${architecture} não aprendeu com Adam a 1e-3 ${result}.`
-          : `${architecture}: o ${measuredOn}, da mesma família, não aprendeu com Adam a 1e-3 ${result}; este modelo não foi medido.`;
-      return `${finding} Com ${optimizer} a ${learningRate} treina normal.`;
+      const measuredItself = architecture.toLowerCase() === measuredOn;
+      const finding = measuredItself
+        ? `${architecture} não aprendeu com Adam a 1e-3 ${result}.`
+        : `${architecture}: o ${measuredOn}, da mesma família, não aprendeu com Adam a 1e-3 ${result}; este modelo não foi medido.`;
+      return `${finding} ${suggestedRemedy(measuredItself ? recoveredAccuracy : null, optimizer, learningRate)}`;
     },
     // The family shares the remedy but was never run: no number at all.
     unmeasured: (architecture: string, optimizer: string, learningRate: number) =>

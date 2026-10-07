@@ -57,6 +57,19 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
   medido em `collapse_evidence` (`measured_on`, `accuracy`, `outcome`); uma
   resposta sem esse campo, de um servidor mais antigo, cai na redação "não
   medido" em vez de imprimir um número que não veio.
+- **A nota de colapso não promete mais que a sugestão treina.** O trecho "Com
+  adamw a 0.0001 treina normal" afirmava uma recuperação medida para todo modelo
+  sinalizado. Ela só foi medida, com os mesmos dados de 4 classes, para
+  `vit_b_16` (0.85), `swin_t` (0.88) e `convnext_tiny` (0.91) com AdamW a 1e-4
+  ([ADR-100](docs/dev/DECISIONS.md)); o `vgg16` a 1e-4 só rodou num problema de
+  duas classes (0.50 contra 0.88, [ADR-099](docs/dev/DECISIONS.md)), que é outro
+  experimento, e o `alexnet` nunca. A nota agora cita a acurácia da recuperação
+  só para o próprio modelo medido (`recovered_accuracy` em `collapse_evidence`)
+  e, para os demais e para os parentes (`vgg19`, `vit_l_16`), diz apenas
+  "Sugerimos adam a 0.0001". O `maxvit`, que nunca foi medido, deixa de ganhar o
+  aviso amarelo de alarme: a sugestão continua, o alarme não. E a nota dos
+  modelos que nunca foram sinalizados (`resnet18`, `mobilenet_v3_small`...) dizia
+  "o valor medido é adam a 0.001" para qualquer um; agora diz "sugerimos".
 - **O botão de parar não promete mais o que o servidor não cumpre.** Parar uma
   validação cruzada (K-fold), uma comparação de modelos, réplicas, o sweep de
   uma tarefa que não é classificação ou uma tarefa própria respondia "ok" e o

@@ -36,6 +36,13 @@ attention family, but it was never run, so it carries no evidence below. What
 the interface may say about a model is exactly what ``collapse_evidence``
 returns for it — the numbers in this table, keyed by family, and nothing more.
 
+The *recovery* (the AdamW 1e-4 column) is evidence only where it was run on this
+same four-class setup: vit_b_16, swin_t and convnext_tiny. VGG16 at 1e-4 was run
+once, on a two-class problem (ADR-099: 0.50 collapsed, 0.88 at 1e-4), which is a
+different measurement and is not quoted next to a four-class one; AlexNet at
+1e-4 was never run. For those, and for every sibling, the rate is a suggestion
+and nothing is claimed about how it trains.
+
 So the suggestion is a function of both. It is a *starting point* offered in the
 interface, never a value forced onto a config the researcher wrote — the whole
 failure mode this addresses is a number appearing without the user's knowledge.
@@ -51,8 +58,9 @@ from typing import Literal
 _UNNORMALIZED = ("vgg", "alexnet")
 _ATTENTION = ("vit", "swin", "convnext", "maxvit")
 
-# Measured starting points. SGD here is plain SGD (no momentum), which is what
-# the classification trainer builds.
+# Suggested starting points. The docstring tables say which of them were
+# measured; the rest follow the family's remedy. SGD here is plain SGD (no
+# momentum), which is what the classification trainer builds.
 _ADAM_DEFAULT = 1e-3
 _ADAM_UNNORMALIZED = 1e-4
 _ADAM_ATTENTION = 1e-4
@@ -70,23 +78,32 @@ class CollapseEvidence:
         outcome: ``collapse`` when it predicted one class for every image,
             ``fails_to_learn`` when it merely stayed near chance without
             collapsing to a single class.
+        recovered_accuracy: the accuracy the same model reached on the same
+            data at the suggested setting, or ``None`` when that run was never
+            made on this setup. ``None`` is not "bad": it means no claim.
     """
 
     measured_on: str
     accuracy: float
     outcome: Literal["collapse", "fails_to_learn"]
+    recovered_accuracy: float | None = None
 
 
 # One entry per family prefix, mirroring the tables in the module docstring.
 # ViT is the odd one out: 0.41 on four classes is above the 0.25 of a one-class
 # prediction, so it failed to learn rather than collapsed. ``maxvit`` has no
-# entry on purpose: it was never measured.
+# entry on purpose: it was never measured. ``recovered_accuracy`` is the AdamW
+# 1e-4 column, left out for vgg16 (only run on two classes) and alexnet (never).
 _EVIDENCE: dict[str, CollapseEvidence] = {
     "vgg": CollapseEvidence("vgg16", 0.25, "collapse"),
     "alexnet": CollapseEvidence("alexnet", 0.25, "collapse"),
-    "swin": CollapseEvidence("swin_t", 0.25, "collapse"),
-    "convnext": CollapseEvidence("convnext_tiny", 0.25, "collapse"),
-    "vit": CollapseEvidence("vit_b_16", 0.41, "fails_to_learn"),
+    "swin": CollapseEvidence("swin_t", 0.25, "collapse", recovered_accuracy=0.88),
+    "convnext": CollapseEvidence(
+        "convnext_tiny", 0.25, "collapse", recovered_accuracy=0.91
+    ),
+    "vit": CollapseEvidence(
+        "vit_b_16", 0.41, "fails_to_learn", recovered_accuracy=0.85
+    ),
 }
 
 

@@ -5,6 +5,11 @@ measurement is one model per family at Adam 1e-3, on 4 classes, so the note name
 that model, says how it failed, and says plainly when the model being asked
 about is not the one that was run. A family that was never run gets no number
 at all, only the suggestion.
+
+The suggested setting is worded the same way. "It trains normally" is a claim,
+so it is made only as a number, only for the model whose recovery was run on the
+same setup (``recovered_accuracy``); everywhere else the setting is just
+suggested.
 """
 
 from __future__ import annotations
@@ -43,11 +48,19 @@ def collapse_note(
     failure = (
         "previu uma classe só" if evidence.outcome == "collapse" else "não aprendeu"
     )
-    if architecture.lower() == evidence.measured_on:
+    measured_itself = architecture.lower() == evidence.measured_on
+    if measured_itself:
         measured = f"{architecture} {failure} com Adam a 1e-3 ({accuracy})."
     else:
         measured = (
             f"{architecture}: o {evidence.measured_on}, da mesma família, {failure} "
             f"com Adam a 1e-3 ({accuracy}); este modelo não foi medido."
         )
-    return f"{measured} Com {optimizer} a {learning_rate:g} treina normal."
+    if measured_itself and evidence.recovered_accuracy is not None:
+        remedy = (
+            f"Com {optimizer} a {learning_rate:g}, a acurácia foi "
+            f"{evidence.recovered_accuracy:.2f} nas mesmas condições."
+        )
+    else:
+        remedy = f"Sugerimos {optimizer} a {learning_rate:g}."
+    return f"{measured} {remedy}"

@@ -666,10 +666,13 @@ class CollapseEvidenceResponse(BaseModel):
     measured_on: str
     accuracy: float
     outcome: Literal["collapse", "fails_to_learn"]
+    # What ``measured_on`` reached at the suggested setting, on the same data;
+    # None where that run was never made on this setup, so nothing is claimed.
+    recovered_accuracy: float | None = None
 
 
 class ModelDefaultsResponse(BaseModel):
-    """Starting points measured for this architecture (ADR-099/100).
+    """Suggested starting points for this architecture (ADR-099/100).
 
     ``collapse_prone`` marks the architectures where Adam at 1e-3 is expected to
     fail, which is what makes this worth surfacing rather than quietly applying.

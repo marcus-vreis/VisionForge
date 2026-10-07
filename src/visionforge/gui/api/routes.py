@@ -348,7 +348,7 @@ async def get_device_info() -> DeviceInfoResponse:
 
 @router.post("/model/defaults")
 async def model_defaults(req: ModelDefaultsRequest) -> ModelDefaultsResponse:
-    """Settings measured to train this architecture (ADR-099/100).
+    """Suggested settings for this architecture (ADR-099/100).
 
     Offered to the form so choosing a model updates the fields in front of the
     researcher, rather than substituting values behind them: the failure this

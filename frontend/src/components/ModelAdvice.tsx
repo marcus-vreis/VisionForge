@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { fetchModelDefaults, type ModelDefaults } from "../api/client";
 import { useT } from "../i18n/useT";
-import { modelAdviceNote } from "../lib/model-advice";
+import { isAlarming, modelAdviceNote } from "../lib/model-advice";
 
 /** Says when the chosen architecture and optimizer were measured to fail.
  *
@@ -10,7 +10,9 @@ import { modelAdviceNote } from "../lib/model-advice";
  * exactly 0.50 on two, reported without comment. ADR-100 found the same for
  * swin_t and convnext_tiny, while vit_b_16 merely failed to learn (0.41), and
  * measured the rate that trains each. The note quotes only that: one model per
- * family, named, and no number at all for a family that was never run.
+ * family, named, and no number at all for a family that was never run. The alarm
+ * colour goes with the measurement: a family flagged without one (maxvit) still
+ * gets the suggestion, in the plain style of the other notes.
  *
  * It suggests rather than applies. The whole failure being addressed is a
  * number arriving without the researcher knowing where it came from, and
@@ -48,12 +50,12 @@ export function ModelAdvice({
 
   if (!advice) return null;
 
-  // Only speak when the current settings differ from what was measured.
+  // Only speak when the current settings differ from the suggestion.
   const rateDiffers = Math.abs(advice.learning_rate - learningRate) > 1e-12;
   const optimizerDiffers = advice.optimizer !== optimizer;
   if (!rateDiffers && !optimizerDiffers) return null;
 
-  const severe = advice.collapse_prone;
+  const severe = isAlarming(advice);
 
   return (
     <div

@@ -796,6 +796,10 @@ export interface CollapseEvidence {
   measured_on: string;
   accuracy: number;
   outcome: "collapse" | "fails_to_learn";
+  /** What `measured_on` reached at the suggested setting on the same data. Null
+   *  (or absent, from an older server) where that run was never made on this
+   *  setup: the note then only suggests the setting and claims nothing about it. */
+  recovered_accuracy?: number | null;
 }
 
 export interface ModelDefaults {
@@ -814,8 +818,8 @@ export interface ModelDefaults {
   note: string | null;
 }
 
-/** Settings measured to train a given architecture (ADR-099/100). Offered to
- *  the form, never applied behind the researcher. */
+/** Suggested settings for a given architecture (ADR-099/100). Offered to the
+ *  form, never applied behind the researcher. */
 export async function fetchModelDefaults(
   architecture: string,
   baseDir?: string,

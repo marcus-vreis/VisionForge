@@ -72,13 +72,18 @@ class TestCollapseEvidence:
     """What the interface may quote about a model is what was measured, no more."""
 
     @staticmethod
-    def _adam_cell(model: str) -> str:
-        """The 'Adam 1e-3' cell of ``model``'s row in the module docstring tables."""
+    def _cell(model: str, column: int) -> str:
+        """One cell of ``model``'s row in the module docstring tables."""
         for line in (learning_rate.__doc__ or "").splitlines():
             cells = [c.strip() for c in line.strip().strip("|").split("|")]
             if line.startswith("|") and cells[0] == model:
-                return cells[1]
+                return cells[column]
         raise AssertionError(f"{model} has no row in the learning_rate docstring")
+
+    @classmethod
+    def _adam_cell(cls, model: str) -> str:
+        """The 'Adam 1e-3' cell of ``model``'s row in the docstring tables."""
+        return cls._cell(model, column=1)
 
     @pytest.mark.parametrize(
         ("arch", "measured_on", "accuracy", "outcome"),
@@ -122,6 +127,42 @@ class TestCollapseEvidence:
             assert number is not None, cell
             assert float(number.group()) == evidence.accuracy
             assert ("collapse" in cell) == (evidence.outcome == "collapse")
+
+    @pytest.mark.parametrize(
+        ("arch", "recovered"),
+        [
+            ("vit_b_16", 0.85),
+            ("swin_t", 0.88),
+            ("convnext_tiny", 0.91),
+            # ADR-099 ran VGG16 at 1e-4 only on a two-class problem, which is not
+            # the four-class setup of the table, so no number is carried.
+            ("vgg16", None),
+            # AlexNet at 1e-4 was never run.
+            ("alexnet", None),
+        ],
+    )
+    def test_the_recovery_is_carried_only_where_it_was_measured(
+        self, arch: str, recovered: float | None
+    ) -> None:
+        evidence = collapse_evidence(arch)
+
+        assert evidence is not None
+        assert evidence.recovered_accuracy == recovered
+
+    def test_every_recovery_matches_the_adamw_column_of_the_docstring(self) -> None:
+        """Same guard as the collapse numbers: prose and data cannot drift apart."""
+        recovered = [
+            e
+            for e in learning_rate._EVIDENCE.values()
+            if e.recovered_accuracy is not None
+        ]
+        assert recovered, "no recovery recorded at all"
+        for evidence in recovered:
+            cell = self._cell(evidence.measured_on, column=2)
+
+            number = re.search(r"\d\.\d+", cell)
+            assert number is not None, cell
+            assert float(number.group()) == evidence.recovered_accuracy
 
     def test_evidence_only_exists_where_the_note_is_raised(self) -> None:
         """A measured model must be collapse-prone, or the evidence is orphaned."""

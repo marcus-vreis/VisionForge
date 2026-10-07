@@ -7,6 +7,18 @@ const lrFinalHelp =
   "The learning rate at the end of training, as a fraction of the initial one.";
 
 /** 1st, 2nd, 3rd, 4th…: a place in the run queue. */
+// What the collapse note says about the suggested setting (components/ModelAdvice). "Trains
+// normally" is a claim, so it is only ever a number, and only for the model whose recovery was run
+// on the same setup; everywhere else the setting is just suggested.
+const suggestedRemedy = (
+  recoveredAccuracy: number | null,
+  optimizer: string,
+  learningRate: number,
+): string =>
+  recoveredAccuracy === null
+    ? `We suggest ${optimizer} at ${learningRate}.`
+    : `With ${optimizer} at ${learningRate}, accuracy was ${recoveredAccuracy.toFixed(2)} under the same conditions.`;
+
 const ordinal = (n: number): string => {
   const lastTwo = n % 100;
   if (lastTwo >= 11 && lastTwo <= 13) return `${n}th`;
@@ -136,8 +148,8 @@ export const en: Dict = {
     changed: "values changed",
   },
   modelAdvice: {
-    measured: (architecture: string, optimizer: string, learningRate: number) =>
-      `For ${architecture}, the measured setting is ${optimizer} at ${learningRate}.`,
+    suggested: (architecture: string, optimizer: string, learningRate: number) =>
+      `For ${architecture}, we suggest ${optimizer} at ${learningRate}.`,
     apply: (optimizer: string, learningRate: number) =>
       `use ${optimizer} · ${learningRate}`,
     // Only what was measured is said (ADR-099/100): one model per family, on 4
@@ -147,29 +159,31 @@ export const en: Dict = {
       architecture: string,
       measuredOn: string,
       accuracy: number,
+      recoveredAccuracy: number | null,
       optimizer: string,
       learningRate: number,
     ) => {
       const result = `(accuracy ${accuracy.toFixed(2)} on 4 classes)`;
-      const finding =
-        architecture.toLowerCase() === measuredOn
-          ? `${architecture} predicted a single class with Adam at 1e-3 ${result}.`
-          : `${architecture}: ${measuredOn}, from the same family, predicted a single class with Adam at 1e-3 ${result}; this model was not measured.`;
-      return `${finding} With ${optimizer} at ${learningRate} it trains normally.`;
+      const measuredItself = architecture.toLowerCase() === measuredOn;
+      const finding = measuredItself
+        ? `${architecture} predicted a single class with Adam at 1e-3 ${result}.`
+        : `${architecture}: ${measuredOn}, from the same family, predicted a single class with Adam at 1e-3 ${result}; this model was not measured.`;
+      return `${finding} ${suggestedRemedy(measuredItself ? recoveredAccuracy : null, optimizer, learningRate)}`;
     },
     failsToLearnMeasured: (
       architecture: string,
       measuredOn: string,
       accuracy: number,
+      recoveredAccuracy: number | null,
       optimizer: string,
       learningRate: number,
     ) => {
       const result = `(accuracy ${accuracy.toFixed(2)} on 4 classes)`;
-      const finding =
-        architecture.toLowerCase() === measuredOn
-          ? `${architecture} did not learn with Adam at 1e-3 ${result}.`
-          : `${architecture}: ${measuredOn}, from the same family, did not learn with Adam at 1e-3 ${result}; this model was not measured.`;
-      return `${finding} With ${optimizer} at ${learningRate} it trains normally.`;
+      const measuredItself = architecture.toLowerCase() === measuredOn;
+      const finding = measuredItself
+        ? `${architecture} did not learn with Adam at 1e-3 ${result}.`
+        : `${architecture}: ${measuredOn}, from the same family, did not learn with Adam at 1e-3 ${result}; this model was not measured.`;
+      return `${finding} ${suggestedRemedy(measuredItself ? recoveredAccuracy : null, optimizer, learningRate)}`;
     },
     unmeasured: (architecture: string, optimizer: string, learningRate: number) =>
       `${architecture}: Adam at 1e-3 was not measured for this family; we suggest ${optimizer} at ${learningRate}, the same as the measured attention families.`,

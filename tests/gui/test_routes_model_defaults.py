@@ -67,15 +67,20 @@ class TestModelDefaults:
     ) -> None:
         body = client.post("/api/model/defaults", json={"architecture": arch}).json()
 
+        # No recovery was measured on this setup: VGG16 at 1e-4 was only run on
+        # a two-class problem (ADR-099), and AlexNet at 1e-4 never was.
         assert body["collapse_evidence"] == {
             "measured_on": arch,
             "accuracy": 0.25,
             "outcome": "collapse",
+            "recovered_accuracy": None,
         }
-        assert body["note"].startswith(f"{arch} previu uma classe só com Adam a 1e-3")
-        assert "acurácia 0.25 em 4 classes" in body["note"]
-        # It was the model itself that ran, so it must not say it was not.
-        assert "não foi medido" not in body["note"]
+        assert body["note"] == (
+            f"{arch} previu uma classe só com Adam a 1e-3 "
+            f"(acurácia 0.25 em 4 classes). Sugerimos adam a 0.0001."
+        )
+        # A suggestion is not a promise: no claim that the new setting works.
+        assert "treina normal" not in body["note"]
 
     def test_a_sibling_of_the_measured_model_says_it_was_not_the_one_measured(
         self, client: TestClient
@@ -86,10 +91,11 @@ class TestModelDefaults:
 
         assert body["collapse_prone"] is True
         assert body["collapse_evidence"]["measured_on"] == "vgg16"
-        assert body["note"].startswith("vgg19: o vgg16, da mesma família,")
-        assert "Adam a 1e-3" in body["note"]
-        assert "acurácia 0.25 em 4 classes" in body["note"]
-        assert "este modelo não foi medido" in body["note"]
+        assert body["note"] == (
+            "vgg19: o vgg16, da mesma família, previu uma classe só com Adam a "
+            "1e-3 (acurácia 0.25 em 4 classes); este modelo não foi medido. "
+            "Sugerimos adam a 0.0001."
+        )
 
     def test_vit_failed_to_learn_it_did_not_collapse(self, client: TestClient) -> None:
         body = client.post(
@@ -100,12 +106,32 @@ class TestModelDefaults:
             "measured_on": "vit_b_16",
             "accuracy": 0.41,
             "outcome": "fails_to_learn",
+            "recovered_accuracy": 0.85,
         }
-        assert "não aprendeu" in body["note"]
-        assert "acurácia 0.41 em 4 classes" in body["note"]
+        # AdamW at 1e-4 was run on the same data (ADR-100), so the recovery is
+        # stated as a number, not as a promise.
+        assert body["note"] == (
+            "vit_b_16 não aprendeu com Adam a 1e-3 (acurácia 0.41 em 4 "
+            "classes). Com adamw a 0.0001, a acurácia foi 0.85 nas mesmas "
+            "condições."
+        )
         # 0.41 is above the 0.25 of a one-class prediction: not what happened.
         assert "uma classe só" not in body["note"]
         assert "0.25" not in body["note"]
+
+    def test_a_sibling_never_gets_the_recovery_claim(self, client: TestClient) -> None:
+        # vit_b_16 recovered to 0.85; vit_l_16 was never run, so its note says
+        # only what is suggested.
+        body = client.post(
+            "/api/model/defaults", json={"architecture": "vit_l_16"}
+        ).json()
+
+        assert body["note"] == (
+            "vit_l_16: o vit_b_16, da mesma família, não aprendeu com Adam a "
+            "1e-3 (acurácia 0.41 em 4 classes); este modelo não foi medido. "
+            "Sugerimos adamw a 0.0001."
+        )
+        assert "0.85" not in body["note"]
 
     def test_swin_collapsed(self, client: TestClient) -> None:
         body = client.post(
@@ -113,8 +139,12 @@ class TestModelDefaults:
         ).json()
 
         assert body["collapse_evidence"]["outcome"] == "collapse"
-        assert "previu uma classe só" in body["note"]
-        assert "acurácia 0.25 em 4 classes" in body["note"]
+        assert body["collapse_evidence"]["recovered_accuracy"] == 0.88
+        assert body["note"] == (
+            "swin_t previu uma classe só com Adam a 1e-3 (acurácia 0.25 em 4 "
+            "classes). Com adamw a 0.0001, a acurácia foi 0.88 nas mesmas "
+            "condições."
+        )
 
     def test_convnext_tiny_was_measured_in_adr_100(self, client: TestClient) -> None:
         # ADR-100's table has convnext_tiny at 0.25 with Adam 1e-3 (collapse).
@@ -126,8 +156,13 @@ class TestModelDefaults:
             "measured_on": "convnext_tiny",
             "accuracy": 0.25,
             "outcome": "collapse",
+            "recovered_accuracy": 0.91,
         }
-        assert "acurácia 0.25 em 4 classes" in body["note"]
+        assert body["note"] == (
+            "convnext_tiny previu uma classe só com Adam a 1e-3 (acurácia 0.25 "
+            "em 4 classes). Com adamw a 0.0001, a acurácia foi 0.91 nas mesmas "
+            "condições."
+        )
 
     def test_a_family_never_measured_quotes_no_number(self, client: TestClient) -> None:
         # maxvit gets the attention families' remedy but was never run.
