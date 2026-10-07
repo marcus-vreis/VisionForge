@@ -35,12 +35,26 @@ const local = (blockKind: string, taskKey: string, loop: LocalRun["epochLoop"] =
   epochLoop: loop,
 });
 
-const epoch = (n: number, total: number): TrainingEvent => ({
+/** An epoch report; inside a search the backend stamps it with its trial. */
+const epoch = (
+  n: number,
+  total: number,
+  trial?: { index: number; of: number },
+): TrainingEvent => ({
   event: "epoch_end",
   epoch: n,
   total_epochs: total,
   train_loss: 0.5,
   val_accuracy: 0.7,
+  ...(trial ? { trial_index: trial.index, total_trials: trial.of } : {}),
+});
+
+/** A search trial's end: its Trainer's `end`, rewritten, with how many epochs it ran. */
+const trialEnd = (index: number, of: number, epochs: number): TrainingEvent => ({
+  event: "trial_end",
+  total_epochs: epochs,
+  trial_index: index,
+  total_trials: of,
 });
 
 const trialStart = (index: number, total: number): TrainingEvent => ({
@@ -257,18 +271,86 @@ describe("runEnding", () => {
     expect(
       runEnding([
         trialStart(0, 4),
-        epoch(2, 2),
-        { event: "trial_end", total_epochs: 2, trial_index: 0, total_trials: 4 },
+        epoch(2, 2, { index: 0, of: 4 }),
+        trialEnd(0, 4, 2),
         end(0, 2),
       ]),
     ).toBe("early");
   });
 
   it("is early when the search's last trial was cut mid-way", () => {
-    expect(runEnding([trialStart(0, 1), epoch(3, 10), end(0, 1)])).toBe("early");
+    expect(
+      runEnding([trialStart(0, 1), epoch(3, 10, { index: 0, of: 1 }), end(0, 1)]),
+    ).toBe("early");
   });
 
   it("is complete when every trial ran to the end", () => {
+    expect(
+      runEnding([
+        trialStart(0, 2),
+        epoch(2, 2, { index: 0, of: 2 }),
+        trialEnd(0, 2, 2),
+        trialStart(1, 2),
+        epoch(2, 2, { index: 1, of: 2 }),
+        trialEnd(1, 2, 2),
+        end(0, 2),
+      ]),
+    ).toBe("complete");
+  });
+
+  it("is early when the last trial was stopped before it trained an epoch", () => {
+    // The search still ends with every trial counted, and the last epoch the
+    // stream carries is the previous trial's final one: reading that as the
+    // run's last epoch would call a stopped search finished.
+    expect(
+      runEnding([
+        trialStart(0, 2),
+        epoch(2, 2, { index: 0, of: 2 }),
+        trialEnd(0, 2, 2),
+        trialStart(1, 2),
+        trialEnd(1, 2, 0),
+        end(0, 2),
+      ]),
+    ).toBe("early");
+  });
+
+  it("is early when a middle trial stopped before it trained an epoch", () => {
+    expect(
+      runEnding([
+        trialStart(0, 3),
+        epoch(2, 2, { index: 0, of: 3 }),
+        trialEnd(0, 3, 2),
+        trialStart(1, 3),
+        trialEnd(1, 3, 0),
+        end(0, 2),
+      ]),
+    ).toBe("early");
+  });
+
+  it("does not call a search complete when its last trial reported no epoch", () => {
+    // Nothing says the last trial trained (and it did not stop at an epoch of
+    // its own), so nothing is claimed.
+    expect(
+      runEnding([
+        trialStart(0, 2),
+        epoch(2, 2, { index: 0, of: 2 }),
+        trialEnd(0, 2, 2),
+        trialStart(1, 2),
+        end(0, 2),
+      ]),
+    ).toBe("unknown");
+  });
+
+  it("tells the trial of an epoch from the last trial_start when it is not stamped", () => {
+    expect(
+      runEnding([
+        trialStart(0, 2),
+        epoch(2, 2),
+        trialStart(1, 2),
+        epoch(1, 2),
+        end(0, 2),
+      ]),
+    ).toBe("early");
     expect(
       runEnding([
         trialStart(0, 2),
@@ -300,6 +382,29 @@ describe("reachedEpoch / hasEnded", () => {
     expect(reachedEpoch([start(6)])).toBeNull();
     expect(reachedEpoch([])).toBeNull();
     expect(reachedEpoch([start(4), trialStart(0, 1), end(0, 1)])).toBeNull();
+  });
+
+  it("does not report the previous trial's last epoch as where a stopped search stood", () => {
+    expect(
+      reachedEpoch([
+        trialStart(0, 2),
+        epoch(2, 2, { index: 0, of: 2 }),
+        trialEnd(0, 2, 2),
+        trialStart(1, 2),
+        epoch(3, 10, { index: 1, of: 2 }),
+        end(0, 2),
+      ]),
+    ).toEqual({ epoch: 3, total: 10 });
+    expect(
+      reachedEpoch([
+        trialStart(0, 2),
+        epoch(2, 2, { index: 0, of: 2 }),
+        trialEnd(0, 2, 2),
+        trialStart(1, 2),
+        trialEnd(1, 2, 0),
+        end(0, 2),
+      ]),
+    ).toEqual({ epoch: 0, total: 2 });
   });
 
   it("sees the terminal event", () => {

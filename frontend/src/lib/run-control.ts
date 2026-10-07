@@ -163,24 +163,53 @@ type EpochEnd = Extract<TrainingEvent, { event: "epoch_end" }>;
 type StartEvent = Extract<TrainingEvent, { event: "start" }>;
 type EndEvent = Extract<TrainingEvent, { event: "end" }>;
 
-/** The events a verdict on how a run ended is drawn from. */
+/** The events a verdict on how a run ended is drawn from.
+ *
+ * A search streams many trainings in one stream, so the last epoch report of
+ * the stream is only the last epoch of the *last trial that trained* — which is
+ * not the last trial when that one was stopped before its first epoch. Epochs
+ * are therefore also kept per trial, by the index the backend stamps on them or,
+ * when it is missing, by the trial that was started most recently.
+ */
 function milestones(events: readonly TrainingEvent[]): {
   start: StartEvent | undefined;
   lastEpoch: EpochEnd | undefined;
   end: EndEvent | undefined;
   plannedTrials: number;
+  /** Index of the trial started most recently; -1 outside a search. */
+  currentTrial: number;
+  /** The last epoch report of each trial that reported one. */
+  epochByTrial: Map<number, EpochEnd>;
+  /** How many epochs each trial ran, from its `trial_end`. */
+  trialEpochs: Map<number, number>;
 } {
   let start: StartEvent | undefined;
   let lastEpoch: EpochEnd | undefined;
   let end: EndEvent | undefined;
   let plannedTrials = 0;
+  let currentTrial = -1;
+  const epochByTrial = new Map<number, EpochEnd>();
+  const trialEpochs = new Map<number, number>();
   for (const e of events) {
     if (e.event === "start") start = e;
-    else if (e.event === "epoch_end") lastEpoch = e;
-    else if (e.event === "trial_start") plannedTrials = e.total_trials;
+    else if (e.event === "epoch_end") {
+      lastEpoch = e;
+      epochByTrial.set(e.trial_index ?? currentTrial, e);
+    } else if (e.event === "trial_start") {
+      plannedTrials = e.total_trials;
+      currentTrial = e.trial_index;
+    } else if (e.event === "trial_end") trialEpochs.set(e.trial_index, e.total_epochs);
     else if (e.event === "end") end = e;
   }
-  return { start, lastEpoch, end, plannedTrials };
+  return {
+    start,
+    lastEpoch,
+    end,
+    plannedTrials,
+    currentTrial,
+    epochByTrial,
+    trialEpochs,
+  };
 }
 
 /** How a run ended, judged from the events it streamed: short of what was
@@ -198,34 +227,58 @@ function milestones(events: readonly TrainingEvent[]): {
  * to be) and `end` (how far its history got); that comparison is the evidence
  * when no epoch was reported. A run that early-stops on its own looks the same
  * as a stopped one; this is only read after the researcher asked for a stop.
+ *
+ * A search is `early` when it skipped trials, when any trial ended having run
+ * no epoch (the stop landed before it trained), or when a trial's last epoch
+ * is short of its total; and `complete` only when the *last planned trial*
+ * reported an epoch that reached its total.
  */
 export function runEnding(
   events: readonly TrainingEvent[],
 ): "early" | "complete" | "unknown" {
-  const { start, lastEpoch, end, plannedTrials } = milestones(events);
+  const { start, lastEpoch, end, plannedTrials, epochByTrial, trialEpochs } =
+    milestones(events);
   if (plannedTrials > 0) {
     // A search's `end` counts the trials that ran, and its epochs are 0.
     if (end?.total_trials !== undefined && end.total_trials < plannedTrials) {
       return "early";
     }
-  } else if (lastEpoch === undefined && start !== undefined && end !== undefined) {
-    return end.total_epochs < start.total_epochs ? "early" : "unknown";
+    for (const ran of trialEpochs.values()) if (ran === 0) return "early";
+    for (const e of epochByTrial.values()) {
+      if (e.epoch < e.total_epochs) return "early";
+    }
+    return epochByTrial.has(plannedTrials - 1) ? "complete" : "unknown";
   }
-  if (lastEpoch === undefined) return "unknown";
+  if (lastEpoch === undefined) {
+    return start !== undefined && end !== undefined && end.total_epochs < start.total_epochs
+      ? "early"
+      : "unknown";
+  }
   return lastEpoch.epoch < lastEpoch.total_epochs ? "early" : "complete";
 }
 
 /** Where the run stood when it ended, for the "stopped at" line: its last
  * reported epoch, or — for a run that reported none — how far its history got
- * out of how long it was meant to be. `null` when the stream does not say. */
+ * out of how long it was meant to be. For a search it is the trial that was
+ * started last: an earlier trial's final epoch says nothing about where a trial
+ * stopped before its first epoch got to. `null` when the stream does not say. */
 export function reachedEpoch(
   events: readonly TrainingEvent[],
 ): { epoch: number; total: number } | null {
-  const { start, lastEpoch, end, plannedTrials } = milestones(events);
+  const { start, lastEpoch, end, plannedTrials, currentTrial, epochByTrial, trialEpochs } =
+    milestones(events);
+  if (plannedTrials > 0) {
+    const latest = epochByTrial.get(currentTrial);
+    if (latest !== undefined) return { epoch: latest.epoch, total: latest.total_epochs };
+    if (trialEpochs.get(currentTrial) === 0) {
+      return { epoch: 0, total: lastEpoch?.total_epochs ?? 0 };
+    }
+    return null;
+  }
   if (lastEpoch !== undefined) {
     return { epoch: lastEpoch.epoch, total: lastEpoch.total_epochs };
   }
-  if (plannedTrials === 0 && start !== undefined && end !== undefined) {
+  if (start !== undefined && end !== undefined) {
     return { epoch: end.total_epochs, total: start.total_epochs };
   }
   return null;
