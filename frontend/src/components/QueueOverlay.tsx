@@ -319,6 +319,21 @@ function JobRow({
             ? t.queueOverlay.running
             : t.queueOverlay.waiting(waitedFor(job.submitted_at))}
         </div>
+        {/* In the row, not only in the button's tooltip: a disabled button is
+            out of reach of the keyboard and of screen readers. */}
+        {running && !stoppable && (
+          <div
+            style={{
+              marginTop: 5,
+              fontFamily: "var(--font-mono)",
+              fontSize: 11,
+              lineHeight: 1.5,
+              color: "var(--vf-text-dim)",
+            }}
+          >
+            {t.queueOverlay.stopUnavailable}
+          </div>
+        )}
       </div>
 
       <button
@@ -329,7 +344,7 @@ function JobRow({
           running
             ? stoppable
               ? t.queueOverlay.stopTitle
-              : t.queueOverlay.stopUnavailableTitle
+              : t.queueOverlay.stopUnavailable
             : t.queueOverlay.removeTitle
         }
         style={{

@@ -1502,8 +1502,8 @@ export const pt = {
     removeTitle: "Remover da fila (não afeta treinos já iniciados)",
     stopTitle: "Interromper este treino (o trabalho já feito é mantido)",
     // The running row of a kind of run the server cannot stop mid-way (lib/run-control.ts).
-    stopUnavailableTitle:
-      "Este tipo de execução não pode ser interrompida no meio: ela segue até o fim.",
+    stopUnavailable:
+      "Esta execução não pode ser interrompida no meio: ela segue até o fim.",
     stop: "■ parar",
     remove: "🗑 remover",
   },
@@ -1555,8 +1555,8 @@ export const pt = {
     // also skips the trials not yet started (lib/run-control.ts).
     stop: "■ Parar",
     stopTitle: "Parar o treino ao fim da época em andamento",
-    stopUnavailableTitle:
-      "Este tipo de execução não pode ser interrompida no meio: ela segue até o fim.",
+    stopUnavailable:
+      "Esta execução não pode ser interrompida no meio: ela segue até o fim.",
     stopConfirmEpoch:
       "Parar este treino? Ele termina a época em andamento e mantém o melhor checkpoint e o histórico até aqui. Se parar antes da última época, dá para retomar pelo Histórico.",
     stopConfirmTrial:
@@ -1567,10 +1567,18 @@ export const pt = {
     stopRequested:
       "Parada pedida: o treino termina a época em andamento e então para.",
     stopFailed: "Não foi possível parar o treino.",
+    // The server found no such job: it ended between the click and the request.
+    stopAlreadyEnded: "O treino já tinha terminado quando o pedido chegou.",
+    // An anomaly run that has not yet shown whether it trains by epochs (PatchCore does not).
+    stopUnconfirmed:
+      "O botão Parar libera quando o treino mostrar que roda por épocas.",
     // Header, once a stopped run has ended; the status the server reports for it is still "completed".
     stopped: "Treino interrompido",
+    // Before its first epoch there is no checkpoint to keep, so none is claimed.
     stoppedLog: (epoch: number | null, total: number | null) =>
-      `interrompido${epoch !== null && total !== null ? ` na época ${epoch}/${total}` : ""} · melhor checkpoint mantido`,
+      epoch === 0
+        ? "interrompido antes da primeira época"
+        : `interrompido${epoch !== null && total !== null ? ` na época ${epoch}/${total}` : ""} · melhor checkpoint mantido`,
     stopTooLate:
       "> a parada chegou na última época: o treino terminou normalmente",
   },

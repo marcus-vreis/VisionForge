@@ -3,8 +3,9 @@ import { ApiError, cancelQueuedRun, fetchQueue } from "../api/client";
 import type { Dict } from "../i18n/pt";
 import { useT } from "../i18n/useT";
 import {
+  epochLoop,
   hasEnded,
-  lastEpochOf,
+  reachedEpoch,
   stopMode,
   stopOutcome,
 } from "../lib/run-control";
@@ -268,21 +269,36 @@ export function TrainingOverlay({
         if (alive) setActiveJob(snap.active);
       })
       .catch(() => {
-        // Unreadable queue: the stop is offered as for a plain run (lib/run-control.ts).
+        // Unreadable queue: the mode falls back to what this sheet knows of its
+        // own run (below), not to "a plain run".
       });
     return () => {
       alive = false;
     };
   }, [isRunning, runId]);
   const job = activeJob !== null && activeJob.run_id === runId ? activeJob : null;
-  // PatchCore reports phases instead of epochs and has no boundary to stop at.
-  const mode = stopMode(job, { phaseOnly: latestPhase !== undefined });
+  // The snapshot decides when there is one. Without it, the block recorded at
+  // submission and the stream decide: K-fold and the like are not offered a
+  // stop the server ignores, and an anomaly run waits for its stream to show
+  // epochs (PatchCore has none, and nothing before its first phase says so).
+  const mode = stopMode(job, {
+    blockKind: blockKind ?? "classification",
+    taskKey,
+    epochLoop: epochLoop(progressEvents),
+  });
 
   const [stop, setStop] = useState<StopState>({
     runId: null,
     phase: "idle",
     error: null,
   });
+  // Why the stop is not on offer, in words, when it is not.
+  const stopBlockedNote =
+    mode === "none"
+      ? t.trainingOverlay.stopUnavailable
+      : mode === "unconfirmed"
+        ? t.trainingOverlay.stopUnconfirmed
+        : null;
   const stopPhase: StopPhase = stop.runId === runId ? stop.phase : "idle";
   const stopError = stop.runId === runId ? stop.error : null;
   const setStopPhase = (phase: StopPhase) =>
@@ -298,8 +314,14 @@ export function TrainingOverlay({
       setStop({
         runId,
         phase: "idle",
+        // 404: the run ended between the click and the request. The server's
+        // own text ("may have already started") is English and wrong here.
         error:
-          e instanceof ApiError ? e.message : t.trainingOverlay.stopFailed,
+          e instanceof ApiError
+            ? e.status === 404
+              ? t.trainingOverlay.stopAlreadyEnded
+              : e.message
+            : t.trainingOverlay.stopFailed,
       });
     }
   };
@@ -312,20 +334,20 @@ export function TrainingOverlay({
     ended: hasEnded(progressEvents) || isFinished,
     events: progressEvents,
   });
-  const lastEpoch = lastEpochOf(progressEvents);
+  const reached = reachedEpoch(progressEvents);
   // Read by the terminal-state effect below through a ref: that effect appends
   // its line once, and a dependency that changed under its pending timer would
   // cancel the line without ever re-running it.
   const stopSummaryRef = useRef({
     outcome: stopOutcomeNow,
-    epoch: lastEpoch?.epoch ?? null,
-    total: lastEpoch?.total ?? null,
+    epoch: reached?.epoch ?? null,
+    total: reached?.total ?? null,
   });
   useEffect(() => {
     stopSummaryRef.current = {
       outcome: stopOutcomeNow,
-      epoch: lastEpoch?.epoch ?? null,
-      total: lastEpoch?.total ?? null,
+      epoch: reached?.epoch ?? null,
+      total: reached?.total ?? null,
     };
   });
 
@@ -658,7 +680,7 @@ export function TrainingOverlay({
 
         {/* Stop: asks first, because one mis-click ends a long training. The
             run still finishes its epoch and keeps what it has saved. */}
-        {isRunning && stopPhase === "confirming" && (
+        {isRunning && stopPhase === "confirming" && stopBlockedNote === null && (
           <div
             role="group"
             aria-label={t.trainingOverlay.stop}
@@ -759,7 +781,7 @@ export function TrainingOverlay({
             justifyContent: "flex-end",
           }}
         >
-          {isRunning && mode === "none" && (
+          {isRunning && stopBlockedNote !== null && (
             <span
               style={{
                 flex: 1,
@@ -769,19 +791,15 @@ export function TrainingOverlay({
                 lineHeight: 1.5,
               }}
             >
-              {t.trainingOverlay.stopUnavailableTitle}
+              {stopBlockedNote}
             </span>
           )}
           {isRunning && (
             <button
               type="button"
               onClick={() => setStopPhase("confirming")}
-              disabled={mode === "none" || stopPhase !== "idle"}
-              title={
-                mode === "none"
-                  ? t.trainingOverlay.stopUnavailableTitle
-                  : t.trainingOverlay.stopTitle
-              }
+              disabled={stopBlockedNote !== null || stopPhase !== "idle"}
+              title={stopBlockedNote ?? t.trainingOverlay.stopTitle}
               style={{
                 padding: "10px 18px",
                 background: "transparent",
@@ -793,14 +811,14 @@ export function TrainingOverlay({
                 letterSpacing: "0.08em",
                 textTransform: "uppercase",
                 cursor:
-                  mode === "none"
+                  stopBlockedNote !== null
                     ? "not-allowed"
                     : stopPhase === "sending"
                       ? "wait"
                       : stopPhase === "idle"
                         ? "pointer"
                         : "default",
-                opacity: mode === "none" || stopPhase !== "idle" ? 0.5 : 1,
+                opacity: stopBlockedNote !== null || stopPhase !== "idle" ? 0.5 : 1,
               }}
             >
               {stopPhase === "sending" || stopPhase === "requested"

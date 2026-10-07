@@ -1354,8 +1354,8 @@ export const en: Dict = {
     waiting: (waited: string) => `waiting ${waited}`,
     removeTitle: "Remove from the queue (does not affect runs already started)",
     stopTitle: "Stop this run (the work done so far is kept)",
-    stopUnavailableTitle:
-      "This kind of run cannot be stopped part-way: it goes on to the end.",
+    stopUnavailable:
+      "This run cannot be stopped part-way: it goes on to the end.",
     stop: "■ stop",
     remove: "🗑 remove",
   },
@@ -1393,8 +1393,8 @@ export const en: Dict = {
     viewResults: "↗ View results",
     stop: "■ Stop",
     stopTitle: "Stop the run at the end of the epoch in progress",
-    stopUnavailableTitle:
-      "This kind of run cannot be stopped part-way: it goes on to the end.",
+    stopUnavailable:
+      "This run cannot be stopped part-way: it goes on to the end.",
     stopConfirmEpoch:
       "Stop this run? It finishes the epoch in progress and keeps the best checkpoint and the history so far. If it stops before the last epoch, you can resume it from the History.",
     stopConfirmTrial:
@@ -1405,9 +1405,14 @@ export const en: Dict = {
     stopRequested:
       "Stop requested: the run finishes the epoch in progress and then stops.",
     stopFailed: "Failed to stop the run.",
+    stopAlreadyEnded: "The run had already ended when the request arrived.",
+    stopUnconfirmed:
+      "The Stop button unlocks once the run shows it trains by epochs.",
     stopped: "Training stopped",
     stoppedLog: (epoch: number | null, total: number | null) =>
-      `stopped${epoch !== null && total !== null ? ` at epoch ${epoch}/${total}` : ""} · best checkpoint kept`,
+      epoch === 0
+        ? "stopped before the first epoch"
+        : `stopped${epoch !== null && total !== null ? ` at epoch ${epoch}/${total}` : ""} · best checkpoint kept`,
     stopTooLate:
       "> the stop arrived during the last epoch: the run finished normally",
   },
