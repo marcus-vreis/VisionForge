@@ -7,13 +7,18 @@ way VGG and AlexNet do, and the fix is the same shape.
 
 from __future__ import annotations
 
+import dataclasses
+import re
 from pathlib import Path
 
 import pytest
 from PIL import Image
 
+from visionforge.core import learning_rate
 from visionforge.core.image_size import median_image_side, suggested_image_size
 from visionforge.core.learning_rate import (
+    CollapseEvidence,
+    collapse_evidence,
     is_collapse_prone,
     suggested_learning_rate,
     suggested_optimizer,
@@ -61,6 +66,71 @@ class TestCollapseProne:
     def test_sgd_is_not_the_failure_mode(self) -> None:
         """VGG+SGD reached 0.80 at the same rate that collapsed under Adam."""
         assert is_collapse_prone("vgg16", "sgd", 1e-2) is False
+
+
+class TestCollapseEvidence:
+    """What the interface may quote about a model is what was measured, no more."""
+
+    @staticmethod
+    def _adam_cell(model: str) -> str:
+        """The 'Adam 1e-3' cell of ``model``'s row in the module docstring tables."""
+        for line in (learning_rate.__doc__ or "").splitlines():
+            cells = [c.strip() for c in line.strip().strip("|").split("|")]
+            if line.startswith("|") and cells[0] == model:
+                return cells[1]
+        raise AssertionError(f"{model} has no row in the learning_rate docstring")
+
+    @pytest.mark.parametrize(
+        ("arch", "measured_on", "accuracy", "outcome"),
+        [
+            ("vgg16", "vgg16", 0.25, "collapse"),
+            ("vgg19", "vgg16", 0.25, "collapse"),
+            ("alexnet", "alexnet", 0.25, "collapse"),
+            ("swin_t", "swin_t", 0.25, "collapse"),
+            ("swin_v2_b", "swin_t", 0.25, "collapse"),
+            ("convnext_base", "convnext_tiny", 0.25, "collapse"),
+            ("vit_b_16", "vit_b_16", 0.41, "fails_to_learn"),
+            ("vit_l_16", "vit_b_16", 0.41, "fails_to_learn"),
+        ],
+    )
+    def test_each_family_cites_the_one_model_that_was_run(
+        self, arch: str, measured_on: str, accuracy: float, outcome: str
+    ) -> None:
+        evidence = collapse_evidence(arch)
+
+        assert evidence is not None
+        assert isinstance(evidence, CollapseEvidence)
+        assert (evidence.measured_on, evidence.accuracy, evidence.outcome) == (
+            measured_on,
+            accuracy,
+            outcome,
+        )
+
+    @pytest.mark.parametrize("arch", ["maxvit_t", "resnet50", "efficientnet_b1", ""])
+    def test_no_measurement_no_evidence(self, arch: str) -> None:
+        assert collapse_evidence(arch) is None
+
+    def test_the_architecture_name_is_matched_ignoring_case(self) -> None:
+        assert collapse_evidence("VGG16") == collapse_evidence("vgg16")
+
+    def test_every_evidence_row_matches_the_docstring_table(self) -> None:
+        """The prose table and the data cannot drift apart unnoticed."""
+        for evidence in learning_rate._EVIDENCE.values():
+            cell = self._adam_cell(evidence.measured_on)
+
+            number = re.search(r"\d\.\d+", cell)
+            assert number is not None, cell
+            assert float(number.group()) == evidence.accuracy
+            assert ("collapse" in cell) == (evidence.outcome == "collapse")
+
+    def test_evidence_only_exists_where_the_note_is_raised(self) -> None:
+        """A measured model must be collapse-prone, or the evidence is orphaned."""
+        for evidence in learning_rate._EVIDENCE.values():
+            assert is_collapse_prone(evidence.measured_on, "adam", 1e-3) is True
+
+    def test_the_evidence_is_immutable(self) -> None:
+        with pytest.raises(dataclasses.FrozenInstanceError):
+            collapse_evidence("vgg16").accuracy = 0.99  # type: ignore[misc,union-attr]
 
 
 class TestImageSize:

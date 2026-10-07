@@ -140,8 +140,39 @@ export const en: Dict = {
       `For ${architecture}, the measured setting is ${optimizer} at ${learningRate}.`,
     apply: (optimizer: string, learningRate: number) =>
       `use ${optimizer} · ${learningRate}`,
-    collapse: (architecture: string, optimizer: string, learningRate: number) =>
-      `${architecture} with Adam at 1e-3 predicts a single class: we measured 0.25 accuracy on 4 classes. With ${optimizer} at ${learningRate} it trains normally.`,
+    // Only what was measured is said (ADR-099/100): one model per family, on 4
+    // classes. When `measuredOn` is not `architecture`, the note says so rather
+    // than letting a sibling borrow the number.
+    collapseMeasured: (
+      architecture: string,
+      measuredOn: string,
+      accuracy: number,
+      optimizer: string,
+      learningRate: number,
+    ) => {
+      const result = `(accuracy ${accuracy.toFixed(2)} on 4 classes)`;
+      const finding =
+        architecture.toLowerCase() === measuredOn
+          ? `${architecture} predicted a single class with Adam at 1e-3 ${result}.`
+          : `${architecture}: ${measuredOn}, from the same family, predicted a single class with Adam at 1e-3 ${result}; this model was not measured.`;
+      return `${finding} With ${optimizer} at ${learningRate} it trains normally.`;
+    },
+    failsToLearnMeasured: (
+      architecture: string,
+      measuredOn: string,
+      accuracy: number,
+      optimizer: string,
+      learningRate: number,
+    ) => {
+      const result = `(accuracy ${accuracy.toFixed(2)} on 4 classes)`;
+      const finding =
+        architecture.toLowerCase() === measuredOn
+          ? `${architecture} did not learn with Adam at 1e-3 ${result}.`
+          : `${architecture}: ${measuredOn}, from the same family, did not learn with Adam at 1e-3 ${result}; this model was not measured.`;
+      return `${finding} With ${optimizer} at ${learningRate} it trains normally.`;
+    },
+    unmeasured: (architecture: string, optimizer: string, learningRate: number) =>
+      `${architecture}: Adam at 1e-3 was not measured for this family; we suggest ${optimizer} at ${learningRate}, the same as the measured attention families.`,
     upscaling: (medianSide: number) =>
       `The images are about ${medianSide}px on a side; training above that upsizes the image without adding detail.`,
   },

@@ -151,8 +151,41 @@ export const pt = {
     // What /api/model/defaults finds, worded here from the numbers it returns so
     // the note is in the language of the interface (its own `note` is not shown).
     // `optimizer` and `learningRate` are the suggestion, not the form's values.
-    collapse: (architecture: string, optimizer: string, learningRate: number) =>
-      `${architecture} com Adam a 1e-3 prevê uma classe só: medimos 0.25 de acurácia em 4 classes. Com ${optimizer} a ${learningRate} treina normal.`,
+    // Only what was measured is said (ADR-099/100): one model per family, on 4
+    // classes. `measuredOn` is that model; when it is not `architecture`, the
+    // note says so rather than letting a sibling borrow its number.
+    collapseMeasured: (
+      architecture: string,
+      measuredOn: string,
+      accuracy: number,
+      optimizer: string,
+      learningRate: number,
+    ) => {
+      const result = `(acurácia ${accuracy.toFixed(2)} em 4 classes)`;
+      const finding =
+        architecture.toLowerCase() === measuredOn
+          ? `${architecture} previu uma classe só com Adam a 1e-3 ${result}.`
+          : `${architecture}: o ${measuredOn}, da mesma família, previu uma classe só com Adam a 1e-3 ${result}; este modelo não foi medido.`;
+      return `${finding} Com ${optimizer} a ${learningRate} treina normal.`;
+    },
+    // ViT did not collapse: 0.41 on 4 classes is above a one-class prediction.
+    failsToLearnMeasured: (
+      architecture: string,
+      measuredOn: string,
+      accuracy: number,
+      optimizer: string,
+      learningRate: number,
+    ) => {
+      const result = `(acurácia ${accuracy.toFixed(2)} em 4 classes)`;
+      const finding =
+        architecture.toLowerCase() === measuredOn
+          ? `${architecture} não aprendeu com Adam a 1e-3 ${result}.`
+          : `${architecture}: o ${measuredOn}, da mesma família, não aprendeu com Adam a 1e-3 ${result}; este modelo não foi medido.`;
+      return `${finding} Com ${optimizer} a ${learningRate} treina normal.`;
+    },
+    // The family shares the remedy but was never run: no number at all.
+    unmeasured: (architecture: string, optimizer: string, learningRate: number) =>
+      `${architecture}: Adam a 1e-3 não foi medido para esta família; sugerimos ${optimizer} a ${learningRate}, o mesmo das famílias de atenção medidas.`,
     upscaling: (medianSide: number) =>
       `As imagens têm cerca de ${medianSide}px de lado; treinar acima disso amplia a imagem sem acrescentar detalhe.`,
   },

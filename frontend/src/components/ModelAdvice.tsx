@@ -5,10 +5,12 @@ import { modelAdviceNote } from "../lib/model-advice";
 
 /** Says when the chosen architecture and optimizer were measured to fail.
  *
- * ADR-099 found that VGG, AlexNet, Swin and ConvNeXt predict a single class for
- * every image at the previous default of 1e-3 — an accuracy of 0.25 on four
- * classes, or exactly 0.50 on two, reported without comment. ADR-100 measured
- * the rate that trains each family instead.
+ * ADR-099 found that vgg16 and alexnet predict a single class for every image
+ * at the previous default of 1e-3 — an accuracy of 0.25 on four classes, or
+ * exactly 0.50 on two, reported without comment. ADR-100 found the same for
+ * swin_t and convnext_tiny, while vit_b_16 merely failed to learn (0.41), and
+ * measured the rate that trains each. The note quotes only that: one model per
+ * family, named, and no number at all for a family that was never run.
  *
  * It suggests rather than applies. The whole failure being addressed is a
  * number arriving without the researcher knowing where it came from, and

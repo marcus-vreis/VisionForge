@@ -52,6 +52,7 @@ from visionforge.core.evaluator import Evaluator
 from visionforge.core.image_size import median_image_side, suggested_image_size
 from visionforge.core.latex_export import report_to_latex
 from visionforge.core.learning_rate import (
+    collapse_evidence,
     is_collapse_prone,
     suggested_learning_rate,
     suggested_optimizer,
@@ -73,6 +74,7 @@ from visionforge.core.task_runner import TaskRunner
 from visionforge.gui.api.dataset_download import credentials_in_play, download_dataset
 from visionforge.gui.api.detection_export import export_detection_run
 from visionforge.gui.api.detection_testing import evaluate_detection_run
+from visionforge.gui.api.model_notes import collapse_note
 from visionforge.gui.api.run_queue import QueuedJob, RunQueue
 from visionforge.gui.api.schemas import (
     AnomalyDatasetStatsRequest,
@@ -82,6 +84,7 @@ from visionforge.gui.api.schemas import (
     BatchPredictRequest,
     BatchPredictResponse,
     CheckpointPickResponse,
+    CollapseEvidenceResponse,
     ComparisonRequest,
     CredentialEntry,
     CredentialSaveRequest,
@@ -363,11 +366,10 @@ async def model_defaults(req: ModelDefaultsRequest) -> ModelDefaultsResponse:
         size = suggested_image_size(root, arch, pretrained=req.pretrained)
 
     note: str | None = None
-    if is_collapse_prone(arch, "adam", 1e-3):
-        note = (
-            f"{arch} com Adam a 1e-3 prevê uma classe só: medimos 0.25 de "
-            f"acurácia em 4 classes. Com {optimizer} a {rate:g} treina normal."
-        )
+    prone = is_collapse_prone(arch, "adam", 1e-3)
+    evidence = collapse_evidence(arch) if prone else None
+    if prone:
+        note = collapse_note(arch, optimizer, rate, evidence)
     elif median is not None and size is not None and median < size:
         note = (
             f"As imagens têm cerca de {median}px de lado; treinar acima disso "
@@ -380,7 +382,12 @@ async def model_defaults(req: ModelDefaultsRequest) -> ModelDefaultsResponse:
         learning_rate=rate,
         image_size=size,
         dataset_median_side=median,
-        collapse_prone=is_collapse_prone(arch, "adam", 1e-3),
+        collapse_prone=prone,
+        collapse_evidence=(
+            CollapseEvidenceResponse.model_validate(asdict(evidence))
+            if evidence is not None
+            else None
+        ),
         note=note,
     )
 

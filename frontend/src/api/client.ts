@@ -789,6 +789,15 @@ export interface SystemInfo {
   version: string;
 }
 
+/** What was measured for an architecture's family at Adam 1e-3 (ADR-099/100):
+ *  the one model that was run, the accuracy it reached on 4 classes, and whether
+ *  it collapsed to a single class or merely failed to learn. */
+export interface CollapseEvidence {
+  measured_on: string;
+  accuracy: number;
+  outcome: "collapse" | "fails_to_learn";
+}
+
 export interface ModelDefaults {
   architecture: string;
   optimizer: string;
@@ -796,8 +805,12 @@ export interface ModelDefaults {
   image_size: number | null;
   dataset_median_side: number | null;
   collapse_prone: boolean;
+  /** The measurement behind `collapse_prone`. Null when the family was never
+   *  run, and absent from a server that predates the field; either way the
+   *  interface must not quote an accuracy. */
+  collapse_evidence?: CollapseEvidence | null;
   /** The server's own sentence, in Portuguese. Not shown: ModelAdvice words the
-   *  same two cases from the fields above, in the language of the interface. */
+   *  same cases from the fields above, in the language of the interface. */
   note: string | null;
 }
 

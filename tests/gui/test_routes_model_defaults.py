@@ -61,6 +61,100 @@ class TestModelDefaults:
         assert body["collapse_prone"] is True
         assert "Adam a 1e-3" in body["note"]
 
+    @pytest.mark.parametrize("arch", ["vgg16", "alexnet"])
+    def test_a_measured_collapse_names_the_model_and_the_number(
+        self, client: TestClient, arch: str
+    ) -> None:
+        body = client.post("/api/model/defaults", json={"architecture": arch}).json()
+
+        assert body["collapse_evidence"] == {
+            "measured_on": arch,
+            "accuracy": 0.25,
+            "outcome": "collapse",
+        }
+        assert body["note"].startswith(f"{arch} previu uma classe só com Adam a 1e-3")
+        assert "acurácia 0.25 em 4 classes" in body["note"]
+        # It was the model itself that ran, so it must not say it was not.
+        assert "não foi medido" not in body["note"]
+
+    def test_a_sibling_of_the_measured_model_says_it_was_not_the_one_measured(
+        self, client: TestClient
+    ) -> None:
+        # Only vgg16 was run. vgg19 gets the same suggestion, but the note must
+        # say whose number this is instead of implying vgg19 was measured.
+        body = client.post("/api/model/defaults", json={"architecture": "vgg19"}).json()
+
+        assert body["collapse_prone"] is True
+        assert body["collapse_evidence"]["measured_on"] == "vgg16"
+        assert body["note"].startswith("vgg19: o vgg16, da mesma família,")
+        assert "Adam a 1e-3" in body["note"]
+        assert "acurácia 0.25 em 4 classes" in body["note"]
+        assert "este modelo não foi medido" in body["note"]
+
+    def test_vit_failed_to_learn_it_did_not_collapse(self, client: TestClient) -> None:
+        body = client.post(
+            "/api/model/defaults", json={"architecture": "vit_b_16"}
+        ).json()
+
+        assert body["collapse_evidence"] == {
+            "measured_on": "vit_b_16",
+            "accuracy": 0.41,
+            "outcome": "fails_to_learn",
+        }
+        assert "não aprendeu" in body["note"]
+        assert "acurácia 0.41 em 4 classes" in body["note"]
+        # 0.41 is above the 0.25 of a one-class prediction: not what happened.
+        assert "uma classe só" not in body["note"]
+        assert "0.25" not in body["note"]
+
+    def test_swin_collapsed(self, client: TestClient) -> None:
+        body = client.post(
+            "/api/model/defaults", json={"architecture": "swin_t"}
+        ).json()
+
+        assert body["collapse_evidence"]["outcome"] == "collapse"
+        assert "previu uma classe só" in body["note"]
+        assert "acurácia 0.25 em 4 classes" in body["note"]
+
+    def test_convnext_tiny_was_measured_in_adr_100(self, client: TestClient) -> None:
+        # ADR-100's table has convnext_tiny at 0.25 with Adam 1e-3 (collapse).
+        body = client.post(
+            "/api/model/defaults", json={"architecture": "convnext_tiny"}
+        ).json()
+
+        assert body["collapse_evidence"] == {
+            "measured_on": "convnext_tiny",
+            "accuracy": 0.25,
+            "outcome": "collapse",
+        }
+        assert "acurácia 0.25 em 4 classes" in body["note"]
+
+    def test_a_family_never_measured_quotes_no_number(self, client: TestClient) -> None:
+        # maxvit gets the attention families' remedy but was never run.
+        body = client.post(
+            "/api/model/defaults", json={"architecture": "maxvit_t"}
+        ).json()
+
+        assert body["collapse_prone"] is True
+        assert body["collapse_evidence"] is None
+        # The only numbers are the settings (1e-3, the suggested 0.0001), never
+        # an accuracy or a class count.
+        assert body["note"] == (
+            "maxvit_t: Adam a 1e-3 não foi medido para esta família; sugerimos "
+            "adamw a 0.0001, o mesmo das famílias de atenção medidas."
+        )
+
+    def test_an_architecture_that_is_not_collapse_prone_has_no_evidence(
+        self, client: TestClient
+    ) -> None:
+        body = client.post(
+            "/api/model/defaults", json={"architecture": "resnet50"}
+        ).json()
+
+        assert body["collapse_prone"] is False
+        assert body["collapse_evidence"] is None
+        assert body["note"] is None
+
     def test_the_size_follows_the_images(
         self, tmp_path: Path, client: TestClient
     ) -> None:

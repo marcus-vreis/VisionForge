@@ -656,12 +656,26 @@ class ModelDefaultsRequest(BaseModel):
     pretrained: bool = True
 
 
+class CollapseEvidenceResponse(BaseModel):
+    """What was measured for an architecture's family at Adam 1e-3 (ADR-099/100).
+
+    ``measured_on`` is the one model that was actually run; the family's other
+    members share the suggestion but not the measurement.
+    """
+
+    measured_on: str
+    accuracy: float
+    outcome: Literal["collapse", "fails_to_learn"]
+
+
 class ModelDefaultsResponse(BaseModel):
     """Starting points measured for this architecture (ADR-099/100).
 
-    ``collapse_prone`` marks the pairs that were watched to predict a single
-    class at the previous default, which is what makes this worth surfacing
-    rather than quietly applying.
+    ``collapse_prone`` marks the architectures where Adam at 1e-3 is expected to
+    fail, which is what makes this worth surfacing rather than quietly applying.
+    ``collapse_evidence`` is the measurement behind that, and is ``None`` when
+    the family was never run: the flag then rests on its family's remedy, not on
+    a number, and the interface must not quote one.
     """
 
     architecture: str
@@ -670,6 +684,7 @@ class ModelDefaultsResponse(BaseModel):
     image_size: int | None = None
     dataset_median_side: int | None = None
     collapse_prone: bool = False
+    collapse_evidence: CollapseEvidenceResponse | None = None
     note: str | None = None
 
 

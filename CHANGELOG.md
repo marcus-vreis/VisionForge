@@ -42,6 +42,21 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Fixed
 
+- **A nota de colapso só cita o que foi medido.** Ao escolher `vgg11`,
+  `vit_l_16` ou `maxvit_t`, o formulário dizia "prevê uma classe só: medimos 0.25
+  de acurácia em 4 classes" para todas as famílias com a sugestão de 1e-4 (VGG,
+  AlexNet, ViT, Swin, ConvNeXt e MaxViT), como se cada modelo tivesse sido
+  medido. Foi medido um modelo por família, com Adam a 1e-3: `vgg16` e `alexnet` (0.25, uma classe só),
+  `swin_t` e `convnext_tiny` (0.25, uma classe só) e `vit_b_16`, que não colapsa
+  mas também não aprende (0.41); o `maxvit` nunca foi medido
+  ([ADR-099](docs/dev/DECISIONS.md), [ADR-100](docs/dev/DECISIONS.md)). A nota
+  agora nomeia o modelo medido, diz quando o modelo escolhido é só da mesma
+  família ("este modelo não foi medido"), diz "não aprendeu" para o ViT em vez de
+  "uma classe só" e, para o `maxvit`, não cita acurácia nenhuma. A sugestão de
+  AdamW/Adam a 1e-4 continua a mesma. O servidor passa a devolver o que foi
+  medido em `collapse_evidence` (`measured_on`, `accuracy`, `outcome`); uma
+  resposta sem esse campo, de um servidor mais antigo, cai na redação "não
+  medido" em vez de imprimir um número que não veio.
 - **O botão de parar não promete mais o que o servidor não cumpre.** Parar uma
   validação cruzada (K-fold), uma comparação de modelos, réplicas, o sweep de
   uma tarefa que não é classificação ou uma tarefa própria respondia "ok" e o
