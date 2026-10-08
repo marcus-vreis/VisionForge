@@ -143,7 +143,7 @@ def replicates_to_latex(report: dict[str, Any], *, experiment: str = "") -> str:
         header=[
             "Metric",
             "Mean",
-            "SD",
+            r"SD ($n-1$)",
             r"95\% CI (t)",
             r"95\% CI (bootstrap)",
         ],
@@ -240,7 +240,7 @@ def cv_to_latex(report: dict[str, Any], *, experiment: str = "") -> str:
     if aggregate:
         rows.append(
             [
-                r"\textbf{Mean $\pm$ SD}",
+                r"\textbf{Mean $\pm$ SD ($n-1$)}",
                 *[
                     f"{_num(aggregate[name].get('mean'))} $\\pm$ "
                     f"{_num(aggregate[name].get('std'))}"

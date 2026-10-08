@@ -4043,7 +4043,12 @@ and dashes, and the caption counts the folds the mean is over ("1 of 5 folds
 finished (1 stopped, 3 not run)"). The replicates note lists only the seeds
 that finished, and how many were requested; a stopped sweep's note says how
 many of the planned trials ran, which needs `planned_trials` in the sweep
-report (`total_trials` counts the trials that ran).
+report (`total_trials` counts the trials that ran). The SD label reads
+"SD ($n-1$)", since it is the sample SD. The other exports follow the same
+rule: the standalone `{kind}_ranking.csv` keeps only finished units, as the
+classification `ranking.csv` always did (ranked for comparisons and sweeps),
+and the Markdown model card adds "Stopped: yes (2 of 5 epochs)" -- or folds,
+or the PatchCore phase -- when the run-level `stopped` is true.
 
 **A stopped job ends like a completed one, with the counts actually done.** It
 emits its normal `end`, writes its summary (and, for classification K-fold, its

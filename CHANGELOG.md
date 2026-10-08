@@ -133,13 +133,17 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
   todo desvio gravado agora vem com `std_ddof: 1`, para distinguir das
   execuções antigas, que dividiam por n, quando duas são comparadas
   ([ADR-111](docs/dev/DECISIONS.md)).
-- **As tabelas LaTeX de uma execução parada dizem o que rodou.** A tabela da
-  validação cruzada mostrava a métrica de uma dobra cortada no meio como se
-  fosse uma dobra normal, sob o título "5-fold"; agora a dobra que não terminou
-  aparece com o estado ("parada" ou "falhou", em inglês na tabela) e traços, e o
-  título conta quantas dobras entraram na média. A tabela das réplicas lista só
-  as sementes que terminaram, e a da varredura diz quantas tentativas de quantas
-  planejadas rodaram ([ADR-111](docs/dev/DECISIONS.md)).
+- **Os arquivos exportados de uma execução parada dizem o que rodou.** A tabela
+  LaTeX da validação cruzada mostrava a métrica de uma dobra cortada no meio
+  como se fosse uma dobra normal, sob o título "5-fold"; agora a dobra que não
+  terminou aparece com o estado ("parada" ou "falhou", em inglês na tabela) e
+  traços, e o título conta quantas dobras entraram na média. A tabela das
+  réplicas lista só as sementes que terminaram, a da varredura diz quantas
+  tentativas de quantas planejadas rodaram, e o desvio aparece como
+  "SD ($n-1$)", o amostral. O CSV de ranking das outras tarefas, como o da
+  classificação, traz só as unidades que terminaram (com posição, na comparação
+  e na varredura), e o cartão do modelo em Markdown diz quando o run foi parado
+  e até onde chegou ([ADR-111](docs/dev/DECISIONS.md)).
 - **Parar antes da primeira época não quebra mais o run.** Um treino parado
   enquanto ainda carregava os dados terminava com erro, porque o bloco tentava
   carregar um checkpoint que nunca foi gravado; em segmentação e nas tarefas

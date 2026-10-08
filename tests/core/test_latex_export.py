@@ -155,7 +155,7 @@ class TestCvTable:
         tex = cv_to_latex(self._report())
         assert "1 & 0.7100" in tex
         assert "2 & 0.7500" in tex
-        assert r"\textbf{Mean $\pm$ SD}" in tex
+        assert r"\textbf{Mean $\pm$ SD ($n-1$)}" in tex
         assert r"0.7300 $\pm$ 0.0200" in tex
 
     def test_folds_are_numbered_from_one_for_the_reader(self) -> None:

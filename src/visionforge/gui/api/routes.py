@@ -1701,6 +1701,24 @@ async def serve_artifact(file_path: str) -> FileResponse:
 # ── private helpers ──────────────────────────────────────────────────────────
 
 
+def _stopped_extent(data: dict[str, Any]) -> str:
+    """How far a stopped run got, in the unit that run counts (ADR-111)."""
+    metrics: dict[str, Any] = data.get("metrics") or {}
+    config: dict[str, Any] = data.get("config") or {}
+    cv = metrics.get("cv_aggregate")
+    if isinstance(cv, dict):
+        return f"{cv.get('n_folds_ok', '?')} of {cv.get('n_folds', '?')} folds finished"
+    if (config.get("model") or {}).get("name") == "patchcore":
+        # PatchCore has phases, not epochs: one fit counts the bank as built.
+        return (
+            "memory bank built, scoring skipped"
+            if metrics.get("total_epochs")
+            else "before the memory bank was built"
+        )
+    planned = (config.get("training") or {}).get("epochs", "?")
+    return f"{metrics.get('total_epochs', '?')} of {planned} epochs"
+
+
 def _render_run_markdown(run_dir: Path, data: dict[str, Any]) -> str:
     """Format a run.json into a paper-ready model card."""
     lines: list[str] = []
@@ -1714,6 +1732,8 @@ def _render_run_markdown(run_dir: Path, data: dict[str, Any]) -> str:
     lines.append(f"- **Run ID:** `{data.get('id', run_dir.name)}`")
     lines.append(f"- **Timestamp:** {data.get('timestamp', '?')}")
     lines.append(f"- **Status:** {data.get('status', '?')}")
+    if data.get("stopped"):
+        lines.append(f"- **Stopped:** yes ({_stopped_extent(data)})")
     if data.get("device_used"):
         lines.append(f"- **Device used:** `{data['device_used']}`")
     lines.append(f"- **Run directory:** `{data.get('run_dir', run_dir)}`")
@@ -4495,7 +4515,14 @@ def _write_advanced_summary(
     )
 
     rows = report.get("trials") or report.get("fold_results") or []
-    flat = [_flatten_trial(r) for r in rows]
+    # Like the classification comparison's ranking.csv: only units that ran to
+    # the end, so a cut unit's half-trained numbers never sit among finished
+    # ones (ADR-111). The JSON summary above keeps every unit with its status.
+    finished = [r for r in rows if r.get("status", "success") == "success"]
+    flat = [_flatten_trial(r) for r in finished]
+    if kind in ("comparison", "sweep"):
+        # Already sorted by the metric, best first.
+        flat = [{"rank": i, **row} for i, row in enumerate(flat, start=1)]
     if flat:
         fieldnames = list(dict.fromkeys(k for row in flat for k in row))
         with (out_dir / f"{kind}_ranking.csv").open(
