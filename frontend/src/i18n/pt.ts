@@ -610,6 +610,11 @@ export const pt = {
     cv: {
       title: (ok: number, total: number, failed: number, stopped: number) =>
         `Cross-validation · ${ok}/${total} folds ok${failed > 0 ? ` · ${failed} ${failed === 1 ? "falhou" : "falharam"}` : ""}${stopped > 0 ? ` · ${stopped} interrompido${stopped === 1 ? "" : "s"}` : ""}`,
+      // Under the means: which divisor the std used. Runs from before ADR-111 divide by n.
+      stdNote: (ddof: 0 | 1): string =>
+        ddof === 1
+          ? "desvio amostral (divide por n−1)"
+          : "desvio populacional (divide por n) — runs antigos; os novos usam n−1, e os dois não se comparam",
       meanAccuracy: "Acurácia média ± std",
       meanF1: "F1 média ± std",
       fold: "Fold",
@@ -821,6 +826,8 @@ export const pt = {
       title: (ok: number, total: number, metric: string, stopped: number) =>
         `// k-fold · ${ok}/${total} folds ok${stopped > 0 ? ` · ${stopped} interrompido${stopped === 1 ? "" : "s"}` : ""} · destaque ${metric}`,
       meanStd: "média ± desvio sobre os folds",
+      // How many folds finished, beside the figure: a stopped K-fold may have one.
+      sample: (n: number) => `n=${n}`,
       fold: "fold",
       trainVal: "treino/val",
     },
@@ -1677,11 +1684,9 @@ export const pt = {
       bankKept
         ? "interrompido · banco de memória salvo, sem pontuação (pontue depois em “+ testar”)"
         : "interrompido durante a extração · nada foi guardado",
-    stopTooLate:
-      "> a parada chegou na última época: o treino terminou normalmente",
-    // The stop landed before the first fold/trial/model/replicate finished: nothing to report.
-    stoppedNoResult: "Nada terminou antes da parada",
-    stoppedNoResultLog: "interrompido · nada terminou antes da parada",
+    // The server says the run was not cut (`stopped: false`): the stop arrived too late
+    // to change anything, or the run had ended on its own.
+    stopTooLate: "> a parada não cortou nada: o treino terminou normalmente",
   },
   // Side-by-side comparison of two or more runs (components/CompareRunsPanel.tsx).
   compareRuns: {

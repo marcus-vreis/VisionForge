@@ -2,6 +2,7 @@ import { useState } from "react";
 import { artifactUrl, downloadRunMarkdown } from "../api/client";
 import { useT } from "../i18n/useT";
 import { metricCi } from "../lib/metric-ci";
+import { isCrossValidationReport } from "../lib/report-shape";
 import { STOPPED_COLOR, countUnits, unitState } from "../lib/unit-status";
 import type { MetricCI, RunResult } from "../types/run";
 import { Lightbox } from "./Lightbox";
@@ -376,14 +377,6 @@ interface FoldRecord {
   f1: number | null;
 }
 
-function isCrossValidationReport(report: Record<string, unknown>): boolean {
-  return (
-    Array.isArray(report["fold_results"]) &&
-    typeof report["mean_accuracy"] === "number" &&
-    typeof report["std_accuracy"] === "number"
-  );
-}
-
 /** Structured render for CrossValidationBlock.report().
  *
  * Beats the JSON dump on three axes: highlights mean ± std (the headline number
@@ -399,10 +392,11 @@ function CrossValidationReport({
 }) {
   const t = useT();
   const folds = (report["fold_results"] as FoldRecord[]) ?? [];
-  const meanAcc = report["mean_accuracy"] as number;
-  const stdAcc = report["std_accuracy"] as number;
-  const meanF1 = report["mean_f1"] as number;
-  const stdF1 = report["std_f1"] as number;
+  // Null when too few folds finished: no mean before one, no spread before two.
+  const meanAcc = report["mean_accuracy"] as number | null;
+  const stdAcc = report["std_accuracy"] as number | null;
+  const meanF1 = report["mean_f1"] as number | null;
+  const stdF1 = report["std_f1"] as number | null;
 
   const successful = folds.filter((f) => unitState(f.status) === "ok");
   const failed = countUnits(folds, "failed");
@@ -520,8 +514,8 @@ function AggregateCard({
   highlight,
 }: {
   label: string;
-  mean: number;
-  std: number;
+  mean: number | null;
+  std: number | null;
   accent: string;
   highlight?: boolean;
 }) {
@@ -556,7 +550,7 @@ function AggregateCard({
           color: highlight ? accent : "var(--vf-text)",
         }}
       >
-        {mean.toFixed(4)}
+        {formatMetric(mean)}
         <span
           style={{
             fontSize: 14,
@@ -565,7 +559,7 @@ function AggregateCard({
             fontWeight: 400,
           }}
         >
-          ± {std.toFixed(4)}
+          ± {formatMetric(std)}
         </span>
       </div>
     </div>
@@ -604,7 +598,7 @@ function TaskCvReport({
   const aggregate =
     (report["aggregate"] as Record<
       string,
-      { mean: number | null; std: number | null }
+      { mean: number | null; std: number | null; n?: number }
     >) ?? {};
   const metric = report["metric"] as string;
   const nFolds = report["n_folds"] as number;
@@ -643,6 +637,7 @@ function TaskCvReport({
           <span style={{ color: "var(--vf-text-dim)" }}> ± {formatMetric(headline.std)}</span>
           <span style={{ fontSize: 11, color: "var(--vf-text-muted)", marginLeft: 10 }}>
             {t.resultsView.taskCv.meanStd}
+            {typeof headline.n === "number" && ` · ${t.resultsView.taskCv.sample(headline.n)}`}
           </span>
         </div>
       )}
@@ -1443,7 +1438,9 @@ function GridSearchReport({
   accent: string;
 }) {
   const t = useT();
+  // Null when a stop landed before any trial finished (ADR-111).
   const best = (report["best_trial"] ?? {}) as Record<string, unknown>;
+  const hasBest = report["best_trial"] !== null && report["best_trial"] !== undefined;
   const total = report["total_trials"] as number;
   const successful = report["successful_trials"] as number;
 
@@ -1491,10 +1488,11 @@ function GridSearchReport({
         {t.resultsView.gridSearch.title(
           successful,
           total,
-          String(best["trial_index"] ?? "?"),
+          hasBest ? String(best["trial_index"] ?? "?") : "—",
         )}
       </div>
 
+      {hasBest && (
       <div
         style={{
           padding: 16,
@@ -1554,6 +1552,7 @@ function GridSearchReport({
           </div>
         )}
       </div>
+      )}
 
       <div
         style={{

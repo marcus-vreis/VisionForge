@@ -577,6 +577,10 @@ export const en: Dict = {
     cv: {
       title: (ok: number, total: number, failed: number, stopped: number) =>
         `Cross-validation · ${ok}/${total} folds ok${failed > 0 ? ` · ${failed} failed` : ""}${stopped > 0 ? ` · ${stopped} stopped` : ""}`,
+      stdNote: (ddof: 0 | 1): string =>
+        ddof === 1
+          ? "sample std (divides by n−1)"
+          : "population std (divides by n) — older runs; newer ones use n−1, and the two are not comparable",
       meanAccuracy: "Mean accuracy ± std",
       meanF1: "Mean F1 ± std",
       fold: "Fold",
@@ -767,6 +771,7 @@ export const en: Dict = {
       title: (ok: number, total: number, metric: string, stopped: number) =>
         `// k-fold · ${ok}/${total} folds ok${stopped > 0 ? ` · ${stopped} stopped` : ""} · headline metric: ${metric}`,
       meanStd: "mean ± std across folds",
+      sample: (n: number) => `n=${n}`,
       fold: "fold",
       trainVal: "train/val",
     },
@@ -1495,10 +1500,7 @@ export const en: Dict = {
       bankKept
         ? "stopped · memory bank saved, not scored (score it later with “+ test”)"
         : "stopped during extraction · nothing was kept",
-    stopTooLate:
-      "> the stop arrived during the last epoch: the run finished normally",
-    stoppedNoResult: "Nothing finished before the stop",
-    stoppedNoResultLog: "stopped · nothing finished before the stop",
+    stopTooLate: "> the stop cut nothing: the run finished normally",
   },
   compareRuns: {
     back: "← history",

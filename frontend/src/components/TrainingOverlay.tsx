@@ -7,12 +7,10 @@ import {
   epochLoop,
   hasEnded,
   isCustomJob,
-  plainReason,
   stopMode,
   stopOutcome,
   stopSummary,
   stoppedFraction,
-  stoppedWithoutResult,
 } from "../lib/run-control";
 import { stopLogLine } from "../lib/stop-log";
 import { phaseName } from "../lib/training-phase";
@@ -39,9 +37,12 @@ interface TrainingOverlayProps {
   /** The run's result report once it is fetched. A multi-unit job names the unit
    *  the server cut in it, which settles whether the run was stopped. */
   report?: Record<string, unknown> | null;
-  /** Called once the server has accepted a stop for `runId`, so the page can
-   *  tell a run that ended because it was stopped from one that broke. */
-  onStopRequested?: (runId: string) => void;
+  /** The result's own `stopped` marker: true when a stop cut the run, false when
+   *  it cut nothing. Absent until the result is fetched, and from older servers. */
+  stopped?: boolean | null;
+  /** The run was submitted from a researcher's own task. Its sweeps and replicate
+   *  sets are queued under a plain label, so the queue cannot say. */
+  customRun?: boolean;
   onClose: () => void;
   onViewResults?: () => void;
 }
@@ -72,7 +73,8 @@ export function TrainingOverlay({
   blockKind,
   queueSize,
   report = null,
-  onStopRequested,
+  stopped = null,
+  customRun = false,
   onClose,
   onViewResults,
 }: TrainingOverlayProps) {
@@ -309,7 +311,7 @@ export function TrainingOverlay({
   const stopPoint = mode === "none" || mode === "unconfirmed" ? null : mode;
   // A researcher's own task is never resumable, and one that owns its loop has no
   // epoch to cut a trial at: what the confirmation promises differs.
-  const customJob = isCustomJob(job, blockKind ?? "classification");
+  const customJob = isCustomJob(job, blockKind ?? "classification", customRun);
 
   const [stop, setStop] = useState<StopState>({
     runId: null,
@@ -334,7 +336,6 @@ export function TrainingOverlay({
     try {
       await cancelQueuedRun(runId);
       setStop({ runId, phase: "requested", error: null });
-      onStopRequested?.(runId);
     } catch (e) {
       setStop({
         runId,
@@ -363,23 +364,17 @@ export function TrainingOverlay({
     ended: hasEnded(progressEvents) || isFinished,
     events: progressEvents,
     report,
+    stopped,
   });
   // What the stopped run has to say for itself: the epoch it reached, the units
   // it finished, or what PatchCore kept.
   const summary = stopSummary(mode, progressEvents, report, queueSize);
-  // Stopped before anything finished: the server fails the job with "nothing to
-  // report", which is the stop's outcome and not a failure of the run.
-  const noResult = stoppedWithoutResult({
-    requested: stopPhase === "requested",
-    failed: hasFailed,
-    events: progressEvents,
-  });
   // Read by the terminal-state effect below through a ref: that effect appends
   // its line once, and a dependency that changed under its pending timer would
   // cancel the line without ever re-running it.
-  const stopSummaryRef = useRef({ outcome: stopOutcomeNow, summary, noResult });
+  const stopSummaryRef = useRef({ outcome: stopOutcomeNow, summary });
   useEffect(() => {
-    stopSummaryRef.current = { outcome: stopOutcomeNow, summary, noResult };
+    stopSummaryRef.current = { outcome: stopOutcomeNow, summary };
   });
 
   // The run is marked completed a moment before its result is fetched. For a
@@ -415,14 +410,11 @@ export function TrainingOverlay({
     if (hasFailed) {
       handledStatusRef.current = status.status;
       const error = status.error;
-      const { noResult: stoppedEmpty } = stopSummaryRef.current;
       const timer = setTimeout(() => {
         setLogs((prev) => [
           ...prev.slice(-24),
-          stoppedEmpty
-            ? (d) => `$ ${d.trainingOverlay.stoppedNoResultLog}`
-            : (d) =>
-                `$ ${d.trainingOverlay.trainingFailed} · ${error ?? d.trainingOverlay.logUnknownError}`,
+          (d) =>
+            `$ ${d.trainingOverlay.trainingFailed} · ${error ?? d.trainingOverlay.logUnknownError}`,
         ]);
       }, 0);
       return () => clearTimeout(timer);
@@ -440,13 +432,12 @@ export function TrainingOverlay({
   // A run that was stopped did not get to 100%: show how far it did (the units
   // it finished of those planned, the epoch it reached of those configured, or the
   // phase it was in), in a colour of its own.
-  const wasStopped = (isCompleted && stopOutcomeNow === "stopped") || noResult;
-  // Nothing finished when the stop landed in the first unit; otherwise the units
-  // (or the epoch of a single run) that did, else what the stream showed. With
-  // none of them known the figure is left out rather than shown as 0%.
-  const stopShare = noResult
-    ? 0
-    : (stoppedFraction(mode, summary) ?? (hasRealProgress ? realProgress : null));
+  const wasStopped = isCompleted && stopOutcomeNow === "stopped";
+  // The units (or the epoch of a single run) that finished — none, when the stop
+  // landed in the first unit — else what the stream showed. With none of them
+  // known the figure is left out rather than shown as 0%.
+  const stopShare =
+    stoppedFraction(mode, summary) ?? (hasRealProgress ? realProgress : null);
   const shareUnknown = wasStopped && stopShare === null;
   const progressFraction = wasStopped
     ? Math.min(1, stopShare ?? 0)
@@ -517,9 +508,7 @@ export function TrainingOverlay({
             >
               {isFinished
                 ? hasFailed
-                  ? noResult
-                    ? t.trainingOverlay.stopped
-                    : t.trainingOverlay.trainingFailed
+                  ? t.trainingOverlay.trainingFailed
                   : stopOutcomeNow === "stopped"
                     ? t.trainingOverlay.stopped
                     : t.trainingOverlay.trainingComplete
@@ -560,7 +549,7 @@ export function TrainingOverlay({
               fontFamily: "var(--font-mono)",
               fontSize: 28,
               fontWeight: 600,
-              color: hasFailed && !noResult ? "oklch(0.74 0.18 22)" : barColor,
+              color: hasFailed ? "oklch(0.74 0.18 22)" : barColor,
             }}
           >
             {shareUnknown ? "—" : `${pct}%`}
@@ -581,7 +570,7 @@ export function TrainingOverlay({
             style={{
               width: `${pct}%`,
               height: "100%",
-              background: hasFailed && !noResult
+              background: hasFailed
                 ? `linear-gradient(90deg, oklch(0.74 0.18 22), oklch(0.74 0.18 22 / 0.6))`
                 : `linear-gradient(90deg, ${barColor}, ${barColor}aa)`,
               boxShadow: `0 0 12px ${barColor}`,
@@ -596,16 +585,12 @@ export function TrainingOverlay({
             style={{
               padding: "14px 16px",
               marginBottom: 14,
-              background: noResult
-                ? "oklch(0.84 0.12 85 / 0.10)"
-                : "oklch(0.704 0.191 22.216 / 0.10)",
-              border: noResult
-                ? "1px solid oklch(0.84 0.12 85 / 0.45)"
-                : "1px solid oklch(0.704 0.191 22.216 / 0.45)",
+              background: "oklch(0.704 0.191 22.216 / 0.10)",
+              border: "1px solid oklch(0.704 0.191 22.216 / 0.45)",
               borderRadius: 12,
               fontFamily: "var(--font-mono)",
               fontSize: 12.5,
-              color: noResult ? "var(--vf-text-dim)" : "oklch(0.88 0.14 22)",
+              color: "oklch(0.88 0.14 22)",
               whiteSpace: "pre-wrap",
               wordBreak: "break-word",
               lineHeight: 1.55,
@@ -618,19 +603,13 @@ export function TrainingOverlay({
                 fontSize: 10,
                 letterSpacing: "0.18em",
                 textTransform: "uppercase",
-                color: noResult ? STOPPED_COLOR : "oklch(0.7 0.18 22)",
+                color: "oklch(0.7 0.18 22)",
                 marginBottom: 6,
               }}
             >
-              {noResult
-                ? t.trainingOverlay.stoppedNoResult
-                : t.trainingOverlay.errorDetail}
+              {t.trainingOverlay.errorDetail}
             </div>
-            {status.error
-              ? noResult
-                ? plainReason(status.error)
-                : status.error
-              : t.trainingOverlay.unknownError}
+            {status.error ?? t.trainingOverlay.unknownError}
           </div>
         )}
 

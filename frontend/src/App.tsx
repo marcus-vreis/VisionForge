@@ -119,10 +119,10 @@ export default function App() {
   // follows): after a reload the running job has no training sheet, and the
   // queue button is the way back to it.
   const [seededRunning, setSeededRunning] = useState(false);
-  // The run the researcher asked to stop. If it then ends "failed" because
-  // nothing had finished to report, that is the stop's outcome, not an error to
-  // put in red under the form.
-  const [stoppedRunId, setStoppedRunId] = useState<string | null>(null);
+  // The current run was submitted from a researcher's own task. What a stop
+  // promises differs for it, and its sweeps and replicate sets are queued under a
+  // plain label, so the queue entry cannot say.
+  const [customRun, setCustomRun] = useState(false);
   const [overlayVisible, setOverlayVisible] = useState(false);
   const [resultsVisible, setResultsVisible] = useState(false);
   const [schema, setSchema] = useState<JsonSchema | null>(null);
@@ -278,6 +278,13 @@ export default function App() {
     [activeKey],
   );
 
+  // Every run starts fresh, and remembers whether it came from a researcher's own
+  // task (`startCustom`): the training sheet words its stop confirmation for it.
+  const startRun = (custom: boolean) => {
+    reset();
+    setCustomRun(custom);
+  };
+
   // A custom task shares the whole single-run surface (overlay, results,
   // history); only the submit URL differs (ADR-058).
   const startCustom = async (
@@ -287,7 +294,7 @@ export default function App() {
     queue?: number,
     run?: (p: Record<string, unknown>) => Promise<RunResponse>,
   ) => {
-    reset();
+    startRun(true);
     setResultsVisible(false);
     setOverlayVisible(true);
     setPipelineSummary([]);
@@ -317,7 +324,7 @@ export default function App() {
       return;
     }
     if (activeKey === "detection") {
-      reset();
+      startRun(false);
       setResultsVisible(false);
       setOverlayVisible(true);
       setPipelineSummary([]);
@@ -333,7 +340,7 @@ export default function App() {
       return;
     }
     if (activeKey === "regression") {
-      reset();
+      startRun(false);
       setResultsVisible(false);
       setOverlayVisible(true);
       setPipelineSummary([]);
@@ -347,7 +354,7 @@ export default function App() {
       return;
     }
     if (activeKey === "segmentation") {
-      reset();
+      startRun(false);
       setResultsVisible(false);
       setOverlayVisible(true);
       setPipelineSummary([]);
@@ -361,7 +368,7 @@ export default function App() {
       return;
     }
     if (activeKey === "anomaly") {
-      reset();
+      startRun(false);
       setResultsVisible(false);
       setOverlayVisible(true);
       setPipelineSummary([]);
@@ -375,7 +382,7 @@ export default function App() {
       return;
     }
     if (activeKey !== "classification") return;
-    reset();
+    startRun(false);
     setResultsVisible(false);
     setOverlayVisible(true);
     // Inject the live device selection so the backend actually honors it
@@ -444,7 +451,7 @@ export default function App() {
     task: "regression" | "segmentation",
     payload: CvPayload,
   ) => {
-    reset();
+    startRun(false);
     setResultsVisible(false);
     setOverlayVisible(true);
     setPipelineSummary([]);
@@ -463,7 +470,7 @@ export default function App() {
     task: AdvancedTask,
     payload: ReplicatesPayload,
   ) => {
-    reset();
+    startRun(false);
     setResultsVisible(false);
     setOverlayVisible(true);
     setPipelineSummary([]);
@@ -482,7 +489,7 @@ export default function App() {
     task: AdvancedTask,
     payload: SweepPayload,
   ) => {
-    reset();
+    startRun(false);
     setResultsVisible(false);
     setOverlayVisible(true);
     setPipelineSummary([]);
@@ -652,9 +659,7 @@ export default function App() {
         )}
         </ContentBoundary>
 
-        {error &&
-          !showOverlay &&
-          !(status.run_id !== null && status.run_id === stoppedRunId) && (
+        {error && !showOverlay && (
           <div
             style={{
               marginTop: 16,
@@ -732,7 +737,8 @@ export default function App() {
           blockKind={blockKind}
           queueSize={queueSize}
           report={result?.report ?? null}
-          onStopRequested={setStoppedRunId}
+          stopped={result?.stopped ?? null}
+          customRun={customRun}
           onClose={() => setOverlayVisible(false)}
           onViewResults={() => {
             setOverlayVisible(false);

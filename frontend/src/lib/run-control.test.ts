@@ -13,11 +13,9 @@ import {
   serverRunning,
   showQueueButton,
   stopMode,
-  plainReason,
   stopOutcome,
   stopSummary,
   stoppedFraction,
-  stoppedWithoutResult,
   unitCounts,
   type LocalRun,
 } from "./run-control";
@@ -528,42 +526,70 @@ describe("stopOutcome", () => {
   });
 });
 
-describe("stoppedWithoutResult", () => {
-  // A stop that lands in the first fold / trial / replicate / model leaves nothing
-  // to report: the server ends the stream normally, then fails the job with a
-  // message saying exactly that ("Parado antes de concluir a primeira dobra…").
-  const ended = [trialStart(0, 3), epoch(1, 3, { index: 0, of: 3 }), end(0, 1)];
+describe("stopOutcome with the run's own `stopped` marker", () => {
+  // The server says whether a stop cut the run (ADR-111): a field on the result,
+  // not something to read off the stream or off a message.
+  const complete = [epoch(4, 4), end(4)];
 
-  it("recognises a stop that left nothing to report", () => {
-    expect(stoppedWithoutResult({ requested: true, failed: true, events: ended })).toBe(true);
-  });
-
-  it("is not a stop when the researcher asked for none", () => {
-    expect(stoppedWithoutResult({ requested: false, failed: true, events: ended })).toBe(false);
-  });
-
-  it("is not a stop when the run did not fail", () => {
-    expect(stoppedWithoutResult({ requested: true, failed: false, events: ended })).toBe(false);
-  });
-
-  it("stays a failure when the stream never reached its end", () => {
-    // A crash mid-run is not a stop that found nothing to report.
+  it("is stopped when the server says so, whatever the stream looks like", () => {
     expect(
-      stoppedWithoutResult({ requested: true, failed: true, events: [start(5), epoch(1, 5)] }),
-    ).toBe(false);
+      stopOutcome({ requested: true, ended: true, events: complete, stopped: true }),
+    ).toBe("stopped");
+    expect(stopOutcome({ requested: true, ended: true, events: [], stopped: true })).toBe(
+      "stopped",
+    );
   });
-});
 
-describe("plainReason", () => {
-  it("drops the exception class the server puts in front of its sentence", () => {
+  it("is stopped for a job stopped before any unit finished", () => {
+    // The server now ends such a job as completed, with no mean and `stopped: true`.
     expect(
-      plainReason("RuntimeError: Parado antes de concluir a primeira dobra: não há resultado."),
-    ).toBe("Parado antes de concluir a primeira dobra: não há resultado.");
+      stopOutcome({
+        requested: true,
+        ended: true,
+        events: [trialStart(0, 3), epoch(1, 3, { index: 0, of: 3 }), end(0, 1)],
+        report: { fold_results: [], mean_accuracy: null, stopped: true },
+        stopped: true,
+      }),
+    ).toBe("stopped");
   });
 
-  it("leaves a message that carries none alone", () => {
-    expect(plainReason("Sem classe no dataset.")).toBe("Sem classe no dataset.");
-    expect(plainReason("")).toBe("");
+  it("is a stop that cut nothing when the server says it did not", () => {
+    // Not the stream's call: a run that ended short on its own (patience) is not
+    // a stopped run either, and the server knows which it was.
+    expect(
+      stopOutcome({
+        requested: true,
+        ended: true,
+        events: [epoch(3, 10), end(3)],
+        stopped: false,
+      }),
+    ).toBe("too-late");
+  });
+
+  it("reads the stream only when the server's marker is absent (an older server)", () => {
+    expect(
+      stopOutcome({ requested: true, ended: true, events: [start(20), end(5)] }),
+    ).toBe("stopped");
+    expect(
+      stopOutcome({
+        requested: true,
+        ended: true,
+        events: [start(20), end(5)],
+        stopped: undefined,
+      }),
+    ).toBe("stopped");
+    expect(
+      stopOutcome({ requested: true, ended: true, events: complete, stopped: null }),
+    ).toBe("too-late");
+  });
+
+  it("never reports a stop nobody asked for, or one still closing", () => {
+    expect(
+      stopOutcome({ requested: false, ended: true, events: complete, stopped: true }),
+    ).toBe("none");
+    expect(
+      stopOutcome({ requested: true, ended: false, events: [epoch(1, 4)], stopped: true }),
+    ).toBe("stopping");
   });
 });
 
@@ -596,7 +622,33 @@ describe("unitCounts", () => {
     expect(unitCounts({})).toBeNull();
   });
 
-  it("reads the classification grid search, which reports only totals", () => {
+  it("reads the classification grid search's own counts", () => {
+    expect(
+      unitCounts({
+        best_trial: {},
+        total_trials: 3,
+        successful_trials: 1,
+        failed_count: 1,
+        stopped_count: 1,
+        stopped: true,
+      }),
+    ).toEqual({ finished: 1, stopped: 1, failed: 1, total: 3 });
+  });
+
+  it("reads a grid search stopped before any trial finished: no best trial", () => {
+    expect(
+      unitCounts({
+        best_trial: null,
+        total_trials: 1,
+        successful_trials: 0,
+        failed_count: 0,
+        stopped_count: 1,
+        stopped: true,
+      }),
+    ).toEqual({ finished: 0, stopped: 1, failed: 0, total: 1 });
+  });
+
+  it("does not guess how the other trials ended on a report from before the counts", () => {
     // The trials that finished are known; whether the others failed or were cut is not.
     expect(
       unitCounts({ best_trial: {}, total_trials: 2, successful_trials: 1 }),
@@ -763,14 +815,22 @@ describe("awaitingReport", () => {
 });
 
 describe("isCustomJob", () => {
-  it("reads the queue entry when there is one", () => {
-    expect(isCustomJob({ task: "custom:counting" }, "grid_search")).toBe(true);
-    expect(isCustomJob({ task: "classification" }, "custom")).toBe(false);
+  it("trusts where the run came from over the queue entry", () => {
+    // A custom task's sweep or replicate set is queued under a plain label, with
+    // no `custom:` prefix, and the block recorded for it is a search.
+    expect(isCustomJob({ task: "counting" }, "grid_search", true)).toBe(true);
+    expect(isCustomJob({ task: "counting" }, "replicates", true)).toBe(true);
+    expect(isCustomJob(null, "random_search", true)).toBe(true);
+  });
+
+  it("reads the queue entry when the run did not come from a custom task", () => {
+    expect(isCustomJob({ task: "custom:counting" }, "grid_search", false)).toBe(true);
+    expect(isCustomJob({ task: "classification" }, "custom", false)).toBe(false);
   });
 
   it("falls back to the block the sheet recorded", () => {
-    expect(isCustomJob(null, "custom")).toBe(true);
-    expect(isCustomJob(null, "classification")).toBe(false);
+    expect(isCustomJob(null, "custom", false)).toBe(true);
+    expect(isCustomJob(null, "classification", false)).toBe(false);
   });
 });
 
@@ -848,6 +908,12 @@ describe("stop wording", () => {
     expect(pt.trainingOverlay.stoppedPhaseLog(false)).toMatch(/nada/);
     expect(en.trainingOverlay.stoppedPhaseLog(true)).toMatch(/memory bank/);
     expect(en.trainingOverlay.stoppedPhaseLog(false)).toMatch(/nothing/);
+  });
+
+  it("says a stop that cut nothing cut nothing, not that it came in the last epoch", () => {
+    // The server's marker also says false for a run that finished early on its own.
+    expect(pt.trainingOverlay.stopTooLate).not.toMatch(/última época/);
+    expect(en.trainingOverlay.stopTooLate).not.toMatch(/last epoch/);
   });
 
   it("speaks of the run, not of its kind, in the right gender", () => {

@@ -62,6 +62,12 @@ export interface RunResult {
    *  ADR-074 and on tasks that keep no per-sample predictions. */
   metric_cis?: Record<string, MetricCI>;
   report: Record<string, unknown>;
+  /** True when a user stop cut this run (ADR-111): a single run whose epoch loop
+   *  broke on the stop, or a multi-unit job with a unit cut or units left unrun
+   *  — including one stopped before any unit finished, which ends `completed`
+   *  with no mean. Absent from servers older than that; an error during the stop
+   *  window is a failed run, never a stopped one. */
+  stopped?: boolean;
   artifacts: {
     model?: string;
     graphics?: string[];

@@ -361,12 +361,20 @@ export function unitCounts(
     const failed = typeof failedCount === "number" ? failedCount : 0;
     return { finished: Math.max(0, total - stopped - failed), stopped, failed, total };
   }
-  // The classification grid / random search reports only how many trials ran and
-  // how many succeeded: the others failed or were cut, and it does not say which.
+  // The classification grid / random search reports how many trials ran and how
+  // many succeeded — and, since ADR-111, how many failed and how many were cut. A
+  // report from before the counts leaves those two unknown, not zero.
   const trialsRan = report["total_trials"];
   const trialsOk = report["successful_trials"];
   if (typeof trialsRan === "number" && typeof trialsOk === "number") {
-    return { finished: trialsOk, stopped: null, failed: null, total: trialsRan };
+    const cut = report["stopped_count"];
+    const failedTrials = report["failed_count"];
+    return {
+      finished: trialsOk,
+      stopped: typeof cut === "number" ? cut : null,
+      failed: typeof failedTrials === "number" ? failedTrials : null,
+      total: trialsRan,
+    };
   }
   return null;
 }
@@ -384,19 +392,26 @@ export function unitCounts(
  */
 export type StopOutcome = "none" | "stopping" | "stopped" | "too-late" | "unknown";
 
-/** The outcome of a stop request. The explicit evidence comes first: a report
- * that names a stopped unit settles it, even when the stream looks complete (a
- * unit cut during its last epoch is still recorded as stopped). Only without it
- * is the stream read (`runEnding`). `report` is the result payload, which is not
- * there yet while the run is closing. */
+/** The outcome of a stop request.
+ *
+ * The server's own answer comes first: every result carries `stopped`, true when
+ * a stop cut the run and false when it cut nothing (a stop that landed in the
+ * last epoch, or a run that had finished on its own). Nothing is read off the
+ * stream or a message where that exists. Only a server that does not send it
+ * (`stopped` absent) falls back to what the report names — a unit marked stopped
+ * — and then to the stream (`runEnding`). `stopped` and `report` come from the
+ * result payload, which is not there yet while the run is closing. */
 export function stopOutcome(args: {
   requested: boolean;
   ended: boolean;
   events: readonly TrainingEvent[];
   report?: Record<string, unknown> | null;
+  stopped?: boolean | null;
 }): StopOutcome {
   if (!args.requested) return "none";
   if (!args.ended) return "stopping";
+  if (args.stopped === true) return "stopped";
+  if (args.stopped === false) return "too-late";
   const counts = unitCounts(args.report);
   if (counts !== null && counts.stopped !== null && counts.stopped > 0) {
     return "stopped";
@@ -409,27 +424,6 @@ export function stopOutcome(args: {
     default:
       return "unknown";
   }
-}
-
-/** A stop that landed before anything finished: nothing to report.
- *
- * A multi-unit job stopped in its first fold, trial, model or replicate has no
- * mean, ranking or best configuration to show, so the server ends the stream
- * normally and then fails the job with a message that says exactly that. It is
- * not a failure of the run: the researcher asked for the stop, and the stream
- * reached its end. A stream that never did is a crash and stays one. */
-export function stoppedWithoutResult(args: {
-  requested: boolean;
-  failed: boolean;
-  events: readonly TrainingEvent[];
-}): boolean {
-  return args.requested && args.failed && hasEnded(args.events);
-}
-
-/** The server's sentence without the exception class it puts in front
- *  (`RuntimeError: Parado antes…` reads as `Parado antes…`). */
-export function plainReason(error: string): string {
-  return error.replace(/^[A-Za-z]+(?:Error|Exception):\s*/, "");
 }
 
 /** What a stopped run has to say for itself, by the kind of stop it had. */
@@ -520,8 +514,18 @@ export function awaitingReport(args: {
   return args.requested && args.completed && (args.report === null || args.report === undefined);
 }
 
-/** Whether the running job is a researcher's own task: the queue entry says so;
- * without one, the block the sheet recorded at submission does. */
-export function isCustomJob(job: Pick<QueuedJobInfo, "task"> | null, blockKind: string): boolean {
+/** Whether the running job is a researcher's own task.
+ *
+ * `fromCustom` is what the page recorded when it submitted the run — the one
+ * thing that is always right: a custom task's sweep or replicate set is queued
+ * under a plain label, with no `custom:` prefix, and the block recorded for it
+ * is a search, so neither the queue entry nor the block can say. Without it, the
+ * queue entry does, and without one the block the sheet recorded. */
+export function isCustomJob(
+  job: Pick<QueuedJobInfo, "task"> | null,
+  blockKind: string,
+  fromCustom = false,
+): boolean {
+  if (fromCustom) return true;
   return job ? job.task.startsWith("custom:") : blockKind === "custom";
 }

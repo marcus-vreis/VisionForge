@@ -23,6 +23,7 @@ import { formatBytes, shortDigest } from "../lib/dataset-identity";
 import { metricCi } from "../lib/metric-ci";
 import { pickerCancelText } from "../lib/picker-feedback";
 import { PREPROCESS_KIND_LABELS } from "../lib/preprocess-kinds";
+import { stdDdof } from "../lib/cv-std";
 import { STOPPED_COLOR, unitState } from "../lib/unit-status";
 import type { MetricCI } from "../types/run";
 import { Lightbox } from "./Lightbox";
@@ -1327,6 +1328,9 @@ interface CVAggregate {
   std_accuracy: number | null;
   mean_f1: number | null;
   std_f1: number | null;
+  /** The divisor of the std: 1 is the sample std (n−1). Absent on runs from before
+   *  ADR-111, which divided by n. */
+  std_ddof?: number;
 }
 
 /** Per-fold detail section, only rendered when the run.json carries
@@ -1361,7 +1365,8 @@ function CrossValidationDetail({ metrics }: { metrics: Record<string, unknown> }
           <CVAggregateCard
             label={t.runDetail.cv.meanAccuracy}
             mean={a.mean_accuracy}
-            std={a.std_accuracy ?? 0}
+            std={a.std_accuracy ?? null}
+            n={a.n_folds_ok}
             highlight
           />
         )}
@@ -1369,10 +1374,24 @@ function CrossValidationDetail({ metrics }: { metrics: Record<string, unknown> }
           <CVAggregateCard
             label={t.runDetail.cv.meanF1}
             mean={a.mean_f1}
-            std={a.std_f1 ?? 0}
+            std={a.std_f1 ?? null}
+            n={a.n_folds_ok}
           />
         )}
       </div>
+      {/* A std is only comparable between runs that divide alike. */}
+      {a.mean_accuracy !== null && a.mean_accuracy !== undefined && (
+        <div
+          style={{
+            marginBottom: 12,
+            fontFamily: "var(--font-mono)",
+            fontSize: 10,
+            color: "var(--vf-text-muted)",
+          }}
+        >
+          {t.runDetail.cv.stdNote(stdDdof(a))}
+        </div>
+      )}
 
       <div
         style={{
@@ -1444,13 +1463,17 @@ function CVAggregateCard({
   label,
   mean,
   std,
+  n,
   highlight,
 }: {
   label: string;
   mean: number;
-  std: number;
+  /** Null below two finished folds: one fold has no spread, not a spread of zero. */
+  std: number | null;
+  n?: number;
   highlight?: boolean;
 }) {
+  const t = useT();
   const accent = "var(--accent-vf)";
   return (
     <div
@@ -1492,7 +1515,8 @@ function CVAggregateCard({
             fontWeight: 400,
           }}
         >
-          ± {std.toFixed(4)}
+          ± {fmtMetric(std)}
+          {typeof n === "number" && ` · ${t.resultsView.taskCv.sample(n)}`}
         </span>
       </div>
     </div>

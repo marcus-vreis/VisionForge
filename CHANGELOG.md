@@ -26,12 +26,13 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
   busca, uma validação cruzada, uma comparação ou um conjunto de réplicas não
   começa mais nada depois do trial, da dobra, do modelo ou da réplica em
   andamento, que fica fora da média e do ranking, e não pode ser retomado; o
-  PatchCore para entre as etapas. Quando o servidor encerra a execução, o
-  cabeçalho passa a dizer "Treino interrompido" (e não "concluído"), a barra
-  mostra até onde chegou em vez de 100% e o log diz a época em que parou, ou
-  quantas dobras, modelos, réplicas ou trials terminaram, ou se o banco do
-  PatchCore foi guardado. Nas tabelas de resultado a unidade cortada aparece
-  como "parada", não como falha. O botão da fila agora aparece também enquanto
+  PatchCore para entre as etapas. Quando o resultado vem marcado como parado
+  (`stopped`), o cabeçalho passa a dizer "Treino interrompido" (e não
+  "concluído"), a barra mostra até onde chegou em vez de 100% e o log diz a época
+  em que parou, ou quantas dobras, modelos, réplicas ou trials terminaram, ou se
+  o banco do PatchCore foi guardado; se a parada não cortou nada, o log diz isso.
+  Um erro depois do pedido de parada continua sendo uma falha, em vermelho. Nas
+  tabelas de resultado a unidade cortada aparece como "parada", não como falha. O botão da fila agora aparece também enquanto
   um treino roda, mesmo sem nada esperando: é o único caminho até o treino
   depois de recarregar a página
   ([ADR-088](docs/dev/DECISIONS.md), [ADR-111](docs/dev/DECISIONS.md)).
@@ -82,7 +83,13 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
   `run.json`, não 0.0); o histórico, o detalhe, a comparação de runs e a tela de
   resultados mostram "—" no lugar, o gráfico de comparação deixa de desenhar uma
   curva sem pontos, e o botão de parar mostra a recusa do servidor (409) em vez
-  do texto cru em inglês ou português.
+  do texto cru em inglês ou português. Uma validação cruzada parada com uma
+  dobra concluída (sem desvio) ou com nenhuma (sem média) abre a mesma tela de
+  resultados, com "—" e o `n`, em vez do JSON cru, e o detalhe do run deixa de
+  mostrar "± 0.0000" para um desvio que não existe; o grid/random search parado
+  sem nenhum trial concluído mostra "—" no lugar do melhor trial. O detalhe diz
+  se o desvio divide por n−1 (runs novos) ou por n (runs antigos), que não se
+  comparam.
 - **Parar funciona em validação cruzada, comparação, réplicas, varreduras e
   tarefas próprias.** Antes, o botão de parar só chegava aos treinos simples e
   ao grid/random search da classificação; nos demais o servidor respondia que
