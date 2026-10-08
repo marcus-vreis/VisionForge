@@ -575,8 +575,8 @@ export const en: Dict = {
       failed: "Failed to run the test.",
     },
     cv: {
-      title: (ok: number, total: number, failed: number) =>
-        `Cross-validation · ${ok}/${total} folds ok${failed > 0 ? ` · ${failed} failed` : ""}`,
+      title: (ok: number, total: number, failed: number, stopped: number) =>
+        `Cross-validation · ${ok}/${total} folds ok${failed > 0 ? ` · ${failed} failed` : ""}${stopped > 0 ? ` · ${stopped} stopped` : ""}`,
       meanAccuracy: "Mean accuracy ± std",
       meanF1: "Mean F1 ± std",
       fold: "Fold",
@@ -750,10 +750,11 @@ export const en: Dict = {
     outcome: {
       ok: "ok",
       failed: (error: string) => `failed · ${error}`,
+      stopped: "stopped · left out of the aggregate",
     },
     cv: {
-      title: (ok: number, total: number, failed: number) =>
-        `// k-fold cross-validation · ${ok}/${total} folds ok${failed > 0 ? ` · ${failed} failed` : ""}`,
+      title: (ok: number, total: number, failed: number, stopped: number) =>
+        `// k-fold cross-validation · ${ok}/${total} folds ok${failed > 0 ? ` · ${failed} failed` : ""}${stopped > 0 ? ` · ${stopped} stopped` : ""}`,
       accuracyMeanStd: "Accuracy (mean ± std)",
       f1MeanStd: "F1 (mean ± std)",
       fold: "Fold",
@@ -763,15 +764,15 @@ export const en: Dict = {
       accuracy: "accuracy",
     },
     taskCv: {
-      title: (ok: number, total: number, metric: string) =>
-        `// k-fold · ${ok}/${total} folds ok · headline metric: ${metric}`,
+      title: (ok: number, total: number, metric: string, stopped: number) =>
+        `// k-fold · ${ok}/${total} folds ok${stopped > 0 ? ` · ${stopped} stopped` : ""} · headline metric: ${metric}`,
       meanStd: "mean ± std across folds",
       fold: "fold",
       trainVal: "train/val",
     },
     replicates: {
-      title: (ok: number, total: number, metric: string) =>
-        `// multi-seed replicates · ${ok}/${total} seeds ok · headline metric: ${metric}`,
+      title: (ok: number, total: number, metric: string, stopped: number) =>
+        `// multi-seed replicates · ${ok}/${total} seeds ok${stopped > 0 ? ` · ${stopped} stopped` : ""} · headline metric: ${metric}`,
       citable: "🎯 citable result",
       headlineMeta: (hasCi: boolean, n: number) => `${hasCi ? "95% CI · " : ""}n=${n}`,
       metric: "metric",
@@ -783,17 +784,17 @@ export const en: Dict = {
       ci: "95% CI",
     },
     comparison: {
-      title: (ok: number, total: number, failed: number, metric: string) =>
-        `// architecture comparison · ${ok}/${total} ok${failed > 0 ? ` · ${failed} failed` : ""} · ranked by ${metric}`,
+      title: (ok: number, total: number, failed: number, stopped: number, metric: string) =>
+        `// architecture comparison · ${ok}/${total} ok${failed > 0 ? ` · ${failed} failed` : ""}${stopped > 0 ? ` · ${stopped} stopped` : ""} · ranked by ${metric}`,
     },
     sweep: {
-      title: (mode: string, ok: number, total: number, metric: string) =>
-        `// ${mode} sweep · ${ok}/${total} trials ok · ranked by ${metric}`,
+      title: (mode: string, ok: number, total: number, stopped: number, metric: string) =>
+        `// ${mode} sweep · ${ok}/${total} trials ok${stopped > 0 ? ` · ${stopped} stopped` : ""} · ranked by ${metric}`,
       best: (metric: string) => `👑 best trial · ${metric}=`,
     },
     modelComparison: {
-      title: (ok: number, total: number, failed: number) =>
-        `// model comparison · ${ok}/${total} ok${failed > 0 ? ` · ${failed} failed` : ""}`,
+      title: (ok: number, total: number, failed: number, stopped: number) =>
+        `// model comparison · ${ok}/${total} ok${failed > 0 ? ` · ${failed} failed` : ""}${stopped > 0 ? ` · ${stopped} stopped` : ""}`,
       accuracy: "Accuracy",
       aucRoc: "AUC-ROC",
       footer: "Top 3 above. The full ranking is in `outputs/reports/<experiment>/ranking.csv`.",
@@ -1392,7 +1393,9 @@ export const en: Dict = {
     removeTitle: "Remove from the queue (does not affect runs already started)",
     stopTitle: "Stop this run (the work done so far is kept)",
     stopUnavailable:
-      "This run cannot be stopped part-way: it goes on to the end.",
+      "This run does not accept a stop request (a custom task that owns its training loop, for example): it goes on to the end.",
+    stopRefused:
+      "The server refused the request: this run does not accept a stop and goes on to the end.",
     stop: "■ stop",
     remove: "🗑 remove",
   },
@@ -1430,28 +1433,64 @@ export const en: Dict = {
     viewResults: "↗ View results",
     stop: "■ Stop",
     stopTitle: "Stop the run at the end of the epoch in progress",
+    stopTitlePhase:
+      "Stop PatchCore (building the memory bank is not interrupted part-way)",
     stopUnavailable:
-      "This run cannot be stopped part-way: it goes on to the end.",
-    stopConfirmEpoch:
-      "Stop this run? It finishes the epoch in progress and keeps the best checkpoint and the history so far. If it stops before the last epoch, you can resume it from the History.",
-    stopConfirmTrial:
-      "Stop this search? The trial in progress finishes its current epoch and the ones that have not started are skipped. Trials already finished are kept; a stopped search cannot be resumed.",
+      "This run does not accept a stop request (a custom task that owns its training loop, for example): it goes on to the end.",
+    stopConfirm: {
+      epoch:
+        "Stop this run? It finishes the epoch in progress and keeps the best checkpoint and the history so far. If it stops before the last epoch, you can resume it from the History.",
+      trial:
+        "Stop this search? The trial in progress finishes its current epoch and no other starts. That cut trial stays out of the ranking, and the finished ones are kept. A stopped search cannot be resumed.",
+      fold:
+        "Stop the cross-validation? The fold in progress finishes its current epoch and no other starts. The mean and standard deviation use only the finished folds; the cut fold is left out. A stopped cross-validation cannot be resumed.",
+      model:
+        "Stop the comparison? The model in progress finishes its current epoch and no other starts. The ranking uses only the finished models; the cut model is left out. A stopped comparison cannot be resumed.",
+      replicate:
+        "Stop the replicates? The replicate in progress finishes its current epoch and no other starts. The mean and interval use only the finished replicates; the cut replicate is left out. A stopped set cannot be resumed.",
+      phase:
+        "Stop PatchCore? During feature extraction nothing is kept. If it is already building the memory bank, that finishes and is saved, and scoring is skipped — you can score it later with “+ test” in the History.",
+    },
     stopConfirmYes: "Stop the run",
     stopConfirmNo: "Keep training",
     stopSending: "Stopping…",
     stopRequested:
-      "Stop requested: the run finishes the epoch in progress and then stops.",
+      "Stop requested: the run finishes the epoch in progress and nothing new starts.",
+    stopRequestedPhase:
+      "Stop requested: PatchCore stops between phases (a memory bank being built finishes first).",
     stopFailed: "Failed to stop the run.",
     stopAlreadyEnded: "The run had already ended when the request arrived.",
+    stopRefused:
+      "The server refused the request: this run does not accept a stop and goes on to the end.",
     stopUnconfirmed:
-      "The Stop button unlocks once the run shows it trains by epochs.",
+      "The Stop button unlocks once it is known where this run can stop.",
     stopped: "Training stopped",
     stoppedLog: (epoch: number | null, total: number | null) =>
       epoch === 0
         ? "stopped before the first epoch"
         : `stopped${epoch !== null && total !== null ? ` at epoch ${epoch}/${total}` : ""} · best checkpoint kept`,
+    stoppedUnitsLog: (
+      unit: "trial" | "fold" | "model" | "replicate",
+      finished: number,
+      planned: number | null,
+      stopped: number,
+    ) => {
+      const label = {
+        trial: "trials finished",
+        fold: "folds finished",
+        model: "models finished",
+        replicate: "replicates finished",
+      }[unit];
+      return `stopped · ${label}: ${finished}${planned !== null ? `/${planned}` : ""}${stopped > 0 ? ` · left out: ${stopped}` : ""}`;
+    },
+    stoppedPhaseLog: (bankKept: boolean): string =>
+      bankKept
+        ? "stopped · memory bank saved, not scored (score it later with “+ test”)"
+        : "stopped during extraction · nothing was kept",
     stopTooLate:
       "> the stop arrived during the last epoch: the run finished normally",
+    stoppedNoResult: "Nothing finished before the stop",
+    stoppedNoResultLog: "stopped · nothing finished before the stop",
   },
   compareRuns: {
     back: "← history",
@@ -1532,7 +1571,7 @@ export const en: Dict = {
     },
     train: {
       title: "Train",
-      body: "This button runs whatever is selected — a single run, a grid search, cross-validation or replicates. While it runs, a live view shows the progress and each epoch's metrics; you can minimize it and come back to it later. In single runs and searches it also has a Stop button: the run finishes the epoch in progress and keeps what it has done so far.",
+      body: "This button runs whatever is selected — a single run, a grid search, cross-validation or replicates. While it runs, a live view shows the progress and each epoch's metrics; you can minimize it and come back to it later. It also has a Stop button: the run finishes the epoch in progress, starts nothing new and keeps what it has done so far — an interrupted fold, model, replicate or trial stays out of the mean and the ranking.",
     },
     history: {
       title: "Everything is saved",

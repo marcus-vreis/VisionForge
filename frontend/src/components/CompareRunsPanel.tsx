@@ -32,7 +32,11 @@ const METRIC_KEYS: Array<keyof Dict["compareRuns"]["metrics"]> = [
 
 function fmtMetric(v: unknown): string {
   if (v === null || v === undefined) return "—";
-  if (typeof v === "number") return v % 1 === 0 ? String(v) : v.toFixed(4);
+  if (typeof v === "number") {
+    // A never-measured metric is null; an infinity or NaN must not be printed.
+    if (!Number.isFinite(v)) return "—";
+    return v % 1 === 0 ? String(v) : v.toFixed(4);
+  }
   return String(v);
 }
 
@@ -610,6 +614,8 @@ function OverlayChart({ details, yKey, title }: OverlayChartProps) {
 
   const allX = series.flatMap((s) => s.points.map((p) => p.x));
   const allY = series.flatMap((s) => s.points.map((p) => p.y)).filter((v) => Number.isFinite(v));
+  // Runs stopped before they measured anything have no curve to draw.
+  if (allY.length === 0) return null;
   const xMax = Math.max(...allX);
   const yMin = Math.min(...allY);
   const yMax = Math.max(...allY);

@@ -608,8 +608,8 @@ export const pt = {
       failed: "Falha no teste.",
     },
     cv: {
-      title: (ok: number, total: number, failed: number) =>
-        `Cross-validation · ${ok}/${total} folds ok${failed > 0 ? ` · ${failed} ${failed === 1 ? "falhou" : "falharam"}` : ""}`,
+      title: (ok: number, total: number, failed: number, stopped: number) =>
+        `Cross-validation · ${ok}/${total} folds ok${failed > 0 ? ` · ${failed} ${failed === 1 ? "falhou" : "falharam"}` : ""}${stopped > 0 ? ` · ${stopped} interrompido${stopped === 1 ? "" : "s"}` : ""}`,
       meanAccuracy: "Acurácia média ± std",
       meanF1: "F1 média ± std",
       fold: "Fold",
@@ -801,11 +801,13 @@ export const pt = {
     outcome: {
       ok: "ok",
       failed: (error: string) => `falhou · ${error}`,
+      // A unit the server cut when a stop arrived: not a failure, and not in the aggregate.
+      stopped: "parada · fora da agregação",
     },
     // K-fold on the classification task.
     cv: {
-      title: (ok: number, total: number, failed: number) =>
-        `// k-fold cross-validation · ${ok}/${total} folds ok${failed > 0 ? ` · ${failed} ${failed === 1 ? "falhou" : "falharam"}` : ""}`,
+      title: (ok: number, total: number, failed: number, stopped: number) =>
+        `// k-fold cross-validation · ${ok}/${total} folds ok${failed > 0 ? ` · ${failed} ${failed === 1 ? "falhou" : "falharam"}` : ""}${stopped > 0 ? ` · ${stopped} interrompido${stopped === 1 ? "" : "s"}` : ""}`,
       accuracyMeanStd: "Acurácia (média ± std)",
       f1MeanStd: "F1 (média ± std)",
       fold: "Fold",
@@ -816,15 +818,15 @@ export const pt = {
     },
     // K-fold on the other tasks.
     taskCv: {
-      title: (ok: number, total: number, metric: string) =>
-        `// k-fold · ${ok}/${total} folds ok · destaque ${metric}`,
+      title: (ok: number, total: number, metric: string, stopped: number) =>
+        `// k-fold · ${ok}/${total} folds ok${stopped > 0 ? ` · ${stopped} interrompido${stopped === 1 ? "" : "s"}` : ""} · destaque ${metric}`,
       meanStd: "média ± desvio sobre os folds",
       fold: "fold",
       trainVal: "treino/val",
     },
     replicates: {
-      title: (ok: number, total: number, metric: string) =>
-        `// réplicas multi-seed · ${ok}/${total} seeds ok · destaque ${metric}`,
+      title: (ok: number, total: number, metric: string, stopped: number) =>
+        `// réplicas multi-seed · ${ok}/${total} seeds ok${stopped > 0 ? ` · ${stopped} interrompido${stopped === 1 ? "" : "s"}` : ""} · destaque ${metric}`,
       citable: "🎯 resultado citável",
       // After the headline value: the interval it carries, and the sample size.
       headlineMeta: (hasCi: boolean, n: number) => `${hasCi ? "IC 95% · " : ""}n=${n}`,
@@ -838,19 +840,19 @@ export const pt = {
     },
     // Model comparison on the other tasks.
     comparison: {
-      title: (ok: number, total: number, failed: number, metric: string) =>
-        `// comparação de arquiteturas · ${ok}/${total} ok${failed > 0 ? ` · ${failed} ${failed === 1 ? "falhou" : "falharam"}` : ""} · ranking por ${metric}`,
+      title: (ok: number, total: number, failed: number, stopped: number, metric: string) =>
+        `// comparação de arquiteturas · ${ok}/${total} ok${failed > 0 ? ` · ${failed} ${failed === 1 ? "falhou" : "falharam"}` : ""}${stopped > 0 ? ` · ${stopped} interrompido${stopped === 1 ? "" : "s"}` : ""} · ranking por ${metric}`,
     },
     sweep: {
-      title: (mode: string, ok: number, total: number, metric: string) =>
-        `// sweep ${mode} · ${ok}/${total} trials ok · ranking por ${metric}`,
+      title: (mode: string, ok: number, total: number, stopped: number, metric: string) =>
+        `// sweep ${mode} · ${ok}/${total} trials ok${stopped > 0 ? ` · ${stopped} interrompido${stopped === 1 ? "" : "s"}` : ""} · ranking por ${metric}`,
       // Followed by the metric's value.
       best: (metric: string) => `👑 melhor trial · ${metric}=`,
     },
     // Model comparison on classification.
     modelComparison: {
-      title: (ok: number, total: number, failed: number) =>
-        `// comparação de modelos · ${ok}/${total} ok${failed > 0 ? ` · ${failed} ${failed === 1 ? "falhou" : "falharam"}` : ""}`,
+      title: (ok: number, total: number, failed: number, stopped: number) =>
+        `// comparação de modelos · ${ok}/${total} ok${failed > 0 ? ` · ${failed} ${failed === 1 ? "falhou" : "falharam"}` : ""}${stopped > 0 ? ` · ${stopped} interrompido${stopped === 1 ? "" : "s"}` : ""}`,
       accuracy: "Accuracy",
       aucRoc: "AUC-ROC",
       // The path goes in backticks, for <Rich>.
@@ -1543,9 +1545,12 @@ export const pt = {
     waiting: (waited: string) => `esperando ${waited}`,
     removeTitle: "Remover da fila (não afeta treinos já iniciados)",
     stopTitle: "Interromper este treino (o trabalho já feito é mantido)",
-    // The running row of a kind of run the server cannot stop mid-way (lib/run-control.ts).
+    // The running row of a job whose `stop_at` is null (lib/run-control.ts).
     stopUnavailable:
-      "Esta execução não pode ser interrompida no meio: ela segue até o fim.",
+      "Esta execução não aceita pedido de parada (uma tarefa própria que controla o próprio laço, por exemplo): ela segue até o fim.",
+    // 409 from the server for a job the row offered to stop anyway.
+    stopRefused:
+      "O servidor recusou o pedido: esta execução não aceita parada e segue até o fim.",
     stop: "■ parar",
     remove: "🗑 remover",
   },
@@ -1592,28 +1597,49 @@ export const pt = {
     pipeline: (n: number) => `⚗ pipeline ativo · ${n} filtro${n === 1 ? "" : "s"}`,
     minimize: "Minimizar",
     viewResults: "↗ Ver resultados",
-    // The stop control of a running job. The server stops a run at the top of its next
-    // epoch, so it finishes the one in progress and keeps what it has saved; a search
-    // also skips the trials not yet started (lib/run-control.ts).
+    // The stop control of a running job. The queue says where a job stops (`stop_at`,
+    // lib/run-control.ts): the epoch of a run, the trial of a search, the fold of a
+    // K-fold, the model of a comparison, the replicate of a set, the phase of PatchCore.
+    // What is in flight finishes its epoch, nothing new starts, and the cut unit stays
+    // out of the aggregate.
     stop: "■ Parar",
-    stopTitle: "Parar o treino ao fim da época em andamento",
+    stopTitle: "Parar a execução ao fim da época em andamento",
+    stopTitlePhase:
+      "Parar o PatchCore (a montagem do banco de memória não é interrompida no meio)",
     stopUnavailable:
-      "Esta execução não pode ser interrompida no meio: ela segue até o fim.",
-    stopConfirmEpoch:
-      "Parar este treino? Ele termina a época em andamento e mantém o melhor checkpoint e o histórico até aqui. Se parar antes da última época, dá para retomar pelo Histórico.",
-    stopConfirmTrial:
-      "Parar esta busca? O treino em andamento termina a época atual e os que ainda não começaram são pulados. Os trials já concluídos ficam salvos; uma busca interrompida não pode ser retomada.",
+      "Esta execução não aceita pedido de parada (uma tarefa própria que controla o próprio laço, por exemplo): ela segue até o fim.",
+    // Asked before the stop is sent, by where the job stops.
+    stopConfirm: {
+      epoch:
+        "Parar este treino? Ele termina a época em andamento e mantém o melhor checkpoint e o histórico até aqui. Se parar antes da última época, dá para retomar pelo Histórico.",
+      trial:
+        "Parar esta busca? O trial em andamento termina a época atual e nenhum outro começa. Esse trial cortado fica fora do ranking e os já concluídos ficam salvos. Uma busca interrompida não pode ser retomada.",
+      fold:
+        "Parar a validação cruzada? A dobra em andamento termina a época atual e nenhuma outra começa. A média e o desvio usam só as dobras concluídas; a dobra cortada fica de fora. Uma validação interrompida não pode ser retomada.",
+      model:
+        "Parar a comparação? O modelo em andamento termina a época atual e nenhum outro começa. O ranking usa só os modelos concluídos; o modelo cortado fica de fora. Uma comparação interrompida não pode ser retomada.",
+      replicate:
+        "Parar as réplicas? A réplica em andamento termina a época atual e nenhuma outra começa. A média e o intervalo usam só as réplicas concluídas; a réplica cortada fica de fora. Um conjunto interrompido não pode ser retomado.",
+      phase:
+        "Parar o PatchCore? Se ainda estiver na extração de features, nada é guardado. Se já estiver montando o banco de memória, ele termina, é salvo e a pontuação é pulada — dá para pontuar depois em “+ testar” no Histórico.",
+    },
     stopConfirmYes: "Parar o treino",
     stopConfirmNo: "Continuar treinando",
     stopSending: "Parando…",
     stopRequested:
-      "Parada pedida: o treino termina a época em andamento e então para.",
+      "Parada pedida: a execução termina a época em andamento e nada novo começa.",
+    stopRequestedPhase:
+      "Parada pedida: o PatchCore para entre as etapas (um banco de memória em montagem termina antes).",
     stopFailed: "Não foi possível parar o treino.",
     // The server found no such job: it ended between the click and the request.
     stopAlreadyEnded: "O treino já tinha terminado quando o pedido chegou.",
-    // An anomaly run that has not yet shown whether it trains by epochs (PatchCore does not).
+    // 409: the job is running and its `stop_at` is null, so the server did not stop it.
+    stopRefused:
+      "O servidor recusou o pedido: esta execução não aceita parada e segue até o fim.",
+    // Not offered yet: a custom task whose level only the queue knows, or an anomaly run
+    // that has not shown whether it trains by epochs (PatchCore does not).
     stopUnconfirmed:
-      "O botão Parar libera quando o treino mostrar que roda por épocas.",
+      "O botão Parar libera quando der para saber onde esta execução pode parar.",
     // Header, once a stopped run has ended; the status the server reports for it is still "completed".
     stopped: "Treino interrompido",
     // Before its first epoch there is no checkpoint to keep, so none is claimed.
@@ -1621,8 +1647,30 @@ export const pt = {
       epoch === 0
         ? "interrompido antes da primeira época"
         : `interrompido${epoch !== null && total !== null ? ` na época ${epoch}/${total}` : ""} · melhor checkpoint mantido`,
+    // A multi-unit job: how many units finished of the planned ones, and the cut one.
+    stoppedUnitsLog: (
+      unit: "trial" | "fold" | "model" | "replicate",
+      finished: number,
+      planned: number | null,
+      stopped: number,
+    ) => {
+      const label = {
+        trial: "trials concluídos",
+        fold: "dobras concluídas",
+        model: "modelos concluídos",
+        replicate: "réplicas concluídas",
+      }[unit];
+      return `interrompido · ${label}: ${finished}${planned !== null ? `/${planned}` : ""}${stopped > 0 ? ` · fora da agregação: ${stopped}` : ""}`;
+    },
+    stoppedPhaseLog: (bankKept: boolean): string =>
+      bankKept
+        ? "interrompido · banco de memória salvo, sem pontuação (pontue depois em “+ testar”)"
+        : "interrompido durante a extração · nada foi guardado",
     stopTooLate:
       "> a parada chegou na última época: o treino terminou normalmente",
+    // The stop landed before the first fold/trial/model/replicate finished: nothing to report.
+    stoppedNoResult: "Nada terminou antes da parada",
+    stoppedNoResultLog: "interrompido · nada terminou antes da parada",
   },
   // Side-by-side comparison of two or more runs (components/CompareRunsPanel.tsx).
   compareRuns: {
@@ -1711,7 +1759,7 @@ export const pt = {
     },
     train: {
       title: "Treinar",
-      body: "O botão roda exatamente o que está selecionado — um treino simples, uma busca em grade, validação cruzada ou réplicas. Enquanto roda, uma tela mostra o progresso e as métricas de cada época; você pode minimizá-la e voltar a ela depois. Nos treinos simples e nas buscas ela também tem o botão Parar: o treino termina a época em andamento e guarda o que já foi feito.",
+      body: "O botão roda exatamente o que está selecionado — um treino simples, uma busca em grade, validação cruzada ou réplicas. Enquanto roda, uma tela mostra o progresso e as métricas de cada época; você pode minimizá-la e voltar a ela depois. Ela também tem o botão Parar: a execução termina a época em andamento, não começa nada novo e guarda o que já foi feito — dobras, modelos, réplicas ou trials interrompidos ficam fora da média e do ranking.",
     },
     history: {
       title: "Tudo fica salvo",

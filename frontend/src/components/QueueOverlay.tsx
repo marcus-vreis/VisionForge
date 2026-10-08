@@ -67,7 +67,11 @@ export function QueueOverlay({
     } catch (e) {
       setError(
         e instanceof ApiError
-          ? e.message
+          ? // 409: the job is running and does not accept a stop. The server's
+            // text is Portuguese; the interface words it in the reader's language.
+            e.status === 409
+            ? t.queueOverlay.stopRefused
+            : e.message
           : t.queueOverlay.cancelFailed,
       );
     } finally {

@@ -119,6 +119,10 @@ export default function App() {
   // follows): after a reload the running job has no training sheet, and the
   // queue button is the way back to it.
   const [seededRunning, setSeededRunning] = useState(false);
+  // The run the researcher asked to stop. If it then ends "failed" because
+  // nothing had finished to report, that is the stop's outcome, not an error to
+  // put in red under the form.
+  const [stoppedRunId, setStoppedRunId] = useState<string | null>(null);
   const [overlayVisible, setOverlayVisible] = useState(false);
   const [resultsVisible, setResultsVisible] = useState(false);
   const [schema, setSchema] = useState<JsonSchema | null>(null);
@@ -648,7 +652,9 @@ export default function App() {
         )}
         </ContentBoundary>
 
-        {error && !showOverlay && (
+        {error &&
+          !showOverlay &&
+          !(status.run_id !== null && status.run_id === stoppedRunId) && (
           <div
             style={{
               marginTop: 16,
@@ -725,6 +731,8 @@ export default function App() {
           pipelineSummary={pipelineSummary}
           blockKind={blockKind}
           queueSize={queueSize}
+          report={result?.report ?? null}
+          onStopRequested={setStoppedRunId}
           onClose={() => setOverlayVisible(false)}
           onViewResults={() => {
             setOverlayVisible(false);

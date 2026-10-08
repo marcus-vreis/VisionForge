@@ -2,6 +2,7 @@ import { useState } from "react";
 import { artifactUrl, downloadRunMarkdown } from "../api/client";
 import { useT } from "../i18n/useT";
 import { metricCi } from "../lib/metric-ci";
+import { STOPPED_COLOR, countUnits, unitState } from "../lib/unit-status";
 import type { MetricCI, RunResult } from "../types/run";
 import { Lightbox } from "./Lightbox";
 import { Rich } from "./Rich";
@@ -14,8 +15,11 @@ interface ResultsViewProps {
 
 /** Format metric values for display. */
 function formatMetric(value: unknown): string {
-  if (value === null || value === undefined) return "N/A";
+  if (value === null || value === undefined) return "—";
   if (typeof value === "number") {
+    // A metric that was never measured arrives as null, but a NaN or an
+    // infinity must not reach the screen either.
+    if (!Number.isFinite(value)) return "—";
     return value % 1 === 0 ? String(value) : value.toFixed(4);
   }
   return String(value);
@@ -400,8 +404,9 @@ function CrossValidationReport({
   const meanF1 = report["mean_f1"] as number;
   const stdF1 = report["std_f1"] as number;
 
-  const successful = folds.filter((f) => f.status === "success");
-  const failed = folds.filter((f) => f.status !== "success");
+  const successful = folds.filter((f) => unitState(f.status) === "ok");
+  const failed = countUnits(folds, "failed");
+  const stopped = countUnits(folds, "stopped");
 
   return (
     <div style={{ marginTop: 22, display: "flex", flexDirection: "column", gap: 18 }}>
@@ -414,7 +419,7 @@ function CrossValidationReport({
           color: "var(--vf-text-muted)",
         }}
       >
-        {t.resultsView.cv.title(successful.length, folds.length, failed.length)}
+        {t.resultsView.cv.title(successful.length, folds.length, failed, stopped)}
       </div>
 
       {/* Headline: mean ± std for accuracy and F1 */}
@@ -471,7 +476,7 @@ function CrossValidationReport({
           </thead>
           <tbody>
             {folds.map((f) => {
-              const ok = f.status === "success";
+              const state = unitState(f.status);
               return (
                 <tr key={f.fold}>
                   <td style={cvTdLabelStyle}>#{f.fold + 1}</td>
@@ -483,12 +488,19 @@ function CrossValidationReport({
                   <td
                     style={{
                       ...cvTdStyle,
-                      color: ok
-                        ? "oklch(0.85 0.16 150)"
-                        : "oklch(0.85 0.14 22)",
+                      color:
+                        state === "ok"
+                          ? "oklch(0.85 0.16 150)"
+                          : state === "stopped"
+                            ? STOPPED_COLOR
+                            : "oklch(0.85 0.14 22)",
                     }}
                   >
-                    {ok ? "✓" : `× ${f.error || "?"}`}
+                    {state === "ok"
+                      ? "✓"
+                      : state === "stopped"
+                        ? `■ ${t.resultsView.outcome.stopped}`
+                        : `× ${f.error || "?"}`}
                   </td>
                 </tr>
               );
@@ -590,10 +602,14 @@ function TaskCvReport({
   const t = useT();
   const folds = (report["fold_results"] as TaskCvFoldRow[]) ?? [];
   const aggregate =
-    (report["aggregate"] as Record<string, { mean: number; std: number }>) ?? {};
+    (report["aggregate"] as Record<
+      string,
+      { mean: number | null; std: number | null }
+    >) ?? {};
   const metric = report["metric"] as string;
   const nFolds = report["n_folds"] as number;
   const ok = report["successful_folds"] as number;
+  const stoppedFolds = countUnits(folds, "stopped");
   const headline = aggregate[metric];
   const metricKeys = Object.keys(aggregate);
 
@@ -608,7 +624,7 @@ function TaskCvReport({
           color: "var(--vf-text-muted)",
         }}
       >
-        {t.resultsView.taskCv.title(ok, nFolds, metric)}
+        {t.resultsView.taskCv.title(ok, nFolds, metric, stoppedFolds)}
       </div>
 
       {headline && (
@@ -675,12 +691,10 @@ function TaskCvReport({
                 <td
                   style={{
                     ...cvTdStyle,
-                    color: f.status === "success" ? "var(--vf-text)" : "oklch(0.72 0.19 22)",
+                    color: unitColor(unitState(f.status)),
                   }}
                 >
-                  {f.status === "success"
-                    ? t.resultsView.outcome.ok
-                    : t.resultsView.outcome.failed(f.error)}
+                  {unitText(t, unitState(f.status), f.error)}
                 </td>
               </tr>
             ))}
@@ -748,6 +762,7 @@ function ReplicatesReport({
   const headline = report["headline"] as ReplicateAggregate | null;
   const total = report["total_replicates"] as number;
   const ok = report["successful_replicates"] as number;
+  const stoppedReplicates = countUnits(trials, "stopped");
 
   const ciHalf =
     headline && headline.ci95_high !== null && headline.ci95_low !== null
@@ -765,7 +780,7 @@ function ReplicatesReport({
           color: "var(--vf-text-muted)",
         }}
       >
-        {t.resultsView.replicates.title(ok, total, metric)}
+        {t.resultsView.replicates.title(ok, total, metric, stoppedReplicates)}
       </div>
 
       {headline && (
@@ -888,17 +903,17 @@ function ReplicatesReport({
                 <td style={cvTdLabelStyle}>{trial.seed}</td>
                 <td style={cvTdStyle}>{formatMetric(trial.metrics?.[metric])}</td>
                 <td style={cvTdStyle}>
-                  {trial.training_time_s === null ? "—" : trial.training_time_s.toFixed(1)}
+                  {typeof trial.training_time_s === "number"
+                    ? trial.training_time_s.toFixed(1)
+                    : "—"}
                 </td>
                 <td
                   style={{
                     ...cvTdStyle,
-                    color: trial.status === "success" ? "var(--vf-text)" : "oklch(0.72 0.19 22)",
+                    color: unitColor(unitState(trial.status)),
                   }}
                 >
-                  {trial.status === "success"
-                    ? t.resultsView.outcome.ok
-                    : t.resultsView.outcome.failed(trial.error)}
+                  {unitText(t, unitState(trial.status), trial.error)}
                 </td>
               </tr>
             ))}
@@ -940,9 +955,10 @@ function TaskComparisonReport({
   const trials = (report["trials"] as TaskComparisonTrial[]) ?? [];
   const metric = report["metric"] as string;
   const totalRan = report["total_ran"] as number;
-  const failedCount = report["failed_count"] as number;
+  const failedCount = countUnits(trials, "failed");
+  const stoppedCount = countUnits(trials, "stopped");
 
-  const successful = trials.filter((trial) => trial.status === "success");
+  const successful = trials.filter((trial) => unitState(trial.status) === "ok");
   const otherKeys = Array.from(
     new Set(successful.flatMap((trial) => Object.keys(trial.metrics ?? {}))),
   ).filter((k) => k !== metric);
@@ -959,7 +975,13 @@ function TaskComparisonReport({
           color: "var(--vf-text-muted)",
         }}
       >
-        {t.resultsView.comparison.title(totalRan - failedCount, totalRan, failedCount, metric)}
+        {t.resultsView.comparison.title(
+          successful.length,
+          totalRan,
+          failedCount,
+          stoppedCount,
+          metric,
+        )}
       </div>
 
       <div
@@ -994,7 +1016,8 @@ function TaskComparisonReport({
           </thead>
           <tbody>
             {trials.map((trial, i) => {
-              const ok = trial.status === "success";
+              const state = unitState(trial.status);
+              const ok = state === "ok";
               return (
                 <tr key={trial.model_arch}>
                   <td
@@ -1022,18 +1045,17 @@ function TaskComparisonReport({
                     </td>
                   ))}
                   <td style={cvTdStyle}>
-                    {trial.training_time_s !== null &&
-                    trial.training_time_s !== undefined
+                    {typeof trial.training_time_s === "number"
                       ? trial.training_time_s.toFixed(1)
                       : "—"}
                   </td>
                   <td
                     style={{
                       ...cvTdStyle,
-                      color: ok ? "oklch(0.85 0.16 150)" : "oklch(0.85 0.14 22)",
+                      color: markColor(state),
                     }}
                   >
-                    {ok ? "✓" : `× ${trial.error || "?"}`}
+                    {markText(t, state, trial.error)}
                   </td>
                 </tr>
               );
@@ -1098,6 +1120,7 @@ function TaskSweepReport({
   const metric = report["metric"] as string;
   const total = report["total_trials"] as number;
   const successful = report["successful_trials"] as number;
+  const stoppedTrials = countUnits(trials, "stopped");
   const best = report["best_trial"] as TaskSweepTrial | null;
 
   return (
@@ -1111,7 +1134,7 @@ function TaskSweepReport({
           color: "var(--vf-text-muted)",
         }}
       >
-        {t.resultsView.sweep.title(mode, successful, total, metric)}
+        {t.resultsView.sweep.title(mode, successful, total, stoppedTrials, metric)}
       </div>
 
       {best && (
@@ -1172,7 +1195,8 @@ function TaskSweepReport({
           </thead>
           <tbody>
             {trials.map((trial, i) => {
-              const ok = trial.status === "success";
+              const state = unitState(trial.status);
+              const ok = state === "ok";
               return (
                 <tr key={trial.trial_index}>
                   <td
@@ -1191,18 +1215,17 @@ function TaskSweepReport({
                     <OverrideChips overrides={trial.overrides} />
                   </td>
                   <td style={cvTdStyle}>
-                    {trial.training_time_s !== null &&
-                    trial.training_time_s !== undefined
+                    {typeof trial.training_time_s === "number"
                       ? trial.training_time_s.toFixed(1)
                       : "—"}
                   </td>
                   <td
                     style={{
                       ...cvTdStyle,
-                      color: ok ? "oklch(0.85 0.16 150)" : "oklch(0.85 0.14 22)",
+                      color: markColor(state),
                     }}
                   >
-                    {ok ? "✓" : `× ${trial.error || "?"}`}
+                    {markText(t, state, trial.error)}
                   </td>
                 </tr>
               );
@@ -1249,6 +1272,9 @@ function ModelComparisonReport({
   const top3 = (report["top_3"] as ModelComparisonTrial[]) ?? [];
   const totalRan = report["total_ran"] as number;
   const failedCount = report["failed_count"] as number;
+  // Absent from a report written before a stop could cut a model (ADR-111).
+  const stoppedCount =
+    typeof report["stopped_count"] === "number" ? report["stopped_count"] : 0;
 
   return (
     <div style={{ marginTop: 22, display: "flex", flexDirection: "column", gap: 18 }}>
@@ -1261,7 +1287,12 @@ function ModelComparisonReport({
           color: "var(--vf-text-muted)",
         }}
       >
-        {t.resultsView.modelComparison.title(totalRan - failedCount, totalRan, failedCount)}
+        {t.resultsView.modelComparison.title(
+          totalRan - failedCount - stoppedCount,
+          totalRan,
+          failedCount,
+          stoppedCount,
+        )}
       </div>
 
       <div
@@ -1321,7 +1352,7 @@ function ModelComparisonReport({
                   <td style={cvTdStyle}>{formatMetric(trial.f1)}</td>
                   <td style={cvTdStyle}>{formatMetric(trial.auc_roc)}</td>
                   <td style={cvTdStyle}>
-                    {trial.training_time_s !== null
+                    {typeof trial.training_time_s === "number"
                       ? trial.training_time_s.toFixed(1)
                       : "—"}
                   </td>
@@ -1536,6 +1567,41 @@ function GridSearchReport({
       </div>
     </div>
   );
+}
+
+/** The status cell of a unit, for the tables that print a word (ok / failed · why). */
+function unitColor(state: ReturnType<typeof unitState>): string {
+  if (state === "stopped") return STOPPED_COLOR;
+  return state === "ok" ? "var(--vf-text)" : "oklch(0.72 0.19 22)";
+}
+
+function unitText(
+  t: ReturnType<typeof useT>,
+  state: ReturnType<typeof unitState>,
+  error: string,
+): string {
+  if (state === "ok") return t.resultsView.outcome.ok;
+  // A unit cut by a stop has no error: the note it carries says why it is out.
+  return state === "stopped"
+    ? `■ ${t.resultsView.outcome.stopped}`
+    : t.resultsView.outcome.failed(error);
+}
+
+/** The same, for the tables that print a mark (✓ / × why). */
+function markColor(state: ReturnType<typeof unitState>): string {
+  if (state === "stopped") return STOPPED_COLOR;
+  return state === "ok" ? "oklch(0.85 0.16 150)" : "oklch(0.85 0.14 22)";
+}
+
+function markText(
+  t: ReturnType<typeof useT>,
+  state: ReturnType<typeof unitState>,
+  error: string,
+): string {
+  if (state === "ok") return "✓";
+  return state === "stopped"
+    ? `■ ${t.resultsView.outcome.stopped}`
+    : `× ${error || "?"}`;
 }
 
 const cvThStyle: React.CSSProperties = {

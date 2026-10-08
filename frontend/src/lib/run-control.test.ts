@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { en } from "../i18n/en";
 import { pt } from "../i18n/pt";
-import type { TrainingEvent } from "../types/run";
+import type { StopPoint, TrainingEvent } from "../types/run";
 import {
   epochLoop,
   hasEnded,
@@ -11,7 +11,11 @@ import {
   serverRunning,
   showQueueButton,
   stopMode,
+  plainReason,
   stopOutcome,
+  stopSummary,
+  stoppedWithoutResult,
+  unitCounts,
   type LocalRun,
 } from "./run-control";
 
@@ -29,9 +33,8 @@ const phase = (label = "buildingBank"): TrainingEvent => ({
 });
 
 /** What the overlay knows about its own run when the queue could not be read. */
-const local = (blockKind: string, taskKey: string, loop: LocalRun["epochLoop"] = "yes"): LocalRun => ({
+const local = (blockKind: string, loop: LocalRun["epochLoop"] = "yes"): LocalRun => ({
   blockKind,
-  taskKey,
   epochLoop: loop,
 });
 
@@ -65,116 +68,123 @@ const trialStart = (index: number, total: number): TrainingEvent => ({
   seed: 0,
 });
 
+const POINTS: StopPoint[] = ["epoch", "trial", "fold", "model", "replicate", "phase"];
+
 describe("stopMode", () => {
-  it("promises an epoch-boundary stop for the single runs the backend wires", () => {
-    // What /api/queue reports: classification files its strategy under the block name.
-    expect(stopMode({ task: "classification", strategy: "classification" })).toBe("epoch");
-    expect(stopMode({ task: "classification", strategy: "transfer_learning" })).toBe("epoch");
-    for (const task of ["detection", "regression", "segmentation", "anomaly"]) {
-      expect(stopMode({ task, strategy: "simple" }), task).toBe("epoch");
-    }
-  });
-
-  it("stops a classification search between trials", () => {
-    expect(stopMode({ task: "classification", strategy: "grid_search" })).toBe("trial");
-    expect(stopMode({ task: "classification", strategy: "random_search" })).toBe("trial");
-  });
-
-  it("promises nothing where the backend does not hand the token to the trainer", () => {
-    const unwired: Array<[string, string]> = [
-      ["classification", "cross_validation"],
-      ["classification", "model_comparison"],
-      // The standalone tasks' own sweeps, K-fold, comparisons and replicates.
-      ["detection", "sweep:grid"],
-      ["regression", "sweep:random"],
-      ["segmentation", "cv"],
-      ["segmentation", "comparison"],
-      ["detection", "replicates"],
-      ["regression", "replicated-comparison"],
-      // A researcher's own task, whatever strategy it runs under.
-      ["custom:counting", "simple"],
-      ["custom:counting", "sweep:grid"],
-      ["custom:counting", "replicates"],
-    ];
-    for (const [task, strategy] of unwired) {
-      expect(stopMode({ task, strategy }), `${task} / ${strategy}`).toBe("none");
-    }
-  });
-
-  it("does not stop a search the standalone tasks run as a sweep", () => {
-    // Same words as the classification search, different path: only the task tells them apart.
-    expect(stopMode({ task: "detection", strategy: "grid_search" })).toBe("none");
-  });
-
-  it("does not promise anything for a strategy it has never heard of", () => {
-    expect(stopMode({ task: "classification", strategy: "brand_new" })).toBe("none");
-  });
-
-  it("assumes a plain run when it knows nothing at all", () => {
-    expect(stopMode(null)).toBe("epoch");
-  });
-
-  it("refuses a run that reports phases instead of epochs (PatchCore)", () => {
-    const job = { task: "anomaly", strategy: "simple" };
-    expect(stopMode(job, local("anomaly", "anomaly", "no"))).toBe("none");
-    expect(stopMode(null, local("anomaly", "anomaly", "no"))).toBe("none");
-  });
-
-  describe("without the queue snapshot, from what the overlay itself knows", () => {
-    it("does not offer a stop the server would ignore", () => {
-      // The queue read failed: K-fold, comparison, replicates and custom tasks
-      // must not fall back to a plain run.
-      expect(stopMode(null, local("cross_validation", "classification"))).toBe("none");
-      expect(stopMode(null, local("model_comparison", "classification"))).toBe("none");
-      expect(stopMode(null, local("cross_validation", "regression"))).toBe("none");
-      expect(stopMode(null, local("replicates", "detection"))).toBe("none");
-      expect(stopMode(null, local("custom", "counting"))).toBe("none");
-    });
-
-    it("keeps the stop for the single runs and the classification searches", () => {
-      expect(stopMode(null, local("classification", "classification"))).toBe("epoch");
-      expect(stopMode(null, local("transfer_learning", "classification"))).toBe("epoch");
-      for (const task of ["detection", "regression", "segmentation"]) {
-        expect(stopMode(null, local(task, task)), task).toBe("epoch");
+  describe("with the queue snapshot", () => {
+    it("takes where the job stops from the snapshot itself", () => {
+      for (const stop_at of POINTS) {
+        expect(stopMode({ task: "classification", strategy: "x", stop_at }), stop_at).toBe(
+          stop_at,
+        );
       }
-      expect(stopMode(null, local("grid_search", "classification"))).toBe("trial");
-      expect(stopMode(null, local("random_search", "classification"))).toBe("trial");
     });
 
-    it("tells a classification search from another task's sweep by the tab it started in", () => {
-      expect(stopMode(null, local("grid_search", "detection"))).toBe("none");
-      expect(stopMode(null, local("random_search", "counting"))).toBe("none");
+    it("reads a null stop_at as a running job that cannot be stopped", () => {
+      expect(stopMode({ task: "custom:counting", strategy: "simple", stop_at: null })).toBe(
+        "none",
+      );
     });
 
-    it("is overruled by the snapshot when there is one", () => {
+    it("trusts the snapshot over what the sheet recorded for itself", () => {
       expect(
         stopMode(
-          { task: "classification", strategy: "cross_validation" },
-          local("classification", "classification"),
+          { task: "classification", strategy: "cross_validation", stop_at: "fold" },
+          local("classification"),
         ),
-      ).toBe("none");
+      ).toBe("fold");
+      // The snapshot says PatchCore: no need to wait for the stream to show it.
       expect(
-        stopMode({ task: "detection", strategy: "simple" }, local("custom", "counting")),
-      ).toBe("epoch");
-    });
-
-    it("does not promise anything for a block it has never heard of", () => {
-      expect(stopMode(null, local("brand_new", "classification"))).toBe("none");
+        stopMode(
+          { task: "anomaly", strategy: "simple", stop_at: "phase" },
+          local("anomaly", "unknown"),
+        ),
+      ).toBe("phase");
     });
   });
 
-  describe("anomaly runs, whose model decides whether there are epochs at all", () => {
-    it("waits for proof of an epoch loop before offering the stop", () => {
-      const job = { task: "anomaly", strategy: "simple" };
-      expect(stopMode(job, local("anomaly", "anomaly", "unknown"))).toBe("unconfirmed");
-      expect(stopMode(null, local("anomaly", "anomaly", "unknown"))).toBe("unconfirmed");
-      expect(stopMode(job, local("anomaly", "anomaly", "yes"))).toBe("epoch");
+  describe("from the strategy, when the snapshot does not say where", () => {
+    // The server's own table (routes._STOP_POINTS), mirrored.
+    it("mirrors the server's mapping", () => {
+      const cases: Array<[string, StopPoint]> = [
+        ["simple", "epoch"],
+        ["classification", "epoch"],
+        ["transfer_learning", "epoch"],
+        ["batch_prediction", "epoch"],
+        ["export_onnx", "epoch"],
+        ["grid_search", "trial"],
+        ["random_search", "trial"],
+        ["sweep:grid", "trial"],
+        ["sweep:optuna", "trial"],
+        ["cross_validation", "fold"],
+        ["cv", "fold"],
+        ["model_comparison", "model"],
+        ["comparison", "model"],
+        ["replicates", "replicate"],
+        ["replicated-comparison", "replicate"],
+      ];
+      for (const [strategy, point] of cases) {
+        expect(stopMode({ task: "classification", strategy }), strategy).toBe(point);
+      }
     });
 
-    it("does not make the other tasks wait", () => {
-      expect(stopMode(null, local("detection", "detection", "unknown"))).toBe("epoch");
+    it("does not claim a stop for a strategy it has never heard of", () => {
+      expect(stopMode({ task: "classification", strategy: "brand_new" })).toBe("none");
+    });
+
+    it("cannot tell which level a custom task is, so it waits for the snapshot", () => {
+      expect(stopMode({ task: "custom:counting", strategy: "simple" })).toBe("unconfirmed");
+      // Its sweeps and replicates stop between units whichever level it is.
+      expect(stopMode({ task: "custom:counting", strategy: "sweep:grid" })).toBe("trial");
+      expect(stopMode({ task: "custom:counting", strategy: "replicates" })).toBe("replicate");
+    });
+  });
+
+  describe("without the snapshot, from what the overlay itself knows", () => {
+    it("stops every kind of run the server now stops", () => {
+      const cases: Array<[string, StopPoint]> = [
+        ["classification", "epoch"],
+        ["transfer_learning", "epoch"],
+        ["detection", "epoch"],
+        ["regression", "epoch"],
+        ["segmentation", "epoch"],
+        ["grid_search", "trial"],
+        ["random_search", "trial"],
+        ["cross_validation", "fold"],
+        ["model_comparison", "model"],
+        ["replicates", "replicate"],
+      ];
+      for (const [blockKind, point] of cases) {
+        expect(stopMode(null, local(blockKind)), blockKind).toBe(point);
+      }
+    });
+
+    it("waits for the snapshot on a custom task, whose level it cannot know", () => {
+      expect(stopMode(null, local("custom"))).toBe("unconfirmed");
+    });
+
+    it("does not claim a stop for a block it has never heard of", () => {
+      expect(stopMode(null, local("brand_new"))).toBe("none");
+    });
+
+    it("assumes a plain run when it knows nothing at all", () => {
+      expect(stopMode(null)).toBe("epoch");
+    });
+
+    it("tells an anomaly run's kind from its stream", () => {
+      const job = { task: "anomaly", strategy: "simple" };
+      expect(stopMode(job, local("anomaly", "yes"))).toBe("epoch");
+      expect(stopMode(job, local("anomaly", "no"))).toBe("phase");
+      expect(stopMode(null, local("anomaly", "no"))).toBe("phase");
+      // Not offered until the stream says which.
+      expect(stopMode(job, local("anomaly", "unknown"))).toBe("unconfirmed");
+      expect(stopMode(null, local("anomaly", "unknown"))).toBe("unconfirmed");
+    });
+
+    it("does not make the other tasks wait for their stream", () => {
+      expect(stopMode(null, local("detection", "unknown"))).toBe("epoch");
       expect(
-        stopMode({ task: "classification", strategy: "classification" }, local("classification", "classification", "unknown")),
+        stopMode({ task: "classification", strategy: "classification" }, local("classification", "unknown")),
       ).toBe("epoch");
     });
   });
@@ -341,6 +351,31 @@ describe("runEnding", () => {
     ).toBe("unknown");
   });
 
+  it("is not thrown off by a middle trial that early-stopped on its own", () => {
+    // Only the last planned trial says whether the search ran to its end: an
+    // earlier one that stopped on patience is an ordinary finished trial.
+    expect(
+      runEnding([
+        trialStart(0, 2),
+        epoch(3, 10, { index: 0, of: 2 }),
+        trialEnd(0, 2, 3),
+        trialStart(1, 2),
+        epoch(10, 10, { index: 1, of: 2 }),
+        trialEnd(1, 2, 10),
+        end(0, 2),
+      ]),
+    ).toBe("complete");
+  });
+
+  it("reads a PatchCore stopped before it scored: phases, then end, no epoch report", () => {
+    expect(runEnding([start(1), phase(), end(1)])).toBe("early");
+    expect(runEnding([start(1), phase(), end(0)])).toBe("early");
+  });
+
+  it("reads a PatchCore that scored as complete", () => {
+    expect(runEnding([start(1), phase(), epoch(1, 1), end(1)])).toBe("complete");
+  });
+
   it("tells the trial of an epoch from the last trial_start when it is not stamped", () => {
     expect(
       runEnding([
@@ -448,11 +483,172 @@ describe("stopOutcome", () => {
     expect(stopOutcome({ requested: true, ended: true, events: complete })).toBe("too-late");
   });
 
+  it("takes a unit the server marked stopped as proof, over what the stream suggests", () => {
+    // The last fold's final epoch was already running when the stop landed: the
+    // stream looks complete, and the server still records the fold as stopped.
+    const events = [trialStart(0, 1), epoch(2, 2, { index: 0, of: 1 }), end(0, 1)];
+    expect(stopOutcome({ requested: true, ended: true, events })).toBe("too-late");
+    expect(
+      stopOutcome({
+        requested: true,
+        ended: true,
+        events,
+        report: { fold_results: [{ status: "success" }, { status: "stopped" }] },
+      }),
+    ).toBe("stopped");
+  });
+
+  it("falls back to the stream when the report names no stopped unit", () => {
+    expect(
+      stopOutcome({
+        requested: true,
+        ended: true,
+        events: [start(20), end(5)],
+        report: { trials: [{ status: "success" }] },
+      }),
+    ).toBe("stopped");
+    expect(
+      stopOutcome({
+        requested: true,
+        ended: true,
+        events: complete,
+        report: { trials: [{ status: "success" }] },
+      }),
+    ).toBe("too-late");
+  });
+
   it("never says the run finished normally without an epoch that reached its total", () => {
     expect(stopOutcome({ requested: true, ended: true, events: [] })).toBe("unknown");
     expect(
       stopOutcome({ requested: true, ended: true, events: [start(5), end(5)] }),
     ).toBe("unknown");
+  });
+});
+
+describe("stoppedWithoutResult", () => {
+  // A stop that lands in the first fold / trial / replicate / model leaves nothing
+  // to report: the server ends the stream normally, then fails the job with a
+  // message saying exactly that ("Parado antes de concluir a primeira dobra…").
+  const ended = [trialStart(0, 3), epoch(1, 3, { index: 0, of: 3 }), end(0, 1)];
+
+  it("recognises a stop that left nothing to report", () => {
+    expect(stoppedWithoutResult({ requested: true, failed: true, events: ended })).toBe(true);
+  });
+
+  it("is not a stop when the researcher asked for none", () => {
+    expect(stoppedWithoutResult({ requested: false, failed: true, events: ended })).toBe(false);
+  });
+
+  it("is not a stop when the run did not fail", () => {
+    expect(stoppedWithoutResult({ requested: true, failed: false, events: ended })).toBe(false);
+  });
+
+  it("stays a failure when the stream never reached its end", () => {
+    // A crash mid-run is not a stop that found nothing to report.
+    expect(
+      stoppedWithoutResult({ requested: true, failed: true, events: [start(5), epoch(1, 5)] }),
+    ).toBe(false);
+  });
+});
+
+describe("plainReason", () => {
+  it("drops the exception class the server puts in front of its sentence", () => {
+    expect(
+      plainReason("RuntimeError: Parado antes de concluir a primeira dobra: não há resultado."),
+    ).toBe("Parado antes de concluir a primeira dobra: não há resultado.");
+  });
+
+  it("leaves a message that carries none alone", () => {
+    expect(plainReason("Sem classe no dataset.")).toBe("Sem classe no dataset.");
+    expect(plainReason("")).toBe("");
+  });
+});
+
+describe("unitCounts", () => {
+  it("counts the folds of a K-fold report", () => {
+    expect(
+      unitCounts({
+        fold_results: [{ status: "success" }, { status: "success" }, { status: "stopped" }],
+      }),
+    ).toEqual({ finished: 2, stopped: 1, failed: 0, total: 3 });
+  });
+
+  it("counts the trials of a sweep, a comparison or a replicate set", () => {
+    expect(
+      unitCounts({
+        trials: [{ status: "success" }, { status: "failed" }, { status: "stopped" }],
+      }),
+    ).toEqual({ finished: 1, stopped: 1, failed: 1, total: 3 });
+  });
+
+  it("reads a classification comparison, which reports counts and no list", () => {
+    expect(
+      unitCounts({ top_3: [], total_ran: 3, failed_count: 1, stopped_count: 1 }),
+    ).toEqual({ finished: 1, stopped: 1, failed: 1, total: 3 });
+  });
+
+  it("says nothing for a report that does not list its units", () => {
+    expect(unitCounts(null)).toBeNull();
+    expect(unitCounts(undefined)).toBeNull();
+    expect(unitCounts({})).toBeNull();
+    // The classification grid search reports only totals: stopped and failed trials
+    // cannot be told apart there.
+    expect(
+      unitCounts({ best_trial: {}, total_trials: 3, successful_trials: 2 }),
+    ).toBeNull();
+  });
+});
+
+describe("stopSummary", () => {
+  it("names the epoch a single run stopped at", () => {
+    expect(stopSummary("epoch", [epoch(45, 400), end(45)], null)).toEqual({
+      kind: "epoch",
+      epoch: 45,
+      total: 400,
+    });
+  });
+
+  it("counts the units of a multi-unit run, from the report", () => {
+    const events = [
+      trialStart(0, 3),
+      epoch(2, 2, { index: 0, of: 3 }),
+      trialEnd(0, 3, 2),
+      trialStart(1, 3),
+      epoch(1, 2, { index: 1, of: 3 }),
+      trialEnd(1, 3, 1),
+      end(0, 2),
+    ];
+    expect(
+      stopSummary("fold", events, {
+        fold_results: [{ status: "success" }, { status: "stopped" }],
+      }),
+    ).toEqual({ kind: "units", unit: "fold", finished: 1, stopped: 1, planned: 3 });
+  });
+
+  it("takes the planned count from the report when the stream did not carry it", () => {
+    expect(
+      stopSummary("fold", [end(0, 2)], {
+        n_folds: 5,
+        fold_results: [{ status: "success" }, { status: "stopped" }],
+      }),
+    ).toEqual({ kind: "units", unit: "fold", finished: 1, stopped: 1, planned: 5 });
+  });
+
+  it("falls back to the epoch the stream reached without a report", () => {
+    expect(
+      stopSummary("model", [trialStart(0, 3), epoch(1, 4, { index: 0, of: 3 }), end(0, 1)], null),
+    ).toEqual({ kind: "epoch", epoch: 1, total: 4 });
+  });
+
+  it("says whether a stopped PatchCore kept its memory bank", () => {
+    expect(stopSummary("phase", [start(1), phase(), end(1)], null)).toEqual({
+      kind: "phase",
+      bankKept: true,
+    });
+    expect(stopSummary("phase", [start(1), phase(), end(0)], null)).toEqual({
+      kind: "phase",
+      bankKept: false,
+    });
   });
 });
 
@@ -467,6 +663,46 @@ describe("stop wording", () => {
   it("does not claim a checkpoint for a run that stopped before its first epoch", () => {
     expect(pt.trainingOverlay.stoppedLog(0, 8)).not.toMatch(/checkpoint|0\/8/);
     expect(en.trainingOverlay.stoppedLog(0, 8)).not.toMatch(/checkpoint|0\/8/);
+  });
+
+  it("confirms each stop point with what the server does there", () => {
+    for (const dict of [pt, en]) {
+      for (const point of POINTS) {
+        expect(dict.trainingOverlay.stopConfirm[point].length, point).toBeGreaterThan(40);
+      }
+    }
+    // A cut unit stays out of the aggregate, and the mean uses the finished ones.
+    expect(pt.trainingOverlay.stopConfirm.fold).toMatch(/dobras concluídas/);
+    expect(en.trainingOverlay.stopConfirm.fold).toMatch(/finished folds/);
+    expect(pt.trainingOverlay.stopConfirm.model).toMatch(/ranking/);
+    expect(pt.trainingOverlay.stopConfirm.replicate).toMatch(/réplicas concluídas/);
+    // PatchCore: nothing is kept during extraction; the bank is finished and saved.
+    expect(pt.trainingOverlay.stopConfirm.phase).toMatch(/extração/);
+    expect(pt.trainingOverlay.stopConfirm.phase).toMatch(/banco/);
+    expect(en.trainingOverlay.stopConfirm.phase).toMatch(/extraction/);
+    expect(en.trainingOverlay.stopConfirm.phase).toMatch(/memory bank/);
+    // Nothing multi-unit can be resumed.
+    for (const point of ["trial", "fold", "model", "replicate"] as const) {
+      expect(pt.trainingOverlay.stopConfirm[point], point).toMatch(/retomad/);
+      expect(en.trainingOverlay.stopConfirm[point], point).toMatch(/resum/);
+    }
+  });
+
+  it("counts the finished units against the planned ones, and the one left out", () => {
+    expect(pt.trainingOverlay.stoppedUnitsLog("fold", 2, 3, 1)).toMatch(/dobras concluídas: 2\/3/);
+    expect(pt.trainingOverlay.stoppedUnitsLog("fold", 2, 3, 1)).toMatch(/fora da agregação: 1/);
+    expect(en.trainingOverlay.stoppedUnitsLog("model", 1, 4, 1)).toMatch(/models finished: 1\/4/);
+    // No stopped unit, no mention; no planned count, no "/null".
+    expect(en.trainingOverlay.stoppedUnitsLog("trial", 2, 5, 0)).not.toMatch(/left out/);
+    expect(pt.trainingOverlay.stoppedUnitsLog("replicate", 2, null, 0)).not.toMatch(/null|\//);
+    expect(en.trainingOverlay.stoppedUnitsLog("replicate", 2, null, 0)).not.toMatch(/null|\//);
+  });
+
+  it("says whether the stopped PatchCore kept its memory bank", () => {
+    expect(pt.trainingOverlay.stoppedPhaseLog(true)).toMatch(/banco/);
+    expect(pt.trainingOverlay.stoppedPhaseLog(false)).toMatch(/nada/);
+    expect(en.trainingOverlay.stoppedPhaseLog(true)).toMatch(/memory bank/);
+    expect(en.trainingOverlay.stoppedPhaseLog(false)).toMatch(/nothing/);
   });
 
   it("speaks of the run, not of its kind, in the right gender", () => {

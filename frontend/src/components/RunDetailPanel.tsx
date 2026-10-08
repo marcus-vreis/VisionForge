@@ -23,6 +23,7 @@ import { formatBytes, shortDigest } from "../lib/dataset-identity";
 import { metricCi } from "../lib/metric-ci";
 import { pickerCancelText } from "../lib/picker-feedback";
 import { PREPROCESS_KIND_LABELS } from "../lib/preprocess-kinds";
+import { STOPPED_COLOR, unitState } from "../lib/unit-status";
 import type { MetricCI } from "../types/run";
 import { Lightbox } from "./Lightbox";
 
@@ -57,7 +58,12 @@ function metricLabel(t: Dict, key: string): string {
 
 function fmtMetric(v: unknown): string {
   if (v === null || v === undefined) return "—";
-  if (typeof v === "number") return v % 1 === 0 ? String(v) : v.toFixed(4);
+  // A metric that was never measured is null; a NaN or an infinity (the old
+  // sentinel of a run with no best epoch) must not reach the screen either.
+  if (typeof v === "number") {
+    if (!Number.isFinite(v)) return "—";
+    return v % 1 === 0 ? String(v) : v.toFixed(4);
+  }
   return String(v);
 }
 
@@ -1315,6 +1321,8 @@ interface CVAggregate {
   n_folds: number;
   n_folds_ok: number;
   n_folds_failed: number;
+  /** Folds the server cut when a stop arrived (ADR-111); absent on older runs. */
+  n_folds_stopped?: number;
   mean_accuracy: number | null;
   std_accuracy: number | null;
   mean_f1: number | null;
@@ -1338,6 +1346,7 @@ function CrossValidationDetail({ metrics }: { metrics: Record<string, unknown> }
         a.n_folds_ok ?? typed.length,
         a.n_folds ?? typed.length,
         a.n_folds_failed ?? 0,
+        a.n_folds_stopped ?? 0,
       )}
     >
       <div
@@ -1395,7 +1404,7 @@ function CrossValidationDetail({ metrics }: { metrics: Record<string, unknown> }
           </thead>
           <tbody>
             {typed.map((f) => {
-              const ok = f.status === "success";
+              const state = unitState(f.status);
               return (
                 <tr key={f.fold}>
                   <td style={cvTdLabelStyle}>#{f.fold + 1}</td>
@@ -1407,12 +1416,19 @@ function CrossValidationDetail({ metrics }: { metrics: Record<string, unknown> }
                   <td
                     style={{
                       ...cvTdStyle,
-                      color: ok
-                        ? "oklch(0.85 0.16 150)"
-                        : "oklch(0.85 0.14 22)",
+                      color:
+                        state === "ok"
+                          ? "oklch(0.85 0.16 150)"
+                          : state === "stopped"
+                            ? STOPPED_COLOR
+                            : "oklch(0.85 0.14 22)",
                     }}
                   >
-                    {ok ? "✓" : `× ${f.error || "?"}`}
+                    {state === "ok"
+                      ? "✓"
+                      : state === "stopped"
+                        ? `■ ${t.resultsView.outcome.stopped}`
+                        : `× ${f.error || "?"}`}
                   </td>
                 </tr>
               );

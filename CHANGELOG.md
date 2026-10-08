@@ -15,19 +15,26 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Added
 
-- **Dá para parar o treino em andamento pela tela de treino.** Um treino sem
+- **Dá para parar a execução em andamento pela tela de treino.** Um treino sem
   nada na fila só podia ser parado matando o servidor: o botão de parar existia
   apenas na linha do treino em execução da fila, e o botão da fila só aparecia
   quando algo esperava. A tela de treino ganhou "■ Parar", que pede confirmação
-  (um clique errado encerra um treino longo) e diz o que acontece: o treino
-  termina a época em andamento e mantém o melhor checkpoint e o histórico — se
-  parou antes da última época, o Histórico oferece retomar. Uma busca em
-  grade/aleatória também pula os trials que ainda não começaram, e não pode ser
-  retomada. Quando o servidor encerra a execução, o cabeçalho passa a dizer
-  "Treino interrompido" (e não "concluído"), com a época em que parou. O botão
-  da fila agora aparece também enquanto um treino roda, mesmo sem nada
-  esperando: é o único caminho até o treino depois de recarregar a página
-  ([ADR-088](docs/dev/DECISIONS.md), [ADR-094](docs/dev/DECISIONS.md)).
+  (um clique errado encerra um treino longo) e diz o que acontece em cada tipo
+  de execução, conforme o ponto de parada que a fila informa (`stop_at`): o
+  treino termina a época em andamento e mantém o melhor checkpoint e o
+  histórico — se parou antes da última época, o Histórico oferece retomar —; uma
+  busca, uma validação cruzada, uma comparação ou um conjunto de réplicas não
+  começa mais nada depois do trial, da dobra, do modelo ou da réplica em
+  andamento, que fica fora da média e do ranking, e não pode ser retomado; o
+  PatchCore para entre as etapas. Quando o servidor encerra a execução, o
+  cabeçalho passa a dizer "Treino interrompido" (e não "concluído"), a barra
+  mostra até onde chegou em vez de 100% e o log diz a época em que parou, ou
+  quantas dobras, modelos, réplicas ou trials terminaram, ou se o banco do
+  PatchCore foi guardado. Nas tabelas de resultado a unidade cortada aparece
+  como "parada", não como falha. O botão da fila agora aparece também enquanto
+  um treino roda, mesmo sem nada esperando: é o único caminho até o treino
+  depois de recarregar a página
+  ([ADR-088](docs/dev/DECISIONS.md), [ADR-111](docs/dev/DECISIONS.md)).
 - **Interface bilíngue (pt/en).** Todas as telas da interface existem em
   português e em inglês, com um seletor PT/EN no cabeçalho. A escolha fica
   lembrada no navegador, e a primeira visita segue o idioma do navegador. Os
@@ -70,15 +77,12 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
   o modelo); em regressão nunca cita a recuperação. E a nota dos
   modelos que nunca foram sinalizados (`resnet18`, `efficientnet_b1`...) dizia
   "o valor medido é adam a 0.001" para qualquer um; agora diz "sugerimos".
-- **O botão de parar não promete mais o que o servidor não cumpre.** Parar uma
-  validação cruzada (K-fold), uma comparação de modelos, réplicas, o sweep de
-  uma tarefa que não é classificação ou uma tarefa própria respondia "ok" e o
-  treino seguia até o fim, porque o servidor só entrega o pedido de parada aos
-  treinos simples e às buscas de classificação
-  ([ADR-094](docs/dev/DECISIONS.md)). Nesses casos o botão de parar fica
-  desativado e diz por quê, tanto na fila quanto na tela de treino. O
-  PatchCore, que não tem épocas, também não para no meio; só a tela de treino
-  o reconhece, porque a fila não sabe qual modelo uma tarefa de anomalia usa.
+- **Resultados de um run parado não mostram mais "null" nem "NaN".** Um run
+  parado antes da primeira época tem métricas nunca medidas (`null` no
+  `run.json`, não 0.0); o histórico, o detalhe, a comparação de runs e a tela de
+  resultados mostram "—" no lugar, o gráfico de comparação deixa de desenhar uma
+  curva sem pontos, e o botão de parar mostra a recusa do servidor (409) em vez
+  do texto cru em inglês ou português.
 - **Parar funciona em validação cruzada, comparação, réplicas, varreduras e
   tarefas próprias.** Antes, o botão de parar só chegava aos treinos simples e
   ao grid/random search da classificação; nos demais o servidor respondia que

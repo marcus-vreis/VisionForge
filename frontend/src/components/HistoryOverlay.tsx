@@ -288,9 +288,12 @@ function RunCard({
   const metricKeys = run.task.startsWith("custom:")
     ? Object.keys(run.final_metrics)
     : (METRIC_KEYS_BY_TASK[run.task] ?? METRIC_KEYS_BY_TASK.classification);
-  const shownMetrics = metricKeys.filter(
-    (k) => run.final_metrics[k] !== undefined,
-  );
+  // A metric that was never measured (a run stopped before its first epoch) is
+  // left out, never printed as null or NaN.
+  const shownMetrics = metricKeys.filter((k) => {
+    const v: unknown = run.final_metrics[k];
+    return typeof v === "number" && Number.isFinite(v);
+  });
 
   const handleClick = () => {
     if (selectable && onToggleSelect) {

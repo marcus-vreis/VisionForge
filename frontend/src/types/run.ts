@@ -16,6 +16,16 @@ export interface RunResponse {
   status: "running" | "queued";
 }
 
+/** Where a job stops when asked (ADR-111): the boundary after which it starts
+ *  nothing new. `phase` is PatchCore, which has no epochs. */
+export type StopPoint =
+  | "epoch"
+  | "trial"
+  | "fold"
+  | "model"
+  | "replicate"
+  | "phase";
+
 /** One entry in the run queue. */
 export interface QueuedJobInfo {
   run_id: string;
@@ -23,6 +33,9 @@ export interface QueuedJobInfo {
   task: string;
   strategy: string;
   submitted_at: string;
+  /** Where the job stops when asked; `null` is a job that cannot be stopped once
+   *  running (DELETE answers 409). Absent from servers older than ADR-111. */
+  stop_at?: StopPoint | null;
 }
 
 export interface QueueSnapshot {
