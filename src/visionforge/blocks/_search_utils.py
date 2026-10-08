@@ -10,12 +10,7 @@ import yaml
 from loguru import logger
 
 from visionforge.blocks.classification import ClassificationBlock
-from visionforge.core.cancellation import (
-    STOPPED,
-    STOPPED_NOTE,
-    CancellationToken,
-    is_cancelled,
-)
+from visionforge.core.cancellation import STOPPED, STOPPED_NOTE, CancellationToken
 from visionforge.utils.config import ExperimentConfig
 
 
@@ -156,6 +151,13 @@ def run_trial(
         trial_record["best_val_loss"] = report.get("train", {}).get("best_val_loss")
         trial_record["test_accuracy"] = report.get("eval", {}).get("accuracy")
         trial_record["test_f1"] = report.get("eval", {}).get("f1")
+        # A trial cut short by the stop must not be ranked against trials that
+        # ran to the end, nor written out as the best config (ADR-111). Only
+        # the trainer knows whether it was cut: a stop that landed in the last
+        # epoch, or during the test evaluation, leaves a finished trial.
+        if report.get("train", {}).get("stopped"):
+            trial_record["status"] = STOPPED
+            trial_record["error"] = STOPPED_NOTE
 
         logger.info(
             "Trial {}/{} succeeded: val_loss={} accuracy={}",
@@ -172,12 +174,6 @@ def run_trial(
     finally:
         del block
         torch.cuda.empty_cache()
-
-    # A trial cut short by the stop must not be ranked against trials that ran
-    # to the end, nor written out as the best config (ADR-111).
-    if is_cancelled(cancel_token):
-        trial_record["status"] = STOPPED
-        trial_record["error"] = STOPPED_NOTE
 
 
 __all__ = [

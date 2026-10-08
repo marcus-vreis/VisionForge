@@ -85,23 +85,42 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
   tinha parado e o trabalho ia até o fim (uma validação cruzada de 3 dobras
   rodava as 3 inteiras). Agora o treino em andamento para no fim da época atual
   e nada novo começa depois: nenhuma dobra, modelo, réplica ou tentativa a
-  mais. A unidade interrompida aparece como "parada", guarda as métricas que
-  chegou a ter e fica fora da média e do ranking, que passam a ser calculados só
-  sobre as que terminaram (com o `n` real). O PatchCore, que não tem épocas,
-  para entre as etapas: parado durante a extração de features não guarda nada;
-  parado enquanto monta o banco de memória termina o banco, salva e pula a
-  pontuação, que pode ser feita depois em "+ testar" no histórico. A fila
-  agora diz onde cada execução para (`stop_at`), e uma tarefa própria que
-  controla o próprio laço de treino, que não tem como parar no meio, recebe 409
-  em vez de um "parado" que não aconteceria; na fila de espera ela continua
-  podendo ser removida ([ADR-111](docs/dev/DECISIONS.md)).
+  mais. A unidade que a parada de fato interrompeu aparece como "parada",
+  guarda as métricas que chegou a ter e fica fora da média e do ranking, que
+  passam a ser calculados só sobre as que terminaram (com o `n` real); uma
+  unidade que terminou mesmo assim (a parada chegou na última época, ou é uma
+  tarefa própria que controla o próprio laço) conta normalmente. Um trabalho
+  parado antes de concluir a primeira unidade termina com um resultado vazio
+  que diz que foi parado, não com erro; todo resultado e todo `run.json` trazem
+  `stopped` (verdadeiro quando a parada cortou o treino), e um erro de verdade
+  durante a parada (falta de memória, por exemplo) continua aparecendo como
+  falha. O grid/random search da classificação passa a contar à parte as
+  tentativas paradas e as que falharam. Na comparação com réplicas, só entram
+  no ranking as variantes que dá para comparar, e a média de cada uma é tomada
+  nas sementes que todas terminaram; as variantes que não chegaram a começar
+  aparecem em `not_run`. O PatchCore, que não tem épocas, para entre as
+  etapas: parado durante a extração de features não guarda nada; parado
+  enquanto monta o banco de memória termina o banco, salva e pula a pontuação,
+  que pode ser feita depois em "+ testar" no histórico. A fila agora diz onde
+  cada execução para (`stop_at`), e uma tarefa própria que controla o próprio
+  laço de treino, que não tem como parar no meio, recebe 409 em vez de um
+  "parado" que não aconteceria; na fila de espera ela continua podendo ser
+  removida ([ADR-111](docs/dev/DECISIONS.md)).
+- **O desvio-padrão da validação cruzada passou a ser o amostral, e some com
+  uma dobra só.** Com uma única dobra concluída (o que é comum depois de parar)
+  o resultado mostrava "± 0.0", que parece uma medida de variação nula; agora o
+  desvio fica vazio e o resultado informa quantas dobras entraram na média
+  (`n`). O cálculo passou a usar n-1, como as réplicas e os testes pareados, o
+  que deixa o desvio de uma validação cruzada completa um pouco maior que antes
+  ([ADR-111](docs/dev/DECISIONS.md)).
 - **Parar antes da primeira época não quebra mais o run.** Um treino parado
   enquanto ainda carregava os dados terminava com erro, porque o bloco tentava
   carregar um checkpoint que nunca foi gravado; em segmentação e nas tarefas
   próprias os pesos não treinados eram salvos e avaliados como se fossem
-  resultado, e na detecção torchvision eram salvos como `best.pt`. Agora o run termina normalmente, o `run.json` registra 0
-  épocas, métricas vazias em vez de 0.0 e nenhum checkpoint, e o run não aparece
-  como retomável, porque não há nada a continuar
+  resultado, e na detecção torchvision eram salvos como `best.pt`. Agora o run
+  termina normalmente, o `run.json` registra 0 épocas, métricas vazias em vez de
+  0.0 e nenhum checkpoint, o "+ testar" diz que não há checkpoint, e o run não
+  aparece como retomável, porque não há nada a continuar
   ([ADR-111](docs/dev/DECISIONS.md)).
 - **"Testar em outro dataset" não exige mais `train` e `val` ao lado.** Em
   regressão, escolher um `.csv` numa pasta sem `train.csv` e `val.csv` falhava

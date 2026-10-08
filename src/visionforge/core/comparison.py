@@ -48,8 +48,9 @@ def run_model_comparison(
     between architectures so a long sweep doesn't accumulate VRAM.
 
     A stop carried by the runner (ADR-111) cuts the architecture in flight at
-    its epoch boundary, records it as ``stopped`` outside the ranking, and
-    starts no further architecture.
+    its epoch boundary and starts no further architecture. Only an
+    architecture the runner reports as cut is recorded as ``stopped``, outside
+    the ranking; one that finished although the stop arrived during it counts.
     """
     token = runner_cancel_token(runner)
     trials: list[ComparisonTrial] = []
@@ -67,7 +68,10 @@ def run_model_comparison(
             trial.metrics = runner.metrics(result)
             trial.training_time_s = result.training_time_s
             trial.error = result.error
-            if result.status == "success":
+            if result.stopped and result.status == "success":
+                trial.status = STOPPED
+                trial.error = STOPPED_NOTE
+            elif result.status == "success":
                 logger.info(
                     "Comparison: {} succeeded — {}={}",
                     arch,
@@ -83,9 +87,6 @@ def run_model_comparison(
             gc.collect()
             if torch is not None and torch.cuda.is_available():
                 torch.cuda.empty_cache()
-        if is_cancelled(token):
-            trial.status = STOPPED
-            trial.error = STOPPED_NOTE
         trials.append(trial)
         if is_cancelled(token):
             logger.info(

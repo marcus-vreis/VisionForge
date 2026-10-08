@@ -10,7 +10,12 @@ from loguru import logger
 
 from visionforge.blocks.base import ExperimentBlock
 from visionforge.blocks.classification_runner import ClassificationRunner
-from visionforge.core.cancellation import STOPPED, STOPPED_NOTE, is_cancelled
+from visionforge.core.cancellation import (
+    STOPPED,
+    STOPPED_NOTE,
+    is_cancelled,
+    job_was_stopped,
+)
 from visionforge.utils.config import ExperimentConfig
 
 
@@ -71,14 +76,21 @@ class ModelComparisonBlock(ExperimentBlock):
                     trial_record["f1"] = result.metrics.get("f1")
                     trial_record["auc_roc"] = result.metrics.get("auc_roc")
                     trial_record["training_time_s"] = result.training_time_s
-
-                    logger.info(
-                        "ModelComparison: {} succeeded — accuracy={} f1={} auc_roc={}",
-                        arch,
-                        trial_record["accuracy"],
-                        trial_record["f1"],
-                        trial_record["auc_roc"],
-                    )
+                    if result.stopped:
+                        # Cut short by the stop: its metrics stay in the record,
+                        # but it does not compete with architectures that
+                        # trained to the end (ADR-111).
+                        trial_record["status"] = STOPPED
+                        trial_record["error"] = STOPPED_NOTE
+                    else:
+                        logger.info(
+                            "ModelComparison: {} succeeded — accuracy={} f1={} "
+                            "auc_roc={}",
+                            arch,
+                            trial_record["accuracy"],
+                            trial_record["f1"],
+                            trial_record["auc_roc"],
+                        )
                 else:
                     trial_record["error"] = result.error
                     logger.warning(
@@ -95,11 +107,6 @@ class ModelComparisonBlock(ExperimentBlock):
                 gc.collect()
                 torch.cuda.empty_cache()
 
-            # Cut short by the stop: its metrics are kept in the record but it
-            # does not compete with architectures that trained to the end.
-            if is_cancelled(self._cancel_token):
-                trial_record["status"] = STOPPED
-                trial_record["error"] = STOPPED_NOTE
             unsorted.append(trial_record)
             if is_cancelled(self._cancel_token):
                 logger.info(
@@ -119,18 +126,23 @@ class ModelComparisonBlock(ExperimentBlock):
         self._write_artifacts()
 
     def report(self) -> dict[str, Any]:
-        """Return top-3 architectures plus total/failed counts.
+        """Return top-3 architectures plus total/failed/stopped counts.
+
+        A comparison stopped before any architecture finished is reported with
+        an empty ranking rather than as a failure (ADR-111).
 
         Raises:
-            RuntimeError: if all architectures failed.
+            RuntimeError: if all architectures failed and the stop cut nothing.
         """
         successful = [t for t in self._trials if t["status"] == "success"]
-        if not successful:
-            if is_cancelled(self._cancel_token):
-                raise RuntimeError(
-                    "Comparação parada antes de concluir a primeira arquitetura: "
-                    "não há ranking a reportar."
-                )
+        mc = self._config.model_comparison
+        assert mc is not None
+        stopped = job_was_stopped(
+            [t["status"] for t in self._trials],
+            len(mc.model_names),
+            self._cancel_token,
+        )
+        if not successful and not stopped:
             raise RuntimeError(
                 "ModelComparisonBlock: all architectures failed — no ranking available."
             )
@@ -140,6 +152,9 @@ class ModelComparisonBlock(ExperimentBlock):
             "total_ran": len(self._trials),
             "failed_count": sum(1 for t in self._trials if t["status"] == "failed"),
             "stopped_count": sum(1 for t in self._trials if t["status"] == STOPPED),
+            # The stop cut this job (ADR-111): a unit was cut, or units were
+            # left unrun -- all of them, if it landed in the first.
+            "stopped": stopped,
         }
 
     # ── private ───────────────────────────────────────────────────────────────

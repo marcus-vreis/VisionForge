@@ -66,6 +66,9 @@ class RegressionTrainResult:
     # Things about this run the researcher has to be told, because the
     # metrics alone would look like a result (ADR-099).
     warnings: list[dict[str, str]] = field(default_factory=list)
+    # True only when the loop broke on the stop token (ADR-111): a run whose
+    # stop arrived in its last epoch, or after it, finished and is not cut.
+    stopped: bool = False
 
 
 class _MetricAccumulator:
@@ -193,6 +196,7 @@ class RegressionTrainer:
         save_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="ckpt")
         save_future = None
 
+        stopped = False
         for epoch in range(start_epoch, cfg.epochs + 1):
             # The safe point: the previous epoch's checkpoint is written and its
             # metrics emitted, so stopping here leaves the run directory whole.
@@ -201,6 +205,7 @@ class RegressionTrainer:
                     "Run cancelled at epoch {}; keeping the best checkpoint so far.",
                     epoch,
                 )
+                stopped = True
                 break
 
             train_loss = self._train_epoch(model, train_loader, optimizer, criterion)
@@ -317,6 +322,7 @@ class RegressionTrainer:
             logger.warning("{}", warning["message"])
 
         train_result = RegressionTrainResult(
+            stopped=stopped,
             best_epoch=best_epoch,
             best_val_loss=best_val_loss,
             total_epochs=len(history),
@@ -558,6 +564,9 @@ class RegressionTrainer:
             "experiment": self._config.name,
             "timestamp": datetime.now().isoformat(),
             "status": "completed",
+            # True when the stop cut this run (ADR-111); "completed" says only
+            # that it ended cleanly, with total_epochs as far as it got.
+            "stopped": result.stopped,
             "device_used": result.device_used,
             "environment": capture_environment(),
             # Proves two runs saw the same data, not just the same path.

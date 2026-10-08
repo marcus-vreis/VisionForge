@@ -15,8 +15,14 @@ from torchvision.datasets import ImageFolder
 
 from visionforge.blocks._search_utils import make_trial_progress_wrapper
 from visionforge.blocks.base import ExperimentBlock
-from visionforge.core.cancellation import STOPPED, STOPPED_NOTE, is_cancelled
+from visionforge.core.cancellation import (
+    STOPPED,
+    STOPPED_NOTE,
+    is_cancelled,
+    job_was_stopped,
+)
 from visionforge.core.evaluator import Evaluator
+from visionforge.core.replicates import sample_std
 from visionforge.core.trainer import Trainer
 from visionforge.models.factory import ModelFactory
 from visionforge.utils.config import ExperimentConfig
@@ -239,8 +245,10 @@ class CrossValidationBlock(ExperimentBlock):
             }
 
             # Whether the fold's trainer got as far as emitting its own "end",
-            # which the wrapper turns into this fold's trial_end.
+            # which the wrapper turns into this fold's trial_end, and whether
+            # the stop cut it short.
             trained = False
+            cut = False
             try:
                 fold_mean, fold_std = _compute_fold_stats(
                     raw_dataset, train_indices, data_cfg.num_workers
@@ -281,6 +289,7 @@ class CrossValidationBlock(ExperimentBlock):
                     cancel_token=self._cancel_token,
                 )
                 trained = True
+                cut = train_result.stopped
                 # 0 epochs only when stopped before the first: nothing to score.
                 if train_result.total_epochs:
                     state_dict = torch.load(
@@ -309,14 +318,17 @@ class CrossValidationBlock(ExperimentBlock):
 
             except Exception as exc:  # noqa: BLE001
                 fold_record["error"] = str(exc)
+                # An error is a failure even inside the stop window (ADR-111).
+                cut = False
                 logger.warning("Fold {}/{} failed: {}", fold_idx + 1, cv.n_folds, exc)
 
             finally:
                 torch.cuda.empty_cache()
 
-            # The fold that was training when the stop arrived keeps its record
-            # but is not a fold of this K-fold any more (ADR-111).
-            if is_cancelled(self._cancel_token):
+            # A fold the stop cut keeps its record but is not a fold of this
+            # K-fold any more (ADR-111). One whose stop landed in its last epoch,
+            # or in the evaluation after it, finished and counts.
+            if cut:
                 fold_record["status"] = STOPPED
                 fold_record["error"] = STOPPED_NOTE
 
@@ -362,16 +374,15 @@ class CrossValidationBlock(ExperimentBlock):
     def report(self) -> dict[str, Any]:
         """Return aggregated cross-validation metrics.
 
+        A K-fold stopped before any fold finished is reported with no mean
+        rather than as a failure: the researcher asked for the stop (ADR-111).
+
         Raises:
-            RuntimeError: if all folds failed.
+            RuntimeError: if all folds failed and the stop cut nothing.
         """
         successful = [r for r in self._fold_results if r["status"] == "success"]
-        if not successful:
-            if is_cancelled(self._cancel_token):
-                raise RuntimeError(
-                    "Validação cruzada parada antes de concluir a primeira dobra: "
-                    "não há média a reportar."
-                )
+        stopped = self._stopped()
+        if not successful and not stopped:
             raise RuntimeError(
                 "CrossValidationBlock: all folds failed — no metrics available."
             )
@@ -381,13 +392,25 @@ class CrossValidationBlock(ExperimentBlock):
 
         return {
             "fold_results": self._fold_results,
-            "mean_accuracy": float(np.mean(accuracies)),
-            "std_accuracy": float(np.std(accuracies)),
-            "mean_f1": float(np.mean(f1s)),
-            "std_f1": float(np.std(f1s)),
+            "n_folds_ok": len(successful),
+            "mean_accuracy": float(np.mean(accuracies)) if accuracies else None,
+            "std_accuracy": sample_std(accuracies),
+            "mean_f1": float(np.mean(f1s)) if f1s else None,
+            "std_f1": sample_std(f1s),
+            # The stop cut this job (ADR-111): a unit was cut, or units were
+            # left unrun -- all of them, if it landed in the first.
+            "stopped": stopped,
         }
 
     # ── private ───────────────────────────────────────────────────────────────
+
+    def _stopped(self) -> bool:
+        """Whether the stop cut this K-fold: a fold cut, or folds left unrun."""
+        cv = self._config.cross_validation
+        assert cv is not None
+        return job_was_stopped(
+            [r["status"] for r in self._fold_results], cv.n_folds, self._cancel_token
+        )
 
     def _write_summary(self, base_name: str) -> None:
         """Write cv_summary.json to reports_dir / base_name."""
@@ -406,10 +429,11 @@ class CrossValidationBlock(ExperimentBlock):
             "n_folds": cv.n_folds,
             "folds": self._fold_results,
             "aggregate": {
+                "n": len(accuracies),
                 "mean_accuracy": float(np.mean(accuracies)) if accuracies else None,
-                "std_accuracy": float(np.std(accuracies)) if accuracies else None,
+                "std_accuracy": sample_std(accuracies),
                 "mean_f1": float(np.mean(f1s)) if f1s else None,
-                "std_f1": float(np.std(f1s)) if f1s else None,
+                "std_f1": sample_std(f1s),
             },
         }
 
@@ -442,12 +466,16 @@ class CrossValidationBlock(ExperimentBlock):
         mean_acc = float(np.mean(accuracies)) if accuracies else None
         mean_f1 = float(np.mean(f1s)) if f1s else None
         mean_val_loss = float(np.mean(val_losses)) if val_losses else None
-        std_acc = float(np.std(accuracies)) if accuracies else None
-        std_f1 = float(np.std(f1s)) if f1s else None
+        std_acc = sample_std(accuracies)
+        std_f1 = sample_std(f1s)
 
         run_json: dict[str, Any] = {
             "experiment": base_name,
-            "status": "completed" if successful else "failed",
+            # A K-fold the researcher stopped did what was asked of it, even
+            # with no fold finished; only genuine failures make it "failed".
+            "status": "completed" if successful or self._stopped() else "failed",
+            # The run-level stop marker (ADR-111), read by History and the GUI.
+            "stopped": self._stopped(),
             # Naive local time like every other run.json writer — mixing aware
             # and naive timestamps breaks the history sort (see routes.py).
             "timestamp": datetime.now().isoformat(),

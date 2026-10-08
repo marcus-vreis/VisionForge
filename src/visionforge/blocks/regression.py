@@ -111,6 +111,8 @@ class RegressionBlock:
                 # inf until an epoch runs, and inf is not JSON (ADR-111).
                 "best_val_loss": r.best_val_loss if r.total_epochs else None,
                 "total_epochs": r.total_epochs,
+                # True only when the stop cut the training (ADR-111).
+                "stopped": r.stopped,
                 "device_used": r.device_used,
                 "run_dir": str(r.model_path.parent),
             }

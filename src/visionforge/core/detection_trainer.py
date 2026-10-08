@@ -143,6 +143,9 @@ class DetectionTrainResult:
     run_dir: Path
     # Things about this run the researcher has to be told (ADR-099/101).
     warnings: list[dict[str, str]] = field(default_factory=list)
+    # True only when training was cut by the stop token (ADR-111): a run whose
+    # stop arrived in its last epoch, or after it, finished and is not cut.
+    stopped: bool = False
 
 
 def _extract(metrics: dict[str, Any], key: str) -> float | None:
@@ -343,9 +346,11 @@ class DetectionTrainer:
         # not enough: a cancelled run's phantom is still within the configured
         # count, so what closes the door is the loop ending, either way it can.
         finished = False
+        # Cut by the stop: only when epochs were still left to run.
+        cut = False
 
         def _on_epoch_end(trainer: Any) -> None:
-            nonlocal finished
+            nonlocal finished, cut
             if finished:
                 return
             epoch = int(getattr(trainer, "epoch", len(history))) + 1
@@ -380,6 +385,7 @@ class DetectionTrainer:
                 logger.info("Run cancelled at epoch {}; stopping after it.", epoch)
                 trainer.stop = True
                 finished = True
+                cut = epoch < cfg.epochs
             elif epoch >= cfg.epochs:
                 finished = True
 
@@ -388,7 +394,7 @@ class DetectionTrainer:
         # once its loop is entered. Checked once more before handing over.
         if is_cancelled(cancel_token):
             logger.info("Run cancelled before its first epoch; nothing trained.")
-            result = self._build_result(run_dir, history)
+            result = self._build_result(run_dir, history, stopped=True)
             self._write_run_json(run_dir, result)
             if progress_callback is not None:
                 progress_callback({"event": "end", "total_epochs": len(history)})
@@ -420,7 +426,7 @@ class DetectionTrainer:
             **self._ultralytics_train_kwargs(),
         )
 
-        result = self._build_result(run_dir, history)
+        result = self._build_result(run_dir, history, stopped=cut)
         self._write_run_json(run_dir, result)
         if progress_callback is not None:
             progress_callback({"event": "end", "total_epochs": len(history)})
@@ -536,6 +542,7 @@ class DetectionTrainer:
             self._device_label,
         )
         tb = TensorBoardLogger(run_dir / "tensorboard")
+        stopped = False
         try:
             for epoch in range(start_epoch, cfg.epochs + 1):
                 if is_cancelled(cancel_token):
@@ -543,6 +550,7 @@ class DetectionTrainer:
                         "Run cancelled at epoch {}; keeping the best checkpoint.",
                         epoch,
                     )
+                    stopped = True
                     break
                 train_loss = self._run_torchvision_epoch(
                     model, train_loader, device, optimizer
@@ -625,6 +633,7 @@ class DetectionTrainer:
         for warning in tv_health:
             logger.warning("{}", warning["message"])
         result = DetectionTrainResult(
+            stopped=stopped,
             warnings=tv_health,
             best_epoch=best_epoch,
             best_map50_95=None,
@@ -764,7 +773,10 @@ class DetectionTrainer:
     # ── private ───────────────────────────────────────────────────────────────
 
     def _build_result(
-        self, run_dir: Path, history: list[DetectionEpochResult]
+        self,
+        run_dir: Path,
+        history: list[DetectionEpochResult],
+        stopped: bool = False,
     ) -> DetectionTrainResult:
         scored = [h for h in history if h.map50_95 is not None]
         best = max(scored, key=lambda h: h.map50_95 or 0.0, default=None)
@@ -773,6 +785,7 @@ class DetectionTrainer:
         for warning in health:
             logger.warning("{}", warning["message"])
         return DetectionTrainResult(
+            stopped=stopped,
             warnings=health,
             best_epoch=best.epoch if best else 0,
             best_map50_95=best.map50_95 if best else None,
@@ -931,6 +944,9 @@ class DetectionTrainer:
             "experiment": self._config.name,
             "timestamp": datetime.now().isoformat(),
             "status": "completed",
+            # True when the stop cut this run (ADR-111); "completed" says only
+            # that it ended cleanly, with total_epochs as far as it got.
+            "stopped": result.stopped,
             "device_used": result.device_used,
             "environment": capture_environment(),
             # Proves two runs saw the same data, not just the same path.

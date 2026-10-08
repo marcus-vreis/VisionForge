@@ -43,7 +43,11 @@ from visionforge.blocks.segmentation import SegmentationBlock
 from visionforge.blocks.segmentation_cv import run_segmentation_cross_validation
 from visionforge.blocks.segmentation_runner import SegmentationRunner
 from visionforge.blocks.transfer_learning import TransferLearningBlock
-from visionforge.core.cancellation import STOPPED, CancellationToken, is_cancelled
+from visionforge.core.cancellation import (
+    STOPPED,
+    CancellationToken,
+    job_was_stopped,
+)
 from visionforge.core.comparison import ComparisonTrial, run_model_comparison
 from visionforge.core.data import DataModule
 from visionforge.core.dataset_fingerprint import dataset_identity
@@ -69,7 +73,12 @@ from visionforge.core.replicates import (
     run_replicates,
 )
 from visionforge.core.resume import can_resume
-from visionforge.core.sweep import SweepTrial, run_sweep, validate_sweep_space
+from visionforge.core.sweep import (
+    SweepTrial,
+    planned_trials,
+    run_sweep,
+    validate_sweep_space,
+)
 from visionforge.core.task_runner import TaskRunner, give_cancel_token
 from visionforge.gui.api.dataset_download import credentials_in_play, download_dataset
 from visionforge.gui.api.detection_export import export_detection_run
@@ -1349,6 +1358,8 @@ async def _execute_custom_task(info: Any, cfg: Any, run_id: str) -> None:
             "total_epochs": result.total_epochs,
             "device_used": result.device_used,
             "run_dir": str(result.run_dir),
+            # True only when the stop cut the training (ADR-111).
+            "stopped": result.stopped,
         }
         _current_run = {
             "run_id": run_id,
@@ -1598,22 +1609,41 @@ async def get_result(run_id: str) -> RunResult:
     run_dir = state.get("run_dir")
     run_json_path = Path(run_dir) / "run.json" if run_dir else None
 
+    report = state.get("report") or {}
+    stopped = _report_stopped(report)
     if run_json_path and run_json_path.exists():
         data = json.loads(run_json_path.read_text(encoding="utf-8"))
         return RunResult(
             run_id=run_id,
             metrics=data.get("metrics", {}),
             metric_cis=data.get("metric_cis", {}),
-            report=state.get("report") or {},
+            report=report,
             artifacts=data.get("artifacts", {}),
+            stopped=stopped,
         )
 
     return RunResult(
         run_id=run_id,
         metrics={},
-        report=state.get("report") or {},
+        report=report,
         artifacts={},
+        stopped=stopped,
     )
+
+
+def _report_stopped(report: dict[str, Any]) -> bool:
+    """Whether a stop cut this run, read from wherever its report keeps it.
+
+    Multi-unit reports carry ``stopped`` at the top; single runs carry it in
+    their training section (``train``, or ``detection`` for detection).
+    """
+    if "stopped" in report:
+        return bool(report["stopped"])
+    for section in ("train", "detection"):
+        part = report.get(section)
+        if isinstance(part, dict) and "stopped" in part:
+            return bool(part["stopped"])
+    return False
 
 
 @router.get("/dataset/file")
@@ -3139,6 +3169,16 @@ def _execute_run_test(run_dir: Path, req: RunTestRequest) -> RunTestResponse:
 
     base_config_dict: dict[str, Any] = data["config"]
 
+    # The same guard as the other families: a run stopped before its first
+    # epoch records no checkpoint (ADR-111), and evaluating "None" would fail
+    # with an error about a path instead of saying what is missing.
+    checkpoint = (data.get("artifacts") or {}).get("model")
+    if not checkpoint or not Path(checkpoint).is_file():
+        raise FileNotFoundError(
+            f"Run '{run_dir.name}' não tem um checkpoint utilizável "
+            f"(artifacts.model: {checkpoint!r})."
+        )
+
     # Point the *test* split at the chosen folder: base_dir is its parent and the
     # split name is the folder itself, so one folder is all the researcher gives
     # and the existing DataModule still does the loading.
@@ -3147,7 +3187,7 @@ def _execute_run_test(run_dir: Path, req: RunTestRequest) -> RunTestResponse:
         **base_config_dict,
         "classification": {
             "mode": "evaluate",
-            "checkpoint_path": data["artifacts"]["model"],
+            "checkpoint_path": checkpoint,
         },
         "data": {
             **base_config_dict.get("data", {}),
@@ -3889,11 +3929,11 @@ async def _execute_comparison(
         trials = await asyncio.to_thread(
             run_model_comparison, runner, config_dict, model_names, metric
         )
-        if not any(t.status == "success" for t in trials):
-            if is_cancelled(token):
-                raise RuntimeError(_nothing_finished("arquitetura"))
+        stopped = job_was_stopped([t.status for t in trials], len(model_names), token)
+        if not any(t.status == "success" for t in trials) and not stopped:
             raise RuntimeError("All architectures failed — no ranking available.")
         report = _comparison_report(trials, metric)
+        report["stopped"] = stopped
         report["report_dir"] = _write_advanced_summary(
             config_dict, "comparison", report
         )
@@ -3931,14 +3971,6 @@ def _comparison_report(trials: list[ComparisonTrial], metric: str) -> dict[str, 
         "failed_count": sum(1 for t in rows if t["status"] == "failed"),
         "stopped_count": sum(1 for t in rows if t["status"] == STOPPED),
     }
-
-
-def _nothing_finished(unit: str) -> str:
-    """Why a job stopped before its first unit ended has no result (ADR-111)."""
-    return (
-        f"Parado antes de concluir a primeira {unit}: não há resultado a "
-        "reportar. As execuções feitas até aí continuam no histórico."
-    )
 
 
 def _start_sweep(
@@ -4008,12 +4040,18 @@ async def _execute_sweep(
             seed=req.seed,
             progress_callback=_put_event,
         )
-        if not any(t.status == "success" for t in trials):
-            if is_cancelled(token):
-                raise RuntimeError(_nothing_finished("tentativa"))
+        stopped = job_was_stopped(
+            [t.status for t in trials],
+            planned_trials(req.search_space, mode=req.mode, n_trials=req.n_trials),
+            token,
+        )
+        finished = any(t.status == "success" for t in trials)
+        if not finished and not stopped:
             raise RuntimeError("All sweep trials failed — no ranking available.")
-        _require_reported_metric(metric, [t.metrics for t in trials], "sweep")
+        if finished:
+            _require_reported_metric(metric, [t.metrics for t in trials], "sweep")
         report = _sweep_report(trials, req.mode, metric)
+        report["stopped"] = stopped
         report["report_dir"] = _write_advanced_summary(
             base_config_dict, "sweep", report
         )
@@ -4074,6 +4112,8 @@ def _sweep_report(trials: list[SweepTrial], mode: str, metric: str) -> dict[str,
         "best_trial": successful[0] if successful else None,
         "total_trials": len(rows),
         "successful_trials": len(successful),
+        "failed_count": sum(1 for t in rows if t["status"] == "failed"),
+        "stopped_count": sum(1 for t in rows if t["status"] == STOPPED),
     }
 
 
@@ -4136,9 +4176,8 @@ async def _execute_task_cv(
             progress_callback=_put_event,
             cancel_token=token,
         )
-        if not any(f.status == "success" for f in cv.folds):
-            if is_cancelled(token):
-                raise RuntimeError(_nothing_finished("dobra"))
+        stopped = job_was_stopped([f.status for f in cv.folds], req.n_folds, token)
+        if not any(f.status == "success" for f in cv.folds) and not stopped:
             raise RuntimeError("All folds failed — no aggregate available.")
         report: dict[str, Any] = {
             "n_folds": cv.n_folds,
@@ -4146,6 +4185,7 @@ async def _execute_task_cv(
             "fold_results": [asdict(f) for f in cv.folds],
             "aggregate": cv.aggregate,
             "successful_folds": sum(1 for f in cv.folds if f.status == "success"),
+            "stopped": stopped,
         }
         report["report_dir"] = _write_advanced_summary(req.config, "cv", report)
         _current_run = {
@@ -4254,11 +4294,17 @@ async def _execute_replicated_comparison(
             progress_callback=_put_event,
         )
         # A stopped comparison reports the variants that did run, even with no
-        # pair left to test; one stopped before any replicate finished has
-        # nothing to report.
-        stopped = is_cancelled(token)
-        if stopped and not any(v["successful"] for v in report["variants"].values()):
-            raise RuntimeError(_nothing_finished("réplica"))
+        # pair left to test: the researcher asked for the stop (ADR-111).
+        stopped = job_was_stopped(
+            [
+                t["status"]
+                for v in report.get("variants", {}).values()
+                for t in v.get("trials", [])
+            ],
+            len(req.variants) * len(seeds),
+            token,
+        )
+        report["stopped"] = stopped
         if not report["comparisons"] and not stopped:
             raise RuntimeError(
                 "No variant produced enough successful replicates to compare "
@@ -4367,12 +4413,14 @@ async def _execute_replicates(
             metric,
             progress_callback=_put_event,
         )
-        if not any(t.status == "success" for t in trials):
-            if is_cancelled(token):
-                raise RuntimeError(_nothing_finished("réplica"))
+        stopped = job_was_stopped([t.status for t in trials], len(seeds), token)
+        finished = any(t.status == "success" for t in trials)
+        if not finished and not stopped:
             raise RuntimeError("All replicates failed — no aggregate available.")
-        _require_reported_metric(metric, [t.metrics for t in trials], "replicate")
+        if finished:
+            _require_reported_metric(metric, [t.metrics for t in trials], "replicate")
         report = _replicates_report(trials, seeds, metric)
+        report["stopped"] = stopped
         report["report_dir"] = _write_advanced_summary(
             base_config_dict, "replicates", report
         )

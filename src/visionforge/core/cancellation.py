@@ -22,6 +22,7 @@ them would make the button something people avoid pressing, which defeats it.
 from __future__ import annotations
 
 import threading
+from collections.abc import Sequence
 
 # Status of a unit (fold, trial, model, replicate) that was training when the
 # stop arrived (ADR-111). Its record keeps whatever metrics it reached, but it
@@ -65,4 +66,22 @@ def is_cancelled(token: CancellationToken | None) -> bool:
     return token is not None and token.cancelled
 
 
-__all__ = ["STOPPED", "STOPPED_NOTE", "CancellationToken", "is_cancelled"]
+def job_was_stopped(
+    statuses: Sequence[str], planned: int, token: CancellationToken | None
+) -> bool:
+    """Whether a stop cut a multi-unit job: a unit was cut, or units were left unrun.
+
+    The run-level marker the result and run.json carry (ADR-111), so a reader
+    never has to infer a stop from a message. A stop that arrived during the
+    last unit, which then finished, cut nothing: the job ran in full.
+    """
+    return STOPPED in statuses or (is_cancelled(token) and len(statuses) < planned)
+
+
+__all__ = [
+    "STOPPED",
+    "STOPPED_NOTE",
+    "CancellationToken",
+    "is_cancelled",
+    "job_was_stopped",
+]

@@ -433,6 +433,25 @@ class TestFinalValidationIsNotAnEpoch:
 
         assert [h.epoch for h in result.history] == [1]
         assert result.total_epochs == 1
+        assert result.stopped is True
+
+    def test_a_stop_in_the_last_epoch_does_not_cut_the_run(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Ultralytics finished every epoch it was given: not cut (ADR-111)."""
+        monkeypatch.setattr(dt_mod, "YOLO", _make_fake_yolo({}))
+        token = CancellationToken()
+
+        def stop_in_the_last(event: dict[str, Any]) -> None:
+            if event.get("event") == "epoch_end" and event.get("epoch") == 2:
+                token.cancel()
+
+        result = DetectionTrainer(_config(tmp_path)).fit(
+            progress_callback=stop_in_the_last, cancel_token=token
+        )
+
+        assert result.total_epochs == 2
+        assert result.stopped is False
 
 
 class TestStoppedBeforeTheFirstEpoch:
@@ -455,6 +474,7 @@ class TestStoppedBeforeTheFirstEpoch:
 
         assert "train_kwargs" not in record
         assert result.total_epochs == 0
+        assert result.stopped is True
         assert [e["event"] for e in events] == ["start", "end"]
         run_json = json.loads((result.run_dir / "run.json").read_text("utf-8"))
         assert run_json["metrics"]["total_epochs"] == 0
@@ -472,6 +492,7 @@ class TestStoppedBeforeTheFirstEpoch:
         result = DetectionTrainer(_tv_config(tmp_path)).fit(cancel_token=token)
 
         assert result.total_epochs == 0
+        assert result.stopped is True
         # The old "epochs=0 guard" saved these weights as best.pt, and every
         # action on the run (test, export) then used a model nothing trained.
         assert not result.model_path.exists()

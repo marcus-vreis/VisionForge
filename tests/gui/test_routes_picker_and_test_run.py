@@ -242,6 +242,20 @@ class TestExecuteRunTest:
         labels = [t["label"] for t in data["tests"]]
         assert labels == ["a", "b", "c"]
 
+    def test_a_run_with_no_checkpoint_says_so(
+        self, configured_run: tuple[Path, Path]
+    ) -> None:
+        """A run stopped before its first epoch records no model (ADR-111)."""
+        run_dir, dataset_root = configured_run
+        data = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+        data["artifacts"]["model"] = None
+        (run_dir / "run.json").write_text(json.dumps(data), encoding="utf-8")
+
+        with pytest.raises(FileNotFoundError, match="não tem um checkpoint utilizável"):
+            _execute_run_test(
+                run_dir, RunTestRequest(data_dir=str(dataset_root / "test"))
+            )
+
 
 # ── /api/runs/{id}/test endpoint integration ─────────────────────────────────
 

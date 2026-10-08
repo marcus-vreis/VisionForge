@@ -17,14 +17,17 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-import numpy as np
 import torch
 from loguru import logger
 from sklearn.model_selection import KFold
 from torch.utils.data import DataLoader, Subset
 
 from visionforge.blocks._search_utils import make_trial_progress_wrapper
-from visionforge.blocks.regression_cv import CrossValidationReport, FoldResult
+from visionforge.blocks.regression_cv import (
+    CrossValidationReport,
+    FoldResult,
+    aggregate_folds,
+)
 from visionforge.core.cancellation import (
     STOPPED,
     STOPPED_NOTE,
@@ -148,8 +151,10 @@ def run_segmentation_cross_validation(
             val_size=len(val_idx),
         )
         # Whether the fold's trainer got as far as emitting its own "end",
-        # which the wrapper turns into this fold's trial_end.
+        # which the wrapper turns into this fold's trial_end, and whether the
+        # stop cut it short.
         trained = False
+        cut = False
         try:
             fold_config = config.model_copy(
                 update={"name": f"{base_name}_fold{fold_idx}"}
@@ -170,6 +175,7 @@ def run_segmentation_cross_validation(
                 cancel_token=cancel_token,
             )
             trained = True
+            cut = result.stopped
             # 0 epochs only when stopped before the first: nothing to score.
             if result.total_epochs:
                 state = torch.load(
@@ -193,14 +199,17 @@ def run_segmentation_cross_validation(
                 )
         except Exception as exc:  # noqa: BLE001 — one bad fold must not abort the sweep
             record.error = str(exc)
+            # An error is a failure even inside the stop window (ADR-111).
+            cut = False
             logger.warning("Fold {}/{} failed: {}", fold_idx + 1, n_folds, exc)
         finally:
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
 
-        # The fold that was training when the stop arrived keeps its record
-        # but is not a fold of this K-fold any more (ADR-111).
-        if is_cancelled(cancel_token):
+        # A fold the stop cut keeps its record but is not a fold of this K-fold
+        # any more (ADR-111). One whose stop landed in its last epoch, or in the
+        # evaluation after it, finished and counts.
+        if cut:
             record.status = STOPPED
             record.error = STOPPED_NOTE
 
@@ -224,22 +233,8 @@ def run_segmentation_cross_validation(
         n_folds=n_folds,
         metric="miou",
         folds=folds,
-        aggregate=_aggregate(folds),
+        aggregate=aggregate_folds(folds, _METRIC_NAMES),
     )
-
-
-def _aggregate(folds: list[FoldResult]) -> dict[str, dict[str, float]]:
-    """Mean ± std of each metric over the successful folds."""
-    successful = [f for f in folds if f.status == "success"]
-    aggregate: dict[str, dict[str, float]] = {}
-    for name in _METRIC_NAMES:
-        values = [f.metrics[name] for f in successful if name in f.metrics]
-        if values:
-            aggregate[name] = {
-                "mean": float(np.mean(values)),
-                "std": float(np.std(values)),
-            }
-    return aggregate
 
 
 __all__ = ["run_segmentation_cross_validation"]

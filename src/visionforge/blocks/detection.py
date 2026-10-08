@@ -51,6 +51,8 @@ class DetectionBlock:
                 "best_map50_95": r.best_map50_95,
                 "best_map50": best_map50,
                 "total_epochs": r.total_epochs,
+                # True only when the stop cut the training (ADR-111).
+                "stopped": r.stopped,
                 "device_used": r.device_used,
                 "model_path": str(r.model_path),
                 "run_dir": str(r.run_dir),

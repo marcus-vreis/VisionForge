@@ -42,7 +42,11 @@ class ClassificationRunner:
                 if k in ("accuracy", "f1", "auc_roc") and v is not None
             }
             return RunResult(
-                metrics=metrics, status="success", training_time_s=elapsed, error=""
+                metrics=metrics,
+                status="success",
+                training_time_s=elapsed,
+                error="",
+                stopped=bool(report.get("train", {}).get("stopped")),
             )
         except Exception as exc:  # noqa: BLE001
             return RunResult(

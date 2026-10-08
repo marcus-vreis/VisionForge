@@ -3978,32 +3978,96 @@ the endpoint answers 409 with a Portuguese detail. A pending job is dropped as
 before, whatever its `stop_at`. A sweep or replicate set of a Level 2 task is
 still stoppable between trials: its current trial runs to its end.
 
-**The unit that was training when the stop arrived is recorded as `stopped`.**
-It keeps whatever metrics it reached, and it is left out of every aggregate
-and ranking: a fold cut at epoch 2 averaged with folds that ran to epoch 30
-gives a mean no configuration produced, and a cut trial that happens to score
-well would be written out as the best config. The aggregates are therefore
-computed over the units that ran to the end, with their real `n`. K-fold's
-`cv_aggregate` gains `n_folds_stopped` next to `n_folds_ok` and
-`n_folds_failed`, the replicate aggregate's `n` counts only finished seeds, and
-the comparison report counts `stopped_count` apart from `failed_count`. The
-rule is conservative: the orchestrator cannot tell a unit cut at epoch 2 from
-one whose last epoch was already running when the stop arrived, so both are
-`stopped`. Excluding one complete unit is the cheaper error. The
-classification grid and random search, which already stopped between trials,
-follow the same rule; they used to rank a cut trial with complete ones.
+**A unit the stop cut is recorded as `stopped`.** It keeps whatever metrics
+it reached, and it is left out of every aggregate and ranking: a fold cut at
+epoch 2 averaged with folds that ran to epoch 30 gives a mean no configuration
+produced, and a cut trial that happens to score well would be written out as
+the best config. The aggregates are therefore computed over the units that ran
+to the end, with their real `n`. K-fold's `cv_aggregate` gains
+`n_folds_stopped` next to `n_folds_ok` and `n_folds_failed`, the replicate
+aggregate's `n` counts only finished seeds, and the comparison report counts
+`stopped_count` apart from `failed_count`. The classification grid and random
+search, which already stopped between trials, follow the same rule; they used
+to rank a cut trial with complete ones.
+
+**Whether a unit was cut is the trainer's answer, not the token's.** The first
+version of this decision marked as `stopped` whatever unit was running when
+the token flipped, on the grounds that the orchestrator could not tell a unit
+cut at epoch 2 from one already in its last epoch. That was wrong in two ways
+review found: a Level 2 custom task runs its unit to the end whatever the
+token says, and a stop that lands in a built-in's last epoch, or in its test
+evaluation, leaves a finished unit. Both were labelled stopped and dropped; a
+replicate set stopped during its first seed then failed with "stopped before
+the first replicate finished" although that replicate had finished, and a
+2-fold K-fold wrote a `failed` run.json. The loop knows: every trainer result
+now carries `stopped`, true only when its loop broke on the token (a run that
+stopped before its first epoch, and a PatchCore that skipped its scoring,
+count as cut; an Ultralytics run counts only when epochs were still left). The
+block reports pass it on (`report["train"]["stopped"]`, or
+`report["detection"]["stopped"]`), the runners carry it as `RunResult.stopped`,
+and only that marks a unit. The token still decides whether the next unit
+starts, read once per unit: reading it once to mark and again to break let a
+stop land between the two reads.
+
+**A ranking is a comparison too.** In a replicated comparison, a variant
+stopped after one seed was crowned `best_by_mean` over a variant with three,
+on a mean of one sample, while the same report listed it as too small to test.
+`ranked_by_mean` now holds only the variants the paired tests could take, and
+their means are taken over the seeds all of them finished (`ranking_seeds`).
+With every seed finished that is the plain mean, as before. Variants that never
+started are listed in `not_run` instead of vanishing, and the power note
+quotes the number of seeds actually paired, not the number requested.
+
+**K-fold reports `n`, and no spread for one fold.** A stopped K-fold often has
+one finished fold, and `np.std` of one value printed "± 0.0", which reads as a
+measured absence of variation. The standalone K-fold aggregate now carries `n`
+beside `mean` and `std`; the classification K-fold report carries `n_folds_ok`.
+The std is the sample std (n-1), the convention of the replicate and paired
+statistics, and null below two folds. The change of ddof also applies to
+complete runs: their std grows by a factor of sqrt(n/(n-1)).
 
 **A stopped job ends like a completed one, with the counts actually done.** It
 emits its normal `end`, writes its summary (and, for classification K-fold, its
 top-level `run.json`) with the folds, models, replicates or trials that ran,
 and its status is `completed`, the same convention as a stopped single run,
-which is `completed` with fewer epochs than configured. No new "interrupted"
-field was added: the `stopped` unit and the counts say it. When the stop
-landed before any unit finished there is no result to show, and the job fails
-with a message saying exactly that ("Parado antes de concluir a primeira
-dobra...") rather than "all folds failed". A stopped replicated comparison is
-reported even when no pair is left to test, because the variants that ran are
-still a result.
+which is `completed` with fewer epochs than configured. The classification
+grid and random search reports gain `failed_count` and `stopped_count`, as the
+comparison report has, so a cut trial is not read as a failed one.
+
+**Whether a run was stopped is a field, not a message.** A reader should never
+have to recognise a stop from Portuguese text, so every run carries a boolean
+`stopped`, true when a user stop cut it:
+
+- a single run: its epoch loop broke on the token (or it never ran an epoch,
+  or a PatchCore skipped its scoring). It is in `run.json` (top level), in the
+  report (`report.train.stopped`; `report.detection.stopped` for detection;
+  `report.stopped` for a custom task) and in the result endpoint;
+- a multi-unit job: a unit was cut, or units were left unrun
+  (`job_was_stopped`). It is in the report (`report.stopped`), in the K-fold's
+  top-level `run.json`, and in the result endpoint. A stop that arrived during
+  the last unit, which then finished, cut nothing: `stopped` is false;
+- `GET /api/experiment/result/{id}` carries it as a top-level `stopped`,
+  whichever of the above the run is.
+
+`completed` keeps meaning only that the run ended cleanly.
+
+**An error inside the stop window is a failure.** A unit that raised -- an
+out-of-memory after the stop, an evaluation that failed after a cut -- is
+`failed` with its error, never `stopped`: only a loop that broke on the token
+is a cut. The runners return `stopped=False` with a failure, the orchestrators
+mark `stopped` only on a successful result, and the K-fold blocks drop the cut
+when the fold raised.
+
+This holds even when the stop landed before any unit finished. The first
+version failed such a job ("Parado antes de concluir a primeira dobra..."), and
+the result endpoint serves a failed job as a 500, so a stop the researcher
+asked for surfaced as a server error. A stop is not a failure: the job is
+`completed` with zero finished units, no mean or ranking (`null`, an empty
+`top_3`, no `best_trial`) and `stopped: true`, and a K-fold's `run.json` says
+`completed`. `failed` is kept for jobs whose units genuinely all failed and
+that the stop did not cut. A stopped replicated comparison is reported even
+when no pair is left to test, because the variants that ran are still a
+result.
 
 **PatchCore stops between phases.** The token is read between
 feature-extraction batches and after each phase. Stopped during extraction, it
@@ -4026,15 +4090,18 @@ and regression `inf` sentinel was written as `Infinity`, which is not JSON, so
 the result endpoint could not serve it. Metrics that were never measured are
 `null` instead of `0.0`, and `artifacts.model` is `null` when no checkpoint
 file exists, so the actions that need one say "no checkpoint" instead of
-failing to open a path. Such a run is not resumable, by the rule that already
+failing to open a path (the classification "+ testar" now checks it like the
+other families). Such a run is not resumable, by the rule that already
 decides it (ADR-092): no `resume.pt` is written before the first epoch, so
 `_resume_status` says no. `_RESUMABLE_BLOCKS` is unchanged, and no multi-unit
 job became resumable.
 
 **Not done:**
 
-- The frontend does not read `stop_at` yet. Until it does, a `stopped` unit
-  renders like a failed one, with the note as its error text.
+- The GUI reads `stop_at` from the queue snapshot to offer or withhold the
+  stop button. The result views do not read the unit `status` "stopped" or the
+  run-level `stopped` yet; until they do, a `stopped` unit renders like a
+  failed one, with the note as its error text.
 - A unit cut by a stop inside a standalone sweep or comparison is an ordinary
   run with a `resume.pt`, so History offers to continue it. That finishes the
   training, but not the sweep: its summary keeps the unit as `stopped`.

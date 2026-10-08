@@ -201,6 +201,7 @@ class TestGenericTaskEngineStop:
         ).run(press_stop, cancel_token=token)
 
         assert result.total_epochs == 1  # of 3 configured
+        assert result.stopped is True
         assert result.model_path is not None and result.model_path.is_file()
         assert "mae" in result.metrics
 
@@ -218,6 +219,7 @@ class TestGenericTaskEngineStop:
 
         assert [e["event"] for e in events] == ["start", "end"]
         assert result.total_epochs == 0
+        assert result.stopped is True
         assert result.metrics == {}
         # Untrained weights are not saved and scored as if they were a result.
         assert result.model_path is None
@@ -228,6 +230,43 @@ class TestGenericTaskEngineStop:
 
 
 class TestGenericTaskEngineLevel2:
+    def test_a_loop_the_task_owns_is_never_cut(self, tmp_path: Path) -> None:
+        """Level 2 runs to its end whatever the token says (ADR-111)."""
+        from visionforge.core.cancellation import CancellationToken
+
+        token = CancellationToken()
+
+        @register_task(
+            key="ownloop",
+            label="Own loop",
+            accent="#445566",
+            metrics={"score": "higher"},
+            primary_metric="score",
+        )
+        class OwnLoop(TaskSpec):
+            def build_model(self, cfg: Any) -> nn.Module:
+                return nn.Linear(1, 1)
+
+            def build_loaders(self, cfg: Any):
+                return [], [], None
+
+            def compute_loss(self, model: Any, batch: Any, cfg: Any):
+                raise AssertionError("Level 1 hooks must not run")
+
+            def compute_metrics(self, model: Any, loader: Any, cfg: Any):
+                raise AssertionError("Level 1 hooks must not run")
+
+            def run(self, cfg: Any, ctx: TaskRunContext) -> dict[str, float]:
+                token.cancel()  # pressed while the task's own loop runs
+                return {"score": 0.9}
+
+        result = GenericTaskEngine(get_task("ownloop"), _config(tmp_path)).run(
+            cancel_token=token
+        )
+
+        assert result.metrics == {"score": 0.9}
+        assert result.stopped is False
+
     def test_custom_run_bypasses_the_loop(self, tmp_path: Path) -> None:
         seen: dict[str, Any] = {}
 

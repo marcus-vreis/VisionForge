@@ -134,6 +134,7 @@ class TestFoldSplitting:
             from unittest.mock import MagicMock
 
             mock_train_result = MagicMock()
+            mock_train_result.stopped = False  # ran to its end (ADR-111)
             mock_train_result.best_val_loss = 0.4
             mock_train_result.model_path = cv_config.output.models_dir / "dummy.pth"
             mock_trainer_cls.return_value.fit.return_value = mock_train_result
@@ -218,6 +219,7 @@ class TestNormalization:
             from unittest.mock import MagicMock
 
             mock_train_result = MagicMock()
+            mock_train_result.stopped = False  # ran to its end (ADR-111)
             mock_train_result.best_val_loss = 0.4
             mock_train_result.model_path = cv_config.output.models_dir / "dummy.pth"
             mock_trainer_cls.return_value.fit.return_value = mock_train_result
@@ -279,6 +281,7 @@ class TestReportAndArtifacts:
             ),
         ):
             mock_train_result = MagicMock()
+            mock_train_result.stopped = False  # ran to its end (ADR-111)
             mock_train_result.best_val_loss = 0.4
             mock_train_result.model_path = cv_config.output.models_dir / "dummy.pth"
             mock_trainer_cls.return_value.fit.return_value = mock_train_result
@@ -366,6 +369,7 @@ class TestFailureHandling:
             ),
         ):
             mock_train_result = MagicMock()
+            mock_train_result.stopped = False  # ran to its end (ADR-111)
             mock_train_result.best_val_loss = 0.4
             mock_train_result.model_path = cv_config.output.models_dir / "dummy.pth"
 
@@ -434,6 +438,7 @@ class TestVramHygiene:
             ) as mock_cache,
         ):
             mock_train_result = MagicMock()
+            mock_train_result.stopped = False  # ran to its end (ADR-111)
             mock_train_result.best_val_loss = 0.4
             mock_train_result.model_path = cv_config.output.models_dir / "dummy.pth"
             mock_trainer_cls.return_value.fit.return_value = mock_train_result
@@ -525,6 +530,7 @@ class TestKFoldVariants:
             ),
         ):
             mock_train_result = MagicMock()
+            mock_train_result.stopped = False  # ran to its end (ADR-111)
             mock_train_result.best_val_loss = 0.4
             mock_train_result.model_path = config.output.models_dir / "dummy.pth"
             mock_trainer_cls.return_value.fit.return_value = mock_train_result

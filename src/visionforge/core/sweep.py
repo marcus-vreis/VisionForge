@@ -24,12 +24,7 @@ from typing import Any
 
 from loguru import logger
 
-from visionforge.core.cancellation import (
-    STOPPED,
-    STOPPED_NOTE,
-    CancellationToken,
-    is_cancelled,
-)
+from visionforge.core.cancellation import STOPPED, STOPPED_NOTE, is_cancelled
 from visionforge.core.task_runner import RunResult, TaskRunner, runner_cancel_token
 
 try:  # torch is the heavy hardware extra; the cache flush is best-effort.
@@ -114,7 +109,6 @@ def _execute_trial(
     metric: str,
     total: int,
     progress_callback: Callable[[dict[str, Any]], None] | None = None,
-    cancel_token: CancellationToken | None = None,
 ) -> SweepTrial:
     """Apply ``overrides`` to the base config, run one trial, and record the result.
 
@@ -143,7 +137,11 @@ def _execute_trial(
         trial.metrics = runner.metrics(result)
         trial.training_time_s = result.training_time_s
         trial.error = result.error
-        if result.status == "success":
+        if result.stopped and result.status == "success":
+            # Cut short by the stop: kept in the list, never ranked (ADR-111).
+            trial.status = STOPPED
+            trial.error = STOPPED_NOTE
+        elif result.status == "success":
             logger.info(
                 "Sweep trial {}/{} ok — {}={}",
                 index + 1,
@@ -160,10 +158,6 @@ def _execute_trial(
         gc.collect()
         if torch is not None and torch.cuda.is_available():
             torch.cuda.empty_cache()
-    # Cut short by the stop: kept in the list, never ranked (ADR-111).
-    if is_cancelled(cancel_token):
-        trial.status = STOPPED
-        trial.error = STOPPED_NOTE
     if progress_callback is not None:
         progress_callback(
             {
@@ -232,7 +226,6 @@ def _optuna_trials(
             metric,
             n_trials,
             progress_callback=progress_callback,
-            cancel_token=token,
         )
         trials.append(st)
         if is_cancelled(token):
@@ -267,8 +260,8 @@ def run_sweep(
     config so every dot-path resolves. Successful trials come first, sorted by
     ``metric`` descending; failures keep their order at the end. GPU memory is
     released between trials. A stop carried by the runner (ADR-111) cuts the
-    trial in flight, records it as ``stopped`` outside the ranking, and starts
-    no further trial.
+    trial in flight and starts no further trial; a trial the runner reports as
+    cut is recorded as ``stopped``, outside the ranking.
 
     Raises:
         ValueError: if ``mode`` is not 'grid', 'random' or 'optuna'.
@@ -292,7 +285,6 @@ def run_sweep(
                     metric,
                     len(points),
                     progress_callback=progress_callback,
-                    cancel_token=token,
                 )
             )
             # The trial in flight already stopped at its epoch boundary; the
@@ -321,4 +313,9 @@ def run_sweep(
     return successful + failed
 
 
-__all__ = ["SweepTrial", "run_sweep", "validate_sweep_space"]
+def planned_trials(search_space: dict[str, Any], *, mode: str, n_trials: int) -> int:
+    """How many trials a sweep sets out to run: the grid's size, or ``n_trials``."""
+    return len(_grid_points(search_space)) if mode == "grid" else n_trials
+
+
+__all__ = ["SweepTrial", "planned_trials", "run_sweep", "validate_sweep_space"]

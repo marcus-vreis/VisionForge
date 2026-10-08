@@ -56,6 +56,8 @@ class ClassificationBlock(ExperimentBlock):
                     else None
                 ),
                 "total_epochs": self._train_result.total_epochs,
+                # True only when the stop cut the training (ADR-111).
+                "stopped": self._train_result.stopped,
                 "device_used": self._train_result.device_used,
             }
         if self._eval_result is not None:

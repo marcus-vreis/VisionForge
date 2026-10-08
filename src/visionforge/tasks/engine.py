@@ -59,6 +59,9 @@ class TaskRunResult:
     history: list[TaskEpochResult] = field(default_factory=list)
     # Plot files this run produced, so run.json can declare them (ADR-079).
     graphics: list[Path] = field(default_factory=list)
+    # True only when the Level 1 loop broke on the stop token (ADR-111). A
+    # Level 2 run owns its loop, so it is never cut.
+    stopped: bool = False
 
 
 @dataclass
@@ -168,6 +171,7 @@ class GenericTaskEngine:
                 "device": self._device_label,
             }
         )
+        stopped = False
         try:
             for epoch in range(1, cfg.training.epochs + 1):
                 # The same safe point as the built-in trainers: the previous
@@ -177,6 +181,7 @@ class GenericTaskEngine:
                         "Run cancelled at epoch {}; keeping the best checkpoint.",
                         epoch,
                     )
+                    stopped = True
                     break
                 model.train()
                 total = 0.0
@@ -246,6 +251,7 @@ class GenericTaskEngine:
             # Stopped before its first epoch. Saving the untrained weights here
             # and scoring them would report a result nothing was trained for.
             empty = TaskRunResult(
+                stopped=True,
                 metrics={},
                 best_epoch=0,
                 total_epochs=0,
@@ -276,6 +282,7 @@ class GenericTaskEngine:
 
         graphics = self._render_curves(run_dir, history)
         result = TaskRunResult(
+            stopped=stopped,
             metrics=final_metrics,
             best_epoch=best_epoch,
             total_epochs=len(history),
@@ -391,6 +398,9 @@ class GenericTaskEngine:
             "task_label": self._info.label,
             "timestamp": datetime.now().isoformat(),
             "status": "completed",
+            # True when the stop cut this run (ADR-111); "completed" says only
+            # that it ended cleanly, with total_epochs as far as it got.
+            "stopped": result.stopped,
             "device_used": result.device_used,
             "environment": capture_environment(),
             # Proves two runs saw the same data, not just the same path.

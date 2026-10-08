@@ -60,6 +60,17 @@ def _t_critical_95(dof: int) -> float:
         return 1.96
 
 
+def sample_std(values: list[float]) -> float | None:
+    """Sample standard deviation (n-1), or None when one value has no spread.
+
+    The convention of the replicate and paired statistics, used for K-fold too
+    so the same "± std" means the same thing everywhere. A single value
+    reports None rather than a 0.0 that reads as "no variation" -- a stopped
+    K-fold often has exactly one finished fold (ADR-111).
+    """
+    return statistics.stdev(values) if len(values) >= 2 else None
+
+
 def aggregate_replicates(
     trials: list[ReplicateTrial],
 ) -> dict[str, dict[str, float | int | None]]:
@@ -128,9 +139,10 @@ def run_replicates(
     ``trial_start``/``trial_end`` events so the GUI overlay tracks real
     progress across the set.
 
-    A stop carried by the runner (ADR-111) cuts the replicate in flight,
-    records it as ``stopped`` -- outside the aggregate, whose ``n`` then counts
-    only the replicates that ran to the end -- and starts no further seed.
+    A stop carried by the runner (ADR-111) cuts the replicate in flight and
+    starts no further seed. A replicate the runner reports as cut is recorded
+    as ``stopped``, outside the aggregate, whose ``n`` then counts only the
+    replicates that ran to the end.
     """
     token = runner_cancel_token(runner)
     trials: list[ReplicateTrial] = []
@@ -160,7 +172,10 @@ def run_replicates(
             trial.metrics = runner.metrics(result)
             trial.training_time_s = result.training_time_s
             trial.error = result.error
-            if result.status == "success":
+            if result.stopped and result.status == "success":
+                trial.status = STOPPED
+                trial.error = STOPPED_NOTE
+            elif result.status == "success":
                 logger.info(
                     "Replicate seed={} ok — {}={}",
                     seed,
@@ -176,9 +191,6 @@ def run_replicates(
             gc.collect()
             if torch is not None and torch.cuda.is_available():
                 torch.cuda.empty_cache()
-        if is_cancelled(token):
-            trial.status = STOPPED
-            trial.error = STOPPED_NOTE
         if progress_callback is not None:
             progress_callback(
                 {
@@ -198,4 +210,4 @@ def run_replicates(
     return trials
 
 
-__all__ = ["ReplicateTrial", "aggregate_replicates", "run_replicates"]
+__all__ = ["ReplicateTrial", "aggregate_replicates", "run_replicates", "sample_std"]

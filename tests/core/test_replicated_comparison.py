@@ -318,3 +318,82 @@ class TestRankingDirection:
             self._results("score"), [1, 2, 3], "score", direction="lower"
         )
         assert report["best_by_mean"] == "poucos"
+
+
+def _variant(label: str, per_seed: dict[int, float]) -> VariantResult:
+    return VariantResult(
+        label,
+        {},
+        [
+            ReplicateTrial(s, "success", {"accuracy": v}, 0.1)
+            for s, v in per_seed.items()
+        ],
+    )
+
+
+class TestRankingUsesTheSameSeeds:
+    """A ranking by mean is a comparison too: over the same seeds, or not at all.
+
+    Found by stopping a comparison mid-variant (ADR-111): the cut variant's one
+    finished seed out-scored a full variant's mean and was crowned best while
+    the report listed it as too small to compare.
+    """
+
+    def test_a_variant_too_small_to_compare_is_not_ranked(self) -> None:
+        report = build_report(
+            [
+                _variant("full", {1: 0.6, 2: 0.6, 3: 0.6}),
+                _variant("one_seed", {1: 0.8}),
+            ],
+            [1, 2, 3],
+            "accuracy",
+        )
+
+        assert report["skipped_variants"] == ["one_seed"]
+        assert report["ranked_by_mean"] == ["full"]
+        assert report["best_by_mean"] == "full"
+
+    def test_means_are_taken_on_the_seeds_every_ranked_variant_finished(
+        self,
+    ) -> None:
+        # Over its own three seeds "a" leads (0.633 vs 0.6); over the two seeds
+        # both finished, "b" does (0.6 vs 0.5). Only the second is a comparison.
+        report = build_report(
+            [
+                _variant("a", {1: 0.5, 2: 0.5, 3: 0.9}),
+                _variant("b", {1: 0.6, 2: 0.6}),
+            ],
+            [1, 2, 3],
+            "accuracy",
+        )
+
+        assert report["ranking_seeds"] == [1, 2]
+        assert report["ranked_by_mean"] == ["b", "a"]
+        assert report["best_by_mean"] == "b"
+
+    def test_a_complete_run_ranks_exactly_as_before(self) -> None:
+        report = build_report(
+            [
+                _variant("a", {1: 0.7, 2: 0.8, 3: 0.9}),
+                _variant("b", {1: 0.6, 2: 0.6, 3: 0.6}),
+            ],
+            [1, 2, 3],
+            "accuracy",
+        )
+
+        assert report["ranking_seeds"] == [1, 2, 3]
+        assert report["ranked_by_mean"] == ["a", "b"]
+
+    def test_the_power_note_quotes_the_seeds_actually_paired(self) -> None:
+        # Six seeds were asked for; only three finished in both variants.
+        report = build_report(
+            [
+                _variant("a", {1: 0.9, 2: 0.91, 3: 0.92}),
+                _variant("b", {1: 0.5, 2: 0.51, 3: 0.52}),
+            ],
+            [1, 2, 3, 4, 5, 6],
+            "accuracy",
+        )
+
+        assert report["underpowered"] is True
+        assert "With 3 paired seeds" in report["power_note"]

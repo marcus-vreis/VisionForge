@@ -15,7 +15,7 @@ from visionforge.blocks._search_utils import (
     write_trials_csv,
 )
 from visionforge.blocks.base import ExperimentBlock
-from visionforge.core.cancellation import is_cancelled
+from visionforge.core.cancellation import STOPPED, is_cancelled, job_was_stopped
 from visionforge.utils.config import ExperimentConfig
 
 
@@ -38,6 +38,7 @@ class GridSearchBlock(ExperimentBlock):
 
         self._config = config
         self._trials: list[dict[str, Any]] = []
+        self._planned = 0
         # Injected by the GUI layer to stream live per-trial progress via SSE.
         self._progress_callback: Callable[[dict[str, Any]], None] | None = None
 
@@ -54,6 +55,7 @@ class GridSearchBlock(ExperimentBlock):
             keys = []
             combos = [()]
 
+        self._planned = len(combos)
         for trial_idx, combo in enumerate(combos):
             trial_seed = base_seed + trial_idx
             trial_overrides = dict(zip(keys, combo, strict=True))
@@ -111,28 +113,32 @@ class GridSearchBlock(ExperimentBlock):
             )
 
     def report(self) -> dict[str, Any]:
-        """Return best trial metrics.
+        """Return best trial metrics, and how many trials failed or were cut.
+
+        A sweep stopped before any trial finished is reported with no best trial
+        rather than as a failure: the researcher asked for the stop (ADR-111).
 
         Raises:
-            RuntimeError: if no trials succeeded.
+            RuntimeError: if no trials succeeded and the stop cut nothing.
         """
         successful = [t for t in self._trials if t["status"] == "success"]
-        if not successful:
-            if is_cancelled(self._cancel_token):
-                raise RuntimeError(
-                    "Busca parada antes de concluir a primeira tentativa: "
-                    "não há melhor configuração a reportar."
-                )
+        stopped = job_was_stopped(
+            [t["status"] for t in self._trials], self._planned, self._cancel_token
+        )
+        if not successful and not stopped:
             raise RuntimeError(
                 "GridSearchBlock: all trials failed — no best trial available."
             )
 
-        best = best_trial(self._trials)
-        assert best is not None
         return {
-            "best_trial": best,
+            "best_trial": best_trial(self._trials),
             "total_trials": len(self._trials),
             "successful_trials": len(successful),
+            "failed_count": sum(1 for t in self._trials if t["status"] == "failed"),
+            "stopped_count": sum(1 for t in self._trials if t["status"] == STOPPED),
+            # The stop cut this job (ADR-111): a unit was cut, or units were
+            # left unrun -- all of them, if it landed in the first.
+            "stopped": stopped,
         }
 
     # ── private ───────────────────────────────────────────────────────────────

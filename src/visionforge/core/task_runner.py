@@ -14,6 +14,11 @@ class RunResult:
     status: str = "failed"
     training_time_s: float | None = None
     error: str = ""
+    # True only when the stop cut this training (ADR-111). The orchestrators
+    # mark a unit stopped from this, never from the token alone: a unit whose
+    # stop landed in its last epoch, or a custom task that owns its loop, ran
+    # to its end and counts.
+    stopped: bool = False
 
 
 @runtime_checkable

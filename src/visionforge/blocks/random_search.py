@@ -17,7 +17,7 @@ from visionforge.blocks._search_utils import (
     write_trials_csv,
 )
 from visionforge.blocks.base import ExperimentBlock
-from visionforge.core.cancellation import is_cancelled
+from visionforge.core.cancellation import STOPPED, is_cancelled, job_was_stopped
 from visionforge.utils.config import ExperimentConfig
 
 # ── search param types (private, flat within this module) ─────────────────────
@@ -178,28 +178,34 @@ class RandomSearchBlock(ExperimentBlock):
             )
 
     def report(self) -> dict[str, Any]:
-        """Return best trial metrics.
+        """Return best trial metrics, and how many trials failed or were cut.
+
+        A sweep stopped before any trial finished is reported with no best trial
+        rather than as a failure: the researcher asked for the stop (ADR-111).
 
         Raises:
-            RuntimeError: if no trials succeeded.
+            RuntimeError: if no trials succeeded and the stop cut nothing.
         """
         successful = [t for t in self._trials if t["status"] == "success"]
-        if not successful:
-            if is_cancelled(self._cancel_token):
-                raise RuntimeError(
-                    "Busca parada antes de concluir a primeira tentativa: "
-                    "não há melhor configuração a reportar."
-                )
+        stopped = job_was_stopped(
+            [t["status"] for t in self._trials],
+            self._config.random_search.n_trials,  # type: ignore[union-attr]
+            self._cancel_token,
+        )
+        if not successful and not stopped:
             raise RuntimeError(
                 "RandomSearchBlock: all trials failed — no best trial available."
             )
 
-        best = best_trial(self._trials)
-        assert best is not None
         return {
-            "best_trial": best,
+            "best_trial": best_trial(self._trials),
             "total_trials": len(self._trials),
             "successful_trials": len(successful),
+            "failed_count": sum(1 for t in self._trials if t["status"] == "failed"),
+            "stopped_count": sum(1 for t in self._trials if t["status"] == STOPPED),
+            # The stop cut this job (ADR-111): a unit was cut, or units were
+            # left unrun -- all of them, if it landed in the first.
+            "stopped": stopped,
         }
 
     # ── private ───────────────────────────────────────────────────────────────

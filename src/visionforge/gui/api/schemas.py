@@ -160,6 +160,10 @@ class RunResult(BaseModel):
     metric_cis: dict[str, Any] = {}
     report: dict[str, Any]
     artifacts: dict[str, Any]
+    # True when a user stop cut this run (ADR-111): a single run whose epoch
+    # loop broke on the stop, or a multi-unit job with a unit cut or units left
+    # unrun -- including one stopped before any unit finished.
+    stopped: bool = False
 
 
 class DatasetInfo(BaseModel):

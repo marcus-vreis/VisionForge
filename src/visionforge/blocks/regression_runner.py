@@ -38,12 +38,17 @@ class RegressionRunner:
             block.run()
             elapsed = time.monotonic() - t0
 
-            test: dict[str, Any] = block.report().get("test", {})
+            report = block.report()
+            test: dict[str, Any] = report.get("test", {})
             metrics = {
                 k: float(test[k]) for k in _METRIC_KEYS if test.get(k) is not None
             }
             return RunResult(
-                metrics=metrics, status="success", training_time_s=elapsed, error=""
+                metrics=metrics,
+                status="success",
+                training_time_s=elapsed,
+                error="",
+                stopped=bool(report.get("train", {}).get("stopped")),
             )
         except Exception as exc:  # noqa: BLE001
             return RunResult(

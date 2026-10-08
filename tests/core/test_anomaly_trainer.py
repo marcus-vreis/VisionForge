@@ -242,6 +242,7 @@ class TestPatchCoreStops:
         # A bank from a third of the normals would be another model; none is kept.
         assert result.total_epochs == 0
         assert result.best_auroc is None
+        assert result.stopped is True
         assert not result.model_path.exists()
         assert events[-1]["event"] == "end"
 
@@ -255,11 +256,24 @@ class TestPatchCoreStops:
         assert result.total_epochs == 1
         assert result.history == []
         assert result.best_auroc is None
+        assert result.stopped is True  # the scoring it skipped is the cut
         run_json = json.loads(
             (result.model_path.parent / "run.json").read_text("utf-8")
         )
         assert run_json["metrics"]["auroc"] is None
         assert run_json["metrics"]["total_epochs"] == 1
+
+    def test_a_stop_during_scoring_lets_the_fit_finish(self, tmp_path: Path) -> None:
+        """Scoring is the last phase: nothing is left to skip, so it is not cut."""
+        result, events = self._fit(tmp_path, "pontuando")
+
+        assert [e["done"] for e in events if e.get("label") == "pontuando"] == [
+            0,
+            1,
+            2,
+        ]
+        assert result.stopped is False
+        assert result.best_auroc is not None
 
 
 class TestTensorBoardTracking:

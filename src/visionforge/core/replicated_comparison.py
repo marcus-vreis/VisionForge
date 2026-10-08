@@ -16,6 +16,7 @@ get it from the same code.
 from __future__ import annotations
 
 import copy
+import statistics
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from typing import Any, Literal
@@ -172,7 +173,15 @@ def run_replicated_comparison(
             )
             break
 
-    return build_report(results, seeds, metric, alpha=alpha, direction=direction)
+    ran = {r.label for r in results}
+    return build_report(
+        results,
+        seeds,
+        metric,
+        alpha=alpha,
+        direction=direction,
+        not_run=[label for label in variants if label not in ran],
+    )
 
 
 def build_report(
@@ -182,13 +191,15 @@ def build_report(
     *,
     alpha: float = 0.05,
     direction: Literal["higher", "lower"] | None = None,
+    not_run: list[str] | None = None,
 ) -> dict[str, Any]:
     """Shape variant results + the paired matrix into a GUI/JSON report.
 
     ``direction`` says whether the metric is better high or low; when omitted
     it is inferred from the name. Getting this wrong crowns the *worst*
     variant — and the mistake reads as authoritative because it arrives with
-    a p-value beside it.
+    a p-value beside it. ``not_run`` names requested variants that never
+    started, so a stopped comparison does not simply lose them (ADR-111).
     """
     groups = {r.label: r.per_seed(metric) for r in results}
     comparable = {label: values for label, values in groups.items() if len(values) >= 2}
@@ -207,15 +218,7 @@ def build_report(
     # "Best" is reported by mean only, deliberately without a claim of
     # significance — that is what the comparison matrix is for.
     resolved_direction = direction or infer_direction(metric)
-    means = {
-        label: values["aggregates"].get(metric, {}).get("mean")
-        for label, values in variants.items()
-    }
-    ranked = sorted(
-        ((label, m) for label, m in means.items() if m is not None),
-        key=lambda pair: pair[1],
-        reverse=resolved_direction == "higher",
-    )
+    ranking_seeds, ranked = _rank_on_shared_seeds(comparable, resolved_direction)
 
     return {
         "kind": "replicated_comparison",
@@ -225,32 +228,58 @@ def build_report(
         "alpha": alpha,
         "variants": variants,
         "comparisons": [c.to_dict() for c in comparisons],
-        "best_by_mean": ranked[0][0] if ranked else None,
-        "ranked_by_mean": [label for label, _ in ranked],
+        "best_by_mean": ranked[0] if ranked else None,
+        "ranked_by_mean": ranked,
+        "ranking_seeds": ranking_seeds,
         "significant_pairs": sum(1 for c in comparisons if c.significant),
         "skipped_variants": [label for label in groups if label not in comparable],
         # Loudest possible flag: when every comparison is underpowered, a "not
         # significant" verdict says nothing about the effect — only that there
         # were too few seeds for the test to ever reject.
         "underpowered": bool(comparisons) and all(c.underpowered for c in comparisons),
-        "power_note": _power_note(comparisons, len(seeds), alpha),
+        "power_note": _power_note(comparisons, alpha),
+        "not_run": list(not_run or []),
     }
 
 
-def _power_note(comparisons: list[Any], n_seeds: int, alpha: float) -> str:
+def _rank_on_shared_seeds(
+    comparable: dict[str, dict[int, float]], direction: str
+) -> tuple[list[int], list[str]]:
+    """Order the comparable variants by their mean over the seeds all of them finished.
+
+    A ranking is a comparison too. Means over different seed sets (a variant
+    stopped after one seed, or one whose seed failed) compare seed luck as much
+    as the variants, so only variants that the paired tests could take are
+    ranked, and only on their shared seeds. With every seed finished this is
+    the plain mean of each variant.
+    """
+    if not comparable:
+        return [], []
+    shared = sorted(set.intersection(*(set(v) for v in comparable.values())))
+    if len(shared) < 2:
+        return [], []
+    means = {
+        label: statistics.fmean(values[seed] for seed in shared)
+        for label, values in comparable.items()
+    }
+    ranked = sorted(means, key=means.__getitem__, reverse=direction == "higher")
+    return shared, ranked
+
+
+def _power_note(comparisons: list[Any], alpha: float) -> str:
     """Explain, in the report, when the seed count caps what can be concluded."""
-    if not comparisons:
-        return ""
     blocked = [c for c in comparisons if c.underpowered]
     if not blocked:
         return ""
-    floor = max(c.min_achievable_p for c in blocked)
+    # The seeds actually paired, not the ones requested: after a stop or a
+    # failed seed the test ran on fewer, and that is what capped it.
+    worst = max(blocked, key=lambda c: c.min_achievable_p)
     return (
-        f"With {n_seeds} seeds the rank test cannot return a p-value below "
-        f"{floor:.4f}, which is above alpha={alpha}: no difference, however "
-        f"large and consistent, can be flagged significant. Increase the "
-        f"number of seeds (6+ for alpha=0.05) before concluding anything from "
-        f"a non-significant result."
+        f"With {worst.n_pairs} paired seeds the rank test cannot return a "
+        f"p-value below {worst.min_achievable_p:.4f}, which is above "
+        f"alpha={alpha}: no difference, however large and consistent, can be "
+        f"flagged significant. Increase the number of seeds (6+ for "
+        f"alpha=0.05) before concluding anything from a non-significant result."
     )
 
 

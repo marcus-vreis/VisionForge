@@ -22,6 +22,7 @@ from visionforge.core.cancellation import STOPPED, CancellationToken
 from visionforge.core.comparison import ComparisonTrial
 from visionforge.core.replicates import ReplicateTrial
 from visionforge.core.sweep import SweepTrial
+from visionforge.core.task_runner import RunResult
 from visionforge.gui.api.run_queue import NotStoppableError, QueuedJob, RunQueue
 from visionforge.tasks import (
     BaseTaskConfig,
@@ -432,6 +433,7 @@ class TestExecutorsHandTheTokenOn:
         )
 
         assert state["status"] == "completed"
+        assert state["report"]["stopped"] is True
         assert state["report"]["stopped_count"] == 1
         assert state["report"]["failed_count"] == 0
         assert [t["model_arch"] for t in state["report"]["top_3"]] == ["a"]
@@ -472,7 +474,7 @@ class TestExecutorsHandTheTokenOn:
                 n_folds=3,
                 metric="r2",
                 folds=[FoldResult(0, "success", 8, 2, {"r2": 0.5})],
-                aggregate={"r2": {"mean": 0.5, "std": 0.0}},
+                aggregate={"r2": {"mean": 0.5, "std": None, "n": 1}},
             )
 
         req = TaskCvRequest(config={"name": "cv"}, n_folds=3)
@@ -485,10 +487,132 @@ class TestExecutorsHandTheTokenOn:
         assert seen["token"] is token
         assert state["status"] == "completed"
 
-    def test_replicates_stopped_before_any_finished_says_so(
-        self, client_and_routes: tuple, monkeypatch
-    ) -> None:  # type: ignore[no-untyped-def]
+    def test_a_replicate_that_finished_during_the_stop_completes_the_job(
+        self, client_and_routes: tuple, tmp_path: Path
+    ) -> None:
+        """The ADR-111 review's reproduction, through the real orchestrator.
+
+        A custom task that owns its loop runs its replicate to the end whatever
+        the token says. Reading "stopped" off the token labelled that finished
+        replicate cut and failed the job with "stopped before the first
+        replicate finished" -- with three seeds asked and one done.
+        """
         _, routes_mod = client_and_routes
+        token = CancellationToken()
+
+        class _OwnsItsLoop:
+            _cancel_token: CancellationToken | None = None
+
+            class config_type:  # noqa: N801 - the protocol's attribute name
+                @staticmethod
+                def model_validate(d: dict[str, Any]) -> dict[str, Any]:
+                    return d
+
+            def run(self, cfg: Any) -> RunResult:
+                token.cancel()  # pressed during seed 1, which still finishes
+                return RunResult(metrics={"r2": 0.5}, status="success")
+
+            def metrics(self, result: RunResult) -> dict[str, float]:
+                return dict(result.metrics)
+
+            def primary_metric(self) -> str:
+                return "r2"
+
+        state = _run_executor(
+            routes_mod,
+            routes_mod._execute_replicates(
+                _OwnsItsLoop(),
+                {"name": "rep", "output": {"reports_dir": str(tmp_path)}},
+                [1, 2, 3],
+                "r2",
+                "r",
+            ),
+            token,
+        )
+
+        assert state["status"] == "completed"
+        report = state["report"]
+        assert report["total_replicates"] == 1
+        assert report["successful_replicates"] == 1
+        # Nothing was cut, but two seeds were left unrun: the job was stopped.
+        assert report["stopped"] is True
+
+    def test_a_stop_during_the_last_unit_that_finishes_cut_nothing(
+        self, client_and_routes: tuple, tmp_path: Path
+    ) -> None:
+        client, routes_mod = client_and_routes
+        token = CancellationToken()
+        calls: list[int] = []
+
+        class _LastSeedFinishes:
+            _cancel_token: CancellationToken | None = None
+
+            class config_type:  # noqa: N801 - the protocol's attribute name
+                @staticmethod
+                def model_validate(d: dict[str, Any]) -> dict[str, Any]:
+                    return d
+
+            def run(self, cfg: Any) -> RunResult:
+                calls.append(1)
+                if len(calls) == 2:
+                    token.cancel()  # pressed during the last seed, which finishes
+                return RunResult(metrics={"r2": 0.5}, status="success")
+
+            def metrics(self, result: RunResult) -> dict[str, float]:
+                return dict(result.metrics)
+
+            def primary_metric(self) -> str:
+                return "r2"
+
+        state = _run_executor(
+            routes_mod,
+            routes_mod._execute_replicates(
+                _LastSeedFinishes(),
+                {"name": "rep", "output": {"reports_dir": str(tmp_path)}},
+                [1, 2],
+                "r2",
+                "r",
+            ),
+            token,
+        )
+
+        assert state["report"]["stopped"] is False
+        assert client.get("/api/experiment/result/r").json()["stopped"] is False
+
+    @pytest.mark.parametrize(
+        ("report", "expected"),
+        [
+            ({"train": {"total_epochs": 1, "stopped": True}}, True),
+            ({"train": {"total_epochs": 3, "stopped": False}}, False),
+            ({"detection": {"stopped": True}}, True),
+            ({"stopped": True, "trials": []}, True),
+            ({"task": "custom:x", "stopped": False}, False),
+            ({}, False),
+        ],
+    )
+    def test_single_runs_carry_the_marker_too(
+        self, client_and_routes: tuple, report: dict[str, Any], expected: bool
+    ) -> None:
+        client, routes_mod = client_and_routes
+        routes_mod._current_run = {
+            "run_id": "single",
+            "status": "completed",
+            "error": None,
+            "report": report,
+            "run_dir": None,
+        }
+
+        assert client.get("/api/experiment/result/single").json()["stopped"] is expected
+
+    def test_stopped_before_any_replicate_finished_is_not_a_failure(
+        self, client_and_routes: tuple, monkeypatch, tmp_path: Path
+    ) -> None:  # type: ignore[no-untyped-def]
+        """A stop the researcher asked for is served as a result, never a 500.
+
+        The first version failed the job ("stopped before the first replicate
+        finished"), and the result endpoint serves a failed job as a 500.
+        """
+        client, routes_mod = client_and_routes
         token = CancellationToken()
         token.cancel()
         runner = _Runner()
@@ -501,13 +625,23 @@ class TestExecutorsHandTheTokenOn:
         state = _run_executor(
             routes_mod,
             routes_mod._execute_replicates(
-                runner, {"name": "rep"}, [1, 2, 3], "r2", "r"
+                runner,
+                {"name": "rep", "output": {"reports_dir": str(tmp_path)}},
+                [1, 2, 3],
+                "r2",
+                "r",
             ),
             token,
         )
 
-        assert state["status"] == "failed"
-        assert "Parado antes de concluir a primeira réplica" in state["error"]
+        assert state["status"] == "completed"
+        resp = client.get("/api/experiment/result/r")
+        assert resp.status_code == 200
+        assert resp.json()["stopped"] is True  # the run-level marker
+        report = resp.json()["report"]
+        assert report["stopped"] is True
+        assert report["successful_replicates"] == 0
+        assert report["headline"] is None
 
     def test_replicated_comparison_keeps_what_ran(
         self, client_and_routes: tuple, monkeypatch
@@ -523,7 +657,10 @@ class TestExecutorsHandTheTokenOn:
         def fake(runner_arg, base, variants, seeds, metric, **kwargs):  # type: ignore[no-untyped-def]
             assert runner_arg._cancel_token is token
             return {
-                "variants": {"a": {"successful": 2}},
+                "variants": {
+                    "a": {"successful": 2, "trials": [{"status": "success"}] * 2}
+                },
+                "not_run": ["b"],
                 "comparisons": [],
                 "skipped_variants": ["a"],
             }
@@ -541,6 +678,7 @@ class TestExecutorsHandTheTokenOn:
         )
 
         assert state["status"] == "completed"
+        assert state["report"]["stopped"] is True  # variant b never ran
 
     def test_custom_task(self, client_and_routes: tuple, monkeypatch) -> None:  # type: ignore[no-untyped-def]
         from types import SimpleNamespace
@@ -563,6 +701,7 @@ class TestExecutorsHandTheTokenOn:
                     total_epochs=0,
                     device_used="cpu",
                     run_dir=Path("."),
+                    stopped=True,
                 )
 
         monkeypatch.setattr(routes_mod, "GenericTaskEngine", _FakeEngine)
@@ -575,3 +714,4 @@ class TestExecutorsHandTheTokenOn:
 
         assert seen["token"] is token
         assert state["status"] == "completed"
+        assert state["report"]["stopped"] is True

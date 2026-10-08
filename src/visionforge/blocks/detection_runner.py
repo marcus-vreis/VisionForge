@@ -39,14 +39,19 @@ class DetectionRunner:
             block.run()
             elapsed = time.monotonic() - t0
 
-            det: dict[str, Any] = block.report().get("detection", {})
+            report = block.report()
+            det: dict[str, Any] = report.get("detection", {})
             metrics = {
                 name: float(det[src])
                 for name, src in _METRIC_KEYS.items()
                 if det.get(src) is not None
             }
             return RunResult(
-                metrics=metrics, status="success", training_time_s=elapsed, error=""
+                metrics=metrics,
+                status="success",
+                training_time_s=elapsed,
+                error="",
+                stopped=bool(report.get("detection", {}).get("stopped")),
             )
         except Exception as exc:  # noqa: BLE001
             return RunResult(

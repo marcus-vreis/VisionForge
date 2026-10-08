@@ -104,6 +104,8 @@ class AnomalyBlock:
                 "best_epoch": r.best_epoch,
                 "best_auroc": r.best_auroc,
                 "total_epochs": r.total_epochs,
+                # True only when the stop cut the training (ADR-111).
+                "stopped": r.stopped,
                 "device_used": r.device_used,
                 "run_dir": str(r.model_path.parent),
             }

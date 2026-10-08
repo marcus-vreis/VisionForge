@@ -47,6 +47,7 @@ class CustomTaskRunner:
                 status="success",
                 training_time_s=time.monotonic() - t0,
                 error="",
+                stopped=result.stopped,
             )
         except Exception as exc:  # noqa: BLE001 — a failed trial must not abort the sweep
             return RunResult(
