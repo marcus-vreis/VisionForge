@@ -4115,12 +4115,16 @@ decides it (ADR-092): no `resume.pt` is written before the first epoch, so
 `_resume_status` says no. `_RESUMABLE_BLOCKS` is unchanged, and no multi-unit
 job became resumable.
 
+**What the interface reads.** The GUI takes all three from the contract above
+rather than from any message text: `stop_at` from the queue snapshot decides
+whether a running job is offered a stop button and what it promises; a unit
+whose `status` is `"stopped"` is shown as stopped, not as failed; and the
+run-level `stopped` of the result says the run was stopped. `std_ddof` is
+persisted for whoever compares an older K-fold with a newer one: a CV std
+without it is the population std (ddof=0).
+
 **Not done:**
 
-- The GUI reads `stop_at` from the queue snapshot to offer or withhold the
-  stop button. The result views do not read the unit `status` "stopped" or the
-  run-level `stopped` yet; until they do, a `stopped` unit renders like a
-  failed one, with the note as its error text.
 - A unit cut by a stop inside a standalone sweep or comparison is an ordinary
   run with a `resume.pt`, so History offers to continue it. That finishes the
   training, but not the sweep: its summary keeps the unit as `stopped`.
