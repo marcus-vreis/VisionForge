@@ -4,8 +4,10 @@ import { en } from "../i18n/en";
 import { pt } from "../i18n/pt";
 import type { StopPoint, TrainingEvent } from "../types/run";
 import {
+  awaitingReport,
   epochLoop,
   hasEnded,
+  isCustomJob,
   reachedEpoch,
   runEnding,
   serverRunning,
@@ -14,6 +16,7 @@ import {
   plainReason,
   stopOutcome,
   stopSummary,
+  stoppedFraction,
   stoppedWithoutResult,
   unitCounts,
   type LocalRun,
@@ -591,11 +594,32 @@ describe("unitCounts", () => {
     expect(unitCounts(null)).toBeNull();
     expect(unitCounts(undefined)).toBeNull();
     expect(unitCounts({})).toBeNull();
-    // The classification grid search reports only totals: stopped and failed trials
-    // cannot be told apart there.
+  });
+
+  it("reads the classification grid search, which reports only totals", () => {
+    // The trials that finished are known; whether the others failed or were cut is not.
     expect(
-      unitCounts({ best_trial: {}, total_trials: 3, successful_trials: 2 }),
-    ).toBeNull();
+      unitCounts({ best_trial: {}, total_trials: 2, successful_trials: 1 }),
+    ).toEqual({ finished: 1, stopped: null, failed: null, total: 2 });
+  });
+
+  it("does not take a grid search's unknown stopped trials for proof of a stop", () => {
+    expect(
+      stopOutcome({
+        requested: true,
+        ended: true,
+        events: [trialStart(0, 3), epoch(4, 4, { index: 0, of: 3 }), trialEnd(0, 3, 4), end(0, 1)],
+        report: { best_trial: {}, total_trials: 1, successful_trials: 1 },
+      }),
+    ).toBe("stopped");
+    expect(
+      stopOutcome({
+        requested: true,
+        ended: true,
+        events: [trialStart(0, 1), epoch(4, 4, { index: 0, of: 1 }), trialEnd(0, 1, 4), end(0, 1)],
+        report: { best_trial: {}, total_trials: 1, successful_trials: 1 },
+      }),
+    ).toBe("too-late");
   });
 });
 
@@ -640,6 +664,40 @@ describe("stopSummary", () => {
     ).toEqual({ kind: "epoch", epoch: 1, total: 4 });
   });
 
+  it("counts a grid search's finished trials without claiming how the others ended", () => {
+    const events = [
+      trialStart(0, 3),
+      epoch(4, 4, { index: 0, of: 3 }),
+      trialEnd(0, 3, 4),
+      trialStart(1, 3),
+      epoch(1, 4, { index: 1, of: 3 }),
+      trialEnd(1, 3, 1),
+      end(0, 2),
+    ];
+    expect(
+      stopSummary("trial", events, { best_trial: {}, total_trials: 2, successful_trials: 1 }),
+    ).toEqual({ kind: "units", unit: "trial", finished: 1, stopped: null, planned: 3 });
+  });
+
+  it("takes the planned count from the submission when neither stream nor report has it", () => {
+    // The classification comparison streams no events and lists only its top three.
+    const report = { top_3: [], total_ran: 2, failed_count: 0, stopped_count: 1 };
+    expect(stopSummary("model", [], report)).toEqual({
+      kind: "units",
+      unit: "model",
+      finished: 1,
+      stopped: 1,
+      planned: null,
+    });
+    expect(stopSummary("model", [], report, 4)).toEqual({
+      kind: "units",
+      unit: "model",
+      finished: 1,
+      stopped: 1,
+      planned: 4,
+    });
+  });
+
   it("says whether a stopped PatchCore kept its memory bank", () => {
     expect(stopSummary("phase", [start(1), phase(), end(1)], null)).toEqual({
       kind: "phase",
@@ -649,6 +707,70 @@ describe("stopSummary", () => {
       kind: "phase",
       bankKept: false,
     });
+  });
+});
+
+describe("stoppedFraction", () => {
+  it("is the share of the planned units that finished", () => {
+    expect(
+      stoppedFraction("fold", { kind: "units", unit: "fold", finished: 1, stopped: 1, planned: 3 }),
+    ).toBeCloseTo(1 / 3);
+  });
+
+  it("is unknown when the planned count is", () => {
+    expect(
+      stoppedFraction("model", { kind: "units", unit: "model", finished: 1, stopped: 1, planned: null }),
+    ).toBeNull();
+  });
+
+  it("is the epoch reached of those configured, for a single run", () => {
+    expect(stoppedFraction("epoch", { kind: "epoch", epoch: 45, total: 400 })).toBeCloseTo(0.1125);
+    expect(stoppedFraction("epoch", { kind: "epoch", epoch: 0, total: 8 })).toBe(0);
+    expect(stoppedFraction("epoch", { kind: "epoch", epoch: null, total: null })).toBeNull();
+  });
+
+  it("does not take the epoch of the trial in flight for how far a multi-unit job got", () => {
+    // Trial 3 of 10 at epoch 5 of 10 is not 50% of the search.
+    expect(stoppedFraction("trial", { kind: "epoch", epoch: 5, total: 10 })).toBeNull();
+    expect(stoppedFraction("fold", { kind: "epoch", epoch: 1, total: 3 })).toBeNull();
+  });
+
+  it("leaves a PatchCore to its own phase fraction", () => {
+    expect(stoppedFraction("phase", { kind: "phase", bankKept: true })).toBeNull();
+  });
+});
+
+describe("awaitingReport", () => {
+  // The hook marks the run completed, then fetches its result: for a moment the
+  // run has ended and its report is not there yet. A line written in that moment
+  // cannot name the units the server cut.
+  it("waits for the report of a stop that has just closed", () => {
+    expect(awaitingReport({ requested: true, completed: true, report: null })).toBe(true);
+  });
+
+  it("stops waiting once the report is there, even an empty one", () => {
+    expect(awaitingReport({ requested: true, completed: true, report: {} })).toBe(false);
+    expect(awaitingReport({ requested: true, completed: true, report: { trials: [] } })).toBe(false);
+  });
+
+  it("does not hold back a run nobody asked to stop", () => {
+    expect(awaitingReport({ requested: false, completed: true, report: null })).toBe(false);
+  });
+
+  it("does not wait while the run is still going", () => {
+    expect(awaitingReport({ requested: true, completed: false, report: null })).toBe(false);
+  });
+});
+
+describe("isCustomJob", () => {
+  it("reads the queue entry when there is one", () => {
+    expect(isCustomJob({ task: "custom:counting" }, "grid_search")).toBe(true);
+    expect(isCustomJob({ task: "classification" }, "custom")).toBe(false);
+  });
+
+  it("falls back to the block the sheet recorded", () => {
+    expect(isCustomJob(null, "custom")).toBe(true);
+    expect(isCustomJob(null, "classification")).toBe(false);
   });
 });
 
@@ -688,6 +810,22 @@ describe("stop wording", () => {
     }
   });
 
+  it("keeps the confirmation for a custom task to what the server does for it", () => {
+    for (const dict of [pt, en]) {
+      for (const point of ["epoch", "trial", "replicate"] as const) {
+        expect(dict.trainingOverlay.stopConfirmCustom[point].length, point).toBeGreaterThan(40);
+      }
+    }
+    // A custom task is never resumable from the History.
+    expect(pt.trainingOverlay.stopConfirmCustom.epoch).not.toMatch(/retomar pelo Histórico/);
+    expect(en.trainingOverlay.stopConfirmCustom.epoch).not.toMatch(/resume it from the History/);
+    // A task that owns its training loop runs the trial or replicate in flight to the end.
+    expect(pt.trainingOverlay.stopConfirmCustom.trial).toMatch(/até o fim/);
+    expect(pt.trainingOverlay.stopConfirmCustom.replicate).toMatch(/até o fim/);
+    expect(en.trainingOverlay.stopConfirmCustom.trial).toMatch(/to the end/);
+    expect(en.trainingOverlay.stopConfirmCustom.replicate).toMatch(/to the end/);
+  });
+
   it("counts the finished units against the planned ones, and the one left out", () => {
     expect(pt.trainingOverlay.stoppedUnitsLog("fold", 2, 3, 1)).toMatch(/dobras concluídas: 2\/3/);
     expect(pt.trainingOverlay.stoppedUnitsLog("fold", 2, 3, 1)).toMatch(/fora da agregação: 1/);
@@ -696,6 +834,13 @@ describe("stop wording", () => {
     expect(en.trainingOverlay.stoppedUnitsLog("trial", 2, 5, 0)).not.toMatch(/left out/);
     expect(pt.trainingOverlay.stoppedUnitsLog("replicate", 2, null, 0)).not.toMatch(/null|\//);
     expect(en.trainingOverlay.stoppedUnitsLog("replicate", 2, null, 0)).not.toMatch(/null|\//);
+    // A report that cannot tell how the unfinished ones ended says nothing about them.
+    expect(pt.trainingOverlay.stoppedUnitsLog("trial", 1, 3, null)).toBe(
+      "interrompido · trials concluídos: 1/3",
+    );
+    expect(en.trainingOverlay.stoppedUnitsLog("trial", 1, 3, null)).toBe(
+      "stopped · trials finished: 1/3",
+    );
   });
 
   it("says whether the stopped PatchCore kept its memory bank", () => {

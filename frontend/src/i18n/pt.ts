@@ -1623,6 +1623,17 @@ export const pt = {
       phase:
         "Parar o PatchCore? Se ainda estiver na extração de features, nada é guardado. Se já estiver montando o banco de memória, ele termina, é salvo e a pontuação é pulada — dá para pontuar depois em “+ testar” no Histórico.",
     },
+    // A researcher's own task. Never resumable from the History; and one that owns its
+    // training loop (Level 2) has no epoch to stop at, so a trial or replicate in flight
+    // runs to the end.
+    stopConfirmCustom: {
+      epoch:
+        "Parar esta tarefa? Ela termina a época em andamento e mantém o que já foi treinado. Uma tarefa própria não pode ser retomada pelo Histórico.",
+      trial:
+        "Parar esta busca? Nenhum trial novo começa. O trial em andamento termina a época atual — ou vai até o fim, se a tarefa controla o próprio laço de treino. Um trial cortado fica fora do ranking e os já concluídos ficam salvos. Uma busca interrompida não pode ser retomada.",
+      replicate:
+        "Parar as réplicas? Nenhuma réplica nova começa. A réplica em andamento termina a época atual — ou vai até o fim, se a tarefa controla o próprio laço de treino. Uma réplica cortada fica fora da média e do intervalo, que usam só as concluídas. Um conjunto interrompido não pode ser retomado.",
+    },
     stopConfirmYes: "Parar o treino",
     stopConfirmNo: "Continuar treinando",
     stopSending: "Parando…",
@@ -1652,7 +1663,7 @@ export const pt = {
       unit: "trial" | "fold" | "model" | "replicate",
       finished: number,
       planned: number | null,
-      stopped: number,
+      stopped: number | null,
     ) => {
       const label = {
         trial: "trials concluídos",
@@ -1660,7 +1671,7 @@ export const pt = {
         model: "modelos concluídos",
         replicate: "réplicas concluídas",
       }[unit];
-      return `interrompido · ${label}: ${finished}${planned !== null ? `/${planned}` : ""}${stopped > 0 ? ` · fora da agregação: ${stopped}` : ""}`;
+      return `interrompido · ${label}: ${finished}${planned !== null ? `/${planned}` : ""}${stopped !== null && stopped > 0 ? ` · fora da agregação: ${stopped}` : ""}`;
     },
     stoppedPhaseLog: (bankKept: boolean): string =>
       bankKept

@@ -3,14 +3,18 @@ import { ApiError, cancelQueuedRun, fetchQueue } from "../api/client";
 import type { Dict } from "../i18n/pt";
 import { useT } from "../i18n/useT";
 import {
+  awaitingReport,
   epochLoop,
   hasEnded,
+  isCustomJob,
   plainReason,
   stopMode,
   stopOutcome,
   stopSummary,
+  stoppedFraction,
   stoppedWithoutResult,
 } from "../lib/run-control";
+import { stopLogLine } from "../lib/stop-log";
 import { phaseName } from "../lib/training-phase";
 import { STOPPED_COLOR } from "../lib/unit-status";
 import type { QueuedJobInfo, RunStatus, TrainingEvent } from "../types/run";
@@ -303,6 +307,9 @@ export function TrainingOverlay({
   });
   // The stop points are the modes that are neither "none" nor "unconfirmed".
   const stopPoint = mode === "none" || mode === "unconfirmed" ? null : mode;
+  // A researcher's own task is never resumable, and one that owns its loop has no
+  // epoch to cut a trial at: what the confirmation promises differs.
+  const customJob = isCustomJob(job, blockKind ?? "classification");
 
   const [stop, setStop] = useState<StopState>({
     runId: null,
@@ -359,7 +366,7 @@ export function TrainingOverlay({
   });
   // What the stopped run has to say for itself: the epoch it reached, the units
   // it finished, or what PatchCore kept.
-  const summary = stopSummary(mode, progressEvents, report);
+  const summary = stopSummary(mode, progressEvents, report, queueSize);
   // Stopped before anything finished: the server fails the job with "nothing to
   // report", which is the stop's outcome and not a failure of the run.
   const noResult = stoppedWithoutResult({
@@ -375,23 +382,23 @@ export function TrainingOverlay({
     stopSummaryRef.current = { outcome: stopOutcomeNow, summary, noResult };
   });
 
+  // The run is marked completed a moment before its result is fetched. For a
+  // stop, the closing line has to name what the report says was cut, so it waits
+  // for it (and this effect, which writes it once, runs again when it arrives).
+  const awaiting = awaitingReport({
+    requested: stopPhase === "requested",
+    completed: isCompleted,
+    report,
+  });
+
   // Handle terminal states — subscribe to status.status changes as an external signal.
   useEffect(() => {
     if (handledStatusRef.current === status.status) return;
     if (isCompleted) {
+      if (awaiting) return;
       handledStatusRef.current = status.status;
       const { outcome, summary: sum } = stopSummaryRef.current;
-      const stoppedLine = (d: Dict): string =>
-        sum.kind === "units"
-          ? d.trainingOverlay.stoppedUnitsLog(
-              sum.unit,
-              sum.finished,
-              sum.planned,
-              sum.stopped,
-            )
-          : sum.kind === "phase"
-            ? d.trainingOverlay.stoppedPhaseLog(sum.bankKept)
-            : d.trainingOverlay.stoppedLog(sum.epoch, sum.total);
+      const stoppedLine = (d: Dict): string => stopLogLine(d, sum);
       const timer = setTimeout(() => {
         setLogs((prev) => [
           ...prev.slice(-24),
@@ -420,7 +427,7 @@ export function TrainingOverlay({
       }, 0);
       return () => clearTimeout(timer);
     }
-  }, [status.status, isCompleted, hasFailed, status.error]);
+  }, [status.status, isCompleted, hasFailed, status.error, awaiting]);
 
   // Auto-scroll logs — also when the overlay is re-shown after a minimize
   // (scrollHeight is 0 while display:none, so re-anchor on visibility).
@@ -434,18 +441,15 @@ export function TrainingOverlay({
   // it finished of those planned, the epoch it reached of those configured, or the
   // phase it was in), in a colour of its own.
   const wasStopped = (isCompleted && stopOutcomeNow === "stopped") || noResult;
-  const stoppedFraction =
-    summary.kind === "units"
-      ? summary.planned
-        ? summary.finished / summary.planned
-        : null
-      : summary.kind === "epoch"
-        ? summary.epoch !== null && summary.total
-          ? summary.epoch / summary.total
-          : null
-        : null;
+  // Nothing finished when the stop landed in the first unit; otherwise the units
+  // (or the epoch of a single run) that did, else what the stream showed. With
+  // none of them known the figure is left out rather than shown as 0%.
+  const stopShare = noResult
+    ? 0
+    : (stoppedFraction(mode, summary) ?? (hasRealProgress ? realProgress : null));
+  const shareUnknown = wasStopped && stopShare === null;
   const progressFraction = wasStopped
-    ? Math.min(1, stoppedFraction ?? (hasRealProgress ? realProgress : 0))
+    ? Math.min(1, stopShare ?? 0)
     : isCompleted
       ? 1
       : hasRealProgress
@@ -559,7 +563,7 @@ export function TrainingOverlay({
               color: hasFailed && !noResult ? "oklch(0.74 0.18 22)" : barColor,
             }}
           >
-            {pct}%
+            {shareUnknown ? "—" : `${pct}%`}
           </div>
         </div>
 
@@ -770,7 +774,12 @@ export function TrainingOverlay({
                 lineHeight: 1.6,
               }}
             >
-              {t.trainingOverlay.stopConfirm[stopPoint]}
+              {customJob &&
+              (stopPoint === "epoch" ||
+                stopPoint === "trial" ||
+                stopPoint === "replicate")
+                ? t.trainingOverlay.stopConfirmCustom[stopPoint]
+                : t.trainingOverlay.stopConfirm[stopPoint]}
             </div>
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
               <button

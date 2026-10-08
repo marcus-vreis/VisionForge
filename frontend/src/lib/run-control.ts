@@ -316,11 +316,13 @@ export function hasEnded(events: readonly TrainingEvent[]): boolean {
   return events.some((e) => e.event === "end");
 }
 
-/** How many units of a multi-unit job finished, were cut by a stop, or failed. */
+/** How many units of a multi-unit job finished, were cut by a stop, or failed.
+ *  `stopped` and `failed` are `null` when the report cannot tell them apart (the
+ *  classification grid search counts only the trials that succeeded). */
 export interface UnitCounts {
   finished: number;
-  stopped: number;
-  failed: number;
+  stopped: number | null;
+  failed: number | null;
   total: number;
 }
 
@@ -359,6 +361,13 @@ export function unitCounts(
     const failed = typeof failedCount === "number" ? failedCount : 0;
     return { finished: Math.max(0, total - stopped - failed), stopped, failed, total };
   }
+  // The classification grid / random search reports only how many trials ran and
+  // how many succeeded: the others failed or were cut, and it does not say which.
+  const trialsRan = report["total_trials"];
+  const trialsOk = report["successful_trials"];
+  if (typeof trialsRan === "number" && typeof trialsOk === "number") {
+    return { finished: trialsOk, stopped: null, failed: null, total: trialsRan };
+  }
   return null;
 }
 
@@ -389,7 +398,9 @@ export function stopOutcome(args: {
   if (!args.requested) return "none";
   if (!args.ended) return "stopping";
   const counts = unitCounts(args.report);
-  if (counts !== null && counts.stopped > 0) return "stopped";
+  if (counts !== null && counts.stopped !== null && counts.stopped > 0) {
+    return "stopped";
+  }
   switch (runEnding(args.events)) {
     case "early":
       return "stopped";
@@ -428,7 +439,8 @@ export type StopSummary =
       kind: "units";
       unit: UnitKind;
       finished: number;
-      stopped: number;
+      /** `null` when the report cannot tell the units it cut from those that failed. */
+      stopped: number | null;
       planned: number | null;
     }
   | { kind: "phase"; bankKept: boolean };
@@ -445,6 +457,7 @@ export function stopSummary(
   mode: StopMode,
   events: readonly TrainingEvent[],
   report?: Record<string, unknown> | null,
+  plannedFallback?: number | null,
 ): StopSummary {
   if (mode === "phase") {
     const { end } = milestones(events);
@@ -460,15 +473,55 @@ export function stopSummary(
         unit: mode,
         finished: counts.finished,
         stopped: counts.stopped,
+        // The stream, then the report, then what was submitted: a comparison
+        // streams nothing and its report lists only the models that ran.
         planned:
           plannedTrials > 0
             ? plannedTrials
             : typeof fromReport === "number"
               ? fromReport
-              : null,
+              : (plannedFallback ?? null),
       };
     }
   }
   const reached = reachedEpoch(events);
   return { kind: "epoch", epoch: reached?.epoch ?? null, total: reached?.total ?? null };
+}
+
+/** How far a stopped job got, as a share of what it planned, when that is known.
+ *
+ * For a multi-unit job it is the units that finished out of those planned — not
+ * the epoch of the one in flight, which says nothing about the job (trial 3 of
+ * 10 at epoch 5 of 10 is not halfway). For a single run it is the epoch reached
+ * out of those configured. `null` is "not known": the caller falls back to what
+ * the stream showed, or shows no figure rather than a made-up 0%. */
+export function stoppedFraction(mode: StopMode, summary: StopSummary): number | null {
+  if (summary.kind === "units") {
+    return summary.planned ? summary.finished / summary.planned : null;
+  }
+  if (mode === "epoch" && summary.kind === "epoch") {
+    return summary.epoch !== null && summary.total ? summary.epoch / summary.total : null;
+  }
+  return null;
+}
+
+/** Whether the closing line of a stopped run has to wait for the report.
+ *
+ * The hook marks a run completed first and fetches its result after, so for a
+ * moment the run has ended and its report is not there yet. A line written then
+ * cannot name the units the server cut: a K-fold would be logged by the epoch of
+ * the fold in flight, and a unit cut in its last epoch as a normal finish. Only a
+ * stop waits; a run nobody stopped has nothing to read from the report. */
+export function awaitingReport(args: {
+  requested: boolean;
+  completed: boolean;
+  report: Record<string, unknown> | null | undefined;
+}): boolean {
+  return args.requested && args.completed && (args.report === null || args.report === undefined);
+}
+
+/** Whether the running job is a researcher's own task: the queue entry says so;
+ * without one, the block the sheet recorded at submission does. */
+export function isCustomJob(job: Pick<QueuedJobInfo, "task"> | null, blockKind: string): boolean {
+  return job ? job.task.startsWith("custom:") : blockKind === "custom";
 }

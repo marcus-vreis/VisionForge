@@ -1451,6 +1451,14 @@ export const en: Dict = {
       phase:
         "Stop PatchCore? During feature extraction nothing is kept. If it is already building the memory bank, that finishes and is saved, and scoring is skipped — you can score it later with “+ test” in the History.",
     },
+    stopConfirmCustom: {
+      epoch:
+        "Stop this task? It finishes the epoch in progress and keeps what has been trained so far. A custom task cannot be resumed from the History.",
+      trial:
+        "Stop this search? No new trial starts. The trial in progress finishes its current epoch — or runs to the end, if the task owns its training loop. A cut trial stays out of the ranking, and the finished ones are kept. A stopped search cannot be resumed.",
+      replicate:
+        "Stop the replicates? No new replicate starts. The replicate in progress finishes its current epoch — or runs to the end, if the task owns its training loop. A cut replicate stays out of the mean and the interval, which use only the finished ones. A stopped set cannot be resumed.",
+    },
     stopConfirmYes: "Stop the run",
     stopConfirmNo: "Keep training",
     stopSending: "Stopping…",
@@ -1473,7 +1481,7 @@ export const en: Dict = {
       unit: "trial" | "fold" | "model" | "replicate",
       finished: number,
       planned: number | null,
-      stopped: number,
+      stopped: number | null,
     ) => {
       const label = {
         trial: "trials finished",
@@ -1481,7 +1489,7 @@ export const en: Dict = {
         model: "models finished",
         replicate: "replicates finished",
       }[unit];
-      return `stopped · ${label}: ${finished}${planned !== null ? `/${planned}` : ""}${stopped > 0 ? ` · left out: ${stopped}` : ""}`;
+      return `stopped · ${label}: ${finished}${planned !== null ? `/${planned}` : ""}${stopped !== null && stopped > 0 ? ` · left out: ${stopped}` : ""}`;
     },
     stoppedPhaseLog: (bankKept: boolean): string =>
       bankKept
