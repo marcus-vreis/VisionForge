@@ -17,6 +17,20 @@ describe("stdDdof", () => {
     expect(stdDdof(null)).toBe(0);
   });
 
+  it("reads it from the object the server writes it in", () => {
+    // Classification K-fold: `metrics.cv_aggregate.std_ddof` (and `report.std_ddof`).
+    const cvAggregate = { n_folds: 3, n_folds_ok: 2, mean_accuracy: 0.9, std_ddof: 1 };
+    expect(stdDdof(cvAggregate)).toBe(1);
+    // Standalone K-fold: inside each metric's entry, not on `aggregate` itself.
+    const aggregate: Record<string, { mean: number; std: number; n: number; std_ddof?: number }> = {
+      miou: { mean: 0.5, std: 0.1, n: 3, std_ddof: 1 },
+      dice: { mean: 0.6, std: 0.1, n: 3 },
+    };
+    expect(stdDdof(aggregate["miou"])).toBe(1);
+    expect(stdDdof(aggregate["dice"])).toBe(0);
+    expect(stdDdof(aggregate)).toBe(0);
+  });
+
   it("does not take anything else for the sample std", () => {
     expect(stdDdof({ std_ddof: "1" })).toBe(0);
     expect(stdDdof({ std_ddof: 2 })).toBe(0);

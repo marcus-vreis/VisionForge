@@ -710,6 +710,23 @@ describe("stopSummary", () => {
     ).toEqual({ kind: "units", unit: "fold", finished: 1, stopped: 1, planned: 5 });
   });
 
+  it("takes a standalone sweep's planned count from its report", () => {
+    // The sweep report says how many trials it planned; the stream may not.
+    expect(
+      stopSummary("trial", [end(0, 2)], {
+        planned_trials: 6,
+        trials: [{ status: "success" }, { status: "stopped" }],
+      }),
+    ).toEqual({ kind: "units", unit: "trial", finished: 1, stopped: 1, planned: 6 });
+    // The stream still wins when it has the count.
+    expect(
+      stopSummary("trial", [trialStart(0, 4), end(0, 2)], {
+        planned_trials: 6,
+        trials: [{ status: "success" }, { status: "stopped" }],
+      }),
+    ).toEqual({ kind: "units", unit: "trial", finished: 1, stopped: 1, planned: 4 });
+  });
+
   it("falls back to the epoch the stream reached without a report", () => {
     expect(
       stopSummary("model", [trialStart(0, 3), epoch(1, 4, { index: 0, of: 3 }), end(0, 1)], null),

@@ -461,7 +461,9 @@ export function stopSummary(
     const counts = unitCounts(report);
     if (counts !== null) {
       const { plannedTrials } = milestones(events);
-      const fromReport = report?.["n_folds"];
+      // A K-fold report names its folds (`n_folds`) and a standalone sweep its
+      // trials (`planned_trials`); a stopped job lists only the units that ran.
+      const fromReport = report?.["n_folds"] ?? report?.["planned_trials"];
       return {
         kind: "units",
         unit: mode,
