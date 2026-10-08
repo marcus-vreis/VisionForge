@@ -4014,9 +4014,13 @@ stopped after one seed was crowned `best_by_mean` over a variant with three,
 on a mean of one sample, while the same report listed it as too small to test.
 `ranked_by_mean` now holds only the variants the paired tests could take, and
 their means are taken over the seeds all of them finished (`ranking_seeds`).
-With every seed finished that is the plain mean, as before. Variants that never
-started are listed in `not_run` instead of vanishing, and the power note
-quotes the number of seeds actually paired, not the number requested.
+With every seed finished that is the plain mean, as before. This also changes
+complete runs in which a seed genuinely failed for one variant: `best_by_mean`
+used to compare each variant's own mean, over different seed sets, and is now
+taken over the seeds every ranked variant finished, so it can name a different
+winner than before. Variants that never started are listed in `not_run`
+instead of vanishing, and the power note quotes the number of seeds actually
+paired, not the number requested.
 
 **K-fold reports `n`, and no spread for one fold.** A stopped K-fold often has
 one finished fold, and `np.std` of one value printed "± 0.0", which reads as a
@@ -4024,7 +4028,22 @@ measured absence of variation. The standalone K-fold aggregate now carries `n`
 beside `mean` and `std`; the classification K-fold report carries `n_folds_ok`.
 The std is the sample std (n-1), the convention of the replicate and paired
 statistics, and null below two folds. The change of ddof also applies to
-complete runs: their std grows by a factor of sqrt(n/(n-1)).
+complete runs: their std grows by a factor of sqrt(n/(n-1)). Older run.json
+files hold the population std, and comparing runs puts the two side by side,
+so every CV std written now carries `std_ddof: 1` beside it -- in
+`metrics.cv_aggregate` and the `cv_summary.json` aggregate of the
+classification K-fold, in the classification K-fold report, and in each metric
+of the standalone K-fold `aggregate`. A std without `std_ddof` is ddof=0.
+
+**The LaTeX tables say what ran** (ADR-061: they are the paper-ready file). A
+K-fold table used to list every fold row, so a fold cut at epoch 2 printed its
+half-trained metric as an ordinary fold under a caption claiming all of them.
+Now a fold that did not finish shows its status (`2 (stopped)`, `2 (failed)`)
+and dashes, and the caption counts the folds the mean is over ("1 of 5 folds
+finished (1 stopped, 3 not run)"). The replicates note lists only the seeds
+that finished, and how many were requested; a stopped sweep's note says how
+many of the planned trials ran, which needs `planned_trials` in the sweep
+report (`total_trials` counts the trials that ran).
 
 **A stopped job ends like a completed one, with the counts actually done.** It
 emits its normal `end`, writes its summary (and, for classification K-fold, its

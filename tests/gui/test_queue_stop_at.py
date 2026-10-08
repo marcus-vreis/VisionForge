@@ -451,14 +451,16 @@ class TestExecutorsHandTheTokenOn:
             return [SweepTrial(0, {}, "success", {"r2": 0.5})]
 
         monkeypatch.setattr(routes_mod, "run_sweep", fake)
-        req = SweepRequest(config={"name": "s"}, search_space={"x": [1]})
-        _run_executor(
+        req = SweepRequest(config={"name": "s"}, search_space={"x": [1, 2, 3]})
+        state = _run_executor(
             routes_mod,
             routes_mod._execute_sweep(runner, {"name": "s"}, req, "r2", "r"),
             token,
         )
 
         assert seen["token"] is token
+        # The table needs it: total_trials counts trials that ran.
+        assert state["report"]["planned_trials"] == 3
 
     def test_cv(self, client_and_routes: tuple) -> None:
         from visionforge.blocks.regression_cv import CrossValidationReport, FoldResult

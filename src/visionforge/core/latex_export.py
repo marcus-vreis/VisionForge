@@ -52,6 +52,13 @@ def _num(value: Any, digits: int = 4) -> str:
     return f"{number:.{digits}f}"
 
 
+def _counts(**counts: int) -> str:
+    """ "1 stopped, 3 not run" for the non-zero counts, in the order given."""
+    return ", ".join(
+        f"{n} {label.replace('_', ' ')}" for label, n in counts.items() if n
+    )
+
+
 def _table(
     *,
     caption: str,
@@ -98,6 +105,24 @@ def replicates_to_latex(report: dict[str, Any], *, experiment: str = "") -> str:
             ]
         )
     n = report.get("successful_replicates", len(seeds))
+    # The seeds that produced the numbers above, not the ones asked for: after
+    # a stop or a failure they differ, and the table must be reproducible from
+    # what it says (ADR-111).
+    trials: list[dict[str, Any]] = report.get("trials") or []
+    finished = (
+        [t.get("seed") for t in trials if t.get("status") == "success"]
+        if trials
+        else list(seeds)
+    )
+    seed_note = escape(", ".join(str(s) for s in finished))
+    if len(finished) < len(seeds):
+        statuses = [t.get("status") for t in trials]
+        detail = _counts(
+            stopped=statuses.count("stopped"),
+            failed=statuses.count("failed"),
+            not_run=len(seeds) - len(trials),
+        )
+        seed_note += f" ({len(finished)} of {len(seeds)} requested; {detail})"
     # Below ~5 seeds both intervals mislead in opposite directions (t far too
     # wide, percentile bootstrap far too narrow). Say so in the table itself:
     # a caveat that lives only in the docs never reaches the reader.
@@ -125,7 +150,7 @@ def replicates_to_latex(report: dict[str, Any], *, experiment: str = "") -> str:
         rows=rows,
         note=(
             r"$\star$ headline metric. Seeds: "
-            + escape(", ".join(str(s) for s in seeds))
+            + seed_note
             + ". Intervals are over seed-to-seed variation of a fixed "
             "configuration, not over the data distribution." + caveat
         ),
@@ -172,15 +197,31 @@ def sweep_to_latex(report: dict[str, Any], *, experiment: str = "") -> str:
         rows=rows,
         note=(
             f"{len(trials)} of {report.get('total_trials', len(trials))} trials "
-            "succeeded. Ranking over a single run per configuration reflects "
-            "seed noise as well as the hyperparameter; confirm the winner with "
-            "replicates."
+            f"succeeded.{_sweep_stop_note(report)} Ranking over a single run per "
+            "configuration reflects seed noise as well as the hyperparameter; "
+            "confirm the winner with replicates."
         ),
     )
 
 
+def _sweep_stop_note(report: dict[str, Any]) -> str:
+    """For a stopped sweep: how far it got of what was planned (ADR-111)."""
+    if not report.get("stopped"):
+        return ""
+    ran = report.get("total_trials", 0)
+    planned = report.get("planned_trials", ran)
+    cut = report.get("stopped_count", 0)
+    detail = f" ({cut} stopped before finishing)" if cut else ""
+    return f" The sweep was stopped after {ran} of {planned} planned trials{detail}."
+
+
 def cv_to_latex(report: dict[str, Any], *, experiment: str = "") -> str:
-    """Per-fold metrics plus the mean ± SD aggregate."""
+    """Per-fold metrics plus the mean ± SD aggregate.
+
+    Only folds that ran to the end show numbers: a fold the stop cut, or one
+    that failed, keeps its status and dashes, and the caption counts the folds
+    the mean is over (ADR-111).
+    """
     folds: list[dict[str, Any]] = report.get("fold_results") or []
     aggregate: dict[str, Any] = report.get("aggregate") or {}
     names = list(aggregate) or sorted(
@@ -189,13 +230,13 @@ def cv_to_latex(report: dict[str, Any], *, experiment: str = "") -> str:
 
     rows: list[list[str]] = []
     for fold in folds:
+        number = str(int(fold.get("fold", 0)) + 1)
+        status = fold.get("status", "success")
+        if status != "success":
+            rows.append([f"{number} ({escape(status)})", *["---" for _ in names]])
+            continue
         metrics = fold.get("metrics") or {}
-        rows.append(
-            [
-                str(int(fold.get("fold", 0)) + 1),
-                *[_num(metrics.get(name)) for name in names],
-            ]
-        )
+        rows.append([number, *[_num(metrics.get(name)) for name in names]])
     if aggregate:
         rows.append(
             [
@@ -207,10 +248,21 @@ def cv_to_latex(report: dict[str, Any], *, experiment: str = "") -> str:
                 ],
             ]
         )
+    n_folds = report.get("n_folds", len(folds))
+    statuses = [f.get("status", "success") for f in folds]
+    finished = statuses.count("success")
+    scope = ""
+    if finished < n_folds:
+        detail = _counts(
+            stopped=statuses.count("stopped"),
+            failed=statuses.count("failed"),
+            not_run=n_folds - len(folds),
+        )
+        scope = f", {finished} of {n_folds} folds finished ({detail})"
     return _table(
         caption=(
             f"{escape(experiment or 'Experiment')}: "
-            f"{report.get('n_folds', len(folds))}-fold cross-validation."
+            f"{n_folds}-fold cross-validation{scope}."
         ),
         label="tab:cv",
         column_spec="l" + "r" * len(names),

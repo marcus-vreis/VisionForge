@@ -114,6 +114,13 @@ class TestClassificationKFold:
         assert run_json["status"] == "completed"
         assert run_json["stopped"] is True
         aggregate = run_json["metrics"]["cv_aggregate"]
+        assert aggregate["std_ddof"] == 1
+        summary = json.loads(
+            (config.output.reports_dir / "stop_multi" / "cv_summary.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        assert summary["aggregate"]["std_ddof"] == 1
         assert aggregate["n_folds"] == 3
         assert aggregate["n_folds_ok"] == 1
         assert aggregate["n_folds_stopped"] == 1
@@ -236,6 +243,8 @@ class TestStandaloneKFold:
         # One finished fold: its n says so, and it has no spread to report.
         assert report.aggregate["r2"]["n"] == 1
         assert report.aggregate["r2"]["std"] is None
+        # Older runs used ddof=0; the readers can tell them apart.
+        assert report.aggregate["r2"]["std_ddof"] == 1
         kinds = [e["event"] for e in callback.events]
         assert kinds.count("trial_start") == kinds.count("trial_end") == 2
 

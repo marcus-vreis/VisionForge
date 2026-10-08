@@ -164,6 +164,110 @@ class TestCvTable:
         assert not any(line.strip().startswith("0 &") for line in tex.splitlines())
 
 
+class TestStoppedRunsInTheTables:
+    """A stopped run's table says what ran, not what was asked (ADR-111).
+
+    The .tex is the paper-ready file: a cut fold's half-trained metric printed
+    as an ordinary row, under a caption claiming every fold, is exactly the
+    transcription-free error the table exists to prevent.
+    """
+
+    def _stopped_cv(self) -> dict[str, Any]:
+        return {
+            "n_folds": 5,
+            "metric": "r2",
+            "fold_results": [
+                {"fold": 0, "status": "success", "metrics": {"r2": 0.81}},
+                {"fold": 1, "status": "stopped", "metrics": {"r2": 0.12}},
+            ],
+            "aggregate": {"r2": {"mean": 0.81, "std": None, "n": 1}},
+            "stopped": True,
+        }
+
+    def test_a_cut_fold_shows_its_status_not_its_metric(self) -> None:
+        tex = cv_to_latex(self._stopped_cv())
+
+        assert "0.1200" not in tex
+        cut_row = next(
+            line for line in tex.splitlines() if "stopped" in line and "&" in line
+        )
+        assert cut_row.strip().startswith("2 (stopped) & ---")
+
+    def test_the_caption_counts_the_folds_that_ran(self) -> None:
+        tex = cv_to_latex(self._stopped_cv())
+
+        caption = next(line for line in tex.splitlines() if r"\caption" in line)
+        assert "1 of 5 folds" in caption
+        assert "1 stopped" in caption
+        assert "3 not run" in caption
+        assert r"0.8100 $\pm$ ---" in tex  # one fold has no spread
+
+    def test_a_failed_fold_is_marked_too(self) -> None:
+        report = self._stopped_cv()
+        report["fold_results"][1]["status"] = "failed"
+        report["fold_results"][1]["metrics"] = {}
+
+        tex = cv_to_latex(report)
+
+        assert "2 (failed) & ---" in tex
+        assert "1 failed" in tex
+
+    def test_a_complete_cv_caption_is_unchanged(self) -> None:
+        tex = cv_to_latex(
+            {
+                "n_folds": 2,
+                "fold_results": [
+                    {"fold": 0, "status": "success", "metrics": {"r2": 0.7}},
+                    {"fold": 1, "status": "success", "metrics": {"r2": 0.8}},
+                ],
+                "aggregate": {"r2": {"mean": 0.75, "std": 0.07, "n": 2}},
+            }
+        )
+
+        assert r"\caption{Experiment: 2-fold cross-validation.}" in tex
+
+    def test_replicates_list_only_the_seeds_that_finished(self) -> None:
+        report = _replicates_report()
+        report["seeds"] = [42, 43, 44, 45, 46]
+        report["trials"] = [
+            {"seed": 42, "status": "success"},
+            {"seed": 43, "status": "success"},
+            {"seed": 44, "status": "stopped"},
+        ]
+        report["successful_replicates"] = 2
+
+        tex = replicates_to_latex(report)
+
+        note = next(line for line in tex.splitlines() if "Seeds:" in line)
+        assert "Seeds: 42, 43 (2 of 5 requested" in note
+        assert "44" not in note.split("Seeds:")[1].split(")")[0].replace("of 5", "")
+
+    def test_a_stopped_sweep_says_how_many_were_planned(self) -> None:
+        report = {
+            "mode": "grid",
+            "metric": "accuracy",
+            "total_trials": 2,
+            "planned_trials": 6,
+            "stopped_count": 1,
+            "stopped": True,
+            "best_trial": {"trial_index": 0},
+            "trials": [
+                {
+                    "status": "success",
+                    "overrides": {"training.learning_rate": 0.001},
+                    "metrics": {"accuracy": 0.93},
+                },
+                {"status": "stopped", "overrides": {}, "metrics": {}},
+            ],
+        }
+
+        tex = sweep_to_latex(report)
+
+        assert "1 of 2 trials succeeded" in tex
+        assert "stopped after 2 of 6 planned trials" in tex
+        assert "1 stopped" in tex
+
+
 class TestComparisonTable:
     def _comparisons(self) -> list[dict[str, Any]]:
         return [

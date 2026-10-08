@@ -4040,11 +4040,8 @@ async def _execute_sweep(
             seed=req.seed,
             progress_callback=_put_event,
         )
-        stopped = job_was_stopped(
-            [t.status for t in trials],
-            planned_trials(req.search_space, mode=req.mode, n_trials=req.n_trials),
-            token,
-        )
+        planned = planned_trials(req.search_space, mode=req.mode, n_trials=req.n_trials)
+        stopped = job_was_stopped([t.status for t in trials], planned, token)
         finished = any(t.status == "success" for t in trials)
         if not finished and not stopped:
             raise RuntimeError("All sweep trials failed — no ranking available.")
@@ -4052,6 +4049,9 @@ async def _execute_sweep(
             _require_reported_metric(metric, [t.metrics for t in trials], "sweep")
         report = _sweep_report(trials, req.mode, metric)
         report["stopped"] = stopped
+        # total_trials counts the trials that ran; the table and the GUI need
+        # to say of how many (ADR-111).
+        report["planned_trials"] = planned
         report["report_dir"] = _write_advanced_summary(
             base_config_dict, "sweep", report
         )

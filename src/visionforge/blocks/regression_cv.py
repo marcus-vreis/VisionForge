@@ -272,6 +272,8 @@ def aggregate_folds(
                 "mean": float(np.mean(values)),
                 "std": sample_std(values),
                 "n": len(values),
+                # Runs before ADR-111 wrote the population std (ddof=0).
+                "std_ddof": 1,
             }
     return aggregate
 

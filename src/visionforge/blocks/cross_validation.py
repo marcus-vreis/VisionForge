@@ -397,6 +397,7 @@ class CrossValidationBlock(ExperimentBlock):
             "std_accuracy": sample_std(accuracies),
             "mean_f1": float(np.mean(f1s)) if f1s else None,
             "std_f1": sample_std(f1s),
+            "std_ddof": 1,
             # The stop cut this job (ADR-111): a unit was cut, or units were
             # left unrun -- all of them, if it landed in the first.
             "stopped": stopped,
@@ -430,6 +431,8 @@ class CrossValidationBlock(ExperimentBlock):
             "folds": self._fold_results,
             "aggregate": {
                 "n": len(accuracies),
+                # Runs before ADR-111 wrote the population std (ddof=0).
+                "std_ddof": 1,
                 "mean_accuracy": float(np.mean(accuracies)) if accuracies else None,
                 "std_accuracy": sample_std(accuracies),
                 "mean_f1": float(np.mean(f1s)) if f1s else None,
@@ -502,6 +505,8 @@ class CrossValidationBlock(ExperimentBlock):
                     "n_folds_stopped": sum(
                         1 for r in self._fold_results if r["status"] == STOPPED
                     ),
+                    # Runs before ADR-111 wrote the population std (ddof=0).
+                    "std_ddof": 1,
                     "mean_accuracy": mean_acc,
                     "std_accuracy": std_acc,
                     "mean_f1": mean_f1,

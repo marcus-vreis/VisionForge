@@ -111,8 +111,17 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
   o resultado mostrava "± 0.0", que parece uma medida de variação nula; agora o
   desvio fica vazio e o resultado informa quantas dobras entraram na média
   (`n`). O cálculo passou a usar n-1, como as réplicas e os testes pareados, o
-  que deixa o desvio de uma validação cruzada completa um pouco maior que antes
+  que deixa o desvio de uma validação cruzada completa um pouco maior que antes;
+  todo desvio gravado agora vem com `std_ddof: 1`, para distinguir das
+  execuções antigas, que dividiam por n, quando duas são comparadas
   ([ADR-111](docs/dev/DECISIONS.md)).
+- **As tabelas LaTeX de uma execução parada dizem o que rodou.** A tabela da
+  validação cruzada mostrava a métrica de uma dobra cortada no meio como se
+  fosse uma dobra normal, sob o título "5-fold"; agora a dobra que não terminou
+  aparece com o estado ("parada" ou "falhou", em inglês na tabela) e traços, e o
+  título conta quantas dobras entraram na média. A tabela das réplicas lista só
+  as sementes que terminaram, e a da varredura diz quantas tentativas de quantas
+  planejadas rodaram ([ADR-111](docs/dev/DECISIONS.md)).
 - **Parar antes da primeira época não quebra mais o run.** Um treino parado
   enquanto ainda carregava os dados terminava com erro, porque o bloco tentava
   carregar um checkpoint que nunca foi gravado; em segmentação e nas tarefas
