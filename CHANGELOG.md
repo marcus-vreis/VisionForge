@@ -50,6 +50,13 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Fixed
 
+- **A validação cruzada de classificação pela interface falhava em todas as
+  dobras com os workers no automático.** A interface manda `num_workers: -1`
+  (automático), e a validação cruzada montava os próprios carregadores com esse
+  valor cru, que o PyTorch recusa: toda dobra terminava com "num_workers option
+  should be non-negative". Agora ela decide os workers pela mesma regra do
+  treino comum (o que a máquina comporta, e nenhum para um conjunto pequeno)
+  ([ADR-103](docs/dev/DECISIONS.md)).
 - **A nota de colapso só cita o que foi medido.** Ao escolher o `vgg19`, o
   formulário dizia "prevê uma classe só: medimos 0.25 de acurácia em 4 classes"
   como se o `vgg19` tivesse sido medido, e o `vit_b_16` recebia a mesma frase

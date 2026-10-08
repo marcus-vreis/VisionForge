@@ -21,6 +21,7 @@ from visionforge.core.cancellation import (
     is_cancelled,
     job_was_stopped,
 )
+from visionforge.core.data import resolve_num_workers
 from visionforge.core.evaluator import Evaluator
 from visionforge.core.replicates import sample_std
 from visionforge.core.trainer import Trainer
@@ -38,6 +39,7 @@ class _FoldDataModule:
         fold_mean: list[float],
         fold_std: list[float],
         config: ExperimentConfig,
+        num_workers: int = 0,
     ) -> None:
         tc = config.data.transforms
         train_transform = T.Compose(
@@ -86,7 +88,9 @@ class _FoldDataModule:
         self._val_ds.targets = [val_ds.targets[i] for i in val_subset.indices]
 
         self._batch_size = config.training.batch_size
-        self._num_workers = config.data.num_workers
+        # Already resolved by the caller (`resolve_num_workers`): the raw
+        # config value can be -1, which DataLoader refuses.
+        self._num_workers = num_workers
         self._pin_memory = config.data.pin_memory
         self._class_names: list[str] = list(train_ds.classes)
 
@@ -250,8 +254,11 @@ class CrossValidationBlock(ExperimentBlock):
             trained = False
             cut = False
             try:
+                # The same policy as DataModule: -1 ("automático") becomes what
+                # the machine affords, and a small fold loads in-process.
+                workers = resolve_num_workers(data_cfg.num_workers, len(train_indices))
                 fold_mean, fold_std = _compute_fold_stats(
-                    raw_dataset, train_indices, data_cfg.num_workers
+                    raw_dataset, train_indices, workers
                 )
 
                 fold_raw: dict[str, Any] = self._config.model_dump(mode="json")
@@ -276,7 +283,12 @@ class CrossValidationBlock(ExperimentBlock):
                 train_subset = Subset(raw_dataset, train_indices)
                 val_subset = Subset(raw_dataset, val_indices)
                 fold_data = _FoldDataModule(
-                    train_subset, val_subset, fold_mean, fold_std, fold_config
+                    train_subset,
+                    val_subset,
+                    fold_mean,
+                    fold_std,
+                    fold_config,
+                    num_workers=workers,
                 )
 
                 model = ModelFactory.create(fold_config.model)

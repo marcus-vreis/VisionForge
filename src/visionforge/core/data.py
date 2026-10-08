@@ -91,6 +91,63 @@ def _build_transforms(
     return T.Compose(steps)
 
 
+# Below this many training images, worker start-up costs more than it saves.
+_SMALL_DATASET_THRESHOLD = 500
+
+
+def resolve_num_workers(
+    requested: int, n_samples: int, *, loader_pools: int = _LOADER_POOLS
+) -> int:
+    """The worker count a classification loader actually uses.
+
+    ``requested`` is ``data.num_workers`` as configured: -1 is the automatic
+    setting (ADR-103). Every loader built from that field goes through here --
+    ``DataModule`` and the K-fold folds alike -- because DataLoader refuses a
+    negative count, and a loader that skipped this step failed every fold.
+    """
+    from loguru import logger
+
+    workers = requested
+    # Auto-downgrade: multiprocessing workers have a fixed startup +
+    # serialisation cost that exceeds the data-loading time on small
+    # datasets.  On Windows this cost is especially high because Python
+    # uses the "spawn" method.  Disable workers when there are fewer
+    # images than a reasonable threshold.
+    if workers > 0 and n_samples < _SMALL_DATASET_THRESHOLD:
+        logger.info(
+            "Dataset has {} images (< {}); setting num_workers=0 "
+            "to avoid multiprocessing overhead.",
+            n_samples,
+            _SMALL_DATASET_THRESHOLD,
+        )
+        workers = 0
+
+    # Cap by what this machine can commit, not by what the config asked for:
+    # each spawned worker re-imports torch and its CUDA DLLs, and a request
+    # for more than the budget is how a run dies with WinError 1455 before
+    # its first epoch (ADR-081/098). Lowering silently would hide the
+    # machine's limit, so it says so.
+    affordable = suggested_workers(loader_pools=loader_pools)
+    if workers < 0:
+        # The automatic setting: what this machine can actually afford.
+        logger.info(
+            "num_workers automático: {} para {} pools de loader.",
+            affordable,
+            loader_pools,
+        )
+        return affordable
+    if workers > affordable:
+        logger.warning(
+            "num_workers={} exceeds what this machine can commit for {} "
+            "loader pools; using {}.",
+            workers,
+            loader_pools,
+            affordable,
+        )
+        return affordable
+    return workers
+
+
 class DataModule:
     """Wraps ImageFolder datasets and exposes DataLoaders for train/val/test splits."""
 
@@ -121,50 +178,7 @@ class DataModule:
             transform=_build_transforms(tc, is_train=False, preprocessing=pp),
         )
 
-        # Auto-downgrade: multiprocessing workers have a fixed startup +
-        # serialisation cost that exceeds the data-loading time on small
-        # datasets.  On Windows this cost is especially high because Python
-        # uses the "spawn" method.  Disable workers when there are fewer
-        # images than a reasonable threshold.
-        _SMALL_DATASET_THRESHOLD = 500
-        if self._num_workers > 0 and len(self._train) < _SMALL_DATASET_THRESHOLD:
-            from loguru import logger
-
-            logger.info(
-                "Dataset has {} images (< {}); setting num_workers=0 "
-                "to avoid multiprocessing overhead.",
-                len(self._train),
-                _SMALL_DATASET_THRESHOLD,
-            )
-            self._num_workers = 0
-
-        # Cap by what this machine can commit, not by what the config asked for:
-        # each spawned worker re-imports torch and its CUDA DLLs, and a request
-        # for more than the budget is how a run dies with WinError 1455 before
-        # its first epoch (ADR-081/098). Lowering silently would hide the
-        # machine's limit, so it says so.
-        affordable = suggested_workers(loader_pools=_LOADER_POOLS)
-        if self._num_workers < 0:
-            # The automatic setting: what this machine can actually afford.
-            from loguru import logger
-
-            self._num_workers = affordable
-            logger.info(
-                "num_workers automático: {} para {} pools de loader.",
-                affordable,
-                _LOADER_POOLS,
-            )
-        elif self._num_workers > affordable:
-            from loguru import logger
-
-            logger.warning(
-                "num_workers={} exceeds what this machine can commit for {} "
-                "loader pools; using {}.",
-                self._num_workers,
-                _LOADER_POOLS,
-                affordable,
-            )
-            self._num_workers = affordable
+        self._num_workers = resolve_num_workers(self._num_workers, len(self._train))
 
     def _loader_kwargs(self, *, persistent: bool) -> dict[str, Any]:
         """Common DataLoader kwargs with GPU-friendly defaults.
