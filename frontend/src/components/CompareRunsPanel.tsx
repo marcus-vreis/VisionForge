@@ -1,7 +1,16 @@
 import { useEffect, useState } from "react";
-import { fetchRunDetail, type RunDetail } from "../api/client";
+import { fetchRunDetail, fetchTasks, type RunDetail } from "../api/client";
 import { useT } from "../i18n/useT";
 import type { Dict } from "../i18n/pt";
+import {
+  distinctTasks,
+  extremeIndexes,
+  isCustomTaskKey,
+  metricRows,
+  numericMetric,
+  runTaskKey,
+} from "../lib/compare-metrics";
+import type { TaskDescriptor } from "../lib/custom-tasks";
 import { compareDatasets } from "../lib/dataset-identity";
 
 interface CompareRunsPanelProps {
@@ -18,18 +27,6 @@ const PALETTE = [
   "oklch(0.78 0.16 200)", // teal
 ];
 
-/** The metric rows, in display order; the labels are `compareRuns.metrics`. */
-const METRIC_KEYS: Array<keyof Dict["compareRuns"]["metrics"]> = [
-  "best_val_loss",
-  "best_epoch",
-  "total_epochs",
-  "test_accuracy",
-  "test_f1",
-  "test_precision",
-  "test_recall",
-  "test_auc_roc",
-];
-
 function fmtMetric(v: unknown): string {
   if (v === null || v === undefined) return "—";
   if (typeof v === "number") {
@@ -44,6 +41,8 @@ function fmtMetric(v: unknown): string {
 export function CompareRunsPanel({ runIds, onBack }: CompareRunsPanelProps) {
   const t = useT();
   const [details, setDetails] = useState<RunDetail[]>([]);
+  // Only read for researcher-defined tasks: what they declared about their metrics.
+  const [descriptors, setDescriptors] = useState<TaskDescriptor[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -55,8 +54,20 @@ export function CompareRunsPanel({ runIds, onBack }: CompareRunsPanelProps) {
       if (alive) setLoading(true);
     }, 0);
     Promise.all(runIds.map((id) => fetchRunDetail(id)))
-      .then((arr) => {
-        if (alive) setDetails(arr);
+      .then(async (arr) => {
+        // A comparison does not depend on the descriptors: without them a custom
+        // task's metrics lose their declared direction (the name decides) and
+        // its label, and nothing else.
+        const custom = arr.some((d) => isCustomTaskKey(runTaskKey(d)));
+        const known = custom
+          ? await fetchTasks()
+              .then((r) => r.tasks)
+              .catch((): TaskDescriptor[] => [])
+          : [];
+        if (alive) {
+          setDetails(arr);
+          setDescriptors(known);
+        }
       })
       .catch((e: unknown) => {
         if (alive) {
@@ -121,11 +132,15 @@ export function CompareRunsPanel({ runIds, onBack }: CompareRunsPanelProps) {
         </div>
       )}
 
-      {!loading && !error && details.length > 0 && (
+      {!loading && !error && distinctTasks(details).length > 1 && (
+        <MixedTasks details={details} descriptors={descriptors} />
+      )}
+
+      {!loading && !error && details.length > 0 && distinctTasks(details).length === 1 && (
         <>
           <Legend details={details} />
           <DatasetVerdictRow details={details} />
-          <MetricsTable details={details} />
+          <MetricsTable details={details} descriptors={descriptors} />
           <ConfigDiffTable details={details} />
           <PreprocessingCompare details={details} />
           <OverlayChart
@@ -239,8 +254,76 @@ function Legend({ details }: { details: RunDetail[] }) {
   );
 }
 
-function MetricsTable({ details }: { details: RunDetail[] }) {
+/** The name a task goes by on screen: the dictionary's for a built-in, the
+ *  researcher's own label (else the key) for a custom task. */
+function taskDisplayName(t: Dict, task: string, descriptors: TaskDescriptor[]): string {
+  if (isCustomTaskKey(task)) {
+    const key = task.slice("custom:".length);
+    return descriptors.find((d) => d.key === key)?.label ?? key;
+  }
+  const names: Record<string, string> = t.taskNames;
+  return names[task] ?? task;
+}
+
+/** Why there is no comparison: runs of different tasks have no metric in common
+ *  to set side by side, so the panel says so and lists whose is whose. */
+function MixedTasks({
+  details,
+  descriptors,
+}: {
+  details: RunDetail[];
+  descriptors: TaskDescriptor[];
+}) {
   const t = useT();
+  return (
+    <div
+      style={{
+        padding: 14,
+        background: "oklch(0.80 0.13 85 / 0.08)",
+        border: "1px solid oklch(0.80 0.13 85 / 0.4)",
+        borderRadius: 12,
+        fontFamily: "var(--font-mono)",
+        fontSize: 12,
+        color: "var(--vf-text)",
+        display: "flex",
+        flexDirection: "column",
+        gap: 8,
+      }}
+    >
+      <div style={{ color: "oklch(0.88 0.13 85)", fontWeight: 600 }}>
+        ⚠ {t.compareRuns.mixedTasks.title}
+      </div>
+      <div style={{ color: "var(--vf-text-dim)", lineHeight: 1.5 }}>
+        {t.compareRuns.mixedTasks.body}
+      </div>
+      <ul style={{ margin: 0, paddingLeft: 18, color: "var(--vf-text-muted)" }}>
+        {details.map((d) => (
+          <li key={d.run_id}>
+            {d.experiment_name} ·{" "}
+            <strong>{taskDisplayName(t, runTaskKey(d), descriptors)}</strong>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** The glyph beside a metric's name that says which end of it is better. */
+const DIRECTION_GLYPH = { higher: "↑", lower: "↓" };
+
+function MetricsTable({
+  details,
+  descriptors,
+}: {
+  details: RunDetail[];
+  descriptors: TaskDescriptor[];
+}) {
+  const t = useT();
+  const task = runTaskKey(details[0]);
+  const declared = isCustomTaskKey(task)
+    ? descriptors.find((d) => d.key === task.slice("custom:".length))?.metrics
+    : undefined;
+  const rows = metricRows(task, details, declared);
   return (
     <div
       style={{
@@ -263,18 +346,44 @@ function MetricsTable({ details }: { details: RunDetail[] }) {
           </tr>
         </thead>
         <tbody>
-          {METRIC_KEYS.map((key) => {
-            const label = t.compareRuns.metrics[key];
-            const present = details.some((d) => d.metrics[key] !== undefined);
-            if (!present) return null;
+          {rows.map((row) => {
+            const label = row.label ? t.compareRuns.metrics[row.label] : row.key;
+            const extremes = extremeIndexes(
+              details.map((d) => numericMetric(d.metrics[row.key])),
+              row.direction,
+            );
             return (
-              <tr key={key}>
-                <td style={tdLabelStyle}>{label}</td>
-                {details.map((d) => (
-                  <td key={d.run_id} style={tdStyle}>
-                    {fmtMetric(d.metrics[key])}
-                  </td>
-                ))}
+              <tr key={row.key}>
+                <td style={tdLabelStyle}>
+                  {label}
+                  {row.direction && (
+                    <span
+                      title={t.compareRuns.direction[row.direction]}
+                      style={{ marginLeft: 6, opacity: 0.6, cursor: "help" }}
+                    >
+                      {DIRECTION_GLYPH[row.direction]}
+                    </span>
+                  )}
+                </td>
+                {details.map((d, i) => {
+                  // The highest or lowest value of the row, said as that and
+                  // nothing more: whether it is a real difference is not
+                  // something one run each can tell.
+                  const extreme = extremes.includes(i) && row.direction;
+                  return (
+                    <td
+                      key={d.run_id}
+                      title={
+                        extreme
+                          ? t.compareRuns.extreme[extreme === "higher" ? "highest" : "lowest"]
+                          : undefined
+                      }
+                      style={extreme ? { ...tdStyle, ...extremeStyle } : tdStyle}
+                    >
+                      {fmtMetric(d.metrics[row.key])}
+                    </td>
+                  );
+                })}
               </tr>
             );
           })}
@@ -307,6 +416,13 @@ const tdStyle: React.CSSProperties = {
   padding: "8px 10px",
   borderBottom: "1px solid rgba(255,255,255,0.04)",
   color: "var(--vf-text)",
+};
+
+/** The cell holding a row's highest or lowest value. Neutral on purpose: no
+ *  green, no "best" — see `extremeIndexes`. */
+const extremeStyle: React.CSSProperties = {
+  background: "rgba(255,255,255,0.07)",
+  fontWeight: 700,
 };
 
 const tdLabelStyle: React.CSSProperties = {

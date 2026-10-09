@@ -15,6 +15,20 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Added
 
+- **A comparação do Histórico mostra as métricas certas de cada tarefa.** A
+  tabela tinha uma lista fixa de métricas de classificação, então comparar runs
+  de detecção, regressão, segmentação ou anomalia mostrava traço em quase todas
+  as linhas. Agora cada tarefa lista as suas: detecção (mAP@50-95, mAP@50,
+  precisão e recall, todos de validação), regressão (R², RMSE e MAE no teste e
+  na validação), segmentação (mIoU, Dice e acurácia de pixel), anomalia (AUROC,
+  F1 da imagem e limiar de decisão) e, numa tarefa própria, as métricas
+  numéricas que os runs registraram, com a direção que a tarefa declarou — ou,
+  sem declaração, a que o nome indica, a mesma regra do ranking das varreduras.
+  Só aparecem as linhas que algum run mediu. Cada linha diz para que lado a
+  métrica melhora (↑ ou ↓) e marca o maior ou o menor valor entre os runs. Runs
+  de tarefas diferentes não entram na mesma tabela: a tela avisa e pede para
+  voltar e selecionar runs da mesma tarefa. Os detalhes de um run
+  (`GET /api/runs/{id}`) passam a trazer a `task`.
 - **O Histórico abre a pasta de um run no explorador de arquivos.** Achar a
   pasta de um run exigia copiar o caminho e colá-lo à mão no explorador. Os
   detalhes do run, na seção "Localização no disco", ganharam o botão "Abrir

@@ -866,6 +866,9 @@ export interface RunDetail {
   /** See RunSummary: the run stopped short and can be continued (ADR-092/093). */
   resumable?: boolean;
   configured_epochs?: number | null;
+  /** The task family: a built-in name, or `custom:<key>` for a researcher's own
+   *  task. Absent from a server older than the comparison by task. */
+  task?: string;
   /** The request came from the machine the server runs on, so the file
    *  manager's window opens in front of the person who clicked. Absent on an
    *  older server, which reads as "do not offer the button". */

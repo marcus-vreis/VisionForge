@@ -297,6 +297,11 @@ class RunDetail(BaseModel):
     # See RunSummary: derived from the resume file on disk (ADR-092/093).
     resumable: bool = False
     configured_epochs: int | None = None
+    # The task family, by the rule `_run_task` applies to run.json: a built-in
+    # name or `custom:<key>`. Not `config.task`, which for classification holds
+    # the problem type and which a researcher-defined task does not carry at
+    # all. History compares runs only inside one family.
+    task: str = "classification"
     # Whether the page may offer "open folder": the request came from the machine
     # the server runs on, which is the only place the file manager's window
     # would appear in front of whoever clicked. Computed per request, never

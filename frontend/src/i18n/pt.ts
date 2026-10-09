@@ -1718,7 +1718,9 @@ export const pt = {
     metric: "Métrica",
     device: "Dispositivo",
     field: "Campo",
-    // Keys are the backend's metric names.
+    // Keys are the backend's metric names, of every task (lib/compare-metrics.ts
+    // says which task lists which). "(teste)" is the held-out split, "(val)" the
+    // validation score at the best epoch — all a detection run has.
     metrics: {
       best_val_loss: "Melhor val loss",
       best_epoch: "Melhor epoch",
@@ -1728,6 +1730,43 @@ export const pt = {
       test_precision: "Precisão (teste)",
       test_recall: "Recall (teste)",
       test_auc_roc: "AUC-ROC (teste)",
+      map50_95: "mAP@50-95 (val)",
+      map50: "mAP@50 (val)",
+      precision: "Precisão (val)",
+      recall: "Recall (val)",
+      test_r2: "R² (teste)",
+      test_rmse: "RMSE (teste)",
+      test_mae: "MAE (teste)",
+      r2: "R² (val)",
+      rmse: "RMSE (val)",
+      mae: "MAE (val)",
+      test_miou: "mIoU (teste)",
+      test_dice: "Dice (teste)",
+      test_pixel_acc: "Acurácia de pixel (teste)",
+      miou: "mIoU (val)",
+      dice: "Dice (val)",
+      pixel_acc: "Acurácia de pixel (val)",
+      test_auroc: "AUROC (teste)",
+      test_image_f1: "F1 da imagem (teste)",
+      test_threshold: "Limiar de decisão (teste)",
+      auroc: "AUROC (val)",
+      image_f1: "F1 da imagem (val)",
+      threshold: "Limiar de decisão (val)",
+    },
+    // Which way a metric improves, beside its name; and what the marked cell of a
+    // row is. The mark describes the numbers: it is not a verdict on the runs.
+    direction: {
+      higher: "maior é melhor",
+      lower: "menor é melhor",
+    },
+    extreme: {
+      highest: "maior valor",
+      lowest: "menor valor",
+    },
+    // Shown instead of the comparison when the selected runs are of different tasks.
+    mixedTasks: {
+      title: "Tarefas diferentes numa só comparação",
+      body: "Métricas de tarefas diferentes não se comparam: o mAP de uma detecção e o R² de uma regressão não medem a mesma coisa nem estão na mesma escala. Volte ao histórico e selecione runs da mesma tarefa.",
     },
     configDiffTitle: "// diff de configuração (células destacadas = diferentes da 1ª run)",
     // The rows of the configuration table.

@@ -137,6 +137,44 @@ class TestRunDetailEndpoint:
         assert body["metrics"]["test_accuracy"] == 0.8
         assert body["started_at"] == datetime.fromisoformat(_TS).isoformat()
         assert body["tests"] == []
+        # `config.task` is "binary" here (the problem type); the family is not.
+        assert body["task"] == "classification"
+
+    @pytest.mark.parametrize(
+        ("top_level", "config_task", "expected"),
+        [
+            (None, "regression", "regression"),
+            (None, "detection", "detection"),
+            (None, "multiclass", "classification"),
+            ("custom:shapes", None, "custom:shapes"),
+        ],
+    )
+    def test_detail_names_the_task_family(
+        self,
+        app_and_routes: tuple,
+        tmp_path: Path,
+        top_level: str | None,
+        config_task: str | None,
+        expected: str,
+    ) -> None:
+        """The comparison only sets runs of one family side by side, and the
+        family cannot be read off `config.task` alone: a custom run has none."""
+        app, routes_mod = app_and_routes
+        run_dir = _write_run(tmp_path)
+        run_json = run_dir / "run.json"
+        data = json.loads(run_json.read_text(encoding="utf-8"))
+        if config_task is None:
+            data["config"].pop("task", None)
+        else:
+            data["config"]["task"] = config_task
+        if top_level is not None:
+            data["task"] = top_level
+        run_json.write_text(json.dumps(data), encoding="utf-8")
+        with patch.object(routes_mod, "_MODELS_DIR", tmp_path):
+            client = TestClient(app, raise_server_exceptions=True)
+            resp = client.get(f"/api/runs/{run_dir.name}")
+        assert resp.status_code == 200
+        assert resp.json()["task"] == expected
 
 
 class TestDeleteRun:

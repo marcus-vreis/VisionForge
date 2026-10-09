@@ -514,6 +514,7 @@ async def get_run_detail(run_id: str, request: Request) -> RunDetail:
         dataset=dataset,
         resumable=resumable,
         configured_epochs=configured_epochs,
+        task=_run_task(data),
         can_reveal=can_reveal(_client_host(request)),
     )
 
