@@ -50,6 +50,13 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Fixed
 
+- **A validação cruzada de classificação registrava 0 épocas.** O `run.json` da
+  execução somava uma contagem de épocas que nenhuma dobra gravava, então o
+  Histórico mostrava "0 épocas" para uma validação cruzada que tinha treinado
+  por horas. Agora cada dobra guarda as épocas que de fato rodou
+  (`epochs_completed`, 0 se morreu antes de treinar) e o total da execução é a
+  soma delas, contando as dobras paradas antes do fim pela parada antecipada ou
+  pelo botão de parar.
 - **O treino de uma tarefa própria parava na primeira época sem melhora.** Com
   a paciência no padrão (0), o motor das tarefas próprias comparava `1 >= 0` e
   encerrava a execução assim que uma época não superava a melhor, em vez de

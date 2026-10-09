@@ -243,6 +243,9 @@ class CrossValidationBlock(ExperimentBlock):
                 "val_size": len(val_indices),
                 "status": "failed",
                 "error": "",
+                # Epochs the fold's trainer ran (early stopping and a user stop
+                # both cut it short); 0 for a fold that died before training.
+                "epochs_completed": 0,
                 "best_val_loss": None,
                 "accuracy": None,
                 "f1": None,
@@ -301,6 +304,7 @@ class CrossValidationBlock(ExperimentBlock):
                     cancel_token=self._cancel_token,
                 )
                 trained = True
+                fold_record["epochs_completed"] = train_result.total_epochs
                 cut = train_result.stopped
                 # 0 epochs only when stopped before the first: nothing to score.
                 if train_result.total_epochs:
@@ -498,6 +502,8 @@ class CrossValidationBlock(ExperimentBlock):
             "metrics": {
                 # Mirror the keys the RunSummary parser already understands so
                 # CV results show the aggregate metric in the history list.
+                # No other multi-unit run writes one; the sum is the training
+                # actually done, early-stopped and cut folds included.
                 "total_epochs": sum(
                     r.get("epochs_completed", 0) or 0 for r in self._fold_results
                 ),
