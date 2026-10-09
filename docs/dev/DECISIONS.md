@@ -4139,16 +4139,22 @@ run-level `stopped` of the result says the run was stopped. `std_ddof` is
 persisted for whoever compares an older K-fold with a newer one: a CV std
 without it is the population std (ddof=0).
 
+**A unit the stop cut cannot be continued alone.** A trainer keeps its
+`resume.pt` when the token cuts it, which is what lets a stopped single run be
+continued. A cut unit of a sweep, comparison, replicate set or K-fold is one
+cell of a table that stays `stopped`: continuing it would finish that lone
+training as a run detached from its job, while the summary still lists it as
+`stopped`. So wherever a unit is marked `stopped` its resume state is dropped
+(`discard_resume_state`), and `_resume_status` answers no by the rule that
+already decides it (ADR-092). The sweep, comparison and replicate
+orchestrators do it from the `RunResult.run_dir` their runner reports
+(`discard_cut_unit_resume`); the regression and segmentation K-fold functions,
+which drive the trainer without a runner, from the fold's `model_path.parent`.
+For Ultralytics that state is `weights/last.pt`, which goes with it; `best.pt`
+and the other artifacts stay. The classification K-fold needed nothing for
+History, since its fold configs carry `block: cross_validation`, which
+`_RESUMABLE_BLOCKS` does not list; its fold directory still holds the file.
+
 **Not done:**
 
-- A cut fold of the standalone K-fold (regression, segmentation) is an
-  ordinary run with a `resume.pt`, so History offers to continue it. That
-  finishes the training, but not the K-fold: its summary keeps the fold as
-  `stopped`. The sweep, comparison and replicate orchestrators no longer leave
-  this behind: a unit they mark `stopped` has its resume state dropped
-  (`discard_cut_unit_resume`, from the `RunResult.run_dir` its runner now
-  reports), so `_resume_status` answers no by the rule that already decides it.
-  For Ultralytics that state is `weights/last.pt`, which goes with it;
-  `best.pt` stays. The K-fold functions drive the trainer without a runner and
-  were not given the same call.
 - PatchCore's memory bank cannot be interrupted while it is being built.

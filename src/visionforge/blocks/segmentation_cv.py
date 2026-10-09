@@ -34,6 +34,7 @@ from visionforge.core.cancellation import (
     CancellationToken,
     is_cancelled,
 )
+from visionforge.core.resume import discard_resume_state
 from visionforge.core.segmentation_data import SegmentationDataset
 from visionforge.core.segmentation_trainer import SegmentationTrainer
 from visionforge.models.segmentation_factory import SegmentationModelFactory
@@ -212,6 +213,9 @@ def run_segmentation_cross_validation(
         if cut:
             record.status = STOPPED
             record.error = STOPPED_NOTE
+            # Continuing it alone would finish a fold the K-fold lists as
+            # stopped, as a run detached from its job.
+            discard_resume_state(result.model_path.parent)
 
         folds.append(record)
         # A fold whose trainer finished already emitted its own end, rewritten

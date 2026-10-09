@@ -35,6 +35,7 @@ from visionforge.core.data import _build_transforms
 from visionforge.core.regression_data import RegressionCsvDataset
 from visionforge.core.regression_trainer import RegressionTrainer
 from visionforge.core.replicates import sample_std
+from visionforge.core.resume import discard_resume_state
 from visionforge.models.regression_factory import RegressionModelFactory
 from visionforge.utils.regression_config import RegressionConfig
 
@@ -234,6 +235,9 @@ def run_regression_cross_validation(
         if cut:
             record.status = STOPPED
             record.error = STOPPED_NOTE
+            # Continuing it alone would finish a fold the K-fold lists as
+            # stopped, as a run detached from its job.
+            discard_resume_state(result.model_path.parent)
 
         folds.append(record)
         # A fold whose trainer finished already emitted its own end, rewritten

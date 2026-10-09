@@ -63,13 +63,15 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 ### Fixed
 
 - **O Histórico oferecia "continuar" para uma única tentativa cortada de uma
-  varredura, comparação ou conjunto de réplicas parado.** A tentativa cortada
-  pelo botão de parar ficava com o estado de retomada como qualquer treino
-  parado, e continuá-la treinava só aquela célula até o fim, num treino solto
-  que a varredura continuava listando como parado. Agora a execução em lote
-  descarta o estado de retomada da tentativa que ela mesma marcou como parada
-  (no YOLO, o `weights/last.pt`; o `best.pt` fica), e o treino único parado
-  segue podendo ser continuado ([ADR-111](docs/dev/DECISIONS.md)).
+  varredura, comparação, conjunto de réplicas ou validação cruzada parado.** A
+  tentativa cortada pelo botão de parar ficava com o estado de retomada como
+  qualquer treino parado, e continuá-la treinava só aquela célula até o fim,
+  num treino solto que a varredura continuava listando como parado. Agora a
+  execução em lote descarta o estado de retomada da tentativa que ela mesma
+  marcou como parada (no YOLO, o `weights/last.pt`; o `best.pt` fica), e a
+  validação cruzada de regressão e de segmentação faz o mesmo com a dobra
+  cortada. O treino único parado segue podendo ser continuado
+  ([ADR-111](docs/dev/DECISIONS.md)).
 - **A validação cruzada de classificação registrava 0 épocas.** O `run.json` da
   execução somava uma contagem de épocas que nenhuma dobra gravava, então o
   Histórico mostrava "0 épocas" para uma validação cruzada que tinha treinado

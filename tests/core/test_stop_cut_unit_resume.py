@@ -336,3 +336,122 @@ class TestRealRegressionSweep:
         assert result.run_dir == run_dir
         data = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
         assert _resume_status(run_dir, data) == (True, EPOCHS)
+
+
+def _stop_in_second_fold(token: CancellationToken) -> Any:
+    """Progress callback that presses stop after the second fold's first epoch."""
+
+    def _callback(event: dict[str, Any]) -> None:
+        if (
+            event.get("event") == "epoch_end"
+            and event.get("trial_index") == 1
+            and event.get("epoch") == 1
+        ):
+            token.cancel()
+
+    return _callback
+
+
+def _output_dirs(tmp_path: Path) -> dict[str, str]:
+    return {
+        "models_dir": str(tmp_path / "models"),
+        "reports_dir": str(tmp_path / "reports"),
+        "graphics_dir": str(tmp_path / "graphics"),
+        "logs_dir": str(tmp_path / "logs"),
+    }
+
+
+def _fold_dir(tmp_path: Path, name: str, fold: int) -> Path:
+    (run_dir,) = (tmp_path / "models").glob(f"{name}_fold{fold}/*")
+    return run_dir
+
+
+class TestRealStandaloneKFold:
+    """A fold the stop cut is not offered as a lone run to continue (ADR-111)."""
+
+    def test_regression_cut_fold_is_not_resumable(self, tmp_path: Path) -> None:
+        from visionforge.blocks.regression_cv import run_regression_cross_validation
+        from visionforge.utils.regression_config import RegressionConfig
+        from visionforge.utils.selftest_data import build_regression_dataset
+
+        config = RegressionConfig.model_validate(
+            {
+                "name": "cut_reg_cv",
+                "model": {"name": "resnet18", "num_targets": 1, "pretrained": False},
+                "data": {
+                    "base_dir": str(build_regression_dataset(tmp_path / "ds")),
+                    "target_columns": ["target"],
+                    "image_size": 32,
+                    "num_workers": 0,
+                    "pin_memory": False,
+                },
+                "training": {"epochs": EPOCHS, "batch_size": 4, "seed": 0},
+                "output": _output_dirs(tmp_path),
+                "device": {"kind": "cpu"},
+            }
+        )
+        token = CancellationToken()
+
+        report = run_regression_cross_validation(
+            config,
+            n_folds=3,
+            shuffle=False,
+            progress_callback=_stop_in_second_fold(token),
+            cancel_token=token,
+        )
+
+        assert [f.status for f in report.folds] == ["success", "stopped"]
+        self._assert_cut_fold_dropped(tmp_path, "cut_reg_cv")
+
+    def test_segmentation_cut_fold_is_not_resumable(self, tmp_path: Path) -> None:
+        from visionforge.blocks.segmentation_cv import (
+            run_segmentation_cross_validation,
+        )
+        from visionforge.utils.segmentation_config import SegmentationConfig
+        from visionforge.utils.selftest_data import build_segmentation_dataset
+
+        config = SegmentationConfig.model_validate(
+            {
+                "name": "cut_seg_cv",
+                "model": {"name": "unet", "num_classes": 3, "pretrained": False},
+                "data": {
+                    "base_dir": str(build_segmentation_dataset(tmp_path / "ds")),
+                    "image_size": 64,
+                    "num_workers": 0,
+                    "pin_memory": False,
+                },
+                "training": {"epochs": EPOCHS, "batch_size": 2, "seed": 0},
+                "output": _output_dirs(tmp_path),
+                "device": {"kind": "cpu"},
+            }
+        )
+        token = CancellationToken()
+
+        report = run_segmentation_cross_validation(
+            config,
+            n_folds=3,
+            shuffle=False,
+            progress_callback=_stop_in_second_fold(token),
+            cancel_token=token,
+        )
+
+        assert [f.status for f in report.folds] == ["success", "stopped"]
+        self._assert_cut_fold_dropped(tmp_path, "cut_seg_cv")
+
+    @staticmethod
+    def _assert_cut_fold_dropped(tmp_path: Path, name: str) -> None:
+        finished = _fold_dir(tmp_path, name, 0)
+        cut = _fold_dir(tmp_path, name, 1)
+        cut_data = json.loads((cut / "run.json").read_text(encoding="utf-8"))
+        finished_data = json.loads((finished / "run.json").read_text(encoding="utf-8"))
+
+        assert cut_data["metrics"]["total_epochs"] == 1
+        assert not _has_resume(cut)
+        assert _resume_status(cut, cut_data) == (False, EPOCHS)
+        # The cut fold keeps its best checkpoint: only the way back in is shut.
+        assert (cut / "best_model.pth").is_file()
+        # A fold that ran to the end had no resume state to begin with, and
+        # its artifacts are as the trainer left them.
+        assert finished_data["metrics"]["total_epochs"] == EPOCHS
+        assert (finished / "best_model.pth").is_file()
+        assert _resume_status(finished, finished_data) == (False, EPOCHS)
