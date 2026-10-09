@@ -253,7 +253,9 @@ def write_run_group(
     # Task identity and provenance come from a child: a researcher-defined task
     # stamps ``task: custom:<key>`` at the top level, which the group's own
     # config cannot say.
-    inherited = {
+    # Annotated: newer mypy infers Literal keys from the tuple and then rejects
+    # unpacking the dict into a `dict[str, Any]`.
+    inherited: dict[str, Any] = {
         key: donor[key]
         for key in (
             "task",
