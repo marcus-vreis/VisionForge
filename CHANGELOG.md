@@ -122,6 +122,18 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Fixed
 
+- **O card do Histórico não mostrava nenhuma métrica de uma execução de
+  regressão, segmentação ou anomalia.** O servidor já enviava os números de
+  destaque de cada tarefa (R², MAE e RMSE; mIoU, Dice e acurácia de pixel; AUROC
+  e F1), mas o card guardava uma lista própria que só conhecia classificação e
+  detecção, então as outras caíam nas chaves de classificação e ficavam sem
+  nada (anomalia mostrava só o F1). Agora o card lê o que o servidor enviou e dá
+  o nome a cada número a partir da mesma tabela que a comparação usa
+  (`lib/compare-metrics.ts`), sem lista própria: o rótulo diz a partição
+  ("R² (teste)", "mAP@50 (val)"), vale também para a média de um conjunto de
+  réplicas, e uma tarefa própria do pesquisador segue com os nomes que ela
+  reportou. Uma execução que nunca avaliou a partição de teste continua sem
+  número no card, porque o servidor só projeta as métricas de teste.
 - **O Histórico oferecia "continuar" para uma única tentativa cortada de uma
   varredura, comparação, conjunto de réplicas ou validação cruzada parado.** A
   tentativa cortada pelo botão de parar ficava com o estado de retomada como

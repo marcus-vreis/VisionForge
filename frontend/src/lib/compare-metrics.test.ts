@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  cardMetrics,
   distinctTasks,
   extremeIndexes,
   inferMetricDirection,
@@ -432,5 +433,90 @@ describe("extremeIndexes", () => {
 
   it("treats zero as a value, not as a missing one", () => {
     expect(extremeIndexes([0, 0.4], "lower")).toEqual([0]);
+  });
+});
+
+describe("cardMetrics", () => {
+  // The names the server projects per task (`_SUMMARY_METRIC_KEYS` in
+  // gui/api/routes.py), as a run's `final_metrics` carries them.
+  const PROJECTED: Record<string, string[]> = {
+    classification: ["accuracy", "f1", "val_loss"],
+    detection: ["map50", "map50_95"],
+    regression: ["r2", "mae", "rmse"],
+    segmentation: ["miou", "dice", "pixel_acc"],
+    anomaly: ["auroc", "f1"],
+  };
+  const summary = (names: string[]) => Object.fromEntries(names.map((n, i) => [n, 0.5 + i / 10]));
+  const labelsOf = (task: string, names: string[]) =>
+    cardMetrics(task, summary(names)).map((m) => m.label);
+
+  it("names every number the server projects for a built-in task from the table", () => {
+    for (const [task, names] of Object.entries(PROJECTED)) {
+      const got = cardMetrics(task, summary(names));
+      expect(
+        got.map((m) => m.key),
+        task,
+      ).toEqual(names);
+      for (const m of got) expect(m.label, `${task}/${m.key}`).not.toBeNull();
+    }
+  });
+
+  it("reads the held-out split's row where the server reads it", () => {
+    expect(labelsOf("regression", ["r2", "mae", "rmse"])).toEqual([
+      "test_r2",
+      "test_mae",
+      "test_rmse",
+    ]);
+    expect(labelsOf("segmentation", ["miou", "dice", "pixel_acc"])).toEqual([
+      "test_miou",
+      "test_dice",
+      "test_pixel_acc",
+    ]);
+    expect(labelsOf("anomaly", ["auroc", "f1"])).toEqual(["test_auroc", "test_image_f1"]);
+    expect(labelsOf("classification", ["accuracy", "f1", "val_loss"])).toEqual([
+      "test_accuracy",
+      "test_f1",
+      "best_val_loss",
+    ]);
+  });
+
+  it("keeps detection on its validation rows, the only ones it has", () => {
+    expect(labelsOf("detection", ["map50", "map50_95"])).toEqual(["map50", "map50_95"]);
+  });
+
+  it("keeps the order the server sent and shows at most three", () => {
+    const got = cardMetrics("regression", { rmse: 3, r2: 0.9, mae: 2, test_mse: 9 });
+    expect(got.map((m) => m.key)).toEqual(["rmse", "r2", "mae"]);
+  });
+
+  it("leaves out a metric that was never measured but keeps a zero", () => {
+    const got = cardMetrics("anomaly", { auroc: Number.NaN, f1: 0 });
+    expect(got.map((m) => m.key)).toEqual(["f1"]);
+    expect(cardMetrics("regression", { r2: Infinity, mae: null, rmse: "3" })).toEqual([]);
+  });
+
+  it("reads a classification problem type, or a task it does not know, as classification", () => {
+    for (const task of ["binary", "multiclass", "multilabel", "something-new"]) {
+      expect(cardMetrics(task, { accuracy: 0.9 })[0].label, task).toBe("test_accuracy");
+    }
+  });
+
+  it("keeps a researcher's own task under the names it reported", () => {
+    expect(cardMetrics("custom:shapes", { iou: 0.7, val_loss: 0.2, f1: 0.5, extra: 1 })).toEqual([
+      { key: "iou", label: null },
+      { key: "val_loss", label: null },
+      { key: "f1", label: null },
+    ]);
+  });
+
+  it("shows a name the table does not know under its own name instead of dropping it", () => {
+    expect(cardMetrics("regression", { r2: 0.9, nse: 0.8 })).toEqual([
+      { key: "r2", label: "test_r2" },
+      { key: "nse", label: null },
+    ]);
+  });
+
+  it("never labels a card with the training bookkeeping", () => {
+    expect(labelsOf("detection", ["best_epoch", "total_epochs"])).toEqual([null, null]);
   });
 });

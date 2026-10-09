@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { deleteRun, fetchRuns } from "../api/client";
 import type { Dict } from "../i18n/pt";
 import { useI18n, useT } from "../i18n/useT";
+import { cardMetrics } from "../lib/compare-metrics";
 import { foldGroups, formatAggregate, isGroupRun, type HistoryEntry } from "../lib/run-groups";
 import { TASK_ACCENT } from "../lib/task-accent";
 import type { RunSummary } from "../types/run";
@@ -233,19 +234,6 @@ function fmtDate(iso: string, locale: string): string {
   }
 }
 
-/** Metric keys shown on each card when present, per task. Mirrors the
- * backend `_SUMMARY_METRIC_KEYS` projection in routes.py. */
-const METRIC_KEYS_BY_TASK: Record<string, string[]> = {
-  classification: ["accuracy", "f1", "val_loss"],
-  detection: ["map50", "map50_95"],
-};
-
-/** Human-readable labels for metric keys that aren't self-explanatory. */
-const METRIC_LABELS: Record<string, string> = {
-  map50: "mAP@50",
-  map50_95: "mAP@50-95",
-};
-
 /** Ordering options for the run list. */
 type SortKey = "recent" | "oldest" | "epochs";
 
@@ -275,18 +263,13 @@ function RunCard({
   // common task in the list.
   const accent = TASK_ACCENT[taskFamily(run.task)] ?? "var(--vf-text-muted)";
   const dot = statusColor(run.status);
-  // A researcher-defined task (custom:<key>, ADR-058) declares its own metric
-  // names, so there is no fixed key list — the backend already projected the
-  // ones worth showing, and they render under their real names.
-  const metricKeys = run.task.startsWith("custom:")
-    ? Object.keys(run.final_metrics)
-    : (METRIC_KEYS_BY_TASK[run.task] ?? METRIC_KEYS_BY_TASK.classification);
-  // A metric that was never measured (a run stopped before its first epoch) is
-  // left out, never printed as null or NaN.
-  const shownMetrics = metricKeys.filter((k) => {
-    const v: unknown = run.final_metrics[k];
-    return typeof v === "number" && Number.isFinite(v);
-  });
+  // The server already projected the run onto its headline numbers
+  // (`final_metrics`, in the order it sends them); the card names them from the
+  // comparison's metric table (lib/compare-metrics.ts), so it keeps no list of
+  // its own. A researcher's task (custom:<key>, ADR-058) renders under the names
+  // it reported. A metric that was never measured (a run stopped before its
+  // first epoch) is left out, never printed as null or NaN.
+  const shownMetrics = cardMetrics(run.task, run.final_metrics);
   // A replicate group (ADR-113) is one entry for a job of several trainings: its
   // numbers are means over the seeds, printed with the interval the report gave.
   const group = run.group ?? null;
@@ -621,12 +604,14 @@ function RunCard({
         <div
           style={{
             display: "flex",
-            gap: 14,
+            // The labels now say the split ("(teste)"), so three can outgrow a card.
+            flexWrap: "wrap",
+            gap: "6px 14px",
             paddingTop: 4,
             borderTop: "1px solid var(--vf-panel-stroke)",
           }}
         >
-          {shownMetrics.map((k) => {
+          {shownMetrics.map(({ key: k, label }) => {
             const shown =
               group?.kind === "replicates" ? formatAggregate(group.final_aggregates[k]) : null;
             return (
@@ -648,7 +633,7 @@ function RunCard({
                   color: "var(--vf-text-muted)",
                 }}
               >
-                {METRIC_LABELS[k] ?? k}
+                {label ? t.compareRuns.metrics[label] : k}
               </span>
               <span
                 style={{

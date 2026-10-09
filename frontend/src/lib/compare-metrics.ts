@@ -10,6 +10,9 @@
  * Pure, and free of text: a row carries the dictionary key of its label
  * (`compareRuns.metrics`), or none when the metric is a researcher's own and
  * its name is the label.
+ *
+ * The History card names its few headline numbers from the same table
+ * (`cardMetrics`), so a task's metrics are listed in one place.
  */
 import type { Dict } from "../i18n/pt";
 
@@ -172,6 +175,55 @@ export function metricRows(
       label: BOOKKEEPING.find((name) => name === key) ?? null,
       direction: directionOf(key, declared),
     }));
+}
+
+/** How many headline numbers a History card prints. */
+const CARD_METRIC_LIMIT = 3;
+
+export interface CardMetric {
+  /** The name in the run's summary (`RunSummary.final_metrics`). */
+  key: string;
+  /** The table row it is read from, whose label the card prints; null where the
+   *  metric's own name is the label (a researcher's task, or a name the table
+   *  does not know). */
+  label: MetricLabelKey | null;
+}
+
+/**
+ * The row of a task's table that a summary name stands for. The server projects
+ * a run onto a few short names (`r2`, `miou`, `f1`), each one read from the
+ * held-out split's `test_<name>` where the task has one (and from the bare name
+ * where it does not, like detection's `map50`). A row answers to a name when it
+ * is that name or ends in `_<name>` (`test_image_f1` is anomaly's `f1`), and
+ * when two do, the held-out one wins: it is the number the server read.
+ */
+function rowOfSummaryName(rows: readonly MetricLabelKey[], name: string): MetricLabelKey | null {
+  const answering = rows.filter(
+    (row) => !NEUTRAL.has(row) && (row === name || row.endsWith(`_${name}`)),
+  );
+  return answering.find((row) => row.startsWith("test_")) ?? answering[0] ?? null;
+}
+
+/**
+ * The headline numbers of a run's History card, in the order the server sent
+ * them (its projection of run.json is the headline set), at most three.
+ *
+ * Nothing is listed here per task: the names come from the run, and the label of
+ * each from the same table the comparison uses, so a task added to
+ * `BUILTIN_ROWS` is labelled on the card and in the comparison at once. A
+ * researcher's own task keeps the names it reported. A task this table does not
+ * know is read as classification, which is what the server projects for it.
+ * A metric never measured (null, NaN, infinite) is left out; zero is a reading.
+ */
+export function cardMetrics(
+  task: string,
+  finalMetrics: Readonly<Record<string, unknown>>,
+): CardMetric[] {
+  const rows = isCustomTaskKey(task) ? null : (BUILTIN_ROWS[task] ?? BUILTIN_ROWS.classification);
+  return Object.keys(finalMetrics)
+    .filter((key) => numericMetric(finalMetrics[key]) !== null)
+    .slice(0, CARD_METRIC_LIMIT)
+    .map((key) => ({ key, label: rows ? rowOfSummaryName(rows, key) : null }));
 }
 
 /**
