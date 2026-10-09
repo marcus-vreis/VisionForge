@@ -1890,7 +1890,7 @@ export const pt = {
         "Cada run tem uma seed só: a diferença entre elas pode ser variação de seed. Para afirmar uma diferença, rode réplicas com várias seeds.",
       // When some of the compared runs are replicate groups, whose cells carry their own interval.
       "single-seed-mixed":
-        "Os runs que não são médias de réplicas têm uma seed só: a diferença entre eles pode ser variação de seed. Para afirmar uma diferença, rode réplicas com várias seeds.",
+        "Os runs que não são médias de réplicas têm uma seed só: uma diferença em que esses runs entram pode ser variação de seed. Para afirmar uma diferença, rode réplicas com várias seeds.",
     },
     // A replicate group in the comparison: its cell is a mean over seeds, with the interval the report gave.
     group: {

@@ -17,6 +17,7 @@ disk. The module only reads the report, tags the children, and writes JSON.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import math
 from datetime import datetime
@@ -167,8 +168,15 @@ def _read_json(path: Path) -> dict[str, Any] | None:
 def _write_json(path: Path, data: dict[str, Any]) -> None:
     """Replace ``path`` whole, so a reader never sees a half-written run.json."""
     tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
-    tmp.replace(path)
+    try:
+        tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        tmp.replace(path)
+    except OSError:
+        # Do not leave the half step behind: the next reader of this folder
+        # would find a stray file next to a run.json that never changed.
+        with contextlib.suppress(OSError):
+            tmp.unlink(missing_ok=True)
+        raise
 
 
 def _writes_bare_names(config: dict[str, Any], donor: dict[str, Any] | None) -> bool:
@@ -209,9 +217,9 @@ def write_run_group(
     has. Children get an additive ``group_id`` in their own ``run.json`` so the
     list can fold them under the group.
 
-    A child whose ``run.json`` cannot be read is left alone and logged: the
-    group still stands, and that seed stays a loose run rather than failing a
-    job whose training already finished.
+    A child whose ``run.json`` cannot be read or rewritten is left alone and
+    logged: the group still stands, and that seed stays a loose run rather than
+    failing a job whose training already finished.
     """
     group = build_group(kind, report, report_json)
     children = _children_of(group)
@@ -229,7 +237,18 @@ def write_run_group(
         donor = donor or data
         total_epochs += int((data.get("metrics") or {}).get("total_epochs") or 0)
         data["group_id"] = group_id
-        _write_json(path, data)
+        try:
+            _write_json(path, data)
+        except OSError as exc:
+            # Windows: an antivirus or the indexer can hold a run.json for a
+            # moment. That seed stays a loose run; the others are still tagged
+            # and the group is still written.
+            logger.warning(
+                "Replicate group {}: could not tag {} ({}); that seed stays loose",
+                group_id,
+                path,
+                exc,
+            )
 
     # Task identity and provenance come from a child: a researcher-defined task
     # stamps ``task: custom:<key>`` at the top level, which the group's own

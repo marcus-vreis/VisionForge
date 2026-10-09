@@ -563,6 +563,7 @@ async def resume_run(run_id: str) -> RunResponse:
     run_dir = _find_run_dir(run_id)
     if run_dir is None:
         raise HTTPException(404, f"Run '{run_id}' not found.")
+    _reject_group_action(run_dir)
     try:
         data: dict[str, Any] = json.loads(
             (run_dir / "run.json").read_text(encoding="utf-8")
@@ -666,6 +667,31 @@ async def export_run_markdown(run_id: str) -> Response:
     )
 
 
+def _reject_group_action(run_dir: Path) -> None:
+    """Refuse a checkpoint-based action on a replicate group (ADR-113).
+
+    A group trained nothing itself: its ``run.json`` has no checkpoint, so
+    continuing, testing, batch prediction, ONNX export and Grad-CAM have
+    nothing to act on. They used to fail by accident (a 409 on resume, a "no
+    checkpoint" error from deep inside the others); the researcher now gets the
+    reason and the way out. Deleting the group (removes only its summary) and
+    revealing or exporting it stay allowed, so they do not call this.
+
+    Raises:
+        HTTPException: 400 pointing at the seeds, which are ordinary runs.
+    """
+    try:
+        data = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return
+    if isinstance(data, dict) and isinstance(data.get("group"), dict):
+        raise HTTPException(
+            400,
+            "Esta execução é um conjunto de réplicas: abra uma das seeds para "
+            "continuar, testar, prever em lote, exportar ou gerar Grad-CAM.",
+        )
+
+
 def _reject_custom_task_action(run_dir: Path, action: str) -> None:
     """Refuse a per-run action on a researcher-defined task's run.
 
@@ -707,6 +733,7 @@ async def test_run_on_dataset(run_id: str, req: RunTestRequest) -> RunTestRespon
     if run_dir is None:
         raise HTTPException(404, f"Run '{run_id}' not found.")
 
+    _reject_group_action(run_dir)
     _reject_custom_task_action(run_dir, "test")
 
     # Run the actual evaluation in a worker thread (PyTorch + disk I/O).
@@ -733,6 +760,7 @@ async def gradcam_run(run_id: str, req: GradCamRequest) -> GradCamResponse:
     run_dir = _find_run_dir(run_id)
     if run_dir is None:
         raise HTTPException(404, f"Run '{run_id}' not found.")
+    _reject_group_action(run_dir)
     _reject_custom_task_action(run_dir, "gradcam")
     try:
         return await asyncio.to_thread(_execute_run_gradcam, run_dir, req)
@@ -757,6 +785,7 @@ async def batch_predict_run(
     if run_dir is None:
         raise HTTPException(404, f"Run '{run_id}' not found.")
 
+    _reject_group_action(run_dir)
     _reject_custom_task_action(run_dir, "batch_predict")
     try:
         result = await asyncio.to_thread(_execute_batch_predict, run_dir, req)
@@ -782,6 +811,7 @@ async def export_run_to_onnx(run_id: str, req: ExportOnnxRequest) -> ExportOnnxR
     if run_dir is None:
         raise HTTPException(404, f"Run '{run_id}' not found.")
 
+    _reject_group_action(run_dir)
     _reject_custom_task_action(run_dir, "export_onnx")
     try:
         result = await asyncio.to_thread(_execute_onnx_export, run_dir, req)

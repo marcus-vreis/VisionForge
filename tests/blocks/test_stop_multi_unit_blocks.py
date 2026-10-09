@@ -796,7 +796,9 @@ class TestRunnersHandTheTokenToTheirBlock:
                 self, progress_callback: Any = None, cancel_token: Any = None
             ) -> Any:
                 captured["token"] = cancel_token
-                return SimpleNamespace(metrics={"mae": 1.0}, stopped=True)
+                return SimpleNamespace(
+                    metrics={"mae": 1.0}, stopped=True, run_dir=Path("models/toy_run")
+                )
 
         info = SimpleNamespace(
             key="toy",
@@ -814,3 +816,6 @@ class TestRunnersHandTheTokenToTheirBlock:
         assert result.status == "success"
         assert captured["token"] is token
         assert result.stopped is True  # the engine's verdict, passed through
+        # Where the unit trained, so a cut one's resume state can be dropped and
+        # a replicate group can find its seed (ADR-111, ADR-113).
+        assert result.run_dir == Path("models/toy_run")

@@ -51,6 +51,10 @@ class CustomTaskRunner:
                 training_time_s=time.monotonic() - t0,
                 error="",
                 stopped=result.stopped,
+                # The orchestrators tag the seed's run with its group and
+                # drop a cut unit's resume state through this (ADR-111/113);
+                # without it a custom task's group finds no seed.
+                run_dir=result.run_dir,
             )
         except Exception as exc:  # noqa: BLE001 — a failed trial must not abort the sweep
             return RunResult(

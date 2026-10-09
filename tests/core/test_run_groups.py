@@ -12,6 +12,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from visionforge.core.replicated_comparison import VariantResult, build_report
 from visionforge.core.replicates import ReplicateTrial, aggregate_replicates
 from visionforge.core.run_groups import build_group, group_run_dir, write_run_group
@@ -252,6 +254,50 @@ class TestReplicatesGroup:
         assert (run_dir / "run.json").is_file()
         first = json.loads((Path(trials[0].run_dir) / "run.json").read_text("utf-8"))
         assert first["group_id"] == "rep_g1"
+
+    def test_a_child_that_cannot_be_rewritten_does_not_fail_the_group(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Windows: an antivirus or indexer holding a child's run.json makes the
+        # replace raise PermissionError. One seed staying loose must not leave
+        # the later seeds untagged, the group unwritten and a .tmp behind.
+        trials = _trials(tmp_path, "rep", {1: 0.8, 2: 0.9, 3: 0.85})
+        held = Path(trials[1].run_dir)
+        real_replace = Path.replace
+
+        def replace(self: Path, target: Any) -> Path:
+            if self.parent == held:
+                raise PermissionError(13, "held by another process")
+            return real_replace(self, target)
+
+        monkeypatch.setattr(Path, "replace", replace)
+
+        run_dir = write_run_group(
+            kind="replicates",
+            group_id="rep_g1",
+            name="rep",
+            config={},
+            report=_replicates_report(trials, [1, 2, 3]),
+            report_json=None,
+            models_dir=tmp_path,
+        )
+
+        tagged = {
+            t.seed: json.loads((Path(t.run_dir) / "run.json").read_text("utf-8")).get(
+                "group_id"
+            )
+            for t in trials
+        }
+        assert tagged == {1: "rep_g1", 2: None, 3: "rep_g1"}
+        assert not list(held.glob("*.tmp"))
+        # The held run.json is the trainer's, untouched.
+        assert json.loads((held / "run.json").read_text("utf-8"))["metrics"] == {
+            "total_epochs": 1,
+            "r2": 0.5,
+        }
+        data = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+        assert data["group"]["seeds_finished"] == [1, 2, 3]
+        assert data["group"]["aggregates"]["r2"]["n"] == 3
 
     def test_two_groups_of_the_same_name_do_not_overwrite_each_other(
         self, tmp_path: Path

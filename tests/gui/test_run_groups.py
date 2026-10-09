@@ -262,3 +262,98 @@ class TestReplicatedComparison:
 
         detail = client.get(f"/api/runs/{run_id}").json()
         assert detail["group"]["comparisons"] == summary["comparisons"]
+
+
+class TestActionsOnAGroup:
+    """A group has no checkpoint of its own: its seeds are the runs to act on.
+
+    These actions used to refuse by accident (resume 409, the others a "no
+    checkpoint" error from deep inside); one explicit guard now says why.
+    """
+
+    @pytest.fixture
+    def group_id(self, client_and_routes: tuple, tmp_path: Path) -> str:
+        from visionforge.core.run_groups import write_run_group
+
+        child_dir = tmp_path / "models" / "grp_s1" / "20260101_000000_000001"
+        child_dir.mkdir(parents=True)
+        (child_dir / "run.json").write_text(
+            json.dumps(
+                {
+                    "id": "grp_s1_20260101_000000_000001",
+                    "experiment": "grp_s1",
+                    "status": "completed",
+                    "config": {"task": "regression", "training": {"epochs": 1}},
+                    "metrics": {"total_epochs": 1, "r2": 0.5},
+                }
+            ),
+            encoding="utf-8",
+        )
+        report = {
+            "metric": "r2",
+            "seeds": [1],
+            "trials": [
+                {
+                    "seed": 1,
+                    "status": "success",
+                    "metrics": {"r2": 0.5},
+                    "run_dir": str(child_dir),
+                }
+            ],
+            "aggregates": {"r2": {"mean": 0.5, "n": 1}},
+        }
+        write_run_group(
+            kind="replicates",
+            group_id="grp_20260101_000000",
+            name="grp",
+            config={"name": "grp", "task": "regression"},
+            report=report,
+            report_json=None,
+            models_dir=tmp_path / "models",
+        )
+        return "grp_20260101_000000"
+
+    def test_resume_says_it_is_a_replicate_set(
+        self, client_and_routes: tuple, group_id: str
+    ) -> None:
+        client, _ = client_and_routes
+        resp = client.post(f"/api/runs/{group_id}/resume")
+        assert resp.status_code == 400
+        assert "conjunto de réplicas" in resp.json()["detail"]
+        assert "seeds" in resp.json()["detail"]
+
+    def test_test_says_it_is_a_replicate_set(
+        self, client_and_routes: tuple, group_id: str, tmp_path: Path
+    ) -> None:
+        client, _ = client_and_routes
+        resp = client.post(
+            f"/api/runs/{group_id}/test", json={"data_dir": str(tmp_path)}
+        )
+        assert resp.status_code == 400
+        assert "conjunto de réplicas" in resp.json()["detail"]
+
+    @pytest.mark.parametrize(
+        ("action", "body"),
+        [
+            ("batch_predict", {"input_dir": "."}),
+            ("export_onnx", {}),
+            ("gradcam", {"input_dir": "."}),
+        ],
+    )
+    def test_the_other_checkpoint_actions_refuse_the_same_way(
+        self, client_and_routes: tuple, group_id: str, action: str, body: dict
+    ) -> None:
+        client, _ = client_and_routes
+        resp = client.post(f"/api/runs/{group_id}/{action}", json=body)
+        assert resp.status_code == 400
+        assert "conjunto de réplicas" in resp.json()["detail"]
+
+    def test_a_seed_of_the_group_is_not_refused(
+        self, client_and_routes: tuple, group_id: str, tmp_path: Path
+    ) -> None:
+        # The guard is about the group, not about runs that belong to one.
+        client, _ = client_and_routes
+        resp = client.post(
+            "/api/runs/20260101_000000_000001/test", json={"data_dir": str(tmp_path)}
+        )
+        assert "conjunto de réplicas" not in str(resp.json().get("detail", ""))

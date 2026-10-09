@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { seedNote, singleSeedValues } from "./compare-seeds";
+import { seedNote } from "./compare-seeds";
 
 describe("seedNote", () => {
   it("warns when two runs differ in a metric that has a direction", () => {
@@ -42,27 +42,50 @@ describe("seedNote", () => {
 });
 
 describe("seedNote with replicate groups (ADR-113)", () => {
-  it("takes the group runs out of the values the note is judged on", () => {
-    expect(singleSeedValues([0.9, 0.8, 0.7], [false, true, false])).toEqual([0.9, null, 0.7]);
-    expect(singleSeedValues([0.9, 0.8], [false, false])).toEqual([0.9, 0.8]);
-  });
-
+  // `values` are every run's value, group means included: they are the ones the
+  // table highlights an extreme among, so they are the ones the note is judged on.
   it("is silent when every compared run is a group: each cell carries its own interval", () => {
-    const values = singleSeedValues([0.9, 0.8], [true, true]);
-    expect(seedNote([{ direction: "higher", values }], true)).toBeNull();
+    expect(seedNote([{ direction: "higher", values: [0.9, 0.8] }], [true, true])).toBeNull();
   });
 
-  it("is silent for one single run beside a group: no gap between single runs", () => {
-    const values = singleSeedValues([0.9, 0.8], [false, true]);
-    expect(seedNote([{ direction: "higher", values }], true)).toBeNull();
+  it("warns for one single run beside a group mean: the highlighted extreme involves a seed", () => {
+    // The group is the highest cell, the single run the lowest: either way the
+    // table points at a gap that rests on one seed.
+    expect(seedNote([{ direction: "higher", values: [0.8, 0.9] }], [false, true])).toBe(
+      "single-seed-mixed",
+    );
+    expect(seedNote([{ direction: "higher", values: [0.9, 0.8] }], [false, true])).toBe(
+      "single-seed-mixed",
+    );
   });
 
   it("speaks of the single runs only when a group is in the selection too", () => {
-    const values = singleSeedValues([0.9, 0.8, 0.85], [false, false, true]);
-    expect(seedNote([{ direction: "higher", values }], true)).toBe("single-seed-mixed");
+    expect(seedNote([{ direction: "higher", values: [0.9, 0.8, 0.85] }], [false, false, true])).toBe(
+      "single-seed-mixed",
+    );
+  });
+
+  it("is silent when the single run did not measure the metric: only means are on the row", () => {
+    expect(seedNote([{ direction: "higher", values: [null, 0.8, 0.9] }], [false, true, true])).toBeNull();
+  });
+
+  it("is silent where the table highlights nothing, groups or not", () => {
+    expect(seedNote([{ direction: "higher", values: [0.9, 0.9] }], [false, true])).toBeNull();
+    expect(seedNote([{ direction: null, values: [0.9, 0.8] }], [false, true])).toBeNull();
+  });
+
+  it("warns on a row that has a single run even when another row is groups only", () => {
+    const rows = [
+      { direction: "higher" as const, values: [null, 0.8, 0.9] },
+      { direction: "lower" as const, values: [0.2, 0.3, 0.4] },
+    ];
+    expect(seedNote(rows, [false, true, true])).toBe("single-seed-mixed");
   });
 
   it("keeps the original wording when no group is compared", () => {
-    expect(seedNote([{ direction: "higher", values: [0.9, 0.8] }], false)).toBe("single-seed");
+    expect(seedNote([{ direction: "higher", values: [0.9, 0.8] }], [false, false])).toBe(
+      "single-seed",
+    );
+    expect(seedNote([{ direction: "higher", values: [0.9, 0.8] }])).toBe("single-seed");
   });
 });

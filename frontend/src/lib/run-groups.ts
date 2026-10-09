@@ -188,3 +188,22 @@ export const FEW_SEEDS = 5;
 export function hasFewSeeds(n: number): boolean {
   return n < FEW_SEEDS;
 }
+
+/**
+ * The fewest seeds any variant of a replicated comparison finished, or null.
+ *
+ * Each variant carries its own interval, so the few-seeds caution is about the
+ * weakest one. A variant nothing finished has no count to speak of and is
+ * skipped; it shows in the variants table as the empty row it is.
+ */
+export function fewestSeeds(
+  group: Pick<RunGroup, "metric" | "variants">,
+): number | null {
+  const counts: number[] = [];
+  for (const variant of Object.values(group.variants ?? {})) {
+    const agg = group.metric ? variant.aggregates[group.metric] : undefined;
+    const n = agg?.n ?? variant.successful ?? 0;
+    if (n > 0) counts.push(n);
+  }
+  return counts.length > 0 ? Math.min(...counts) : null;
+}

@@ -3,6 +3,7 @@ import { stdDdof } from "../lib/cv-std";
 import {
   bestByMean,
   childTarget,
+  fewestSeeds,
   formatAggregate,
   formatNumber,
   formatP,
@@ -440,6 +441,8 @@ function ComparisonBody({ group, accent, knownRunIds, onOpenRun }: RunGroupDetai
   const notRun = group.not_run ?? [];
   const skipped = group.skipped_variants ?? [];
   const allChildren = Object.values(variants).flatMap((v) => v.children);
+  // Every variant has its own interval, so the caution is about the weakest one.
+  const fewest = fewestSeeds(group);
 
   return (
     <>
@@ -519,6 +522,11 @@ function ComparisonBody({ group, accent, knownRunIds, onOpenRun }: RunGroupDetai
           </div>
         )}
         <div style={noteStyle}>{t.runDetail.cv.stdNote(stdDdof({ std_ddof: group.std_ddof }))}</div>
+        {fewest !== null && hasFewSeeds(fewest) && (
+          <div style={{ ...noteStyle, color: STOPPED_COLOR }}>
+            ⚠ {t.runGroup.detail.fewSeeds(fewest)}
+          </div>
+        )}
       </GroupSection>
 
       <GroupSection title={t.runGroup.detail.testsTitle}>

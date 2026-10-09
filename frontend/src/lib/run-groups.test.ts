@@ -1,11 +1,18 @@
 import { describe, expect, it } from "vitest";
 
-import type { MetricAggregate, RunGroup, RunGroupBrief, RunSummary } from "../types/run";
+import type {
+  GroupVariant,
+  MetricAggregate,
+  RunGroup,
+  RunGroupBrief,
+  RunSummary,
+} from "../types/run";
 import {
   aggregateForRow,
   bestByMean,
   childTarget,
   ciHalfWidth,
+  fewestSeeds,
   foldGroups,
   formatAggregate,
   formatNumber,
@@ -251,5 +258,40 @@ describe("hasFewSeeds", () => {
     expect(hasFewSeeds(2)).toBe(true);
     expect(hasFewSeeds(4)).toBe(true);
     expect(hasFewSeeds(5)).toBe(false);
+  });
+});
+
+describe("fewestSeeds", () => {
+  const variant = (n: number | null, successful: number | null = null): GroupVariant => ({
+    overrides: {},
+    aggregates: n === null ? {} : { r2: { ...AGG, n } },
+    successful,
+    seeds_finished: [],
+    children: [],
+  });
+
+  it("is the smallest seed count among the variants that trained", () => {
+    expect(fewestSeeds({ metric: "r2", variants: { a: variant(6), b: variant(3) } })).toBe(3);
+  });
+
+  it("falls back to the variant's own success count when it has no aggregate", () => {
+    expect(fewestSeeds({ metric: "r2", variants: { a: variant(6), b: variant(null, 2) } })).toBe(2);
+  });
+
+  it("skips a variant nothing finished: that is not a seed count", () => {
+    expect(fewestSeeds({ metric: "r2", variants: { a: variant(null, 0), b: variant(4) } })).toBe(4);
+  });
+
+  it("is null when no variant has a count, or there are no variants", () => {
+    expect(fewestSeeds({ metric: "r2", variants: { a: variant(null, 0) } })).toBeNull();
+    expect(fewestSeeds({ metric: "r2", variants: {} })).toBeNull();
+    expect(fewestSeeds({ metric: "r2" })).toBeNull();
+  });
+
+  it("feeds hasFewSeeds: a comparison of three seeds each warns, five does not", () => {
+    const few = fewestSeeds({ metric: "r2", variants: { a: variant(3), b: variant(3) } });
+    const enough = fewestSeeds({ metric: "r2", variants: { a: variant(5), b: variant(5) } });
+    expect(few !== null && hasFewSeeds(few)).toBe(true);
+    expect(enough !== null && hasFewSeeds(enough)).toBe(false);
   });
 });

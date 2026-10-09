@@ -9,10 +9,13 @@
  *
  * A replicate group is the other kind of run (ADR-113): its cell is a mean over
  * seeds with the interval the report gave, which carries its own uncertainty, so
- * the single-seed caution does not apply to it. The note is about the runs that
- * are one seed. It is judged on those alone: two groups side by side raise no
- * note, and a group beside single runs raises it only for a gap among the
- * single runs, in words that say which runs it speaks of. The frontend still
+ * the single-seed caution does not apply to the group's own cell. The note is
+ * about the runs that are one seed, and it is judged on the cells the table
+ * actually highlights: a row warns when it marks a highest or lowest value
+ * (group means included, since they are on the same row) and at least one run
+ * on that row is a single seed. Two groups side by side raise no note; one
+ * single run beside a group mean does, because the highlighted gap then rests
+ * on one seed. The wording says which runs it speaks of. The frontend still
  * computes no statistics of its own.
  */
 import { extremeIndexes, type MetricDirection } from "./compare-metrics";
@@ -22,17 +25,10 @@ export type SeedNote = "single-seed" | "single-seed-mixed";
 
 export interface SeedRow {
   direction: MetricDirection | null;
-  /** One entry per compared run; null where the run did not measure it. */
+  /** One entry per compared run, replicate-group means included; null where the
+   *  run did not measure it. These are the values the table marks an extreme
+   *  among, so the note is judged on the same ones. */
   values: ReadonlyArray<number | null>;
-}
-
-/** A row's values with the group runs taken out (set to null), so the note is
- *  judged on the single-seed runs only. `isGroup` is parallel to `values`. */
-export function singleSeedValues(
-  values: ReadonlyArray<number | null>,
-  isGroup: ReadonlyArray<boolean>,
-): Array<number | null> {
-  return values.map((value, i) => (isGroup[i] ? null : value));
 }
 
 /**
@@ -40,14 +36,24 @@ export function singleSeedValues(
  *
  * The note is about a gap, so it appears exactly when the table shows one: some
  * row marks a highest or lowest value (two or more runs measured it, it has a
- * direction, and the values differ). A table with no such row implies no winner
- * and warns of none, rather than repeating itself under every comparison.
- * `rows` carry the single-seed runs' values (`singleSeedValues`); `hasGroups`
- * only picks the wording, because "each run has a single seed" is false when
- * some of the compared runs are means over seeds.
+ * direction, and the values differ) and a single-seed run measured that row. A
+ * table with no such row implies no winner and warns of none, rather than
+ * repeating itself under every comparison.
+ *
+ * `isGroup` is parallel to each row's `values` (true where the run is a
+ * replicate group, a mean over seeds); omitted, every run is one seed. It picks
+ * the wording too, because "each run has a single seed" is false when some of
+ * the compared runs are means over seeds.
  */
-export function seedNote(rows: ReadonlyArray<SeedRow>, hasGroups = false): SeedNote | null {
-  const gap = rows.some((row) => extremeIndexes(row.values, row.direction).length > 0);
-  if (!gap) return null;
-  return hasGroups ? "single-seed-mixed" : "single-seed";
+export function seedNote(
+  rows: ReadonlyArray<SeedRow>,
+  isGroup: ReadonlyArray<boolean> = [],
+): SeedNote | null {
+  const warns = rows.some(
+    (row) =>
+      extremeIndexes(row.values, row.direction).length > 0 &&
+      row.values.some((value, i) => value !== null && !isGroup[i]),
+  );
+  if (!warns) return null;
+  return isGroup.some(Boolean) ? "single-seed-mixed" : "single-seed";
 }

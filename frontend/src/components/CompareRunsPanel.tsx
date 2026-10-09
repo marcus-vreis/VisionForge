@@ -10,7 +10,7 @@ import {
   numericMetric,
   runTaskKey,
 } from "../lib/compare-metrics";
-import { seedNote, singleSeedValues } from "../lib/compare-seeds";
+import { seedNote } from "../lib/compare-seeds";
 import type { TaskDescriptor } from "../lib/custom-tasks";
 import { compareDatasets } from "../lib/dataset-identity";
 import { aggregateForRow, formatAggregate } from "../lib/run-groups";
@@ -336,15 +336,14 @@ function MetricsTable({
     row,
     values: details.map((d) => numericMetric(d.metrics[row.key])),
   }));
-  // A group's cell is a mean over seeds with its own interval, so the single-seed
-  // caution (ADR-112) is judged on the runs that are one seed each (ADR-113).
+  // A group's cell is a mean over seeds with its own interval, but the extreme
+  // the table highlights is judged over every cell, group means included. The
+  // single-seed caution (ADR-112) therefore speaks whenever a highlighted row
+  // has a single-seed run on it (ADR-113), in wording that names which runs.
   const isGroup = details.map((d) => d.group != null);
   const note = seedNote(
-    rows.map(({ row, values }) => ({
-      direction: row.direction,
-      values: singleSeedValues(values, isGroup),
-    })),
-    isGroup.some(Boolean),
+    rows.map(({ row, values }) => ({ direction: row.direction, values })),
+    isGroup,
   );
   return (
     <div

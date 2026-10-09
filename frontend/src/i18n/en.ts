@@ -1680,7 +1680,7 @@ export const en: Dict = {
       "single-seed":
         "Each run has a single seed: the gap between them can be seed variation. To claim a difference, run replicates with several seeds.",
       "single-seed-mixed":
-        "The runs that are not replicate means have a single seed: the gap between them can be seed variation. To claim a difference, run replicates with several seeds.",
+        "The runs that are not replicate means have a single seed: a gap involving them can be seed variation. To claim a difference, run replicates with several seeds.",
     },
     group: {
       tag: (n: number) => `mean of ${n} ${n === 1 ? "seed" : "seeds"}`,

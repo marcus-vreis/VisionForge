@@ -24,9 +24,13 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
   as seeds com status e link para cada run; numa comparação replicada, a tabela
   de variantes, os testes pareados (p bruto e "significativo após Holm" sim ou
   não), as variantes que não rodaram e a melhor média — ou "—" com o motivo
-  quando não há. Na comparação do Histórico, a célula de um grupo mostra a média
-  com o IC95 e a nota de seed única só vale para os runs que são uma seed só;
-  nenhuma estatística é calculada no frontend ([ADR-113](docs/dev/DECISIONS.md)).
+  quando não há; o aviso de poucas seeds também vale para a comparação
+  replicada. Na comparação do Histórico, a célula de um grupo mostra a média
+  com o IC95; a nota de seed única aparece sempre que uma linha marcada tem um
+  run de uma seed só (um run solto ao lado da média de um grupo avisa; só
+  grupos, não). Continuar, testar, prever em lote, exportar ONNX e Grad-CAM num
+  grupo respondem 400 pedindo para abrir uma das seeds. Nenhuma estatística é
+  calculada no frontend ([ADR-113](docs/dev/DECISIONS.md)).
 - **Conjuntos de réplicas e comparações replicadas viram uma execução do
   Histórico.** Antes, rodar N seeds deixava N execuções soltas no Histórico e a
   média, o IC95 e os testes pareados só existiam num relatório em
@@ -40,7 +44,11 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
   carrega (NaN) vira `null`. Cada seed ganha um `group_id` no seu próprio
   `run.json` e continua sendo um run comum. `GET /api/runs` e
   `GET /api/runs/{id}` ganham `group_id` e `group` (campos novos, nenhum
-  removido); um trabalho parado grava `stopped` ([ADR-113](docs/dev/DECISIONS.md)).
+  removido); um trabalho parado grava `stopped`. Numa tarefa própria
+  (`/api/custom/{key}/replicates` e `replicated-comparison`) as seeds também
+  entram no grupo, que se identifica como `custom:<key>`; uma seed cujo
+  `run.json` está preso (antivírus no Windows) fica solta e o resto do grupo é
+  gravado ([ADR-113](docs/dev/DECISIONS.md)).
 - **A comparação do Histórico não declara vencedor com uma seed.** Cada run do
   Histórico é um treino com uma seed só, e a variação entre seeds costuma ser
   maior que a diferença entre duas configurações; marcar o maior número de uma

@@ -4321,12 +4321,24 @@ directory, and History lists it as one run.
   mean with the interval (`metric_keys` says which row an aggregate fills, so a
   validation-score row is never given a test-split interval by name); a
   replicated comparison, which has no single value per row, shows a dash. The
-  single-seed note of ADR-112 is judged on the runs that are one seed each: two
-  groups side by side raise none, and a group beside single runs raises it,
-  worded for "the runs that are not replicate means", only for a gap among the
-  single runs. The frontend computes no statistic: the one subtraction, the
-  interval's half-width, prints the report's own bounds in the form the results
-  view already used.
+  single-seed note of ADR-112 is judged on the cells the table highlights, group
+  means included: a row warns when it marks a highest or lowest value and a
+  single-seed run measured it. Two groups side by side raise none; one single
+  run beside a group mean does, since the highlighted gap then rests on one
+  seed, worded for "the runs that are not replicate means". The frontend
+  computes no statistic: the one subtraction, the interval's half-width, prints
+  the report's own bounds in the form the results view already used.
+- **A group has no checkpoint, and says so.** Continue, test, batch prediction,
+  ONNX export and Grad-CAM on a group's id answer 400 ("é um conjunto de
+  réplicas: abra uma das seeds") through one guard, instead of failing by
+  accident further in. Deleting a group (only its summary goes) and revealing or
+  exporting it are unchanged. The caution under five seeds also shows for a
+  replicated comparison, judged on its weakest variant.
+- **A researcher-defined task's seeds reach the group.** `CustomTaskRunner`
+  returns the run directory the engine trained into, the way the built-in
+  runners do; without it every trial was recorded with no directory, so no seed
+  was tagged, the group had no child to take `task: custom:<key>` from and
+  History read it as classification.
 
 **Consequences:** the group is written once, when the job ends, so a server
 killed mid-job leaves its seeds as loose runs, as before; a failure to write it
@@ -4335,4 +4347,10 @@ Runs written before this ADR have no group and no `group_id`; they stay loose
 and nothing infers a group from their names. `n_requested` counts trainings (a
 comparison of 3 variants over 5 seeds asks for 15), including those a stop kept
 from starting. The report files under `outputs/reports` are unchanged, and the
-`.tex` table and CSV remain the paper-ready form.
+`.tex` table and CSV remain the paper-ready form. Tagging a seed rewrites its
+`run.json`; one that cannot be rewritten (on Windows an antivirus or the indexer
+can hold the file) is logged, its temporary file removed, and it stays a loose
+run while the other seeds are tagged and the group is still written. Re-training
+a seed rewrites its `run.json` and drops `group_id`: it reappears as a loose run
+and the group's aggregates do not update. This is rare, since a seed a stop cut
+is not resumable on its own (ADR-111).

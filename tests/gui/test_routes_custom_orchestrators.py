@@ -274,3 +274,98 @@ class TestCustomSweep:
             json={"config": _payload(tmp_path), "search_space": {"scale": [1.0]}},
         )
         assert resp.status_code == 404
+
+
+@pytest.fixture
+def real_client(app_and_routes: tuple, tmp_path: Path, monkeypatch):  # type: ignore[no-untyped-def]
+    """The real app with the toy task trained for real (nothing mocked)."""
+    _register_toy()
+    app, routes_mod = app_and_routes
+    monkeypatch.setattr(routes_mod, "_MODELS_DIR", tmp_path / "models")
+    routes_mod._current_run = None
+    try:
+        # One event loop for the whole test: the job is a background task of
+        # the request that queued it.
+        with TestClient(app, raise_server_exceptions=True) as client:
+            yield client
+    finally:
+        routes_mod._RUN_QUEUE.reset()
+        routes_mod._current_run = None
+        routes_mod._active_cancel_token = None
+
+
+def _real_payload(tmp_path: Path) -> dict:
+    cfg = _payload(tmp_path)
+    cfg["output"]["reports_dir"] = str(tmp_path / "reports")
+    return cfg
+
+
+def _finish(client: TestClient) -> dict:
+    status: dict = {"status": "running"}
+    for _ in range(600):
+        status = client.get("/api/experiment/status").json()
+        if status["status"] in ("completed", "failed"):
+            break
+        time.sleep(0.1)
+    return status
+
+
+class TestCustomGroupsAreHistoryRuns:
+    """A custom task's seeds must reach the group (ADR-113).
+
+    ``CustomTaskRunner.run`` once returned no ``run_dir``, so every trial was
+    recorded with ``run_dir=""``: no seed was tagged, the group found no donor
+    to say ``task: custom:<key>`` and History read it as classification.
+    """
+
+    def test_replicates_tag_the_seeds_and_name_the_task(
+        self, real_client: TestClient, tmp_path: Path
+    ) -> None:
+        resp = real_client.post(
+            "/api/custom/toyorch/replicates",
+            json={"config": _real_payload(tmp_path), "seeds": [7, 8]},
+        )
+        assert resp.status_code == 200, resp.text
+        run_id = resp.json()["run_id"]
+        assert _finish(real_client)["status"] == "completed"
+
+        runs = real_client.get("/api/runs").json()
+        group = next(r for r in runs if r["run_id"] == run_id)
+        children = [r for r in runs if r.get("group_id") == run_id]
+
+        assert group["task"] == "custom:toyorch"
+        assert group["block"] == "replicates"
+        assert group["group"]["n_finished"] == 2
+        assert len(children) == 2
+        assert sorted(group["group"]["child_ids"]) == sorted(
+            r["run_id"] for r in children
+        )
+        # The card is not empty: the mean sits under the task's own metric.
+        assert "mae" in group["final_metrics"]
+        detail = real_client.get(f"/api/runs/{run_id}").json()
+        assert detail["task"] == "custom:toyorch"
+        assert all(c["run_id"] for c in detail["group"]["children"])
+
+    def test_replicated_comparison_tags_the_seeds_of_every_variant(
+        self, real_client: TestClient, tmp_path: Path
+    ) -> None:
+        resp = real_client.post(
+            "/api/custom/toyorch/replicated-comparison",
+            json={
+                "config": _real_payload(tmp_path),
+                "variants": {"base": {}, "wide": {"scale": 2.0}},
+                "seeds": [7, 8],
+            },
+        )
+        assert resp.status_code == 200, resp.text
+        run_id = resp.json()["run_id"]
+        assert _finish(real_client)["status"] == "completed"
+
+        runs = real_client.get("/api/runs").json()
+        group = next(r for r in runs if r["run_id"] == run_id)
+        children = [r for r in runs if r.get("group_id") == run_id]
+
+        assert group["task"] == "custom:toyorch"
+        assert group["block"] == "replicated_comparison"
+        assert len(children) == 4
+        assert len(group["group"]["child_ids"]) == 4
