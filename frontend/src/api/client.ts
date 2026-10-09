@@ -850,13 +850,10 @@ export interface RunDetail {
   metrics: Record<string, unknown>;
   /** Bootstrap interval per test metric (ADR-074), keyed by bare metric name. */
   metric_cis?: Record<string, MetricCI>;
-  history: Array<{
-    epoch: number;
-    train_loss: number;
-    train_accuracy: number;
-    val_loss: number;
-    val_accuracy: number;
-  }>;
+  /** One record per epoch, under the names its trainer writes (lib/compare-curves.ts
+   *  lists them per task); a metric a backend does not measure is null. Empty on a
+   *  replicate group. */
+  history: Array<{ epoch: number; [series: string]: number | null | undefined }>;
   artifacts: {
     model?: string;
     graphics?: string[];

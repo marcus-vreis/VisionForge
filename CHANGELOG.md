@@ -15,6 +15,23 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Added
 
+- **A comparação do Histórico desenha as curvas por epoch de cada tarefa.** Os
+  dois gráficos fixos (`val_loss` e `val_accuracy`) só existiam em
+  classificação: uma comparação de detecção, regressão, segmentação ou anomalia
+  não mostrava curva nenhuma, porque cada treinador grava no `history` do
+  `run.json` os nomes da sua tarefa. Agora as séries vêm da tarefa dos runs e do
+  que o histórico deles de fato mediu (`lib/compare-curves.ts`): detecção
+  desenha mAP@50-95 e a box loss de validação (mAP@50 no lugar do primeiro onde
+  o backend torchvision não o mede), regressão a val loss e o R², segmentação a
+  val loss e o mIoU, anomalia o AUROC, e classificação segue com val loss e val
+  accuracy. Um seletor de curvas oferece o resto do que os runs mediram (RMSE,
+  MAE, Dice, acurácia de pixel, F1 da imagem, as losses de treino, precisão e
+  recall…), uma tarefa própria do pesquisador oferece todas as chaves numéricas
+  que reportou, e cada gráfico diz se menor ou maior é melhor. Um conjunto de
+  réplicas guarda a média das seeds e não o histórico de cada epoch: ele fica
+  fora das curvas, com uma nota que o nomeia e manda abrir uma das seeds. Uma
+  série de uma epoch só (o PatchCore treina em uma) aparece como ponto, e o
+  eixo x passa a começar na primeira epoch medida.
 - **O Histórico mostra um conjunto de réplicas como uma entrada só, com média ±
   IC95.** O grupo vira um cartão com as seeds recolhidas embaixo (continuam
   abríveis, selecionáveis, comparáveis e excluíveis como runs comuns); contagens

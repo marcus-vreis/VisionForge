@@ -1930,8 +1930,44 @@ export const pt = {
     },
     preprocessingTitle: "// pipelines de pré-processamento",
     noPreprocessing: "sem pré-processamento",
-    valLossChart: "Val loss × epoch",
-    valAccuracyChart: "Val accuracy × epoch",
+    // The epoch curves under the tables (lib/compare-curves.ts says which task draws which).
+    curvePicker: "Curvas",
+    curveTitle: (label: string) => `${label} × epoch`,
+    // Runs with no per-epoch history are left out of the chart. A replicate set is the
+    // usual case: it keeps the mean over its seeds, each seed keeps its own epochs.
+    noCurves: (names: string, replicates: boolean) =>
+      `Sem curva por epoch, ficam fora do gráfico: ${names}.` +
+      (replicates
+        ? " Um conjunto de réplicas guarda a média das seeds, não o histórico de cada epoch: abra uma das seeds para ver a curva."
+        : ""),
+    // Keys are the names in run.json `history`, of every task.
+    curves: {
+      train_loss: "Loss de treino",
+      train_accuracy: "Acurácia de treino",
+      val_loss: "Val loss",
+      val_accuracy: "Val accuracy",
+      map50_95: "Val mAP@50-95",
+      map50: "Val mAP@50",
+      precision: "Val precisão",
+      recall: "Val recall",
+      box_loss: "Val box loss",
+      val_box_loss: "Val box loss",
+      train_box_loss: "Box loss de treino",
+      train_cls_loss: "Cls loss de treino",
+      train_dfl_loss: "DFL loss de treino",
+      val_cls_loss: "Val cls loss",
+      val_dfl_loss: "Val DFL loss",
+      val_r2: "Val R²",
+      val_rmse: "Val RMSE",
+      val_mae: "Val MAE",
+      val_mse: "Val MSE",
+      val_miou: "Val mIoU",
+      val_dice: "Val Dice",
+      val_pixel_acc: "Val acurácia de pixel",
+      val_auroc: "Val AUROC",
+      val_image_f1: "Val F1 da imagem",
+      val_threshold: "Val limiar de decisão",
+    },
   },
   // The first-run guide (components/GuidedTour.tsx). The steps are `tour`.
   guidedTour: {

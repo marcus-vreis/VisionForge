@@ -10,10 +10,12 @@ import {
   numericMetric,
   runTaskKey,
 } from "../lib/compare-metrics";
+import { curveSeries, selectedCurves, toggleCurve, type CurveSeries } from "../lib/compare-curves";
 import { seedNote } from "../lib/compare-seeds";
 import type { TaskDescriptor } from "../lib/custom-tasks";
 import { compareDatasets } from "../lib/dataset-identity";
 import { aggregateForRow, formatAggregate } from "../lib/run-groups";
+import { accentForTask } from "../lib/task-accent";
 
 interface CompareRunsPanelProps {
   runIds: string[];
@@ -145,17 +147,7 @@ export function CompareRunsPanel({ runIds, onBack }: CompareRunsPanelProps) {
           <MetricsTable details={details} descriptors={descriptors} />
           <ConfigDiffTable details={details} />
           <PreprocessingCompare details={details} />
-          <OverlayChart
-            details={details}
-            yKey="val_loss"
-            title={t.compareRuns.valLossChart}
-            invertGood
-          />
-          <OverlayChart
-            details={details}
-            yKey="val_accuracy"
-            title={t.compareRuns.valAccuracyChart}
-          />
+          <EpochCurves details={details} task={distinctTasks(details)[0]} />
         </>
       )}
     </div>
@@ -759,14 +751,113 @@ function PreprocessingCompare({ details }: { details: RunDetail[] }) {
   );
 }
 
-interface OverlayChartProps {
-  details: RunDetail[];
-  yKey: "val_loss" | "val_accuracy" | "train_loss" | "train_accuracy";
-  title: string;
-  invertGood?: boolean;
+/**
+ * The epoch curves of the compared runs: the task's own series (lib/compare-curves.ts),
+ * a chart each, with a picker when the runs measured more than the ones drawn first.
+ *
+ * A run with no per-epoch history (a replicate group keeps the mean of its seeds, not
+ * their epochs) has no line; the runs left out are named instead of being silently
+ * absent from the chart.
+ */
+function EpochCurves({ details, task }: { details: RunDetail[]; task: string }) {
+  const t = useT();
+  // null until the researcher picks: then the task's initial series are drawn.
+  const [picked, setPicked] = useState<string[] | null>(null);
+  const available = curveSeries(
+    task,
+    details.map((d) => d.history),
+  );
+  const shown = selectedCurves(available, picked);
+  const accent = accentForTask(task);
+  const without = details.filter((d) => d.history.length === 0);
+
+  if (available.length === 0 && without.length === 0) return null;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      {without.length > 0 && (
+        <div
+          style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: 11,
+            lineHeight: 1.5,
+            color: "var(--vf-text-muted)",
+          }}
+        >
+          {t.compareRuns.noCurves(
+            without.map((d) => d.experiment_name).join(", "),
+            without.some((d) => d.group != null),
+          )}
+        </div>
+      )}
+      {available.length > 1 && (
+        <div
+          role="group"
+          aria-label={t.compareRuns.curvePicker}
+          style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 6 }}
+        >
+          <span
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: 9,
+              letterSpacing: "0.16em",
+              textTransform: "uppercase",
+              color: "var(--vf-text-muted)",
+              marginRight: 4,
+            }}
+          >
+            {t.compareRuns.curvePicker}
+          </span>
+          {available.map((s) => {
+            const on = shown.some((x) => x.key === s.key);
+            return (
+              <button
+                key={s.key}
+                type="button"
+                aria-pressed={on}
+                onClick={() =>
+                  setPicked(
+                    toggleCurve(
+                      shown.map((x) => x.key),
+                      s.key,
+                    ),
+                  )
+                }
+                style={{
+                  padding: "4px 10px",
+                  background: on ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.025)",
+                  border: `1px solid ${on ? accent : "var(--vf-panel-stroke)"}`,
+                  borderRadius: 999,
+                  color: on ? "var(--vf-text)" : "var(--vf-text-dim)",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 11,
+                  cursor: "pointer",
+                }}
+              >
+                {s.label ? t.compareRuns.curves[s.label] : s.key}
+              </button>
+            );
+          })}
+        </div>
+      )}
+      {shown.map((s) => (
+        <OverlayChart key={s.key} details={details} series={s} accent={accent} />
+      ))}
+    </div>
+  );
 }
 
-function OverlayChart({ details, yKey, title }: OverlayChartProps) {
+function OverlayChart({
+  details,
+  series: curve,
+  accent,
+}: {
+  details: RunDetail[];
+  series: CurveSeries;
+  accent: string;
+}) {
+  const t = useT();
+  const title = t.compareRuns.curveTitle(curve.label ? t.compareRuns.curves[curve.label] : curve.key);
   const width = 720;
   const height = 220;
   const padding = { top: 16, right: 16, bottom: 28, left: 44 };
@@ -778,7 +869,7 @@ function OverlayChart({ details, yKey, title }: OverlayChartProps) {
     .map((d, i) => {
       const points = d.history.map((h) => ({
         x: h.epoch,
-        y: (h as Record<string, number>)[yKey] ?? NaN,
+        y: numericMetric(h[curve.key]) ?? NaN,
       }));
       return { runId: d.run_id, label: d.experiment_name, color: PALETTE[i % PALETTE.length], points };
     })
@@ -792,12 +883,13 @@ function OverlayChart({ details, yKey, title }: OverlayChartProps) {
   const allY = series.flatMap((s) => s.points.map((p) => p.y)).filter((v) => Number.isFinite(v));
   // Runs stopped before they measured anything have no curve to draw.
   if (allY.length === 0) return null;
+  const xMin = Math.min(...allX);
   const xMax = Math.max(...allX);
   const yMin = Math.min(...allY);
   const yMax = Math.max(...allY);
   const yRange = yMax - yMin || 1;
 
-  const xScale = (x: number) => padding.left + (x / Math.max(xMax, 1)) * innerW;
+  const xScale = (x: number) => padding.left + ((x - xMin) / Math.max(xMax - xMin, 1)) * innerW;
   const yScale = (y: number) =>
     padding.top + innerH - ((y - yMin) / yRange) * innerH;
 
@@ -820,7 +912,12 @@ function OverlayChart({ details, yKey, title }: OverlayChartProps) {
           marginBottom: 8,
         }}
       >
-        // {title}
+        <span style={{ color: accent }}>//</span> {title}
+        {curve.direction && (
+          <span style={{ marginLeft: 10, letterSpacing: "0.06em", textTransform: "none" }}>
+            · {t.compareRuns.direction[curve.direction]}
+          </span>
+        )}
       </div>
       <svg width={width} height={height} style={{ display: "block", maxWidth: "100%" }}>
         {/* Y-axis labels (min/max) */}
@@ -843,7 +940,7 @@ function OverlayChart({ details, yKey, title }: OverlayChartProps) {
           fontSize="10"
           fill="var(--vf-text-muted)"
         >
-          1
+          {xMin}
         </text>
         <text
           x={width - padding.right}
@@ -873,21 +970,26 @@ function OverlayChart({ details, yKey, title }: OverlayChartProps) {
         />
         {/* Lines */}
         {series.map((s) => {
-          const path = s.points
-            .filter((p) => Number.isFinite(p.y))
+          const finite = s.points.filter((p) => Number.isFinite(p.y));
+          const path = finite
             .map((p, i) => `${i === 0 ? "M" : "L"} ${xScale(p.x)} ${yScale(p.y)}`)
             .join(" ");
           return (
-            <path
-              key={s.runId}
-              d={path}
-              fill="none"
-              stroke={s.color}
-              strokeWidth="2"
-              strokeLinejoin="round"
-              strokeLinecap="round"
-              opacity={0.92}
-            />
+            <g key={s.runId}>
+              <path
+                d={path}
+                fill="none"
+                stroke={s.color}
+                strokeWidth="2"
+                strokeLinejoin="round"
+                strokeLinecap="round"
+                opacity={0.92}
+              />
+              {/* One epoch (PatchCore fits in one) is a point, which a line does not draw. */}
+              {finite.length === 1 && (
+                <circle cx={xScale(finite[0].x)} cy={yScale(finite[0].y)} r={3.5} fill={s.color} />
+              )}
+            </g>
           );
         })}
       </svg>
