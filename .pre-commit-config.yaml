@@ -19,7 +19,7 @@ repos:
         exclude: "(package-lock\\.json|src/visionforge/gui/static/.*|frontend/dist/.*|docs/superpowers/.*)"
 
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.20.0
+    rev: v2.4.0
     hooks:
       - id: mypy
         additional_dependencies: [loguru, pydantic>=2.0, types-PyYAML>=6.0]
