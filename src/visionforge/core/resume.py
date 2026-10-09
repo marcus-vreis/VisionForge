@@ -135,6 +135,19 @@ def clear_resume_state(run_dir: Path) -> None:
         logger.debug("Could not remove resume state: {}", exc)
 
 
+def discard_resume_state(run_dir: Path) -> None:
+    """Make a run not continuable, whichever loop owns its state.
+
+    The in-house trainers resume from `resume.pt`; Ultralytics from its own
+    `weights/last.pt` (ADR-093). `best.pt` and every other artifact stay.
+    """
+    clear_resume_state(run_dir)
+    try:
+        (run_dir / "weights" / "last.pt").unlink(missing_ok=True)
+    except OSError as exc:  # noqa: BLE001 - a leftover file is harmless
+        logger.debug("Could not remove Ultralytics resume state: {}", exc)
+
+
 def can_resume(run_dir: Path, configured_epochs: int) -> bool:
     """Whether this run stopped before its last epoch and left usable state."""
     state = load_resume_state(run_dir)
@@ -146,6 +159,7 @@ __all__ = [
     "ResumeState",
     "can_resume",
     "clear_resume_state",
+    "discard_resume_state",
     "load_resume_state",
     "resume_path",
     "save_resume_state",

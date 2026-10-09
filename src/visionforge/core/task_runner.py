@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Literal, Protocol, runtime_checkable
 
 from visionforge.core.cancellation import CancellationToken
+from visionforge.core.resume import discard_resume_state
 from visionforge.core.significance import infer_direction
 
 
@@ -21,6 +23,9 @@ class RunResult:
     # stop landed in its last epoch, or a custom task that owns its loop, ran
     # to its end and counts.
     stopped: bool = False
+    # The directory the unit trained into, when it has one. The orchestrator
+    # needs it to drop the resume state of a unit the stop cut.
+    run_dir: Path | None = None
 
 
 @runtime_checkable
@@ -66,6 +71,24 @@ def runner_cancel_token(runner: object) -> CancellationToken | None:
     return token if isinstance(token, CancellationToken) else None
 
 
+def run_dir_from(section: dict[str, Any]) -> Path | None:
+    """The run directory a block's report section names, if it names one."""
+    raw = section.get("run_dir")
+    return Path(raw) if raw else None
+
+
+def discard_cut_unit_resume(result: RunResult) -> None:
+    """Make a unit the stop cut non-resumable, since its job never finished.
+
+    A trainer keeps its resume state when the token cuts it, which is what lets
+    a stopped single run be continued. Inside a sweep, comparison or replicate
+    set the same unit is one cell of a table that stays `stopped`; continuing it
+    alone would give History a run detached from its job (ADR-111).
+    """
+    if result.run_dir is not None:
+        discard_resume_state(result.run_dir)
+
+
 def runner_metric_direction(runner: object, metric: str) -> Literal["higher", "lower"]:
     """Whether ``metric`` is better high or low for this runner's task.
 
@@ -107,8 +130,10 @@ def rank_by_metric[T](
 __all__ = [
     "RunResult",
     "TaskRunner",
+    "discard_cut_unit_resume",
     "give_cancel_token",
     "rank_by_metric",
+    "run_dir_from",
     "runner_cancel_token",
     "runner_metric_direction",
 ]

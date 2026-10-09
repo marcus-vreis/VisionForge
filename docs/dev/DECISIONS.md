@@ -4141,7 +4141,14 @@ without it is the population std (ddof=0).
 
 **Not done:**
 
-- A unit cut by a stop inside a standalone sweep or comparison is an ordinary
-  run with a `resume.pt`, so History offers to continue it. That finishes the
-  training, but not the sweep: its summary keeps the unit as `stopped`.
+- A cut fold of the standalone K-fold (regression, segmentation) is an
+  ordinary run with a `resume.pt`, so History offers to continue it. That
+  finishes the training, but not the K-fold: its summary keeps the fold as
+  `stopped`. The sweep, comparison and replicate orchestrators no longer leave
+  this behind: a unit they mark `stopped` has its resume state dropped
+  (`discard_cut_unit_resume`, from the `RunResult.run_dir` its runner now
+  reports), so `_resume_status` answers no by the rule that already decides it.
+  For Ultralytics that state is `weights/last.pt`, which goes with it;
+  `best.pt` stays. The K-fold functions drive the trainer without a runner and
+  were not given the same call.
 - PatchCore's memory bank cannot be interrupted while it is being built.

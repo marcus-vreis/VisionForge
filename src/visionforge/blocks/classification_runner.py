@@ -5,7 +5,7 @@ from typing import Any
 
 from visionforge.blocks.classification import ClassificationBlock
 from visionforge.core.cancellation import CancellationToken
-from visionforge.core.task_runner import RunResult
+from visionforge.core.task_runner import RunResult, run_dir_from
 from visionforge.utils.config import ExperimentConfig
 
 
@@ -47,6 +47,7 @@ class ClassificationRunner:
                 training_time_s=elapsed,
                 error="",
                 stopped=bool(report.get("train", {}).get("stopped")),
+                run_dir=run_dir_from(report.get("train", {})),
             )
         except Exception as exc:  # noqa: BLE001
             return RunResult(

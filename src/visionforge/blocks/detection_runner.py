@@ -7,7 +7,7 @@ from typing import Any
 
 from visionforge.blocks.detection import DetectionBlock
 from visionforge.core.cancellation import CancellationToken
-from visionforge.core.task_runner import RunResult
+from visionforge.core.task_runner import RunResult, run_dir_from
 from visionforge.utils.detection_config import DetectionConfig
 
 # Detection's ranking metrics. map50_95 (Ultralytics) is the default; map50 is
@@ -52,6 +52,7 @@ class DetectionRunner:
                 training_time_s=elapsed,
                 error="",
                 stopped=bool(report.get("detection", {}).get("stopped")),
+                run_dir=run_dir_from(report.get("detection", {})),
             )
         except Exception as exc:  # noqa: BLE001
             return RunResult(

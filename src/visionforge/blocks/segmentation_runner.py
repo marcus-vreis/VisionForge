@@ -7,7 +7,7 @@ from typing import Any
 
 from visionforge.blocks.segmentation import SegmentationBlock
 from visionforge.core.cancellation import CancellationToken
-from visionforge.core.task_runner import RunResult
+from visionforge.core.task_runner import RunResult, run_dir_from
 from visionforge.utils.segmentation_config import SegmentationConfig
 
 # Segmentation's test metrics; miou (higher is better) is the ranking default.
@@ -49,6 +49,7 @@ class SegmentationRunner:
                 training_time_s=elapsed,
                 error="",
                 stopped=bool(report.get("train", {}).get("stopped")),
+                run_dir=run_dir_from(report.get("train", {})),
             )
         except Exception as exc:  # noqa: BLE001
             return RunResult(

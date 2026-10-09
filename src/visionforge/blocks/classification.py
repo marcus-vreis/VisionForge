@@ -59,6 +59,7 @@ class ClassificationBlock(ExperimentBlock):
                 # True only when the stop cut the training (ADR-111).
                 "stopped": self._train_result.stopped,
                 "device_used": self._train_result.device_used,
+                "run_dir": str(self._train_result.model_path.parent),
             }
         if self._eval_result is not None:
             result["eval"] = {

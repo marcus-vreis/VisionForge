@@ -28,6 +28,7 @@ from visionforge.core.cancellation import STOPPED, STOPPED_NOTE, is_cancelled
 from visionforge.core.task_runner import (
     RunResult,
     TaskRunner,
+    discard_cut_unit_resume,
     rank_by_metric,
     runner_cancel_token,
     runner_metric_direction,
@@ -147,6 +148,7 @@ def _execute_trial(
             # Cut short by the stop: kept in the list, never ranked (ADR-111).
             trial.status = STOPPED
             trial.error = STOPPED_NOTE
+            discard_cut_unit_resume(result)
         elif result.status == "success":
             logger.info(
                 "Sweep trial {}/{} ok — {}={}",

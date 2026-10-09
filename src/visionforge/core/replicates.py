@@ -27,7 +27,12 @@ from loguru import logger
 
 from visionforge.core.cancellation import STOPPED, STOPPED_NOTE, is_cancelled
 from visionforge.core.significance import bootstrap_ci
-from visionforge.core.task_runner import RunResult, TaskRunner, runner_cancel_token
+from visionforge.core.task_runner import (
+    RunResult,
+    TaskRunner,
+    discard_cut_unit_resume,
+    runner_cancel_token,
+)
 
 try:  # torch is the heavy hardware extra; the cache flush is best-effort.
     import torch
@@ -175,6 +180,7 @@ def run_replicates(
             if result.stopped and result.status == "success":
                 trial.status = STOPPED
                 trial.error = STOPPED_NOTE
+                discard_cut_unit_resume(result)
             elif result.status == "success":
                 logger.info(
                     "Replicate seed={} ok — {}={}",
