@@ -147,14 +147,25 @@ class TestReplicates:
         )
         assert len(children) == 2
         # The group's History metric is the mean of the seeds' own r2.
-        assert group["final_metrics"]["r2"] == pytest.approx(
-            group["group"]["aggregates"]["r2"]["mean"]
-        )
+        detail = client.get(f"/api/runs/{run_id}").json()
+        full = detail["group"]["aggregates"]["r2"]
+        assert group["final_metrics"]["r2"] == pytest.approx(full["mean"])
+        # The card prints the mean beside the interval it came with, keyed by
+        # the same label as the number.
+        finals = group["group"]["final_aggregates"]
+        assert set(finals) == set(group["final_metrics"])
+        assert finals["r2"] == full
+        for label, value in group["final_metrics"].items():
+            assert finals[label]["mean"] == pytest.approx(value)
         # A seed is still a run of its own, openable and not a group itself.
         assert all(r["group"] is None for r in children)
 
-        detail = client.get(f"/api/runs/{run_id}").json()
-        assert detail["group"]["aggregates"] == group["group"]["aggregates"]
+        assert detail["group"]["metric_keys"] == {
+            "test_r2": "r2",
+            "test_rmse": "rmse",
+            "test_mae": "mae",
+            "test_mse": "mse",
+        }
         assert detail["group_id"] is None
         assert detail["task"] == "regression"
         child = client.get(f"/api/runs/{children[0]['run_id']}").json()

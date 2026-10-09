@@ -202,9 +202,11 @@ class RunGroupBrief(BaseModel):
     stopped: bool = False
     # Run ids of the seeds' own runs (the ones that exist on disk).
     child_ids: list[str] = []
-    # Replicates: mean / std / CI95 per metric. Empty for a comparison, which
-    # has one set per variant instead (in the run detail).
-    aggregates: dict[str, Any] = {}
+    # Replicates: the aggregate (mean / std / CI95, as the report recorded it)
+    # of each metric the card shows, keyed like ``RunSummary.final_metrics``.
+    # Empty for a comparison, which has one set per variant instead (in the run
+    # detail).
+    final_aggregates: dict[str, Any] = {}
     # Replicated comparison: the variants compared and the one with the best
     # mean on the seeds they share (None when no ranking is possible).
     variants: list[str] = []

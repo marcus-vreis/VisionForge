@@ -7,6 +7,7 @@ import type {
   DatasetInfo,
   MetricCI,
   QueueSnapshot,
+  RunGroup,
   RunResponse,
   RunResult,
   RunStatus,
@@ -866,6 +867,11 @@ export interface RunDetail {
   /** See RunSummary: the run stopped short and can be continued (ADR-092/093). */
   resumable?: boolean;
   configured_epochs?: number | null;
+  /** A seed of a replicate group names the group (ADR-113). */
+  group_id?: string | null;
+  /** On the group itself: its seeds, aggregates and, for a replicated
+   *  comparison, the variants and paired tests, as the report recorded them. */
+  group?: RunGroup | null;
   /** The task family: a built-in name, or `custom:<key>` for a researcher's own
    *  task. Absent from a server older than the comparison by task. */
   task?: string;

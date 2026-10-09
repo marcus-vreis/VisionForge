@@ -876,6 +876,117 @@ export const en: Dict = {
       submit: (n: number) => `🗑 Delete${n > 1 ? ` ${n}` : ""}`,
     },
   },
+  runGroup: {
+    kind: {
+      replicates: "Replicates",
+      replicated_comparison: "Replicated comparison",
+    },
+    card: {
+      seeds: (finished: number, requested: number) => `${finished}/${requested} seeds`,
+      trainings: (finished: number, requested: number) =>
+        `${finished}/${requested} trainings`,
+      variants: (n: number) => `${n} ${n === 1 ? "variant" : "variants"}`,
+      best: (label: string) => `best mean: ${label}`,
+      noBest: "no best mean",
+      stopped: "stopped",
+      stoppedTitle: "Stopped on request: the aggregate uses only what finished.",
+      showRuns: (n: number) => `▸ ${n} ${n === 1 ? "run in the group" : "runs in the group"}`,
+      hideRuns: (n: number) => `▾ ${n} ${n === 1 ? "run in the group" : "runs in the group"}`,
+      meanTitle: (n: number, low: string | null, high: string | null) =>
+        low !== null && high !== null
+          ? `mean of ${n} seeds · 95% CI: [${low}, ${high}]`
+          : `mean of ${n} ${n === 1 ? "seed" : "seeds"} · no CI (a single seed)`,
+      deleteTitle: "Delete this group (its seeds stay in the history)",
+    },
+    deleteNote:
+      "Deleting a group removes only its summary: the seeds' runs stay in the history, as ordinary runs.",
+    member: {
+      title: "Part of a group",
+      body: (id: string) => `This seed belongs to the group ${id}.`,
+      open: "open the group",
+    },
+    detail: {
+      eyebrow: {
+        replicates: "// replicate set",
+        replicated_comparison: "// replicated comparison",
+      },
+      metric: "metric",
+      seedsAsked: "seeds asked",
+      trainingsDone: "trainings finished",
+      alpha: "alpha",
+      direction: {
+        higher: "higher is better",
+        lower: "lower is better",
+      },
+      report: "report",
+      stopped:
+        "Stopped on request: the aggregate uses only the trainings that finished; whatever was cut is left out.",
+      aggregateTitle: "Aggregate per metric",
+      cols: {
+        metric: "metric",
+        n: "n",
+        meanCi: "mean ± 95% CI",
+        interval: "95% CI",
+        std: "std",
+        range: "min – max",
+        seed: "seed",
+        status: "status",
+        run: "run",
+        variant: "variant",
+        overrides: "overrides",
+        seeds: "seeds",
+        pair: "pair",
+        pairs: "pairs",
+        diff: "Δ mean (a−b)",
+        test: "test",
+        p: "p (raw)",
+        holm: "significant after Holm",
+        effect: "effect (d)",
+      },
+      noInterval: "—",
+      fewSeeds: (n: number) =>
+        `With ${n} ${n === 1 ? "seed" : "seeds"} the 95% CI is wide and fragile: below 5 seeds it does not measure precision.`,
+      seedsTitle: "Seeds",
+      open: "open",
+      removed: "removed from the history",
+      noRun: "no run",
+      status: {
+        ok: "finished",
+        stopped: "stopped · left out of the aggregate",
+        failed: "failed",
+      },
+      variantsTitle: "Variants",
+      bestByMean: "best mean",
+      bestNote:
+        "It describes the means on the shared seeds; whether the gap exceeds seed variation is what the paired tests below say.",
+      noBest: {
+        stopped: "the stop left variants unrun",
+        "too-few-seeds": "fewer than 2 seeds finished in common by the variants",
+      },
+      rankingSeeds: (seeds: string) => `ranked on seeds ${seeds}`,
+      notRun: (labels: string) => `Not run (stopped): ${labels}`,
+      skipped: (labels: string) => `Too few seeds to test: ${labels}`,
+      testsTitle: "Paired tests",
+      noTests: "No pair of variants could be tested.",
+      yes: "yes",
+      no: "no",
+      tests: {
+        paired_t: "paired t",
+        wilcoxon: "Wilcoxon",
+      },
+      effects: {
+        negligible: "negligible",
+        small: "small",
+        medium: "medium",
+        large: "large",
+      },
+      underpowered: "few seeds",
+      underpoweredTitle: (pairs: number, floor: string) =>
+        `With ${pairs} pairs the smallest possible p is ${floor}, above alpha: no result, however consistent, could be significant.`,
+      testsNote:
+        "p is the raw test value. The \"significant after Holm\" column is already corrected for the set of comparisons; it is the one that counts.",
+    },
+  },
   taskPanel: {
     sweep: "Sweep",
     replicates: "Replicates",
@@ -1568,6 +1679,17 @@ export const en: Dict = {
     seedNote: {
       "single-seed":
         "Each run has a single seed: the gap between them can be seed variation. To claim a difference, run replicates with several seeds.",
+      "single-seed-mixed":
+        "The runs that are not replicate means have a single seed: the gap between them can be seed variation. To claim a difference, run replicates with several seeds.",
+    },
+    group: {
+      tag: (n: number) => `mean of ${n} ${n === 1 ? "seed" : "seeds"}`,
+      cellTitle: (n: number, low: string | null, high: string | null) =>
+        low !== null && high !== null
+          ? `mean of ${n} seeds · 95% CI: [${low}, ${high}]`
+          : `mean of ${n} ${n === 1 ? "seed" : "seeds"} · no CI (a single seed)`,
+      noCell:
+        "A replicated comparison has no single value for this row: open the group to see each variant and the paired tests.",
     },
     mixedTasks: {
       title: "Different tasks in one comparison",

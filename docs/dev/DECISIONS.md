@@ -4298,7 +4298,35 @@ directory, and History lists it as one run.
   table find it in the row where it belongs, and `group.metric_keys` says which
   aggregate filled which key. A comparison has no single headline number, so
   its `final_metrics` are empty rather than the mean of whichever variant won.
-  A group is never resumable: it trained nothing itself.
+  `RunGroupBrief.final_aggregates` hands the card the aggregate behind each of
+  those numbers under the same label, read through `metric_keys`. A group is
+  never resumable: it trained nothing itself.
+- **History shows a group as one entry.** The list folds a seed under the group
+  its `group_id` names (`lib/run-groups.ts`, `foldGroups`), collapsed by default
+  and still openable, selectable, comparable and deletable as the run it is;
+  tab counts, filters and the header count are over entries, so a group and its
+  seeds are not counted twice. A seed whose group is no longer in the list (the
+  group was deleted, which removes only its summary) stays visible as a loose
+  run instead of vanishing with the folder that named it, and the delete dialog
+  says so. A card prints `mean ± half-width` from the report's own interval, a
+  comparison card its variants and `best_by_mean` or "no best mean".
+- **The group's detail** shows per-metric mean ± CI95 with n, the interval, the
+  sample SD (n−1, `std_ddof`) and min–max, a caution under five seeds, the seeds
+  with their status and a link to each run, and for a comparison the variants,
+  the paired tests with the raw p and "significant after Holm" (yes or no), the
+  `not_run` variants, and `best_by_mean` as a dash with the reason when there
+  is none (a stop left variants unrun, or fewer than two seeds are common to
+  the variants). A seed's own detail links back to its group.
+- **The comparison reads a group as a mean, not a seed.** Its cells show the
+  mean with the interval (`metric_keys` says which row an aggregate fills, so a
+  validation-score row is never given a test-split interval by name); a
+  replicated comparison, which has no single value per row, shows a dash. The
+  single-seed note of ADR-112 is judged on the runs that are one seed each: two
+  groups side by side raise none, and a group beside single runs raises it,
+  worded for "the runs that are not replicate means", only for a gap among the
+  single runs. The frontend computes no statistic: the one subtraction, the
+  interval's half-width, prints the report's own bounds in the form the results
+  view already used.
 
 **Consequences:** the group is written once, when the job ends, so a server
 killed mid-job leaves its seeds as loose runs, as before; a failure to write it

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { seedNote } from "./compare-seeds";
+import { seedNote, singleSeedValues } from "./compare-seeds";
 
 describe("seedNote", () => {
   it("warns when two runs differ in a metric that has a direction", () => {
@@ -38,5 +38,31 @@ describe("seedNote", () => {
 
   it("still warns when a run lacks a value but two others differ", () => {
     expect(seedNote([{ direction: "higher", values: [null, 0.7, 0.8] }])).toBe("single-seed");
+  });
+});
+
+describe("seedNote with replicate groups (ADR-113)", () => {
+  it("takes the group runs out of the values the note is judged on", () => {
+    expect(singleSeedValues([0.9, 0.8, 0.7], [false, true, false])).toEqual([0.9, null, 0.7]);
+    expect(singleSeedValues([0.9, 0.8], [false, false])).toEqual([0.9, 0.8]);
+  });
+
+  it("is silent when every compared run is a group: each cell carries its own interval", () => {
+    const values = singleSeedValues([0.9, 0.8], [true, true]);
+    expect(seedNote([{ direction: "higher", values }], true)).toBeNull();
+  });
+
+  it("is silent for one single run beside a group: no gap between single runs", () => {
+    const values = singleSeedValues([0.9, 0.8], [false, true]);
+    expect(seedNote([{ direction: "higher", values }], true)).toBeNull();
+  });
+
+  it("speaks of the single runs only when a group is in the selection too", () => {
+    const values = singleSeedValues([0.9, 0.8, 0.85], [false, false, true]);
+    expect(seedNote([{ direction: "higher", values }], true)).toBe("single-seed-mixed");
+  });
+
+  it("keeps the original wording when no group is compared", () => {
+    expect(seedNote([{ direction: "higher", values: [0.9, 0.8] }], false)).toBe("single-seed");
   });
 });

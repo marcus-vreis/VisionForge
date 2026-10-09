@@ -15,6 +15,18 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Added
 
+- **O Histórico mostra um conjunto de réplicas como uma entrada só, com média ±
+  IC95.** O grupo vira um cartão com as seeds recolhidas embaixo (continuam
+  abríveis, selecionáveis, comparáveis e excluíveis como runs comuns); contagens
+  e filtros são por entrada. Uma seed cujo grupo foi excluído continua visível
+  como run solto. O detalhe do grupo traz, por métrica, média ± IC95 com n,
+  intervalo, desvio amostral (n−1), mín–máx e um aviso abaixo de 5 seeds, mais
+  as seeds com status e link para cada run; numa comparação replicada, a tabela
+  de variantes, os testes pareados (p bruto e "significativo após Holm" sim ou
+  não), as variantes que não rodaram e a melhor média — ou "—" com o motivo
+  quando não há. Na comparação do Histórico, a célula de um grupo mostra a média
+  com o IC95 e a nota de seed única só vale para os runs que são uma seed só;
+  nenhuma estatística é calculada no frontend ([ADR-113](docs/dev/DECISIONS.md)).
 - **Conjuntos de réplicas e comparações replicadas viram uma execução do
   Histórico.** Antes, rodar N seeds deixava N execuções soltas no Histórico e a
   média, o IC95 e os testes pareados só existiam num relatório em

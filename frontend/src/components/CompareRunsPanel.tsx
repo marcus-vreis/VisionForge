@@ -10,9 +10,10 @@ import {
   numericMetric,
   runTaskKey,
 } from "../lib/compare-metrics";
-import { seedNote } from "../lib/compare-seeds";
+import { seedNote, singleSeedValues } from "../lib/compare-seeds";
 import type { TaskDescriptor } from "../lib/custom-tasks";
 import { compareDatasets } from "../lib/dataset-identity";
+import { aggregateForRow, formatAggregate } from "../lib/run-groups";
 
 interface CompareRunsPanelProps {
   runIds: string[];
@@ -215,6 +216,7 @@ function DatasetVerdictRow({ details }: { details: RunDetail[] }) {
 }
 
 function Legend({ details }: { details: RunDetail[] }) {
+  const t = useT();
   return (
     <div
       style={{
@@ -249,6 +251,12 @@ function Legend({ details }: { details: RunDetail[] }) {
             }}
           />
           {d.experiment_name}
+          {d.group && (
+            <span style={{ color: "var(--vf-text-muted)" }}>
+              {" · "}
+              {t.runGroup.kind[d.group.kind]}
+            </span>
+          )}
         </div>
       ))}
     </div>
@@ -328,7 +336,16 @@ function MetricsTable({
     row,
     values: details.map((d) => numericMetric(d.metrics[row.key])),
   }));
-  const note = seedNote(rows.map(({ row, values }) => ({ direction: row.direction, values })));
+  // A group's cell is a mean over seeds with its own interval, so the single-seed
+  // caution (ADR-112) is judged on the runs that are one seed each (ADR-113).
+  const isGroup = details.map((d) => d.group != null);
+  const note = seedNote(
+    rows.map(({ row, values }) => ({
+      direction: row.direction,
+      values: singleSeedValues(values, isGroup),
+    })),
+    isGroup.some(Boolean),
+  );
   return (
     <div
       style={{
@@ -372,17 +389,43 @@ function MetricsTable({
                   // nothing more: whether it is a real difference is not
                   // something one run each can tell (ADR-112).
                   const extreme = extremes.includes(i) && row.direction;
+                  // A group's cell is its mean with the interval the report gave
+                  // (never one seed's value); a replicated comparison has no
+                  // single number per row, so it prints a dash and says why.
+                  const shown = d.group ? formatAggregate(aggregateForRow(d.group, row.key)) : null;
+                  const titles = [
+                    shown
+                      ? t.compareRuns.group.cellTitle(shown.n, shown.low, shown.high)
+                      : d.group?.kind === "replicated_comparison"
+                        ? t.compareRuns.group.noCell
+                        : null,
+                    extreme
+                      ? t.compareRuns.extreme[extreme === "higher" ? "highest" : "lowest"]
+                      : null,
+                  ].filter((title): title is string => title !== null);
                   return (
                     <td
                       key={d.run_id}
-                      title={
-                        extreme
-                          ? t.compareRuns.extreme[extreme === "higher" ? "highest" : "lowest"]
-                          : undefined
-                      }
+                      title={titles.length > 0 ? titles.join(" · ") : undefined}
                       style={extreme ? { ...tdStyle, ...extremeStyle } : tdStyle}
                     >
-                      {fmtMetric(d.metrics[row.key])}
+                      {d.group ? (
+                        shown ? (
+                          <>
+                            {shown.mean}
+                            {shown.half !== null && (
+                              <span style={{ color: "var(--vf-text-muted)", fontWeight: 400 }}>
+                                {" ± "}
+                                {shown.half}
+                              </span>
+                            )}
+                          </>
+                        ) : (
+                          "—"
+                        )
+                      ) : (
+                        fmtMetric(d.metrics[row.key])
+                      )}
                     </td>
                   );
                 })}

@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { deleteRun, fetchRuns } from "../api/client";
 import type { Dict } from "../i18n/pt";
 import { useI18n, useT } from "../i18n/useT";
+import { foldGroups, formatAggregate, isGroupRun, type HistoryEntry } from "../lib/run-groups";
+import { TASK_ACCENT } from "../lib/task-accent";
 import type { RunSummary } from "../types/run";
 import { CompareRunsPanel } from "./CompareRunsPanel";
 import { MenuSelect } from "./controls";
@@ -90,15 +92,6 @@ function FilterChips({
     </div>
   );
 }
-
-/** Color accent per task type, mirroring the VisionForge oklch palette. */
-const TASK_ACCENT: Record<string, string> = {
-  classification: "oklch(0.74 0.18 22)",
-  detection: "oklch(0.78 0.18 150)",
-  regression: "oklch(0.74 0.16 240)",
-  segmentation: "oklch(0.74 0.18 305)",
-  anomaly: "oklch(0.80 0.15 75)",
-};
 
 /** Order the family tabs the way the app's own task bar orders them, so the
  * history reads like the rest of the GUI instead of alphabetically. Custom
@@ -294,6 +287,9 @@ function RunCard({
     const v: unknown = run.final_metrics[k];
     return typeof v === "number" && Number.isFinite(v);
   });
+  // A replicate group (ADR-113) is one entry for a job of several trainings: its
+  // numbers are means over the seeds, printed with the interval the report gave.
+  const group = run.group ?? null;
 
   const handleClick = () => {
     if (selectable && onToggleSelect) {
@@ -354,7 +350,7 @@ function RunCard({
             onDelete();
           }}
           disabled={deleting}
-          title={t.history.card.deleteTitle}
+          title={group ? t.runGroup.card.deleteTitle : t.history.card.deleteTitle}
           style={{
             position: "absolute",
             top: 8,
@@ -526,7 +522,43 @@ function RunCard({
             {run.configured_epochs ? `/${run.configured_epochs}` : ""}
           </span>
         )}
-        {run.block && run.block !== "classification" && (
+        {group && (
+          <span
+            title={t.history.card.blockTitle(run.block ?? group.kind)}
+            style={{
+              padding: "2px 8px",
+              background: "rgba(180, 140, 255, 0.12)",
+              border: "1px solid rgba(180, 140, 255, 0.45)",
+              borderRadius: 999,
+              fontFamily: "var(--font-mono)",
+              fontSize: 10,
+              color: "rgba(220, 190, 255, 0.95)",
+              letterSpacing: "0.10em",
+              textTransform: "uppercase",
+            }}
+          >
+            ⛓ {t.runGroup.kind[group.kind]}
+          </span>
+        )}
+        {group?.stopped && (
+          <span
+            title={t.runGroup.card.stoppedTitle}
+            style={{
+              padding: "2px 8px",
+              background: "oklch(0.84 0.12 85 / 0.14)",
+              border: "1px solid oklch(0.84 0.12 85 / 0.45)",
+              borderRadius: 999,
+              fontFamily: "var(--font-mono)",
+              fontSize: 10,
+              color: "oklch(0.90 0.12 85)",
+              letterSpacing: "0.10em",
+              textTransform: "uppercase",
+            }}
+          >
+            ■ {t.runGroup.card.stopped}
+          </span>
+        )}
+        {!group && run.block && run.block !== "classification" && (
           <span
             title={t.history.card.blockTitle(run.block)}
             style={{
@@ -552,9 +584,37 @@ function RunCard({
             color: "var(--vf-text-muted)",
           }}
         >
-          {t.history.card.epochs(run.epochs_completed)}
+          {group
+            ? group.kind === "replicates"
+              ? t.runGroup.card.seeds(group.n_finished, group.n_requested)
+              : t.runGroup.card.trainings(group.n_finished, group.n_requested)
+            : t.history.card.epochs(run.epochs_completed)}
         </span>
       </div>
+
+      {/* A replicated comparison has no single number: it names its variants and
+          the one with the best mean, or says there is none. */}
+      {group?.kind === "replicated_comparison" && (
+        <div
+          style={{
+            display: "flex",
+            gap: 14,
+            flexWrap: "wrap",
+            paddingTop: 4,
+            borderTop: "1px solid var(--vf-panel-stroke)",
+            fontFamily: "var(--font-mono)",
+            fontSize: 11,
+            color: "var(--vf-text-dim)",
+          }}
+        >
+          <span>{t.runGroup.card.variants(group.variants.length)}</span>
+          <span style={{ color: group.best_by_mean ? accent : "var(--vf-text-muted)" }}>
+            {group.best_by_mean
+              ? t.runGroup.card.best(group.best_by_mean)
+              : t.runGroup.card.noBest}
+          </span>
+        </div>
+      )}
 
       {/* Metrics row */}
       {shownMetrics.length > 0 && (
@@ -566,8 +626,19 @@ function RunCard({
             borderTop: "1px solid var(--vf-panel-stroke)",
           }}
         >
-          {shownMetrics.map((k) => (
-            <div key={k} style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+          {shownMetrics.map((k) => {
+            const shown =
+              group?.kind === "replicates" ? formatAggregate(group.final_aggregates[k]) : null;
+            return (
+            <div
+              key={k}
+              title={
+                shown
+                  ? t.runGroup.card.meanTitle(shown.n, shown.low, shown.high)
+                  : undefined
+              }
+              style={{ display: "flex", flexDirection: "column", gap: 1 }}
+            >
               <span
                 style={{
                   fontFamily: "var(--font-mono)",
@@ -587,10 +658,19 @@ function RunCard({
                   color: accent,
                 }}
               >
-                {run.final_metrics[k].toFixed(4)}
+                {shown ? shown.mean : run.final_metrics[k].toFixed(4)}
+                {shown?.half != null && (
+                  <span
+                    style={{ fontSize: 11, fontWeight: 400, color: "var(--vf-text-muted)" }}
+                  >
+                    {" ± "}
+                    {shown.half}
+                  </span>
+                )}
               </span>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -612,6 +692,73 @@ function RunCard({
   );
 }
 
+/** A History row: the run's card and, when it is a replicate group, its seeds
+ *  folded underneath (ADR-113). They stay runs of their own once opened: each is
+ *  a card that can be opened, selected, compared or deleted like any other. */
+function GroupedRun({
+  entry,
+  expandAll,
+  renderCard,
+}: {
+  entry: HistoryEntry;
+  /** Open every group, as a search does so the match is visible. */
+  expandAll: boolean;
+  renderCard: (run: RunSummary) => React.ReactNode;
+}) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const { run, children } = entry;
+  const shown = open || expandAll;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      {renderCard(run)}
+      {children.length > 0 && (
+        <>
+          <button
+            type="button"
+            onClick={() => setOpen((o) => !o)}
+            aria-expanded={shown}
+            style={{
+              alignSelf: "flex-start",
+              marginLeft: 18,
+              padding: "3px 10px",
+              background: "transparent",
+              border: "1px solid var(--vf-panel-stroke)",
+              borderRadius: 8,
+              color: "var(--vf-text-dim)",
+              fontFamily: "var(--font-mono)",
+              fontSize: 10,
+              letterSpacing: "0.10em",
+              textTransform: "uppercase",
+              cursor: "pointer",
+            }}
+          >
+            {shown
+              ? t.runGroup.card.hideRuns(children.length)
+              : t.runGroup.card.showRuns(children.length)}
+          </button>
+          {shown && (
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 8,
+                marginLeft: 18,
+                paddingLeft: 12,
+                borderLeft: "2px solid var(--vf-panel-stroke)",
+              }}
+            >
+              {children.map((child) => (
+                <div key={child.run_id}>{renderCard(child)}</div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 /** History overlay — fetches and displays past experiment runs from /api/runs. */
 export function HistoryOverlay({
   onClose,
@@ -624,6 +771,9 @@ export function HistoryOverlay({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+  // The run to return to from the one open: a seed opened from its group goes
+  // back to the group, not to the list.
+  const [backTo, setBackTo] = useState<string | null>(null);
   const [selectMode, setSelectMode] = useState(false);
   const [selection, setSelection] = useState<string[]>([]);
   const [compareActiveIds, setCompareActiveIds] = useState<string[] | null>(null);
@@ -644,7 +794,8 @@ export function HistoryOverlay({
   // Declared before the `!open` early return so the Esc effect can depend on it.
   const stepBack = useCallback(() => {
     if (selectedRunId) {
-      setSelectedRunId(null);
+      setSelectedRunId(backTo);
+      setBackTo(null);
       return;
     }
     if (compareActiveIds) {
@@ -652,7 +803,7 @@ export function HistoryOverlay({
       return;
     }
     onClose();
-  }, [selectedRunId, compareActiveIds, onClose]);
+  }, [selectedRunId, backTo, compareActiveIds, onClose]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -673,7 +824,8 @@ export function HistoryOverlay({
     fetchRuns()
       .then((data) => {
         setRuns(data);
-        onCountChange?.(data.length);
+        // A group counts as the one entry the list shows for it.
+        onCountChange?.(foldGroups(data).length);
         // Only land on the active task's tab if that tab will actually exist.
         if (initialTask && data.some((r) => taskFamily(r.task) === initialTask)) {
           setTaskFilter(initialTask);
@@ -722,7 +874,7 @@ export function HistoryOverlay({
     if (deleted.length > 0) {
       const next = runs.filter((r) => !deleted.includes(r.run_id));
       setRuns(next);
-      onCountChange?.(next.length);
+      onCountChange?.(foldGroups(next).length);
       if (selectedRunId && deleted.includes(selectedRunId)) setSelectedRunId(null);
       setSelection((prev) => prev.filter((rid) => !deleted.includes(rid)));
     }
@@ -742,38 +894,44 @@ export function HistoryOverlay({
 
   // Client-side filter + sort — keeps the list responsive even with hundreds of
   // runs. Search is case-insensitive and matches experiment name, arch or run_id.
-  const filteredRuns = (() => {
-    if (runs.length === 0) return runs;
+  // A replicate group is one entry with its seeds under it (ADR-113); the filters,
+  // the tab counts and the sort all work on those entries, so a group and its
+  // seeds are never counted twice. A search that only a seed matches keeps its
+  // group, so the match has somewhere to be shown.
+  const entries = foldGroups(runs);
+  const filteredEntries = (() => {
+    if (entries.length === 0) return entries;
     const q = query.trim().toLowerCase();
-    const matches = runs.filter((r) => {
+    const named = (r: RunSummary) =>
+      r.experiment_name.toLowerCase().includes(q) ||
+      r.model_arch.toLowerCase().includes(q) ||
+      r.run_id.toLowerCase().includes(q);
+    const matches = entries.filter(({ run: r, children }) => {
       if (taskFilter !== "all" && taskFamily(r.task) !== taskFilter) return false;
       if (subtypeFilter !== "all" && r.task !== subtypeFilter) return false;
       if (statusFilter !== "all" && r.status !== statusFilter) return false;
       if (blockFilter !== "all" && (r.block ?? "classification") !== blockFilter)
         return false;
       if (q === "") return true;
-      return (
-        r.experiment_name.toLowerCase().includes(q) ||
-        r.model_arch.toLowerCase().includes(q) ||
-        r.run_id.toLowerCase().includes(q)
-      );
+      return named(r) || children.some(named);
     });
     const sorted = [...matches];
     if (sortBy === "oldest") {
-      sorted.sort((a, b) => a.started_at.localeCompare(b.started_at));
+      sorted.sort((a, b) => a.run.started_at.localeCompare(b.run.started_at));
     } else if (sortBy === "epochs") {
-      sorted.sort((a, b) => b.epochs_completed - a.epochs_completed);
+      sorted.sort((a, b) => b.run.epochs_completed - a.run.epochs_completed);
     } else {
-      sorted.sort((a, b) => b.started_at.localeCompare(a.started_at));
+      sorted.sort((a, b) => b.run.started_at.localeCompare(a.run.started_at));
     }
     return sorted;
   })();
 
-  const taskCounts = runs.reduce<Record<string, number>>((acc, r) => {
+  const taskCounts = entries.reduce<Record<string, number>>((acc, { run: r }) => {
     const f = taskFamily(r.task);
     acc[f] = (acc[f] ?? 0) + 1;
     return acc;
   }, {});
+  const knownRunIds = new Set(runs.map((r) => r.run_id));
   // Built-in families in the GUI's own order, then the researcher's custom
   // tasks alphabetically after them.
   const presentFamilies = new Set(Object.keys(taskCounts));
@@ -784,10 +942,11 @@ export function HistoryOverlay({
 
   // Status and block options are derived from the runs of the *active tab*, so
   // a tab never offers a filter that would empty its own list.
+  const listedRuns = entries.map((e) => e.run);
   const tabRuns =
     taskFilter === "all"
-      ? runs
-      : runs.filter((r) => taskFamily(r.task) === taskFilter);
+      ? listedRuns
+      : listedRuns.filter((r) => taskFamily(r.task) === taskFilter);
   const availableStatuses = Array.from(new Set(tabRuns.map((r) => r.status))).sort();
   const availableBlocks = Array.from(
     new Set(tabRuns.map((r) => r.block ?? "classification")),
@@ -887,7 +1046,7 @@ export function HistoryOverlay({
                     verticalAlign: "middle",
                   }}
                 >
-                  {runs.length}
+                  {entries.length}
                 </span>
               )}
             </div>
@@ -1007,7 +1166,7 @@ export function HistoryOverlay({
                 setBlockFilter("all");
                 setSubtypeFilter("all");
               }}
-              total={runs.length}
+              total={entries.length}
             />
           )}
 
@@ -1133,7 +1292,17 @@ export function HistoryOverlay({
           {selectedRunId && !compareActiveIds && (
             <RunDetailPanel
               runId={selectedRunId}
-              onBack={() => setSelectedRunId(null)}
+              onBack={() => {
+                setSelectedRunId(backTo);
+                setBackTo(null);
+              }}
+              onOpenRun={(id) => {
+                // Remember where this was opened from, so Back returns to the
+                // group (or to the seed) rather than dropping to the list.
+                setBackTo(selectedRunId);
+                setSelectedRunId(id);
+              }}
+              knownRunIds={knownRunIds}
             />
           )}
 
@@ -1222,7 +1391,7 @@ export function HistoryOverlay({
                     letterSpacing: "0.08em",
                   }}
                 >
-                  {filteredRuns.length} / {runs.length}
+                  {filteredEntries.length} / {entries.length}
                 </span>
               )}
             </div>
@@ -1286,7 +1455,7 @@ export function HistoryOverlay({
           {/* Run list */}
           {!selectedRunId && !compareActiveIds && !loading && error === null && runs.length > 0 && (
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {filteredRuns.length === 0 ? (
+              {filteredEntries.length === 0 ? (
                 <div
                   style={{
                     padding: 24,
@@ -1301,19 +1470,28 @@ export function HistoryOverlay({
                   {t.history.noMatch}
                 </div>
               ) : (
-                filteredRuns.map((run) => (
-                  <RunCard
-                    key={run.run_id}
-                    run={run}
-                    onClick={() => setSelectedRunId(run.run_id)}
-                    selectable={selectMode}
-                    selected={selection.includes(run.run_id)}
-                    onToggleSelect={() => toggleSelect(run.run_id)}
-                    onDelete={() => {
-                      setDeleteError(null);
-                      setPendingDeletes([run]);
-                    }}
-                    deleting={deletingIds.includes(run.run_id)}
+                filteredEntries.map((entry) => (
+                  <GroupedRun
+                    key={entry.run.run_id}
+                    entry={entry}
+                    expandAll={query.trim() !== ""}
+                    renderCard={(run) => (
+                      <RunCard
+                        run={run}
+                        onClick={() => {
+                          setBackTo(null);
+                          setSelectedRunId(run.run_id);
+                        }}
+                        selectable={selectMode}
+                        selected={selection.includes(run.run_id)}
+                        onToggleSelect={() => toggleSelect(run.run_id)}
+                        onDelete={() => {
+                          setDeleteError(null);
+                          setPendingDeletes([run]);
+                        }}
+                        deleting={deletingIds.includes(run.run_id)}
+                      />
+                    )}
                   />
                 ))
               )}
@@ -1409,6 +1587,19 @@ export function HistoryOverlay({
             >
               {t.history.confirm.body(pendingDeletes.length)}
             </div>
+            {/* A group's folder holds only its summary; its seeds are runs of their own. */}
+            {pendingDeletes.some(isGroupRun) && (
+              <div
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 11,
+                  color: "oklch(0.86 0.12 85)",
+                  lineHeight: 1.6,
+                }}
+              >
+                {t.runGroup.deleteNote}
+              </div>
+            )}
             {deleteError && (
               <div
                 style={{

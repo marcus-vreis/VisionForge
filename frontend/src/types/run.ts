@@ -101,6 +101,131 @@ export interface RunSummary {
   /** How many epochs it was configured to run, so the button can say how many
    *  are missing. */
   configured_epochs?: number | null;
+  /** Set on a run that is one seed of a replicate group: the group's run id
+   *  (ADR-113). History folds it under the group. */
+  group_id?: string | null;
+  /** Set on the group itself, which History lists as one run (ADR-113). */
+  group?: RunGroupBrief | null;
+}
+
+/** How a replicate job is told apart: a set of seeds of one config, or one
+ *  set of seeds per variant with paired tests between them. */
+export type GroupKind = "replicates" | "replicated_comparison";
+
+/** Distribution of one metric over a group's seeds, as the report recorded it
+ *  (`aggregate_replicates`). Copied by the server, never recomputed here. */
+export interface MetricAggregate {
+  /** Seeds that ran to the end and reported the metric. */
+  n: number;
+  mean: number | null;
+  /** Sample standard deviation (divides by n−1, `std_ddof`); null below two seeds. */
+  std: number | null;
+  std_ddof?: number;
+  min: number | null;
+  max: number | null;
+  /** Student-t 95% interval of the mean; null below two seeds. */
+  ci95_low: number | null;
+  ci95_high: number | null;
+  boot95_low?: number | null;
+  boot95_high?: number | null;
+}
+
+/** The list view of a group (backend `RunGroupBrief`). */
+export interface RunGroupBrief {
+  kind: GroupKind;
+  metric: string | null;
+  /** The seeds asked for. */
+  seeds: number[];
+  /** Trainings asked for and trainings that ran to the end. */
+  n_requested: number;
+  n_finished: number;
+  stopped: boolean;
+  /** Run ids of the seeds' own runs that exist on disk. */
+  child_ids: string[];
+  /** Replicates: the aggregate behind each number of `final_metrics`, same key. */
+  final_aggregates: Record<string, MetricAggregate>;
+  /** Replicated comparison: the variants and the one with the best mean. */
+  variants: string[];
+  best_by_mean: string | null;
+}
+
+/** One seed of a group. `run_id` is null for a seed that never got a run. */
+export interface GroupChild {
+  seed: number;
+  variant: string | null;
+  /** `success`, `failed` or `stopped` (see lib/unit-status). */
+  status: string;
+  run_id: string | null;
+  run_dir: string | null;
+  metrics: Record<string, number | null>;
+  error: string;
+}
+
+/** One paired test between two variants (backend `PairedComparison`). */
+export interface PairedTest {
+  label_a: string;
+  label_b: string;
+  metric: string;
+  n_pairs: number;
+  mean_a: number | null;
+  mean_b: number | null;
+  /** a − b */
+  mean_difference: number | null;
+  test: "paired_t" | "wilcoxon";
+  test_reason: string;
+  /** Raw p, before the Holm correction `significant` already carries. */
+  p_value: number | null;
+  /** Paired Cohen's d. */
+  effect_size: number | null;
+  effect_label: string;
+  /** Smallest p this test could return with this many pairs. */
+  min_achievable_p: number;
+  /** True when that floor is above alpha: no result could be significant. */
+  underpowered: boolean;
+  /** After the Holm correction over the whole family of tests. */
+  significant: boolean;
+}
+
+export interface GroupVariant {
+  overrides: Record<string, unknown>;
+  aggregates: Record<string, MetricAggregate>;
+  successful: number | null;
+  seeds_finished: number[];
+  children: GroupChild[];
+}
+
+/** The `group` section of a group's run.json, as the run detail serves it. */
+export interface RunGroup {
+  kind: GroupKind;
+  metric: string | null;
+  seeds: number[];
+  n_requested: number;
+  n_finished: number;
+  stopped: boolean;
+  /** The divisor every `std` in the group used: 1 is the sample std (n-1). */
+  std_ddof: number;
+  report_path: string | null;
+  report_dir: string | null;
+  // Replicate set.
+  seeds_finished?: number[];
+  children?: GroupChild[];
+  aggregates?: Record<string, MetricAggregate>;
+  /** run.json `metrics` key -> the aggregate that filled it. */
+  metric_keys?: Record<string, string>;
+  // Replicated comparison.
+  metric_direction?: "higher" | "lower" | null;
+  alpha?: number | null;
+  variants?: Record<string, GroupVariant>;
+  comparisons?: PairedTest[];
+  best_by_mean?: string | null;
+  ranked_by_mean?: string[];
+  /** The seeds every ranked variant finished; empty when nothing can be ranked. */
+  ranking_seeds?: number[];
+  significant_pairs?: number | null;
+  skipped_variants?: string[];
+  /** Variants a stop kept from starting. */
+  not_run?: string[];
+  underpowered?: boolean;
 }
 
 /** The dataset a run trained on, as far as its run.json can prove it.

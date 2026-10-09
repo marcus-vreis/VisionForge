@@ -3646,11 +3646,37 @@ def _parse_run_summary(run_dir: Path, data: dict[str, Any]) -> RunSummary:
         resumable=resumable,
         configured_epochs=configured_epochs,
         group_id=data.get("group_id"),
-        group=_group_brief(group) if group else None,
+        group=_group_brief(group, task, final_metrics) if group else None,
     )
 
 
-def _group_brief(group: dict[str, Any]) -> RunGroupBrief:
+def _group_final_aggregates(
+    task: str, group: dict[str, Any], final_metrics: dict[str, float]
+) -> dict[str, Any]:
+    """The aggregate behind each number of ``final_metrics``, under the same label.
+
+    A card prints a group's mean next to the interval it came with. The report
+    keys its aggregates by the metric's own name; the history projection keys
+    them by label, through the run.json key the mean was stored under
+    (``group.metric_keys``), so the correspondence is read, not inferred.
+    """
+    aggregates: dict[str, Any] = group.get("aggregates") or {}
+    metric_keys: dict[str, str] = group.get("metric_keys") or {}
+    if task.startswith("custom:"):
+        sources = {label: label for label in final_metrics}
+    else:
+        sources = _SUMMARY_METRIC_KEYS.get(task, _SUMMARY_METRIC_KEYS["classification"])
+    out: dict[str, Any] = {}
+    for label, src in sources.items():
+        name = metric_keys.get(src)
+        if label in final_metrics and name in aggregates:
+            out[label] = aggregates[name]
+    return out
+
+
+def _group_brief(
+    group: dict[str, Any], task: str, final_metrics: dict[str, float]
+) -> RunGroupBrief:
     """The list view of a group's ``run.json`` section."""
     kind = group["kind"]
     variants: dict[str, Any] = group.get("variants") or {}
@@ -3666,7 +3692,11 @@ def _group_brief(group: dict[str, Any]) -> RunGroupBrief:
         n_finished=int(group.get("n_finished") or 0),
         stopped=bool(group.get("stopped")),
         child_ids=[c["run_id"] for c in children if c.get("run_id")],
-        aggregates=(group.get("aggregates") or {}) if kind == "replicates" else {},
+        final_aggregates=(
+            _group_final_aggregates(task, group, final_metrics)
+            if kind == "replicates"
+            else {}
+        ),
         variants=list(variants),
         best_by_mean=group.get("best_by_mean"),
     )

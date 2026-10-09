@@ -947,6 +947,127 @@ export const pt = {
       submit: (n: number) => `🗑 Excluir${n > 1 ? ` ${n}` : ""}`,
     },
   },
+  // A replicate set or a replicated comparison, listed in History as one run with
+  // its seeds under it (components/RunGroupDetail.tsx, lib/run-groups.ts, ADR-113).
+  // Every number is the report's: the interface prints it, it does not compute it.
+  runGroup: {
+    kind: {
+      replicates: "Réplicas",
+      replicated_comparison: "Comparação replicada",
+    },
+    // The History card.
+    card: {
+      seeds: (finished: number, requested: number) => `${finished}/${requested} seeds`,
+      trainings: (finished: number, requested: number) =>
+        `${finished}/${requested} treinos`,
+      variants: (n: number) => `${n} ${n === 1 ? "variante" : "variantes"}`,
+      best: (label: string) => `melhor média: ${label}`,
+      noBest: "sem melhor média",
+      stopped: "parado",
+      stoppedTitle: "Parado a pedido: a agregação usa só o que terminou.",
+      showRuns: (n: number) => `▸ ${n} ${n === 1 ? "run do grupo" : "runs do grupo"}`,
+      hideRuns: (n: number) => `▾ ${n} ${n === 1 ? "run do grupo" : "runs do grupo"}`,
+      meanTitle: (n: number, low: string | null, high: string | null) =>
+        low !== null && high !== null
+          ? `média de ${n} seeds · IC 95%: [${low}, ${high}]`
+          : `média de ${n} ${n === 1 ? "seed" : "seeds"} · sem IC (uma seed só)`,
+      deleteTitle: "Excluir este grupo (as seeds continuam no histórico)",
+    },
+    // Appended to the confirmation of a delete that includes a group.
+    deleteNote:
+      "Excluir um grupo apaga só o resumo dele: os runs das seeds continuam no histórico, como runs comuns.",
+    // A seed's own detail: where it came from.
+    member: {
+      title: "Parte de um grupo",
+      body: (id: string) => `Esta seed pertence ao grupo ${id}.`,
+      open: "abrir o grupo",
+    },
+    detail: {
+      eyebrow: {
+        replicates: "// conjunto de réplicas",
+        replicated_comparison: "// comparação replicada",
+      },
+      metric: "métrica",
+      seedsAsked: "seeds pedidas",
+      trainingsDone: "treinos concluídos",
+      alpha: "alfa",
+      direction: {
+        higher: "maior é melhor",
+        lower: "menor é melhor",
+      },
+      report: "relatório",
+      stopped:
+        "Parado a pedido: a agregação usa só os treinos que terminaram; o que foi cortado fica de fora.",
+      // The per-metric table of a replicate set.
+      aggregateTitle: "Agregado por métrica",
+      cols: {
+        metric: "métrica",
+        n: "n",
+        meanCi: "média ± IC 95%",
+        interval: "IC 95%",
+        std: "desvio",
+        range: "min – max",
+        seed: "seed",
+        status: "status",
+        run: "run",
+        variant: "variante",
+        overrides: "overrides",
+        seeds: "seeds",
+        pair: "par",
+        pairs: "pares",
+        diff: "Δ média (a−b)",
+        test: "teste",
+        p: "p (bruto)",
+        holm: "significativo após Holm",
+        effect: "efeito (d)",
+      },
+      noInterval: "—",
+      fewSeeds: (n: number) =>
+        `Com ${n} ${n === 1 ? "seed" : "seeds"} o IC 95% é largo e frágil: abaixo de 5 seeds ele não mede precisão.`,
+      // The seeds and the runs they became.
+      seedsTitle: "Seeds",
+      open: "abrir",
+      removed: "removido do histórico",
+      noRun: "sem run",
+      status: {
+        ok: "concluída",
+        stopped: "parada · fora da agregação",
+        failed: "falhou",
+      },
+      // The variants of a comparison.
+      variantsTitle: "Variantes",
+      bestByMean: "melhor média",
+      bestNote:
+        "Descreve as médias nas seeds em comum; quem diz se a diferença passa da variação de seed são os testes pareados abaixo.",
+      noBest: {
+        stopped: "a parada deixou variantes sem rodar",
+        "too-few-seeds": "menos de 2 seeds concluídas em comum entre as variantes",
+      },
+      rankingSeeds: (seeds: string) => `ranking nas seeds ${seeds}`,
+      notRun: (labels: string) => `Não rodaram (parada): ${labels}`,
+      skipped: (labels: string) => `Sem seeds suficientes para testar: ${labels}`,
+      // The paired tests.
+      testsTitle: "Testes pareados",
+      noTests: "Nenhum par de variantes pôde ser testado.",
+      yes: "sim",
+      no: "não",
+      tests: {
+        paired_t: "t pareado",
+        wilcoxon: "Wilcoxon",
+      },
+      effects: {
+        negligible: "desprezível",
+        small: "pequeno",
+        medium: "médio",
+        large: "grande",
+      },
+      underpowered: "poucas seeds",
+      underpoweredTitle: (pairs: number, floor: string) =>
+        `Com ${pairs} pares o menor p possível é ${floor}, acima de alfa: nenhum resultado, por mais consistente, poderia ser significativo.`,
+      testsNote:
+        "O p é o valor bruto do teste. A coluna \"significativo após Holm\" já está corrigida para o conjunto de comparações; é ela que vale.",
+    },
+  },
   // What the segmentation, regression and anomaly forms (components/
   // SegmentationPanel.tsx, RegressionPanel.tsx, AnomalyPanel.tsx) have in common:
   // the training block, the transfer-learning block and the dataset basics. Model
@@ -1767,6 +1888,19 @@ export const pt = {
     seedNote: {
       "single-seed":
         "Cada run tem uma seed só: a diferença entre elas pode ser variação de seed. Para afirmar uma diferença, rode réplicas com várias seeds.",
+      // When some of the compared runs are replicate groups, whose cells carry their own interval.
+      "single-seed-mixed":
+        "Os runs que não são médias de réplicas têm uma seed só: a diferença entre eles pode ser variação de seed. Para afirmar uma diferença, rode réplicas com várias seeds.",
+    },
+    // A replicate group in the comparison: its cell is a mean over seeds, with the interval the report gave.
+    group: {
+      tag: (n: number) => `média de ${n} ${n === 1 ? "seed" : "seeds"}`,
+      cellTitle: (n: number, low: string | null, high: string | null) =>
+        low !== null && high !== null
+          ? `média de ${n} seeds · IC 95%: [${low}, ${high}]`
+          : `média de ${n} ${n === 1 ? "seed" : "seeds"} · sem IC (uma seed só)`,
+      noCell:
+        "Uma comparação replicada não tem um valor só para esta linha: abra o grupo para ver cada variante e os testes pareados.",
     },
     // Shown instead of the comparison when the selected runs are of different tasks.
     mixedTasks: {

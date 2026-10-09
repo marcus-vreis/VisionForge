@@ -28,11 +28,19 @@ import { canOfferReveal, revealErrorText } from "../lib/reveal-folder";
 import { stdDdof } from "../lib/cv-std";
 import { STOPPED_COLOR, unitState } from "../lib/unit-status";
 import type { MetricCI } from "../types/run";
+import { accentForTask } from "../lib/task-accent";
 import { Lightbox } from "./Lightbox";
+import { RunGroupDetail } from "./RunGroupDetail";
 
 interface RunDetailPanelProps {
   runId: string;
   onBack: () => void;
+  /** Open another run from here: a seed of a group, or the group of a seed
+   *  (ADR-113). Absent where the panel has nowhere to navigate. */
+  onOpenRun?: (runId: string) => void;
+  /** The run ids History lists, so a seed deleted since its group was written
+   *  is named instead of linked. */
+  knownRunIds?: ReadonlySet<string>;
 }
 
 /** Metric names read the same in every language; only the words around them are translated. */
@@ -93,7 +101,7 @@ function getConfigRecord(
   return value as Record<string, unknown>;
 }
 
-export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
+export function RunDetailPanel({ runId, onBack, onOpenRun, knownRunIds }: RunDetailPanelProps) {
   const { t, locale } = useI18n();
   const graphLabels: Record<string, string> = t.plots.labels;
   const [detail, setDetail] = useState<RunDetail | null>(null);
@@ -485,26 +493,29 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
               : ""}
           </button>
         )}
-        <button
-          type="button"
-          onClick={() => void downloadRunMarkdown(runId)}
-          title={t.modelCard.title}
-          style={{
-            marginLeft: detail?.resumable ? 0 : "auto",
-            padding: "6px 12px",
-            background: "var(--accent-soft)",
-            border: "1px solid var(--accent-vf)",
-            borderRadius: 8,
-            color: "var(--vf-text)",
-            fontFamily: "var(--font-mono)",
-            fontSize: 11,
-            letterSpacing: "0.10em",
-            textTransform: "uppercase",
-            cursor: "pointer",
-          }}
-        >
-          {t.modelCard.button}
-        </button>
+        {/* A model card describes a trained model; a group has none. */}
+        {!detail?.group && (
+          <button
+            type="button"
+            onClick={() => void downloadRunMarkdown(runId)}
+            title={t.modelCard.title}
+            style={{
+              marginLeft: detail?.resumable ? 0 : "auto",
+              padding: "6px 12px",
+              background: "var(--accent-soft)",
+              border: "1px solid var(--accent-vf)",
+              borderRadius: 8,
+              color: "var(--vf-text)",
+              fontFamily: "var(--font-mono)",
+              fontSize: 11,
+              letterSpacing: "0.10em",
+              textTransform: "uppercase",
+              cursor: "pointer",
+            }}
+          >
+            {t.modelCard.button}
+          </button>
+        )}
       </div>
 
       {resumeMsg && (
@@ -553,6 +564,59 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
 
       {detail && (
         <>
+          {/* A replicate group is a job, not a training: its numbers are the
+              report's (mean ± CI95, paired tests) and its seeds are runs of
+              their own (ADR-113). */}
+          {detail.group && (
+            <RunGroupDetail
+              group={detail.group}
+              accent={accentForTask(task)}
+              knownRunIds={knownRunIds}
+              onOpenRun={onOpenRun}
+            />
+          )}
+
+          {detail.group_id && onOpenRun && (
+            <Section title={t.runGroup.member.title}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 12,
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 11,
+                  color: "var(--vf-text-dim)",
+                }}
+              >
+                <span style={{ wordBreak: "break-all" }}>
+                  {t.runGroup.member.body(detail.group_id)}
+                </span>
+                {(!knownRunIds || knownRunIds.has(detail.group_id)) && (
+                  <button
+                    type="button"
+                    onClick={() => onOpenRun(detail.group_id ?? "")}
+                    style={{
+                      padding: "6px 12px",
+                      background: "rgba(255,255,255,0.04)",
+                      border: `1px solid ${accentForTask(task)}`,
+                      borderRadius: 8,
+                      color: "var(--vf-text)",
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 11,
+                      letterSpacing: "0.10em",
+                      textTransform: "uppercase",
+                      cursor: "pointer",
+                      flexShrink: 0,
+                    }}
+                  >
+                    {t.runGroup.member.open}
+                  </button>
+                )}
+              </div>
+            </Section>
+          )}
+
           {detail.dataset && (
             <Section title={t.runDetail.dataset.title}>
               <KeyRow label={t.runDetail.dataset.name} value={detail.dataset.name} />
@@ -1135,9 +1199,14 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
 
           <CrossValidationDetail metrics={detail.metrics} />
 
-          <Section title={t.runDetail.metrics.title}>
-            <MetricsGrid metrics={detail.metrics} metricCis={detail.metric_cis} />
-          </Section>
+          {/* A group's `metrics` are bookkeeping for the History list (the sum of
+              its seeds' epochs and the means); the group section above is where
+              they are shown, with their intervals. */}
+          {!detail.group && (
+            <Section title={t.runDetail.metrics.title}>
+              <MetricsGrid metrics={detail.metrics} metricCis={detail.metric_cis} />
+            </Section>
+          )}
 
           {detail.artifacts.graphics && detail.artifacts.graphics.length > 0 && (
             <Section title={t.runDetail.graphs.title}>
@@ -1202,6 +1271,8 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
             </Section>
           )}
 
+          {/* Testing needs a checkpoint, which a group does not have. */}
+          {!detail.group && (
           <Section
             title={t.runDetail.tests.title}
             action={
@@ -1353,6 +1424,7 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
               </div>
             )}
           </Section>
+          )}
         </>
       )}
 
