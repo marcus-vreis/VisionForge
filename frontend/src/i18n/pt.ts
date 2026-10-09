@@ -803,6 +803,9 @@ export const pt = {
       overrides: "overrides",
     },
     // A trial's or fold's outcome cell.
+    // Appended to a header that counts against the units planned: the ones a stop
+    // kept from ever starting.
+    notRun: (n: number): string => ` · ${n} ${n === 1 ? "não rodou" : "não rodaram"}`,
     outcome: {
       ok: "ok",
       failed: (error: string) => `falhou · ${error}`,

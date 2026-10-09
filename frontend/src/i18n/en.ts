@@ -751,6 +751,7 @@ export const en: Dict = {
       seed: "seed",
       overrides: "overrides",
     },
+    notRun: (n: number): string => ` · ${n} not run`,
     outcome: {
       ok: "ok",
       failed: (error: string) => `failed · ${error}`,

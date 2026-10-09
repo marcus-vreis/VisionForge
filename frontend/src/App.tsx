@@ -550,6 +550,9 @@ export default function App() {
           <ResultsView
             result={result}
             taskAccent={activeTask.accent}
+            // Only a stopped run lists fewer units than it planned; for any other
+            // the report's own count is the one to trust.
+            submittedUnits={result.stopped === true ? (queueSize ?? null) : null}
             onClose={() => {
               setResultsVisible(false);
               reset();

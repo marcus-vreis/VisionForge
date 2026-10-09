@@ -3,6 +3,7 @@ import { artifactUrl, downloadRunMarkdown } from "../api/client";
 import { useT } from "../i18n/useT";
 import { metricCi } from "../lib/metric-ci";
 import { isCrossValidationReport } from "../lib/report-shape";
+import { plannedUnits, unitPlan } from "../lib/unit-plan";
 import { STOPPED_COLOR, countUnits, unitState } from "../lib/unit-status";
 import type { MetricCI, RunResult } from "../types/run";
 import { Lightbox } from "./Lightbox";
@@ -12,6 +13,10 @@ interface ResultsViewProps {
   result: RunResult;
   onClose: () => void;
   taskAccent: string;
+  /** How many folds / models / trials / replicates the run was submitted with.
+   *  A stopped job lists only the units that ran, and its header counts against
+   *  this when the report does not say how many were planned. */
+  submittedUnits?: number | null;
 }
 
 /** Format metric values for display. */
@@ -115,7 +120,12 @@ function MetricCard({ label, value, accent, highlight, ci }: MetricCardProps) {
 }
 
 /** Results sheet that slides up over the param panel. */
-export function ResultsView({ result, onClose, taskAccent }: ResultsViewProps) {
+export function ResultsView({
+  result,
+  onClose,
+  taskAccent,
+  submittedUnits = null,
+}: ResultsViewProps) {
   const t = useT();
   const metricLabels: Record<string, string> = t.resultsView.metricLabels;
   const plotLabels: Record<string, string> = t.plots.labels;
@@ -317,19 +327,47 @@ export function ResultsView({ result, onClose, taskAccent }: ResultsViewProps) {
       {/* Report summary — branches between CV/comparison/grid (structured) and generic JSON */}
       {result.report && Object.keys(result.report).length > 0 && (
         isCrossValidationReport(result.report) ? (
-          <CrossValidationReport report={result.report} accent={taskAccent} />
+          <CrossValidationReport
+            report={result.report}
+            accent={taskAccent}
+            submitted={submittedUnits}
+          />
         ) : isTaskCvReport(result.report) ? (
-          <TaskCvReport report={result.report} accent={taskAccent} />
+          <TaskCvReport
+            report={result.report}
+            accent={taskAccent}
+            submitted={submittedUnits}
+          />
         ) : isReplicatesReport(result.report) ? (
-          <ReplicatesReport report={result.report} accent={taskAccent} />
+          <ReplicatesReport
+            report={result.report}
+            accent={taskAccent}
+            submitted={submittedUnits}
+          />
         ) : isTaskComparisonReport(result.report) ? (
-          <TaskComparisonReport report={result.report} accent={taskAccent} />
+          <TaskComparisonReport
+            report={result.report}
+            accent={taskAccent}
+            submitted={submittedUnits}
+          />
         ) : isTaskSweepReport(result.report) ? (
-          <TaskSweepReport report={result.report} accent={taskAccent} />
+          <TaskSweepReport
+            report={result.report}
+            accent={taskAccent}
+            submitted={submittedUnits}
+          />
         ) : isModelComparisonReport(result.report) ? (
-          <ModelComparisonReport report={result.report} accent={taskAccent} />
+          <ModelComparisonReport
+            report={result.report}
+            accent={taskAccent}
+            submitted={submittedUnits}
+          />
         ) : isGridSearchReport(result.report) ? (
-          <GridSearchReport report={result.report} accent={taskAccent} />
+          <GridSearchReport
+            report={result.report}
+            accent={taskAccent}
+            submitted={submittedUnits}
+          />
         ) : (
           <div style={{ marginTop: 22 }}>
             <div
@@ -386,9 +424,11 @@ interface FoldRecord {
 function CrossValidationReport({
   report,
   accent,
+  submitted = null,
 }: {
   report: Record<string, unknown>;
   accent: string;
+  submitted?: number | null;
 }) {
   const t = useT();
   const folds = (report["fold_results"] as FoldRecord[]) ?? [];
@@ -398,6 +438,9 @@ function CrossValidationReport({
   const meanF1 = report["mean_f1"] as number | null;
   const stdF1 = report["std_f1"] as number | null;
 
+  // Against the folds planned, not only those that ran: a K-fold stopped in its
+  // first fold lists one.
+  const plan = unitPlan(folds.length, plannedUnits(report, submitted));
   const successful = folds.filter((f) => unitState(f.status) === "ok");
   const failed = countUnits(folds, "failed");
   const stopped = countUnits(folds, "stopped");
@@ -413,7 +456,8 @@ function CrossValidationReport({
           color: "var(--vf-text-muted)",
         }}
       >
-        {t.resultsView.cv.title(successful.length, folds.length, failed, stopped)}
+        {t.resultsView.cv.title(successful.length, plan.total, failed, stopped)}
+        {plan.notRun > 0 && t.resultsView.notRun(plan.notRun)}
       </div>
 
       {/* Headline: mean ± std for accuracy and F1 */}
@@ -589,9 +633,11 @@ function isTaskCvReport(report: Record<string, unknown>): boolean {
 function TaskCvReport({
   report,
   accent,
+  submitted = null,
 }: {
   report: Record<string, unknown>;
   accent: string;
+  submitted?: number | null;
 }) {
   const t = useT();
   const folds = (report["fold_results"] as TaskCvFoldRow[]) ?? [];
@@ -604,6 +650,7 @@ function TaskCvReport({
   const nFolds = report["n_folds"] as number;
   const ok = report["successful_folds"] as number;
   const stoppedFolds = countUnits(folds, "stopped");
+  const foldPlan = unitPlan(folds.length, plannedUnits(report, submitted ?? nFolds));
   const headline = aggregate[metric];
   const metricKeys = Object.keys(aggregate);
 
@@ -618,7 +665,8 @@ function TaskCvReport({
           color: "var(--vf-text-muted)",
         }}
       >
-        {t.resultsView.taskCv.title(ok, nFolds, metric, stoppedFolds)}
+        {t.resultsView.taskCv.title(ok, foldPlan.total, metric, stoppedFolds)}
+        {foldPlan.notRun > 0 && t.resultsView.notRun(foldPlan.notRun)}
       </div>
 
       {headline && (
@@ -745,9 +793,11 @@ function isReplicatesReport(report: Record<string, unknown>): boolean {
 function ReplicatesReport({
   report,
   accent,
+  submitted = null,
 }: {
   report: Record<string, unknown>;
   accent: string;
+  submitted?: number | null;
 }) {
   const t = useT();
   const trials = (report["trials"] as ReplicateTrialRow[]) ?? [];
@@ -758,6 +808,7 @@ function ReplicatesReport({
   const total = report["total_replicates"] as number;
   const ok = report["successful_replicates"] as number;
   const stoppedReplicates = countUnits(trials, "stopped");
+  const plan = unitPlan(total, plannedUnits(report, submitted));
 
   const ciHalf =
     headline && headline.ci95_high !== null && headline.ci95_low !== null
@@ -775,7 +826,8 @@ function ReplicatesReport({
           color: "var(--vf-text-muted)",
         }}
       >
-        {t.resultsView.replicates.title(ok, total, metric, stoppedReplicates)}
+        {t.resultsView.replicates.title(ok, plan.total, metric, stoppedReplicates)}
+        {plan.notRun > 0 && t.resultsView.notRun(plan.notRun)}
       </div>
 
       {headline && (
@@ -942,9 +994,11 @@ function isTaskComparisonReport(report: Record<string, unknown>): boolean {
 function TaskComparisonReport({
   report,
   accent,
+  submitted = null,
 }: {
   report: Record<string, unknown>;
   accent: string;
+  submitted?: number | null;
 }) {
   const t = useT();
   const trials = (report["trials"] as TaskComparisonTrial[]) ?? [];
@@ -952,6 +1006,7 @@ function TaskComparisonReport({
   const totalRan = report["total_ran"] as number;
   const failedCount = countUnits(trials, "failed");
   const stoppedCount = countUnits(trials, "stopped");
+  const plan = unitPlan(totalRan, plannedUnits(report, submitted));
 
   const successful = trials.filter((trial) => unitState(trial.status) === "ok");
   const otherKeys = Array.from(
@@ -972,11 +1027,12 @@ function TaskComparisonReport({
       >
         {t.resultsView.comparison.title(
           successful.length,
-          totalRan,
+          plan.total,
           failedCount,
           stoppedCount,
           metric,
         )}
+        {plan.notRun > 0 && t.resultsView.notRun(plan.notRun)}
       </div>
 
       <div
@@ -1105,9 +1161,11 @@ function OverrideChips({ overrides }: { overrides: Record<string, unknown> }) {
 function TaskSweepReport({
   report,
   accent,
+  submitted = null,
 }: {
   report: Record<string, unknown>;
   accent: string;
+  submitted?: number | null;
 }) {
   const t = useT();
   const trials = (report["trials"] as TaskSweepTrial[]) ?? [];
@@ -1116,6 +1174,7 @@ function TaskSweepReport({
   const total = report["total_trials"] as number;
   const successful = report["successful_trials"] as number;
   const stoppedTrials = countUnits(trials, "stopped");
+  const plan = unitPlan(total, plannedUnits(report, submitted));
   const best = report["best_trial"] as TaskSweepTrial | null;
 
   return (
@@ -1129,7 +1188,8 @@ function TaskSweepReport({
           color: "var(--vf-text-muted)",
         }}
       >
-        {t.resultsView.sweep.title(mode, successful, total, stoppedTrials, metric)}
+        {t.resultsView.sweep.title(mode, successful, plan.total, stoppedTrials, metric)}
+        {plan.notRun > 0 && t.resultsView.notRun(plan.notRun)}
       </div>
 
       {best && (
@@ -1259,9 +1319,11 @@ function isModelComparisonReport(report: Record<string, unknown>): boolean {
 function ModelComparisonReport({
   report,
   accent,
+  submitted = null,
 }: {
   report: Record<string, unknown>;
   accent: string;
+  submitted?: number | null;
 }) {
   const t = useT();
   const top3 = (report["top_3"] as ModelComparisonTrial[]) ?? [];
@@ -1270,6 +1332,7 @@ function ModelComparisonReport({
   // Absent from a report written before a stop could cut a model (ADR-111).
   const stoppedCount =
     typeof report["stopped_count"] === "number" ? report["stopped_count"] : 0;
+  const plan = unitPlan(totalRan, plannedUnits(report, submitted));
 
   return (
     <div style={{ marginTop: 22, display: "flex", flexDirection: "column", gap: 18 }}>
@@ -1284,10 +1347,11 @@ function ModelComparisonReport({
       >
         {t.resultsView.modelComparison.title(
           totalRan - failedCount - stoppedCount,
-          totalRan,
+          plan.total,
           failedCount,
           stoppedCount,
         )}
+        {plan.notRun > 0 && t.resultsView.notRun(plan.notRun)}
       </div>
 
       <div
@@ -1433,9 +1497,11 @@ function isGridSearchReport(report: Record<string, unknown>): boolean {
 function GridSearchReport({
   report,
   accent,
+  submitted = null,
 }: {
   report: Record<string, unknown>;
   accent: string;
+  submitted?: number | null;
 }) {
   const t = useT();
   // Null when a stop landed before any trial finished (ADR-111).
@@ -1443,6 +1509,7 @@ function GridSearchReport({
   const hasBest = report["best_trial"] !== null && report["best_trial"] !== undefined;
   const total = report["total_trials"] as number;
   const successful = report["successful_trials"] as number;
+  const plan = unitPlan(total, plannedUnits(report, submitted));
 
   // Fields written by GridSearchBlock alongside the hyperparameter overrides.
   // Everything else in best_trial is treated as an override and rendered as
@@ -1487,9 +1554,10 @@ function GridSearchReport({
       >
         {t.resultsView.gridSearch.title(
           successful,
-          total,
+          plan.total,
           hasBest ? String(best["trial_index"] ?? "?") : "—",
         )}
+        {plan.notRun > 0 && t.resultsView.notRun(plan.notRun)}
       </div>
 
       {hasBest && (

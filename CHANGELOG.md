@@ -94,7 +94,10 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
   dobra concluída (sem desvio) ou com nenhuma (sem média) abre a mesma tela de
   resultados, com "—" e o `n`, em vez do JSON cru, e o detalhe do run deixa de
   mostrar "± 0.0000" para um desvio que não existe; o grid/random search parado
-  sem nenhum trial concluído mostra "—" no lugar do melhor trial. O detalhe diz
+  sem nenhum trial concluído mostra "—" no lugar do melhor trial. O título da
+  tela de resultados de uma execução parada conta as unidades planejadas ("0/5
+  folds ok · 1 interrompido · 4 não rodaram"), não só as que rodaram, e bate com
+  a linha do log. O detalhe diz
   se o desvio divide por n−1 (runs novos) ou por n (runs antigos), que não se
   comparam.
 - **Parar funciona em validação cruzada, comparação, réplicas, varreduras e
