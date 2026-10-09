@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Literal, Protocol, runtime_checkable
 
 from visionforge.core.cancellation import CancellationToken
+from visionforge.core.significance import infer_direction
 
 
 @dataclass
@@ -64,4 +66,49 @@ def runner_cancel_token(runner: object) -> CancellationToken | None:
     return token if isinstance(token, CancellationToken) else None
 
 
-__all__ = ["RunResult", "TaskRunner", "give_cancel_token", "runner_cancel_token"]
+def runner_metric_direction(runner: object, metric: str) -> Literal["higher", "lower"]:
+    """Whether ``metric`` is better high or low for this runner's task.
+
+    A task that declares its metrics (``@register_task(metrics=...)``, carried
+    as ``metric_directions``) is believed; otherwise the name decides, by the
+    same ``infer_direction`` rule the replicated comparison uses.
+    """
+    declared = getattr(runner, "metric_directions", None)
+    if isinstance(declared, dict):
+        direction = declared.get(metric)
+        if direction == "higher":
+            return "higher"
+        if direction == "lower":
+            return "lower"
+    return infer_direction(metric)
+
+
+def rank_by_metric[T](
+    items: list[T],
+    value: Callable[[T], float | None],
+    direction: str,
+) -> list[T]:
+    """Best first by ``value``; items without a value go last, in their order.
+
+    Sorting descending with a 0.0 stand-in for a missing value used to put the
+    worst trial first for a lower-is-better metric, and a trial that reported
+    nothing above every negative R².
+    """
+
+    def key(item: T) -> tuple[int, float]:
+        number = value(item)
+        if number is None:
+            return (1, 0.0)
+        return (0, -number if direction == "higher" else number)
+
+    return sorted(items, key=key)
+
+
+__all__ = [
+    "RunResult",
+    "TaskRunner",
+    "give_cancel_token",
+    "rank_by_metric",
+    "runner_cancel_token",
+    "runner_metric_direction",
+]

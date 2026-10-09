@@ -20,12 +20,18 @@ import math
 import random
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal
 
 from loguru import logger
 
 from visionforge.core.cancellation import STOPPED, STOPPED_NOTE, is_cancelled
-from visionforge.core.task_runner import RunResult, TaskRunner, runner_cancel_token
+from visionforge.core.task_runner import (
+    RunResult,
+    TaskRunner,
+    rank_by_metric,
+    runner_cancel_token,
+    runner_metric_direction,
+)
 
 try:  # torch is the heavy hardware extra; the cache flush is best-effort.
     import torch
@@ -192,12 +198,13 @@ def _optuna_trials(
     n_trials: int,
     seed: int,
     progress_callback: Callable[[dict[str, Any]], None] | None = None,
+    direction: str = "higher",
 ) -> list[SweepTrial]:
     """Run an Optuna TPE study over the search space, collecting every trial.
 
-    Direction is ``maximize`` (the ranking metrics — accuracy/r2/mAP/mIoU/AUROC —
-    are higher-is-better, matching the descending sort the other modes use). Failed
-    trials are recorded and pruned so the study keeps going.
+    The study maximizes a higher-is-better metric and minimizes a lower-is-better
+    one, the same direction the trials are ranked in. Failed trials are recorded
+    and pruned so the study keeps going.
 
     Raises:
         ImportError: if the optional ``optuna`` dependency is not installed.
@@ -237,7 +244,8 @@ def _optuna_trials(
         return value
 
     study = optuna.create_study(
-        direction="maximize", sampler=optuna.samplers.TPESampler(seed=seed)
+        direction="maximize" if direction == "higher" else "minimize",
+        sampler=optuna.samplers.TPESampler(seed=seed),
     )
     study.optimize(objective, n_trials=n_trials)
     return trials
@@ -253,6 +261,7 @@ def run_sweep(
     n_trials: int = 10,
     seed: int = 0,
     progress_callback: Callable[[dict[str, Any]], None] | None = None,
+    direction: Literal["higher", "lower"] | None = None,
 ) -> list[SweepTrial]:
     """Run a grid, random or Optuna sweep and return trials ranked by ``metric``.
 
@@ -267,6 +276,7 @@ def run_sweep(
         ValueError: if ``mode`` is not 'grid', 'random' or 'optuna'.
         ImportError: for mode 'optuna' when the optuna extra is not installed.
     """
+    resolved = direction or runner_metric_direction(runner, metric)
     if mode in ("grid", "random"):
         points = (
             _grid_points(search_space)
@@ -301,6 +311,7 @@ def run_sweep(
             n_trials,
             seed,
             progress_callback=progress_callback,
+            direction=resolved,
         )
     else:
         raise ValueError(
@@ -309,8 +320,8 @@ def run_sweep(
 
     successful = [t for t in trials if t.status == "success"]
     failed = [t for t in trials if t.status != "success"]
-    successful.sort(key=lambda t: t.metrics.get(metric) or 0.0, reverse=True)
-    return successful + failed
+    ranked = rank_by_metric(successful, lambda t: t.metrics.get(metric), resolved)
+    return ranked + failed
 
 
 def planned_trials(search_space: dict[str, Any], *, mode: str, n_trials: int) -> int:

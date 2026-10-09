@@ -79,7 +79,11 @@ from visionforge.core.sweep import (
     run_sweep,
     validate_sweep_space,
 )
-from visionforge.core.task_runner import TaskRunner, give_cancel_token
+from visionforge.core.task_runner import (
+    TaskRunner,
+    give_cancel_token,
+    runner_metric_direction,
+)
 from visionforge.gui.api.dataset_download import credentials_in_play, download_dataset
 from visionforge.gui.api.detection_export import export_detection_run
 from visionforge.gui.api.detection_testing import evaluate_detection_run
@@ -3952,7 +3956,9 @@ async def _execute_comparison(
         stopped = job_was_stopped([t.status for t in trials], len(model_names), token)
         if not any(t.status == "success" for t in trials) and not stopped:
             raise RuntimeError("All architectures failed — no ranking available.")
-        report = _comparison_report(trials, metric)
+        report = _comparison_report(
+            trials, metric, runner_metric_direction(runner, metric)
+        )
         report["stopped"] = stopped
         report["report_dir"] = _write_advanced_summary(
             config_dict, "comparison", report
@@ -3979,12 +3985,16 @@ async def _execute_comparison(
             await queue.put(None)
 
 
-def _comparison_report(trials: list[ComparisonTrial], metric: str) -> dict[str, Any]:
+def _comparison_report(
+    trials: list[ComparisonTrial], metric: str, direction: str = "higher"
+) -> dict[str, Any]:
     """Shape ranked comparison trials into a GUI-friendly report dict."""
     rows = [asdict(t) for t in trials]
     successful = [t for t in rows if t["status"] == "success"]
     return {
         "metric": metric,
+        # Which way the trials were ranked; "top" means lowest for "lower".
+        "metric_direction": direction,
         "trials": rows,
         "top_3": successful[:3],
         "total_ran": len(rows),
@@ -4067,7 +4077,9 @@ async def _execute_sweep(
             raise RuntimeError("All sweep trials failed — no ranking available.")
         if finished:
             _require_reported_metric(metric, [t.metrics for t in trials], "sweep")
-        report = _sweep_report(trials, req.mode, metric)
+        report = _sweep_report(
+            trials, req.mode, metric, runner_metric_direction(runner, metric)
+        )
         report["stopped"] = stopped
         # total_trials counts the trials that ran; the table and the GUI need
         # to say of how many (ADR-111).
@@ -4121,13 +4133,17 @@ def _require_reported_metric(
     )
 
 
-def _sweep_report(trials: list[SweepTrial], mode: str, metric: str) -> dict[str, Any]:
+def _sweep_report(
+    trials: list[SweepTrial], mode: str, metric: str, direction: str = "higher"
+) -> dict[str, Any]:
     """Shape ranked sweep trials into a GUI-friendly report dict."""
     rows = [asdict(t) for t in trials]
     successful = [t for t in rows if t["status"] == "success"]
     return {
         "mode": mode,
         "metric": metric,
+        # Which way the trials were ranked; best_trial is the lowest for "lower".
+        "metric_direction": direction,
         "trials": rows,
         "best_trial": successful[0] if successful else None,
         "total_trials": len(rows),

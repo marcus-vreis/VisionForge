@@ -799,7 +799,10 @@ class TestRunnersHandTheTokenToTheirBlock:
                 return SimpleNamespace(metrics={"mae": 1.0}, stopped=True)
 
         info = SimpleNamespace(
-            key="toy", spec_cls=SimpleNamespace(Config=dict), primary_metric="mae"
+            key="toy",
+            spec_cls=SimpleNamespace(Config=dict),
+            metrics={"mae": "lower"},
+            primary_metric="mae",
         )
         runner = runner_mod.CustomTaskRunner(info)  # type: ignore[arg-type]
         token = CancellationToken()

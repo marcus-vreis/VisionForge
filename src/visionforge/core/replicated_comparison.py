@@ -30,7 +30,11 @@ from visionforge.core.replicates import (
     run_replicates,
 )
 from visionforge.core.significance import comparison_matrix, infer_direction
-from visionforge.core.task_runner import TaskRunner, runner_cancel_token
+from visionforge.core.task_runner import (
+    TaskRunner,
+    runner_cancel_token,
+    runner_metric_direction,
+)
 
 
 @dataclass
@@ -174,6 +178,8 @@ def run_replicated_comparison(
             break
 
     ran = {r.label for r in results}
+    # The task's declared direction, where it has one, over the name heuristic.
+    direction = direction or runner_metric_direction(runner, metric)
     return build_report(
         results,
         seeds,

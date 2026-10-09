@@ -10,12 +10,18 @@ from __future__ import annotations
 
 import gc
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal
 
 from loguru import logger
 
 from visionforge.core.cancellation import STOPPED, STOPPED_NOTE, is_cancelled
-from visionforge.core.task_runner import RunResult, TaskRunner, runner_cancel_token
+from visionforge.core.task_runner import (
+    RunResult,
+    TaskRunner,
+    rank_by_metric,
+    runner_cancel_token,
+    runner_metric_direction,
+)
 
 try:  # torch is the heavy hardware extra; the cache flush is best-effort.
     import torch
@@ -39,6 +45,7 @@ def run_model_comparison(
     base_config_dict: dict[str, Any],
     model_names: list[str],
     metric: str,
+    direction: Literal["higher", "lower"] | None = None,
 ) -> list[ComparisonTrial]:
     """Train each architecture via ``runner`` and return trials ranked by ``metric``.
 
@@ -98,8 +105,9 @@ def run_model_comparison(
 
     successful = [t for t in trials if t.status == "success"]
     failed = [t for t in trials if t.status != "success"]
-    successful.sort(key=lambda t: t.metrics.get(metric) or 0.0, reverse=True)
-    return successful + failed
+    resolved = direction or runner_metric_direction(runner, metric)
+    ranked = rank_by_metric(successful, lambda t: t.metrics.get(metric), resolved)
+    return ranked + failed
 
 
 __all__ = ["ComparisonTrial", "run_model_comparison"]

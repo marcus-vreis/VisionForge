@@ -50,6 +50,16 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Fixed
 
+- **Varredura e comparação de modelos punham a pior tentativa em primeiro
+  lugar quando a métrica é "quanto menor, melhor".** A ordenação era sempre
+  decrescente: escolhendo `rmse`, `mae` ou `loss`, ou numa tarefa própria que
+  declara a métrica como "lower", a melhor tentativa da tela, a posição 1 do CSV
+  de ranking, a primeira linha da tabela LaTeX e a busca do Optuna apontavam
+  para a pior. Agora a direção vem da declaração da tarefa, quando existe, e
+  senão do nome da métrica (a mesma regra da comparação com réplicas), e os
+  relatórios dizem qual foi (`metric_direction`). Uma tentativa sem a métrica
+  vai para o fim, em vez de contar como 0
+  ([ADR-044](docs/dev/DECISIONS.md)).
 - **A validação cruzada de classificação pela interface falhava em todas as
   dobras com os workers no automático.** A interface manda `num_workers: -1`
   (automático), e a validação cruzada montava os próprios carregadores com esse
@@ -145,8 +155,11 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
   tentativas de quantas planejadas rodaram, e o desvio aparece como
   "SD ($n-1$)", o amostral. O CSV de ranking das outras tarefas, como o da
   classificação, traz só as unidades que terminaram (com posição, na comparação
-  e na varredura), e o cartão do modelo em Markdown diz quando o run foi parado
-  e até onde chegou ([ADR-111](docs/dev/DECISIONS.md)).
+  e na varredura): ficam de fora as paradas e também as que falharam de
+  verdade, então uma execução sem parada que teve falhas exporta menos linhas
+  que antes; o resumo JSON continua listando todas, com o estado de cada uma. O
+  cartão do modelo em Markdown diz quando o run foi parado e até onde chegou
+  ([ADR-111](docs/dev/DECISIONS.md)).
 - **Parar antes da primeira época não quebra mais o run.** Um treino parado
   enquanto ainda carregava os dados terminava com erro, porque o bloco tentava
   carregar um checkpoint que nunca foi gravado; em segmentação e nas tarefas

@@ -34,6 +34,9 @@ class CustomTaskRunner:
             raise ValueError(f"Task '{info.key}' has no spec class registered.")
         self._info = info
         self.config_type = info.spec_cls.Config
+        # Read by the orchestrators to rank trials the way the task declared
+        # (`runner_metric_direction`): "score" may well be lower-is-better.
+        self.metric_directions = dict(info.metrics)
 
     def run(self, cfg: Any) -> RunResult:
         """Run a single training trial and return a uniform RunResult."""

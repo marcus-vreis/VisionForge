@@ -16,6 +16,8 @@ from visionforge.core.cancellation import (
     is_cancelled,
     job_was_stopped,
 )
+from visionforge.core.significance import infer_direction
+from visionforge.core.task_runner import rank_by_metric
 from visionforge.utils.config import ExperimentConfig
 
 
@@ -116,13 +118,15 @@ class ModelComparisonBlock(ExperimentBlock):
                 )
                 break
 
-        # Sort successful trials by the chosen metric descending; failures go last.
+        # Best first by the chosen metric, in its direction; failures go last.
         metric = mc.metric
         successful = [t for t in unsorted if t["status"] == "success"]
         failed = [t for t in unsorted if t["status"] != "success"]
-        successful.sort(key=lambda t: t[metric] or 0.0, reverse=True)
+        ranked = rank_by_metric(
+            successful, lambda t: t[metric], infer_direction(metric)
+        )
 
-        self._trials = successful + failed
+        self._trials = ranked + failed
         self._write_artifacts()
 
     def report(self) -> dict[str, Any]:

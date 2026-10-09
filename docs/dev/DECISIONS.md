@@ -621,6 +621,15 @@ give the standalone tasks comparison without folding them into `ExperimentConfig
 (which ADR-033 forbids) — task-specific metric names stay in each adapter, the
 shared orchestration is written once. `r2`/`miou` are the natural ranking
 defaults (higher-is-better, like accuracy) so the descending sort is uniform.
+
+**Correction (2026-10-09):** uniform only while every ranking metric was
+higher-is-better. The API lets the researcher rank by `rmse`, `mae` or `loss`,
+and a custom task may declare its metric "lower"; the descending sort then
+named the worst model best, and the sweep (ADR-045) did the same. Rankings now
+take the direction from the task's declaration, else from `infer_direction`,
+the rule ADR-061 introduced for the replicated comparison
+(`runner_metric_direction`, `rank_by_metric`), and the reports carry
+`metric_direction`. A unit without the metric ranks last instead of as 0.
 Backend-first per the Phase-5 norm; the GUI surface and the generic sweep/
 batch-predict are the next ADR-041 slices.
 
@@ -840,7 +849,9 @@ each trial is suggested adaptively from prior results (`suggest_float` /
 `_execute_trial` helper as the other modes, and recorded as a `SweepTrial`. The
 study direction is `maximize` (the ranking metrics are higher-is-better, matching
 the existing descending sort); failed trials are recorded then `TrialPruned` so the
-study continues. Optuna is a new optional extra (`[optuna]`), imported lazily.
+study continues. *(Corrected 2026-10-09: the study now minimizes a
+lower-is-better metric, the same direction the trials are ranked in; see the
+correction under ADR-044.)* Optuna is a new optional extra (`[optuna]`), imported lazily.
 Exposed through the existing sweep API/GUI by adding `"optuna"` to `SweepRequest.mode`
 and the `SweepCard` strategy selector (the random-style editor + `n_trials` apply
 unchanged). Pruning of in-progress trials is deferred (would need per-epoch
