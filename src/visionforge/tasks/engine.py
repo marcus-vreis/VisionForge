@@ -233,7 +233,13 @@ class GenericTaskEngine:
                     torch.save(model.state_dict(), model_path)
                 else:
                     patience += 1
-                    if patience >= cfg.training.early_stopping_patience:
+                    # 0 disables early stopping, as in the built-in trainers;
+                    # unguarded, `1 >= 0` ends the run at the first epoch
+                    # without improvement.
+                    if (
+                        cfg.training.early_stopping_patience > 0
+                        and patience >= cfg.training.early_stopping_patience
+                    ):
                         logger.info("Early stopping at epoch {}.", epoch)
                         break
 

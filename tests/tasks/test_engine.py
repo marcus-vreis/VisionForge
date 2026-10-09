@@ -126,6 +126,35 @@ class TestGenericTaskEngineLevel1:
         assert result.total_epochs == 3  # 1 best + 2 patience
         assert result.best_epoch == 1
 
+    def test_zero_patience_disables_early_stopping(self, tmp_path: Path) -> None:
+        @register_task(
+            key="stuck0",
+            label="Stuck",
+            accent="#112233",
+            metrics={"score": "higher"},
+            primary_metric="score",
+        )
+        class StuckTask(TaskSpec):
+            def build_model(self, cfg: Any) -> nn.Module:
+                return nn.Linear(3, 1)
+
+            def build_loaders(self, cfg: Any):
+                return _make_batches(1), _make_batches(1), None
+
+            def compute_loss(self, model: nn.Module, batch: Any, cfg: Any):
+                inputs, targets = batch
+                return nn.functional.mse_loss(model(inputs), targets)
+
+            def compute_metrics(self, model: nn.Module, loader: Any, cfg: Any):
+                return {"score": 0.5}  # never improves after epoch 1
+
+        # patience 0 is the default and means "off", as in the built-in trainers
+        cfg = _config(tmp_path, epochs=5)
+        assert cfg.training.early_stopping_patience == 0
+        result = GenericTaskEngine(get_task("stuck0"), cfg).run()
+        assert result.total_epochs == 5
+        assert result.best_epoch == 1
+
     def test_missing_primary_metric_fails_loudly(self, tmp_path: Path) -> None:
         @register_task(
             key="badmetrics",

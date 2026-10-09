@@ -50,6 +50,12 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Fixed
 
+- **O treino de uma tarefa própria parava na primeira época sem melhora.** Com
+  a paciência no padrão (0), o motor das tarefas próprias comparava `1 >= 0` e
+  encerrava a execução assim que uma época não superava a melhor, em vez de
+  rodar todas as épocas configuradas. Agora 0 desliga a parada antecipada, como
+  nos treinadores embutidos, e uma paciência N continua parando depois de N
+  épocas seguidas sem melhora.
 - **Varredura e comparação de modelos punham a pior tentativa em primeiro
   lugar quando a métrica é "quanto menor, melhor".** A ordenação era sempre
   decrescente: escolhendo `rmse`, `mae` ou `loss`, ou numa tarefa própria que
