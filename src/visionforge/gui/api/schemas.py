@@ -297,6 +297,11 @@ class RunDetail(BaseModel):
     # See RunSummary: derived from the resume file on disk (ADR-092/093).
     resumable: bool = False
     configured_epochs: int | None = None
+    # Whether the page may offer "open folder": the request came from the machine
+    # the server runs on, which is the only place the file manager's window
+    # would appear in front of whoever clicked. Computed per request, never
+    # stored in run.json.
+    can_reveal: bool = False
 
 
 class RunTestRequest(BaseModel):

@@ -15,6 +15,18 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Added
 
+- **O Histórico abre a pasta de um run no explorador de arquivos.** Achar a
+  pasta de um run exigia copiar o caminho e colá-lo à mão no explorador. Os
+  detalhes do run, na seção "Localização no disco", ganharam o botão "Abrir
+  pasta" ao lado de "copiar" (que continua lá, e agora está em português). O
+  servidor abre a janela na área de trabalho da máquina em que ele roda, então
+  o botão só aparece quando o navegador está nessa mesma máquina
+  (`can_reveal` nos detalhes do run); com `visionforge gui --host` aberto para
+  a rede, ou dentro do Docker, quem acessa de fora continua vendo o caminho e o
+  "copiar", e o pedido direto à API é recusado (403). A pasta é sempre a do run
+  localizado no servidor — o pedido (`POST /api/runs/{id}/reveal`) não leva
+  caminho nenhum, então não dá para apontá-lo para outro lugar. No Linux, o
+  botão depende do `xdg-open` instalado.
 - **Dá para parar a execução em andamento pela tela de treino.** Um treino sem
   nada na fila só podia ser parado matando o servidor: o botão de parar existia
   apenas na linha do treino em execução da fila, e o botão da fila só aparecia

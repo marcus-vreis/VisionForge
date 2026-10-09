@@ -866,6 +866,10 @@ export interface RunDetail {
   /** See RunSummary: the run stopped short and can be continued (ADR-092/093). */
   resumable?: boolean;
   configured_epochs?: number | null;
+  /** The request came from the machine the server runs on, so the file
+   *  manager's window opens in front of the person who clicked. Absent on an
+   *  older server, which reads as "do not offer the button". */
+  can_reveal?: boolean;
 }
 
 export interface TestRecord {
@@ -888,6 +892,15 @@ export async function resumeRun(runId: string): Promise<RunResponse> {
   return request<RunResponse>(`/runs/${encodeURIComponent(runId)}/resume`, {
     method: "POST",
   });
+}
+
+/** Open the run's folder in the file manager of the machine running the server.
+ *  The folder is found from the run id alone; the backend answers 403 to a
+ *  client that is not that machine and 404 to an unknown run. */
+export async function revealRunFolder(
+  runId: string,
+): Promise<{ run_id: string; run_dir: string }> {
+  return request(`/runs/${encodeURIComponent(runId)}/reveal`, { method: "POST" });
 }
 
 /** Permanently delete a run directory. The backend refuses to delete the

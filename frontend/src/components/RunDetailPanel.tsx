@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import {
   ApiError,
   artifactUrl,
@@ -7,6 +7,7 @@ import {
   exportRunToOnnx,
   fetchRunDetail,
   resumeRun,
+  revealRunFolder,
   gradcamRun,
   pickDatasetFolder,
   testRunOnDataset,
@@ -23,6 +24,7 @@ import { formatBytes, shortDigest } from "../lib/dataset-identity";
 import { metricCi } from "../lib/metric-ci";
 import { pickerCancelText } from "../lib/picker-feedback";
 import { PREPROCESS_KIND_LABELS } from "../lib/preprocess-kinds";
+import { canOfferReveal, revealErrorText } from "../lib/reveal-folder";
 import { stdDdof } from "../lib/cv-std";
 import { STOPPED_COLOR, unitState } from "../lib/unit-status";
 import type { MetricCI } from "../types/run";
@@ -138,6 +140,13 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
     { kind: "info" | "error" | "success"; text: string } | null
   >(null);
 
+  // Open-folder state — the server opens the file manager on its own desktop,
+  // so the button only exists when the server said that desktop is the user's.
+  const [revealing, setRevealing] = useState(false);
+  const [revealMsg, setRevealMsg] = useState<
+    { kind: "info" | "error" | "success"; text: string } | null
+  >(null);
+
   // Grad-CAM state — independent single-shot explainability action.
   const [showGradcamForm, setShowGradcamForm] = useState(false);
   const [gradcamForm, setGradcamForm] = useState({ input_dir: "", num_samples: 8 });
@@ -208,6 +217,25 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
       });
     } finally {
       setResuming(false);
+    }
+  };
+
+  const doReveal = async () => {
+    setRevealing(true);
+    setRevealMsg(null);
+    try {
+      await revealRunFolder(runId);
+      setRevealMsg({ kind: "success", text: t.runDetail.reveal.opened });
+    } catch (e) {
+      setRevealMsg({
+        kind: "error",
+        text: revealErrorText(
+          e instanceof ApiError ? e.status : 0,
+          t.runDetail.reveal,
+        ),
+      });
+    } finally {
+      setRevealing(false);
     }
   };
 
@@ -555,7 +583,39 @@ export function RunDetailPanel({ runId, onBack }: RunDetailPanelProps) {
           )}
 
           <Section title={t.runDetail.location.title}>
-            <PathRow label={t.runDetail.location.runFolder} value={detail.run_dir} />
+            <PathRow
+              label={t.runDetail.location.runFolder}
+              value={detail.run_dir}
+              action={
+                canOfferReveal(detail) ? (
+                  <button
+                    type="button"
+                    onClick={() => void doReveal()}
+                    disabled={revealing}
+                    title={t.runDetail.reveal.title}
+                    style={{ ...PATH_ROW_BUTTON_STYLE, opacity: revealing ? 0.6 : 1 }}
+                  >
+                    {t.runDetail.reveal.button}
+                  </button>
+                ) : null
+              }
+            />
+            {revealMsg && (
+              <div
+                role={revealMsg.kind === "error" ? "alert" : "status"}
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 11,
+                  padding: "4px 0",
+                  color:
+                    revealMsg.kind === "error"
+                      ? "oklch(0.80 0.17 22)"
+                      : "var(--vf-text-dim)",
+                }}
+              >
+                {revealMsg.text}
+              </div>
+            )}
             {detail.artifacts.model && (
               <PathRow label={t.runDetail.location.checkpoint} value={detail.artifacts.model} />
             )}
@@ -1589,7 +1649,27 @@ function Section({ title, children, action }: SectionProps) {
   );
 }
 
-function PathRow({ label, value }: { label: string; value: string }) {
+const PATH_ROW_BUTTON_STYLE: CSSProperties = {
+  padding: "4px 8px",
+  background: "rgba(255,255,255,0.04)",
+  border: "1px solid var(--vf-panel-stroke)",
+  borderRadius: 6,
+  color: "var(--vf-text-dim)",
+  fontFamily: "var(--font-mono)",
+  fontSize: 10,
+  cursor: "pointer",
+};
+
+function PathRow({
+  label,
+  value,
+  action,
+}: {
+  label: string;
+  value: string;
+  /** Extra button beside "copy", e.g. open the folder. */
+  action?: ReactNode;
+}) {
   const t = useT();
   return (
     <div
@@ -1629,19 +1709,11 @@ function PathRow({ label, value }: { label: string; value: string }) {
         type="button"
         onClick={() => void navigator.clipboard.writeText(value)}
         title={t.runDetail.copyPath}
-        style={{
-          padding: "4px 8px",
-          background: "rgba(255,255,255,0.04)",
-          border: "1px solid var(--vf-panel-stroke)",
-          borderRadius: 6,
-          color: "var(--vf-text-dim)",
-          fontFamily: "var(--font-mono)",
-          fontSize: 10,
-          cursor: "pointer",
-        }}
+        style={PATH_ROW_BUTTON_STYLE}
       >
         {t.runDetail.copy}
       </button>
+      {action}
     </div>
   );
 }

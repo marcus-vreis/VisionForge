@@ -17,7 +17,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from loguru import logger
@@ -87,6 +87,12 @@ from visionforge.core.task_runner import (
 from visionforge.gui.api.dataset_download import credentials_in_play, download_dataset
 from visionforge.gui.api.detection_export import export_detection_run
 from visionforge.gui.api.detection_testing import evaluate_detection_run
+from visionforge.gui.api.folder_opener import (
+    FolderOpenError,
+    can_reveal,
+    is_loopback_host,
+    open_folder,
+)
 from visionforge.gui.api.model_notes import collapse_note
 from visionforge.gui.api.run_queue import (
     NotStoppableError,
@@ -458,7 +464,7 @@ async def list_runs() -> list[RunSummary]:
 
 
 @router.get("/runs/{run_id}")
-async def get_run_detail(run_id: str) -> RunDetail:
+async def get_run_detail(run_id: str, request: Request) -> RunDetail:
     """Return the full run.json for a specific run_id."""
     run_dir = _find_run_dir(run_id)
     if run_dir is None:
@@ -508,7 +514,37 @@ async def get_run_detail(run_id: str) -> RunDetail:
         dataset=dataset,
         resumable=resumable,
         configured_epochs=configured_epochs,
+        can_reveal=can_reveal(_client_host(request)),
     )
+
+
+def _client_host(request: Request) -> str | None:
+    """The address the request came from, None when the transport has none."""
+    return request.client.host if request.client else None
+
+
+@router.post("/runs/{run_id}/reveal")
+async def reveal_run_folder(run_id: str, request: Request) -> dict[str, str]:
+    """Open a run's folder in the file manager of the machine running the server.
+
+    The folder is found by ``_find_run_dir`` alone: the request carries no path,
+    so it cannot point the file manager anywhere else. And the window opens on
+    the *server's* desktop, which is the clicker's only when both are the same
+    machine, so a client that is not loopback is refused (403) -- the page hides
+    the button for it too (``can_reveal`` on the run detail).
+    """
+    if not is_loopback_host(_client_host(request)):
+        raise HTTPException(
+            403, "The folder can only be opened from the machine running the server."
+        )
+    run_dir = _find_run_dir(run_id)
+    if run_dir is None:
+        raise HTTPException(404, f"Run '{run_id}' not found.")
+    try:
+        open_folder(run_dir)
+    except FolderOpenError as exc:
+        raise HTTPException(500, f"Failed to open the folder: {exc}") from exc
+    return {"run_id": run_dir.name, "run_dir": str(run_dir.resolve())}
 
 
 @router.post("/runs/{run_id}/resume")

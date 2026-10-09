@@ -452,8 +452,18 @@ export const pt = {
     loading: "carregando…",
     loadFailed: "Falha ao carregar detalhes.",
     browse: "📁 Escolher",
-    copy: "copy",
+    copy: "copiar",
     copyPath: "Copiar caminho",
+    // Open the run's folder in the file manager of the machine the server runs on.
+    reveal: {
+      button: "Abrir pasta",
+      title: "Abrir a pasta do run no explorador de arquivos",
+      opened: "Pasta aberta no explorador de arquivos.",
+      forbidden:
+        "A pasta só abre a partir da máquina que roda o servidor. Copie o caminho.",
+      notFound: "Este run não existe mais no disco.",
+      failed: "Falha ao abrir a pasta. Copie o caminho.",
+    },
     imageFolder: "Pasta de imagens",
     resume: {
       button: "▶ retomar",

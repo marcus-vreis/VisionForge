@@ -424,6 +424,15 @@ export const en: Dict = {
     browse: "📁 Browse",
     copy: "copy",
     copyPath: "Copy path",
+    reveal: {
+      button: "Open folder",
+      title: "Open the run's folder in the file manager",
+      opened: "Folder opened in the file manager.",
+      forbidden:
+        "The folder only opens from the machine running the server. Copy the path.",
+      notFound: "This run no longer exists on disk.",
+      failed: "Failed to open the folder. Copy the path.",
+    },
     imageFolder: "Image folder",
     resume: {
       button: "▶ resume",
