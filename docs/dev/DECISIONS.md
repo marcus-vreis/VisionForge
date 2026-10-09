@@ -4224,9 +4224,87 @@ no statistics either way, and the report would hand it less than the intent
 assumed: the paired result is a raw `p_value` and the Holm-corrected
 `significant` flag, with no adjusted p.
 
+*Resolved by ADR-113: the group now exists as a History entry.*
+
 **Consequences:** a comparison of runs from one replicate set (`<name>_s42`
 against `<name>_s43`) carries the same note, which is true of each of them even
 if the advice to run replicates has already been taken; the note does not try to
 recognise a replicate by its name. The curves and the config diff are unchanged,
 and the curves still plot classification's validation accuracy and loss, so a
 detection or anomaly comparison has no chart yet.
+
+---
+
+## ADR-113 — Replicate groups are History runs
+
+**Date:** 2026-10-09
+**Status:** Accepted
+**Complements:** ADR-056 (multi-seed replicates), ADR-061 (paired tests with
+Holm), ADR-111 (the run-level `stopped` marker), ADR-112 (resolves its "Not
+done")
+
+**Context:** A replicate set and a replicated comparison are one job made of
+several trainings. Each seed is an ordinary run named `<name>_s<seed>`, and the
+job's own result (mean, 95% interval, the paired tests) was written only to
+`outputs/reports/<name>/<timestamp>/{replicates,comparison}_summary.json`.
+History scans the models directory, so it showed N loose runs and nothing about
+what they add up to: the number a paper would quote was not in the interface,
+and the History comparison could only ever tabulate single seeds (ADR-112). The
+classification K-fold had already solved the same shape by writing a top-level
+`{base}_cv/run.json`.
+
+**Decision:** a replicate job writes a `run.json` of its own, in the models
+directory, and History lists it as one run.
+
+- **Where and what.** `<models_dir>/<name>_replicates/<run_id>/run.json` for a
+  replicate set and `<name>_comparison/<run_id>/run.json` for a replicated
+  comparison, `run_id` being the job's id (`<name>_<timestamp>`). The sub-folder
+  per group means a second run with the same name does not overwrite the first,
+  which would orphan its seeds. The top-level keys are the ones every run
+  carries and `_parse_run_summary` already reads (`id`, `experiment`, `status`,
+  `stopped`, `timestamp`, `config`, `metrics.total_epochs`, `block`), plus
+  `task`, `task_label`, `device_used`, `environment` and `dataset_fingerprint`
+  taken from a child, since a researcher-defined task stamps its identity there
+  and the group's own config cannot. `block` is `replicates` or
+  `replicated_comparison`. `status` is `completed` and `stopped` says the job
+  was cut, as for a K-fold (ADR-111).
+- **A `group` section** holds what only a group has: `kind`, `metric`, `seeds`
+  (requested), `n_requested` and `n_finished` trainings, `children` (per seed:
+  `seed`, `variant`, `status`, `run_id`, `run_dir`, `metrics`, `error`), the
+  per-metric `aggregates` (`n`, `mean`, `std`, `std_ddof: 1`, `ci95_low/high`,
+  min/max and the bootstrap interval) and, for a comparison, per-variant
+  aggregates, the Holm-corrected `comparisons` (`p_value`, `significant`,
+  `effect_size`, `effect_label`, the bootstrap interval of the difference,
+  `underpowered`), `ranking_seeds`, `ranked_by_mean`, `best_by_mean` (null when
+  no ranking is possible), `not_run`, `skipped_variants` and `report_path`.
+- **Nothing is recomputed.** Every statistic is copied from the report the job
+  already built; a second computation could drift from the report a paper's
+  table is made from. The only transformation is that a non-finite number
+  becomes `null`, since a bare `NaN` is not JSON and no browser parses it. The
+  one thing added at the source is `std_ddof: 1` in `aggregate_replicates`, so
+  the convention of the `std` is stated where it is computed.
+- **Children are tagged, not moved.** Each seed's own `run.json` gets an
+  additive `group_id` (the group's `run_id`) when the group is written. A seed
+  stays an ordinary run, openable and testable on its own; `ReplicateTrial`
+  gained `run_dir` so the group knows where each one is. A seed that never got
+  a directory (a failed one) is listed in `children` with `run_id: null`.
+- **The API adds fields, removes none.** `RunSummary` gets `group_id` and a
+  slim `group` (kind, metric, seeds, counts, `child_ids`, the aggregates of a
+  replicate set, the variants and `best_by_mean` of a comparison); `RunDetail`
+  gets `group_id` and the full `group` section. A replicate set's `metrics`
+  carry the mean of each metric under the key a single run of the task writes
+  (`test_r2`, `test_miou`, ...; the bare `map50` for detection; the declared
+  name for a researcher's task), so the history projection and the comparison
+  table find it in the row where it belongs, and `group.metric_keys` says which
+  aggregate filled which key. A comparison has no single headline number, so
+  its `final_metrics` are empty rather than the mean of whichever variant won.
+  A group is never resumable: it trained nothing itself.
+
+**Consequences:** the group is written once, when the job ends, so a server
+killed mid-job leaves its seeds as loose runs, as before; a failure to write it
+is logged and does not fail a job whose training and report are already on disk.
+Runs written before this ADR have no group and no `group_id`; they stay loose
+and nothing infers a group from their names. `n_requested` counts trainings (a
+comparison of 3 variants over 5 seeds asks for 15), including those a stop kept
+from starting. The report files under `outputs/reports` are unchanged, and the
+`.tex` table and CSV remain the paper-ready form.

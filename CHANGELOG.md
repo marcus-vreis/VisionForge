@@ -15,6 +15,20 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Added
 
+- **Conjuntos de réplicas e comparações replicadas viram uma execução do
+  Histórico.** Antes, rodar N seeds deixava N execuções soltas no Histórico e a
+  média, o IC95 e os testes pareados só existiam num relatório em
+  `outputs/reports`. Agora o trabalho grava um `run.json` próprio na pasta de
+  modelos, no mesmo molde do da validação cruzada, com uma seção `group`: as
+  seeds pedidas e as concluídas, os runs de cada seed, a agregação por métrica
+  (média, IC95, n, desvio com `std_ddof: 1`) e, na comparação, as variantes, os
+  testes pareados (`p_value`, `significant` após Holm, tamanho de efeito),
+  `ranking_seeds`, `not_run` e `best_by_mean`. Os números são copiados do
+  relatório que o trabalho já montou, nada é recalculado; o que o JSON não
+  carrega (NaN) vira `null`. Cada seed ganha um `group_id` no seu próprio
+  `run.json` e continua sendo um run comum. `GET /api/runs` e
+  `GET /api/runs/{id}` ganham `group_id` e `group` (campos novos, nenhum
+  removido); um trabalho parado grava `stopped` ([ADR-113](docs/dev/DECISIONS.md)).
 - **A comparação do Histórico não declara vencedor com uma seed.** Cada run do
   Histórico é um treino com uma seed só, e a variação entre seeds costuma ser
   maior que a diferença entre duas configurações; marcar o maior número de uma

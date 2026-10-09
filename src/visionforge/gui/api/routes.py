@@ -73,6 +73,7 @@ from visionforge.core.replicates import (
     run_replicates,
 )
 from visionforge.core.resume import can_resume
+from visionforge.core.run_groups import write_run_group
 from visionforge.core.sweep import (
     SweepTrial,
     planned_trials,
@@ -150,6 +151,7 @@ from visionforge.gui.api.schemas import (
     ReplicatedComparisonRequest,
     ReplicatesRequest,
     RunDetail,
+    RunGroupBrief,
     RunResponse,
     RunResult,
     RunStatus,
@@ -514,6 +516,8 @@ async def get_run_detail(run_id: str, request: Request) -> RunDetail:
         dataset=dataset,
         resumable=resumable,
         configured_epochs=configured_epochs,
+        group_id=data.get("group_id"),
+        group=data.get("group") if isinstance(data.get("group"), dict) else None,
         task=_run_task(data),
         can_reveal=can_reveal(_client_host(request)),
     )
@@ -3028,6 +3032,10 @@ def _resume_status(run_dir: Path, data: dict[str, Any]) -> tuple[bool, int | Non
     epochs = (config.get("training") or {}).get("epochs")
     if not isinstance(epochs, int):
         return False, None
+    # A replicate group trained nothing itself: its seeds are the runs one
+    # continues, one at a time (ADR-113).
+    if data.get("group"):
+        return False, epochs
 
     task = _run_task(data)
     if task == "classification":
@@ -3588,6 +3596,9 @@ def _parse_run_summary(run_dir: Path, data: dict[str, Any]) -> RunSummary:
     # skipped as unparsable, so they never reached History.
     task: str = config.get("task") or data.get("task", "classification")
 
+    group = data.get("group") if isinstance(data.get("group"), dict) else None
+    # A group's metrics are the means of its seeds under the keys a single run
+    # of the task writes (run_groups), so the projection reads them as any run's.
     final_metrics = _summary_metrics(task, metrics)
 
     data_cfg = config.get("data") or {}
@@ -3634,6 +3645,30 @@ def _parse_run_summary(run_dir: Path, data: dict[str, Any]) -> RunSummary:
         dataset_root=dataset_root,
         resumable=resumable,
         configured_epochs=configured_epochs,
+        group_id=data.get("group_id"),
+        group=_group_brief(group) if group else None,
+    )
+
+
+def _group_brief(group: dict[str, Any]) -> RunGroupBrief:
+    """The list view of a group's ``run.json`` section."""
+    kind = group["kind"]
+    variants: dict[str, Any] = group.get("variants") or {}
+    if kind == "replicates":
+        children = group.get("children") or []
+    else:
+        children = [c for v in variants.values() for c in v.get("children") or []]
+    return RunGroupBrief(
+        kind=kind,
+        metric=group.get("metric"),
+        seeds=group.get("seeds") or [],
+        n_requested=int(group.get("n_requested") or 0),
+        n_finished=int(group.get("n_finished") or 0),
+        stopped=bool(group.get("stopped")),
+        child_ids=[c["run_id"] for c in children if c.get("run_id")],
+        aggregates=(group.get("aggregates") or {}) if kind == "replicates" else {},
+        variants=list(variants),
+        best_by_mean=group.get("best_by_mean"),
     )
 
 
@@ -4389,6 +4424,9 @@ async def _execute_replicated_comparison(
         report["report_dir"] = _write_advanced_summary(
             base_config_dict, "comparison", report
         )
+        _record_run_group(
+            "replicated_comparison", run_id, base_config_dict, report, "comparison"
+        )
         _current_run = {
             "run_id": run_id,
             "status": "completed",
@@ -4500,6 +4538,7 @@ async def _execute_replicates(
         report["report_dir"] = _write_advanced_summary(
             base_config_dict, "replicates", report
         )
+        _record_run_group("replicates", run_id, base_config_dict, report, "replicates")
         _current_run = {
             "run_id": run_id,
             "status": "completed",
@@ -4520,6 +4559,36 @@ async def _execute_replicates(
     finally:
         if queue is not None:
             await queue.put(None)
+
+
+def _record_run_group(
+    kind: Literal["replicates", "replicated_comparison"],
+    run_id: str,
+    config: dict[str, Any],
+    report: dict[str, Any],
+    report_name: str,
+) -> None:
+    """Give a finished replicate job its own entry in History (ADR-113).
+
+    The job's trainings are ordinary runs and its numbers sit in the report
+    just written; this writes the ``run.json`` that ties them together, copied
+    from that report. It is the last step of a job whose training and report
+    are already done, so a failure here is logged rather than turned into a
+    failed job: the researcher keeps a report and loses only the grouped entry.
+    """
+    models_dir = Path((config.get("output") or {}).get("models_dir") or _MODELS_DIR)
+    try:
+        write_run_group(
+            kind=kind,
+            group_id=run_id,
+            name=str(config.get("name", report_name)),
+            config=config,
+            report=report,
+            report_json=Path(report["report_dir"]) / f"{report_name}_summary.json",
+            models_dir=models_dir,
+        )
+    except Exception:  # noqa: BLE001 - the report is on disk; do not fail the job
+        logger.exception("GUI: could not write the History entry of group {}", run_id)
 
 
 def _replicates_report(

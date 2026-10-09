@@ -184,6 +184,33 @@ class DatasetInfo(BaseModel):
     note: str | None = None
 
 
+class RunGroupBrief(BaseModel):
+    """What the history list needs to show a replicate group as one entry.
+
+    A group is a replicate set or a replicated comparison (ADR-113): one job
+    made of several trainings, each of them a run of its own. Everything here
+    is copied from the group's ``run.json``, which copied it from the job's
+    report; nothing is computed on the way. The full section, with the paired
+    tests, is served by the run detail.
+    """
+
+    kind: Literal["replicates", "replicated_comparison"]
+    metric: str | None = None
+    seeds: list[int] = []
+    n_requested: int = 0
+    n_finished: int = 0
+    stopped: bool = False
+    # Run ids of the seeds' own runs (the ones that exist on disk).
+    child_ids: list[str] = []
+    # Replicates: mean / std / CI95 per metric. Empty for a comparison, which
+    # has one set per variant instead (in the run detail).
+    aggregates: dict[str, Any] = {}
+    # Replicated comparison: the variants compared and the one with the best
+    # mean on the seeds they share (None when no ranking is possible).
+    variants: list[str] = []
+    best_by_mean: str | None = None
+
+
 class RunSummary(BaseModel):
     """Summary of one historical experiment run for the history browser."""
 
@@ -210,6 +237,11 @@ class RunSummary(BaseModel):
     resumable: bool = False
     # How far it got and where it was going, so the button can say so.
     configured_epochs: int | None = None
+    # Set on a run that is one seed of a replicate group: the group's run id.
+    # History folds such a run under the group (ADR-113).
+    group_id: str | None = None
+    # Set on the group itself, which is listed as one run.
+    group: RunGroupBrief | None = None
 
 
 class DatasetDetectRequest(BaseModel):
@@ -297,6 +329,12 @@ class RunDetail(BaseModel):
     # See RunSummary: derived from the resume file on disk (ADR-092/093).
     resumable: bool = False
     configured_epochs: int | None = None
+    # A seed of a replicate group names the group; the group carries its whole
+    # section: seeds, children, per-metric aggregates and, for a replicated
+    # comparison, the variants and the paired tests, as the report recorded
+    # them (ADR-113).
+    group_id: str | None = None
+    group: dict[str, Any] | None = None
     # The task family, by the rule `_run_task` applies to run.json: a built-in
     # name or `custom:<key>`. Not `config.task`, which for classification holds
     # the problem type and which a researcher-defined task does not carry at

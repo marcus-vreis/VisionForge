@@ -49,6 +49,10 @@ class ReplicateTrial:
     metrics: dict[str, float] = field(default_factory=dict)
     training_time_s: float | None = None
     error: str = ""
+    # The directory this seed trained into, "" when it never got one (a failed
+    # seed). History needs it to tie the run to the group it belongs to
+    # (ADR-113); the folder's name is the run id the History list uses.
+    run_dir: str = ""
 
 
 def _t_critical_95(dof: int) -> float:
@@ -82,9 +86,10 @@ def aggregate_replicates(
     """Aggregate successful trials into per-metric distribution statistics.
 
     For every metric key observed across successful trials, returns ``n``,
-    ``mean``, ``std`` (sample, n-1), ``min``, ``max`` and a Student-t 95%
-    confidence interval (``ci95_low``/``ci95_high``). With a single value the
-    dispersion fields are ``None`` — one sample has no spread to report.
+    ``mean``, ``std`` (sample, n-1, named by ``std_ddof``), ``min``, ``max``
+    and a Student-t 95% confidence interval (``ci95_low``/``ci95_high``). With
+    a single value the dispersion fields are ``None`` — one sample has no
+    spread to report.
 
     A percentile **bootstrap** interval (``boot95_low``/``boot95_high``,
     ADR-061) is reported alongside the t interval: t assumes the sampling
@@ -117,6 +122,9 @@ def aggregate_replicates(
             "n": n,
             "mean": mean,
             "std": std,
+            # Says which std this is, as the K-fold's aggregate does: a reader
+            # of the number should not have to know the code to trust it.
+            "std_ddof": 1,
             "min": min(values),
             "max": max(values),
             "ci95_low": ci_low,
@@ -177,6 +185,7 @@ def run_replicates(
             trial.metrics = runner.metrics(result)
             trial.training_time_s = result.training_time_s
             trial.error = result.error
+            trial.run_dir = str(result.run_dir) if result.run_dir else ""
             if result.stopped and result.status == "success":
                 trial.status = STOPPED
                 trial.error = STOPPED_NOTE
