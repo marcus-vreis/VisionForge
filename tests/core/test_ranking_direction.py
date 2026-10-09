@@ -11,7 +11,7 @@ The direction comes from the task's declaration where there is one, else from
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import pytest
 
@@ -82,7 +82,11 @@ class TestTheDirectionRule:
 
     def test_a_missing_value_ranks_last_either_way(self) -> None:
         values = {"a": 0.5, "b": None, "c": 0.1}
-        for direction, expected in (("lower", "cab"), ("higher", "acb")):
+        cases: list[tuple[Literal["higher", "lower"], str]] = [
+            ("lower", "cab"),
+            ("higher", "acb"),
+        ]
+        for direction, expected in cases:
             ranked = rank_by_metric(list(values), values.get, direction)
             assert "".join(ranked) == expected
 
@@ -196,8 +200,87 @@ class TestCustomTaskRunnerDeclaresItsDirections:
         assert runner_metric_direction(runner, "score") == "lower"
 
 
+class TestTheReportsAreToldTheDirection:
+    """No default: a caller that forgets it would label a lower-is-better ranking."""
+
+    def test_the_comparison_report_requires_it(self) -> None:
+        import visionforge.gui.api.routes as routes_mod
+
+        with pytest.raises(TypeError, match="direction"):
+            routes_mod._comparison_report([], "rmse")  # type: ignore[call-arg]
+
+        report = routes_mod._comparison_report([], "rmse", "lower")
+        assert report["metric_direction"] == "lower"
+
+    def test_the_sweep_report_requires_it(self) -> None:
+        import visionforge.gui.api.routes as routes_mod
+
+        with pytest.raises(TypeError, match="direction"):
+            routes_mod._sweep_report([], "grid", "rmse")  # type: ignore[call-arg]
+
+        report = routes_mod._sweep_report([], "grid", "rmse", "lower")
+        assert report["metric_direction"] == "lower"
+
+
+class TestTheClassificationComparisonBlockStaysHigherIsBetter:
+    """Its metric is `accuracy`, `f1` or `auc_roc`: no lower-is-better one exists.
+
+    `ModelComparisonBlock` ranks by `infer_direction`, so a lower-is-better
+    case cannot be configured. This pins the assumption: a metric added to
+    that choice must come with a declared direction, not a silent descending
+    sort.
+    """
+
+    def test_every_configurable_metric_ranks_descending(self) -> None:
+        from typing import get_args
+
+        from visionforge.core.significance import infer_direction
+        from visionforge.utils.config import ModelComparisonConfig
+
+        metrics = get_args(ModelComparisonConfig.model_fields["metric"].annotation)
+
+        assert metrics
+        assert {infer_direction(m) for m in metrics} == {"higher"}
+
+
 class TestTheExportsFollowTheRanking:
     """best_trial, the ranking CSV and the LaTeX "#" all read the sweep's order."""
+
+    def test_a_lower_is_better_comparison_end_to_end(self, tmp_path: Path) -> None:
+        import asyncio
+        import csv
+
+        import visionforge.gui.api.routes as routes_mod
+        from visionforge.core.cancellation import CancellationToken
+
+        runner = _ScoredRunner("rmse", {"a": 0.5, "b": 0.2, "c": 0.9})
+        base = {**_base(), "output": {"reports_dir": str(tmp_path)}}
+        routes_mod._active_cancel_token = CancellationToken()
+        routes_mod._event_queue = None
+        try:
+            asyncio.run(
+                routes_mod._execute_comparison(
+                    runner, base, ["a", "b", "c"], "rmse", "r"
+                )
+            )
+            state = dict(routes_mod._current_run or {})
+        finally:
+            routes_mod._active_cancel_token = None
+            routes_mod._current_run = None
+
+        report = state["report"]
+        assert report["metric_direction"] == "lower"
+        assert [t["model_arch"] for t in report["trials"]] == ["b", "a", "c"]
+        assert [t["model_arch"] for t in report["top_3"]] == ["b", "a", "c"]
+        with (Path(report["report_dir"]) / "comparison_ranking.csv").open(
+            encoding="utf-8", newline=""
+        ) as f:
+            rows = list(csv.DictReader(f))
+        assert [(r["rank"], r["model_arch"], r["rmse"]) for r in rows] == [
+            ("1", "b", "0.2"),
+            ("2", "a", "0.5"),
+            ("3", "c", "0.9"),
+        ]
 
     def test_a_lower_is_better_sweep_end_to_end(self, tmp_path: Path) -> None:
         import asyncio

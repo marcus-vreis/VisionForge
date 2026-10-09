@@ -200,7 +200,8 @@ def _optuna_trials(
     n_trials: int,
     seed: int,
     progress_callback: Callable[[dict[str, Any]], None] | None = None,
-    direction: str = "higher",
+    *,
+    direction: Literal["higher", "lower"],
 ) -> list[SweepTrial]:
     """Run an Optuna TPE study over the search space, collecting every trial.
 

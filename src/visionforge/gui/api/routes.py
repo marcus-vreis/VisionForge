@@ -4022,7 +4022,7 @@ async def _execute_comparison(
 
 
 def _comparison_report(
-    trials: list[ComparisonTrial], metric: str, direction: str = "higher"
+    trials: list[ComparisonTrial], metric: str, direction: Literal["higher", "lower"]
 ) -> dict[str, Any]:
     """Shape ranked comparison trials into a GUI-friendly report dict."""
     rows = [asdict(t) for t in trials]
@@ -4170,7 +4170,10 @@ def _require_reported_metric(
 
 
 def _sweep_report(
-    trials: list[SweepTrial], mode: str, metric: str, direction: str = "higher"
+    trials: list[SweepTrial],
+    mode: str,
+    metric: str,
+    direction: Literal["higher", "lower"],
 ) -> dict[str, Any]:
     """Shape ranked sweep trials into a GUI-friendly report dict."""
     rows = [asdict(t) for t in trials]

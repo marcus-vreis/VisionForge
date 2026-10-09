@@ -109,7 +109,7 @@ def runner_metric_direction(runner: object, metric: str) -> Literal["higher", "l
 def rank_by_metric[T](
     items: list[T],
     value: Callable[[T], float | None],
-    direction: str,
+    direction: Literal["higher", "lower"],
 ) -> list[T]:
     """Best first by ``value``; items without a value go last, in their order.
 

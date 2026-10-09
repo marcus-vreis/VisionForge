@@ -249,7 +249,7 @@ def build_report(
 
 
 def _rank_on_shared_seeds(
-    comparable: dict[str, dict[int, float]], direction: str
+    comparable: dict[str, dict[int, float]], direction: Literal["higher", "lower"]
 ) -> tuple[list[int], list[str]]:
     """Order the comparable variants by their mean over the seeds all of them finished.
 
