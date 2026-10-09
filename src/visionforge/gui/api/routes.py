@@ -92,6 +92,7 @@ from visionforge.gui.api.folder_opener import (
     FolderOpenError,
     can_reveal,
     is_loopback_host,
+    is_loopback_origin,
     open_folder,
 )
 from visionforge.gui.api.model_notes import collapse_note
@@ -537,7 +538,17 @@ async def reveal_run_folder(run_id: str, request: Request) -> dict[str, str]:
     the *server's* desktop, which is the clicker's only when both are the same
     machine, so a client that is not loopback is refused (403) -- the page hides
     the button for it too (``can_reveal`` on the run detail).
+
+    A page on another site can POST here from the user's own browser, which makes
+    the client loopback too (CSRF). A browser names that page in ``Origin``, so a
+    request whose ``Origin`` is not this machine is refused. No ``Origin`` is a
+    same-origin navigation or a client that is not a browser: allowed.
     """
+    origin = request.headers.get("origin")
+    if origin is not None and not is_loopback_origin(origin):
+        raise HTTPException(
+            403, "The folder can only be opened from VisionForge's own page."
+        )
     if not is_loopback_host(_client_host(request)):
         raise HTTPException(
             403, "The folder can only be opened from the machine running the server."

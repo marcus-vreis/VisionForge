@@ -5,6 +5,10 @@ that is not the same machine, and the page learns that from ``can_reveal`` on th
 run detail. The folder comes from ``_find_run_dir`` only -- never from a path the
 client sent. The opener itself is replaced everywhere here: no test opens a real
 file manager.
+
+A page on another site can fire a cross-site POST from the user's own browser at
+the loopback server, so a request that carries a foreign ``Origin`` is
+refused as well (CSRF); one with no ``Origin`` is not a cross-site browser form.
 """
 
 from __future__ import annotations
@@ -201,6 +205,150 @@ class TestRevealRoute:
             resp = _client(app, "127.0.0.1").post(f"/api/runs/{run_dir.name}/reveal")
         assert resp.status_code == 500
         assert "xdg-open not found" in resp.json()["detail"]
+
+
+class TestRevealRefusesAForeignOrigin:
+    """A cross-site page must not be able to pop a file manager (CSRF).
+
+    A browser sends ``Origin`` on every cross-site POST, so a page on another
+    site that guesses a run folder arrives with its own origin. The client
+    address is the user's own machine in that case (the browser is local), so
+    the loopback check alone cannot tell the page from the app.
+    """
+
+    @staticmethod
+    def _reveal(
+        app_and_routes: tuple, tmp_path: Path, origin: str | None
+    ) -> tuple[Any, _Opened]:
+        app, routes_mod = app_and_routes
+        run_dir = _write_run(tmp_path)
+        opened = _Opened()
+        headers = {} if origin is None else {"Origin": origin}
+        with (
+            patch.object(routes_mod, "_MODELS_DIR", tmp_path),
+            patch.object(routes_mod, "open_folder", opened),
+        ):
+            resp = _client(app, "127.0.0.1").post(
+                f"/api/runs/{run_dir.name}/reveal", headers=headers
+            )
+        return resp, opened
+
+    @pytest.mark.parametrize(
+        "origin",
+        [
+            "https://evil.example",
+            "http://evil.example:8000",
+            "http://127.0.0.1.evil.example:8000",
+            "http://localhost.evil.example",
+            "http://192.168.1.20:8000",
+            "null",
+            "file://",
+            "not a url",
+            "",
+        ],
+    )
+    def test_a_foreign_origin_is_403_and_opens_nothing(
+        self, app_and_routes: tuple, tmp_path: Path, origin: str
+    ) -> None:
+        resp, opened = self._reveal(app_and_routes, tmp_path, origin)
+        assert resp.status_code == 403
+        assert opened.paths == []
+
+    @pytest.mark.parametrize(
+        "origin",
+        [
+            "http://127.0.0.1:8000",
+            "http://localhost:8000",
+            "http://localhost:5173",  # the Vite dev server
+            "http://[::1]:8000",
+            "https://LOCALHOST",
+        ],
+    )
+    def test_a_loopback_origin_is_served(
+        self, app_and_routes: tuple, tmp_path: Path, origin: str
+    ) -> None:
+        resp, opened = self._reveal(app_and_routes, tmp_path, origin)
+        assert resp.status_code == 200
+        assert len(opened.paths) == 1
+
+    def test_the_servers_own_page_is_served(
+        self, app_and_routes: tuple, tmp_path: Path
+    ) -> None:
+        """Same-origin: the page the server itself delivered posts its own origin."""
+        app, routes_mod = app_and_routes
+        run_dir = _write_run(tmp_path)
+        opened = _Opened()
+        client = TestClient(
+            app,
+            base_url="http://127.0.0.1:8000",
+            client=("127.0.0.1", 50000),
+        )
+        with (
+            patch.object(routes_mod, "_MODELS_DIR", tmp_path),
+            patch.object(routes_mod, "open_folder", opened),
+        ):
+            resp = client.post(
+                f"/api/runs/{run_dir.name}/reveal",
+                headers={"Origin": "http://127.0.0.1:8000"},
+            )
+        assert resp.status_code == 200
+        assert len(opened.paths) == 1
+
+    def test_no_origin_is_served(self, app_and_routes: tuple, tmp_path: Path) -> None:
+        """A same-origin navigation or a non-browser client sends no Origin."""
+        resp, opened = self._reveal(app_and_routes, tmp_path, None)
+        assert resp.status_code == 200
+        assert len(opened.paths) == 1
+
+    def test_a_remote_client_stays_refused_whatever_its_origin(
+        self, app_and_routes: tuple, tmp_path: Path
+    ) -> None:
+        app, routes_mod = app_and_routes
+        run_dir = _write_run(tmp_path)
+        opened = _Opened()
+        with (
+            patch.object(routes_mod, "_MODELS_DIR", tmp_path),
+            patch.object(routes_mod, "open_folder", opened),
+        ):
+            resp = _client(app, "192.168.1.20").post(
+                f"/api/runs/{run_dir.name}/reveal",
+                headers={"Origin": "http://127.0.0.1:8000"},
+            )
+        assert resp.status_code == 403
+        assert opened.paths == []
+
+
+class TestIsLoopbackOrigin:
+    @pytest.mark.parametrize(
+        "origin",
+        [
+            "http://127.0.0.1:8000",
+            "http://localhost",
+            "https://localhost:5173",
+            "http://[::1]:8000",
+            "http://LocalHost:8000",
+        ],
+    )
+    def test_this_machine(self, origin: str) -> None:
+        assert folder_opener.is_loopback_origin(origin) is True
+
+    @pytest.mark.parametrize(
+        "origin",
+        [
+            "null",
+            "",
+            "evil.example",
+            "https://evil.example",
+            "http://127.0.0.1.evil.example",
+            "http://localhost.evil.example:8000",
+            "http://evil.example/127.0.0.1",
+            "http://127.0.0.1@evil.example",
+            "http://192.168.1.20:8000",
+            "http://[::1",
+        ],
+    )
+    def test_anything_else(self, origin: str) -> None:
+        assert folder_opener.is_loopback_origin(origin) is False
 
 
 class TestCanRevealFlag:

@@ -18,6 +18,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from urllib.parse import urlsplit
 
 
 class FolderOpenError(RuntimeError):
@@ -42,6 +43,25 @@ def is_loopback_host(host: str | None) -> bool:
     if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped is not None:
         address = address.ipv4_mapped
     return address.is_loopback
+
+
+def is_loopback_origin(origin: str) -> bool:
+    """Whether a request's ``Origin`` header names this very machine.
+
+    A browser puts the page's origin on every cross-site POST, so this tells the
+    app's own page (``http://127.0.0.1:8000``, the Vite dev server on
+    ``localhost``) from a page of another site that fired the request at the
+    user's local server. Only the host counts, so a lookalike such as
+    ``127.0.0.1.evil.example`` or ``127.0.0.1@evil.example`` is refused, and so
+    are ``null`` (a sandboxed frame, a ``file://`` page) and anything that does
+    not parse. The request's own ``Host`` is deliberately not trusted as "the
+    server's host": a DNS-rebinding page controls both it and the ``Origin``.
+    """
+    try:
+        host = urlsplit(origin).hostname
+    except ValueError:
+        return False
+    return is_loopback_host(host)
 
 
 def opener_available() -> bool:

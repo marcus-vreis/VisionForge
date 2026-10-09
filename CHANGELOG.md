@@ -338,6 +338,11 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Security
 
+- **Uma página de outro site não consegue mais abrir o gerenciador de arquivos
+  do usuário.** `POST /api/runs/{id}/reveal` só checava que o cliente era a
+  própria máquina, o que um POST entre sites disparado pelo navegador local
+  também satisfaz; agora uma requisição com `Origin` que não seja a própria
+  máquina (inclusive `null`) recebe 403, e uma sem `Origin` segue como antes.
 - **Erros do download de dataset não expõem mais a chave do provedor.** O
   cliente do Roboflow põe a chave na URL da requisição, então uma falha de rede
   (sem internet, DNS) produzia "Max retries exceeded with url: /?api_key=…", e
