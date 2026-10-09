@@ -66,6 +66,64 @@ class TestEachTaskSurfacesItsOwnMetrics:
         }
 
 
+class TestRunWithoutATestSplit:
+    """A run that never scored a held-out split still has a card.
+
+    Every trainer writes the validation score at the best epoch under the bare
+    name (``r2``, ``miou``, ``auroc``); only ``test_*`` appears once a test
+    split was scored. Projecting ``test_*`` alone left such a run's card empty,
+    though the numbers were on disk. The validation value is sent under
+    ``val_<label>``, so the card can say which split it is.
+    """
+
+    def test_regression_falls_back_to_the_validation_scores(self) -> None:
+        metrics = {"best_val_loss": 12.0, "r2": 0.41, "mae": 3.2, "rmse": 4.5}
+
+        assert _summary_metrics("regression", metrics) == {
+            "val_r2": 0.41,
+            "val_mae": 3.2,
+            "val_rmse": 4.5,
+        }
+
+    def test_segmentation_falls_back_to_the_validation_scores(self) -> None:
+        metrics = {"miou": 0.5, "dice": 0.6, "pixel_acc": 0.7}
+
+        assert _summary_metrics("segmentation", metrics) == {
+            "val_miou": 0.5,
+            "val_dice": 0.6,
+            "val_pixel_acc": 0.7,
+        }
+
+    def test_anomaly_falls_back_through_its_image_f1(self) -> None:
+        metrics = {"auroc": 0.88, "image_f1": 0.0, "threshold": 0.3}
+
+        # The projected name is the headline's (`f1`), the source is `image_f1`.
+        assert _summary_metrics("anomaly", metrics) == {
+            "val_auroc": 0.88,
+            "val_f1": 0.0,
+        }
+
+    def test_a_test_value_wins_over_the_validation_one(self) -> None:
+        metrics = {"r2": 0.41, "test_r2": 0.52, "mae": 3.2}
+
+        # Per metric: r2 was scored on the test split, mae was not.
+        assert _summary_metrics("regression", metrics) == {"r2": 0.52, "val_mae": 3.2}
+
+    def test_a_metric_never_measured_is_still_left_out(self) -> None:
+        metrics = {"r2": None, "mae": "n/a", "rmse": 4.5}
+
+        assert _summary_metrics("regression", metrics) == {"val_rmse": 4.5}
+
+    def test_detection_has_no_test_split_so_keeps_its_names(self) -> None:
+        assert _summary_metrics("detection", {"map50": 0.6}) == {"map50": 0.6}
+
+    def test_a_classification_run_keeps_its_validation_loss(self) -> None:
+        """Classification writes no bare validation accuracy: only its loss."""
+        assert _summary_metrics("classification", {"best_val_loss": 0.4}) == {
+            "val_loss": 0.4
+        }
+
+
 class TestBlockLabel:
     """A standalone task's block is its task, not the classification default."""
 

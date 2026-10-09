@@ -189,6 +189,10 @@ export interface CardMetric {
   label: MetricLabelKey | null;
 }
 
+/** What the server puts before a headline's name when it is the validation score
+ *  (`routes._summary_metrics`). */
+const VALIDATION_PREFIX = "val_";
+
 /**
  * The row of a task's table that a summary name stands for. The server projects
  * a run onto a few short names (`r2`, `miou`, `f1`), each one read from the
@@ -196,12 +200,20 @@ export interface CardMetric {
  * where it does not, like detection's `map50`). A row answers to a name when it
  * is that name or ends in `_<name>` (`test_image_f1` is anomaly's `f1`), and
  * when two do, the held-out one wins: it is the number the server read.
+ *
+ * A run that never scored a test split has no `test_<name>`; the server then
+ * sends the validation score as `val_<name>`. That name is answered by the bare
+ * (validation) row, never a `test_` one: the card must not call it "(teste)".
  */
 function rowOfSummaryName(rows: readonly MetricLabelKey[], name: string): MetricLabelKey | null {
-  const answering = rows.filter(
-    (row) => !NEUTRAL.has(row) && (row === name || row.endsWith(`_${name}`)),
-  );
-  return answering.find((row) => row.startsWith("test_")) ?? answering[0] ?? null;
+  const answering = (wanted: string) =>
+    rows.filter((row) => !NEUTRAL.has(row) && (row === wanted || row.endsWith(`_${wanted}`)));
+  const own = answering(name);
+  const held = own.find((row) => row.startsWith("test_")) ?? own[0];
+  if (held !== undefined) return held;
+  if (!name.startsWith(VALIDATION_PREFIX)) return null;
+  const bare = answering(name.slice(VALIDATION_PREFIX.length));
+  return bare.find((row) => !row.startsWith("test_")) ?? null;
 }
 
 /**

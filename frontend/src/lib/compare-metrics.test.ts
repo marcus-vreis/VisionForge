@@ -480,6 +480,39 @@ describe("cardMetrics", () => {
     ]);
   });
 
+  it("labels the validation fallback the server sends for a run with no test split", () => {
+    // `val_<name>`: the server found no `test_<name>` and sent the validation score.
+    expect(labelsOf("regression", ["val_r2", "val_mae", "val_rmse"])).toEqual([
+      "r2",
+      "mae",
+      "rmse",
+    ]);
+    expect(labelsOf("segmentation", ["val_miou", "val_dice", "val_pixel_acc"])).toEqual([
+      "miou",
+      "dice",
+      "pixel_acc",
+    ]);
+    expect(labelsOf("anomaly", ["val_auroc", "val_f1"])).toEqual(["auroc", "image_f1"]);
+  });
+
+  it("labels each headline by its own split when a run has only some test scores", () => {
+    expect(labelsOf("regression", ["r2", "val_mae", "val_rmse"])).toEqual([
+      "test_r2",
+      "mae",
+      "rmse",
+    ]);
+  });
+
+  it("does not take a classification's val_loss for a validation fallback", () => {
+    expect(labelsOf("classification", ["val_loss"])).toEqual(["best_val_loss"]);
+  });
+
+  it("falls back to the metric's own name when no row answers a validation name", () => {
+    expect(cardMetrics("regression", { val_nse: 0.8 })).toEqual([
+      { key: "val_nse", label: null },
+    ]);
+  });
+
   it("keeps detection on its validation rows, the only ones it has", () => {
     expect(labelsOf("detection", ["map50", "map50_95"])).toEqual(["map50", "map50_95"]);
   });

@@ -139,6 +139,15 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Fixed
 
+- **O card do Histórico ficava vazio numa execução que nunca avaliou o split de
+  teste.** O servidor lia só as chaves `test_*` (`test_r2`, `test_miou`,
+  `test_auroc`…); uma execução de regressão, segmentação ou anomalia sem teste
+  não tinha nenhuma delas e mostrava o card sem número algum, embora o
+  validation score do melhor epoch estivesse no `run.json` sob o nome simples
+  (`r2`, `miou`, `auroc`). Agora, por métrica, quando não há valor de teste o
+  servidor envia o de validação como `val_<nome>` e o card o rotula "(val)", sem
+  nunca chamá-lo de "(teste)". Classificação não grava acurácia de validação no
+  `run.json`, só a loss, e segue mostrando a `val_loss`.
 - **O card do Histórico não mostrava nenhuma métrica de uma execução de
   regressão, segmentação ou anomalia.** O servidor já enviava os números de
   destaque de cada tarefa (R², MAE e RMSE; mIoU, Dice e acurácia de pixel; AUROC

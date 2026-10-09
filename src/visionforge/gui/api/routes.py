@@ -3571,6 +3571,11 @@ def _summary_metrics(task: str, metrics: dict[str, Any]) -> dict[str, float]:
     Missing or non-numeric values are skipped so a partially-written run.json
     (Ultralytics omits mAP early in training) never raises.
 
+    A headline read from a ``test_*`` key that the run never wrote (no test
+    split was scored) falls back to the validation value under the bare name and
+    is projected as ``val_<label>``, so the card is not empty and says which
+    split the number is from.
+
     A researcher-defined task (``custom:<key>``) declares its own metric names,
     so there is no fixed map: the first three numeric metrics are surfaced
     under their real names, which is what the generic history card renders.
@@ -3589,14 +3594,29 @@ def _summary_metrics(task: str, metrics: dict[str, Any]) -> dict[str, float]:
     key_map = _SUMMARY_METRIC_KEYS.get(task, _SUMMARY_METRIC_KEYS["classification"])
     out: dict[str, float] = {}
     for label, src in key_map.items():
-        value = metrics.get(src)
-        if value is None:
+        value = _finite_float(metrics.get(src))
+        if value is not None:
+            out[label] = value
             continue
-        try:
-            out[label] = float(value)
-        except (TypeError, ValueError):
-            continue
+        # No held-out score for this headline: the run never evaluated a test
+        # split. Every trainer writes the validation score at the best epoch
+        # under the bare name, so send that one, under a name that says which
+        # split it is (the card prints it as "(val)").
+        if src.startswith("test_"):
+            value = _finite_float(metrics.get(src.removeprefix("test_")))
+            if value is not None:
+                out[f"val_{label}"] = value
     return out
+
+
+def _finite_float(value: Any) -> float | None:
+    """``value`` as a float, or None when it is missing or not a number."""
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _parse_run_timestamp(value: str) -> datetime:
