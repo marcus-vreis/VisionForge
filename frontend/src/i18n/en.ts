@@ -1565,6 +1565,10 @@ export const en: Dict = {
       highest: "highest value",
       lowest: "lowest value",
     },
+    seedNote: {
+      "single-seed":
+        "Each run has a single seed: the gap between them can be seed variation. To claim a difference, run replicates with several seeds.",
+    },
     mixedTasks: {
       title: "Different tasks in one comparison",
       body: "Metrics of different tasks can't be compared: a detection's mAP and a regression's R² don't measure the same thing or share a scale. Go back to the history and select runs of the same task.",

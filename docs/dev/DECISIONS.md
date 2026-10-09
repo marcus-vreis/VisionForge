@@ -4158,3 +4158,75 @@ History, since its fold configs carry `block: cross_validation`, which
 **Not done:**
 
 - PatchCore's memory bank cannot be interrupted while it is being built.
+
+---
+
+## ADR-112 — The History comparison names no winner from a single seed
+
+**Date:** 2026-10-09
+**Status:** Accepted
+**Complements:** ADR-056 (multi-seed replicates), ADR-061 (paired tests with
+Holm), ADR-074 (what a single run's interval is not)
+
+**Context:** The History comparison sets 2+ runs side by side: a metric table and
+the epoch curves. Its rows were a fixed list of classification metrics, so a
+detection, regression, segmentation or anomaly comparison was dashes in almost
+every row; that was fixed by listing each task's own metrics and by never mixing
+tasks in one table. Making the table readable made a second problem visible: a
+run in History is one training under one seed, and the project's whole premise
+(ADR-056) is that seed-to-seed variance routinely exceeds the gap between two
+configurations. A table that marks the larger of two such numbers is answering
+"which is better?" from one sample of each, with the authority of a table. It is
+the caveat ADR-061 already writes into its LaTeX notes for a sweep ranked on one
+run per configuration: the gap still reflects seed noise, and it reads as a
+result because of where it is printed.
+
+**Decision:** the comparison describes the numbers and does not rank the runs.
+
+- **The mark is "highest value" or "lowest value", never "best".** In a row with
+  a direction, the cell holding the highest value of a higher-is-better metric,
+  or the lowest of a lower-is-better one, is marked with a neutral tint and that
+  tooltip. A glyph beside the metric name (↑ or ↓) says which end is better, so
+  the mark can be read without being taken for a verdict. Ties are all marked;
+  equal values, a single measured value, and rows with no direction (epochs, a
+  decision threshold) mark nothing.
+- **One direction rule.** The direction is `infer_direction` of the backend
+  (`core/significance.py`), copied into `lib/compare-metrics.ts`, and a custom
+  task's declared direction wins over the name exactly as in
+  `runner_metric_direction`. A third rule would let a metric read one way in a
+  sweep ranking and another in this table.
+- **A note under the table whenever it marks something.** One line, in both
+  languages: each run has a single seed, the gap can be seed variation, and
+  claiming a difference takes replicates with several seeds. It is tied to the
+  mark rather than to the number of runs: a table with no highest or lowest cell
+  implies no winner and warns of none (`lib/compare-seeds.ts`, `seedNote`).
+- **Runs of different tasks are refused, not tabulated.** A detection's mAP and a
+  regression's R² have no metric in common, and the config diff and the curves
+  below the table are meaningless across tasks too, so the panel names each run's
+  task and asks for a selection of one. The task comes from the run detail
+  (`task`, by the same `_run_task` rule the resume check uses): `config.task`
+  alone cannot say it, since classification keeps its problem type there and a
+  custom task keeps nothing.
+
+**Not done: a replicate group beside the runs.** The intent was to show, for a
+compared run that is a replicate group, its mean ± CI95 instead of a single
+value, and the paired test between compared variants. History has no such run.
+`replicates` and `replicated-comparison` jobs write their report
+(`replicates_summary.json`, `comparison_summary.json`, with `aggregates` and
+`comparisons`) under `outputs/reports/<name>/<timestamp>/` and nothing in the
+models directory; each seed is an ordinary run named `<name>_s<seed>`. The
+K-fold is the only multi-unit run in History, and its numbers are means over
+folds of one seed. So everything the panel can compare is a single seed, and the
+note says so for all of it. Showing a group needs the group to exist as a
+History entry (as a K-fold's `run.json` does) or its report to be served; either
+is a decision about History itself, not about this table. The frontend computes
+no statistics either way, and the report would hand it less than the intent
+assumed: the paired result is a raw `p_value` and the Holm-corrected
+`significant` flag, with no adjusted p.
+
+**Consequences:** a comparison of runs from one replicate set (`<name>_s42`
+against `<name>_s43`) carries the same note, which is true of each of them even
+if the advice to run replicates has already been taken; the note does not try to
+recognise a replicate by its name. The curves and the config diff are unchanged,
+and the curves still plot classification's validation accuracy and loss, so a
+detection or anomaly comparison has no chart yet.

@@ -1763,6 +1763,11 @@ export const pt = {
       highest: "maior valor",
       lowest: "menor valor",
     },
+    // Under the metric table when it marks a highest or lowest value (lib/compare-seeds.ts).
+    seedNote: {
+      "single-seed":
+        "Cada run tem uma seed só: a diferença entre elas pode ser variação de seed. Para afirmar uma diferença, rode réplicas com várias seeds.",
+    },
     // Shown instead of the comparison when the selected runs are of different tasks.
     mixedTasks: {
       title: "Tarefas diferentes numa só comparação",

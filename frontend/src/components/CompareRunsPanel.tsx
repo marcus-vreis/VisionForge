@@ -10,6 +10,7 @@ import {
   numericMetric,
   runTaskKey,
 } from "../lib/compare-metrics";
+import { seedNote } from "../lib/compare-seeds";
 import type { TaskDescriptor } from "../lib/custom-tasks";
 import { compareDatasets } from "../lib/dataset-identity";
 
@@ -323,7 +324,11 @@ function MetricsTable({
   const declared = isCustomTaskKey(task)
     ? descriptors.find((d) => d.key === task.slice("custom:".length))?.metrics
     : undefined;
-  const rows = metricRows(task, details, declared);
+  const rows = metricRows(task, details, declared).map((row) => ({
+    row,
+    values: details.map((d) => numericMetric(d.metrics[row.key])),
+  }));
+  const note = seedNote(rows.map(({ row, values }) => ({ direction: row.direction, values })));
   return (
     <div
       style={{
@@ -346,12 +351,9 @@ function MetricsTable({
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => {
+          {rows.map(({ row, values }) => {
             const label = row.label ? t.compareRuns.metrics[row.label] : row.key;
-            const extremes = extremeIndexes(
-              details.map((d) => numericMetric(d.metrics[row.key])),
-              row.direction,
-            );
+            const extremes = extremeIndexes(values, row.direction);
             return (
               <tr key={row.key}>
                 <td style={tdLabelStyle}>
@@ -368,7 +370,7 @@ function MetricsTable({
                 {details.map((d, i) => {
                   // The highest or lowest value of the row, said as that and
                   // nothing more: whether it is a real difference is not
-                  // something one run each can tell.
+                  // something one run each can tell (ADR-112).
                   const extreme = extremes.includes(i) && row.direction;
                   return (
                     <td
@@ -397,6 +399,22 @@ function MetricsTable({
           </tr>
         </tbody>
       </table>
+      {note && (
+        <div
+          role="note"
+          style={{
+            marginTop: 10,
+            paddingTop: 10,
+            borderTop: "1px solid rgba(255,255,255,0.04)",
+            fontFamily: "var(--font-mono)",
+            fontSize: 11,
+            lineHeight: 1.5,
+            color: "oklch(0.86 0.12 85)",
+          }}
+        >
+          ⚠ {t.compareRuns.seedNote[note]}
+        </div>
+      )}
     </div>
   );
 }

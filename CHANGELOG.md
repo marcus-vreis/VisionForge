@@ -15,6 +15,18 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Added
 
+- **A comparação do Histórico não declara vencedor com uma seed.** Cada run do
+  Histórico é um treino com uma seed só, e a variação entre seeds costuma ser
+  maior que a diferença entre duas configurações; marcar o maior número de uma
+  linha como se respondesse "qual é melhor?" é afirmar o que um run de cada
+  lado não prova. A marca diz apenas "maior valor" ou "menor valor", e, sempre
+  que a tabela marca alguma célula, uma nota logo abaixo avisa que cada run tem
+  uma seed só, que a diferença pode ser variação de seed e que afirmar uma
+  diferença exige réplicas com várias seeds. A tabela que não marca nada
+  (valores iguais, ou só épocas) não repete o aviso. Os conjuntos de réplicas e
+  as comparações replicadas (média ± IC95, teste pareado) ainda não aparecem
+  nessa tela: o relatório deles fica em `outputs/reports`, não no Histórico, e
+  cada seed é um run comum ([ADR-112](docs/dev/DECISIONS.md)).
 - **A comparação do Histórico mostra as métricas certas de cada tarefa.** A
   tabela tinha uma lista fixa de métricas de classificação, então comparar runs
   de detecção, regressão, segmentação ou anomalia mostrava traço em quase todas
