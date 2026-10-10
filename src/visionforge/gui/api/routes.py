@@ -1100,16 +1100,16 @@ async def pick_dataset_folder() -> DatasetPickResponse:
 async def sample_dataset(
     req: SampleDatasetRequest,
 ) -> SampleDatasetResponse | JSONResponse:
-    """Write the synthetic sample dataset of a task for the guide (ADR-115).
+    """Write the synthetic sample dataset of a task for the guide (ADR-115, ADR-117).
 
     Local and offline: the self-test builder draws tiny images with a
-    deterministic seed. Only classification exists in this slice.
+    deterministic seed. Every built-in task has one, in its own layout.
 
     Raises:
-        HTTPException: 400 for an unknown task or one without a sample yet, 409
-            when ``datasets/exemplo-<task>/`` already holds files (the body
-            carries ``path`` so the guide can use that folder), 500 when the OS
-            refuses to write.
+        HTTPException: 400 for an unknown task, 409 when
+            ``datasets/exemplo-<tarefa>/`` already holds files (the body carries
+            ``path`` so the guide can use that folder), 500 when the OS refuses
+            to write.
     """
     try:
         built = await asyncio.to_thread(
@@ -1125,11 +1125,15 @@ async def sample_dataset(
         )
     except OSError as exc:
         logger.warning("GUI: could not write the sample dataset: {}", exc)
-        raise HTTPException(500, f"Could not write the sample dataset: {exc}") from exc
+        raise HTTPException(500, tr("sample.write_failed", error=exc)) from exc
     _remember_dataset_root(built.path)
     logger.info("GUI: wrote the {} sample dataset at {}", req.task, built.path)
     return SampleDatasetResponse(
-        path=str(built.path), classes=built.classes, counts=built.counts
+        task=built.task,
+        path=str(built.path),
+        classes=built.classes,
+        counts=built.counts,
+        targets=built.targets,
     )
 
 

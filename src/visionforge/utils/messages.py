@@ -533,6 +533,25 @@ CATALOG: dict[str, dict[Lang, str]] = {
     },
     "profile.where_comparison": {"pt": "numa comparação", "en": "in a comparison"},
     "profile.where_sweep": {"pt": "numa varredura", "en": "in a sweep"},
+    # ── sample dataset of the guides (ADR-115, ADR-117) ──────────────────────
+    "sample.unknown_task": {
+        "pt": "Tarefa desconhecida '{task}'.",
+        "en": "Unknown task '{task}'.",
+    },
+    "sample.exists": {
+        "pt": (
+            "{path} já existe e não está vazia: use-a como dataset ou remova-a "
+            "para gerar um novo."
+        ),
+        "en": (
+            "{path} already exists and is not empty; use it as the dataset or "
+            "remove it to generate a new one."
+        ),
+    },
+    "sample.write_failed": {
+        "pt": "Não foi possível gravar o dataset de exemplo: {error}",
+        "en": "Could not write the sample dataset: {error}",
+    },
 }
 
 

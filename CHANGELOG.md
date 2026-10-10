@@ -40,8 +40,22 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
   e devolve `{path, classes, counts}`. É local e determinístico: usa os mesmos
   geradores do `visionforge selftest`, sem baixar nada, e um treino curto nele
   leva segundos na CPU. Nunca sobrescreve: se a pasta já tem arquivos a resposta
-  é 409 com o `path` dela, e uma tarefa sem exemplo (por ora só classificação
-  tem) ou desconhecida dá 400 ([ADR-115](docs/dev/DECISIONS.md)).
+  é 409 com o `path` dela, e uma tarefa desconhecida dá 400
+  ([ADR-115](docs/dev/DECISIONS.md)).
+- **O dataset de exemplo existe para as cinco tarefas, cada um no layout que a
+  tarefa lê.** `POST /api/sample-dataset` aceita agora `detection`, `regression`,
+  `segmentation` e `anomaly`, além de `classification`, e grava em
+  `datasets/exemplo-deteccao/` (imagens e etiquetas YOLO em `images/` e
+  `labels/`, com um `classes.txt`), `datasets/exemplo-regressao/` (manifestos
+  `train/val/test.csv` e `images/`), `datasets/exemplo-segmentacao/` (pares
+  imagem e máscara em `<split>/images` e `<split>/masks`) e
+  `datasets/exemplo-anomalia/` (só imagens normais em `train/good`; `test/` com
+  `good` e `defect`). A resposta ganha `task` e `targets` (as colunas-alvo da
+  regressão), e `counts` vem na unidade que a tarefa lê: imagens, linhas do CSV
+  ou pares imagem e máscara. A semântica é a mesma de antes: 201, 409 com o
+  `path` se a pasta já tem arquivos, nada de pasta pela metade. As mensagens do
+  servidor para o dataset de exemplo passam pelo catálogo e saem no idioma da
+  página ([ADR-117](docs/dev/DECISIONS.md)).
 - **Perfis para um servidor compartilhado: cada pessoa vê só o próprio
   histórico de treinos.** Um perfil é uma pasta, `outputs/profiles/<slug>/`, com
   `models`, `graphics`, `logs`, `reports` e um `profile.json` com o nome de

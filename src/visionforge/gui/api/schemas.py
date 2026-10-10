@@ -871,20 +871,27 @@ class DatasetDownloadResponse(BaseModel):
 class SampleDatasetRequest(BaseModel):
     """Ask for the synthetic sample dataset of a task (ADR-115).
 
-    ``task`` is a plain string, not a ``Literal``: an unknown task and a task
-    whose sample is not built yet are both a 400 with their own message, where a
-    ``Literal`` would turn them into an opaque 422.
+    ``task`` is a plain string, not a ``Literal``: an unknown task is a 400 with a
+    message the page can show, where a ``Literal`` would turn it into an opaque 422.
     """
 
     task: str = "classification"
 
 
 class SampleDatasetResponse(BaseModel):
-    """Where the sample dataset is, its classes and the images in each split."""
+    """Where the sample dataset is and what is in it (ADR-117).
 
+    ``counts`` is items per split in the unit the task reads (images, CSV rows,
+    image and mask pairs); ``classes`` is what the layout declares (class folders,
+    ``classes.txt`` names, mask pixel values, or the ``test/`` subfolders of an
+    anomaly dataset); ``targets`` is the CSV target columns of a regression one.
+    """
+
+    task: str = "classification"
     path: str
     classes: list[str]
     counts: dict[str, int]
+    targets: list[str] = []
 
 
 __all__ = [
