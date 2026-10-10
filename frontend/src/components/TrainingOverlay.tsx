@@ -467,6 +467,7 @@ export function TrainingOverlay({
       }}
     >
       <div
+        data-tour="training-sheet"
         style={{
           width: "min(720px, 100%)",
           background: "rgba(12,14,18,0.95)",

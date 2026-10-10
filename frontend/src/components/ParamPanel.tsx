@@ -2315,6 +2315,7 @@ export function ParamPanel({
         {t.paramPanel.kickers.training}
       </div>
       <div
+        data-tour="training"
         style={{
           display: "grid",
           gridTemplateColumns: "repeat(3, 1fr)",

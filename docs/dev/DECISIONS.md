@@ -4555,13 +4555,22 @@ does something.
   existing auto-detection run exactly as if the folder had been picked; a 409
   fills the field with the existing path and says so. An unreachable server
   shows its message on the card, not a silent no-op.
-- *Steps may also* run something when they open (`onEnter`) and ask for a card
-  that does not dim the page (`floating`). The first is used to switch to the
-  classification tab and to put the training sheet away before the History is
-  pointed at; the second for the two steps that are about watching the training
-  sheet, where a 74% dim over it would hide the thing the card describes. The
-  guide now sits above the training sheet (z-index 95 against 90) and still
-  below the History, Datasets and Queue sheets (100).
+- *Steps may also* run something when they open (`onEnter`), ask for a card
+  that does not dim the page (`floating`) and ask for the target near the top of
+  the screen (`align: "top"`). `onEnter` switches to the classification tab and
+  puts the training sheet away before the History is pointed at. `floating` is
+  for the two steps about watching the training sheet, where a 74% dim over it
+  would hide the thing the card describes: the card is 340px wide and goes
+  beside the sheet when a side has room, and otherwise in the bottom-left
+  corner, because the sheet keeps its stop, minimise and "view results"
+  buttons at the bottom right and the last of them is what the researcher must
+  click when the run ends (found in the browser: a corner card on the right
+  covered it at 1424px). `align: "top"` is for the steps with a tall card
+  (the sample-dataset button): with the target in the middle of an 800px window
+  the card fits neither above nor below it and, centred, covers the field it
+  points at. The guide now sits above the training sheet (z-index 95 against
+  90) and still below the History, Datasets and Queue sheets (100); the header
+  rose from 3 to 4 so its menu is not painted over by the tab row.
 
 **4. The "Primeiro treino" script.** Eight short steps: create the sample
 dataset (and why there are three splits) → point the dataset (gate: a path is
@@ -4599,3 +4608,17 @@ folder of whoever uses the guide; deleting it is what lets the guide generate a
 fresh one. The default model is pretrained, so the first run on a machine that
 has never trained a ResNet-18 downloads its weights once; the parameters step
 says so. The tour's script, its anchors and its tests are untouched.
+
+**Verified in the browser** (headless Chrome over CDP, on CPU): the invitation
+offers both guides; the header menu opens above the tab row; the sample button
+created the folder and filled the field (splits detected, binary applied,
+thumbnails shown) and a second click got the 409 and reused the folder;
+"Continuar" is disabled at the train step and the arrow key does not move it;
+with a finished run's events still on screen the gate stayed closed until a new
+run started; on a 20-epoch run the result step stayed closed through all twenty
+epochs and opened at the end; the tour plays as before (stop 1 of 7, nothing
+gated). One thing the run corrected in the first draft of the text: it claimed
+the training loss "usually sits below" the validation loss, and on this very
+dataset the first epoch's training loss (0.68, averaged while the model is
+still changing) is above the validation loss (0.20), so the step now says how
+each one is measured instead.

@@ -1,9 +1,25 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useT } from "../i18n/useT";
-import { CARD_WIDTH, markTourSeen, placeCard, tourSteps, type TourStep } from "../lib/tour";
+import {
+  GUIDES,
+  guideById,
+  type ActionResult,
+  type GuideContext,
+  type GuideId,
+  type GuideStep,
+} from "../lib/guides";
+import { gateOpen } from "../lib/guides/gates";
+import { FLOATING_WIDTH, placeFloating } from "../lib/guides/placement";
+import { useGuideFacts } from "../lib/guides/useGuideFacts";
+import { CARD_WIDTH, markTourSeen, placeCard } from "../lib/tour";
 
-/** O guia de primeira execução (ADR-104).
+/** Os guias (ADR-104, ADR-115): o tour da interface e o primeiro treino.
+ *
+ * Um passo pode esperar o que o pesquisador faz (`waitFor`, lido do estado real
+ * da tela), oferecer um botão que faz o passo (`action`) e pedir um cartão que
+ * não escurece a página (`floating`), para os passos em que ele precisa olhar a
+ * tela de trás. Os passos do tour não têm nada disso e se comportam como antes.
  *
  * Um recorte de luz sobre o elemento de que o passo está falando e um cartão ao
  * lado dele. A escuridão são quatro painéis ao redor do recorte, cada um com a
@@ -27,13 +43,44 @@ const MOVE = ["left", "top", "right", "bottom", "width", "height"]
 interface GuidedTourProps {
   /** Começa pelo convite ("quer um guia?") em vez de já entrar no primeiro passo. */
   invite?: boolean;
+  /** O guia a tocar quando não há convite. */
+  guide?: GuideId;
+  /** Os eventos do treino em curso; os portões "começou" e "terminou" leem daqui. */
+  events: readonly { event: string }[];
+  /** A pasta do dataset do formulário de classificação. */
+  datasetPath: string;
+  /** O que um passo pode mudar na aplicação. */
+  context: GuideContext;
   onClose: () => void;
 }
 
-export function GuidedTour({ invite = false, onClose }: GuidedTourProps) {
+export function GuidedTour({
+  invite = false,
+  guide = "tour",
+  events,
+  datasetPath,
+  context,
+  onClose,
+}: GuidedTourProps) {
   const t = useT();
-  const steps = useMemo(() => tourSteps(t), [t]);
+  const [guideId, setGuideId] = useState<GuideId | null>(invite ? null : guide);
+  const steps = useMemo(
+    () => (guideId ? guideById(guideId).steps(t) : []),
+    [guideId, t],
+  );
   const [step, setStep] = useState(invite ? -1 : 0);
+  // O que já estava na lista de eventos quando o guia abriu não conta: a trava
+  // só abre um portão por um evento que aparece depois (lib/guides/gates).
+  const facts = useGuideFacts(events, datasetPath);
+  const [action, setAction] = useState<{
+    step: number;
+    busy: boolean;
+    result: ActionResult | null;
+  } | null>(null);
+  const contextRef = useRef(context);
+  useEffect(() => {
+    contextRef.current = context;
+  }, [context]);
   const [rect, setRect] = useState<DOMRect | null>(null);
   const [animate, setAnimate] = useState(true);
   const [entered, setEntered] = useState(false);
@@ -50,14 +97,40 @@ export function GuidedTour({ invite = false, onClose }: GuidedTourProps) {
     observer.current = ro;
   }, []);
 
-  const current = step >= 0 ? steps[step] : null;
+  const current = step >= 0 ? (steps[step] ?? null) : null;
   const anchor = current?.anchor;
+  const floating = current?.floating === true;
+  const alignTop = current?.align === "top";
   const last = step === steps.length - 1;
+  const open = current ? gateOpen(current, facts) : true;
+  const shownAction = action && action.step === step ? action : null;
 
   const finish = useCallback(() => {
     markTourSeen();
     onClose();
   }, [onClose]);
+
+  const choose = useCallback((id: GuideId) => {
+    setGuideId(id);
+    setStep(0);
+  }, []);
+
+  const runAction = useCallback(async () => {
+    const step_action = current?.action;
+    if (!step_action) return;
+    const at = step;
+    setAction({ step: at, busy: true, result: null });
+    const result = await step_action.run(contextRef.current);
+    setAction({ step: at, busy: false, result });
+  }, [current, step]);
+
+  // Ao abrir um passo, o que ele pede à aplicação (trocar de aba, guardar a tela
+  // de treino). Depende só do passo: ler o contexto por ref evita repetir o
+  // efeito a cada render do App.
+  const onEnter = current?.onEnter;
+  useEffect(() => {
+    onEnter?.(contextRef.current);
+  }, [onEnter]);
 
   const measure = useCallback(() => {
     if (!anchor) {
@@ -81,7 +154,21 @@ export function GuidedTour({ invite = false, onClose }: GuidedTourProps) {
     const el = anchor
       ? document.querySelector(`[data-tour="${anchor}"]`)
       : null;
-    el?.scrollIntoView({ behavior: "smooth", block: "center" });
+    // A tela de treino é fixa e é o que o passo flutuante quer ver inteira.
+    if (el && !floating) {
+      if (alignTop) {
+        // Um passo de cartão alto (o botão do dataset de exemplo) não cabe nem
+        // acima nem abaixo de um alvo no meio da tela, e centralizado cobriria o
+        // campo que o passo mostra. Com o alvo perto do topo, o cartão tem o
+        // resto da tela abaixo dele.
+        window.scrollTo({
+          top: Math.max(0, el.getBoundingClientRect().top + window.scrollY - 48),
+          behavior: "smooth",
+        });
+      } else {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }
     const raf = window.requestAnimationFrame(() => {
       setAnimate(true);
       measure();
@@ -91,7 +178,7 @@ export function GuidedTour({ invite = false, onClose }: GuidedTourProps) {
       window.cancelAnimationFrame(raf);
       window.clearTimeout(id);
     };
-  }, [anchor, measure]);
+  }, [anchor, floating, alignTop, measure]);
 
   // Rolagem e redimensionamento acompanham sem transição: interpolar aqui faria
   // o recorte perseguir a página com atraso em vez de ficar colado nela.
@@ -117,27 +204,29 @@ export function GuidedTour({ invite = false, onClose }: GuidedTourProps) {
       if (e.key === "Escape") {
         finish();
       } else if (e.key === "ArrowRight") {
-        setStep((s) => (s + 1 >= steps.length ? s : s + 1));
+        // Um portão fechado vale para a seta como para o botão.
+        if (open) setStep((s) => (s + 1 >= steps.length ? s : s + 1));
       } else if (e.key === "ArrowLeft") {
         setStep((s) => (s > 0 ? s - 1 : s));
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [finish, steps.length]);
+  }, [finish, steps.length, open]);
 
   // O cartão vai abaixo do alvo, ou acima quando não sobra espaço; o convite e
-  // os passos sem alvo ficam no centro.
-  const card = placeCard(rect, cardHeight, {
-    width: window.innerWidth,
-    height: window.innerHeight,
-  });
+  // os passos sem alvo ficam no centro. O passo flutuante fica ao lado do alvo.
+  const view = { width: window.innerWidth, height: window.innerHeight };
+  const card = floating
+    ? placeFloating(rect, cardHeight, view)
+    : placeCard(rect, cardHeight, view);
 
   const dim = `rgba(4,5,7,${entered ? 0.74 : 0})`;
 
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 60, pointerEvents: "none" }}>
-      {rect ? (
+    // Acima da tela de treino (90) e abaixo do Histórico, dos Datasets e da Fila (100).
+    <div style={{ position: "fixed", inset: 0, zIndex: 95, pointerEvents: "none" }}>
+      {floating ? null : rect ? (
         <>
           <Shade dim={dim} animate={animate} style={{ left: 0, top: 0, right: 0, height: Math.max(0, rect.top - 6) }} />
           <Shade dim={dim} animate={animate} style={{ left: 0, top: rect.bottom + 6, right: 0, bottom: 0 }} />
@@ -178,7 +267,7 @@ export function GuidedTour({ invite = false, onClose }: GuidedTourProps) {
           position: "fixed",
           left: card.left,
           top: card.top,
-          width: CARD_WIDTH,
+          width: floating ? FLOATING_WIDTH : CARD_WIDTH,
           maxWidth: "calc(100vw - 40px)",
           padding: "20px 22px 18px",
           background: "rgba(10,12,16,0.94)",
@@ -231,9 +320,78 @@ export function GuidedTour({ invite = false, onClose }: GuidedTourProps) {
           <InviteBody />
         )}
 
+        {current?.action && (
+          <div style={{ marginTop: 14 }}>
+            <button
+              type="button"
+              onClick={() => void runAction()}
+              disabled={shownAction?.busy === true}
+              style={{
+                ...secondaryStyle,
+                borderColor: "var(--accent-vf)",
+                opacity: shownAction?.busy ? 0.55 : 1,
+              }}
+            >
+              {current.action.label}
+            </button>
+            {shownAction?.result && (
+              <div
+                role="status"
+                style={{
+                  ...noteStyle,
+                  color: shownAction.result.ok
+                    ? "var(--vf-text-dim)"
+                    : "oklch(0.85 0.14 22)",
+                }}
+              >
+                {shownAction.result.message}
+              </div>
+            )}
+          </div>
+        )}
+
+        {current?.waitFor && (
+          <div role="status" style={{ ...noteStyle, display: "flex", gap: 8 }}>
+            <span
+              style={{
+                marginTop: 5,
+                width: 6,
+                height: 6,
+                flexShrink: 0,
+                borderRadius: "50%",
+                background: open ? "oklch(0.78 0.18 150)" : "var(--accent-vf)",
+                animation: open ? "none" : "pulse-dot 2.6s ease-in-out infinite",
+              }}
+            />
+            <span>{open ? t.guidedTour.gateDone : current.waitHint}</span>
+          </div>
+        )}
+
+        {/* O convite oferece cada guia do registro, lado a lado; o último é o destaque. */}
+        {!current && (
+          <div style={{ marginTop: 20, display: "flex", gap: 10 }}>
+            {GUIDES.map((g, i) => (
+              <button
+                key={g.id}
+                type="button"
+                onClick={() => choose(g.id)}
+                style={{
+                  ...(i === GUIDES.length - 1 ? primaryStyle : secondaryStyle),
+                  flex: 1,
+                  whiteSpace: "nowrap",
+                  padding: "10px 8px",
+                }}
+              >
+                {g.title(t)}
+                {i === GUIDES.length - 1 ? " →" : ""}
+              </button>
+            ))}
+          </div>
+        )}
+
         <div
           style={{
-            marginTop: 20,
+            marginTop: current ? 20 : 8,
             display: "flex",
             alignItems: "center",
             gap: 10,
@@ -249,26 +407,31 @@ export function GuidedTour({ invite = false, onClose }: GuidedTourProps) {
             {current ? t.common.skip : t.guidedTour.notNow}
           </button>
           <div style={{ flex: 1 }} />
-          {step > 0 && (
-            <button
-              type="button"
-              onClick={() => setStep((s) => s - 1)}
-              style={secondaryStyle}
-            >
-              {t.common.back}
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => (last ? finish() : setStep((s) => s + 1))}
-            style={primaryStyle}
-          >
-            {current
-              ? last
-                ? t.guidedTour.finish
-                : t.guidedTour.next
-              : t.guidedTour.seeGuide}
-          </button>
+          {current ? (
+            <>
+              {step > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setStep((s) => s - 1)}
+                  style={secondaryStyle}
+                >
+                  {t.common.back}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => (last ? finish() : setStep((s) => s + 1))}
+                disabled={!open}
+                style={{
+                  ...primaryStyle,
+                  opacity: open ? 1 : 0.4,
+                  cursor: open ? "pointer" : "not-allowed",
+                }}
+              >
+                {last ? t.guidedTour.finish : t.guidedTour.next}
+              </button>
+            </>
+          ) : null}
         </div>
       </div>
     </div>
@@ -319,7 +482,7 @@ function StepBody({
   body,
 }: {
   step: number;
-  steps: TourStep[];
+  steps: GuideStep[];
   title: string;
   body: string;
 }) {
@@ -381,6 +544,15 @@ const bodyStyle: React.CSSProperties = {
   fontSize: 13.5,
   lineHeight: 1.65,
   color: "var(--vf-text-dim)",
+  // O último passo do primeiro treino é uma lista de uma linha por tarefa.
+  whiteSpace: "pre-line",
+};
+
+const noteStyle: React.CSSProperties = {
+  marginTop: 12,
+  fontSize: 12.5,
+  lineHeight: 1.55,
+  color: "var(--vf-text-muted)",
 };
 
 const ghostStyle: React.CSSProperties = {

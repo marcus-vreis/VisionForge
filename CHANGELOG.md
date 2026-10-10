@@ -15,6 +15,24 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Added
 
+- **Guias que esperam você: o botão "guia" do cabeçalho abre um menu, e o novo
+  "Primeiro treino" leva a um treino de classificação de verdade.** O menu tem o
+  tour da interface, igual ao de antes, e o "Primeiro treino", em oito paradas
+  curtas: criar o dataset de exemplo (um botão no próprio cartão cria a pasta e
+  preenche o campo do dataset; se ela já existe, é reaproveitada), apontar o
+  dataset, os poucos parâmetros que importam (épocas em 3), treinar, o que a tela
+  de treino mostra, o resultado (loss de treino contra a de validação, o sinal de
+  overfitting), o Histórico e o que muda nas outras tarefas. Três passos esperam
+  o que você faz: "Continuar" fica desabilitado, e a seta do teclado também,
+  até o campo do dataset estar preenchido, o treino ter começado e ter terminado,
+  lidos do estado real da tela; os eventos de uma execução que já estava na tela
+  quando o guia abriu não contam. "Pular", o ✕ e o Esc saem a qualquer momento.
+  Nos dois passos de olhar o treino o cartão não escurece a página e fica ao
+  lado da tela de treino, sem cobrir os botões dela. O guia diz com todas as
+  letras que dados sintéticos são fáceis de propósito: a acurácia perto de 100%
+  ensina a mecânica, não o que esperar com imagens reais, e o último passo
+  aponta o cartão de download de Datasets. O convite da primeira visita passa a
+  oferecer os dois guias ([ADR-115](docs/dev/DECISIONS.md)).
 - **Um dataset de exemplo sintético, gerado sob pedido, para quem ainda não tem
   um.** `POST /api/sample-dataset` com `{"task": "classification"}` monta o
   layout `train/val/test` (duas classes, imagens de 32 px) em

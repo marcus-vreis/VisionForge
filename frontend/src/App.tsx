@@ -22,6 +22,7 @@ import { Header } from "./components/Header";
 import { WelcomeOverlay } from "./components/WelcomeOverlay";
 import { GuidedTour } from "./components/GuidedTour";
 import { readTourSeen } from "./lib/tour";
+import type { GuideContext, GuideId } from "./lib/guides";
 import { readUserName } from "./lib/user-name";
 import {
   isProfileStorageKey,
@@ -111,8 +112,9 @@ export default function App() {
     gpu_ids: null,
   });
   const [userName, setUserName] = useState(() => readUserName());
-  // "convite" na primeira visita, "guia" quando pedido pelo cabeçalho.
-  const [tour, setTour] = useState<"none" | "convite" | "guia">("none");
+  // "convite" na primeira visita; um id de guia quando escolhido no menu do
+  // cabeçalho (ADR-115).
+  const [tour, setTour] = useState<"none" | "convite" | GuideId>("none");
   // Set by the header chip: remounts the overlay so the intro replays clean.
   const [askName, setAskName] = useState(false);
   // The profile in use and whether the server has any besides the default
@@ -205,6 +207,26 @@ export default function App() {
     Record<string, PanelStrategy>
   >({});
   const [runSignal, setRunSignal] = useState(0);
+
+  // What the guides read and change (ADR-115). The dataset path is the
+  // classification form's own, so the "dataset set" gate follows what the field
+  // shows, and the guide's button fills the same field the picker does.
+  const guideDatasetPath =
+    (((formData["data"] ?? {}) as Record<string, unknown>)["base_dir"] as
+      | string
+      | undefined) ?? "";
+  const guideContext = useMemo<GuideContext>(
+    () => ({
+      selectTask: setActiveKey,
+      setDatasetPath: (path) =>
+        setFormData((prev) => ({
+          ...prev,
+          data: { ...((prev["data"] ?? {}) as Record<string, unknown>), base_dir: path },
+        })),
+      hideTrainingSheet: () => setOverlayVisible(false),
+    }),
+    [],
+  );
 
   // Runs are meant to be left alone, so the tab has to say when one ends.
   // Permission is asked when a run actually starts, never on load: a prompt
@@ -572,7 +594,7 @@ export default function App() {
           sharedServer && profileIsTheName(profile, userName) ? undefined : userName
         }
         onChangeName={() => setAskName(true)}
-        onGuide={() => setTour("guia")}
+        onGuide={setTour}
         profileName={
           sharedServer && profile
             ? profile.is_default
@@ -829,6 +851,10 @@ export default function App() {
         <GuidedTour
           key={tour}
           invite={tour === "convite"}
+          guide={tour === "convite" ? undefined : tour}
+          events={progressEvents}
+          datasetPath={guideDatasetPath}
+          context={guideContext}
           onClose={() => setTour("none")}
         />
       )}

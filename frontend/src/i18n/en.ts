@@ -80,7 +80,7 @@ export const en: Dict = {
   },
   header: {
     guide: "guide",
-    guideTitle: "Show the interface guide again",
+    guideTitle: "Open the guides: interface tour and first training",
     changeName: "Change name",
     welcome: "Welcome,",
   },
@@ -1832,13 +1832,14 @@ export const en: Dict = {
     dialogLabel: "VisionForge guide",
     closeLabel: "Close the guide",
     eyebrow: "First time here",
-    inviteTitle: "Want a quick tour?",
+    inviteTitle: "Want a guide?",
     inviteBody:
-      "Seven quick stops at the main spots: where to pick a task, how to point to your dataset, what's already set up for you and where your results are saved. You can leave at any time — the guide stays available from the header.",
+      "There are two. The interface tour makes seven quick stops at the main spots: where to pick a task, how to point to your dataset, what's already set up for you and where your results are saved. The first training takes you through a real run on a sample dataset that VisionForge creates, and waits for you to do each step. You can leave at any time — both stay in the header's “guide” menu.",
     notNow: "Not now",
-    seeGuide: "See the guide →",
     next: "Next →",
     finish: "Done",
+    // Under a step that waits for the researcher: what is still missing, and then that it is done.
+    gateDone: "Done — you can continue.",
   },
   tour: {
     tabs: {
@@ -1868,6 +1869,59 @@ export const en: Dict = {
     datasets: {
       title: "Your datasets",
       body: "Here you download a dataset (torchvision, Roboflow, Kaggle or Hugging Face) to a local folder and point any task at it. Once the folder is set, the task's panel shows the class distribution — worth a look before your first run: most odd results trace back to an imbalanced dataset.",
+    },
+  },
+  // The guide menu and the guides' own texts (lib/guides/, ADR-115). The tour's
+  // stops are `tour`; "First training" is `guides.firstTraining`.
+  guides: {
+    menuLabel: "Guides",
+    tour: {
+      title: "Interface tour",
+      summary: "Seven stops through the main parts of the screen.",
+    },
+    firstTraining: {
+      title: "First training",
+      summary: "A real classification run, step by step, on a sample dataset.",
+      sample: {
+        title: "Create a sample dataset",
+        body: "You do not need images of your own for a first run: the button below creates a synthetic two-class dataset. It comes split into train, validation and test because each part has a job: the model learns on train, validation shows during training whether it is generalising, and test is used only at the end, on images the model has never seen.",
+        action: "Create sample dataset",
+        created: (path: string) => `Done, created at ${path}.`,
+        existed: (path: string) =>
+          `That folder already existed, so I will use it: ${path}.`,
+        failed: (message: string) => `Could not create the dataset: ${message}`,
+      },
+      dataset: {
+        title: "Point at the dataset",
+        body: "The dataset field now points at the sample folder, and VisionForge has already found the train, val and test subfolders and the two classes (class_a and class_b), setting the model up for them. With a dataset of your own, this is where you pick the folder.",
+        waiting: "Fill in the dataset field to continue.",
+      },
+      parameters: {
+        title: "The few parameters that matter",
+        body: "Set epochs to 3: an epoch is one full pass over the training images, and three are enough for this dataset. Batch size (images per step) and learning rate (the size of each step) can stay as they are, and so can the rest. The first time, the model downloads the pretrained ResNet-18 weights (about 45 MB), which are cached afterwards.",
+      },
+      train: {
+        title: "Train",
+        body: "Click Train. If the machine has no GPU, pick CPU in the selector beside it: with this dataset the run takes a few seconds.",
+        waiting: "Click Train to continue.",
+      },
+      watching: {
+        title: "What is happening now",
+        body: "The training sheet shows the current epoch and, after each one, the training loss and the validation loss. Loss is the model's error, and both should fall. The training one is measured during the epoch, while the model is still changing; the validation one at its end, on images the model did not learn from.",
+      },
+      result: {
+        title: "The result",
+        body: "When it finishes, open “View results” and compare the two losses: if the training loss keeps falling while the validation loss stalls or rises, the model is memorising the training set (overfitting). Accuracy near 100% here is on purpose, because this data is easy: it teaches the mechanics, not what to expect with real images.",
+        waiting: "Waiting for the training to finish…",
+      },
+      history: {
+        title: "Everything was saved",
+        body: "The run is already in the History, under outputs/models/<name>/<date> (in your profile's folder, if you use one). The run.json holds the configuration and the metrics of every epoch; to see the effect of chance, run again with another seed and compare the two there.",
+      },
+      others: {
+        title: "What about the other tasks?",
+        body: "Detection: YOLO-format boxes, measured by mAP.\nSegmentation: per-pixel masks, measured by mIoU.\nRegression: a CSV with the value to predict, measured by R² and RMSE.\nAnomaly: only normal images in training, measured by AUROC.\nSynthetic data is easy on purpose: to know what to expect, download a real dataset from the download card in Datasets.",
+      },
     },
   },
 };

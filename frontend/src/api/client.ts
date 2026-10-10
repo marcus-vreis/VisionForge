@@ -107,6 +107,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       throw new ApiError(
         res.status,
         (body as { detail: string }).detail,
+        undefined,
+        undefined,
+        body,
       );
     }
 
@@ -119,17 +122,22 @@ export class ApiError extends Error {
   status: number;
   cause?: string;
   validationErrors?: FastApiValidationError[];
+  /** The parsed error body, for the few endpoints whose error carries data next
+   *  to `detail` (a 409 that names the folder already there). */
+  body?: unknown;
 
   constructor(
     status: number,
     message: string,
     cause?: string,
     validationErrors?: FastApiValidationError[],
+    body?: unknown,
   ) {
     super(message);
     this.status = status;
     this.cause = cause;
     this.validationErrors = validationErrors;
+    this.body = body;
   }
 }
 
@@ -369,6 +377,45 @@ export interface DatasetPickResponse {
 
 export async function pickDatasetFolder(): Promise<DatasetPickResponse> {
   return request<DatasetPickResponse>("/dataset/pick", { method: "POST" });
+}
+
+/** The synthetic sample dataset of the "Primeiro treino" guide (ADR-115). */
+export interface SampleDataset {
+  /** Absolute path of the folder on the server's disk. */
+  path: string;
+  classes: string[];
+  /** Images per split. Empty when the folder already existed. */
+  counts: Record<string, number>;
+  /** The folder was already there and was reused, not created now. */
+  existed: boolean;
+}
+
+/** Create `datasets/exemplo-<task>/` on the server. A 409 means the folder is
+ *  already there: the call then resolves with `existed: true` and its path, so the
+ *  guide can use it. Any other failure rejects. */
+export async function createSampleDataset(
+  task = "classification",
+): Promise<SampleDataset> {
+  try {
+    const made = await request<Omit<SampleDataset, "existed">>(
+      "/sample-dataset",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ task }),
+      },
+    );
+    return { ...made, existed: false };
+  } catch (e) {
+    const path =
+      e instanceof ApiError && e.status === 409
+        ? (e.body as { path?: unknown } | null | undefined)?.path
+        : undefined;
+    if (typeof path === "string" && path !== "") {
+      return { path, classes: [], counts: {}, existed: true };
+    }
+    throw e;
+  }
 }
 
 export interface DatasetDownloadRequest {

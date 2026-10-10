@@ -80,7 +80,7 @@ export const pt = {
   },
   header: {
     guide: "guia",
-    guideTitle: "Rever o guia da interface",
+    guideTitle: "Abrir os guias: tour da interface e primeiro treino",
     changeName: "Trocar nome",
     welcome: "Bem-vindo,",
   },
@@ -2058,13 +2058,14 @@ export const pt = {
     dialogLabel: "Guia do VisionForge",
     closeLabel: "Fechar o guia",
     eyebrow: "Primeira vez por aqui",
-    inviteTitle: "Quer uma volta rápida?",
+    inviteTitle: "Quer um guia?",
     inviteBody:
-      "Sete paradas curtas pelos pontos principais: onde escolher a tarefa, como apontar o dataset, o que já vem decidido para você e onde os resultados ficam guardados. Dá para sair a qualquer momento — e o guia continua disponível no cabeçalho depois.",
+      "Há dois. O tour da interface faz sete paradas curtas pelos pontos principais: onde escolher a tarefa, como apontar o dataset, o que já vem decidido para você e onde os resultados ficam guardados. O primeiro treino leva você por um treino de verdade, com um dataset de exemplo que o VisionForge cria, e espera você fazer cada passo. Dá para sair a qualquer momento — e os dois continuam no menu “guia” do cabeçalho.",
     notNow: "Agora não",
-    seeGuide: "Ver o guia →",
     next: "Continuar →",
     finish: "Concluir",
+    // Under a step that waits for the researcher: what is still missing, and then that it is done.
+    gateDone: "Feito — pode continuar.",
   },
   // The seven stops of the guide (lib/tour.ts `tourSteps`).
   tour: {
@@ -2095,6 +2096,59 @@ export const pt = {
     datasets: {
       title: "Seus datasets",
       body: "Aqui você baixa um dataset (torchvision, Roboflow, Kaggle ou Hugging Face) para uma pasta local e aponta qualquer tarefa para ela. Com a pasta definida, o painel da tarefa mostra a distribuição das classes — vale conferir antes do primeiro treino: quase todo resultado estranho começa em um dataset desbalanceado.",
+    },
+  },
+  // The guide menu and the guides' own texts (lib/guides/, ADR-115). The tour's
+  // stops are `tour`; "Primeiro treino" is `guides.firstTraining`.
+  guides: {
+    menuLabel: "Guias",
+    tour: {
+      title: "Tour da interface",
+      summary: "Sete paradas pelos pontos principais da tela.",
+    },
+    firstTraining: {
+      title: "Primeiro treino",
+      summary:
+        "Um treino de classificação de verdade, passo a passo, com um dataset de exemplo.",
+      sample: {
+        title: "Crie um dataset de exemplo",
+        body: "Para o primeiro treino você não precisa de imagens suas: o botão abaixo cria um dataset sintético de duas classes. Ele vem dividido em treino, validação e teste porque cada parte tem um papel: o modelo aprende no treino, a validação mostra durante o treino se ele está generalizando, e o teste só entra no fim, com imagens que o modelo nunca viu.",
+        action: "Criar dataset de exemplo",
+        created: (path: string) => `Pronto, criado em ${path}.`,
+        existed: (path: string) => `Essa pasta já existia, então vou usá-la: ${path}.`,
+        failed: (message: string) => `Não deu para criar o dataset: ${message}`,
+      },
+      dataset: {
+        title: "Aponte o dataset",
+        body: "O campo do dataset agora aponta para a pasta de exemplo, e o VisionForge já achou as subpastas train, val e test e as duas classes (class_a e class_b), ajustando o modelo para elas. Com um dataset seu, é aqui que você escolhe a pasta.",
+        waiting: "Preencha o campo do dataset para continuar.",
+      },
+      parameters: {
+        title: "Os poucos parâmetros que importam",
+        body: "Troque as épocas para 3: cada época é uma passada completa pelas imagens de treino, e três bastam neste dataset. O tamanho do batch (imagens por passo) e a taxa de aprendizado (o tamanho de cada passo) podem ficar como estão, e o resto também. Na primeira vez o modelo baixa os pesos pré-treinados da ResNet-18 (uns 45 MB), que depois ficam em cache.",
+      },
+      train: {
+        title: "Treine",
+        body: "Clique em Treinar. Se a máquina não tem GPU, escolha CPU no seletor ao lado: com este dataset o treino leva poucos segundos.",
+        waiting: "Clique em Treinar para continuar.",
+      },
+      watching: {
+        title: "O que está acontecendo",
+        body: "A tela de treino mostra a época atual e, a cada época, a loss de treino e a de validação. Loss é o erro do modelo, e as duas devem cair. A de treino é medida durante a época, com o modelo ainda mudando; a de validação, ao fim dela, em imagens que ele não usou para aprender.",
+      },
+      result: {
+        title: "O resultado",
+        body: "Quando terminar, abra “Ver resultados” e compare as duas losses: se a de treino continua caindo e a de validação para ou sobe, o modelo está decorando o treino (overfitting). A acurácia perto de 100% aqui é de propósito, porque estes dados são fáceis: ela ensina a mecânica, não o que esperar com imagens reais.",
+        waiting: "Aguardando o treino terminar…",
+      },
+      history: {
+        title: "Tudo ficou salvo",
+        body: "O treino já está no Histórico, em outputs/models/<nome>/<data> (na pasta do seu perfil, se você usa um). O run.json guarda a configuração e as métricas de cada época; para ver o efeito do acaso, rode de novo com outra seed e compare as duas execuções ali.",
+      },
+      others: {
+        title: "E nas outras tarefas?",
+        body: "Detecção: caixas no formato YOLO, medida por mAP.\nSegmentação: máscaras por pixel, medida por mIoU.\nRegressão: um CSV com o valor a prever, medida por R² e RMSE.\nAnomalia: só imagens normais no treino, medida por AUROC.\nDados sintéticos são fáceis de propósito: para saber o que esperar, baixe um dataset real no cartão de download de Datasets.",
+      },
     },
   },
 };

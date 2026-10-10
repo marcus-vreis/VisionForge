@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { fetchSystemInfo } from "../api/client";
 import { useI18n } from "../i18n/useT";
+import type { GuideId } from "../lib/guides";
+import { GuideMenu } from "./GuideMenu";
 
 function Logo() {
   return (
@@ -59,8 +61,8 @@ export function Header({
 }: {
   userName?: string;
   onChangeName?: () => void;
-  /** Reabre o guia de primeira execução (ADR-104) a qualquer momento. */
-  onGuide?: () => void;
+  /** Abre um guia escolhido no menu (ADR-104, ADR-115). */
+  onGuide?: (id: GuideId) => void;
   /** Perfil em uso (ADR-114). Só vem num servidor que tem perfis: sem ele o chip
    *  não aparece e uma instalação de uma pessoa não vê nada novo. */
   profileName?: string;
@@ -97,7 +99,7 @@ export function Header({
     <header
       style={{
         position: "relative",
-        zIndex: 3,
+        zIndex: 4,
         padding: "22px 40px 0",
         maxWidth: 1280,
         margin: "0 auto",
@@ -185,32 +187,7 @@ export function Header({
             </button>
           ))}
         </div>
-        {onGuide && (
-          <button
-            type="button"
-            onClick={onGuide}
-            title={t.header.guideTitle}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "9px 13px",
-              background: "rgba(255,255,255,0.025)",
-              border: "1px solid var(--vf-panel-stroke)",
-              borderRadius: 10,
-              color: "var(--vf-text-dim)",
-              fontFamily: "var(--font-mono)",
-              fontSize: 11,
-              letterSpacing: "0.12em",
-              textTransform: "uppercase",
-              cursor: "pointer",
-              animation: "fadeUp 700ms ease both",
-            }}
-          >
-            <span style={{ fontSize: 13, lineHeight: 1 }}>◎</span>
-            {t.header.guide}
-          </button>
-        )}
+        {onGuide && <GuideMenu onSelect={onGuide} />}
         {profileName && (
           <button
             type="button"
