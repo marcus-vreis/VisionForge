@@ -4734,3 +4734,138 @@ to the catalog before the test passes, which is the same rule ADR-110 set for
 the page. One defect came out of moving the texts: the "froze N weights" warning
 replaced every comma of its Portuguese sentence by a period while grouping the
 number ("pré-treinados. ou use"), and now changes only the number.
+
+## ADR-117 — "Primeiro treino" for every built-in task
+
+**Date:** 2026-10-10
+**Status:** Accepted
+**Completes:** ADR-115 (which shipped classification only and named the other four
+tasks as a later slice), reusing the gates and the registry it built
+
+**Context:** the guide of ADR-115 taught one task. A researcher who opens the
+detection, regression, segmentation or anomaly tab and asks for the guide got a
+classification script (ResNet, accuracy, class folders) pointed at a form that
+has no such thing, and its last step said in one line what the other tasks
+would have been. The gates and the registry were built to be reused; what each
+task needed was its own sample dataset, its own text and a way to put the folder
+in a form that is not classification's.
+
+**Decision.**
+
+**1. A sample dataset for every task.** `POST /api/sample-dataset` takes the five
+tasks and writes `datasets/exemplo-<tarefa>/` with the self-test builders
+(ADR-060), unchanged: `exemplo-deteccao` (`images/` and `labels/` with `train`
+and `val`, four images each, one YOLO box per image), `exemplo-regressao`
+(`train.csv`, `val.csv`, `test.csv` of 12, 6 and 4 rows, columns `image` and
+`target`, and `images/`), `exemplo-segmentacao` (`<split>/images` and
+`<split>/masks`, 6, 3 and 2 pairs, mask values 0, 1, 2) and `exemplo-anomalia`
+(eight normal images in `train/good`, and `test/good` and `test/defect` with four
+each). The semantics are those of ADR-115: 201, 409 with the existing folder's
+`path` when it holds anything, a scratch folder renamed into place so no half
+folder is ever mistaken for a finished one. The response gains `task` and
+`targets`, and `counts` is items per split in the unit the task reads (images,
+CSV rows, image and mask pairs); `classes` is what the layout declares (class
+folders, the names in `classes.txt`, the pixel values found in the train masks,
+the subfolders of `test/`). One addition to the builders' output: the detection
+folder gets a `classes.txt` with the single name `object`, which is how a plain
+YOLO dataset says what class 0 is, and what the panel's stats card reads. The
+messages of this endpoint (unknown task, folder in use, write failure) now go
+through the catalog of ADR-116 in both languages; the "not built yet" 400 is gone
+because nothing is not built.
+
+**2. One guide, played on the active tab.** `GuideDefinition.steps(t, task)`
+takes the task. The guide opened from the menu, or chosen in the invitation, plays
+the script of the tab that is active at that moment (`guideTaskFor`: a built-in
+task's own tab, classification for a researcher's own task, which has no sample).
+The task is latched when the guide starts: switching tabs mid-guide does not
+change the script, and the dataset gate keeps reading the form of the guide's
+task (`datasetPaths[task]`), not the form that happens to be on screen. The
+eight steps, their gates (dataset set, `start`, `end`), their anchors and the
+wording of the buttons are the same for all five; what is per task, in
+`guides.firstTraining.tasks.<task>`, is what the data is, what was found, the
+parameters that matter, how long it takes, what the sheet shows, the result
+metric and what changes with data of one's own. Classification's texts moved
+there unchanged, except that its last step now says how to do the same on another
+task.
+
+**3. Anchors in the four panels.** Only the classification panel carried
+`dataset` and `training`. Each of the other four now marks the folder row
+(`dataset`), the training grid (`training`) and, new, the stats card under the
+dataset fields (`dataset-stats`). The second step of every task but
+classification points at the stats card instead of the folder row: with the card
+anchored on the folder row, the guide's card sat on top of the very counts the
+step describes (seen in the browser on the regression tab). Classification's
+picker shows what it found inside its own box, so it keeps `dataset`.
+
+**4. The sample sets what the defaults would not train on.** The forms default to
+photographs: images of 224 px (regression), 256 (anomaly), 512 (segmentation) and
+640 (detection) for samples of 32 to 128 px, two classes for masks that hold
+three values, which stops the run at the first batch. The guide's button, and the
+409 that reuses an existing folder, therefore also set the image size
+(`SAMPLE_SETUP`: 128 for detection, 64 for the others) and the model's class count
+(1 for detection, 3 for segmentation), and the steps say so. How each form
+receives a folder is a pure function per task (`lib/guides/sample-forms.ts`),
+because each panel keeps its own form shape: detection also goes back to the
+folder source if it was left on a `data.yaml`.
+
+**5. The few numbers the guide asks the researcher to type were measured, not
+guessed.** Each was run on CPU through the same API the page uses, and the
+defaults were run too, because the text has to say what they do:
+
+| Task | Asked | Result (best epoch) | Defaults would give |
+|---|---|---|---|
+| Classification | epochs 3 | unchanged from ADR-115 | |
+| Detection | nothing (100 epochs) | mAP50-95 0.995, about 50 s | 5 to 60 epochs: 0.04 to 0.08 |
+| Regression | epochs 30, batch 4 | val R² 0.88, RMSE 0.065 | 20 epochs, batch 32: R² -0.62 (one step per epoch) |
+| Segmentation | epochs 8, batch 2 | mIoU 0.92, about 40 s | batch 8: one step per epoch |
+| Anomaly | epochs 3 | AUROC 1.0, image F1 0.89 | |
+
+Two of these are lessons the text states instead of hiding. Detection is the one
+task where fewer epochs is the wrong advice: with four images and a few epochs YOLO
+barely leaves its warm-up and the mAP stays near zero, so the step says to leave
+the 100. Regression's
+test split has four rows, so its R² ranged from -14 to 0.6 across the runs of
+this calibration; the result step says that a low test R² there is sample noise,
+and the watching step that the live R² swings from epoch to epoch while the
+result keeps the best. The anomaly step also says what PatchCore does differently: it has
+no epochs, and the sheet shows `phase` events (extracting features, building the
+memory bank, scoring) with their progress in place of the epoch counter.
+
+**Rejected:**
+
+- *One menu entry per task.* Five entries for one script would crowd the menu and
+  the invitation; the active tab already says which task the researcher means.
+- *Filling epochs and batch size for the researcher too.* The folder, the image
+  size and the class count are facts about the sample, which the form cannot
+  know. Epochs and batch are what the researcher decides, and typing them is the
+  exercise; a guide that does it for you teaches where the button is.
+- *Changing the self-test builders* (a larger regression set, a named detection
+  class). The builders also feed `visionforge selftest` and a dozen tests; the one
+  addition lives in the sample endpoint, not in them.
+- *A gate on the class count.* A forgotten click on "apply" in the segmentation
+  card would fail the run, so the guide sets it; a gate would only turn that
+  failure into a waiting card.
+
+**Consequences:** a researcher on any of the five tabs gets a script written for
+that tab, with a folder that loads in that task's own loader and a result worth
+looking at. The response of `POST /api/sample-dataset` has two more fields, which
+a client that ignores them does not notice. On Windows the anomaly run takes
+about 13 to 16 s per epoch, almost all of it the start of the DataLoader workers
+for the loaders that are not persistent (its per-epoch metrics are measured on
+them), so the text says "about a minute" and asks for 3 epochs; that cost is the
+loaders', not the guide's. A calibration slip is worth recording: the first
+segmentation runs sent the image size where the regression config keeps it
+(`transforms.image_size`), which the segmentation config ignores, so they ran at
+512 px and took a minute per epoch; the numbers above are from `data.image_size`.
+
+**Verified in the browser** (headless Chrome over CDP, on CPU, with the sample
+folder deleted first so the button created it): regression, anomaly, detection and
+segmentation were played from the first step to the last. On each the button
+created the folder and filled that tab's own field, with the image size (and class
+count) set; the stats card was highlighted at step 2 and showed the counts the text
+names; the typed epochs and batch reached the run (`run.json` says 30 and 4 for
+regression); "Continuar" was disabled at the train step until `start` and at the
+result step until `end`; the sheet's log lines carry the metrics the watching step
+names. A second click on the button, with the folder already there, got the 409,
+filled the field and applied the image size as well. One thing the run corrected: a
+first draft put the second step on the folder row, and the card covered the counts.

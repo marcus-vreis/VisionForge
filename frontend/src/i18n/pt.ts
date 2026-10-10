@@ -2109,45 +2109,171 @@ export const pt = {
     firstTraining: {
       title: "Primeiro treino",
       summary:
-        "Um treino de classificação de verdade, passo a passo, com um dataset de exemplo.",
-      sample: {
-        title: "Crie um dataset de exemplo",
-        body: "Para o primeiro treino você não precisa de imagens suas: o botão abaixo cria um dataset sintético de duas classes. Ele vem dividido em treino, validação e teste porque cada parte tem um papel: o modelo aprende no treino, a validação mostra durante o treino se ele está generalizando, e o teste só entra no fim, com imagens que o modelo nunca viu.",
-        action: "Criar dataset de exemplo",
-        created: (path: string) => `Pronto, criado em ${path}.`,
-        existed: (path: string) => `Essa pasta já existia, então vou usá-la: ${path}.`,
-        failed: (message: string) => `Não deu para criar o dataset: ${message}`,
-      },
-      dataset: {
-        title: "Aponte o dataset",
-        body: "O campo do dataset agora aponta para a pasta de exemplo, e o VisionForge já achou as subpastas train, val e test e as duas classes (class_a e class_b), ajustando o modelo para elas. Com um dataset seu, é aqui que você escolhe a pasta.",
-        waiting: "Preencha o campo do dataset para continuar.",
-      },
-      parameters: {
-        title: "Os poucos parâmetros que importam",
-        body: "Troque as épocas para 3: cada época é uma passada completa pelas imagens de treino, e três bastam neste dataset. O tamanho do batch (imagens por passo) e a taxa de aprendizado (o tamanho de cada passo) podem ficar como estão, e o resto também. Na primeira vez o modelo baixa os pesos pré-treinados da ResNet-18 (uns 45 MB), que depois ficam em cache.",
-      },
-      train: {
-        title: "Treine",
-        body: "Clique em Treinar. Se a máquina não tem GPU, escolha CPU no seletor ao lado: com este dataset o treino leva poucos segundos.",
-        waiting: "Clique em Treinar para continuar.",
-      },
-      watching: {
-        title: "O que está acontecendo",
-        body: "A tela de treino mostra a época atual e, a cada época, a loss de treino e a de validação. Loss é o erro do modelo, e as duas devem cair. A de treino é medida durante a época, com o modelo ainda mudando; a de validação, ao fim dela, em imagens que ele não usou para aprender.",
-      },
-      result: {
-        title: "O resultado",
-        body: "Quando terminar, abra “Ver resultados” e compare as duas losses: se a de treino continua caindo e a de validação para ou sobe, o modelo está decorando o treino (overfitting). A acurácia perto de 100% aqui é de propósito, porque estes dados são fáceis: ela ensina a mecânica, não o que esperar com imagens reais.",
-        waiting: "Aguardando o treino terminar…",
-      },
+        "Um treino de verdade, passo a passo, com um dataset de exemplo da tarefa da aba ativa.",
+      action: "Criar dataset de exemplo",
+      created: (path: string) => `Pronto, criado em ${path}.`,
+      existed: (path: string) => `Essa pasta já existia, então vou usá-la: ${path}.`,
+      failed: (message: string) => `Não deu para criar o dataset: ${message}`,
+      datasetWaiting: "Preencha o campo do dataset para continuar.",
+      trainWaiting: "Clique em Treinar para continuar.",
+      resultWaiting: "Aguardando o treino terminar…",
       history: {
         title: "Tudo ficou salvo",
         body: "O treino já está no Histórico, em outputs/models/<nome>/<data> (na pasta do seu perfil, se você usa um). O run.json guarda a configuração e as métricas de cada época; para ver o efeito do acaso, rode de novo com outra seed e compare as duas execuções ali.",
       },
-      others: {
-        title: "E nas outras tarefas?",
-        body: "Detecção: caixas no formato YOLO, medida por mAP.\nSegmentação: máscaras por pixel, medida por mIoU.\nRegressão: um CSV com o valor a prever, medida por R² e RMSE.\nAnomalia: só imagens normais no treino, medida por AUROC.\nDados sintéticos são fáceis de propósito: para saber o que esperar, baixe um dataset real no cartão de download de Datasets.",
+      // O roteiro de cada tarefa (ADR-117): o que são os dados, os parâmetros que
+      // importam, o que olhar durante o treino e a métrica do resultado.
+      tasks: {
+        classification: {
+          sample: {
+            title: "Crie um dataset de exemplo",
+            body: "Para o primeiro treino você não precisa de imagens suas: o botão abaixo cria um dataset sintético de duas classes. Ele vem dividido em treino, validação e teste porque cada parte tem um papel: o modelo aprende no treino, a validação mostra durante o treino se ele está generalizando, e o teste só entra no fim, com imagens que o modelo nunca viu.",
+          },
+          dataset: {
+            title: "Aponte o dataset",
+            body: "O campo do dataset agora aponta para a pasta de exemplo, e o VisionForge já achou as subpastas train, val e test e as duas classes (class_a e class_b), ajustando o modelo para elas. Com um dataset seu, é aqui que você escolhe a pasta.",
+          },
+          parameters: {
+            title: "Os poucos parâmetros que importam",
+            body: "Troque as épocas para 3: cada época é uma passada completa pelas imagens de treino, e três bastam neste dataset. O tamanho do batch (imagens por passo) e a taxa de aprendizado (o tamanho de cada passo) podem ficar como estão, e o resto também. Na primeira vez o modelo baixa os pesos pré-treinados da ResNet-18 (uns 45 MB), que depois ficam em cache.",
+          },
+          train: {
+            title: "Treine",
+            body: "Clique em Treinar. Se a máquina não tem GPU, escolha CPU no seletor ao lado: com este dataset o treino leva poucos segundos.",
+          },
+          watching: {
+            title: "O que está acontecendo",
+            body: "A tela de treino mostra a época atual e, a cada época, a loss de treino e a de validação. Loss é o erro do modelo, e as duas devem cair. A de treino é medida durante a época, com o modelo ainda mudando; a de validação, ao fim dela, em imagens que ele não usou para aprender.",
+          },
+          result: {
+            title: "O resultado",
+            body: "Quando terminar, abra “Ver resultados” e compare as duas losses: se a de treino continua caindo e a de validação para ou sobe, o modelo está decorando o treino (overfitting). A acurácia perto de 100% aqui é de propósito, porque estes dados são fáceis: ela ensina a mecânica, não o que esperar com imagens reais.",
+          },
+          others: {
+            title: "E nas outras tarefas?",
+            body: "Detecção: caixas no formato YOLO, medida por mAP.\nSegmentação: máscaras por pixel, medida por mIoU.\nRegressão: um CSV com o valor a prever, medida por R² e RMSE.\nAnomalia: só imagens normais no treino, medida por AUROC.\nDados sintéticos são fáceis de propósito: para saber o que esperar, baixe um dataset real no cartão de download de Datasets. Para fazer o mesmo em outra tarefa, abra este guia com a aba dela ativa.",
+          },
+        },
+        detection: {
+          sample: {
+            title: "Crie um dataset de exemplo",
+            body: "Detecção precisa de imagens e de caixas. O botão abaixo cria oito imagens sintéticas de 128 px, cada uma com um quadrado claro no meio, e um .txt de mesmo nome com a caixa no formato YOLO: classe, centro x, centro y, largura e altura, tudo entre 0 e 1. As pastas images/ e labels/ têm train e val; o mAP é medido na validação.",
+          },
+          dataset: {
+            title: "Aponte o dataset",
+            body: "O campo agora aponta para a pasta de exemplo, e o VisionForge ajustou o tamanho da imagem para 128 px e o número de classes para 1, a classe object que o classes.txt da pasta declara. O cartão destacado conta imagens e caixas por divisão: quatro e quatro, uma caixa por imagem. Não há pasta de teste, e tudo bem.",
+          },
+          parameters: {
+            title: "Os poucos parâmetros que importam",
+            body: "Aqui, deixe tudo como está. Com poucas épocas o YOLO mal sai do aquecimento e o mAP fica perto de zero: as 100 do padrão são o que ele precisa, e neste dataset levam cerca de um minuto na CPU. O modelo é o YOLO11n pré-treinado, e na primeira vez o Ultralytics baixa os pesos dele (uns 5 MB).",
+          },
+          train: {
+            title: "Treine",
+            body: "Clique em Treinar. Se a máquina não tem GPU, escolha CPU no seletor ao lado: com este dataset as 100 épocas levam cerca de um minuto.",
+          },
+          watching: {
+            title: "O que está acontecendo",
+            body: "A tela de treino mostra a época atual e, a cada época, o mAP, a precisão, o recall e as losses da validação. A de caixa (box) mede onde o modelo põe a caixa; a de classe (cls), se ele acerta o que há nela. Nas primeiras épocas o mAP fica perto de zero e só sobe depois do aquecimento: é o esperado.",
+          },
+          result: {
+            title: "O resultado",
+            body: "Quando terminar, abra “Ver resultados”. O mAP50-95 é a precisão média das detecções para limiares de IoU (a sobreposição entre a caixa prevista e a real) de 0,5 a 0,95. Perto de 1 aqui é de propósito, porque o quadrado é fácil: ele ensina a mecânica, não o que esperar com fotos reais, onde valores bem menores são normais.",
+          },
+          others: {
+            title: "E com dados seus?",
+            body: "Com um dataset seu, a pasta precisa de images/ e labels/ com train e val (ou de um data.yaml, como os exportados pelo Roboflow) e de um classes.txt com os nomes. Dados sintéticos são fáceis de propósito: para saber o que esperar, baixe um dataset real no cartão de download de Datasets. Para fazer o mesmo em outra tarefa, abra este guia com a aba dela ativa.",
+          },
+        },
+        regression: {
+          sample: {
+            title: "Crie um dataset de exemplo",
+            body: "Regressão prevê um número a partir da imagem. O botão abaixo cria imagens sintéticas de uma cor lisa e um manifesto CSV por divisão (train.csv, val.csv e test.csv) com duas colunas: image, o nome do arquivo, e target, o valor a prever, que aqui cresce com o vermelho da imagem. São 12 linhas de treino, 6 de validação e 4 de teste.",
+          },
+          dataset: {
+            title: "Aponte o dataset",
+            body: "O campo agora aponta para a pasta de exemplo, e o VisionForge ajustou o tamanho da imagem para 64 px. Os nomes dos CSVs e das colunas (image e target) já são os do padrão do formulário. O cartão destacado confere os manifestos: as linhas de cada divisão, se as colunas existem e se as imagens estão na pasta images/.",
+          },
+          parameters: {
+            title: "Os poucos parâmetros que importam",
+            body: "Troque as épocas para 30 e o tamanho do batch para 4. Com 12 imagens de treino, o batch de 32 dá um passo só por época, e 30 épocas seriam 30 passos, pouco para aprender; com 4 são 90. A loss (MSE) é a padrão de regressão. Na primeira vez o modelo baixa os pesos pré-treinados da ResNet-18 (uns 45 MB), que depois ficam em cache.",
+          },
+          train: {
+            title: "Treine",
+            body: "Clique em Treinar. Se a máquina não tem GPU, escolha CPU no seletor ao lado: com este dataset o treino leva cerca de um minuto.",
+          },
+          watching: {
+            title: "O que está acontecendo",
+            body: "A tela de treino mostra a época atual e, a cada época, a loss de treino e as métricas da validação: RMSE e MAE, o erro típico na unidade do alvo (menor é melhor), e R², que vale 1 para um modelo perfeito e 0 para um que sempre prevê a média. O R² oscila de uma época para outra, e o resultado fica com a melhor delas; nas primeiras ele pode ser negativo, porque o modelo ainda é pior que a média.",
+          },
+          result: {
+            title: "O resultado",
+            body: "Quando terminar, abra “Ver resultados”. Olhe o R² e o RMSE da validação (6 imagens): R² perto de 0,9 é um bom ajuste, e estes dados são fáceis de propósito. O R² do teste tem só 4 imagens e oscila muito de uma execução para outra: um valor baixo ali é, em boa parte, ruído de amostra pequena, não necessariamente defeito do modelo.",
+          },
+          others: {
+            title: "E com dados seus?",
+            body: "Com dados seus, você precisa de uma pasta com as imagens e de um CSV por divisão, com a coluna do nome do arquivo e uma ou mais colunas-alvo (os nomes ficam no cartão Dataset). Dados sintéticos são fáceis de propósito: para saber o que esperar, baixe um dataset real no cartão de download de Datasets. Para fazer o mesmo em outra tarefa, abra este guia com a aba dela ativa.",
+          },
+        },
+        segmentation: {
+          sample: {
+            title: "Crie um dataset de exemplo",
+            body: "Segmentação classifica cada pixel. O botão abaixo cria pares de imagem e máscara: em cada pasta de divisão há images/ e masks/, com arquivos de mesmo nome. A máscara é uma imagem em tons de cinza em que cada pixel guarda o número da classe: 0 é o fundo, e 1 e 2 são as duas classes de um retângulo colorido. São 6 pares de treino, 3 de validação e 2 de teste.",
+          },
+          dataset: {
+            title: "Aponte o dataset",
+            body: "O campo agora aponta para a pasta de exemplo, e o VisionForge ajustou o tamanho da imagem para 64 px e o número de classes do modelo para 3: os valores 0, 1 e 2 que o cartão destacado achou nas máscaras. Esse número tem de cobrir todos os valores das máscaras, ou o treino para. O cartão também confere se cada imagem tem a sua máscara.",
+          },
+          parameters: {
+            title: "Os poucos parâmetros que importam",
+            body: "Troque as épocas para 8 e o tamanho do batch para 2: com 6 imagens de treino, o batch de 8 do padrão dá um passo só por época, e poucas épocas não bastam. A loss é a entropia cruzada, a padrão de segmentação, e o U-Net é treinado do zero, sem baixar pesos.",
+          },
+          train: {
+            title: "Treine",
+            body: "Clique em Treinar. Se a máquina não tem GPU, escolha CPU no seletor ao lado: com este dataset o treino leva cerca de um minuto.",
+          },
+          watching: {
+            title: "O que está acontecendo",
+            body: "A tela de treino mostra a época atual e, a cada época, a loss e as métricas da validação: o mIoU (a sobreposição média entre a máscara prevista e a real, por classe), o Dice (parecido, mais generoso) e a acurácia por pixel. Como o fundo ocupa quase tudo, a acurácia por pixel é a mais otimista das três: confie no mIoU.",
+          },
+          result: {
+            title: "O resultado",
+            body: "Quando terminar, abra “Ver resultados”: o mIoU e o Dice da validação e do teste. Perto de 1 aqui é de propósito, porque os retângulos são fáceis: o resultado ensina a mecânica, não o que esperar com imagens reais, onde valores bem menores são normais.",
+          },
+          others: {
+            title: "E com dados seus?",
+            body: "Com dados seus, cada divisão precisa de images/ e masks/ com arquivos de mesmo nome, e a máscara guarda o número da classe em cada pixel (um valor como 255 pode marcar pixels a ignorar). Dados sintéticos são fáceis de propósito: para saber o que esperar, baixe um dataset real no cartão de download de Datasets. Para fazer o mesmo em outra tarefa, abra este guia com a aba dela ativa.",
+          },
+        },
+        anomaly: {
+          sample: {
+            title: "Crie um dataset de exemplo",
+            body: "Detecção de anomalias aprende só com imagens normais. O botão abaixo cria 8 imagens sintéticas de textura lisa em train/good e, em test/, 4 normais (good) e 4 com defeito (defect), um quadrado branco que as normais nunca têm. O modelo nunca vê um defeito no treino: ele só é testado com eles.",
+          },
+          dataset: {
+            title: "Aponte o dataset",
+            body: "O campo agora aponta para a pasta de exemplo, e o VisionForge ajustou o tamanho da imagem para 64 px. Os nomes das pastas (train, test e good) já são os do padrão. O cartão destacado conta as imagens normais do treino e as do teste, separando as normais das com defeito.",
+          },
+          parameters: {
+            title: "Os poucos parâmetros que importam",
+            body: "Troque as épocas para 3. O método é o autoencoder: ele aprende a recriar imagens normais, e uma imagem com defeito é recriada mal, o que a denuncia. O PatchCore, a outra opção, não treina por épocas: guarda características das imagens normais e compara cada imagem nova com elas. O resto pode ficar como está.",
+          },
+          train: {
+            title: "Treine",
+            body: "Clique em Treinar. Se a máquina não tem GPU, escolha CPU no seletor ao lado: com este dataset o treino leva cerca de um minuto.",
+          },
+          watching: {
+            title: "O que está acontecendo",
+            body: "A tela de treino mostra a época atual e, a cada época, a loss de reconstrução (o erro ao recriar uma imagem normal, que deve cair) e, medidos nas imagens de teste, o AUROC e o F1 de imagem. Com o PatchCore não há épocas: a tela mostra fases (extraindo features, montando o banco e pontuando), cada uma com o seu progresso.",
+          },
+          result: {
+            title: "O resultado",
+            body: "Quando terminar, abra “Ver resultados”. O AUROC mede se o modelo dá notas mais altas às imagens com defeito do que às normais: 1 é perfeito, 0,5 é sorte. O F1 de imagem depende também do limiar, o ponto de corte da nota, calculado nas normais do treino: pode ficar abaixo de 1 mesmo com AUROC 1. Aqui os defeitos são fáceis de propósito.",
+          },
+          others: {
+            title: "E com dados seus?",
+            body: "Com dados seus, a pasta precisa de train/good, só com imagens normais, e de test/ com uma subpasta good e uma por tipo de defeito (os nomes ficam no cartão Dataset). Dados sintéticos são fáceis de propósito: para saber o que esperar, baixe um dataset real no cartão de download de Datasets. Para fazer o mesmo em outra tarefa, abra este guia com a aba dela ativa.",
+          },
+        },
       },
     },
   },

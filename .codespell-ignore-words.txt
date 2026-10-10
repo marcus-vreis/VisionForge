@@ -58,3 +58,4 @@ rever
 excede
 registre
 falso
+fases

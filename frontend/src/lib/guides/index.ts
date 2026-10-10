@@ -18,6 +18,7 @@ export function guideById(id: GuideId): GuideDefinition {
   return BY_ID[id];
 }
 
+export { GUIDE_TASKS, guideTaskFor, type GuideTask } from "./tasks";
 export type {
   ActionResult,
   GuideAction,

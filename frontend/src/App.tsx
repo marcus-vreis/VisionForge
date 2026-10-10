@@ -22,7 +22,14 @@ import { Header } from "./components/Header";
 import { WelcomeOverlay } from "./components/WelcomeOverlay";
 import { GuidedTour } from "./components/GuidedTour";
 import { readTourSeen } from "./lib/tour";
-import type { GuideContext, GuideId } from "./lib/guides";
+import type { GuideContext, GuideId, GuideTask } from "./lib/guides";
+import {
+  sampleAnomalyForm,
+  sampleClassificationForm,
+  sampleDetectionForm,
+  sampleRegressionForm,
+  sampleSegmentationForm,
+} from "./lib/guides/sample-forms";
 import { readUserName } from "./lib/user-name";
 import {
   isProfileStorageKey,
@@ -208,21 +215,45 @@ export default function App() {
   >({});
   const [runSignal, setRunSignal] = useState(0);
 
-  // What the guides read and change (ADR-115). The dataset path is the
-  // classification form's own, so the "dataset set" gate follows what the field
-  // shows, and the guide's button fills the same field the picker does.
-  const guideDatasetPath =
-    (((formData["data"] ?? {}) as Record<string, unknown>)["base_dir"] as
-      | string
-      | undefined) ?? "";
+  // What the guides read and change (ADR-115, ADR-117). Each task keeps its
+  // dataset folder in its own form, so the "dataset set" gate follows what the
+  // field of the guide's task shows, and the guide's button fills the same field
+  // the picker does. Detection reads the field of the source in use.
+  const guideDatasetPaths: Record<GuideTask, string> = {
+    classification:
+      (((formData["data"] ?? {}) as Record<string, unknown>)["base_dir"] as
+        | string
+        | undefined) ?? "",
+    detection:
+      detectionForm.data.source === "folder"
+        ? detectionForm.data.base_dir
+        : detectionForm.data.data_yaml,
+    regression: regressionForm.data.base_dir,
+    segmentation: segmentationForm.data.base_dir,
+    anomaly: anomalyForm.data.base_dir,
+  };
   const guideContext = useMemo<GuideContext>(
     () => ({
       selectTask: setActiveKey,
-      setDatasetPath: (path) =>
-        setFormData((prev) => ({
-          ...prev,
-          data: { ...((prev["data"] ?? {}) as Record<string, unknown>), base_dir: path },
-        })),
+      setDatasetPath: (path, task, setup) => {
+        switch (task) {
+          case "classification":
+            setFormData((prev) => sampleClassificationForm(prev, path));
+            break;
+          case "detection":
+            setDetectionForm((prev) => sampleDetectionForm(prev, path, setup));
+            break;
+          case "regression":
+            setRegressionForm((prev) => sampleRegressionForm(prev, path, setup));
+            break;
+          case "segmentation":
+            setSegmentationForm((prev) => sampleSegmentationForm(prev, path, setup));
+            break;
+          case "anomaly":
+            setAnomalyForm((prev) => sampleAnomalyForm(prev, path, setup));
+            break;
+        }
+      },
       hideTrainingSheet: () => setOverlayVisible(false),
     }),
     [],
@@ -853,7 +884,8 @@ export default function App() {
           invite={tour === "convite"}
           guide={tour === "convite" ? undefined : tour}
           events={progressEvents}
-          datasetPath={guideDatasetPath}
+          activeTask={activeKey}
+          datasetPaths={guideDatasetPaths}
           context={guideContext}
           onClose={() => setTour("none")}
         />

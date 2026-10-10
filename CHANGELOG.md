@@ -42,6 +42,26 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
   leva segundos na CPU. Nunca sobrescreve: se a pasta já tem arquivos a resposta
   é 409 com o `path` dela, e uma tarefa desconhecida dá 400
   ([ADR-115](docs/dev/DECISIONS.md)).
+- **O "Primeiro treino" agora é um roteiro para cada tarefa: ele toca a aba que
+  está ativa quando o guia abre.** Detecção, regressão, segmentação e anomalia
+  ganham os mesmos oito passos da classificação, com os mesmos portões (dataset
+  preenchido, treino começou, treino terminou), e o texto de cada passo é da
+  tarefa: o que são os dados (caixas YOLO, um CSV de alvos, pares imagem e
+  máscara, só imagens normais no treino), os poucos parâmetros que importam, o
+  que olhar durante o treino e a métrica do resultado (mAP50-95, R² e RMSE, mIoU
+  e Dice, AUROC e F1 de imagem). O passo de anomalia diz que o PatchCore não tem
+  épocas e que a tela mostra fases. O botão do primeiro passo cria o dataset da
+  tarefa e preenche o campo do formulário dela, e também ajusta o que o padrão do
+  formulário não treinaria sobre o exemplo: o tamanho da imagem (64 px, ou 128
+  na detecção) e o número de classes (3 na segmentação, 1 na detecção), porque
+  uma máscara com um valor que o modelo não tem como classe derruba a execução. Os
+  números que o guia pede para digitar foram medidos na CPU: na regressão, 30
+  épocas e batch 4 dão R² de validação perto de 0,9, onde o padrão (20 épocas,
+  batch 32, um passo por época) dava R² negativo; na detecção, ao contrário, o
+  guia manda deixar as 100 épocas, porque com poucas o mAP fica perto de zero.
+  Dados sintéticos continuam fáceis de propósito, e o último passo aponta o cartão
+  de download de Datasets. Os painéis das quatro tarefas ganharam as âncoras do
+  guia, e a classificação segue como estava ([ADR-117](docs/dev/DECISIONS.md)).
 - **O dataset de exemplo existe para as cinco tarefas, cada um no layout que a
   tarefa lê.** `POST /api/sample-dataset` aceita agora `detection`, `regression`,
   `segmentation` e `anomaly`, além de `classification`, e grava em

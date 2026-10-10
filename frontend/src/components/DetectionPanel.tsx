@@ -276,7 +276,7 @@ export function DetectionPanel({
       {/* Treinamento */}
       <div style={card}>
         <div style={sectionLabel}>{t.detectionPanel.training.title}</div>
-        <div style={grid}>
+        <div data-tour="training" style={grid}>
           <NumberField
             label={t.detectionPanel.training.epochs}
             value={formData.training.epochs}
@@ -548,7 +548,10 @@ export function DetectionPanel({
         </div>
         <div style={grid}>
           {formData.data.source === "folder" ? (
-            <div style={{ gridColumn: "1 / -1", display: "flex", gap: 10, alignItems: "flex-end" }}>
+            <div
+              data-tour="dataset"
+              style={{ gridColumn: "1 / -1", display: "flex", gap: 10, alignItems: "flex-end" }}
+            >
               <div style={{ flex: 1 }}>
                 <TextField
                   label={t.detectionPanel.dataset.baseDir}
@@ -569,7 +572,10 @@ export function DetectionPanel({
               </button>
             </div>
           ) : (
-            <div style={{ gridColumn: "1 / -1", display: "flex", gap: 10, alignItems: "flex-end" }}>
+            <div
+              data-tour="dataset"
+              style={{ gridColumn: "1 / -1", display: "flex", gap: 10, alignItems: "flex-end" }}
+            >
               <div style={{ flex: 1 }}>
                 <TextField
                   label={t.detectionPanel.dataset.yamlFile}
@@ -612,10 +618,12 @@ export function DetectionPanel({
           />
         </div>
         {formData.data.source === "folder" ? (
-          <DetectionDatasetStats
-            baseDir={formData.data.base_dir}
-            onApplyClasses={(n) => setModel({ num_classes: n })}
-          />
+          <div data-tour="dataset-stats">
+            <DetectionDatasetStats
+              baseDir={formData.data.base_dir}
+              onApplyClasses={(n) => setModel({ num_classes: n })}
+            />
+          </div>
         ) : (
           <p
             style={{

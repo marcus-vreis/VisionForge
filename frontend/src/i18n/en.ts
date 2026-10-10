@@ -1881,46 +1881,173 @@ export const en: Dict = {
     },
     firstTraining: {
       title: "First training",
-      summary: "A real classification run, step by step, on a sample dataset.",
-      sample: {
-        title: "Create a sample dataset",
-        body: "You do not need images of your own for a first run: the button below creates a synthetic two-class dataset. It comes split into train, validation and test because each part has a job: the model learns on train, validation shows during training whether it is generalising, and test is used only at the end, on images the model has never seen.",
-        action: "Create sample dataset",
-        created: (path: string) => `Done, created at ${path}.`,
-        existed: (path: string) =>
-          `That folder already existed, so I will use it: ${path}.`,
-        failed: (message: string) => `Could not create the dataset: ${message}`,
-      },
-      dataset: {
-        title: "Point at the dataset",
-        body: "The dataset field now points at the sample folder, and VisionForge has already found the train, val and test subfolders and the two classes (class_a and class_b), setting the model up for them. With a dataset of your own, this is where you pick the folder.",
-        waiting: "Fill in the dataset field to continue.",
-      },
-      parameters: {
-        title: "The few parameters that matter",
-        body: "Set epochs to 3: an epoch is one full pass over the training images, and three are enough for this dataset. Batch size (images per step) and learning rate (the size of each step) can stay as they are, and so can the rest. The first time, the model downloads the pretrained ResNet-18 weights (about 45 MB), which are cached afterwards.",
-      },
-      train: {
-        title: "Train",
-        body: "Click Train. If the machine has no GPU, pick CPU in the selector beside it: with this dataset the run takes a few seconds.",
-        waiting: "Click Train to continue.",
-      },
-      watching: {
-        title: "What is happening now",
-        body: "The training sheet shows the current epoch and, after each one, the training loss and the validation loss. Loss is the model's error, and both should fall. The training one is measured during the epoch, while the model is still changing; the validation one at its end, on images the model did not learn from.",
-      },
-      result: {
-        title: "The result",
-        body: "When it finishes, open “View results” and compare the two losses: if the training loss keeps falling while the validation loss stalls or rises, the model is memorising the training set (overfitting). Accuracy near 100% here is on purpose, because this data is easy: it teaches the mechanics, not what to expect with real images.",
-        waiting: "Waiting for the training to finish…",
-      },
+      summary:
+        "A real run, step by step, on a sample dataset of the task on the active tab.",
+      action: "Create sample dataset",
+      created: (path: string) => `Done, created at ${path}.`,
+      existed: (path: string) =>
+        `That folder already existed, so I will use it: ${path}.`,
+      failed: (message: string) => `Could not create the dataset: ${message}`,
+      datasetWaiting: "Fill in the dataset field to continue.",
+      trainWaiting: "Click Train to continue.",
+      resultWaiting: "Waiting for the training to finish…",
       history: {
         title: "Everything was saved",
         body: "The run is already in the History, under outputs/models/<name>/<date> (in your profile's folder, if you use one). The run.json holds the configuration and the metrics of every epoch; to see the effect of chance, run again with another seed and compare the two there.",
       },
-      others: {
-        title: "What about the other tasks?",
-        body: "Detection: YOLO-format boxes, measured by mAP.\nSegmentation: per-pixel masks, measured by mIoU.\nRegression: a CSV with the value to predict, measured by R² and RMSE.\nAnomaly: only normal images in training, measured by AUROC.\nSynthetic data is easy on purpose: to know what to expect, download a real dataset from the download card in Datasets.",
+      // Each task's script (ADR-117): what the data is, the parameters that
+      // matter, what to watch while it trains and the result metric.
+      tasks: {
+        classification: {
+          sample: {
+            title: "Create a sample dataset",
+            body: "You do not need images of your own for a first run: the button below creates a synthetic two-class dataset. It comes split into train, validation and test because each part has a job: the model learns on train, validation shows during training whether it is generalising, and test is used only at the end, on images the model has never seen.",
+          },
+          dataset: {
+            title: "Point at the dataset",
+            body: "The dataset field now points at the sample folder, and VisionForge has already found the train, val and test subfolders and the two classes (class_a and class_b), setting the model up for them. With a dataset of your own, this is where you pick the folder.",
+          },
+          parameters: {
+            title: "The few parameters that matter",
+            body: "Set epochs to 3: an epoch is one full pass over the training images, and three are enough for this dataset. Batch size (images per step) and learning rate (the size of each step) can stay as they are, and so can the rest. The first time, the model downloads the pretrained ResNet-18 weights (about 45 MB), which are cached afterwards.",
+          },
+          train: {
+            title: "Train",
+            body: "Click Train. If the machine has no GPU, pick CPU in the selector beside it: with this dataset the run takes a few seconds.",
+          },
+          watching: {
+            title: "What is happening now",
+            body: "The training sheet shows the current epoch and, after each one, the training loss and the validation loss. Loss is the model's error, and both should fall. The training one is measured during the epoch, while the model is still changing; the validation one at its end, on images the model did not learn from.",
+          },
+          result: {
+            title: "The result",
+            body: "When it finishes, open “View results” and compare the two losses: if the training loss keeps falling while the validation loss stalls or rises, the model is memorising the training set (overfitting). Accuracy near 100% here is on purpose, because this data is easy: it teaches the mechanics, not what to expect with real images.",
+          },
+          others: {
+            title: "What about the other tasks?",
+            body: "Detection: YOLO-format boxes, measured by mAP.\nSegmentation: per-pixel masks, measured by mIoU.\nRegression: a CSV with the value to predict, measured by R² and RMSE.\nAnomaly: only normal images in training, measured by AUROC.\nSynthetic data is easy on purpose: to know what to expect, download a real dataset from the download card in Datasets. To do the same on another task, open this guide with its tab active.",
+          },
+        },
+        detection: {
+          sample: {
+            title: "Create a sample dataset",
+            body: "Detection needs images and boxes. The button below creates eight synthetic 128 px images, each with a bright square in the middle, and a .txt file with the same name holding the box in YOLO format: class, centre x, centre y, width and height, all between 0 and 1. The images/ and labels/ folders have train and val; mAP is measured on validation.",
+          },
+          dataset: {
+            title: "Point at the dataset",
+            body: "The field now points at the sample folder, and VisionForge set the image size to 128 px and the number of classes to 1, the object class that the folder's classes.txt declares. The highlighted card counts images and boxes per split: four and four, one box per image. There is no test folder, and that is fine.",
+          },
+          parameters: {
+            title: "The few parameters that matter",
+            body: "Here, leave everything as it is. With few epochs YOLO barely leaves its warm-up and mAP stays near zero: the default 100 are what it needs, and on this dataset they take about a minute on CPU. The model is the pretrained YOLO11n, and the first time Ultralytics downloads its weights (about 5 MB).",
+          },
+          train: {
+            title: "Train",
+            body: "Click Train. If the machine has no GPU, pick CPU in the selector beside it: with this dataset the 100 epochs take about a minute.",
+          },
+          watching: {
+            title: "What is happening now",
+            body: "The training sheet shows the current epoch and, after each one, the validation mAP, precision, recall and losses. The box loss measures where the model puts the box; the class loss (cls), whether it gets right what is in it. In the first epochs mAP stays near zero and only rises after the warm-up: that is expected.",
+          },
+          result: {
+            title: "The result",
+            body: "When it finishes, open “View results”. mAP50-95 is the average precision of the detections over IoU thresholds (the overlap between the predicted and the true box) from 0.5 to 0.95. Near 1 here is on purpose, because the square is easy: it teaches the mechanics, not what to expect with real photos, where much lower values are normal.",
+          },
+          others: {
+            title: "And with your own data?",
+            body: "With a dataset of your own, the folder needs images/ and labels/ with train and val (or a data.yaml, like the ones Roboflow exports) and a classes.txt with the names. Synthetic data is easy on purpose: to know what to expect, download a real dataset from the download card in Datasets. To do the same on another task, open this guide with its tab active.",
+          },
+        },
+        regression: {
+          sample: {
+            title: "Create a sample dataset",
+            body: "Regression predicts a number from the image. The button below creates plain-colour synthetic images and one CSV manifest per split (train.csv, val.csv and test.csv) with two columns: image, the file name, and target, the value to predict, which here grows with the image's red. There are 12 training rows, 6 validation and 4 test.",
+          },
+          dataset: {
+            title: "Point at the dataset",
+            body: "The field now points at the sample folder, and VisionForge set the image size to 64 px. The CSV and column names (image and target) are already the form's defaults. The highlighted card checks the manifests: the rows of each split, whether the columns exist and whether the images are in the images/ folder.",
+          },
+          parameters: {
+            title: "The few parameters that matter",
+            body: "Set epochs to 30 and batch size to 4. With 12 training images, the default batch of 32 is a single step per epoch, and 30 epochs would be 30 steps, too few to learn from; with 4 there are 90. The loss (MSE) is the usual one for regression. The first time, the model downloads the pretrained ResNet-18 weights (about 45 MB), which are cached afterwards.",
+          },
+          train: {
+            title: "Train",
+            body: "Click Train. If the machine has no GPU, pick CPU in the selector beside it: with this dataset the run takes about a minute.",
+          },
+          watching: {
+            title: "What is happening now",
+            body: "The training sheet shows the current epoch and, after each one, the training loss and the validation metrics: RMSE and MAE, the typical error in the target's unit (lower is better), and R², which is 1 for a perfect model and 0 for one that always predicts the mean. R² swings from one epoch to the next and the result keeps the best of them; in the first ones it can be negative, because the model is still worse than the mean.",
+          },
+          result: {
+            title: "The result",
+            body: "When it finishes, open “View results”. Look at the validation R² and RMSE (6 images): an R² near 0.9 is a good fit, and this data is easy on purpose. The test R² rests on only 4 images and swings a lot from one run to the next: a low value there is largely small-sample noise, not necessarily a fault in the model.",
+          },
+          others: {
+            title: "And with your own data?",
+            body: "With your own data you need a folder with the images and one CSV per split, with the file-name column and one or more target columns (the names are in the Dataset card). Synthetic data is easy on purpose: to know what to expect, download a real dataset from the download card in Datasets. To do the same on another task, open this guide with its tab active.",
+          },
+        },
+        segmentation: {
+          sample: {
+            title: "Create a sample dataset",
+            body: "Segmentation classifies every pixel. The button below creates image and mask pairs: each split folder has images/ and masks/, with files of the same name. A mask is a grey-scale image whose pixels hold the class number: 0 is the background, and 1 and 2 are the two classes of a coloured rectangle. There are 6 training pairs, 3 validation and 2 test.",
+          },
+          dataset: {
+            title: "Point at the dataset",
+            body: "The field now points at the sample folder, and VisionForge set the image size to 64 px and the model's number of classes to 3: the values 0, 1 and 2 that the highlighted card found in the masks. That number has to cover every value in the masks, or the run stops. The card also checks that each image has its mask.",
+          },
+          parameters: {
+            title: "The few parameters that matter",
+            body: "Set epochs to 8 and batch size to 2: with 6 training images, the default batch of 8 is a single step per epoch, and a few epochs are not enough. The loss is cross-entropy, the usual one for segmentation, and the U-Net is trained from scratch, with no weights to download.",
+          },
+          train: {
+            title: "Train",
+            body: "Click Train. If the machine has no GPU, pick CPU in the selector beside it: with this dataset the run takes about a minute.",
+          },
+          watching: {
+            title: "What is happening now",
+            body: "The training sheet shows the current epoch and, after each one, the loss and the validation metrics: mIoU (the average overlap between the predicted and the true mask, per class), Dice (similar, more generous) and pixel accuracy. Since the background fills almost everything, pixel accuracy is the most optimistic of the three: trust mIoU.",
+          },
+          result: {
+            title: "The result",
+            body: "When it finishes, open “View results”: the validation and test mIoU and Dice. Near 1 here is on purpose, because the rectangles are easy: the result teaches the mechanics, not what to expect with real images, where much lower values are normal.",
+          },
+          others: {
+            title: "And with your own data?",
+            body: "With your own data, each split needs images/ and masks/ with files of the same name, and the mask holds the class number at every pixel (a value such as 255 can mark pixels to ignore). Synthetic data is easy on purpose: to know what to expect, download a real dataset from the download card in Datasets. To do the same on another task, open this guide with its tab active.",
+          },
+        },
+        anomaly: {
+          sample: {
+            title: "Create a sample dataset",
+            body: "Anomaly detection learns from normal images only. The button below creates 8 synthetic plain-texture images in train/good and, in test/, 4 normal ones (good) and 4 with a defect (defect), a white square the normal ones never have. The model never sees a defect during training: it is only tested on them.",
+          },
+          dataset: {
+            title: "Point at the dataset",
+            body: "The field now points at the sample folder, and VisionForge set the image size to 64 px. The folder names (train, test and good) are already the defaults. The highlighted card counts the normal training images and the test ones, telling the normal apart from the defective.",
+          },
+          parameters: {
+            title: "The few parameters that matter",
+            body: "Set epochs to 3. The method is the autoencoder: it learns to rebuild normal images, and an image with a defect is rebuilt badly, which gives it away. PatchCore, the other option, does not train in epochs: it stores features of the normal images and compares each new image with them. The rest can stay as it is.",
+          },
+          train: {
+            title: "Train",
+            body: "Click Train. If the machine has no GPU, pick CPU in the selector beside it: with this dataset the run takes about a minute.",
+          },
+          watching: {
+            title: "What is happening now",
+            body: "The training sheet shows the current epoch and, after each one, the reconstruction loss (the error when rebuilding a normal image, which should fall) and, measured on the test images, the AUROC and the image F1. PatchCore has no epochs: the sheet shows phases (extracting features, building the memory bank and scoring), each with its own progress.",
+          },
+          result: {
+            title: "The result",
+            body: "When it finishes, open “View results”. AUROC measures whether the model scores defective images higher than normal ones: 1 is perfect, 0.5 is luck. The image F1 also depends on the threshold, the score cut-off, computed on the training normals: it can be below 1 even with an AUROC of 1. Here the defects are easy on purpose.",
+          },
+          others: {
+            title: "And with your own data?",
+            body: "With your own data, the folder needs train/good, with normal images only, and test/ with a good subfolder and one per defect type (the names are in the Dataset card). Synthetic data is easy on purpose: to know what to expect, download a real dataset from the download card in Datasets. To do the same on another task, open this guide with its tab active.",
+          },
+        },
       },
     },
   },

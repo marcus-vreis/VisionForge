@@ -238,7 +238,7 @@ export function RegressionPanel({
       {/* Treinamento */}
       <div style={card}>
         <div style={sectionLabel}>{t.taskPanel.training.title}</div>
-        <div style={grid}>
+        <div data-tour="training" style={grid}>
           <NumberField
             label={t.taskPanel.training.epochs}
             value={formData.training.epochs}
@@ -366,7 +366,10 @@ export function RegressionPanel({
       <div style={card}>
         <div style={sectionLabel}>{t.regressionPanel.dataset.title}</div>
         <div style={grid}>
-          <div style={{ gridColumn: "1 / -1", display: "flex", gap: 10, alignItems: "flex-end" }}>
+          <div
+            data-tour="dataset"
+            style={{ gridColumn: "1 / -1", display: "flex", gap: 10, alignItems: "flex-end" }}
+          >
             <div style={{ flex: 1 }}>
               <TextField
                 label={t.taskPanel.dataset.baseDir}
@@ -447,15 +450,17 @@ export function RegressionPanel({
             help={paramHelp(t, "image_size")}
           />
         </div>
-        <RegressionDatasetStats
-          baseDir={formData.data.base_dir}
-          imagesDir={formData.data.images_dir}
-          trainCsv={formData.data.train_csv}
-          valCsv={formData.data.val_csv}
-          testCsv={formData.data.test_csv}
-          imageColumn={formData.data.image_column}
-          targetColumns={formData.data.target_columns}
-        />
+        <div data-tour="dataset-stats">
+          <RegressionDatasetStats
+            baseDir={formData.data.base_dir}
+            imagesDir={formData.data.images_dir}
+            trainCsv={formData.data.train_csv}
+            valCsv={formData.data.val_csv}
+            testCsv={formData.data.test_csv}
+            imageColumn={formData.data.image_column}
+            targetColumns={formData.data.target_columns}
+          />
+        </div>
       </div>
 
       {/* Pré-processamento + augmentação (ADR-059) */}

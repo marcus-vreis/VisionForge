@@ -231,7 +231,7 @@ export function SegmentationPanel({
       {/* Treinamento */}
       <div style={card}>
         <div style={sectionLabel}>{t.taskPanel.training.title}</div>
-        <div style={grid}>
+        <div data-tour="training" style={grid}>
           <NumberField
             label={t.taskPanel.training.epochs}
             value={formData.training.epochs}
@@ -360,6 +360,7 @@ export function SegmentationPanel({
         <div style={sectionLabel}>{t.segmentationPanel.dataset.title}</div>
         <div style={grid}>
           <div
+            data-tour="dataset"
             style={{
               gridColumn: "1 / -1",
               display: "flex",
@@ -446,15 +447,17 @@ export function SegmentationPanel({
             hint={t.segmentationPanel.dataset.ignoreIndexHint}
           />
         </div>
-        <SegmentationDatasetStats
-          baseDir={formData.data.base_dir}
-          imagesSubdir={formData.data.images_subdir}
-          masksSubdir={formData.data.masks_subdir}
-          trainDir={formData.data.train_dir}
-          valDir={formData.data.val_dir}
-          testDir={formData.data.test_dir}
-          onApplyClasses={(n) => setModel({ num_classes: n })}
-        />
+        <div data-tour="dataset-stats">
+          <SegmentationDatasetStats
+            baseDir={formData.data.base_dir}
+            imagesSubdir={formData.data.images_subdir}
+            masksSubdir={formData.data.masks_subdir}
+            trainDir={formData.data.train_dir}
+            valDir={formData.data.val_dir}
+            testDir={formData.data.test_dir}
+            onApplyClasses={(n) => setModel({ num_classes: n })}
+          />
+        </div>
       </div>
 
       {/* Pré-processamento + augmentação (ADR-059) */}

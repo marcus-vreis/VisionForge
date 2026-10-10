@@ -7,12 +7,25 @@
 
 import type { Dict } from "../../i18n/pt";
 import type { TourStep } from "../tour";
+import type { GuideTask } from "./tasks";
 
 export type GuideId = "tour" | "firstTraining";
 
+/** What a sample dataset fixes in its task's form besides the folder, because the
+ *  form's own default would not train on it (ADR-117). Classification fixes
+ *  nothing: its panel reads the classes and the splits off the folder by itself. */
+export interface SampleSetup {
+  /** The model's class count, which the masks (0, 1, 2) or the labels (one class)
+   *  decide: a mask value the model has no class for stops the run. */
+  numClasses?: number;
+  /** The side the images are resized to. The forms default to 224 to 640 px, for
+   *  photographs, and the sample images are 32 to 128 px. */
+  imageSize?: number;
+}
+
 /** What a step may ask about the app. Read from the real screen state, never kept apart. */
 export interface GuideFacts {
-  /** The classification form's dataset folder, as typed or picked. */
+  /** The dataset folder of the guide's task, as typed or picked in that task's form. */
   datasetPath: string;
   /** The training stream produced `start` after the guide opened. */
   trainingStarted: boolean;
@@ -24,8 +37,9 @@ export interface GuideFacts {
 export interface GuideContext {
   /** Switches to a task tab by key. */
   selectTask: (key: string) => void;
-  /** Fills the dataset field of the classification form. */
-  setDatasetPath: (path: string) => void;
+  /** Fills the dataset field of `task`'s form, the way that task's panel stores it,
+   *  and applies what the sample fixes besides the folder. */
+  setDatasetPath: (path: string, task: GuideTask, setup?: SampleSetup) => void;
   /** Puts the training sheet away without stopping the run. */
   hideTrainingSheet: () => void;
 }
@@ -63,5 +77,6 @@ export interface GuideDefinition {
   title: (t: Dict) => string;
   /** One line under the title in the menu and the invitation. */
   summary: (t: Dict) => string;
-  steps: (t: Dict) => GuideStep[];
+  /** The script. `task` is the tab the guide opened on; the tour ignores it. */
+  steps: (t: Dict, task?: GuideTask) => GuideStep[];
 }

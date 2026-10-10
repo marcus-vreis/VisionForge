@@ -409,12 +409,18 @@ export async function pickDatasetFolder(): Promise<DatasetPickResponse> {
   return request<DatasetPickResponse>("/dataset/pick", { method: "POST" });
 }
 
-/** The synthetic sample dataset of the "Primeiro treino" guide (ADR-115). */
+/** The synthetic sample dataset of the "Primeiro treino" guide (ADR-115, ADR-117). */
 export interface SampleDataset {
+  task: string;
   /** Absolute path of the folder on the server's disk. */
   path: string;
+  /** What the layout declares: class folders, the names in `classes.txt`, the mask
+   *  pixel values or the subfolders of an anomaly dataset's `test/`. */
   classes: string[];
-  /** Images per split. Empty when the folder already existed. */
+  /** The CSV target columns of a regression dataset. */
+  targets: string[];
+  /** Items per split, in the unit the task reads (images, CSV rows, image and mask
+   *  pairs). Empty when the folder already existed. */
   counts: Record<string, number>;
   /** The folder was already there and was reused, not created now. */
   existed: boolean;
@@ -442,7 +448,7 @@ export async function createSampleDataset(
         ? (e.body as { path?: unknown } | null | undefined)?.path
         : undefined;
     if (typeof path === "string" && path !== "") {
-      return { path, classes: [], counts: {}, existed: true };
+      return { task, path, classes: [], targets: [], counts: {}, existed: true };
     }
     throw e;
   }

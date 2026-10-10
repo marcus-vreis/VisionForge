@@ -8,6 +8,8 @@ import {
   type GuideContext,
   type GuideId,
   type GuideStep,
+  type GuideTask,
+  guideTaskFor,
 } from "../lib/guides";
 import { gateOpen } from "../lib/guides/gates";
 import { FLOATING_WIDTH, placeFloating } from "../lib/guides/placement";
@@ -47,8 +49,10 @@ interface GuidedTourProps {
   guide?: GuideId;
   /** Os eventos do treino em curso; os portões "começou" e "terminou" leem daqui. */
   events: readonly { event: string }[];
-  /** A pasta do dataset do formulário de classificação. */
-  datasetPath: string;
+  /** A aba ativa quando o guia abre: o "Primeiro treino" toca a tarefa dela. */
+  activeTask: string;
+  /** A pasta do dataset no formulário de cada tarefa; o portão lê a da tarefa do guia. */
+  datasetPaths: Record<GuideTask, string>;
   /** O que um passo pode mudar na aplicação. */
   context: GuideContext;
   onClose: () => void;
@@ -58,20 +62,24 @@ export function GuidedTour({
   invite = false,
   guide = "tour",
   events,
-  datasetPath,
+  activeTask,
+  datasetPaths,
   context,
   onClose,
 }: GuidedTourProps) {
   const t = useT();
   const [guideId, setGuideId] = useState<GuideId | null>(invite ? null : guide);
+  // A tarefa é fixada quando o guia começa: trocar de aba no meio dele não
+  // troca o roteiro, e o portão do dataset segue olhando o formulário dela.
+  const [task, setTask] = useState<GuideTask>(() => guideTaskFor(activeTask));
   const steps = useMemo(
-    () => (guideId ? guideById(guideId).steps(t) : []),
-    [guideId, t],
+    () => (guideId ? guideById(guideId).steps(t, task) : []),
+    [guideId, t, task],
   );
   const [step, setStep] = useState(invite ? -1 : 0);
   // O que já estava na lista de eventos quando o guia abriu não conta: a trava
   // só abre um portão por um evento que aparece depois (lib/guides/gates).
-  const facts = useGuideFacts(events, datasetPath);
+  const facts = useGuideFacts(events, datasetPaths[task]);
   const [action, setAction] = useState<{
     step: number;
     busy: boolean;
@@ -110,10 +118,14 @@ export function GuidedTour({
     onClose();
   }, [onClose]);
 
-  const choose = useCallback((id: GuideId) => {
-    setGuideId(id);
-    setStep(0);
-  }, []);
+  const choose = useCallback(
+    (id: GuideId) => {
+      setGuideId(id);
+      setTask(guideTaskFor(activeTask));
+      setStep(0);
+    },
+    [activeTask],
+  );
 
   const runAction = useCallback(async () => {
     const step_action = current?.action;

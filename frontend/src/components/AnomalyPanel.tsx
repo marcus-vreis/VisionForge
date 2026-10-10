@@ -230,7 +230,7 @@ export function AnomalyPanel({
       {/* Treinamento */}
       <div style={card}>
         <div style={sectionLabel}>{t.taskPanel.training.title}</div>
-        <div style={grid}>
+        <div data-tour="training" style={grid}>
           <NumberField
             label={t.taskPanel.training.epochs}
             value={formData.training.epochs}
@@ -312,6 +312,7 @@ export function AnomalyPanel({
         <div style={sectionLabel}>{t.anomalyPanel.dataset.title}</div>
         <div style={grid}>
           <div
+            data-tour="dataset"
             style={{
               gridColumn: "1 / -1",
               display: "flex",
@@ -377,12 +378,14 @@ export function AnomalyPanel({
             help={paramHelp(t, "image_size")}
           />
         </div>
-        <AnomalyDatasetStats
-          baseDir={formData.data.base_dir}
-          trainDir={formData.data.train_dir}
-          testDir={formData.data.test_dir}
-          normalDir={formData.data.normal_dir}
-        />
+        <div data-tour="dataset-stats">
+          <AnomalyDatasetStats
+            baseDir={formData.data.base_dir}
+            trainDir={formData.data.train_dir}
+            testDir={formData.data.test_dir}
+            normalDir={formData.data.normal_dir}
+          />
+        </div>
       </div>
 
       {/* Pré-processamento + augmentação (ADR-059) — flips/rotações
