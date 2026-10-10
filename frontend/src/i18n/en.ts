@@ -876,6 +876,56 @@ export const en: Dict = {
       submit: (n: number) => `🗑 Delete${n > 1 ? ` ${n}` : ""}`,
     },
   },
+  leaderboard: {
+    viewList: "☰ List",
+    viewRanking: "⇅ Ranking",
+    viewRankingTitle: "Order each dataset's runs by a metric",
+    intro:
+      "Each board gathers the runs of one task on the same dataset and orders them by a metric. It is the order of the numbers, not a verdict: with a single seed, the gap between two runs may be seed variance. Tick runs of a board to compare them.",
+    runs: (n: number) => `${n} ${n === 1 ? "run" : "runs"}`,
+    metricLabel: "metric",
+    legend: (metric: string, direction: string) =>
+      `Ordered by ${metric} (${direction}). Replicates enter by their mean; a lone run, by its value.`,
+    unnamedDataset: "unnamed dataset",
+    basis: {
+      fingerprint: "same fingerprint",
+      path: "by path only",
+    },
+    basisTitle: {
+      fingerprint: (method: string, digest: string) =>
+        `Fingerprint ${method} ${digest}: the runs saw the same files, within the limits of that method.`,
+      path: "No fingerprint (a run from before the feature, or an unreachable folder): the path is the same, but nothing proves the files did not change between one run and another.",
+    },
+    unknownTitle: "Unknown dataset",
+    unknownBody:
+      "Runs with no fingerprint and no dataset path: there is no way to know whether they saw the same data, so they are not ordered.",
+    rank: (n: number) => `#${n}`,
+    topTag: (mean: boolean) => `1st by ${mean ? "mean" : "value"}`,
+    valueNote: {
+      mean: (seeds: number) => `mean of ${seeds} seeds`,
+      value: "value · 1 seed",
+    },
+    ciTitle: (low: string, high: string) => `95% CI: [${low}, ${high}]`,
+    tickTitle: "Tick to compare",
+    openTitle: "Open this run",
+    unrankedTitle: "Not ranked",
+    reason: {
+      "not-finished": "not finished",
+      stopped: "cut by a stop",
+      comparison: "replicated comparison: no single value (open the group)",
+      "no-metric": "did not measure this metric",
+    },
+    caution: {
+      "single-seed":
+        "The top two are single-seed runs: the gap between them may be seed variance. To claim a difference, run replicates with several seeds.",
+      "single-seed-mixed":
+        "One of the top two is a single-seed run with no interval: the gap between them may be seed variance. To claim a difference, run replicates with several seeds.",
+      "no-interval":
+        "One of the top two carries no confidence interval: it cannot be said whether the gap between them exceeds the variation between seeds.",
+      overlap:
+        "The 95% intervals of the top two overlap: on this data, their order could flip.",
+    },
+  },
   runGroup: {
     kind: {
       replicates: "Replicates",

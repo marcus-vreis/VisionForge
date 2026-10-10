@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { deleteRun, fetchRuns } from "../api/client";
-import type { Dict } from "../i18n/pt";
 import { useI18n, useT } from "../i18n/useT";
 import { cardMetrics } from "../lib/compare-metrics";
 import { foldGroups, formatAggregate, isGroupRun, type HistoryEntry } from "../lib/run-groups";
 import { TASK_ACCENT } from "../lib/task-accent";
+import { FAMILY_ORDER, familyLabel, taskFamily } from "../lib/task-family";
 import type { RunSummary } from "../types/run";
 import { CompareRunsPanel } from "./CompareRunsPanel";
 import { MenuSelect } from "./controls";
+import { LeaderboardView } from "./LeaderboardView";
 import { RunDetailPanel } from "./RunDetailPanel";
 
 interface HistoryOverlayProps {
@@ -92,38 +93,6 @@ function FilterChips({
       </div>
     </div>
   );
-}
-
-/** Order the family tabs the way the app's own task bar orders them, so the
- * history reads like the rest of the GUI instead of alphabetically. Custom
- * tasks (ADR-058) keep their own key and come after these. */
-const FAMILY_ORDER = [
-  "classification",
-  "detection",
-  "regression",
-  "segmentation",
-  "anomaly",
-];
-
-/** Map a run's `task` onto the family it belongs to.
- *
- * `run.task` is not the family: classification runs record their *problem*
- * type (`binary`, `multiclass`, `multilabel`) because that is what the
- * classification config's `task` field means, while the standalone tasks
- * record the family itself. Grouping on the raw value split classification
- * into a "BINARY" and a "MULTICLASS" tab, which is not a task anyone chose.
- */
-function taskFamily(task: string): string {
-  if (task.startsWith("custom:")) return task;
-  if (FAMILY_ORDER.includes(task) && task !== "classification") return task;
-  return "classification";
-}
-
-/** Tab label per task family, from the dictionary; a custom task is its own name. */
-function familyLabel(t: Dict, family: string): string {
-  if (family.startsWith("custom:")) return family.slice("custom:".length);
-  const families: Record<string, string> = t.taskNames;
-  return families[family] ?? family;
 }
 
 /** One history tab per task, each scoped to that task's runs.
@@ -773,6 +742,12 @@ export function HistoryOverlay({
   const [pendingDeletes, setPendingDeletes] = useState<RunSummary[] | null>(null);
   const [deletingIds, setDeletingIds] = useState<string[]>([]);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  // The list of runs, or the same runs as a ranking per dataset (lib/leaderboard.ts).
+  // What the ranking needs to survive a comparison or a run detail opened from it
+  // lives here, since the view is unmounted while either is open.
+  const [view, setView] = useState<"list" | "ranking">("list");
+  const [rankTicks, setRankTicks] = useState<string[]>([]);
+  const [rankMetrics, setRankMetrics] = useState<Record<string, string>>({});
   // A stray click outside the sheet used to throw away the whole navigation, so
   // the backdrop and Esc both step back exactly one level: gráfico → treinamento
   // → histórico → gui. The × in the header is the deliberate "close it all".
@@ -1045,6 +1020,33 @@ export function HistoryOverlay({
               <button
                 type="button"
                 onClick={() => {
+                  setView((v) => (v === "list" ? "ranking" : "list"));
+                  // Ticking is the ranking's own; a selection left from the list
+                  // would be invisible there and still count when coming back.
+                  setSelectMode(false);
+                  setSelection([]);
+                }}
+                title={t.leaderboard.viewRankingTitle}
+                style={{
+                  padding: "8px 14px",
+                  background: view === "ranking" ? "var(--accent-soft)" : "rgba(255,255,255,0.04)",
+                  border: `1px solid ${view === "ranking" ? "var(--accent-vf)" : "var(--vf-panel-stroke)"}`,
+                  borderRadius: 10,
+                  color: view === "ranking" ? "var(--vf-text)" : "var(--vf-text-dim)",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 11,
+                  letterSpacing: "0.10em",
+                  textTransform: "uppercase",
+                  cursor: "pointer",
+                }}
+              >
+                {view === "ranking" ? t.leaderboard.viewList : t.leaderboard.viewRanking}
+              </button>
+            )}
+            {!selectedRunId && !compareActiveIds && runs.length > 0 && view === "list" && (
+              <button
+                type="button"
+                onClick={() => {
                   setSelectMode((m) => !m);
                   if (selectMode) setSelection([]);
                 }}
@@ -1313,7 +1315,7 @@ export function HistoryOverlay({
           )}
 
           {/* Search + task filter row (only when there's a list to filter) */}
-          {!selectedRunId && !compareActiveIds && !loading && error === null && runs.length > 0 && (
+          {!selectedRunId && !compareActiveIds && !loading && error === null && runs.length > 0 && view === "list" && (
             <div
               style={{
                 display: "flex",
@@ -1386,7 +1388,7 @@ export function HistoryOverlay({
               wrapping row, so a long option list grows downward instead of
               running off the edge, and only dimensions that actually vary in
               this tab are shown — a single-valued filter filters nothing. */}
-          {!selectedRunId && !compareActiveIds && !loading && error === null && runs.length > 0 && (
+          {!selectedRunId && !compareActiveIds && !loading && error === null && runs.length > 0 && view === "list" && (
             <div
               style={{
                 display: "flex",
@@ -1437,8 +1439,32 @@ export function HistoryOverlay({
             </div>
           )}
 
+          {/* The same runs as a ranking per task and dataset. The task tabs above still
+              scope it; the filters and the sort of the list do not apply. */}
+          {!selectedRunId && !compareActiveIds && !loading && error === null && runs.length > 0 && view === "ranking" && (
+            <LeaderboardView
+              entries={entries}
+              taskFilter={taskFilter}
+              ticks={rankTicks}
+              onToggleTick={(runId) =>
+                setRankTicks((prev) =>
+                  prev.includes(runId) ? prev.filter((id) => id !== runId) : [...prev, runId],
+                )
+              }
+              onCompare={setCompareActiveIds}
+              onOpenRun={(runId) => {
+                setBackTo(null);
+                setSelectedRunId(runId);
+              }}
+              metricPicks={rankMetrics}
+              onPickMetric={(boardId, metric) =>
+                setRankMetrics((prev) => ({ ...prev, [boardId]: metric }))
+              }
+            />
+          )}
+
           {/* Run list */}
-          {!selectedRunId && !compareActiveIds && !loading && error === null && runs.length > 0 && (
+          {!selectedRunId && !compareActiveIds && !loading && error === null && runs.length > 0 && view === "list" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {filteredEntries.length === 0 ? (
                 <div

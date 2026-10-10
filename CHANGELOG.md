@@ -15,6 +15,27 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Added
 
+- **O Histórico tem uma visão de Ranking: os runs de cada dataset ordenados por
+  uma métrica.** Um botão no cabeçalho alterna entre a lista e o ranking, que
+  reúne os runs em quadros por (tarefa, dataset) e ordena cada quadro pela
+  métrica principal da tarefa, a primeira linha de qualidade da tabela de
+  métricas (a acurácia de teste em classificação, o mAP@50-95 em detecção, o R²,
+  o mIoU, o AUROC), que um seletor troca por qualquer outra que os runs
+  mediram, com a direção que o servidor informa. O dataset se identifica pelo
+  fingerprint (ADR-061), e o quadro diz isso; sem fingerprint vale o caminho
+  normalizado, marcado como "só pelo caminho" porque o caminho não prova que os
+  arquivos não mudaram; um run com nenhum dos dois cai num quadro de "dataset
+  desconhecido" que não é ordenado. Um conjunto de réplicas entra pela média e
+  mostra média ± IC 95%; um run solto entra pelo valor, marcado "1 seed". A
+  primeira linha é "1º por média" ou "1º por valor", nunca "o melhor": o quadro
+  avisa, no espírito do ADR-112, quando os dois primeiros são de uma seed só (ou
+  um deles é e não tem intervalo), quando um deles não traz intervalo, ou
+  quando os intervalos de 95% dos dois se sobrepõem. O frontend só lê esses
+  intervalos, não calcula estatística. Runs interrompidos, não concluídos, sem a
+  métrica ou comparações replicadas ficam depois dos ordenados, com o motivo.
+  Marcar runs de um quadro abre a comparação que já existia. Para isso a lista
+  de runs (`GET /api/runs`) passou a trazer, de forma aditiva, `dataset_digest`,
+  `dataset_method`, `stopped` e `metric_directions`.
 - **A comparação do Histórico desenha as curvas por epoch de cada tarefa.** Os
   dois gráficos fixos (`val_loss` e `val_accuracy`) só existiam em
   classificação: uma comparação de detecção, regressão, segmentação ou anomalia

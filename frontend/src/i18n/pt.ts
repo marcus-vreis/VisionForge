@@ -947,6 +947,64 @@ export const pt = {
       submit: (n: number) => `🗑 Excluir${n > 1 ? ` ${n}` : ""}`,
     },
   },
+  // The ranking view of the history (components/LeaderboardView.tsx, lib/leaderboard.ts):
+  // runs of one task on one dataset, ordered by one metric. It describes an order of numbers
+  // and never names a winner (ADR-112).
+  leaderboard: {
+    viewList: "☰ Lista",
+    viewRanking: "⇅ Ranking",
+    viewRankingTitle: "Ordenar os runs de cada dataset por uma métrica",
+    intro:
+      "Cada quadro reúne os runs de uma mesma tarefa no mesmo dataset e os ordena por uma métrica. É a ordem dos números, não um veredito: com uma seed só, a diferença entre dois runs pode ser variação de seed. Marque runs de um quadro para compará-los.",
+    runs: (n: number) => `${n} ${n === 1 ? "run" : "runs"}`,
+    metricLabel: "métrica",
+    // `direction` is the dictionary's "maior é melhor" / "menor é melhor".
+    legend: (metric: string, direction: string) =>
+      `Ordenado por ${metric} (${direction}). Réplicas entram pela média; um run solto, pelo valor.`,
+    unnamedDataset: "dataset sem nome",
+    // How the board knows its runs saw the same data.
+    basis: {
+      fingerprint: "mesmo fingerprint",
+      path: "só pelo caminho",
+    },
+    basisTitle: {
+      fingerprint: (method: string, digest: string) =>
+        `Fingerprint ${method} ${digest}: os runs viram os mesmos arquivos, nos limites desse método.`,
+      path: "Sem fingerprint (run anterior ao recurso, ou pasta inacessível): o caminho é o mesmo, mas nada prova que os arquivos não mudaram entre um run e outro.",
+    },
+    unknownTitle: "Dataset desconhecido",
+    unknownBody:
+      "Runs sem fingerprint e sem caminho de dataset: não dá para saber se viram os mesmos dados, então não são ordenados.",
+    rank: (n: number) => `${n}º`,
+    // The first row, in words: an order of the numbers, not "the best".
+    topTag: (mean: boolean) => `1º por ${mean ? "média" : "valor"}`,
+    valueNote: {
+      mean: (seeds: number) => `média de ${seeds} seeds`,
+      value: "valor · 1 seed",
+    },
+    ciTitle: (low: string, high: string) => `IC 95%: [${low}, ${high}]`,
+    tickTitle: "Marcar para comparar",
+    openTitle: "Abrir este run",
+    unrankedTitle: "Fora do ranking",
+    // Why a run is listed but not ordered (lib/leaderboard.ts UnrankedReason).
+    reason: {
+      "not-finished": "não concluído",
+      stopped: "interrompido por uma parada",
+      comparison: "comparação replicada: sem valor único (abra o grupo)",
+      "no-metric": "não mediu esta métrica",
+    },
+    // Under the board when its first two rows cannot be told apart (lib/leaderboard.ts Caution).
+    caution: {
+      "single-seed":
+        "Os dois primeiros são runs de uma seed só: a diferença entre eles pode ser variação de seed. Para afirmar uma diferença, rode réplicas com várias seeds.",
+      "single-seed-mixed":
+        "Um dos dois primeiros é um run de uma seed só, sem intervalo: a diferença entre eles pode ser variação de seed. Para afirmar uma diferença, rode réplicas com várias seeds.",
+      "no-interval":
+        "Um dos dois primeiros não traz intervalo de confiança: não dá para dizer se a diferença entre eles passa da variação entre seeds.",
+      overlap:
+        "Os intervalos de 95% dos dois primeiros se sobrepõem: com estes dados, a ordem entre eles pode se inverter.",
+    },
+  },
   // A replicate set or a replicated comparison, listed in History as one run with
   // its seeds under it (components/RunGroupDetail.tsx, lib/run-groups.ts, ADR-113).
   // Every number is the report's: the interface prints it, it does not compute it.

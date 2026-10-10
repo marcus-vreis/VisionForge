@@ -3722,6 +3722,11 @@ def _parse_run_summary(run_dir: Path, data: dict[str, Any]) -> RunSummary:
 
     dataset_name, dataset_root = dataset_identity(data)
     resumable, configured_epochs = _resume_status(run_dir, data)
+    # Only a digest that proves something is sent: an ``unavailable`` fingerprint
+    # has an empty one, and a method without a digest identifies nothing.
+    fingerprint = data.get("dataset_fingerprint") or {}
+    dataset_digest = fingerprint.get("digest") or None
+    dataset_method = (fingerprint.get("method") or None) if dataset_digest else None
 
     return RunSummary(
         run_id=run_dir.name,
@@ -3739,6 +3744,10 @@ def _parse_run_summary(run_dir: Path, data: dict[str, Any]) -> RunSummary:
         block=block,
         dataset_name=dataset_name,
         dataset_root=dataset_root,
+        dataset_digest=dataset_digest,
+        dataset_method=dataset_method,
+        stopped=bool(data.get("stopped")),
+        metric_directions=_metric_directions(task, final_metrics, []),
         resumable=resumable,
         configured_epochs=configured_epochs,
         group_id=data.get("group_id"),

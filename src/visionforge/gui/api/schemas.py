@@ -233,6 +233,21 @@ class RunSummary(BaseModel):
     # to config.data.base_dir, so it resolves on every run ever written.
     dataset_name: str | None = None
     dataset_root: str | None = None
+    # The fingerprint behind that dataset (ADR-061), when the run carries one:
+    # what the History ranking groups runs by, since two runs with the same path
+    # may have seen different files. The digest only means something next to its
+    # method (a manifest digest never equals a content digest of the same data).
+    # None on a run older than the fingerprint, or whose fingerprint was
+    # ``unavailable`` -- the ranking then falls back to the path.
+    dataset_digest: str | None = None
+    dataset_method: str | None = None
+    # True when a user stop cut this run (ADR-111): a stopped run is listed in the
+    # ranking but never ranked, because it did not finish what it was asked.
+    stopped: bool = False
+    # Which way each of ``final_metrics`` improves, by the rule the rankings use
+    # (see ``RunDetail.metric_directions``): the History ranking reads it instead
+    # of repeating the rule in the page.
+    metric_directions: dict[str, Literal["higher", "lower"]] = {}
     # True when the run stopped before its configured last epoch and left usable
     # state behind (ADR-092/093). Derived from the resume file's presence, not
     # from `status`, so no stored flag can disagree with what is on disk.

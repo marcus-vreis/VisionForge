@@ -221,6 +221,13 @@ export function metricRows(
     }));
 }
 
+/** The rows of a task's table, in display order, or null for a researcher's own
+ *  task (it lists whatever it reported). A task this table does not know is read
+ *  as classification, which is what the server projects for it. */
+export function tableRowsOf(task: string): readonly MetricLabelKey[] | null {
+  return isCustomTaskKey(task) ? null : (BUILTIN_ROWS[task] ?? BUILTIN_ROWS.classification);
+}
+
 /** How many headline numbers a History card prints. */
 const CARD_METRIC_LIMIT = 3;
 
@@ -275,7 +282,7 @@ export function cardMetrics(
   task: string,
   finalMetrics: Readonly<Record<string, unknown>>,
 ): CardMetric[] {
-  const rows = isCustomTaskKey(task) ? null : (BUILTIN_ROWS[task] ?? BUILTIN_ROWS.classification);
+  const rows = tableRowsOf(task);
   return Object.keys(finalMetrics)
     .filter((key) => numericMetric(finalMetrics[key]) !== null)
     .slice(0, CARD_METRIC_LIMIT)

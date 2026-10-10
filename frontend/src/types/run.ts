@@ -95,6 +95,17 @@ export interface RunSummary {
    *  config.data.base_dir so it resolves on runs older than the fingerprint. */
   dataset_name?: string | null;
   dataset_root?: string | null;
+  /** The dataset fingerprint (ADR-061) behind that name, when the run has one:
+   *  the ranking groups by it, since the same path may hold different files. The
+   *  digest only means something next to its `dataset_method`. Absent or null on
+   *  a run older than the fingerprint. */
+  dataset_digest?: string | null;
+  dataset_method?: string | null;
+  /** A user stop cut this run (ADR-111): listed in the ranking, never ranked. */
+  stopped?: boolean;
+  /** Which way each of `final_metrics` improves, by the server's rule. Absent
+   *  from a server that predates it: the page then reads the metric's name. */
+  metric_directions?: Record<string, "higher" | "lower">;
   /** True when the run stopped before its last epoch and left state behind
    *  (ADR-092/093). Derived server-side from what is on disk. */
   resumable?: boolean;
