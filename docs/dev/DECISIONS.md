@@ -4354,3 +4354,86 @@ run while the other seeds are tagged and the group is still written. Re-training
 a seed rewrites its `run.json` and drops `group_id`: it reappears as a loose run
 and the group's aggregates do not update. This is rare, since a seed a stop cut
 is not resumable on its own (ADR-111).
+
+## ADR-114 — Profiles are output folders; organisation, not access control
+
+**Date:** 2026-10-10
+**Status:** Accepted
+**Complements:** ADR-075 (one run queue per server), ADR-090 (the first-run
+welcome and its name), ADR-113 (History is the models folder)
+
+**Context:** a lab can run one `visionforge gui --host` for several people. The
+History is the models folder of the machine, so everyone sees everyone's runs,
+and finding your own among a colleague's thirty is the daily friction. What was
+asked for is narrow: on entering, say who you are, and see only your own
+training history. Nothing about who may *read* anything.
+
+**Decision:** a profile is a folder, and it changes where outputs go and which
+runs the History reads, nothing else.
+
+- **A profile IS a folder.** `outputs/profiles/<slug>/` holds `models`,
+  `graphics`, `logs`, `reports` and a `profile.json` with the display name.
+  Listing profiles lists those folders; creating one creates the folder. There
+  is no user database and nothing to migrate.
+- **Slug.** 1-40 characters of lowercase ascii letters, digits, `-` and `_`,
+  starting with a letter or digit, derived from the display name (accents fold
+  to their letter, other characters become `-`). The display name (up to 60
+  characters, whitespace collapsed) lives only in `profile.json`. `default` and
+  the Windows device names (`con`, `nul`, `com1`...) are reserved. Two names
+  that fold to the same slug ("João", "Joao") are the same profile: the second
+  create answers 409 naming the first.
+- **The default profile is the layout that already exists.** It maps to
+  `outputs/models` and its siblings, so nothing moves, an install that never
+  creates a profile behaves as before, and runs started from the command line
+  keep writing there. Its runs and a named profile's are disjoint folders, so
+  the default History does not list a profile's runs.
+- **The browser keeps the choice and sends it on every API call** as
+  `X-VF-Profile: <slug>`, from `localStorage`. The server validates it where it
+  is used: not a safe slug (`../x`, uppercase, too long) is 400, a safe slug with
+  no folder is 404, an absent or `default` header is the default profile. A
+  slug cannot hold a separator or a dot, and the resolved folder must also be a
+  direct child of `outputs/profiles` named exactly like the slug, so a link
+  planted there is refused rather than followed.
+- **What a profile changes.** (1) *Where a submitted run writes*: at submit
+  time `config.output.{models,graphics,logs,reports}_dir` are forced under the
+  profile for every executor (a single run, a sweep, K-fold, a model comparison,
+  replicates, a replicated comparison, a researcher-defined task, and the
+  detection, regression, segmentation and anomaly runs); a resumed run is scoped
+  again to the profile it is found in. The default profile leaves the config
+  alone. (2) *The root the History reads*: one per-request resolver
+  (`current_profile` in `gui/api/routes.py`, built on `gui/api/profiles.py`)
+  replaces the module-level `_MODELS_DIR` in the list, the detail, the reveal,
+  resume, delete, the markdown export, testing a run, Grad-CAM, batch
+  prediction and ONNX export. The comparison, the ranking and the replicate
+  groups are built in the browser from the list and the detail, or written under
+  the models folder, so they follow without code of their own.
+- **What stays shared.** Datasets, credentials, custom tasks and the run queue.
+  The queue snapshot shows each job's profile display name, so a colleague's job
+  ahead of yours is visible.
+- **No passwords, and the interface says so.** Anyone who can reach the server
+  can send any profile's slug, and the welcome screen states plainly that
+  profiles organise runs and do not protect them. The existing name prompt
+  keeps working: with no profile besides the default the flow is unchanged
+  except for an optional "criar perfil" link.
+
+**Interface.** The welcome overlay becomes "Quem é você?": the existing
+profiles (the default shown as "Padrão (sem perfil)") and "criar novo perfil",
+and a small chip in the header switches. Text lives in both dictionaries.
+
+**Rejected:** accounts with passwords (a security claim this tool cannot back:
+the server runs training code and reads any folder it is pointed at); one
+server per person (they share one GPU, and the point of the queue, ADR-075, is
+that they can); filtering the History by an `owner` field in `run.json` (it would
+leave every run in one folder, and the runs written before this ADR have no
+owner).
+
+**Consequences:** `GET /api/profiles` lists and `POST /api/profiles` creates; no
+rename or delete, which a researcher does in the file manager (the folder is the
+profile). Profile-scoped means History and where outputs land, so a few things
+are deliberately not scoped: `GET /api/artifacts/...` still serves any file
+under `outputs/` (an `<img>` cannot send the header, and this ADR makes no
+confidentiality claim), the live progress stream and `/experiment/result/{id}`
+belong to the one running job, and the preview cache is shared. `profile.json`
+is read leniently: a folder made by hand with a valid name is a profile whose
+display name is its slug. The orphan sweep of filtered detection copies at
+server start now also covers each profile's models folder.

@@ -16,9 +16,9 @@ from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from loguru import logger
@@ -97,6 +97,18 @@ from visionforge.gui.api.folder_opener import (
     open_folder,
 )
 from visionforge.gui.api.model_notes import collapse_note
+from visionforge.gui.api.profiles import (
+    PROFILE_HEADER,
+    InvalidProfileError,
+    Profile,
+    ProfileExistsError,
+    ProfileNameError,
+    UnknownProfileError,
+    create_profile,
+    default_profile,
+    list_profiles,
+    resolve_profile,
+)
 from visionforge.gui.api.run_queue import (
     NotStoppableError,
     QueuedJob,
@@ -144,6 +156,9 @@ from visionforge.gui.api.schemas import (
     PreprocessPreviewRequest,
     PreprocessPreviewResponse,
     PreprocessPreviewStep,
+    ProfileCreateRequest,
+    ProfileInfo,
+    ProfileListResponse,
     QueuedJobInfo,
     QueueSnapshot,
     RegressionDatasetStatsRequest,
@@ -223,8 +238,36 @@ _event_queue: asyncio.Queue[dict[str, Any] | None] | None = None
 # (ADR-088) instead of only flipping a flag nobody reads.
 _active_cancel_token: CancellationToken | None = None
 
-# Default location where Trainer writes run directories.
+# Default location where Trainer writes run directories. Since ADR-114 this is
+# the models folder of the *default profile*; a named profile reads and writes
+# under _PROFILES_DIR / <slug> instead. Both are read when a request arrives, so
+# they stay relative to the folder the GUI was started from.
 _MODELS_DIR = Path("outputs/models")
+_PROFILES_DIR = Path("outputs/profiles")
+
+
+def current_profile(
+    x_vf_profile: Annotated[str | None, Header(alias=PROFILE_HEADER)] = None,
+) -> Profile:
+    """The per-request resolver of the folders a request works in (ADR-114).
+
+    Reads ``X-VF-Profile``; an absent header is the default profile, which is
+    the pre-profile layout (``_MODELS_DIR``). Every History route and every
+    submission goes through this instead of reading ``_MODELS_DIR`` itself.
+
+    Raises:
+        HTTPException: 400 for a header that is not a safe slug (``../x``), 404
+            for a safe slug with no profile folder.
+    """
+    try:
+        return resolve_profile(x_vf_profile, _PROFILES_DIR, _MODELS_DIR)
+    except InvalidProfileError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except UnknownProfileError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
+ProfileDep = Annotated[Profile, Depends(current_profile)]
 
 
 def _begin_job(job: QueuedJob) -> None:
@@ -310,12 +353,16 @@ def _submit_job(
     strategy: str,
     start: Callable[[], Awaitable[None]],
     stop_at: StopPoint | None | Literal["auto"] = "auto",
+    profile: Profile | None = None,
 ) -> RunResponse:
     """Queue a training job and report whether it started or is waiting.
 
     ``stop_at`` defaults to what the strategy implies; the starters whose stop
     depends on the config (PatchCore, a custom task that owns its loop) pass it.
+    ``profile`` is only the queue's label for whose folders the job writes into;
+    the config handed to ``start`` was already scoped to it by the caller.
     """
+    owner = profile or default_profile(_MODELS_DIR)
     status = _RUN_QUEUE.submit(
         QueuedJob(
             run_id=run_id,
@@ -324,6 +371,8 @@ def _submit_job(
             strategy=strategy,
             start=start,
             stop_at=_stop_point(strategy) if stop_at == "auto" else stop_at,
+            profile=owner.slug,
+            profile_name=owner.name,
         )
     )
     return RunResponse(run_id=run_id, status=status)  # type: ignore[arg-type]
@@ -461,16 +510,54 @@ async def model_defaults(req: ModelDefaultsRequest) -> ModelDefaultsResponse:
     )
 
 
+def _profile_info(profile: Profile) -> ProfileInfo:
+    return ProfileInfo(
+        slug=profile.slug, name=profile.name, is_default=profile.is_default
+    )
+
+
+@router.get("/profiles")
+async def get_profiles() -> ProfileListResponse:
+    """Every profile, the default one first (ADR-114).
+
+    Deliberately not behind ``current_profile``: the picker must be able to list
+    them while the browser still holds a slug that no longer exists.
+    """
+    return ProfileListResponse(
+        profiles=[_profile_info(p) for p in list_profiles(_PROFILES_DIR, _MODELS_DIR)]
+    )
+
+
+@router.post("/profiles", status_code=201)
+async def add_profile(req: ProfileCreateRequest) -> ProfileInfo:
+    """Create ``outputs/profiles/<slug>/`` for a display name (ADR-114).
+
+    Raises:
+        HTTPException: 422 when nothing usable is left of the name or it is
+            reserved, 409 when that folder already exists.
+    """
+    try:
+        profile = create_profile(req.name, _PROFILES_DIR, _MODELS_DIR)
+    except ProfileNameError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    except ProfileExistsError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    logger.info("GUI: created profile {} at {}", profile.slug, profile.root)
+    return _profile_info(profile)
+
+
 @router.get("/runs")
-async def list_runs() -> list[RunSummary]:
-    """Return all historical runs sorted by started_at descending."""
-    return _load_runs(_MODELS_DIR.resolve())
+async def list_runs(profile: ProfileDep) -> list[RunSummary]:
+    """Return the profile's historical runs sorted by started_at descending."""
+    return _load_runs(profile.models_dir.resolve())
 
 
 @router.get("/runs/{run_id}")
-async def get_run_detail(run_id: str, request: Request) -> RunDetail:
+async def get_run_detail(
+    run_id: str, request: Request, profile: ProfileDep
+) -> RunDetail:
     """Return the full run.json for a specific run_id."""
-    run_dir = _find_run_dir(run_id)
+    run_dir = _find_run_dir(run_id, profile)
     if run_dir is None:
         raise HTTPException(404, f"Run '{run_id}' not found.")
     run_json_path = run_dir / "run.json"
@@ -565,7 +652,9 @@ def _client_host(request: Request) -> str | None:
 
 
 @router.post("/runs/{run_id}/reveal")
-async def reveal_run_folder(run_id: str, request: Request) -> dict[str, str]:
+async def reveal_run_folder(
+    run_id: str, request: Request, profile: ProfileDep
+) -> dict[str, str]:
     """Open a run's folder in the file manager of the machine running the server.
 
     The folder is found by ``_find_run_dir`` alone: the request carries no path,
@@ -588,7 +677,7 @@ async def reveal_run_folder(run_id: str, request: Request) -> dict[str, str]:
         raise HTTPException(
             403, "The folder can only be opened from the machine running the server."
         )
-    run_dir = _find_run_dir(run_id)
+    run_dir = _find_run_dir(run_id, profile)
     if run_dir is None:
         raise HTTPException(404, f"Run '{run_id}' not found.")
     try:
@@ -599,14 +688,16 @@ async def reveal_run_folder(run_id: str, request: Request) -> dict[str, str]:
 
 
 @router.post("/runs/{run_id}/resume")
-async def resume_run(run_id: str) -> RunResponse:
+async def resume_run(run_id: str, profile: ProfileDep) -> RunResponse:
     """Continue a stopped run in its own directory (ADR-092/093).
 
     The config comes from the run's own ``run.json`` rather than from the
     browser: continuing with different hyperparameters would produce one
-    directory whose history describes two different experiments.
+    directory whose history describes two different experiments. The run is
+    looked up in the caller's profile only, and the config is scoped to that
+    profile again so its reports and graphics follow the run (ADR-114).
     """
-    run_dir = _find_run_dir(run_id)
+    run_dir = _find_run_dir(run_id, profile)
     if run_dir is None:
         raise HTTPException(404, f"Run '{run_id}' not found.")
     _reject_group_action(run_dir)
@@ -642,6 +733,7 @@ async def resume_run(run_id: str) -> RunResponse:
             400, f"The stored config of '{run_id}' is no longer valid: {exc}"
         ) from exc
 
+    config = profile.scope_model(config)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     job_id = f"{config.name}_{timestamp}"
     return _submit_job(
@@ -650,20 +742,22 @@ async def resume_run(run_id: str) -> RunResponse:
         task,
         "simple",
         lambda: executor(config, job_id, resume_dir=run_dir),
+        profile=profile,
     )
 
 
 @router.delete("/runs/{run_id}")
-async def delete_run(run_id: str) -> dict[str, str]:
+async def delete_run(run_id: str, profile: ProfileDep) -> dict[str, str]:
     """Permanently remove a run directory and all its artifacts.
 
     Safety:
-    - Must resolve to a directory under _MODELS_DIR (no path traversal).
+    - Must resolve to a directory under the profile's models folder (no path
+      traversal), which is ``_MODELS_DIR`` for the default profile (ADR-114).
     - Refuses to delete the run that is currently executing.
     """
     import shutil
 
-    run_dir = _find_run_dir(run_id)
+    run_dir = _find_run_dir(run_id, profile)
     if run_dir is None:
         raise HTTPException(404, f"Run '{run_id}' not found.")
 
@@ -676,7 +770,7 @@ async def delete_run(run_id: str) -> dict[str, str]:
         raise HTTPException(409, "Cannot delete a run that is currently executing.")
 
     resolved = run_dir.resolve()
-    models_dir = _MODELS_DIR.resolve()
+    models_dir = profile.models_dir.resolve()
     try:
         resolved.relative_to(models_dir)
     except ValueError as exc:
@@ -693,9 +787,9 @@ async def delete_run(run_id: str) -> dict[str, str]:
 
 
 @router.get("/runs/{run_id}/export_md")
-async def export_run_markdown(run_id: str) -> Response:
+async def export_run_markdown(run_id: str, profile: ProfileDep) -> Response:
     """Render a model card (markdown) for the run, ready for paper inclusion."""
-    run_dir = _find_run_dir(run_id)
+    run_dir = _find_run_dir(run_id, profile)
     if run_dir is None:
         raise HTTPException(404, f"Run '{run_id}' not found.")
     run_json_path = run_dir / "run.json"
@@ -769,13 +863,15 @@ def _reject_custom_task_action(run_dir: Path, action: str) -> None:
 
 
 @router.post("/runs/{run_id}/test")
-async def test_run_on_dataset(run_id: str, req: RunTestRequest) -> RunTestResponse:
+async def test_run_on_dataset(
+    run_id: str, req: RunTestRequest, profile: ProfileDep
+) -> RunTestResponse:
     """Run the saved checkpoint against a new dataset and record the result.
 
     The test result is appended to run.json under the 'tests' array so each
     saved model accumulates its own per-dataset history.
     """
-    run_dir = _find_run_dir(run_id)
+    run_dir = _find_run_dir(run_id, profile)
     if run_dir is None:
         raise HTTPException(404, f"Run '{run_id}' not found.")
 
@@ -797,13 +893,15 @@ async def test_run_on_dataset(run_id: str, req: RunTestRequest) -> RunTestRespon
 
 
 @router.post("/runs/{run_id}/gradcam")
-async def gradcam_run(run_id: str, req: GradCamRequest) -> GradCamResponse:
+async def gradcam_run(
+    run_id: str, req: GradCamRequest, profile: ProfileDep
+) -> GradCamResponse:
     """Generate Grad-CAM overlays for sample images using this run's checkpoint.
 
     Classification-only (detection/regression/segmentation/anomaly have no
     softmax-classifier CAM path). Overlays are written to ``<run_dir>/gradcam/``.
     """
-    run_dir = _find_run_dir(run_id)
+    run_dir = _find_run_dir(run_id, profile)
     if run_dir is None:
         raise HTTPException(404, f"Run '{run_id}' not found.")
     _reject_group_action(run_dir)
@@ -819,7 +917,7 @@ async def gradcam_run(run_id: str, req: GradCamRequest) -> GradCamResponse:
 
 @router.post("/runs/{run_id}/batch_predict")
 async def batch_predict_run(
-    run_id: str, req: BatchPredictRequest
+    run_id: str, req: BatchPredictRequest, profile: ProfileDep
 ) -> BatchPredictResponse:
     """Run inference of this run's checkpoint over a folder of images.
 
@@ -827,7 +925,7 @@ async def batch_predict_run(
     timestamped file in ``<run_dir>/predictions/`` so consecutive batch runs
     don't overwrite each other.
     """
-    run_dir = _find_run_dir(run_id)
+    run_dir = _find_run_dir(run_id, profile)
     if run_dir is None:
         raise HTTPException(404, f"Run '{run_id}' not found.")
 
@@ -847,13 +945,15 @@ async def batch_predict_run(
 
 
 @router.post("/runs/{run_id}/export_onnx")
-async def export_run_to_onnx(run_id: str, req: ExportOnnxRequest) -> ExportOnnxResponse:
+async def export_run_to_onnx(
+    run_id: str, req: ExportOnnxRequest, profile: ProfileDep
+) -> ExportOnnxResponse:
     """Export this run's saved checkpoint to ONNX, optionally validating it.
 
     Reuses the run's stored ``config.data.transforms.image_size`` and
     ``config.model`` to build the dummy input and the architecture for export.
     """
-    run_dir = _find_run_dir(run_id)
+    run_dir = _find_run_dir(run_id, profile)
     if run_dir is None:
         raise HTTPException(404, f"Run '{run_id}' not found.")
 
@@ -1014,8 +1114,9 @@ def _execute_dataset_download(req: DatasetDownloadRequest) -> DatasetDownloadRes
 
 
 @router.post("/experiment/run")
-async def run_experiment(config: ExperimentConfig) -> RunResponse:
+async def run_experiment(config: ExperimentConfig, profile: ProfileDep) -> RunResponse:
     """Start a training experiment, or queue it if one is already running."""
+    config = profile.scope_model(config)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     run_id = f"{config.name}_{timestamp}"
 
@@ -1025,6 +1126,7 @@ async def run_experiment(config: ExperimentConfig) -> RunResponse:
         "classification",
         config.block,
         lambda: _execute_experiment(config, run_id),
+        profile=profile,
     )
 
 
@@ -1102,13 +1204,14 @@ async def regression_dataset_stats(
 
 
 @router.post("/detection/run")
-async def run_detection(config: DetectionConfig) -> RunResponse:
+async def run_detection(config: DetectionConfig, profile: ProfileDep) -> RunResponse:
     """Start an object-detection training run in the background.
 
     Detection shares the run queue and the /experiment/{status,events,result}
     endpoints (one run at a time, one GPU) but dispatches its own standalone
     DetectionBlock (ADR-033) rather than the ExperimentConfig path.
     """
+    config = profile.scope_model(config)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     run_id = f"{config.name}_{timestamp}"
 
@@ -1118,6 +1221,7 @@ async def run_detection(config: DetectionConfig) -> RunResponse:
         "detection",
         "simple",
         lambda: _execute_detection(config, run_id),
+        profile=profile,
     )
 
 
@@ -1128,13 +1232,14 @@ async def get_regression_schema() -> dict[str, Any]:
 
 
 @router.post("/regression/run")
-async def run_regression(config: RegressionConfig) -> RunResponse:
+async def run_regression(config: RegressionConfig, profile: ProfileDep) -> RunResponse:
     """Start an image-regression training run in the background.
 
     Regression shares the run queue and the /experiment/{status,events,result}
     endpoints (one run at a time, one GPU) but dispatches its own standalone
     RegressionBlock (ADR-036) rather than the ExperimentConfig path.
     """
+    config = profile.scope_model(config)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     run_id = f"{config.name}_{timestamp}"
 
@@ -1144,6 +1249,7 @@ async def run_regression(config: RegressionConfig) -> RunResponse:
         "regression",
         "simple",
         lambda: _execute_regression(config, run_id),
+        profile=profile,
     )
 
 
@@ -1154,13 +1260,16 @@ async def get_segmentation_schema() -> dict[str, Any]:
 
 
 @router.post("/segmentation/run")
-async def run_segmentation(config: SegmentationConfig) -> RunResponse:
+async def run_segmentation(
+    config: SegmentationConfig, profile: ProfileDep
+) -> RunResponse:
     """Start a semantic-segmentation training run in the background.
 
     Segmentation shares the run queue and the /experiment/{status,events,result}
     endpoints (one run at a time, one GPU) but dispatches its own standalone
     SegmentationBlock (ADR-037) rather than the ExperimentConfig path.
     """
+    config = profile.scope_model(config)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     run_id = f"{config.name}_{timestamp}"
 
@@ -1170,6 +1279,7 @@ async def run_segmentation(config: SegmentationConfig) -> RunResponse:
         "segmentation",
         "simple",
         lambda: _execute_segmentation(config, run_id),
+        profile=profile,
     )
 
 
@@ -1180,13 +1290,14 @@ async def get_anomaly_schema() -> dict[str, Any]:
 
 
 @router.post("/anomaly/run")
-async def run_anomaly(config: AnomalyConfig) -> RunResponse:
+async def run_anomaly(config: AnomalyConfig, profile: ProfileDep) -> RunResponse:
     """Start an anomaly-detection training run in the background.
 
     Anomaly shares the run queue and the /experiment/{status,events,result}
     endpoints (one run at a time, one GPU) but dispatches its own standalone
     AnomalyBlock (ADR-038) rather than the ExperimentConfig path.
     """
+    config = profile.scope_model(config)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     run_id = f"{config.name}_{timestamp}"
 
@@ -1198,55 +1309,60 @@ async def run_anomaly(config: AnomalyConfig) -> RunResponse:
         lambda: _execute_anomaly(config, run_id),
         # PatchCore has no epochs; it stops between its phases (ADR-111).
         stop_at="phase" if config.model.name == "patchcore" else "epoch",
+        profile=profile,
     )
 
 
 @router.post("/regression/compare")
-async def compare_regression(req: ComparisonRequest) -> RunResponse:
+async def compare_regression(
+    req: ComparisonRequest, profile: ProfileDep
+) -> RunResponse:
     """Train N regression backbones on the same dataset and rank them (ADR-044)."""
-    return _start_comparison(req, RegressionConfig, RegressionRunner())
+    return _start_comparison(req, RegressionConfig, RegressionRunner(), profile)
 
 
 @router.post("/segmentation/compare")
-async def compare_segmentation(req: ComparisonRequest) -> RunResponse:
+async def compare_segmentation(
+    req: ComparisonRequest, profile: ProfileDep
+) -> RunResponse:
     """Train N segmentation backbones on the same dataset and rank them (ADR-044)."""
-    return _start_comparison(req, SegmentationConfig, SegmentationRunner())
+    return _start_comparison(req, SegmentationConfig, SegmentationRunner(), profile)
 
 
 @router.post("/regression/sweep")
-async def sweep_regression(req: SweepRequest) -> RunResponse:
+async def sweep_regression(req: SweepRequest, profile: ProfileDep) -> RunResponse:
     """Run a grid/random hyperparameter sweep for regression (ADR-045)."""
-    return _start_sweep(req, RegressionConfig, RegressionRunner())
+    return _start_sweep(req, RegressionConfig, RegressionRunner(), profile)
 
 
 @router.post("/segmentation/sweep")
-async def sweep_segmentation(req: SweepRequest) -> RunResponse:
+async def sweep_segmentation(req: SweepRequest, profile: ProfileDep) -> RunResponse:
     """Run a grid/random hyperparameter sweep for segmentation (ADR-045)."""
-    return _start_sweep(req, SegmentationConfig, SegmentationRunner())
+    return _start_sweep(req, SegmentationConfig, SegmentationRunner(), profile)
 
 
 @router.post("/detection/compare")
-async def compare_detection(req: ComparisonRequest) -> RunResponse:
+async def compare_detection(req: ComparisonRequest, profile: ProfileDep) -> RunResponse:
     """Train N detectors on the same dataset and rank them (ADR-044)."""
-    return _start_comparison(req, DetectionConfig, DetectionRunner())
+    return _start_comparison(req, DetectionConfig, DetectionRunner(), profile)
 
 
 @router.post("/detection/sweep")
-async def sweep_detection(req: SweepRequest) -> RunResponse:
+async def sweep_detection(req: SweepRequest, profile: ProfileDep) -> RunResponse:
     """Run a grid/random hyperparameter sweep for detection (ADR-045)."""
-    return _start_sweep(req, DetectionConfig, DetectionRunner())
+    return _start_sweep(req, DetectionConfig, DetectionRunner(), profile)
 
 
 @router.post("/anomaly/compare")
-async def compare_anomaly(req: ComparisonRequest) -> RunResponse:
+async def compare_anomaly(req: ComparisonRequest, profile: ProfileDep) -> RunResponse:
     """Train N anomaly models on the same dataset and rank them (ADR-044)."""
-    return _start_comparison(req, AnomalyConfig, AnomalyRunner())
+    return _start_comparison(req, AnomalyConfig, AnomalyRunner(), profile)
 
 
 @router.post("/anomaly/sweep")
-async def sweep_anomaly(req: SweepRequest) -> RunResponse:
+async def sweep_anomaly(req: SweepRequest, profile: ProfileDep) -> RunResponse:
     """Run a grid/random hyperparameter sweep for anomaly detection (ADR-045)."""
-    return _start_sweep(req, AnomalyConfig, AnomalyRunner())
+    return _start_sweep(req, AnomalyConfig, AnomalyRunner(), profile)
 
 
 # Built-in task descriptors — accents mirror frontend/src/types/tasks.ts.
@@ -1421,7 +1537,9 @@ async def custom_task_schema(key: str) -> dict[str, Any]:
 
 
 @router.post("/custom/{key}/run")
-async def run_custom_task(key: str, config: dict[str, Any]) -> RunResponse:
+async def run_custom_task(
+    key: str, config: dict[str, Any], profile: ProfileDep
+) -> RunResponse:
     """Start a custom-task training run in the background (ADR-058).
 
     Validates against the task's own Config; reuses the shared run queue and the
@@ -1434,7 +1552,7 @@ async def run_custom_task(key: str, config: dict[str, Any]) -> RunResponse:
     info = _get_custom_task_or_404(key)
 
     try:
-        cfg = info.spec_cls.Config.model_validate(config)
+        cfg = info.spec_cls.Config.model_validate(profile.scope_dict(config))
     except ValidationError as exc:
         raise RequestValidationError(exc.errors()) from exc
 
@@ -1448,6 +1566,7 @@ async def run_custom_task(key: str, config: dict[str, Any]) -> RunResponse:
         "simple",
         lambda: _execute_custom_task(info, cfg, run_id),
         stop_at=None if _owns_its_loop(info) else "epoch",
+        profile=profile,
     )
 
 
@@ -1505,7 +1624,9 @@ async def _execute_custom_task(info: Any, cfg: Any, run_id: str) -> None:
 
 
 @router.post("/custom/{key}/sweep")
-async def sweep_custom_task(key: str, req: SweepRequest) -> RunResponse:
+async def sweep_custom_task(
+    key: str, req: SweepRequest, profile: ProfileDep
+) -> RunResponse:
     """Run a grid/random hyperparameter sweep for a custom task (ADR-045/058).
 
     ``CustomTaskRunner`` gives the task the same orchestrator the built-ins
@@ -1515,110 +1636,134 @@ async def sweep_custom_task(key: str, req: SweepRequest) -> RunResponse:
     sweep over whichever field the task declares covers that use case.
     """
     info = _get_custom_task_or_404(key)
-    return _start_sweep(req, info.spec_cls.Config, CustomTaskRunner(info))
+    return _start_sweep(req, info.spec_cls.Config, CustomTaskRunner(info), profile)
 
 
 @router.post("/custom/{key}/replicates")
-async def replicates_custom_task(key: str, req: ReplicatesRequest) -> RunResponse:
+async def replicates_custom_task(
+    key: str, req: ReplicatesRequest, profile: ProfileDep
+) -> RunResponse:
     """Train one custom-task config N times under different seeds (ADR-056/058)."""
     info = _get_custom_task_or_404(key)
-    return _start_replicates(req, info.spec_cls.Config, CustomTaskRunner(info))
+    return _start_replicates(req, info.spec_cls.Config, CustomTaskRunner(info), profile)
 
 
 @router.post("/regression/cv")
-async def cv_regression(req: TaskCvRequest) -> RunResponse:
+async def cv_regression(req: TaskCvRequest, profile: ProfileDep) -> RunResponse:
     """Run K-fold cross-validation for regression (ADR-050) in the background."""
     return _start_task_cv(
-        req, RegressionConfig, run_regression_cross_validation, "Regression"
+        req, RegressionConfig, run_regression_cross_validation, "Regression", profile
     )
 
 
 @router.post("/segmentation/cv")
-async def cv_segmentation(req: TaskCvRequest) -> RunResponse:
+async def cv_segmentation(req: TaskCvRequest, profile: ProfileDep) -> RunResponse:
     """Run K-fold cross-validation for segmentation in the background."""
     return _start_task_cv(
-        req, SegmentationConfig, run_segmentation_cross_validation, "Segmentation"
+        req,
+        SegmentationConfig,
+        run_segmentation_cross_validation,
+        "Segmentation",
+        profile,
     )
 
 
 @router.post("/classification/replicates")
-async def replicates_classification(req: ReplicatesRequest) -> RunResponse:
+async def replicates_classification(
+    req: ReplicatesRequest, profile: ProfileDep
+) -> RunResponse:
     """Train one classification config N times under different seeds (ADR-056)."""
-    return _start_replicates(req, ExperimentConfig, ClassificationRunner())
+    return _start_replicates(req, ExperimentConfig, ClassificationRunner(), profile)
 
 
 @router.post("/regression/replicates")
-async def replicates_regression(req: ReplicatesRequest) -> RunResponse:
+async def replicates_regression(
+    req: ReplicatesRequest, profile: ProfileDep
+) -> RunResponse:
     """Train one regression config N times under different seeds (ADR-056)."""
-    return _start_replicates(req, RegressionConfig, RegressionRunner())
+    return _start_replicates(req, RegressionConfig, RegressionRunner(), profile)
 
 
 @router.post("/segmentation/replicates")
-async def replicates_segmentation(req: ReplicatesRequest) -> RunResponse:
+async def replicates_segmentation(
+    req: ReplicatesRequest, profile: ProfileDep
+) -> RunResponse:
     """Train one segmentation config N times under different seeds (ADR-056)."""
-    return _start_replicates(req, SegmentationConfig, SegmentationRunner())
+    return _start_replicates(req, SegmentationConfig, SegmentationRunner(), profile)
 
 
 @router.post("/detection/replicates")
-async def replicates_detection(req: ReplicatesRequest) -> RunResponse:
+async def replicates_detection(
+    req: ReplicatesRequest, profile: ProfileDep
+) -> RunResponse:
     """Train one detection config N times under different seeds (ADR-056)."""
-    return _start_replicates(req, DetectionConfig, DetectionRunner())
+    return _start_replicates(req, DetectionConfig, DetectionRunner(), profile)
 
 
 @router.post("/anomaly/replicates")
-async def replicates_anomaly(req: ReplicatesRequest) -> RunResponse:
+async def replicates_anomaly(
+    req: ReplicatesRequest, profile: ProfileDep
+) -> RunResponse:
     """Train one anomaly config N times under different seeds (ADR-056)."""
-    return _start_replicates(req, AnomalyConfig, AnomalyRunner())
+    return _start_replicates(req, AnomalyConfig, AnomalyRunner(), profile)
 
 
 @router.post("/classification/replicated-comparison")
 async def replicated_comparison_classification(
-    req: ReplicatedComparisonRequest,
+    req: ReplicatedComparisonRequest, profile: ProfileDep
 ) -> RunResponse:
     """Compare classification variants over shared seeds with a paired test."""
-    return _start_replicated_comparison(req, ExperimentConfig, ClassificationRunner())
+    return _start_replicated_comparison(
+        req, ExperimentConfig, ClassificationRunner(), profile
+    )
 
 
 @router.post("/regression/replicated-comparison")
 async def replicated_comparison_regression(
-    req: ReplicatedComparisonRequest,
+    req: ReplicatedComparisonRequest, profile: ProfileDep
 ) -> RunResponse:
     """Compare regression variants over shared seeds with a paired test."""
-    return _start_replicated_comparison(req, RegressionConfig, RegressionRunner())
+    return _start_replicated_comparison(
+        req, RegressionConfig, RegressionRunner(), profile
+    )
 
 
 @router.post("/segmentation/replicated-comparison")
 async def replicated_comparison_segmentation(
-    req: ReplicatedComparisonRequest,
+    req: ReplicatedComparisonRequest, profile: ProfileDep
 ) -> RunResponse:
     """Compare segmentation variants over shared seeds with a paired test."""
-    return _start_replicated_comparison(req, SegmentationConfig, SegmentationRunner())
+    return _start_replicated_comparison(
+        req, SegmentationConfig, SegmentationRunner(), profile
+    )
 
 
 @router.post("/detection/replicated-comparison")
 async def replicated_comparison_detection(
-    req: ReplicatedComparisonRequest,
+    req: ReplicatedComparisonRequest, profile: ProfileDep
 ) -> RunResponse:
     """Compare detection variants over shared seeds with a paired test."""
-    return _start_replicated_comparison(req, DetectionConfig, DetectionRunner())
+    return _start_replicated_comparison(
+        req, DetectionConfig, DetectionRunner(), profile
+    )
 
 
 @router.post("/anomaly/replicated-comparison")
 async def replicated_comparison_anomaly(
-    req: ReplicatedComparisonRequest,
+    req: ReplicatedComparisonRequest, profile: ProfileDep
 ) -> RunResponse:
     """Compare anomaly variants over shared seeds with a paired test."""
-    return _start_replicated_comparison(req, AnomalyConfig, AnomalyRunner())
+    return _start_replicated_comparison(req, AnomalyConfig, AnomalyRunner(), profile)
 
 
 @router.post("/custom/{key}/replicated-comparison")
 async def replicated_comparison_custom(
-    key: str, req: ReplicatedComparisonRequest
+    key: str, req: ReplicatedComparisonRequest, profile: ProfileDep
 ) -> RunResponse:
     """Compare a custom task's variants over shared seeds (ADR-058 + ADR-061)."""
     info = _get_custom_task_or_404(key)
     return _start_replicated_comparison(
-        req, info.spec_cls.Config, CustomTaskRunner(info)
+        req, info.spec_cls.Config, CustomTaskRunner(info), profile
     )
 
 
@@ -2001,14 +2146,22 @@ def _render_run_markdown(run_dir: Path, data: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def _find_run_dir(run_id: str) -> Path | None:
-    """Locate a run directory by its timestamp folder name."""
-    models_dir = _MODELS_DIR.resolve()
+def _find_run_dir(run_id: str, profile: Profile | None = None) -> Path | None:
+    """Locate a run directory by its timestamp folder name, inside one profile.
+
+    The search root is the profile's models folder (``_MODELS_DIR`` for the
+    default one) and nothing outside it can be returned: a run id is only
+    compared with folder names and ``run.json`` ids, never joined into a path,
+    and a hit whose real path left the root (a link) is skipped (ADR-114).
+    """
+    models_dir = (profile or default_profile(_MODELS_DIR)).models_dir.resolve()
     if not models_dir.exists():
         return None
     # run_id == timestamp folder OR experiment_name+timestamp; check both forms.
     for run_json in models_dir.rglob("run.json"):
         d = run_json.parent
+        if not d.resolve().is_relative_to(models_dir):
+            continue
         if d.name == run_id:
             return d
         try:
@@ -4113,12 +4266,16 @@ def _start_comparison(
     req: ComparisonRequest,
     config_type: type[Any],
     runner: TaskRunner,
+    profile: Profile,
 ) -> RunResponse:
     """Validate the base config and queue a model-comparison run.
 
     Raises:
         RequestValidationError: 422 if the base task config is invalid.
     """
+    # Every trial and the report inherit the profile's output folders from the
+    # base config (ADR-114).
+    req = req.model_copy(update={"config": profile.scope_dict(req.config)})
     # Fail fast on a bad base config; each trial re-validates with its override.
     try:
         config_type.model_validate(req.config)
@@ -4138,6 +4295,7 @@ def _start_comparison(
         lambda: _execute_comparison(
             runner, req.config, req.model_names, metric, run_id
         ),
+        profile=profile,
     )
 
 
@@ -4214,6 +4372,7 @@ def _start_sweep(
     req: SweepRequest,
     config_type: type[Any],
     runner: TaskRunner,
+    profile: Profile,
 ) -> RunResponse:
     """Validate the base config + search space and queue a sweep.
 
@@ -4223,7 +4382,9 @@ def _start_sweep(
     # Validate the base config (fills defaults) and confirm every sweep path
     # resolves against it before spending GPU time.
     try:
-        complete = config_type.model_validate(req.config).model_dump(mode="json")
+        complete = profile.scope_dict(
+            config_type.model_validate(req.config).model_dump(mode="json")
+        )
         validate_sweep_space(complete, list(req.search_space))
     except ValidationError as exc:
         raise RequestValidationError(exc.errors()) from exc
@@ -4241,6 +4402,7 @@ def _start_sweep(
         _task_label_from_config(config_type),
         f"sweep:{req.mode}" if getattr(req, "mode", None) else "sweep",
         lambda: _execute_sweep(runner, complete, req, metric, run_id),
+        profile=profile,
     )
 
 
@@ -4368,6 +4530,7 @@ def _start_task_cv(
     config_type: type[Any],
     cv_fn: Callable[..., Any],
     task_label: str,
+    profile: Profile,
 ) -> RunResponse:
     """Validate the config and queue a K-fold run for one task.
 
@@ -4377,6 +4540,9 @@ def _start_task_cv(
     Raises:
         RequestValidationError: 422 if the base task config is invalid.
     """
+    # Both the config the folds train from and the dict the report is written
+    # from live under the profile (ADR-114).
+    req = req.model_copy(update={"config": profile.scope_dict(req.config)})
     try:
         config = config_type.model_validate(req.config)
     except ValidationError as exc:
@@ -4391,6 +4557,7 @@ def _start_task_cv(
         _task_label_from_config(config_type),
         "cv",
         lambda: _execute_task_cv(config, req, run_id, cv_fn, task_label),
+        profile=profile,
     )
 
 
@@ -4462,6 +4629,7 @@ def _start_replicated_comparison(
     req: ReplicatedComparisonRequest,
     config_type: type[Any],
     runner: TaskRunner,
+    profile: Profile,
 ) -> RunResponse:
     """Validate the base config + variants and queue the paired comparison.
 
@@ -4471,7 +4639,9 @@ def _start_replicated_comparison(
         RequestValidationError: 422 if the base task config is invalid.
     """
     try:
-        complete = config_type.model_validate(req.config).model_dump(mode="json")
+        complete = profile.scope_dict(
+            config_type.model_validate(req.config).model_dump(mode="json")
+        )
     except ValidationError as exc:
         raise RequestValidationError(exc.errors()) from exc
 
@@ -4503,6 +4673,7 @@ def _start_replicated_comparison(
         lambda: _execute_replicated_comparison(
             runner, complete, req, seeds, metric, run_id
         ),
+        profile=profile,
     )
 
 
@@ -4593,6 +4764,7 @@ def _start_replicates(
     req: ReplicatesRequest,
     config_type: type[Any],
     runner: TaskRunner,
+    profile: Profile,
 ) -> RunResponse:
     """Validate the base config and queue a multi-seed replicate set.
 
@@ -4606,7 +4778,9 @@ def _start_replicates(
     # Validate the base config (fills defaults) so the seed derivation below can
     # trust `training.seed` to exist.
     try:
-        complete = config_type.model_validate(req.config).model_dump(mode="json")
+        complete = profile.scope_dict(
+            config_type.model_validate(req.config).model_dump(mode="json")
+        )
     except ValidationError as exc:
         raise RequestValidationError(exc.errors()) from exc
 
@@ -4629,6 +4803,7 @@ def _start_replicates(
         _task_label_from_config(config_type),
         "replicates",
         lambda: _execute_replicates(runner, complete, seeds, metric, run_id),
+        profile=profile,
     )
 
 

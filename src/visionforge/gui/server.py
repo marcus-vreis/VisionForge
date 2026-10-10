@@ -51,6 +51,9 @@ async def _sweep_filtered_datasets() -> None:
     from visionforge.core.materialized_dataset import sweep_orphans
 
     sweep_orphans(Path("outputs/models/_filtered"))
+    # A named profile keeps its filtered copies under its own models folder (ADR-114).
+    for cache in sorted(Path("outputs/profiles").glob("*/models/_filtered")):
+        sweep_orphans(cache)
 
 
 @app.get("/api/health")

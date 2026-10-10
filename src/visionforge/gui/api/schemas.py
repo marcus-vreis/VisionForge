@@ -44,6 +44,29 @@ class QueuedJobInfo(BaseModel):
     stop_at: Literal["epoch", "trial", "fold", "model", "replicate", "phase"] | None = (
         None
     )
+    # Whose folders the job writes into (ADR-114); "default" is the legacy layout.
+    profile: str = "default"
+    profile_name: str = "default"
+
+
+class ProfileInfo(BaseModel):
+    """One profile as the picker shows it (ADR-114)."""
+
+    slug: str
+    name: str
+    is_default: bool = False
+
+
+class ProfileListResponse(BaseModel):
+    """Every profile, the default one first."""
+
+    profiles: list[ProfileInfo]
+
+
+class ProfileCreateRequest(BaseModel):
+    """Create a profile from the name the researcher typed."""
+
+    name: str = Field(min_length=1, max_length=60)
 
 
 class QueueSnapshot(BaseModel):

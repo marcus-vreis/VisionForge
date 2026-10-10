@@ -71,6 +71,10 @@ class QueuedJob:
     # None for a job whose executor never reads the token (a custom task that
     # owns its loop): cancelling it would report a stop that does not happen.
     stop_at: StopPoint | None = "epoch"
+    # Whose folders the job writes into (ADR-114): the profile slug, and the
+    # display name the queue panel prints. The queue itself stays shared.
+    profile: str = "default"
+    profile_name: str = "default"
 
     def describe(self) -> dict[str, Any]:
         """JSON-ready form for the queue endpoint (never includes the callable)."""
@@ -81,6 +85,8 @@ class QueuedJob:
             "strategy": self.strategy,
             "submitted_at": self.submitted_at.isoformat(),
             "stop_at": self.stop_at,
+            "profile": self.profile,
+            "profile_name": self.profile_name,
         }
 
 

@@ -200,7 +200,7 @@ class TestResumeEndpoint:
         monkeypatch.setattr(routes_mod, "_MODELS_DIR", tmp_path / "models")
         submitted: dict[str, Any] = {}
 
-        def fake_submit(job_id, label, task, strategy, start):  # type: ignore[no-untyped-def]
+        def fake_submit(job_id, label, task, strategy, start, **_kwargs):  # type: ignore[no-untyped-def]
             submitted.update(
                 job_id=job_id, label=label, task=task, strategy=strategy, start=start
             )

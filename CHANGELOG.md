@@ -15,6 +15,23 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Added
 
+- **Perfis para um servidor compartilhado: cada pessoa vê só o próprio
+  histórico de treinos.** Um perfil é uma pasta, `outputs/profiles/<slug>/`, com
+  `models`, `graphics`, `logs`, `reports` e um `profile.json` com o nome de
+  exibição; listar os perfis é listar as pastas e criar um é criar a pasta, sem
+  banco de usuários. O navegador manda o perfil escolhido em todas as chamadas
+  como `X-VF-Profile: <slug>` (sem o cabeçalho vale o perfil padrão). O perfil
+  muda só duas coisas: onde uma execução enviada grava suas saídas (as quatro
+  pastas de `output`, em qualquer modo: simples, varredura, K-fold, comparação,
+  réplicas, tarefas próprias, detecção, regressão, segmentação e anomalia) e a
+  raiz que o Histórico lê (lista, detalhe, continuar, excluir, abrir a pasta,
+  exportar, testar, Grad-CAM, predição em lote e ONNX). O perfil padrão é o
+  `outputs/models` de sempre, então nada muda de lugar e a linha de comando
+  segue gravando ali. Um cabeçalho que não é um slug seguro (`../x`) dá 400 e um
+  slug sem pasta dá 404. Datasets, credenciais e a fila continuam
+  compartilhados, e a fila mostra o perfil de cada execução. Perfis organizam,
+  não protegem: não há senha, e quem alcança o servidor pode escolher qualquer
+  perfil ([ADR-114](docs/dev/DECISIONS.md)).
 - **O Histórico tem uma visão de Ranking: os runs de cada dataset ordenados por
   uma métrica.** Um botão no cabeçalho alterna entre a lista e o ranking, que
   reúne os runs em quadros por (tarefa, dataset) e ordena cada quadro pela
