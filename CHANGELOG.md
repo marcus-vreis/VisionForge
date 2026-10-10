@@ -200,16 +200,43 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 - **Interface bilíngue (pt/en).** Todas as telas da interface existem em
   português e em inglês, com um seletor PT/EN no cabeçalho. A escolha fica
   lembrada no navegador, e a primeira visita segue o idioma do navegador. Os
-  textos que vêm do servidor aparecem como o servidor os escreve, em parte em
-  português e em parte em inglês, até um segundo passo: os detalhes dos erros
-  HTTP e as mensagens dos validadores do Pydantic estão em inglês; os avisos de
-  saúde do treino, as mensagens da varredura do dataset, os títulos e as
-  mensagens dos seletores nativos de arquivo e de pasta, alguns títulos de
-  gráfico, a dica do WinError 1455 e a descrição dos campos de treino no
-  formulário das tarefas próprias estão em português
+  textos que o servidor escreve ainda seguem o idioma em que foram escritos, em
+  parte em português e em parte em inglês; o que já acompanha a interface está
+  na primeira entrada de "Changed" abaixo. Seguem em inglês os detalhes dos
+  erros HTTP que ela não lista e as mensagens dos validadores do Pydantic; em
+  português, as linhas do log de treino, alguns títulos de gráfico e a
+  descrição dos campos de treino no formulário das tarefas próprias
   ([ADR-110](docs/dev/DECISIONS.md)).
 
+### Changed
+
+- **O servidor escreve as próprias mensagens no idioma da interface.** A página
+  manda o idioma em todas as chamadas (`X-VF-Lang: pt|en`, ao lado do
+  `X-VF-Profile`), o servidor o resolve a cada requisição e as mensagens saem de
+  um catálogo único (`utils/messages.py`, cada chave em português e em inglês,
+  sem biblioteca de tradução). Com a interface em inglês, passam a vir em inglês
+  os avisos de saúde do treino, a cópia deles no `run.json` (que fica no idioma
+  de quem apertou Treinar, porque o job guarda o idioma em que foi enviado), as
+  mensagens da detecção de splits e das estatísticas, amostras e prévias do
+  dataset, os títulos e as falhas dos seletores nativos de arquivo e de pasta, a
+  dica do WinError 1455, os erros do teste, da predição em lote e da exportação
+  ONNX de um run, o run não encontrado, a fila e a parada, as recusas de "abrir
+  pasta" e os erros dos perfis. Uma chamada sem o cabeçalho, ou com um valor que
+  o servidor não reconhece, recebe português, como antes; para as mensagens que
+  eram em inglês e mudaram de lugar (run não encontrado, perfis, abrir pasta, o
+  404 da fila), quem não manda `X-VF-Lang` agora lê português e precisa mandar
+  `en` para manter o texto de antes. Os códigos de status não mudam. Seguem como
+  estavam as linhas do log de treino, os gráficos, a descrição dos campos no
+  esquema da configuração e os erros em inglês que não estão na lista
+  ([ADR-116](docs/dev/DECISIONS.md)).
+
 ### Fixed
+
+- **O aviso "Feature extraction congelou N pesos" trocava toda vírgula da frase
+  por ponto.** Para separar os milhares do número em português, o texto inteiro
+  passava por `.replace(",", ".")`, e "pré-treinados, ou use fine-tuning" saía
+  "pré-treinados. ou use fine-tuning". Agora só o número é agrupado (31.400.000
+  em português, 31,400,000 em inglês).
 
 - **O card do Histórico ficava vazio numa execução que nunca avaliou o split de
   teste.** O servidor lia só as chaves `test_*` (`test_r2`, `test_miou`,

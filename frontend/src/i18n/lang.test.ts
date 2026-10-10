@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { initialLang, localeOf, readStoredLang, storeLang } from "./lang";
+import { LANG_HEADER, initialLang, langHeaders, localeOf, readStoredLang, storeLang } from "./lang";
 
 describe("initialLang", () => {
   it("keeps what the user chose before", () => {
@@ -27,6 +27,14 @@ describe("localeOf", () => {
   it("gives each language its BCP 47 tag", () => {
     expect(localeOf("pt")).toBe("pt-BR");
     expect(localeOf("en")).toBe("en-US");
+  });
+});
+
+describe("langHeaders", () => {
+  it("names the language the server should write its messages in", () => {
+    expect(LANG_HEADER).toBe("X-VF-Lang");
+    expect(langHeaders("en")).toEqual({ "X-VF-Lang": "en" });
+    expect(langHeaders("pt")).toEqual({ "X-VF-Lang": "pt" });
   });
 });
 

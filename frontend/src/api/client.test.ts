@@ -1,12 +1,20 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { createProfile, deleteRun, fetchProfiles, fetchRuns, withProfile } from "./client";
+import {
+  createProfile,
+  deleteRun,
+  downloadRunMarkdown,
+  fetchProfiles,
+  fetchRuns,
+  withLang,
+  withProfile,
+} from "./client";
 
 /** A fetch that records its calls and answers with `body`. */
-function stubFetch(body: unknown = []) {
+function stubFetch(body: unknown = [], status = 200) {
   const fetchMock = vi.fn(async () => ({
-    ok: true,
-    status: 200,
+    ok: status < 400,
+    status,
     json: async () => body,
   }));
   vi.stubGlobal("fetch", fetchMock);
@@ -129,6 +137,97 @@ describe("every request carries the chosen profile", () => {
     await deleteRun("r");
 
     expect(sentHeader(fetchMock, "X-VF-Profile")).toBe("ana");
+  });
+});
+
+describe("withLang", () => {
+  it("adds the language header to an init that had none", () => {
+    const init = withLang(undefined, "en");
+
+    expect(new Headers(init.headers).get("X-VF-Lang")).toBe("en");
+  });
+
+  it("keeps the headers and the rest of the init it was given", () => {
+    const original = {
+      method: "POST",
+      body: "{}",
+      headers: { "Content-Type": "application/json" },
+    };
+
+    const init = withLang(original, "pt");
+
+    expect(init.method).toBe("POST");
+    expect(init.body).toBe("{}");
+    const headers = new Headers(init.headers);
+    expect(headers.get("Content-Type")).toBe("application/json");
+    expect(headers.get("X-VF-Lang")).toBe("pt");
+    expect(original.headers).toEqual({ "Content-Type": "application/json" });
+  });
+});
+
+describe("every request carries the language on screen", () => {
+  it("sends the language the header toggle stored", async () => {
+    stubStorage({ "vf.lang": "en" });
+    const fetchMock = stubFetch([]);
+
+    await fetchRuns();
+
+    expect(sentHeader(fetchMock, "X-VF-Lang")).toBe("en");
+  });
+
+  it("follows a switch made between two calls", async () => {
+    stubStorage({ "vf.lang": "en" });
+    const fetchMock = stubFetch([]);
+    await fetchRuns();
+
+    stubStorage({ "vf.lang": "pt" });
+    await fetchRuns();
+
+    expect(sentHeader(fetchMock, "X-VF-Lang", 0)).toBe("en");
+    expect(sentHeader(fetchMock, "X-VF-Lang", 1)).toBe("pt");
+  });
+
+  it("takes the browser's language when nothing was chosen yet", async () => {
+    stubStorage({});
+    vi.stubGlobal("navigator", { language: "pt-BR" });
+    const fetchMock = stubFetch([]);
+    await fetchRuns();
+
+    vi.stubGlobal("navigator", { language: "de-DE" });
+    await fetchRuns();
+
+    expect(sentHeader(fetchMock, "X-VF-Lang", 0)).toBe("pt");
+    expect(sentHeader(fetchMock, "X-VF-Lang", 1)).toBe("en");
+  });
+
+  it("ignores a stored value that is not a language", async () => {
+    stubStorage({ "vf.lang": "klingon" });
+    vi.stubGlobal("navigator", { language: "pt-BR" });
+    const fetchMock = stubFetch([]);
+
+    await fetchRuns();
+
+    expect(sentHeader(fetchMock, "X-VF-Lang")).toBe("pt");
+  });
+
+  it("goes together with the profile and with a write's own headers", async () => {
+    stubStorage({ "vf.lang": "en", "vf.profile": "ana" });
+    const fetchMock = stubFetch({ slug: "bia", name: "Bia", is_default: false });
+
+    await createProfile("Bia");
+
+    expect(sentHeader(fetchMock, "X-VF-Lang")).toBe("en");
+    expect(sentHeader(fetchMock, "X-VF-Profile")).toBe("ana");
+    expect(sentHeader(fetchMock, "Content-Type")).toBe("application/json");
+  });
+
+  it("is also on the download, which does not go through request()", async () => {
+    stubStorage({ "vf.lang": "en" });
+    const fetchMock = stubFetch(null, 500);
+
+    await expect(downloadRunMarkdown("r")).rejects.toThrow();
+
+    expect(sentHeader(fetchMock, "X-VF-Lang")).toBe("en");
   });
 });
 

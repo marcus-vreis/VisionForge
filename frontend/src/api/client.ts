@@ -1,5 +1,10 @@
 import { en } from "../i18n/en";
-import { initialLang, readStoredLang } from "../i18n/lang";
+import {
+  initialLang,
+  langHeaders,
+  readStoredLang,
+  type Lang,
+} from "../i18n/lang";
 import { pt, type Dict } from "../i18n/pt";
 import type { TaskDescriptor } from "../lib/custom-tasks";
 import {
@@ -22,20 +27,23 @@ import type {
 const BASE = "/api";
 
 /**
- * The texts of the errors raised here, in the language on screen.
+ * The language on screen, resolved the way the provider seeds it.
  *
  * This module is not a component, so it cannot call useT(), and threading the
- * dictionary through every request would touch each of its ~50 callers. The
- * language is resolved the way the provider seeds it: setLang() stores the
- * choice before anything can fail, so this follows the header toggle, and a
- * message is built at the moment it is thrown, which is also when it is shown.
+ * language through every request would touch each of its ~50 callers.
+ * setLang() stores the choice before anything can fail, so this follows the
+ * header toggle on the next call.
  */
-function errorTexts(): Dict["errors"] {
-  const lang = initialLang(
+function currentLang(): Lang {
+  return initialLang(
     readStoredLang(),
     typeof navigator === "undefined" ? undefined : navigator.language,
   );
-  return (lang === "pt" ? pt : en).errors;
+}
+
+/** The texts of the errors raised here, built when they are thrown. */
+function errorTexts(): Dict["errors"] {
+  return (currentLang() === "pt" ? pt : en).errors;
 }
 
 export interface FastApiValidationError {
@@ -62,10 +70,32 @@ export function withProfile(
   return { ...init, headers };
 }
 
+/**
+ * `init` with the interface language added (ADR-116).
+ *
+ * The server words the messages it composes (a dataset scan, a health warning,
+ * a refused request) in this language. Without the header it writes Portuguese.
+ */
+export function withLang(
+  init?: RequestInit,
+  lang: Lang = currentLang(),
+): RequestInit {
+  const headers = new Headers(init?.headers);
+  for (const [name, value] of Object.entries(langHeaders(lang))) {
+    headers.set(name, value);
+  }
+  return { ...init, headers };
+}
+
+/** Every call carries the chosen profile and the language on screen. */
+function withContext(init?: RequestInit): RequestInit {
+  return withLang(withProfile(init));
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response;
   try {
-    res = await fetch(`${BASE}${path}`, withProfile(init));
+    res = await fetch(`${BASE}${path}`, withContext(init));
   } catch (e) {
     throw new ApiError(
       0,
@@ -1029,7 +1059,7 @@ export async function testRunOnDataset(
 export async function downloadRunMarkdown(runId: string): Promise<void> {
   const res = await fetch(
     `${BASE}/runs/${encodeURIComponent(runId)}/export_md`,
-    withProfile(),
+    withContext(),
   );
   if (!res.ok) {
     throw new ApiError(res.status, errorTexts().markdownExport(res.status));

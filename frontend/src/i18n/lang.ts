@@ -30,6 +30,19 @@ export function storeLang(lang: Lang): void {
   }
 }
 
+/** The header that tells the server which language to write its messages in (ADR-116). */
+export const LANG_HEADER = "X-VF-Lang";
+
+/** The header every API call carries.
+ *
+ * Unlike the profile header, it is always sent: the server's default is
+ * Portuguese, so even the default interface language has to say so when it is
+ * English, and saying it for Portuguese too costs nothing and keeps one rule.
+ */
+export function langHeaders(lang: Lang): Record<string, string> {
+  return { [LANG_HEADER]: lang };
+}
+
 /** The BCP 47 tag for dates, numbers and <html lang>. */
 export function localeOf(lang: Lang): string {
   return lang === "pt" ? "pt-BR" : "en-US";
