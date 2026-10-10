@@ -3923,6 +3923,12 @@ the result of a download) and keep the language they were created in until the
 next action; the ones that depend only on current state, such as the
 "downloading…" notice, are worded at render time.
 
+**Follow-up:** the "second step" that this leaves open is ADR-116: the page
+sends its language and the server words its own messages. Of the inventory
+above, it moves the health warnings, the dataset-scan messages, the dialogs'
+titles and failure messages, the WinError 1455 hint and the exceptions the
+run-test endpoints relay; the rest is listed there.
+
 ---
 
 ## ADR-111 — Stop honored by every executor; the queue says where it stops
@@ -4622,3 +4628,109 @@ the training loss "usually sits below" the validation loss, and on this very
 dataset the first epoch's training loss (0.68, averaged while the model is
 still changing) is above the validation loss (0.20), so the step now says how
 each one is measured instead.
+
+## ADR-116 — The server words its messages in the language of the page
+
+**Date:** 2026-10-10
+**Status:** Accepted
+**Completes:** ADR-110 (the bilingual interface left the server's own texts as
+they were), reusing the per-request header of ADR-114
+
+**Context:** the interface is bilingual since ADR-110, but a message that the
+server composes arrived in whichever language its author wrote it in: the
+training-health warnings, the dataset-scan messages and the dialogs' failures in
+Portuguese, the `detail` of most HTTP errors in English. A researcher who picked
+English read Portuguese in the middle of a screen, and one who picked
+Portuguese read English. ADR-110 named the choice (translate at the API edge, or
+send codes the page words itself) and postponed it.
+
+**Decision.** Both, each where it fits.
+
+- *The page says which language it wants.* `request()` in `api/client.ts`, next
+  to `X-VF-Profile`, adds `X-VF-Lang: pt|en` to every call, read from the same
+  place the error texts of that file already read it (`vf.lang`, else the
+  browser). It is not `Accept-Language`: that is the browser's preference, and the
+  header toggle exists exactly for the person whose browser and interface
+  disagree.
+- *The server resolves it once per request.* `resolve_lang` takes the primary
+  subtag (`en-US` is `en`) and returns Portuguese for an absent, empty or
+  unknown value: there is no negotiation and no quality values, because the
+  caller is our own page. A router-level `async` dependency (`request_lang`)
+  stores the result in a `ContextVar`. Router-level, so the profile lookup that
+  runs before the endpoint writes its errors in the right language; `async`,
+  because a sync dependency runs in a worker thread and a context variable set
+  there never reaches the endpoint.
+- *Messages come from one catalog.* `utils/messages.py` maps a key to
+  `{pt, en}`, each a `str.format` template; `tr(key, **params)` reads the
+  current language. No gettext: two languages and about seventy entries need a
+  dictionary and a test. It is in `utils/` and not in `gui/` because `core/`
+  writes some of these texts and must not import the web layer. A context
+  variable and not a `lang` parameter, because the messages are written in a
+  dozen helpers and in the trainers, and the language rides through
+  `asyncio.to_thread` and tasks by itself.
+- *A queued job keeps the language it was submitted under.* The queue starts a
+  job from its own task, long after the request that queued it, so
+  `_submit_job` captures the language and wraps the job's `start` in it. A
+  health warning, written by a trainer in a worker thread, is therefore in the
+  language of whoever pressed Train; it is also what lands in `run.json`, next
+  to a `code` that does not change. The command line never binds a language and
+  keeps printing Portuguese.
+- *Where the page already words something from structured data, the catalog does
+  not duplicate it.* The plain dismissal of a dialog stays the sentence
+  "Cancelado." because `lib/picker-feedback.ts` replaces exactly that string; the
+  409 and 404 of a stop request are worded by `TrainingOverlay` and
+  `QueueOverlay` from the status code. Their catalog entries are for every other
+  client of the API.
+- *The catalog is checked from both ends.* Every key has both languages, takes
+  the same placeholders in each and differs between them; every `tr("…")` call
+  in `src/` names a key that exists; every key is used somewhere. A typo fails a
+  test, not a request.
+
+**Moved in this slice** (key prefix, then where):
+
+- `health.*`: the six training-health warnings (`core/training_health.py`).
+- `winerror.*`: the paging-file hint (`core/loader_lifecycle.py`) and the
+  worker-crash message (`core/detection_trainer.py`).
+- `detect.*`, `scan.*`: split detection and the messages of the classification,
+  detection, segmentation, anomaly and regression dataset-stats, samples and
+  preview responses (`gui/api/routes.py`).
+- `pick.*`: the titles of the three native dialogs, their failure message, the
+  missing-tkinter message and the container hint.
+- `testrun.*`, `export.*`: what the run-test, batch-prediction and detection
+  ONNX-export endpoints relay (`routes.py`, `detection_testing.py`,
+  `detection_export.py`).
+- `run.*`, `queue.*`, `reveal.*`: a run not found, still running, failed, not
+  deletable or with nothing to continue; the replicate-group refusal; the
+  "(resuming)" label; the stop refusals; the Origin and loopback 403s of "open
+  folder".
+- `profile.*`: every error of `gui/api/profiles.py` and the refusal to vary
+  `output` in a sweep or comparison.
+
+**Still as written, on purpose or not yet:**
+
+- The training log lines (`logger.*` in the trainers). They go to the log file
+  and the live stream in whatever the trainer wrote; a later slice.
+- `STOPPED_NOTE` (`core/cancellation.py`): the audit text in the `error` of a unit
+  a stop cut. No screen shows it; the page words "stopped" from the status.
+- The title and axis labels of the residual and anomaly-score plots
+  (`core/plotter.py`), which are images in the report; and the `description` of
+  the training fields in the config schema.
+- The `detail` of the HTTP errors in `routes.py` that were already English and
+  are not in the list above (`Path must be absolute`, `Failed to parse
+  run.json`, `Task … cannot be resumed`, the sample-dataset errors), the
+  messages of the Pydantic validators, and the exceptions raised below the
+  route layer and relayed as is (dataset download, ONNX export, Grad-CAM).
+- The built-in task labels and descriptions in `/api/tasks`, the note of
+  `/api/model/defaults` and the `detail` of hiding, restoring or deleting a
+  custom task: the first two are replaced by the page's dictionary or not shown
+  (ADR-110), the last is shown as the server writes it.
+
+**Consequences:** a call without the header gets Portuguese. For the messages
+that used to be English and moved (a run not found, the profile errors, the
+"open folder" refusals, the queue 404), a script that does not send
+`X-VF-Lang` now reads Portuguese and has to send `en` to keep the old text; the
+status codes are unchanged. Adding a server message means adding both languages
+to the catalog before the test passes, which is the same rule ADR-110 set for
+the page. One defect came out of moving the texts: the "froze N weights" warning
+replaced every comma of its Portuguese sentence by a period while grouping the
+number ("pré-treinados. ou use"), and now changes only the number.

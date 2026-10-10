@@ -185,9 +185,13 @@ class TestResumeEndpoint:
         monkeypatch.setattr(routes_mod, "_MODELS_DIR", tmp_path / "models")
 
         resp = client.post(f"/api/runs/{run_dir.name}/resume")
+        in_english = client.post(
+            f"/api/runs/{run_dir.name}/resume", headers={"X-VF-Lang": "en"}
+        )
 
-        assert resp.status_code == 409
-        assert "continue" in resp.json()["detail"]
+        assert resp.status_code == in_english.status_code == 409
+        assert "continuar" in resp.json()["detail"]
+        assert "continue" in in_english.json()["detail"]
 
     def test_a_stopped_run_is_submitted_in_its_own_directory(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch

@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from visionforge.gui.api.schemas import ExportOnnxRequest, ExportOnnxResponse
+from visionforge.utils.messages import tr
 
 
 def export_detection_run(
@@ -32,15 +33,11 @@ def export_detection_run(
     checkpoint = data.get("artifacts", {}).get("model")
     if not checkpoint or not Path(checkpoint).is_file():
         raise FileNotFoundError(
-            f"Run '{run_dir.name}' não tem um checkpoint utilizável "
-            f"(artifacts.model: {checkpoint!r})."
+            tr("testrun.no_checkpoint", run=run_dir.name, model=repr(checkpoint))
         )
 
     if backend != "ultralytics":
-        raise ValueError(
-            "Export ONNX para detectores torchvision ainda não é suportado; "
-            "use o backend Ultralytics."
-        )
+        raise ValueError(tr("export.torchvision_detection"))
 
     from visionforge.core import detection_trainer
 

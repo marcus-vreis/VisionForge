@@ -20,6 +20,8 @@ from typing import Any, TypeVar
 
 from loguru import logger
 
+from visionforge.utils.messages import tr
+
 _LoaderT = TypeVar("_LoaderT")
 
 
@@ -69,16 +71,7 @@ def describe_worker_spawn_failure(exc: BaseException) -> str | None:
     winerror = getattr(exc, "winerror", None)
     if winerror != _PAGING_FILE_WINERROR:
         return None
-    return (
-        "Windows ficou sem espaço de paginação ao criar os processos de leitura "
-        "de dados (WinError 1455). Cada worker é um processo novo que recarrega "
-        "o torch e as DLLs da CUDA, ~1 GB cada.\n"
-        "  - Reduza data.num_workers (2, ou 0 para desligar).\n"
-        "  - Feche runs anteriores que tenham ficado presos e o que estiver "
-        "ocupando memória.\n"
-        "  - Ou aumente o arquivo de paginação do Windows "
-        "(Sistema → Configurações avançadas → Desempenho → Memória virtual)."
-    )
+    return tr("winerror.paging_file")
 
 
 class LoaderCache:

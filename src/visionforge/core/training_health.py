@@ -26,6 +26,8 @@ from dataclasses import asdict, dataclass
 
 import numpy as np
 
+from visionforge.utils.messages import current_lang, tr
+
 # A loss that falls by less than this fraction over the whole run is, for
 # reporting purposes, a loss that did not move. Calibrated on the measured grid
 # (ADR-099) rather than picked: the runs that learned nothing fell 3.7%
@@ -67,15 +69,7 @@ def collapsed_predictions(
     only = distinct.pop()
     return HealthWarning(
         code="collapsed_predictions",
-        message=(
-            f"O modelo previu a mesma classe ({only}) para todas as "
-            f"{len(predictions)} imagens de validação — ele não aprendeu a "
-            f"distinguir as classes. A acurácia mostrada é apenas a proporção "
-            f"dessa classe. Causa mais comum: learning rate alto demais para "
-            f"esta arquitetura (VGG e AlexNet com Adam costumam precisar de "
-            f"1e-4, não 1e-3). Tente reduzir o learning rate ou trocar o "
-            f"otimizador para SGD."
-        ),
+        message=tr("health.collapsed_predictions", cls=only, n=len(predictions)),
     )
 
 
@@ -91,19 +85,17 @@ def stagnant_loss(losses: Sequence[float]) -> HealthWarning | None:
         return None
     return HealthWarning(
         code="stagnant_loss",
-        message=(
-            f"A loss de treino praticamente não caiu ({first:.4f} → {last:.4f} "
-            f"em {len(values)} épocas). O modelo não está aprendendo: revise o "
-            f"learning rate (alto demais diverge, baixo demais não sai do "
-            f"lugar) e confira se os rótulos do dataset estão corretos."
-        ),
+        message=tr("health.stagnant_loss", first=first, last=last, n=len(values)),
     )
 
 
 def constant_predictions(
-    values: Sequence[float], *, label: str = "valor"
+    values: Sequence[float], *, label: str | None = None
 ) -> HealthWarning | None:
-    """Warn when a regressor outputs essentially one number for every input."""
+    """Warn when a regressor outputs essentially one number for every input.
+
+    ``label`` names what is predicted; by default the catalog's word for "value".
+    """
     array = np.asarray([float(v) for v in values], dtype=float).ravel()
     if array.size < 2:
         return None
@@ -113,11 +105,10 @@ def constant_predictions(
         return None
     return HealthWarning(
         code="constant_predictions",
-        message=(
-            f"O modelo previu praticamente o mesmo {label} "
-            f"({float(array.mean()):.4f}) para todas as entradas — ele está "
-            f"chutando a média em vez de usar a imagem. Revise o learning rate "
-            f"e a normalização dos alvos."
+        message=tr(
+            "health.constant_predictions",
+            label=label or tr("health.value_label"),
+            mean=float(array.mean()),
         ),
     )
 
@@ -134,15 +125,13 @@ def frozen_random_backbone(
     """
     if mode != "feature_extraction" or pretrained:
         return None
+    grouped = f"{frozen_params:,}"
+    if current_lang() == "pt":
+        # Only the number: the sentence around it has commas of its own.
+        grouped = grouped.replace(",", ".")
     return HealthWarning(
         code="frozen_random_backbone",
-        message=(
-            f"Feature extraction congelou {frozen_params:,} pesos que nunca "
-            f"foram treinados (o modelo está sem pesos pré-treinados). Congelar "
-            f"faz sentido quando os pesos já aprenderam algo; aqui eles são "
-            f"aleatórios. Ative os pesos pré-treinados, ou use fine-tuning para "
-            f"treinar a rede inteira."
-        ).replace(",", "."),
+        message=tr("health.frozen_random_backbone", frozen=grouped),
     )
 
 
@@ -162,14 +151,7 @@ def collapsed_segmentation(
     if len(scored) > 1:
         return None
     return HealthWarning(
-        code="collapsed_segmentation",
-        message=(
-            "A segmentação previu uma única classe em todos os pixels — as "
-            "outras ficaram com IoU zero. O mIoU mostrado é o dessa classe "
-            "dividido pelo número de classes, não uma medida de qualidade. "
-            "Revise o learning rate e verifique se as máscaras têm os índices "
-            "de classe esperados."
-        ),
+        code="collapsed_segmentation", message=tr("health.collapsed_segmentation")
     )
 
 
@@ -185,12 +167,7 @@ def no_detections(map50: float | None, epochs_done: int) -> HealthWarning | None
         return None
     return HealthWarning(
         code="no_detections",
-        message=(
-            f"O modelo terminou {epochs_done} época(s) com mAP@50 igual a zero: "
-            f"ele não acertou nenhuma caixa. Confira se os rótulos estão no "
-            f"formato YOLO esperado e se o número de classes bate com o "
-            f"data.yaml; depois disso, o learning rate."
-        ),
+        message=tr("health.no_detections", epochs=epochs_done),
     )
 
 

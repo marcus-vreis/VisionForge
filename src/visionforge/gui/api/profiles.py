@@ -35,6 +35,8 @@ from typing import Any, TypeVar
 
 from pydantic import BaseModel
 
+from visionforge.utils.messages import tr
+
 DEFAULT_SLUG = "default"
 PROFILE_HEADER = "X-VF-Profile"
 MAX_SLUG_LEN = 40
@@ -85,7 +87,7 @@ class ProfileExistsError(ProfileError):
     """A profile with that slug already exists (409)."""
 
     def __init__(self, slug: str, name: str) -> None:
-        super().__init__(f"Já existe um perfil '{name}' (pasta '{slug}').")
+        super().__init__(tr("profile.exists", name=name, slug=slug))
         self.slug = slug
         self.name = name
 
@@ -183,16 +185,16 @@ def _profile_folder(slug: str, profiles_dir: Path) -> Path | None:
         real = folder.resolve()
         root = profiles_dir.resolve()
     except OSError:
-        raise InvalidProfileError(f"Profile '{slug}' cannot be resolved.") from None
+        raise InvalidProfileError(tr("profile.unresolvable", slug=slug)) from None
     if real.parent != root or real.name != slug:
-        raise InvalidProfileError(f"Profile '{slug}' is outside the profiles folder.")
+        raise InvalidProfileError(tr("profile.outside_root", slug=slug))
     for sub in OUTPUT_SUBDIRS:
         # Every output folder, not only ``models``: a linked ``graphics`` or
         # ``logs`` would send a run's files out of the profile just the same.
         child = folder / sub
         if child.exists() and child.resolve().parent != real:
             raise InvalidProfileError(
-                f"Profile '{slug}' keeps its {sub} outside itself."
+                tr("profile.linked_subfolder", slug=slug, sub=sub)
             )
     return folder
 
@@ -230,12 +232,11 @@ def resolve_profile(
         return default_profile(default_models_dir)
     if not is_valid_slug(slug):
         raise InvalidProfileError(
-            f"'{slug[:60]}' is not a valid profile name: use 1-{MAX_SLUG_LEN} "
-            "lowercase ascii letters, digits, '-' or '_'."
+            tr("profile.invalid", slug=slug[:60], max_len=MAX_SLUG_LEN)
         )
     folder = _profile_folder(slug, profiles_dir)
     if folder is None:
-        raise UnknownProfileError(f"Profile '{slug}' does not exist.")
+        raise UnknownProfileError(tr("profile.unknown", slug=slug))
     return _build(slug, folder, profiles_dir)
 
 
@@ -269,11 +270,9 @@ def create_profile(name: str, profiles_dir: Path, default_models_dir: Path) -> P
     display = normalize_display_name(name)
     slug = slugify(display)
     if not slug:
-        raise ProfileNameError(
-            "O nome precisa ter ao menos uma letra (a-z) ou um número."
-        )
+        raise ProfileNameError(tr("profile.name_empty"))
     if slug in _RESERVED:
-        raise ProfileNameError(f"'{slug}' é um nome reservado. Escolha outro.")
+        raise ProfileNameError(tr("profile.name_reserved", slug=slug))
 
     folder = profiles_dir / slug
     made = False
@@ -307,7 +306,7 @@ def create_profile(name: str, profiles_dir: Path, default_models_dir: Path) -> P
             shutil.rmtree(folder, ignore_errors=True)
         reason = exc.strerror or type(exc).__name__
         raise ProfileCreateError(
-            f"Não foi possível criar a pasta do perfil '{slug}': {reason}."
+            tr("profile.create_failed", slug=slug, reason=reason)
         ) from exc
     return _build(slug, folder, profiles_dir)
 

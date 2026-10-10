@@ -41,6 +41,7 @@ from visionforge.core.training_health import no_detections, summarize
 from visionforge.models.detection_factory import build_torchvision_detector
 from visionforge.utils.detection_config import DetectionConfig
 from visionforge.utils.environment import capture_environment
+from visionforge.utils.messages import tr
 from visionforge.utils.workers import suggested_workers
 
 try:  # ultralytics ships with the package (ADR-106); still bound lazily.
@@ -269,13 +270,7 @@ class DetectionTrainer:
         except (OSError, RuntimeError, EOFError) as exc:
             if sys.platform == "win32" and _is_worker_spawn_crash(str(exc)):
                 raise RuntimeError(
-                    f"Os workers do DataLoader morreram ao iniciar — no Windows "
-                    f"isso quase sempre é o arquivo de paginação pequeno demais "
-                    f"para {self._config.training.workers} workers recarregarem "
-                    f"as DLLs CUDA do torch (WinError 1455). Reduza "
-                    f"training.workers para 0–2, ou aumente a memória virtual "
-                    f"do Windows (Sistema → Configurações avançadas → "
-                    f"Desempenho → Memória virtual)."
+                    tr("winerror.workers_died", workers=self._config.training.workers)
                 ) from exc
             raise
 

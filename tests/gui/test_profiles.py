@@ -746,7 +746,7 @@ class TestHistoryIsPerProfile:
         resp = getattr(client, method)(url, **kwargs)
 
         assert resp.status_code == 404, resp.text
-        assert "not found" in resp.json()["detail"]
+        assert "não encontrado" in resp.json()["detail"]
         assert (ana / "run.json").is_file()
 
     @pytest.mark.parametrize(

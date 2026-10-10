@@ -19,6 +19,7 @@ from typing import Any
 
 from visionforge.gui.api.schemas import RunTestRequest, RunTestResponse
 from visionforge.utils.detection_config import DetectionConfig
+from visionforge.utils.messages import tr
 
 # Preferred evaluation split order: a held-out split first, train last.
 _EVAL_SPLITS = ("val", "test", "train")
@@ -38,8 +39,7 @@ def evaluate_detection_run(
     checkpoint = data.get("artifacts", {}).get("model")
     if not checkpoint or not Path(checkpoint).is_file():
         raise FileNotFoundError(
-            f"Run '{run_dir.name}' não tem um checkpoint utilizável "
-            f"(artifacts.model: {checkpoint!r})."
+            tr("testrun.no_checkpoint", run=run_dir.name, model=repr(checkpoint))
         )
 
     if config.model.backend == "torchvision":

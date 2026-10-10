@@ -210,6 +210,14 @@ from visionforge.utils.anomaly_config import AnomalyConfig
 from visionforge.utils.config import ExperimentConfig
 from visionforge.utils.cuda import check_cuda
 from visionforge.utils.detection_config import DetectionConfig
+from visionforge.utils.messages import (
+    LANG_HEADER,
+    current_lang,
+    resolve_lang,
+    set_lang,
+    tr,
+    using_lang,
+)
 from visionforge.utils.redact import redact_secrets
 from visionforge.utils.regression_config import RegressionConfig
 from visionforge.utils.segmentation_config import SegmentationConfig
@@ -229,7 +237,22 @@ _VAL_ALIASES = {
 }
 _TEST_ALIASES = {"test", "testing", "teste", "ts", "holdout", "hold_out"}
 
-router = APIRouter(prefix="/api")
+
+async def request_lang(
+    x_vf_lang: Annotated[str | None, Header(alias=LANG_HEADER)] = None,
+) -> None:
+    """Bind the page's language for the rest of the request (ADR-116).
+
+    Async on purpose: a sync dependency runs in a worker thread, and a context
+    variable set there never reaches the endpoint. It always sets, so a request
+    without the header is Portuguese and never inherits another one's language.
+    """
+    set_lang(resolve_lang(x_vf_lang))
+
+
+# Router-level, so every endpoint and every dependency below it (the profile
+# lookup among them) writes its messages in the language of the page.
+router = APIRouter(prefix="/api", dependencies=[Depends(request_lang)])
 
 # State of the run that is executing right now (the machine still trains one at
 # a time); submissions that arrive while it is busy wait in _RUN_QUEUE.
@@ -374,13 +397,22 @@ def _submit_job(
     the config handed to ``start`` was already scoped to it by the caller.
     """
     owner = profile or default_profile(_MODELS_DIR)
+    lang = current_lang()
+
+    async def start_in_lang() -> None:
+        # The queue starts the job from its own task, long after this request's
+        # language is gone; the messages the trainer writes (health warnings, the
+        # paging-file hint) are for the person who pressed the button.
+        with using_lang(lang):
+            await start()
+
     status = _RUN_QUEUE.submit(
         QueuedJob(
             run_id=run_id,
             label=label,
             task=task,
             strategy=strategy,
-            start=start,
+            start=start_in_lang,
             stop_at=_stop_point(strategy) if stop_at == "auto" else stop_at,
             profile=owner.slug,
             profile_name=owner.name,
@@ -574,7 +606,7 @@ async def get_run_detail(
     """Return the full run.json for a specific run_id."""
     run_dir = _find_run_dir(run_id, profile)
     if run_dir is None:
-        raise HTTPException(404, f"Run '{run_id}' not found.")
+        raise HTTPException(404, tr("run.not_found", run_id=run_id))
     run_json_path = run_dir / "run.json"
     try:
         data: dict[str, Any] = json.loads(run_json_path.read_text(encoding="utf-8"))
@@ -685,20 +717,16 @@ async def reveal_run_folder(
     """
     origin = request.headers.get("origin")
     if origin is not None and not is_loopback_origin(origin):
-        raise HTTPException(
-            403, "The folder can only be opened from VisionForge's own page."
-        )
+        raise HTTPException(403, tr("reveal.foreign_origin"))
     if not is_loopback_host(_client_host(request)):
-        raise HTTPException(
-            403, "The folder can only be opened from the machine running the server."
-        )
+        raise HTTPException(403, tr("reveal.remote_client"))
     run_dir = _find_run_dir(run_id, profile)
     if run_dir is None:
-        raise HTTPException(404, f"Run '{run_id}' not found.")
+        raise HTTPException(404, tr("run.not_found", run_id=run_id))
     try:
         open_folder(run_dir)
     except FolderOpenError as exc:
-        raise HTTPException(500, f"Failed to open the folder: {exc}") from exc
+        raise HTTPException(500, tr("reveal.failed", error=exc)) from exc
     return {"run_id": run_dir.name, "run_dir": str(run_dir.resolve())}
 
 
@@ -714,7 +742,7 @@ async def resume_run(run_id: str, profile: ProfileDep) -> RunResponse:
     """
     run_dir = _find_run_dir(run_id, profile)
     if run_dir is None:
-        raise HTTPException(404, f"Run '{run_id}' not found.")
+        raise HTTPException(404, tr("run.not_found", run_id=run_id))
     _reject_group_action(run_dir)
     try:
         data: dict[str, Any] = json.loads(
@@ -725,7 +753,7 @@ async def resume_run(run_id: str, profile: ProfileDep) -> RunResponse:
 
     resumable, _ = _resume_status(run_dir, data)
     if not resumable:
-        raise HTTPException(409, f"Run '{run_id}' has nothing left to continue.")
+        raise HTTPException(409, tr("run.nothing_to_continue", run_id=run_id))
 
     # Built here rather than at module level: the executors are defined further
     # down this file and do not exist yet while it is being imported.
@@ -753,7 +781,7 @@ async def resume_run(run_id: str, profile: ProfileDep) -> RunResponse:
     job_id = f"{config.name}_{timestamp}"
     return _submit_job(
         job_id,
-        f"{config.name} (retomando)",
+        tr("run.resuming_label", name=config.name),
         task,
         "simple",
         lambda: executor(config, job_id, resume_dir=run_dir),
@@ -774,7 +802,7 @@ async def delete_run(run_id: str, profile: ProfileDep) -> dict[str, str]:
 
     run_dir = _find_run_dir(run_id, profile)
     if run_dir is None:
-        raise HTTPException(404, f"Run '{run_id}' not found.")
+        raise HTTPException(404, tr("run.not_found", run_id=run_id))
 
     # Block deleting the active run — its files are held open by the trainer.
     if (
@@ -782,7 +810,7 @@ async def delete_run(run_id: str, profile: ProfileDep) -> dict[str, str]:
         and _current_run.get("status") == "running"
         and _current_run.get("run_id") == run_id
     ):
-        raise HTTPException(409, "Cannot delete a run that is currently executing.")
+        raise HTTPException(409, tr("run.cannot_delete_active"))
 
     resolved = run_dir.resolve()
     models_dir = profile.models_dir.resolve()
@@ -806,7 +834,7 @@ async def export_run_markdown(run_id: str, profile: ProfileDep) -> Response:
     """Render a model card (markdown) for the run, ready for paper inclusion."""
     run_dir = _find_run_dir(run_id, profile)
     if run_dir is None:
-        raise HTTPException(404, f"Run '{run_id}' not found.")
+        raise HTTPException(404, tr("run.not_found", run_id=run_id))
     run_json_path = run_dir / "run.json"
     try:
         data: dict[str, Any] = json.loads(run_json_path.read_text(encoding="utf-8"))
@@ -840,11 +868,7 @@ def _reject_group_action(run_dir: Path) -> None:
     except (OSError, ValueError):
         return
     if isinstance(data, dict) and isinstance(data.get("group"), dict):
-        raise HTTPException(
-            400,
-            "Esta execução é um conjunto de réplicas: abra uma das seeds para "
-            "continuar, testar, prever em lote, exportar ou gerar Grad-CAM.",
-        )
+        raise HTTPException(400, tr("run.group_action"))
 
 
 def _reject_custom_task_action(run_dir: Path, action: str) -> None:
@@ -888,7 +912,7 @@ async def test_run_on_dataset(
     """
     run_dir = _find_run_dir(run_id, profile)
     if run_dir is None:
-        raise HTTPException(404, f"Run '{run_id}' not found.")
+        raise HTTPException(404, tr("run.not_found", run_id=run_id))
 
     _reject_group_action(run_dir)
     _reject_custom_task_action(run_dir, "test")
@@ -918,7 +942,7 @@ async def gradcam_run(
     """
     run_dir = _find_run_dir(run_id, profile)
     if run_dir is None:
-        raise HTTPException(404, f"Run '{run_id}' not found.")
+        raise HTTPException(404, tr("run.not_found", run_id=run_id))
     _reject_group_action(run_dir)
     _reject_custom_task_action(run_dir, "gradcam")
     try:
@@ -942,7 +966,7 @@ async def batch_predict_run(
     """
     run_dir = _find_run_dir(run_id, profile)
     if run_dir is None:
-        raise HTTPException(404, f"Run '{run_id}' not found.")
+        raise HTTPException(404, tr("run.not_found", run_id=run_id))
 
     _reject_group_action(run_dir)
     _reject_custom_task_action(run_dir, "batch_predict")
@@ -970,7 +994,7 @@ async def export_run_to_onnx(
     """
     run_dir = _find_run_dir(run_id, profile)
     if run_dir is None:
-        raise HTTPException(404, f"Run '{run_id}' not found.")
+        raise HTTPException(404, tr("run.not_found", run_id=run_id))
 
     _reject_group_action(run_dir)
     _reject_custom_task_action(run_dir, "export_onnx")
@@ -1666,7 +1690,7 @@ async def _execute_custom_task(info: Any, cfg: Any, run_id: str) -> None:
         _current_run = {
             "run_id": run_id,
             "status": "failed",
-            "error": f"{type(e).__name__}: {e or '(sem mensagem)'}",
+            "error": f"{type(e).__name__}: {e or tr('run.no_message')}",
             "report": None,
             "run_dir": None,
         }
@@ -1888,16 +1912,9 @@ async def cancel_queued_run(run_id: str) -> dict[str, str]:
     try:
         found = _RUN_QUEUE.cancel(run_id)
     except NotStoppableError:
-        raise HTTPException(
-            409,
-            "Esta execução não verifica pedidos de parada (uma tarefa própria "
-            "que controla o próprio laço de treino, por exemplo) e vai rodar "
-            "até o fim. Nada foi interrompido.",
-        ) from None
+        raise HTTPException(409, tr("queue.not_stoppable")) from None
     if not found:
-        raise HTTPException(
-            404, "No queued run with that id — it may have already started."
-        )
+        raise HTTPException(404, tr("queue.unknown_id"))
     return {"run_id": run_id, "status": "cancelled"}
 
 
@@ -1913,15 +1930,14 @@ async def get_result(run_id: str) -> RunResult:
     if state is None:
         state = _RUN_QUEUE.record(run_id)
     if state is None:
-        raise HTTPException(404, "Run not found.")
+        raise HTTPException(404, tr("run.not_found", run_id=run_id))
 
     if state["status"] == "running":
-        raise HTTPException(409, "Experiment is still running.")
+        raise HTTPException(409, tr("run.still_running"))
 
     if state["status"] == "failed":
         raise HTTPException(
-            500,
-            f"Experiment failed: {state.get('error', 'unknown error')}",
+            500, tr("run.failed", error=state.get("error", "unknown error"))
         )
 
     run_dir = state.get("run_dir")
@@ -2255,7 +2271,7 @@ def _render_preprocess_preview(
             final="",
             source_image="",
             available_kinds=available_kinds(),
-            message=f"Split '{req.split}' não encontrado.",
+            message=tr("scan.split_missing", split=req.split),
         )
 
     # Pick the first available class + first image inside it.
@@ -2267,7 +2283,7 @@ def _render_preprocess_preview(
             final="",
             source_image="",
             available_kinds=available_kinds(),
-            message="Nenhuma classe encontrada no split.",
+            message=tr("scan.split_no_classes"),
         )
 
     target_class = None
@@ -2291,7 +2307,7 @@ def _render_preprocess_preview(
             final="",
             source_image="",
             available_kinds=available_kinds(),
-            message=f"Sem imagens no diretório {target_class}.",
+            message=tr("scan.class_no_images", path=target_class),
         )
 
     # Cache dir is deterministic per source image so repeated previews don't
@@ -2431,7 +2447,7 @@ def _render_augment_preview(req: AugmentPreviewRequest) -> AugmentPreviewRespons
             variants=[],
             source_image="",
             active=[],
-            message=f"Sem imagens no split '{req.split}'.",
+            message=tr("scan.split_no_images", split=req.split),
         )
 
     tc = TransformConfig.model_validate(req.transforms)
@@ -2489,7 +2505,7 @@ def _collect_dataset_samples(req: DatasetSamplesRequest) -> DatasetSamplesRespon
             base_dir=req.base_dir,
             split=req.split,
             samples={},
-            message=f"Split '{req.split}' não encontrado em {base}.",
+            message=tr("scan.split_missing_in", split=req.split, path=base),
         )
 
     samples: dict[str, list[str]] = {}
@@ -2521,7 +2537,7 @@ def _collect_dataset_stats(req: DatasetStatsRequest) -> DatasetStatsResponse:
             splits={},
             class_names=[],
             imbalanced=False,
-            message=f"Diretório base não encontrado: {req.base_dir}",
+            message=tr("scan.base_missing", path=req.base_dir),
         )
 
     split_map = {"train": req.train_dir, "val": req.val_dir, "test": req.test_dir}
@@ -2620,7 +2636,7 @@ def _collect_detection_dataset_samples(
             base_dir=req.base_dir,
             split=req.split,
             crops={},
-            message=f"Diretório não encontrado: {req.base_dir}",
+            message=tr("scan.dir_missing", path=req.base_dir),
         )
 
     resolved = resolve_yolo_split(base, req.split)
@@ -2629,7 +2645,7 @@ def _collect_detection_dataset_samples(
             base_dir=req.base_dir,
             split=req.split,
             crops={},
-            message=f"Split '{req.split}' não encontrado neste dataset.",
+            message=tr("scan.split_missing_dataset", split=req.split),
         )
 
     images_dir, labels_dir = resolved
@@ -2664,7 +2680,7 @@ def _collect_detection_dataset_samples(
         base_dir=req.base_dir,
         split=req.split,
         crops=crops,
-        message=None if crops else "Nenhuma caixa anotada encontrada neste split.",
+        message=None if crops else tr("scan.no_boxes"),
     )
 
 
@@ -2714,7 +2730,7 @@ def _collect_detection_dataset_stats(
             splits={},
             class_names=[],
             imbalanced=False,
-            message=f"Diretório base não encontrado: {req.base_dir}",
+            message=tr("scan.base_missing", path=req.base_dir),
         )
 
     declared_names = _read_yolo_class_names(base)
@@ -2770,10 +2786,7 @@ def _collect_detection_dataset_stats(
 
     message = None
     if all(m for _, _, _, m in raw.values()):
-        message = (
-            "Nenhum split YOLO encontrado (esperado 'images/<split>' "
-            "ou '<split>/images')."
-        )
+        message = tr("scan.no_yolo_split")
 
     return DetectionDatasetStatsResponse(
         base_dir=str(base.resolve()),
@@ -2816,7 +2829,7 @@ def _collect_segmentation_dataset_stats(
             base_dir=req.base_dir,
             splits={},
             mask_class_ids=[],
-            message=f"Diretório base não encontrado: {req.base_dir}",
+            message=tr("scan.base_missing", path=req.base_dir),
         )
 
     splits: dict[str, SegmentationSplitStats] = {}
@@ -2866,7 +2879,7 @@ def _collect_segmentation_dataset_stats(
 
     message = None
     if all(s.missing for s in splits.values()):
-        message = "Nenhum split encontrado (esperado <split>/{imagens,máscaras})."
+        message = tr("scan.no_seg_split")
 
     return SegmentationDatasetStatsResponse(
         base_dir=str(base.resolve()),
@@ -2889,7 +2902,7 @@ def _collect_anomaly_dataset_stats(
             test_anomalous={},
             missing_train=True,
             missing_test=True,
-            message=f"Diretório base não encontrado: {req.base_dir}",
+            message=tr("scan.base_missing", path=req.base_dir),
         )
 
     train_normal_dir = base / req.train_dir / req.normal_dir
@@ -2905,11 +2918,13 @@ def _collect_anomaly_dataset_stats(
 
     message = None
     if not train_normal_dir.is_dir():
-        message = (
-            f"Pasta de treino normal não encontrada: {req.train_dir}/{req.normal_dir}"
+        message = tr(
+            "scan.anomaly_train_missing",
+            train_dir=req.train_dir,
+            normal_dir=req.normal_dir,
         )
     elif train_normal == 0:
-        message = "Nenhuma imagem normal no treino — o treino falharia."
+        message = tr("scan.anomaly_train_empty")
 
     return AnomalyDatasetStatsResponse(
         base_dir=str(base.resolve()),
@@ -2935,7 +2950,7 @@ def _collect_regression_dataset_stats(
         return RegressionDatasetStatsResponse(
             base_dir=req.base_dir,
             splits={},
-            message=f"Diretório base não encontrado: {req.base_dir}",
+            message=tr("scan.base_missing", path=req.base_dir),
         )
 
     images_root = base / req.images_dir
@@ -2998,7 +3013,7 @@ def _collect_regression_dataset_stats(
 
     message = None
     if all(s.missing for s in splits.values()):
-        message = "Nenhum CSV de manifest encontrado na pasta base."
+        message = tr("scan.no_manifest")
 
     return RegressionDatasetStatsResponse(
         base_dir=str(base.resolve()),
@@ -3020,7 +3035,7 @@ def _open_native_checkpoint_dialog() -> CheckpointPickResponse:
         return CheckpointPickResponse(
             path="",
             cancelled=True,
-            message="tkinter is not available on this Python installation.",
+            message=tr("pick.no_tkinter"),
         )
 
     try:
@@ -3028,7 +3043,7 @@ def _open_native_checkpoint_dialog() -> CheckpointPickResponse:
         root.withdraw()
         root.attributes("-topmost", True)
         chosen = filedialog.askopenfilename(
-            title="Selecione um checkpoint (.pth ou .pt)",
+            title=tr("pick.title_checkpoint"),
             filetypes=[
                 ("PyTorch checkpoint", "*.pth *.pt"),
                 ("All files", "*.*"),
@@ -3039,7 +3054,7 @@ def _open_native_checkpoint_dialog() -> CheckpointPickResponse:
         return CheckpointPickResponse(
             path="",
             cancelled=True,
-            message=f"Falha ao abrir o seletor: {exc}",
+            message=tr("pick.failed", error=exc),
         )
 
     if not chosen:
@@ -3061,7 +3076,7 @@ def _open_native_yaml_dialog() -> DatasetPickResponse:
         return DatasetPickResponse(
             path="",
             cancelled=True,
-            message="tkinter is not available on this Python installation.",
+            message=tr("pick.no_tkinter"),
         )
 
     try:
@@ -3069,7 +3084,7 @@ def _open_native_yaml_dialog() -> DatasetPickResponse:
         root.withdraw()
         root.attributes("-topmost", True)
         chosen = filedialog.askopenfilename(
-            title="Selecione o data.yaml do dataset",
+            title=tr("pick.title_yaml"),
             filetypes=[
                 ("Ultralytics data.yaml", "*.yaml *.yml"),
                 ("All files", "*.*"),
@@ -3080,7 +3095,7 @@ def _open_native_yaml_dialog() -> DatasetPickResponse:
         return DatasetPickResponse(
             path="",
             cancelled=True,
-            message=f"Falha ao abrir o seletor: {exc}",
+            message=tr("pick.failed", error=exc),
         )
 
     if not chosen:
@@ -3102,10 +3117,7 @@ def _open_native_folder_dialog() -> DatasetPickResponse:
         return DatasetPickResponse(
             path="",
             cancelled=True,
-            message=(
-                "O seletor nativo não abre dentro do container (sem display). "
-                "Digite o caminho montado, por exemplo /work/datasets/meu-dataset."
-            ),
+            message=tr("pick.container"),
         )
 
     try:
@@ -3115,20 +3127,20 @@ def _open_native_folder_dialog() -> DatasetPickResponse:
         return DatasetPickResponse(
             path="",
             cancelled=True,
-            message="tkinter is not available on this Python installation.",
+            message=tr("pick.no_tkinter"),
         )
 
     try:
         root = tk.Tk()
         root.withdraw()
         root.attributes("-topmost", True)
-        chosen = filedialog.askdirectory(title="Selecione o diretório base do dataset")
+        chosen = filedialog.askdirectory(title=tr("pick.title_folder"))
         root.destroy()
     except Exception as exc:  # noqa: BLE001
         return DatasetPickResponse(
             path="",
             cancelled=True,
-            message=f"Falha ao abrir o seletor: {exc}",
+            message=tr("pick.failed", error=exc),
         )
 
     if not chosen:
@@ -3189,9 +3201,7 @@ def _execute_batch_predict(
         )
 
     if task in ("detection", "segmentation"):
-        raise ValueError(
-            f"Inferência em lote não é suportada para runs de '{task}' ainda."
-        )
+        raise ValueError(tr("testrun.batch_unsupported", task=task))
 
     base_config_dict: dict[str, Any] = data["config"]
 
@@ -3364,18 +3374,14 @@ def _evaluate_standalone_run(
     # typed a second ago.
     chosen = Path(req.data_dir)
     if not chosen.exists():
-        raise ValueError(f"Caminho não encontrado: {chosen}")
+        raise ValueError(tr("testrun.path_not_found", path=chosen))
     if task == "regression" and chosen.is_dir():
-        raise ValueError(
-            "Regressão avalia um manifesto: escolha o arquivo .csv com a "
-            "coluna de imagem e a(s) coluna(s) alvo, não uma pasta."
-        )
+        raise ValueError(tr("testrun.regression_needs_csv"))
 
     checkpoint = (data.get("artifacts") or {}).get("model")
     if not checkpoint or not Path(checkpoint).is_file():
         raise FileNotFoundError(
-            f"Run '{run_dir.name}' não tem um checkpoint utilizável "
-            f"(artifacts.model: {checkpoint!r})."
+            tr("testrun.no_checkpoint", run=run_dir.name, model=repr(checkpoint))
         )
 
     config_dict = dict(data["config"])
@@ -3403,7 +3409,7 @@ def _evaluate_standalone_run(
             reg_config, evaluation_only=True
         ).test_loader()
         if reg_loader is None:
-            raise ValueError(f"Nenhuma linha utilizável em {chosen}.")
+            raise ValueError(tr("testrun.no_rows", path=chosen))
         mse, rmse, mae, r2 = RegressionTrainer(reg_config).evaluate(
             reg_model, reg_loader
         )
@@ -3424,10 +3430,13 @@ def _evaluate_standalone_run(
             not masks_dir.is_dir()
         ):
             raise ValueError(
-                f"A pasta {test_split} tem '{seg_config.data.images_subdir}', mas "
-                f"não tem a pasta de máscaras '{seg_config.data.masks_subdir}' "
-                f"({masks_dir}). Segmentação pareia cada imagem com a máscara de "
-                "mesmo nome."
+                tr(
+                    "testrun.masks_missing",
+                    split=test_split,
+                    images=seg_config.data.images_subdir,
+                    masks=seg_config.data.masks_subdir,
+                    masks_path=masks_dir,
+                )
             )
         seg_model = SegmentationModelFactory.create(seg_config.model)
         seg_model.load_state_dict(
@@ -3437,7 +3446,7 @@ def _evaluate_standalone_run(
             seg_config, evaluation_only=True
         ).test_loader()
         if seg_loader is None:
-            raise ValueError(f"Nenhum par imagem/máscara encontrado em {chosen}.")
+            raise ValueError(tr("testrun.no_pairs", path=chosen))
         miou, dice, pixel_acc = SegmentationTrainer(seg_config).evaluate(
             seg_model, seg_loader
         )
@@ -3460,11 +3469,12 @@ def _evaluate_standalone_run(
         )
         if not train_normal.is_dir():
             raise ValueError(
-                "A detecção de anomalias calibra o limiar com as imagens normais "
-                f"de treino, e elas não existem em {train_normal}. Escolha uma "
-                f"pasta de teste que esteja ao lado da pasta '{anom_config.data.train_dir}' "
-                f"(layout MVTec: {anom_config.data.train_dir}/"
-                f"{anom_config.data.normal_dir}/ e a pasta de teste na mesma pasta pai)."
+                tr(
+                    "testrun.anomaly_train_missing",
+                    path=train_normal,
+                    train_dir=anom_config.data.train_dir,
+                    normal_dir=anom_config.data.normal_dir,
+                )
             )
         anom_model = AnomalyModelFactory.create(anom_config.model)
         anom_model.load_state_dict(
@@ -3531,8 +3541,7 @@ def _execute_run_test(run_dir: Path, req: RunTestRequest) -> RunTestResponse:
     checkpoint = (data.get("artifacts") or {}).get("model")
     if not checkpoint or not Path(checkpoint).is_file():
         raise FileNotFoundError(
-            f"Run '{run_dir.name}' não tem um checkpoint utilizável "
-            f"(artifacts.model: {checkpoint!r})."
+            tr("testrun.no_checkpoint", run=run_dir.name, model=repr(checkpoint))
         )
 
     # Point the *test* split at the chosen folder: base_dir is its parent and the
@@ -4099,7 +4108,7 @@ async def _execute_experiment(
     except Exception as e:
         logger.exception("GUI: Experiment {} failed", run_id)
         cls = type(e).__name__
-        msg = str(e) or "(sem mensagem)"
+        msg = str(e) or tr("run.no_message")
         # A worker-spawn failure surfaces as a torch DLL error, which sends the
         # reader after the wrong thing entirely.
         spawn_hint = describe_worker_spawn_failure(e)
@@ -4153,7 +4162,7 @@ async def _execute_detection(
     except Exception as e:
         logger.exception("GUI: Detection {} failed", run_id)
         cls = type(e).__name__
-        msg = str(e) or "(sem mensagem)"
+        msg = str(e) or tr("run.no_message")
         _current_run = {
             "run_id": run_id,
             "status": "failed",
@@ -4204,7 +4213,7 @@ async def _execute_regression(
     except Exception as e:
         logger.exception("GUI: Regression {} failed", run_id)
         cls = type(e).__name__
-        msg = str(e) or "(sem mensagem)"
+        msg = str(e) or tr("run.no_message")
         _current_run = {
             "run_id": run_id,
             "status": "failed",
@@ -4255,7 +4264,7 @@ async def _execute_segmentation(
     except Exception as e:
         logger.exception("GUI: Segmentation {} failed", run_id)
         cls = type(e).__name__
-        msg = str(e) or "(sem mensagem)"
+        msg = str(e) or tr("run.no_message")
         _current_run = {
             "run_id": run_id,
             "status": "failed",
@@ -4306,7 +4315,7 @@ async def _execute_anomaly(
     except Exception as e:
         logger.exception("GUI: Anomaly {} failed", run_id)
         cls = type(e).__name__
-        msg = str(e) or "(sem mensagem)"
+        msg = str(e) or tr("run.no_message")
         _current_run = {
             "run_id": run_id,
             "status": "failed",
@@ -4399,7 +4408,7 @@ async def _execute_comparison(
         _current_run = {
             "run_id": run_id,
             "status": "failed",
-            "error": f"{type(e).__name__}: {e or '(sem mensagem)'}",
+            "error": f"{type(e).__name__}: {e or tr('run.no_message')}",
             "report": None,
             "run_dir": None,
         }
@@ -4434,15 +4443,16 @@ def _refuse_output_paths(paths: Iterable[str], where: str) -> None:
     trial. A path under ``output`` would therefore undo the scoping (ADR-114),
     and no experiment legitimately varies where its files go.
 
+    ``where`` is the catalog key of the phrase that ends the sentence ("in a
+    sweep"), because that phrase differs between languages.
+
     Raises:
         HTTPException: 422 naming the first offending path.
     """
     for path in paths:
         if str(path).split(".", 1)[0] == "output":
             raise HTTPException(
-                422,
-                f"A pasta de saída é definida pelo perfil e não pode ser alterada "
-                f"{where}: remova '{path}'.",
+                422, tr("profile.output_locked", where=tr(where), path=path)
             )
 
 
@@ -4458,7 +4468,7 @@ def _start_sweep(
         HTTPException: 422 if a sweep path points under ``output``.
         RequestValidationError: 422 if the base config or a sweep path is invalid.
     """
-    _refuse_output_paths(req.search_space, "numa varredura")
+    _refuse_output_paths(req.search_space, "profile.where_sweep")
     # Validate the base config (fills defaults) and confirm every sweep path
     # resolves against it before spending GPU time.
     try:
@@ -4549,7 +4559,7 @@ async def _execute_sweep(
         _current_run = {
             "run_id": run_id,
             "status": "failed",
-            "error": f"{type(e).__name__}: {e or '(sem mensagem)'}",
+            "error": f"{type(e).__name__}: {e or tr('run.no_message')}",
             "report": None,
             "run_dir": None,
         }
@@ -4696,7 +4706,7 @@ async def _execute_task_cv(
         _current_run = {
             "run_id": run_id,
             "status": "failed",
-            "error": f"{type(e).__name__}: {e or '(sem mensagem)'}",
+            "error": f"{type(e).__name__}: {e or tr('run.no_message')}",
             "report": None,
             "run_dir": None,
         }
@@ -4719,7 +4729,7 @@ def _start_replicated_comparison(
         RequestValidationError: 422 if the base task config is invalid.
     """
     for overrides in req.variants.values():
-        _refuse_output_paths(overrides, "numa comparação")
+        _refuse_output_paths(overrides, "profile.where_comparison")
     try:
         complete = profile.scope_dict(
             config_type.model_validate(req.config).model_dump(mode="json")
@@ -4833,7 +4843,7 @@ async def _execute_replicated_comparison(
         _current_run = {
             "run_id": run_id,
             "status": "failed",
-            "error": f"{type(e).__name__}: {e or '(sem mensagem)'}",
+            "error": f"{type(e).__name__}: {e or tr('run.no_message')}",
             "report": None,
             "run_dir": None,
         }
@@ -4944,7 +4954,7 @@ async def _execute_replicates(
         _current_run = {
             "run_id": run_id,
             "status": "failed",
-            "error": f"{type(e).__name__}: {e or '(sem mensagem)'}",
+            "error": f"{type(e).__name__}: {e or tr('run.no_message')}",
             "report": None,
             "run_dir": None,
         }
@@ -5079,7 +5089,7 @@ def _detect_dataset_layout(base_dir_str: str) -> DatasetDetectResponse:
         return DatasetDetectResponse(
             base_dir=base_dir_str,
             detected=False,
-            message="Informe o caminho do diretório base do dataset.",
+            message=tr("detect.path_empty"),
         )
 
     base = Path(base_dir_str).expanduser()
@@ -5087,13 +5097,13 @@ def _detect_dataset_layout(base_dir_str: str) -> DatasetDetectResponse:
         return DatasetDetectResponse(
             base_dir=str(base),
             detected=False,
-            message=f"O diretório '{base}' não foi encontrado no disco.",
+            message=tr("detect.not_found", path=base),
         )
     if not base.is_dir():
         return DatasetDetectResponse(
             base_dir=str(base),
             detected=False,
-            message=f"O caminho '{base}' existe mas não é uma pasta.",
+            message=tr("detect.not_a_folder", path=base),
         )
 
     try:
@@ -5102,17 +5112,14 @@ def _detect_dataset_layout(base_dir_str: str) -> DatasetDetectResponse:
         return DatasetDetectResponse(
             base_dir=str(base),
             detected=False,
-            message=f"Sem permissão de leitura em '{base}'.",
+            message=tr("detect.no_permission", path=base),
         )
 
     if not children:
         return DatasetDetectResponse(
             base_dir=str(base),
             detected=False,
-            message=(
-                "Nenhuma subpasta encontrada em "
-                f"'{base}'. Esperado pastas separando treino, validação e teste."
-            ),
+            message=tr("detect.no_subfolders", path=base),
         )
 
     train_dir: str | None = None
@@ -5133,16 +5140,13 @@ def _detect_dataset_layout(base_dir_str: str) -> DatasetDetectResponse:
     if len(found) >= 2:
         missing = []
         if not train_dir:
-            missing.append("treino")
+            missing.append(tr("detect.role_train"))
         if not val_dir:
-            missing.append("validação")
+            missing.append(tr("detect.role_val"))
         if not test_dir:
-            missing.append("teste")
+            missing.append(tr("detect.role_test"))
         if missing:
-            message = (
-                f"Detectado parcialmente. Faltando: {', '.join(missing)}. "
-                "Selecione manualmente as pastas restantes."
-            )
+            message = tr("detect.partial", missing=", ".join(missing))
             return DatasetDetectResponse(
                 base_dir=str(base),
                 detected=False,
@@ -5159,21 +5163,14 @@ def _detect_dataset_layout(base_dir_str: str) -> DatasetDetectResponse:
             val_dir=val_dir,
             test_dir=test_dir,
             candidates=candidates,
-            message=(
-                f"Splits detectados: treino='{train_dir}', "
-                f"validação='{val_dir}', teste='{test_dir}'."
-            ),
+            message=tr("detect.found", train=train_dir, val=val_dir, test=test_dir),
         )
 
     return DatasetDetectResponse(
         base_dir=str(base),
         detected=False,
         candidates=candidates,
-        message=(
-            "Não foi possível identificar automaticamente os splits. "
-            f"Subpastas encontradas: {', '.join(candidates)}. "
-            "Selecione manualmente qual é treino / validação / teste."
-        ),
+        message=tr("detect.unrecognized", found=", ".join(candidates)),
     )
 
 
