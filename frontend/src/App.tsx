@@ -23,6 +23,7 @@ import { WelcomeOverlay } from "./components/WelcomeOverlay";
 import { GuidedTour } from "./components/GuidedTour";
 import { readTourSeen } from "./lib/tour";
 import { readUserName } from "./lib/user-name";
+import { profileIsTheName, type ProfileInfo } from "./lib/profile";
 import { useT } from "./i18n/useT";
 import { DatasetsOverlay } from "./components/DatasetsOverlay";
 import { HistoryOverlay } from "./components/HistoryOverlay";
@@ -108,6 +109,14 @@ export default function App() {
   const [tour, setTour] = useState<"none" | "convite" | "guia">("none");
   // Set by the header chip: remounts the overlay so the intro replays clean.
   const [askName, setAskName] = useState(false);
+  // The profile in use and whether the server has any besides the default
+  // (ADR-114). The header chip only exists on a server that does; a one-person
+  // install sees no profile UI beyond the optional link under the name field.
+  const [profile, setProfile] = useState<ProfileInfo | null>(null);
+  const [sharedServer, setSharedServer] = useState(false);
+  // Set by the profile chip: remounts the overlay straight on "who are you".
+  const [pickProfile, setPickProfile] = useState(false);
+  const profileSlugRef = useRef<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [showDatasets, setShowDatasets] = useState(false);
   const [showQueue, setShowQueue] = useState(false);
@@ -525,9 +534,19 @@ export default function App() {
       }}
     >
       <Header
-        userName={userName}
+        userName={
+          sharedServer && profileIsTheName(profile, userName) ? undefined : userName
+        }
         onChangeName={() => setAskName(true)}
         onGuide={() => setTour("guia")}
+        profileName={
+          sharedServer && profile
+            ? profile.is_default
+              ? t.profile.defaultShort
+              : profile.name
+            : undefined
+        }
+        onChangeProfile={() => setPickProfile(true)}
       />
 
       <TabBar tasks={tasks} activeKey={activeKey} setActiveKey={setActiveKey} />
@@ -750,11 +769,24 @@ export default function App() {
         />
       )}
       <WelcomeOverlay
-        key={askName ? "ask" : "boot"}
+        key={askName ? "ask" : pickProfile ? "pick" : "boot"}
         forceAsk={askName}
+        forcePick={pickProfile}
+        onProfile={(p, shared) => {
+          // The History is the profile's: another profile's count and open sheet
+          // would describe runs this one cannot see.
+          if (profileSlugRef.current !== null && profileSlugRef.current !== p.slug) {
+            setHistoryCount(0);
+            setShowHistory(false);
+          }
+          profileSlugRef.current = p.slug;
+          setProfile(p);
+          setSharedServer(shared);
+        }}
         onName={(n) => {
           setUserName(n);
           setAskName(false);
+          setPickProfile(false);
           // Só na primeira vez: quem já viu (ou dispensou) o guia entra direto.
           if (!readTourSeen()) setTour("convite");
         }}

@@ -153,6 +153,32 @@ export const pt = {
     nameLabel: "Seu nome",
     enter: "Entrar ↵",
   },
+  // Perfis de um servidor compartilhado (ADR-114): uma pasta de saída por pessoa.
+  profile: {
+    who: "Quem é você?",
+    defaultName: "Padrão (sem perfil)",
+    defaultShort: "Padrão",
+    listLabel: "Perfis",
+    create: "criar novo perfil",
+    createTitle: "Novo perfil",
+    createLink: "criar perfil",
+    nameLabel: "Nome do perfil",
+    namePlaceholder: "ex.: Ana Souza",
+    folder: (slug: string) => `pasta: outputs/profiles/${slug}`,
+    folderNone: "Use ao menos uma letra (a-z) ou um número.",
+    submit: "Criar ↵",
+    creating: "Criando…",
+    back: "← voltar",
+    notice:
+      "Perfis organizam o histórico de treinos; não protegem. Quem alcança este servidor pode escolher qualquer perfil.",
+    chip: "perfil",
+    chipTitle: "Trocar de perfil",
+    exists: "Já existe um perfil com esse nome.",
+    invalid:
+      "Esse nome não vira uma pasta. Use ao menos uma letra (a-z) ou um número.",
+    failed: "Não foi possível criar o perfil.",
+    queueOwner: (name: string) => `perfil ${name}`,
+  },
   datasetsOverlay: {
     kicker: "// datasets",
     title: "Obter dados",

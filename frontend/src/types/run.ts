@@ -36,6 +36,10 @@ export interface QueuedJobInfo {
   /** Where the job stops when asked; `null` is a job that cannot be stopped once
    *  running (DELETE answers 409). Absent from servers older than ADR-111. */
   stop_at?: StopPoint | null;
+  /** Whose folders the job writes into (ADR-114); "default" is the legacy
+   *  layout. Absent from servers older than the profiles. */
+  profile?: string;
+  profile_name?: string;
 }
 
 export interface QueueSnapshot {

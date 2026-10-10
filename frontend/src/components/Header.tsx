@@ -54,11 +54,17 @@ export function Header({
   userName,
   onChangeName,
   onGuide,
+  profileName,
+  onChangeProfile,
 }: {
   userName?: string;
   onChangeName?: () => void;
   /** Reabre o guia de primeira execução (ADR-104) a qualquer momento. */
   onGuide?: () => void;
+  /** Perfil em uso (ADR-114). Só vem num servidor que tem perfis: sem ele o chip
+   *  não aparece e uma instalação de uma pessoa não vê nada novo. */
+  profileName?: string;
+  onChangeProfile?: () => void;
 } = {}) {
   const [time, setTime] = useState(() => new Date());
   // Read from the backend rather than hardcoded: a screenshot of a bug then
@@ -203,6 +209,50 @@ export function Header({
           >
             <span style={{ fontSize: 13, lineHeight: 1 }}>◎</span>
             {t.header.guide}
+          </button>
+        )}
+        {profileName && (
+          <button
+            type="button"
+            onClick={onChangeProfile}
+            title={t.profile.chipTitle}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 9,
+              padding: "9px 14px",
+              background: "rgba(255,255,255,0.025)",
+              border: "1px solid var(--vf-panel-stroke)",
+              borderRadius: 10,
+              cursor: "pointer",
+              animation: "fadeUp 700ms ease both",
+            }}
+          >
+            <span style={{ fontSize: 12, lineHeight: 1, color: "var(--accent-vf)" }}>
+              ▤
+            </span>
+            <span
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: 11,
+                letterSpacing: "0.12em",
+                textTransform: "uppercase",
+                color: "var(--vf-text-dim)",
+              }}
+            >
+              {t.profile.chip}
+            </span>
+            {/* Sem text-transform: o nome aparece exatamente como foi digitado. */}
+            <span
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: 11,
+                letterSpacing: "0.12em",
+                color: "var(--vf-text)",
+              }}
+            >
+              {profileName}
+            </span>
           </button>
         )}
         {userName && (

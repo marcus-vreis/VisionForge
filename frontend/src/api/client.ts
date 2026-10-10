@@ -2,6 +2,11 @@ import { en } from "../i18n/en";
 import { initialLang, readStoredLang } from "../i18n/lang";
 import { pt, type Dict } from "../i18n/pt";
 import type { TaskDescriptor } from "../lib/custom-tasks";
+import {
+  activeProfileSlug,
+  profileHeaders,
+  type ProfileInfo,
+} from "../lib/profile";
 import type { JsonSchema } from "../types/schema";
 import type {
   DatasetInfo,
@@ -39,10 +44,28 @@ export interface FastApiValidationError {
   type?: string;
 }
 
+/**
+ * `init` with the profile header added (ADR-114).
+ *
+ * Every call carries the chosen profile, so which folder a request reads or
+ * writes is never a decision a single endpoint has to remember. The default
+ * profile sends nothing: no header already means the default.
+ */
+export function withProfile(
+  init?: RequestInit,
+  slug: string = activeProfileSlug(),
+): RequestInit {
+  const extra = profileHeaders(slug);
+  if (Object.keys(extra).length === 0) return init ?? {};
+  const headers = new Headers(init?.headers);
+  for (const [name, value] of Object.entries(extra)) headers.set(name, value);
+  return { ...init, headers };
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response;
   try {
-    res = await fetch(`${BASE}${path}`, init);
+    res = await fetch(`${BASE}${path}`, withProfile(init));
   } catch (e) {
     throw new ApiError(
       0,
@@ -300,6 +323,22 @@ export async function fetchResult(runId: string): Promise<RunResult> {
 
 export async function fetchRuns(): Promise<RunSummary[]> {
   return request<RunSummary[]>("/runs");
+}
+
+/** Every profile on the server, the default one first (ADR-114). */
+export async function fetchProfiles(): Promise<ProfileInfo[]> {
+  const body = await request<{ profiles: ProfileInfo[] }>("/profiles");
+  return body.profiles;
+}
+
+/** Create a profile folder from a display name. 409 when its folder exists and
+ *  422 when nothing usable is left of the name. */
+export async function createProfile(name: string): Promise<ProfileInfo> {
+  return request<ProfileInfo>("/profiles", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
 }
 
 export interface DatasetDetectResponse {
@@ -915,7 +954,8 @@ export async function revealRunFolder(
 }
 
 /** Permanently delete a run directory. The backend refuses to delete the
- *  currently running run (409) and rejects anything outside _MODELS_DIR (400). */
+ *  currently running run (409) and rejects anything outside the profile's models
+ *  folder (400); a run of another profile is a 404 (ADR-114). */
 export async function deleteRun(runId: string): Promise<{ run_id: string; status: string }> {
   return request(`/runs/${encodeURIComponent(runId)}`, { method: "DELETE" });
 }
@@ -940,7 +980,10 @@ export async function testRunOnDataset(
 
 /** Download the model card markdown for a run. Triggers a browser download. */
 export async function downloadRunMarkdown(runId: string): Promise<void> {
-  const res = await fetch(`${BASE}/runs/${encodeURIComponent(runId)}/export_md`);
+  const res = await fetch(
+    `${BASE}/runs/${encodeURIComponent(runId)}/export_md`,
+    withProfile(),
+  );
   if (!res.ok) {
     throw new ApiError(res.status, errorTexts().markdownExport(res.status));
   }

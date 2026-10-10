@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ApiError, cancelQueuedRun, fetchQueue } from "../api/client";
 import { useT } from "../i18n/useT";
 import { strategyLabel, taskLabel, waitedFor } from "../lib/queue-format";
+import { jobProfileLabel, queueShowsProfiles } from "../lib/profile";
 import { stopMode } from "../lib/run-control";
 import type { QueuedJobInfo } from "../types/run";
 
@@ -80,6 +81,9 @@ export function QueueOverlay({
   };
 
   if (!open) return null;
+
+  // Only a server with more than the default profile has anyone to tell apart.
+  const showProfile = queueShowsProfiles(active ? [active, ...pending] : pending);
 
   return (
     <div
@@ -227,6 +231,7 @@ export function QueueOverlay({
           {active && (
             <JobRow
               job={active}
+              showProfile={showProfile}
               running
               stoppable={stopMode(active) !== "none"}
               onCancel={() => void cancel(active.run_id)}
@@ -238,6 +243,7 @@ export function QueueOverlay({
             <JobRow
               key={job.run_id}
               job={job}
+              showProfile={showProfile}
               position={index + 1}
               onCancel={() => void cancel(job.run_id)}
               cancelling={busyId === job.run_id}
@@ -251,6 +257,7 @@ export function QueueOverlay({
 
 function JobRow({
   job,
+  showProfile = false,
   running = false,
   stoppable = true,
   position,
@@ -258,6 +265,9 @@ function JobRow({
   cancelling = false,
 }: {
   job: QueuedJobInfo;
+  /** Say whose folders the job writes into (ADR-114); off on a one-person
+   *  install, where every job is the default profile's. */
+  showProfile?: boolean;
   running?: boolean;
   /** False for a running job the server cannot stop part-way. */
   stoppable?: boolean;
@@ -319,6 +329,9 @@ function JobRow({
           }}
         >
           {taskLabel(t, job.task)} · {strategyLabel(t, job.strategy)} ·{" "}
+          {showProfile && (
+            <>{t.profile.queueOwner(jobProfileLabel(job, t.profile.defaultShort))} · </>
+          )}
           {running
             ? t.queueOverlay.running
             : t.queueOverlay.waiting(waitedFor(job.submitted_at))}

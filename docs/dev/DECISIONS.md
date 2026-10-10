@@ -4420,6 +4420,25 @@ runs the History reads, nothing else.
 profiles (the default shown as "Padrão (sem perfil)") and "criar novo perfil",
 and a small chip in the header switches. Text lives in both dictionaries.
 
+- *Who is asked.* Only on a server that has a profile besides the default, and
+  only while this browser has not chosen one that still exists; a folder deleted
+  by hand leaves an orphan slug in `localStorage`, which does not count as a
+  choice. A one-person install never sees the question: it keeps the name
+  prompt and gains an optional "criar perfil" link under it. A server that does
+  not know `/api/profiles` (one started before this ADR) is treated the same
+  way, and a failed read of the list never erases a stored choice.
+- *One question, not two.* Choosing a named profile also stores its display
+  name as the name the header greets, since a shared server's profile is who the
+  person is; "Padrão (sem perfil)" says no name and keeps the one already
+  saved. The header's profile chip appears only on a server that has profiles,
+  and stands in for the greeting chip when both would print the same name.
+- *The choice travels in one place.* The API client adds `X-VF-Profile` to every
+  request, including the model-card download, and sends nothing for the default
+  profile or for a stored value the server would refuse. Switching profiles
+  closes the History sheet and resets its count, because both describe the
+  other profile's runs. The queue panel names each job's profile once a job of a
+  profile other than the default is in it.
+
 **Rejected:** accounts with passwords (a security claim this tool cannot back:
 the server runs training code and reads any folder it is pointed at); one
 server per person (they share one GPU, and the point of the queue, ADR-075, is

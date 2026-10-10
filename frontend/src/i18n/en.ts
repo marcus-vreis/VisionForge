@@ -145,6 +145,32 @@ export const en: Dict = {
     nameLabel: "Your name",
     enter: "Enter ↵",
   },
+  // Profiles on a shared server (ADR-114): one output folder per person.
+  profile: {
+    who: "Who are you?",
+    defaultName: "Default (no profile)",
+    defaultShort: "Default",
+    listLabel: "Profiles",
+    create: "create new profile",
+    createTitle: "New profile",
+    createLink: "create profile",
+    nameLabel: "Profile name",
+    namePlaceholder: "e.g. Ana Souza",
+    folder: (slug: string) => `folder: outputs/profiles/${slug}`,
+    folderNone: "Use at least one letter (a-z) or a digit.",
+    submit: "Create ↵",
+    creating: "Creating…",
+    back: "← back",
+    notice:
+      "Profiles organise training history; they do not protect it. Anyone who can reach this server can pick any profile.",
+    chip: "profile",
+    chipTitle: "Switch profile",
+    exists: "A profile with that name already exists.",
+    invalid:
+      "That name cannot become a folder. Use at least one letter (a-z) or a digit.",
+    failed: "Couldn't create the profile.",
+    queueOwner: (name: string) => `profile ${name}`,
+  },
   datasetsOverlay: {
     kicker: "// datasets",
     title: "Get data",

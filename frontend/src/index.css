@@ -190,6 +190,17 @@
     100% { background-position: 200% 0; }
 }
 
+/* "Quem é você?" (ADR-114): one row per profile on the welcome screen. */
+.vf-profile-option {
+    transition: background 180ms ease, border-color 180ms ease;
+}
+.vf-profile-option:hover,
+.vf-profile-option:focus-visible {
+    background: var(--accent-soft);
+    border-color: var(--accent-vf);
+    outline: none;
+}
+
 /* Respect users who ask the OS to minimize motion: drop every running
    animation/transition to a single static frame. Defense-in-depth against
    compositor-heavy decorative motion (animated background behind the
