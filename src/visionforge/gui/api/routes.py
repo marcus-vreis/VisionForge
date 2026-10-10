@@ -20,7 +20,7 @@ from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import FileResponse, Response, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from loguru import logger
 from pydantic import ValidationError
 
@@ -116,6 +116,11 @@ from visionforge.gui.api.run_queue import (
     RunQueue,
     StopPoint,
 )
+from visionforge.gui.api.sample_dataset import (
+    SampleDatasetExistsError,
+    SampleTaskError,
+    create_sample_dataset,
+)
 from visionforge.gui.api.schemas import (
     AnomalyDatasetStatsRequest,
     AnomalyDatasetStatsResponse,
@@ -176,6 +181,8 @@ from visionforge.gui.api.schemas import (
     RunSummary,
     RunTestRequest,
     RunTestResponse,
+    SampleDatasetRequest,
+    SampleDatasetResponse,
     SegmentationDatasetStatsRequest,
     SegmentationDatasetStatsResponse,
     SegmentationSplitStats,
@@ -245,6 +252,9 @@ _active_cancel_token: CancellationToken | None = None
 # they stay relative to the folder the GUI was started from.
 _MODELS_DIR = Path("outputs/models")
 _PROFILES_DIR = Path("outputs/profiles")
+# Where the guide's synthetic sample dataset is written (ADR-115). Datasets are
+# shared across profiles, so this is not under a profile folder.
+_SAMPLE_DATASETS_DIR = Path("datasets")
 
 
 def current_profile(
@@ -1060,6 +1070,43 @@ async def pick_dataset_folder() -> DatasetPickResponse:
     path — something the browser's File System Access API never provides.
     """
     return await asyncio.to_thread(_open_native_folder_dialog)
+
+
+@router.post("/sample-dataset", status_code=201, response_model=SampleDatasetResponse)
+async def sample_dataset(
+    req: SampleDatasetRequest,
+) -> SampleDatasetResponse | JSONResponse:
+    """Write the synthetic sample dataset of a task for the guide (ADR-115).
+
+    Local and offline: the self-test builder draws tiny images with a
+    deterministic seed. Only classification exists in this slice.
+
+    Raises:
+        HTTPException: 400 for an unknown task or one without a sample yet, 409
+            when ``datasets/exemplo-<task>/`` already holds files (the body
+            carries ``path`` so the guide can use that folder), 500 when the OS
+            refuses to write.
+    """
+    try:
+        built = await asyncio.to_thread(
+            create_sample_dataset, _SAMPLE_DATASETS_DIR, req.task
+        )
+    except SampleTaskError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except SampleDatasetExistsError as exc:
+        # `path` rides next to `detail` instead of inside it, so a client that
+        # only knows string details still shows a readable message.
+        return JSONResponse(
+            status_code=409, content={"detail": str(exc), "path": str(exc.path)}
+        )
+    except OSError as exc:
+        logger.warning("GUI: could not write the sample dataset: {}", exc)
+        raise HTTPException(500, f"Could not write the sample dataset: {exc}") from exc
+    _remember_dataset_root(built.path)
+    logger.info("GUI: wrote the {} sample dataset at {}", req.task, built.path)
+    return SampleDatasetResponse(
+        path=str(built.path), classes=built.classes, counts=built.counts
+    )
 
 
 @router.post("/dataset/download")

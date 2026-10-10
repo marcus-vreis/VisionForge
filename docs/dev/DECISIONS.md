@@ -4478,3 +4478,124 @@ belong to the one running job, and the preview cache is shared. `profile.json`
 is read leniently: a folder made by hand with a valid name is a profile whose
 display name is its slug. The orphan sweep of filtered detection copies at
 server start now also covers each profile's models folder.
+
+## ADR-115 — Guides with gates; a synthetic sample dataset
+
+**Date:** 2026-10-10
+**Status:** Accepted
+**Builds on:** ADR-104 (a guided tour, offered once), ADR-060 (the self-test's
+synthetic datasets), ADR-114 (outputs are per profile)
+
+**Context:** the tour of ADR-104 says where things are and waits for nothing: a
+stop highlights a button and the card says what it does, but the researcher
+reads it, clicks "Continuar" and is never asked to *do* it. A newcomer who
+finishes it has seen the Train button and has still not trained. Two things are
+missing for a guide that teaches by doing: steps that wait for the researcher's
+action, and something to train on, since a first-time user usually has no
+dataset on disk. The project already generates a synthetic dataset for every
+task, offline and deterministically (`utils/selftest_data.py`, ADR-060), and a
+short classification run on it takes seconds on CPU.
+
+**Decision.** Four parts, shipped as the smallest slice that works end to end:
+classification only.
+
+**1. A sample dataset on request.** `POST /api/sample-dataset` with
+`{"task": "classification"}` builds the self-test classification layout
+(`train/val/test`, two classes, six 32px images per class and split) into
+`datasets/exemplo-classificacao/`, relative to the folder the GUI was started
+from, creating `datasets/` if needed. It answers 201 with
+`{path, classes, counts}` where `path` is absolute and `counts` is images per
+split. Local and offline: nothing is downloaded.
+
+- *It never overwrites.* If the folder exists and holds anything, the answer is
+  409 and the body carries `path` next to `detail`, so the guide can offer that
+  folder instead of failing; an empty folder left by hand is taken. The 409 is
+  not an error for the guide, it is "you already have one".
+- *No half-written folder.* The builder runs in a hidden scratch folder beside
+  the target and is renamed into place, so a crash cannot leave a partial
+  `exemplo-classificacao/` that the next call would take for a finished one.
+- *Only classification.* Any other known task is a 400 saying it has no sample
+  yet, and an unknown task is a 400 too; neither creates a folder. `task` is a
+  plain string for that reason: a `Literal` would turn both into a 422.
+- *Datasets are not per profile* (ADR-114 left them shared), so the folder is
+  not under a profile.
+- The folder is added to the session's dataset allow-list, so its thumbnails
+  load in the dataset card like any folder the researcher picked.
+
+**2. Guides are a registry.** `lib/guides/` holds `GuideDefinition { id,
+title(t), steps(t) }` for two guides: the existing tour, unchanged (its steps
+are the ones of ADR-104 and have no gate), and "Primeiro treino". The header's
+"guia" button opens a small menu with both, and the first-visit invitation
+offers both (it used to offer one). A new guide is a new entry in the registry
+and new text in the two dictionaries, nothing in the component.
+
+**3. Steps may wait.** A step can carry `waitFor(facts)`, a predicate over
+facts read from the real app state, and `action`, a button on the card that
+does something.
+
+- *The facts* are three booleans: the classification form has a dataset path,
+  the training stream has produced a `start` event, and it has produced an
+  `end` event. They come from what the screen already holds (the form data and
+  the training hook's events), not from a second source of truth.
+- *Events count only when they arrive after the guide is open.* The training
+  hook keeps the previous run's events until the next submission or until the
+  results are closed, so a researcher who opens the guide after a finished run
+  would find the "training started" gate already open. The latch (`advanceFacts`,
+  pure and tested) records whether `start` and `end` were present when the guide
+  opened and only counts a transition to present. A run that is already in
+  flight when the guide opens does not count either; the guide waits for its
+  own.
+- *A gate never traps.* "Pular", the ✕ and Esc always leave, and Back always
+  works. While a gate is closed "Continuar" is disabled (the arrow key too) and
+  the card says what it is waiting for in one line. Nothing advances on its own:
+  the researcher is reading, and a card that changes under their eyes when the
+  event arrives is worse than one more click.
+- *Actions return a result the card shows.* The one action built here creates
+  the sample dataset and fills the form's dataset field, which makes the
+  existing auto-detection run exactly as if the folder had been picked; a 409
+  fills the field with the existing path and says so. An unreachable server
+  shows its message on the card, not a silent no-op.
+- *Steps may also* run something when they open (`onEnter`) and ask for a card
+  that does not dim the page (`floating`). The first is used to switch to the
+  classification tab and to put the training sheet away before the History is
+  pointed at; the second for the two steps that are about watching the training
+  sheet, where a 74% dim over it would hide the thing the card describes. The
+  guide now sits above the training sheet (z-index 95 against 90) and still
+  below the History, Datasets and Queue sheets (100).
+
+**4. The "Primeiro treino" script.** Eight short steps: create the sample
+dataset (and why there are three splits) → point the dataset (gate: a path is
+set; the classes it found) → the few parameters that matter, with epochs at 3 →
+train (gate: `start`) → what is on the training sheet (epochs, train versus
+validation loss) → the result (gate: `end`; accuracy, the two losses, what
+overfitting looks like) → the History (where the run is saved, `run.json`,
+repeating with another seed) → "E nas outras tarefas?", one line per task on
+what changes in the data format and the metric. It says plainly, in the result
+step and again at the end, that this data is easy on purpose: a near-perfect
+accuracy teaches the mechanics and says nothing about what to expect on a
+researcher's own images, and the last step points at the download card in
+Datasets for a real one.
+
+**Rejected:**
+
+- *Waiting by watching the DOM* (a step is done when an element appears). The
+  DOM changes for reasons unrelated to what the researcher did, and the gates
+  that matter (the training started, ended) are not DOM facts.
+- *Advancing automatically when a gate opens.* See above; it also fights the
+  researcher who wants to read the previous card once more.
+- *Generating the sample in the browser.* It would put PNG encoding in the
+  frontend and give the server no folder to train on; the training reads a path
+  on the server's disk.
+- *A real dataset (CIFAR-10) as the sample.* It needs the network, tens of
+  megabytes and minutes on CPU; the first run should take seconds and work on a
+  plane. A real dataset is the guide's last suggestion instead.
+- *One guide per task now.* Detection, segmentation, regression and anomaly
+  each need their own builder call, their own form anchors and their own gates;
+  the registry and the gates are what they will reuse, so they are a later
+  slice, and the last step says in one line what changes for each.
+
+**Consequences:** `datasets/exemplo-classificacao/` appears in the working
+folder of whoever uses the guide; deleting it is what lets the guide generate a
+fresh one. The default model is pretrained, so the first run on a machine that
+has never trained a ResNet-18 downloads its weights once; the parameters step
+says so. The tour's script, its anchors and its tests are untouched.

@@ -15,6 +15,15 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Added
 
+- **Um dataset de exemplo sintético, gerado sob pedido, para quem ainda não tem
+  um.** `POST /api/sample-dataset` com `{"task": "classification"}` monta o
+  layout `train/val/test` (duas classes, imagens de 32 px) em
+  `datasets/exemplo-classificacao/`, na pasta de onde a interface foi iniciada,
+  e devolve `{path, classes, counts}`. É local e determinístico: usa os mesmos
+  geradores do `visionforge selftest`, sem baixar nada, e um treino curto nele
+  leva segundos na CPU. Nunca sobrescreve: se a pasta já tem arquivos a resposta
+  é 409 com o `path` dela, e uma tarefa sem exemplo (por ora só classificação
+  tem) ou desconhecida dá 400 ([ADR-115](docs/dev/DECISIONS.md)).
 - **Perfis para um servidor compartilhado: cada pessoa vê só o próprio
   histórico de treinos.** Um perfil é uma pasta, `outputs/profiles/<slug>/`, com
   `models`, `graphics`, `logs`, `reports` e um `profile.json` com o nome de

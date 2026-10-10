@@ -868,6 +868,25 @@ class DatasetDownloadResponse(BaseModel):
     classes: list[str] = []
 
 
+class SampleDatasetRequest(BaseModel):
+    """Ask for the synthetic sample dataset of a task (ADR-115).
+
+    ``task`` is a plain string, not a ``Literal``: an unknown task and a task
+    whose sample is not built yet are both a 400 with their own message, where a
+    ``Literal`` would turn them into an opaque 422.
+    """
+
+    task: str = "classification"
+
+
+class SampleDatasetResponse(BaseModel):
+    """Where the sample dataset is, its classes and the images in each split."""
+
+    path: str
+    classes: list[str]
+    counts: dict[str, int]
+
+
 __all__ = [
     "RunStatus",
     "RunResponse",
@@ -902,6 +921,8 @@ __all__ = [
     "SystemInfo",
     "DatasetDownloadRequest",
     "DatasetDownloadResponse",
+    "SampleDatasetRequest",
+    "SampleDatasetResponse",
 ]
 
 
