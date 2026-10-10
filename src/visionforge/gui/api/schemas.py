@@ -347,6 +347,11 @@ class RunDetail(BaseModel):
     # would appear in front of whoever clicked. Computed per request, never
     # stored in run.json.
     can_reveal: bool = False
+    # Which way each metric of the run improves (its `metrics` keys and its
+    # history series), by the rule the orchestrators rank with: the task's own
+    # declaration where it made one, else `infer_direction`. The comparison reads
+    # this instead of keeping a second copy of the rule. Computed, not stored.
+    metric_directions: dict[str, Literal["higher", "lower"]] = {}
 
 
 class RunTestRequest(BaseModel):

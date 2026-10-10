@@ -176,6 +176,30 @@ describe("curveSeries", () => {
     });
   });
 
+  it("believes the directions the server sent over the name, and the name where it sent none", () => {
+    const h = history(["train_loss", "val_score", "val_threshold", "val_iou"]);
+    const series = curveSeries("custom:shapes", [h], {
+      val_score: "lower",
+      val_threshold: "higher",
+    });
+    const direction = Object.fromEntries(series.map((s) => [s.key, s.direction]));
+    expect(direction).toEqual({
+      train_loss: "lower",
+      val_score: "lower",
+      // A decision point per epoch is neither: the server's word does not change that.
+      val_threshold: null,
+      val_iou: "higher",
+    });
+  });
+
+  it("reads the name alone when the server sent nothing", () => {
+    const h = history(["val_score", "val_rmse"]);
+    const direction = Object.fromEntries(
+      curveSeries("custom:shapes", [h], undefined).map((s) => [s.key, s.direction]),
+    );
+    expect(direction).toEqual({ val_score: "higher", val_rmse: "lower" });
+  });
+
   it("labels every built-in series with a name both dictionaries have", () => {
     const every = history(Object.keys(pt.compareRuns.curves));
     for (const task of ["classification", "detection", "regression", "segmentation", "anomaly"]) {

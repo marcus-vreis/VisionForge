@@ -7,6 +7,7 @@ import {
   inferMetricDirection,
   isCustomTaskKey,
   metricRows,
+  servedDirections,
   numericMetric,
   runTaskKey,
 } from "./compare-metrics";
@@ -397,8 +398,75 @@ describe("metricRows, a researcher's own task", () => {
     expect(rows.map50).toBe("higher");
   });
 
+  describe("with the directions the server sent", () => {
+    const served = (metric_directions: Record<string, string>) => ({ ...run, metric_directions });
+
+    it("believes the server over the name", () => {
+      const rows = directions(
+        metricRows("custom:shapes", [served({ score: "lower", edge_error: "higher" })]),
+      );
+      expect(rows.score).toBe("lower");
+      expect(rows.edge_error).toBe("higher");
+    });
+
+    it("believes the server over the descriptors a researcher's task was read from", () => {
+      const rows = directions(
+        metricRows("custom:shapes", [served({ score: "lower" })], { score: "higher" }),
+      );
+      expect(rows.score).toBe("lower");
+    });
+
+    it("still leaves a count or a decision point without a direction", () => {
+      const rows = directions(
+        metricRows("custom:shapes", [served({ best_epoch: "higher", score: "higher" })]),
+      );
+      expect(rows.best_epoch).toBeNull();
+    });
+
+    it("judges a name the server did not list by the fallback rule", () => {
+      const rows = directions(metricRows("custom:shapes", [served({ score: "lower" })]));
+      expect(rows.edge_error).toBe("lower");
+    });
+
+    it("ignores a value that is not a direction", () => {
+      const rows = directions(metricRows("custom:shapes", [served({ score: "sideways" })]));
+      expect(rows.score).toBe("higher");
+    });
+
+    it("takes the direction from whichever run carries it", () => {
+      const bare = { metrics: { score: 0.5 } };
+      const rows = directions(metricRows("custom:shapes", [bare, served({ score: "lower" })]));
+      expect(rows.score).toBe("lower");
+    });
+
+    it("applies to a built-in task's rows too", () => {
+      const detection = { metrics: { map50: 0.5 }, metric_directions: { map50: "lower" } };
+      expect(directions(metricRows("detection", [detection])).map50).toBe("lower");
+    });
+  });
+
   it("lists nothing of a task it has never heard of beyond what the runs reported", () => {
     expect(keys(metricRows("future_task", [{ metrics: { quality: 1 } }]))).toEqual(["quality"]);
+  });
+});
+
+describe("servedDirections", () => {
+  it("is undefined when no run carries the field, as from a server that predates it", () => {
+    expect(servedDirections([{}, { metric_directions: undefined }])).toBeUndefined();
+  });
+
+  it("unites the runs' maps, the first run's answer standing", () => {
+    expect(
+      servedDirections([
+        { metric_directions: { a: "lower", b: "higher" } },
+        { metric_directions: { a: "higher", c: "lower" } },
+        {},
+      ]),
+    ).toEqual({ a: "lower", b: "higher", c: "lower" });
+  });
+
+  it("is an empty map, not undefined, when the server sent the field with nothing in it", () => {
+    expect(servedDirections([{ metric_directions: {} }])).toEqual({});
   });
 });
 

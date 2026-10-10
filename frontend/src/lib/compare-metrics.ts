@@ -33,9 +33,14 @@ export interface CompareMetric {
 
 const STANDALONE_TASKS = ["detection", "regression", "segmentation", "anomaly"];
 
+/** Which way each metric improves, by name: what a run detail's `metric_directions`
+ *  carries. */
+type Directions = Readonly<Record<string, string>>;
+
 /** Substrings that mark a metric as lower-is-better: the backend's rule
- *  (`infer_direction` in core/significance.py), copied rather than reinvented so
- *  a metric reads the same way in a ranking, a sweep and this table. */
+ *  (`infer_direction` in core/significance.py). Only the fallback for a server
+ *  that does not send `metric_directions` (and for a name it did not list): the
+ *  server's answer is the rule, so a ranking and this table cannot disagree. */
 const LOWER_IS_BETTER = ["loss", "mae", "mse", "rmse", "error", "err", "distance"];
 
 /** Bookkeeping that every run reports and that is no better for being larger. */
@@ -44,9 +49,44 @@ const BOOKKEEPING: MetricLabelKey[] = ["best_epoch", "total_epochs"];
 /** Metrics that are a decision point or a count, not a quality. */
 const NEUTRAL = new Set<string>([...BOOKKEEPING, "threshold", "test_threshold"]);
 
+/** The fallback rule, by name alone. Prefer `metricDirection` where the server's
+ *  answer is at hand. */
 export function inferMetricDirection(name: string): MetricDirection {
   const lowered = name.toLowerCase();
   return LOWER_IS_BETTER.some((token) => lowered.includes(token)) ? "lower" : "higher";
+}
+
+/** The direction `name` has in `served`, or undefined when it is not a direction
+ *  (absent from the map, or a value this page does not know). */
+function statedDirection(name: string, served: Directions | undefined): MetricDirection | undefined {
+  const stated = served?.[name];
+  return stated === "higher" || stated === "lower" ? stated : undefined;
+}
+
+/** Which end of `name` is better: the server's answer (`RunDetail.metric_directions`)
+ *  where it gave one, else the name's own rule. */
+export function metricDirection(name: string, served?: Directions): MetricDirection {
+  return statedDirection(name, served) ?? inferMetricDirection(name);
+}
+
+/**
+ * The directions the compared runs' details carry, as one map: the first run to
+ * state a name decides it (runs compared share a task, so they agree). Undefined
+ * when no run carries the field at all, which is a server that predates it: the
+ * callers then fall back to the name.
+ */
+export function servedDirections(
+  runs: ReadonlyArray<{ metric_directions?: Directions }>,
+): Directions | undefined {
+  const carrying = runs.filter((run) => run.metric_directions !== undefined);
+  if (carrying.length === 0) return undefined;
+  const merged: Record<string, string> = {};
+  for (const run of carrying) {
+    for (const [name, direction] of Object.entries(run.metric_directions ?? {})) {
+      if (!(name in merged)) merged[name] = direction;
+    }
+  }
+  return merged;
 }
 
 /**
@@ -130,36 +170,40 @@ export function isCustomTaskKey(task: string): boolean {
 
 function directionOf(
   key: string,
-  declared: Readonly<Record<string, string>> | undefined,
+  served: Directions | undefined,
+  declared: Directions | undefined,
 ): MetricDirection | null {
   if (NEUTRAL.has(key)) return null;
-  // A task that declared its metrics is believed over the name, as in the backend.
-  const stated = declared?.[key];
-  if (stated === "higher" || stated === "lower") return stated;
-  return inferMetricDirection(key);
+  // The server's answer is the rule. Without it (a server that predates it, or a
+  // name it did not list) a task that declared its metrics is believed over the
+  // name, as in the backend.
+  return statedDirection(key, served) ?? statedDirection(key, declared) ?? inferMetricDirection(key);
 }
 
 /**
  * The table rows for runs of one `task`: only the metrics at least one run
  * actually measured, so a task never shows the rows of another.
  *
- * `declared` is a researcher's task's own statement of which way each metric
- * improves (`GET /api/tasks` -> `metrics`); a built-in task ignores it. A task
- * that is not built in lists the bookkeeping and then every numeric metric its
- * runs reported, under the names they reported them.
+ * Which end of a row is better comes from the runs' `metric_directions` (the
+ * server's rule, a researcher's declared directions included). `declared` is the
+ * same declaration read from `GET /api/tasks` -> `metrics`, only for a server
+ * that does not send them; a built-in task ignores it. A task that is not built
+ * in lists the bookkeeping and then every numeric metric its runs reported,
+ * under the names they reported them.
  */
 export function metricRows(
   task: string,
-  runs: ReadonlyArray<{ metrics: Record<string, unknown> }>,
-  declared?: Readonly<Record<string, string>>,
+  runs: ReadonlyArray<{ metrics: Record<string, unknown>; metric_directions?: Directions }>,
+  declared?: Directions,
 ): CompareMetric[] {
   const measured = (key: string) => runs.some((run) => numericMetric(run.metrics[key]) !== null);
+  const served = servedDirections(runs);
 
   const builtin = BUILTIN_ROWS[task];
   if (builtin) {
     return builtin
       .filter(measured)
-      .map((key) => ({ key, label: key, direction: directionOf(key, undefined) }));
+      .map((key) => ({ key, label: key, direction: directionOf(key, served, undefined) }));
   }
 
   const reported = runs.flatMap((run) =>
@@ -173,7 +217,7 @@ export function metricRows(
       // The bookkeeping is the engine's own, so the dictionary names it; the rest is
       // the researcher's vocabulary and keeps their spelling.
       label: BOOKKEEPING.find((name) => name === key) ?? null,
-      direction: directionOf(key, declared),
+      direction: directionOf(key, served, declared),
     }));
 }
 

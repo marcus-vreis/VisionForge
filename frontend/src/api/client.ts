@@ -876,6 +876,11 @@ export interface RunDetail {
    *  manager's window opens in front of the person who clicked. Absent on an
    *  older server, which reads as "do not offer the button". */
   can_reveal?: boolean;
+  /** Which way each metric and history series improves, by the rule the server
+   *  ranks with (a researcher's declared directions included). Absent from a
+   *  server that predates it: the page then falls back to the metric's name
+   *  (`inferMetricDirection`). */
+  metric_directions?: Record<string, "higher" | "lower">;
 }
 
 export interface TestRecord {

@@ -9,6 +9,7 @@ import {
   metricRows,
   numericMetric,
   runTaskKey,
+  servedDirections,
 } from "../lib/compare-metrics";
 import { curveSeries, selectedCurves, toggleCurve, type CurveSeries } from "../lib/compare-curves";
 import { seedNote } from "../lib/compare-seeds";
@@ -59,9 +60,10 @@ export function CompareRunsPanel({ runIds, onBack }: CompareRunsPanelProps) {
     }, 0);
     Promise.all(runIds.map((id) => fetchRunDetail(id)))
       .then(async (arr) => {
-        // A comparison does not depend on the descriptors: without them a custom
-        // task's metrics lose their declared direction (the name decides) and
-        // its label, and nothing else.
+        // A comparison does not depend on the descriptors: the directions come
+        // with the run details (`metric_directions`), so without them a custom
+        // task loses its label, and, on a server that predates that field, its
+        // declared directions (the name decides).
         const custom = arr.some((d) => isCustomTaskKey(runTaskKey(d)));
         const known = custom
           ? await fetchTasks()
@@ -766,6 +768,7 @@ function EpochCurves({ details, task }: { details: RunDetail[]; task: string }) 
   const available = curveSeries(
     task,
     details.map((d) => d.history),
+    servedDirections(details),
   );
   const shown = selectedCurves(available, picked);
   const accent = accentForTask(task);

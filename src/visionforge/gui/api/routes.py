@@ -15,6 +15,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Request
@@ -499,6 +500,10 @@ async def get_run_detail(run_id: str, request: Request) -> RunDetail:
         else None
     )
 
+    task = _run_task(data)
+    metrics: dict[str, Any] = data.get("metrics", {})
+    history: list[dict[str, Any]] = data.get("history", [])
+
     return RunDetail(
         run_id=run_dir.name,
         experiment_name=data.get("experiment", run_dir.parent.name),
@@ -509,9 +514,9 @@ async def get_run_detail(run_id: str, request: Request) -> RunDetail:
         environment=data.get("environment", {}),
         run_dir=data.get("run_dir", str(run_dir.resolve())),
         config=data.get("config", {}),
-        metrics=data.get("metrics", {}),
+        metrics=metrics,
         metric_cis=data.get("metric_cis", {}),
-        history=data.get("history", []),
+        history=history,
         artifacts=data.get("artifacts", {}),
         tests=data.get("tests", []),
         dataset=dataset,
@@ -519,9 +524,39 @@ async def get_run_detail(run_id: str, request: Request) -> RunDetail:
         configured_epochs=configured_epochs,
         group_id=data.get("group_id"),
         group=data.get("group") if isinstance(data.get("group"), dict) else None,
-        task=_run_task(data),
+        task=task,
         can_reveal=can_reveal(_client_host(request)),
+        metric_directions=_metric_directions(task, metrics, history),
     )
+
+
+def _metric_directions(
+    task: str, metrics: dict[str, Any], history: list[dict[str, Any]]
+) -> dict[str, Literal["higher", "lower"]]:
+    """Which way each metric of a run improves, by the rule the rankings use.
+
+    Covers the run's ``metrics`` keys and every history series, so the
+    comparison table and its epoch curves read the same answer. A researcher's
+    task (``custom:<key>``) is believed over the name: its declared directions
+    apply to the metric and to the ``val_<metric>`` series the engine streams.
+    A task no longer registered has nothing declared and is judged by its names.
+    """
+    declared: dict[str, str] = {}
+    if task.startswith("custom:"):
+        try:
+            info = get_task(task.removeprefix("custom:"))
+        except KeyError:
+            info = None
+        if info is not None:
+            for name, direction in info.metrics.items():
+                declared[name] = direction
+                declared[f"val_{name}"] = direction
+    names = set(metrics)
+    for record in history:
+        names.update(record)
+    names.discard("epoch")
+    holder = SimpleNamespace(metric_directions=declared)
+    return {name: runner_metric_direction(holder, name) for name in sorted(names)}
 
 
 def _client_host(request: Request) -> str | None:

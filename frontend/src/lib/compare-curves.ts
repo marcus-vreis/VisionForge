@@ -14,8 +14,8 @@
  */
 import type { Dict } from "../i18n/pt";
 import {
-  inferMetricDirection,
   isCustomTaskKey,
+  metricDirection,
   numericMetric,
   type MetricDirection,
 } from "./compare-metrics";
@@ -88,9 +88,13 @@ const CURVES: Record<string, TaskCurves> = {
   },
 };
 
-/** A decision point per epoch is neither better high nor low. */
-function directionOf(key: string): MetricDirection | null {
-  return key.endsWith("threshold") ? null : inferMetricDirection(key);
+/** A decision point per epoch is neither better high nor low; any other series
+ *  improves the way the server said (`RunDetail.metric_directions`), else by name. */
+function directionOf(
+  key: string,
+  served: Readonly<Record<string, string>> | undefined,
+): MetricDirection | null {
+  return key.endsWith("threshold") ? null : metricDirection(key, served);
 }
 
 type History = ReadonlyArray<Record<string, unknown>>;
@@ -106,7 +110,11 @@ type History = ReadonlyArray<Record<string, unknown>>;
  * train loss and its first validation metric. A task this module does not know
  * is read as classification, as the History card does.
  */
-export function curveSeries(task: string, histories: ReadonlyArray<History>): CurveSeries[] {
+export function curveSeries(
+  task: string,
+  histories: ReadonlyArray<History>,
+  served?: Readonly<Record<string, string>>,
+): CurveSeries[] {
   const measured = (key: string) =>
     histories.some((history) => history.some((record) => numericMetric(record[key]) !== null));
 
@@ -118,7 +126,7 @@ export function curveSeries(task: string, histories: ReadonlyArray<History>): Cu
     return keys.map((key) => ({
       key,
       label: null,
-      direction: directionOf(key),
+      direction: directionOf(key, served),
       initial: key === "train_loss" || key === first,
     }));
   }
@@ -131,7 +139,7 @@ export function curveSeries(task: string, histories: ReadonlyArray<History>): Cu
   return keys.map((key) => ({
     key,
     label: key,
-    direction: directionOf(key),
+    direction: directionOf(key, served),
     initial: initial.includes(key),
   }));
 }
