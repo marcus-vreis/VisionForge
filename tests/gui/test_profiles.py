@@ -27,7 +27,9 @@ from fastapi.testclient import TestClient
 from pydantic import BaseModel
 
 from visionforge.gui.api.profiles import (
+    OUTPUT_SUBDIRS,
     InvalidProfileError,
+    ProfileCreateError,
     ProfileExistsError,
     ProfileNameError,
     UnknownProfileError,
@@ -220,7 +222,11 @@ class TestFolders:
         with pytest.raises(ProfileExistsError, match="João"):
             create_profile("Joao", tmp_path / "p", tmp_path / "m")
 
-    @pytest.mark.parametrize("name", ["!!!", "李雷", "default", "Default", "NUL"])
+    @pytest.mark.parametrize(
+        "name",
+        # "COM¹" and "LPT³" fold to com1 and lpt3 (NFKD), so they are caught too.
+        ["!!!", "李雷", "default", "Default", "NUL", "COM0", "lpt0", "COM¹", "LPT³"],
+    )
     def test_a_name_with_no_usable_slug_is_refused(
         self, tmp_path: Path, name: str
     ) -> None:
@@ -267,6 +273,47 @@ class TestFolders:
         listed = list_profiles(tmp_path / "missing", tmp_path / "m")
 
         assert [p.slug for p in listed] == ["default"]
+
+    def test_a_folder_the_os_refuses_is_a_clear_error(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        real_mkdir = Path.mkdir
+
+        def deny(self: Path, *args: Any, **kwargs: Any) -> None:
+            if self.name == "ana":
+                raise PermissionError(13, "Acesso negado")
+            real_mkdir(self, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "mkdir", deny)
+
+        with pytest.raises(ProfileCreateError, match="Não foi possível criar"):
+            create_profile("Ana", tmp_path / "p", tmp_path / "m")
+
+    def test_a_profiles_root_that_is_a_file_is_not_reported_as_taken(
+        self, tmp_path: Path
+    ) -> None:
+        (tmp_path / "p").write_text("not a folder", encoding="utf-8")
+
+        with pytest.raises(ProfileCreateError):
+            create_profile("Ana", tmp_path / "p", tmp_path / "m")
+
+    def test_a_full_disk_leaves_no_half_made_profile_to_trip_over(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        profiles = tmp_path / "p"
+
+        with monkeypatch.context() as patched:
+
+            def full(self: Path, *args: Any, **kwargs: Any) -> int:
+                raise OSError(28, "No space left on device")
+
+            patched.setattr(Path, "write_text", full)
+            with pytest.raises(ProfileCreateError, match="No space left"):
+                create_profile("Ana", profiles, tmp_path / "m")
+
+        assert not (profiles / "ana").exists()
+        # The same name works once the disk has room; it was not left "taken".
+        assert create_profile("Ana", profiles, tmp_path / "m").slug == "ana"
 
 
 class TestResolve:
@@ -326,6 +373,23 @@ class TestResolve:
 
         with pytest.raises(InvalidProfileError):
             resolve_profile("ana", tmp_path / "p", tmp_path / "m")
+
+    @pytest.mark.parametrize("sub", OUTPUT_SUBDIRS)
+    def test_any_output_folder_linked_elsewhere_is_refused(
+        self, tmp_path: Path, sub: str
+    ) -> None:
+        create_profile("Ana", tmp_path / "p", tmp_path / "m")
+        linked = tmp_path / "p" / "ana" / sub
+        linked.rmdir()
+        outside = tmp_path / "outside"
+        outside.mkdir()
+        _link_dir(linked, outside)
+
+        with pytest.raises(InvalidProfileError, match=sub):
+            resolve_profile("ana", tmp_path / "p", tmp_path / "m")
+        assert [p.slug for p in list_profiles(tmp_path / "p", tmp_path / "m")] == [
+            "default"
+        ]
 
 
 class _Cfg(BaseModel):
@@ -423,6 +487,17 @@ class TestProfilesApi:
         self, client: TestClient, name: str
     ) -> None:
         assert client.post("/api/profiles", json={"name": name}).status_code == 422
+
+    def test_a_folder_the_os_refuses_is_a_500_with_a_message(
+        self, client: TestClient, tmp_path: Path
+    ) -> None:
+        (tmp_path / "outputs").mkdir()
+        (tmp_path / "outputs" / "profiles").write_text("x", encoding="utf-8")
+
+        resp = client.post("/api/profiles", json={"name": "Ana"})
+
+        assert resp.status_code == 500
+        assert "Não foi possível criar" in resp.json()["detail"]
 
     @pytest.mark.parametrize("body", [{}, {"name": ""}, {"name": "n" * 61}])
     def test_a_missing_or_overlong_name_is_a_422(
@@ -720,6 +795,51 @@ class TestHistoryIsPerProfile:
 
         assert routes_mod._find_run_dir(secret.name, profile) is None
         assert routes_mod._find_run_dir("..", profile) is None
+        assert secret.is_dir()
+
+    def test_the_default_profile_follows_a_linked_run_folder(
+        self,
+        client: TestClient,
+        env,
+        tmp_path: Path,  # type: ignore[no-untyped-def]
+    ) -> None:
+        """Old runs moved to another drive and linked back stay reachable.
+
+        The History lists them, so every action on them has to find them too:
+        the link-escape check belongs to the named profiles only (ADR-114).
+        """
+        _, routes_mod = env
+        moved = _write_run(tmp_path / "other-drive" / "models", experiment="old")
+        models = tmp_path / "outputs" / "models"
+        models.mkdir(parents=True)
+        _link_dir(models / "old", moved.parent)
+        if moved.name not in _ids(client.get("/api/runs")):
+            pytest.skip("this Python's glob does not enter that kind of link")
+
+        for headers in ({}, {HEADER: "default"}):
+            assert (
+                client.get(f"/api/runs/{moved.name}", headers=headers).status_code
+                == 200
+            )
+            assert (
+                client.get(
+                    f"/api/runs/{moved.name}/export_md", headers=headers
+                ).status_code
+                != 404
+            )
+        assert routes_mod._find_run_dir(moved.name) is not None
+
+    def test_a_named_profile_still_refuses_a_linked_run_folder_over_http(
+        self, client: TestClient, tmp_path: Path
+    ) -> None:
+        _make_profile(client, "Ana")
+        secret = _write_run(tmp_path / "secret" / "models", experiment="loot")
+        models = tmp_path / "outputs" / "profiles" / "ana" / "models"
+        _link_dir(models / "loot", secret.parent)
+
+        resp = client.get(f"/api/runs/{secret.name}", headers={HEADER: "ana"})
+
+        assert resp.status_code == 404
         assert secret.is_dir()
 
 
@@ -1066,3 +1186,59 @@ class TestEverySubmissionIsScoped:
 
         assert outputs[0]["models_dir"] == "outputs/profiles/ana/models"
         assert outputs[0]["reports_dir"] == "outputs/profiles/ana/reports"
+
+    @pytest.mark.parametrize(
+        ("path", "kind", "shape"),
+        [c for c in CASES if c[2] in ("sweep", "replicated-comparison")],
+    )
+    @pytest.mark.parametrize("profile", [None, "ana"])
+    @pytest.mark.parametrize(
+        "target", ["output.models_dir", "output.reports_dir", "output"]
+    )
+    def test_a_sweep_or_comparison_cannot_vary_the_output_folder(
+        self,
+        client: TestClient,
+        spy: tuple[list[Any], list[dict[str, str]]],
+        tmp_path: Path,
+        path: str,
+        kind: str,
+        shape: str,
+        profile: str | None,
+        target: str,
+    ) -> None:
+        """Applied per trial after the scoping, it would undo the profile."""
+        jobs, _ = spy
+        body = self._body(shape, self._cfg(kind, tmp_path))
+        if shape == "sweep":
+            body["search_space"] = {
+                "training.learning_rate": [0.001, 0.01],
+                target: ["elsewhere", "other"],
+            }
+        else:
+            body["variants"] = {"a": {}, "b": {target: "elsewhere"}}
+        headers = {HEADER: profile} if profile else {}
+
+        resp = client.post(path, json=body, headers=headers)
+
+        assert resp.status_code == 422, resp.text
+        assert "pasta de saída" in resp.json()["detail"]
+        assert target in resp.json()["detail"]
+        assert not jobs
+
+    def test_a_random_search_space_cannot_vary_the_output_folder_either(
+        self,
+        client: TestClient,
+        spy: tuple[list[Any], list[dict[str, str]]],
+        tmp_path: Path,
+    ) -> None:
+        jobs, _ = spy
+        body = self._body("sweep", self._cfg("regression", tmp_path))
+        body["mode"] = "random"
+        body["search_space"] = {
+            "output.models_dir": {"type": "choice", "options": ["a", "b"]}
+        }
+
+        resp = client.post("/api/regression/sweep", json=body, headers={HEADER: "ana"})
+
+        assert resp.status_code == 422, resp.text
+        assert not jobs

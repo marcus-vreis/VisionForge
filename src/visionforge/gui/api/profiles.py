@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 import unicodedata
 from dataclasses import dataclass
 from datetime import datetime
@@ -48,11 +49,13 @@ OUTPUT_SUBDIRS = ("models", "graphics", "logs", "reports")
 _SLUG_RE = re.compile(rf"[a-z0-9][a-z0-9_-]{{0,{MAX_SLUG_LEN - 1}}}")
 
 # "default" is the legacy layout, and the DOS device names cannot be folder
-# names on Windows (creating ``con`` there fails or opens a device).
+# names on Windows (creating ``con`` there fails or opens a device). ``com0`` and
+# ``lpt0`` count as devices too; the superscript forms (``com¹``) fold to
+# ``com1`` in ``slugify`` before they ever reach this set.
 _RESERVED = frozenset(
     {DEFAULT_SLUG, "con", "prn", "aux", "nul"}
-    | {f"com{n}" for n in range(1, 10)}
-    | {f"lpt{n}" for n in range(1, 10)}
+    | {f"com{n}" for n in range(10)}
+    | {f"lpt{n}" for n in range(10)}
 )
 
 _M = TypeVar("_M", bound=BaseModel)
@@ -72,6 +75,10 @@ class UnknownProfileError(ProfileError):
 
 class ProfileNameError(ProfileError):
     """The display name cannot become a profile (422)."""
+
+
+class ProfileCreateError(ProfileError):
+    """The OS refused to make the folders: permissions, full disk, read-only (500)."""
 
 
 class ProfileExistsError(ProfileError):
@@ -179,9 +186,14 @@ def _profile_folder(slug: str, profiles_dir: Path) -> Path | None:
         raise InvalidProfileError(f"Profile '{slug}' cannot be resolved.") from None
     if real.parent != root or real.name != slug:
         raise InvalidProfileError(f"Profile '{slug}' is outside the profiles folder.")
-    models = folder / "models"
-    if models.exists() and models.resolve().parent != real:
-        raise InvalidProfileError(f"Profile '{slug}' keeps its runs outside itself.")
+    for sub in OUTPUT_SUBDIRS:
+        # Every output folder, not only ``models``: a linked ``graphics`` or
+        # ``logs`` would send a run's files out of the profile just the same.
+        child = folder / sub
+        if child.exists() and child.resolve().parent != real:
+            raise InvalidProfileError(
+                f"Profile '{slug}' keeps its {sub} outside itself."
+            )
     return folder
 
 
@@ -250,6 +262,9 @@ def create_profile(name: str, profiles_dir: Path, default_models_dir: Path) -> P
     Raises:
         ProfileNameError: nothing usable is left of the name, or it is reserved.
         ProfileExistsError: that slug is already a profile.
+        ProfileCreateError: the OS refused to make the folders (no permission,
+            no space left, a file where the profiles folder should be). A
+            half-made folder is removed so the same name can be tried again.
     """
     display = normalize_display_name(name)
     slug = slugify(display)
@@ -260,26 +275,40 @@ def create_profile(name: str, profiles_dir: Path, default_models_dir: Path) -> P
     if slug in _RESERVED:
         raise ProfileNameError(f"'{slug}' é um nome reservado. Escolha outro.")
 
-    profiles_dir.mkdir(parents=True, exist_ok=True)
     folder = profiles_dir / slug
+    made = False
     try:
-        folder.mkdir()
-    except FileExistsError:
-        raise ProfileExistsError(slug, _read_name(folder, slug)) from None
-    for sub in OUTPUT_SUBDIRS:
-        (folder / sub).mkdir()
-    (folder / "profile.json").write_text(
-        json.dumps(
-            {
-                "name": display,
-                "slug": slug,
-                "created_at": datetime.now().isoformat(timespec="seconds"),
-            },
-            ensure_ascii=False,
-            indent=2,
-        ),
-        encoding="utf-8",
-    )
+        profiles_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            folder.mkdir()
+        except FileExistsError:
+            # Only a folder that is there is "taken"; anything else that raised
+            # FileExistsError (a file in the way) is an OS failure like the rest.
+            if folder.is_dir():
+                raise ProfileExistsError(slug, _read_name(folder, slug)) from None
+            raise
+        made = True
+        for sub in OUTPUT_SUBDIRS:
+            (folder / sub).mkdir()
+        (folder / "profile.json").write_text(
+            json.dumps(
+                {
+                    "name": display,
+                    "slug": slug,
+                    "created_at": datetime.now().isoformat(timespec="seconds"),
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+    except OSError as exc:
+        if made:
+            shutil.rmtree(folder, ignore_errors=True)
+        reason = exc.strerror or type(exc).__name__
+        raise ProfileCreateError(
+            f"Não foi possível criar a pasta do perfil '{slug}': {reason}."
+        ) from exc
     return _build(slug, folder, profiles_dir)
 
 
@@ -291,6 +320,7 @@ __all__ = [
     "PROFILE_HEADER",
     "InvalidProfileError",
     "Profile",
+    "ProfileCreateError",
     "ProfileError",
     "ProfileExistsError",
     "ProfileNameError",

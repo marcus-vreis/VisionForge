@@ -11,7 +11,7 @@ import os
 import platform
 import traceback
 import uuid
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
@@ -101,6 +101,7 @@ from visionforge.gui.api.profiles import (
     PROFILE_HEADER,
     InvalidProfileError,
     Profile,
+    ProfileCreateError,
     ProfileExistsError,
     ProfileNameError,
     UnknownProfileError,
@@ -534,7 +535,8 @@ async def add_profile(req: ProfileCreateRequest) -> ProfileInfo:
 
     Raises:
         HTTPException: 422 when nothing usable is left of the name or it is
-            reserved, 409 when that folder already exists.
+            reserved, 409 when that folder already exists, 500 when the OS
+            refuses to make the folders (permissions, full disk).
     """
     try:
         profile = create_profile(req.name, _PROFILES_DIR, _MODELS_DIR)
@@ -542,6 +544,9 @@ async def add_profile(req: ProfileCreateRequest) -> ProfileInfo:
         raise HTTPException(422, str(exc)) from exc
     except ProfileExistsError as exc:
         raise HTTPException(409, str(exc)) from exc
+    except ProfileCreateError as exc:
+        logger.warning("GUI: could not create profile for {!r}: {}", req.name, exc)
+        raise HTTPException(500, str(exc)) from exc
     logger.info("GUI: created profile {} at {}", profile.slug, profile.root)
     return _profile_info(profile)
 
@@ -2150,17 +2155,23 @@ def _find_run_dir(run_id: str, profile: Profile | None = None) -> Path | None:
     """Locate a run directory by its timestamp folder name, inside one profile.
 
     The search root is the profile's models folder (``_MODELS_DIR`` for the
-    default one) and nothing outside it can be returned: a run id is only
-    compared with folder names and ``run.json`` ids, never joined into a path,
-    and a hit whose real path left the root (a link) is skipped (ADR-114).
+    default one). A run id is only compared with folder names and ``run.json``
+    ids, never joined into a path, and for a named profile a hit whose real path
+    left the root (a link) is skipped (ADR-114). The default profile keeps
+    following links, exactly as before profiles existed.
     """
-    models_dir = (profile or default_profile(_MODELS_DIR)).models_dir.resolve()
+    profile = profile or default_profile(_MODELS_DIR)
+    models_dir = profile.models_dir.resolve()
     if not models_dir.exists():
         return None
+    # Only a named profile is confined: the default one is the pre-profile
+    # layout, where a link under outputs/models (old runs moved to another
+    # drive) is legitimate and the History already lists it.
+    confine = not profile.is_default
     # run_id == timestamp folder OR experiment_name+timestamp; check both forms.
     for run_json in models_dir.rglob("run.json"):
         d = run_json.parent
-        if not d.resolve().is_relative_to(models_dir):
+        if confine and not d.resolve().is_relative_to(models_dir):
             continue
         if d.name == run_id:
             return d
@@ -4368,6 +4379,26 @@ def _comparison_report(
     }
 
 
+def _refuse_output_paths(paths: Iterable[str], where: str) -> None:
+    """Reject a dot-path that would move a trial's output folders.
+
+    ``Profile.scope_dict`` points ``output`` at the profile before a sweep or a
+    comparison starts, but both apply their dot-paths to that dict once per
+    trial. A path under ``output`` would therefore undo the scoping (ADR-114),
+    and no experiment legitimately varies where its files go.
+
+    Raises:
+        HTTPException: 422 naming the first offending path.
+    """
+    for path in paths:
+        if str(path).split(".", 1)[0] == "output":
+            raise HTTPException(
+                422,
+                f"A pasta de saída é definida pelo perfil e não pode ser alterada "
+                f"{where}: remova '{path}'.",
+            )
+
+
 def _start_sweep(
     req: SweepRequest,
     config_type: type[Any],
@@ -4377,8 +4408,10 @@ def _start_sweep(
     """Validate the base config + search space and queue a sweep.
 
     Raises:
+        HTTPException: 422 if a sweep path points under ``output``.
         RequestValidationError: 422 if the base config or a sweep path is invalid.
     """
+    _refuse_output_paths(req.search_space, "numa varredura")
     # Validate the base config (fills defaults) and confirm every sweep path
     # resolves against it before spending GPU time.
     try:
@@ -4635,9 +4668,11 @@ def _start_replicated_comparison(
 
     Raises:
         HTTPException: 422 for an invalid variant set (unknown override path,
-            duplicate seeds).
+            an override under ``output``, duplicate seeds).
         RequestValidationError: 422 if the base task config is invalid.
     """
+    for overrides in req.variants.values():
+        _refuse_output_paths(overrides, "numa comparação")
     try:
         complete = profile.scope_dict(
             config_type.model_validate(req.config).model_dump(mode="json")

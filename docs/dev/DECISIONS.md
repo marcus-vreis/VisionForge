@@ -4379,9 +4379,13 @@ runs the History reads, nothing else.
   starting with a letter or digit, derived from the display name (accents fold
   to their letter, other characters become `-`). The display name (up to 60
   characters, whitespace collapsed) lives only in `profile.json`. `default` and
-  the Windows device names (`con`, `nul`, `com1`...) are reserved. Two names
-  that fold to the same slug ("João", "Joao") are the same profile: the second
-  create answers 409 naming the first.
+  the Windows device names (`con`, `nul`, `com0`-`com9`, `lpt0`-`lpt9`...) are
+  reserved; the superscript spellings (`com¹`) fold to `com1` before the check.
+  Two names that fold to the same slug ("João", "Joao") are the same profile:
+  the second create answers 409 naming the first. When the operating system
+  refuses to make the folders (no permission, full disk, a file where
+  `outputs/profiles` should be) the create answers 500 with a Portuguese message
+  and removes the half-made folder, so the same name can be tried again.
 - **The default profile is the layout that already exists.** It maps to
   `outputs/models` and its siblings, so nothing moves, an install that never
   creates a profile behaves as before, and runs started from the command line
@@ -4393,14 +4397,28 @@ runs the History reads, nothing else.
   no folder is 404, an absent or `default` header is the default profile. A
   slug cannot hold a separator or a dot, and the resolved folder must also be a
   direct child of `outputs/profiles` named exactly like the slug, so a link
-  planted there is refused rather than followed.
+  planted there is refused rather than followed. The same goes for the profile's
+  own `models`, `graphics`, `logs` and `reports`: one that is a link pointing
+  elsewhere makes the profile invalid, because a run would write its files
+  outside it.
+- **Links are confined for a named profile only.** Looking a run up for a
+  History action (`_find_run_dir`) skips a hit whose real path left the
+  profile's models folder, so a link planted inside a profile cannot reach a
+  folder elsewhere. The default profile does not apply that check: it is the
+  layout from before profiles, where old runs moved to another drive and linked
+  back under `outputs/models` are legitimate and the History already lists
+  them. Zero change for an install that never creates a profile.
 - **What a profile changes.** (1) *Where a submitted run writes*: at submit
   time `config.output.{models,graphics,logs,reports}_dir` are forced under the
   profile for every executor (a single run, a sweep, K-fold, a model comparison,
   replicates, a replicated comparison, a researcher-defined task, and the
   detection, regression, segmentation and anomaly runs); a resumed run is scoped
-  again to the profile it is found in. The default profile leaves the config
-  alone. (2) *The root the History reads*: one per-request resolver
+  again to the profile it is found in. A sweep applies its search-space paths,
+  and a replicated comparison its variants' override paths, to that scoped
+  config once per trial, so a path under `output` (`output.models_dir`, or
+  `output` itself) would undo the scoping: both are refused with a 422 before
+  anything is queued, for every profile, since no experiment varies where its
+  files go. The default profile leaves the rest of the config alone. (2) *The root the History reads*: one per-request resolver
   (`current_profile` in `gui/api/routes.py`, built on `gui/api/profiles.py`)
   replaces the module-level `_MODELS_DIR` in the list, the detail, the reveal,
   resume, delete, the markdown export, testing a run, Grad-CAM, batch
@@ -4436,7 +4454,11 @@ and a small chip in the header switches. Text lives in both dictionaries.
   request, including the model-card download, and sends nothing for the default
   profile or for a stored value the server would refuse. Switching profiles
   closes the History sheet and resets its count, because both describe the
-  other profile's runs. The queue panel names each job's profile once a job of a
+  other profile's runs. The choice lives in `localStorage`, which every tab of
+  the browser shares, so a switch in one tab moves the next calls of the others;
+  each tab listens for the `storage` event on the profile keys and follows the
+  same way (chip, closed History, the greeting name), instead of keeping a chip
+  that names a profile its calls no longer use. The queue panel names each job's profile once a job of a
   profile other than the default is in it.
 
 **Rejected:** accounts with passwords (a security claim this tool cannot back:

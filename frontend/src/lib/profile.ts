@@ -21,7 +21,7 @@ export const MAX_SLUG_LENGTH = 40;
 export const MAX_PROFILE_NAME = 60;
 
 /** Nomes de dispositivo do Windows, que não podem ser nome de pasta lá. */
-const WINDOWS_DEVICE = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])$/;
+const WINDOWS_DEVICE = /^(?:con|prn|aux|nul|com[0-9]|lpt[0-9])$/;
 
 const SLUG_PATTERN = new RegExp(`^[a-z0-9][a-z0-9_-]{0,${MAX_SLUG_LENGTH - 1}}$`);
 
@@ -102,6 +102,39 @@ export function readProfile(): StoredProfile | null {
   } catch {
     return null;
   }
+}
+
+/** Se uma chave do `storage` event é a do perfil escolhido.
+ *
+ * `key` é null quando o storage inteiro foi apagado (`localStorage.clear()`),
+ * o que também leva a escolha embora.
+ */
+export function isProfileStorageKey(key: string | null): boolean {
+  return key === null || key === SLUG_KEY || key === NAME_KEY;
+}
+
+/** O perfil para onde esta aba deve ir depois que outra mexeu no storage.
+ *
+ * O localStorage é de todas as abas e o cliente da API o lê a cada chamada: o
+ * que uma aba escolhe já vale para as próximas chamadas das outras. Isto diz
+ * quando a tela delas precisa acompanhar. `stored` é `readProfile()` agora;
+ * sem escolha guardada o cliente manda o padrão, e a tela deve dizer o mesmo.
+ *
+ * Devolve null quando não há o que mudar: a aba já mostra esse perfil (com esse
+ * nome), ou ainda não decidiu o dela (a introdução lê o storage por conta
+ * própria ao terminar).
+ */
+export function profileAfterStorageChange(
+  current: ProfileInfo | null,
+  stored: StoredProfile | null,
+): ProfileInfo | null {
+  if (current === null) return null;
+  // A slug the client would not even send (profileHeaders) is the default too.
+  const next: ProfileInfo =
+    stored && isValidProfileSlug(stored.slug)
+      ? { slug: stored.slug, name: stored.name, is_default: false }
+      : DEFAULT_PROFILE_INFO;
+  return next.slug === current.slug && next.name === current.name ? null : next;
 }
 
 /** O slug a mandar nas chamadas: o escolhido, ou o padrão. */

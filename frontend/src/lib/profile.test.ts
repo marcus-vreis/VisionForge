@@ -6,11 +6,13 @@ import {
   canCreateProfile,
   clearProfile,
   hasNamedProfiles,
+  isProfileStorageKey,
   isValidProfileSlug,
   jobProfileLabel,
   needsProfileChoice,
   normalizeProfileName,
   pickStoredProfile,
+  profileAfterStorageChange,
   profileHeaders,
   profileIsTheName,
   queueShowsProfiles,
@@ -84,7 +86,9 @@ describe("isValidProfileSlug", () => {
     "default",
     "con",
     "nul",
+    "com0",
     "com1",
+    "lpt0",
     "lpt9",
   ])("refuses %j", (s) => {
     expect(isValidProfileSlug(s)).toBe(false);
@@ -198,6 +202,60 @@ describe("the header", () => {
     expect(profileIsTheName(DEFAULT_PROFILE_INFO, "default")).toBe(false);
     expect(profileIsTheName(null, "Ana")).toBe(false);
     expect(profileIsTheName(ana, "")).toBe(false);
+  });
+});
+
+// localStorage is shared by every tab, and the API client reads it on each call,
+// so a switch made in one tab already moves the others' requests; these decide
+// when the other tabs' screens must follow (the `storage` event).
+describe("a profile switched in another tab", () => {
+  it("cares about the profile keys, and about a wiped storage", () => {
+    expect(isProfileStorageKey("vf.profile")).toBe(true);
+    expect(isProfileStorageKey("vf.profile.name")).toBe(true);
+    // localStorage.clear() reports a null key.
+    expect(isProfileStorageKey(null)).toBe(true);
+    expect(isProfileStorageKey("vf.welcome.name")).toBe(false);
+    expect(isProfileStorageKey("vf.lang")).toBe(false);
+  });
+
+  it("moves this tab to the profile the other tab chose", () => {
+    expect(profileAfterStorageChange(ana, { slug: "bob", name: "Bob" })).toEqual(bob);
+    expect(profileAfterStorageChange(DEFAULT_PROFILE_INFO, { slug: "ana", name: "Ana" })).toEqual(
+      ana,
+    );
+  });
+
+  it("goes back to the default when the other tab chose it or cleared the choice", () => {
+    expect(profileAfterStorageChange(ana, { slug: "default", name: "default" })).toEqual(
+      DEFAULT_PROFILE_INFO,
+    );
+    expect(profileAfterStorageChange(ana, null)).toEqual(DEFAULT_PROFILE_INFO);
+    // A value the client would not send is the default as far as the server goes.
+    expect(profileAfterStorageChange(ana, { slug: "../x", name: "x" })).toEqual(
+      DEFAULT_PROFILE_INFO,
+    );
+  });
+
+  it("does nothing when the tab already shows that profile", () => {
+    expect(profileAfterStorageChange(ana, { slug: "ana", name: "Ana" })).toBeNull();
+    expect(profileAfterStorageChange(DEFAULT_PROFILE_INFO, null)).toBeNull();
+    expect(
+      profileAfterStorageChange(DEFAULT_PROFILE_INFO, { slug: "default", name: "default" }),
+    ).toBeNull();
+  });
+
+  it("picks up a new display name for the same profile", () => {
+    expect(profileAfterStorageChange(ana, { slug: "ana", name: "Ana Souza" })).toEqual({
+      slug: "ana",
+      name: "Ana Souza",
+      is_default: false,
+    });
+  });
+
+  it("waits while this tab is still choosing", () => {
+    // No profile is settled yet: the welcome flow reads the storage itself.
+    expect(profileAfterStorageChange(null, { slug: "ana", name: "Ana" })).toBeNull();
+    expect(profileAfterStorageChange(null, null)).toBeNull();
   });
 });
 

@@ -34,8 +34,11 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
   perfil. Na interface, a abertura passa a perguntar "Quem é você?" com os
   perfis existentes ("Padrão (sem perfil)" e os demais) e "criar novo perfil", e
   um chip no cabeçalho troca de perfil; escolher um perfil também define o nome
-  da saudação. Numa instalação sem perfis nada muda, além de um "criar perfil"
-  opcional sob o campo do nome ([ADR-114](docs/dev/DECISIONS.md)).
+  da saudação. A escolha fica no `localStorage`, que todas as abas dividem;
+  trocar de perfil numa aba faz as outras acompanharem, com o chip e o
+  Histórico, em vez de continuar mostrando o perfil antigo enquanto as chamadas
+  já vão para o novo. Numa instalação sem perfis nada muda, além de um "criar
+  perfil" opcional sob o campo do nome ([ADR-114](docs/dev/DECISIONS.md)).
 - **O Histórico tem uma visão de Ranking: os runs de cada dataset ordenados por
   uma métrica.** Um botão no cabeçalho alterna entre a lista e o ranking, que
   reúne os runs em quadros por (tarefa, dataset) e ordena cada quadro pela

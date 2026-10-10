@@ -23,7 +23,13 @@ import { WelcomeOverlay } from "./components/WelcomeOverlay";
 import { GuidedTour } from "./components/GuidedTour";
 import { readTourSeen } from "./lib/tour";
 import { readUserName } from "./lib/user-name";
-import { profileIsTheName, type ProfileInfo } from "./lib/profile";
+import {
+  isProfileStorageKey,
+  profileAfterStorageChange,
+  profileIsTheName,
+  readProfile,
+  type ProfileInfo,
+} from "./lib/profile";
 import { useT } from "./i18n/useT";
 import { DatasetsOverlay } from "./components/DatasetsOverlay";
 import { HistoryOverlay } from "./components/HistoryOverlay";
@@ -117,10 +123,38 @@ export default function App() {
   // Set by the profile chip: remounts the overlay straight on "who are you".
   const [pickProfile, setPickProfile] = useState(false);
   const profileSlugRef = useRef<string | null>(null);
+  const profileRef = useRef<ProfileInfo | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [showDatasets, setShowDatasets] = useState(false);
   const [showQueue, setShowQueue] = useState(false);
   const [historyCount, setHistoryCount] = useState(0);
+  useEffect(() => {
+    profileRef.current = profile;
+  }, [profile]);
+  // The choice lives in localStorage, which every tab of the browser shares and
+  // the API client reads on each call: a switch in another tab already moves
+  // this tab's next requests. Follow it on screen too (chip, History, name), as
+  // a local switch does, instead of keeping a chip that names the old profile.
+  // The event never fires in the tab that wrote, so this is only the others.
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (!isProfileStorageKey(e.key)) return;
+      const next = profileAfterStorageChange(profileRef.current, readProfile());
+      if (!next) return;
+      if (profileSlugRef.current !== next.slug) {
+        setHistoryCount(0);
+        setShowHistory(false);
+      }
+      profileSlugRef.current = next.slug;
+      profileRef.current = next;
+      setProfile(next);
+      if (!next.is_default) setSharedServer(true);
+      // Choosing a named profile also saves its name as the greeting's.
+      setUserName(readUserName());
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
   // Seeded once on mount so a reload mid-queue still shows the badge, then kept
   // live by the run status the training hook already polls (ADR-075).
   const [seededQueueCount, setSeededQueueCount] = useState(0);
