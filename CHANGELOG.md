@@ -266,6 +266,11 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Fixed
 
+- **O caso de regressão do `visionforge selftest` treinava a 224 px em vez de 32.**
+  O payload mandava `data.image_size`, que a configuração de regressão ignora
+  sem avisar (ela lê `data.transforms.image_size`); agora o tamanho vai para onde
+  é lido, e um teste confere o tamanho efetivo de cada tarefa.
+
 - **O aviso "Feature extraction congelou N pesos" trocava toda vírgula da frase
   por ponto.** Para separar os milhares do número em português, o texto inteiro
   passava por `.replace(",", ".")`, e "pré-treinados, ou use fine-tuning" saía

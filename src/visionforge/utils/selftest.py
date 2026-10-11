@@ -221,9 +221,11 @@ def _regression_payload(base: Path, workdir: Path) -> dict[str, Any]:
         "data": {
             "base_dir": str(base),
             "target_columns": ["target"],
-            "image_size": 32,
             "num_workers": 0,
             "pin_memory": False,
+            # Regression keeps the size under transforms, like classification;
+            # a top-level data.image_size is dropped and trains at 224.
+            "transforms": {"image_size": 32},
         },
         "training": {"epochs": 1, "batch_size": 4, "learning_rate": 0.001, "seed": 0},
         "output": _out(workdir, "regression"),
