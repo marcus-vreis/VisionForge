@@ -19,15 +19,13 @@ import torchvision.transforms as T
 from PIL import Image
 from torch.utils.data import DataLoader, Dataset
 
-from visionforge.core.data import _build_transforms
+from visionforge.core.data import (
+    _SMALL_DATASET_THRESHOLD,
+    _build_transforms,
+    resolve_num_workers,
+)
 from visionforge.core.loader_lifecycle import LoaderCache
 from visionforge.utils.regression_config import RegressionConfig
-from visionforge.utils.workers import suggested_workers
-
-# Disable DataLoader workers below this many rows: spawn/serialisation overhead
-# (high on Windows) exceeds the load time on small sets. Mirrors core.data.
-_SMALL_DATASET_THRESHOLD = 500
-
 
 _LOADER_POOLS = 3
 
@@ -137,47 +135,12 @@ class RegressionDataModule:
 
         # Without a train split, the set being scored decides whether workers pay.
         sized = self._train if self._train is not None else self._test
-        if (
-            self._num_workers > 0
-            and sized is not None
-            and len(sized) < _SMALL_DATASET_THRESHOLD
-        ):
-            from loguru import logger
-
-            logger.info(
-                "Regression set has {} rows (< {}); setting num_workers=0.",
-                len(sized),
-                _SMALL_DATASET_THRESHOLD,
-            )
-            self._num_workers = 0
-
-        # Cap by what this machine can commit, not by what the config asked for:
-        # each spawned worker re-imports torch and its CUDA DLLs, and a request
-        # for more than the budget is how a run dies with WinError 1455 before
-        # its first epoch (ADR-081/098). Lowering silently would hide the
-        # machine's limit, so it says so.
-        affordable = suggested_workers(loader_pools=_LOADER_POOLS)
-        if self._num_workers < 0:
-            # The automatic setting: what this machine can actually afford.
-            from loguru import logger
-
-            self._num_workers = affordable
-            logger.info(
-                "num_workers automático: {} para {} pools de loader.",
-                affordable,
-                _LOADER_POOLS,
-            )
-        elif self._num_workers > affordable:
-            from loguru import logger
-
-            logger.warning(
-                "num_workers={} exceeds what this machine can commit for {} "
-                "loader pools; using {}.",
-                self._num_workers,
-                _LOADER_POOLS,
-                affordable,
-            )
-            self._num_workers = affordable
+        # No split to count (evaluation_only without a test set): nothing to
+        # downgrade on, so only the machine's budget applies.
+        n_samples = len(sized) if sized is not None else _SMALL_DATASET_THRESHOLD
+        self._num_workers = resolve_num_workers(
+            self._num_workers, n_samples, loader_pools=_LOADER_POOLS
+        )
 
     def _loader_kwargs(self, *, persistent: bool) -> dict[str, Any]:
         kwargs: dict[str, Any] = {

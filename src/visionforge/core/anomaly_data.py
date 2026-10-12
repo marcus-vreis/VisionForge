@@ -17,12 +17,10 @@ import torchvision.transforms as T
 from PIL import Image
 from torch.utils.data import DataLoader, Dataset
 
-from visionforge.core.data import _build_transforms
+from visionforge.core.data import _build_transforms, resolve_num_workers
 from visionforge.core.loader_lifecycle import LoaderCache
 from visionforge.utils.anomaly_config import AnomalyConfig
-from visionforge.utils.workers import suggested_workers
 
-_SMALL_DATASET_THRESHOLD = 500
 _IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp")
 
 
@@ -138,43 +136,9 @@ class AnomalyDataModule:
             is_train=False,
         )
 
-        if self._num_workers > 0 and self.train_size < _SMALL_DATASET_THRESHOLD:
-            from loguru import logger
-
-            logger.info(
-                "Anomaly train set has {} images (< {}); setting num_workers=0.",
-                self.train_size,
-                _SMALL_DATASET_THRESHOLD,
-            )
-            self._num_workers = 0
-
-        # Cap by what this machine can commit, not by what the config asked for:
-        # each spawned worker re-imports torch and its CUDA DLLs, and a request
-        # for more than the budget is how a run dies with WinError 1455 before
-        # its first epoch (ADR-081/098). Lowering silently would hide the
-        # machine's limit, so it says so.
-        affordable = suggested_workers(loader_pools=_LOADER_POOLS)
-        if self._num_workers < 0:
-            # The automatic setting: what this machine can actually afford.
-            from loguru import logger
-
-            self._num_workers = affordable
-            logger.info(
-                "num_workers automático: {} para {} pools de loader.",
-                affordable,
-                _LOADER_POOLS,
-            )
-        elif self._num_workers > affordable:
-            from loguru import logger
-
-            logger.warning(
-                "num_workers={} exceeds what this machine can commit for {} "
-                "loader pools; using {}.",
-                self._num_workers,
-                _LOADER_POOLS,
-                affordable,
-            )
-            self._num_workers = affordable
+        self._num_workers = resolve_num_workers(
+            self._num_workers, self.train_size, loader_pools=_LOADER_POOLS
+        )
 
     def _loader_kwargs(self, *, persistent: bool) -> dict[str, Any]:
         kwargs: dict[str, Any] = {
