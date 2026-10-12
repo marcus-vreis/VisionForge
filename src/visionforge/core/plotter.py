@@ -10,7 +10,7 @@ from matplotlib.ticker import MaxNLocator
 from sklearn.metrics import auc, precision_recall_curve, roc_curve
 
 from visionforge.core.trainer import EpochResult
-from visionforge.utils.messages import tr
+from visionforge.utils.messages import tr_artifact
 
 
 class MetricsPlotter:
@@ -19,7 +19,9 @@ class MetricsPlotter:
     Each method is independent — add new plot types without touching existing ones.
     Figures are rendered via the Agg backend so no display is required. Titles,
     axes and legends are worded in the language of the run that draws them
-    (ADR-116); the command line has none bound and gets Portuguese.
+    (ADR-116). With none bound (a script, the command line) they are English, as
+    they always were, since a figure is what a paper gets; ``VISIONFORGE_LANG``
+    binds one for a command-line run.
     """
 
     @staticmethod
@@ -34,12 +36,22 @@ class MetricsPlotter:
         ax = fig.subplots()
 
         ax.plot(
-            epochs, train_losses, label=tr("plot.train"), linewidth=2, color="#3b82f6"
+            epochs,
+            train_losses,
+            label=tr_artifact("plot.train"),
+            linewidth=2,
+            color="#3b82f6",
         )
-        ax.plot(epochs, val_losses, label=tr("plot.val"), linewidth=2, color="#f59e0b")
-        ax.set_xlabel(tr("plot.epoch"))
-        ax.set_ylabel(tr("plot.loss"))
-        ax.set_title(tr("plot.title_loss"))
+        ax.plot(
+            epochs,
+            val_losses,
+            label=tr_artifact("plot.val"),
+            linewidth=2,
+            color="#f59e0b",
+        )
+        ax.set_xlabel(tr_artifact("plot.epoch"))
+        ax.set_ylabel(tr_artifact("plot.loss"))
+        ax.set_title(tr_artifact("plot.title_loss"))
         # There is no epoch 1.5, and a figure that implies one invites the
         # question in a review.
         ax.xaxis.set_major_locator(MaxNLocator(integer=True))
@@ -70,9 +82,9 @@ class MetricsPlotter:
         ax = fig.subplots()
 
         ax.plot(epochs, values, label=label, linewidth=2, color=color, marker="o")
-        ax.set_xlabel(tr("plot.epoch"))
+        ax.set_xlabel(tr_artifact("plot.epoch"))
         ax.set_ylabel(ylabel or label)
-        ax.set_title(title or tr("plot.title_over_epochs", label=label))
+        ax.set_title(title or tr_artifact("plot.title_over_epochs", label=label))
         ax.legend()
         ax.grid(True, alpha=0.3)
 
@@ -112,15 +124,15 @@ class MetricsPlotter:
                 "--",
                 color="#f16363",
                 linewidth=1.5,
-                label=tr("plot.perfect"),
+                label=tr_artifact("plot.perfect"),
             )
             ax.set_xlim(low, high)
             ax.set_ylim(low, high)
             ax.legend()
 
-        ax.set_xlabel(tr("plot.axis_actual", target=target_name))
-        ax.set_ylabel(tr("plot.axis_predicted", target=target_name))
-        ax.set_title(tr("plot.title_predicted_vs_actual"))
+        ax.set_xlabel(tr_artifact("plot.axis_actual", target=target_name))
+        ax.set_ylabel(tr_artifact("plot.axis_predicted", target=target_name))
+        ax.set_title(tr_artifact("plot.title_predicted_vs_actual"))
         ax.grid(True, alpha=0.3)
         ax.set_aspect("equal", adjustable="box")
 
@@ -153,18 +165,18 @@ class MetricsPlotter:
             color="#f16363",
             linestyle="--",
             linewidth=1.5,
-            label=tr("plot.no_error"),
+            label=tr_artifact("plot.no_error"),
         )
         if residual.size:
             ax.axvline(
                 float(residual.mean()),
                 color="#f5a524",
                 linewidth=1.5,
-                label=tr("plot.mean_bias", bias=residual.mean()),
+                label=tr_artifact("plot.mean_bias", bias=residual.mean()),
             )
-        ax.set_xlabel(tr("plot.axis_residual"))
-        ax.set_ylabel(tr("plot.samples"))
-        ax.set_title(tr("plot.title_residuals"))
+        ax.set_xlabel(tr_artifact("plot.axis_residual"))
+        ax.set_ylabel(tr_artifact("plot.samples"))
+        ax.set_title(tr_artifact("plot.title_residuals"))
         ax.legend()
         ax.grid(True, alpha=0.3)
 
@@ -199,12 +211,12 @@ class MetricsPlotter:
                 color="#f5a524",
                 linestyle="--",
                 linewidth=1.5,
-                label=tr("plot.mean", mean=scores.mean()),
+                label=tr_artifact("plot.mean", mean=scores.mean()),
             )
             ax.legend()
         ax.set_ylim(0.0, 1.0)
         ax.set_ylabel(metric_label)
-        ax.set_title(title or tr("plot.title_per_class", metric=metric_label))
+        ax.set_title(title or tr_artifact("plot.title_per_class", metric=metric_label))
         ax.grid(True, axis="y", alpha=0.3)
         for tick in ax.get_xticklabels():
             tick.set_rotation(30)
@@ -235,7 +247,7 @@ class MetricsPlotter:
         ax = fig.subplots()
         for value, name, color in (
             (0, "normal", "#48cf8e"),
-            (1, tr("plot.defect"), "#f16363"),
+            (1, tr_artifact("plot.defect"), "#f16363"),
         ):
             subset = score_arr[label_arr == value]
             if subset.size:
@@ -252,11 +264,11 @@ class MetricsPlotter:
                 color="#f5a524",
                 linestyle="--",
                 linewidth=1.8,
-                label=tr("plot.threshold", threshold=threshold),
+                label=tr_artifact("plot.threshold", threshold=threshold),
             )
-        ax.set_xlabel(tr("plot.axis_anomaly_score"))
-        ax.set_ylabel(tr("plot.images"))
-        ax.set_title(tr("plot.title_scores"))
+        ax.set_xlabel(tr_artifact("plot.axis_anomaly_score"))
+        ax.set_ylabel(tr_artifact("plot.images"))
+        ax.set_title(tr_artifact("plot.title_scores"))
         ax.legend()
         ax.grid(True, alpha=0.3)
 
@@ -291,12 +303,16 @@ class MetricsPlotter:
         te, tl = _clean(epochs, train_losses)
         ve, vl = _clean(epochs, val_losses)
         if tl:
-            ax_loss.plot(te, tl, label=tr("plot.train"), linewidth=2, color="#3b82f6")
+            ax_loss.plot(
+                te, tl, label=tr_artifact("plot.train"), linewidth=2, color="#3b82f6"
+            )
         if vl:
-            ax_loss.plot(ve, vl, label=tr("plot.val"), linewidth=2, color="#f59e0b")
-        ax_loss.set_xlabel(tr("plot.epoch"))
-        ax_loss.set_ylabel(tr("plot.loss"))
-        ax_loss.set_title(tr("plot.title_loss"))
+            ax_loss.plot(
+                ve, vl, label=tr_artifact("plot.val"), linewidth=2, color="#f59e0b"
+            )
+        ax_loss.set_xlabel(tr_artifact("plot.epoch"))
+        ax_loss.set_ylabel(tr_artifact("plot.loss"))
+        ax_loss.set_title(tr_artifact("plot.title_loss"))
         if tl or vl:
             ax_loss.legend()
         ax_loss.grid(True, alpha=0.3)
@@ -307,9 +323,9 @@ class MetricsPlotter:
                 me, mv, label="mAP@50", linewidth=2, color="#10b981", marker="o"
             )
             ax_map.legend()
-        ax_map.set_xlabel(tr("plot.epoch"))
+        ax_map.set_xlabel(tr_artifact("plot.epoch"))
         ax_map.set_ylabel("mAP@50")
-        ax_map.set_title(tr("plot.title_val_map50"))
+        ax_map.set_title(tr_artifact("plot.title_val_map50"))
         ax_map.grid(True, alpha=0.3)
 
         save_path.parent.mkdir(parents=True, exist_ok=True)
@@ -327,12 +343,22 @@ class MetricsPlotter:
         ax = fig.subplots()
 
         ax.plot(
-            epochs, train_accs, label=tr("plot.train"), linewidth=2, color="#10b981"
+            epochs,
+            train_accs,
+            label=tr_artifact("plot.train"),
+            linewidth=2,
+            color="#10b981",
         )
-        ax.plot(epochs, val_accs, label=tr("plot.val"), linewidth=2, color="#8b5cf6")
-        ax.set_xlabel(tr("plot.epoch"))
-        ax.set_ylabel(tr("plot.accuracy"))
-        ax.set_title(tr("plot.title_accuracy"))
+        ax.plot(
+            epochs,
+            val_accs,
+            label=tr_artifact("plot.val"),
+            linewidth=2,
+            color="#8b5cf6",
+        )
+        ax.set_xlabel(tr_artifact("plot.epoch"))
+        ax.set_ylabel(tr_artifact("plot.accuracy"))
+        ax.set_title(tr_artifact("plot.title_accuracy"))
         ax.set_ylim(0.0, 1.05)
         ax.legend()
         ax.grid(True, alpha=0.3)
@@ -362,9 +388,9 @@ class MetricsPlotter:
             yticklabels=class_names,
             ax=ax,
         )
-        ax.set_xlabel(tr("plot.axis_predicted_class"))
-        ax.set_ylabel(tr("plot.axis_true_class"))
-        ax.set_title(tr("plot.title_confusion"))
+        ax.set_xlabel(tr_artifact("plot.axis_predicted_class"))
+        ax.set_ylabel(tr_artifact("plot.axis_true_class"))
+        ax.set_title(tr_artifact("plot.title_confusion"))
 
         save_path.parent.mkdir(parents=True, exist_ok=True)
         fig.savefig(save_path, dpi=150, bbox_inches="tight")
@@ -398,9 +424,9 @@ class MetricsPlotter:
             vmax=1.0,
             ax=ax,
         )
-        ax.set_xlabel(tr("plot.axis_predicted_class"))
-        ax.set_ylabel(tr("plot.axis_true_class"))
-        ax.set_title(tr("plot.title_confusion_normalized"))
+        ax.set_xlabel(tr_artifact("plot.axis_predicted_class"))
+        ax.set_ylabel(tr_artifact("plot.axis_true_class"))
+        ax.set_title(tr_artifact("plot.title_confusion_normalized"))
 
         save_path.parent.mkdir(parents=True, exist_ok=True)
         fig.savefig(save_path, dpi=150, bbox_inches="tight")
@@ -449,7 +475,7 @@ class MetricsPlotter:
                 label = (
                     class_names[i]
                     if i < len(class_names)
-                    else tr("plot.class_n", index=i)
+                    else tr_artifact("plot.class_n", index=i)
                 )
                 ax.plot(fpr, tpr, linewidth=1.6, label=f"{label} (AUC = {roc_auc:.3f})")
                 interpolated.append(np.interp(grid, fpr, tpr))
@@ -465,11 +491,16 @@ class MetricsPlotter:
                 )
 
         ax.plot(
-            [0, 1], [0, 1], "--", color="#94a3b8", linewidth=1, label=tr("plot.chance")
+            [0, 1],
+            [0, 1],
+            "--",
+            color="#94a3b8",
+            linewidth=1,
+            label=tr_artifact("plot.chance"),
         )
-        ax.set_xlabel(tr("plot.axis_fpr"))
-        ax.set_ylabel(tr("plot.axis_tpr"))
-        ax.set_title(tr("plot.title_roc"))
+        ax.set_xlabel(tr_artifact("plot.axis_fpr"))
+        ax.set_ylabel(tr_artifact("plot.axis_tpr"))
+        ax.set_title(tr_artifact("plot.title_roc"))
         ax.set_xlim(0.0, 1.0)
         ax.set_ylim(0.0, 1.02)
         ax.legend(loc="lower right", fontsize=9)
@@ -513,7 +544,7 @@ class MetricsPlotter:
                 label = (
                     class_names[i]
                     if i < len(class_names)
-                    else tr("plot.class_n", index=i)
+                    else tr_artifact("plot.class_n", index=i)
                 )
                 ax.plot(
                     recall,
@@ -522,9 +553,9 @@ class MetricsPlotter:
                     label=f"{label} (AUC = {pr_auc:.3f})",
                 )
 
-        ax.set_xlabel(tr("plot.axis_recall"))
-        ax.set_ylabel(tr("plot.axis_precision"))
-        ax.set_title(tr("plot.title_precision_recall"))
+        ax.set_xlabel(tr_artifact("plot.axis_recall"))
+        ax.set_ylabel(tr_artifact("plot.axis_precision"))
+        ax.set_title(tr_artifact("plot.title_precision_recall"))
         ax.set_xlim(0.0, 1.0)
         ax.set_ylim(0.0, 1.02)
         ax.legend(loc="lower left", fontsize=9)

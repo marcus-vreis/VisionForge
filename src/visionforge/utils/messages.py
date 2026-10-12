@@ -10,7 +10,12 @@ The language of a request is a ``ContextVar``. The GUI binds it from the
 was submitted under, so a message written deep inside a training thread (a health
 warning, the paging-file hint) is worded for the person who started the run. Code
 that never ran under a request (the command line, a script) gets Portuguese,
-which is what it always printed.
+which is what it always printed, unless ``VISIONFORGE_LANG`` says otherwise.
+
+The text written into the figures a run saves is the one exception: a figure is
+a publication artifact and used to be English, so ``tr_artifact`` words it in
+English when no language is bound at all (a script, the command line) and in the
+bound language otherwise. The command line can bind one with ``VISIONFORGE_LANG``.
 
 It lives in ``utils`` rather than in ``gui`` because ``core`` writes some of these
 messages and must not import the web layer.
@@ -18,7 +23,7 @@ messages and must not import the web layer.
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import Literal
@@ -26,15 +31,20 @@ from typing import Literal
 Lang = Literal["pt", "en"]
 
 DEFAULT_LANG: Lang = "pt"
+# What an artifact is worded in when nobody chose (see ``tr_artifact``).
+ARTIFACT_DEFAULT_LANG: Lang = "en"
 LANG_HEADER = "X-VF-Lang"
+LANG_ENV = "VISIONFORGE_LANG"
 
 _SUPPORTED: tuple[Lang, ...] = ("pt", "en")
 
-_LANG: ContextVar[Lang] = ContextVar("visionforge_lang", default=DEFAULT_LANG)
+# ``None`` is "nobody chose", which is not the same as choosing Portuguese: the
+# figures of an unbound run are English, those of a Portuguese page are not.
+_LANG: ContextVar[Lang | None] = ContextVar("visionforge_lang", default=None)
 
 
-def resolve_lang(value: str | None) -> Lang:
-    """The language an ``X-VF-Lang`` value asks for; absent or unknown is Portuguese.
+def parse_lang(value: str | None) -> Lang | None:
+    """The language a header or environment value names, or ``None`` if it names none.
 
     Only the primary subtag counts, so ``en-US`` and ``EN`` are English.
     """
@@ -43,11 +53,26 @@ def resolve_lang(value: str | None) -> Lang:
         for lang in _SUPPORTED:
             if primary == lang:
                 return lang
-    return DEFAULT_LANG
+    return None
+
+
+def resolve_lang(value: str | None) -> Lang:
+    """The language an ``X-VF-Lang`` value asks for; absent or unknown is Portuguese."""
+    return parse_lang(value) or DEFAULT_LANG
+
+
+def lang_from_env(environ: Mapping[str, str]) -> Lang | None:
+    """The language ``VISIONFORGE_LANG`` selects; unset, empty or unknown selects none."""
+    return parse_lang(environ.get(LANG_ENV))
 
 
 def current_lang() -> Lang:
     """The language messages are written in right now."""
+    return _LANG.get() or DEFAULT_LANG
+
+
+def bound_lang() -> Lang | None:
+    """The language somebody bound, or ``None`` when nobody did."""
     return _LANG.get()
 
 
@@ -692,8 +717,8 @@ CATALOG: dict[str, dict[Lang, str]] = {
     },
     # ── titles, axes and legends of the saved figures (core/plotter.py) ──────
     # Figures are artifacts: they are worded for whoever started the run, and a
-    # run from the command line has no language bound, so its figures are
-    # Portuguese like everything else it prints.
+    # run with no language bound (the command line, a script) gets English, which
+    # is what they always said there. Read through ``tr_artifact``.
     "plot.epoch": {"pt": "Época", "en": "Epoch"},
     "plot.loss": {"pt": "Perda", "en": "Loss"},
     "plot.accuracy": {"pt": "Acurácia", "en": "Accuracy"},
@@ -780,15 +805,26 @@ def tr(key: str, /, **params: object) -> str:
     return message(current_lang(), key, **params)
 
 
+def tr_artifact(key: str, /, **params: object) -> str:
+    """The catalog text ``key`` for a file a run saves: English unless a language is bound."""
+    return message(bound_lang() or ARTIFACT_DEFAULT_LANG, key, **params)
+
+
 __all__ = [
+    "ARTIFACT_DEFAULT_LANG",
     "CATALOG",
     "DEFAULT_LANG",
+    "LANG_ENV",
     "LANG_HEADER",
     "Lang",
+    "bound_lang",
     "current_lang",
+    "lang_from_env",
     "message",
+    "parse_lang",
     "resolve_lang",
     "set_lang",
     "tr",
+    "tr_artifact",
     "using_lang",
 ]

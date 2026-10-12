@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -102,6 +103,20 @@ def build_task_block(config_path: Path) -> tuple[Any, Any]:
     return config, block
 
 
+def _bind_language_from_env() -> None:
+    """Bind ``VISIONFORGE_LANG`` for the whole run, when it names a language (ADR-116).
+
+    Without it the command line has no language: messages are Portuguese and the
+    figures it saves are English. Under ``gui`` the page's own header rebinds a
+    language on every request, so this changes nothing there.
+    """
+    from visionforge.utils.messages import lang_from_env, set_lang
+
+    lang = lang_from_env(os.environ)
+    if lang is not None:
+        set_lang(lang)
+
+
 def main() -> None:
     """Run a VisionForge experiment or start the GUI from the command line."""
     from visionforge.utils.logger import setup_logger
@@ -183,6 +198,7 @@ def main() -> None:
     )
 
     args = parser.parse_args()
+    _bind_language_from_env()
 
     # Windows consoles default to a legacy codepage (cp1252), which cannot
     # encode the arrows and box characters the reports use. Without this,

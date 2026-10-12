@@ -1,5 +1,9 @@
 """Titles, axes and legends of the saved figures follow the run's language (ADR-116).
 
+With a language bound (the GUI, or ``VISIONFORGE_LANG`` on the command line) the
+figure is in it; with none bound, which is a script or a bare command-line run,
+it is English, as figures always were.
+
 The figure is read off the object that gets saved, not off the image: what is
 being checked is the text that was set, and a pixel comparison would say nothing
 about which language it is in.
@@ -15,7 +19,7 @@ import pytest
 from matplotlib.figure import Figure
 
 from visionforge.core.plotter import MetricsPlotter
-from visionforge.utils.messages import using_lang
+from visionforge.utils.messages import bound_lang, using_lang
 
 from .test_plotter import make_history
 
@@ -261,7 +265,7 @@ class TestFiguresFollowTheLanguage:
         assert len(figures) == 1
         return _panels(figures[0])
 
-    def test_portuguese_without_a_bound_language(
+    def test_english_when_no_language_is_bound(
         self,
         draw: Callable[[Path], Any],
         portuguese: list[Panel],
@@ -269,7 +273,19 @@ class TestFiguresFollowTheLanguage:
         tmp_path: Path,
         figures: list[Figure],
     ) -> None:
-        assert self._drawn(draw, tmp_path, figures) == portuguese
+        assert bound_lang() is None
+        assert self._drawn(draw, tmp_path, figures) == english
+
+    def test_portuguese_under_the_portuguese_interface(
+        self,
+        draw: Callable[[Path], Any],
+        portuguese: list[Panel],
+        english: list[Panel],
+        tmp_path: Path,
+        figures: list[Figure],
+    ) -> None:
+        with using_lang("pt"):
+            assert self._drawn(draw, tmp_path, figures) == portuguese
 
     def test_english_under_the_english_interface(
         self,

@@ -4673,8 +4673,9 @@ send codes the page words itself) and postponed it.
   `_submit_job` captures the language and wraps the job's `start` in it. A
   health warning, written by a trainer in a worker thread, is therefore in the
   language of whoever pressed Train; it is also what lands in `run.json`, next
-  to a `code` that does not change. The command line never binds a language and
-  keeps printing Portuguese.
+  to a `code` that does not change. The command line binds no language of its own
+  and keeps printing Portuguese; the figures it saves are the exception (see the
+  second slice) and `VISIONFORGE_LANG` is how it chooses one.
 - *Where the page already words something from structured data, the catalog does
   not duplicate it.* The plain dismissal of a dialog stays the sentence
   "Cancelado." because `lib/picker-feedback.ts` replaces exactly that string; the
@@ -4712,13 +4713,26 @@ send codes the page words itself) and postponed it.
   and accuracy curves, the detection history, confusion matrices, ROC,
   precision-recall, predicted against actual, residuals, per-class bars, anomaly
   scores). A figure is an artifact, so it is worded for whoever started the run:
-  the plotters call `tr()` while the job runs, under the language `_submit_job`
-  captured. A run from the command line has no language bound and draws in
-  Portuguese, which changes the figures that used to carry an English title there
-  (`Training & Validation Loss`, `ROC Curve`, `Confusion Matrix`); the ones of
-  ADR-077 were Portuguese already. A name the caller passes (`label`, `title`,
-  `metric_label`) is used as given, and so are the words that read the same in both
-  languages (`normal`, `macro`, `mAP@50`).
+  the plotters call `tr_artifact()` while the job runs, under the language
+  `_submit_job` captured. `tr_artifact` differs from `tr` in one place: when no
+  language is bound at all, it answers English. A script, a notebook or a bare
+  `visionforge run` has no language, and its figures were English
+  (`Training & Validation Loss`, `ROC Curve`, `Confusion Matrix`) before this
+  slice; they are what a paper gets, and turning them Portuguese without being
+  asked would have been a regression. So the context variable now defaults to
+  `None` ("nobody chose"), which `current_lang()` still reads as Portuguese for the
+  messages, and `bound_lang()` exposes. A GUI request always binds one (Portuguese
+  without the header), so a GUI run draws in the page's language. The figures of
+  ADR-077 were Portuguese and become English in that unbound case. A name the
+  caller passes (`label`, `title`, `metric_label`) is used as given, and so are the
+  words that read the same in both languages (`normal`, `macro`, `mAP@50`).
+- `VISIONFORGE_LANG=pt|en`: the command line reads it once, right after parsing its
+  arguments, and binds it for the whole run (`__main__._bind_language_from_env`).
+  A Portuguese researcher who wants Portuguese figures from `visionforge run` sets
+  `pt`; `en` also words the health warnings and the other messages in English. An
+  empty or unrecognised value is ignored (a typo does not silently pick a language),
+  and under `gui` it changes nothing, because every request rebinds the page's
+  language.
 - `run.*` (the rest), `file.*`, `compare.*`, `replicates.*`: the `detail` of an
   unreadable `run.json`, a task that cannot be resumed, a stored config that is no
   longer valid, a delete refused outside the models folder, a run folder that is
@@ -4769,12 +4783,11 @@ that used to be English and moved (a run not found, the profile errors, the
 `X-VF-Lang` now reads Portuguese and has to send `en` to keep the old text; the
 status codes are unchanged. Adding a server message means adding both languages
 to the catalog before the test passes, which is the same rule ADR-110 set for
-the page. The figures of a command-line run are now Portuguese where some were
-English (second slice): a researcher who publishes a figure as the command line
-saved it gets a Portuguese title now, and the way to English figures is to run the
-job from the GUI with the interface in English, because the command line has no
-language switch yet. One defect came out of moving the texts: the "froze N weights" warning
-replaced every comma of its Portuguese sentence by a period while grouping the
+the page. The figures made outside the GUI keep their English text: the command
+line and the library draw in English unless `VISIONFORGE_LANG` says otherwise, and
+only the figures of a run started from the page follow the page. The non-figure
+messages of a command-line run stay Portuguese, as before. One defect came out of
+moving the texts: the "froze N weights" warning replaced every comma of its Portuguese sentence by a period while grouping the
 number ("pré-treinados. ou use"), and now changes only the number.
 
 ## ADR-117 — "Primeiro treino" for every built-in task

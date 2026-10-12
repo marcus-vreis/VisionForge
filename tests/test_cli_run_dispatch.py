@@ -112,3 +112,92 @@ class TestBuildTaskBlock:
         cfg_path = _write(tmp_path, {"name": "x", "task": "teleportation"})
         with pytest.raises(ValueError, match="Unknown task"):
             build_task_block(cfg_path)
+
+
+class TestCommandLineLanguage:
+    """``VISIONFORGE_LANG`` is bound for the whole of a ``visionforge run`` (ADR-116)."""
+
+    @staticmethod
+    def _run_cli(
+        monkeypatch: pytest.MonkeyPatch, tmp_path: Path, env: str | None
+    ) -> dict[str, object]:
+        import contextvars
+        from types import SimpleNamespace
+
+        from matplotlib.figure import Figure
+
+        import visionforge.__main__ as cli
+        import visionforge.utils.logger as logger_mod
+        from visionforge.core.plotter import MetricsPlotter
+        from visionforge.utils.messages import bound_lang, current_lang, tr
+
+        seen: dict[str, object] = {}
+        monkeypatch.setattr(
+            Figure,
+            "savefig",
+            lambda self, *_a, **_k: seen.update(title=self.axes[0].get_title()),
+        )
+
+        class FakeBlock:
+            def run(self) -> None:
+                seen["bound"] = bound_lang()
+                seen["message"] = tr("scan.split_missing", split="val")
+                MetricsPlotter.metric_curve(
+                    [1], [0.5], tmp_path / "curve.png", label="AUROC"
+                )
+                seen["messages_in"] = current_lang()
+
+            def report(self) -> str:
+                return "report"
+
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(logger_mod, "setup_logger", lambda *a, **k: None)
+        monkeypatch.setattr(
+            cli,
+            "build_task_block",
+            lambda _path: (SimpleNamespace(name="x", task="t"), FakeBlock()),
+        )
+        monkeypatch.setattr("sys.argv", ["visionforge", "run", "cfg.yaml"])
+        if env is None:
+            monkeypatch.delenv("VISIONFORGE_LANG", raising=False)
+        else:
+            monkeypatch.setenv("VISIONFORGE_LANG", env)
+
+        # The command binds a language in the context it runs in; a copy keeps it
+        # from leaking into the tests that follow.
+        contextvars.copy_context().run(cli.main)
+        return seen
+
+    def test_without_the_variable_figures_are_english_and_messages_portuguese(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        seen = self._run_cli(monkeypatch, tmp_path, None)
+
+        assert seen["bound"] is None
+        assert seen["title"] == "AUROC over epochs"
+        assert seen["message"] == "Split 'val' não encontrado."
+
+    def test_portuguese_figures_on_request(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        seen = self._run_cli(monkeypatch, tmp_path, "pt")
+
+        assert seen["bound"] == "pt"
+        assert seen["title"] == "AUROC por época"
+
+    def test_english_binds_the_messages_too(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        seen = self._run_cli(monkeypatch, tmp_path, "en")
+
+        assert seen["bound"] == "en"
+        assert seen["title"] == "AUROC over epochs"
+        assert seen["message"] == "Split 'val' not found."
+
+    def test_an_unknown_value_is_ignored(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        seen = self._run_cli(monkeypatch, tmp_path, "klingon")
+
+        assert seen["bound"] is None
+        assert seen["title"] == "AUROC over epochs"

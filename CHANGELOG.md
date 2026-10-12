@@ -267,10 +267,12 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
   Título, eixos e legendas das figuras (curvas de perda e de acurácia, matriz de
   confusão, ROC, precisão e revocação, predito contra real, resíduos, barras por
   classe, escores de anomalia, resultados de detecção) saem no idioma de quem
-  apertou Treinar, porque o job guarda o idioma em que foi enviado. Um treino
-  pela linha de comando não tem idioma e desenha em português, o que muda as
-  figuras que antes saíam com título em inglês ("Training & Validation Loss",
-  "ROC Curve" etc.). Também passam pelo catálogo os erros das rotas que ainda
+  apertou Treinar, porque o job guarda o idioma em que foi enviado. Fora da
+  interface (a linha de comando e o uso como biblioteca) as figuras continuam em
+  inglês, como sempre foram ("Training & Validation Loss", "ROC Curve" etc.), por
+  serem o que vai para um artigo; a variável de ambiente `VISIONFORGE_LANG=pt|en`
+  escolhe o idioma de uma execução pela linha de comando (um valor vazio ou
+  desconhecido é ignorado). Também passam pelo catálogo os erros das rotas que ainda
   eram em inglês (caminho que não é absoluto, `run.json` ilegível, tarefa que não
   pode ser retomada, config guardada que deixou de valer, seeds repetidas, as
   recusas do servidor de imagens e de artefatos), o texto de ocultar, restaurar

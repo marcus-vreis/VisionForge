@@ -29,11 +29,15 @@ from visionforge.utils.messages import (
     CATALOG,
     DEFAULT_LANG,
     Lang,
+    bound_lang,
     current_lang,
+    lang_from_env,
     message,
+    parse_lang,
     resolve_lang,
     set_lang,
     tr,
+    tr_artifact,
     using_lang,
 )
 
@@ -105,7 +109,7 @@ class TestCatalog:
                 if (
                     isinstance(node, ast.Call)
                     and isinstance(node.func, ast.Name)
-                    and node.func.id == "tr"
+                    and node.func.id in {"tr", "tr_artifact"}
                     and node.args
                     and isinstance(node.args[0], ast.Constant)
                     and node.args[0].value not in CATALOG
@@ -155,6 +159,78 @@ class TestResolveLang:
     def test_absent_means_the_language_the_program_always_used(self) -> None:
         assert DEFAULT_LANG == "pt"
         assert current_lang() == "pt"
+
+
+class TestParseAndEnvironment:
+    @pytest.mark.parametrize(
+        ("value", "expected"),
+        [
+            ("pt", "pt"),
+            ("EN", "en"),
+            (" en-US ", "en"),
+            ("pt_BR", "pt"),
+            (None, None),
+            ("", None),
+            ("fr", None),
+            ("english", None),
+        ],
+    )
+    def test_a_value_names_a_language_or_none(
+        self, value: str | None, expected: str | None
+    ) -> None:
+        assert parse_lang(value) == expected
+
+    def test_resolve_falls_back_to_portuguese_where_parse_gives_none(self) -> None:
+        assert parse_lang("fr") is None
+        assert resolve_lang("fr") == "pt"
+
+    @pytest.mark.parametrize(
+        ("environ", "expected"),
+        [
+            ({"VISIONFORGE_LANG": "pt"}, "pt"),
+            ({"VISIONFORGE_LANG": "en"}, "en"),
+            ({"VISIONFORGE_LANG": "EN_us"}, "en"),
+            ({"VISIONFORGE_LANG": ""}, None),
+            ({"VISIONFORGE_LANG": "klingon"}, None),
+            ({}, None),
+            ({"LANG": "en_US.UTF-8"}, None),
+        ],
+    )
+    def test_the_variable_selects_a_language_or_none(
+        self, environ: dict[str, str], expected: str | None
+    ) -> None:
+        assert lang_from_env(environ) == expected
+
+
+class TestArtifactLanguage:
+    """A saved file is English unless somebody chose a language for the run."""
+
+    def test_nobody_chose_means_english_for_a_file_and_portuguese_for_a_message(
+        self,
+    ) -> None:
+        assert bound_lang() is None
+        assert tr_artifact("plot.title_roc") == "ROC Curve"
+        assert tr("plot.title_roc") == "Curva ROC"
+        assert current_lang() == "pt"
+
+    def test_choosing_portuguese_is_not_the_same_as_not_choosing(self) -> None:
+        with using_lang("pt"):
+            assert bound_lang() == "pt"
+            assert tr_artifact("plot.title_roc") == "Curva ROC"
+
+    def test_choosing_english(self) -> None:
+        with using_lang("en"):
+            assert tr_artifact("plot.title_roc") == "ROC Curve"
+            assert tr("plot.title_roc") == "ROC Curve"
+
+    def test_the_choice_ends_with_the_block(self) -> None:
+        with using_lang("pt"):
+            pass
+
+        assert bound_lang() is None
+
+    def test_parameters_are_filled_in(self) -> None:
+        assert tr_artifact("plot.title_per_class", metric="IoU") == "IoU per class"
 
 
 class TestCurrentLang:
