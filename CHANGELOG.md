@@ -13,6 +13,8 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ## [Unreleased]
 
+## [0.13.0] — 2026-10-11
+
 ### Added
 
 - **Guias que esperam você: o botão "guia" do cabeçalho abre um menu, e o novo
