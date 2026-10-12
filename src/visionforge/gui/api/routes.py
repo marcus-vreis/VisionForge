@@ -532,10 +532,7 @@ async def model_defaults(req: ModelDefaultsRequest) -> ModelDefaultsResponse:
     if prone:
         note = collapse_note(arch, optimizer, rate, evidence)
     elif median is not None and size is not None and median < size:
-        note = (
-            f"As imagens têm cerca de {median}px de lado; treinar acima disso "
-            f"amplia a imagem sem acrescentar detalhe."
-        )
+        note = tr("model.small_images", median=median)
 
     return ModelDefaultsResponse(
         architecture=arch,
@@ -611,7 +608,7 @@ async def get_run_detail(
     try:
         data: dict[str, Any] = json.loads(run_json_path.read_text(encoding="utf-8"))
     except Exception as exc:  # noqa: BLE001
-        raise HTTPException(500, f"Failed to parse run.json: {exc}") from exc
+        raise HTTPException(500, tr("run.bad_json", error=exc)) from exc
 
     started = _parse_run_timestamp(data["timestamp"])
     status = data.get("status", "completed")
@@ -749,7 +746,7 @@ async def resume_run(run_id: str, profile: ProfileDep) -> RunResponse:
             (run_dir / "run.json").read_text(encoding="utf-8")
         )
     except Exception as exc:  # noqa: BLE001
-        raise HTTPException(500, f"Failed to parse run.json: {exc}") from exc
+        raise HTTPException(500, tr("run.bad_json", error=exc)) from exc
 
     resumable, _ = _resume_status(run_dir, data)
     if not resumable:
@@ -766,14 +763,14 @@ async def resume_run(run_id: str, profile: ProfileDep) -> RunResponse:
         "anomaly": (AnomalyConfig, _execute_anomaly),
     }
     if task not in executors:
-        raise HTTPException(400, f"Task '{task}' cannot be resumed.")
+        raise HTTPException(400, tr("run.cannot_resume_task", task=task))
     config_cls, executor = executors[task]
 
     try:
         config = config_cls.model_validate(data["config"])
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(
-            400, f"The stored config of '{run_id}' is no longer valid: {exc}"
+            400, tr("run.stored_config_invalid", run_id=run_id, error=exc)
         ) from exc
 
     config = profile.scope_model(config)
@@ -818,11 +815,11 @@ async def delete_run(run_id: str, profile: ProfileDep) -> dict[str, str]:
         resolved.relative_to(models_dir)
     except ValueError as exc:
         raise HTTPException(
-            400, f"Refused to delete path outside {models_dir}: {resolved}"
+            400, tr("run.delete_outside", models_dir=models_dir, path=resolved)
         ) from exc
 
     if not resolved.is_dir():
-        raise HTTPException(404, f"Run directory '{resolved}' does not exist.")
+        raise HTTPException(404, tr("run.dir_missing", path=resolved))
 
     shutil.rmtree(resolved)
     logger.info("GUI: deleted run {} at {}", run_id, resolved)
@@ -839,7 +836,7 @@ async def export_run_markdown(run_id: str, profile: ProfileDep) -> Response:
     try:
         data: dict[str, Any] = json.loads(run_json_path.read_text(encoding="utf-8"))
     except Exception as exc:  # noqa: BLE001
-        raise HTTPException(500, f"Failed to parse run.json: {exc}") from exc
+        raise HTTPException(500, tr("run.bad_json", error=exc)) from exc
 
     md = _render_run_markdown(run_dir, data)
     filename = f"{data.get('experiment', run_dir.name)}_{run_dir.name}.md"
@@ -894,10 +891,7 @@ def _reject_custom_task_action(run_dir: Path, action: str) -> None:
     if isinstance(task, str) and task.startswith("custom:"):
         raise HTTPException(
             400,
-            f"'{action}' is not available for the researcher-defined task "
-            f"'{task[len('custom:') :]}': this action rebuilds a built-in "
-            f"architecture from the run's config, and a custom task owns its own "
-            f"model. Evaluate it by re-running the task against another split.",
+            tr("run.custom_action", action=action, task=task[len("custom:") :]),
         )
 
 
@@ -1525,9 +1519,7 @@ async def hide_custom_task(key: str) -> CustomTaskActionResponse:
     return CustomTaskActionResponse(
         key=key,
         action="hidden",
-        detail="Aba ocultada. O arquivo continua em user_tasks/."
-        if changed
-        else "Já estava oculta.",
+        detail=tr("custom.hidden") if changed else tr("custom.already_hidden"),
     )
 
 
@@ -1538,7 +1530,7 @@ async def unhide_custom_task(key: str) -> CustomTaskActionResponse:
 
     set_hidden(key, False)
     return CustomTaskActionResponse(
-        key=key, action="unhidden", detail="Aba restaurada."
+        key=key, action="unhidden", detail=tr("custom.unhidden")
     )
 
 
@@ -1558,7 +1550,7 @@ async def delete_custom_task(key: str, confirm: str = "") -> CustomTaskActionRes
     except FileNotFoundError as exc:
         raise HTTPException(404, str(exc)) from exc
     return CustomTaskActionResponse(
-        key=key, action="deleted", detail=f"Removido do disco: {removed}"
+        key=key, action="deleted", detail=tr("custom.deleted", removed=removed)
     )
 
 
@@ -2002,20 +1994,18 @@ async def serve_dataset_file(path: str) -> FileResponse:
     # check below is the authoritative guard, but these two early checks make
     # the intent obvious to readers (and to taint-analysis tools).
     if ".." in path.replace("\\", "/").split("/"):
-        raise HTTPException(400, "Path contains traversal segments.")
+        raise HTTPException(400, tr("file.traversal"))
     candidate = Path(path)
     if not candidate.is_absolute():
-        raise HTTPException(400, "Path must be absolute.")
+        raise HTTPException(400, tr("file.not_absolute"))
     try:
         resolved = candidate.resolve(strict=True)  # NOSONAR pythonsecurity:S6549
     except (FileNotFoundError, OSError) as exc:
-        raise HTTPException(404, "File not found.") from exc
+        raise HTTPException(404, tr("file.not_found")) from exc
     if resolved.suffix.lower() not in _IMAGE_EXTS:
-        raise HTTPException(400, "Only image files are previewable.")
+        raise HTTPException(400, tr("file.not_image"))
     if not _is_inside_allowed_root(resolved):
-        raise HTTPException(
-            403, "Path is not inside any dataset directory probed this session."
-        )
+        raise HTTPException(403, tr("file.not_in_dataset"))
     return FileResponse(resolved)  # NOSONAR python:S2083
 
 
@@ -2028,10 +2018,10 @@ async def serve_artifact(file_path: str) -> FileResponse:
     outputs_dir = Path("outputs").resolve()
 
     if not resolved.is_relative_to(outputs_dir):
-        raise HTTPException(403, "Access denied.")
+        raise HTTPException(403, tr("file.access_denied"))
 
     if not resolved.is_file():
-        raise HTTPException(404, "File not found.")
+        raise HTTPException(404, tr("file.not_found"))
 
     return FileResponse(resolved)  # NOSONAR python:S2083
 
@@ -4743,7 +4733,7 @@ def _start_replicated_comparison(
 
     if req.seeds is not None:
         if len(set(req.seeds)) != len(req.seeds):
-            raise HTTPException(422, "Comparison seeds must be unique.")
+            raise HTTPException(422, tr("compare.seeds_unique"))
         seeds = list(req.seeds)
     else:
         base_seed = int(complete.get("training", {}).get("seed", 42))
@@ -4882,7 +4872,7 @@ def _start_replicates(
 
     if req.seeds is not None:
         if len(set(req.seeds)) != len(req.seeds):
-            raise HTTPException(422, "Replicate seeds must be unique.")
+            raise HTTPException(422, tr("replicates.seeds_unique"))
         seeds = list(req.seeds)
     else:
         base_seed = int(complete.get("training", {}).get("seed", 42))

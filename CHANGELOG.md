@@ -263,6 +263,20 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
   estavam as linhas do log de treino, os gráficos, a descrição dos campos no
   esquema da configuração e os erros em inglês que não estão na lista
   ([ADR-116](docs/dev/DECISIONS.md)).
+- **Os gráficos salvos e o resto dos `detail` em inglês também seguem o idioma.**
+  Título, eixos e legendas das figuras (curvas de perda e de acurácia, matriz de
+  confusão, ROC, precisão e revocação, predito contra real, resíduos, barras por
+  classe, escores de anomalia, resultados de detecção) saem no idioma de quem
+  apertou Treinar, porque o job guarda o idioma em que foi enviado. Um treino
+  pela linha de comando não tem idioma e desenha em português, o que muda as
+  figuras que antes saíam com título em inglês ("Training & Validation Loss",
+  "ROC Curve" etc.). Também passam pelo catálogo os erros das rotas que ainda
+  eram em inglês (caminho que não é absoluto, `run.json` ilegível, tarefa que não
+  pode ser retomada, config guardada que deixou de valer, seeds repetidas, as
+  recusas do servidor de imagens e de artefatos), o texto de ocultar, restaurar
+  e excluir uma tarefa própria e a nota de `/api/model/defaults`. Quem chamava
+  essas rotas sem `X-VF-Lang` agora lê português
+  ([ADR-116](docs/dev/DECISIONS.md)).
 
 ### Fixed
 
@@ -270,6 +284,12 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
   O payload mandava `data.image_size`, que a configuração de regressão ignora
   sem avisar (ela lê `data.transforms.image_size`); agora o tamanho vai para onde
   é lido, e um teste confere o tamanho efetivo de cada tarefa.
+
+- **A folha de treino dizia "TRAINING COMPLETE" e "$ training complete" na página
+  em português.** Eram três textos do dicionário português escritos em inglês
+  (`treino concluído`, `treino falhou` e `treinando · <tarefa>`), no cabeçalho e
+  na última linha do log. Nenhuma linha da folha vem do servidor: ela é montada
+  na página a partir dos eventos de progresso, que levam só números.
 
 - **O aviso "Feature extraction congelou N pesos" trocava toda vírgula da frase
   por ponto.** Para separar os milhares do número em português, o texto inteiro

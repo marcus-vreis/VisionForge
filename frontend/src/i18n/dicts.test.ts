@@ -129,6 +129,17 @@ describe("dictionaries", () => {
     expect(en.history.confirm.failed(2, 3)).toBe("2 of 3 runs couldn't be deleted:");
   });
 
+  it("word the training sheet's own lines in Portuguese, not in the trainer's English", () => {
+    // These three were English in the Portuguese dictionary: the sheet read
+    // "TRAINING COMPLETE" and "$ training complete" in the middle of a Portuguese page.
+    expect(pt.trainingOverlay.trainingComplete).toBe("treino concluído");
+    expect(pt.trainingOverlay.trainingFailed).toBe("treino falhou");
+    expect(pt.trainingOverlay.training("Classificação")).toBe("treinando · Classificação");
+    expect(en.trainingOverlay.trainingComplete).toBe("training complete");
+    expect(en.trainingOverlay.trainingFailed).toBe("training failed");
+    expect(en.trainingOverlay.training("Classification")).toBe("training · Classification");
+  });
+
   it("name an unnamed run so the notification does not say the same word twice", () => {
     expect(pt.runNotify.completedTitle(pt.app.unnamedRun)).toBe("Treino concluído — sem nome");
     expect(en.runNotify.completedTitle(en.app.unnamedRun)).toBe("Training finished — unnamed run");

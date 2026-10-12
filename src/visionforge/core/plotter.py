@@ -10,13 +10,16 @@ from matplotlib.ticker import MaxNLocator
 from sklearn.metrics import auc, precision_recall_curve, roc_curve
 
 from visionforge.core.trainer import EpochResult
+from visionforge.utils.messages import tr
 
 
 class MetricsPlotter:
     """Generates and saves metric plots for a training run.
 
     Each method is independent — add new plot types without touching existing ones.
-    Figures are rendered via the Agg backend so no display is required.
+    Figures are rendered via the Agg backend so no display is required. Titles,
+    axes and legends are worded in the language of the run that draws them
+    (ADR-116); the command line has none bound and gets Portuguese.
     """
 
     @staticmethod
@@ -30,11 +33,13 @@ class MetricsPlotter:
         FigureCanvasAgg(fig)
         ax = fig.subplots()
 
-        ax.plot(epochs, train_losses, label="train", linewidth=2, color="#3b82f6")
-        ax.plot(epochs, val_losses, label="val", linewidth=2, color="#f59e0b")
-        ax.set_xlabel("Epoch")
-        ax.set_ylabel("Loss")
-        ax.set_title("Training & Validation Loss")
+        ax.plot(
+            epochs, train_losses, label=tr("plot.train"), linewidth=2, color="#3b82f6"
+        )
+        ax.plot(epochs, val_losses, label=tr("plot.val"), linewidth=2, color="#f59e0b")
+        ax.set_xlabel(tr("plot.epoch"))
+        ax.set_ylabel(tr("plot.loss"))
+        ax.set_title(tr("plot.title_loss"))
         # There is no epoch 1.5, and a figure that implies one invites the
         # question in a review.
         ax.xaxis.set_major_locator(MaxNLocator(integer=True))
@@ -65,9 +70,9 @@ class MetricsPlotter:
         ax = fig.subplots()
 
         ax.plot(epochs, values, label=label, linewidth=2, color=color, marker="o")
-        ax.set_xlabel("Epoch")
+        ax.set_xlabel(tr("plot.epoch"))
         ax.set_ylabel(ylabel or label)
-        ax.set_title(title or f"{label} over epochs")
+        ax.set_title(title or tr("plot.title_over_epochs", label=label))
         ax.legend()
         ax.grid(True, alpha=0.3)
 
@@ -107,15 +112,15 @@ class MetricsPlotter:
                 "--",
                 color="#f16363",
                 linewidth=1.5,
-                label="perfeito (y = ŷ)",
+                label=tr("plot.perfect"),
             )
             ax.set_xlim(low, high)
             ax.set_ylim(low, high)
             ax.legend()
 
-        ax.set_xlabel(f"real ({target_name})")
-        ax.set_ylabel(f"predito ({target_name})")
-        ax.set_title("Predito vs real")
+        ax.set_xlabel(tr("plot.axis_actual", target=target_name))
+        ax.set_ylabel(tr("plot.axis_predicted", target=target_name))
+        ax.set_title(tr("plot.title_predicted_vs_actual"))
         ax.grid(True, alpha=0.3)
         ax.set_aspect("equal", adjustable="box")
 
@@ -144,18 +149,22 @@ class MetricsPlotter:
         ax = fig.subplots()
         ax.hist(residual, bins=40, color="#5b9fff", alpha=0.85)
         ax.axvline(
-            0.0, color="#f16363", linestyle="--", linewidth=1.5, label="sem erro"
+            0.0,
+            color="#f16363",
+            linestyle="--",
+            linewidth=1.5,
+            label=tr("plot.no_error"),
         )
         if residual.size:
             ax.axvline(
                 float(residual.mean()),
                 color="#f5a524",
                 linewidth=1.5,
-                label=f"viés médio = {residual.mean():+.4f}",
+                label=tr("plot.mean_bias", bias=residual.mean()),
             )
-        ax.set_xlabel("resíduo (predito − real)")
-        ax.set_ylabel("amostras")
-        ax.set_title("Distribuição dos resíduos")
+        ax.set_xlabel(tr("plot.axis_residual"))
+        ax.set_ylabel(tr("plot.samples"))
+        ax.set_title(tr("plot.title_residuals"))
         ax.legend()
         ax.grid(True, alpha=0.3)
 
@@ -190,12 +199,12 @@ class MetricsPlotter:
                 color="#f5a524",
                 linestyle="--",
                 linewidth=1.5,
-                label=f"média = {scores.mean():.4f}",
+                label=tr("plot.mean", mean=scores.mean()),
             )
             ax.legend()
         ax.set_ylim(0.0, 1.0)
         ax.set_ylabel(metric_label)
-        ax.set_title(title or f"{metric_label} por classe")
+        ax.set_title(title or tr("plot.title_per_class", metric=metric_label))
         ax.grid(True, axis="y", alpha=0.3)
         for tick in ax.get_xticklabels():
             tick.set_rotation(30)
@@ -224,7 +233,10 @@ class MetricsPlotter:
         fig = Figure(figsize=(9, 5))
         FigureCanvasAgg(fig)
         ax = fig.subplots()
-        for value, name, color in ((0, "normal", "#48cf8e"), (1, "defeito", "#f16363")):
+        for value, name, color in (
+            (0, "normal", "#48cf8e"),
+            (1, tr("plot.defect"), "#f16363"),
+        ):
             subset = score_arr[label_arr == value]
             if subset.size:
                 ax.hist(
@@ -240,11 +252,11 @@ class MetricsPlotter:
                 color="#f5a524",
                 linestyle="--",
                 linewidth=1.8,
-                label=f"limiar = {threshold:.4f}",
+                label=tr("plot.threshold", threshold=threshold),
             )
-        ax.set_xlabel("escore de anomalia")
-        ax.set_ylabel("imagens")
-        ax.set_title("Distribuição dos escores")
+        ax.set_xlabel(tr("plot.axis_anomaly_score"))
+        ax.set_ylabel(tr("plot.images"))
+        ax.set_title(tr("plot.title_scores"))
         ax.legend()
         ax.grid(True, alpha=0.3)
 
@@ -279,12 +291,12 @@ class MetricsPlotter:
         te, tl = _clean(epochs, train_losses)
         ve, vl = _clean(epochs, val_losses)
         if tl:
-            ax_loss.plot(te, tl, label="train", linewidth=2, color="#3b82f6")
+            ax_loss.plot(te, tl, label=tr("plot.train"), linewidth=2, color="#3b82f6")
         if vl:
-            ax_loss.plot(ve, vl, label="val", linewidth=2, color="#f59e0b")
-        ax_loss.set_xlabel("Epoch")
-        ax_loss.set_ylabel("Loss")
-        ax_loss.set_title("Training & Validation Loss")
+            ax_loss.plot(ve, vl, label=tr("plot.val"), linewidth=2, color="#f59e0b")
+        ax_loss.set_xlabel(tr("plot.epoch"))
+        ax_loss.set_ylabel(tr("plot.loss"))
+        ax_loss.set_title(tr("plot.title_loss"))
         if tl or vl:
             ax_loss.legend()
         ax_loss.grid(True, alpha=0.3)
@@ -295,9 +307,9 @@ class MetricsPlotter:
                 me, mv, label="mAP@50", linewidth=2, color="#10b981", marker="o"
             )
             ax_map.legend()
-        ax_map.set_xlabel("Epoch")
+        ax_map.set_xlabel(tr("plot.epoch"))
         ax_map.set_ylabel("mAP@50")
-        ax_map.set_title("Validation mAP@50")
+        ax_map.set_title(tr("plot.title_val_map50"))
         ax_map.grid(True, alpha=0.3)
 
         save_path.parent.mkdir(parents=True, exist_ok=True)
@@ -314,11 +326,13 @@ class MetricsPlotter:
         FigureCanvasAgg(fig)
         ax = fig.subplots()
 
-        ax.plot(epochs, train_accs, label="train", linewidth=2, color="#10b981")
-        ax.plot(epochs, val_accs, label="val", linewidth=2, color="#8b5cf6")
-        ax.set_xlabel("Epoch")
-        ax.set_ylabel("Accuracy")
-        ax.set_title("Training & Validation Accuracy")
+        ax.plot(
+            epochs, train_accs, label=tr("plot.train"), linewidth=2, color="#10b981"
+        )
+        ax.plot(epochs, val_accs, label=tr("plot.val"), linewidth=2, color="#8b5cf6")
+        ax.set_xlabel(tr("plot.epoch"))
+        ax.set_ylabel(tr("plot.accuracy"))
+        ax.set_title(tr("plot.title_accuracy"))
         ax.set_ylim(0.0, 1.05)
         ax.legend()
         ax.grid(True, alpha=0.3)
@@ -348,9 +362,9 @@ class MetricsPlotter:
             yticklabels=class_names,
             ax=ax,
         )
-        ax.set_xlabel("Predicted")
-        ax.set_ylabel("True")
-        ax.set_title("Confusion Matrix")
+        ax.set_xlabel(tr("plot.axis_predicted_class"))
+        ax.set_ylabel(tr("plot.axis_true_class"))
+        ax.set_title(tr("plot.title_confusion"))
 
         save_path.parent.mkdir(parents=True, exist_ok=True)
         fig.savefig(save_path, dpi=150, bbox_inches="tight")
@@ -384,9 +398,9 @@ class MetricsPlotter:
             vmax=1.0,
             ax=ax,
         )
-        ax.set_xlabel("Predicted")
-        ax.set_ylabel("True")
-        ax.set_title("Confusion Matrix (normalized by true class)")
+        ax.set_xlabel(tr("plot.axis_predicted_class"))
+        ax.set_ylabel(tr("plot.axis_true_class"))
+        ax.set_title(tr("plot.title_confusion_normalized"))
 
         save_path.parent.mkdir(parents=True, exist_ok=True)
         fig.savefig(save_path, dpi=150, bbox_inches="tight")
@@ -432,7 +446,11 @@ class MetricsPlotter:
                     continue
                 fpr, tpr, _ = roc_curve(y_bin, proba[:, i])
                 roc_auc = auc(fpr, tpr)
-                label = class_names[i] if i < len(class_names) else f"class {i}"
+                label = (
+                    class_names[i]
+                    if i < len(class_names)
+                    else tr("plot.class_n", index=i)
+                )
                 ax.plot(fpr, tpr, linewidth=1.6, label=f"{label} (AUC = {roc_auc:.3f})")
                 interpolated.append(np.interp(grid, fpr, tpr))
             if len(interpolated) > 1:
@@ -446,10 +464,12 @@ class MetricsPlotter:
                     label=f"macro (AUC = {auc(grid, macro):.3f})",
                 )
 
-        ax.plot([0, 1], [0, 1], "--", color="#94a3b8", linewidth=1, label="chance")
-        ax.set_xlabel("False Positive Rate")
-        ax.set_ylabel("True Positive Rate")
-        ax.set_title("ROC Curve")
+        ax.plot(
+            [0, 1], [0, 1], "--", color="#94a3b8", linewidth=1, label=tr("plot.chance")
+        )
+        ax.set_xlabel(tr("plot.axis_fpr"))
+        ax.set_ylabel(tr("plot.axis_tpr"))
+        ax.set_title(tr("plot.title_roc"))
         ax.set_xlim(0.0, 1.0)
         ax.set_ylim(0.0, 1.02)
         ax.legend(loc="lower right", fontsize=9)
@@ -490,7 +510,11 @@ class MetricsPlotter:
                     continue
                 precision, recall, _ = precision_recall_curve(y_bin, proba[:, i])
                 pr_auc = auc(recall, precision)
-                label = class_names[i] if i < len(class_names) else f"class {i}"
+                label = (
+                    class_names[i]
+                    if i < len(class_names)
+                    else tr("plot.class_n", index=i)
+                )
                 ax.plot(
                     recall,
                     precision,
@@ -498,9 +522,9 @@ class MetricsPlotter:
                     label=f"{label} (AUC = {pr_auc:.3f})",
                 )
 
-        ax.set_xlabel("Recall")
-        ax.set_ylabel("Precision")
-        ax.set_title("Precision-Recall Curve")
+        ax.set_xlabel(tr("plot.axis_recall"))
+        ax.set_ylabel(tr("plot.axis_precision"))
+        ax.set_title(tr("plot.title_precision_recall"))
         ax.set_xlim(0.0, 1.0)
         ax.set_ylim(0.0, 1.02)
         ax.legend(loc="lower left", fontsize=9)

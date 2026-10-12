@@ -4686,7 +4686,7 @@ send codes the page words itself) and postponed it.
   in `src/` names a key that exists; every key is used somewhere. A typo fails a
   test, not a request.
 
-**Moved in this slice** (key prefix, then where):
+**Moved in the first slice** (key prefix, then where):
 
 - `health.*`: the six training-health warnings (`core/training_health.py`).
 - `winerror.*`: the paging-file hint (`core/loader_lifecycle.py`) and the
@@ -4706,24 +4706,62 @@ send codes the page words itself) and postponed it.
 - `profile.*`: every error of `gui/api/profiles.py` and the refusal to vary
   `output` in a sweep or comparison.
 
+**Moved in the second slice:**
+
+- `plot.*`: title, axes and legends of every figure `core/plotter.py` saves (loss
+  and accuracy curves, the detection history, confusion matrices, ROC,
+  precision-recall, predicted against actual, residuals, per-class bars, anomaly
+  scores). A figure is an artifact, so it is worded for whoever started the run:
+  the plotters call `tr()` while the job runs, under the language `_submit_job`
+  captured. A run from the command line has no language bound and draws in
+  Portuguese, which changes the figures that used to carry an English title there
+  (`Training & Validation Loss`, `ROC Curve`, `Confusion Matrix`); the ones of
+  ADR-077 were Portuguese already. A name the caller passes (`label`, `title`,
+  `metric_label`) is used as given, and so are the words that read the same in both
+  languages (`normal`, `macro`, `mAP@50`).
+- `run.*` (the rest), `file.*`, `compare.*`, `replicates.*`: the `detail` of an
+  unreadable `run.json`, a task that cannot be resumed, a stored config that is no
+  longer valid, a delete refused outside the models folder, a run folder that is
+  gone, an action a researcher-defined task does not offer, repeated seeds, and the
+  refusals of the image preview and of the artifact server.
+- `custom.*`: what hiding, restoring and deleting a researcher-defined task
+  answer.
+- `model.*`: the note of `/api/model/defaults` (`gui/api/model_notes.py` and the
+  small-images sentence in `routes.py`). Its numbers are the same in both
+  languages; the interface still words its own from the response's numbers.
+
+**What the training sheet turned out to be.** The lines of the sheet are not server
+text. The server streams progress events (`start`, `epoch_end`, `trial_start`,
+`phase`, `end`), which carry numbers, and `TrainingOverlay` words every line from
+them with the page dictionary; the `logger.*` calls of the trainers go to the log
+file and the console, not to the page. The "TRAINING COMPLETE" in the header and the
+"$ training complete" of the last line were `trainingComplete` in the Portuguese
+dictionary, written in English, as were `trainingFailed` and the `training · <task>`
+header; they now read `treino concluído`, `treino falhou` and `treinando · <tarefa>`.
+Two things in the sheet are still the server's: the `error` of a failed run (an
+exception message, below) and the label of a PatchCore phase, which
+`lib/training-phase.ts` already maps for the three known ones.
+
 **Still as written, on purpose or not yet:**
 
-- The training log lines (`logger.*` in the trainers). They go to the log file
-  and the live stream in whatever the trainer wrote; a later slice.
+- The `logger.*` lines of the trainers and blocks. They are diagnostics for the log
+  file, shared by every run and read by whoever maintains the installation, not by
+  the person at the page; they stay in the language they were written in.
+- The epoch and trial lines of the sheet (`> epoch 3/10 · loss=…`, `── trial 1/3
+  ──`): the trainer's own vocabulary, the same one the command line prints, kept
+  on purpose (the comment on `trainingOverlay` in `pt.ts`).
 - `STOPPED_NOTE` (`core/cancellation.py`): the audit text in the `error` of a unit
   a stop cut. No screen shows it; the page words "stopped" from the status.
-- The title and axis labels of the residual and anomaly-score plots
-  (`core/plotter.py`), which are images in the report; and the `description` of
-  the training fields in the config schema.
-- The `detail` of the HTTP errors in `routes.py` that were already English and
-  are not in the list above (`Path must be absolute`, `Failed to parse
-  run.json`, `Task … cannot be resumed`, the sample-dataset errors), the
-  messages of the Pydantic validators, and the exceptions raised below the
-  route layer and relayed as is (dataset download, ONNX export, Grad-CAM).
-- The built-in task labels and descriptions in `/api/tasks`, the note of
-  `/api/model/defaults` and the `detail` of hiding, restoring or deleting a
-  custom task: the first two are replaced by the page's dictionary or not shown
-  (ADR-110), the last is shown as the server writes it.
+- The `description` of the training fields in the config schema, and the messages of
+  the Pydantic validators.
+- Exceptions raised below the route layer and relayed as is: the dataset download,
+  the ONNX export, Grad-CAM, the confirmation and not-found errors of
+  `tasks/manage.py` (`delete_task`) and `tasks/registry.py` (`get_task`), and every
+  `str(exc)` that becomes the `error` of a failed run.
+- Texts of the reports that are not figures: the LaTeX captions
+  (`core/latex_export.py`) and the Markdown export of a run.
+- The built-in task labels and descriptions in `/api/tasks`: replaced by the page's
+  dictionary (ADR-110).
 
 **Consequences:** a call without the header gets Portuguese. For the messages
 that used to be English and moved (a run not found, the profile errors, the
@@ -4731,7 +4769,11 @@ that used to be English and moved (a run not found, the profile errors, the
 `X-VF-Lang` now reads Portuguese and has to send `en` to keep the old text; the
 status codes are unchanged. Adding a server message means adding both languages
 to the catalog before the test passes, which is the same rule ADR-110 set for
-the page. One defect came out of moving the texts: the "froze N weights" warning
+the page. The figures of a command-line run are now Portuguese where some were
+English (second slice): a researcher who publishes a figure as the command line
+saved it gets a Portuguese title now, and the way to English figures is to run the
+job from the GUI with the interface in English, because the command line has no
+language switch yet. One defect came out of moving the texts: the "froze N weights" warning
 replaced every comma of its Portuguese sentence by a period while grouping the
 number ("pré-treinados. ou use"), and now changes only the number.
 

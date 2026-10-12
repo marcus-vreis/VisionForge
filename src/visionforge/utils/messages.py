@@ -552,6 +552,221 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "pt": "Não foi possível gravar o dataset de exemplo: {error}",
         "en": "Could not write the sample dataset: {error}",
     },
+    # ── the rest of the run routes' own refusals ─────────────────────────────
+    "run.bad_json": {
+        "pt": "Não foi possível ler o run.json: {error}",
+        "en": "Failed to parse run.json: {error}",
+    },
+    "run.cannot_resume_task": {
+        "pt": "A tarefa '{task}' não pode ser retomada.",
+        "en": "Task '{task}' cannot be resumed.",
+    },
+    "run.stored_config_invalid": {
+        "pt": "A configuração guardada de '{run_id}' não é mais válida: {error}",
+        "en": "The stored config of '{run_id}' is no longer valid: {error}",
+    },
+    "run.delete_outside": {
+        "pt": "Exclusão recusada: o caminho está fora de {models_dir}: {path}",
+        "en": "Refused to delete path outside {models_dir}: {path}",
+    },
+    "run.dir_missing": {
+        "pt": "A pasta do run '{path}' não existe.",
+        "en": "Run directory '{path}' does not exist.",
+    },
+    "run.custom_action": {
+        "pt": (
+            "'{action}' não está disponível para a tarefa própria '{task}': esta "
+            "ação reconstrói uma arquitetura pronta a partir da config do run, e "
+            "uma tarefa própria define o próprio modelo. Avalie-a executando a "
+            "tarefa de novo sobre outro split."
+        ),
+        "en": (
+            "'{action}' is not available for the researcher-defined task "
+            "'{task}': this action rebuilds a built-in architecture from the "
+            "run's config, and a custom task owns its own model. Evaluate it by "
+            "re-running the task against another split."
+        ),
+    },
+    "compare.seeds_unique": {
+        "pt": "As seeds da comparação precisam ser distintas.",
+        "en": "Comparison seeds must be unique.",
+    },
+    "replicates.seeds_unique": {
+        "pt": "As seeds das réplicas precisam ser distintas.",
+        "en": "Replicate seeds must be unique.",
+    },
+    # ── files served to the page (image preview, artifacts) ──────────────────
+    "file.traversal": {
+        "pt": "O caminho contém segmentos de navegação ('..').",
+        "en": "Path contains traversal segments.",
+    },
+    "file.not_absolute": {
+        "pt": "O caminho precisa ser absoluto.",
+        "en": "Path must be absolute.",
+    },
+    "file.not_found": {"pt": "Arquivo não encontrado.", "en": "File not found."},
+    "file.not_image": {
+        "pt": "Só é possível pré-visualizar arquivos de imagem.",
+        "en": "Only image files are previewable.",
+    },
+    "file.not_in_dataset": {
+        "pt": (
+            "O caminho não está em nenhuma pasta de dataset consultada nesta sessão."
+        ),
+        "en": "Path is not inside any dataset directory probed this session.",
+    },
+    "file.access_denied": {"pt": "Acesso negado.", "en": "Access denied."},
+    # ── researcher-defined tasks: hide, restore, delete ──────────────────────
+    "custom.hidden": {
+        "pt": "Aba ocultada. O arquivo continua em user_tasks/.",
+        "en": "Tab hidden. The file is still in user_tasks/.",
+    },
+    "custom.already_hidden": {
+        "pt": "Já estava oculta.",
+        "en": "It was already hidden.",
+    },
+    "custom.unhidden": {"pt": "Aba restaurada.", "en": "Tab restored."},
+    "custom.deleted": {
+        "pt": "Removido do disco: {removed}",
+        "en": "Removed from disk: {removed}",
+    },
+    # ── the note of /api/model/defaults (model_notes.py, routes.py) ──────────
+    "model.collapse_unmeasured": {
+        "pt": (
+            "{architecture}: Adam a 1e-3 não foi medido para esta família; "
+            "sugerimos {optimizer} a {rate:g}, o mesmo das famílias de atenção "
+            "medidas."
+        ),
+        "en": (
+            "{architecture}: Adam at 1e-3 was not measured for this family; we "
+            "suggest {optimizer} at {rate:g}, the same as the attention families "
+            "that were measured."
+        ),
+    },
+    "model.accuracy_on_classes": {
+        "pt": "acurácia {accuracy:.2f} em {classes} classes",
+        "en": "accuracy {accuracy:.2f} on {classes} classes",
+    },
+    "model.failure_collapse": {
+        "pt": "previu uma classe só",
+        "en": "predicted a single class",
+    },
+    "model.failure_learned_little": {"pt": "aprendeu pouco", "en": "learned little"},
+    "model.measured_itself": {
+        "pt": "{architecture} {failure} com Adam a 1e-3 ({accuracy}).",
+        "en": "{architecture} {failure} with Adam at 1e-3 ({accuracy}).",
+    },
+    "model.measured_sibling": {
+        "pt": (
+            "{architecture}: o {measured_on}, da mesma família, {failure} com "
+            "Adam a 1e-3 ({accuracy}); este modelo não foi medido."
+        ),
+        "en": (
+            "{architecture}: {measured_on}, from the same family, {failure} with "
+            "Adam at 1e-3 ({accuracy}); this model was not measured."
+        ),
+    },
+    "model.remedy_measured": {
+        "pt": (
+            "Com {optimizer} a {rate:g}, a acurácia foi {recovered:.2f} nas "
+            "mesmas condições."
+        ),
+        "en": (
+            "With {optimizer} at {rate:g}, the accuracy was {recovered:.2f} under "
+            "the same conditions."
+        ),
+    },
+    "model.remedy_suggested": {
+        "pt": "Sugerimos {optimizer} a {rate:g}.",
+        "en": "We suggest {optimizer} at {rate:g}.",
+    },
+    "model.small_images": {
+        "pt": (
+            "As imagens têm cerca de {median}px de lado; treinar acima disso "
+            "amplia a imagem sem acrescentar detalhe."
+        ),
+        "en": (
+            "The images are about {median}px on a side; training above that "
+            "enlarges the image without adding detail."
+        ),
+    },
+    # ── titles, axes and legends of the saved figures (core/plotter.py) ──────
+    # Figures are artifacts: they are worded for whoever started the run, and a
+    # run from the command line has no language bound, so its figures are
+    # Portuguese like everything else it prints.
+    "plot.epoch": {"pt": "Época", "en": "Epoch"},
+    "plot.loss": {"pt": "Perda", "en": "Loss"},
+    "plot.accuracy": {"pt": "Acurácia", "en": "Accuracy"},
+    "plot.train": {"pt": "treino", "en": "train"},
+    "plot.val": {"pt": "validação", "en": "val"},
+    "plot.title_loss": {
+        "pt": "Perda de treino e de validação",
+        "en": "Training & Validation Loss",
+    },
+    "plot.title_accuracy": {
+        "pt": "Acurácia de treino e de validação",
+        "en": "Training & Validation Accuracy",
+    },
+    "plot.title_val_map50": {"pt": "mAP@50 de validação", "en": "Validation mAP@50"},
+    "plot.title_over_epochs": {"pt": "{label} por época", "en": "{label} over epochs"},
+    "plot.perfect": {"pt": "perfeito (y = ŷ)", "en": "perfect (y = ŷ)"},
+    "plot.axis_actual": {"pt": "real ({target})", "en": "actual ({target})"},
+    "plot.axis_predicted": {"pt": "predito ({target})", "en": "predicted ({target})"},
+    "plot.title_predicted_vs_actual": {
+        "pt": "Predito vs real",
+        "en": "Predicted vs actual",
+    },
+    "plot.no_error": {"pt": "sem erro", "en": "no error"},
+    "plot.mean_bias": {
+        "pt": "viés médio = {bias:+.4f}",
+        "en": "mean bias = {bias:+.4f}",
+    },
+    "plot.axis_residual": {
+        "pt": "resíduo (predito − real)",
+        "en": "residual (predicted − actual)",
+    },
+    "plot.samples": {"pt": "amostras", "en": "samples"},
+    "plot.title_residuals": {
+        "pt": "Distribuição dos resíduos",
+        "en": "Residual distribution",
+    },
+    "plot.mean": {"pt": "média = {mean:.4f}", "en": "mean = {mean:.4f}"},
+    "plot.title_per_class": {"pt": "{metric} por classe", "en": "{metric} per class"},
+    "plot.defect": {"pt": "defeito", "en": "defect"},
+    "plot.threshold": {
+        "pt": "limiar = {threshold:.4f}",
+        "en": "threshold = {threshold:.4f}",
+    },
+    "plot.axis_anomaly_score": {"pt": "escore de anomalia", "en": "anomaly score"},
+    "plot.images": {"pt": "imagens", "en": "images"},
+    "plot.title_scores": {
+        "pt": "Distribuição dos escores",
+        "en": "Score distribution",
+    },
+    "plot.axis_predicted_class": {"pt": "Predito", "en": "Predicted"},
+    "plot.axis_true_class": {"pt": "Real", "en": "True"},
+    "plot.title_confusion": {"pt": "Matriz de confusão", "en": "Confusion Matrix"},
+    "plot.title_confusion_normalized": {
+        "pt": "Matriz de confusão (normalizada pela classe real)",
+        "en": "Confusion Matrix (normalized by true class)",
+    },
+    "plot.class_n": {"pt": "classe {index}", "en": "class {index}"},
+    "plot.chance": {"pt": "acaso", "en": "chance"},
+    "plot.axis_fpr": {
+        "pt": "Taxa de falsos positivos",
+        "en": "False Positive Rate",
+    },
+    "plot.axis_tpr": {
+        "pt": "Taxa de verdadeiros positivos",
+        "en": "True Positive Rate",
+    },
+    "plot.title_roc": {"pt": "Curva ROC", "en": "ROC Curve"},
+    "plot.axis_recall": {"pt": "Revocação", "en": "Recall"},
+    "plot.axis_precision": {"pt": "Precisão", "en": "Precision"},
+    "plot.title_precision_recall": {
+        "pt": "Curva de precisão e revocação",
+        "en": "Precision-Recall Curve",
+    },
 }
 
 

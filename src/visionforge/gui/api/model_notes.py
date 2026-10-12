@@ -19,6 +19,7 @@ suggested.
 from __future__ import annotations
 
 from visionforge.core.learning_rate import CollapseEvidence
+from visionforge.utils.messages import tr
 
 # The grid behind every number in learning_rate.py used four classes.
 _MEASURED_CLASSES = 4
@@ -30,7 +31,7 @@ def collapse_note(
     learning_rate: float,
     evidence: CollapseEvidence | None,
 ) -> str:
-    """Portuguese note for a collapse-prone architecture.
+    """Note for a collapse-prone architecture, in the language of the request.
 
     Args:
         architecture: the model the researcher chose.
@@ -42,29 +43,46 @@ def collapse_note(
         A sentence that cites only the measurement ``evidence`` carries.
     """
     if evidence is None:
-        return (
-            f"{architecture}: Adam a 1e-3 não foi medido para esta família; "
-            f"sugerimos {optimizer} a {learning_rate:g}, o mesmo das famílias "
-            f"de atenção medidas."
+        return tr(
+            "model.collapse_unmeasured",
+            architecture=architecture,
+            optimizer=optimizer,
+            rate=learning_rate,
         )
 
-    accuracy = f"acurácia {evidence.accuracy:.2f} em {_MEASURED_CLASSES} classes"
-    failure = (
-        "previu uma classe só" if evidence.outcome == "collapse" else "aprendeu pouco"
+    accuracy = tr(
+        "model.accuracy_on_classes",
+        accuracy=evidence.accuracy,
+        classes=_MEASURED_CLASSES,
+    )
+    failure = tr(
+        "model.failure_collapse"
+        if evidence.outcome == "collapse"
+        else "model.failure_learned_little"
     )
     measured_itself = architecture.lower() == evidence.measured_on
     if measured_itself:
-        measured = f"{architecture} {failure} com Adam a 1e-3 ({accuracy})."
+        measured = tr(
+            "model.measured_itself",
+            architecture=architecture,
+            failure=failure,
+            accuracy=accuracy,
+        )
     else:
-        measured = (
-            f"{architecture}: o {evidence.measured_on}, da mesma família, {failure} "
-            f"com Adam a 1e-3 ({accuracy}); este modelo não foi medido."
+        measured = tr(
+            "model.measured_sibling",
+            architecture=architecture,
+            measured_on=evidence.measured_on,
+            failure=failure,
+            accuracy=accuracy,
         )
     if measured_itself and evidence.recovered_accuracy is not None:
-        remedy = (
-            f"Com {optimizer} a {learning_rate:g}, a acurácia foi "
-            f"{evidence.recovered_accuracy:.2f} nas mesmas condições."
+        remedy = tr(
+            "model.remedy_measured",
+            optimizer=optimizer,
+            rate=learning_rate,
+            recovered=evidence.recovered_accuracy,
         )
     else:
-        remedy = f"Sugerimos {optimizer} a {learning_rate:g}."
+        remedy = tr("model.remedy_suggested", optimizer=optimizer, rate=learning_rate)
     return f"{measured} {remedy}"

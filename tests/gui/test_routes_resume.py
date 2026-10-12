@@ -239,9 +239,13 @@ class TestResumeEndpoint:
         monkeypatch.setattr(routes_mod, "_MODELS_DIR", tmp_path / "models")
 
         resp = client.post(f"/api/runs/{run_dir.name}/resume")
+        in_english = client.post(
+            f"/api/runs/{run_dir.name}/resume", headers={"X-VF-Lang": "en"}
+        )
 
-        assert resp.status_code == 400
-        assert "no longer valid" in resp.json()["detail"]
+        assert resp.status_code == in_english.status_code == 400
+        assert "não é mais válida" in resp.json()["detail"]
+        assert "no longer valid" in in_english.json()["detail"]
 
     def test_an_unreadable_run_json_is_a_500(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch

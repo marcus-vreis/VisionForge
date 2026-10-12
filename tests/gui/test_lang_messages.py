@@ -11,6 +11,7 @@ than a helper called by hand.
 from __future__ import annotations
 
 import asyncio
+import json
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
@@ -18,12 +19,15 @@ from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
+from matplotlib.figure import Figure
 
+from visionforge.core.plotter import MetricsPlotter
 from visionforge.core.training_health import collapsed_predictions
 from visionforge.gui.api.schemas import RunResponse
-from visionforge.utils.messages import current_lang, set_lang
+from visionforge.utils.messages import current_lang, set_lang, using_lang
 
 from .conftest import occupy_queue, release_queue
+from .test_routes_replicates import _payload as _replicates_payload
 from .test_routes_resume import _classification_full
 from .test_routes_resume import _run as _stopped_run
 
@@ -510,7 +514,6 @@ class TestTestingARunOnAnotherFolder:
         run_dir = tmp_path / "outputs" / "models" / "e" / "20260522_100000_000000"
         run_dir.mkdir(parents=True)
         config = _classification_full(tmp_path)
-        import json
 
         (run_dir / "run.json").write_text(
             json.dumps(
@@ -567,6 +570,273 @@ class TestTestingARunOnAnotherFolder:
         assert pt.json()["detail"] == (
             f"Run '{run_id}' não tem um checkpoint utilizável (artifacts.model: None)."
         )
+
+
+def _run_with(tmp_path: Path, run_json: dict[str, Any] | str) -> str:
+    """A run folder under the default models folder; returns its id."""
+    run_dir = tmp_path / "outputs" / "models" / "e" / "20260923_000000_000000"
+    run_dir.mkdir(parents=True)
+    text = run_json if isinstance(run_json, str) else json.dumps(run_json)
+    (run_dir / "run.json").write_text(text, encoding="utf-8")
+    return run_dir.name
+
+
+class TestRunRoutesOwnRefusals:
+    def test_a_run_json_that_cannot_be_read(
+        self, client: TestClient, tmp_path: Path
+    ) -> None:
+        run_id = _run_with(tmp_path, "{not json")
+
+        for method, url in (
+            ("post", f"/api/runs/{run_id}/resume"),
+            ("get", f"/api/runs/{run_id}/export_md"),
+        ):
+            en = getattr(client, method)(url, headers=EN)
+            pt = getattr(client, method)(url)
+
+            assert en.status_code == pt.status_code == 500, url
+            assert en.json()["detail"].startswith("Failed to parse run.json: ")
+            assert pt.json()["detail"].startswith("Não foi possível ler o run.json: ")
+
+    def test_a_task_that_cannot_be_resumed(
+        self,
+        client: TestClient,
+        env,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        _, routes_mod = env
+        monkeypatch.setattr(routes_mod, "_resume_status", lambda *_a: (True, None))
+        run_id = _run_with(tmp_path, {"task": "custom:foo", "config": {}})
+        url = f"/api/runs/{run_id}/resume"
+
+        en = client.post(url, headers=EN)
+        pt = client.post(url)
+
+        assert en.status_code == pt.status_code == 400
+        assert en.json()["detail"] == "Task 'custom:foo' cannot be resumed."
+        assert pt.json()["detail"] == "A tarefa 'custom:foo' não pode ser retomada."
+
+    def test_an_action_a_researcher_defined_task_does_not_offer(
+        self, tmp_path: Path
+    ) -> None:
+        from fastapi import HTTPException
+
+        from visionforge.gui.api.routes import _reject_custom_task_action
+
+        run_id = _run_with(tmp_path, {"task": "custom:vlm"})
+        run_dir = tmp_path / "outputs" / "models" / "e" / run_id
+
+        def refusal() -> str:
+            with pytest.raises(HTTPException) as excinfo:
+                _reject_custom_task_action(run_dir, "export_onnx")
+            return str(excinfo.value.detail)
+
+        with using_lang("en"):
+            en = refusal()
+        pt = refusal()
+
+        assert en.startswith("'export_onnx' is not available for the researcher-")
+        assert "task 'vlm'" in en
+        assert pt.startswith("'export_onnx' não está disponível para a tarefa própria")
+        assert "'vlm'" in pt
+
+    def test_seeds_that_repeat(self, client: TestClient, tmp_path: Path) -> None:
+        config = _replicates_payload(tmp_path)
+        for url, body, en_text, pt_text in (
+            (
+                "/api/regression/replicates",
+                {"config": config, "seeds": [1, 1]},
+                "Replicate seeds must be unique.",
+                "As seeds das réplicas precisam ser distintas.",
+            ),
+            (
+                "/api/regression/replicated-comparison",
+                {
+                    "config": config,
+                    "variants": {"a": {}, "b": {"training.learning_rate": 0.01}},
+                    "seeds": [1, 1],
+                    "metric": "r2",
+                },
+                "Comparison seeds must be unique.",
+                "As seeds da comparação precisam ser distintas.",
+            ),
+        ):
+            en = client.post(url, json=body, headers=EN)
+            pt = client.post(url, json=body)
+
+            assert en.status_code == pt.status_code == 422, en.text
+            assert en.json()["detail"] == en_text
+            assert pt.json()["detail"] == pt_text
+
+
+class TestFilesServedToThePage:
+    def _check(
+        self, client: TestClient, url: str, status: int, en_text: str, pt_text: str
+    ) -> None:
+        en = client.get(url, headers=EN)
+        pt = client.get(url)
+
+        assert en.status_code == pt.status_code == status, (url, en.text)
+        assert en.json()["detail"] == en_text
+        assert pt.json()["detail"] == pt_text
+
+    def test_the_image_preview_refusals(
+        self, client: TestClient, tmp_path: Path
+    ) -> None:
+        text_file = tmp_path / "notes.txt"
+        text_file.write_text("x", encoding="utf-8")
+        image = tmp_path / "a.png"
+        image.write_bytes(b"x")
+        base = "/api/dataset/file?path="
+
+        self._check(
+            client,
+            base + "a/../b.png",
+            400,
+            "Path contains traversal segments.",
+            "O caminho contém segmentos de navegação ('..').",
+        )
+        self._check(
+            client,
+            base + "relative.png",
+            400,
+            "Path must be absolute.",
+            "O caminho precisa ser absoluto.",
+        )
+        self._check(
+            client,
+            base + str(tmp_path / "missing.png"),
+            404,
+            "File not found.",
+            "Arquivo não encontrado.",
+        )
+        self._check(
+            client,
+            base + str(text_file),
+            400,
+            "Only image files are previewable.",
+            "Só é possível pré-visualizar arquivos de imagem.",
+        )
+        self._check(
+            client,
+            base + str(image),
+            403,
+            "Path is not inside any dataset directory probed this session.",
+            "O caminho não está em nenhuma pasta de dataset consultada nesta sessão.",
+        )
+
+    def test_the_artifact_refusals(self, client: TestClient, tmp_path: Path) -> None:
+        (tmp_path / "outputs").mkdir()
+        self._check(
+            client,
+            f"/api/artifacts/{tmp_path / 'elsewhere.png'}",
+            403,
+            "Access denied.",
+            "Acesso negado.",
+        )
+        self._check(
+            client,
+            "/api/artifacts/outputs/missing.png",
+            404,
+            "File not found.",
+            "Arquivo não encontrado.",
+        )
+
+
+class TestCustomTaskActions:
+    @pytest.fixture
+    def manage(self, env, monkeypatch: pytest.MonkeyPatch):  # type: ignore[no-untyped-def]
+        import visionforge.tasks.manage as manage_mod
+
+        _, routes_mod = env
+        monkeypatch.setattr(routes_mod, "_get_custom_task_or_404", lambda _key: None)
+        return manage_mod
+
+    def test_hiding_and_restoring(
+        self, client: TestClient, manage, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        changed = {"value": True}
+        monkeypatch.setattr(manage, "set_hidden", lambda *_a: changed["value"])
+
+        en = client.post("/api/custom/toy/hide", headers=EN)
+        pt = client.post("/api/custom/toy/hide")
+        assert en.json()["detail"] == "Tab hidden. The file is still in user_tasks/."
+        assert pt.json()["detail"] == "Aba ocultada. O arquivo continua em user_tasks/."
+
+        changed["value"] = False
+        en = client.post("/api/custom/toy/hide", headers=EN)
+        pt = client.post("/api/custom/toy/hide")
+        assert en.json()["detail"] == "It was already hidden."
+        assert pt.json()["detail"] == "Já estava oculta."
+
+        en = client.post("/api/custom/toy/unhide", headers=EN)
+        pt = client.post("/api/custom/toy/unhide")
+        assert en.json()["detail"] == "Tab restored."
+        assert pt.json()["detail"] == "Aba restaurada."
+
+    def test_deleting(
+        self, client: TestClient, manage, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(
+            manage, "delete_task", lambda *_a: Path("user_tasks/toy.py")
+        )
+
+        en = client.delete("/api/custom/toy", params={"confirm": "toy"}, headers=EN)
+        pt = client.delete("/api/custom/toy", params={"confirm": "toy"})
+
+        assert en.json()["detail"].startswith("Removed from disk: ")
+        assert pt.json()["detail"].startswith("Removido do disco: ")
+        assert en.json()["detail"].endswith("toy.py")
+
+
+class TestModelDefaultsNote:
+    URL = "/api/model/defaults"
+
+    def test_a_family_that_collapsed_at_the_default(self, client: TestClient) -> None:
+        body = {"architecture": "vgg19"}
+
+        en = client.post(self.URL, json=body, headers=EN).json()["note"]
+        pt = client.post(self.URL, json=body).json()["note"]
+
+        assert en == (
+            "vgg19: vgg16, from the same family, predicted a single class with "
+            "Adam at 1e-3 (accuracy 0.25 on 4 classes); this model was not "
+            "measured. We suggest adam at 0.0001."
+        )
+        assert pt == (
+            "vgg19: o vgg16, da mesma família, previu uma classe só com Adam a "
+            "1e-3 (acurácia 0.25 em 4 classes); este modelo não foi medido. "
+            "Sugerimos adam a 0.0001."
+        )
+
+    def test_a_model_that_was_measured_and_recovered(self, client: TestClient) -> None:
+        body = {"architecture": "vit_b_16"}
+
+        en = client.post(self.URL, json=body, headers=EN).json()["note"]
+
+        assert en == (
+            "vit_b_16 learned little with Adam at 1e-3 (accuracy 0.41 on 4 "
+            "classes). With adamw at 0.0001, the accuracy was 0.85 under the "
+            "same conditions."
+        )
+
+    def test_images_smaller_than_the_training_size(
+        self, client: TestClient, tmp_path: Path
+    ) -> None:
+        from PIL import Image
+
+        folder = tmp_path / "ds" / "train" / "a"
+        folder.mkdir(parents=True)
+        for i in range(6):
+            Image.new("RGB", (32, 32)).save(folder / f"{i}.png")
+        body = {"architecture": "resnet18", "base_dir": str(tmp_path / "ds")}
+
+        en = client.post(self.URL, json=body, headers=EN).json()["note"]
+        pt = client.post(self.URL, json=body).json()["note"]
+
+        assert en.startswith("The images are about 32px on a side;")
+        assert pt.startswith("As imagens têm cerca de 32px de lado;")
 
 
 class TestMessagesWrittenAfterTheRequestIsOver:
@@ -636,3 +906,43 @@ class TestMessagesWrittenAfterTheRequestIsOver:
         assert "predicted the same class" in written["en"]
         assert "O modelo previu a mesma classe" in written["pt"]
         assert current_lang() == "pt"
+
+    def test_a_job_draws_its_figures_in_the_language_of_whoever_queued_it(
+        self, env, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _, routes_mod = env
+        titles: list[str] = []
+        monkeypatch.setattr(
+            Figure,
+            "savefig",
+            lambda self, *_a, **_k: titles.append(self.axes[0].get_title()),
+        )
+
+        def make_start(name: str) -> Callable[[], Awaitable[None]]:
+            async def start() -> None:
+                await asyncio.to_thread(
+                    MetricsPlotter.metric_curve,
+                    [1],
+                    [0.5],
+                    tmp_path / f"{name}.png",
+                    label="AUROC",
+                )
+
+            return start
+
+        async def scenario() -> None:
+            set_lang("en")
+            routes_mod._submit_job(
+                "fig-en", "en", "classification", "simple", make_start("en")
+            )
+            set_lang("pt")
+            routes_mod._submit_job(
+                "fig-pt", "pt", "classification", "simple", make_start("pt")
+            )
+            queue = routes_mod._RUN_QUEUE
+            while queue.is_busy() or queue.pending_count():
+                await asyncio.sleep(0.01)
+
+        asyncio.run(scenario())
+
+        assert titles == ["AUROC over epochs", "AUROC por época"]

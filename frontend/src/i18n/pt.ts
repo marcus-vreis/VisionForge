@@ -1800,10 +1800,10 @@ export const pt = {
     // The first two lines of the log.
     initializing: (runId: string) => `> inicializando runtime · ${runId}`,
     loadingDataset: "> carregando dataset…",
-    trainingFailed: "training failed",
-    trainingComplete: "training complete",
+    trainingFailed: "treino falhou",
+    trainingComplete: "treino concluído",
     queued: (task: string) => `na fila · ${task}`,
-    training: (task: string) => `training · ${task}`,
+    training: (task: string) => `treinando · ${task}`,
     starting: "iniciando…",
     // `position` is the run's place in line and `queued` how many are waiting; both
     // may be missing.
