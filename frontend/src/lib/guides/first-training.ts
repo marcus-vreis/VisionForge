@@ -91,6 +91,8 @@ function firstTrainingSteps(t: Dict, task: GuideTask = "classification"): GuideS
       floating: true,
       title: x.watching.title,
       body: x.watching.body,
+      // "What is happening now" is what the drawing answers.
+      onEnter: (ctx) => ctx.showTrainingStory(),
     },
     {
       anchor: "training-sheet",

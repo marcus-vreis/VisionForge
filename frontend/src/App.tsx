@@ -16,6 +16,8 @@ import type { SweepPayload } from "./components/SweepCard";
 import type { ReplicatesPayload } from "./lib/replicates-form";
 import { announce, requestPermission, resetTitle } from "./lib/run-notify";
 import { serverRunning } from "./lib/run-control";
+import { GENERIC_STORY, storySpecFor, type StorySpec } from "./lib/story-family";
+import type { SheetTab } from "./lib/training-story";
 import { BottomBar } from "./components/BottomBar";
 import type { DeviceSelection } from "./components/DeviceSelector";
 import { Header } from "./components/Header";
@@ -175,6 +177,11 @@ export default function App() {
   // promises differs for it, and its sweeps and replicate sets are queued under a
   // plain label, so the queue entry cannot say.
   const [customRun, setCustomRun] = useState(false);
+  // Which drawing the "Como funciona" tab shows for the current run, read from its
+  // config when it is submitted (the sheet outlives the form), and which tab of the
+  // sheet is open: the log, until a guide asks for the other one (ADR-118).
+  const [storySpec, setStorySpec] = useState<StorySpec>(GENERIC_STORY);
+  const [sheetTab, setSheetTab] = useState<SheetTab>("log");
   const [overlayVisible, setOverlayVisible] = useState(false);
   const [resultsVisible, setResultsVisible] = useState(false);
   const [schema, setSchema] = useState<JsonSchema | null>(null);
@@ -255,6 +262,7 @@ export default function App() {
         }
       },
       hideTrainingSheet: () => setOverlayVisible(false),
+      showTrainingStory: () => setSheetTab("story"),
     }),
     [],
   );
@@ -379,6 +387,8 @@ export default function App() {
   const startRun = (custom: boolean) => {
     reset();
     setCustomRun(custom);
+    // A new run opens on its log.
+    setSheetTab("log");
   };
 
   // A custom task shares the whole single-run surface (overlay, results,
@@ -396,6 +406,7 @@ export default function App() {
     setPipelineSummary([]);
     setBlockKind(kind);
     setQueueSize(queue);
+    setStorySpec(storySpecFor("custom", null));
     await submit(body, { run: run ?? ((p) => runCustomTask(key, p)) });
   };
 
@@ -432,6 +443,7 @@ export default function App() {
         training: buildDetectionTrainingPayload(detectionForm.training),
         device: { kind: device.kind, gpu_ids: device.gpu_ids },
       };
+      setStorySpec(storySpecFor("detection", payload));
       await submit(payload, { detection: true });
       return;
     }
@@ -446,6 +458,7 @@ export default function App() {
         ...buildRegressionPayload(regressionForm),
         device: { kind: device.kind, gpu_ids: device.gpu_ids },
       };
+      setStorySpec(storySpecFor("regression", payload));
       await submit(payload, { regression: true });
       return;
     }
@@ -460,6 +473,7 @@ export default function App() {
         ...buildSegmentationPayload(segmentationForm),
         device: { kind: device.kind, gpu_ids: device.gpu_ids },
       };
+      setStorySpec(storySpecFor("segmentation", payload));
       await submit(payload, { segmentation: true });
       return;
     }
@@ -474,6 +488,7 @@ export default function App() {
         ...buildAnomalyPayload(anomalyForm),
         device: { kind: device.kind, gpu_ids: device.gpu_ids },
       };
+      setStorySpec(storySpecFor("anomaly", payload));
       await submit(payload, { anomaly: true });
       return;
     }
@@ -523,6 +538,7 @@ export default function App() {
     }
     setQueueSize(qSize);
 
+    setStorySpec(storySpecFor("classification", payload));
     await submit(payload);
   };
 
@@ -557,6 +573,7 @@ export default function App() {
       ...buildTaskBase(task),
       device: { kind: device.kind, gpu_ids: device.gpu_ids },
     };
+    setStorySpec(storySpecFor(task, config));
     await submit({ config, ...payload }, { run: (p) => runTaskCv(task, p) });
   };
 
@@ -576,6 +593,7 @@ export default function App() {
       ...buildTaskBase(task),
       device: { kind: device.kind, gpu_ids: device.gpu_ids },
     };
+    setStorySpec(storySpecFor(task, config));
     await submit({ config, ...payload }, { run: (p) => runReplicates(task, p) });
   };
 
@@ -603,6 +621,7 @@ export default function App() {
       ...buildTaskBase(task),
       device: { kind: device.kind, gpu_ids: device.gpu_ids },
     };
+    setStorySpec(storySpecFor(task, config));
     await submit({ config, ...payload }, { run: (p) => runSweep(task, p) });
   };
 
@@ -848,6 +867,9 @@ export default function App() {
           report={result?.report ?? null}
           stopped={result?.stopped ?? null}
           customRun={customRun}
+          story={storySpec}
+          tab={sheetTab}
+          onTabChange={setSheetTab}
           onClose={() => setOverlayVisible(false)}
           onViewResults={() => {
             setOverlayVisible(false);

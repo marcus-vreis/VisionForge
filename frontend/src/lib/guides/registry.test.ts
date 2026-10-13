@@ -85,6 +85,7 @@ describe("Primeiro treino", () => {
       selectTask: (k) => calls.push(`task:${k}`),
       setDatasetPath: (p) => calls.push(`path:${p}`),
       hideTrainingSheet: () => calls.push("hide"),
+      showTrainingStory: () => calls.push("story"),
     };
     const all = steps(pt);
 
@@ -92,6 +93,27 @@ describe("Primeiro treino", () => {
     all[6].onEnter?.(ctx);
 
     expect(calls).toEqual(["task:classification", "hide"]);
+  });
+
+  it("opens the sheet's 'Como funciona' tab on the step that watches the training, and only there", () => {
+    const calls: string[] = [];
+    const ctx: GuideContext = {
+      selectTask: () => calls.push("task"),
+      setDatasetPath: () => calls.push("path"),
+      hideTrainingSheet: () => calls.push("hide"),
+      showTrainingStory: () => calls.push("story"),
+    };
+    const all = steps(pt);
+
+    // Step 5 of 8 ("O que está acontecendo") points at the sheet.
+    expect(all[4].anchor).toBe("training-sheet");
+    all[4].onEnter?.(ctx);
+    expect(calls).toEqual(["story"]);
+
+    // The result step stays on whichever tab the researcher is reading.
+    calls.length = 0;
+    all[5].onEnter?.(ctx);
+    expect(calls).toEqual([]);
   });
 
   it("states that the synthetic data is easy on purpose, in both languages", () => {
@@ -117,6 +139,7 @@ describe("the sample dataset action", () => {
       selectTask: () => {},
       setDatasetPath: (p) => paths.push(p),
       hideTrainingSheet: () => {},
+      showTrainingStory: () => {},
     };
     return { context, paths };
   };

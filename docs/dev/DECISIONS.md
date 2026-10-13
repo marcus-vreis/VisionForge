@@ -5016,8 +5016,13 @@ the run is going and the drawing is seen; arrows on the curves, still, under
 durations does not reach SMIL, so the preference is read in script); nothing when
 the browser tab is hidden or the sheet is minimized, where the particles are not
 mounted at all. A run that is not going (queued, finished, failed) is a still
-drawing. The sheet is dark in both themes, so the neon look needs no light
-variant. Every word is in `i18n/pt.ts` and `i18n/en.ts`.
+drawing. Each flow has a shape as well as a colour (a filled dot for data and the
+forward pass, a ring for the gradient, a diamond for validation), because the
+gradient's amber is close to the anomaly task's own accent and the validation's
+cyan to the regression's blue. The interface has a single, dark theme and the
+sheet paints its own dark background, so the neon look needs no light variant; the
+drawing never uses a CSS variable for a colour it sets as an SVG attribute. Every
+word is in `i18n/pt.ts` and `i18n/en.ts`.
 
 **Rejected:**
 
@@ -5034,10 +5039,35 @@ variant. Every word is in `i18n/pt.ts` and `i18n/en.ts`.
   already, and a few circles on a few curves do not justify a dependency.
 
 **Consequences:** the sheet gains a tab and no request. The cost of the drawing is
-bounded (a few dozen circles and curves, five particle animations), and it is zero
+bounded (a few dozen circles and curves, and at most eight pulses), and it is zero
 while the sheet is minimized or the tab hidden. The stage `testing` is honest about
 what the stream shows, not about what the server is doing every second: after the
 last epoch the server evaluates, draws figures and writes the report, and the
 stream cannot tell those apart. A model comparison streams no epochs, so its story
 stays on `preparing` until the job ends; the drawing is the family its models
 share, or the generic network.
+
+**Verified in the browser** (headless Chrome over CDP, the GUI served from the
+worktree's own `src` on CPU, in Portuguese and once in English). Classification was
+run through the "Primeiro treino" guide: the sheet opened on the log, the guide's
+"O que está acontecendo" step switched it to "Como funciona", and the strip went
+`dados` to `treino` to `teste` to `pronto` with the epoch, both losses and the
+accuracy changing as `epoch_end` arrived; the `teste` stage lasted about six
+seconds, which is the server evaluating the test split and writing the report after
+the last epoch. Regression drew the CNN in blue with a one-neuron head and an R²
+tile; segmentation drew the U-Net in violet with its skip arcs and an mIoU tile, and
+a stop confirmed in the middle of it went to `testing` (the server still evaluates a
+stopped run) and then to `interrompido`, the drawing turning amber. PatchCore drew
+the extractor, the memory bank and the scoring zone, showed `extraindo features ·
+0/1` and `pontuando · 1/2` in place of an epoch, and lit the cyan pulses while
+scoring. A K-fold showed `dobra 1/5`, `2/5` and `3/5` on the same drawing, and a
+run with no dataset went from `dados` straight to `falhou`, in red. With
+`prefers-reduced-motion: reduce` emulated, no `animateMotion` was mounted and
+chevrons were drawn instead; minimizing the sheet took the animated elements from 17
+to 0 and reopening it brought them back, as did hiding and showing the document.
+One thing the check changed: the first drawing was 190 units tall and the tab
+scrolled inside the sheet, hiding the caption, so it was reduced to 166 and the
+spacing tightened. Two things it left as they are: the guide's floating card covers
+the left edge of the sheet at 1280 px wide, as it already did with the log, and
+the amber of the gradient is close to the anomaly accent, which the ring shape
+settles.

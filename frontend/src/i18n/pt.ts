@@ -1906,6 +1906,89 @@ export const pt = {
     // to change anything, or the run had ended on its own.
     stopTooLate: "> a parada não cortou nada: o treino terminou normalmente",
   },
+  // The "Como funciona" tab of the training sheet (components/training-story/, ADR-118).
+  // Only the stage and the numbers are real; the caption says the motion is not.
+  trainingStory: {
+    tab: "Como funciona",
+    logTab: "Log",
+    tabsLabel: "Conteúdo da tela de treino",
+    stripLabel: "Estágios do treino",
+    caption:
+      "animação ilustrativa, em câmera lenta: só o estágio e os números são reais",
+    figure: (family: string) => `Desenho ilustrativo de uma rede: ${family}`,
+    // What each drawing is.
+    families: {
+      cnn: "rede convolucional (CNN)",
+      transformer: "transformer: patches que prestam atenção uns nos outros",
+      encoderDecoder: "codificador–decodificador, como a U-Net",
+      detector: "detector: backbone, neck e cabeças que dão caixas",
+      autoencoder: "autoencoder: comprime e reconstrói",
+      patchcore: "PatchCore: extrator, banco de memória e pontuação",
+    },
+    // The strip. The last slot says how the run ended.
+    stageNames: {
+      queued: "na fila",
+      preparing: "dados",
+      training: "treino",
+      testing: "teste",
+      done: "pronto",
+      interrupted: "interrompido",
+      failed: "falhou",
+    },
+    // One sentence per stage.
+    stages: {
+      queued: "Na fila: o treino começa sozinho quando a GPU ficar livre.",
+      preparing:
+        "Carregando os dados e montando o modelo; ainda não houve nenhuma época.",
+      training:
+        "O modelo vê os dados, erra, e o erro volta ajustando os pesos; ao fim de cada época, a validação mede o quanto ele aprendeu.",
+      testing:
+        "Treino terminado: o modelo é medido no conjunto de teste, que ele nunca viu, e o relatório é escrito.",
+      done: "Pronto: os resultados completos estão em “Ver resultados”.",
+      interrupted:
+        "Interrompido a pedido: o que já foi salvo continua disponível.",
+      failed: "O treino falhou: o detalhe do erro está no quadro acima e no log.",
+    },
+    // PatchCore has phases where the others have epochs.
+    phases: {
+      extractingFeatures:
+        "Uma rede já treinada lê as imagens normais e extrai suas características (features); nada é ajustado.",
+      buildingBank:
+        "As características mais representativas do que é normal são guardadas no banco de memória.",
+      scoring:
+        "Cada imagem de teste é comparada com o banco: quanto mais longe do que é normal, maior a nota de anomalia.",
+    },
+    numbers: {
+      epoch: "época",
+      epochOf: (epoch: number, total: number | null) =>
+        total === null ? `${epoch}` : `${epoch}/${total}`,
+      trainLoss: "loss de treino",
+      valLoss: "loss de validação",
+      phase: "fase",
+      metrics: {
+        accuracy: "acurácia",
+        map50: "mAP50",
+        r2: "R²",
+        miou: "mIoU",
+        auroc: "AUROC",
+        primary: "métrica principal",
+      },
+    },
+    // The unit of a job made of several trainings.
+    units: {
+      trial: (index: number, total: number) => `trial ${index}/${total}`,
+      fold: (index: number, total: number) => `dobra ${index}/${total}`,
+      model: (index: number, total: number) => `modelo ${index}/${total}`,
+      replicate: (index: number, total: number) => `réplica ${index}/${total}`,
+    },
+    legend: {
+      forward: "dados e passagem direta",
+      backward: "gradiente voltando",
+      validation: "validação",
+      patchForward: "características guardadas",
+      patchScore: "pontuação",
+    },
+  },
   // Side-by-side comparison of two or more runs (components/CompareRunsPanel.tsx).
   compareRuns: {
     back: "← histórico",

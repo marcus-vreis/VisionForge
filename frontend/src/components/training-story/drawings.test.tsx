@@ -1,0 +1,415 @@
+/**
+ * The test setup has no DOM, so each drawing is rendered to markup and read as
+ * text. What the browser makes of the animations is the browser check's job; here
+ * it is which elements a stage, a motion mode and a family put on the page.
+ */
+import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, it } from "vitest";
+
+import { LanguageContext } from "../../i18n/context";
+import { en } from "../../i18n/en";
+import { pt } from "../../i18n/pt";
+import type { StoryFamily, StoryTask } from "../../lib/story-family";
+import { storySpecFor } from "../../lib/story-family";
+import {
+  activeFlows,
+  type StoryMotion,
+  type StoryPhase,
+  type StoryStage,
+} from "../../lib/training-story";
+import type { TrainingEvent } from "../../types/run";
+import { StoryDrawing } from "./drawings";
+import { TrainingStory } from "./TrainingStory";
+import {
+  accentForStory,
+  FAILED_COLOR,
+  GRADIENT_COLOR,
+  INTERRUPTED_COLOR,
+  toneFor,
+  VALIDATION_COLOR,
+  withAlpha,
+} from "./tone";
+
+const FAMILIES: StoryFamily[] = [
+  "cnn",
+  "transformer",
+  "encoder_decoder",
+  "detector",
+  "autoencoder",
+  "patchcore",
+];
+const ACCENT = "oklch(0.74 0.18 22)";
+
+const phase = (key: StoryPhase["key"], fraction = 0.5): StoryPhase => ({
+  key,
+  label: key ?? "?",
+  done: Math.round(fraction * 10),
+  total: 10,
+  fraction,
+});
+
+/** A drawing, as markup. */
+function draw(
+  family: StoryFamily,
+  stage: StoryStage,
+  motion: StoryMotion,
+  over: { phase?: StoryPhase | null; accent?: string; output?: "classes" | "value" } = {},
+) {
+  const ph =
+    over.phase !== undefined
+      ? over.phase
+      : family === "patchcore" && stage !== "preparing"
+        ? phase("buildingBank")
+        : null;
+  return renderToStaticMarkup(
+    <StoryDrawing
+      family={family}
+      output={over.output ?? "classes"}
+      phase={ph}
+      accent={over.accent ?? ACCENT}
+      stage={stage}
+      flows={activeFlows(stage, family, ph?.key ?? null)}
+      motion={motion}
+      pulseKey={3}
+      label="figure"
+    />,
+  );
+}
+
+const count = (html: string, needle: string) => html.split(needle).length - 1;
+
+describe("each family's drawing", () => {
+  it("is one SVG with its own family mark and a label for a screen reader", () => {
+    for (const family of FAMILIES) {
+      const html = draw(family, "training", "none");
+      expect(html.startsWith("<svg"), family).toBe(true);
+      expect(html, family).toContain(`data-family="${family}"`);
+      expect(html, family).toContain('role="img"');
+      expect(html, family).toContain('aria-label="figure"');
+      expect(html, family).toContain("<circle");
+      expect(count(html, "<svg"), family).toBe(1);
+    }
+  });
+
+  it("looks different in every family", () => {
+    const shapes = new Set(FAMILIES.map((f) => draw(f, "training", "none")));
+    expect(shapes.size).toBe(FAMILIES.length);
+  });
+
+  it("draws the detector's three boxes, and only the detector's", () => {
+    expect(count(draw("detector", "training", "none"), "<rect")).toBeGreaterThanOrEqual(3 + 3);
+    for (const family of FAMILIES.filter((f) => f !== "detector" && f !== "patchcore")) {
+      // The data source is three small sheets; there is nothing else drawn as a rect.
+      expect(count(draw(family, "training", "none"), "<rect"), family).toBe(3);
+    }
+  });
+
+  it("draws a regression's network with a one-neuron head", () => {
+    const circles = (output: "classes" | "value") =>
+      count(draw("cnn", "training", "none", { output }), "<circle");
+    expect(circles("classes") - circles("value")).toBe(2);
+  });
+});
+
+describe("the three flows", () => {
+  it("move data, the forward pass, the gradient and validation while training", () => {
+    for (const family of FAMILIES.filter((f) => f !== "patchcore")) {
+      const html = draw(family, "training", "particles");
+      expect(count(html, "<animateMotion"), family).toBeGreaterThan(0);
+      // The accent, the amber ring of the gradient, and the cyan diamond of validation.
+      expect(html, family).toContain(ACCENT);
+      expect(html, family).toContain(GRADIENT_COLOR);
+      expect(html, family).toContain(VALIDATION_COLOR);
+      // The validation pulse waits to be fired by an epoch.
+      expect(html, family).toContain('begin="indefinite"');
+    }
+  });
+
+  it("gives each flow a shape as well as a colour", () => {
+    const html = draw("cnn", "training", "particles");
+    // Ring: unfilled circles. Diamond: rotated squares.
+    expect(html).toContain('fill="none" stroke="' + GRADIENT_COLOR);
+    expect(html).toContain('transform="rotate(45)"');
+  });
+
+  it("brings only data in while preparing: no gradient and no validation", () => {
+    const html = draw("cnn", "preparing", "particles");
+    expect(count(html, "<animateMotion")).toBeGreaterThan(0);
+    expect(html).not.toContain(GRADIENT_COLOR);
+    expect(html).not.toContain(VALIDATION_COLOR);
+  });
+
+  it("runs only validation while testing", () => {
+    const html = draw("cnn", "testing", "particles");
+    expect(html).toContain(VALIDATION_COLOR);
+    expect(html).not.toContain(GRADIENT_COLOR);
+  });
+
+  it("keeps the number of animated elements small", () => {
+    for (const family of FAMILIES) {
+      for (const stage of ["preparing", "training", "testing"] as const) {
+        const html = draw(family, stage, "particles");
+        expect(count(html, "<animateMotion"), `${family} ${stage}`).toBeLessThanOrEqual(30);
+      }
+    }
+  });
+
+  it("draws nothing moving when the run is not going or nobody looks", () => {
+    for (const family of FAMILIES) {
+      for (const stage of ["queued", "done", "interrupted", "failed"] as const) {
+        const html = draw(family, stage, "none");
+        expect(html, `${family} ${stage}`).not.toContain("animateMotion");
+        expect(html, `${family} ${stage}`).not.toContain("<animate ");
+      }
+      expect(draw(family, "training", "none"), family).not.toContain("animateMotion");
+    }
+  });
+
+  it("draws arrows and no animation for a reader who asked for less motion", () => {
+    for (const family of FAMILIES) {
+      for (const stage of ["preparing", "training", "testing"] as const) {
+        const html = draw(family, stage, "arrows");
+        expect(html, `${family} ${stage}`).not.toContain("animateMotion");
+        expect(html, `${family} ${stage}`).not.toContain("<animate ");
+        // A chevron: a small open path placed and turned along a curve.
+        expect(html, `${family} ${stage}`).toContain("rotate(");
+        expect(html, `${family} ${stage}`).toContain("M-4.2 -3.6L1.8 0L-4.2 3.6");
+      }
+    }
+  });
+
+  it("points the gradient's arrows backwards", () => {
+    const html = draw("cnn", "training", "arrows");
+    const group = new RegExp(`stroke="${GRADIENT_COLOR.replace(/[().]/g, "\\$&")}"[^>]*>(.*?)</g>`).exec(html);
+    expect(group).not.toBeNull();
+    const amber = group![1];
+    const angles = [...amber.matchAll(/rotate\((-?[\d.]+)\)/g)].map((m) => Math.abs(Number(m[1])));
+    expect(angles.length).toBeGreaterThan(0);
+    // Pointing left: a heading well past a quarter turn.
+    expect(angles.every((a) => a > 90)).toBe(true);
+  });
+});
+
+describe("PatchCore's phases", () => {
+  it("lights the memory bank with the progress of its phase", () => {
+    const lit = (fraction: number) => {
+      const html = draw("patchcore", "training", "none", { phase: phase("buildingBank", fraction) });
+      return count(html, 'fill-opacity="0.85"');
+    };
+    expect(lit(0)).toBe(0);
+    expect(lit(0.5)).toBe(15);
+    expect(lit(1)).toBe(30);
+  });
+
+  it("scores with the validation colour, and stores with the accent", () => {
+    const scoring = draw("patchcore", "training", "particles", { phase: phase("scoring") });
+    expect(scoring).toContain(VALIDATION_COLOR);
+    const storing = draw("patchcore", "training", "particles", { phase: phase("buildingBank") });
+    expect(storing).not.toContain(`fill="${VALIDATION_COLOR}" fill-opacity="0.5"`);
+    expect(storing).not.toContain(GRADIENT_COLOR);
+  });
+
+  it("has no gradient in any phase", () => {
+    for (const key of ["extractingFeatures", "buildingBank", "scoring"] as const) {
+      expect(draw("patchcore", "training", "particles", { phase: phase(key) })).not.toContain(
+        GRADIENT_COLOR,
+      );
+    }
+  });
+
+  it("highlights the zone of the phase it is in", () => {
+    const zoneOpacity = (key: StoryPhase["key"]) =>
+      [...draw("patchcore", "training", "none", { phase: phase(key) }).matchAll(/stroke-opacity="0\.5"/g)].length;
+    expect(zoneOpacity("extractingFeatures")).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe("the colours of a drawing", () => {
+  it("goes by the task's own accent", () => {
+    expect(accentForStory("classification", undefined)).toBe("oklch(0.74 0.18 22)");
+    expect(accentForStory("detection", undefined)).toBe("oklch(0.78 0.18 150)");
+    expect(accentForStory("regression", undefined)).toBe("oklch(0.74 0.16 240)");
+    expect(accentForStory("segmentation", undefined)).toBe("oklch(0.74 0.18 305)");
+    expect(accentForStory("anomaly", undefined)).toBe("oklch(0.80 0.15 75)");
+  });
+
+  it("gives a researcher's own task the accent of its tab, unless that is a variable", () => {
+    expect(accentForStory("custom", "oklch(0.7 0.1 10)")).toBe("oklch(0.7 0.1 10)");
+    const neutral = accentForStory("custom", "var(--vf-text-muted)");
+    expect(neutral.startsWith("oklch(")).toBe(true);
+    expect(accentForStory("custom", undefined)).toBe(neutral);
+  });
+
+  it("never hands the drawing a CSS variable", () => {
+    const tasks: StoryTask[] = ["classification", "detection", "regression", "segmentation", "anomaly", "custom"];
+    for (const task of tasks) {
+      for (const stage of ["queued", "preparing", "training", "testing", "done", "interrupted", "failed"] as const) {
+        const tone = toneFor(stage, accentForStory(task, "var(--x)"));
+        expect(tone.line, `${task} ${stage}`).not.toContain("var(");
+        expect(tone.web, `${task} ${stage}`).not.toContain("var(");
+      }
+    }
+  });
+
+  it("tells the end states apart: amber for a stop, red for a failure, filled when done", () => {
+    expect(toneFor("interrupted", ACCENT).line).toBe(INTERRUPTED_COLOR);
+    expect(toneFor("failed", ACCENT).line).toBe(FAILED_COLOR);
+    expect(toneFor("done", ACCENT).fillOpacity).toBeGreaterThan(toneFor("training", ACCENT).fillOpacity);
+    expect(toneFor("preparing", ACCENT).line).not.toBe(ACCENT);
+  });
+
+  it("adds an opacity to an oklch colour, and leaves the rest alone", () => {
+    expect(withAlpha("oklch(0.74 0.18 22)", 0.4)).toBe("oklch(0.74 0.18 22 / 0.4)");
+    expect(withAlpha("rgba(1, 2, 3, 0.9)", 0.4)).toBe("rgba(1, 2, 3, 0.9)");
+  });
+
+  it("paints a drawing in the accent it is given", () => {
+    for (const task of ["classification", "detection", "regression", "segmentation"] as const) {
+      const accent = accentForStory(task, undefined);
+      expect(draw("cnn", "training", "none", { accent })).toContain(accent);
+    }
+  });
+});
+
+// ── The whole tab ────────────────────────────────────────────────────────────
+
+const inLanguage = (lang: "pt" | "en", node: React.ReactNode) =>
+  renderToStaticMarkup(
+    <LanguageContext.Provider
+      value={{
+        lang,
+        t: lang === "pt" ? pt : en,
+        locale: lang === "pt" ? "pt-BR" : "en-US",
+        setLang: () => {},
+      }}
+    >
+      {node}
+    </LanguageContext.Provider>,
+  );
+
+const epoch = (n: number, total: number): TrainingEvent => ({
+  event: "epoch_end",
+  epoch: n,
+  total_epochs: total,
+  train_loss: 0.5,
+  val_loss: 0.6,
+  val_accuracy: 0.8,
+});
+
+const tab = (
+  lang: "pt" | "en",
+  over: Partial<React.ComponentProps<typeof TrainingStory>> = {},
+) =>
+  inLanguage(
+    lang,
+    <TrainingStory
+      events={[{ event: "start", total_epochs: 4 }, epoch(2, 4)]}
+      status="running"
+      stopped={false}
+      unitKind={null}
+      spec={storySpecFor("classification", { model: { name: "resnet18" } })}
+      sheetVisible
+      {...over}
+    />,
+  );
+
+describe("the tab", () => {
+  it("shows the stage, one sentence, the numbers, the legend and the caption", () => {
+    const html = tab("pt");
+    expect(html).toContain('data-story-stage="training"');
+    expect(html).toContain(pt.trainingStory.stages.training);
+    expect(html).toContain(pt.trainingStory.numbers.epochOf(2, 4));
+    expect(html).toContain("0.5000");
+    expect(html).toContain("0.6000");
+    expect(html).toContain("0.8000");
+    expect(html).toContain(pt.trainingStory.numbers.metrics.accuracy);
+    for (const word of Object.values(pt.trainingStory.legend).slice(0, 3)) {
+      expect(html).toContain(word);
+    }
+    expect(html).toContain(pt.trainingStory.caption);
+    expect(pt.trainingStory.caption).toMatch(/ilustrativa, em câmera lenta/);
+    expect(en.trainingStory.caption).toMatch(/illustrative animation, slowed down/);
+  });
+
+  it("lights the current stage in the strip and says which it is", () => {
+    const html = tab("en");
+    expect(html).toContain('aria-current="step"');
+    expect(count(html, 'aria-current="step"')).toBe(1);
+    for (const name of [en.trainingStory.stageNames.preparing, en.trainingStory.stageNames.training, en.trainingStory.stageNames.testing]) {
+      expect(html).toContain(name);
+    }
+  });
+
+  it("follows the language", () => {
+    expect(tab("en")).toContain(en.trainingStory.stages.training);
+    expect(tab("en")).not.toContain(pt.trainingStory.stages.training);
+    expect(tab("pt")).not.toContain(en.trainingStory.stages.training);
+  });
+
+  it("says what each end looks like", () => {
+    const events = [{ event: "start", total_epochs: 4 } as TrainingEvent, epoch(4, 4), { event: "end", total_epochs: 4 } as TrainingEvent];
+    expect(tab("pt", { events, status: "completed" })).toContain(pt.trainingStory.stages.done);
+    expect(tab("pt", { events, status: "completed", stopped: true })).toContain(
+      pt.trainingStory.stages.interrupted,
+    );
+    expect(tab("pt", { events, status: "failed" })).toContain(pt.trainingStory.stages.failed);
+    expect(tab("pt", { events: [], status: "queued" })).toContain(pt.trainingStory.stages.queued);
+    expect(tab("pt", { events: [{ event: "start", total_epochs: 4 }] })).toContain(
+      pt.trainingStory.stages.preparing,
+    );
+    expect(tab("pt", { events: [{ event: "start", total_epochs: 4 }, epoch(4, 4)] })).toContain(
+      pt.trainingStory.stages.testing,
+    );
+  });
+
+  it("names the unit of a multi-unit job", () => {
+    const events: TrainingEvent[] = [
+      { event: "trial_start", trial_index: 1, total_trials: 5, overrides: {}, seed: 0 },
+      epoch(1, 4),
+    ];
+    expect(tab("pt", { events, unitKind: "fold" })).toContain("dobra 2/5");
+    expect(tab("en", { events, unitKind: "fold" })).toContain("fold 2/5");
+    expect(tab("en", { events, unitKind: "trial" })).toContain("trial 2/5");
+    expect(tab("en")).not.toContain("trial ");
+  });
+
+  it("does not show a number the trainer has not reported", () => {
+    const html = tab("en", { events: [{ event: "start", total_epochs: 4 }] });
+    expect(html).not.toContain(en.trainingStory.numbers.trainLoss);
+    expect(html).not.toContain(en.trainingStory.numbers.metrics.accuracy);
+    // The epoch is known to be 0 of 4.
+    expect(html).toContain(en.trainingStory.numbers.epochOf(0, 4));
+  });
+
+  it("shows PatchCore's phase and its progress where the others show an epoch", () => {
+    const spec = storySpecFor("anomaly", { model: { name: "patchcore" } });
+    const events: TrainingEvent[] = [
+      { event: "start", total_epochs: 1 },
+      { event: "phase", label: "montando o banco", done: 40, total: 100 },
+    ];
+    const html = tab("pt", { events, spec });
+    expect(html).toContain(pt.trainingStory.phases.buildingBank);
+    expect(html).toContain(`${pt.trainingOverlay.phases.buildingBank} · 40/100`);
+    expect(html).toContain(pt.trainingStory.numbers.phase);
+    expect(html).not.toContain(pt.trainingStory.numbers.epoch);
+    expect(html).not.toContain(pt.trainingStory.numbers.trainLoss);
+    // No gradient to explain.
+    expect(html).not.toContain(pt.trainingStory.legend.backward);
+    expect(html).toContain(pt.trainingStory.legend.patchScore);
+  });
+
+  it("draws the family of the run", () => {
+    const familyOf = (task: string, config: unknown) =>
+      tab("pt", { spec: storySpecFor(task, config) }).match(/data-family="([a-z_]+)"/)?.[1];
+    expect(familyOf("classification", { model: { name: "swin_t" } })).toBe("transformer");
+    expect(familyOf("segmentation", { model: { name: "unet" } })).toBe("encoder_decoder");
+    expect(familyOf("detection", { model: { name: "yolo11n" } })).toBe("detector");
+    expect(familyOf("anomaly", { model: { name: "autoencoder" } })).toBe("autoencoder");
+    expect(familyOf("anomaly", { model: { name: "patchcore" } })).toBe("patchcore");
+    expect(familyOf("custom", null)).toBe("cnn");
+  });
+
+  it("keeps the animation off a sheet that is minimized", () => {
+    expect(tab("pt", { sheetVisible: false })).not.toContain("animateMotion");
+  });
+});

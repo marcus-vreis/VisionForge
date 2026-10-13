@@ -29,6 +29,9 @@ import type { UnitKind } from "./run-control";
 import type { MetricKind, StoryFamily, StorySpec } from "./story-family";
 import { phaseKey, type PhaseKey } from "./training-phase";
 
+/** The two tabs of the training sheet: the log (the default) and the story. */
+export type SheetTab = "log" | "story";
+
 export type StoryStage =
   | "queued"
   | "preparing"

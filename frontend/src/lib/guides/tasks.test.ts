@@ -108,6 +108,7 @@ describe.each(GUIDE_TASKS)("Primeiro treino: %s", (task) => {
       selectTask: (k) => calls.push(`task:${k}`),
       setDatasetPath: () => {},
       hideTrainingSheet: () => calls.push("hide"),
+      showTrainingStory: () => calls.push("story"),
     };
     const all = steps(pt, task);
 
@@ -115,6 +116,11 @@ describe.each(GUIDE_TASKS)("Primeiro treino: %s", (task) => {
     all[6].onEnter?.(ctx);
 
     expect(calls).toEqual([`task:${task}`, "hide"]);
+
+    // The step that watches the training shows what it is doing, on every task.
+    calls.length = 0;
+    all[4].onEnter?.(ctx);
+    expect(calls).toEqual(["story"]);
   });
 
   it("says the synthetic data is easy on purpose, and points at the download card", () => {
@@ -213,6 +219,7 @@ describe("the sample dataset action, per task", () => {
       selectTask: () => {},
       setDatasetPath: (...args) => calls.push(args),
       hideTrainingSheet: () => {},
+      showTrainingStory: () => {},
     };
 
     const out = await steps(pt, task)[0].action!.run(ctx);
@@ -229,6 +236,7 @@ describe("the sample dataset action, per task", () => {
       selectTask: () => {},
       setDatasetPath: (...args) => calls.push(args),
       hideTrainingSheet: () => {},
+      showTrainingStory: () => {},
     };
 
     const out = await steps(pt, "segmentation")[0].action!.run(ctx);

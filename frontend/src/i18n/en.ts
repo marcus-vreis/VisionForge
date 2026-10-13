@@ -1699,6 +1699,79 @@ export const en: Dict = {
         : "stopped during extraction · nothing was kept",
     stopTooLate: "> the stop cut nothing: the run finished normally",
   },
+  trainingStory: {
+    tab: "How it works",
+    logTab: "Log",
+    tabsLabel: "Training sheet content",
+    stripLabel: "Training stages",
+    caption: "illustrative animation, slowed down: only the stage and the numbers are real",
+    figure: (family: string) => `Illustrative drawing of a network: ${family}`,
+    families: {
+      cnn: "convolutional network (CNN)",
+      transformer: "transformer: patches that attend to one another",
+      encoderDecoder: "encoder–decoder, like the U-Net",
+      detector: "detector: backbone, neck and heads that give boxes",
+      autoencoder: "autoencoder: compresses and rebuilds",
+      patchcore: "PatchCore: extractor, memory bank and scoring",
+    },
+    stageNames: {
+      queued: "queued",
+      preparing: "data",
+      training: "training",
+      testing: "test",
+      done: "done",
+      interrupted: "interrupted",
+      failed: "failed",
+    },
+    stages: {
+      queued: "Queued: training starts by itself when the GPU is free.",
+      preparing: "Loading the data and building the model; no epoch has run yet.",
+      training:
+        "The model sees the data, gets it wrong, and the error flows back adjusting the weights; at the end of each epoch, validation measures how much it learned.",
+      testing:
+        "Training is over: the model is measured on the test split, which it has never seen, and the report is written.",
+      done: "Done: the full results are under “View results”.",
+      interrupted: "Interrupted on request: whatever was already saved is still available.",
+      failed: "Training failed: the error detail is in the box above and in the log.",
+    },
+    phases: {
+      extractingFeatures:
+        "A network that is already trained reads the normal images and extracts their features; nothing is adjusted.",
+      buildingBank:
+        "The most representative features of what is normal are stored in the memory bank.",
+      scoring:
+        "Each test image is compared with the bank: the farther from what is normal, the higher the anomaly score.",
+    },
+    numbers: {
+      epoch: "epoch",
+      epochOf: (epoch: number, total: number | null) =>
+        total === null ? `${epoch}` : `${epoch}/${total}`,
+      trainLoss: "train loss",
+      valLoss: "validation loss",
+      phase: "phase",
+      metrics: {
+        accuracy: "accuracy",
+        map50: "mAP50",
+        r2: "R²",
+        miou: "mIoU",
+        auroc: "AUROC",
+        primary: "main metric",
+      },
+    },
+    units: {
+      trial: (index: number, total: number) => `trial ${index}/${total}`,
+      fold: (index: number, total: number) => `fold ${index}/${total}`,
+      model: (index: number, total: number) => `model ${index}/${total}`,
+      replicate: (index: number, total: number) => `replicate ${index}/${total}`,
+    },
+    legend: {
+      forward: "data and forward pass",
+      backward: "gradient flowing back",
+      validation: "validation",
+      patchForward: "features stored",
+      patchScore: "scoring",
+    },
+  },
   compareRuns: {
     back: "← history",
     comparing: (n: number) => `Comparing ${n} runs`,

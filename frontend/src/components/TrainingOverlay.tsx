@@ -13,9 +13,12 @@ import {
   stoppedFraction,
 } from "../lib/run-control";
 import { stopLogLine } from "../lib/stop-log";
+import { GENERIC_STORY, type StorySpec } from "../lib/story-family";
 import { phaseName } from "../lib/training-phase";
+import type { SheetTab } from "../lib/training-story";
 import { STOPPED_COLOR } from "../lib/unit-status";
 import type { QueuedJobInfo, RunStatus, TrainingEvent } from "../types/run";
+import { TrainingStory } from "./training-story/TrainingStory";
 
 interface TrainingOverlayProps {
   status: RunStatus;
@@ -43,6 +46,13 @@ interface TrainingOverlayProps {
   /** The run was submitted from a researcher's own task. Its sweeps and replicate
    *  sets are queued under a plain label, so the queue cannot say. */
   customRun?: boolean;
+  /** Which drawing the "Como funciona" tab shows, recorded when the run was
+   *  submitted: the sheet outlives the form it came from (ADR-118). */
+  story?: StorySpec;
+  /** The tab of the sheet that is open. The log is the default, and the guide can
+   *  ask for the other one, so the choice lives in the page. */
+  tab: SheetTab;
+  onTabChange: (tab: SheetTab) => void;
   onClose: () => void;
   onViewResults?: () => void;
 }
@@ -75,6 +85,9 @@ export function TrainingOverlay({
   report = null,
   stopped = null,
   customRun = false,
+  story = GENERIC_STORY,
+  tab,
+  onTabChange,
   onClose,
   onViewResults,
 }: TrainingOverlayProps) {
@@ -424,10 +437,10 @@ export function TrainingOverlay({
   // Auto-scroll logs — also when the overlay is re-shown after a minimize
   // (scrollHeight is 0 while display:none, so re-anchor on visibility).
   useEffect(() => {
-    if (visible && logRef.current) {
+    if (visible && tab === "log" && logRef.current) {
       logRef.current.scrollTop = logRef.current.scrollHeight;
     }
-  }, [logs, visible]);
+  }, [logs, visible, tab]);
 
   // A run that was stopped did not get to 100%: show how far it did (the units
   // it finished of those planned, the epoch it reached of those configured, or the
@@ -694,9 +707,80 @@ export function TrainingOverlay({
           </div>
         )}
 
+        {/* Log and "Como funciona": the log is what the sheet opens on. */}
+        <div
+          role="tablist"
+          aria-label={t.trainingStory.tabsLabel}
+          style={{ display: "flex", gap: 18, marginBottom: 8 }}
+          onKeyDown={(e) => {
+            if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+              e.preventDefault();
+              onTabChange(tab === "log" ? "story" : "log");
+            }
+          }}
+        >
+          {(["log", "story"] as const).map((name) => {
+            const selected = tab === name;
+            return (
+              <button
+                key={name}
+                type="button"
+                role="tab"
+                id={`training-tab-${name}`}
+                aria-selected={selected}
+                aria-controls={`training-panel-${name}`}
+                tabIndex={selected ? 0 : -1}
+                onClick={() => onTabChange(name)}
+                style={{
+                  padding: "4px 0",
+                  background: "transparent",
+                  border: "none",
+                  borderBottom: `2px solid ${selected ? taskAccent : "transparent"}`,
+                  color: selected ? "var(--vf-text)" : "var(--vf-text-muted)",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 10,
+                  letterSpacing: "0.18em",
+                  textTransform: "uppercase",
+                  cursor: "pointer",
+                }}
+              >
+                {name === "log" ? t.trainingStory.logTab : t.trainingStory.tab}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* The story is mounted only while it is the open tab, so its animations
+            stop with it; the log stays mounted (hidden), to keep what it holds. */}
+        {tab === "story" && (
+          <div
+            role="tabpanel"
+            id="training-panel-story"
+            aria-labelledby="training-tab-story"
+          >
+            <TrainingStory
+              events={progressEvents}
+              status={status.status}
+              stopped={stopOutcomeNow === "stopped"}
+              unitKind={
+                mode === "trial" || mode === "fold" || mode === "model" || mode === "replicate"
+                  ? mode
+                  : null
+              }
+              spec={story}
+              tabAccent={taskAccent}
+              sheetVisible={visible}
+            />
+          </div>
+        )}
+
         {/* Log stream */}
         <div
           ref={logRef}
+          role="tabpanel"
+          id="training-panel-log"
+          aria-labelledby="training-tab-log"
+          hidden={tab !== "log"}
           style={{
             height: hasFailed ? 120 : 220,
             padding: 16,

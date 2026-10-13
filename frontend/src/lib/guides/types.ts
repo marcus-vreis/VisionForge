@@ -42,6 +42,9 @@ export interface GuideContext {
   setDatasetPath: (path: string, task: GuideTask, setup?: SampleSetup) => void;
   /** Puts the training sheet away without stopping the run. */
   hideTrainingSheet: () => void;
+  /** Opens the sheet's "Como funciona" tab, the drawing of what training does
+   *  (ADR-118); the log is the tab it opens on. */
+  showTrainingStory: () => void;
 }
 
 /** The outcome an action shows on the card. */

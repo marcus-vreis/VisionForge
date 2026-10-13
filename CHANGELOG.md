@@ -13,6 +13,34 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ## [Unreleased]
 
+### Added
+
+- **Uma aba "Como funciona" na tela de treino: o treino desenhado, ao lado do log.**
+  A tela de treino ganha duas abas, "Log" (a de sempre, que continua sendo a que
+  abre) e "Como funciona". Nela, a rede que está aprendendo aparece como colunas de
+  neurônios ligadas por curvas, num fundo escuro com a cor da tarefa (vermelho,
+  verde, azul, violeta; âmbar na anomalia), e três fluxos de pulsos luminosos, bem
+  devagar: os dados e a passagem direta na cor da tarefa (bolinhas), o gradiente
+  voltando em âmbar (anéis) e a validação em ciano (losangos), que cruza a rede
+  uma vez ao fim de cada época. Há um desenho por família de arquitetura, não por
+  modelo: rede convolucional (a regressão é a mesma rede com um neurônio de saída),
+  transformer (ViT, Swin, MaxViT), codificador-decodificador como a U-Net (todos os
+  modelos de segmentação), detector (os YOLOs, o RT-DETR e os da torchvision,
+  com as caixas nas saídas), autoencoder e PatchCore, que não tem épocas e mostra
+  as fases (extrair features, montar o banco de memória, pontuar) com o banco se
+  enchendo conforme o progresso delas; um modelo próprio ou uma tarefa própria usa a
+  rede genérica. Só duas coisas ali são reais, e a legenda diz que o resto é
+  "animação ilustrativa, em câmera lenta": o estágio do treino (na fila, dados,
+  treino, teste, pronto, interrompido ou falhou, lido dos mesmos eventos do log e do
+  veredito de parada que a tela já calcula) e os números (época, loss de treino e
+  de validação, a métrica da tarefa, e a dobra, o trial ou a réplica de um trabalho
+  com várias execuções). Quem pede menos movimento ao sistema
+  (`prefers-reduced-motion`) vê o desenho parado, com setas no lugar dos pulsos; a
+  animação para quando a aba do navegador fica em segundo plano ou a tela de
+  treino é minimizada. É SVG, sem biblioteca nova e sem mudança no servidor, e o
+  guia "Primeiro treino" abre essa aba no passo "O que está acontecendo"
+  ([ADR-118](docs/dev/DECISIONS.md)).
+
 ## [0.13.0] — 2026-10-11
 
 ### Added
