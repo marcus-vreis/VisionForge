@@ -1990,7 +1990,7 @@ export const en: Dict = {
           },
           watching: {
             title: "What is happening now",
-            body: "The training sheet shows the current epoch and, after each one, the training loss and the validation loss. Loss is the model's error, and both should fall. The training one is measured during the epoch, while the model is still changing; the validation one at its end, on images the model did not learn from.",
+            body: "The training sheet shows the current epoch and, after each one, the training loss and the validation loss. Loss is the model's error, and both should fall. The training one is measured during the epoch, while the model is still changing; the validation one at its end, on images the model did not learn from. The “How it works” tab, open next to the log, draws what training is doing, with the live numbers.",
           },
           result: {
             title: "The result",
@@ -2020,7 +2020,7 @@ export const en: Dict = {
           },
           watching: {
             title: "What is happening now",
-            body: "The training sheet shows the current epoch and, after each one, the validation mAP, precision, recall and losses. The box loss measures where the model puts the box; the class loss (cls), whether it gets right what is in it. In the first epochs mAP stays near zero and only rises after the warm-up: that is expected.",
+            body: "The training sheet shows the current epoch and, after each one, the validation mAP, precision, recall and losses. The box loss measures where the model puts the box; the class loss (cls), whether it gets right what is in it. In the first epochs mAP stays near zero and only rises after the warm-up: that is expected. The “How it works” tab, open next to the log, draws what training is doing, with the live numbers.",
           },
           result: {
             title: "The result",
@@ -2050,7 +2050,7 @@ export const en: Dict = {
           },
           watching: {
             title: "What is happening now",
-            body: "The training sheet shows the current epoch and, after each one, the training loss and the validation metrics: RMSE and MAE, the typical error in the target's unit (lower is better), and R², which is 1 for a perfect model and 0 for one that always predicts the mean. R² swings from one epoch to the next and the result keeps the best of them; in the first ones it can be negative, because the model is still worse than the mean.",
+            body: "The training sheet shows the current epoch and, after each one, the training loss and the validation metrics: RMSE and MAE, the typical error in the target's unit (lower is better), and R², which is 1 for a perfect model and 0 for one that always predicts the mean. R² swings from one epoch to the next and the result keeps the best of them; in the first ones it can be negative, because the model is still worse than the mean. The “How it works” tab, open next to the log, draws what training is doing, with the live numbers.",
           },
           result: {
             title: "The result",
@@ -2080,7 +2080,7 @@ export const en: Dict = {
           },
           watching: {
             title: "What is happening now",
-            body: "The training sheet shows the current epoch and, after each one, the loss and the validation metrics: mIoU (the average overlap between the predicted and the true mask, per class), Dice (similar, more generous) and pixel accuracy. Since the background fills almost everything, pixel accuracy is the most optimistic of the three: trust mIoU.",
+            body: "The training sheet shows the current epoch and, after each one, the loss and the validation metrics: mIoU (the average overlap between the predicted and the true mask, per class), Dice (similar, more generous) and pixel accuracy. Since the background fills almost everything, pixel accuracy is the most optimistic of the three: trust mIoU. The “How it works” tab, open next to the log, draws what training is doing, with the live numbers.",
           },
           result: {
             title: "The result",
@@ -2110,7 +2110,7 @@ export const en: Dict = {
           },
           watching: {
             title: "What is happening now",
-            body: "The training sheet shows the current epoch and, after each one, the reconstruction loss (the error when rebuilding a normal image, which should fall) and, measured on the test images, the AUROC and the image F1. PatchCore has no epochs: the sheet shows phases (extracting features, building the memory bank and scoring), each with its own progress.",
+            body: "The training sheet shows the current epoch and, after each one, the reconstruction loss (the error when rebuilding a normal image, which should fall) and, measured on the test images, the AUROC and the image F1. PatchCore has no epochs: the sheet shows phases (extracting features, building the memory bank and scoring), each with its own progress. The “How it works” tab, open next to the log, draws what training is doing, with the live numbers.",
           },
           result: {
             title: "The result",

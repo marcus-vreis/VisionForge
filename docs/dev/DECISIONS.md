@@ -4933,8 +4933,8 @@ first draft put the second step on the folder row, and the card covered the coun
 ADR-115 and ADR-117 (the guides, whose "what is happening now" step opens it)
 
 **Context:** the training sheet is a log. A researcher who does not yet know what
-training is sees `epoch 3/10 · loss=0.41` and has nothing to attach it to. The idea
-list (`.claude/plans/2026-10-06-ideias-didaticas.md`, section 2) asked for an
+training is sees `epoch 3/10 · loss=0.41` and has nothing to attach it to. The didactic
+ideas list (kept outside the repository) asked for an
 animation of the network learning, with one hard rule: it must never teach wrong.
 A moving picture synchronised to "training now / validating now" cannot keep it,
 because the stream has no such events (there is no per-batch progress, and the

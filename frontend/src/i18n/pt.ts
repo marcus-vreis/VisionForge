@@ -2226,7 +2226,7 @@ export const pt = {
           },
           watching: {
             title: "O que está acontecendo",
-            body: "A tela de treino mostra a época atual e, a cada época, a loss de treino e a de validação. Loss é o erro do modelo, e as duas devem cair. A de treino é medida durante a época, com o modelo ainda mudando; a de validação, ao fim dela, em imagens que ele não usou para aprender.",
+            body: "A tela de treino mostra a época atual e, a cada época, a loss de treino e a de validação. Loss é o erro do modelo, e as duas devem cair. A de treino é medida durante a época, com o modelo ainda mudando; a de validação, ao fim dela, em imagens que ele não usou para aprender. A aba “Como funciona”, aberta ao lado do log, desenha o que o treino está fazendo, com os números ao vivo.",
           },
           result: {
             title: "O resultado",
@@ -2256,7 +2256,7 @@ export const pt = {
           },
           watching: {
             title: "O que está acontecendo",
-            body: "A tela de treino mostra a época atual e, a cada época, o mAP, a precisão, o recall e as losses da validação. A de caixa (box) mede onde o modelo põe a caixa; a de classe (cls), se ele acerta o que há nela. Nas primeiras épocas o mAP fica perto de zero e só sobe depois do aquecimento: é o esperado.",
+            body: "A tela de treino mostra a época atual e, a cada época, o mAP, a precisão, o recall e as losses da validação. A de caixa (box) mede onde o modelo põe a caixa; a de classe (cls), se ele acerta o que há nela. Nas primeiras épocas o mAP fica perto de zero e só sobe depois do aquecimento: é o esperado. A aba “Como funciona”, aberta ao lado do log, desenha o que o treino está fazendo, com os números ao vivo.",
           },
           result: {
             title: "O resultado",
@@ -2286,7 +2286,7 @@ export const pt = {
           },
           watching: {
             title: "O que está acontecendo",
-            body: "A tela de treino mostra a época atual e, a cada época, a loss de treino e as métricas da validação: RMSE e MAE, o erro típico na unidade do alvo (menor é melhor), e R², que vale 1 para um modelo perfeito e 0 para um que sempre prevê a média. O R² oscila de uma época para outra, e o resultado fica com a melhor delas; nas primeiras ele pode ser negativo, porque o modelo ainda é pior que a média.",
+            body: "A tela de treino mostra a época atual e, a cada época, a loss de treino e as métricas da validação: RMSE e MAE, o erro típico na unidade do alvo (menor é melhor), e R², que vale 1 para um modelo perfeito e 0 para um que sempre prevê a média. O R² oscila de uma época para outra, e o resultado fica com a melhor delas; nas primeiras ele pode ser negativo, porque o modelo ainda é pior que a média. A aba “Como funciona”, aberta ao lado do log, desenha o que o treino está fazendo, com os números ao vivo.",
           },
           result: {
             title: "O resultado",
@@ -2316,7 +2316,7 @@ export const pt = {
           },
           watching: {
             title: "O que está acontecendo",
-            body: "A tela de treino mostra a época atual e, a cada época, a loss e as métricas da validação: o mIoU (a sobreposição média entre a máscara prevista e a real, por classe), o Dice (parecido, mais generoso) e a acurácia por pixel. Como o fundo ocupa quase tudo, a acurácia por pixel é a mais otimista das três: confie no mIoU.",
+            body: "A tela de treino mostra a época atual e, a cada época, a loss e as métricas da validação: o mIoU (a sobreposição média entre a máscara prevista e a real, por classe), o Dice (parecido, mais generoso) e a acurácia por pixel. Como o fundo ocupa quase tudo, a acurácia por pixel é a mais otimista das três: confie no mIoU. A aba “Como funciona”, aberta ao lado do log, desenha o que o treino está fazendo, com os números ao vivo.",
           },
           result: {
             title: "O resultado",
@@ -2346,7 +2346,7 @@ export const pt = {
           },
           watching: {
             title: "O que está acontecendo",
-            body: "A tela de treino mostra a época atual e, a cada época, a loss de reconstrução (o erro ao recriar uma imagem normal, que deve cair) e, medidos nas imagens de teste, o AUROC e o F1 de imagem. Com o PatchCore não há épocas: a tela mostra fases (extraindo features, montando o banco e pontuando), cada uma com o seu progresso.",
+            body: "A tela de treino mostra a época atual e, a cada época, a loss de reconstrução (o erro ao recriar uma imagem normal, que deve cair) e, medidos nas imagens de teste, o AUROC e o F1 de imagem. Com o PatchCore não há épocas: a tela mostra fases (extraindo features, montando o banco e pontuando), cada uma com o seu progresso. A aba “Como funciona”, aberta ao lado do log, desenha o que o treino está fazendo, com os números ao vivo.",
           },
           result: {
             title: "O resultado",
