@@ -4924,3 +4924,120 @@ result step until `end`; the sheet's log lines carry the metrics the watching st
 names. A second click on the button, with the folder already there, got the 409,
 filled the field and applied the image size as well. One thing the run corrected: a
 first draft put the second step on the folder row, and the card covered the counts.
+
+## ADR-118 — Training story: an illustrative animation driven by real stages
+
+**Date:** 2026-10-13
+**Status:** Accepted
+**Builds on:** ADR-111 (the stop outcome and the units of a multi-unit job),
+ADR-115 and ADR-117 (the guides, whose "what is happening now" step opens it)
+
+**Context:** the training sheet is a log. A researcher who does not yet know what
+training is sees `epoch 3/10 · loss=0.41` and has nothing to attach it to. The idea
+list (`.claude/plans/2026-10-06-ideias-didaticas.md`, section 2) asked for an
+animation of the network learning, with one hard rule: it must never teach wrong.
+A moving picture synchronised to "training now / validating now" cannot keep it,
+because the stream has no such events (there is no per-batch progress, and the
+validation between two epochs is over before the screen could show it). The user
+decided the rest on 2026-10-13: one drawing per architecture family, a neon-circuit
+look on an organic-network topology, three flows in three colours, text kept short,
+and a tab next to the log.
+
+**Decision.**
+
+**1. What is real and what is not.** Two things on the tab are real: the macro
+*stage* of the run, and the *numbers* the trainer reported (epoch, training loss,
+validation loss, the task's headline metric, and the unit of a multi-unit job).
+Both are computed from the events the log already reads (`start`, `epoch_end`,
+`phase`, `trial_start`, `trial_end`, `end`) and the run status. The motion of the
+particles is illustrative and says so on the tab: "animação ilustrativa, em câmera
+lenta". No backend change and no new event: the `stage` event the plan first
+proposed is not needed, because the stage the viewer can use is the macro one.
+
+**2. The stage rules** (`lib/training-story.ts`, a pure function of the events):
+
+| Stage | When |
+|---|---|
+| queued | the server reports the run as waiting for the GPU |
+| preparing | running, and no epoch reported yet — or, between two units of a multi-unit job, the next unit has not reported one |
+| training | epochs short of the unit's last planned epoch are being reported; for a run that reports phases (PatchCore), a phase is under way |
+| testing | the unit's last planned epoch was reported and the unit has not closed (`trial_end`); the last unit has closed; or the stream's `end` arrived and the result is not out yet |
+| done | the run completed |
+| interrupted | the run completed and the sheet's stop verdict is `stopped` |
+| failed | the run failed |
+
+A stop is not re-derived: the sheet already computes `stopOutcome`
+(lib/run-control.ts) for its closing log line, and the story takes
+`stopped = outcome === "stopped"` from it, so the two cannot disagree. A run that
+stops on its own early (patience) goes from `training` straight to `done`: the
+stream shows no last planned epoch, and the story does not pretend there was. A
+multi-unit job names the unit that is running, with the word the stop point already
+uses (`fold`, `trial`, `replicate`, `model`), from `trial_start`, and the numbers of
+the previous unit are cleared when the next one starts. A job of one unit shows
+none.
+
+**3. One drawing per family, chosen once, when the run is submitted**
+(`lib/story-family.ts`). The sheet outlives the form it came from, and a tab
+switched mid-run must not change the picture of the run in flight, so `App` records
+the spec (`storySpecFor(task, config)`) at each submission, next to the block kind.
+
+| Family | Models | Drawing |
+|---|---|---|
+| `cnn` | the ten convolutional built-ins of classification and regression (`resnet18/34/50/101`, `efficientnet_b1/b7`, `vgg16/19`, `alexnet`, `convnext_tiny`); a `timm` name that is not an attention model; a model of the researcher's own; a researcher's own task; a comparison of mixed families | columns narrowing towards a head; the head is class scores, or one neuron for regression |
+| `transformer` | `vit_b_16`, `swin_t`; a `timm` name with `vit`, `deit`, `swin`, `beit`, `cait`, `xcit`, `pvt`, `twins`, `volo` or a leading `eva` (so `maxvit` and `mobilevit`) | columns of patch tokens joined by attention arcs, ending in a class token |
+| `encoder_decoder` | every segmentation model: `unet`, `deeplabv3_*`, `fcn_*`, `lraspp_*` | shrinking, a bottleneck, growing back, with skip arcs |
+| `detector` | every detection model: the Ultralytics YOLOs, RT-DETR, and torchvision's detectors | backbone, neck, three heads that end in boxes |
+| `autoencoder` | the anomaly autoencoder | encoder, bottleneck, decoder |
+| `patchcore` | PatchCore | feature extractor, memory bank, scoring: phases, not epochs |
+
+Regression is a CNN (or a transformer, for `vit_b_16` and `swin_t`) with a
+one-neuron head, as the user asked. The headline metric is the task's own:
+accuracy, mAP50, R², mIoU, AUROC; a researcher's own task has only the compat field
+`val_accuracy` (ADR-058), shown as "main metric" because the name of its metric is
+not in the event.
+
+**4. Three flows, three colours.** Data entering and the forward pass go in the
+task's accent (`TASK_ACCENT`, the colours the rest of the interface uses); the
+gradient coming back is amber; validation is cyan, a sparse pulse that fires once
+per `epoch_end` and a slow loop while `testing`. PatchCore has no gradient: it shows
+the accent while it extracts and stores features and cyan while it scores, and
+fills the memory bank with the progress of its `phase` events. Particle counts are
+small (three forward, two backward) and slow, on purpose.
+
+**5. Where it lives.** A tab "Como funciona" next to "Log" in the training sheet.
+The log stays the default, and a new run goes back to it. The tab state is lifted
+into `App` so the "Primeiro treino" guide can select it: its "what is happening
+now" step does it on entering (`GuideContext.showTrainingStory`).
+
+**6. Motion, accessibility and cost.** SVG and SMIL `animateMotion`, no video, no
+Lottie, no dependency. `storyMotion` decides, as a pure function: particles when
+the run is going and the drawing is seen; arrows on the curves, still, under
+`prefers-reduced-motion: reduce` (the CSS rule of the app that zeroes animation
+durations does not reach SMIL, so the preference is read in script); nothing when
+the browser tab is hidden or the sheet is minimized, where the particles are not
+mounted at all. A run that is not going (queued, finished, failed) is a still
+drawing. The sheet is dark in both themes, so the neon look needs no light
+variant. Every word is in `i18n/pt.ts` and `i18n/en.ts`.
+
+**Rejected:**
+
+- *A `stage` event from the trainers* (the original plan). It buys "validating
+  now", which the screen cannot follow, at the price of a contract change in five
+  trainers. The macro stage is already in the stream.
+- *One drawing per model.* Twelve-plus pictures to maintain for a teaching point
+  that is the family's. A ResNet-18 and a VGG-19 teach the same thing.
+- *Reading the model from the queue snapshot.* It carries a label, not the config,
+  and arrives after the run starts; the form at submission has the answer.
+- *Deriving the stop in the story.* `stopOutcome` has its own tests and its own
+  edge cases (resumed runs, searches, PatchCore); a second copy would drift.
+- *A charting or animation library.* The interface draws its charts by hand
+  already, and a few circles on a few curves do not justify a dependency.
+
+**Consequences:** the sheet gains a tab and no request. The cost of the drawing is
+bounded (a few dozen circles and curves, five particle animations), and it is zero
+while the sheet is minimized or the tab hidden. The stage `testing` is honest about
+what the stream shows, not about what the server is doing every second: after the
+last epoch the server evaluates, draws figures and writes the report, and the
+stream cannot tell those apart. A model comparison streams no epochs, so its story
+stays on `preparing` until the job ends; the drawing is the family its models
+share, or the generic network.
