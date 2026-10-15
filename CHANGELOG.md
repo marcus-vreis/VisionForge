@@ -63,6 +63,16 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
   model card de um run (`export_md`) sai no idioma da página; uma chamada sem
   `X-VF-Lang` recebe o mesmo card em inglês de antes
   ([ADR-116](docs/dev/DECISIONS.md)).
+- **As mensagens de validação das configs e as dicas do formulário de tarefa
+  própria também.** O que as configs recusam (caminho que não existe ou não é
+  arquivo ou pasta, `batch_size` que não é potência de 2, `gpu_ids`, `schema_version`
+  mais nova, `num_classes` incompatível com a tarefa, detector inválido,
+  `target_columns`, `ignore_index`, arquivo de config que não é um mapeamento YAML,
+  etapa de pré-processamento desconhecida) chega no idioma da página; a linha de
+  comando passa a mostrar essas mensagens em português, como as outras. No
+  formulário de uma tarefa própria, as dicas de `early_stopping_patience` e
+  `deterministic` seguem o idioma; as descrições escritas pelo pesquisador ficam
+  como ele escreveu ([ADR-116](docs/dev/DECISIONS.md)).
 
 ### Fixed
 

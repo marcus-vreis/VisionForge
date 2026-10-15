@@ -22,6 +22,7 @@ from visionforge.utils.config import (
     check_schema_version,
     migrate_config_dict,
 )
+from visionforge.utils.messages import tr
 
 # Model names per backend. Explicit so config validation rejects a name that
 # does not belong to the chosen backend before any weights are downloaded.
@@ -95,9 +96,9 @@ class DetectionModelConfig(BaseModel):
         if v is None:
             return v
         if not v.exists():
-            raise ValueError(f"weights_path does not exist: {v}")
+            raise ValueError(tr("config.path_missing", field="weights_path", path=v))
         if not v.is_file():
-            raise ValueError(f"weights_path must be a file, got: {v}")
+            raise ValueError(tr("config.not_a_file", field="weights_path", path=v))
         return v
 
     @model_validator(mode="after")
@@ -109,8 +110,12 @@ class DetectionModelConfig(BaseModel):
         )
         if self.name not in allowed:
             raise ValueError(
-                f"Model '{self.name}' is not a valid {self.backend} detector. "
-                f"Choose one of: {', '.join(allowed)}."
+                tr(
+                    "config.detector_invalid",
+                    name=self.name,
+                    backend=self.backend,
+                    allowed=", ".join(allowed),
+                )
             )
         return self
 
@@ -142,9 +147,9 @@ class DetectionDataConfig(BaseModel):
         if v is None:
             return v
         if not v.exists():
-            raise ValueError(f"data_yaml does not exist: {v}")
+            raise ValueError(tr("config.path_missing", field="data_yaml", path=v))
         if not v.is_file():
-            raise ValueError(f"data_yaml must be a file, got: {v}")
+            raise ValueError(tr("config.not_a_file", field="data_yaml", path=v))
         return v
 
     @field_validator("base_dir")
@@ -153,17 +158,15 @@ class DetectionDataConfig(BaseModel):
         if v is None:
             return v
         if not v.exists():
-            raise ValueError(f"base_dir does not exist: {v}")
+            raise ValueError(tr("config.path_missing", field="base_dir", path=v))
         if not v.is_dir():
-            raise ValueError(f"base_dir must be a directory, got: {v}")
+            raise ValueError(tr("config.not_a_dir", field="base_dir", path=v))
         return v
 
     @model_validator(mode="after")
     def at_least_one_source(self) -> "DetectionDataConfig":
         if self.data_yaml is None and self.base_dir is None:
-            raise ValueError(
-                "DetectionDataConfig requires either data_yaml or base_dir."
-            )
+            raise ValueError(tr("config.detection_needs_data"))
         return self
 
 
@@ -295,9 +298,9 @@ def load_detection_config(path: Path | str) -> DetectionConfig:
     """
     path = Path(path)
     if not path.exists():
-        raise FileNotFoundError(f"Config file not found: {path}")
+        raise FileNotFoundError(tr("config.file_not_found", path=path))
     if not path.is_file():
-        raise ValueError(f"Config path is not a file: {path}")
+        raise ValueError(tr("config.path_not_file", path=path))
 
     with path.open(encoding="utf-8") as f:
         raw: Any = yaml.safe_load(f)
@@ -306,9 +309,7 @@ def load_detection_config(path: Path | str) -> DetectionConfig:
         raw = {}
 
     if not isinstance(raw, dict):
-        raise ValueError(
-            f"Config file must contain a YAML mapping, got: {type(raw).__name__}"
-        )
+        raise ValueError(tr("config.yaml_not_mapping", kind=type(raw).__name__))
 
     return DetectionConfig.model_validate(migrate_config_dict(raw))
 

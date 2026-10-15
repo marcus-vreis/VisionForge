@@ -841,6 +841,155 @@ CATALOG: dict[str, dict[Lang, str]] = {
             "enlarges the image without adding detail."
         ),
     },
+    # ── config validation and loading (utils/*config.py) ─────────────────────
+    # A field name is an identifier and stays as written in both languages.
+    "config.path_missing": {
+        "pt": "{field} não existe: {path}",
+        "en": "{field} does not exist: {path}",
+    },
+    "config.not_a_file": {
+        "pt": "{field} precisa ser um arquivo, recebido: {path}",
+        "en": "{field} must be a file, got: {path}",
+    },
+    "config.not_a_dir": {
+        "pt": "{field} precisa ser uma pasta, recebido: {path}",
+        "en": "{field} must be a directory, got: {path}",
+    },
+    "config.custom_or_timm": {
+        "pt": "Defina só um entre custom_model e timm_model, não os dois.",
+        "en": "Set only one of custom_model or timm_model, not both.",
+    },
+    "config.batch_power_of_two": {
+        "pt": "batch_size precisa ser uma potência de 2, recebido {value}.",
+        "en": "batch_size must be a power of 2, got {value}.",
+    },
+    "config.gpu_ids_negative": {
+        "pt": "gpu_ids precisam ser todos >= 0, recebido {ids}",
+        "en": "gpu_ids must all be >= 0, got {ids}",
+    },
+    "config.gpu_ids_unique": {
+        "pt": "gpu_ids não podem se repetir, recebido {ids}",
+        "en": "gpu_ids must be unique, got {ids}",
+    },
+    "config.multi_cuda_gpus": {
+        "pt": "multi_cuda precisa de pelo menos 2 gpu_ids, recebido {ids}",
+        "en": "multi_cuda requires at least 2 gpu_ids, got {ids}",
+    },
+    "config.schema_newer": {
+        "pt": (
+            "A config tem schema_version {version}, escrita por uma versão mais "
+            "nova do VisionForge (esta suporta até {supported}). Atualize o "
+            "VisionForge."
+        ),
+        "en": (
+            "Config schema_version {version} was written by a newer version of "
+            "VisionForge (this build supports up to {supported}). Please upgrade "
+            "VisionForge."
+        ),
+    },
+    "config.binary_num_classes": {
+        "pt": "A tarefa binária exige num_classes=1, recebido {n}.",
+        "en": "Binary task requires num_classes=1, got {n}.",
+    },
+    "config.multiclass_num_classes": {
+        "pt": "A tarefa multiclasse exige num_classes>=2, recebido {n}.",
+        "en": "Multiclass task requires num_classes>=2, got {n}.",
+    },
+    "config.auc_multiclass": {
+        "pt": (
+            "A métrica auc_roc não é definida para tarefas multiclasse. Use "
+            "'accuracy' ou 'f1'."
+        ),
+        "en": (
+            "auc_roc metric is not defined for multiclass tasks. Use 'accuracy' "
+            "or 'f1' instead."
+        ),
+    },
+    "config.file_not_found": {
+        "pt": "Arquivo de config não encontrado: {path}",
+        "en": "Config file not found: {path}",
+    },
+    "config.path_not_file": {
+        "pt": "O caminho da config não é um arquivo: {path}",
+        "en": "Config path is not a file: {path}",
+    },
+    "config.yaml_not_mapping": {
+        "pt": "O arquivo de config precisa conter um mapeamento YAML, recebido: {kind}",
+        "en": "Config file must contain a YAML mapping, got: {kind}",
+    },
+    "config.detector_invalid": {
+        "pt": (
+            "O modelo '{name}' não é um detector {backend} válido. Escolha um "
+            "destes: {allowed}."
+        ),
+        "en": (
+            "Model '{name}' is not a valid {backend} detector. Choose one of: "
+            "{allowed}."
+        ),
+    },
+    "config.detection_needs_data": {
+        "pt": "DetectionDataConfig precisa de data_yaml ou de base_dir.",
+        "en": "DetectionDataConfig requires either data_yaml or base_dir.",
+    },
+    "config.target_columns_empty": {
+        "pt": "target_columns precisa listar pelo menos uma coluna.",
+        "en": "target_columns must list at least one column.",
+    },
+    "config.target_columns_unique": {
+        "pt": "target_columns não podem se repetir, recebido {columns}",
+        "en": "target_columns must be unique, got {columns}",
+    },
+    "config.num_targets_mismatch": {
+        "pt": (
+            "model.num_targets ({targets}) precisa ser igual ao número de "
+            "data.target_columns ({columns})."
+        ),
+        "en": (
+            "model.num_targets ({targets}) must equal the number of "
+            "data.target_columns ({columns})."
+        ),
+    },
+    "config.ignore_index_collides": {
+        "pt": (
+            "data.ignore_index ({index}) coincide com o id de uma classe real "
+            "(0..{last}); use um valor fora desse intervalo (por exemplo, 255 "
+            "ou -1)."
+        ),
+        "en": (
+            "data.ignore_index ({index}) collides with a real class id "
+            "(0..{last}); use a value outside that range (e.g. 255 or -1)."
+        ),
+    },
+    "config.unknown_preprocessing": {
+        "pt": "Etapa de pré-processamento desconhecida: {kind}. Disponíveis: {available}.",
+        "en": "Unknown preprocessing step: {kind}. Available: {available}.",
+    },
+    # ── hints of the researcher-task form (GET /api/custom/{key}/schema) ─────
+    "schema.early_stopping_patience": {
+        "pt": (
+            "Épocas seguidas sem melhora antes de encerrar o treino. 0 (padrão) "
+            "desliga: roda todas as épocas configuradas."
+        ),
+        "en": (
+            "Consecutive epochs without improvement before training stops. 0 "
+            "(default) turns it off: every configured epoch runs."
+        ),
+    },
+    "schema.deterministic": {
+        "pt": (
+            "Quando True (padrão), força os algoritmos determinísticos do cuDNN e "
+            "desliga o auto-tuning, para que a mesma config e a mesma seed "
+            "reproduzam os mesmos números. Use False para deixar o cuDNN se "
+            "ajustar sozinho, o que pode compensar em muitas épocas, mas torna "
+            "impossível reproduzir um run exatamente."
+        ),
+        "en": (
+            "When True (default), forces cuDNN deterministic algorithms and "
+            "disables auto-tuning, so the same config and seed reproduce the same "
+            "numbers. Set False to let cuDNN auto-tune, which can pay off over "
+            "many epochs but makes a run impossible to reproduce exactly."
+        ),
+    },
     # ── titles, axes and legends of the saved figures (core/plotter.py) ──────
     # Figures are artifacts: they are worded for whoever started the run, and a
     # run with no language bound (the command line, a script) gets English, which

@@ -4,6 +4,8 @@ from typing import Any, Literal
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from visionforge.utils.messages import tr
+
 # Bumped whenever a breaking change is made to the experiment config schema. A
 # config carries the version it was written with so old YAML/run.json files can
 # be migrated forward (see ``migrate_config_dict``) without losing traceability —
@@ -82,9 +84,9 @@ class ModelConfig(BaseModel):
         if v is None:
             return v
         if not v.exists():
-            raise ValueError(f"weights_path does not exist: {v}")
+            raise ValueError(tr("config.path_missing", field="weights_path", path=v))
         if not v.is_file():
-            raise ValueError(f"weights_path must be a file, got: {v}")
+            raise ValueError(tr("config.not_a_file", field="weights_path", path=v))
         return v
 
     @field_validator("custom_model", "timm_model")
@@ -99,7 +101,7 @@ class ModelConfig(BaseModel):
     @model_validator(mode="after")
     def one_alternate_model_source(self) -> "ModelConfig":
         if self.custom_model is not None and self.timm_model is not None:
-            raise ValueError("Set only one of custom_model or timm_model, not both.")
+            raise ValueError(tr("config.custom_or_timm"))
         return self
 
 
@@ -168,7 +170,7 @@ class TrainingConfig(BaseModel):
     @classmethod
     def batch_size_must_be_power_of_two(cls, v: int) -> int:
         if (v & (v - 1)) != 0:
-            raise ValueError(f"batch_size must be a power of 2, got {v}.")
+            raise ValueError(tr("config.batch_power_of_two", value=v))
         return v
 
 
@@ -242,9 +244,9 @@ class DataConfig(BaseModel):
     @classmethod
     def base_dir_must_exist(cls, v: Path) -> Path:
         if not v.exists():
-            raise ValueError(f"base_dir does not exist: {v}")
+            raise ValueError(tr("config.path_missing", field="base_dir", path=v))
         if not v.is_dir():
-            raise ValueError(f"base_dir must be a directory, got: {v}")
+            raise ValueError(tr("config.not_a_dir", field="base_dir", path=v))
         return v
 
 
@@ -292,9 +294,9 @@ class DeviceConfig(BaseModel):
         if v is None:
             return v
         if any(i < 0 for i in v):
-            raise ValueError(f"gpu_ids must all be >= 0, got {v}")
+            raise ValueError(tr("config.gpu_ids_negative", ids=v))
         if len(v) != len(set(v)):
-            raise ValueError(f"gpu_ids must be unique, got {v}")
+            raise ValueError(tr("config.gpu_ids_unique", ids=v))
         return v
 
     @model_validator(mode="after")
@@ -304,9 +306,7 @@ class DeviceConfig(BaseModel):
             and self.gpu_ids is not None
             and len(self.gpu_ids) < 2
         ):
-            raise ValueError(
-                f"multi_cuda requires at least 2 gpu_ids, got {self.gpu_ids}"
-            )
+            raise ValueError(tr("config.multi_cuda_gpus", ids=self.gpu_ids))
         return self
 
 
@@ -371,18 +371,18 @@ class BatchPredictionConfig(BaseModel):
     @classmethod
     def checkpoint_must_be_file(cls, v: Path) -> Path:
         if not v.exists():
-            raise ValueError(f"checkpoint_path does not exist: {v}")
+            raise ValueError(tr("config.path_missing", field="checkpoint_path", path=v))
         if not v.is_file():
-            raise ValueError(f"checkpoint_path must be a file, got: {v}")
+            raise ValueError(tr("config.not_a_file", field="checkpoint_path", path=v))
         return v
 
     @field_validator("input_dir")
     @classmethod
     def input_dir_must_be_directory(cls, v: Path) -> Path:
         if not v.exists():
-            raise ValueError(f"input_dir does not exist: {v}")
+            raise ValueError(tr("config.path_missing", field="input_dir", path=v))
         if not v.is_dir():
-            raise ValueError(f"input_dir must be a directory, got: {v}")
+            raise ValueError(tr("config.not_a_dir", field="input_dir", path=v))
         return v
 
 
@@ -408,9 +408,9 @@ class ExportONNXConfig(BaseModel):
     @classmethod
     def checkpoint_path_must_be_file(cls, v: Path) -> Path:
         if not v.exists():
-            raise ValueError(f"checkpoint_path does not exist: {v}")
+            raise ValueError(tr("config.path_missing", field="checkpoint_path", path=v))
         if not v.is_file():
-            raise ValueError(f"checkpoint_path must be a file, got: {v}")
+            raise ValueError(tr("config.not_a_file", field="checkpoint_path", path=v))
         return v
 
 
@@ -448,27 +448,24 @@ class ExperimentConfig(BaseModel):
     def validate_task_and_num_classes(self) -> "ExperimentConfig":
         if self.schema_version > CURRENT_SCHEMA_VERSION:
             raise ValueError(
-                f"Config schema_version {self.schema_version} was written by a "
-                f"newer version of VisionForge (this build supports up to "
-                f"{CURRENT_SCHEMA_VERSION}). Please upgrade VisionForge."
+                tr(
+                    "config.schema_newer",
+                    version=self.schema_version,
+                    supported=CURRENT_SCHEMA_VERSION,
+                )
             )
         if self.task == "binary" and self.model.num_classes != 1:
-            raise ValueError(
-                f"Binary task requires num_classes=1, got {self.model.num_classes}."
-            )
+            raise ValueError(tr("config.binary_num_classes", n=self.model.num_classes))
         if self.task == "multiclass" and self.model.num_classes < 2:
             raise ValueError(
-                f"Multiclass task requires num_classes>=2, got {self.model.num_classes}."
+                tr("config.multiclass_num_classes", n=self.model.num_classes)
             )
         if (
             self.model_comparison is not None
             and self.model_comparison.metric == "auc_roc"
             and self.task == "multiclass"
         ):
-            raise ValueError(
-                "auc_roc metric is not defined for multiclass tasks. "
-                "Use 'accuracy' or 'f1' instead."
-            )
+            raise ValueError(tr("config.auc_multiclass"))
         return self
 
 
@@ -480,9 +477,7 @@ def check_schema_version(version: int) -> None:
     """
     if version > CURRENT_SCHEMA_VERSION:
         raise ValueError(
-            f"Config schema_version {version} was written by a newer version of "
-            f"VisionForge (this build supports up to {CURRENT_SCHEMA_VERSION}). "
-            f"Please upgrade VisionForge."
+            tr("config.schema_newer", version=version, supported=CURRENT_SCHEMA_VERSION)
         )
 
 
@@ -519,9 +514,9 @@ def load_config(path: Path | str) -> ExperimentConfig:
     """
     path = Path(path)
     if not path.exists():
-        raise FileNotFoundError(f"Config file not found: {path}")
+        raise FileNotFoundError(tr("config.file_not_found", path=path))
     if not path.is_file():
-        raise ValueError(f"Config path is not a file: {path}")
+        raise ValueError(tr("config.path_not_file", path=path))
 
     with path.open(encoding="utf-8") as f:
         raw: Any = yaml.safe_load(f)
@@ -530,9 +525,7 @@ def load_config(path: Path | str) -> ExperimentConfig:
         raw = {}
 
     if not isinstance(raw, dict):
-        raise ValueError(
-            f"Config file must contain a YAML mapping, got: {type(raw).__name__}"
-        )
+        raise ValueError(tr("config.yaml_not_mapping", kind=type(raw).__name__))
 
     return ExperimentConfig.model_validate(migrate_config_dict(raw))
 

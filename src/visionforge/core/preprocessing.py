@@ -16,6 +16,8 @@ from typing import Any
 import numpy as np
 from PIL import Image, ImageFilter, ImageOps
 
+from visionforge.utils.messages import tr
+
 
 def _ensure_rgb(img: Image.Image) -> Image.Image:
     """Convert any PIL mode to RGB so downstream tensors have consistent shape."""
@@ -140,8 +142,11 @@ def apply_step(
         # typed a filter name into the GUI, and "blur" is a reasonable guess
         # that happens to be spelled gaussian_blur or median_blur.
         raise ValueError(
-            f"Unknown preprocessing step: {kind!r}. "
-            f"Available: {', '.join(sorted(_REGISTRY))}."
+            tr(
+                "config.unknown_preprocessing",
+                kind=repr(kind),
+                available=", ".join(sorted(_REGISTRY)),
+            )
         )
     return fn(img, params or {})
 

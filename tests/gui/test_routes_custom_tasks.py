@@ -118,6 +118,25 @@ class TestCustomSchema:
         resp = client.get("/api/custom/nope/schema")
         assert resp.status_code == 404
 
+    @pytest.mark.parametrize(
+        ("lang", "patience", "deterministic"),
+        [
+            ("pt", "Épocas seguidas sem melhora", "Quando True (padrão)"),
+            ("en", "Consecutive epochs without improvement", "When True (default)"),
+        ],
+    )
+    def test_visionforge_hints_follow_the_page_language(
+        self, app_and_routes: tuple, lang: str, patience: str, deterministic: str
+    ) -> None:
+        _register_toy()
+        app, _ = app_and_routes
+        client = TestClient(app, raise_server_exceptions=True)
+        resp = client.get("/api/custom/toyapi/schema", headers={"X-VF-Lang": lang})
+        assert resp.status_code == 200
+        training = resp.json()["$defs"]["TaskTrainingConfig"]["properties"]
+        assert training["early_stopping_patience"]["description"].startswith(patience)
+        assert training["deterministic"]["description"].startswith(deterministic)
+
     def test_unknown_key_detail_is_the_message_not_its_repr(
         self, app_and_routes: tuple
     ) -> None:

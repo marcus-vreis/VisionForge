@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
 
@@ -11,6 +11,7 @@ from pydantic import BaseModel, ValidationError
 from visionforge.utils.anomaly_config import AnomalyConfig, load_anomaly_config
 from visionforge.utils.config import CURRENT_SCHEMA_VERSION
 from visionforge.utils.detection_config import DetectionConfig, load_detection_config
+from visionforge.utils.messages import using_lang
 from visionforge.utils.regression_config import (
     RegressionConfig,
     load_regression_config,
@@ -19,6 +20,14 @@ from visionforge.utils.segmentation_config import (
     SegmentationConfig,
     load_segmentation_config,
 )
+
+
+@pytest.fixture(autouse=True)
+def _english_messages() -> Iterator[None]:
+    """These tests check the validation rules against their English wording;
+    the Portuguese default is covered by tests/utils/test_messages.py (ADR-116)."""
+    with using_lang("en"):
+        yield
 
 
 def _regression(tmp: Path) -> dict[str, Any]:

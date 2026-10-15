@@ -457,3 +457,66 @@ class TestErrorsRaisedBelowTheRoutes:
         assert "(disponíveis: nenhuma)" in self._raise("not_registered", tmp_path)
         with using_lang("en"):
             assert "(available: none)" in self._raise("not_registered", tmp_path)
+
+
+class TestConfigValidationMessages:
+    """What a config validator raises reaches the page inside the 422 ``msg``, and
+    the command line prints it: both follow the language (ADR-116, fifth slice)."""
+
+    @staticmethod
+    def _message(case: str, tmp_path: Path) -> str:
+        from PIL import Image
+        from pydantic import ValidationError
+
+        from visionforge.core.preprocessing import apply_step
+        from visionforge.utils.config import DeviceConfig, ExperimentConfig, load_config
+        from visionforge.utils.detection_config import DetectionModelConfig
+
+        not_mapping = tmp_path / "list.yaml"
+        not_mapping.write_text("- a\n- b\n", encoding="utf-8")
+        base = {
+            "name": "x",
+            "model": {"name": "resnet18", "num_classes": 2},
+            "data": {"base_dir": str(tmp_path)},
+        }
+        calls = {
+            "missing_dir": lambda: ExperimentConfig.model_validate(
+                {**base, "data": {"base_dir": str(tmp_path / "nope")}}
+            ),
+            "binary": lambda: ExperimentConfig.model_validate(
+                {**base, "task": "binary"}
+            ),
+            "newer": lambda: ExperimentConfig.model_validate(
+                {**base, "schema_version": 999}
+            ),
+            "multi_cuda": lambda: DeviceConfig(kind="multi_cuda", gpu_ids=[0]),
+            "detector": lambda: DetectionModelConfig(name="resnet18"),
+            "not_mapping": lambda: load_config(not_mapping),
+            "step": lambda: apply_step(Image.new("RGB", (4, 4)), "nope"),
+        }
+        with pytest.raises((ValidationError, ValueError)) as exc:
+            calls[case]()
+        return str(exc.value)
+
+    @pytest.mark.parametrize(
+        ("case", "pt", "en"),
+        [
+            ("missing_dir", "base_dir não existe", "base_dir does not exist"),
+            ("binary", "binária exige num_classes=1", "Binary task requires"),
+            ("newer", "versão mais nova do VisionForge", "newer version of"),
+            ("multi_cuda", "precisa de pelo menos 2 gpu_ids", "requires at least 2"),
+            ("detector", "não é um detector", "is not a valid"),
+            ("not_mapping", "mapeamento YAML", "must contain a YAML mapping"),
+            (
+                "step",
+                "Etapa de pré-processamento desconhecida",
+                "Unknown preprocessing",
+            ),
+        ],
+    )
+    def test_portuguese_by_default_and_english_when_asked(
+        self, case: str, pt: str, en: str, tmp_path: Path
+    ) -> None:
+        assert pt in self._message(case, tmp_path)
+        with using_lang("en"):
+            assert en in self._message(case, tmp_path)

@@ -62,7 +62,7 @@ class TestApplyStep:
         assert out.size == (33, 31)
 
     def test_unknown_step_raises(self) -> None:
-        with pytest.raises(ValueError, match="Unknown preprocessing step"):
+        with pytest.raises(ValueError, match="Etapa de pré-processamento desconhecida"):
             apply_step(_solid_image(), "nope")
 
 

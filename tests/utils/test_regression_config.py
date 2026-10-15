@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
 import yaml
 from pydantic import ValidationError
 
+from visionforge.utils.messages import using_lang
 from visionforge.utils.regression_config import (
     RegressionConfig,
     RegressionDataConfig,
@@ -13,6 +15,14 @@ from visionforge.utils.regression_config import (
     RegressionTrainingConfig,
     load_regression_config,
 )
+
+
+@pytest.fixture(autouse=True)
+def _english_messages() -> Iterator[None]:
+    """These tests check the validation rules against their English wording;
+    the Portuguese default is covered by tests/utils/test_messages.py (ADR-116)."""
+    with using_lang("en"):
+        yield
 
 
 def _base_config(tmp_path: Path, overrides: dict | None = None) -> dict:

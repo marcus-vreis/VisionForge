@@ -60,3 +60,5 @@ registre
 falso
 fases
 gere
+conter
+algoritmos

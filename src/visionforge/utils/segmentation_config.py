@@ -25,6 +25,7 @@ from visionforge.utils.config import (
     check_schema_version,
     migrate_config_dict,
 )
+from visionforge.utils.messages import tr
 
 # torchvision segmentation families + a hand-rolled U-Net. Explicit so
 # config validation rejects an unsupported name before any weights are loaded.
@@ -70,9 +71,9 @@ class SegmentationModelConfig(BaseModel):
         if v is None:
             return v
         if not v.exists():
-            raise ValueError(f"weights_path does not exist: {v}")
+            raise ValueError(tr("config.path_missing", field="weights_path", path=v))
         if not v.is_file():
-            raise ValueError(f"weights_path must be a file, got: {v}")
+            raise ValueError(tr("config.not_a_file", field="weights_path", path=v))
         return v
 
     @field_validator("custom_model")
@@ -117,9 +118,9 @@ class SegmentationDataConfig(BaseModel):
     @classmethod
     def base_dir_must_exist(cls, v: Path) -> Path:
         if not v.exists():
-            raise ValueError(f"base_dir does not exist: {v}")
+            raise ValueError(tr("config.path_missing", field="base_dir", path=v))
         if not v.is_dir():
-            raise ValueError(f"base_dir must be a directory, got: {v}")
+            raise ValueError(tr("config.not_a_dir", field="base_dir", path=v))
         return v
 
 
@@ -188,9 +189,11 @@ class SegmentationConfig(BaseModel):
         idx = self.data.ignore_index
         if 0 <= idx < self.model.num_classes:
             raise ValueError(
-                f"data.ignore_index ({idx}) collides with a real class id "
-                f"(0..{self.model.num_classes - 1}); use a value outside that "
-                f"range (e.g. 255 or -1)."
+                tr(
+                    "config.ignore_index_collides",
+                    index=idx,
+                    last=self.model.num_classes - 1,
+                )
             )
         return self
 
@@ -205,9 +208,9 @@ def load_segmentation_config(path: Path | str) -> SegmentationConfig:
     """
     path = Path(path)
     if not path.exists():
-        raise FileNotFoundError(f"Config file not found: {path}")
+        raise FileNotFoundError(tr("config.file_not_found", path=path))
     if not path.is_file():
-        raise ValueError(f"Config path is not a file: {path}")
+        raise ValueError(tr("config.path_not_file", path=path))
 
     with path.open(encoding="utf-8") as f:
         raw: Any = yaml.safe_load(f)
@@ -216,9 +219,7 @@ def load_segmentation_config(path: Path | str) -> SegmentationConfig:
         raw = {}
 
     if not isinstance(raw, dict):
-        raise ValueError(
-            f"Config file must contain a YAML mapping, got: {type(raw).__name__}"
-        )
+        raise ValueError(tr("config.yaml_not_mapping", kind=type(raw).__name__))
 
     return SegmentationConfig.model_validate(migrate_config_dict(raw))
 

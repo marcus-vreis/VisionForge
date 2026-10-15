@@ -4798,6 +4798,28 @@ whoever asked, English when nobody chose).
   before. Config keys and values (`num_classes`, the transforms table) are
   identifiers and stay as they are.
 
+**Moved in the fifth slice** (2026-10-15):
+
+- `config.*`: every message the config models and loaders raise
+  (`utils/config.py` and the anomaly, detection, regression and segmentation
+  configs, plus the unknown preprocessing step): a path that does not exist or is
+  not a file or a folder, `batch_size` not a power of 2, `gpu_ids` and
+  `multi_cuda`, a newer `schema_version`, `num_classes` against the task, `auc_roc`
+  on multiclass, an invalid detector, `target_columns`, `num_targets`,
+  `ignore_index`, a config file not found or not a YAML mapping. The five copies of
+  "does not exist / must be a file / must be a directory" share one key each, with
+  the field name as a parameter. They reach the page inside the `msg` of a 422,
+  after pydantic's own "Value error, " prefix, which stays; the command line, which
+  binds no language, now prints them in Portuguese like its other messages. Field
+  names are identifiers and read the same in both languages. Pydantic's built-in
+  messages ("Input should be greater than 0") are the library's and stay English.
+- `schema.*`: the two hints the researcher-task form shows that VisionForge writes
+  itself, `early_stopping_patience` and `deterministic` of the shared training
+  block. `GET /api/custom/{key}/schema` replaces them in the page's language; the
+  researcher's own descriptions are theirs and stay as written. The descriptions in
+  the built-in configs' schemas are not shown by any screen (the built-in forms word
+  their fields from the page dictionary), so they are left as written.
+
 **What the training sheet turned out to be.** The lines of the sheet are not server
 text. The server streams progress events (`start`, `epoch_end`, `trial_start`,
 `phase`, `end`), which carry numbers, and `TrainingOverlay` words every line from
@@ -4820,8 +4842,8 @@ exception message, below) and the label of a PatchCore phase, which
   on purpose (the comment on `trainingOverlay` in `pt.ts`).
 - `STOPPED_NOTE` (`core/cancellation.py`): the audit text in the `error` of a unit
   a stop cut. No screen shows it; the page words "stopped" from the status.
-- The `description` of the training fields in the config schema, and the messages of
-  the Pydantic validators.
+- The `description` of the fields of the built-in configs' schemas, which no screen
+  shows, and pydantic's own validation messages.
 - Exceptions raised below the route layer by the libraries themselves (torch,
   Ultralytics, the dataset providers' clients) and relayed as is, including every
   `str(exc)` that becomes the `error` of a failed run or the `500` of an action.

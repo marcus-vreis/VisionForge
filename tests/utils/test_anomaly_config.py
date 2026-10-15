@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -13,6 +14,15 @@ from visionforge.utils.anomaly_config import (
     AnomalyTrainingConfig,
     load_anomaly_config,
 )
+from visionforge.utils.messages import using_lang
+
+
+@pytest.fixture(autouse=True)
+def _english_messages() -> Iterator[None]:
+    """These tests check the validation rules against their English wording;
+    the Portuguese default is covered by tests/utils/test_messages.py (ADR-116)."""
+    with using_lang("en"):
+        yield
 
 
 def _base_config(tmp_path: Path, overrides: dict | None = None) -> dict:

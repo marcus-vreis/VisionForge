@@ -81,9 +81,9 @@ class TestFactoryTimmRouting:
 
 class TestModelSourceValidation:
     def test_custom_and_timm_are_mutually_exclusive(self) -> None:
-        with pytest.raises(ValidationError, match="only one"):
+        with pytest.raises(ValidationError, match="só um entre"):
             ModelConfig(custom_model="a", timm_model="b")
-        with pytest.raises(ValidationError, match="only one"):
+        with pytest.raises(ValidationError, match="só um entre"):
             RegressionModelConfig(custom_model="a", timm_model="b")
 
     def test_blank_timm_model_coerced_to_none(self) -> None:

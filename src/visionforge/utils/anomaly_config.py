@@ -27,6 +27,7 @@ from visionforge.utils.config import (
     check_schema_version,
     migrate_config_dict,
 )
+from visionforge.utils.messages import tr
 
 # PatchCore feature-extractor backbones (frozen ImageNet). The autoencoder is
 # hand-rolled and ignores this field.
@@ -86,9 +87,9 @@ class AnomalyDataConfig(BaseModel):
     @classmethod
     def base_dir_must_exist(cls, v: Path) -> Path:
         if not v.exists():
-            raise ValueError(f"base_dir does not exist: {v}")
+            raise ValueError(tr("config.path_missing", field="base_dir", path=v))
         if not v.is_dir():
-            raise ValueError(f"base_dir must be a directory, got: {v}")
+            raise ValueError(tr("config.not_a_dir", field="base_dir", path=v))
         return v
 
 
@@ -148,9 +149,9 @@ def load_anomaly_config(path: Path | str) -> AnomalyConfig:
     """
     path = Path(path)
     if not path.exists():
-        raise FileNotFoundError(f"Config file not found: {path}")
+        raise FileNotFoundError(tr("config.file_not_found", path=path))
     if not path.is_file():
-        raise ValueError(f"Config path is not a file: {path}")
+        raise ValueError(tr("config.path_not_file", path=path))
 
     with path.open(encoding="utf-8") as f:
         raw: Any = yaml.safe_load(f)
@@ -159,9 +160,7 @@ def load_anomaly_config(path: Path | str) -> AnomalyConfig:
         raw = {}
 
     if not isinstance(raw, dict):
-        raise ValueError(
-            f"Config file must contain a YAML mapping, got: {type(raw).__name__}"
-        )
+        raise ValueError(tr("config.yaml_not_mapping", kind=type(raw).__name__))
 
     return AnomalyConfig.model_validate(migrate_config_dict(raw))
 

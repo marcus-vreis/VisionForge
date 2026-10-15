@@ -1,3 +1,4 @@
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
@@ -6,6 +7,15 @@ import yaml
 from pydantic import ValidationError
 
 from visionforge.utils.config import ExperimentConfig, load_config
+from visionforge.utils.messages import using_lang
+
+
+@pytest.fixture(autouse=True)
+def _english_messages() -> Iterator[None]:
+    """These tests check the validation rules against their English wording;
+    the Portuguese default is covered by tests/utils/test_messages.py (ADR-116)."""
+    with using_lang("en"):
+        yield
 
 
 def make_raw_config(

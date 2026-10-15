@@ -26,6 +26,7 @@ from visionforge.utils.config import (
     check_schema_version,
     migrate_config_dict,
 )
+from visionforge.utils.messages import tr
 
 # Backbones reused from the classification factory; regression swaps the final
 # layer for a linear head rather than a softmax classifier.
@@ -93,9 +94,9 @@ class RegressionModelConfig(BaseModel):
         if v is None:
             return v
         if not v.exists():
-            raise ValueError(f"weights_path does not exist: {v}")
+            raise ValueError(tr("config.path_missing", field="weights_path", path=v))
         if not v.is_file():
-            raise ValueError(f"weights_path must be a file, got: {v}")
+            raise ValueError(tr("config.not_a_file", field="weights_path", path=v))
         return v
 
     @field_validator("custom_model", "timm_model")
@@ -108,7 +109,7 @@ class RegressionModelConfig(BaseModel):
     @model_validator(mode="after")
     def one_alternate_model_source(self) -> "RegressionModelConfig":
         if self.custom_model is not None and self.timm_model is not None:
-            raise ValueError("Set only one of custom_model or timm_model, not both.")
+            raise ValueError(tr("config.custom_or_timm"))
         return self
 
 
@@ -144,18 +145,18 @@ class RegressionDataConfig(BaseModel):
     @classmethod
     def base_dir_must_exist(cls, v: Path) -> Path:
         if not v.exists():
-            raise ValueError(f"base_dir does not exist: {v}")
+            raise ValueError(tr("config.path_missing", field="base_dir", path=v))
         if not v.is_dir():
-            raise ValueError(f"base_dir must be a directory, got: {v}")
+            raise ValueError(tr("config.not_a_dir", field="base_dir", path=v))
         return v
 
     @field_validator("target_columns")
     @classmethod
     def target_columns_non_empty_and_unique(cls, v: list[str]) -> list[str]:
         if not v:
-            raise ValueError("target_columns must list at least one column.")
+            raise ValueError(tr("config.target_columns_empty"))
         if len(v) != len(set(v)):
-            raise ValueError(f"target_columns must be unique, got {v}")
+            raise ValueError(tr("config.target_columns_unique", columns=v))
         return v
 
 
@@ -221,8 +222,11 @@ class RegressionConfig(BaseModel):
         n_cols = len(self.data.target_columns)
         if n_cols != self.model.num_targets:
             raise ValueError(
-                f"model.num_targets ({self.model.num_targets}) must equal the "
-                f"number of data.target_columns ({n_cols})."
+                tr(
+                    "config.num_targets_mismatch",
+                    targets=self.model.num_targets,
+                    columns=n_cols,
+                )
             )
         return self
 
@@ -237,9 +241,9 @@ def load_regression_config(path: Path | str) -> RegressionConfig:
     """
     path = Path(path)
     if not path.exists():
-        raise FileNotFoundError(f"Config file not found: {path}")
+        raise FileNotFoundError(tr("config.file_not_found", path=path))
     if not path.is_file():
-        raise ValueError(f"Config path is not a file: {path}")
+        raise ValueError(tr("config.path_not_file", path=path))
 
     with path.open(encoding="utf-8") as f:
         raw: Any = yaml.safe_load(f)
@@ -248,9 +252,7 @@ def load_regression_config(path: Path | str) -> RegressionConfig:
         raw = {}
 
     if not isinstance(raw, dict):
-        raise ValueError(
-            f"Config file must contain a YAML mapping, got: {type(raw).__name__}"
-        )
+        raise ValueError(tr("config.yaml_not_mapping", kind=type(raw).__name__))
 
     return RegressionConfig.model_validate(migrate_config_dict(raw))
 

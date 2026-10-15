@@ -1617,7 +1617,27 @@ def _get_custom_task_or_404(key: str) -> Any:
 async def custom_task_schema(key: str) -> dict[str, Any]:
     """JSON Schema of a custom task's Config — drives the generic form."""
     info = _get_custom_task_or_404(key)
-    return info.spec_cls.Config.model_json_schema()  # type: ignore[no-any-return]
+    schema: dict[str, Any] = info.spec_cls.Config.model_json_schema()
+    return _localize_task_schema(schema)
+
+
+# The hints the generic form shows (SchemaForm renders each `description`) that
+# VisionForge writes itself, in the shared training block every researcher task
+# inherits. The researcher's own descriptions are theirs and stay as written.
+_TASK_SCHEMA_HINTS = {
+    ("TaskTrainingConfig", "early_stopping_patience"): "schema.early_stopping_patience",
+    ("TaskTrainingConfig", "deterministic"): "schema.deterministic",
+}
+
+
+def _localize_task_schema(schema: dict[str, Any]) -> dict[str, Any]:
+    """The schema with VisionForge's own field hints in the page's language (ADR-116)."""
+    defs = schema.get("$defs") or {}
+    for (model, field), key in _TASK_SCHEMA_HINTS.items():
+        prop = (defs.get(model) or {}).get("properties", {}).get(field)
+        if isinstance(prop, dict) and "description" in prop:
+            prop["description"] = tr(key)
+    return schema
 
 
 @router.post("/custom/{key}/run")

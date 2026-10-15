@@ -2,10 +2,21 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+
 import pytest
 from pydantic import ValidationError
 
 from visionforge.utils.config import DeviceConfig
+from visionforge.utils.messages import using_lang
+
+
+@pytest.fixture(autouse=True)
+def _english_messages() -> Iterator[None]:
+    """These tests check the validation rules against their English wording;
+    the Portuguese default is covered by tests/utils/test_messages.py (ADR-116)."""
+    with using_lang("en"):
+        yield
 
 
 class TestDeviceConfigDefaults:
