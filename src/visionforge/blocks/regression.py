@@ -25,6 +25,7 @@ from visionforge.core.regression_trainer import (
     RegressionTrainer,
     RegressionTrainResult,
 )
+from visionforge.core.trainer import seed_before_building
 from visionforge.core.training_health import constant_predictions
 from visionforge.models.regression_factory import RegressionModelFactory
 from visionforge.utils.regression_config import RegressionConfig
@@ -49,6 +50,7 @@ class RegressionBlock:
         self._resume_dir: Path | None = None
 
     def run(self) -> None:
+        seed_before_building(self._config.training)
         model = RegressionModelFactory.create(self._config.model)
         data = RegressionDataModule(self._config)
         trainer = RegressionTrainer(self._config)

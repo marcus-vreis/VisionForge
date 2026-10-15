@@ -5327,3 +5327,48 @@ on do not.) Also covered by tests: the lookup, the cache, the installer choice, 
 blocked case, both routes, the updater with harmless commands in place of the install
 (the retry, the restore, the wait for a finished process), and the page's notice and
 wait.
+
+## ADR-121 — A model is built from the run's seed, not only trained from it
+
+**Date:** 2026-10-15
+**Status:** Accepted
+**Corrects:** ADR-098's promise that the same config and seed reproduce the same
+numbers, which did not hold for a pretrained network with a new head
+
+**Context:** the seed-variance study's pre-registered sanity check trained resnet18
+at seed 0 twice in one process, deterministic mode on, and got 0.774 and 0.681 test
+accuracy on USK-Coffee (smaller gaps on the other two datasets), with the training
+losses apart from the first epoch. The trainers call `_seed_everything` at the start
+of `fit`, but every built-in block creates the model before calling `fit`, and a
+pretrained network gets a new final layer for the task's classes, initialised from
+the global RNG at creation. That layer came from whatever state the RNG was in: an
+earlier run in the same process, or the unseeded state of a fresh one. Measured in
+isolation on the RTX 5060 Ti: built without seeding first, the head differed between
+builds; seeded first, it was identical; and with identical weights and batch, two
+CUDA backward passes gave bit-identical gradients, so the kernels (adaptive average
+pooling included) were not a second cause. Researcher-defined tasks were already
+correct: their engine seeds before `build_model`.
+
+**Decision.** `core.trainer.seed_before_building(training)` seeds every RNG from the
+run's `training.seed` (with its `deterministic` flag) and every block that builds a
+model to train calls it first: classification, its K-fold and transfer learning,
+regression and its K-fold, segmentation and its K-fold, anomaly. `fit` still seeds
+again, so the data order does not depend on how much randomness the build consumed.
+Paths that build a model only to load a checkpoint into it (evaluation, Grad-CAM,
+ONNX export, batch prediction) are unchanged: the checkpoint overwrites the head.
+
+**Rejected:** *seeding inside the factories*, which do not know the run's seed and
+are also used to rebuild models for checkpoints; *`torch.use_deterministic_algorithms`*,
+since the measurement showed the kernels were already deterministic here and strict
+mode raises on operations some models need.
+
+**Consequences:** two runs of the same config and seed now start from the same
+weights; verified by training resnet18 on the 10% USK-Coffee subset twice in one
+process (0.816875 both times) and by a regression test that scrambles the RNG
+differently before two builds of the classification and regression blocks (it fails
+without the fix). Runs made before this change with a pretrained model and a new
+head are not reproducible from their seed alone; their `run.json` still records
+everything else. The worker count is a separate source a researcher can pin: the
+automatic `num_workers` follows the free memory of the moment, and the number of
+workers decides which random augmentation each image receives, so a study that must
+repeat a seed exactly should fix it (the seed-variance study fixes it at 0).

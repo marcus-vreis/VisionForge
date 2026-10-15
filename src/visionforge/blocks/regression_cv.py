@@ -36,6 +36,7 @@ from visionforge.core.regression_data import RegressionCsvDataset
 from visionforge.core.regression_trainer import RegressionTrainer
 from visionforge.core.replicates import sample_std
 from visionforge.core.resume import discard_resume_state
+from visionforge.core.trainer import seed_before_building
 from visionforge.models.regression_factory import RegressionModelFactory
 from visionforge.utils.regression_config import RegressionConfig
 
@@ -190,6 +191,7 @@ def run_regression_cross_validation(
                 Subset(val_ds, val_idx.tolist()),
                 config.training.batch_size,
             )
+            seed_before_building(fold_config.training)
             model = RegressionModelFactory.create(fold_config.model)
             trainer = RegressionTrainer(fold_config)
             result = trainer.fit(

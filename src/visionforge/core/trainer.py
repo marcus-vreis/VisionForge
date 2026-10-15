@@ -91,6 +91,20 @@ def _seed_everything(seed: int, *, deterministic: bool = False) -> None:
     torch.backends.cudnn.benchmark = not deterministic
 
 
+def seed_before_building(training: Any) -> None:
+    """Seed before a model is built, not only before it trains (ADR-121).
+
+    A pretrained network gets a new head for the task's classes, and that head
+    is drawn from the global RNG when the model is created. The trainers seed in
+    ``fit``, after the blocks had already created the model, so the head came
+    from whatever state the RNG was in: two runs of the same config and seed
+    started from different weights and ended 0.09 accuracy apart. Every block
+    that builds a model to train calls this first; ``fit`` still seeds again,
+    so the data order does not depend on how much randomness the build used.
+    """
+    _seed_everything(training.seed, deterministic=training.deterministic)
+
+
 def resolve_device(device_cfg: DeviceConfig) -> tuple[torch.device, list[int], str]:
     """Resolve a DeviceConfig into a torch.device + (optional) DataParallel ids.
 

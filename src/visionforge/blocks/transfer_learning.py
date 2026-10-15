@@ -13,7 +13,7 @@ from visionforge.blocks.base import ExperimentBlock
 from visionforge.core.data import DataModule
 from visionforge.core.evaluator import EvalResult, Evaluator, bootstrap_eval_cis
 from visionforge.core.metric_ci import MetricCI
-from visionforge.core.trainer import Trainer, TrainResult
+from visionforge.core.trainer import Trainer, TrainResult, seed_before_building
 from visionforge.models.factory import ModelFactory, final_linear
 from visionforge.utils.config import ExperimentConfig
 
@@ -48,6 +48,7 @@ class TransferLearningBlock(ExperimentBlock):
 
     def run(self) -> None:
         """Build model, freeze/unfreeze layers, train, and evaluate."""
+        seed_before_building(self._config.training)
         model = ModelFactory.create(self._config.model)
         self._apply_freeze(model)
         self._optimizer = self._build_transfer_optimizer(model)

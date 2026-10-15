@@ -25,6 +25,7 @@ from visionforge.core.anomaly_trainer import (
 from visionforge.core.cancellation import CancellationToken
 from visionforge.core.metric_ci import MetricCI, bootstrap_anomaly_cis
 from visionforge.core.plotter import MetricsPlotter
+from visionforge.core.trainer import seed_before_building
 from visionforge.models.anomaly_factory import AnomalyModelFactory
 from visionforge.utils.anomaly_config import AnomalyConfig
 
@@ -48,6 +49,7 @@ class AnomalyBlock:
         self._resume_dir: Path | None = None
 
     def run(self) -> None:
+        seed_before_building(self._config.training)
         model = AnomalyModelFactory.create(self._config.model)
         data = AnomalyDataModule(self._config)
         trainer = AnomalyTrainer(self._config)

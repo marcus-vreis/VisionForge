@@ -12,7 +12,7 @@ from visionforge.core.data import DataModule
 from visionforge.core.evaluator import EvalResult, Evaluator, bootstrap_eval_cis
 from visionforge.core.metric_ci import MetricCI
 from visionforge.core.plotter import MetricsPlotter
-from visionforge.core.trainer import Trainer, TrainResult
+from visionforge.core.trainer import Trainer, TrainResult, seed_before_building
 from visionforge.models.factory import ModelFactory
 from visionforge.utils.config import ExperimentConfig
 
@@ -78,6 +78,7 @@ class ClassificationBlock(ExperimentBlock):
     # ── private ───────────────────────────────────────────────────────────────
 
     def _run_train(self) -> None:
+        seed_before_building(self._config.training)
         model = ModelFactory.create(self._config.model)
         data = DataModule(self._config)
 

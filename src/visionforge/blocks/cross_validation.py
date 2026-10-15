@@ -24,7 +24,7 @@ from visionforge.core.cancellation import (
 from visionforge.core.data import resolve_num_workers
 from visionforge.core.evaluator import Evaluator
 from visionforge.core.replicates import sample_std
-from visionforge.core.trainer import Trainer
+from visionforge.core.trainer import Trainer, seed_before_building
 from visionforge.models.factory import ModelFactory
 from visionforge.utils.config import ExperimentConfig
 
@@ -294,6 +294,7 @@ class CrossValidationBlock(ExperimentBlock):
                     num_workers=workers,
                 )
 
+                seed_before_building(fold_config.training)
                 model = ModelFactory.create(fold_config.model)
                 train_result = Trainer(fold_config).fit(
                     model,

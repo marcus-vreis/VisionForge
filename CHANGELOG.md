@@ -41,6 +41,16 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
   Todo sweep das tarefas também passa a mostrar as épocas de cada trial
   ([ADR-118](docs/dev/DECISIONS.md)).
 
+### Fixed
+
+- **A mesma config e a mesma seed agora reproduzem o mesmo treino com modelo
+  pré-treinado.** A camada final nova (a das classes da tarefa) era criada antes de o
+  treino semear os geradores aleatórios, e por isso começava de pesos diferentes a
+  cada execução: no piloto do estudo de seeds, a ResNet-18 com seed 0 deu 0,774 e
+  0,681 de acurácia em duas execuções seguidas. Agora o modelo é construído já a
+  partir da seed, em todas as tarefas. Runs antigos com modelo pré-treinado não são
+  reprodutíveis só pela seed ([ADR-121](docs/dev/DECISIONS.md)).
+
 ## [0.14.0] — 2026-10-15
 
 ### Added

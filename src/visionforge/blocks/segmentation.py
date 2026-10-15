@@ -24,6 +24,7 @@ from visionforge.core.segmentation_trainer import (
     SegmentationTrainer,
     SegmentationTrainResult,
 )
+from visionforge.core.trainer import seed_before_building
 from visionforge.models.segmentation_factory import SegmentationModelFactory
 from visionforge.utils.segmentation_config import SegmentationConfig
 
@@ -47,6 +48,7 @@ class SegmentationBlock:
         self._resume_dir: Path | None = None
 
     def run(self) -> None:
+        seed_before_building(self._config.training)
         model = SegmentationModelFactory.create(self._config.model)
         data = SegmentationDataModule(self._config)
         trainer = SegmentationTrainer(self._config)

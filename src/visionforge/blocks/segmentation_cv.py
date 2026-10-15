@@ -37,6 +37,7 @@ from visionforge.core.cancellation import (
 from visionforge.core.resume import discard_resume_state
 from visionforge.core.segmentation_data import SegmentationDataset
 from visionforge.core.segmentation_trainer import SegmentationTrainer
+from visionforge.core.trainer import seed_before_building
 from visionforge.models.segmentation_factory import SegmentationModelFactory
 from visionforge.utils.segmentation_config import SegmentationConfig
 
@@ -165,6 +166,7 @@ def run_segmentation_cross_validation(
                 Subset(val_ds, val_idx.tolist()),
                 config.training.batch_size,
             )
+            seed_before_building(fold_config.training)
             model = SegmentationModelFactory.create(fold_config.model)
             trainer = SegmentationTrainer(fold_config)
             result = trainer.fit(
