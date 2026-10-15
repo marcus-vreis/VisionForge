@@ -13,6 +13,24 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ## [Unreleased]
 
+### Added
+
+- **A aba "Como funciona" avisa quando as losses mostram overfitting.** Quando a loss
+  de validação sobe por três épocas seguidas enquanto a de treino cai, aparece uma
+  frase em âmbar dizendo desde qual época, e que o modelo pode estar decorando o
+  treino. Lida só dos números que o treino reportou; some numa unidade nova de um
+  K-fold, sweep ou comparação, e nunca aparece no PatchCore
+  ([ADR-119](docs/dev/DECISIONS.md)).
+
+### Changed
+
+- **Comparar modelos mostra o progresso de cada modelo.** O sweep sobre arquiteturas
+  (e a comparação clássica) ficava em "preparando", ou num trial sem números, até o
+  fim; agora a tela de treino diz qual modelo está treinando (`modelo 2/3`), com as
+  épocas e as losses dele, e o log separa os modelos (`── model 2/3 · resnet34 ──`).
+  Todo sweep das tarefas também passa a mostrar as épocas de cada trial
+  ([ADR-118](docs/dev/DECISIONS.md)).
+
 ## [0.14.0] — 2026-10-15
 
 ### Added

@@ -259,6 +259,25 @@ export function TrainingStory({
         {sentence}
       </div>
 
+      {/* A sign the losses themselves show, not the drawing (ADR-119). */}
+      {story.overfittingSince !== null && (
+        <div
+          data-story-overfitting
+          style={{
+            ...MONO,
+            fontSize: 11.5,
+            lineHeight: 1.5,
+            color: "var(--vf-text)",
+            borderLeft: `3px solid ${GRADIENT_COLOR}`,
+            background: withAlpha(GRADIENT_COLOR, 0.1),
+            borderRadius: 6,
+            padding: "6px 10px",
+          }}
+        >
+          {s.overfitting(story.overfittingSince)}
+        </div>
+      )}
+
       {/* The numbers the trainer reported. */}
       {tiles.length > 0 && (
         <div

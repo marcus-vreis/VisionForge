@@ -17,12 +17,15 @@ from visionforge.core.cancellation import (
     job_was_stopped,
 )
 from visionforge.core.significance import infer_direction
-from visionforge.core.task_runner import rank_by_metric
+from visionforge.core.task_runner import ProgressCallback, UnitProgress, rank_by_metric
 from visionforge.utils.config import ExperimentConfig
 
 
 class ModelComparisonBlock(ExperimentBlock):
     """Train N architectures on the same dataset and rank them by a chosen metric."""
+
+    # Set by the GUI before run(): each architecture streams as one unit.
+    _progress_callback: ProgressCallback | None = None
 
     def setup(self, config: ExperimentConfig) -> None:
         """Validate config and initialise trial state.
@@ -52,8 +55,10 @@ class ModelComparisonBlock(ExperimentBlock):
         # below starts no new one after a stop (ADR-111).
         runner._cancel_token = self._cancel_token
         unsorted: list[dict[str, Any]] = []
+        progress = UnitProgress(self._progress_callback, len(mc.model_names))
 
-        for arch in mc.model_names:
+        for index, arch in enumerate(mc.model_names):
+            progress.start(runner, index, {"model.name": arch})
             trial_record: dict[str, Any] = {
                 "model_arch": arch,
                 "status": "failed",
@@ -104,6 +109,7 @@ class ModelComparisonBlock(ExperimentBlock):
                 logger.warning("ModelComparison: {} failed — {}", arch, exc)
 
             finally:
+                progress.finish(runner, index, trial_record["status"])
                 # Release any references the runner or block may hold before the
                 # next arch loads its weights; avoids OOM on VRAM-constrained GPUs.
                 gc.collect()
@@ -117,6 +123,7 @@ class ModelComparisonBlock(ExperimentBlock):
                     len(mc.model_names),
                 )
                 break
+        progress.end(len(unsorted))
 
         # Best first by the chosen metric, in its direction; failures go last.
         metric = mc.metric

@@ -18,6 +18,7 @@ import {
   stoppedFraction,
   unitCounts,
   type LocalRun,
+  trialBanner,
 } from "./run-control";
 
 const start = (total: number): TrainingEvent => ({ event: "start", total_epochs: total });
@@ -937,5 +938,22 @@ describe("stop wording", () => {
     // "Esta execução … interrompida", not "Este tipo de execução … interrompida".
     expect(pt.trainingOverlay.stopUnavailable).toMatch(/^Esta execução/);
     expect(pt.queueOverlay.stopUnavailable).toMatch(/^Esta execução/);
+  });
+});
+
+describe("trialBanner", () => {
+  it("names a sweep trial by the values it set", () => {
+    expect(trialBanner(1, 6, { "training.learning_rate": 0.01, "training.batch_size": 32 })).toBe(
+      "── trial 2/6 · learning_rate=0.01 · batch_size=32 ──",
+    );
+  });
+
+  it("names a comparison unit as the model it trains", () => {
+    expect(trialBanner(0, 3, { "model.name": "resnet18" })).toBe("── model 1/3 · resnet18 ──");
+  });
+
+  it("keeps a bare trial line when nothing was set", () => {
+    expect(trialBanner(2, 5, {})).toBe("── trial 3/5 ──");
+    expect(trialBanner(2, 5, undefined)).toBe("── trial 3/5 ──");
   });
 });

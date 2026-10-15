@@ -1916,6 +1916,9 @@ export const pt = {
     caption:
       "animação ilustrativa, em câmera lenta: só o estágio e os números são reais",
     figure: (family: string) => `Desenho ilustrativo de uma rede: ${family}`,
+    // Read from the reported losses, never from the motion (ADR-119).
+    overfitting: (since: number) =>
+      `Sinal de overfitting: desde a época ${since}, a loss de validação sobe a cada época enquanto a de treino cai. O modelo pode estar decorando o treino em vez de aprender o que vale para imagens novas.`,
     // What each drawing is.
     families: {
       cnn: "rede convolucional (CNN)",

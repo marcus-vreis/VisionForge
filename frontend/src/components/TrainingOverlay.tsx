@@ -11,6 +11,7 @@ import {
   stopOutcome,
   stopSummary,
   stoppedFraction,
+  trialBanner,
 } from "../lib/run-control";
 import { stopLogLine } from "../lib/stop-log";
 import { GENERIC_STORY, type StorySpec } from "../lib/story-family";
@@ -200,13 +201,7 @@ export function TrainingOverlay({
   useEffect(() => {
     if (latestTrialStart === undefined) return;
     const { trial_index, total_trials, overrides } = latestTrialStart;
-    const ov = Object.entries(overrides ?? {})
-      .map(([k, v]) => `${k.split(".").at(-1)}=${v}`)
-      .join(" · ");
-    const line =
-      `── trial ${trial_index + 1}/${total_trials}` +
-      (ov ? ` · ${ov}` : "") +
-      " ──";
+    const line = trialBanner(trial_index, total_trials, overrides);
     // Defer the append so it does not run synchronously inside the effect body
     // (avoids cascading renders); same pattern as the terminal-state effect.
     const timer = setTimeout(() => {

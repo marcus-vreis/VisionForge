@@ -11,6 +11,7 @@ from loguru import logger
 
 from visionforge.blocks.classification import ClassificationBlock
 from visionforge.core.cancellation import STOPPED, STOPPED_NOTE, CancellationToken
+from visionforge.core.task_runner import trial_progress_wrapper
 from visionforge.utils.config import ExperimentConfig
 
 
@@ -79,32 +80,9 @@ def write_best_config_yaml(
         yaml.dump(best_raw, f, default_flow_style=False, allow_unicode=True)
 
 
-def make_trial_progress_wrapper(
-    progress_callback: Callable[[dict[str, Any]], None] | None,
-    trial_idx: int,
-    total_trials: int,
-) -> Callable[[dict[str, Any]], None] | None:
-    """Wrap a sweep-level callback so a trial's inner Trainer events carry trial
-    context and don't masquerade as the terminal 'end' event.
-
-    The GUI closes the SSE stream on a bare 'end'; since each trial's Trainer
-    emits its own 'end', the inner one is rewritten to 'trial_end' to keep the
-    stream open across trials. The inner 'start' is dropped because the sweep
-    emits its own 'trial_start'. Returns None when there is nothing to forward.
-    """
-    if progress_callback is None:
-        return None
-
-    def _wrapped(event: dict[str, Any]) -> None:
-        kind = event.get("event")
-        if kind == "start":
-            return
-        annotated = {**event, "trial_index": trial_idx, "total_trials": total_trials}
-        if kind == "end":
-            annotated["event"] = "trial_end"
-        progress_callback(annotated)
-
-    return _wrapped
+# Lives in core so the task-agnostic comparison can use it too; the sweeps and
+# the K-fold keep importing it by this name.
+make_trial_progress_wrapper = trial_progress_wrapper
 
 
 def run_trial(

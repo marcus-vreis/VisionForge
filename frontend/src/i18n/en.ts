@@ -1706,6 +1706,8 @@ export const en: Dict = {
     stripLabel: "Training stages",
     caption: "illustrative animation, slowed down: only the stage and the numbers are real",
     figure: (family: string) => `Illustrative drawing of a network: ${family}`,
+    overfitting: (since: number) =>
+      `Sign of overfitting: since epoch ${since}, the validation loss rises every epoch while the training loss falls. The model may be memorising the training set instead of learning what holds for new images.`,
     families: {
       cnn: "convolutional network (CNN)",
       transformer: "transformer: patches that attend to one another",

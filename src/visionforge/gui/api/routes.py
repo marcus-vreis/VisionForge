@@ -4136,7 +4136,8 @@ async def _execute_experiment(
             | GridSearchBlock
             | RandomSearchBlock
             | CrossValidationBlock
-            | TransferLearningBlock,
+            | TransferLearningBlock
+            | ModelComparisonBlock,
         ):
             block._progress_callback = _put_event
         block._cancel_token = _active_cancel_token
@@ -4439,10 +4440,22 @@ async def _execute_comparison(
     # The runner carries the stop into the architecture in flight, and the
     # comparison reads it between architectures (ADR-111).
     give_cancel_token(runner, token)
+    loop = asyncio.get_running_loop()
+
+    def _put_event(event: dict[str, Any]) -> None:
+        if queue is not None:
+            asyncio.run_coroutine_threadsafe(queue.put(event), loop)
 
     try:
+        # Each architecture streams as one unit, so the sheet shows which model
+        # is training and its epochs instead of "preparing" until the end.
         trials = await asyncio.to_thread(
-            run_model_comparison, runner, config_dict, model_names, metric
+            run_model_comparison,
+            runner,
+            config_dict,
+            model_names,
+            metric,
+            progress_callback=_put_event,
         )
         stopped = job_was_stopped([t.status for t in trials], len(model_names), token)
         if not any(t.status == "success" for t in trials) and not stopped:

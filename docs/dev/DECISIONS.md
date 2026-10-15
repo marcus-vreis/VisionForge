@@ -5145,3 +5145,83 @@ spacing tightened. Two things it left as they are: the guide's floating card cov
 the left edge of the sheet at 1280 px wide, as it already did with the log, and
 the amber of the gradient is close to the anomaly accent, which the ring shape
 settles.
+
+**Amended (2026-10-15): comparing models streams each model's epochs.** In the GUI,
+comparing architectures is a sweep over `model.name` (ADR-059); for the standalone
+tasks that sweep (`core.sweep`) announced each trial and its end but carried none of
+its epochs, because the task runners had no way to pass the trainer's events on, and
+the classic comparison loops (`ModelComparisonBlock`, the task-agnostic
+`run_model_comparison`) streamed nothing at all. So the story sat on `preparing`, or
+on a unit with no numbers, for the whole job. Now every task runner has a
+`_progress_callback` slot it hands to the block it builds, next to `_cancel_token`,
+and the three loops stream each unit through `core.task_runner.UnitProgress`: a
+`trial_start` with what the unit varies in `overrides`, the unit's own epochs
+annotated with its index, and exactly one `trial_end` carrying the outcome (`status`)
+and, when the trainer reported its end, its `total_epochs`; the trainer's own `end` is
+held back for that, so it never closes the stream and a unit that died first is
+closed too. The comparison loops add a single terminal `end`. The epoch-annotating
+wrapper moved from `blocks/_search_utils` to `core` so the task-agnostic loops can
+reach it. A unit whose only override is `model.name` is named a model on the tab
+(`modelo 2/3`) and in the log (`── model 2/3 · resnet34 ──`), not a trial over a
+parameter called `name`. Verified in the browser on 2026-10-15, with the guides' sample
+datasets: a regression sweep over three ResNets showed `trial 2/3`, then (after the
+naming change) `modelo 2/2`, the training stage and each model's epochs and losses;
+also the detector, transformer (`swin_t`) and autoencoder drawings, which the first
+check had not covered, and a detection run stopped mid-way going to `interrompido`.
+
+## ADR-119 — The training story names overfitting when the losses show it
+
+**Date:** 2026-10-15
+**Status:** Accepted
+**Builds on:** ADR-118 (the training story and its rule that only the stage and the
+numbers are real)
+
+**Context:** the original plan for the training tab included a line on "what to watch
+for": validation loss rising while training loss falls. ADR-118 kept the tab to one
+sentence per stage and the live numbers, so a beginner watching the numbers had to
+notice the pattern alone, and the pattern is the single most useful thing a first
+training run can teach.
+
+**Decision.** A sentence under the stage's, in the gradient's amber, shown when the
+reported losses of the unit in flight show the pattern, and only then:
+
+- **The rule** (`overfittingSince` in `lib/training-story.ts`, a pure function):
+  over the last `OVERFIT_RISES` (3) epochs the validation loss rose at every epoch,
+  and the training loss ended lower than it started. The answer is the first epoch
+  of the climb, so the sentence says since when.
+- **Why three rises and a falling training loss.** One or two rises are ordinary
+  noise between epochs; a validation loss that rises together with the training loss
+  is a run that diverges (learning rate too high), not one that memorises, and
+  calling it overfitting would teach the wrong fix.
+- **What it reads.** Only `epoch_end` events of the current unit (a new unit of a
+  K-fold, sweep or comparison starts clean), and only when both losses are finite.
+  PatchCore, which reports no losses, never shows it; nor does a failed or queued
+  run. A finished or stopped run keeps it, because that is when the reader looks
+  back at what happened.
+- **What it says.** That the validation loss rises while the training loss falls,
+  and that the model *may* be memorising the training set. It does not claim the
+  best checkpoint is protected: classification keeps the lowest validation loss, but
+  YOLO picks its best weights by mAP, and one sentence for every task cannot promise
+  the same thing.
+
+**Rejected:**
+
+- *A loss chart on the tab.* The plan's mini-chart repeats what the log and the
+  History already plot, and the user chose numbers over charts for the tab
+  (ADR-118).
+- *Detecting it on the server.* The health warnings (`core/training_health.py`)
+  judge a finished run; this is a live cue that comes and goes with the epochs, and
+  the page already has every number it needs.
+- *A threshold on the size of the rise.* Losses of different tasks live on different
+  scales; consecutive rises are scale-free.
+
+**Consequences:** the tab gains one conditional sentence and no request. The rule can
+miss slow overfitting that zig-zags (a dip in the climb resets it) and can fire on a
+short, noisy plateau of three small rises; both are acceptable for a cue that says
+"may", and the threshold is one constant. Verified by unit tests on the rule (three
+rises fire, two do not, a dip does not, both losses rising does not, no validation
+loss does not, units read separately, PatchCore never), and seen in the browser on
+the regression sample dataset, whose validation loss is noisy: the sentence appeared
+during a sweep's second model ("desde a época 6") and went away with the next unit.
+That run is also the false-positive case the rule accepts: on six validation images a
+three-epoch climb can be noise, which is why the sentence says "may".

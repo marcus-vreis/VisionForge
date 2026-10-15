@@ -415,7 +415,7 @@ class TestExecutorsHandTheTokenOn:
         token = CancellationToken()
         runner = _Runner()
 
-        def fake(runner_arg, config, names, metric):  # type: ignore[no-untyped-def]
+        def fake(runner_arg, config, names, metric, progress_callback=None):  # type: ignore[no-untyped-def]
             assert runner_arg._cancel_token is token
             token.cancel()  # pressed during the second model
             return [

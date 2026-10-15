@@ -5,7 +5,7 @@ from typing import Any
 
 from visionforge.blocks.classification import ClassificationBlock
 from visionforge.core.cancellation import CancellationToken
-from visionforge.core.task_runner import RunResult, run_dir_from
+from visionforge.core.task_runner import ProgressCallback, RunResult, run_dir_from
 from visionforge.utils.config import ExperimentConfig
 
 
@@ -23,6 +23,9 @@ class ClassificationRunner:
     # comparison) and handed to each block built here, so a stopped job also
     # stops the training in flight (ADR-111). None when nobody can press stop.
     _cancel_token: CancellationToken | None = None
+    # Where the block's training events go, set by the orchestrator for each
+    # unit it runs (core.task_runner.UnitProgress); None streams nothing.
+    _progress_callback: ProgressCallback | None = None
 
     def run(self, cfg: Any) -> RunResult:
         """Run a single classification training trial and return a uniform RunResult."""
@@ -30,6 +33,7 @@ class ClassificationRunner:
         try:
             block.setup(cfg)
             block._cancel_token = self._cancel_token
+            block._progress_callback = self._progress_callback
             t0 = time.monotonic()
             block.run()
             elapsed = time.monotonic() - t0

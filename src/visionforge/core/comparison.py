@@ -16,8 +16,10 @@ from loguru import logger
 
 from visionforge.core.cancellation import STOPPED, STOPPED_NOTE, is_cancelled
 from visionforge.core.task_runner import (
+    ProgressCallback,
     RunResult,
     TaskRunner,
+    UnitProgress,
     discard_cut_unit_resume,
     rank_by_metric,
     runner_cancel_token,
@@ -47,6 +49,7 @@ def run_model_comparison(
     model_names: list[str],
     metric: str,
     direction: Literal["higher", "lower"] | None = None,
+    progress_callback: ProgressCallback | None = None,
 ) -> list[ComparisonTrial]:
     """Train each architecture via ``runner`` and return trials ranked by ``metric``.
 
@@ -59,12 +62,17 @@ def run_model_comparison(
     its epoch boundary and starts no further architecture. Only an
     architecture the runner reports as cut is recorded as ``stopped``, outside
     the ranking; one that finished although the stop arrived during it counts.
+
+    ``progress_callback`` receives the live stream: each architecture as one unit,
+    announced, its epochs, and closed (``UnitProgress``), then a single ``end``.
     """
     token = runner_cancel_token(runner)
     trials: list[ComparisonTrial] = []
+    progress = UnitProgress(progress_callback, len(model_names))
 
-    for arch in model_names:
+    for index, arch in enumerate(model_names):
         trial = ComparisonTrial(model_arch=arch)
+        progress.start(runner, index, {"model.name": arch})
         try:
             trial_dict = {
                 **base_config_dict,
@@ -93,6 +101,7 @@ def run_model_comparison(
             trial.error = str(exc)
             logger.warning("Comparison: {} failed — {}", arch, exc)
         finally:
+            progress.finish(runner, index, trial.status)
             gc.collect()
             if torch is not None and torch.cuda.is_available():
                 torch.cuda.empty_cache()
@@ -104,6 +113,7 @@ def run_model_comparison(
                 len(model_names),
             )
             break
+    progress.end(len(trials))
 
     successful = [t for t in trials if t.status == "success"]
     failed = [t for t in trials if t.status != "success"]

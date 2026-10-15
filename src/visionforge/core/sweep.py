@@ -28,6 +28,7 @@ from visionforge.core.cancellation import STOPPED, STOPPED_NOTE, is_cancelled
 from visionforge.core.task_runner import (
     RunResult,
     TaskRunner,
+    UnitProgress,
     discard_cut_unit_resume,
     rank_by_metric,
     runner_cancel_token,
@@ -121,19 +122,13 @@ def _execute_trial(
 
     Never raises — a failed trial is captured in the returned ``SweepTrial`` so the
     sweep continues. GPU memory is released afterwards. ``progress_callback``
-    receives ``trial_start``/``trial_end`` events (the vocabulary the GUI's
-    training overlay tracks) so multi-trial progress is real, not synthetic.
+    receives ``trial_start``, the trial's epochs and ``trial_end`` (``UnitProgress``,
+    the vocabulary the GUI's training overlay tracks), so progress is real.
     """
     trial = SweepTrial(trial_index=index, overrides=overrides)
-    if progress_callback is not None:
-        progress_callback(
-            {
-                "event": "trial_start",
-                "trial_index": index,
-                "total_trials": total,
-                "overrides": overrides,
-            }
-        )
+    # The trial's own epochs reach the stream too, not only its start and end.
+    progress = UnitProgress(progress_callback, total)
+    progress.start(runner, index, overrides)
     try:
         cfg_dict = copy.deepcopy(base_config_dict)
         for path, value in overrides.items():
@@ -163,18 +158,10 @@ def _execute_trial(
         trial.error = str(exc)
         logger.warning("Sweep trial {} failed — {}", index, exc)
     finally:
+        progress.finish(runner, index, trial.status)
         gc.collect()
         if torch is not None and torch.cuda.is_available():
             torch.cuda.empty_cache()
-    if progress_callback is not None:
-        progress_callback(
-            {
-                "event": "trial_end",
-                "trial_index": index,
-                "total_trials": total,
-                "status": trial.status,
-            }
-        )
     return trial
 
 

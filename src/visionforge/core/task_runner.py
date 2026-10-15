@@ -127,13 +127,122 @@ def rank_by_metric[T](
     return sorted(items, key=key)
 
 
+ProgressCallback = Callable[[dict[str, Any]], None]
+
+
+def trial_progress_wrapper(
+    progress_callback: ProgressCallback | None,
+    trial_idx: int,
+    total_trials: int,
+) -> ProgressCallback | None:
+    """Wrap a job-level callback so one unit's trainer events carry its context.
+
+    The GUI closes the SSE stream on a bare 'end'; since each unit's trainer emits
+    its own 'end', the inner one is rewritten to 'trial_end' to keep the stream
+    open across units. The inner 'start' is dropped because the job emits its own
+    'trial_start'. Returns None when there is nothing to forward.
+    """
+    if progress_callback is None:
+        return None
+
+    def _wrapped(event: dict[str, Any]) -> None:
+        kind = event.get("event")
+        if kind == "start":
+            return
+        annotated = {**event, "trial_index": trial_idx, "total_trials": total_trials}
+        if kind == "end":
+            annotated["event"] = "trial_end"
+        progress_callback(annotated)
+
+    return _wrapped
+
+
+def give_progress_callback(runner: Any, callback: ProgressCallback | None) -> None:
+    """Hand ``runner`` the events sink of its next run, if it declares a slot."""
+    if hasattr(runner, "_progress_callback"):
+        runner._progress_callback = callback
+
+
+class UnitProgress:
+    """The live stream of a job that trains one unit after another through a runner.
+
+    A model comparison trains one architecture per unit, a sweep one point of its
+    grid. Without this their streams carried no epochs, and the training sheet sat
+    on "preparing" for every unit (ADR-118). Each unit is announced with
+    ``trial_start`` (what it varies in ``overrides``), its trainer's epochs are
+    forwarded with the unit's index, and it is closed with exactly one
+    ``trial_end`` that carries the unit's outcome (``status``) and, when the
+    trainer reported its end, how many epochs it ran (``total_epochs``). The
+    trainer's own ``end`` is held back for that, so it never reaches the stream as
+    a terminal ``end`` and a unit that died before its trainer spoke is closed too.
+    """
+
+    def __init__(self, callback: ProgressCallback | None, total: int) -> None:
+        self._callback = callback
+        self._total = total
+        self._open = False
+        self._trainer_end: dict[str, Any] | None = None
+
+    def start(self, runner: Any, index: int, overrides: dict[str, Any]) -> None:
+        """Announce unit ``index`` and route ``runner``'s events into the stream."""
+        if self._callback is None:
+            return
+        callback = self._callback
+        callback(
+            {
+                "event": "trial_start",
+                "trial_index": index,
+                "total_trials": self._total,
+                "overrides": overrides,
+            }
+        )
+        self._open = True
+        self._trainer_end = None
+
+        def forward(event: dict[str, Any]) -> None:
+            kind = event.get("event")
+            if kind == "start":
+                return  # the unit was announced already
+            if kind == "end":
+                self._trainer_end = event
+                return
+            callback({**event, "trial_index": index, "total_trials": self._total})
+
+        give_progress_callback(runner, forward)
+
+    def finish(self, runner: Any, index: int, status: str) -> None:
+        """Close unit ``index`` with its outcome, and detach ``runner``."""
+        if self._callback is None or not self._open:
+            return
+        give_progress_callback(runner, None)
+        event: dict[str, Any] = {
+            "event": "trial_end",
+            "trial_index": index,
+            "total_trials": self._total,
+            "status": status,
+        }
+        if self._trainer_end is not None and "total_epochs" in self._trainer_end:
+            event["total_epochs"] = self._trainer_end["total_epochs"]
+        self._callback(event)
+        self._open = False
+
+    def end(self, ran: int) -> None:
+        """The job's single terminal ``end``, after its last unit."""
+        if self._callback is not None:
+            self._callback({"event": "end", "total_epochs": 0, "total_trials": ran})
+
+
 __all__ = [
+    "ProgressCallback",
     "RunResult",
     "TaskRunner",
+    "UnitProgress",
     "discard_cut_unit_resume",
     "give_cancel_token",
+    "give_progress_callback",
     "rank_by_metric",
     "run_dir_from",
     "runner_cancel_token",
     "runner_metric_direction",
+    "trial_progress_wrapper",
 ]

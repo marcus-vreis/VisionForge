@@ -25,7 +25,7 @@
  */
 
 import type { RunStatus, TrainingEvent } from "../types/run";
-import type { UnitKind } from "./run-control";
+import { variesOnlyTheModel, type UnitKind } from "./run-control";
 import type { MetricKind, StoryFamily, StorySpec } from "./story-family";
 import { phaseKey, type PhaseKey } from "./training-phase";
 
@@ -92,6 +92,8 @@ export interface StoryState {
   /** How many epochs have been reported. It changes with every `epoch_end`, which
    *  is what makes the validation pulse fire once per epoch. */
   epochsSeen: number;
+  /** The epoch the current unit started to overfit at, by `overfittingSince`. */
+  overfittingSince: number | null;
 }
 
 export interface StoryInput {
@@ -128,12 +130,39 @@ function phaseOf(e: PhaseEvent): StoryPhase {
   return { key: phaseKey(e.label), label: e.label, done: e.done, total: e.total, fraction };
 }
 
+/** How many consecutive rises of the validation loss make a sign of overfitting. */
+export const OVERFIT_RISES = 3;
+
+/** The epoch from which the losses show overfitting, or null (ADR-119).
+ *
+ * A sign, read from the numbers the trainer reported and nothing else: over the
+ * last `OVERFIT_RISES` epochs the validation loss rose every epoch, and the
+ * training loss ended lower than it started. One rise is noise, and a validation
+ * loss that rises together with the training loss is a run that diverges, not one
+ * that memorises. The answer is the first epoch of the climb, so the sentence can
+ * say since when. A run without a validation loss never shows it.
+ */
+export function overfittingSince(epochs: readonly EpochEnd[]): number | null {
+  if (epochs.length < OVERFIT_RISES + 1) return null;
+  const window = epochs.slice(-(OVERFIT_RISES + 1));
+  const val = window.map((e) => finite(e.val_loss));
+  const train = window.map((e) => finite(e.train_loss));
+  if (val.some((v) => v === null) || train.some((v) => v === null)) return null;
+  for (let i = 1; i < window.length; i += 1) {
+    if ((val[i] as number) <= (val[i - 1] as number)) return null;
+  }
+  if ((train[train.length - 1] as number) >= (train[0] as number)) return null;
+  return window[1].epoch;
+}
+
 /** The story of a run: its stage, unit and numbers, from the events it streamed. */
 export function trainingStory(input: StoryInput): StoryState {
   const { events, status, stopped, unitKind, spec } = input;
 
   let unitStart: Extract<TrainingEvent, { event: "start" }> | undefined;
   let lastEpoch: EpochEnd | undefined;
+  // The epochs of the unit in flight: a sign of overfitting is one unit's.
+  let unitEpochs: EpochEnd[] = [];
   let epochsSeen = 0;
   let trial: Extract<TrainingEvent, { event: "trial_start" }> | undefined;
   // The trial in `trial` has reported its `trial_end`.
@@ -152,9 +181,11 @@ export function trainingStory(input: StoryInput): StoryState {
         // A new unit starts from nothing: the numbers of the last one are not its.
         unitStart = undefined;
         lastEpoch = undefined;
+        unitEpochs = [];
         break;
       case "epoch_end":
         lastEpoch = e;
+        unitEpochs.push(e);
         epochsSeen += 1;
         break;
       case "trial_end":
@@ -177,7 +208,8 @@ export function trainingStory(input: StoryInput): StoryState {
   const unit: StoryUnit | null =
     multiUnit && trial !== undefined
       ? {
-          kind: unitKind ?? "trial",
+          // A sweep over the architecture alone compares models (ADR-059).
+          kind: variesOnlyTheModel(trial.overrides) ? "model" : (unitKind ?? "trial"),
           index: Math.min(plannedUnits, trial.trial_index + 1 + (upNext ? 1 : 0)),
           total: plannedUnits,
         }
@@ -212,7 +244,20 @@ export function trainingStory(input: StoryInput): StoryState {
   else if (numbers.totalEpochs !== null && lastEpoch.epoch >= numbers.totalEpochs) stage = "testing";
   else stage = "training";
 
-  return { stage, family: spec.family, unit, numbers, phase, epochsSeen };
+  const overfitting =
+    spec.family === "patchcore" || stage === "failed" || stage === "queued"
+      ? null
+      : overfittingSince(unitEpochs);
+
+  return {
+    stage,
+    family: spec.family,
+    unit,
+    numbers,
+    phase,
+    epochsSeen,
+    overfittingSince: overfitting,
+  };
 }
 
 /** Which of the three flows the drawing carries in a stage. */

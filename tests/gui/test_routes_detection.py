@@ -124,7 +124,9 @@ class TestDetectionCompareSweep:
         app, routes_mod = app_and_routes
         routes_mod._current_run = None
 
-        def fake_compare(runner, config_dict, model_names, metric):  # type: ignore[no-untyped-def]
+        def fake_compare(
+            runner, config_dict, model_names, metric, progress_callback=None
+        ):  # type: ignore[no-untyped-def]
             return [
                 ComparisonTrial("yolo11s", "success", {"map50_95": 0.5}),
                 ComparisonTrial("yolo11n", "success", {"map50_95": 0.4}),

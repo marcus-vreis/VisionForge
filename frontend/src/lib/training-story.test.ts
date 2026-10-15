@@ -4,6 +4,7 @@ import type { TrainingEvent } from "../types/run";
 import { GENERIC_STORY, storySpecFor, type StorySpec } from "./story-family";
 import {
   activeFlows,
+  overfittingSince,
   STAGE_ORDER,
   storyMotion,
   trainingStory,
@@ -412,5 +413,107 @@ describe("storyMotion", () => {
 describe("STAGE_ORDER", () => {
   it("lists the stages of a run in the order it goes through them", () => {
     expect(STAGE_ORDER).toEqual(["preparing", "training", "testing", "done"]);
+  });
+});
+
+describe("overfittingSince", () => {
+  type EpochEnd = Extract<TrainingEvent, { event: "epoch_end" }>;
+  /** Epochs 1..n with the given losses. */
+  const series = (train: number[], val: number[]): EpochEnd[] =>
+    train.map((tl, i) => ({
+      event: "epoch_end",
+      epoch: i + 1,
+      total_epochs: 20,
+      train_loss: tl,
+      val_loss: val[i],
+      val_accuracy: 0.5,
+    }));
+
+  it("names the first epoch of three straight rises while training falls", () => {
+    const epochs = series([1.0, 0.8, 0.6, 0.5, 0.4, 0.3], [1.0, 0.7, 0.6, 0.65, 0.7, 0.8]);
+    expect(overfittingSince(epochs)).toBe(4);
+  });
+
+  it("does not call two rises a sign", () => {
+    const epochs = series([1.0, 0.8, 0.6, 0.5, 0.4], [1.0, 0.7, 0.6, 0.65, 0.7]);
+    expect(overfittingSince(epochs)).toBeNull();
+  });
+
+  it("does not call a dip in the climb a sign", () => {
+    const epochs = series([1.0, 0.8, 0.6, 0.5, 0.4], [0.6, 0.65, 0.64, 0.7, 0.8]);
+    expect(overfittingSince(epochs)).toBeNull();
+  });
+
+  it("does not call both losses rising a sign: that run diverges", () => {
+    const epochs = series([0.5, 0.6, 0.7, 0.8], [0.6, 0.7, 0.8, 0.9]);
+    expect(overfittingSince(epochs)).toBeNull();
+  });
+
+  it("stays silent without a validation loss", () => {
+    const epochs = series([1.0, 0.8, 0.6, 0.5], [Number.NaN, Number.NaN, Number.NaN, Number.NaN]);
+    expect(overfittingSince(epochs)).toBeNull();
+    expect(overfittingSince([])).toBeNull();
+  });
+});
+
+describe("trainingStory: overfitting", () => {
+  const rising: TrainingEvent[] = [
+    start(10),
+    epoch(1, 10, { train_loss: 1.0, val_loss: 0.6 }),
+    epoch(2, 10, { train_loss: 0.8, val_loss: 0.65 }),
+    epoch(3, 10, { train_loss: 0.6, val_loss: 0.7 }),
+    epoch(4, 10, { train_loss: 0.5, val_loss: 0.8 }),
+  ];
+
+  it("reports the sign while the run trains", () => {
+    expect(story(rising).overfittingSince).toBe(2);
+  });
+
+  it("keeps it on the finished run, where the reader looks back", () => {
+    expect(story(rising, { status: "completed" }).overfittingSince).toBe(2);
+  });
+
+  it("drops it on a failed run, whose numbers are not the point", () => {
+    expect(story(rising, { status: "failed" }).overfittingSince).toBeNull();
+  });
+
+  it("reads one unit at a time: the next unit starts clean", () => {
+    const events: TrainingEvent[] = [
+      trialStart(0, 2),
+      ...rising.slice(1),
+      trialEnd(0, 2, 4),
+      trialStart(1, 2),
+      epoch(1, 10, { train_loss: 1.0, val_loss: 0.9 }),
+    ];
+    expect(story(events).overfittingSince).toBeNull();
+  });
+
+  it("never shows on PatchCore, which has no losses to read", () => {
+    const patchcore = storySpecFor("anomaly", { model: { name: "patchcore" } });
+    expect(story(rising, { spec: patchcore }).overfittingSince).toBeNull();
+  });
+});
+
+describe("trainingStory: a sweep over the architecture", () => {
+  it("names its units as models", () => {
+    const events: TrainingEvent[] = [
+      { event: "trial_start", trial_index: 1, total_trials: 3, overrides: { "model.name": "resnet34" }, seed: 0 },
+      epoch(1, 10),
+    ];
+    expect(story(events).unit).toEqual({ kind: "model", index: 2, total: 3 });
+  });
+
+  it("keeps a sweep over anything else a trial", () => {
+    const events: TrainingEvent[] = [
+      {
+        event: "trial_start",
+        trial_index: 0,
+        total_trials: 3,
+        overrides: { "model.name": "resnet34", "training.learning_rate": 0.01 },
+        seed: 0,
+      },
+      epoch(1, 10),
+    ];
+    expect(story(events).unit?.kind).toBe("trial");
   });
 });

@@ -110,6 +110,33 @@ function targetFromLocal(local: LocalRun): Pick<StopTarget, "task" | "strategy">
  * `unconfirmed` until the snapshot says; for anomaly, `local.epochLoop` can say
  * it sooner, from the stream.
  */
+/** The log's separator line for a new unit of a multi-unit job.
+ *
+ * A sweep names the values it set (`── trial 2/6 · lr=0.01 ──`). A model comparison
+ * sets only the model, and names it as one (`── model 2/3 · resnet18 ──`): "trial"
+ * and `name=` would read as a sweep over a parameter called name. The words stay
+ * English, like the epoch lines (ADR-116).
+ */
+/** A unit that varies only the architecture: a comparison, or a sweep over
+ *  `model.name` (ADR-059). Such a unit is a model, not a trial. */
+export function variesOnlyTheModel(overrides: Record<string, unknown> | undefined): boolean {
+  const keys = Object.keys(overrides ?? {});
+  return keys.length === 1 && keys[0] === "model.name";
+}
+
+export function trialBanner(
+  index: number,
+  total: number,
+  overrides: Record<string, unknown> | undefined,
+): string {
+  const entries = Object.entries(overrides ?? {});
+  if (variesOnlyTheModel(overrides)) {
+    return `── model ${index + 1}/${total} · ${String(entries[0][1])} ──`;
+  }
+  const ov = entries.map(([k, v]) => `${k.split(".").at(-1)}=${String(v)}`).join(" · ");
+  return `── trial ${index + 1}/${total}` + (ov ? ` · ${ov}` : "") + " ──";
+}
+
 export function stopMode(job: StopTarget | null, local?: LocalRun): StopMode {
   if (job && job.stop_at !== undefined) return job.stop_at ?? "none";
   const target = job ?? (local ? targetFromLocal(local) : null);
