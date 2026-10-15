@@ -200,7 +200,7 @@ ignore_missing_imports = true
 exclude                = ["outputs/", "configs/", ".venv/"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests", "research"]
 pythonpath = ["src"]
 # Slow cases train real models through a live server (ADR-060). They are
 # deselected here so the pre-commit suite stays seconds-fast; run them with
