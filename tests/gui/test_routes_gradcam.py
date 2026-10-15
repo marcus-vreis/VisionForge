@@ -104,7 +104,7 @@ class TestExecuteRunGradcam:
     def test_anomaly_run_rejected(self, tmp_path: Path) -> None:
         run_dir = _make_run_dir(tmp_path, task="anomaly")
         input_dir = _make_input_dir(tmp_path, n=1)
-        with pytest.raises(ValueError, match="not available"):
+        with pytest.raises(ValueError, match="não está disponível"):
             _execute_run_gradcam(
                 run_dir, GradCamRequest(input_dir=str(input_dir), num_samples=1)
             )

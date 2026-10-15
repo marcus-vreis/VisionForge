@@ -63,7 +63,7 @@ class TestTorchvisionDownload:
         assert result.total_images == 2  # 1 per class (cat, dog)
 
     def test_unknown_dataset_raises(self, tmp_path: Path) -> None:
-        with pytest.raises(ValueError, match="Unknown torchvision dataset"):
+        with pytest.raises(ValueError, match="Dataset do torchvision desconhecido"):
             download_torchvision("not_a_dataset", tmp_path)
 
 
@@ -245,7 +245,7 @@ class TestRoboflowDownload:
             download_roboflow("ws/proj", tmp_path, api_key=None, version=1)
 
     def test_missing_version_raises(self, tmp_path: Path) -> None:
-        with pytest.raises(ValueError, match="version"):
+        with pytest.raises(ValueError, match="número de versão"):
             download_roboflow("ws/proj", tmp_path, api_key="KEY", version=None)
 
     def test_malformed_dataset_raises(self, tmp_path: Path) -> None:
@@ -353,7 +353,7 @@ class TestAnEmptyDownloadIsNotSuccess:
         self._empty_roboflow(monkeypatch)
         out = tmp_path / "ds"
 
-        with pytest.raises(ValueError, match="no images landed") as exc:
+        with pytest.raises(ValueError, match="nenhuma imagem chegou") as exc:
             download_roboflow("ws/proj", out, api_key="KEY", version=1)
 
         assert str(out) in str(exc.value)
@@ -542,7 +542,7 @@ class TestHuggingFaceDownload:
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         _install_fake_datasets(monkeypatch, with_label=False)
-        with pytest.raises(ValueError, match="no image\\+label features"):
+        with pytest.raises(ValueError, match="não tem colunas de imagem e rótulo"):
             download_huggingface("owner/text-ds", tmp_path)
 
 

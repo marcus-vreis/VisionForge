@@ -59,3 +59,4 @@ excede
 registre
 falso
 fases
+gere

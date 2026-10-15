@@ -118,6 +118,16 @@ class TestCustomSchema:
         resp = client.get("/api/custom/nope/schema")
         assert resp.status_code == 404
 
+    def test_unknown_key_detail_is_the_message_not_its_repr(
+        self, app_and_routes: tuple
+    ) -> None:
+        # str() of a KeyError would wrap the sentence in quotes.
+        app, _ = app_and_routes
+        client = TestClient(app, raise_server_exceptions=True)
+        resp = client.get("/api/custom/nope/schema", headers={"X-VF-Lang": "en"})
+        assert resp.status_code == 404
+        assert resp.json()["detail"].startswith("Custom task 'nope' is not registered")
+
 
 class TestCustomRun:
     def test_run_trains_and_reports(

@@ -43,8 +43,11 @@ class TestSaveCredential:
 
     def test_a_blank_value_is_a_400(self, client: TestClient) -> None:
         # Passes the schema (min_length=1) and is rejected after strip().
+        # In the language the page asked for (ADR-116).
         resp = client.post(
-            "/api/credentials", json={"provider": "roboflow", "value": "   "}
+            "/api/credentials",
+            json={"provider": "roboflow", "value": "   "},
+            headers={"X-VF-Lang": "en"},
         )
 
         assert resp.status_code == 400

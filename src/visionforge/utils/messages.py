@@ -434,6 +434,25 @@ CATALOG: dict[str, dict[Lang, str]] = {
             "Ultralytics backend."
         ),
     },
+    "export.no_checkpoint": {
+        "pt": "Run '{run}' não tem checkpoint registrado em artifacts.model.",
+        "en": "Run '{run}' has no checkpoint recorded in artifacts.model.",
+    },
+    # ── Grad-CAM (gui/api/torch_gradcam.py, core/gradcam.py) ─────────────────
+    "gradcam.unsupported_task": {
+        "pt": (
+            "Grad-CAM não está disponível para a tarefa '{task}' (suportadas: "
+            "classification, regression, segmentation)."
+        ),
+        "en": (
+            "Grad-CAM is not available for task '{task}' (supported: "
+            "classification, regression, segmentation)."
+        ),
+    },
+    "gradcam.no_conv_layer": {
+        "pt": "O modelo não tem uma camada nn.Conv2d para o Grad-CAM usar.",
+        "en": "Model has no nn.Conv2d layer to target for Grad-CAM.",
+    },
     "testrun.batch_unsupported": {
         "pt": "Inferência em lote não é suportada para runs de '{task}' ainda.",
         "en": "Batch inference is not supported for '{task}' runs yet.",
@@ -654,6 +673,113 @@ CATALOG: dict[str, dict[Lang, str]] = {
     "custom.deleted": {
         "pt": "Removido do disco: {removed}",
         "en": "Removed from disk: {removed}",
+    },
+    "custom.confirm_mismatch": {
+        "pt": (
+            "A confirmação precisa repetir exatamente a chave da tarefa: "
+            "esperado '{key}'."
+        ),
+        "en": "Confirmation must repeat the task key exactly: expected '{key}'.",
+    },
+    "custom.no_file": {
+        "pt": "Nenhum arquivo de tarefa encontrado para '{key}'.",
+        "en": "No task file found for '{key}'.",
+    },
+    "custom.not_registered": {
+        "pt": (
+            "A tarefa customizada '{key}' não está registrada (disponíveis: "
+            "{available}). Defina-a com @register_task num arquivo .py em {where}/."
+        ),
+        "en": (
+            "Custom task '{key}' is not registered (available: {available}). "
+            "Define it with @register_task in a .py file under {where}/."
+        ),
+    },
+    "custom.none_available": {"pt": "nenhuma", "en": "none"},
+    # ── dataset download (gui/api/dataset_download.py) ───────────────────────
+    "download.unknown_torchvision": {
+        "pt": "Dataset do torchvision desconhecido: '{name}'. Disponíveis: {available}.",
+        "en": "Unknown torchvision dataset '{name}'. Available: {available}.",
+    },
+    "download.no_images": {
+        "pt": (
+            "{provider} terminou, mas nenhuma imagem chegou em '{root}'. A "
+            "exportação em si deu certo, então a causa mais comum é uma versão "
+            "vazia ou sem anotações de '{dataset}' — abra-a no provedor e confira "
+            "se a versão pedida tem imagens."
+        ),
+        "en": (
+            "{provider} finished but no images landed in '{root}'. The export "
+            "itself succeeded, so the usual cause is an empty or unannotated "
+            "version of '{dataset}' — open it in the provider and check that the "
+            "version you asked for has images."
+        ),
+    },
+    "download.stray_extensions": {
+        "pt": "Arquivos encontrados com estas extensões: {extensions}.",
+        "en": "Found files with these extensions: {extensions}.",
+    },
+    "download.roboflow_format": {
+        "pt": (
+            "O dataset do Roboflow precisa ser 'workspace/project' — cole a URL "
+            "do projeto ou o par workspace/project."
+        ),
+        "en": (
+            "Roboflow dataset must be 'workspace/project' — paste the project "
+            "URL or the workspace/project pair."
+        ),
+    },
+    "download.roboflow_api_key": {
+        "pt": "O Roboflow precisa de uma api_key.",
+        "en": "Roboflow requires an api_key.",
+    },
+    "download.roboflow_version": {
+        "pt": "O Roboflow precisa de um número de versão.",
+        "en": "Roboflow requires a version number.",
+    },
+    "download.kaggle_format": {
+        "pt": "O dataset do Kaggle precisa ser 'owner/dataset-slug'.",
+        "en": "Kaggle dataset must be 'owner/dataset-slug'.",
+    },
+    "download.kaggle_old_pair": {
+        "pt": (
+            "Isto parece o antigo par 'username:key' do Kaggle, que o cliente "
+            "atual ignora. Gere um token de API em kaggle.com/settings/api "
+            "('Create New Token') e salve esse valor — ele começa com 'KGAT_'."
+        ),
+        "en": (
+            "This looks like the old Kaggle 'username:key' pair, which the "
+            "current client ignores. Generate an API token at "
+            "kaggle.com/settings/api ('Create New Token') and save that value "
+            "instead — it starts with 'KGAT_'."
+        ),
+    },
+    "download.kaggle_no_credentials": {
+        "pt": (
+            "Credenciais do Kaggle não encontradas. Crie um token de API em "
+            "kaggle.com/settings/api e salve-o no campo de credencial, ou "
+            "grave-o em ~/.kaggle/access_token: {error}"
+        ),
+        "en": (
+            "Kaggle credentials not found. Create an API token at "
+            "kaggle.com/settings/api and save it in the credential field, or "
+            "write it to ~/.kaggle/access_token: {error}"
+        ),
+    },
+    "download.hf_no_image_label": {
+        "pt": (
+            "O dataset '{dataset}' do Hugging Face não tem colunas de imagem e "
+            "rótulo para materializar como ImageFolder."
+        ),
+        "en": (
+            "Hugging Face dataset '{dataset}' has no image+label features to "
+            "materialize into an ImageFolder."
+        ),
+    },
+    # ── stored provider keys (utils/credentials.py) ──────────────────────────
+    "credentials.empty": {
+        "pt": "O valor da credencial não pode ficar vazio.",
+        "en": "Credential value cannot be empty.",
     },
     # ── the note of /api/model/defaults (model_notes.py, routes.py) ──────────
     "model.collapse_unmeasured": {

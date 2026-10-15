@@ -28,6 +28,7 @@ from visionforge.utils.credentials import (
     resolve_credential,
 )
 from visionforge.utils.doctor import missing_package_hint
+from visionforge.utils.messages import tr
 
 # name -> torchvision.datasets class name. All take a ``train`` kwarg and expose
 # ``.classes``; items are ``(PIL.Image, int)``.
@@ -124,8 +125,11 @@ def download_torchvision(
     key = name.lower()
     if key not in _TORCHVISION_DATASETS:
         raise ValueError(
-            f"Unknown torchvision dataset '{name}'. "
-            f"Available: {', '.join(torchvision_datasets())}."
+            tr(
+                "download.unknown_torchvision",
+                name=name,
+                available=", ".join(torchvision_datasets()),
+            )
         )
     if not 0.0 <= val_fraction < 1.0:
         raise ValueError(f"val_fraction must be in [0, 1), got {val_fraction}")
@@ -180,13 +184,10 @@ def _require_images(root: Path, provider: str, dataset: str) -> None:
             to go look at it.
     """
     stray = sorted({f.suffix.lower() for f in root.rglob("*") if f.is_file()})
-    detail = f" Found files with these extensions: {', '.join(stray)}." if stray else ""
-    raise ValueError(
-        f"{provider} finished but no images landed in '{root}'. The export "
-        f"itself succeeded, so the usual cause is an empty or unannotated "
-        f"version of '{dataset}' — open it in the provider and check that the "
-        f"version you asked for has images.{detail}"
-    )
+    text = tr("download.no_images", provider=provider, root=root, dataset=dataset)
+    if stray:
+        text += " " + tr("download.stray_extensions", extensions=", ".join(stray))
+    raise ValueError(text)
 
 
 def _count_images(root: Path) -> tuple[int, dict[str, int]]:
@@ -232,10 +233,7 @@ def _parse_roboflow_dataset(dataset: str) -> tuple[str, str, int | None]:
             break
     parts = [p for p in text.split("/") if p]
     if len(parts) < 2:
-        raise ValueError(
-            "Roboflow dataset must be 'workspace/project' — paste the project "
-            "URL or the workspace/project pair."
-        )
+        raise ValueError(tr("download.roboflow_format"))
     version: int | None = None
     if len(parts) >= 3 and parts[2].isdigit():
         version = int(parts[2])
@@ -261,11 +259,11 @@ def download_roboflow(
         ImportError: if ``roboflow`` is missing from the install.
     """
     if not api_key:
-        raise ValueError("Roboflow requires an api_key.")
+        raise ValueError(tr("download.roboflow_api_key"))
     workspace, project_name, url_version = _parse_roboflow_dataset(dataset)
     version = version if version is not None else url_version
     if version is None:
-        raise ValueError("Roboflow requires a version number.")
+        raise ValueError(tr("download.roboflow_version"))
     try:
         from roboflow import Roboflow
     except ImportError as exc:  # pragma: no cover - only on a damaged install
@@ -313,7 +311,7 @@ def download_kaggle(dataset: str, out_dir: str | Path) -> DatasetDownloadResult:
         ImportError: if ``kaggle`` is missing from the install.
     """
     if "/" not in dataset:
-        raise ValueError("Kaggle dataset must be 'owner/dataset-slug'.")
+        raise ValueError(tr("download.kaggle_format"))
 
     # The kaggle client authenticates *at import time*, so the token has to be
     # in the environment before the import below — it cannot be an argument.
@@ -328,12 +326,7 @@ def download_kaggle(dataset: str, out_dir: str | Path) -> DatasetDownloadResult:
     if stored and not os.environ.get("KAGGLE_API_TOKEN"):
         token = stored.strip()
         if ":" in token:
-            raise ValueError(
-                "This looks like the old Kaggle 'username:key' pair, which the "
-                "current client ignores. Generate an API token at "
-                "kaggle.com/settings/api ('Create New Token') and save that "
-                "value instead — it starts with 'KGAT_'."
-            )
+            raise ValueError(tr("download.kaggle_old_pair"))
         os.environ["KAGGLE_API_TOKEN"] = token
 
     try:
@@ -344,11 +337,7 @@ def download_kaggle(dataset: str, out_dir: str | Path) -> DatasetDownloadResult:
             f"{missing_package_hint('kaggle')}"
         ) from exc
     except OSError as exc:  # kaggle auto-authenticates on import; missing creds raise
-        raise ValueError(
-            "Kaggle credentials not found. Create an API token at "
-            "kaggle.com/settings/api and save it in the credential field, "
-            f"or write it to ~/.kaggle/access_token: {exc}"
-        ) from exc
+        raise ValueError(tr("download.kaggle_no_credentials", error=exc)) from exc
 
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
@@ -356,11 +345,7 @@ def download_kaggle(dataset: str, out_dir: str | Path) -> DatasetDownloadResult:
     try:
         api.authenticate()
     except OSError as exc:
-        raise ValueError(
-            "Kaggle credentials not found. Create an API token at "
-            "kaggle.com/settings/api and save it in the credential field, "
-            f"or write it to ~/.kaggle/access_token: {exc}"
-        ) from exc
+        raise ValueError(tr("download.kaggle_no_credentials", error=exc)) from exc
     api.dataset_download_files(dataset, path=str(out), unzip=True)
 
     total, splits = _count_images(out)
@@ -452,10 +437,7 @@ def download_huggingface(
     first = next(iter(split_map.values()))
     image_col, label_col, class_names = _hf_image_label_cols(first.features)
     if image_col is None or label_col is None:
-        raise ValueError(
-            f"Hugging Face dataset '{dataset}' has no image+label features to "
-            "materialize into an ImageFolder."
-        )
+        raise ValueError(tr("download.hf_no_image_label", dataset=dataset))
 
     total = 0
     split_counts: dict[str, int] = {}

@@ -28,6 +28,7 @@ from visionforge.models.segmentation_factory import (
     segmentation_logits,
 )
 from visionforge.utils.config import ModelConfig, PreprocessingConfig, TransformConfig
+from visionforge.utils.messages import tr
 from visionforge.utils.regression_config import RegressionModelConfig
 from visionforge.utils.segmentation_config import SegmentationModelConfig
 
@@ -144,10 +145,7 @@ def build_gradcam(
 
         return GradcamSetup(model, transform, seg_target, seg_describe)
 
-    raise ValueError(
-        f"Grad-CAM is not available for task '{task}' "
-        "(supported: classification, regression, segmentation)."
-    )
+    raise ValueError(tr("gradcam.unsupported_task", task=task))
 
 
 __all__ = ["GradcamSetup", "build_gradcam"]

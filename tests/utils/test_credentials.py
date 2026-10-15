@@ -75,7 +75,7 @@ class TestValidation:
             save_credential("dropbox", "x")
 
     def test_blank_value_is_rejected(self) -> None:
-        with pytest.raises(ValueError, match="cannot be empty"):
+        with pytest.raises(ValueError, match="não pode ficar vazio"):
             save_credential("roboflow", "   ")
 
 

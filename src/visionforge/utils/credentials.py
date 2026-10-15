@@ -32,6 +32,8 @@ from typing import Any
 
 from loguru import logger
 
+from visionforge.utils.messages import tr
+
 # Providers that can hold a key. `torchvision` and `huggingface`-public need
 # none, but Hugging Face private datasets do, so it is offered.
 PROVIDERS = ("roboflow", "kaggle", "huggingface")
@@ -99,7 +101,7 @@ def save_credential(provider: str, value: str) -> None:
         )
     value = value.strip()
     if not value:
-        raise ValueError("Credential value cannot be empty.")
+        raise ValueError(tr("credentials.empty"))
     data = _read_all()
     data[provider] = value
     _write_all(data)

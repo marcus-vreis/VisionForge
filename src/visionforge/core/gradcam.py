@@ -21,6 +21,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from PIL import Image
 
+from visionforge.utils.messages import tr
+
 # ImageNet de-normalization (the classification pipeline normalizes with these);
 # used to recover a viewable RGB image for the overlay.
 _IMAGENET_MEAN = (0.485, 0.456, 0.406)
@@ -41,7 +43,7 @@ def resolve_target_layer(model: nn.Module) -> nn.Conv2d:
         if isinstance(module, nn.Conv2d):
             last_conv = module
     if last_conv is None:
-        raise ValueError("Model has no nn.Conv2d layer to target for Grad-CAM.")
+        raise ValueError(tr("gradcam.no_conv_layer"))
     return last_conv
 
 

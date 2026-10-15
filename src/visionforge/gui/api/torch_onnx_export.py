@@ -22,6 +22,7 @@ from visionforge.models.segmentation_factory import (
     SegmentationModelFactory,
     segmentation_logits,
 )
+from visionforge.utils.messages import tr
 from visionforge.utils.regression_config import RegressionConfig
 from visionforge.utils.segmentation_config import SegmentationConfig
 
@@ -29,9 +30,7 @@ from visionforge.utils.segmentation_config import SegmentationConfig
 def _checkpoint(data: dict[str, Any], run_name: str) -> str:
     path = data.get("artifacts", {}).get("model")
     if not path:
-        raise FileNotFoundError(
-            f"Run '{run_name}' has no checkpoint recorded in artifacts.model."
-        )
+        raise FileNotFoundError(tr("export.no_checkpoint", run=run_name))
     return str(path)
 
 

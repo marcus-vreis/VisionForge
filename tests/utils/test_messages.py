@@ -14,6 +14,7 @@ import string
 from pathlib import Path
 
 import pytest
+import torch
 
 import visionforge
 from visionforge.core.loader_lifecycle import describe_worker_spawn_failure
@@ -367,3 +368,92 @@ class TestPagingFileHint:
         assert "ran out of paging file space" in hint
         assert "data.num_workers" in hint
         assert "paginação" not in hint
+
+
+class TestErrorsRaisedBelowTheRoutes:
+    """The exceptions a route relays as its ``detail`` are worded per language too.
+
+    Each case raises the message where it is written, below the route layer, so the
+    language has to reach the dataset providers, the Grad-CAM and ONNX helpers and
+    the task registry (ADR-116, third slice).
+    """
+
+    @staticmethod
+    def _raise(case: str, tmp_path: Path) -> str:
+        from visionforge.core.gradcam import resolve_target_layer
+        from visionforge.gui.api.dataset_download import (
+            _parse_roboflow_dataset,
+            _require_images,
+            download_roboflow,
+            download_torchvision,
+        )
+        from visionforge.gui.api.torch_gradcam import build_gradcam
+        from visionforge.gui.api.torch_onnx_export import _checkpoint
+        from visionforge.tasks.manage import delete_task
+        from visionforge.tasks.registry import get_task
+        from visionforge.utils.credentials import save_credential
+
+        (tmp_path / "notes.txt").write_text("x", encoding="utf-8")
+        calls = {
+            "torchvision": lambda: download_torchvision("nope", tmp_path),
+            "empty": lambda: _require_images(tmp_path, "Roboflow", "ws/proj"),
+            "roboflow_format": lambda: _parse_roboflow_dataset("only-one-part"),
+            "roboflow_key": lambda: download_roboflow("ws/proj", tmp_path, api_key=""),
+            "onnx": lambda: _checkpoint({}, "exp_1"),
+            "gradcam_task": lambda: build_gradcam(
+                {"config": {"task": "detection"}}, target_index=None, checkpoint="x"
+            ),
+            "gradcam_layer": lambda: resolve_target_layer(torch.nn.Linear(2, 2)),
+            "confirm": lambda: delete_task("toy", "oops", tmp_path),
+            "no_file": lambda: delete_task("ghost", "ghost", tmp_path),
+            "not_registered": lambda: get_task("ghost", user_tasks_dir=tmp_path),
+            "blank_key": lambda: save_credential("roboflow", "   "),
+        }
+        with pytest.raises((ValueError, FileNotFoundError, KeyError)) as exc:
+            calls[case]()
+        return str(exc.value.args[0])
+
+    @pytest.mark.parametrize(
+        ("case", "pt", "en"),
+        [
+            (
+                "torchvision",
+                "Dataset do torchvision desconhecido",
+                "Unknown torchvision",
+            ),
+            ("empty", "nenhuma imagem chegou", "no images landed"),
+            (
+                "roboflow_format",
+                "precisa ser 'workspace/project'",
+                "must be 'workspace",
+            ),
+            ("roboflow_key", "precisa de uma api_key", "requires an api_key"),
+            ("onnx", "não tem checkpoint registrado", "has no checkpoint recorded"),
+            ("gradcam_task", "não está disponível para a tarefa", "is not available"),
+            ("gradcam_layer", "não tem uma camada nn.Conv2d", "has no nn.Conv2d"),
+            ("confirm", "repetir exatamente a chave", "must repeat the task key"),
+            ("no_file", "Nenhum arquivo de tarefa", "No task file found"),
+            ("not_registered", "não está registrada", "is not registered"),
+            ("blank_key", "não pode ficar vazio", "cannot be empty"),
+        ],
+    )
+    def test_portuguese_by_default_and_english_when_asked(
+        self, case: str, pt: str, en: str, tmp_path: Path
+    ) -> None:
+        assert pt in self._raise(case, tmp_path)
+        with using_lang("en"):
+            assert en in self._raise(case, tmp_path)
+
+    def test_the_stray_extensions_follow_the_sentence(self, tmp_path: Path) -> None:
+        with using_lang("en"):
+            text = self._raise("empty", tmp_path)
+
+        assert text.endswith("has images. Found files with these extensions: .txt.")
+
+    def test_no_registered_task_is_named_in_the_language(self, tmp_path: Path) -> None:
+        from visionforge.tasks.registry import clear_task_registry
+
+        clear_task_registry()
+        assert "(disponíveis: nenhuma)" in self._raise("not_registered", tmp_path)
+        with using_lang("en"):
+            assert "(available: none)" in self._raise("not_registered", tmp_path)

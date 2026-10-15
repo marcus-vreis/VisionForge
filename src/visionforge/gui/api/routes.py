@@ -1598,7 +1598,8 @@ def _get_custom_task_or_404(key: str) -> Any:
     try:
         return get_task(key)
     except KeyError as exc:
-        raise HTTPException(404, str(exc)) from exc
+        # str() of a KeyError is the repr of its argument, quotes included.
+        raise HTTPException(404, exc.args[0] if exc.args else str(exc)) from exc
 
 
 @router.get("/custom/{key}/schema")

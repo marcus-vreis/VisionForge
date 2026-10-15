@@ -22,6 +22,8 @@ from typing import TYPE_CHECKING
 
 from loguru import logger
 
+from visionforge.utils.messages import tr
+
 if TYPE_CHECKING:  # pragma: no cover - annotations only
     from visionforge.tasks.base import TaskSpec
 
@@ -169,12 +171,15 @@ def get_task(key: str, *, user_tasks_dir: Path | str | None = None) -> TaskInfo:
     if key not in _REGISTRY:
         load_user_tasks(user_tasks_dir)
     if key not in _REGISTRY:
-        available = [t.key for t in registered_tasks()]
+        available = ", ".join(t.key for t in registered_tasks())
         where = user_tasks_dir if user_tasks_dir is not None else DEFAULT_USER_TASKS_DIR
         raise KeyError(
-            f"Custom task '{key}' is not registered "
-            f"(available: {available or 'none'}). Define it with @register_task "
-            f"in a .py file under {where}/."
+            tr(
+                "custom.not_registered",
+                key=key,
+                available=available or tr("custom.none_available"),
+                where=where,
+            )
         )
     return _REGISTRY[key]
 

@@ -24,6 +24,7 @@ from pathlib import Path
 from loguru import logger
 
 from visionforge.tasks.registry import DEFAULT_USER_TASKS_DIR
+from visionforge.utils.messages import tr
 
 _HIDDEN_FILE = ".hidden.json"
 
@@ -96,12 +97,10 @@ def delete_task(
         FileNotFoundError: if no file backs that key.
     """
     if confirmation != key:
-        raise ValueError(
-            f"Confirmation must repeat the task key exactly: expected '{key}'."
-        )
+        raise ValueError(tr("custom.confirm_mismatch", key=key))
     path = task_file(key, directory)
     if path is None:
-        raise FileNotFoundError(f"No task file found for '{key}'.")
+        raise FileNotFoundError(tr("custom.no_file", key=key))
 
     # A packaged task owns its folder (it exists to hold assets alongside
     # task.py), so removing only the .py would leave an orphan directory.

@@ -73,7 +73,7 @@ class TestTaskFile:
 
 class TestDeleting:
     def test_requires_the_key_as_confirmation(self, tasks_dir: Path) -> None:
-        with pytest.raises(ValueError, match="repeat the task key"):
+        with pytest.raises(ValueError, match="repetir exatamente a chave"):
             delete_task("flat_task", "yes", tasks_dir)
         assert task_file("flat_task", tasks_dir) is not None
 
@@ -94,7 +94,7 @@ class TestDeleting:
         assert not (tasks_dir / "packaged_task").exists()
 
     def test_missing_task_raises(self, tasks_dir: Path) -> None:
-        with pytest.raises(FileNotFoundError, match="No task file"):
+        with pytest.raises(FileNotFoundError, match="Nenhum arquivo de tarefa"):
             delete_task("nope", "nope", tasks_dir)
 
     def test_deleting_clears_a_stale_hidden_entry(self, tasks_dir: Path) -> None:

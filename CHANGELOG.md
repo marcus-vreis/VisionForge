@@ -41,6 +41,22 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
   guia "Primeiro treino" abre essa aba no passo "O que está acontecendo"
   ([ADR-118](docs/dev/DECISIONS.md)).
 
+### Changed
+
+- **Os erros que vêm de baixo das rotas também seguem o idioma da página.** Passam
+  pelo catálogo as mensagens que uma rota repassa como `detail` mas que são escritas
+  mais fundo: o download de dataset (dataset do torchvision desconhecido, formato do
+  Roboflow e do Kaggle, `api_key` e versão que faltam, o antigo par `username:key`
+  do Kaggle, credenciais do Kaggle não encontradas, dataset do Hugging Face sem
+  colunas de imagem e rótulo, download que terminou sem nenhuma imagem), o run sem
+  checkpoint na exportação ONNX, o Grad-CAM numa tarefa que não o tem ou num modelo
+  sem camada convolucional, a confirmação e o arquivo que falta ao excluir uma
+  tarefa própria, a tarefa própria não registrada e a chave de credencial em
+  branco. O 404 de uma tarefa própria desconhecida deixa de vir entre aspas (era o
+  `repr` do `KeyError`). Como nas fatias anteriores, quem chama sem `X-VF-Lang`, e
+  a linha de comando, agora lê português; os códigos de status não mudam
+  ([ADR-116](docs/dev/DECISIONS.md)).
+
 ## [0.13.0] — 2026-10-11
 
 ### Added

@@ -4744,6 +4744,34 @@ send codes the page words itself) and postponed it.
   small-images sentence in `routes.py`). Its numbers are the same in both
   languages; the interface still words its own from the response's numbers.
 
+**Moved in the third slice** (2026-10-15): the exceptions raised below the route
+layer that a route relays as its `detail`. They are worded where they are raised,
+not translated at the route, because the route only sees the finished sentence; the
+language reaches them through the same context variable, across
+`asyncio.to_thread`.
+
+- `download.*`: every refusal of `gui/api/dataset_download.py` a person can cause
+  from the page: an unknown torchvision dataset, the Roboflow and Kaggle dataset
+  formats, the missing Roboflow key and version, the old Kaggle `username:key`
+  pair, Kaggle credentials not found, a Hugging Face dataset without image and
+  label columns, and a download that finished with no image (its list of stray
+  extensions is a sentence of its own, appended).
+- `export.no_checkpoint`, `gradcam.*`: a run with no checkpoint in
+  `artifacts.model` (`torch_onnx_export.py`), Grad-CAM on a task that has no CAM
+  path (`torch_gradcam.py`) or on a model with no `nn.Conv2d` (`core/gradcam.py`).
+- `custom.*` (the rest): the confirmation and the missing file of `delete_task`
+  (`tasks/manage.py`) and the "not registered" of `get_task` (`tasks/registry.py`),
+  whose list of available keys is now joined with commas instead of printed as a
+  Python list. The 404 that relays it read `str(exc)`, which for a `KeyError` is the
+  repr of the message, quotes included; it now reads `exc.args[0]`.
+- `credentials.empty`: a blank provider key (`utils/credentials.py`).
+
+Left in English in this slice, on purpose: the errors only a programmer can cause
+(the `register_task` checks a researcher meets while writing a task file, an unknown
+provider name that the request schema already refuses, `val_fraction` out of range,
+`ExportONNXBlock` without `export_onnx`), and the `ImportError` of a damaged install,
+whose hint is a command line.
+
 **What the training sheet turned out to be.** The lines of the sheet are not server
 text. The server streams progress events (`start`, `epoch_end`, `trial_start`,
 `phase`, `end`), which carry numbers, and `TrainingOverlay` words every line from
@@ -4768,10 +4796,10 @@ exception message, below) and the label of a PatchCore phase, which
   a stop cut. No screen shows it; the page words "stopped" from the status.
 - The `description` of the training fields in the config schema, and the messages of
   the Pydantic validators.
-- Exceptions raised below the route layer and relayed as is: the dataset download,
-  the ONNX export, Grad-CAM, the confirmation and not-found errors of
-  `tasks/manage.py` (`delete_task`) and `tasks/registry.py` (`get_task`), and every
-  `str(exc)` that becomes the `error` of a failed run.
+- Exceptions raised below the route layer by the libraries themselves (torch,
+  Ultralytics, the dataset providers' clients) and relayed as is, including every
+  `str(exc)` that becomes the `error` of a failed run or the `500` of an action.
+  Our own ones moved in the third slice.
 - Texts of the reports that are not figures: the LaTeX captions
   (`core/latex_export.py`) and the Markdown export of a run.
 - The built-in task labels and descriptions in `/api/tasks`: replaced by the page's
