@@ -48,7 +48,9 @@ DATASETS: dict[str, dict[str, Any]] = {
         "val_dir": "validation",
     },
 }
-ARCHITECTURES = ["resnet18", "efficientnet_b1", "convnext_tiny"]
+# Two CNNs and a transformer (PROTOCOL.md): whether the seeds a comparison needs
+# differ between the families.
+ARCHITECTURES = ["resnet18", "convnext_tiny", "swin_t"]
 VARIANTS: dict[str, dict[str, Any]] = {
     "baseline": {},
     "no_aug": {
@@ -129,7 +131,7 @@ def check() -> int:
 
 
 def pilot() -> None:
-    """Seed 0 twice for resnet18 (must match: deterministic) and once for convnext_tiny.
+    """Seed 0 twice for resnet18 (must match: deterministic), once each for the others.
 
     Writes ``results/pilot.json`` with the wall time of each run, which is what
     the full grid's duration is estimated from.
@@ -138,7 +140,7 @@ def pilot() -> None:
     rows: list[dict[str, Any]] = []
     runner = ClassificationRunner()
     for dataset in DATASETS:
-        for arch, repeats in (("resnet18", 2), ("convnext_tiny", 1)):
+        for arch, repeats in (("resnet18", 2), ("convnext_tiny", 1), ("swin_t", 1)):
             for _ in range(repeats):
                 started = time.time()
                 (trial,) = run_replicates(
