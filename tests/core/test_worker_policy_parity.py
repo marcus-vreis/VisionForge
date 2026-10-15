@@ -37,10 +37,13 @@ def _row(n_small: tuple[int, ...], n_large: tuple[int, ...]) -> dict[str, Any]:
     }
 
 
+# One deliberate change since the copies were recorded: the automatic setting
+# (-1) on a small dataset now loads in process like any explicit request; the
+# copies handed it the whole budget (6 or 4).
 _PINNED = {
-    "anomaly": _row((6, 0, 0, 0, 0, 0, 0), (6, 0, 1, 2, 4, 6, 6)),
-    "regression": _row((4, 0, 0, 0, 0, 0, 0), (4, 0, 1, 2, 4, 4, 4)),
-    "segmentation": _row((4, 0, 0, 0, 0, 0, 0), (4, 0, 1, 2, 4, 4, 4)),
+    "anomaly": _row((0, 0, 0, 0, 0, 0, 0), (6, 0, 1, 2, 4, 6, 6)),
+    "regression": _row((0, 0, 0, 0, 0, 0, 0), (4, 0, 1, 2, 4, 4, 4)),
+    "segmentation": _row((0, 0, 0, 0, 0, 0, 0), (4, 0, 1, 2, 4, 4, 4)),
 }
 
 

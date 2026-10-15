@@ -46,6 +46,11 @@ class TestResolveNumWorkers:
 
         assert resolve_num_workers(2, n_samples=100) == 0
 
+    def test_automatic_on_a_small_dataset_loads_in_process_too(self) -> None:
+        from visionforge.core.data import resolve_num_workers
+
+        assert resolve_num_workers(-1, n_samples=100) == 0
+
     def test_zero_stays_zero(self) -> None:
         from visionforge.core.data import resolve_num_workers
 

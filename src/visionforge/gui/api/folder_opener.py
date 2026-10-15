@@ -6,6 +6,13 @@ the desktop of whoever clicked, so the action is only meaningful when the
 browser and the server share a machine. That is decided here from the client
 address, and the route refuses (403) and the page hides the button otherwise.
 
+Behind a reverse proxy on the same machine (nginx, Caddy) every request arrives
+from the proxy, i.e. from loopback, so a remote browser would be offered the
+button and its click would open a window on the server. Proxy headers
+(``X-Forwarded-For``) are deliberately not read: anyone can send them, and trusting
+them needs a list of trusted proxies this server does not have. Put such a proxy
+on another machine, or accept that the button is offered to everyone behind it.
+
 The folder is chosen by the caller from a path it already resolved on the
 server (``routes._find_run_dir``); nothing here accepts a path from the client.
 """

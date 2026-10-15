@@ -112,8 +112,10 @@ def resolve_num_workers(
     # serialisation cost that exceeds the data-loading time on small
     # datasets.  On Windows this cost is especially high because Python
     # uses the "spawn" method.  Disable workers when there are fewer
-    # images than a reasonable threshold.
-    if workers > 0 and n_samples < _SMALL_DATASET_THRESHOLD:
+    # images than a reasonable threshold.  The automatic setting (-1) obeys
+    # this too: it used to skip the check and hand a 100-image dataset every
+    # worker the machine could afford, the opposite of an explicit request.
+    if workers != 0 and n_samples < _SMALL_DATASET_THRESHOLD:
         logger.info(
             "Dataset has {} images (< {}); setting num_workers=0 "
             "to avoid multiprocessing overhead.",

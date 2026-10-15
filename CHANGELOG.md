@@ -64,6 +64,15 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
   `X-VF-Lang` recebe o mesmo card em inglês de antes
   ([ADR-116](docs/dev/DECISIONS.md)).
 
+### Fixed
+
+- **`num_workers` automático num dataset pequeno carrega no processo principal.**
+  Com menos de 500 imagens, um número de workers pedido explicitamente já virava
+  0 (abrir processos custa mais do que carregar as imagens), mas o automático
+  (`-1`) pulava essa regra e recebia todos os workers que a máquina aguentava. Agora
+  os dois seguem a mesma regra, em todas as tarefas
+  ([ADR-103](docs/dev/DECISIONS.md)).
+
 ## [0.13.0] — 2026-10-11
 
 ### Added
@@ -280,9 +289,9 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
   em que parou, ou quantas dobras, modelos, réplicas ou trials terminaram, ou se
   o banco do PatchCore foi guardado; se a parada não cortou nada, o log diz isso.
   Um erro depois do pedido de parada continua sendo uma falha, em vermelho. Nas
-  tabelas de resultado a unidade cortada aparece como "parada", não como falha. O botão da fila agora aparece também enquanto
-  um treino roda, mesmo sem nada esperando: é o único caminho até o treino
-  depois de recarregar a página
+  tabelas de resultado a unidade cortada aparece como "parada", não como falha. O
+  botão da fila agora aparece também enquanto um treino roda, mesmo sem nada
+  esperando: é o único caminho até o treino depois de recarregar a página
   ([ADR-088](docs/dev/DECISIONS.md), [ADR-111](docs/dev/DECISIONS.md)).
 - **Interface bilíngue (pt/en).** Todas as telas da interface existem em
   português e em inglês, com um seletor PT/EN no cabeçalho. A escolha fica

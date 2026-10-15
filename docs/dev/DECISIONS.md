@@ -3555,6 +3555,12 @@ machine, the toggle switches to a number input pre-filled with 3, and toggling
 back returns to automatic. 22 tests cover the contract, including that `0`
 survives validation and `-2` does not.
 
+**Amended (2026-10-15):** the automatic setting now obeys the small-dataset rule of
+`resolve_num_workers` as an explicit count always did: under 500 images it loads in
+the main process (0 workers). Before, `-1` skipped that check and gave a 100-image
+dataset the whole budget the machine could afford, paying the spawn cost the rule
+exists to avoid. The worker-policy parity test records the change.
+
 ## ADR-104 — A guided tour, offered once
 
 **Date:** 2026-08-28
