@@ -87,7 +87,10 @@ def base_config(dataset: str, arch: str) -> dict[str, Any]:
             "train_dir": "train",
             "val_dir": spec["val_dir"],
             "test_dir": "test",
-            "num_workers": -1,
+            # Fixed, not automatic: the automatic count follows the free memory of
+            # the moment, and the worker count decides which random augmentation
+            # each image gets, so a run would not repeat itself (Deviation 1).
+            "num_workers": 0,
             "transforms": {
                 "image_size": 224,
                 "horizontal_flip": True,

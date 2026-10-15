@@ -80,6 +80,46 @@ al. 2021; Summers & Dinneen 2021); what is not measured is the ratio of seed SD 
 ablation effect and the reversal rate in small-data fine-tuning of ImageNet-pretrained
 vision models under deterministic, paired seeds.
 
+## Pilot
+
+Run 2026-10-15 on one RTX 5060 Ti, with the fixes of Deviation 1
+(`results/pilot.json`). The determinism check passed on every dataset: resnet18 at
+seed 0, trained twice in one process, gave identical test accuracy (USK full 0.8150
+and 0.8150; USK 10% 0.8169 and 0.8169; Beans 0.9219 and 0.9219). All twelve runs
+succeeded.
+
+Wall time of one seed, used to estimate the grid (× 3 variants × 10 seeds):
+
+| Dataset | resnet18 | convnext_tiny | swin_t | Grid |
+|---|---|---|---|---|
+| USK full | 245 s | 608 s | 570 s | ≈ 11.9 h |
+| USK 10% | 65 s | 146 s | 173 s | ≈ 3.2 h |
+| Beans | 61 s | 367 s | 351 s | ≈ 6.5 h |
+
+About 21.5 hours in total, an upper estimate: the `res160` variant trains faster,
+and early stopping shortens runs unevenly. This section is information, not a
+deviation from the protocol.
+
 ## Deviations
 
-None yet.
+**1. The determinism check failed, and the cause was fixed before the grid
+(2026-10-15).** The pre-registered sanity check trained resnet18 at seed 0 twice
+per dataset in one process. The pairs disagreed: 0.7744 / 0.6813 (USK full),
+0.7869 / 0.7925 (USK 10%), 0.9453 / 0.9531 (Beans), with training losses already
+different at epoch 1. As the protocol requires, the grid did not start. Two causes
+were found and removed, and nothing else in the design changed:
+
+- *The new classifier head was not seeded.* VisionForge's blocks built the model
+  before the trainer seeded the RNGs, so the head of a pretrained network was drawn
+  from whatever state the RNG was in. Measured in isolation: built without seeding
+  first, the head differed between builds; seeded first, it was identical; with
+  identical weights and batch, two CUDA backward passes gave identical gradients
+  (so the kernels were not the cause). VisionForge now seeds before building
+  (ADR-121, with a regression test), which is the version the study runs on.
+- *The worker count was automatic.* It follows the free memory of the moment, and
+  the number of data-loading workers decides which random augmentation each image
+  receives, so a seed's run could change between nights. `run_study.py` now fixes
+  `num_workers` at 0.
+
+The pilot is repeated with both fixes; its result replaces this one under
+**Pilot**. The failed pilot's numbers are kept above as the record.

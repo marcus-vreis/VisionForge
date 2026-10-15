@@ -1,0 +1,98 @@
+[
+  {
+    "dataset": "usk_full",
+    "architecture": "resnet18",
+    "status": "success",
+    "metric": 0.815,
+    "wall_time_s": 240.1,
+    "error": ""
+  },
+  {
+    "dataset": "usk_full",
+    "architecture": "resnet18",
+    "status": "success",
+    "metric": 0.815,
+    "wall_time_s": 251.4,
+    "error": ""
+  },
+  {
+    "dataset": "usk_full",
+    "architecture": "convnext_tiny",
+    "status": "success",
+    "metric": 0.9075,
+    "wall_time_s": 607.9,
+    "error": ""
+  },
+  {
+    "dataset": "usk_full",
+    "architecture": "swin_t",
+    "status": "success",
+    "metric": 0.884375,
+    "wall_time_s": 570.1,
+    "error": ""
+  },
+  {
+    "dataset": "usk_10pct",
+    "architecture": "resnet18",
+    "status": "success",
+    "metric": 0.816875,
+    "wall_time_s": 64.7,
+    "error": ""
+  },
+  {
+    "dataset": "usk_10pct",
+    "architecture": "resnet18",
+    "status": "success",
+    "metric": 0.816875,
+    "wall_time_s": 64.4,
+    "error": ""
+  },
+  {
+    "dataset": "usk_10pct",
+    "architecture": "convnext_tiny",
+    "status": "success",
+    "metric": 0.835,
+    "wall_time_s": 146.1,
+    "error": ""
+  },
+  {
+    "dataset": "usk_10pct",
+    "architecture": "swin_t",
+    "status": "success",
+    "metric": 0.846875,
+    "wall_time_s": 172.6,
+    "error": ""
+  },
+  {
+    "dataset": "beans",
+    "architecture": "resnet18",
+    "status": "success",
+    "metric": 0.921875,
+    "wall_time_s": 61.2,
+    "error": ""
+  },
+  {
+    "dataset": "beans",
+    "architecture": "resnet18",
+    "status": "success",
+    "metric": 0.921875,
+    "wall_time_s": 61.2,
+    "error": ""
+  },
+  {
+    "dataset": "beans",
+    "architecture": "convnext_tiny",
+    "status": "success",
+    "metric": 0.984375,
+    "wall_time_s": 366.8,
+    "error": ""
+  },
+  {
+    "dataset": "beans",
+    "architecture": "swin_t",
+    "status": "success",
+    "metric": 0.96875,
+    "wall_time_s": 351.0,
+    "error": ""
+  }
+]
