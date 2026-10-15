@@ -13,6 +13,8 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ## [Unreleased]
 
+## [0.14.0] — 2026-10-15
+
 ### Added
 
 - **Uma aba "Como funciona" na tela de treino: o treino desenhado, ao lado do log.**
