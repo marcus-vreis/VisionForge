@@ -4772,6 +4772,26 @@ provider name that the request schema already refuses, `val_fraction` out of ran
 `ExportONNXBlock` without `export_onnx`), and the `ImportError` of a damaged install,
 whose hint is a command line.
 
+**Moved in the fourth slice** (2026-10-15): the two report texts that are not
+figures, under the rule the figures already follow (`tr_artifact`: the language of
+whoever asked, English when nobody chose).
+
+- `latex.*`: captions, column headers and notes of the four tables
+  `core/latex_export.py` writes (replicates, sweep, cross-validation, paired
+  comparison), including the small-n caution, the stopped-sweep note and the
+  "underpowered" warning. The tables are written by the job that ran the study, so
+  they are in the language it was submitted under. LaTeX markup stays in the
+  templates with its literal braces doubled; metric names, statuses and test names
+  are data and pass through unchanged. "Fold", "Seed", "Scheduler", `$p$` and `$d_z$`
+  read the same in both languages and have no entry.
+- `card.*`: the Markdown model card of `/api/runs/{id}/export_md` and the
+  `_stopped_extent` phrases it uses. Unlike the other routes, this one binds the
+  language from `X-VF-Lang` alone and falls back to **English** without it, not to
+  Portuguese: the page always sends the header, so the page gets its own language,
+  and a script that fetched the card before this change gets the same text as
+  before. Config keys and values (`num_classes`, the transforms table) are
+  identifiers and stay as they are.
+
 **What the training sheet turned out to be.** The lines of the sheet are not server
 text. The server streams progress events (`start`, `epoch_end`, `trial_start`,
 `phase`, `end`), which carry numbers, and `TrainingOverlay` words every line from
@@ -4800,8 +4820,6 @@ exception message, below) and the label of a PatchCore phase, which
   Ultralytics, the dataset providers' clients) and relayed as is, including every
   `str(exc)` that becomes the `error` of a failed run or the `500` of an action.
   Our own ones moved in the third slice.
-- Texts of the reports that are not figures: the LaTeX captions
-  (`core/latex_export.py`) and the Markdown export of a run.
 - The built-in task labels and descriptions in `/api/tasks`: replaced by the page's
   dictionary (ADR-110).
 

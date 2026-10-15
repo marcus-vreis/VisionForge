@@ -213,9 +213,11 @@ from visionforge.utils.detection_config import DetectionConfig
 from visionforge.utils.messages import (
     LANG_HEADER,
     current_lang,
+    parse_lang,
     resolve_lang,
     set_lang,
     tr,
+    tr_artifact,
     using_lang,
 )
 from visionforge.utils.redact import redact_secrets
@@ -827,8 +829,16 @@ async def delete_run(run_id: str, profile: ProfileDep) -> dict[str, str]:
 
 
 @router.get("/runs/{run_id}/export_md")
-async def export_run_markdown(run_id: str, profile: ProfileDep) -> Response:
-    """Render a model card (markdown) for the run, ready for paper inclusion."""
+async def export_run_markdown(
+    run_id: str,
+    profile: ProfileDep,
+    x_vf_lang: Annotated[str | None, Header(alias=LANG_HEADER)] = None,
+) -> Response:
+    """Render a model card (markdown) for the run, ready for paper inclusion.
+
+    The card is an artifact: it follows the language the page asked for, and is
+    English when the request names none (a script calling the endpoint).
+    """
     run_dir = _find_run_dir(run_id, profile)
     if run_dir is None:
         raise HTTPException(404, tr("run.not_found", run_id=run_id))
@@ -838,7 +848,8 @@ async def export_run_markdown(run_id: str, profile: ProfileDep) -> Response:
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(500, tr("run.bad_json", error=exc)) from exc
 
-    md = _render_run_markdown(run_dir, data)
+    with using_lang(parse_lang(x_vf_lang) or "en"):
+        md = _render_run_markdown(run_dir, data)
     filename = f"{data.get('experiment', run_dir.name)}_{run_dir.name}.md"
     return Response(
         content=md,
@@ -2036,16 +2047,22 @@ def _stopped_extent(data: dict[str, Any]) -> str:
     config: dict[str, Any] = data.get("config") or {}
     cv = metrics.get("cv_aggregate")
     if isinstance(cv, dict):
-        return f"{cv.get('n_folds_ok', '?')} of {cv.get('n_folds', '?')} folds finished"
+        return tr_artifact(
+            "card.stopped_folds",
+            ok=cv.get("n_folds_ok", "?"),
+            n=cv.get("n_folds", "?"),
+        )
     if (config.get("model") or {}).get("name") == "patchcore":
         # PatchCore has phases, not epochs: one fit counts the bank as built.
-        return (
-            "memory bank built, scoring skipped"
+        return tr_artifact(
+            "card.stopped_bank_built"
             if metrics.get("total_epochs")
-            else "before the memory bank was built"
+            else "card.stopped_before_bank"
         )
     planned = (config.get("training") or {}).get("epochs", "?")
-    return f"{metrics.get('total_epochs', '?')} of {planned} epochs"
+    return tr_artifact(
+        "card.stopped_epochs", done=metrics.get("total_epochs", "?"), planned=planned
+    )
 
 
 def _render_run_markdown(run_dir: Path, data: dict[str, Any]) -> str:
@@ -2058,47 +2075,70 @@ def _render_run_markdown(run_dir: Path, data: dict[str, Any]) -> str:
 
     lines.append(f"# {name}")
     lines.append("")
-    lines.append(f"- **Run ID:** `{data.get('id', run_dir.name)}`")
-    lines.append(f"- **Timestamp:** {data.get('timestamp', '?')}")
-    lines.append(f"- **Status:** {data.get('status', '?')}")
+    lines.append(
+        f"- **{tr_artifact('card.run_id')}:** `{data.get('id', run_dir.name)}`"
+    )
+    lines.append(f"- **{tr_artifact('card.timestamp')}:** {data.get('timestamp', '?')}")
+    lines.append(f"- **{tr_artifact('card.status')}:** {data.get('status', '?')}")
     if data.get("stopped"):
-        lines.append(f"- **Stopped:** yes ({_stopped_extent(data)})")
+        lines.append(
+            f"- **{tr_artifact('card.stopped')}:** {tr_artifact('card.yes')} "
+            f"({_stopped_extent(data)})"
+        )
     if data.get("device_used"):
-        lines.append(f"- **Device used:** `{data['device_used']}`")
-    lines.append(f"- **Run directory:** `{data.get('run_dir', run_dir)}`")
+        lines.append(
+            f"- **{tr_artifact('card.device_used')}:** `{data['device_used']}`"
+        )
+    lines.append(
+        f"- **{tr_artifact('card.run_dir')}:** `{data.get('run_dir', run_dir)}`"
+    )
     artifacts = data.get("artifacts", {})
     if artifacts.get("model"):
-        lines.append(f"- **Checkpoint:** `{artifacts['model']}`")
+        lines.append(f"- **{tr_artifact('card.checkpoint')}:** `{artifacts['model']}`")
     lines.append("")
 
-    lines.append("## Configuration")
+    lines.append(f"## {tr_artifact('card.configuration')}")
     lines.append("")
     model_cfg = config.get("model", {})
     training_cfg = config.get("training", {})
-    lines.append(f"- **Architecture:** {model_cfg.get('name', '?')}")
+    lines.append(
+        f"- **{tr_artifact('card.architecture')}:** {model_cfg.get('name', '?')}"
+    )
     lines.append(f"- **num_classes:** {model_cfg.get('num_classes', '?')}")
-    lines.append(f"- **Pretrained:** {model_cfg.get('pretrained', '?')}")
-    lines.append(f"- **Task:** {config.get('task', '?')}")
-    lines.append(f"- **Optimizer:** {training_cfg.get('optimizer', '?')}")
-    lines.append(f"- **Learning rate:** {training_cfg.get('learning_rate', '?')}")
-    lines.append(f"- **Batch size:** {training_cfg.get('batch_size', '?')}")
-    lines.append(f"- **Epochs (max):** {training_cfg.get('epochs', '?')}")
+    lines.append(
+        f"- **{tr_artifact('card.pretrained')}:** {model_cfg.get('pretrained', '?')}"
+    )
+    lines.append(f"- **{tr_artifact('card.task')}:** {config.get('task', '?')}")
+    lines.append(
+        f"- **{tr_artifact('card.optimizer')}:** {training_cfg.get('optimizer', '?')}"
+    )
+    lines.append(
+        f"- **{tr_artifact('card.learning_rate')}:** "
+        f"{training_cfg.get('learning_rate', '?')}"
+    )
+    lines.append(
+        f"- **{tr_artifact('card.batch_size')}:** {training_cfg.get('batch_size', '?')}"
+    )
+    lines.append(
+        f"- **{tr_artifact('card.epochs_max')}:** {training_cfg.get('epochs', '?')}"
+    )
+    # "Seed" and "Scheduler" are the words a Portuguese paper uses too.
     lines.append(f"- **Seed:** {training_cfg.get('seed', '?')}")
     if training_cfg.get("scheduler", {}).get("kind", "none") != "none":
         sched = training_cfg["scheduler"]
         lines.append(f"- **Scheduler:** {sched['kind']} ({sched})")
     if training_cfg.get("mixed_precision"):
-        lines.append("- **Mixed precision:** enabled")
+        lines.append(
+            f"- **{tr_artifact('card.mixed_precision')}:** {tr_artifact('card.enabled')}"
+        )
     lines.append("")
 
     data_cfg = config.get("data", {})
     pp_steps = data_cfg.get("preprocessing", {}).get("steps", [])
     if pp_steps:
-        lines.append("## Preprocessing pipeline")
+        lines.append(f"## {tr_artifact('card.preprocessing')}")
         lines.append("")
-        lines.append(
-            "Applied to every loaded image before augmentation, in this order:"
-        )
+        lines.append(tr_artifact("card.preprocessing_intro"))
         lines.append("")
         for i, step in enumerate(pp_steps, start=1):
             kind = step.get("kind", "?")
@@ -2108,24 +2148,22 @@ def _render_run_markdown(run_dir: Path, data: dict[str, Any]) -> str:
 
     tx = data_cfg.get("transforms", {})
     if tx:
-        lines.append("## Augmentation / Normalization")
+        lines.append(f"## {tr_artifact('card.augmentation')}")
         lines.append("")
-        lines.append("| Field | Value |")
+        lines.append(f"| {tr_artifact('card.field')} | {tr_artifact('card.value')} |")
         lines.append("|---|---|")
         for k, v in tx.items():
             lines.append(f"| {k} | `{v}` |")
         lines.append("")
 
-    lines.append("## Final metrics")
+    lines.append(f"## {tr_artifact('card.final_metrics')}")
     lines.append("")
     if metrics:
         cis: dict[str, Any] = data.get("metric_cis", {})
         has_cis = bool(cis)
-        header = (
-            "| Metric | Value | 95% CI (bootstrap) |"
-            if has_cis
-            else "| Metric | Value |"
-        )
+        header = f"| {tr_artifact('card.metric')} | {tr_artifact('card.value')} |"
+        if has_cis:
+            header += f" {tr_artifact('card.ci_bootstrap')} |"
         lines.append(header)
         lines.append("|---|---|---|" if has_cis else "|---|---|")
         for k, v in metrics.items():
@@ -2142,14 +2180,14 @@ def _render_run_markdown(run_dir: Path, data: dict[str, Any]) -> str:
             sample = next(iter(cis.values()))
             lines.append("")
             lines.append(
-                f"Intervals are percentile bootstrap over the "
-                f"{sample['n_samples']} test images "
-                f"({sample['n_resamples']} resamples): they quantify test-split "
-                f"sampling noise for this fixed model, not run-to-run variance. "
-                f"For the latter, train replicates under several seeds."
+                tr_artifact(
+                    "card.bootstrap_note",
+                    n_samples=sample["n_samples"],
+                    n_resamples=sample["n_resamples"],
+                )
             )
     else:
-        lines.append("_(none recorded)_")
+        lines.append(tr_artifact("card.none_recorded"))
     lines.append("")
 
     if history:
@@ -2165,9 +2203,9 @@ def _render_run_markdown(run_dir: Path, data: dict[str, Any]) -> str:
                 if key != "epoch" and key not in columns:
                     columns.append(key)
 
-        lines.append(f"## Training history ({len(history)} epoch(s))")
+        lines.append(f"## {tr_artifact('card.history', n=len(history))}")
         lines.append("")
-        lines.append("| Epoch | " + " | ".join(columns) + " |")
+        lines.append(f"| {tr_artifact('card.epoch')} | " + " | ".join(columns) + " |")
         lines.append("|---" * (len(columns) + 1) + "|")
         for epoch in history:
             cells = [str(epoch.get("epoch", "?"))]
@@ -2183,7 +2221,7 @@ def _render_run_markdown(run_dir: Path, data: dict[str, Any]) -> str:
 
     graphics = artifacts.get("graphics", [])
     if graphics:
-        lines.append("## Plots")
+        lines.append(f"## {tr_artifact('card.plots')}")
         lines.append("")
         for g in graphics:
             lines.append(f"- `{g}`")
@@ -2191,15 +2229,21 @@ def _render_run_markdown(run_dir: Path, data: dict[str, Any]) -> str:
 
     tests = data.get("tests", [])
     if tests:
-        lines.append(f"## Test runs on additional datasets ({len(tests)})")
+        lines.append(f"## {tr_artifact('card.tests', n=len(tests))}")
         lines.append("")
         for t in tests:
             lines.append(f"### {t.get('label', t.get('test_id'))}")
-            lines.append(f"- **base_dir:** `{t.get('base_dir')}`")
-            lines.append(f"- **timestamp:** {t.get('timestamp')}")
+            lines.append(
+                f"- **{tr_artifact('card.test_base_dir')}:** `{t.get('base_dir')}`"
+            )
+            lines.append(
+                f"- **{tr_artifact('card.test_timestamp')}:** {t.get('timestamp')}"
+            )
             m = t.get("metrics", {})
             if m:
-                lines.append("| Metric | Value |")
+                lines.append(
+                    f"| {tr_artifact('card.metric')} | {tr_artifact('card.value')} |"
+                )
                 lines.append("|---|---|")
                 for k, v in m.items():
                     val = f"{v:.4f}" if isinstance(v, float) else str(v)

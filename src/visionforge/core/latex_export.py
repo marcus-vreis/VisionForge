@@ -14,6 +14,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from visionforge.utils.messages import tr_artifact
+
 # Characters that would otherwise break compilation or silently render wrong.
 _ESCAPES = {
     "\\": r"\textbackslash{}",
@@ -52,11 +54,14 @@ def _num(value: Any, digits: int = 4) -> str:
     return f"{number:.{digits}f}"
 
 
-def _counts(**counts: int) -> str:
-    """ "1 stopped, 3 not run" for the non-zero counts, in the order given."""
-    return ", ".join(
-        f"{n} {label.replace('_', ' ')}" for label, n in counts.items() if n
+def _counts(*, stopped: int = 0, failed: int = 0, not_run: int = 0) -> str:
+    """ "1 stopped, 3 not run" for the non-zero counts, in a fixed order."""
+    parts = (
+        ("latex.count_stopped", stopped),
+        ("latex.count_failed", failed),
+        ("latex.count_not_run", not_run),
     )
+    return ", ".join(tr_artifact(key, n=n) for key, n in parts if n)
 
 
 def _table(
@@ -122,38 +127,37 @@ def replicates_to_latex(report: dict[str, Any], *, experiment: str = "") -> str:
             failed=statuses.count("failed"),
             not_run=len(seeds) - len(trials),
         )
-        seed_note += f" ({len(finished)} of {len(seeds)} requested; {detail})"
+        seed_note += " " + tr_artifact(
+            "latex.seeds_requested",
+            finished=len(finished),
+            planned=len(seeds),
+            detail=detail,
+        )
     # Below ~5 seeds both intervals mislead in opposite directions (t far too
     # wide, percentile bootstrap far too narrow). Say so in the table itself:
     # a caveat that lives only in the docs never reaches the reader.
     caveat = (
-        r" \textbf{Caution:} with $n<5$ seeds the $t$ interval is very wide and "
-        "the percentile bootstrap too narrow; treat both as indicative and "
-        "increase the number of seeds before reporting."
+        " " + tr_artifact("latex.replicates_caution")
         if isinstance(n, int) and n < 5
         else ""
     )
     return _table(
-        caption=(
-            f"{escape(experiment or 'Experiment')}: multi-seed replicates "
-            f"($n={n}$ seeds)."
+        caption=tr_artifact(
+            "latex.replicates_caption",
+            experiment=escape(experiment or tr_artifact("latex.experiment")),
+            n=n,
         ),
         label="tab:replicates",
         column_spec="lrrcc",
         header=[
-            "Metric",
-            "Mean",
-            r"SD ($n-1$)",
-            r"95\% CI (t)",
-            r"95\% CI (bootstrap)",
+            tr_artifact("latex.metric"),
+            tr_artifact("latex.mean"),
+            tr_artifact("latex.sd"),
+            tr_artifact("latex.ci_t"),
+            tr_artifact("latex.ci_bootstrap"),
         ],
         rows=rows,
-        note=(
-            r"$\star$ headline metric. Seeds: "
-            + seed_note
-            + ". Intervals are over seed-to-seed variation of a fixed "
-            "configuration, not over the data distribution." + caveat
-        ),
+        note=tr_artifact("latex.replicates_note", seeds=seed_note, caveat=caveat),
     )
 
 
@@ -181,10 +185,11 @@ def sweep_to_latex(report: dict[str, Any], *, experiment: str = "") -> str:
             ]
         )
     return _table(
-        caption=(
-            f"{escape(experiment or 'Experiment')}: "
-            f"{escape(report.get('mode', 'grid'))} hyperparameter sweep, "
-            f"ranked by {escape(metric)}."
+        caption=tr_artifact(
+            "latex.sweep_caption",
+            experiment=escape(experiment or tr_artifact("latex.experiment")),
+            mode=escape(report.get("mode", "grid")),
+            metric=escape(metric),
         ),
         label="tab:sweep",
         column_spec="l" + "r" * (len(paths) + 2),
@@ -192,14 +197,14 @@ def sweep_to_latex(report: dict[str, Any], *, experiment: str = "") -> str:
             "\\#",
             *[escape(p.split(".")[-1]) for p in paths],
             escape(metric),
-            "Time (s)",
+            tr_artifact("latex.time_s"),
         ],
         rows=rows,
-        note=(
-            f"{len(trials)} of {report.get('total_trials', len(trials))} trials "
-            f"succeeded.{_sweep_stop_note(report)} Ranking over a single run per "
-            "configuration reflects seed noise as well as the hyperparameter; "
-            "confirm the winner with replicates."
+        note=tr_artifact(
+            "latex.sweep_note",
+            succeeded=len(trials),
+            total=report.get("total_trials", len(trials)),
+            stop_note=_sweep_stop_note(report),
         ),
     )
 
@@ -211,8 +216,8 @@ def _sweep_stop_note(report: dict[str, Any]) -> str:
     ran = report.get("total_trials", 0)
     planned = report.get("planned_trials", ran)
     cut = report.get("stopped_count", 0)
-    detail = f" ({cut} stopped before finishing)" if cut else ""
-    return f" The sweep was stopped after {ran} of {planned} planned trials{detail}."
+    key = "latex.sweep_stopped_cut" if cut else "latex.sweep_stopped"
+    return " " + tr_artifact(key, ran=ran, planned=planned, cut=cut)
 
 
 def cv_to_latex(report: dict[str, Any], *, experiment: str = "") -> str:
@@ -240,7 +245,7 @@ def cv_to_latex(report: dict[str, Any], *, experiment: str = "") -> str:
     if aggregate:
         rows.append(
             [
-                r"\textbf{Mean $\pm$ SD ($n-1$)}",
+                tr_artifact("latex.cv_mean_sd"),
                 *[
                     f"{_num(aggregate[name].get('mean'))} $\\pm$ "
                     f"{_num(aggregate[name].get('std'))}"
@@ -251,21 +256,27 @@ def cv_to_latex(report: dict[str, Any], *, experiment: str = "") -> str:
     n_folds = report.get("n_folds", len(folds))
     statuses = [f.get("status", "success") for f in folds]
     finished = statuses.count("success")
-    scope = ""
+    shown = escape(experiment or tr_artifact("latex.experiment"))
     if finished < n_folds:
         detail = _counts(
             stopped=statuses.count("stopped"),
             failed=statuses.count("failed"),
             not_run=n_folds - len(folds),
         )
-        scope = f", {finished} of {n_folds} folds finished ({detail})"
+        caption = tr_artifact(
+            "latex.cv_caption_partial",
+            experiment=shown,
+            n_folds=n_folds,
+            finished=finished,
+            detail=detail,
+        )
+    else:
+        caption = tr_artifact("latex.cv_caption", experiment=shown, n_folds=n_folds)
     return _table(
-        caption=(
-            f"{escape(experiment or 'Experiment')}: "
-            f"{n_folds}-fold cross-validation{scope}."
-        ),
+        caption=caption,
         label="tab:cv",
         column_spec="l" + "r" * len(names),
+        # "Fold" is the same word in both languages, so it has no catalog entry.
         header=["Fold", *[escape(n) for n in names]],
         rows=rows,
     )
@@ -280,7 +291,11 @@ def comparison_to_latex(
         star = r"$^{*}$" if c.get("significant") else ""
         rows.append(
             [
-                f"{escape(c.get('label_a'))} vs {escape(c.get('label_b'))}",
+                tr_artifact(
+                    "latex.versus",
+                    a=escape(c.get("label_a")),
+                    b=escape(c.get("label_b")),
+                ),
                 f"{_num(c.get('mean_difference'))}{star}",
                 f"[{_num(c.get('ci_low'))}, {_num(c.get('ci_high'))}]",
                 escape(c.get("test", "").replace("_", " ")),
@@ -295,33 +310,26 @@ def comparison_to_latex(
     power_note = ""
     if blocked:
         floor = max(float(c.get("min_achievable_p") or 0.0) for c in blocked)
-        power_note = (
-            r" \textbf{Underpowered:} with this many seeds the rank test cannot "
-            f"return $p<{floor:.4f}$, so no difference could reach "
-            f"$\\alpha={alpha}$ regardless of its size. Add seeds before "
-            "interpreting a non-significant result."
+        power_note = " " + tr_artifact(
+            "latex.comparison_underpowered", floor=floor, alpha=alpha
         )
     return _table(
-        caption=(
-            f"{escape(experiment or 'Experiment')}: paired comparison over "
-            "shared seeds."
+        caption=tr_artifact(
+            "latex.comparison_caption",
+            experiment=escape(experiment or tr_artifact("latex.experiment")),
         ),
         label="tab:comparison",
         column_spec="lrcccr",
         header=[
-            "Comparison",
-            "Difference",
-            r"95\% CI",
-            "Test",
+            tr_artifact("latex.comparison"),
+            tr_artifact("latex.difference"),
+            tr_artifact("latex.ci"),
+            tr_artifact("latex.test"),
             "$p$",
             "$d_z$",
         ],
         rows=rows,
-        note=(
-            f"$^{{*}}$ significant at $\\alpha={alpha}$ after Holm-Bonferroni "
-            "correction across the family. Differences are A minus B on the "
-            "seeds both configurations ran." + power_note
-        ),
+        note=tr_artifact("latex.comparison_note", alpha=alpha, power_note=power_note),
     )
 
 

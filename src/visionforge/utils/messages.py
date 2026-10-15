@@ -918,6 +918,226 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "pt": "Curva de precisão e revocação",
         "en": "Precision-Recall Curve",
     },
+    # ── LaTeX tables (core/latex_export.py) ──────────────────────────────────
+    # Artifacts too, so read through ``tr_artifact``. LaTeX markup that is not
+    # language (``\textbf``, ``$n<5$``, ``\%``) stays in the template and its
+    # literal braces are doubled, because the template goes through ``format``.
+    "latex.experiment": {"pt": "Experimento", "en": "Experiment"},
+    "latex.metric": {"pt": "Métrica", "en": "Metric"},
+    "latex.mean": {"pt": "Média", "en": "Mean"},
+    "latex.sd": {"pt": r"DP ($n-1$)", "en": r"SD ($n-1$)"},
+    "latex.ci_t": {"pt": r"IC 95\% (t)", "en": r"95\% CI (t)"},
+    "latex.ci_bootstrap": {"pt": r"IC 95\% (bootstrap)", "en": r"95\% CI (bootstrap)"},
+    "latex.ci": {"pt": r"IC 95\%", "en": r"95\% CI"},
+    "latex.time_s": {"pt": "Tempo (s)", "en": "Time (s)"},
+    "latex.comparison": {"pt": "Comparação", "en": "Comparison"},
+    "latex.difference": {"pt": "Diferença", "en": "Difference"},
+    "latex.test": {"pt": "Teste", "en": "Test"},
+    "latex.versus": {"pt": "{a} vs. {b}", "en": "{a} vs {b}"},
+    "latex.count_stopped": {"pt": "{n} interrompida(s)", "en": "{n} stopped"},
+    "latex.count_failed": {"pt": "{n} com falha", "en": "{n} failed"},
+    "latex.count_not_run": {"pt": "{n} não executada(s)", "en": "{n} not run"},
+    "latex.replicates_caption": {
+        "pt": "{experiment}: réplicas com várias seeds ($n={n}$ seeds).",
+        "en": "{experiment}: multi-seed replicates ($n={n}$ seeds).",
+    },
+    "latex.seeds_requested": {
+        "pt": "({finished} de {planned} solicitadas; {detail})",
+        "en": "({finished} of {planned} requested; {detail})",
+    },
+    "latex.replicates_note": {
+        "pt": (
+            r"$\star$ métrica principal. Seeds: {seeds}. Os intervalos são sobre "
+            "a variação entre seeds de uma configuração fixa, não sobre a "
+            "distribuição dos dados.{caveat}"
+        ),
+        "en": (
+            r"$\star$ headline metric. Seeds: {seeds}. Intervals are over "
+            "seed-to-seed variation of a fixed configuration, not over the data "
+            "distribution.{caveat}"
+        ),
+    },
+    "latex.replicates_caution": {
+        "pt": (
+            r"\textbf{{Atenção:}} com $n<5$ seeds o intervalo $t$ é muito largo e "
+            "o bootstrap percentílico, estreito demais; trate ambos como "
+            "indicativos e aumente o número de seeds antes de reportar."
+        ),
+        "en": (
+            r"\textbf{{Caution:}} with $n<5$ seeds the $t$ interval is very wide and "
+            "the percentile bootstrap too narrow; treat both as indicative and "
+            "increase the number of seeds before reporting."
+        ),
+    },
+    "latex.sweep_caption": {
+        "pt": (
+            "{experiment}: varredura de hiperparâmetros ({mode}), ordenada por "
+            "{metric}."
+        ),
+        "en": "{experiment}: {mode} hyperparameter sweep, ranked by {metric}.",
+    },
+    "latex.sweep_note": {
+        "pt": (
+            "{succeeded} de {total} tentativas concluídas com sucesso.{stop_note} "
+            "A ordenação com uma única execução por configuração reflete o ruído "
+            "de seed e também o hiperparâmetro; confirme a vencedora com réplicas."
+        ),
+        "en": (
+            "{succeeded} of {total} trials succeeded.{stop_note} Ranking over a "
+            "single run per configuration reflects seed noise as well as the "
+            "hyperparameter; confirm the winner with replicates."
+        ),
+    },
+    "latex.sweep_stopped": {
+        "pt": (
+            "A varredura foi interrompida após {ran} de {planned} tentativas "
+            "planejadas."
+        ),
+        "en": "The sweep was stopped after {ran} of {planned} planned trials.",
+    },
+    "latex.sweep_stopped_cut": {
+        "pt": (
+            "A varredura foi interrompida após {ran} de {planned} tentativas "
+            "planejadas ({cut} interrompida(s) antes de terminar)."
+        ),
+        "en": (
+            "The sweep was stopped after {ran} of {planned} planned trials "
+            "({cut} stopped before finishing)."
+        ),
+    },
+    "latex.cv_caption": {
+        "pt": "{experiment}: validação cruzada com {n_folds} folds.",
+        "en": "{experiment}: {n_folds}-fold cross-validation.",
+    },
+    "latex.cv_caption_partial": {
+        "pt": (
+            "{experiment}: validação cruzada com {n_folds} folds, {finished} de "
+            "{n_folds} folds concluídos ({detail})."
+        ),
+        "en": (
+            "{experiment}: {n_folds}-fold cross-validation, {finished} of "
+            "{n_folds} folds finished ({detail})."
+        ),
+    },
+    "latex.cv_mean_sd": {
+        "pt": r"\textbf{{Média $\pm$ DP ($n-1$)}}",
+        "en": r"\textbf{{Mean $\pm$ SD ($n-1$)}}",
+    },
+    "latex.comparison_caption": {
+        "pt": "{experiment}: comparação pareada nas seeds compartilhadas.",
+        "en": "{experiment}: paired comparison over shared seeds.",
+    },
+    "latex.comparison_note": {
+        "pt": (
+            r"$^{{*}}$ significativo a $\alpha={alpha}$ após a correção de "
+            "Holm-Bonferroni na família de comparações. As diferenças são A menos "
+            "B nas seeds em que as duas configurações foram executadas.{power_note}"
+        ),
+        "en": (
+            r"$^{{*}}$ significant at $\alpha={alpha}$ after Holm-Bonferroni "
+            "correction across the family. Differences are A minus B on the "
+            "seeds both configurations ran.{power_note}"
+        ),
+    },
+    "latex.comparison_underpowered": {
+        "pt": (
+            r"\textbf{{Poder insuficiente:}} com tão poucas seeds o teste de "
+            r"postos não consegue retornar $p<{floor:.4f}$, então nenhuma "
+            r"diferença poderia atingir $\alpha={alpha}$, qualquer que fosse o "
+            "seu tamanho. Adicione seeds antes de interpretar um resultado não "
+            "significativo."
+        ),
+        "en": (
+            r"\textbf{{Underpowered:}} with this many seeds the rank test cannot "
+            r"return $p<{floor:.4f}$, so no difference could reach "
+            r"$\alpha={alpha}$ regardless of its size. Add seeds before "
+            "interpreting a non-significant result."
+        ),
+    },
+    # ── Markdown model card (gui/api/routes.py) ──────────────────────────────
+    # The card is an artifact, but the route that serves it always runs under
+    # the page language, so a Portuguese page gets a Portuguese card.
+    "card.run_id": {"pt": "ID da execução", "en": "Run ID"},
+    "card.timestamp": {"pt": "Data e hora", "en": "Timestamp"},
+    "card.status": {"pt": "Situação", "en": "Status"},
+    "card.stopped": {"pt": "Interrompida", "en": "Stopped"},
+    "card.yes": {"pt": "sim", "en": "yes"},
+    "card.device_used": {"pt": "Dispositivo usado", "en": "Device used"},
+    "card.run_dir": {"pt": "Diretório da execução", "en": "Run directory"},
+    "card.checkpoint": {"pt": "Arquivo do checkpoint", "en": "Checkpoint"},
+    "card.configuration": {"pt": "Configuração", "en": "Configuration"},
+    "card.architecture": {"pt": "Arquitetura", "en": "Architecture"},
+    "card.pretrained": {"pt": "Pré-treinado", "en": "Pretrained"},
+    "card.task": {"pt": "Tarefa", "en": "Task"},
+    "card.optimizer": {"pt": "Otimizador", "en": "Optimizer"},
+    "card.learning_rate": {"pt": "Taxa de aprendizado", "en": "Learning rate"},
+    "card.batch_size": {"pt": "Tamanho do batch", "en": "Batch size"},
+    "card.epochs_max": {"pt": "Épocas (máx.)", "en": "Epochs (max)"},
+    "card.mixed_precision": {"pt": "Precisão mista", "en": "Mixed precision"},
+    "card.enabled": {"pt": "ativada", "en": "enabled"},
+    "card.preprocessing": {
+        "pt": "Pipeline de pré-processamento",
+        "en": "Preprocessing pipeline",
+    },
+    "card.preprocessing_intro": {
+        "pt": (
+            "Aplicadas a cada imagem carregada, antes do data augmentation, nesta "
+            "ordem:"
+        ),
+        "en": "Applied to every loaded image before augmentation, in this order:",
+    },
+    "card.augmentation": {
+        "pt": "Data augmentation / Normalização",
+        "en": "Augmentation / Normalization",
+    },
+    "card.field": {"pt": "Campo", "en": "Field"},
+    "card.value": {"pt": "Valor", "en": "Value"},
+    "card.final_metrics": {"pt": "Métricas finais", "en": "Final metrics"},
+    "card.metric": {"pt": "Métrica", "en": "Metric"},
+    "card.ci_bootstrap": {"pt": "IC 95% (bootstrap)", "en": "95% CI (bootstrap)"},
+    "card.bootstrap_note": {
+        "pt": (
+            "Os intervalos são bootstrap percentílico sobre as {n_samples} imagens "
+            "de teste ({n_resamples} reamostragens): quantificam o ruído amostral "
+            "do conjunto de teste para este modelo fixo, não a variância entre "
+            "execuções. Para esta última, treine réplicas com várias seeds."
+        ),
+        "en": (
+            "Intervals are percentile bootstrap over the {n_samples} test images "
+            "({n_resamples} resamples): they quantify test-split sampling noise "
+            "for this fixed model, not run-to-run variance. For the latter, train "
+            "replicates under several seeds."
+        ),
+    },
+    "card.none_recorded": {"pt": "_(nenhuma registrada)_", "en": "_(none recorded)_"},
+    "card.history": {
+        "pt": "Histórico de treino ({n} época(s))",
+        "en": "Training history ({n} epoch(s))",
+    },
+    "card.epoch": {"pt": "Época", "en": "Epoch"},
+    "card.plots": {"pt": "Gráficos", "en": "Plots"},
+    "card.tests": {
+        "pt": "Testes em conjuntos de dados adicionais ({n})",
+        "en": "Test runs on additional datasets ({n})",
+    },
+    "card.test_base_dir": {"pt": "diretório-base", "en": "base_dir"},
+    "card.test_timestamp": {"pt": "data e hora", "en": "timestamp"},
+    "card.stopped_folds": {
+        "pt": "{ok} de {n} folds concluídos",
+        "en": "{ok} of {n} folds finished",
+    },
+    "card.stopped_bank_built": {
+        "pt": "banco de memória construído, pontuação não realizada",
+        "en": "memory bank built, scoring skipped",
+    },
+    "card.stopped_before_bank": {
+        "pt": "antes de o banco de memória ser construído",
+        "en": "before the memory bank was built",
+    },
+    "card.stopped_epochs": {
+        "pt": "{done} de {planned} épocas",
+        "en": "{done} of {planned} epochs",
+    },
 }
 
 

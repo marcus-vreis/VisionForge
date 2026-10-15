@@ -56,6 +56,13 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
   `repr` do `KeyError`). Como nas fatias anteriores, quem chama sem `X-VF-Lang`, e
   a linha de comando, agora lê português; os códigos de status não mudam
   ([ADR-116](docs/dev/DECISIONS.md)).
+- **As tabelas LaTeX e o model card em Markdown seguem o idioma, como as figuras.**
+  Legendas, cabeçalhos e notas das tabelas de réplicas, sweep, validação cruzada e
+  comparação pareada (incluindo o aviso de poucas seeds e o de poder insuficiente)
+  saem no idioma de quem iniciou o estudo; fora da interface continuam em inglês. O
+  model card de um run (`export_md`) sai no idioma da página; uma chamada sem
+  `X-VF-Lang` recebe o mesmo card em inglês de antes
+  ([ADR-116](docs/dev/DECISIONS.md)).
 
 ## [0.13.0] — 2026-10-11
 
