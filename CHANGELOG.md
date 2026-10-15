@@ -15,6 +15,16 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Added
 
+- **A GUI avisa quando há uma versão nova e instala com um botão.** Abaixo da
+  versão, no canto do cabeçalho, aparece "atualização disponível"; o botão
+  "atualizar e reabrir" fecha a GUI, instala exatamente a versão anunciada e a abre
+  de novo, e a página recarrega sozinha. O botão não aparece para quem roda do
+  código-fonte (`git pull`), num ambiente sem pip nem uv, de outra máquina ou com um
+  treino na fila; nesses casos o aviso mostra o comando. Nada atualiza sozinho. Uma
+  falha deixa a versão anterior rodando e o motivo em `update.log`.
+  `VISIONFORGE_NO_UPDATE_CHECK=1` desliga a consulta ao PyPI, e a nova opção
+  `visionforge gui --no-browser` abre o servidor sem abrir o navegador
+  ([ADR-120](docs/dev/DECISIONS.md)).
 - **A aba "Como funciona" avisa quando as losses mostram overfitting.** Quando a loss
   de validação sobe por três épocas seguidas enquanto a de treino cai, aparece uma
   frase em âmbar dizendo desde qual época, e que o modelo pode estar decorando o

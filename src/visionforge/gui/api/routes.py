@@ -697,6 +697,66 @@ def _client_host(request: Request) -> str | None:
     return request.client.host if request.client else None
 
 
+# Why the button cannot install, as the catalog words it (ADR-120).
+_UPDATE_BLOCKED = {
+    "source": "update.blocked_source",
+    "no_installer": "update.blocked_no_installer",
+    "remote": "update.blocked_remote",
+    "busy": "update.blocked_busy",
+}
+
+
+@router.get("/update")
+async def get_update(request: Request) -> dict[str, Any]:
+    """Whether a newer release exists, and whether this page may install it (ADR-120).
+
+    The PyPI lookup blocks for up to a few seconds when the network is slow, so it
+    runs off the event loop; its answer is cached for hours.
+    """
+    from visionforge.gui.api.updates import update_status
+
+    return await asyncio.to_thread(
+        update_status,
+        client_is_local=is_loopback_host(_client_host(request)),
+        busy=_RUN_QUEUE.is_busy() or _RUN_QUEUE.pending_count() > 0,
+    )
+
+
+@router.post("/update/apply")
+async def apply_update(request: Request) -> dict[str, str]:
+    """Install the announced release and restart the GUI (ADR-120).
+
+    Refused for a page of another site and for a client on another machine, the
+    same two checks as "open folder": reinstalling the server is the server
+    owner's decision. Refused while a job runs or waits, which the restart would
+    kill. The updater runs in a process of its own; this server exits right after
+    answering, so the updater can replace its files and reuse its port.
+    """
+    from visionforge.gui.api.updates import spawn_updater, update_status
+    from visionforge.gui.server import request_shutdown
+
+    origin = request.headers.get("origin")
+    if origin is not None and not is_loopback_origin(origin):
+        raise HTTPException(403, tr("update.foreign_origin"))
+    local = is_loopback_host(_client_host(request))
+    busy = _RUN_QUEUE.is_busy() or _RUN_QUEUE.pending_count() > 0
+    status = await asyncio.to_thread(update_status, client_is_local=local, busy=busy)
+    if not status["available"]:
+        raise HTTPException(409, tr("update.none"))
+    if not status["can_apply"]:
+        raise HTTPException(
+            403 if status["blocked"] == "remote" else 409,
+            tr(_UPDATE_BLOCKED[status["blocked"]]),
+        )
+    host, port = request.scope.get("server") or ("127.0.0.1", 8000)
+    try:
+        spawn_updater(version=status["latest"], host=str(host), port=int(port))
+    except (OSError, RuntimeError) as exc:
+        raise HTTPException(500, tr("update.spawn_failed", error=exc)) from exc
+    request_shutdown()
+    return {"status": "restarting", "target": status["latest"]}
+
+
 @router.post("/runs/{run_id}/reveal")
 async def reveal_run_folder(
     run_id: str, request: Request, profile: ProfileDep

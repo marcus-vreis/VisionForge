@@ -29,6 +29,8 @@ const ALLOWED = new Set([
   "· v",
   // Example values in the sweep editor's placeholders: a config dot-path and model names.
   "training.learning_rate", "resnet18, resnet50",
+  // A link target, not text: the release notes of the version the update notice offers.
+  "https://github.com/marcus-vreis/VisionForge/releases/tag/v",
 ]);
 
 const VISIBLE_PROPS = new Set([

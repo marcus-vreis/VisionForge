@@ -78,6 +78,32 @@ export const pt = {
       `Mede o ruído de amostragem do split com este modelo fixo — não a ` +
       `variação entre treinos, que réplicas com várias seeds medem.`,
   },
+  // The corner of the header that offers a newer release (ADR-120).
+  update: {
+    available: (version: string) => `atualização disponível · v${version}`,
+    apply: "atualizar e reabrir",
+    retry: "tentar de novo",
+    confirm: (version: string) =>
+      `Instalar a v${version}? A GUI fecha, instala e reabre sozinha; esta página recarrega quando ela voltar. Nenhum treino está rodando.`,
+    confirmYes: "atualizar agora",
+    confirmNo: "agora não",
+    skip: "pular esta versão",
+    whatsNew: "o que mudou",
+    updating: (version: string) => `instalando a v${version}… a página recarrega sozinha`,
+    timeout:
+      "A GUI ainda não voltou. Ela pode estar instalando dependências; recarregue a página em alguns minutos.",
+    failed: (version: string) =>
+      `A atualização para a v${version} falhou e a versão anterior continua rodando.`,
+    logAt: (path: string) => `Detalhes em ${path}`,
+    copy: "copiar",
+    copied: "copiado",
+    blocked: {
+      source: "Você está rodando do código-fonte. Para atualizar:",
+      no_installer: "Este ambiente não tem pip nem uv. Para atualizar:",
+      remote: "Só quem está na máquina do servidor pode atualizar. Lá, rode:",
+      busy: "Há um treino rodando ou na fila. Atualize quando a fila esvaziar, ou rode:",
+    },
+  },
   header: {
     guide: "guia",
     guideTitle: "Abrir os guias: tour da interface e primeiro treino",

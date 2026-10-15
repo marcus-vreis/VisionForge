@@ -3,6 +3,7 @@ import { fetchSystemInfo } from "../api/client";
 import { useI18n } from "../i18n/useT";
 import type { GuideId } from "../lib/guides";
 import { GuideMenu } from "./GuideMenu";
+import { UpdateNotice } from "./UpdateNotice";
 
 function Logo() {
   return (
@@ -143,6 +144,7 @@ export function Header({
           >
             local ai studio{version ? ` · v${version}` : ""}
           </div>
+          <UpdateNotice />
         </div>
       </div>
 

@@ -1152,3 +1152,45 @@ export async function deleteCustomTask(
     { method: "DELETE" },
   );
 }
+
+/** What `GET /api/update` answers (ADR-120). */
+export interface UpdateStatus {
+  current: string;
+  latest: string | null;
+  available: boolean;
+  can_apply: boolean;
+  /** Why the button cannot install; worded by the page. */
+  blocked: "source" | "no_installer" | "remote" | "busy" | null;
+  /** What to type by hand when the button cannot do it. */
+  command: string | null;
+  last_attempt: {
+    target: string;
+    ok: boolean;
+    returncode: number;
+    finished_at: string;
+    log: string;
+  } | null;
+  check_disabled: boolean;
+}
+
+/** Whether a newer release exists and whether this page may install it. */
+export async function fetchUpdateStatus(): Promise<UpdateStatus> {
+  return request<UpdateStatus>("/update");
+}
+
+/** Install the announced release; the server restarts right after answering. */
+export async function applyUpdate(): Promise<{ status: string; target: string }> {
+  return request<{ status: string; target: string }>("/update/apply", { method: "POST" });
+}
+
+/** The version a server answers with, or null while it is down (a restart). */
+export async function fetchServerVersion(): Promise<string | null> {
+  try {
+    const res = await fetch(`${BASE}/health`, { cache: "no-store" });
+    if (!res.ok) return null;
+    const body = (await res.json()) as { version?: unknown };
+    return typeof body.version === "string" ? body.version : null;
+  } catch {
+    return null;
+  }
+}

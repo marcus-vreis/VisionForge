@@ -5225,3 +5225,105 @@ the regression sample dataset, whose validation loss is noisy: the sentence appe
 during a sweep's second model ("desde a época 6") and went away with the next unit.
 That run is also the false-positive case the rule accepts: on six validation images a
 three-epoch climb can be noise, which is why the sentence says "may".
+
+## ADR-120 — The GUI offers updates, and installs one when asked
+
+**Date:** 2026-10-15
+**Status:** Accepted
+
+**Context:** VisionForge ships on PyPI, and the people it is meant for (researchers,
+the testers of the usability study) install it once and keep it. Nothing told them a
+newer release existed; updating meant knowing the package name, the environment and
+the right command, and on Windows it fails outright while the GUI is open, because a
+running program cannot replace its own files (the reason the pre-commit hook already
+runs `uv run --no-sync`).
+
+**Decision.** A small notice in the corner of the header, under the version, and a
+button that installs the release and brings the GUI back.
+
+- **The check.** `GET /api/update` (`gui/api/updates.py`) reads the latest version
+  from PyPI's JSON API with a 3-second timeout, off the event loop, cached for six
+  hours per server process. Offline, behind a proxy or with an odd answer, it says
+  nothing. Only plain `X.Y.Z` releases count, so a pre-release or a local build
+  (`0.0.0+unknown`) is never offered. `VISIONFORGE_NO_UPDATE_CHECK=1` turns the
+  lookup off entirely, for a lab that must not reach the internet or a study that
+  pins its version. The page can also skip one version (`localStorage`); the next one
+  shows again.
+- **When the button may install, and when it may not.** The answer carries
+  `can_apply` and, when false, a code the page words itself:
+  - `source`: a checkout (`pip install -e .`, detected as by `doctor`) updates with
+    `git pull`; reinstalling a wheel over it would detach it from the repository.
+  - `no_installer`: neither `pip` in this interpreter nor `uv` on the PATH.
+  - `remote`: the client is not this machine. Reinstalling the server is its owner's
+    decision, the same rule as "open folder".
+  - `busy`: a job is running or queued; the restart would kill it.
+
+  In every blocked case the notice shows the command to run by hand.
+- **Applying.** `POST /api/update/apply` repeats every check (and refuses a foreign
+  `Origin`, as "open folder" does), then starts `gui/updater.py` in a process of its
+  own and stops the server about a second later, after the response went out
+  (`server.request_shutdown`: the way Ctrl+C does under `visionforge gui`, SIGINT
+  under a bare `uvicorn`, a hard exit after 15 s if neither worked). The updater is
+  copied out of the package first and imports only the standard library, because
+  the install replaces the package's files while it runs. It waits for the server's
+  processes to end (this Python, and the `visionforge.exe` launcher that started it
+  when `argv[0]` is that .exe) and for the port to free, then installs the exact
+  version the page announced
+  (`pip install --upgrade visionforge-studio==X.Y.Z`, or `uv pip install --python
+  <this python> …` for an environment `uv` created without pip), appends the output
+  to `update.log` and writes `status.json` in the config folder (next to the stored
+  credentials), and starts `python -m visionforge gui` again in the same working
+  directory, with `VISIONFORGE_NO_BROWSER=1` so no second tab opens. An environment
+  variable rather than the new `--no-browser` flag, because the relaunch runs the
+  *new* version: a flag it did not know would stop it, an unknown variable is
+  ignored.
+- **The page waits.** It polls `/api/health` until the server answers with the new
+  version, then reloads. A server that went away and came back with the *old*
+  version means the install failed and the updater relaunched what was there; the
+  page stops waiting at once and the notice turns into "the update failed, the
+  previous version is still running", with the log's path. After five minutes it
+  gives up and says to reload later (a first install of new dependencies can be
+  slow).
+- **Torch is untouched.** It is not a dependency of the package (ADR-005), so the
+  install never swaps the CUDA build a researcher chose; pip's default
+  `only-if-needed` upgrades other dependencies only when the new release requires it.
+
+**Rejected:**
+
+- *Updating on its own, at start-up.* A study in progress must not change version
+  between two runs because a release came out overnight. The runs record their
+  version, but the researcher decides when.
+- *Installing in place from the server process.* It fails on Windows (locked
+  `visionforge.exe` and extension modules) and would leave a half-replaced package
+  running.
+- *Upgrading to "latest" in the updater.* A release published between the notice
+  and the click would install a version the page never showed.
+- *A desktop launcher or an installer app.* More to build and sign, for the same
+  outcome.
+
+**Consequences:** one request to PyPI per server process every six hours, which
+tells PyPI the address of a machine running VisionForge (the same as `pip` does); the
+environment variable removes it. The button cannot help a checkout, a pip-less
+environment or a remote client, and says so with the command to run. A failed install
+leaves the old version running and the reason in `update.log`.
+
+**What the first real run taught.** The flow was run end to end on Windows: a wheel of
+this code labelled 0.13.9 in a separate environment (`uv venv --seed`, so the `pip`
+path), its GUI on port 8010, the button pressed in the browser, PyPI's 0.14.0
+installed. The first attempt waited for the port only. The server closes its socket
+and lives on for seconds while it shuts down, and the launcher with it; pip found
+`Scriptsisionforge.exe` locked (`WinError 32`), had already removed the package by
+then, and did not put it back -- the relaunch found no VisionForge at all. Three
+changes came out of it: the updater waits for the processes, not the port; an
+install whose log shows `WinError 32` is retried (five times, five seconds apart);
+and a failed install is followed by reinstalling the version that was running
+(`restore`, recorded as `restored` in the status) before the GUI starts again. The
+page also offers "try again" on a failed attempt when the server can still install,
+and the updater deletes its temporary copy when it is done. The second attempt, from
+the page's failed state, installed 0.14.0 with no retry needed, the GUI came back on
+the same port, and the page reloaded itself showing v0.14.0. (That release predates
+`VISIONFORGE_NO_BROWSER` and opened a browser tab on its own; releases from this one
+on do not.) Also covered by tests: the lookup, the cache, the installer choice, every
+blocked case, both routes, the updater with harmless commands in place of the install
+(the retry, the restore, the wait for a finished process), and the page's notice and
+wait.

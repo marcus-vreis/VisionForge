@@ -141,6 +141,11 @@ def main() -> None:
     gui_parser.add_argument(
         "--port", type=int, default=8000, help="bind port (default 8000)"
     )
+    gui_parser.add_argument(
+        "--no-browser",
+        action="store_true",
+        help="do not open a browser tab (used when an update restarts the GUI)",
+    )
 
     doctor_parser = subparsers.add_parser(
         "doctor", help="Check the environment and recommend the correct torch wheel."
@@ -285,7 +290,11 @@ def main() -> None:
     if args.command == "gui":
         from visionforge.gui.server import start_server
 
-        start_server(host=args.host, port=args.port)
+        # The updater relaunches with VISIONFORGE_NO_BROWSER rather than the flag:
+        # the relaunch runs the *new* version, and an environment variable it does
+        # not know is ignored where an unknown flag would stop it (ADR-120).
+        quiet = args.no_browser or bool(os.environ.get("VISIONFORGE_NO_BROWSER"))
+        start_server(host=args.host, port=args.port, open_browser=not quiet)
         return
 
     if args.command == "run":

@@ -660,6 +660,35 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "en": "Path is not inside any dataset directory probed this session.",
     },
     "file.access_denied": {"pt": "Acesso negado.", "en": "Access denied."},
+    # ── updating the install from the page (gui/api/routes.py, ADR-120) ──────
+    "update.foreign_origin": {
+        "pt": "Atualização recusada: o pedido veio de uma página de outro site.",
+        "en": "Update refused: the request came from a page of another site.",
+    },
+    "update.none": {
+        "pt": "Não há atualização disponível.",
+        "en": "No update is available.",
+    },
+    "update.blocked_source": {
+        "pt": "Esta instalação roda do código-fonte; atualize com git pull.",
+        "en": "This install runs from a source checkout; update it with git pull.",
+    },
+    "update.blocked_no_installer": {
+        "pt": "Este ambiente não tem pip nem uv para instalar a atualização.",
+        "en": "This environment has neither pip nor uv to install the update.",
+    },
+    "update.blocked_remote": {
+        "pt": "Só quem está na máquina do servidor pode atualizá-lo.",
+        "en": "Only someone at the server's own machine can update it.",
+    },
+    "update.blocked_busy": {
+        "pt": "Há um treino rodando ou na fila; atualize quando a fila esvaziar.",
+        "en": "A training is running or queued; update once the queue is empty.",
+    },
+    "update.spawn_failed": {
+        "pt": "Não foi possível iniciar a atualização: {error}",
+        "en": "Could not start the update: {error}",
+    },
     # ── researcher-defined tasks: hide, restore, delete ──────────────────────
     "custom.hidden": {
         "pt": "Aba ocultada. O arquivo continua em user_tasks/.",

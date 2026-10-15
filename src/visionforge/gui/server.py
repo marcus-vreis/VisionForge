@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from typing import Any
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -100,17 +101,60 @@ async def spa_fallback(path: str) -> FileResponse:
     )
 
 
-def start_server(*, host: str = "127.0.0.1", port: int = 8000) -> None:
-    """Start the VisionForge GUI server."""
+# The running server, when this process started it through ``start_server``, so
+# an update can stop it cleanly (ADR-120). None under ``uvicorn ...:app`` or tests.
+_SERVER: Any = None
+
+
+def start_server(
+    *, host: str = "127.0.0.1", port: int = 8000, open_browser: bool = True
+) -> None:
+    """Start the VisionForge GUI server.
+
+    ``open_browser`` is False when the updater restarts the server: the page the
+    researcher had open reloads itself, and a second tab would only confuse.
+    """
     import webbrowser
 
     import uvicorn
 
+    global _SERVER
     logger.info(
         "Starting VisionForge GUI at http://{}:{}", host, port
     )  # NOSONAR python:S5332 - local server URL
-    webbrowser.open(f"http://{host}:{port}")  # NOSONAR python:S5332 - local server URL
-    uvicorn.run(app, host=host, port=port, log_level="warning")
+    if open_browser:
+        webbrowser.open(
+            f"http://{host}:{port}"
+        )  # NOSONAR python:S5332 - local server URL
+    _SERVER = uvicorn.Server(
+        uvicorn.Config(app, host=host, port=port, log_level="warning")
+    )
+    _SERVER.run()
 
 
-__all__ = ["app", "start_server"]
+def request_shutdown(grace_seconds: float = 1.0, hard_after: float = 15.0) -> None:
+    """Stop this server soon, after the current response has gone out.
+
+    A server started by ``start_server`` is asked to exit the way Ctrl+C does;
+    any other (``uvicorn ...:app``) gets SIGINT. If it is still alive
+    ``hard_after`` seconds later, the process exits outright: the updater is
+    waiting for the port, and an update that never starts is worse than an abrupt
+    stop with nothing running (the route refuses while a job is active).
+    """
+    import os
+    import signal
+    import threading
+
+    def _stop() -> None:
+        if _SERVER is not None:
+            _SERVER.should_exit = True
+        else:
+            signal.raise_signal(signal.SIGINT)
+
+    threading.Timer(grace_seconds, _stop).start()
+    hard = threading.Timer(hard_after, lambda: os._exit(0))
+    hard.daemon = True
+    hard.start()
+
+
+__all__ = ["app", "request_shutdown", "start_server"]

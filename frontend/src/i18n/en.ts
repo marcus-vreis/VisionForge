@@ -78,6 +78,31 @@ export const en: Dict = {
       `held fixed — not the variation between training runs, which multi-seed ` +
       `replicates measure.`,
   },
+  update: {
+    available: (version: string) => `update available · v${version}`,
+    apply: "update and reopen",
+    retry: "try again",
+    confirm: (version: string) =>
+      `Install v${version}? The GUI closes, installs and reopens by itself; this page reloads when it is back. No training is running.`,
+    confirmYes: "update now",
+    confirmNo: "not now",
+    skip: "skip this version",
+    whatsNew: "what changed",
+    updating: (version: string) => `installing v${version}… the page reloads by itself`,
+    timeout:
+      "The GUI is not back yet. It may be installing dependencies; reload the page in a few minutes.",
+    failed: (version: string) =>
+      `The update to v${version} failed and the previous version is still running.`,
+    logAt: (path: string) => `Details in ${path}`,
+    copy: "copy",
+    copied: "copied",
+    blocked: {
+      source: "You are running from a source checkout. To update:",
+      no_installer: "This environment has neither pip nor uv. To update:",
+      remote: "Only someone at the server's own machine can update it. There, run:",
+      busy: "A training is running or queued. Update once the queue is empty, or run:",
+    },
+  },
   header: {
     guide: "guide",
     guideTitle: "Open the guides: interface tour and first training",
