@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from collections.abc import Callable
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -305,6 +306,10 @@ class CrossValidationBlock(ExperimentBlock):
                     cancel_token=self._cancel_token,
                 )
                 trained = True
+                # The fold's own run folder: its run.json holds the device,
+                # environment and dataset fingerprint the K-fold's run.json
+                # reports for the whole job.
+                fold_record["run_dir"] = str(train_result.model_path.parent)
                 fold_record["epochs_completed"] = train_result.total_epochs
                 cut = train_result.stopped
                 # 0 epochs only when stopped before the first: nothing to score.
@@ -461,6 +466,28 @@ class CrossValidationBlock(ExperimentBlock):
             json.dumps(summary, indent=2), encoding="utf-8"
         )
 
+    def _provenance_from_folds(self) -> dict[str, Any]:
+        """``device_used``, ``environment`` and ``dataset_fingerprint`` of the
+        first fold whose run.json can be read; empty when none can."""
+        for record in self._fold_results:
+            run_dir = record.get("run_dir")
+            if not run_dir:
+                continue
+            try:
+                fold_json = json.loads(
+                    (Path(run_dir) / "run.json").read_text(encoding="utf-8")
+                )
+            except (OSError, ValueError):
+                continue
+            if not isinstance(fold_json, dict):
+                continue
+            return {
+                key: fold_json[key]
+                for key in ("device_used", "environment", "dataset_fingerprint")
+                if key in fold_json
+            }
+        return {}
+
     def _write_top_level_run_json(self, base_name: str) -> None:
         """Write a parent-level run.json so /api/runs treats CV like other runs.
 
@@ -533,8 +560,12 @@ class CrossValidationBlock(ExperimentBlock):
                 },
             },
             "history": [],
+            # Where and on what the folds trained, read from a fold's run.json:
+            # the K-fold trains nothing itself, and a null device with an empty
+            # environment made it the one run that could not say how it was made.
             "device_used": None,
             "block": "cross_validation",
+            **self._provenance_from_folds(),
         }
 
         (cv_dir / "run.json").write_text(

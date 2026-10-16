@@ -57,7 +57,10 @@ class GridSearchBlock(ExperimentBlock):
 
         self._planned = len(combos)
         for trial_idx, combo in enumerate(combos):
-            trial_seed = base_seed + trial_idx
+            # One seed for the whole grid: the only thing that differs between
+            # trials is the hyperparameters, so a gap in the ranking is theirs
+            # and not the seed's. Seed-to-seed spread is what replicates measure.
+            trial_seed = base_seed
             trial_overrides = dict(zip(keys, combo, strict=True))
 
             trial_record: dict[str, Any] = {
@@ -169,6 +172,7 @@ class GridSearchBlock(ExperimentBlock):
             self._config,
             best_idx,
             best_overrides,
+            seed=self._config.training.seed,
         )
 
 

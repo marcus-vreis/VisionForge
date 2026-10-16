@@ -171,6 +171,40 @@ class TestWriteBestConfigYaml:
         assert raw["training"]["seed"] == 7  # 5 + 2
         assert raw["training"]["learning_rate"] == 0.001
 
+    def test_explicit_seed_overrides_the_index_offset(self, tmp_path: Path) -> None:
+        """A sweep that trains every trial on one seed writes that seed back."""
+        import yaml
+
+        config = ExperimentConfig.model_validate(
+            {
+                "name": "t",
+                "task": "binary",
+                "model": {"name": "resnet18", "num_classes": 1, "pretrained": False},
+                "training": {
+                    "learning_rate": 0.01,
+                    "epochs": 1,
+                    "batch_size": 2,
+                    "seed": 5,
+                },
+                "data": {
+                    "base_dir": str(tmp_path),
+                    "num_workers": 0,
+                    "pin_memory": False,
+                },
+            }
+        )
+        yaml_path = tmp_path / "best.yaml"
+        write_best_config_yaml(
+            yaml_path,
+            config,
+            best_idx=2,
+            best_overrides={},
+            seed=config.training.seed,
+        )
+
+        with yaml_path.open(encoding="utf-8") as f:
+            assert yaml.safe_load(f)["training"]["seed"] == 5
+
 
 # ── run_trial ─────────────────────────────────────────────────────────────────
 

@@ -190,10 +190,14 @@ class TestTrialGeneration:
 
 
 class TestSeedPropagation:
-    def test_trial_seeds_increment_by_index(
+    def test_every_trial_uses_the_base_seed(
         self, grid_2x2_config: ExperimentConfig
     ) -> None:
-        """Each trial's seed must equal base_seed + trial_index."""
+        """Every trial trains with the base seed, so only the grid varies.
+
+        A seed that moved with the trial index would mix the effect of the
+        hyperparameter with the effect of the seed in the ranking.
+        """
         from visionforge.blocks.grid_search import GridSearchBlock
 
         captured_seeds: list[int] = []
@@ -216,8 +220,7 @@ class TestSeedPropagation:
             block.run()
 
         base_seed = grid_2x2_config.training.seed
-        expected = [base_seed + i for i in range(4)]
-        assert captured_seeds == expected
+        assert captured_seeds == [base_seed] * 4
 
 
 # ── artifacts ─────────────────────────────────────────────────────────────────
@@ -284,6 +287,9 @@ class TestArtifacts:
         assert isinstance(raw, dict)
         assert "name" in raw
         assert "training" in raw
+        # The best trial trained on the base seed, so the config that
+        # reproduces it carries that seed, not one shifted by its index.
+        assert raw["training"]["seed"] == grid_2x2_config.training.seed
 
     def test_report_returns_best_trial(self, grid_2x2_config: ExperimentConfig) -> None:
         """report() must return dict with best_trial, total_trials, successful_trials."""

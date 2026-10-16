@@ -15,6 +15,13 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Fixed
 
+- **A busca em grade compara só os hiperparâmetros.** Cada trial treinava com `seed + índice`,
+  então a diferença entre dois pontos da grade misturava o efeito do hiperparâmetro com o da
+  seed. Todos os trials usam a seed base, e o `best_config.yaml` grava essa mesma seed (ADR-045).
+  A busca aleatória segue com uma seed por trial.
+- **O K-fold de classificação registra o dispositivo, o ambiente e a impressão do dataset.**
+  O `run.json` do K-fold saía com `device_used` nulo e `environment` vazio; agora herda
+  esses campos do `run.json` de uma fold, e cada fold guarda o `run_dir` do seu run.
 - **Réplicas e comparação replicada mostram o progresso por época.** A folha de treino
   ficava em "preparando" do começo ao fim. Cada seed (e, na comparação, cada par
   variante/seed) agora é uma unidade com suas épocas e perdas, como no sweep e na

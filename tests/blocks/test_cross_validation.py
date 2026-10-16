@@ -346,6 +346,68 @@ class TestReportAndArtifacts:
         assert agg["n_folds"] == 3
         assert agg["n_folds_ok"] == 3
 
+    def test_top_level_run_json_inherits_provenance_from_a_fold(
+        self, cv_config: ExperimentConfig
+    ) -> None:
+        """The K-fold's run.json names the device, environment and dataset of
+        the folds it trained, as every other run does, instead of null/empty."""
+        from unittest.mock import MagicMock
+
+        from visionforge.blocks.cross_validation import CrossValidationBlock
+
+        fingerprint = {"method": "content", "digest": "abc", "n_files": 12}
+        environment = {"python": "3.13", "torch": "2.x"}
+        calls: list[int] = []
+
+        def fake_fit(*_args: Any, **_kwargs: Any) -> MagicMock:
+            # What Trainer does: a run folder with its own run.json.
+            run_dir = cv_config.output.models_dir / f"fold{len(calls)}" / "run"
+            run_dir.mkdir(parents=True)
+            (run_dir / "run.json").write_text(
+                json.dumps(
+                    {
+                        "device_used": "cuda:0",
+                        "environment": environment,
+                        "dataset_fingerprint": fingerprint,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            calls.append(1)
+            result = MagicMock()
+            result.stopped = False
+            result.total_epochs = 1
+            result.best_val_loss = 0.4
+            result.model_path = run_dir / "best_model.pth"
+            return result
+
+        block = CrossValidationBlock()
+        block.setup(cv_config)
+        with (
+            patch("visionforge.blocks.cross_validation.ModelFactory.create"),
+            patch("visionforge.blocks.cross_validation.Trainer") as mock_trainer_cls,
+            patch("visionforge.blocks.cross_validation.Evaluator") as mock_eval_cls,
+            patch("visionforge.blocks.cross_validation.torch.load", return_value={}),
+            patch(
+                "visionforge.blocks.cross_validation.torch.nn.Module.load_state_dict"
+            ),
+        ):
+            mock_trainer_cls.return_value.fit.side_effect = fake_fit
+            mock_eval_cls.return_value.evaluate.return_value = MagicMock(
+                accuracy=0.8, f1=0.75
+            )
+            block.run()
+
+        data = json.loads(
+            (
+                cv_config.output.models_dir / f"{cv_config.name}_cv" / "run.json"
+            ).read_text(encoding="utf-8")
+        )
+        assert data["device_used"] == "cuda:0"
+        assert data["environment"] == environment
+        assert data["dataset_fingerprint"] == fingerprint
+        assert all(f["run_dir"] for f in data["metrics"]["fold_results"])
+
 
 # ── failure handling ──────────────────────────────────────────────────────────
 

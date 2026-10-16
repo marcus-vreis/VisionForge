@@ -70,10 +70,19 @@ def write_best_config_yaml(
     base_config: ExperimentConfig,
     best_idx: int,
     best_overrides: dict[str, Any],
+    seed: int | None = None,
 ) -> None:
-    """Write the best trial's config as a YAML file."""
+    """Write the best trial's config as a YAML file.
+
+    ``seed`` is the one the best trial trained on. A sweep that moves the seed
+    with the trial index (random search) leaves it unset and gets
+    ``base seed + best_idx``; one that trains every trial on the base seed
+    (grid search) passes it.
+    """
     best_raw: dict[str, Any] = base_config.model_dump(mode="json")
-    best_raw["training"]["seed"] = base_config.training.seed + best_idx
+    best_raw["training"]["seed"] = (
+        base_config.training.seed + best_idx if seed is None else seed
+    )
     for dot_key, val in best_overrides.items():
         set_nested(best_raw, dot_key, val)
     with yaml_path.open("w", encoding="utf-8") as f:

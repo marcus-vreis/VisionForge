@@ -658,6 +658,8 @@ model and a future unification path. Validating the base config and every
 dot-path before running spends no GPU time on a typo. Backend-first per the
 Phase-5 norm; the GUI lands with the deferred comparison panel on the new design.
 
+**Amended 2026-10-16: the classification grid trains every trial on the base seed.** `GridSearchBlock` gave trial *i* the seed `base + i`, so a gap between two grid points mixed the hyperparameter's effect with the seed's. All trials now share `training.seed` and `best_config.yaml` writes it back; the spread between seeds is what replicates measure (ADR-056). Random search keeps one seed per trial.
+
 ## ADR-046 — Transfer-learning knobs as a per-task config field (regression)
 
 **Date:** 2026-06
