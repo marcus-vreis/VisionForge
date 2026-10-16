@@ -1,0 +1,644 @@
+{
+  "kind": "replicated_comparison",
+  "metric": "accuracy",
+  "metric_direction": "higher",
+  "seeds": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+  ],
+  "alpha": 0.05,
+  "variants": {
+    "baseline": {
+      "overrides": {},
+      "aggregates": {
+        "accuracy": {
+          "n": 10,
+          "mean": 0.96953125,
+          "std": 0.006840586216960259,
+          "std_ddof": 1,
+          "min": 0.9609375,
+          "max": 0.9765625,
+          "ci95_low": 0.9646377894088097,
+          "ci95_high": 0.9744247105911902,
+          "boot95_low": 0.965625,
+          "boot95_high": 0.9734375
+        },
+        "f1": {
+          "n": 10,
+          "mean": 0.9696771542725948,
+          "std": 0.006802562550992643,
+          "std_ddof": 1,
+          "min": 0.9610261205057523,
+          "max": 0.9768114727502842,
+          "ci95_low": 0.9648108941734448,
+          "ci95_high": 0.9745434143717449,
+          "boot95_low": 0.9657772674519046,
+          "boot95_high": 0.9735667651216606
+        },
+        "auc_roc": {
+          "n": 10,
+          "mean": 0.9968809849521204,
+          "std": 0.0014848032939099366,
+          "std_ddof": 1,
+          "min": 0.9940720474236207,
+          "max": 0.9988144094847241,
+          "ci95_low": 0.9958188206618139,
+          "ci95_high": 0.9979431492424269,
+          "boot95_low": 0.9959598723210215,
+          "boot95_high": 0.9977200182398542
+        }
+      },
+      "trials": [
+        {
+          "seed": 0,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.96875,
+            "f1": 0.9687902851544372,
+            "auc_roc": 0.9962608299133606
+          },
+          "training_time_s": 370.22958050000307,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_beans_swin_t_baseline_s0\\20261016_145847_053342"
+        },
+        {
+          "seed": 1,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.9765625,
+            "f1": 0.9766434722848613,
+            "auc_roc": 0.997172822617419
+          },
+          "training_time_s": 370.8138576999954,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_beans_swin_t_baseline_s1\\20261016_150457_343650"
+        },
+        {
+          "seed": 2,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.9765625,
+            "f1": 0.9768114727502842,
+            "auc_roc": 0.9979024167806658
+          },
+          "training_time_s": 236.6605337000001,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_beans_swin_t_baseline_s2\\20261016_151108_308978"
+        },
+        {
+          "seed": 3,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.9765625,
+            "f1": 0.9766434722848613,
+            "auc_roc": 0.9967168262653899
+          },
+          "training_time_s": 322.9748355999982,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_beans_swin_t_baseline_s3\\20261016_151505_078681"
+        },
+        {
+          "seed": 4,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.9609375,
+            "f1": 0.9612185777030184,
+            "auc_roc": 0.9949840401276789
+          },
+          "training_time_s": 161.39538660000107,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_beans_swin_t_baseline_s4\\20261016_152028_197693"
+        },
+        {
+          "seed": 5,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.9609375,
+            "f1": 0.9612185777030184,
+            "auc_roc": 0.9988144094847241
+          },
+          "training_time_s": 145.88414769999508,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_beans_swin_t_baseline_s5\\20261016_152309_718389"
+        },
+        {
+          "seed": 6,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.96875,
+            "f1": 0.9687902851544372,
+            "auc_roc": 0.9968992248062015
+          },
+          "training_time_s": 235.89015029999427,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_beans_swin_t_baseline_s6\\20261016_152535_731675"
+        },
+        {
+          "seed": 7,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.9765625,
+            "f1": 0.9766434722848613,
+            "auc_roc": 0.9974464204286365
+          },
+          "training_time_s": 307.9137736999983,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_beans_swin_t_baseline_s7\\20261016_152931_755416"
+        },
+        {
+          "seed": 8,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.96875,
+            "f1": 0.9689858069004164,
+            "auc_roc": 0.9985408116735067
+          },
+          "training_time_s": 181.85852929999965,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_beans_swin_t_baseline_s8\\20261016_153439_782437"
+        },
+        {
+          "seed": 9,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.9609375,
+            "f1": 0.9610261205057523,
+            "auc_roc": 0.9940720474236207
+          },
+          "training_time_s": 217.7065325999938,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_beans_swin_t_baseline_s9\\20261016_153741_782813"
+        }
+      ],
+      "successful": 10,
+      "per_seed": {
+        "0": 0.96875,
+        "1": 0.9765625,
+        "2": 0.9765625,
+        "3": 0.9765625,
+        "4": 0.9609375,
+        "5": 0.9609375,
+        "6": 0.96875,
+        "7": 0.9765625,
+        "8": 0.96875,
+        "9": 0.9609375
+      }
+    },
+    "no_aug": {
+      "overrides": {
+        "data.transforms.horizontal_flip": false,
+        "data.transforms.rotation_degrees": 0
+      },
+      "aggregates": {
+        "accuracy": {
+          "n": 10,
+          "mean": 0.96796875,
+          "std": 0.005764568651348608,
+          "std_ddof": 1,
+          "min": 0.9609375,
+          "max": 0.9765625,
+          "ci95_low": 0.9638450260053159,
+          "ci95_high": 0.9720924739946842,
+          "boot95_low": 0.96484375,
+          "boot95_high": 0.97109375
+        },
+        "f1": {
+          "n": 10,
+          "mean": 0.9681085613488417,
+          "std": 0.0057435541715253405,
+          "std_ddof": 1,
+          "min": 0.9609214752892914,
+          "max": 0.9767410412440839,
+          "ci95_low": 0.9639998702074244,
+          "ci95_high": 0.972217252490259,
+          "boot95_low": 0.9649645631205803,
+          "boot95_high": 0.9712595547141802
+        },
+        "auc_roc": {
+          "n": 10,
+          "mean": 0.9968486309252385,
+          "std": 0.0014333110705883,
+          "std_ddof": 1,
+          "min": 0.9947104423164616,
+          "max": 0.9992704058367533,
+          "ci95_low": 0.9958233019524889,
+          "ci95_high": 0.997873959897988,
+          "boot95_low": 0.9960048259613925,
+          "boot95_high": 0.9977057954964932
+        }
+      },
+      "trials": [
+        {
+          "seed": 0,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.9609375,
+            "f1": 0.9612185777030184,
+            "auc_roc": 0.9970816233470132
+          },
+          "training_time_s": 180.50939649999782,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_beans_swin_t_no_aug_s0\\20261016_154119_620319"
+        },
+        {
+          "seed": 1,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.9765625,
+            "f1": 0.9766434722848613,
+            "auc_roc": 0.9977200182398541
+          },
+          "training_time_s": 180.9907647,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_beans_swin_t_no_aug_s1\\20261016_154420_270768"
+        },
+        {
+          "seed": 2,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.9609375,
+            "f1": 0.9612185777030184,
+            "auc_roc": 0.9947104423164616
+          },
+          "training_time_s": 360.2408525999999,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_beans_swin_t_no_aug_s2\\20261016_154721_409616"
+        },
+        {
+          "seed": 3,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.96875,
+            "f1": 0.9687902851544372,
+            "auc_roc": 0.994938440492476
+          },
+          "training_time_s": 326.47889230000146,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_beans_swin_t_no_aug_s3\\20261016_155321_877017"
+        },
+        {
+          "seed": 4,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.9609375,
+            "f1": 0.9609214752892914,
+            "auc_roc": 0.9969893383710073
+          },
+          "training_time_s": 155.4266340000031,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_beans_swin_t_no_aug_s4\\20261016_155848_395163"
+        },
+        {
+          "seed": 5,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.96875,
+            "f1": 0.9687902851544372,
+            "auc_roc": 0.9984485266975006
+          },
+          "training_time_s": 123.21766139999818,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_beans_swin_t_no_aug_s5\\20261016_160123_934271"
+        },
+        {
+          "seed": 6,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.96875,
+            "f1": 0.9689858069004164,
+            "auc_roc": 0.9958949471261372
+          },
+          "training_time_s": 217.7039544000072,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_beans_swin_t_no_aug_s6\\20261016_160327_270493"
+        },
+        {
+          "seed": 7,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.96875,
+            "f1": 0.9687902851544372,
+            "auc_roc": 0.9968981391006014
+          },
+          "training_time_s": 181.69984919999843,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_beans_swin_t_no_aug_s7\\20261016_160705_083748"
+        },
+        {
+          "seed": 8,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.96875,
+            "f1": 0.9689858069004164,
+            "auc_roc": 0.9992704058367533
+          },
+          "training_time_s": 193.17447099999845,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_beans_swin_t_no_aug_s8\\20261016_161006_872442"
+        },
+        {
+          "seed": 9,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.9765625,
+            "f1": 0.9767410412440839,
+            "auc_roc": 0.9965344277245783
+          },
+          "training_time_s": 150.46957880000264,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_beans_swin_t_no_aug_s9\\20261016_161320_133585"
+        }
+      ],
+      "successful": 10,
+      "per_seed": {
+        "0": 0.9609375,
+        "1": 0.9765625,
+        "2": 0.9609375,
+        "3": 0.96875,
+        "4": 0.9609375,
+        "5": 0.96875,
+        "6": 0.96875,
+        "7": 0.96875,
+        "8": 0.96875,
+        "9": 0.9765625
+      }
+    },
+    "res160": {
+      "overrides": {
+        "data.transforms.image_size": 160
+      },
+      "aggregates": {
+        "accuracy": {
+          "n": 10,
+          "mean": 0.9609375,
+          "std": 0.009021097956087902,
+          "std_ddof": 1,
+          "min": 0.9453125,
+          "max": 0.9765625,
+          "ci95_low": 0.9544841952776747,
+          "ci95_high": 0.9673908047223253,
+          "boot95_low": 0.95546875,
+          "boot95_high": 0.96640625
+        },
+        "f1": {
+          "n": 10,
+          "mean": 0.9612090133306139,
+          "std": 0.009001834696462093,
+          "std_ddof": 1,
+          "min": 0.9456828824644917,
+          "max": 0.9767410412440839,
+          "ci95_low": 0.9547694887140934,
+          "ci95_high": 0.9676485379471345,
+          "boot95_low": 0.9557543729485827,
+          "boot95_high": 0.9666496147330806
+        },
+        "auc_roc": {
+          "n": 10,
+          "mean": 0.9960411916704667,
+          "std": 0.0017806275071722986,
+          "std_ddof": 1,
+          "min": 0.992795257637939,
+          "max": 0.9983584131326948,
+          "ci95_low": 0.9947674074862496,
+          "ci95_high": 0.9973149758546838,
+          "boot95_low": 0.9949560262089331,
+          "boot95_high": 0.9970537234273554
+        }
+      },
+      "trials": [
+        {
+          "seed": 0,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.953125,
+            "f1": 0.9532455800748484,
+            "auc_roc": 0.9945237009532496
+          },
+          "training_time_s": 103.25042569999641,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_beans_swin_t_res160_s0\\20261016_161550_692480"
+        },
+        {
+          "seed": 1,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.9453125,
+            "f1": 0.9456828824644917,
+            "auc_roc": 0.9955312357501139
+          },
+          "training_time_s": 209.63052590000007,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_beans_swin_t_res160_s1\\20261016_161733_994444"
+        },
+        {
+          "seed": 2,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.9609375,
+            "f1": 0.9612245774542019,
+            "auc_roc": 0.9971728226174191
+          },
+          "training_time_s": 141.3131222000011,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_beans_swin_t_res160_s2\\20261016_162103_736146"
+        },
+        {
+          "seed": 3,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.953125,
+            "f1": 0.9532985608036317,
+            "auc_roc": 0.9941610752828263
+          },
+          "training_time_s": 96.51892130000488,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_beans_swin_t_res160_s3\\20261016_162325_250044"
+        },
+        {
+          "seed": 4,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.96875,
+            "f1": 0.9689858069004164,
+            "auc_roc": 0.9978112175102599
+          },
+          "training_time_s": 189.8598839999977,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_beans_swin_t_res160_s4\\20261016_162501_802095"
+        },
+        {
+          "seed": 5,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.9609375,
+            "f1": 0.9613843281096562,
+            "auc_roc": 0.9983584131326948
+          },
+          "training_time_s": 194.64608189999853,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_beans_swin_t_res160_s5\\20261016_162811_754336"
+        },
+        {
+          "seed": 6,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.96875,
+            "f1": 0.9689858069004164,
+            "auc_roc": 0.992795257637939
+          },
+          "training_time_s": 147.34693020000122,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_beans_swin_t_res160_s6\\20261016_163126_491033"
+        },
+        {
+          "seed": 7,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.9609375,
+            "f1": 0.9612185777030184,
+            "auc_roc": 0.9963509434781664
+          },
+          "training_time_s": 167.3729785999967,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_beans_swin_t_res160_s7\\20261016_163353_975634"
+        },
+        {
+          "seed": 8,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.9765625,
+            "f1": 0.9767410412440839,
+            "auc_roc": 0.9974464204286365
+          },
+          "training_time_s": 92.84439250000287,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_beans_swin_t_res160_s8\\20261016_163641_348425"
+        },
+        {
+          "seed": 9,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.9609375,
+            "f1": 0.9613229716513741,
+            "auc_roc": 0.9962608299133606
+          },
+          "training_time_s": 117.75572699999611,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_beans_swin_t_res160_s9\\20261016_163814_344990"
+        }
+      ],
+      "successful": 10,
+      "per_seed": {
+        "0": 0.953125,
+        "1": 0.9453125,
+        "2": 0.9609375,
+        "3": 0.953125,
+        "4": 0.96875,
+        "5": 0.9609375,
+        "6": 0.96875,
+        "7": 0.9609375,
+        "8": 0.9765625,
+        "9": 0.9609375
+      }
+    }
+  },
+  "comparisons": [
+    {
+      "label_a": "baseline",
+      "label_b": "no_aug",
+      "metric": "accuracy",
+      "n_pairs": 10,
+      "mean_a": 0.96953125,
+      "mean_b": 0.96796875,
+      "mean_difference": 0.0015625,
+      "test": "paired_t",
+      "test_reason": "differences pass Shapiro-Wilk (p=0.479)",
+      "statistic": 0.5570860145311556,
+      "p_value": 0.5910512317836045,
+      "effect_size": 0.17616606585441105,
+      "effect_label": "negligible",
+      "ci_low": -0.00390625,
+      "ci_high": 0.00625,
+      "min_achievable_p": 0.0,
+      "underpowered": false,
+      "significant": false
+    },
+    {
+      "label_a": "baseline",
+      "label_b": "res160",
+      "metric": "accuracy",
+      "n_pairs": 10,
+      "mean_a": 0.96953125,
+      "mean_b": 0.9609375,
+      "mean_difference": 0.00859375,
+      "test": "paired_t",
+      "test_reason": "differences pass Shapiro-Wilk (p=0.260)",
+      "statistic": 2.012045510803985,
+      "p_value": 0.07507983017249283,
+      "effect_size": 0.6362646570057517,
+      "effect_label": "medium",
+      "ci_low": 0.00078125,
+      "ci_high": 0.01640625,
+      "min_achievable_p": 0.0,
+      "underpowered": false,
+      "significant": false
+    },
+    {
+      "label_a": "no_aug",
+      "label_b": "res160",
+      "metric": "accuracy",
+      "n_pairs": 10,
+      "mean_a": 0.96796875,
+      "mean_b": 0.9609375,
+      "mean_difference": 0.00703125,
+      "test": "paired_t",
+      "test_reason": "differences pass Shapiro-Wilk (p=0.441)",
+      "statistic": 1.8676290524384018,
+      "p_value": 0.09465570582843714,
+      "effect_size": 0.5905961630007396,
+      "effect_label": "medium",
+      "ci_low": 0.0,
+      "ci_high": 0.0140625,
+      "min_achievable_p": 0.0,
+      "underpowered": false,
+      "significant": false
+    }
+  ],
+  "best_by_mean": "baseline",
+  "ranked_by_mean": [
+    "baseline",
+    "no_aug",
+    "res160"
+  ],
+  "ranking_seeds": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+  ],
+  "significant_pairs": 0,
+  "skipped_variants": [],
+  "underpowered": false,
+  "power_note": "",
+  "not_run": [],
+  "study": {
+    "dataset": "beans",
+    "architecture": "swin_t",
+    "wall_time_s": 6085.3,
+    "visionforge_version": "0.14.0"
+  }
+}

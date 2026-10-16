@@ -1,0 +1,644 @@
+{
+  "kind": "replicated_comparison",
+  "metric": "accuracy",
+  "metric_direction": "higher",
+  "seeds": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+  ],
+  "alpha": 0.05,
+  "variants": {
+    "baseline": {
+      "overrides": {},
+      "aggregates": {
+        "accuracy": {
+          "n": 10,
+          "mean": 0.965625,
+          "std": 0.009882117688026186,
+          "std_ddof": 1,
+          "min": 0.9453125,
+          "max": 0.984375,
+          "ci95_low": 0.9585557588662555,
+          "ci95_high": 0.9726942411337444,
+          "boot95_low": 0.959375,
+          "boot95_high": 0.97109375
+        },
+        "f1": {
+          "n": 10,
+          "mean": 0.965801120891481,
+          "std": 0.00975323049733609,
+          "std_ddof": 1,
+          "min": 0.9459332165542426,
+          "max": 0.9844877344877344,
+          "ci95_low": 0.9588240800996879,
+          "ci95_high": 0.972778161683274,
+          "boot95_low": 0.959700756688149,
+          "boot95_high": 0.971256043780483
+        },
+        "auc_roc": {
+          "n": 10,
+          "mean": 0.9978841769265845,
+          "std": 0.0005732591368328427,
+          "std_ddof": 1,
+          "min": 0.9966256269949841,
+          "max": 0.9987232102143183,
+          "ci95_low": 0.9974740920441403,
+          "ci95_high": 0.9982942618090287,
+          "boot95_low": 0.9975193798449613,
+          "boot95_high": 0.9981942544459645
+        }
+      },
+      "trials": [
+        {
+          "seed": 0,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.984375,
+            "f1": 0.9844877344877344,
+            "auc_roc": 0.9979024167806658
+          },
+          "training_time_s": 327.85573830000067,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_beans_convnext_tiny_baseline_s0\\20261016_123850_323353"
+        },
+        {
+          "seed": 1,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.9609375,
+            "f1": 0.9612185777030184,
+            "auc_roc": 0.9981760145918832
+          },
+          "training_time_s": 165.36539579999953,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_beans_convnext_tiny_baseline_s1\\20261016_124418_273486"
+        },
+        {
+          "seed": 2,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.96875,
+            "f1": 0.9687902851544372,
+            "auc_roc": 0.9975376196990423
+          },
+          "training_time_s": 163.212065599997,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_beans_convnext_tiny_baseline_s2\\20261016_124703_762142"
+        },
+        {
+          "seed": 3,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.9453125,
+            "f1": 0.9459332165542426,
+            "auc_roc": 0.9974464204286365
+          },
+          "training_time_s": 163.33292439999786,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_beans_convnext_tiny_baseline_s3\\20261016_124947_101383"
+        },
+        {
+          "seed": 4,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.96875,
+            "f1": 0.9688749648137761,
+            "auc_roc": 0.998267213862289
+          },
+          "training_time_s": 289.182175599999,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_beans_convnext_tiny_baseline_s4\\20261016_125230_554629"
+        },
+        {
+          "seed": 5,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.96875,
+            "f1": 0.9687902851544372,
+            "auc_roc": 0.9966256269949841
+          },
+          "training_time_s": 361.2622436999991,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_beans_convnext_tiny_baseline_s5\\20261016_125719_878505"
+        },
+        {
+          "seed": 6,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.96875,
+            "f1": 0.9689858069004164,
+            "auc_roc": 0.9979024167806658
+          },
+          "training_time_s": 361.30528090000007,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_beans_convnext_tiny_baseline_s6\\20261016_130321_267088"
+        },
+        {
+          "seed": 7,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.9609375,
+            "f1": 0.9609214752892914,
+            "auc_roc": 0.9981760145918832
+          },
+          "training_time_s": 361.6198626000005,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_beans_convnext_tiny_baseline_s7\\20261016_130922_710990"
+        },
+        {
+          "seed": 8,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.96875,
+            "f1": 0.9687902851544372,
+            "auc_roc": 0.9980848153214774
+          },
+          "training_time_s": 340.8759925999984,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_beans_convnext_tiny_baseline_s8\\20261016_131524_435859"
+        },
+        {
+          "seed": 9,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.9609375,
+            "f1": 0.9612185777030184,
+            "auc_roc": 0.9987232102143183
+          },
+          "training_time_s": 324.7028892999988,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_beans_convnext_tiny_baseline_s9\\20261016_132105_429626"
+        }
+      ],
+      "successful": 10,
+      "per_seed": {
+        "0": 0.984375,
+        "1": 0.9609375,
+        "2": 0.96875,
+        "3": 0.9453125,
+        "4": 0.96875,
+        "5": 0.96875,
+        "6": 0.96875,
+        "7": 0.9609375,
+        "8": 0.96875,
+        "9": 0.9609375
+      }
+    },
+    "no_aug": {
+      "overrides": {
+        "data.transforms.horizontal_flip": false,
+        "data.transforms.rotation_degrees": 0
+      },
+      "aggregates": {
+        "accuracy": {
+          "n": 10,
+          "mean": 0.9640625,
+          "std": 0.0065880784586841235,
+          "std_ddof": 1,
+          "min": 0.953125,
+          "max": 0.9765625,
+          "ci95_low": 0.9593496725775038,
+          "ci95_high": 0.9687753274224963,
+          "boot95_low": 0.96015625,
+          "boot95_high": 0.96796875
+        },
+        "f1": {
+          "n": 10,
+          "mean": 0.9641454503770124,
+          "std": 0.006566679338178037,
+          "std_ddof": 1,
+          "min": 0.9532455800748484,
+          "max": 0.9766434722848613,
+          "ci95_low": 0.9594479309631518,
+          "ci95_high": 0.9688429697908729,
+          "boot95_low": 0.9602616094243546,
+          "boot95_high": 0.9680581378302515
+        },
+        "auc_roc": {
+          "n": 10,
+          "mean": 0.9965693874449004,
+          "std": 0.0011659468100508666,
+          "std_ddof": 1,
+          "min": 0.9950741536924848,
+          "max": 0.9979925303454715,
+          "ci95_low": 0.9957353193423361,
+          "ci95_high": 0.9974034555474648,
+          "boot95_low": 0.9958764847024082,
+          "boot95_high": 0.9972518728421601
+        }
+      },
+      "trials": [
+        {
+          "seed": 0,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.9765625,
+            "f1": 0.9766434722848613,
+            "auc_roc": 0.9979925303454715
+          },
+          "training_time_s": 323.52700370000093,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_beans_convnext_tiny_no_aug_s0\\20261016_132630_270450"
+        },
+        {
+          "seed": 1,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.953125,
+            "f1": 0.9532455800748484,
+            "auc_roc": 0.9956224350205197
+          },
+          "training_time_s": 209.23298499999873,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_beans_convnext_tiny_no_aug_s1\\20261016_133153_904676"
+        },
+        {
+          "seed": 2,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.9609375,
+            "f1": 0.9609144899624823,
+            "auc_roc": 0.9978991596638656
+          },
+          "training_time_s": 417.7374735000012,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_beans_convnext_tiny_no_aug_s2\\20261016_133523_298960"
+        },
+        {
+          "seed": 3,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.9609375,
+            "f1": 0.9609214752892914,
+            "auc_roc": 0.9950741536924848
+          },
+          "training_time_s": 316.5311299999994,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_beans_convnext_tiny_no_aug_s3\\20261016_134221_144786"
+        },
+        {
+          "seed": 4,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.9609375,
+            "f1": 0.9609214752892914,
+            "auc_roc": 0.9955236358109135
+          },
+          "training_time_s": 411.7913719999997,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_beans_convnext_tiny_no_aug_s4\\20261016_134737_778510"
+        },
+        {
+          "seed": 5,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.96875,
+            "f1": 0.9687902851544372,
+            "auc_roc": 0.9969904240766073
+          },
+          "training_time_s": 406.4665696999982,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_beans_convnext_tiny_no_aug_s5\\20261016_135429_675675"
+        },
+        {
+          "seed": 6,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.96875,
+            "f1": 0.9687902851544372,
+            "auc_roc": 0.9951664386684906
+          },
+          "training_time_s": 204.1889889999984,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_beans_convnext_tiny_no_aug_s6\\20261016_140116_255305"
+        },
+        {
+          "seed": 7,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.9609375,
+            "f1": 0.9612185777030184,
+            "auc_roc": 0.9978101318046598
+          },
+          "training_time_s": 166.92494670000087,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_beans_convnext_tiny_no_aug_s7\\20261016_140440_566955"
+        },
+        {
+          "seed": 8,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.96875,
+            "f1": 0.9687902851544372,
+            "auc_roc": 0.9963509434781664
+          },
+          "training_time_s": 424.38799709999876,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_beans_convnext_tiny_no_aug_s8\\20261016_140727_620602"
+        },
+        {
+          "seed": 9,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.9609375,
+            "f1": 0.9612185777030184,
+            "auc_roc": 0.9972640218878248
+          },
+          "training_time_s": 420.41210379999757,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_beans_convnext_tiny_no_aug_s9\\20261016_141432_139639"
+        }
+      ],
+      "successful": 10,
+      "per_seed": {
+        "0": 0.9765625,
+        "1": 0.953125,
+        "2": 0.9609375,
+        "3": 0.9609375,
+        "4": 0.9609375,
+        "5": 0.96875,
+        "6": 0.96875,
+        "7": 0.9609375,
+        "8": 0.96875,
+        "9": 0.9609375
+      }
+    },
+    "res160": {
+      "overrides": {
+        "data.transforms.image_size": 160
+      },
+      "aggregates": {
+        "accuracy": {
+          "n": 10,
+          "mean": 0.96875,
+          "std": 0.005208333333333333,
+          "std_ddof": 1,
+          "min": 0.9609375,
+          "max": 0.9765625,
+          "ci95_low": 0.9650241827814028,
+          "ci95_high": 0.9724758172185972,
+          "boot95_low": 0.965625,
+          "boot95_high": 0.971875
+        },
+        "f1": {
+          "n": 10,
+          "mean": 0.9689121184375009,
+          "std": 0.005195970001009964,
+          "std_ddof": 1,
+          "min": 0.9610261205057523,
+          "max": 0.9766434722848613,
+          "ci95_low": 0.965195145414062,
+          "ci95_high": 0.9726290914609398,
+          "boot95_low": 0.9657842660689816,
+          "boot95_high": 0.9720249388668988
+        },
+        "auc_roc": {
+          "n": 10,
+          "mean": 0.9969256074522832,
+          "std": 0.001134054600380771,
+          "std_ddof": 1,
+          "min": 0.9947983844700672,
+          "max": 0.9986320109439125,
+          "ci95_low": 0.9961143536621531,
+          "ci95_high": 0.9977368612424133,
+          "boot95_low": 0.9962231559290384,
+          "boot95_high": 0.9975644393416282
+        }
+      },
+      "trials": [
+        {
+          "seed": 0,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.96875,
+            "f1": 0.9689858069004164,
+            "auc_roc": 0.9973552211582307
+          },
+          "training_time_s": 267.69893169999705,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_beans_convnext_tiny_res160_s0\\20261016_142132_671787"
+        },
+        {
+          "seed": 1,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.96875,
+            "f1": 0.9689858069004164,
+            "auc_roc": 0.9973552211582307
+          },
+          "training_time_s": 134.8748455999994,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_beans_convnext_tiny_res160_s1\\20261016_142600_469274"
+        },
+        {
+          "seed": 2,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.9609375,
+            "f1": 0.9610261205057523,
+            "auc_roc": 0.9953488372093023
+          },
+          "training_time_s": 214.6350010999995,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_beans_convnext_tiny_res160_s2\\20261016_142815_476560"
+        },
+        {
+          "seed": 3,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.9765625,
+            "f1": 0.9766434722848613,
+            "auc_roc": 0.9976288189694481
+          },
+          "training_time_s": 267.87887050000063,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_beans_convnext_tiny_res160_s3\\20261016_143150_242557"
+        },
+        {
+          "seed": 4,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.96875,
+            "f1": 0.9689858069004164,
+            "auc_roc": 0.9986320109439125
+          },
+          "training_time_s": 254.70961109999917,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_beans_convnext_tiny_res160_s4\\20261016_143618_246075"
+        },
+        {
+          "seed": 5,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.9765625,
+            "f1": 0.9766434722848613,
+            "auc_roc": 0.9977178468286539
+          },
+          "training_time_s": 254.44641499999852,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_beans_convnext_tiny_res160_s5\\20261016_144033_043932"
+        },
+        {
+          "seed": 6,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.96875,
+            "f1": 0.9687902851544372,
+            "auc_roc": 0.9967157405597898
+          },
+          "training_time_s": 214.75890470000013,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_beans_convnext_tiny_res160_s6\\20261016_144447_622418"
+        },
+        {
+          "seed": 7,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.96875,
+            "f1": 0.9689858069004164,
+            "auc_roc": 0.9966223698781839
+          },
+          "training_time_s": 188.71723529999872,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_beans_convnext_tiny_res160_s7\\20261016_144822_508922"
+        },
+        {
+          "seed": 8,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.96875,
+            "f1": 0.9689858069004164,
+            "auc_roc": 0.9970816233470132
+          },
+          "training_time_s": 266.4645950000013,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_beans_convnext_tiny_res160_s8\\20261016_145131_360069"
+        },
+        {
+          "seed": 9,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.9609375,
+            "f1": 0.9610887996430165,
+            "auc_roc": 0.9947983844700672
+          },
+          "training_time_s": 168.69961499999772,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_beans_convnext_tiny_res160_s9\\20261016_145557_975235"
+        }
+      ],
+      "successful": 10,
+      "per_seed": {
+        "0": 0.96875,
+        "1": 0.96875,
+        "2": 0.9609375,
+        "3": 0.9765625,
+        "4": 0.96875,
+        "5": 0.9765625,
+        "6": 0.96875,
+        "7": 0.96875,
+        "8": 0.96875,
+        "9": 0.9609375
+      }
+    }
+  },
+  "comparisons": [
+    {
+      "label_a": "baseline",
+      "label_b": "no_aug",
+      "metric": "accuracy",
+      "n_pairs": 10,
+      "mean_a": 0.965625,
+      "mean_b": 0.9640625,
+      "mean_difference": 0.0015625,
+      "test": "wilcoxon",
+      "test_reason": "differences fail Shapiro-Wilk (p=0.004), using ranks",
+      "statistic": 5.0,
+      "p_value": 0.75,
+      "effect_size": 0.2176428750330035,
+      "effect_label": "small",
+      "ci_low": -0.003125,
+      "ci_high": 0.00546875,
+      "min_achievable_p": 0.001953125,
+      "underpowered": false,
+      "significant": false
+    },
+    {
+      "label_a": "baseline",
+      "label_b": "res160",
+      "metric": "accuracy",
+      "n_pairs": 10,
+      "mean_a": 0.965625,
+      "mean_b": 0.96875,
+      "mean_difference": -0.003125,
+      "test": "paired_t",
+      "test_reason": "differences pass Shapiro-Wilk (p=0.127)",
+      "statistic": -0.8017837257372732,
+      "p_value": 0.44333185016966004,
+      "effect_size": -0.253546276418555,
+      "effect_label": "small",
+      "ci_low": -0.0109375,
+      "ci_high": 0.00390625,
+      "min_achievable_p": 0.0,
+      "underpowered": false,
+      "significant": false
+    },
+    {
+      "label_a": "no_aug",
+      "label_b": "res160",
+      "metric": "accuracy",
+      "n_pairs": 10,
+      "mean_a": 0.9640625,
+      "mean_b": 0.96875,
+      "mean_difference": -0.0046875,
+      "test": "paired_t",
+      "test_reason": "differences pass Shapiro-Wilk (p=0.245)",
+      "statistic": -1.9639610121239315,
+      "p_value": 0.08112618884584057,
+      "effect_size": -0.6210590034081188,
+      "effect_label": "medium",
+      "ci_low": -0.009375,
+      "ci_high": 0.0,
+      "min_achievable_p": 0.0,
+      "underpowered": false,
+      "significant": false
+    }
+  ],
+  "best_by_mean": "res160",
+  "ranked_by_mean": [
+    "res160",
+    "baseline",
+    "no_aug"
+  ],
+  "ranking_seeds": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+  ],
+  "significant_pairs": 0,
+  "skipped_variants": [],
+  "underpowered": false,
+  "power_note": "",
+  "not_run": [],
+  "study": {
+    "dataset": "beans",
+    "architecture": "convnext_tiny",
+    "wall_time_s": 8396.6,
+    "visionforge_version": "0.14.0"
+  }
+}
