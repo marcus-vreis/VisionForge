@@ -103,3 +103,56 @@ class TestDeleting:
         set_hidden("flat_task", True, tasks_dir)
         delete_task("flat_task", "flat_task", tasks_dir)
         assert hidden_tasks(tasks_dir) == set()
+
+
+_REGISTERING_TASK = """
+from visionforge.tasks import BaseTaskConfig, TaskSpec, register_task
+
+
+@register_task(
+    key="{key}",
+    label="Del",
+    accent="#2dd4bf",
+    metrics={{"mae": "lower"}},
+    primary_metric="mae",
+)
+class DelTask(TaskSpec):
+    Config = BaseTaskConfig
+"""
+
+
+class TestDeletingUnregisters:
+    """Apagar o arquivo sem tirar do registro deixava a tarefa treinável até
+    reiniciar a GUI."""
+
+    @pytest.mark.parametrize("layout", ["flat", "packaged"])
+    def test_a_deleted_task_leaves_the_registry(
+        self, tmp_path: Path, layout: str
+    ) -> None:
+        from visionforge.tasks.registry import (
+            clear_task_registry,
+            get_task,
+            load_user_tasks,
+            registered_tasks,
+        )
+
+        clear_task_registry()
+        d = tmp_path / "user_tasks"
+        d.mkdir()
+        src = _REGISTERING_TASK.format(key="del_me")
+        if layout == "flat":
+            (d / "del_me.py").write_text(src, encoding="utf-8")
+        else:
+            (d / "del_me").mkdir()
+            (d / "del_me" / "task.py").write_text(src, encoding="utf-8")
+        try:
+            load_user_tasks(d)
+            assert [t.key for t in registered_tasks()] == ["del_me"]
+
+            delete_task("del_me", "del_me", d)
+
+            assert registered_tasks() == []
+            with pytest.raises(KeyError):
+                get_task("del_me", user_tasks_dir=d)
+        finally:
+            clear_task_registry()

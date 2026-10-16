@@ -15,6 +15,9 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Fixed
 
+- **Apagar uma task custom a tira de verdade.** O arquivo sumia, mas a task seguia registrada
+  na sessÃ£o: a aba, o schema e `/custom/<chave>/run` continuavam funcionando atÃ© reiniciar a
+  GUI. Apagar agora remove a task do registro (e o mÃ³dulo importado), e a chave passa a dar 404.
 - **A busca em grade compara só os hiperparâmetros.** Cada trial treinava com `seed + índice`,
   então a diferença entre dois pontos da grade misturava o efeito do hiperparâmetro com o da
   seed. Todos os trials usam a seed base, e o `best_config.yaml` grava essa mesma seed (ADR-045).

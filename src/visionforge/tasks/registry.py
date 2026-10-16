@@ -116,6 +116,21 @@ def registered_tasks() -> list[TaskInfo]:
     return [_REGISTRY[k] for k in sorted(_REGISTRY)]
 
 
+def unregister_task(key: str) -> bool:
+    """Drop one task from the registry; True when it was registered.
+
+    Deleting a task's file is not enough: the process keeps the registered class,
+    so the tab, the schema and ``/custom/<key>/run`` would go on working until the
+    GUI restarted (the training would even run from the class in memory).
+    """
+    return _REGISTRY.pop(key, None) is not None
+
+
+def user_task_module_name(path: Path) -> str:
+    """The ``sys.modules`` name a user-task file is imported under."""
+    return f"vf_user_tasks.{path.parent.name}_{path.stem}"
+
+
 def clear_task_registry() -> None:
     """Drop every registered task. Test hook — not used in the run path."""
     _REGISTRY.clear()
@@ -140,7 +155,7 @@ def load_user_tasks(directory: Path | str | None = None) -> list[TaskInfo]:
 
 
 def _import_file(path: Path) -> None:
-    module_name = f"vf_user_tasks.{path.parent.name}_{path.stem}"
+    module_name = user_task_module_name(path)
     spec = importlib.util.spec_from_file_location(module_name, path)
     if spec is None or spec.loader is None:
         logger.warning("Could not load user-task file: {}", path)
@@ -193,4 +208,6 @@ __all__ = [
     "load_user_tasks",
     "register_task",
     "registered_tasks",
+    "unregister_task",
+    "user_task_module_name",
 ]

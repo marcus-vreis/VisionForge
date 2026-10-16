@@ -19,11 +19,16 @@ about whether it is visible.
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
 from loguru import logger
 
-from visionforge.tasks.registry import DEFAULT_USER_TASKS_DIR
+from visionforge.tasks.registry import (
+    DEFAULT_USER_TASKS_DIR,
+    unregister_task,
+    user_task_module_name,
+)
 from visionforge.utils.messages import tr
 
 _HIDDEN_FILE = ".hidden.json"
@@ -101,6 +106,11 @@ def delete_task(
     path = task_file(key, directory)
     if path is None:
         raise FileNotFoundError(tr("custom.no_file", key=key))
+
+    # Out of the registry too, and out of sys.modules so a task re-created under
+    # the same key is imported afresh instead of reusing the deleted module.
+    unregister_task(key)
+    sys.modules.pop(user_task_module_name(path), None)
 
     # A packaged task owns its folder (it exists to hold assets alongside
     # task.py), so removing only the .py would leave an orphan directory.

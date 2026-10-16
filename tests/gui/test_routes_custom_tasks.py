@@ -258,3 +258,39 @@ class TestDeleteCustomTaskRoute:
 
         assert resp.status_code == 404
         assert resp.json()["detail"] == "não existe"
+
+
+class TestDeletedTaskIsGone:
+    def test_a_deleted_task_stops_being_listed_or_runnable(
+        self,
+        app_and_routes: tuple,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        from visionforge.tasks.registry import load_user_tasks
+
+        app, routes_mod = app_and_routes
+        routes_mod._current_run = None
+        tasks_dir = tmp_path / "user_tasks"
+        tasks_dir.mkdir()
+        (tasks_dir / "toydel.py").write_text(
+            "from visionforge.tasks import BaseTaskConfig, TaskSpec, register_task\n"
+            "@register_task(key='toydel', label='Toy', accent='#2dd4bf',\n"
+            "               metrics={'mae': 'lower'}, primary_metric='mae')\n"
+            "class T(TaskSpec):\n"
+            "    Config = BaseTaskConfig\n",
+            encoding="utf-8",
+        )
+        monkeypatch.chdir(tmp_path)
+        load_user_tasks()
+        client = TestClient(app, raise_server_exceptions=True)
+        assert "toydel" in [t["key"] for t in client.get("/api/tasks").json()["tasks"]]
+
+        resp = client.delete("/api/custom/toydel", params={"confirm": "toydel"})
+        assert resp.status_code == 200, resp.text
+
+        keys = [t["key"] for t in client.get("/api/tasks").json()["tasks"]]
+        assert "toydel" not in keys
+        assert client.get("/api/custom/toydel/schema").status_code == 404
+        run = client.post("/api/custom/toydel/run", json=_payload(tmp_path))
+        assert run.status_code == 404
