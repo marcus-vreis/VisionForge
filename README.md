@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/marcus-vreis/VisionForge/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/marcus-vreis/VisionForge/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/marcus-vreis/VisionForge/blob/main/LICENSE)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23425765.svg)](https://doi.org/10.5281/zenodo.23425765)
 
 **Train, compare and defend computer-vision models on your own GPU.**
 Five task families, one interface, no cloud and no notebooks.
@@ -209,6 +210,9 @@ Found something?
 
 If VisionForge is useful in your research, please cite it — see
 [`CITATION.cff`](https://github.com/marcus-vreis/VisionForge/blob/main/CITATION.cff).
+Every release is archived on Zenodo under
+[doi:10.5281/zenodo.23425765](https://doi.org/10.5281/zenodo.23425765), which
+always points to the latest version; each version also has its own DOI there.
 
 ## License
 
