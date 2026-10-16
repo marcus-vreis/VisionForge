@@ -200,3 +200,29 @@ class TestFit:
         assert 0.0 <= miou <= 1.0
         assert 0.0 <= dice <= 1.0
         assert 0.0 <= pixel_acc <= 1.0
+
+
+class TestMaskIdsOutsideTheModel:
+    """A mask id the model has no output for is refused before it reaches the GPU.
+
+    On CUDA such a target is a device-side assert inside the loss, which poisons the
+    process's CUDA context: every later job of the GUI then failed, CPU ones
+    included, until a restart (validation round 2026-10-16).
+    """
+
+    def test_a_mask_id_beyond_num_classes_is_a_clear_error(
+        self, tmp_path: Path
+    ) -> None:
+        import pytest
+
+        from visionforge.utils.messages import using_lang
+
+        trainer = SegmentationTrainer(_config(tmp_path))  # num_classes = 3
+        with using_lang("en"), pytest.raises(ValueError, match="num_classes"):
+            trainer.fit(TinySegModel(3), FakeSegDataModule(num_classes=5))
+
+    def test_the_ignore_index_is_not_an_out_of_range_id(self) -> None:
+        from visionforge.core.segmentation_trainer import check_mask_ids
+
+        masks = torch.tensor([[0, 2, 255]])
+        check_mask_ids(masks, num_classes=3, ignore_index=255)  # no error

@@ -5413,3 +5413,41 @@ draws from a global generator. With workers above 0 the job's augmentation runs 
 worker processes and was not exposed; the DataLoader's shuffle still uses the global
 generator of the training thread, which is safe as long as no other thread draws
 from it.
+
+## ADR-122 — A broken CUDA context stops the queue, and segmentation masks are checked first
+
+**Date:** 2026-10-16
+**Status:** Accepted
+
+**Context:** in the GUI validation of 2026-10-16 a segmentation run whose masks held
+a class id above `num_classes - 1` tripped a device-side assert inside the loss. That
+poisons the CUDA context of the whole process: every later CUDA call raises. The
+trainers seed CUDA even for a CPU job, so from then on every job the GUI accepted
+failed within a second with `CUDA error: device-side assert triggered`, CPU ones
+included, while the queue kept accepting work and nothing said the server had to be
+restarted.
+
+**Decision:** two guards. *Before the GPU:* the segmentation trainer checks every
+batch's mask ids on the CPU before moving them to the device (`check_mask_ids`: one
+`max` over an integer tensor) and refuses an id outside `0..num_classes-1` that is not
+the `ignore_index`, with a message that names the id and what to change; the run fails
+as any other, and the context stays healthy. *After the fact:* every job submission
+first asks `gpu_health.cuda_context_broken()`, which returns true only when CUDA was
+started in this process and a one-element allocation raises a CUDA error; the
+submission is then refused with 503 and a message to reopen VisionForge. The probe
+never starts CUDA in a server that has not used it and does not wait for a running
+job's kernels.
+
+**Alternatives considered:**
+- *Restart the server automatically.* It would kill the page's connection and any
+  waiting jobs, and hide that something went wrong.
+- *Validate mask ids from the dataset statistics before the run.* The statistics
+  sample masks; a single mask outside the sample would still poison the context. The
+  per-batch check sees every pixel the loss sees.
+- *Not seeding CUDA for CPU jobs.* Narrower: it would let CPU jobs run, but GPU jobs
+  would still fail silently one after another.
+
+**Consequences:** a bad mask is a clear error in the run instead of a dead server;
+any other cause of a device-side assert (a custom task, a detector) now stops the
+queue with a reason instead of failing every job. The check costs one reduction per
+batch.

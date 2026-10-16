@@ -43,6 +43,7 @@ from visionforge.core.training_health import (
 )
 from visionforge.models.segmentation_factory import segmentation_logits
 from visionforge.utils.environment import capture_environment
+from visionforge.utils.messages import tr
 from visionforge.utils.segmentation_config import SegmentationConfig
 
 
@@ -164,6 +165,34 @@ class SegmentationMetricAccumulator:
 
         pixel_acc = float(diag.sum().item() / total)
         return mean_iou, mean_dice, pixel_acc
+
+
+def check_mask_ids(masks: torch.Tensor, num_classes: int, ignore_index: int) -> None:
+    """Refuse a mask id the model has no output for, while the batch is on the CPU.
+
+    On CUDA such a target trips a device-side assert inside the loss, and that
+    poisons the process's CUDA context: every later job fails, CPU ones included,
+    until the server restarts. One ``max`` over an integer batch is cheap.
+
+    Raises:
+        ValueError: a mask id outside ``0..num_classes-1`` that is not ``ignore_index``.
+    """
+    valid = masks[masks != ignore_index]
+    if valid.numel() == 0:
+        return
+    found = int(valid.max())
+    if found >= num_classes or int(valid.min()) < 0:
+        found = found if found >= num_classes else int(valid.min())
+        raise ValueError(
+            tr(
+                "segmentation.mask_id_out_of_range",
+                found=found,
+                num_classes=num_classes,
+                last=num_classes - 1,
+                needed=max(found + 1, num_classes),
+                ignore=ignore_index,
+            )
+        )
 
 
 def dice_loss(
@@ -492,6 +521,7 @@ class SegmentationTrainer:
         per_image: list[np.ndarray] = []
         with torch.no_grad():
             for inputs, targets in loader:
+                check_mask_ids(targets, self._num_classes, self._ignore_index)
                 inputs = inputs.to(self._device, non_blocking=True)
                 targets = targets.to(self._device, non_blocking=True)
                 logits = segmentation_logits(model(inputs))
@@ -637,6 +667,7 @@ class SegmentationTrainer:
         model.train()
         total_loss = 0.0
         for inputs, targets in loader:
+            check_mask_ids(targets, self._num_classes, self._ignore_index)
             inputs = inputs.to(self._device, non_blocking=True)
             targets = targets.to(self._device, non_blocking=True)
             optimizer.zero_grad(set_to_none=True)
@@ -660,6 +691,7 @@ class SegmentationTrainer:
         metrics = SegmentationMetricAccumulator(self._num_classes, self._ignore_index)
         with torch.no_grad():
             for inputs, targets in loader:
+                check_mask_ids(targets, self._num_classes, self._ignore_index)
                 inputs = inputs.to(self._device, non_blocking=True)
                 targets = targets.to(self._device, non_blocking=True)
                 logits = segmentation_logits(model(inputs))

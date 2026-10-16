@@ -96,6 +96,7 @@ from visionforge.gui.api.folder_opener import (
     is_loopback_origin,
     open_folder,
 )
+from visionforge.gui.api.gpu_health import cuda_context_broken
 from visionforge.gui.api.model_notes import collapse_note
 from visionforge.gui.api.profiles import (
     PROFILE_HEADER,
@@ -398,6 +399,9 @@ def _submit_job(
     ``profile`` is only the queue's label for whose folders the job writes into;
     the config handed to ``start`` was already scoped to it by the caller.
     """
+    if cuda_context_broken():
+        # Every job would fail within a second, CPU ones included; say so now.
+        raise HTTPException(503, tr("gpu.context_broken"))
     owner = profile or default_profile(_MODELS_DIR)
     lang = current_lang()
 

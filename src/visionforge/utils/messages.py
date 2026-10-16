@@ -355,6 +355,30 @@ CATALOG: dict[str, dict[Lang, str]] = {
         ),
         "en": ("No YOLO split found (expected 'images/<split>' or '<split>/images')."),
     },
+    "gpu.context_broken": {
+        "pt": (
+            "A GPU deste servidor parou de aceitar trabalho depois de um erro de CUDA "
+            "num treino anterior (veja o erro dele no histórico). Feche e abra o "
+            "VisionForge de novo para continuar treinando."
+        ),
+        "en": (
+            "This server's GPU stopped accepting work after a CUDA error in an "
+            "earlier run (see its error in the history). Close and reopen "
+            "VisionForge to keep training."
+        ),
+    },
+    "segmentation.mask_id_out_of_range": {
+        "pt": (
+            "Há máscaras com o id de classe {found}, mas o modelo tem num_classes = "
+            "{num_classes} (ids de 0 a {last}). Aumente num_classes para pelo menos "
+            "{needed} ou marque esses pixels com o ignore_index ({ignore})."
+        ),
+        "en": (
+            "Some masks contain class id {found}, but the model has num_classes = "
+            "{num_classes} (ids 0 to {last}). Raise num_classes to at least "
+            "{needed}, or mark those pixels with the ignore_index ({ignore})."
+        ),
+    },
     "scan.no_seg_split": {
         "pt": "Nenhum split encontrado (esperado <split>/{{imagens,máscaras}}).",
         "en": "No split found (expected <split>/{{images,masks}}).",

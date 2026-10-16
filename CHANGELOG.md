@@ -27,6 +27,13 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
   A prévia sorteava as variações no mesmo gerador aleatório global que o treino usa
   (em outra thread), e um run com seed fixa deixava de ser reproduzível. A prévia
   agora sorteia com um gerador próprio ([ADR-121](docs/dev/DECISIONS.md)).
+- **Uma máscara com id de classe acima de `num_classes` não derruba mais o servidor.**
+  Na GPU, esse id disparava um erro de CUDA que inutilizava o processo inteiro: todo
+  treino seguinte falhava em um segundo, até os de CPU, sem aviso. Agora a segmentação
+  confere os ids antes de mandar o lote para a GPU e falha com uma mensagem que diz o
+  id e o que mudar; e, se o CUDA do servidor quebrar por qualquer outro motivo, a GUI
+  recusa novos treinos e pede para reabrir o VisionForge
+  ([ADR-122](docs/dev/DECISIONS.md)).
 
 ## [0.15.0] — 2026-10-16
 
