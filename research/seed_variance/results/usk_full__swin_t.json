@@ -1,0 +1,644 @@
+{
+  "kind": "replicated_comparison",
+  "metric": "accuracy",
+  "metric_direction": "higher",
+  "seeds": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+  ],
+  "alpha": 0.05,
+  "variants": {
+    "baseline": {
+      "overrides": {},
+      "aggregates": {
+        "accuracy": {
+          "n": 10,
+          "mean": 0.8981875,
+          "std": 0.010938789606512924,
+          "std_ddof": 1,
+          "min": 0.88375,
+          "max": 0.913125,
+          "ci95_low": 0.8903623613120208,
+          "ci95_high": 0.9060126386879792,
+          "boot95_low": 0.89175,
+          "boot95_high": 0.9047499999999999
+        },
+        "f1": {
+          "n": 10,
+          "mean": 0.8985466675306155,
+          "std": 0.01091353621452823,
+          "std_ddof": 1,
+          "min": 0.8845847635668369,
+          "max": 0.9139416334444264,
+          "ci95_low": 0.8907395940309918,
+          "ci95_high": 0.9063537410302392,
+          "boot95_low": 0.8921349375553049,
+          "boot95_high": 0.9050652274872083
+        },
+        "auc_roc": {
+          "n": 10,
+          "mean": 0.9848741927083333,
+          "std": 0.0027054207218732583,
+          "std_ddof": 1,
+          "min": 0.97966875,
+          "max": 0.9883104166666667,
+          "ci95_low": 0.9829388513113851,
+          "ci95_high": 0.9868095341052815,
+          "boot95_low": 0.9831690625,
+          "boot95_high": 0.9863067115885416
+        }
+      },
+      "trials": [
+        {
+          "seed": 0,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.88375,
+            "f1": 0.8849974889833615,
+            "auc_roc": 0.9861854166666668
+          },
+          "training_time_s": 390.495369,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_swin_t_baseline_s0\\20261016_060730_616810"
+        },
+        {
+          "seed": 1,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.903125,
+            "f1": 0.9035577838403828,
+            "auc_roc": 0.9854458333333334
+          },
+          "training_time_s": 342.6293972000001,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_swin_t_baseline_s1\\20261016_061400_976634"
+        },
+        {
+          "seed": 2,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.885,
+            "f1": 0.8845847635668369,
+            "auc_roc": 0.9804546875
+          },
+          "training_time_s": 468.07155999999986,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_swin_t_baseline_s2\\20261016_061943_696545"
+        },
+        {
+          "seed": 3,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.906875,
+            "f1": 0.9070042849920606,
+            "auc_roc": 0.9867682291666666
+          },
+          "training_time_s": 635.7885163000001,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_swin_t_baseline_s3\\20261016_062731_832828"
+        },
+        {
+          "seed": 4,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.8975,
+            "f1": 0.8976238189270329,
+            "auc_roc": 0.9850828125
+          },
+          "training_time_s": 635.6471207999998,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_swin_t_baseline_s4\\20261016_063807_688599"
+        },
+        {
+          "seed": 5,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.910625,
+            "f1": 0.9107494244820338,
+            "auc_roc": 0.9854281249999999
+          },
+          "training_time_s": 384.21809429999985,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_swin_t_baseline_s5\\20261016_064843_425362"
+        },
+        {
+          "seed": 6,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.88875,
+            "f1": 0.888526206532912,
+            "auc_roc": 0.97966875
+          },
+          "training_time_s": 468.06406679999964,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_swin_t_baseline_s6\\20261016_065507_722371"
+        },
+        {
+          "seed": 7,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.913125,
+            "f1": 0.9139416334444264,
+            "auc_roc": 0.9883104166666667
+          },
+          "training_time_s": 426.4216921000002,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_swin_t_baseline_s7\\20261016_070255_894466"
+        },
+        {
+          "seed": 8,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.88875,
+            "f1": 0.8899534927707855,
+            "auc_roc": 0.9854825520833335
+          },
+          "training_time_s": 761.3651231000003,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_swin_t_baseline_s8\\20261016_071002_379129"
+        },
+        {
+          "seed": 9,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.904375,
+            "f1": 0.9045277777663222,
+            "auc_roc": 0.9859151041666666
+          },
+          "training_time_s": 593.5065631999996,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_swin_t_baseline_s9\\20261016_072243_827758"
+        }
+      ],
+      "successful": 10,
+      "per_seed": {
+        "0": 0.88375,
+        "1": 0.903125,
+        "2": 0.885,
+        "3": 0.906875,
+        "4": 0.8975,
+        "5": 0.910625,
+        "6": 0.88875,
+        "7": 0.913125,
+        "8": 0.88875,
+        "9": 0.904375
+      }
+    },
+    "no_aug": {
+      "overrides": {
+        "data.transforms.horizontal_flip": false,
+        "data.transforms.rotation_degrees": 0
+      },
+      "aggregates": {
+        "accuracy": {
+          "n": 10,
+          "mean": 0.8916875000000001,
+          "std": 0.018364202231818054,
+          "std_ddof": 1,
+          "min": 0.869375,
+          "max": 0.914375,
+          "ci95_low": 0.8785505411108271,
+          "ci95_high": 0.9048244588891731,
+          "boot95_low": 0.8808125,
+          "boot95_high": 0.9024999999999999
+        },
+        "f1": {
+          "n": 10,
+          "mean": 0.8919509418876267,
+          "std": 0.017772894188585783,
+          "std_ddof": 1,
+          "min": 0.8699155341154975,
+          "max": 0.9144622437119287,
+          "ci95_low": 0.879236979290736,
+          "ci95_high": 0.9046649044845174,
+          "boot95_low": 0.8814647511827653,
+          "boot95_high": 0.9023892108052077
+        },
+        "auc_roc": {
+          "n": 10,
+          "mean": 0.9851575260416666,
+          "std": 0.0032671592737732996,
+          "std_ddof": 1,
+          "min": 0.9792161458333333,
+          "max": 0.9887703125,
+          "ci95_low": 0.9828203410922668,
+          "ci95_high": 0.9874947109910664,
+          "boot95_low": 0.9831515820312501,
+          "boot95_high": 0.9870161601562498
+        }
+      },
+      "trials": [
+        {
+          "seed": 0,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.914375,
+            "f1": 0.9144622437119287,
+            "auc_roc": 0.9873958333333334
+          },
+          "training_time_s": 585.7436365000003,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_swin_t_no_aug_s0\\20261016_073237_407961"
+        },
+        {
+          "seed": 1,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.87375,
+            "f1": 0.8747586136026182,
+            "auc_roc": 0.9812635416666666
+          },
+          "training_time_s": 434.03694110000015,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_swin_t_no_aug_s1\\20261016_074223_240619"
+        },
+        {
+          "seed": 2,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.878125,
+            "f1": 0.8790264272271617,
+            "auc_roc": 0.9841645833333333
+          },
+          "training_time_s": 398.2021043000004,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_swin_t_no_aug_s2\\20261016_074937_422451"
+        },
+        {
+          "seed": 3,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.869375,
+            "f1": 0.8699155341154975,
+            "auc_roc": 0.9792161458333333
+          },
+          "training_time_s": 378.6902387,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_swin_t_no_aug_s3\\20261016_075615_721415"
+        },
+        {
+          "seed": 4,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.905625,
+            "f1": 0.9056422106938254,
+            "auc_roc": 0.9883390624999999
+          },
+          "training_time_s": 383.16586839999945,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_swin_t_no_aug_s4\\20261016_080234_548790"
+        },
+        {
+          "seed": 5,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.91,
+            "f1": 0.9096140217743774,
+            "auc_roc": 0.9874
+          },
+          "training_time_s": 265.3042011999996,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_swin_t_no_aug_s5\\20261016_080857_825793"
+        },
+        {
+          "seed": 6,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.87,
+            "f1": 0.8716423107800706,
+            "auc_roc": 0.9833684895833333
+          },
+          "training_time_s": 805.5204442999993,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_swin_t_no_aug_s6\\20261016_081323_182413"
+        },
+        {
+          "seed": 7,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.883125,
+            "f1": 0.883101176468924,
+            "auc_roc": 0.9839174479166668
+          },
+          "training_time_s": 489.41428690000066,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_swin_t_no_aug_s7\\20261016_082648_732550"
+        },
+        {
+          "seed": 8,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.903125,
+            "f1": 0.9024225347408423,
+            "auc_roc": 0.98773984375
+          },
+          "training_time_s": 359.90914150000026,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_swin_t_no_aug_s8\\20261016_083458_290462"
+        },
+        {
+          "seed": 9,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.909375,
+            "f1": 0.9089243457610215,
+            "auc_roc": 0.9887703125
+          },
+          "training_time_s": 313.7734669999991,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_swin_t_no_aug_s9\\20261016_084058_312422"
+        }
+      ],
+      "successful": 10,
+      "per_seed": {
+        "0": 0.914375,
+        "1": 0.87375,
+        "2": 0.878125,
+        "3": 0.869375,
+        "4": 0.905625,
+        "5": 0.91,
+        "6": 0.87,
+        "7": 0.883125,
+        "8": 0.903125,
+        "9": 0.909375
+      }
+    },
+    "res160": {
+      "overrides": {
+        "data.transforms.image_size": 160
+      },
+      "aggregates": {
+        "accuracy": {
+          "n": 10,
+          "mean": 0.8908125,
+          "std": 0.012791904178033832,
+          "std_ddof": 1,
+          "min": 0.87375,
+          "max": 0.9125,
+          "ci95_low": 0.8816617230057285,
+          "ci95_high": 0.8999632769942715,
+          "boot95_low": 0.8835625,
+          "boot95_high": 0.8984374999999998
+        },
+        "f1": {
+          "n": 10,
+          "mean": 0.8911423412734717,
+          "std": 0.012598124820699027,
+          "std_ddof": 1,
+          "min": 0.8747058078029435,
+          "max": 0.9123629085613165,
+          "ci95_low": 0.8821301856807042,
+          "ci95_high": 0.9001544968662392,
+          "boot95_low": 0.8840528125650176,
+          "boot95_high": 0.8986059618452568
+        },
+        "auc_roc": {
+          "n": 10,
+          "mean": 0.98372171875,
+          "std": 0.0029199960850973933,
+          "std_ddof": 1,
+          "min": 0.9798843749999999,
+          "max": 0.9887833333333333,
+          "ci95_low": 0.9816328793851183,
+          "ci95_high": 0.9858105581148817,
+          "boot95_low": 0.9820315859375,
+          "boot95_high": 0.98544765234375
+        }
+      },
+      "trials": [
+        {
+          "seed": 0,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.889375,
+            "f1": 0.8901992754547272,
+            "auc_roc": 0.9834182291666667
+          },
+          "training_time_s": 258.32218680000005,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_swin_t_res160_s0\\20261016_084612_173989"
+        },
+        {
+          "seed": 1,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.896875,
+            "f1": 0.8982572535593942,
+            "auc_roc": 0.9855697916666666
+          },
+          "training_time_s": 285.9289620000018,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_swin_t_res160_s1\\20261016_085030_542435"
+        },
+        {
+          "seed": 2,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.9125,
+            "f1": 0.9123629085613165,
+            "auc_roc": 0.9887833333333333
+          },
+          "training_time_s": 229.37441380000018,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_swin_t_res160_s2\\20261016_085516_623079"
+        },
+        {
+          "seed": 3,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.87375,
+            "f1": 0.8747058078029435,
+            "auc_roc": 0.9817499999999999
+          },
+          "training_time_s": 267.9702926000009,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_swin_t_res160_s3\\20261016_085906_106377"
+        },
+        {
+          "seed": 4,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.879375,
+            "f1": 0.8792157910407331,
+            "auc_roc": 0.9803640625
+          },
+          "training_time_s": 478.9397614999998,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_swin_t_res160_s4\\20261016_090334_204665"
+        },
+        {
+          "seed": 5,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.885,
+            "f1": 0.8849881130954206,
+            "auc_roc": 0.9812937500000001
+          },
+          "training_time_s": 247.7847201000004,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_swin_t_res160_s5\\20261016_091133_171953"
+        },
+        {
+          "seed": 6,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.87875,
+            "f1": 0.8794200462507558,
+            "auc_roc": 0.9798843749999999
+          },
+          "training_time_s": 355.7138596999994,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_swin_t_res160_s6\\20261016_091541_054339"
+        },
+        {
+          "seed": 7,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.89625,
+            "f1": 0.8962563735561081,
+            "auc_roc": 0.9864
+          },
+          "training_time_s": 198.74758400000064,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_swin_t_res160_s7\\20261016_092136_830457"
+        },
+        {
+          "seed": 8,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.90875,
+            "f1": 0.9084599689522886,
+            "auc_roc": 0.9838802083333333
+          },
+          "training_time_s": 279.0448498000005,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_swin_t_res160_s8\\20261016_092455_731018"
+        },
+        {
+          "seed": 9,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.8875,
+            "f1": 0.88755787446103,
+            "auc_roc": 0.9858734375
+          },
+          "training_time_s": 328.4135031000005,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_swin_t_res160_s9\\20261016_092934_821696"
+        }
+      ],
+      "successful": 10,
+      "per_seed": {
+        "0": 0.889375,
+        "1": 0.896875,
+        "2": 0.9125,
+        "3": 0.87375,
+        "4": 0.879375,
+        "5": 0.885,
+        "6": 0.87875,
+        "7": 0.89625,
+        "8": 0.90875,
+        "9": 0.8875
+      }
+    }
+  },
+  "comparisons": [
+    {
+      "label_a": "baseline",
+      "label_b": "no_aug",
+      "metric": "accuracy",
+      "n_pairs": 10,
+      "mean_a": 0.8981875,
+      "mean_b": 0.8916875000000001,
+      "mean_difference": 0.006499999999999983,
+      "test": "paired_t",
+      "test_reason": "differences pass Shapiro-Wilk (p=0.797)",
+      "statistic": 0.9315965030560474,
+      "p_value": 0.37585925945872406,
+      "effect_size": 0.29459668099051217,
+      "effect_label": "small",
+      "ci_low": -0.0064999999999999945,
+      "ci_high": 0.019312499999999976,
+      "min_achievable_p": 0.0,
+      "underpowered": false,
+      "significant": false
+    },
+    {
+      "label_a": "baseline",
+      "label_b": "res160",
+      "metric": "accuracy",
+      "n_pairs": 10,
+      "mean_a": 0.8981875,
+      "mean_b": 0.8908125,
+      "mean_difference": 0.007375000000000009,
+      "test": "paired_t",
+      "test_reason": "differences pass Shapiro-Wilk (p=0.429)",
+      "statistic": 1.1937679329456228,
+      "p_value": 0.26308418399178446,
+      "effect_size": 0.37750256657793263,
+      "effect_label": "small",
+      "ci_low": -0.004374999999999985,
+      "ci_high": 0.0183125,
+      "min_achievable_p": 0.0,
+      "underpowered": false,
+      "significant": false
+    },
+    {
+      "label_a": "no_aug",
+      "label_b": "res160",
+      "metric": "accuracy",
+      "n_pairs": 10,
+      "mean_a": 0.8916875000000001,
+      "mean_b": 0.8908125,
+      "mean_difference": 0.0008750000000000257,
+      "test": "paired_t",
+      "test_reason": "differences pass Shapiro-Wilk (p=0.150)",
+      "statistic": 0.12477473877916254,
+      "p_value": 0.90344440617544,
+      "effect_size": 0.03945723689946909,
+      "effect_label": "negligible",
+      "ci_low": -0.012124999999999964,
+      "ci_high": 0.013875000000000026,
+      "min_achievable_p": 0.0,
+      "underpowered": false,
+      "significant": false
+    }
+  ],
+  "best_by_mean": "baseline",
+  "ranked_by_mean": [
+    "baseline",
+    "no_aug",
+    "res160"
+  ],
+  "ranking_seeds": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+  ],
+  "significant_pairs": 0,
+  "skipped_variants": [],
+  "underpowered": false,
+  "power_note": "",
+  "not_run": [],
+  "study": {
+    "dataset": "usk_full",
+    "architecture": "swin_t",
+    "wall_time_s": 12452.9,
+    "visionforge_version": "0.14.0"
+  }
+}
