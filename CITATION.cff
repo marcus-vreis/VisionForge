@@ -8,8 +8,8 @@ authors:
 repository-code: "https://github.com/marcus-vreis/VisionForge"
 url: "https://github.com/marcus-vreis/VisionForge"
 license: MIT
-version: 0.14.0
-date-released: 2026-10-15
+version: 0.15.0
+date-released: 2026-10-16
 keywords:
   - computer-vision
   - deep-learning

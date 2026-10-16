@@ -13,6 +13,8 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ## [Unreleased]
 
+## [0.15.0] — 2026-10-16
+
 ### Added
 
 - **A GUI avisa quando há uma versão nova e instala com um botão.** Abaixo da
