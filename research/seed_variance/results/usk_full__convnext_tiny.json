@@ -1,0 +1,644 @@
+{
+  "kind": "replicated_comparison",
+  "metric": "accuracy",
+  "metric_direction": "higher",
+  "seeds": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+  ],
+  "alpha": 0.05,
+  "variants": {
+    "baseline": {
+      "overrides": {},
+      "aggregates": {
+        "accuracy": {
+          "n": 10,
+          "mean": 0.8931250000000001,
+          "std": 0.021280615201007075,
+          "std_ddof": 1,
+          "min": 0.84875,
+          "max": 0.92,
+          "ci95_low": 0.8779017649526554,
+          "ci95_high": 0.9083482350473447,
+          "boot95_low": 0.879875,
+          "boot95_high": 0.9049375
+        },
+        "f1": {
+          "n": 10,
+          "mean": 0.8935546008662725,
+          "std": 0.020919559639176438,
+          "std_ddof": 1,
+          "min": 0.8491953180692058,
+          "max": 0.9193260275702632,
+          "ci95_low": 0.8785896494085225,
+          "ci95_high": 0.9085195523240225,
+          "boot95_low": 0.8805220015252069,
+          "boot95_high": 0.9051120631592123
+        },
+        "auc_roc": {
+          "n": 10,
+          "mean": 0.9847474479166667,
+          "std": 0.0038500693600516996,
+          "std_ddof": 1,
+          "min": 0.9779171875,
+          "max": 0.9897630208333335,
+          "ci95_low": 0.9819932742114876,
+          "ci95_high": 0.9875016216218457,
+          "boot95_low": 0.9823914856770832,
+          "boot95_high": 0.986920744140625
+        }
+      },
+      "trials": [
+        {
+          "seed": 0,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.9075,
+            "f1": 0.9074335681691532,
+            "auc_roc": 0.9887067708333332
+          },
+          "training_time_s": 513.1242032000009,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_convnext_tiny_baseline_s0\\20261015_195343_831811"
+        },
+        {
+          "seed": 1,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.92,
+            "f1": 0.9193260275702632,
+            "auc_roc": 0.9897630208333335
+          },
+          "training_time_s": 395.76485060000414,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_convnext_tiny_baseline_s1\\20261015_200217_032921"
+        },
+        {
+          "seed": 2,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.880625,
+            "f1": 0.8810383137923246,
+            "auc_roc": 0.9824552083333333
+          },
+          "training_time_s": 434.4363424999974,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_convnext_tiny_baseline_s2\\20261015_200852_867224"
+        },
+        {
+          "seed": 3,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.9025,
+            "f1": 0.9030160221405753,
+            "auc_roc": 0.9860822916666667
+          },
+          "training_time_s": 599.7395221999977,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_convnext_tiny_baseline_s3\\20261015_201607_400289"
+        },
+        {
+          "seed": 4,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.9,
+            "f1": 0.9007538182092594,
+            "auc_roc": 0.98625078125
+          },
+          "training_time_s": 1101.1508902999994,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_convnext_tiny_baseline_s4\\20261015_202607_219992"
+        },
+        {
+          "seed": 5,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.88125,
+            "f1": 0.8825608059794933,
+            "auc_roc": 0.9779171875
+          },
+          "training_time_s": 664.9566993999979,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_convnext_tiny_baseline_s5\\20261015_204428_448056"
+        },
+        {
+          "seed": 6,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.915625,
+            "f1": 0.9157612353516422,
+            "auc_roc": 0.9884104166666667
+          },
+          "training_time_s": 441.7344817999983,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_convnext_tiny_baseline_s6\\20261015_205533_487770"
+        },
+        {
+          "seed": 7,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.84875,
+            "f1": 0.8491953180692058,
+            "auc_roc": 0.9800921874999999
+          },
+          "training_time_s": 659.2138650999987,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_convnext_tiny_baseline_s7\\20261015_210255_305211"
+        },
+        {
+          "seed": 8,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.896875,
+            "f1": 0.8967573970862933,
+            "auc_roc": 0.9836796875
+          },
+          "training_time_s": 823.1775991999966,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_convnext_tiny_baseline_s8\\20261015_211354_590944"
+        },
+        {
+          "seed": 9,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.878125,
+            "f1": 0.879703502294514,
+            "auc_roc": 0.9841169270833333
+          },
+          "training_time_s": 549.4766553000009,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_convnext_tiny_baseline_s9\\20261015_212737_846314"
+        }
+      ],
+      "successful": 10,
+      "per_seed": {
+        "0": 0.9075,
+        "1": 0.92,
+        "2": 0.880625,
+        "3": 0.9025,
+        "4": 0.9,
+        "5": 0.88125,
+        "6": 0.915625,
+        "7": 0.84875,
+        "8": 0.896875,
+        "9": 0.878125
+      }
+    },
+    "no_aug": {
+      "overrides": {
+        "data.transforms.horizontal_flip": false,
+        "data.transforms.rotation_degrees": 0
+      },
+      "aggregates": {
+        "accuracy": {
+          "n": 10,
+          "mean": 0.9004375,
+          "std": 0.019910934495899497,
+          "std_ddof": 1,
+          "min": 0.871875,
+          "max": 0.920625,
+          "ci95_low": 0.8861940755040287,
+          "ci95_high": 0.9146809244959713,
+          "boot95_low": 0.8883749999999999,
+          "boot95_high": 0.9112500000000001
+        },
+        "f1": {
+          "n": 10,
+          "mean": 0.9007282910648648,
+          "std": 0.019542637656709008,
+          "std_ddof": 1,
+          "min": 0.8719502732332514,
+          "max": 0.9206758578003503,
+          "ci95_low": 0.8867483302562557,
+          "ci95_high": 0.914708251873474,
+          "boot95_low": 0.888830196039705,
+          "boot95_high": 0.9113192104042737
+        },
+        "auc_roc": {
+          "n": 10,
+          "mean": 0.986845234375,
+          "std": 0.0033238977603353434,
+          "std_ddof": 1,
+          "min": 0.9798828125000001,
+          "max": 0.9913739583333334,
+          "ci95_low": 0.9844674611574037,
+          "ci95_high": 0.9892230075925964,
+          "boot95_low": 0.9848475260416667,
+          "boot95_high": 0.9886801946614584
+        }
+      },
+      "trials": [
+        {
+          "seed": 0,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.91375,
+            "f1": 0.9141818325884705,
+            "auc_roc": 0.9897437499999999
+          },
+          "training_time_s": 481.7954960000061,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_convnext_tiny_no_aug_s0\\20261015_213647_383207"
+        },
+        {
+          "seed": 1,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.87375,
+            "f1": 0.8744526033399403,
+            "auc_roc": 0.9852729166666667
+          },
+          "training_time_s": 378.08600870000373,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_convnext_tiny_no_aug_s1\\20261015_214449_289763"
+        },
+        {
+          "seed": 2,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.871875,
+            "f1": 0.8734140122525983,
+            "auc_roc": 0.9863484375
+          },
+          "training_time_s": 485.9443057999961,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_convnext_tiny_no_aug_s2\\20261015_215107_456691"
+        },
+        {
+          "seed": 3,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.91,
+            "f1": 0.9098740956928106,
+            "auc_roc": 0.9871916666666667
+          },
+          "training_time_s": 322.9328533000007,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_convnext_tiny_no_aug_s3\\20261015_215913_464772"
+        },
+        {
+          "seed": 4,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.920625,
+            "f1": 0.9206758578003503,
+            "auc_roc": 0.9890880208333332
+          },
+          "training_time_s": 488.94271959999605,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_convnext_tiny_no_aug_s4\\20261015_220436_479409"
+        },
+        {
+          "seed": 5,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.90375,
+            "f1": 0.9042416492288615,
+            "auc_roc": 0.98354140625
+          },
+          "training_time_s": 482.8883222000004,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_convnext_tiny_no_aug_s5\\20261015_221245_524021"
+        },
+        {
+          "seed": 6,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.90625,
+            "f1": 0.9068117395287325,
+            "auc_roc": 0.9874682291666667
+          },
+          "training_time_s": 580.6095755999995,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_convnext_tiny_no_aug_s6\\20261015_222048_489208"
+        },
+        {
+          "seed": 7,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.871875,
+            "f1": 0.8719502732332514,
+            "auc_roc": 0.9798828125000001
+          },
+          "training_time_s": 474.08107700000255,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_convnext_tiny_no_aug_s7\\20261015_223029_156863"
+        },
+        {
+          "seed": 8,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.9175,
+            "f1": 0.9172408184712868,
+            "auc_roc": 0.9885411458333333
+          },
+          "training_time_s": 628.9878245,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_convnext_tiny_no_aug_s8\\20261015_223823_350191"
+        },
+        {
+          "seed": 9,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.915,
+            "f1": 0.9144400285123464,
+            "auc_roc": 0.9913739583333334
+          },
+          "training_time_s": 525.206108499995,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_convnext_tiny_no_aug_s9\\20261015_224852_391369"
+        }
+      ],
+      "successful": 10,
+      "per_seed": {
+        "0": 0.91375,
+        "1": 0.87375,
+        "2": 0.871875,
+        "3": 0.91,
+        "4": 0.920625,
+        "5": 0.90375,
+        "6": 0.90625,
+        "7": 0.871875,
+        "8": 0.9175,
+        "9": 0.915
+      }
+    },
+    "res160": {
+      "overrides": {
+        "data.transforms.image_size": 160
+      },
+      "aggregates": {
+        "accuracy": {
+          "n": 10,
+          "mean": 0.893,
+          "std": 0.016642691088482833,
+          "std_ddof": 1,
+          "min": 0.863125,
+          "max": 0.9175,
+          "ci95_low": 0.8810945359959174,
+          "ci95_high": 0.9049054640040827,
+          "boot95_low": 0.8829375,
+          "boot95_high": 0.9023140625
+        },
+        "f1": {
+          "n": 10,
+          "mean": 0.8933022958308479,
+          "std": 0.016280514619043465,
+          "std_ddof": 1,
+          "min": 0.8635599327875967,
+          "max": 0.9171973388407135,
+          "ci95_low": 0.8816559172653587,
+          "ci95_high": 0.904948674396337,
+          "boot95_low": 0.8833925836229384,
+          "boot95_high": 0.9024237405783578
+        },
+        "auc_roc": {
+          "n": 10,
+          "mean": 0.9841071614583333,
+          "std": 0.0037897380738622535,
+          "std_ddof": 1,
+          "min": 0.9779755208333334,
+          "max": 0.98925703125,
+          "ci95_low": 0.981396146155376,
+          "ci95_high": 0.9868181767612907,
+          "boot95_low": 0.9818465598958332,
+          "boot95_high": 0.9862715885416666
+        }
+      },
+      "trials": [
+        {
+          "seed": 0,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.90625,
+            "f1": 0.9064618775100743,
+            "auc_roc": 0.9871583333333332
+          },
+          "training_time_s": 227.23655439999857,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_convnext_tiny_res160_s0\\20261015_225737_670340"
+        },
+        {
+          "seed": 1,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.883125,
+            "f1": 0.8844755444126559,
+            "auc_roc": 0.9824838541666667
+          },
+          "training_time_s": 364.9272443000009,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_convnext_tiny_res160_s1\\20261015_230125_002877"
+        },
+        {
+          "seed": 2,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.89625,
+            "f1": 0.8965153023894334,
+            "auc_roc": 0.9829338541666667
+          },
+          "training_time_s": 227.5642547000025,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_convnext_tiny_res160_s2\\20261015_230730_006065"
+        },
+        {
+          "seed": 3,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.888125,
+            "f1": 0.8884009339595793,
+            "auc_roc": 0.9848401041666667
+          },
+          "training_time_s": 365.5041257999983,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_convnext_tiny_res160_s3\\20261015_231117_649534"
+        },
+        {
+          "seed": 4,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.89875,
+            "f1": 0.8992348728033828,
+            "auc_roc": 0.9833291666666667
+          },
+          "training_time_s": 559.718000599998,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_convnext_tiny_res160_s4\\20261015_231723_234275"
+        },
+        {
+          "seed": 5,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.863125,
+            "f1": 0.8635599327875967,
+            "auc_roc": 0.9779755208333334
+          },
+          "training_time_s": 254.01310479999665,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_convnext_tiny_res160_s5\\20261015_232643_030624"
+        },
+        {
+          "seed": 6,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.8725,
+            "f1": 0.8731773988917064,
+            "auc_roc": 0.9788104166666666
+          },
+          "training_time_s": 226.11765419999574,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_convnext_tiny_res160_s6\\20261015_233057_147362"
+        },
+        {
+          "seed": 7,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.89625,
+            "f1": 0.8968530615411188,
+            "auc_roc": 0.9856916666666667
+          },
+          "training_time_s": 198.52175140000327,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_convnext_tiny_res160_s7\\20261015_233443_318436"
+        },
+        {
+          "seed": 8,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.9175,
+            "f1": 0.9171973388407135,
+            "auc_roc": 0.9885916666666668
+          },
+          "training_time_s": 226.193629399997,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_convnext_tiny_res160_s8\\20261015_233801_928240"
+        },
+        {
+          "seed": 9,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.908125,
+            "f1": 0.907146695172218,
+            "auc_roc": 0.98925703125
+          },
+          "training_time_s": 337.1990453000035,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_convnext_tiny_res160_s9\\20261015_234148_195111"
+        }
+      ],
+      "successful": 10,
+      "per_seed": {
+        "0": 0.90625,
+        "1": 0.883125,
+        "2": 0.89625,
+        "3": 0.888125,
+        "4": 0.89875,
+        "5": 0.863125,
+        "6": 0.8725,
+        "7": 0.89625,
+        "8": 0.9175,
+        "9": 0.908125
+      }
+    }
+  },
+  "comparisons": [
+    {
+      "label_a": "baseline",
+      "label_b": "no_aug",
+      "metric": "accuracy",
+      "n_pairs": 10,
+      "mean_a": 0.8931250000000001,
+      "mean_b": 0.9004375,
+      "mean_difference": -0.0073124999999999996,
+      "test": "paired_t",
+      "test_reason": "differences pass Shapiro-Wilk (p=0.158)",
+      "statistic": -0.9699204700339668,
+      "p_value": 0.35742838348960826,
+      "effect_size": -0.3067157834528427,
+      "effect_label": "small",
+      "ci_low": -0.020000000000000007,
+      "ci_high": 0.008001562499999984,
+      "min_achievable_p": 0.0,
+      "underpowered": false,
+      "significant": false
+    },
+    {
+      "label_a": "baseline",
+      "label_b": "res160",
+      "metric": "accuracy",
+      "n_pairs": 10,
+      "mean_a": 0.8931250000000001,
+      "mean_b": 0.893,
+      "mean_difference": 0.00012499999999998623,
+      "test": "paired_t",
+      "test_reason": "differences pass Shapiro-Wilk (p=0.932)",
+      "statistic": 0.013617525958403742,
+      "p_value": 0.9894322120101718,
+      "effect_size": 0.004306239812502315,
+      "effect_label": "negligible",
+      "ci_low": -0.016500000000000004,
+      "ci_high": 0.017374999999999963,
+      "min_achievable_p": 0.0,
+      "underpowered": false,
+      "significant": false
+    },
+    {
+      "label_a": "no_aug",
+      "label_b": "res160",
+      "metric": "accuracy",
+      "n_pairs": 10,
+      "mean_a": 0.9004375,
+      "mean_b": 0.893,
+      "mean_difference": 0.007437499999999986,
+      "test": "paired_t",
+      "test_reason": "differences pass Shapiro-Wilk (p=0.638)",
+      "statistic": 1.0433914216218605,
+      "p_value": 0.3239818148221971,
+      "effect_size": 0.3299493383406136,
+      "effect_label": "small",
+      "ci_low": -0.005687500000000001,
+      "ci_high": 0.02050156249999996,
+      "min_achievable_p": 0.0,
+      "underpowered": false,
+      "significant": false
+    }
+  ],
+  "best_by_mean": "no_aug",
+  "ranked_by_mean": [
+    "no_aug",
+    "baseline",
+    "res160"
+  ],
+  "ranking_seeds": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+  ],
+  "significant_pairs": 0,
+  "skipped_variants": [],
+  "underpowered": false,
+  "power_note": "",
+  "not_run": [],
+  "study": {
+    "dataset": "usk_full",
+    "architecture": "convnext_tiny",
+    "wall_time_s": 14021.7,
+    "visionforge_version": "0.14.0"
+  }
+}

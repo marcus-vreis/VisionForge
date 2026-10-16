@@ -1,0 +1,644 @@
+{
+  "kind": "replicated_comparison",
+  "metric": "accuracy",
+  "metric_direction": "higher",
+  "seeds": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+  ],
+  "alpha": 0.05,
+  "variants": {
+    "baseline": {
+      "overrides": {},
+      "aggregates": {
+        "accuracy": {
+          "n": 10,
+          "mean": 0.791875,
+          "std": 0.04044887033170534,
+          "std_ddof": 1,
+          "min": 0.72625,
+          "max": 0.846875,
+          "ci95_low": 0.7629396212695027,
+          "ci95_high": 0.8208103787304973,
+          "boot95_low": 0.7678125,
+          "boot95_high": 0.8150000000000001
+        },
+        "f1": {
+          "n": 10,
+          "mean": 0.7919882029297669,
+          "std": 0.042475157504946306,
+          "std_ddof": 1,
+          "min": 0.7266952273687959,
+          "max": 0.8468925211502261,
+          "ci95_low": 0.7616033056764119,
+          "ci95_high": 0.8223731001831219,
+          "boot95_low": 0.7667071356452854,
+          "boot95_high": 0.8162316411714864
+        },
+        "auc_roc": {
+          "n": 10,
+          "mean": 0.9574420312499999,
+          "std": 0.013011386181763042,
+          "std_ddof": 1,
+          "min": 0.930453125,
+          "max": 0.9702859374999999,
+          "ci95_low": 0.9481342462886244,
+          "ci95_high": 0.9667498162113755,
+          "boot95_low": 0.9494178007812499,
+          "boot95_high": 0.9645924414062501
+        }
+      },
+      "trials": [
+        {
+          "seed": 0,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.815,
+            "f1": 0.816472371284788,
+            "auc_roc": 0.9655380208333334
+          },
+          "training_time_s": 266.07691879999766,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_resnet18_baseline_s0\\20261015_182405_220434"
+        },
+        {
+          "seed": 1,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.76,
+            "f1": 0.7590705362714337,
+            "auc_roc": 0.930453125
+          },
+          "training_time_s": 220.2373301999978,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_resnet18_baseline_s1\\20261015_182831_298136"
+        },
+        {
+          "seed": 2,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.795,
+            "f1": 0.7996244389812424,
+            "auc_roc": 0.9634473958333334
+          },
+          "training_time_s": 153.21485450000182,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_resnet18_baseline_s2\\20261015_183211_624402"
+        },
+        {
+          "seed": 3,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.80625,
+            "f1": 0.8111559932842992,
+            "auc_roc": 0.9702859374999999
+          },
+          "training_time_s": 281.94841799999995,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_resnet18_baseline_s3\\20261015_183444_929249"
+        },
+        {
+          "seed": 4,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.846875,
+            "f1": 0.8468925211502261,
+            "auc_roc": 0.9694692708333335
+          },
+          "training_time_s": 310.1342513999989,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_resnet18_baseline_s4\\20261015_183926_971749"
+        },
+        {
+          "seed": 5,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.72625,
+            "f1": 0.7266952273687959,
+            "auc_roc": 0.9459052083333332
+          },
+          "training_time_s": 102.34218329999567,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_resnet18_baseline_s5\\20261015_184437_190131"
+        },
+        {
+          "seed": 6,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.839375,
+            "f1": 0.8418610080604974,
+            "auc_roc": 0.9699697916666667
+          },
+          "training_time_s": 190.5475024000043,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_resnet18_baseline_s6\\20261015_184619_625818"
+        },
+        {
+          "seed": 7,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.8075,
+            "f1": 0.8075667779159312,
+            "auc_roc": 0.9554255208333333
+          },
+          "training_time_s": 94.52209380000568,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_resnet18_baseline_s7\\20261015_184930_252434"
+        },
+        {
+          "seed": 8,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.78625,
+            "f1": 0.7819607213960683,
+            "auc_roc": 0.9558286458333334
+          },
+          "training_time_s": 230.71393250000256,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_resnet18_baseline_s8\\20261015_185104_857931"
+        },
+        {
+          "seed": 9,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.73625,
+            "f1": 0.7285824335843861,
+            "auc_roc": 0.9480973958333332
+          },
+          "training_time_s": 107.8034484000018,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_resnet18_baseline_s9\\20261015_185455_654347"
+        }
+      ],
+      "successful": 10,
+      "per_seed": {
+        "0": 0.815,
+        "1": 0.76,
+        "2": 0.795,
+        "3": 0.80625,
+        "4": 0.846875,
+        "5": 0.72625,
+        "6": 0.839375,
+        "7": 0.8075,
+        "8": 0.78625,
+        "9": 0.73625
+      }
+    },
+    "no_aug": {
+      "overrides": {
+        "data.transforms.horizontal_flip": false,
+        "data.transforms.rotation_degrees": 0
+      },
+      "aggregates": {
+        "accuracy": {
+          "n": 10,
+          "mean": 0.7893749999999999,
+          "std": 0.032785868822473564,
+          "std_ddof": 1,
+          "min": 0.736875,
+          "max": 0.845,
+          "ci95_low": 0.7659214023195952,
+          "ci95_high": 0.8128285976804047,
+          "boot95_low": 0.7698125,
+          "boot95_high": 0.8085015625
+        },
+        "f1": {
+          "n": 10,
+          "mean": 0.7896055047194338,
+          "std": 0.033302094077194165,
+          "std_ddof": 1,
+          "min": 0.7322307406171615,
+          "max": 0.844319456998822,
+          "ci95_low": 0.7657826217380281,
+          "ci95_high": 0.8134283877008395,
+          "boot95_low": 0.7695673526638325,
+          "boot95_high": 0.808842178730615
+        },
+        "auc_roc": {
+          "n": 10,
+          "mean": 0.9576727864583333,
+          "std": 0.010435745905530638,
+          "std_ddof": 1,
+          "min": 0.9344395833333333,
+          "max": 0.9704513020833333,
+          "ci95_low": 0.9502075035558569,
+          "ci95_high": 0.9651380693608097,
+          "boot95_low": 0.9509889498697915,
+          "boot95_high": 0.9633587545572916
+        }
+      },
+      "trials": [
+        {
+          "seed": 0,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.736875,
+            "f1": 0.7322307406171615,
+            "auc_roc": 0.9344395833333333
+          },
+          "training_time_s": 159.09851949999575,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_resnet18_no_aug_s0\\20261015_185643_541376"
+        },
+        {
+          "seed": 1,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.83,
+            "f1": 0.8303786545540622,
+            "auc_roc": 0.9651179687499999
+          },
+          "training_time_s": 215.48286469999584,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_resnet18_no_aug_s1\\20261015_185922_731601"
+        },
+        {
+          "seed": 2,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.845,
+            "f1": 0.844319456998822,
+            "auc_roc": 0.9704513020833333
+          },
+          "training_time_s": 217.09041560000333,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_resnet18_no_aug_s2\\20261015_190258_300978"
+        },
+        {
+          "seed": 3,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.769375,
+            "f1": 0.7663532290898895,
+            "auc_roc": 0.9509083333333332
+          },
+          "training_time_s": 220.9308721999987,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_resnet18_no_aug_s3\\20261015_190635_477001"
+        },
+        {
+          "seed": 4,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.785625,
+            "f1": 0.7919881209586487,
+            "auc_roc": 0.9681643229166667
+          },
+          "training_time_s": 221.27969300000404,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_resnet18_no_aug_s4\\20261015_191016_495562"
+        },
+        {
+          "seed": 5,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.794375,
+            "f1": 0.7959819183607828,
+            "auc_roc": 0.9549744791666668
+          },
+          "training_time_s": 158.9663059999948,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_resnet18_no_aug_s5\\20261015_191357_854260"
+        },
+        {
+          "seed": 6,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.804375,
+            "f1": 0.8028978620151975,
+            "auc_roc": 0.9564234375
+          },
+          "training_time_s": 190.1265824000002,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_resnet18_no_aug_s6\\20261015_191636_905667"
+        },
+        {
+          "seed": 7,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.786875,
+            "f1": 0.7890738059089901,
+            "auc_roc": 0.9575395833333333
+          },
+          "training_time_s": 174.39009449999867,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_resnet18_no_aug_s7\\20261015_191947_117116"
+        },
+        {
+          "seed": 8,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.790625,
+            "f1": 0.7888457601639789,
+            "auc_roc": 0.96441875
+          },
+          "training_time_s": 221.04203859999689,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_resnet18_no_aug_s8\\20261015_192241_589430"
+        },
+        {
+          "seed": 9,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.750625,
+            "f1": 0.7539854985268049,
+            "auc_roc": 0.9542901041666666
+          },
+          "training_time_s": 143.19687929999782,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_resnet18_no_aug_s9\\20261015_192622_719033"
+        }
+      ],
+      "successful": 10,
+      "per_seed": {
+        "0": 0.736875,
+        "1": 0.83,
+        "2": 0.845,
+        "3": 0.769375,
+        "4": 0.785625,
+        "5": 0.794375,
+        "6": 0.804375,
+        "7": 0.786875,
+        "8": 0.790625,
+        "9": 0.750625
+      }
+    },
+    "res160": {
+      "overrides": {
+        "data.transforms.image_size": 160
+      },
+      "aggregates": {
+        "accuracy": {
+          "n": 10,
+          "mean": 0.819375,
+          "std": 0.024641527166779066,
+          "std_ddof": 1,
+          "min": 0.7775,
+          "max": 0.85625,
+          "ci95_low": 0.8017475133675808,
+          "ci95_high": 0.8370024866324192,
+          "boot95_low": 0.805,
+          "boot95_high": 0.8335640624999999
+        },
+        "f1": {
+          "n": 10,
+          "mean": 0.8199262787148957,
+          "std": 0.0234021592044807,
+          "std_ddof": 1,
+          "min": 0.7822192043265099,
+          "max": 0.8563738607566799,
+          "ci95_low": 0.8031853825133455,
+          "ci95_high": 0.8366671749164458,
+          "boot95_low": 0.8063715422885843,
+          "boot95_high": 0.8335759479606694
+        },
+        "auc_roc": {
+          "n": 10,
+          "mean": 0.963472578125,
+          "std": 0.00753516577560494,
+          "std_ddof": 1,
+          "min": 0.9508098958333333,
+          "max": 0.9749208333333333,
+          "ci95_low": 0.9580822452497871,
+          "ci95_high": 0.9688629110002128,
+          "boot95_low": 0.9589665885416665,
+          "boot95_high": 0.9677648131510418
+        }
+      },
+      "trials": [
+        {
+          "seed": 0,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.7775,
+            "f1": 0.7822192043265099,
+            "auc_roc": 0.9633416666666665
+          },
+          "training_time_s": 134.12052250000124,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_resnet18_res160_s0\\20261015_192845_997853"
+        },
+        {
+          "seed": 1,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.85125,
+            "f1": 0.8501736951022357,
+            "auc_roc": 0.9686223958333333
+          },
+          "training_time_s": 145.09491700000217,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_resnet18_res160_s1\\20261015_193100_209108"
+        },
+        {
+          "seed": 2,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.83875,
+            "f1": 0.8363363670492432,
+            "auc_roc": 0.9687463541666667
+          },
+          "training_time_s": 145.26668780000182,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_resnet18_res160_s2\\20261015_193325_375814"
+        },
+        {
+          "seed": 3,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.815625,
+            "f1": 0.8163817790151258,
+            "auc_roc": 0.9712411458333334
+          },
+          "training_time_s": 184.7815380999964,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_resnet18_res160_s3\\20261015_193550_729379"
+        },
+        {
+          "seed": 4,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.809375,
+            "f1": 0.8088278939921583,
+            "auc_roc": 0.9562440104166667
+          },
+          "training_time_s": 189.81520970000565,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_resnet18_res160_s4\\20261015_193855_593631"
+        },
+        {
+          "seed": 5,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.85625,
+            "f1": 0.8563738607566799,
+            "auc_roc": 0.9749208333333333
+          },
+          "training_time_s": 215.34851569999591,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_resnet18_res160_s5\\20261015_194205_495456"
+        },
+        {
+          "seed": 6,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.7975,
+            "f1": 0.7960912570108171,
+            "auc_roc": 0.9508098958333333
+          },
+          "training_time_s": 83.13474560000031,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_resnet18_res160_s6\\20261015_194540_926559"
+        },
+        {
+          "seed": 7,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.816875,
+            "f1": 0.8174744687350548,
+            "auc_roc": 0.9611453125
+          },
+          "training_time_s": 134.16785820000223,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_resnet18_res160_s7\\20261015_194704_140357"
+        },
+        {
+          "seed": 8,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.8025,
+            "f1": 0.8059732885547146,
+            "auc_roc": 0.9566135416666668
+          },
+          "training_time_s": 105.99148889999924,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_resnet18_res160_s8\\20261015_194918_393980"
+        },
+        {
+          "seed": 9,
+          "status": "success",
+          "metrics": {
+            "accuracy": 0.828125,
+            "f1": 0.8294109726064174,
+            "auc_roc": 0.963040625
+          },
+          "training_time_s": 159.09375880000152,
+          "error": "",
+          "run_dir": "outputs\\models\\seedvar_usk_full_resnet18_res160_s9\\20261015_195104_475731"
+        }
+      ],
+      "successful": 10,
+      "per_seed": {
+        "0": 0.7775,
+        "1": 0.85125,
+        "2": 0.83875,
+        "3": 0.815625,
+        "4": 0.809375,
+        "5": 0.85625,
+        "6": 0.7975,
+        "7": 0.816875,
+        "8": 0.8025,
+        "9": 0.828125
+      }
+    }
+  },
+  "comparisons": [
+    {
+      "label_a": "baseline",
+      "label_b": "no_aug",
+      "metric": "accuracy",
+      "n_pairs": 10,
+      "mean_a": 0.791875,
+      "mean_b": 0.7893749999999999,
+      "mean_difference": 0.0025000000000000022,
+      "test": "paired_t",
+      "test_reason": "differences pass Shapiro-Wilk (p=0.515)",
+      "statistic": 0.1497918403575073,
+      "p_value": 0.8842319422396198,
+      "effect_size": 0.04736833904380537,
+      "effect_label": "negligible",
+      "ci_low": -0.02806406250000002,
+      "ci_high": 0.03331250000000001,
+      "min_achievable_p": 0.0,
+      "underpowered": false,
+      "significant": false
+    },
+    {
+      "label_a": "baseline",
+      "label_b": "res160",
+      "metric": "accuracy",
+      "n_pairs": 10,
+      "mean_a": 0.791875,
+      "mean_b": 0.819375,
+      "mean_difference": -0.02749999999999999,
+      "test": "paired_t",
+      "test_reason": "differences pass Shapiro-Wilk (p=0.274)",
+      "statistic": -1.4355969778513908,
+      "p_value": 0.18494572472539675,
+      "effect_size": -0.4539756252064693,
+      "effect_label": "small",
+      "ci_low": -0.06375156249999998,
+      "ci_high": 0.007062500000000016,
+      "min_achievable_p": 0.0,
+      "underpowered": false,
+      "significant": false
+    },
+    {
+      "label_a": "no_aug",
+      "label_b": "res160",
+      "metric": "accuracy",
+      "n_pairs": 10,
+      "mean_a": 0.7893749999999999,
+      "mean_b": 0.819375,
+      "mean_difference": -0.029999999999999992,
+      "test": "paired_t",
+      "test_reason": "differences pass Shapiro-Wilk (p=0.842)",
+      "statistic": -3.459699705225123,
+      "p_value": 0.007164201159908834,
+      "effect_size": -1.0940531088724532,
+      "effect_label": "large",
+      "ci_low": -0.046499999999999986,
+      "ci_high": -0.014312499999999995,
+      "min_achievable_p": 0.0,
+      "underpowered": false,
+      "significant": true
+    }
+  ],
+  "best_by_mean": "res160",
+  "ranked_by_mean": [
+    "res160",
+    "baseline",
+    "no_aug"
+  ],
+  "ranking_seeds": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+  ],
+  "significant_pairs": 1,
+  "skipped_variants": [],
+  "underpowered": false,
+  "power_note": "",
+  "not_run": [],
+  "study": {
+    "dataset": "usk_full",
+    "architecture": "resnet18",
+    "wall_time_s": 5378.5,
+    "visionforge_version": "0.14.0"
+  }
+}
