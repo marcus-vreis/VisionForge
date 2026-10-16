@@ -15,6 +15,14 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Fixed
 
+- **O histórico de detecção (Ultralytics) agora traz as perdas de treino.**
+  `train_box_loss`, `train_cls_loss` e `train_dfl_loss` saíam vazias e o
+  `train_loss` do evento era a perda de validação. Elas vêm de
+  `trainer.label_loss_items(trainer.tloss, prefix="train")`, já que
+  `trainer.metrics` só guarda o que a validação devolve.
+- **Testar um checkpoint de detecção não escreve mais `runs/detect/val` na pasta
+  de trabalho.** O `model.val` recebe `project`/`name`/`exist_ok` apontando para
+  a pasta `tests/` do próprio run, como o treino faz (ADR-079).
 - **O `run.json` agora registra a versão do VisionForge.** O campo
   `environment.visionforge` saía sempre `unknown`, porque a busca usava o nome do
   módulo e não o da distribuição (`visionforge-studio`); sem isso a versão que gerou

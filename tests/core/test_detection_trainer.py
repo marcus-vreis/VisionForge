@@ -58,10 +58,19 @@ class _FakeUTrainer:
             "val/box_loss": 1.0 - 0.1 * epoch,
             "val/cls_loss": 0.8 - 0.1 * epoch,
             "val/dfl_loss": 0.6 - 0.05 * epoch,
-            "train/box_loss": 1.2 - 0.1 * epoch,
-            "train/cls_loss": 0.9 - 0.1 * epoch,
-            "train/dfl_loss": 0.7 - 0.05 * epoch,
         }
+        # Ultralytics keeps the training losses out of ``metrics`` (that dict
+        # only carries what the validator returned); they live in ``tloss`` and
+        # are labelled through ``label_loss_items``.
+        self.tloss = [1.2 - 0.1 * epoch, 0.9 - 0.1 * epoch, 0.7 - 0.05 * epoch]
+
+    def label_loss_items(
+        self, loss_items: list[float] | None = None, prefix: str = "train"
+    ) -> dict[str, float]:
+        keys = [f"{prefix}/{n}" for n in ("box_loss", "cls_loss", "dfl_loss")]
+        return dict(
+            zip(keys, [round(float(x), 5) for x in loss_items or []], strict=True)
+        )
 
 
 def _make_fake_yolo(record: dict[str, Any]) -> type:
@@ -239,6 +248,22 @@ class TestUltralyticsPath:
             "val_dfl_loss",
         ):
             assert last[key] is not None, key
+
+    def test_train_losses_come_from_tloss_not_validation(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Ultralytics keeps train losses in ``trainer.tloss``; ``metrics`` only
+        holds the validation ones, so ``train_loss`` must not be the val loss."""
+        monkeypatch.setattr(dt_mod, "YOLO", _make_fake_yolo({}))
+        events: list[dict[str, Any]] = []
+        DetectionTrainer(_config(tmp_path)).fit(progress_callback=events.append)
+
+        last = [e for e in events if e["event"] == "epoch_end"][-1]  # epoch index 1
+        assert last["train_box_loss"] == pytest.approx(1.1)
+        assert last["train_cls_loss"] == pytest.approx(0.8)
+        assert last["train_dfl_loss"] == pytest.approx(0.65)
+        assert last["train_loss"] == pytest.approx(1.1)
+        assert last["val_loss"] == pytest.approx(0.9)
 
     def test_run_json_history_carries_extended_metrics(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch

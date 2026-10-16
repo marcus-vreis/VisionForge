@@ -159,7 +159,16 @@ def _evaluate_ultralytics(
 
     data_yaml = DetectionDataModule(config).resolve_data_yaml(out_dir=run_dir / "tests")
     model = detection_trainer.YOLO(str(checkpoint))
-    results = model.val(data=str(data_yaml), verbose=False)
+    # Without project/name Ultralytics writes runs/detect/val[-N] under the
+    # process cwd, scattering folders outside the run. Absolute and pinned to the
+    # run's tests folder for the same reason as training (ADR-079).
+    results = model.val(
+        data=str(data_yaml),
+        verbose=False,
+        project=str((run_dir / "tests").resolve()),
+        name="val",
+        exist_ok=True,
+    )
     box = results.box
     return {
         "map50": float(box.map50),

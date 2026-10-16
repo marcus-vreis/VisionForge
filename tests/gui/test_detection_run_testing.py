@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -162,6 +163,50 @@ class TestUltralyticsDetectionTest:
         fake_model.val.assert_called_once()
         on_disk = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
         assert len(on_disk["tests"]) == 1
+
+    def test_val_output_stays_inside_the_run_folder(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Ultralytics' default project is ``runs/detect`` under the cwd; the
+        test must pin project/name so nothing lands outside the run."""
+        ds = tmp_path / "ds"
+        _write_image(ds / "images" / "train" / "t.jpg")
+        _write_image(ds / "images" / "val" / "v.jpg")
+        run_dir = tmp_path / "models" / "det" / "20260603_120000_000004"
+        ckpt = tmp_path / "best.pt"
+        ckpt.write_bytes(b"fake")
+        data = _make_run_json(
+            run_dir,
+            backend="ultralytics",
+            model_name="yolo11n",
+            num_classes=2,
+            checkpoint=str(ckpt),
+        )
+        cwd = tmp_path / "cwd"
+        cwd.mkdir()
+        monkeypatch.chdir(cwd)
+
+        seen: dict[str, Any] = {}
+
+        def fake_val(**kwargs: Any) -> SimpleNamespace:
+            seen.update(kwargs)
+            # Mimic Ultralytics: with no project it falls back to cwd/runs/detect.
+            project = Path(kwargs.get("project") or Path.cwd() / "runs" / "detect")
+            (project / kwargs.get("name", "val")).mkdir(parents=True, exist_ok=True)
+            return SimpleNamespace(box=SimpleNamespace(map50=0.6, map=0.42))
+
+        fake_model = MagicMock()
+        fake_model.val.side_effect = fake_val
+        with patch(
+            "visionforge.core.detection_trainer.YOLO",
+            MagicMock(return_value=fake_model),
+        ):
+            evaluate_detection_run(run_dir, RunTestRequest(data_dir=str(ds)), data)
+
+        assert Path(seen["project"]).is_absolute()
+        assert Path(seen["project"]).resolve().is_relative_to(run_dir.resolve())
+        assert seen["exist_ok"] is True
+        assert list(cwd.iterdir()) == []
 
     def test_raises_when_ultralytics_absent(self, tmp_path: Path) -> None:
         ds = tmp_path / "ds"

@@ -168,6 +168,24 @@ def _first_present(*values: float | None, default: float) -> float:
     return default
 
 
+def _train_loss_metrics(trainer: Any) -> dict[str, Any]:
+    """Labelled training losses (``train/box_loss`` ...) of the epoch that ended.
+
+    Empty when the trainer carries no ``tloss`` (it is ``None`` right after a
+    cancelled epoch) or does not expose ``label_loss_items``.
+    """
+    tloss = getattr(trainer, "tloss", None)
+    label = getattr(trainer, "label_loss_items", None)
+    if tloss is None or label is None:
+        return {}
+    try:
+        labelled = label(tloss, prefix="train")
+    except (TypeError, ValueError) as exc:
+        logger.warning("Could not read the training losses: {}", exc)
+        return {}
+    return labelled if isinstance(labelled, dict) else {}
+
+
 def _epoch_event(
     result: DetectionEpochResult,
     total_epochs: int,
@@ -196,9 +214,7 @@ def _epoch_event(
         "val_box_loss": result.val_box_loss,
         "val_cls_loss": result.val_cls_loss,
         "val_dfl_loss": result.val_dfl_loss,
-        "train_loss": _first_present(
-            train_loss, result.train_box_loss, result.box_loss, default=0.0
-        ),
+        "train_loss": _first_present(train_loss, result.train_box_loss, default=0.0),
         "val_loss": _first_present(
             val_loss, result.val_box_loss, result.box_loss, default=0.0
         ),
@@ -353,8 +369,12 @@ class DetectionTrainer:
             map50 = _extract(metrics, _MAP50_KEY)
             map95 = _extract(metrics, _MAP5095_KEY)
             box_loss = _extract(metrics, _BOXLOSS_KEY)
+            # `trainer.metrics` only holds what the validator returned, so the
+            # training losses are not in it: Ultralytics keeps their running
+            # mean in `trainer.tloss` and labels it through `label_loss_items`.
+            train_metrics = _train_loss_metrics(trainer)
             train_losses = {
-                k: _extract(metrics, v) for k, v in _TRAIN_LOSS_KEYS.items()
+                k: _extract(train_metrics, v) for k, v in _TRAIN_LOSS_KEYS.items()
             }
             val_losses = {k: _extract(metrics, v) for k, v in _VAL_LOSS_KEYS.items()}
             result = DetectionEpochResult(
