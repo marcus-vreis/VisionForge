@@ -114,13 +114,35 @@ def installer_command(version: str) -> list[str] | None:
     ``uv pip install --python <this python>`` next. None when neither exists.
     The version is pinned: the button installs what the page announced, not
     whatever is newest by the time the updater runs.
+
+    Only VisionForge is upgraded; a dependency moves only if the new release
+    requires it. ``uv pip install --upgrade`` upgrades every dependency, which
+    replaced a CUDA torch from the PyTorch index with PyPI's CPU-only torch.
     """
     spec = f"{DIST_NAME}=={version}"
     if importlib.util.find_spec("pip") is not None:
-        return [sys.executable, "-m", "pip", "install", "--upgrade", spec]
+        return [
+            sys.executable,
+            "-m",
+            "pip",
+            "install",
+            "--upgrade",
+            "--upgrade-strategy",
+            "only-if-needed",
+            spec,
+        ]
     uv = shutil.which("uv")
     if uv is not None:
-        return [uv, "pip", "install", "--python", sys.executable, "--upgrade", spec]
+        return [
+            uv,
+            "pip",
+            "install",
+            "--python",
+            sys.executable,
+            "--upgrade-package",
+            DIST_NAME,
+            spec,
+        ]
     return None
 
 

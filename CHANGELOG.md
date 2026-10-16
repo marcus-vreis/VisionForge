@@ -13,6 +13,17 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ## [Unreleased]
 
+### Fixed
+
+- **O botão "atualizar e reabrir" não mexe mais nas outras bibliotecas.** Num ambiente
+  criado pelo `uv`, a atualização usava `uv pip install --upgrade`, que atualiza todas
+  as dependências e trocava o torch com CUDA pelo torch só de CPU do PyPI. Agora só o
+  VisionForge é atualizado; uma dependência só muda se a versão nova exigir. Além
+  disso, um checkout rodando com `src` no caminho não é mais confundido com uma
+  instalação do PyPI (o botão não aparece para quem usa `git pull`), um arquivo travado
+  por outro processo é tentado de novo também com a mensagem do `uv`, e a instalação
+  não abre mais uma janela de terminal vazia ([ADR-120](docs/dev/DECISIONS.md)).
+
 ## [0.15.0] — 2026-10-16
 
 ### Added

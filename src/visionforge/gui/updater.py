@@ -37,8 +37,9 @@ PROCESS_WAIT_SECONDS = 60.0
 INSTALL_TIMEOUT_SECONDS = 900.0
 LOCKED_RETRIES = 5
 LOCKED_RETRY_SECONDS = 5.0
-# What pip prints when Windows refuses to replace a file another process holds.
-LOCKED_MARKER = "WinError 32"
+# What pip and uv print when Windows refuses to replace a file another process
+# holds ("os error 5" is uv's access-denied on the rename that follows).
+LOCKED_MARKERS = ("WinError 32", "os error 32", "os error 5")
 
 
 def port_in_use(host: str, port: int) -> bool:
@@ -101,6 +102,14 @@ def run_install(command: list[str], log: Path) -> int:
     with log.open("a", encoding="utf-8") as out:
         out.write(f"\n=== {datetime.now(UTC).isoformat()} {' '.join(command)}\n")
         out.flush()
+        # This process has no console (it was started detached), so Windows
+        # would open a new console window for pip/uv: an empty terminal the
+        # user sees pop up and wonders about.
+        creationflags: int = (
+            subprocess.CREATE_NO_WINDOW  # type: ignore[attr-defined]
+            if sys.platform == "win32"
+            else 0
+        )
         try:
             completed = subprocess.run(  # noqa: S603 - argv from the server, no shell
                 command,
@@ -108,6 +117,7 @@ def run_install(command: list[str], log: Path) -> int:
                 stderr=subprocess.STDOUT,
                 timeout=INSTALL_TIMEOUT_SECONDS,
                 check=False,
+                creationflags=creationflags,
             )
         except (OSError, subprocess.TimeoutExpired) as exc:
             out.write(f"install did not run: {exc}\n")
@@ -124,7 +134,8 @@ def install_with_retries(
     """``run_install``, again while the log says a file was still locked."""
     code = run_install(command, log)
     for _ in range(retries):
-        if code == 0 or LOCKED_MARKER not in _tail(log):
+        tail = _tail(log)
+        if code == 0 or not any(marker in tail for marker in LOCKED_MARKERS):
             break
         time.sleep(pause)
         code = run_install(command, log)

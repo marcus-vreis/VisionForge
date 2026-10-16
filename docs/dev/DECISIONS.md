@@ -5328,6 +5328,33 @@ blocked case, both routes, the updater with harmless commands in place of the in
 (the retry, the restore, the wait for a finished process), and the page's notice and
 wait.
 
+**What the second real run broke (2026-10-16).** The button was pressed in the
+project's own development environment, a `uv` checkout whose GUI ran as `uvicorn
+--app-dir src`, and it wrecked that environment. Four faults, each now fixed and
+tested:
+
+- *A checkout was taken for a PyPI install.* With `src` first on `sys.path`, Python
+  found a stale `src/visionforge_studio.egg-info` before the editable install's
+  metadata, and that egg-info has no `direct_url.json`; `installed_from_source`
+  answered no and the button was offered. It now also asks where the imported
+  package lives: a `visionforge` package under `src/` next to a `pyproject.toml` that
+  names `visionforge-studio` is a checkout, whatever metadata is found first.
+- *`uv pip install --upgrade` upgrades every dependency.* It replaced the CUDA build
+  of torch (from the PyTorch index) with PyPI's CPU-only torch, among 78 packages. The
+  `uv` command now uses `--upgrade-package visionforge-studio`, and the `pip` command
+  says `--upgrade-strategy only-if-needed` (pip's default, made explicit): a
+  dependency moves only when the new release requires it. The restore uses the same
+  command, so it no longer churns the environment either.
+- *uv words a locked file differently.* It prints `os error 32` (and `os error 5` on
+  the rename after), not pip's `WinError 32`, so the retry never fired. Both
+  wordings are matched. The file was held by a second VisionForge server running
+  from the same environment, which the updater does not wait for; with only
+  VisionForge's own files replaced now, a lock is much less likely, and the retry
+  covers a short one. A second server on the same environment remains a known gap.
+- *A console window opened.* The updater runs detached, without a console, so Windows
+  gave `uv` a new console window: an empty terminal the user saw appear, after which
+  nothing seemed to happen. The install now runs with `CREATE_NO_WINDOW`.
+
 ## ADR-121 — A model is built from the run's seed, not only trained from it
 
 **Date:** 2026-10-15

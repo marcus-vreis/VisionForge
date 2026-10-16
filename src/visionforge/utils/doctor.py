@@ -121,7 +121,30 @@ def installed_from_source() -> bool:
     Editable installs record a ``direct_url.json`` with ``dir_info.editable``.
     Anything else — a wheel from PyPI — has no source tree to install from, so
     telling that user to run ``pip install -e ".[cpu]"`` would fail.
+
+    The metadata alone is not enough: with ``src`` on ``sys.path`` (``uvicorn
+    --app-dir src``) a stale ``src/*.egg-info`` is found first and has no
+    ``direct_url.json``. Where the imported package actually lives decides too.
     """
+    return _editable_metadata() or package_in_checkout()
+
+
+def package_in_checkout(package_dir: Path | None = None) -> bool:
+    """True when the ``visionforge`` package sits in this project's ``src`` layout."""
+    if package_dir is None:
+        package_dir = Path(__file__).resolve().parent.parent
+    if package_dir.parent.name != "src":
+        return False
+    pyproject = package_dir.parent.parent / "pyproject.toml"
+    try:
+        text = pyproject.read_text(encoding="utf-8")
+    except OSError:
+        return False
+    return re.search(rf'^name\s*=\s*"{re.escape(_DIST_NAME)}"', text, re.M) is not None
+
+
+def _editable_metadata() -> bool:
+    """The installed metadata says this is an editable install."""
     try:
         raw = distribution(_DIST_NAME).read_text("direct_url.json")
     except Exception:  # noqa: BLE001 - absent metadata just means "not editable"

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import io
 import json
+import subprocess
 import sys
 from collections.abc import Iterator
 from pathlib import Path
@@ -109,6 +110,8 @@ class TestInstaller:
             "pip",
             "install",
             "--upgrade",
+            "--upgrade-strategy",
+            "only-if-needed",
             "visionforge-studio==0.15.0",
         ]
 
@@ -122,7 +125,10 @@ class TestInstaller:
             "install",
             "--python",
             sys.executable,
-            "--upgrade",
+            # Never plain --upgrade: uv then upgrades every dependency too, and a
+            # CUDA torch from the PyTorch index becomes PyPI's CPU-only torch.
+            "--upgrade-package",
+            "visionforge-studio",
             "visionforge-studio==0.15.0",
         ]
 
@@ -465,6 +471,47 @@ class TestUpdaterSafety:
 
         assert updater.install_with_retries(["x"], log, pause=0) == 0
         assert len(attempts) == 3
+
+    def test_uv_wording_of_a_locked_file_is_retried_too(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from visionforge.gui import updater
+
+        log = tmp_path / "update.log"
+        codes = iter([2, 0])
+
+        def fake_install(command: list[str], path: Path) -> int:
+            code = next(codes)
+            if code:
+                path.write_text(
+                    "error: failed to remove file `x.ttf`: in use. (os error 32)\n",
+                    encoding="utf-8",
+                )
+            return code
+
+        monkeypatch.setattr(updater, "run_install", fake_install)
+
+        assert updater.install_with_retries(["x"], log, pause=0) == 0
+
+    def test_the_install_opens_no_console_window(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from visionforge.gui import updater
+
+        seen: dict[str, Any] = {}
+
+        def fake_run(command: list[str], **kwargs: Any) -> Any:
+            seen.update(kwargs)
+            return subprocess.CompletedProcess(command, 0)
+
+        monkeypatch.setattr(updater.subprocess, "run", fake_run)
+        monkeypatch.setattr(updater.sys, "platform", "win32")
+        monkeypatch.setattr(
+            updater.subprocess, "CREATE_NO_WINDOW", 0x08000000, raising=False
+        )
+
+        assert updater.run_install(["uv", "pip"], tmp_path / "update.log") == 0
+        assert seen.get("creationflags") == 0x08000000
 
     def test_any_other_failure_is_not_retried(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -11,6 +12,7 @@ from visionforge.utils.doctor import (
     build_install_command,
     check_python,
     detect_driver_cuda,
+    package_in_checkout,
     probe_torch,
     run_doctor,
     select_wheel_tag,
@@ -588,3 +590,42 @@ class TestGpuDetectedWithoutNvidiaSmi:
         out = self._run(capsys)
         assert "No CUDA-capable GPU detected" in out
         assert "Recommended wheel: cpu" in out
+
+
+class TestCheckoutDetection:
+    """A checkout is a checkout, whatever metadata Python finds first.
+
+    Running the GUI with ``src`` on ``sys.path`` (``uvicorn --app-dir src``) made a
+    stale ``src/visionforge_studio.egg-info`` shadow the editable install's
+    metadata; the GUI then thought it was a PyPI install, offered the update
+    button, and the update replaced the checkout's environment.
+    """
+
+    @staticmethod
+    def _layout(root: Path, project_name: str) -> Path:
+        package = root / "src" / "visionforge"
+        package.mkdir(parents=True)
+        (root / "pyproject.toml").write_text(
+            f'[project]\nname = "{project_name}"\nversion = "0.1.0"\n', encoding="utf-8"
+        )
+        return package
+
+    def test_a_package_under_our_checkout_is_from_source(self, tmp_path: Path) -> None:
+        assert package_in_checkout(self._layout(tmp_path, "visionforge-studio"))
+
+    def test_another_project_around_it_does_not_count(self, tmp_path: Path) -> None:
+        assert not package_in_checkout(self._layout(tmp_path, "something-else"))
+
+    def test_an_installed_package_is_not_from_source(self, tmp_path: Path) -> None:
+        package = tmp_path / "Lib" / "site-packages" / "visionforge"
+        package.mkdir(parents=True)
+        assert not package_in_checkout(package)
+
+    def test_the_checkout_wins_over_metadata_without_the_editable_flag(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        import visionforge.utils.doctor as doctor
+
+        monkeypatch.setattr(doctor, "_editable_metadata", lambda: False)
+        monkeypatch.setattr(doctor, "package_in_checkout", lambda path=None: True)
+        assert doctor.installed_from_source()
