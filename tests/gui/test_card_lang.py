@@ -78,7 +78,7 @@ class TestCardPortuguese:
         for expected in (
             "- **ID da execução:** `exp_1`",
             "- **Data e hora:** 2026-05-22T10:00:00",
-            "- **Situação:** completed",
+            "- **Situação:** concluída",
             "- **Interrompida:** sim (2 de 5 épocas)",
             "- **Dispositivo usado:** `cpu`",
             "- **Diretório da execução:**",
@@ -192,7 +192,7 @@ class TestExportRoute:
     def test_a_portuguese_page_gets_a_portuguese_card(self, tmp_path: Path) -> None:
         body = self._get(tmp_path, {"X-VF-Lang": "pt"})
 
-        assert "- **ID da execução:** `exp_1`" in body
+        assert "- **ID da execução:** `20260522_100000_000000`" in body
         assert "- **Interrompida:** sim (2 de 5 épocas)" in body
         assert "## Métricas finais" in body
         assert "Run ID" not in body
@@ -200,7 +200,7 @@ class TestExportRoute:
     def test_an_english_page_gets_an_english_card(self, tmp_path: Path) -> None:
         body = self._get(tmp_path, {"X-VF-Lang": "en"})
 
-        assert "- **Run ID:** `exp_1`" in body
+        assert "- **Run ID:** `20260522_100000_000000`" in body
         assert "ID da execução" not in body
 
     def test_a_request_naming_no_language_gets_the_english_card(
@@ -208,5 +208,5 @@ class TestExportRoute:
     ) -> None:
         body = self._get(tmp_path, {})
 
-        assert "- **Run ID:** `exp_1`" in body
+        assert "- **Run ID:** `20260522_100000_000000`" in body
         assert "- **Stopped:** yes (2 of 5 epochs)" in body

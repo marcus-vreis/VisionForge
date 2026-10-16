@@ -28,6 +28,16 @@ class TestEachTaskSurfacesItsOwnMetrics:
             "pixel_acc": 0.7670,
         }
 
+    def test_segmentation_without_test_split_shows_the_validation_score(self) -> None:
+        # run.json now names the split (val_miou); runs written before it kept
+        # the bare names for the same validation score. Both read the same.
+        new = {"val_miou": 0.5, "val_dice": 0.6, "val_pixel_acc": 0.7}
+        old = {"miou": 0.5, "dice": 0.6, "pixel_acc": 0.7}
+        expected = {"val_miou": 0.5, "val_dice": 0.6, "val_pixel_acc": 0.7}
+
+        assert _summary_metrics("segmentation", new) == expected
+        assert _summary_metrics("segmentation", old) == expected
+
     def test_regression_shows_r2_not_the_raw_loss(self) -> None:
         metrics = {
             "best_val_loss": 101.77,

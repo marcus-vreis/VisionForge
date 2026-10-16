@@ -176,8 +176,12 @@ class TestFit:
             (result.model_path.parent / "run.json").read_text(encoding="utf-8")
         )
         assert run_json["status"] == "completed"
-        for key in ("miou", "dice", "pixel_acc", "best_epoch"):
+        for key in ("val_miou", "val_dice", "val_pixel_acc", "best_epoch"):
             assert key in run_json["metrics"]
+        # The bare names were the validation score while the listing's "miou"
+        # was the test one; run.json now says which split it is.
+        for bare in ("miou", "dice", "pixel_acc"):
+            assert bare not in run_json["metrics"]
         assert "torch" in run_json["environment"]
 
     def test_combined_loss_runs(self, tmp_path: Path) -> None:

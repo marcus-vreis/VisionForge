@@ -2095,6 +2095,13 @@ metric's sign.
 
 ---
 
+**Amended 2026-10-16: segmentation's `run.json` names the split of the validation
+score.** The block carried `miou`, `dice` and `pixel_acc` (the best-epoch *validation*
+score) beside `test_*`, while the History card's `miou` was the *test* score, so one name
+meant two splits. New runs write `val_miou`, `val_dice` and `val_pixel_acc`; the card
+projection and the comparison table read `val_<name>` first and fall back to the bare
+name, so a run written earlier lists as before. The bare names are no longer written.
+
 ## ADR-077 — The post-training surface stops being classification-shaped
 
 **Date:** 2026-08-02
@@ -4872,6 +4879,15 @@ only the figures of a run started from the page follow the page. The non-figure
 messages of a command-line run stay Portuguese, as before. One defect came out of
 moving the texts: the "froze N weights" warning replaced every comma of its Portuguese sentence by a period while grouping the
 number ("pré-treinados. ou use"), and now changes only the number.
+
+**Amended 2026-10-16: the model card reads each task's own config.** The card printed
+`?` for fields a task does not have (`num_classes` and `pretrained` for regression,
+anomaly and custom tasks), the classification `transforms.image_size` for anomaly and
+segmentation (they resize to `data.image_size`), the raw status, `None` for a missing
+metric, and the `run.json` id (`<experiment>_<folder>`) where the History shows the
+folder name. A row whose field is absent is now left out (a custom task shows its
+label as architecture and task), the size is the one training used, the status goes
+through the catalog, `None` is `—`, and the id is the folder name.
 
 ## ADR-117 — "Primeiro treino" for every built-in task
 

@@ -725,9 +725,13 @@ class SegmentationTrainer:
                 "best_val_miou": result.best_val_miou if result.total_epochs else None,
                 "best_epoch": result.best_epoch,
                 "total_epochs": result.total_epochs,
-                "miou": best.val_miou if best else None,
-                "dice": best.val_dice if best else None,
-                "pixel_acc": best.val_pixel_acc if best else None,
+                # Validation score at the best epoch. The test split is
+                # test_<name>, written after evaluation; the bare names were
+                # ambiguous and old run.json files still carry them (readers
+                # fall back to them).
+                "val_miou": best.val_miou if best else None,
+                "val_dice": best.val_dice if best else None,
+                "val_pixel_acc": best.val_pixel_acc if best else None,
             },
             "history": [
                 {

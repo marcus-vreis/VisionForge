@@ -124,6 +124,11 @@ const BUILTIN_ROWS: Record<string, MetricLabelKey[]> = {
     "test_miou",
     "test_dice",
     "test_pixel_acc",
+    // The validation score is named for its split; the bare names are runs
+    // written before that, whose validation score kept them.
+    "val_miou",
+    "val_dice",
+    "val_pixel_acc",
     "miou",
     "dice",
     "pixel_acc",

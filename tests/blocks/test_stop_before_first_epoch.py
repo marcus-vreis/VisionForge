@@ -194,7 +194,7 @@ class TestStandaloneFamilies:
         assert report["train"]["best_val_miou"] is None
         assert "test" not in report
         data = _assert_empty_run(Path(report["train"]["run_dir"]), events, report)
-        assert data["metrics"]["miou"] is None
+        assert data["metrics"]["val_miou"] is None
 
     @pytest.mark.parametrize("model_name", ["autoencoder", "patchcore"])
     def test_anomaly(self, tmp_path: Path, model_name: str) -> None:

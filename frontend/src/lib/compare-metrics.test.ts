@@ -289,6 +289,18 @@ describe("metricRows, segmentation", () => {
     ]);
   });
 
+  it("lists the validation score under its split's name for a new run", () => {
+    const fresh = {
+      metrics: { val_miou: 0.6, val_dice: 0.7, val_pixel_acc: 0.9, test_miou: 0.58 },
+    };
+    expect(keys(metricRows("segmentation", [fresh]))).toEqual([
+      "test_miou",
+      "val_miou",
+      "val_dice",
+      "val_pixel_acc",
+    ]);
+  });
+
   it("reads them all as higher-is-better", () => {
     const rows = directions(metricRows("segmentation", [run]));
     expect(rows.test_miou).toBe("higher");
@@ -556,9 +568,9 @@ describe("cardMetrics", () => {
       "rmse",
     ]);
     expect(labelsOf("segmentation", ["val_miou", "val_dice", "val_pixel_acc"])).toEqual([
-      "miou",
-      "dice",
-      "pixel_acc",
+      "val_miou",
+      "val_dice",
+      "val_pixel_acc",
     ]);
     expect(labelsOf("anomaly", ["val_auroc", "val_f1"])).toEqual(["auroc", "image_f1"]);
   });

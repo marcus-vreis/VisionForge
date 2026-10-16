@@ -2150,6 +2150,28 @@ def _stopped_extent(data: dict[str, Any]) -> str:
     )
 
 
+def _card_status(status: Any) -> str:
+    """The run's status in the card's language; an unknown one is kept as is."""
+    if status is None:
+        return "—"
+    if status == "completed":
+        return tr_artifact("card.status_completed")
+    if status == "failed":
+        return tr_artifact("card.status_failed")
+    if status == "running":
+        return tr_artifact("card.status_running")
+    if status == "stopped":
+        return tr_artifact("card.status_stopped")
+    return str(status)
+
+
+def _card_value(value: Any) -> str:
+    """A metric cell: four decimals for a float, a dash for a missing value."""
+    if value is None:
+        return "—"
+    return f"{value:.4f}" if isinstance(value, float) else str(value)
+
+
 def _render_run_markdown(run_dir: Path, data: dict[str, Any]) -> str:
     """Format a run.json into a paper-ready model card."""
     lines: list[str] = []
@@ -2160,11 +2182,16 @@ def _render_run_markdown(run_dir: Path, data: dict[str, Any]) -> str:
 
     lines.append(f"# {name}")
     lines.append("")
+    # The History lists a run by its folder name, so the card carries the same
+    # id; run.json's own "id" is "<experiment>_<folder>" and matched nothing the
+    # user sees. A bare Path (no folder) falls back to it.
     lines.append(
-        f"- **{tr_artifact('card.run_id')}:** `{data.get('id', run_dir.name)}`"
+        f"- **{tr_artifact('card.run_id')}:** `{run_dir.name or data.get('id', '')}`"
     )
     lines.append(f"- **{tr_artifact('card.timestamp')}:** {data.get('timestamp', '?')}")
-    lines.append(f"- **{tr_artifact('card.status')}:** {data.get('status', '?')}")
+    lines.append(
+        f"- **{tr_artifact('card.status')}:** {_card_status(data.get('status'))}"
+    )
     if data.get("stopped"):
         lines.append(
             f"- **{tr_artifact('card.stopped')}:** {tr_artifact('card.yes')} "
@@ -2184,31 +2211,33 @@ def _render_run_markdown(run_dir: Path, data: dict[str, Any]) -> str:
 
     lines.append(f"## {tr_artifact('card.configuration')}")
     lines.append("")
-    model_cfg = config.get("model", {})
-    training_cfg = config.get("training", {})
-    lines.append(
-        f"- **{tr_artifact('card.architecture')}:** {model_cfg.get('name', '?')}"
-    )
-    lines.append(f"- **num_classes:** {model_cfg.get('num_classes', '?')}")
-    lines.append(
-        f"- **{tr_artifact('card.pretrained')}:** {model_cfg.get('pretrained', '?')}"
-    )
-    lines.append(f"- **{tr_artifact('card.task')}:** {config.get('task', '?')}")
-    lines.append(
-        f"- **{tr_artifact('card.optimizer')}:** {training_cfg.get('optimizer', '?')}"
-    )
-    lines.append(
-        f"- **{tr_artifact('card.learning_rate')}:** "
-        f"{training_cfg.get('learning_rate', '?')}"
-    )
-    lines.append(
-        f"- **{tr_artifact('card.batch_size')}:** {training_cfg.get('batch_size', '?')}"
-    )
-    lines.append(
-        f"- **{tr_artifact('card.epochs_max')}:** {training_cfg.get('epochs', '?')}"
-    )
-    # "Seed" and "Scheduler" are the words a Portuguese paper uses too.
-    lines.append(f"- **Seed:** {training_cfg.get('seed', '?')}")
+    model_cfg = config.get("model") or {}
+    training_cfg = config.get("training") or {}
+    # Each task has its own config shape: a row whose field the task does not
+    # have is left out rather than printed as "?".
+    task_label = data.get("task_label")
+    rows: list[tuple[str, Any]] = [
+        (
+            tr_artifact("card.architecture"),
+            model_cfg.get("name") or task_label,
+        ),
+        ("num_classes", model_cfg.get("num_classes")),
+        ("num_targets", model_cfg.get("num_targets")),
+        (tr_artifact("card.pretrained"), model_cfg.get("pretrained")),
+        (
+            tr_artifact("card.task"),
+            task_label or config.get("task") or data.get("task"),
+        ),
+        (tr_artifact("card.optimizer"), training_cfg.get("optimizer")),
+        (tr_artifact("card.learning_rate"), training_cfg.get("learning_rate")),
+        (tr_artifact("card.batch_size"), training_cfg.get("batch_size")),
+        (tr_artifact("card.epochs_max"), training_cfg.get("epochs")),
+        # "Seed" and "Scheduler" are the words a Portuguese paper uses too.
+        ("Seed", training_cfg.get("seed")),
+    ]
+    for label, value in rows:
+        if value is not None:
+            lines.append(f"- **{label}:** {value}")
     if training_cfg.get("scheduler", {}).get("kind", "none") != "none":
         sched = training_cfg["scheduler"]
         lines.append(f"- **Scheduler:** {sched['kind']} ({sched})")
@@ -2231,7 +2260,12 @@ def _render_run_markdown(run_dir: Path, data: dict[str, Any]) -> str:
             lines.append(f"{i}. **{kind}**" + (f" ({params})" if params else ""))
         lines.append("")
 
-    tx = data_cfg.get("transforms", {})
+    tx = dict(data_cfg.get("transforms") or {})
+    # Anomaly and segmentation resize to data.image_size; the image_size inside
+    # transforms is a classification default they never read, so the card would
+    # state a resolution the model never saw.
+    if tx and isinstance(data_cfg.get("image_size"), int):
+        tx["image_size"] = data_cfg["image_size"]
     if tx:
         lines.append(f"## {tr_artifact('card.augmentation')}")
         lines.append("")
@@ -2252,7 +2286,7 @@ def _render_run_markdown(run_dir: Path, data: dict[str, Any]) -> str:
         lines.append(header)
         lines.append("|---|---|---|" if has_cis else "|---|---|")
         for k, v in metrics.items():
-            value = f"{v:.4f}" if isinstance(v, float) else str(v)
+            value = _card_value(v)
             if not has_cis:
                 lines.append(f"| {k} | {value} |")
                 continue
@@ -2331,8 +2365,7 @@ def _render_run_markdown(run_dir: Path, data: dict[str, Any]) -> str:
                 )
                 lines.append("|---|---|")
                 for k, v in m.items():
-                    val = f"{v:.4f}" if isinstance(v, float) else str(v)
-                    lines.append(f"| {k} | {val} |")
+                    lines.append(f"| {k} | {_card_value(v)} |")
             lines.append("")
 
     return "\n".join(lines)
@@ -4009,7 +4042,11 @@ def _summary_metrics(task: str, metrics: dict[str, Any]) -> dict[str, float]:
         # under the bare name, so send that one, under a name that says which
         # split it is (the card prints it as "(val)").
         if src.startswith("test_"):
-            value = _finite_float(metrics.get(src.removeprefix("test_")))
+            bare = src.removeprefix("test_")
+            # Newer runs name the split (val_miou); older ones kept the bare name.
+            value = _finite_float(metrics.get(f"val_{bare}"))
+            if value is None:
+                value = _finite_float(metrics.get(bare))
             if value is not None:
                 out[f"val_{label}"] = value
     return out

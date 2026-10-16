@@ -15,6 +15,16 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Fixed
 
+- **Na segmentação, `miou` deixa de significar duas coisas.** O `run.json` gravava
+  a nota de validação como `miou`/`dice`/`pixel_acc` enquanto a listagem chamava de
+  `miou` a nota de teste. Agora a validação se chama `val_miou`, `val_dice` e
+  `val_pixel_acc`; os runs antigos, que só têm os nomes sem prefixo, continuam
+  aparecendo na listagem e na comparação.
+- **O model card usa os campos de cada tarefa.** Anomalia e segmentação mostravam o
+  `image_size` de classificação (224) em vez do que o treino usou; regressão,
+  anomalia e tarefa custom mostravam `?` em campos que não têm (agora a linha some,
+  e a tarefa custom usa o próprio rótulo). A situação sai traduzida, valor ausente
+  vira `—` e o ID é o mesmo da aba Histórico.
 - **O histórico de detecção (Ultralytics) agora traz as perdas de treino.**
   `train_box_loss`, `train_cls_loss` e `train_dfl_loss` saíam vazias e o
   `train_loss` do evento era a perda de validação. Elas vêm de
