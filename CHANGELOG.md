@@ -15,6 +15,16 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Fixed
 
+- **O seletor de pasta diz o que aconteceu quando não escolhe nada.** Em Regressão, Segmentação,
+  Anomalia e Detecção (pasta e YAML) e no download de dataset, cancelar o diálogo ou falhar ao
+  abri-lo não mostrava nada, e o botão parecia quebrado. Agora aparece a mesma frase da
+  classificação, no idioma da interface, ou a mensagem de erro do servidor.
+- **O título da aba do navegador segue o idioma da interface.** Ficava fixo em inglês, e a volta
+  ao título normal depois de uma execução também. Agora vem do dicionário (pt ou en).
+- **Um checkout com metadata defasada deixa de anunciar uma atualização que ele já é.** Num
+  checkout (`pip install -e .`), `visionforge.__version__` agora vem do `pyproject.toml` do
+  próprio checkout, não da metadata gravada na instalação; depois de um pull ou bump a GUI
+  comparava a versão antiga com o PyPI e mostrava "atualização disponível — git pull" para sempre.
 - **ClassificaÃ§Ã£o recusa `num_classes` que nÃ£o bate com as pastas de classe.** Um `num_classes`
   diferente do nÃºmero de pastas no treino era aceito e o treino seguia com a saÃ­da errada. O
   submit agora responde 422 com o nÃºmero de pastas e os nomes encontrados. A tarefa `binary`

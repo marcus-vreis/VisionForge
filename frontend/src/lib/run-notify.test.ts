@@ -148,8 +148,17 @@ describe("canNotify / resetTitle", () => {
   it("restores the plain title", () => {
     const doc = { title: "✓ x — VisionForge" } as Document;
 
-    resetTitle(doc);
+    resetTitle(en.app.pageTitle, doc);
 
     expect(doc.title).toBe("VisionForge — Local AI Training");
+  });
+
+  it("restores it in the language of the interface, not always in English", () => {
+    const doc = { title: "✓ x — VisionForge" } as Document;
+
+    resetTitle(pt.app.pageTitle, doc);
+
+    expect(doc.title).toBe("VisionForge — Treino local de IA");
+    expect(pt.app.pageTitle).not.toBe(en.app.pageTitle);
   });
 });

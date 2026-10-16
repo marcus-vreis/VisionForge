@@ -20,3 +20,28 @@ export function pickerCancelText(
   if (res.message === null || res.message === SERVER_CANCEL_MESSAGE) return canceled;
   return res.message;
 }
+
+/** Run a native picker and hand back the sentence the form should show under it.
+ *
+ * A chosen path goes to `onPath` and clears the notice (null). A dismissal or a
+ * dialog that could not open gets the text of `pickerCancelText`; a request that
+ * itself failed gets the error's message, or `failed` when it carries none. The
+ * forms without a feedback line used to swallow all three, so a picker that
+ * never opened looked like a button that did nothing.
+ */
+export async function runPicker(
+  pick: () => Promise<{ cancelled: boolean; path: string | null; message: string | null }>,
+  onPath: (path: string) => void,
+  texts: { canceled: string; failed: string },
+): Promise<string | null> {
+  try {
+    const res = await pick();
+    if (!res.cancelled && res.path) {
+      onPath(res.path);
+      return null;
+    }
+    return pickerCancelText(res, texts.canceled);
+  } catch (e) {
+    return e instanceof Error && e.message ? e.message : texts.failed;
+  }
+}

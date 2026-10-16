@@ -1,5 +1,7 @@
 import { paramHelp } from "../lib/param-help";
 import { useT } from "../i18n/useT";
+import { runPicker } from "../lib/picker-feedback";
+import { PickerNote } from "./PickerNote";
 import { ModelAdvice } from "./ModelAdvice";
 import { AdvancedFields } from "./AdvancedFields";
 import { useState } from "react";
@@ -79,6 +81,7 @@ export function SegmentationPanel({
     { value: "pixel_acc", label: t.segmentationPanel.pixelAcc },
   ];
   const [picking, setPicking] = useState(false);
+  const [pickNote, setPickNote] = useState<string | null>(null);
   const [strategy, setStrategy] = useState<PanelStrategy>("simple");
 
   const setModel = (patch: Partial<SegmentationForm["model"]>) =>
@@ -95,8 +98,13 @@ export function SegmentationPanel({
   const onPickFolder = async () => {
     setPicking(true);
     try {
-      const res = await pickDatasetFolder();
-      if (!res.cancelled && res.path) setData({ base_dir: res.path });
+      setPickNote(
+        await runPicker(
+          pickDatasetFolder,
+          (path) => setData({ base_dir: path }),
+          { canceled: t.datasetPicker.cancelled, failed: t.datasetPicker.pickFailed },
+        ),
+      );
     } finally {
       setPicking(false);
     }
@@ -397,6 +405,7 @@ export function SegmentationPanel({
               {picking ? "…" : t.taskPanel.dataset.browse}
             </button>
           </div>
+          <PickerNote text={pickNote} />
           <TextField
             label={t.taskPanel.dataset.imagesSubdir}
             value={formData.data.images_subdir}

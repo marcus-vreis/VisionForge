@@ -284,7 +284,7 @@ export default function App() {
     if (status.status === "running") {
       void requestPermission();
       announced.current = null;
-      resetTitle();
+      resetTitle(tRef.current.app.pageTitle);
       return;
     }
     if (status.status !== "completed" && status.status !== "failed") return;

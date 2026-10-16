@@ -1,5 +1,7 @@
 import { paramHelp } from "../lib/param-help";
 import { useT } from "../i18n/useT";
+import { runPicker } from "../lib/picker-feedback";
+import { PickerNote } from "./PickerNote";
 import { ModelAdvice } from "./ModelAdvice";
 import { AdvancedFields } from "./AdvancedFields";
 import { useState } from "react";
@@ -81,6 +83,7 @@ export function RegressionPanel({
 }: RegressionPanelProps) {
   const t = useT();
   const [picking, setPicking] = useState(false);
+  const [pickNote, setPickNote] = useState<string | null>(null);
   const [strategy, setStrategy] = useState<PanelStrategy>("simple");
 
   const setModel = (patch: Partial<RegressionForm["model"]>) =>
@@ -97,8 +100,13 @@ export function RegressionPanel({
   const onPickFolder = async () => {
     setPicking(true);
     try {
-      const res = await pickDatasetFolder();
-      if (!res.cancelled && res.path) setData({ base_dir: res.path });
+      setPickNote(
+        await runPicker(
+          pickDatasetFolder,
+          (path) => setData({ base_dir: path }),
+          { canceled: t.datasetPicker.cancelled, failed: t.datasetPicker.pickFailed },
+        ),
+      );
     } finally {
       setPicking(false);
     }
@@ -399,6 +407,7 @@ export function RegressionPanel({
               {picking ? "…" : t.taskPanel.dataset.browse}
             </button>
           </div>
+          <PickerNote text={pickNote} />
           <TextField
             label={t.taskPanel.dataset.imagesSubdir}
             value={formData.data.images_dir}

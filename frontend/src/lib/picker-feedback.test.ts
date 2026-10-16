@@ -1,7 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { en } from "../i18n/en";
 import { pt } from "../i18n/pt";
-import { pickerCancelText, SERVER_CANCEL_MESSAGE } from "./picker-feedback";
+import { pickerCancelText, runPicker, SERVER_CANCEL_MESSAGE } from "./picker-feedback";
 
 describe("pickerCancelText", () => {
   it("words a plain dismissal in the language of the interface", () => {
@@ -30,5 +30,47 @@ describe("pickerCancelText", () => {
 
   it("matches the sentence the backend sends", () => {
     expect(SERVER_CANCEL_MESSAGE).toBe("Cancelado.");
+  });
+});
+
+describe("runPicker", () => {
+  const texts = { canceled: "Selection canceled.", failed: "Failed to open the folder picker." };
+
+  it("hands a chosen path over and shows no notice", async () => {
+    const onPath = vi.fn();
+    const note = await runPicker(
+      async () => ({ cancelled: false, path: "/data/coffee", message: null }),
+      onPath,
+      texts,
+    );
+    expect(onPath).toHaveBeenCalledWith("/data/coffee");
+    expect(note).toBeNull();
+  });
+
+  it("says so when the dialog is dismissed", async () => {
+    const onPath = vi.fn();
+    const note = await runPicker(
+      async () => ({ cancelled: true, path: "", message: SERVER_CANCEL_MESSAGE }),
+      onPath,
+      texts,
+    );
+    expect(onPath).not.toHaveBeenCalled();
+    expect(note).toBe("Selection canceled.");
+  });
+
+  it("shows why the dialog could not open", async () => {
+    const note = await runPicker(
+      async () => ({ cancelled: true, path: "", message: "Falha ao abrir o seletor: boom" }),
+      vi.fn(),
+      texts,
+    );
+    expect(note).toBe("Falha ao abrir o seletor: boom");
+  });
+
+  it("shows the error of a failed request, or the fallback when it has none", async () => {
+    const boom = await runPicker(async () => Promise.reject(new Error("HTTP 500")), vi.fn(), texts);
+    expect(boom).toBe("HTTP 500");
+    const bare = await runPicker(async () => Promise.reject("x"), vi.fn(), texts);
+    expect(bare).toBe(texts.failed);
   });
 });

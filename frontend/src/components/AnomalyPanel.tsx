@@ -1,5 +1,7 @@
 import { paramHelp } from "../lib/param-help";
 import { useT } from "../i18n/useT";
+import { runPicker } from "../lib/picker-feedback";
+import { PickerNote } from "./PickerNote";
 import { useState } from "react";
 import { fetchTaskSchema, pickDatasetFolder } from "../api/client";
 import {
@@ -74,6 +76,7 @@ export function AnomalyPanel({
     { value: "image_f1", label: t.anomalyPanel.imageF1 },
   ];
   const [picking, setPicking] = useState(false);
+  const [pickNote, setPickNote] = useState<string | null>(null);
   const [strategy, setStrategy] = useState<PanelStrategy>("simple");
 
   const setModel = (patch: Partial<AnomalyForm["model"]>) =>
@@ -90,8 +93,13 @@ export function AnomalyPanel({
   const onPickFolder = async () => {
     setPicking(true);
     try {
-      const res = await pickDatasetFolder();
-      if (!res.cancelled && res.path) setData({ base_dir: res.path });
+      setPickNote(
+        await runPicker(
+          pickDatasetFolder,
+          (path) => setData({ base_dir: path }),
+          { canceled: t.datasetPicker.cancelled, failed: t.datasetPicker.pickFailed },
+        ),
+      );
     } finally {
       setPicking(false);
     }
@@ -349,6 +357,7 @@ export function AnomalyPanel({
               {picking ? "…" : t.taskPanel.dataset.browse}
             </button>
           </div>
+          <PickerNote text={pickNote} />
           <TextField
             label={t.taskPanel.dataset.trainSplit}
             value={formData.data.train_dir}

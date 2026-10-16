@@ -14,8 +14,6 @@ import type { Dict } from "../i18n/pt";
 
 export type RunOutcome = "completed" | "failed";
 
-const BASE_TITLE = "VisionForge — Local AI Training";
-
 /** The tab title for a finished run: readable at tab-strip width, mark first. */
 export function titleFor(outcome: RunOutcome, label: string): string {
   const mark = outcome === "completed" ? "✓" : "✗";
@@ -68,9 +66,10 @@ export function canNotify(
   return Boolean(notification) && notification!.permission === "granted";
 }
 
-/** Restore the title once the researcher is looking again. */
-export function resetTitle(doc: Document = document): void {
-  doc.title = BASE_TITLE;
+/** Restore the title (`t.app.pageTitle`, in the interface language) once the
+ *  researcher is looking again. */
+export function resetTitle(title: string, doc: Document = document): void {
+  doc.title = title;
 }
 
 /** Announce a finished run through both channels.

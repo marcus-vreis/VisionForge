@@ -129,6 +129,9 @@ export const pt = {
     previewFailed: "Falha ao gerar preview.",
   },
   app: {
+    // The browser tab title while no run has just ended (the static one in
+    // index.html is only what shows before the page loads).
+    pageTitle: "VisionForge — Treino local de IA",
     train: {
       simple: "▶ Treinar",
       cv: "▶ Rodar K-fold",

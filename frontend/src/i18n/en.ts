@@ -123,6 +123,9 @@ export const en: Dict = {
     previewFailed: "Failed to generate the preview.",
   },
   app: {
+    // The browser tab title while no run has just ended (the static one in
+    // index.html is only what shows before the page loads).
+    pageTitle: "VisionForge — Local AI Training",
     train: {
       simple: "▶ Train",
       cv: "▶ Run K-fold",

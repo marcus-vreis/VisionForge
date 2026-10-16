@@ -143,6 +143,27 @@ def package_in_checkout(package_dir: Path | None = None) -> bool:
     return re.search(rf'^name\s*=\s*"{re.escape(_DIST_NAME)}"', text, re.M) is not None
 
 
+def checkout_version(package_dir: Path | None = None) -> str | None:
+    """The version in this checkout's ``pyproject.toml``, or None outside a checkout.
+
+    The installed metadata is frozen at ``pip install -e .`` time, so after a pull
+    or a bump it names an older release and the GUI would announce an update to
+    a version the checkout already is. The pyproject is what the code runs as.
+    """
+    if package_dir is None:
+        package_dir = Path(__file__).resolve().parent.parent
+    if not package_in_checkout(package_dir):
+        return None
+    try:
+        text = (package_dir.parent.parent / "pyproject.toml").read_text(
+            encoding="utf-8"
+        )
+    except OSError:
+        return None
+    found = re.search(r'^version\s*=\s*"([^"]+)"', text, re.M)
+    return found.group(1) if found else None
+
+
 def _editable_metadata() -> bool:
     """The installed metadata says this is an editable install."""
     try:

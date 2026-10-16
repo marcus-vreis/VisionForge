@@ -11,9 +11,11 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     initialLang(readStoredLang(), typeof navigator === "undefined" ? undefined : navigator.language),
   );
 
-  // Screen readers and the browser's own translate prompt read <html lang>.
+  // Screen readers and the browser's own translate prompt read <html lang>; the
+  // tab title is worded in the same language (index.html's is English only).
   useEffect(() => {
     document.documentElement.lang = localeOf(lang);
+    document.title = DICTS[lang].app.pageTitle;
   }, [lang]);
 
   const setLang = useCallback((next: Lang) => {

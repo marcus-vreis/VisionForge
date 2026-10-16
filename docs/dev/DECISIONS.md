@@ -1497,6 +1497,8 @@ section stating the known limits — single concurrent training, dataset downloa
 covering classification only, no K-fold for detection/anomaly, the Windows
 worker cap, dark theme only.
 
+**Amended 2026-10-16: in a checkout, the version is the one in `pyproject.toml`.** Point 2 still holds for an installed package, but the metadata of an editable install is written once, at `pip install -e .`, and goes stale after a pull or a bump: the GUI then compared the old number with PyPI and offered "update available, git pull" for good. `visionforge.__version__` now takes the `version` of the checkout's `pyproject.toml` (`utils.doctor.checkout_version`, only when the package sits in this project's `src` layout) and falls back to the metadata everywhere else.
+
 ---
 
 ## ADR-067 — Published as `visionforge-studio`

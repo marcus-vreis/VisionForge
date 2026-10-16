@@ -1,5 +1,7 @@
 import { paramHelp } from "../lib/param-help";
 import { useT } from "../i18n/useT";
+import { runPicker } from "../lib/picker-feedback";
+import { PickerNote } from "./PickerNote";
 import { useState } from "react";
 import {
   fetchTaskSchema,
@@ -93,6 +95,7 @@ export function DetectionPanel({
 }: DetectionPanelProps) {
   const t = useT();
   const [picking, setPicking] = useState(false);
+  const [pickNote, setPickNote] = useState<string | null>(null);
   const [strategy, setStrategy] = useState<PanelStrategy>("simple");
 
   const setModel = (patch: Partial<DetectionForm["model"]>) =>
@@ -125,8 +128,13 @@ export function DetectionPanel({
   const onPickFolder = async () => {
     setPicking(true);
     try {
-      const res = await pickDatasetFolder();
-      if (!res.cancelled && res.path) setData({ base_dir: res.path });
+      setPickNote(
+        await runPicker(
+          pickDatasetFolder,
+          (path) => setData({ base_dir: path }),
+          { canceled: t.datasetPicker.cancelled, failed: t.datasetPicker.pickFailed },
+        ),
+      );
     } finally {
       setPicking(false);
     }
@@ -135,8 +143,13 @@ export function DetectionPanel({
   const onPickYaml = async () => {
     setPicking(true);
     try {
-      const res = await pickDetectionYaml();
-      if (!res.cancelled && res.path) setData({ data_yaml: res.path });
+      setPickNote(
+        await runPicker(
+          pickDetectionYaml,
+          (path) => setData({ data_yaml: path }),
+          { canceled: t.datasetPicker.cancelled, failed: t.datasetPicker.pickFailed },
+        ),
+      );
     } finally {
       setPicking(false);
     }
@@ -596,6 +609,7 @@ export function DetectionPanel({
               </button>
             </div>
           )}
+          <PickerNote text={pickNote} />
           <NumberField
             label={t.detectionPanel.dataset.imageSize}
             value={formData.data.image_size}

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { runPicker } from "../lib/picker-feedback";
 import {
   datasetDownload,
   pickDatasetFolder,
@@ -56,7 +57,7 @@ export function DatasetDownloadCard({
   // The outcome of the last download. The "downloading…" notice is not stored:
   // it is worded at render time from `running`, so it follows the language.
   const [outcome, setOutcome] = useState<{
-    kind: "error" | "success";
+    kind: "error" | "success" | "info";
     text: string;
   } | null>(null);
   const msg: { kind: "info" | "error" | "success"; text: string } | null = running
@@ -67,8 +68,13 @@ export function DatasetDownloadCard({
     setForm((f) => ({ ...f, ...patch }));
 
   const pick = async () => {
-    const res = await pickDatasetFolder();
-    if (!res.cancelled && res.path) set({ out_dir: res.path });
+    // Dismissed or failed: say so in the same line the download uses, instead of
+    // leaving a button that seems to do nothing.
+    const note = await runPicker(pickDatasetFolder, (path) => set({ out_dir: path }), {
+      canceled: t.datasetPicker.cancelled,
+      failed: t.datasetPicker.pickFailed,
+    });
+    setOutcome(note === null ? null : { kind: "info", text: note });
   };
 
   const run = async () => {

@@ -11,6 +11,7 @@ import pytest
 from visionforge.utils.doctor import (
     build_install_command,
     check_python,
+    checkout_version,
     detect_driver_cuda,
     package_in_checkout,
     probe_torch,
@@ -629,3 +630,56 @@ class TestCheckoutDetection:
         monkeypatch.setattr(doctor, "_editable_metadata", lambda: False)
         monkeypatch.setattr(doctor, "package_in_checkout", lambda path=None: True)
         assert doctor.installed_from_source()
+
+
+class TestCheckoutVersion:
+    """A checkout reports the version of its own pyproject.toml.
+
+    The installed metadata is written at ``pip install -e .`` time and goes stale
+    as soon as the checkout is bumped or pulled; the GUI then compared the old
+    number against PyPI and offered "update available, git pull" forever.
+    """
+
+    @staticmethod
+    def _layout(root: Path, version: str, name: str = "visionforge-studio") -> Path:
+        package = root / "src" / "visionforge"
+        package.mkdir(parents=True)
+        (root / "pyproject.toml").write_text(
+            f'[project]\nname = "{name}"\nversion = "{version}"\n'
+            '\n[tool.bumpversion]\ncurrent_version = "9.9.9"\n',
+            encoding="utf-8",
+        )
+        return package
+
+    def test_reads_the_version_of_the_checkout_pyproject(self, tmp_path: Path) -> None:
+        assert checkout_version(self._layout(tmp_path, "0.15.0")) == "0.15.0"
+
+    def test_ignores_another_project_and_installed_packages(
+        self, tmp_path: Path
+    ) -> None:
+        assert (
+            checkout_version(
+                self._layout(tmp_path / "other", "1.2.3", name="something-else")
+            )
+            is None
+        )
+        installed = tmp_path / "Lib" / "site-packages" / "visionforge"
+        installed.mkdir(parents=True)
+        assert checkout_version(installed) is None
+
+    def test_a_pyproject_without_a_static_version_gives_none(
+        self, tmp_path: Path
+    ) -> None:
+        package = self._layout(tmp_path, "0.1.0")
+        (tmp_path / "pyproject.toml").write_text(
+            '[project]\nname = "visionforge-studio"\ndynamic = ["version"]\n',
+            encoding="utf-8",
+        )
+        assert checkout_version(package) is None
+
+    def test_the_running_checkout_reports_its_own_pyproject(self) -> None:
+        import visionforge
+
+        expected = checkout_version()
+        if expected is not None:
+            assert visionforge.__version__ == expected

@@ -54,6 +54,22 @@ describe("noticeMode", () => {
     });
   });
 
+  it("hides an old failure when no update is on offer", () => {
+    // /api/update keeps the last attempt even once the install is current again;
+    // with nothing to update to, a stale "update failed" has no action to offer.
+    const stale = {
+      target: "0.15.0",
+      ok: false,
+      returncode: 1,
+      finished_at: "2026-10-15T12:00:00Z",
+      log: "C:/vf/update.log",
+    };
+    expect(noticeMode(status({ available: false, last_attempt: stale }), null).kind).toBe("hidden");
+    expect(
+      noticeMode(status({ available: false, latest: null, last_attempt: stale }), null).kind,
+    ).toBe("hidden");
+  });
+
   it("forgets a failure at an older target once a newer release is on offer", () => {
     const old = status({
       latest: "0.16.0",
