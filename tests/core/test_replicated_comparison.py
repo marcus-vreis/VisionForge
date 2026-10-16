@@ -58,6 +58,20 @@ class _FakeRunner:
         return "accuracy"
 
 
+class _EpochRunner(_FakeRunner):
+    """Streams one epoch and its own "end" per run, like a real trainer."""
+
+    _progress_callback: Any = None
+
+    def run(self, cfg: dict[str, Any]) -> RunResult:
+        emit = self._progress_callback
+        if emit is not None:
+            emit({"event": "start", "total_epochs": 1})
+            emit({"event": "epoch_end", "epoch": 1, "total_epochs": 1})
+            emit({"event": "end", "total_epochs": 1})
+        return super().run(cfg)
+
+
 def _base() -> dict[str, Any]:
     return {
         "name": "exp",
@@ -172,25 +186,37 @@ class TestRunReplicatedComparison:
         assert report["underpowered"] is False
         assert report["power_note"] == ""
 
-    def test_streams_one_trial_pair_per_variant(self) -> None:
+    def test_streams_one_unit_per_variant_and_seed(self) -> None:
+        """The unit is (variant, seed): each announced, its epochs forwarded,
+        closed, one terminal "end" for the whole job (ADR-118)."""
         events: list[dict[str, Any]] = []
         run_replicated_comparison(
-            _FakeRunner(),
+            _EpochRunner(),
             _base(),
             self._variants(),
             [1, 2],
             "accuracy",
             progress_callback=events.append,
         )
-        # The monitor tracks variants, not every seed — inner replicate events
-        # would make a 2-variant run look like a 4-trial one.
-        assert [e["event"] for e in events] == [
-            "trial_start",
-            "trial_end",
-            "trial_start",
-            "trial_end",
-        ]
-        assert events[0]["overrides"]["variant"] == "baseline"
+        kinds = [e["event"] for e in events]
+        assert kinds.count("trial_start") == 4
+        assert kinds.count("trial_end") == 4
+        assert kinds.count("epoch_end") == 4
+        assert kinds.count("end") == 1
+        assert kinds[-1] == "end"
+        starts = [e for e in events if e["event"] == "trial_start"]
+        assert [e["trial_index"] for e in starts] == [0, 1, 2, 3]
+        assert all(e["total_trials"] == 4 for e in starts)
+        assert starts[0]["overrides"] == {"variant": "baseline", "training.seed": 1}
+        assert starts[3]["overrides"] == {
+            "variant": "lr_alto",
+            "training.learning_rate": 0.01,
+            "training.seed": 2,
+        }
+        ends = [e for e in events if e["event"] == "trial_end"]
+        assert [e["total_epochs"] for e in ends] == [1, 1, 1, 1]
+        epochs = [e for e in events if e["event"] == "epoch_end"]
+        assert [e["trial_index"] for e in epochs] == [0, 1, 2, 3]
 
     def test_a_failed_variant_stays_visible_but_untested(self) -> None:
         report = run_replicated_comparison(

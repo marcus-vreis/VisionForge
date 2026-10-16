@@ -18,6 +18,7 @@ from __future__ import annotations
 import copy
 import gc
 import math
+import re
 import statistics
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -26,10 +27,11 @@ from typing import Any
 from loguru import logger
 
 from visionforge.core.cancellation import STOPPED, STOPPED_NOTE, is_cancelled
-from visionforge.core.significance import bootstrap_ci
+from visionforge.core.significance import bootstrap_ci, infer_direction
 from visionforge.core.task_runner import (
     RunResult,
     TaskRunner,
+    UnitProgress,
     discard_cut_unit_resume,
     runner_cancel_token,
 )
@@ -69,6 +71,42 @@ def _t_critical_95(dof: int) -> float:
         return 1.96
 
 
+# Metrics whose value lives in [0, 1] by definition, matched on the name's words
+# ("val_accuracy", "map50", "f1_macro"). A name outside this list is left
+# unbounded: clipping on a guess would hide a real interval.
+_UNIT_INTERVAL_WORD = re.compile(
+    r"^(accuracy|acc|precision|recall|f1|iou|miou|dice|auc|auroc|map|ap"
+    r"|specificity|sensitivity)\d*$"
+)
+
+
+def metric_domain(metric: str) -> tuple[float | None, float | None]:
+    """The ``(low, high)`` bounds a metric's values can take, ``None`` for open.
+
+    Errors and losses (``infer_direction`` says "lower") cannot be negative;
+    the [0, 1] scores cannot exceed 1 (nor drop under 0); R² is bounded above
+    by 1 only. Anything else is unbounded.
+    """
+    if infer_direction(metric) == "lower":
+        return 0.0, None
+    words = re.split(r"[^a-z0-9]+", metric.lower())
+    if any(_UNIT_INTERVAL_WORD.match(w) for w in words):
+        return 0.0, 1.0
+    if "r2" in words or metric.lower() == "r_squared":
+        return None, 1.0
+    return None, None
+
+
+def _clip_to_domain(
+    low: float, high: float, domain: tuple[float | None, float | None]
+) -> tuple[float, float, bool]:
+    """Clip an interval to the domain; the flag says whether an end moved."""
+    floor, ceiling = domain
+    new_low = low if floor is None else max(low, floor)
+    new_high = high if ceiling is None else min(high, ceiling)
+    return new_low, new_high, (new_low != low or new_high != high)
+
+
 def sample_std(values: list[float]) -> float | None:
     """Sample standard deviation (n-1), or None when one value has no spread.
 
@@ -82,7 +120,7 @@ def sample_std(values: list[float]) -> float | None:
 
 def aggregate_replicates(
     trials: list[ReplicateTrial],
-) -> dict[str, dict[str, float | int | None]]:
+) -> dict[str, dict[str, float | int | bool | None]]:
     """Aggregate successful trials into per-metric distribution statistics.
 
     For every metric key observed across successful trials, returns ``n``,
@@ -90,6 +128,16 @@ def aggregate_replicates(
     and a Student-t 95% confidence interval (``ci95_low``/``ci95_high``). With
     a single value the dispersion fields are ``None`` — one sample has no
     spread to report.
+
+    The t interval is symmetric around the mean, so with few seeds it spills
+    out of what the metric can be (an MAE of ``[-0.70, 3.76]``, an accuracy
+    above 1). It is **clipped to the metric's domain** (``metric_domain``:
+    errors >= 0, [0, 1] scores inside [0, 1], R² <= 1) and ``ci95_clipped``
+    says it was, so the report never shows an impossible value and never hides
+    that the interval was cut. Clipping, rather than swapping in the bootstrap,
+    keeps ``ci95`` meaning one thing (the t interval) while the bootstrap
+    stays beside it, untouched, for the reader who wants a distribution-free
+    one (ADR-061).
 
     A percentile **bootstrap** interval (``boot95_low``/``boot95_high``,
     ADR-061) is reported alongside the t interval: t assumes the sampling
@@ -100,18 +148,22 @@ def aggregate_replicates(
     successful = [t for t in trials if t.status == "success"]
     keys: list[str] = list(dict.fromkeys(k for t in successful for k in t.metrics))
 
-    aggregates: dict[str, dict[str, float | int | None]] = {}
+    aggregates: dict[str, dict[str, float | int | bool | None]] = {}
     for key in keys:
         values = [t.metrics[key] for t in successful if key in t.metrics]
         n = len(values)
         mean = statistics.fmean(values)
         boot_low: float | None = None
         boot_high: float | None = None
+        clipped = False
         if n >= 2:
             std = statistics.stdev(values)
             half_width = _t_critical_95(n - 1) * std / math.sqrt(n)
-            ci_low: float | None = mean - half_width
-            ci_high: float | None = mean + half_width
+            ci_low: float | None
+            ci_high: float | None
+            ci_low, ci_high, clipped = _clip_to_domain(
+                mean - half_width, mean + half_width, metric_domain(key)
+            )
             boot = bootstrap_ci(values)
             if boot is not None:
                 boot_low, boot_high = boot.ci_low, boot.ci_high
@@ -129,6 +181,8 @@ def aggregate_replicates(
             "max": max(values),
             "ci95_low": ci_low,
             "ci95_high": ci_high,
+            # True when the t interval was cut to the metric's domain.
+            "ci95_clipped": clipped,
             "boot95_low": boot_low,
             "boot95_high": boot_high,
         }
@@ -141,6 +195,10 @@ def run_replicates(
     seeds: list[int],
     metric: str,
     progress_callback: Callable[[dict[str, Any]], None] | None = None,
+    *,
+    progress: UnitProgress | None = None,
+    unit_offset: int = 0,
+    unit_overrides: dict[str, Any] | None = None,
 ) -> list[ReplicateTrial]:
     """Train ``base_config_dict`` once per seed and return the trials in seed order.
 
@@ -148,9 +206,14 @@ def run_replicates(
     ``_s{seed}`` so its checkpoints and run.json land in a distinct run dir.
     Replicates are never ranked — they are samples of one distribution, not
     competitors. A failed replicate is recorded and the set continues; GPU
-    memory is released between replicates. ``progress_callback`` receives
-    ``trial_start``/``trial_end`` events so the GUI overlay tracks real
-    progress across the set.
+    memory is released between replicates. ``progress_callback`` receives the
+    live stream: each seed as one unit, announced, its epochs, and closed
+    (``UnitProgress``, ADR-118), then a single ``end``.
+
+    A caller that runs several sets as one job (the replicated comparison)
+    passes its own ``progress`` instead, with ``unit_offset`` (the index of this
+    set's first seed in the job) and ``unit_overrides`` (what else the unit
+    varies, e.g. the variant); the job then owns the terminal ``end``.
 
     A stop carried by the runner (ADR-111) cuts the replicate in flight and
     starts no further seed. A replicate the runner reports as cut is recorded
@@ -160,18 +223,13 @@ def run_replicates(
     token = runner_cancel_token(runner)
     trials: list[ReplicateTrial] = []
     base_name = str(base_config_dict.get("name", "replicates"))
+    owns_stream = progress is None
+    stream = progress or UnitProgress(progress_callback, len(seeds))
 
     for index, seed in enumerate(seeds):
         trial = ReplicateTrial(seed=seed)
-        if progress_callback is not None:
-            progress_callback(
-                {
-                    "event": "trial_start",
-                    "trial_index": index,
-                    "total_trials": len(seeds),
-                    "overrides": {"training.seed": seed},
-                }
-            )
+        unit = unit_offset + index
+        stream.start(runner, unit, {**(unit_overrides or {}), "training.seed": seed})
         try:
             trial_dict = copy.deepcopy(base_config_dict)
             trial_dict["name"] = f"{base_name}_s{seed}"
@@ -203,26 +261,26 @@ def run_replicates(
             trial.error = str(exc)
             logger.warning("Replicate seed={} failed — {}", seed, exc)
         finally:
+            stream.finish(runner, unit, trial.status)
             gc.collect()
             if torch is not None and torch.cuda.is_available():
                 torch.cuda.empty_cache()
-        if progress_callback is not None:
-            progress_callback(
-                {
-                    "event": "trial_end",
-                    "trial_index": index,
-                    "total_trials": len(seeds),
-                    "status": trial.status,
-                }
-            )
         trials.append(trial)
         if is_cancelled(token):
             logger.info(
                 "Replicates stopped after {} of {} seeds.", index + 1, len(seeds)
             )
             break
+    if owns_stream:
+        stream.end(len(trials))
 
     return trials
 
 
-__all__ = ["ReplicateTrial", "aggregate_replicates", "run_replicates", "sample_std"]
+__all__ = [
+    "ReplicateTrial",
+    "aggregate_replicates",
+    "metric_domain",
+    "run_replicates",
+    "sample_std",
+]

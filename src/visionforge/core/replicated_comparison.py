@@ -32,6 +32,7 @@ from visionforge.core.replicates import (
 from visionforge.core.significance import comparison_matrix, infer_direction
 from visionforge.core.task_runner import (
     TaskRunner,
+    UnitProgress,
     runner_cancel_token,
     runner_metric_direction,
 )
@@ -117,6 +118,10 @@ def run_replicated_comparison(
     current replicate and starts no further variant; the report then covers
     the variants and seeds that actually ran, paired on the seeds they share.
 
+    ``progress_callback`` receives the live stream, one unit per (variant,
+    seed): announced with both in ``overrides``, its epochs, and closed
+    (``UnitProgress``, ADR-118), then a single ``end`` after the last one.
+
     Raises:
         ValueError: for invalid variants (see :func:`validate_variants`) or
             fewer than two seeds, which leaves no dispersion to test.
@@ -130,17 +135,9 @@ def run_replicated_comparison(
     base_name = str(base_config_dict.get("name", "comparison"))
     results: list[VariantResult] = []
     total = len(variants)
+    progress = UnitProgress(progress_callback, total * len(seeds))
 
     for index, (label, overrides) in enumerate(variants.items()):
-        if progress_callback is not None:
-            progress_callback(
-                {
-                    "event": "trial_start",
-                    "trial_index": index,
-                    "total_trials": total,
-                    "overrides": {"variant": label, **overrides},
-                }
-            )
         variant_config = copy.deepcopy(base_config_dict)
         variant_config["name"] = f"{base_name}_{label}"
         for path, value in overrides.items():
@@ -153,22 +150,19 @@ def run_replicated_comparison(
             total,
             len(seeds),
         )
-        # No inner progress_callback: one variant's seeds would otherwise look
-        # like the whole run's trials to the live monitor.
-        trials = run_replicates(runner, variant_config, seeds, metric)
+        # The job's units are the (variant, seed) pairs, numbered across the
+        # variants; the job, not each variant's set, owns the terminal "end".
+        trials = run_replicates(
+            runner,
+            variant_config,
+            seeds,
+            metric,
+            progress=progress,
+            unit_offset=index * len(seeds),
+            unit_overrides={"variant": label, **overrides},
+        )
         results.append(VariantResult(label=label, overrides=overrides, trials=trials))
 
-        if progress_callback is not None:
-            progress_callback(
-                {
-                    "event": "trial_end",
-                    "trial_index": index,
-                    "total_trials": total,
-                    "status": "success"
-                    if any(t.status == "success" for t in trials)
-                    else "failed",
-                }
-            )
         if is_cancelled(runner_cancel_token(runner)):
             logger.info(
                 "Replicated comparison stopped after {} of {} variants.",
@@ -176,6 +170,7 @@ def run_replicated_comparison(
                 total,
             )
             break
+    progress.end(sum(len(r.trials) for r in results))
 
     ran = {r.label for r in results}
     # The task's declared direction, where it has one, over the name heuristic.

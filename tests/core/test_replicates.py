@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import statistics
 from typing import Any
 
 import pytest
@@ -46,6 +47,21 @@ class _FakeRunner:
 
     def primary_metric(self) -> str:
         return "score"
+
+
+class _EpochRunner(_FakeRunner):
+    """Runner that streams two epochs and its own "end", like a real trainer."""
+
+    _progress_callback: Any = None
+
+    def run(self, cfg: dict[str, Any]) -> RunResult:
+        emit = self._progress_callback
+        if emit is not None:
+            emit({"event": "start", "total_epochs": 2})
+            emit({"event": "epoch_end", "epoch": 1, "total_epochs": 2})
+            emit({"event": "epoch_end", "epoch": 2, "total_epochs": 2})
+            emit({"event": "end", "total_epochs": 2})
+        return super().run(cfg)
 
 
 def _base() -> dict[str, Any]:
@@ -102,12 +118,45 @@ class TestRunReplicates:
             "trial_end",
             "trial_start",
             "trial_end",
+            "end",
         ]
         assert events[0]["overrides"] == {"training.seed": 7}
         assert events[0]["total_trials"] == 2
         # trial_end carries the outcome, including for the failed seed.
         assert events[1]["status"] == "success"
         assert events[3]["status"] == "failed"
+
+    def test_streams_each_seeds_epochs_with_its_index(self) -> None:
+        """The training sheet must leave "preparing": every seed forwards its
+        epochs, tagged with the seed's index, and trial_end says how many ran
+        (ADR-118). The trainer's own "end" must not close the stream early."""
+        events: list[dict[str, Any]] = []
+        runner = _EpochRunner()
+        run_replicates(
+            runner,
+            _base(),
+            [7, 8],
+            metric="score",
+            progress_callback=events.append,
+        )
+        assert [e["event"] for e in events] == [
+            "trial_start",
+            "epoch_end",
+            "epoch_end",
+            "trial_end",
+            "trial_start",
+            "epoch_end",
+            "epoch_end",
+            "trial_end",
+            "end",
+        ]
+        epochs = [e for e in events if e["event"] == "epoch_end"]
+        assert [e["trial_index"] for e in epochs] == [0, 0, 1, 1]
+        assert all(e["total_trials"] == 2 for e in epochs)
+        ends = [e for e in events if e["event"] == "trial_end"]
+        assert [e["total_epochs"] for e in ends] == [2, 2]
+        # The runner is detached once the set is over.
+        assert runner._progress_callback is None
 
 
 class TestAggregateReplicates:
@@ -140,6 +189,73 @@ class TestAggregateReplicates:
         assert agg["std"] is None
         assert agg["ci95_low"] is None
         assert agg["ci95_high"] is None
+
+    @pytest.mark.parametrize(
+        ("metric", "values"),
+        [
+            ("mae", [0.1, 0.2, 0.9]),
+            ("mse", [0.01, 0.5, 0.02]),
+            ("val_loss", [0.3, 0.2, 2.0]),
+        ],
+    )
+    def test_error_metric_interval_never_goes_below_zero(
+        self, metric: str, values: list[float]
+    ) -> None:
+        trials = [
+            ReplicateTrial(seed=i, status="success", metrics={metric: v})
+            for i, v in enumerate(values)
+        ]
+        agg = aggregate_replicates(trials)[metric]
+        assert agg["ci95_low"] == 0.0
+        assert agg["ci95_clipped"] is True
+        # The side that stayed inside the domain is the untouched t interval.
+        half = 4.302653 * statistics.stdev(values) / math.sqrt(3)
+        assert agg["ci95_high"] == pytest.approx(statistics.fmean(values) + half)
+
+    def test_unit_interval_metric_interval_stays_inside_zero_one(self) -> None:
+        # "score" is not a known bounded name: its t interval is left alone.
+        trials = [self._trial(i, v) for i, v in enumerate([0.8, 0.9, 1.0])]
+        assert aggregate_replicates(trials)["score"]["ci95_clipped"] is False
+        acc = [
+            ReplicateTrial(seed=i, status="success", metrics={"accuracy": v})
+            for i, v in enumerate([0.8, 0.9, 1.0])
+        ]
+        agg = aggregate_replicates(acc)["accuracy"]
+        assert agg["ci95_high"] == 1.0
+        assert agg["ci95_low"] == pytest.approx(0.9 - 4.302653 * 0.1 / math.sqrt(3))
+        assert agg["ci95_clipped"] is True
+
+    def test_r2_interval_stops_at_one_but_may_go_negative(self) -> None:
+        trials = [
+            ReplicateTrial(seed=i, status="success", metrics={"r2": v})
+            for i, v in enumerate([0.5, 0.9, 0.99])
+        ]
+        agg = aggregate_replicates(trials)["r2"]
+        assert agg["ci95_high"] == 1.0
+        assert agg["ci95_clipped"] is True
+        wide = [
+            ReplicateTrial(seed=i, status="success", metrics={"r2": v})
+            for i, v in enumerate([-1.0, 0.2, 0.9])
+        ]
+        low = aggregate_replicates(wide)["r2"]["ci95_low"]
+        assert low is not None
+        assert low < -1.0
+
+    def test_interval_inside_the_domain_is_not_flagged(self) -> None:
+        trials = [
+            ReplicateTrial(seed=i, status="success", metrics={"accuracy": v})
+            for i, v in enumerate([0.50, 0.51, 0.52])
+        ]
+        agg = aggregate_replicates(trials)["accuracy"]
+        assert agg["ci95_clipped"] is False
+        low, high = agg["ci95_low"], agg["ci95_high"]
+        assert low is not None
+        assert high is not None
+        assert 0.0 < low < high < 1.0
+
+    def test_single_value_is_not_flagged(self) -> None:
+        agg = aggregate_replicates([self._trial(0, 0.7)])["score"]
+        assert agg["ci95_clipped"] is False
 
     def test_failed_trials_are_excluded(self) -> None:
         trials = [self._trial(0, 0.8), self._trial(1, None), self._trial(2, 1.0)]

@@ -1227,6 +1227,8 @@ reason, because provenance must not be what fails a training run.
 
 **Phase D is complete.**
 
+**Amended 2026-10-16: the t interval is clipped to the metric's domain.** The n=2 example above (`[-0.70, 3.76]` for a strictly non-negative MAE) was documented but still shipped: with 3 seeds a mean-squared error showed a negative low end and an accuracy a high end above 1. `aggregate_replicates` now clips `ci95_low`/`ci95_high` to `metric_domain(name)` (errors and losses >= 0; accuracy, precision, recall, F1, IoU, Dice, AUC and mAP within [0, 1]; R2 <= 1; any other name unbounded) and reports `ci95_clipped`. Clipping was chosen over swapping in the bootstrap because `ci95` keeps one meaning (the t interval) and the bootstrap stays beside it unchanged; the domain is matched on the metric's name, so a custom metric with an unknown name is never cut on a guess.
+
 ---
 
 ## ADR-062 — `training.deterministic` in every task, and detection's two seeds
@@ -5193,6 +5195,8 @@ datasets: a regression sweep over three ResNets showed `trial 2/3`, then (after 
 naming change) `modelo 2/2`, the training stage and each model's epochs and losses;
 also the detector, transformer (`swin_t`) and autoencoder drawings, which the first
 check had not covered, and a detection run stopped mid-way going to `interrompido`.
+
+**Amended 2026-10-16: replicates and the replicated comparison stream their epochs too.** They were the two multi-unit jobs left out: their sheet sat on "preparing" for the whole run. `run_replicates` now drives a `UnitProgress` with one unit per seed (`overrides` = `training.seed`), and `run_replicated_comparison` one unit per (variant, seed), numbered across the variants, with the variant and its overrides in `overrides`; the job emits a single `end`. The variant-level `trial_start`/`trial_end` pair of the comparison is gone: its `total_trials` is now variants x seeds. The frontend needed no change (`replicate` was already a unit kind).
 
 ## ADR-119 — The training story names overfitting when the losses show it
 

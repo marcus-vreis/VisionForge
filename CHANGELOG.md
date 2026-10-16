@@ -15,6 +15,15 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Fixed
 
+- **Réplicas e comparação replicada mostram o progresso por época.** A folha de treino
+  ficava em "preparando" do começo ao fim. Cada seed (e, na comparação, cada par
+  variante/seed) agora é uma unidade com suas épocas e perdas, como no sweep e na
+  comparação de modelos (ADR-118).
+- **O IC 95% das réplicas não sai mais do domínio da métrica.** Com poucas seeds o
+  intervalo t dava MSE negativo, R² acima de 1 e acurácia acima de 1. Ele é recortado
+  ao domínio (erros >= 0, métricas de 0 a 1 dentro de 0 a 1, R² <= 1) e o campo
+  `ci95_clipped` do relatório diz quando houve recorte; o bootstrap segue intocado
+  (ADR-061).
 - **Na segmentação, `miou` deixa de significar duas coisas.** O `run.json` gravava
   a nota de validação como `miou`/`dice`/`pixel_acc` enquanto a listagem chamava de
   `miou` a nota de teste. Agora a validação se chama `val_miou`, `val_dice` e
