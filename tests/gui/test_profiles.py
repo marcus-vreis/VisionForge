@@ -19,6 +19,7 @@ import json
 import os
 import subprocess
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -43,6 +44,11 @@ from visionforge.gui.api.profiles import (
 )
 from visionforge.gui.api.schemas import RunResponse
 from visionforge.utils.config import OutputConfig
+from visionforge.utils.selftest_data import (
+    build_detection_dataset,
+    build_regression_dataset,
+    build_segmentation_dataset,
+)
 
 from .conftest import occupy_queue, release_queue
 from .test_routes_custom_orchestrators import _payload as _toy_payload
@@ -945,8 +951,7 @@ class TestQueueShowsTheProfile:
     ) -> None:
         _, routes_mod = env
         _make_profile(client, "João Silva")
-        base = tmp_path / "ds"
-        base.mkdir()
+        base = build_regression_dataset(tmp_path / "ds")
         occupy_queue(routes_mod)
         body = {
             "name": "reg",
@@ -975,8 +980,18 @@ class TestEverySubmissionIsScoped:
     @staticmethod
     def _cfg(kind: str, tmp_path: Path) -> dict[str, Any]:
         base = tmp_path / "ds"
-        for split in ("train", "val"):
-            (base / "images" / split).mkdir(parents=True, exist_ok=True)
+        # The submit refuses an empty dataset, so the one that is going to be
+        # read gets real files; the other kinds keep the bare folder.
+        builders: dict[str, Callable[[Path], Path]] = {
+            "detection": build_detection_dataset,
+            "regression": build_regression_dataset,
+            "segmentation": build_segmentation_dataset,
+        }
+        if kind in builders:
+            builders[kind](base)
+        else:
+            for split in ("train", "val"):
+                (base / "images" / split).mkdir(parents=True, exist_ok=True)
         training = {"epochs": 1, "batch_size": 4, "learning_rate": 0.001}
         configs: dict[str, dict[str, Any]] = {
             "classification": _classification_full(base),

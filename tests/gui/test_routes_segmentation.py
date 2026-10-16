@@ -6,6 +6,8 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from visionforge.utils.selftest_data import build_segmentation_dataset
+
 from .conftest import occupy_queue, release_queue
 
 
@@ -18,8 +20,7 @@ def app_and_routes():  # type: ignore[return]
 
 
 def _payload(tmp_path: Path) -> dict:
-    base = tmp_path / "ds"
-    base.mkdir(parents=True, exist_ok=True)
+    base = build_segmentation_dataset(tmp_path / "ds")
     return {
         "name": "seg_run",
         "model": {"name": "unet", "num_classes": 3, "pretrained": False},

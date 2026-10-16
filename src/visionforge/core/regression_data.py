@@ -25,6 +25,7 @@ from visionforge.core.data import (
     resolve_num_workers,
 )
 from visionforge.core.loader_lifecycle import LoaderCache
+from visionforge.utils.messages import tr
 from visionforge.utils.regression_config import RegressionConfig
 
 _LOADER_POOLS = 3
@@ -46,7 +47,7 @@ class RegressionCsvDataset(Dataset):  # type: ignore[type-arg]
         transform: T.Compose,
     ) -> None:
         if not csv_path.is_file():
-            raise FileNotFoundError(f"Regression manifest not found: {csv_path}")
+            raise FileNotFoundError(tr("regdata.manifest_not_found", path=csv_path))
 
         self._images_root = images_root
         self._transform = transform
@@ -59,22 +60,34 @@ class RegressionCsvDataset(Dataset):  # type: ignore[type-arg]
             missing = [c for c in [image_column, *target_columns] if c not in header]
             if missing:
                 raise ValueError(
-                    f"Manifest '{csv_path}' is missing column(s): "
-                    f"{', '.join(missing)}. Found: {', '.join(header)}."
+                    tr(
+                        "regdata.missing_columns",
+                        path=csv_path,
+                        missing=", ".join(missing),
+                        found=", ".join(header),
+                    )
                 )
             for line_no, row in enumerate(reader, start=2):
                 image = (row.get(image_column) or "").strip()
                 if not image:
                     raise ValueError(
-                        f"Manifest '{csv_path}' row {line_no}: empty "
-                        f"'{image_column}' value."
+                        tr(
+                            "regdata.empty_image",
+                            path=csv_path,
+                            line=line_no,
+                            column=image_column,
+                        )
                     )
                 try:
                     targets = [float(row[c]) for c in target_columns]
                 except (TypeError, ValueError) as exc:
                     raise ValueError(
-                        f"Manifest '{csv_path}' row {line_no}: non-numeric "
-                        f"target ({exc})."
+                        tr(
+                            "regdata.non_numeric_target",
+                            path=csv_path,
+                            line=line_no,
+                            error=exc,
+                        )
                     ) from exc
                 self._rows.append((image, targets))
 

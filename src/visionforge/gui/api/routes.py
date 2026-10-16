@@ -17,7 +17,7 @@ from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, NoReturn
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
@@ -1267,6 +1267,7 @@ def _execute_dataset_download(req: DatasetDownloadRequest) -> DatasetDownloadRes
 async def run_experiment(config: ExperimentConfig, profile: ProfileDep) -> RunResponse:
     """Start a training experiment, or queue it if one is already running."""
     config = profile.scope_model(config)
+    await asyncio.to_thread(_check_classification_classes, config)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     run_id = f"{config.name}_{timestamp}"
 
@@ -1362,6 +1363,7 @@ async def run_detection(config: DetectionConfig, profile: ProfileDep) -> RunResp
     DetectionBlock (ADR-033) rather than the ExperimentConfig path.
     """
     config = profile.scope_model(config)
+    await asyncio.to_thread(_check_detection_dataset, config)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     run_id = f"{config.name}_{timestamp}"
 
@@ -1390,6 +1392,7 @@ async def run_regression(config: RegressionConfig, profile: ProfileDep) -> RunRe
     RegressionBlock (ADR-036) rather than the ExperimentConfig path.
     """
     config = profile.scope_model(config)
+    await asyncio.to_thread(_check_regression_dataset, config)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     run_id = f"{config.name}_{timestamp}"
 
@@ -1420,6 +1423,7 @@ async def run_segmentation(
     SegmentationBlock (ADR-037) rather than the ExperimentConfig path.
     """
     config = profile.scope_model(config)
+    await asyncio.to_thread(_check_segmentation_dataset, config)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     run_id = f"{config.name}_{timestamp}"
 
@@ -3193,6 +3197,118 @@ def _collect_regression_dataset_stats(
         splits=splits,
         message=message,
     )
+
+
+# ── dataset checks at submit time ───────────────────────────────────────────
+# The run queue accepts any config that validates, so an empty or mismatched
+# dataset used to enter the queue and die on the first batch with a raw English
+# exception. These checks list directories and read one CSV row at most (the
+# /dataset/stats walks count every file); they reuse the stats probes' split
+# resolution and messages so the form and the submit agree on what is usable.
+
+
+def _refuse(message: str) -> NoReturn:
+    raise HTTPException(422, message)
+
+
+def _check_detection_dataset(config: DetectionConfig) -> None:
+    """Refuse a YOLO ``base_dir`` with no split or no train images."""
+    data = config.data
+    if data.data_yaml is not None or data.base_dir is None:
+        return  # an explicit data.yaml names its own splits; Ultralytics owns them
+    base = Path(data.base_dir)
+    if not base.is_dir():
+        _refuse(tr("scan.base_missing", path=base))
+    splits = {s: resolve_yolo_split(base, s) for s in ("train", "val", "test")}
+    if all(resolved is None for resolved in splits.values()):
+        _refuse(tr("scan.no_yolo_split"))
+    train = splits["train"]
+    if train is None or _count_images(train[0]) == 0:
+        _refuse(tr("submit.detection_empty_train"))
+
+
+def _check_segmentation_dataset(config: SegmentationConfig) -> None:
+    """Refuse a base_dir with no split or no image-mask pair in train."""
+    data = config.data
+    base = Path(data.base_dir)
+    split_dirs = (data.train_dir, data.val_dir, data.test_dir)
+    if not any((base / d).is_dir() for d in split_dirs):
+        _refuse(tr("scan.no_seg_split"))
+    train = base / data.train_dir
+    if not train.is_dir():
+        _refuse(tr("submit.segmentation_no_train_dir", path=train))
+    images = _image_stems(train / data.images_subdir)
+    masks = _image_stems(train / data.masks_subdir)
+    if not images & masks:
+        _refuse(
+            tr(
+                "submit.segmentation_no_pairs",
+                images=len(images),
+                masks=len(masks),
+            )
+        )
+
+
+def _check_regression_dataset(config: RegressionConfig) -> None:
+    """Refuse a missing train CSV, absent columns or a manifest with no rows."""
+    data = config.data
+    base = Path(data.base_dir)
+    expected = [data.image_column, *data.target_columns]
+    train_csv = base / data.train_csv
+    if not train_csv.is_file():
+        _refuse(tr("submit.regression_no_train_csv", path=train_csv))
+    for name in (data.train_csv, data.val_csv, data.test_csv):
+        path = base / name
+        if not path.is_file():
+            continue  # val/test are optional here; the trainer reports what it needs
+        try:
+            with path.open(encoding="utf-8", newline="") as f:
+                reader = csv.DictReader(f)
+                header = reader.fieldnames or []
+                has_rows = next(reader, None) is not None
+        except (OSError, UnicodeDecodeError, csv.Error):
+            continue  # an unreadable file fails with its own message at load time
+        missing = [c for c in expected if c not in header]
+        if missing:
+            _refuse(
+                tr(
+                    "submit.regression_missing_columns",
+                    csv=name,
+                    missing=", ".join(missing),
+                    found=", ".join(header) or "-",
+                )
+            )
+        if path == train_csv and not has_rows:
+            _refuse(tr("submit.regression_empty_manifest", csv=name))
+
+
+def _check_classification_classes(config: ExperimentConfig) -> None:
+    """Refuse ``num_classes`` that disagrees with the train class folders.
+
+    ``binary`` has one output for two folders (ADR on binary heads), so it is
+    checked against 2 folders, not against ``num_classes``.
+    """
+    train = Path(config.data.base_dir) / config.data.train_dir
+    if not train.is_dir():
+        return
+    # ImageFolder counts every sub-directory as a class, empty or hidden included.
+    names = sorted(p.name for p in train.iterdir() if p.is_dir())
+    if not names:
+        return
+    shown = ", ".join(names[:10]) + (", ..." if len(names) > 10 else "")
+    if config.task == "binary":
+        if len(names) != 2:
+            _refuse(tr("submit.binary_folders", found=len(names), names=shown))
+        return
+    if len(names) != config.model.num_classes:
+        _refuse(
+            tr(
+                "submit.num_classes_mismatch",
+                num_classes=config.model.num_classes,
+                found=len(names),
+                names=shown,
+            )
+        )
 
 
 def _open_native_checkpoint_dialog() -> CheckpointPickResponse:

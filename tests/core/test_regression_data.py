@@ -92,7 +92,9 @@ class TestRegressionCsvDataset:
         assert target.tolist() == [1.5, 2.5]
 
     def test_missing_csv_raises(self, tmp_path: Path) -> None:
-        with pytest.raises(FileNotFoundError, match="manifest not found"):
+        with pytest.raises(
+            FileNotFoundError, match="Manifest de regressão não encontrado"
+        ):
             RegressionCsvDataset(
                 tmp_path / "nope.csv",
                 tmp_path,
@@ -103,7 +105,7 @@ class TestRegressionCsvDataset:
 
     def test_missing_column_raises(self, tmp_path: Path) -> None:
         (tmp_path / "m.csv").write_text("image,wrong\nx.png,1\n", encoding="utf-8")
-        with pytest.raises(ValueError, match="missing column"):
+        with pytest.raises(ValueError, match=r"não tem a\(s\) coluna"):
             RegressionCsvDataset(
                 tmp_path / "m.csv",
                 tmp_path,
@@ -116,7 +118,7 @@ class TestRegressionCsvDataset:
         (tmp_path / "m.csv").write_text(
             "image,target\nx.png,notanumber\n", encoding="utf-8"
         )
-        with pytest.raises(ValueError, match="non-numeric target"):
+        with pytest.raises(ValueError, match="alvo não numérico"):
             RegressionCsvDataset(
                 tmp_path / "m.csv",
                 tmp_path,
@@ -171,12 +173,16 @@ class TestRegressionDataModule:
         self, regression_root: Path
     ) -> None:
         (regression_root / "train.csv").unlink()
-        with pytest.raises(FileNotFoundError, match=r"manifest not found.*train\.csv"):
+        with pytest.raises(
+            FileNotFoundError, match=r"Manifest de regressão não encontrado.*train\.csv"
+        ):
             RegressionDataModule(_config(regression_root))
 
     def test_training_still_needs_val_csv_up_front(self, regression_root: Path) -> None:
         (regression_root / "val.csv").unlink()
-        with pytest.raises(FileNotFoundError, match=r"manifest not found.*val\.csv"):
+        with pytest.raises(
+            FileNotFoundError, match=r"Manifest de regressão não encontrado.*val\.csv"
+        ):
             RegressionDataModule(_config(regression_root))
 
 

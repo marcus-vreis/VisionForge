@@ -6,6 +6,8 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from visionforge.utils.selftest_data import build_detection_dataset
+
 from .conftest import occupy_queue, release_queue
 
 
@@ -18,9 +20,7 @@ def app_and_routes():  # type: ignore[return]
 
 
 def _payload(tmp_path: Path) -> dict:
-    base = tmp_path / "ds"
-    for split in ("train", "val"):
-        (base / "images" / split).mkdir(parents=True, exist_ok=True)
+    base = build_detection_dataset(tmp_path / "ds")
     return {
         "name": "det_run",
         "model": {"backend": "ultralytics", "name": "yolo11n", "num_classes": 2},

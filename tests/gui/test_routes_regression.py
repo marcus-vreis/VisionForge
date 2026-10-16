@@ -6,6 +6,8 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from visionforge.utils.selftest_data import build_regression_dataset
+
 from .conftest import occupy_queue, release_queue
 
 
@@ -18,8 +20,7 @@ def app_and_routes():  # type: ignore[return]
 
 
 def _payload(tmp_path: Path) -> dict:
-    base = tmp_path / "ds"
-    base.mkdir(parents=True, exist_ok=True)
+    base = build_regression_dataset(tmp_path / "ds")
     return {
         "name": "reg_run",
         "model": {"name": "resnet18", "num_targets": 1, "pretrained": False},

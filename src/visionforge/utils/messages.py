@@ -383,6 +383,74 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "pt": "Nenhum split encontrado (esperado <split>/{{imagens,máscaras}}).",
         "en": "No split found (expected <split>/{{images,masks}}).",
     },
+    # ── dataset checks at submit time (the run is refused before it is queued) ──
+    "submit.detection_empty_train": {
+        "pt": "O split de treino do dataset de detecção não existe ou não tem nenhuma imagem.",
+        "en": "The detection dataset's train split does not exist or has no images.",
+    },
+    "submit.segmentation_no_train_dir": {
+        "pt": "Pasta de treino da segmentação não encontrada: {path}",
+        "en": "Segmentation train folder not found: {path}",
+    },
+    "submit.segmentation_no_pairs": {
+        "pt": (
+            "O split de treino não tem nenhum par imagem↔máscara (imagens: {images}, "
+            "máscaras: {masks}); os nomes dos arquivos, sem a extensão, precisam coincidir."
+        ),
+        "en": (
+            "The train split has no image-mask pair (images: {images}, masks: {masks}); "
+            "file names, without the extension, must match."
+        ),
+    },
+    "submit.regression_no_train_csv": {
+        "pt": "CSV de treino da regressão não encontrado: {path}",
+        "en": "Regression train CSV not found: {path}",
+    },
+    "submit.regression_missing_columns": {
+        "pt": "Colunas ausentes em {csv}: {missing}. Colunas encontradas: {found}.",
+        "en": "Columns missing from {csv}: {missing}. Columns found: {found}.",
+    },
+    "submit.regression_empty_manifest": {
+        "pt": "O CSV de treino {csv} está sem linhas de dados.",
+        "en": "The train CSV {csv} has no data rows.",
+    },
+    "submit.num_classes_mismatch": {
+        "pt": (
+            "num_classes={num_classes}, mas a pasta de treino tem {found} pastas de "
+            "classe ({names}). Ajuste num_classes para {found} ou corrija as pastas."
+        ),
+        "en": (
+            "num_classes={num_classes}, but the train folder has {found} class folders "
+            "({names}). Set num_classes to {found} or fix the folders."
+        ),
+    },
+    "submit.binary_folders": {
+        "pt": (
+            "A tarefa binária precisa de exatamente 2 pastas de classe no treino "
+            "(1 saída para 2 pastas), mas há {found}: {names}."
+        ),
+        "en": (
+            "A binary task needs exactly 2 class folders in train (1 output for 2 "
+            "folders), but there are {found}: {names}."
+        ),
+    },
+    # ── regression manifest rows (raised while the dataset loads) ──
+    "regdata.manifest_not_found": {
+        "pt": "Manifest de regressão não encontrado: {path}",
+        "en": "Regression manifest not found: {path}",
+    },
+    "regdata.missing_columns": {
+        "pt": "O manifest '{path}' não tem a(s) coluna(s): {missing}. Colunas encontradas: {found}.",
+        "en": "Manifest '{path}' is missing column(s): {missing}. Found: {found}.",
+    },
+    "regdata.empty_image": {
+        "pt": "Manifest '{path}', linha {line}: valor vazio em '{column}'.",
+        "en": "Manifest '{path}' row {line}: empty '{column}' value.",
+    },
+    "regdata.non_numeric_target": {
+        "pt": "Manifest '{path}', linha {line}: alvo não numérico ({error}).",
+        "en": "Manifest '{path}' row {line}: non-numeric target ({error}).",
+    },
     "scan.anomaly_train_missing": {
         "pt": "Pasta de treino normal não encontrada: {train_dir}/{normal_dir}",
         "en": "Normal training folder not found: {train_dir}/{normal_dir}",

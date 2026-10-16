@@ -15,6 +15,15 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Fixed
 
+- **ClassificaÃ§Ã£o recusa `num_classes` que nÃ£o bate com as pastas de classe.** Um `num_classes`
+  diferente do nÃºmero de pastas no treino era aceito e o treino seguia com a saÃ­da errada. O
+  submit agora responde 422 com o nÃºmero de pastas e os nomes encontrados. A tarefa `binary`
+  (1 saÃ­da) Ã© checada contra 2 pastas.
+- **Dataset vazio ou com coluna inexistente Ã© recusado no submit.** DetecÃ§Ã£o e segmentaÃ§Ã£o sem
+  split ou sem imagens (ou sem nenhum par imagemâ†”mÃ¡scara) no treino, e regressÃ£o com CSV de treino
+  ausente, sem linhas ou sem a coluna-alvo, entravam na fila e morriam com exceÃ§Ã£o crua em inglÃªs.
+  Agora o submit responde 422 traduzido, e as mensagens de `core/regression_data.py` passam pelo
+  catÃ¡logo.
 - **Apagar uma task custom a tira de verdade.** O arquivo sumia, mas a task seguia registrada
   na sessÃ£o: a aba, o schema e `/custom/<chave>/run` continuavam funcionando atÃ© reiniciar a
   GUI. Apagar agora remove a task do registro (e o mÃ³dulo importado), e a chave passa a dar 404.
