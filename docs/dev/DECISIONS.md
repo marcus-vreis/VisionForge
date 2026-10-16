@@ -5399,3 +5399,17 @@ everything else. The worker count is a separate source a researcher can pin: the
 automatic `num_workers` follows the free memory of the moment, and the number of
 workers decides which random augmentation each image receives, so a study that must
 repeat a seed exactly should fix it (the seed-variance study fixes it at 0).
+
+**Amended 2026-10-16: nothing else in the server draws from the global generator.**
+The GUI validation found three runs of one config and one seed diverging from the
+first epoch while the Datasets tab's augmentation preview was being used. The job
+trains in a thread and its augmentation and shuffling draw from torch's global
+generator (`num_workers` 0 on a small dataset); the preview, in another thread, drew
+its random flips, rotations and jitter from the same generator, so the job received
+a different sequence. The preview now draws from a `random.Random` of its own and
+applies the same operations through `torchvision.transforms.functional`, and a test
+checks it leaves torch's and Python's global state untouched. No other GUI route
+draws from a global generator. With workers above 0 the job's augmentation runs in
+worker processes and was not exposed; the DataLoader's shuffle still uses the global
+generator of the training thread, which is safe as long as no other thread draws
+from it.

@@ -2554,7 +2554,10 @@ def _pick_preview_image(
 
 def _render_augment_preview(req: AugmentPreviewRequest) -> AugmentPreviewResponse:
     """Save N randomly-augmented variants of one dataset image and return paths."""
+    import random
+
     import torchvision.transforms as T
+    import torchvision.transforms.functional as TF
     from PIL import Image
 
     from visionforge.utils.config import TransformConfig
@@ -2571,18 +2574,31 @@ def _render_augment_preview(req: AugmentPreviewRequest) -> AugmentPreviewRespons
 
     tc = TransformConfig.model_validate(req.transforms)
     size = tc.image_size
-    aug_steps: list[Any] = []
     active: list[str] = []
     if tc.horizontal_flip:
-        aug_steps.append(T.RandomHorizontalFlip())
         active.append("flip")
     if tc.rotation_degrees > 0:
-        aug_steps.append(T.RandomRotation(tc.rotation_degrees))
         active.append("rotation")
     if tc.color_jitter:
-        aug_steps.append(T.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2))
         active.append("jitter")
-    transform = T.Compose([T.Resize(size), T.CenterCrop(size), *aug_steps])
+    # Drawn from a generator of its own, never torch's or Python's global one:
+    # this runs in a thread while a job may be training in another, and the job's
+    # augmentation and shuffling draw from the global generator, so a preview
+    # that drew from it too would change a seeded run's result (ADR-121).
+    rng = random.Random()
+    resize = T.Compose([T.Resize(size), T.CenterCrop(size)])
+
+    def transform(img: Any) -> Any:
+        img = resize(img)
+        if tc.horizontal_flip and rng.random() < 0.5:
+            img = TF.hflip(img)
+        if tc.rotation_degrees > 0:
+            img = TF.rotate(img, rng.uniform(-tc.rotation_degrees, tc.rotation_degrees))
+        if tc.color_jitter:  # the same ranges as the training transform's ColorJitter
+            img = TF.adjust_brightness(img, rng.uniform(0.8, 1.2))
+            img = TF.adjust_contrast(img, rng.uniform(0.8, 1.2))
+            img = TF.adjust_saturation(img, rng.uniform(0.8, 1.2))
+        return img
 
     cache_dir = _PREVIEW_CACHE_DIR / "augment"
     cache_dir.mkdir(parents=True, exist_ok=True)

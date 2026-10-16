@@ -120,3 +120,36 @@ class TestRenderAugmentPreview:
             )
         )
         assert "class_1" in resp.source_image
+
+    def test_the_preview_leaves_the_training_randomness_alone(
+        self, tmp_path: Path
+    ) -> None:
+        # The preview runs in a thread while a job trains in another, and the
+        # job's augmentation and shuffling draw from torch's global generator.
+        # A preview that drew from it too changed a seeded run's result
+        # (validation round 2026-10-16: three identical runs diverged at epoch 1).
+        import random
+
+        import torch
+
+        base = _make_dataset(tmp_path)
+        torch.manual_seed(7)
+        random.seed(7)
+        torch_before = torch.get_rng_state()
+        python_before = random.getstate()
+
+        _render_augment_preview(
+            AugmentPreviewRequest(
+                base_dir=str(base),
+                transforms={
+                    "image_size": 32,
+                    "horizontal_flip": True,
+                    "rotation_degrees": 30,
+                    "color_jitter": True,
+                },
+                num_variants=6,
+            )
+        )
+
+        assert torch.equal(torch.get_rng_state(), torch_before)
+        assert random.getstate() == python_before

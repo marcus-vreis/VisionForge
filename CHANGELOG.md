@@ -23,6 +23,10 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
   instalação do PyPI (o botão não aparece para quem usa `git pull`), um arquivo travado
   por outro processo é tentado de novo também com a mensagem do `uv`, e a instalação
   não abre mais uma janela de terminal vazia ([ADR-120](docs/dev/DECISIONS.md)).
+- **Abrir a prévia de augmentation durante um treino não muda mais o resultado dele.**
+  A prévia sorteava as variações no mesmo gerador aleatório global que o treino usa
+  (em outra thread), e um run com seed fixa deixava de ser reproduzível. A prévia
+  agora sorteia com um gerador próprio ([ADR-121](docs/dev/DECISIONS.md)).
 
 ## [0.15.0] — 2026-10-16
 
