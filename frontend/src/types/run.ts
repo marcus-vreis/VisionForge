@@ -277,7 +277,7 @@ export type TrainingEvent =
       event: "epoch_end";
       epoch: number;
       total_epochs: number;
-      train_loss: number;
+      train_loss: number | null;
       // Optional: the generic engine behind researcher-defined tasks
       // (ADR-058) has no notion of a validation loss and streams the task's
       // own declared metrics as `val_<name>` instead. val_accuracy is the

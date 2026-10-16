@@ -9,6 +9,7 @@ import io
 import json
 import os
 import platform
+import re
 import traceback
 import uuid
 from collections.abc import Awaitable, Callable, Iterable
@@ -616,9 +617,8 @@ async def get_run_detail(
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(500, tr("run.bad_json", error=exc)) from exc
 
-    started = _parse_run_timestamp(data["timestamp"])
     status = data.get("status", "completed")
-    finished = started if status == "completed" else None
+    started, finished = _run_span(run_dir.name, data["timestamp"], status)
 
     dataset_name, dataset_root = dataset_identity(data)
     resumable, configured_epochs = _resume_status(run_dir, data)
@@ -659,6 +659,7 @@ async def get_run_detail(
         dataset=dataset,
         resumable=resumable,
         configured_epochs=configured_epochs,
+        stopped=bool(data.get("stopped")),
         group_id=data.get("group_id"),
         group=data.get("group") if isinstance(data.get("group"), dict) else None,
         task=task,
@@ -4037,11 +4038,40 @@ def _parse_run_timestamp(value: str) -> datetime:
     return parsed
 
 
+_RUN_DIR_START = re.compile(r"^(\d{8}_\d{6})(?:_\d+)?$")
+
+
+def _run_span(
+    dir_name: str, timestamp: str, status: str
+) -> tuple[datetime, datetime | None]:
+    """``(started_at, finished_at)`` of a run, from what the files really say.
+
+    ``run.json`` is written when the run ends, so its ``timestamp`` is the *end*;
+    the folder is named when the run starts. Reading the timestamp as both made
+    ``finished_at == started_at`` for every run. When the folder name is not a
+    start time (groups, hand-made folders) or lies after the timestamp, nothing
+    trustworthy says when it began and the old reading stands: no duration is
+    invented. A resumed run keeps its original folder, so its span includes the
+    time it sat stopped.
+    """
+    ended = _parse_run_timestamp(timestamp)
+    finished = ended if status == "completed" else None
+    match = _RUN_DIR_START.match(dir_name)
+    if match is None:
+        return ended, finished
+    try:
+        started = datetime.strptime(match.group(1), "%Y%m%d_%H%M%S")
+    except ValueError:
+        return ended, finished
+    if started > ended:
+        return ended, finished
+    return started, finished
+
+
 def _parse_run_summary(run_dir: Path, data: dict[str, Any]) -> RunSummary:
     """Build a RunSummary from a parsed run.json dict."""
     status: str = data["status"]
-    started_at = _parse_run_timestamp(data["timestamp"])
-    finished_at: datetime | None = started_at if status == "completed" else None
+    started_at, finished_at = _run_span(run_dir.name, data["timestamp"], status)
 
     config: dict[str, Any] = data["config"]
     metrics: dict[str, Any] = data.get("metrics", {})
@@ -4072,7 +4102,11 @@ def _parse_run_summary(run_dir: Path, data: dict[str, Any]) -> RunSummary:
     block = (
         data.get("block")
         or config.get("block")
-        or (task if task in _STANDALONE_TASKS else "classification")
+        or (
+            task
+            if task in _STANDALONE_TASKS or task.startswith("custom:")
+            else "classification"
+        )
     )
 
     # Custom tasks declare no architecture; the researcher's label is the most

@@ -121,6 +121,26 @@ class TestRunDetailEndpoint:
             resp = client.get("/api/runs/does_not_exist")
         assert resp.status_code == 404
 
+    def test_detail_says_whether_a_user_stop_cut_the_run(
+        self, app_and_routes: tuple, tmp_path: Path
+    ) -> None:
+        """The summary carries `stopped` (ADR-111); the detail page needs the same
+        fact, or it can only guess from the epoch count."""
+        app, routes_mod = app_and_routes
+        stopped_dir = _write_run(tmp_path, "20260522_100000_000001")
+        data = json.loads((stopped_dir / "run.json").read_text(encoding="utf-8"))
+        data["stopped"] = True
+        (stopped_dir / "run.json").write_text(json.dumps(data), encoding="utf-8")
+        whole_dir = _write_run(tmp_path, "20260522_100000_000002")
+
+        with patch.object(routes_mod, "_MODELS_DIR", tmp_path):
+            client = TestClient(app, raise_server_exceptions=True)
+            stopped = client.get(f"/api/runs/{stopped_dir.name}").json()
+            whole = client.get(f"/api/runs/{whole_dir.name}").json()
+
+        assert stopped["stopped"] is True
+        assert whole["stopped"] is False
+
     def test_known_run_returns_full_detail(
         self, app_and_routes: tuple, tmp_path: Path
     ) -> None:

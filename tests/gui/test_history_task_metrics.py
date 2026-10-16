@@ -158,3 +158,26 @@ class TestBlockLabel:
             self._summary("multiclass", {"task": "multiclass", "block": "grid_search"})
             == "grid_search"
         )
+
+
+class TestCustomTaskBlock:
+    def test_a_custom_run_is_not_filed_as_classification(self) -> None:
+        """A researcher's task has no `config.task`: its identity is the top-level
+        `custom:<key>`, which is also what separates it in the block filter."""
+        from datetime import datetime
+        from pathlib import Path
+
+        from visionforge.gui.api.routes import _parse_run_summary
+
+        data = {
+            "experiment": "e",
+            "task": "custom:sentiment",
+            "task_label": "Sentiment",
+            "timestamp": datetime.now().strftime("%Y%m%d_%H%M%S"),
+            "status": "completed",
+            "config": {"name": "e"},
+            "metrics": {"total_epochs": 1},
+            "history": [],
+        }
+
+        assert _parse_run_summary(Path("runs/x"), data).block == "custom:sentiment"

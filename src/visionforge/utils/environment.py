@@ -59,7 +59,9 @@ def capture_environment() -> dict[str, str]:
         "torch": _safe_version("torch"),
         "torchvision": _safe_version("torchvision"),
         "numpy": _safe_version("numpy"),
-        "visionforge": _safe_version("visionforge"),
+        # The distribution is "visionforge-studio"; "visionforge" is only the
+        # import name, so looking it up reported "unknown" in every run.json.
+        "visionforge": _safe_version("visionforge-studio"),
         **_torch_runtime(),
     }
 

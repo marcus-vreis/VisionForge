@@ -79,3 +79,15 @@ class TestHealthReportsTheBootBundle:
 
         with patch.object(server_mod, "STATIC_DIR", tmp_path):
             assert server_mod._read_spa_bundle() == ""
+
+
+class TestUnknownApiRoute:
+    def test_an_unknown_api_path_is_a_json_404_not_the_spa(self) -> None:
+        """A typo in /api/... must fail loudly, not answer 200 with HTML."""
+        client = TestClient(app)
+
+        resp = client.get("/api/isto-nao-existe")
+
+        assert resp.status_code == 404
+        assert resp.headers["content-type"].startswith("application/json")
+        assert "detail" in resp.json()

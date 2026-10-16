@@ -444,6 +444,12 @@ describe("overfittingSince", () => {
     expect(overfittingSince(epochs)).toBeNull();
   });
 
+  it("reads a null training loss (PatchCore) as no sign, not as zero", () => {
+    const epochs = series([1.0, 0.8, 0.6, 0.5, 0.4], [0.6, 0.65, 0.7, 0.8, 0.9]);
+    epochs[3].train_loss = null;
+    expect(overfittingSince(epochs)).toBeNull();
+  });
+
   it("does not call both losses rising a sign: that run diverges", () => {
     const epochs = series([0.5, 0.6, 0.7, 0.8], [0.6, 0.7, 0.8, 0.9]);
     expect(overfittingSince(epochs)).toBeNull();

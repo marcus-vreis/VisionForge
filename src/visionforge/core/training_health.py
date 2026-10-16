@@ -73,7 +73,7 @@ def collapsed_predictions(
     )
 
 
-def stagnant_loss(losses: Sequence[float]) -> HealthWarning | None:
+def stagnant_loss(losses: Sequence[float | None]) -> HealthWarning | None:
     """Warn when the training loss never meaningfully moved."""
     values = [float(v) for v in losses if v is not None]
     if len(values) < 2:

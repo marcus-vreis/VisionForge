@@ -135,9 +135,43 @@ class TestLoadRunsSingleRun:
         assert results[0].preprocessing_count == 2
 
     def test_completed_run_has_finished_at(self, tmp_path: Path) -> None:
-        """A completed run must have finished_at equal to started_at."""
+        """Folder and timestamp agree: no span is known, the end is still set."""
         _make_run_json(tmp_path, status="completed")
         s = _load_runs(tmp_path)[0]
+        assert s.finished_at == s.started_at
+
+    def test_finished_at_is_the_timestamp_and_started_at_the_folder(
+        self, tmp_path: Path
+    ) -> None:
+        """run.json's timestamp is written when the run ends; the folder is
+        named when it starts. Reading both as the start made every run look
+        instantaneous."""
+        _make_run_json(
+            tmp_path,
+            folder="20260101_100000_123456",
+            timestamp="2026-01-01T10:42:30",
+        )
+        s = _load_runs(tmp_path)[0]
+        assert s.started_at == datetime(2026, 1, 1, 10, 0, 0)
+        assert s.finished_at == datetime(2026, 1, 1, 10, 42, 30)
+
+    def test_a_folder_that_is_not_a_timestamp_keeps_the_old_span(
+        self, tmp_path: Path
+    ) -> None:
+        """No trustworthy start: nothing is invented, the timestamp stands."""
+        _make_run_json(tmp_path, folder="group_abc", timestamp="2026-01-01T10:42:30")
+        s = _load_runs(tmp_path)[0]
+        assert s.started_at == datetime(2026, 1, 1, 10, 42, 30)
+        assert s.finished_at == s.started_at
+
+    def test_a_folder_dated_after_the_timestamp_is_not_trusted(
+        self, tmp_path: Path
+    ) -> None:
+        _make_run_json(
+            tmp_path, folder="20260301_100000_000000", timestamp="2026-01-01T10:00:00"
+        )
+        s = _load_runs(tmp_path)[0]
+        assert s.started_at == datetime(2026, 1, 1, 10, 0, 0)
         assert s.finished_at == s.started_at
 
     def test_running_status_has_no_finished_at(self, tmp_path: Path) -> None:

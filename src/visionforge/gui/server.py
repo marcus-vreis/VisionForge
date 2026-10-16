@@ -6,7 +6,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from loguru import logger
@@ -91,6 +91,10 @@ _INDEX_HEADERS = {"Cache-Control": "no-cache, must-revalidate"}
 @app.get("/{path:path}")
 async def spa_fallback(path: str) -> FileResponse:
     """Serve the React SPA — static files or index.html fallback."""
+    # An unknown /api/... is a client error, not a deep link: answering 200 with
+    # index.html made typos and stale clients fail as JSON parse errors.
+    if path == "api" or path.startswith("api/"):
+        raise HTTPException(status_code=404, detail="Not Found")
     # STATIC_DIR is a fixed project-local directory; path is joined (not resolved
     # from user input alone), so traversal outside STATIC_DIR is not possible.
     file_path = STATIC_DIR / path

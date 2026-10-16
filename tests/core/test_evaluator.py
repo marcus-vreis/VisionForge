@@ -155,6 +155,47 @@ class TestEvaluatorMulticlass:
         assert result.auc_roc is not None
         assert 0.0 <= result.auc_roc <= 1.0
 
+    def test_two_class_multiclass_still_gets_an_auc(self, tmp_path: Path) -> None:
+        """A multiclass run with two folders is scored from the second column,
+        as the ROC plot is; sklearn's ovr mode refuses it, which left the AUC
+        null beside a curve that was delivered."""
+        cfg = ExperimentConfig.model_validate(
+            {
+                "name": "eval_two",
+                "task": "multiclass",
+                "model": {"name": "resnet18", "num_classes": 2, "pretrained": False},
+                "training": {
+                    "learning_rate": 0.001,
+                    "epochs": 1,
+                    "batch_size": 4,
+                    "seed": 0,
+                },
+                "data": {"base_dir": str(tmp_path)},
+            }
+        )
+
+        class TwoModel(nn.Module):
+            def forward(self, x: torch.Tensor) -> torch.Tensor:
+                # Sample i leans to class i % 2, except the last two, which
+                # lean the wrong way: neither a perfect nor a useless AUC.
+                out = torch.zeros(x.size(0), 2)
+                lean = [0, 1, 0, 1, 0, 1, 1, 0]
+                for i, c in enumerate(lean):
+                    out[i, c] = 2.0 + 0.1 * i
+                return out
+
+        labels = torch.tensor([0, 1, 0, 1, 0, 1, 0, 1], dtype=torch.long)
+        loader = make_binary_loader(torch.zeros(8, 3, 32, 32), labels)
+
+        result = Evaluator(cfg).evaluate(TwoModel(), loader)
+
+        assert result.auc_roc is not None
+        proba = torch.tensor(result.y_proba_full)[:, 1].numpy()
+        from sklearn.metrics import roc_auc_score
+
+        assert result.auc_roc == pytest.approx(roc_auc_score(labels.numpy(), proba))
+        assert 0.0 < result.auc_roc < 1.0
+
     def test_y_proba_full_preserved(self, multiclass_config: ExperimentConfig) -> None:
         """y_proba_full must hold per-sample full distributions for downstream plots."""
 

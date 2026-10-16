@@ -106,15 +106,18 @@ class Evaluator:
             n_classes = len(all_proba_full[0])
             present = np.unique(y_true)
             if len(present) > 1 and n_classes >= 2:
+                proba = np.array(all_proba_full)
                 try:
-                    auc_roc = float(
-                        roc_auc_score(
-                            y_true,
-                            np.array(all_proba_full),
-                            multi_class="ovr",
-                            average="macro",
+                    if n_classes == 2:
+                        # sklearn's ovr mode rejects two columns; the ROC plot
+                        # scores the second one, so the number must too.
+                        auc_roc = float(roc_auc_score(y_true, proba[:, 1]))
+                    else:
+                        auc_roc = float(
+                            roc_auc_score(
+                                y_true, proba, multi_class="ovr", average="macro"
+                            )
                         )
-                    )
                 except ValueError:
                     auc_roc = None
 

@@ -369,6 +369,8 @@ class RunDetail(BaseModel):
     # See RunSummary: derived from the resume file on disk (ADR-092/093).
     resumable: bool = False
     configured_epochs: int | None = None
+    # True when a user stop cut this run (ADR-111); the summary carries it too.
+    stopped: bool = False
     # A seed of a replicate group names the group; the group carries its whole
     # section: seeds, children, per-metric aggregates and, for a replicated
     # comparison, the variants and the paired tests, as the report recorded

@@ -15,6 +15,31 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Fixed
 
+- **O `run.json` agora registra a versão do VisionForge.** O campo
+  `environment.visionforge` saía sempre `unknown`, porque a busca usava o nome do
+  módulo e não o da distribuição (`visionforge-studio`); sem isso a versão que gerou
+  um resultado não ficava gravada.
+- **Um endereço `/api/...` que não existe devolve 404 em JSON.** Antes caía no
+  fallback da interface e respondia 200 com o HTML do `index.html`, e um erro de
+  digitação ou um cliente antigo falhava como "JSON inválido".
+- **Execuções de uma tarefa própria não aparecem mais como "classification" no
+  Histórico.** O bloco delas é a própria tarefa (`custom:<chave>`), como já era para
+  segmentação, regressão, anomalia e detecção.
+- **PatchCore não grava mais loss de treino 0.0.** Ele monta um banco de memória, sem
+  loss por gradiente; o valor agora é nulo no `run.json` e no evento `epoch_end`, e o
+  gráfico e os resumos já ignoram nulos.
+- **O Histórico mostra o início e o fim reais de cada execução.** O horário de fim
+  (`finished_at`) era sempre igual ao de início, porque o `timestamp` do `run.json` é
+  gravado no fim da execução. O início agora vem do nome da pasta quando ele é um
+  horário; se não for, nada é inventado e vale o `timestamp` como antes. Uma execução
+  retomada conta desde a pasta original, inclusive o tempo parada.
+- **O AUC-ROC de um multiclasse com 2 classes deixa de ser nulo.** O scikit-learn
+  recusa o modo um-contra-todos com duas colunas, e a curva ROC era entregue ao lado
+  de um AUC vazio. Agora o número usa a segunda coluna, como a curva.
+- **O detalhe de uma execução informa se ela foi parada.** `/api/runs/{id}` passou a
+  trazer `stopped`, que só a listagem trazia. O `total_epochs` menor no evento `end`
+  de uma execução parada é intencional e ficou documentado
+  ([ADR-111](docs/dev/DECISIONS.md)).
 - **O botão "atualizar e reabrir" não mexe mais nas outras bibliotecas.** Num ambiente
   criado pelo `uv`, a atualização usava `uv pip install --upgrade`, que atualiza todas
   as dependências e trocava o torch com CUDA pelo torch só de CPU do PyPI. Agora só o

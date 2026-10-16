@@ -4171,6 +4171,15 @@ History, since its fold configs carry `block: cross_validation`, which
 
 - PatchCore's memory bank cannot be interrupted while it is being built.
 
+**Amended 2026-10-16: the run detail carries `stopped`, and `end.total_epochs` is the
+epochs that ran.** `RunSummary` already said whether a user stop cut a run, but
+`RunDetail` (`/api/runs/{id}`) dropped the field, so the detail page could only guess
+from the epoch count. It is served now. The `end` event of a stopped run reports a
+`total_epochs` smaller than the `epoch_end` ones: that is deliberate, not a drift. The
+`epoch_end` events carry the configured total and `end` carries how far the history
+got, and the overlay reads the difference as the evidence of a stop
+(`lib/run-control.ts`). The trainer now says so where it emits the event.
+
 ---
 
 ## ADR-112 — The History comparison names no winner from a single seed

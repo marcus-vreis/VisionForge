@@ -48,3 +48,13 @@ class TestCaptureEnvironment:
         env = capture_environment()
         assert env["cuda"] != "unknown"
         assert env["gpu"] != "unknown"
+
+
+def test_visionforge_version_is_the_installed_distribution() -> None:
+    # The distribution is "visionforge-studio"; looking up the import name
+    # reported "unknown" in every run.json.
+    import visionforge
+
+    env = capture_environment()
+    assert env["visionforge"] == visionforge.__version__
+    assert env["visionforge"] != "unknown"

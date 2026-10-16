@@ -183,6 +183,37 @@ class TestFitPatchCore:
             next(e for e in events if e["event"] == "epoch_end")
         )
 
+    def test_patchcore_has_no_train_loss_instead_of_a_zero(
+        self, tmp_path: Path
+    ) -> None:
+        """PatchCore trains nothing by gradient: a 0.0 loss is a measurement it
+        never made, and it drew a flat line at zero on the loss chart."""
+        cfg = _config(
+            tmp_path,
+            {
+                "model": {
+                    "name": "patchcore",
+                    "backbone": "resnet18",
+                    "pretrained": False,
+                    "coreset_ratio": 0.5,
+                },
+                "data": {"base_dir": str(tmp_path), "image_size": 64},
+            },
+        )
+        events: list[dict[str, object]] = []
+        trainer = AnomalyTrainer(cfg)
+        model = PatchCore(backbone="resnet18", pretrained=False, coreset_ratio=0.5)
+
+        result = trainer.fit(
+            model,
+            FakeAnomalyDataModule(size=64),
+            progress_callback=events.append,
+        )
+
+        epoch_ev = next(e for e in events if e["event"] == "epoch_end")
+        assert epoch_ev["train_loss"] is None
+        assert result.history[0].train_loss is None
+
     def test_evaluate_returns_metrics(self, tmp_path: Path) -> None:
         trainer = AnomalyTrainer(_config(tmp_path))
         dm = FakeAnomalyDataModule()

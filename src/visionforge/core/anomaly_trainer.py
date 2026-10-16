@@ -85,7 +85,8 @@ class AnomalyEpochResult:
     """Metrics for a single anomaly training epoch."""
 
     epoch: int
-    train_loss: float
+    # None for PatchCore: it fits a memory bank, with no gradient loss to report.
+    train_loss: float | None
     val_auroc: float
     val_threshold: float
     val_image_f1: float
@@ -513,7 +514,7 @@ class AnomalyTrainer:
                     "event": "epoch_end",
                     "epoch": 1,
                     "total_epochs": 1,
-                    "train_loss": 0.0,
+                    "train_loss": None,
                     "val_auroc": auroc,
                     "val_image_f1": f1,
                     "val_threshold": threshold,
@@ -525,7 +526,7 @@ class AnomalyTrainer:
             best_auroc=auroc,
             total_epochs=1,
             device_used=self._device_label,
-            history=[AnomalyEpochResult(1, 0.0, auroc, threshold, f1)],
+            history=[AnomalyEpochResult(1, None, auroc, threshold, f1)],
             model_path=model_path,
         )
 

@@ -986,6 +986,8 @@ export interface RunDetail {
   /** See RunSummary: the run stopped short and can be continued (ADR-092/093). */
   resumable?: boolean;
   configured_epochs?: number | null;
+  /** A user stop cut this run (ADR-111); same fact as on RunSummary. */
+  stopped?: boolean;
   /** A seed of a replicate group names the group (ADR-113). */
   group_id?: string | null;
   /** On the group itself: its seeds, aggregates and, for a replicated

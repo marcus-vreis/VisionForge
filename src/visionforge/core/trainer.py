@@ -438,6 +438,10 @@ class Trainer:
             torch.cuda.empty_cache()
 
         if progress_callback is not None:
+            # Deliberately the epochs that ran, not the configured total that
+            # `epoch_end` carries: on a stopped run the two differ, and the
+            # difference is how the overlay tells "stopped" from "finished"
+            # (lib/run-control.ts, ADR-111).
             progress_callback({"event": "end", "total_epochs": len(history)})
 
         return train_result
