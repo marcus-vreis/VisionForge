@@ -9,6 +9,7 @@ import { paramHelp } from "../lib/param-help";
 import { pickerCancelText } from "../lib/picker-feedback";
 import { useT } from "../i18n/useT";
 import { TextField } from "./controls/TextField";
+import { SampleDatasetButton } from "./SampleDatasetButton";
 
 interface DatasetPickerProps {
   baseDir: string;
@@ -247,6 +248,11 @@ export function DatasetPicker({
             {t.datasetPicker.browse}
           </button>
         </div>
+
+        <SampleDatasetButton
+          task="classification"
+          onApply={(path) => onChange({ base_dir: path })}
+        />
 
         {feedback && fb && (
           <div

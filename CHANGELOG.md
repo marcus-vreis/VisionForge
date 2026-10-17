@@ -15,6 +15,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Added
 
+- **Cada painel de tarefa ganhou o botão "usar dataset de exemplo".** Fica embaixo da pasta base (classificação, detecção, regressão, segmentação e anomalia), cria `datasets/exemplo-<tarefa>/` ou reaproveita a que já existe, e preenche a pasta, o número de classes e o image size como o guia "Primeiro treino" faz. Se a criação falhar, o erro aparece embaixo do botão (ADR-117).
 - **A aba "Como funciona" ganhou o botão "rever animação".** Com o treino concluído, ele toca de novo, em câmera lenta (cerca de 13 s), os estágios dados, treino e teste com as partículas, e volta ao quadro final; pode ser repetido. É uma animação genérica: os números continuam os finais do run. Com movimento reduzido, só destaca os estágios, sem partículas. Não aparece no PatchCore (ADR-118).
 - **O desenho do detector, na aba "Como funciona", termina numa miniatura de imagem.** As três
   cabeças se ligam por linhas à miniatura (um quadro com três formas simples como objetos), e as

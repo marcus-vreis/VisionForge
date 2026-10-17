@@ -2,6 +2,8 @@ import { paramHelp } from "../lib/param-help";
 import { useT } from "../i18n/useT";
 import { runPicker } from "../lib/picker-feedback";
 import { PickerNote } from "./PickerNote";
+import { sampleAnomalyForm } from "../lib/guides/sample-forms";
+import { SampleDatasetButton } from "./SampleDatasetButton";
 import { useState } from "react";
 import { fetchTaskSchema, pickDatasetFolder } from "../api/client";
 import {
@@ -358,6 +360,10 @@ export function AnomalyPanel({
             </button>
           </div>
           <PickerNote text={pickNote} />
+          <SampleDatasetButton
+            task="anomaly"
+            onApply={(path, setup) => setFormData((p) => sampleAnomalyForm(p, path, setup))}
+          />
           <TextField
             label={t.taskPanel.dataset.trainSplit}
             value={formData.data.train_dir}

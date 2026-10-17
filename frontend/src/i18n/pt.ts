@@ -1391,6 +1391,12 @@ export const pt = {
     // A subfolder typed by hand that the auto-detection did not list.
     manual: (value: string) => `${value} (manual)`,
   },
+  // The panels' "use the sample dataset" button (ADR-117).
+  sampleDataset: {
+    button: "usar dataset de exemplo",
+    title: "Cria datasets/exemplo-<tarefa>/ (ou reaproveita) e preenche a pasta base",
+    failed: (reason: string) => `Não foi possível criar o dataset de exemplo: ${reason}`,
+  },
   // The pre-training overview of a classification dataset (components/DatasetStats.tsx).
   // Its split names, "missing", the imbalance flag and the sample strip title are
   // also used by the detection and task overviews below.

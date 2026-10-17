@@ -2,6 +2,8 @@ import { paramHelp } from "../lib/param-help";
 import { useT } from "../i18n/useT";
 import { runPicker } from "../lib/picker-feedback";
 import { PickerNote } from "./PickerNote";
+import { sampleSegmentationForm } from "../lib/guides/sample-forms";
+import { SampleDatasetButton } from "./SampleDatasetButton";
 import { ModelAdvice } from "./ModelAdvice";
 import { AdvancedFields } from "./AdvancedFields";
 import { useState } from "react";
@@ -406,6 +408,10 @@ export function SegmentationPanel({
             </button>
           </div>
           <PickerNote text={pickNote} />
+          <SampleDatasetButton
+            task="segmentation"
+            onApply={(path, setup) => setFormData((p) => sampleSegmentationForm(p, path, setup))}
+          />
           <TextField
             label={t.taskPanel.dataset.imagesSubdir}
             value={formData.data.images_subdir}

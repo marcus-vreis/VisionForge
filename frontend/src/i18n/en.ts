@@ -1281,6 +1281,12 @@ export const en: Dict = {
     testSubdir: "Test subfolder",
     manual: (value: string) => `${value} (manual)`,
   },
+  sampleDataset: {
+    button: "use the sample dataset",
+    title: "Creates datasets/exemplo-<task>/ (or reuses it) and fills the base folder",
+    failed: (reason: string) => `Could not create the sample dataset: ${reason}`,
+  },
+
   datasetStats: {
     splits: {
       train: "train",

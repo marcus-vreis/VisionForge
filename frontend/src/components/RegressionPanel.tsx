@@ -2,6 +2,8 @@ import { paramHelp } from "../lib/param-help";
 import { useT } from "../i18n/useT";
 import { runPicker } from "../lib/picker-feedback";
 import { PickerNote } from "./PickerNote";
+import { sampleRegressionForm } from "../lib/guides/sample-forms";
+import { SampleDatasetButton } from "./SampleDatasetButton";
 import { ModelAdvice } from "./ModelAdvice";
 import { AdvancedFields } from "./AdvancedFields";
 import { useState } from "react";
@@ -408,6 +410,10 @@ export function RegressionPanel({
             </button>
           </div>
           <PickerNote text={pickNote} />
+          <SampleDatasetButton
+            task="regression"
+            onApply={(path, setup) => setFormData((p) => sampleRegressionForm(p, path, setup))}
+          />
           <TextField
             label={t.taskPanel.dataset.imagesSubdir}
             value={formData.data.images_dir}

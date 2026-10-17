@@ -5030,6 +5030,8 @@ names. A second click on the button, with the folder already there, got the 409,
 filled the field and applied the image size as well. One thing the run corrected: a
 first draft put the second step on the folder row, and the card covered the counts.
 
+**Amended 2026-10-17: the sample dataset is one click away in every task panel.** The sample could only be created by the guide, and only for the open tab, so the segmentation one was hard to find. Each panel (classification, detection, regression, segmentation, anomaly) now has a small "usar dataset de exemplo" button under its folder row (`SampleDatasetButton`). It calls `createSample(task)`, the same call the guide's button makes, and applies the result with the `sample-forms` functions the guide uses, so the folder, the class count and the image size land exactly as in the guide; a 409 reuses the existing folder. A failure shows as a red line under the button. The guide only changed to share `createSample`.
+
 ## ADR-118 — Training story: an illustrative animation driven by real stages
 
 **Date:** 2026-10-13

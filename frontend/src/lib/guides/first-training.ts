@@ -31,6 +31,18 @@ export const SAMPLE_SETUP: Record<GuideTask, SampleSetup> = {
   anomaly: { imageSize: 64 },
 };
 
+/** Creates (or finds, on a 409) the task's sample folder and pairs it with what that
+ *  task's form needs besides the path. The guide's button and the panels' "use the
+ *  sample dataset" button both go through it. */
+export async function createSample(task: GuideTask): Promise<{
+  path: string;
+  existed: boolean;
+  setup: SampleSetup;
+}> {
+  const made = await createSampleDataset(task);
+  return { path: made.path, existed: made.existed, setup: SAMPLE_SETUP[task] };
+}
+
 function firstTrainingSteps(t: Dict, task: GuideTask = "classification"): GuideStep[] {
   const s = t.guides.firstTraining;
   const x = s.tasks[task];
@@ -45,8 +57,8 @@ function firstTrainingSteps(t: Dict, task: GuideTask = "classification"): GuideS
         label: s.action,
         run: async (ctx) => {
           try {
-            const made = await createSampleDataset(task);
-            ctx.setDatasetPath(made.path, task, SAMPLE_SETUP[task]);
+            const made = await createSample(task);
+            ctx.setDatasetPath(made.path, task, made.setup);
             return {
               ok: true,
               message: made.existed

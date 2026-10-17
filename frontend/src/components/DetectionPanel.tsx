@@ -2,6 +2,8 @@ import { paramHelp } from "../lib/param-help";
 import { useT } from "../i18n/useT";
 import { runPicker } from "../lib/picker-feedback";
 import { PickerNote } from "./PickerNote";
+import { sampleDetectionForm } from "../lib/guides/sample-forms";
+import { SampleDatasetButton } from "./SampleDatasetButton";
 import { useState } from "react";
 import {
   fetchTaskSchema,
@@ -610,6 +612,10 @@ export function DetectionPanel({
             </div>
           )}
           <PickerNote text={pickNote} />
+          <SampleDatasetButton
+            task="detection"
+            onApply={(path, setup) => setFormData((p) => sampleDetectionForm(p, path, setup))}
+          />
           <NumberField
             label={t.detectionPanel.dataset.imageSize}
             value={formData.data.image_size}
