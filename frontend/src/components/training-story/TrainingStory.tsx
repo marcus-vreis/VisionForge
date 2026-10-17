@@ -20,6 +20,7 @@ import {
   type StoryStage,
 } from "../../lib/training-story";
 import type { RunStatus, TrainingEvent } from "../../types/run";
+import { canReplay } from "../../lib/training-replay";
 import { StoryDrawing } from "./drawings";
 import { LegendGlyph } from "./flow";
 import {
@@ -30,6 +31,7 @@ import {
   VALIDATION_COLOR,
   withAlpha,
 } from "./tone";
+import { useReplay } from "./use-replay";
 import { useDocumentVisible, usePrefersReducedMotion } from "./use-viewing";
 
 export interface TrainingStoryProps {
@@ -126,7 +128,11 @@ export function TrainingStory({
   const t = useT();
   const s = t.trainingStory;
   const story = trainingStory({ events, status, stopped, unitKind, spec });
-  const { stage, family, phase } = story;
+  const { family, phase } = story;
+  // The replay forces a stage over the drawing and the sentence; the numbers stay the run's.
+  const replay = useReplay(story.stage === "done");
+  const replaying = replay.stage !== null;
+  const stage = replay.stage ?? story.stage;
   const reducedMotion = usePrefersReducedMotion();
   const documentVisible = useDocumentVisible();
   const motion = storyMotion({ stage, reducedMotion, documentVisible, sheetVisible });
@@ -258,6 +264,29 @@ export function TrainingStory({
       >
         {sentence}
       </div>
+
+      {canReplay(story.stage, family) && (
+        <button
+          type="button"
+          data-story-replay
+          disabled={replaying}
+          onClick={replay.start}
+          style={{
+            ...MONO,
+            alignSelf: "flex-start",
+            fontSize: 11,
+            padding: "4px 12px",
+            borderRadius: 999,
+            color: "var(--vf-text)",
+            background: "transparent",
+            border: `1px solid ${withAlpha(accent, 0.5)}`,
+            cursor: replaying ? "default" : "pointer",
+            opacity: replaying ? 0.6 : 1,
+          }}
+        >
+          {replaying ? s.replay.playing : s.replay.button}
+        </button>
+      )}
 
       {/* A sign the losses themselves show, not the drawing (ADR-119). */}
       {story.overfittingSince !== null && (

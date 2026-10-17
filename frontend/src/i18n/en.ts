@@ -1794,6 +1794,8 @@ export const en: Dict = {
       model: (index: number, total: number) => `model ${index}/${total}`,
       replicate: (index: number, total: number) => `replicate ${index}/${total}`,
     },
+    // A finished run can show its stages again, in slow motion (ADR-118).
+    replay: { button: "replay animation", playing: "replaying…" },
     legend: {
       forward: "data and forward pass",
       backward: "gradient flowing back",

@@ -5202,6 +5202,8 @@ check had not covered, and a detection run stopped mid-way going to `interrompid
 
 **Amended 2026-10-16: replicates and the replicated comparison stream their epochs too.** They were the two multi-unit jobs left out: their sheet sat on "preparing" for the whole run. `run_replicates` now drives a `UnitProgress` with one unit per seed (`overrides` = `training.seed`), and `run_replicated_comparison` one unit per (variant, seed), numbered across the variants, with the variant and its overrides in `overrides`; the job emits a single `end`. The variant-level `trial_start`/`trial_end` pair of the comparison is gone: its `total_trials` is now variants x seeds. The frontend needed no change (`replicate` was already a unit kind).
 
+**Amended 2026-10-17: a finished run can replay the stages.** The tab was left on "done" with no way to see the drawing move again. A button "rever animação" (only when the stage is `done` and the family is not PatchCore) walks `preparing`, `training` and `testing` in about 13 s (3 + 6 + 4) and returns to the real stage; it can be clicked again once it ends. It is a generic replay, not the run played back: the numbers stay the run's final ones, and the caption "animação ilustrativa" stays on screen. It is local state (`useReplay`, over `lib/training-replay.ts`) that overrides the stage the tab shows; the story model is untouched. `storyMotion` decides the motion as before, so under `prefers-reduced-motion` the stages are highlighted with still arrows and no particles.
+
 ## ADR-119 — The training story names overfitting when the losses show it
 
 **Date:** 2026-10-15

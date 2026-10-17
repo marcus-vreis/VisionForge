@@ -2013,6 +2013,8 @@ export const pt = {
       model: (index: number, total: number) => `modelo ${index}/${total}`,
       replicate: (index: number, total: number) => `réplica ${index}/${total}`,
     },
+    // A finished run can show its stages again, in slow motion (ADR-118).
+    replay: { button: "rever animação", playing: "revendo…" },
     legend: {
       forward: "dados e passagem direta",
       backward: "gradiente voltando",

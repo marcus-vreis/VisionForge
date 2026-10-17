@@ -413,3 +413,35 @@ describe("the tab", () => {
     expect(tab("pt", { sheetVisible: false })).not.toContain("animateMotion");
   });
 });
+
+describe("the replay button", () => {
+  const finished: TrainingEvent[] = [
+    { event: "start", total_epochs: 4 },
+    epoch(4, 4),
+    { event: "end", total_epochs: 4 },
+  ];
+  const BUTTON = "data-story-replay";
+
+  it("shows up only when the run is done, in the language of the interface", () => {
+    const done = tab("pt", { events: finished, status: "completed" });
+    expect(done).toContain(BUTTON);
+    expect(done).toContain(pt.trainingStory.replay.button);
+    expect(tab("en", { events: finished, status: "completed" })).toContain(
+      en.trainingStory.replay.button,
+    );
+    expect(tab("pt")).not.toContain(BUTTON);
+    expect(tab("pt", { events: [], status: "queued" })).not.toContain(BUTTON);
+    expect(tab("pt", { events: finished, status: "failed" })).not.toContain(BUTTON);
+    expect(tab("pt", { events: finished, status: "completed", stopped: true })).not.toContain(BUTTON);
+  });
+
+  it("is absent for PatchCore, which has no tab drawing to replay", () => {
+    const spec = storySpecFor("anomaly", { model: { name: "patchcore" } });
+    const events: TrainingEvent[] = [
+      { event: "start", total_epochs: 1 },
+      { event: "phase", label: "pontuando", done: 100, total: 100 },
+      { event: "end", total_epochs: 1 },
+    ];
+    expect(tab("pt", { events, spec, status: "completed" })).not.toContain(BUTTON);
+  });
+});
