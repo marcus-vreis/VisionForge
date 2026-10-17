@@ -39,12 +39,20 @@ export function FieldLabel({
           }}
         />
       )}
-      <span>{children}</span>
+      {/* The label never wraps: a hint beside it squeezed "NOME DO / EXPERIMENTO"
+          onto two lines, which pushed that field below its neighbours. The hint
+          gives way instead, cut with an ellipsis and whole in its tooltip. */}
+      <span style={{ whiteSpace: "nowrap", flexShrink: 0 }}>{children}</span>
       {help && <InfoDot text={help} />}
       {hint && (
         <span
+          title={hint}
           style={{
             marginLeft: "auto",
+            minWidth: 0,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
             color: "var(--vf-text-muted)",
             textTransform: "none",
             letterSpacing: 0,

@@ -49,10 +49,11 @@ export function Segmented({
             <button
               key={o.value}
               type="button"
+              title={o.label}
               onClick={() => onChange(o.value)}
               style={{
                 flex: 1,
-                padding: "8px 10px",
+                padding: "8px 6px",
                 border: "none",
                 borderRadius: 7,
                 background: active ? "var(--accent-soft)" : "transparent",
@@ -60,6 +61,12 @@ export function Segmented({
                 fontFamily: "var(--font-mono)",
                 fontSize: 12,
                 letterSpacing: "0.04em",
+                // One line per option: a wrapped label made this control taller
+                // than the fields beside it.
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                minWidth: 0,
                 transition: "all 160ms ease",
                 position: "relative",
                 cursor: "pointer",

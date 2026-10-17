@@ -18,10 +18,13 @@ import { Chevron } from "./controls";
 export function AdvancedFields({
   count,
   startOpen = false,
+  flush = false,
   children,
 }: {
   count: number;
   startOpen?: boolean;
+  /** The last thing in its card (the task panels): no gap below it. */
+  flush?: boolean;
   children: React.ReactNode;
 }) {
   const t = useT();
@@ -30,7 +33,7 @@ export function AdvancedFields({
   if (count === 0) return null;
 
   return (
-    <div style={{ marginBottom: 26 }}>
+    <div style={{ marginBottom: flush ? 0 : 26 }}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}

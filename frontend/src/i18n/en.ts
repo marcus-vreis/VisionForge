@@ -1545,7 +1545,7 @@ export const en: Dict = {
     shuffle: "Shuffle",
     shuffleHint: "before splitting",
     foldSeed: "Fold seed",
-    run: (folds: number) => `⛓ Run CV · ${folds} folds`,
+    summary: (folds: number) => `${folds} folds · run it with the button below`,
   },
   replicatesCard: {
     title: "Multi-seed replicates · statistical rigor",
@@ -1560,7 +1560,9 @@ export const en: Dict = {
     seedList: "Seeds (comma-separated)",
     seedCount: (n: number) => `${n} seeds`,
     headlineMetric: "Headline metric",
-    run: (seeds: number) => `🎲 Run replicates · ${seeds} seed${seeds === 1 ? "" : "s"}`,
+    summary: (seeds: number) =>
+      `${seeds} seed${seeds === 1 ? "" : "s"} · run it with the button below`,
+    blocked: "Needs at least 2 valid seeds to run.",
   },
   sweepCard: {
     title: "Hyperparameter sweep · advanced mode",
@@ -1585,7 +1587,9 @@ export const en: Dict = {
     rankingMetric: "Ranking metric",
     trials: "Trials",
     seed: "Seed",
-    run: (trials: number) => `⛓ Run sweep · ${trials} trial${trials === 1 ? "" : "s"}`,
+    summary: (trials: number) =>
+      `${trials} trial${trials === 1 ? "" : "s"} · run it with the button below`,
+    blocked: "Add a parameter with values to sweep.",
   },
   schemaForm: {
     sections: {

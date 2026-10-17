@@ -276,7 +276,7 @@ export function AnomalyPanel({
             help={paramHelp(t, "seed")}
           />
         </div>
-        <AdvancedFields count={4}>
+        <AdvancedFields count={4} flush>
             <NumberField
             label={t.anomalyPanel.threshold}
             value={formData.training.threshold_percentile}

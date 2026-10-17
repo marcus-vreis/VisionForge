@@ -18,7 +18,7 @@ import {
 } from "../lib/regression-models";
 import { checkImportedConfig, exportConfigToYaml } from "../lib/yaml-config";
 import type { ValidationError } from "../hooks/useExperiment";
-import { NumberField, SelectField, Segmented, TextField, Toggle } from "./controls";
+import { FieldLabel, NumberField, SelectField, Segmented, TextField, Toggle } from "./controls";
 import { CvCard, type CvPayload } from "./CvCard";
 import { ExperimentHeader, type PanelStrategy } from "./ExperimentHeader";
 import { ReplicatesCard } from "./ReplicatesCard";
@@ -214,26 +214,24 @@ export function RegressionPanel({
             options={regressionModels(t)}
             hint={t.regressionPanel.model.backboneHint}
           />
+          {/* Read-only, but shaped like its neighbours: a bare big number sat
+              lower than the fields beside it. */}
           <div>
-            <div style={sectionLabel}>{t.regressionPanel.model.numTargets}</div>
+            <FieldLabel dot hint={t.regressionPanel.model.numTargetsHint}>
+              {t.regressionPanel.model.numTargets}
+            </FieldLabel>
             <div
               style={{
+                padding: "12px 14px",
+                background: "rgba(12,14,18,0.35)",
+                border: "1px dashed var(--vf-panel-stroke)",
+                borderRadius: 10,
                 fontFamily: "var(--font-mono)",
-                fontSize: 22,
+                fontSize: 13,
                 color: "var(--vf-text)",
-                padding: "8px 0",
               }}
             >
               {numTargets}
-              <span
-                style={{
-                  fontSize: 11,
-                  color: "var(--vf-text-muted)",
-                  marginLeft: 8,
-                }}
-              >
-                {t.regressionPanel.model.numTargetsHint}
-              </span>
             </div>
           </div>
           <Toggle
@@ -290,7 +288,7 @@ export function RegressionPanel({
             help={paramHelp(t, "seed")}
           />
         </div>
-        <AdvancedFields count={3}>
+        <AdvancedFields count={3} flush>
             <Segmented
             label={t.taskPanel.training.optimizer}
             value={formData.training.optimizer}

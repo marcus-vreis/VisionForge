@@ -130,7 +130,7 @@ export function ExperimentHeader({
           flexWrap: "wrap",
         }}
       >
-        <div style={{ flex: "1 1 280px", maxWidth: 420 }}>
+        <div style={{ flex: "1 1 280px" }}>
           <TextField
             label={t.experimentHeader.nameLabel}
             value={name}
@@ -198,7 +198,7 @@ export function ExperimentHeader({
         }}
       >
         <div style={sectionLabel}>{t.experimentHeader.strategyTitle}</div>
-        <div style={{ maxWidth: 560 }}>
+        <div>
           <Segmented
             label={t.experimentHeader.mode}
             value={strategy}

@@ -1,23 +1,8 @@
 import { useState } from "react";
 import { useT } from "../i18n/useT";
-import { createSample } from "../lib/guides/first-training";
+import { runSample } from "../lib/sample-dataset";
 import type { GuideTask } from "../lib/guides/tasks";
 import type { SampleSetup } from "../lib/guides/types";
-
-/** What `createSample` failed with, as the sentence the panel shows. */
-export async function runSample(
-  task: GuideTask,
-  apply: (path: string, setup: SampleSetup) => void,
-  failed: (reason: string) => string,
-): Promise<string | null> {
-  try {
-    const made = await createSample(task);
-    apply(made.path, made.setup);
-    return null;
-  } catch (e) {
-    return failed(e instanceof Error ? e.message : String(e));
-  }
-}
 
 /** Small button under a task's folder row: creates the sample dataset (or reuses
  *  the one already there) and hands its path to the panel, as the guide does. */

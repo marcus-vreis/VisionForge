@@ -65,6 +65,7 @@ export function TransformsSection({
           baseDir={baseDir}
           steps={steps}
           onChange={onStepsChange}
+          bare
         />
       </div>
 

@@ -283,7 +283,7 @@ export function SegmentationPanel({
             help={paramHelp(t, "seed")}
           />
         </div>
-        <AdvancedFields count={3}>
+        <AdvancedFields count={3} flush>
             <Segmented
             label={t.taskPanel.training.optimizer}
             value={formData.training.optimizer}

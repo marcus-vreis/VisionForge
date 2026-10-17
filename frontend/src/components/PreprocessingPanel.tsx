@@ -18,6 +18,8 @@ interface PreprocessingPanelProps {
   baseDir: string;
   steps: PreprocessingStep[];
   onChange: (steps: PreprocessingStep[]) => void;
+  /** Inside a card of its own (the task panels): no second frame, no top gap. */
+  bare?: boolean;
 }
 
 const KNOWN_KINDS = [
@@ -51,6 +53,7 @@ export function PreprocessingPanel({
   baseDir,
   steps,
   onChange,
+  bare = false,
 }: PreprocessingPanelProps) {
   const t = useT();
   const [preview, setPreview] = useState<PreprocessPreviewResponse | null>(null);
@@ -124,11 +127,15 @@ export function PreprocessingPanel({
   return (
     <div
       style={{
-        marginTop: 18,
-        padding: 18,
-        background: "rgba(255,255,255,0.02)",
-        border: "1px solid var(--vf-panel-stroke)",
-        borderRadius: 12,
+        ...(bare
+          ? {}
+          : {
+              marginTop: 18,
+              padding: 18,
+              background: "rgba(255,255,255,0.02)",
+              border: "1px solid var(--vf-panel-stroke)",
+              borderRadius: 12,
+            }),
         display: "flex",
         flexDirection: "column",
         gap: 14,

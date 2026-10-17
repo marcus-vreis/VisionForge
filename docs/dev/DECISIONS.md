@@ -1095,6 +1095,19 @@ learns one layout, every task behaves the same), closes a real correctness
 hole, and prevents the recurring backend-ahead-of-GUI debt (Phase 5.5 déjà vu).
 Defaults are NOT changed (behavior-preserving); they are surfaced.
 
+**Amended 2026-10-17: one run button, and fields that line up.** A visual review of
+the regression, segmentation, detection and anomaly panels against classification
+found them drifting from the template. The K-fold, sweep and replicates cards each
+had a run button of their own besides the bottom bar's, which already ran the same
+strategy; the cards now show what they will run ("5 seeds", "3 trials") or why they
+cannot, and that reason turns into a warning when the bottom button is pressed, so
+the one button never fails silently. `FieldLabel` no longer lets a hint wrap the
+label onto two lines (the hint is cut with an ellipsis and whole in its tooltip),
+which had pushed fields below their row; segmented controls keep each option on one
+line; the experiment name and the strategy control span the card as in
+classification; the preprocessing panel no longer draws a second frame inside the
+task card; the regression target count is a field-shaped box.
+
 ## ADR-060 — `visionforge selftest`: end-to-end verification through the real API
 
 **Date:** 2026-07

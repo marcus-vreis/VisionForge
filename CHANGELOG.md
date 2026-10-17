@@ -25,6 +25,15 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Changed
 
+- **Os painéis de detecção, regressão, segmentação e anomalia seguem o layout da
+  classificação.** K-fold, sweep e réplicas não têm mais um segundo botão de rodar dentro
+  do card: o botão da barra de baixo roda tudo, e o card mostra o que vai rodar ("5 seeds")
+  ou, se faltar algo, o motivo, que vira aviso quando o botão é apertado. Os rótulos não
+  quebram mais em duas linhas (a dica ao lado é cortada e aparece inteira ao passar o
+  mouse), então os campos de uma linha ficam alinhados; o nome do experimento e o seletor de
+  modo ocupam a largura do card; o pré-processamento perdeu a moldura dupla; as opções de
+  loss cabem numa linha; e a barra de baixo diz "histórico" em português
+  ([ADR-059](docs/dev/DECISIONS.md)).
 - **Um K-fold aparece no histórico como um grupo, com os folds dentro.** Antes cada fold
   era um run solto e, na regressão e na segmentação, a média ± desvio só existia no relatório
   em `outputs/reports`. Agora o K-fold é uma entrada só, com a média e o desvio de cada métrica,

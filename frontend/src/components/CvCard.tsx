@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { RunSummary } from "./RunSummary";
 import { useT } from "../i18n/useT";
 import { NumberField, Toggle } from "./controls";
 
@@ -48,11 +49,14 @@ export function CvCard({ accent, disabled, onCv, runSignal }: CvCardProps) {
   const run = () => onCv({ n_folds: nFolds, shuffle, fold_seed: foldSeed });
 
   // Fire on a new signal only — see ReplicatesCard for the rationale.
+  // Set when the bottom bar asked to run and this card could not.
+  const [attempted, setAttempted] = useState(false);
   const lastSignal = useRef(runSignal ?? 0);
   useEffect(() => {
     if (runSignal === undefined || runSignal === lastSignal.current) return;
     lastSignal.current = runSignal;
     if (canRun) run();
+    else setAttempted(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runSignal]);
 
@@ -91,26 +95,13 @@ export function CvCard({ accent, disabled, onCv, runSignal }: CvCardProps) {
             step={1}
           />
         </div>
-        <button
-          type="button"
-          onClick={run}
-          disabled={!canRun}
-          style={{
-            padding: "12px 18px",
-            background: canRun ? accent : "rgba(255,255,255,0.05)",
-            border: `1px solid ${canRun ? accent : "var(--vf-panel-stroke)"}`,
-            borderRadius: 10,
-            color: canRun ? "var(--accent-ink, #08120c)" : "var(--vf-text-muted)",
-            fontFamily: "var(--font-mono)",
-            fontSize: 12,
-            fontWeight: 600,
-            letterSpacing: "0.04em",
-            cursor: canRun ? "pointer" : "not-allowed",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {t.cvCard.run(nFolds)}
-        </button>
+        <RunSummary
+          text={t.cvCard.summary(nFolds)}
+          ready={canRun}
+          reason={null}
+          attempted={attempted}
+          accent={accent}
+        />
       </div>
     </div>
   );

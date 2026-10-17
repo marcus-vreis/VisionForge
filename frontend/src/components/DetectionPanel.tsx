@@ -327,7 +327,7 @@ export function DetectionPanel({
             help={paramHelp(t, "seed")}
           />
         </div>
-        <AdvancedFields count={6}>
+        <AdvancedFields count={6} flush>
             <NumberField
             label={t.detectionPanel.training.patience}
             value={formData.training.patience}
@@ -667,6 +667,7 @@ export function DetectionPanel({
           baseDir={formData.data.base_dir}
           steps={formData.data.preprocessing}
           onChange={(steps) => setData({ preprocessing: steps })}
+          bare
         />
         {formData.data.preprocessing.length > 0 && (
           <p

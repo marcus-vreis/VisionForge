@@ -47,9 +47,10 @@ export function segmentationModels(t: Dict): SegmentationModelOption[] {
 }
 
 export const SEGMENTATION_LOSSES: { value: string; label: string }[] = [
-  { value: "cross_entropy", label: "Cross-Entropy" },
+  // Short, so three fit one row beside the other fields; the hint spells them out.
+  { value: "cross_entropy", label: "CE" },
   { value: "dice", label: "Dice" },
-  { value: "combined", label: "CE + Dice" },
+  { value: "combined", label: "CE+Dice" },
 ];
 
 export type TransferMode = "none" | "feature_extraction" | "fine_tuning";

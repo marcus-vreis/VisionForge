@@ -152,7 +152,7 @@ export const pt = {
   bottomBar: {
     reopenTraining: "🔬 abrir treino",
     running: "Executando…",
-    history: "history",
+    history: "histórico",
     datasets: "datasets",
     datasetsTitle: "Baixar um dataset para uma pasta local",
     queue: "fila",
@@ -1706,7 +1706,7 @@ export const pt = {
     shuffleHint: "antes do split",
     foldSeed: "Seed do split",
     // K is at least 2 (the field's minimum), so "folds" is plural only.
-    run: (folds: number) => `⛓ Rodar CV · ${folds} folds`,
+    summary: (folds: number) => `${folds} folds · roda pelo botão abaixo`,
   },
   // The multi-seed launcher (components/ReplicatesCard.tsx).
   replicatesCard: {
@@ -1722,7 +1722,9 @@ export const pt = {
     seedList: "Seeds (vírgula)",
     seedCount: (n: number) => `${n} seeds`,
     headlineMetric: "Métrica destaque",
-    run: (seeds: number) => `🎲 Rodar réplicas · ${seeds} seed${seeds === 1 ? "" : "s"}`,
+    summary: (seeds: number) =>
+      `${seeds} seed${seeds === 1 ? "" : "s"} · roda pelo botão abaixo`,
+    blocked: "Precisa de pelo menos 2 seeds válidas para rodar.",
   },
   // The hyperparameter sweep editor (components/SweepCard.tsx). Grid, Random and
   // Optuna are algorithm names; dot-paths and the model names in the placeholders
@@ -1751,7 +1753,9 @@ export const pt = {
     rankingMetric: "Métrica de ranking",
     trials: "Nº de trials",
     seed: "Seed",
-    run: (trials: number) => `⛓ Rodar sweep · ${trials} trial${trials === 1 ? "" : "s"}`,
+    summary: (trials: number) =>
+      `${trials} trial${trials === 1 ? "" : "s"} · roda pelo botão abaixo`,
+    blocked: "Adicione um parâmetro com valores para varrer.",
   },
   // The generic form of a researcher-defined task (components/SchemaForm.tsx). The
   // fields' own titles and descriptions come from the task's schema and are shown

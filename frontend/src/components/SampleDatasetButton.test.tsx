@@ -6,7 +6,8 @@ import { en } from "../i18n/en";
 import { pt } from "../i18n/pt";
 import { SAMPLE_SETUP } from "../lib/guides/first-training";
 import { GUIDE_TASKS } from "../lib/guides/tasks";
-import { SampleDatasetButton, runSample } from "./SampleDatasetButton";
+import { runSample } from "../lib/sample-dataset";
+import { SampleDatasetButton } from "./SampleDatasetButton";
 
 const reply = (status: number, json: unknown) =>
   vi.fn().mockResolvedValue(

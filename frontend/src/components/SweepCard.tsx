@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { RunSummary } from "./RunSummary";
 import { useT } from "../i18n/useT";
 import { NumberField, SelectField, Segmented, TextField } from "./controls";
 import {
@@ -121,11 +122,14 @@ export function SweepCard({
 
   // Fire on a new signal only — the card keeps owning its own fields, so the
   // effect deliberately does not depend on them (it would re-fire on typing).
+  // Set when the bottom bar asked to run and this card could not.
+  const [attempted, setAttempted] = useState(false);
   const lastSignal = useRef(runSignal ?? 0);
   useEffect(() => {
     if (runSignal === undefined || runSignal === lastSignal.current) return;
     lastSignal.current = runSignal;
     if (canRun) run();
+    else setAttempted(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runSignal]);
 
@@ -375,28 +379,13 @@ export function SweepCard({
             </div>
           </>
         )}
-        <button
-          type="button"
-          onClick={() =>
-            run()
-          }
-          disabled={!canRun}
-          style={{
-            padding: "12px 18px",
-            background: canRun ? accent : "rgba(255,255,255,0.05)",
-            border: `1px solid ${canRun ? accent : "var(--vf-panel-stroke)"}`,
-            borderRadius: 10,
-            color: canRun ? "var(--accent-ink, #08120c)" : "var(--vf-text-muted)",
-            fontFamily: "var(--font-mono)",
-            fontSize: 12,
-            fontWeight: 600,
-            letterSpacing: "0.04em",
-            cursor: canRun ? "pointer" : "not-allowed",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {t.sweepCard.run(trialCount)}
-        </button>
+        <RunSummary
+          text={t.sweepCard.summary(trialCount)}
+          ready={canRun}
+          reason={disabled ? null : t.sweepCard.blocked}
+          attempted={attempted}
+          accent={accent}
+        />
       </div>
     </div>
   );
