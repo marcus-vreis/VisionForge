@@ -13,6 +13,8 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ## [Unreleased]
 
+## [0.16.0] — 2026-10-17
+
 ### Added
 
 - **Cada painel de tarefa ganhou o botão "usar dataset de exemplo".** Fica embaixo da pasta base (classificação, detecção, regressão, segmentação e anomalia), cria `datasets/exemplo-<tarefa>/` ou reaproveita a que já existe, e preenche a pasta, o número de classes e o image size como o guia "Primeiro treino" faz. Se a criação falhar, o erro aparece embaixo do botão (ADR-117).
