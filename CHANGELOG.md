@@ -25,18 +25,18 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
   checkout (`pip install -e .`), `visionforge.__version__` agora vem do `pyproject.toml` do
   próprio checkout, não da metadata gravada na instalação; depois de um pull ou bump a GUI
   comparava a versão antiga com o PyPI e mostrava "atualização disponível — git pull" para sempre.
-- **ClassificaÃ§Ã£o recusa `num_classes` que nÃ£o bate com as pastas de classe.** Um `num_classes`
-  diferente do nÃºmero de pastas no treino era aceito e o treino seguia com a saÃ­da errada. O
-  submit agora responde 422 com o nÃºmero de pastas e os nomes encontrados. A tarefa `binary`
-  (1 saÃ­da) Ã© checada contra 2 pastas.
-- **Dataset vazio ou com coluna inexistente Ã© recusado no submit.** DetecÃ§Ã£o e segmentaÃ§Ã£o sem
-  split ou sem imagens (ou sem nenhum par imagemâ†”mÃ¡scara) no treino, e regressÃ£o com CSV de treino
-  ausente, sem linhas ou sem a coluna-alvo, entravam na fila e morriam com exceÃ§Ã£o crua em inglÃªs.
+- **Classificação recusa `num_classes` que não bate com as pastas de classe.** Um `num_classes`
+  diferente do número de pastas no treino era aceito e o treino seguia com a saída errada. O
+  submit agora responde 422 com o número de pastas e os nomes encontrados. A tarefa `binary`
+  (1 saída) é checada contra 2 pastas.
+- **Dataset vazio ou com coluna inexistente é recusado no submit.** Detecção e segmentação sem
+  split ou sem imagens (ou sem nenhum par imagem↔máscara) no treino, e regressão com CSV de treino
+  ausente, sem linhas ou sem a coluna-alvo, entravam na fila e morriam com exceção crua em inglês.
   Agora o submit responde 422 traduzido, e as mensagens de `core/regression_data.py` passam pelo
-  catÃ¡logo.
+  catálogo.
 - **Apagar uma task custom a tira de verdade.** O arquivo sumia, mas a task seguia registrada
-  na sessÃ£o: a aba, o schema e `/custom/<chave>/run` continuavam funcionando atÃ© reiniciar a
-  GUI. Apagar agora remove a task do registro (e o mÃ³dulo importado), e a chave passa a dar 404.
+  na sessão: a aba, o schema e `/custom/<chave>/run` continuavam funcionando até reiniciar a
+  GUI. Apagar agora remove a task do registro (e o módulo importado), e a chave passa a dar 404.
 - **A busca em grade compara só os hiperparâmetros.** Cada trial treinava com `seed + índice`,
   então a diferença entre dois pontos da grade misturava o efeito do hiperparâmetro com o da
   seed. Todos os trials usam a seed base, e o `best_config.yaml` grava essa mesma seed (ADR-045).
