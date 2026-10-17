@@ -9,6 +9,7 @@ import pytest
 from visionforge.core.replicates import (
     ReplicateTrial,
     aggregate_replicates,
+    metric_domain,
     run_replicates,
 )
 from visionforge.core.task_runner import RunResult
@@ -275,3 +276,24 @@ class TestAggregateReplicates:
         assert agg["a"]["n"] == 2
         assert agg["a"]["mean"] == pytest.approx(2.0)
         assert agg["b"]["n"] == 1  # only present in one trial
+
+
+class TestMetricDomain:
+    """Which bounds a confidence interval is clipped to (review 2026-10-17)."""
+
+    @pytest.mark.parametrize(
+        "name", ["mae", "val_mse", "test_rmse", "train_loss", "mean_absolute_error"]
+    )
+    def test_absolute_errors_and_losses_cannot_go_negative(self, name: str) -> None:
+        assert metric_domain(name) == (0.0, None)
+
+    @pytest.mark.parametrize("name", ["mean_error", "bias_error", "signed_error"])
+    def test_a_signed_error_is_not_floored_at_zero(self, name: str) -> None:
+        assert metric_domain(name) == (None, None)
+
+    @pytest.mark.parametrize("name", ["r2", "val_r2", "r_squared", "val_r_squared"])
+    def test_r_squared_is_capped_at_one_only(self, name: str) -> None:
+        assert metric_domain(name) == (None, 1.0)
+
+    def test_scores_in_the_unit_interval(self) -> None:
+        assert metric_domain("val_accuracy") == (0.0, 1.0)

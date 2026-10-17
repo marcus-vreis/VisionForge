@@ -83,18 +83,32 @@ _UNIT_INTERVAL_WORD = re.compile(
 def metric_domain(metric: str) -> tuple[float | None, float | None]:
     """The ``(low, high)`` bounds a metric's values can take, ``None`` for open.
 
-    Errors and losses (``infer_direction`` says "lower") cannot be negative;
-    the [0, 1] scores cannot exceed 1 (nor drop under 0); R² is bounded above
-    by 1 only. Anything else is unbounded.
+    Absolute errors and losses cannot be negative; the [0, 1] scores cannot
+    exceed 1 (nor drop under 0); R² is bounded above by 1 only. Anything else is
+    unbounded -- a signed error (``mean_error``, ``bias_error``) is "lower is
+    better" yet can be negative, so the floor is kept for names that are
+    absolute by construction, not for every "lower" metric.
     """
-    if infer_direction(metric) == "lower":
-        return 0.0, None
     words = re.split(r"[^a-z0-9]+", metric.lower())
+    if infer_direction(metric) == "lower" and _is_absolute_error(words):
+        return 0.0, None
     if any(_UNIT_INTERVAL_WORD.match(w) for w in words):
         return 0.0, 1.0
-    if "r2" in words or metric.lower() == "r_squared":
+    if "r2" in words or ("r" in words and "squared" in words):
         return None, 1.0
     return None, None
+
+
+_ABSOLUTE_ERROR_WORDS = frozenset(
+    {"mae", "mse", "rmse", "msle", "rmsle", "mape", "smape", "loss"}
+)
+
+
+def _is_absolute_error(words: list[str]) -> bool:
+    """A name whose values are non-negative by construction (MAE, MSE, a loss)."""
+    if _ABSOLUTE_ERROR_WORDS.intersection(words):
+        return True
+    return "error" in words and ("absolute" in words or "squared" in words)
 
 
 def _clip_to_domain(

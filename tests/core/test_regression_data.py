@@ -13,7 +13,15 @@ from visionforge.core.regression_data import (
     RegressionDataModule,
 )
 from visionforge.utils.config import TransformConfig
+from visionforge.utils.messages import using_lang
 from visionforge.utils.regression_config import RegressionConfig
+
+
+@pytest.fixture(autouse=True)
+def _portuguese_messages():  # type: ignore[no-untyped-def]
+    """The asserts below match the Portuguese wording; pin it, whatever ran before."""
+    with using_lang("pt"):
+        yield
 
 
 def _make_image(path: Path) -> None:

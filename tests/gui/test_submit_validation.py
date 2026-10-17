@@ -139,6 +139,21 @@ class TestDetectionSubmit:
         assert resp.status_code == 422
         assert "No YOLO split" in resp.json()["detail"]
 
+    def test_images_in_subfolders_and_tif_are_accepted(
+        self, client_and_routes: tuple, tmp_path: Path
+    ) -> None:
+        # Ultralytics reads train images from subfolders and as .tif; the submit
+        # must not refuse a dataset the trainer would take (review 2026-10-17).
+        client, _ = client_and_routes
+        base = build_detection_dataset(tmp_path / "ds")
+        train = base / "images" / "train"
+        nested = train / "batch_a"
+        nested.mkdir()
+        for img in [p for p in train.iterdir() if p.is_file()]:
+            img.rename(nested / f"{img.stem}.tif")
+        resp = client.post("/api/detection/run", json=_detection(tmp_path, base))
+        assert resp.status_code == 200, resp.text
+
 
 @pytest.mark.usefixtures("busy_queue")
 class TestSegmentationSubmit:
@@ -170,6 +185,23 @@ class TestSegmentationSubmit:
         resp = client.post("/api/segmentation/run", json=_segmentation(tmp_path, base))
         assert resp.status_code == 422
         assert "par imagem" in resp.json()["detail"]
+
+    def test_tif_pairs_are_accepted(
+        self, client_and_routes: tuple, tmp_path: Path
+    ) -> None:
+        # The segmentation dataset pairs .tif images with .tif masks; the submit
+        # check used the routes' extension list, which had no .tif (review 2026-10-17).
+        client, _ = client_and_routes
+        base = tmp_path / "ds"
+        for split in ("train", "val"):
+            (base / split / "images").mkdir(parents=True)
+            (base / split / "masks").mkdir(parents=True)
+            from PIL import Image
+
+            Image.new("RGB", (8, 8)).save(base / split / "images" / "a.tif")
+            Image.new("L", (8, 8)).save(base / split / "masks" / "a.tif")
+        resp = client.post("/api/segmentation/run", json=_segmentation(tmp_path, base))
+        assert resp.status_code == 200, resp.text
 
 
 @pytest.mark.usefixtures("busy_queue")

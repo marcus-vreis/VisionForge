@@ -38,8 +38,8 @@ from visionforge.utils.config import PreprocessingConfig, TransformConfig
 from visionforge.utils.segmentation_config import SegmentationConfig
 
 # Image extensions accepted for the image branch (mask is always read by stem).
-_IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp")
-_MASK_EXTS = (".png", ".bmp", ".tif", ".tiff")
+IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp")
+MASK_EXTS = (".png", ".bmp", ".tif", ".tiff")
 
 
 _LOADER_POOLS = 3
@@ -94,14 +94,14 @@ class SegmentationDataset(Dataset):  # type: ignore[type-arg]
         images = sorted(
             p
             for p in images_dir.iterdir()
-            if p.is_file() and p.suffix.lower() in _IMAGE_EXTS
+            if p.is_file() and p.suffix.lower() in IMAGE_EXTS
         )
         if not images:
             raise ValueError(f"No image files in {images_dir}.")
         masks_by_stem: dict[str, Path] = {
             p.stem: p
             for p in masks_dir.iterdir()
-            if p.is_file() and p.suffix.lower() in _MASK_EXTS
+            if p.is_file() and p.suffix.lower() in MASK_EXTS
         }
         pairs: list[tuple[Path, Path]] = []
         for img in images:

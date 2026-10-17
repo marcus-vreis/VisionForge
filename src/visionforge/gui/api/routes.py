@@ -12,7 +12,7 @@ import platform
 import re
 import traceback
 import uuid
-from collections.abc import Awaitable, Callable, Iterable
+from collections.abc import Awaitable, Callable, Collection, Iterable
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
@@ -2974,14 +2974,16 @@ def _collect_detection_dataset_stats(
     )
 
 
-def _image_stems(directory: Path) -> set[str]:
-    """Filename stems of the image files directly inside ``directory``."""
+def _image_stems(
+    directory: Path, extensions: Collection[str] = _IMAGE_EXTS
+) -> set[str]:
+    """Filename stems of the files with ``extensions`` directly inside ``directory``."""
     if not directory.is_dir():
         return set()
     return {
         p.stem
         for p in directory.iterdir()
-        if p.is_file() and p.suffix.lower() in _IMAGE_EXTS
+        if p.is_file() and p.suffix.lower() in extensions
     }
 
 
@@ -3223,8 +3225,23 @@ def _check_detection_dataset(config: DetectionConfig) -> None:
     if all(resolved is None for resolved in splits.values()):
         _refuse(tr("scan.no_yolo_split"))
     train = splits["train"]
-    if train is None or _count_images(train[0]) == 0:
+    if train is None or not _has_detection_image(train[0]):
         _refuse(tr("submit.detection_empty_train"))
+
+
+def _has_detection_image(directory: Path) -> bool:
+    """Any image Ultralytics would read under ``directory``, subfolders included.
+
+    Stricter than this would refuse datasets the trainer accepts: Ultralytics
+    walks subfolders and reads formats (``.tif``, ``.avif``...) the stats probe
+    does not count.
+    """
+    from ultralytics.data.utils import IMG_FORMATS
+
+    return any(
+        p.is_file() and p.suffix.lower().lstrip(".") in IMG_FORMATS
+        for p in directory.rglob("*")
+    )
 
 
 def _check_segmentation_dataset(config: SegmentationConfig) -> None:
@@ -3237,8 +3254,11 @@ def _check_segmentation_dataset(config: SegmentationConfig) -> None:
     train = base / data.train_dir
     if not train.is_dir():
         _refuse(tr("submit.segmentation_no_train_dir", path=train))
-    images = _image_stems(train / data.images_subdir)
-    masks = _image_stems(train / data.masks_subdir)
+    # The dataset's own extension lists: the trainer pairs .tif images and masks.
+    from visionforge.core.segmentation_data import IMAGE_EXTS, MASK_EXTS
+
+    images = _image_stems(train / data.images_subdir, IMAGE_EXTS)
+    masks = _image_stems(train / data.masks_subdir, MASK_EXTS)
     if not images & masks:
         _refuse(
             tr(
