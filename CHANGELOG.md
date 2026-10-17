@@ -43,6 +43,9 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Fixed
 
+- **O `run.json` grava a versão que o VisionForge informa, também num checkout.** Quem roda do
+  código-fonte tinha a versão do `pyproject.toml` na interface e a dos metadados instalados
+  (mais antiga até reinstalar) no `run.json` de cada run.
 - **O seletor de pasta diz o que aconteceu quando não escolhe nada.** Em Regressão, Segmentação,
   Anomalia e Detecção (pasta e YAML) e no download de dataset, cancelar o diálogo ou falhar ao
   abri-lo não mostrava nada, e o botão parecia quebrado. Agora aparece a mesma frase da
