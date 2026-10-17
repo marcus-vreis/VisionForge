@@ -57,6 +57,12 @@ class TestSegmentationCrossValidation:
         assert sum(f.val_size for f in report.folds) == _N_PAIRS
         assert all(f.train_size + f.val_size == _N_PAIRS for f in report.folds)
 
+        # each fold names the run it trained, so History can fold it under the
+        # K-fold's group (ADR-123)
+        for fold in report.folds:
+            assert fold.run_dir is not None
+            assert (Path(fold.run_dir) / "run.json").is_file()
+
         # every segmentation metric is aggregated to mean ± std
         for name in ("miou", "dice", "pixel_acc"):
             assert name in report.aggregate

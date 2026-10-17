@@ -462,9 +462,10 @@ class TestExecutorsHandTheTokenOn:
         # The table needs it: total_trials counts trials that ran.
         assert state["report"]["planned_trials"] == 3
 
-    def test_cv(self, client_and_routes: tuple) -> None:
+    def test_cv(self, client_and_routes: tuple, tmp_path: Path) -> None:
         from visionforge.blocks.regression_cv import CrossValidationReport, FoldResult
         from visionforge.gui.api.schemas import TaskCvRequest
+        from visionforge.utils.regression_config import RegressionConfig
 
         _, routes_mod = client_and_routes
         token = CancellationToken()
@@ -479,10 +480,22 @@ class TestExecutorsHandTheTokenOn:
                 aggregate={"r2": {"mean": 0.5, "std": None, "n": 1}},
             )
 
-        req = TaskCvRequest(config={"name": "cv"}, n_folds=3)
+        # A real config: the job now writes its History group (ADR-123), and
+        # writes it under these folders, not the default outputs.
+        raw = {
+            "name": "cv",
+            "model": {"name": "resnet18", "num_targets": 1, "pretrained": False},
+            "data": {"base_dir": str(tmp_path), "target_columns": ["target"]},
+            "output": {
+                "models_dir": str(tmp_path / "models"),
+                "reports_dir": str(tmp_path / "reports"),
+            },
+        }
+        config = RegressionConfig.model_validate(raw)
+        req = TaskCvRequest(config=raw, n_folds=3)
         state = _run_executor(
             routes_mod,
-            routes_mod._execute_task_cv(object(), req, "r", fake_cv, "Regression"),
+            routes_mod._execute_task_cv(config, req, "r", fake_cv, "Regression"),
             token,
         )
 

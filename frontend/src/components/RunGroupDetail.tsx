@@ -213,12 +213,13 @@ function ChildStatus({ child }: { child: GroupChild }) {
   );
 }
 
-/** The seeds of a group, each with the run it became. */
+/** The seeds of a group (or a K-fold's folds), each with the run it became. */
 function SeedsTable({
   seeds,
   accent,
   metric,
   showVariant,
+  byFold = false,
   knownRunIds,
   onOpenRun,
 }: {
@@ -226,6 +227,7 @@ function SeedsTable({
   accent: string;
   metric: string | null;
   showVariant: boolean;
+  byFold?: boolean;
   knownRunIds?: ReadonlySet<string>;
   onOpenRun?: (runId: string) => void;
 }) {
@@ -237,7 +239,7 @@ function SeedsTable({
         <thead>
           <tr>
             {showVariant && <th style={thStyle}>{c.variant}</th>}
-            <th style={thStyle}>{c.seed}</th>
+            <th style={thStyle}>{byFold ? c.fold : c.seed}</th>
             <th style={thStyle}>{metric ?? c.metric}</th>
             <th style={thStyle}>{c.status}</th>
             <th style={thStyle}>{c.run}</th>
@@ -245,9 +247,9 @@ function SeedsTable({
         </thead>
         <tbody>
           {seeds.map((child) => (
-            <tr key={`${child.variant ?? ""}:${child.seed}`}>
+            <tr key={`${child.variant ?? ""}:${byFold ? child.fold : child.seed}`}>
               {showVariant && <td style={tdLabelStyle}>{child.variant}</td>}
-              <td style={tdLabelStyle}>{child.seed}</td>
+              <td style={tdLabelStyle}>{byFold ? child.fold : child.seed}</td>
               <td style={tdStyle}>{formatNumber(metric ? child.metrics[metric] : null)}</td>
               <td style={tdStyle}>
                 <ChildStatus child={child} />
@@ -273,6 +275,8 @@ function ReplicatesBody({ group, accent, knownRunIds, onOpenRun }: RunGroupDetai
     ? [group.metric, ...names.filter((n) => n !== group.metric)]
     : names;
   const headline = group.metric ? aggregates[group.metric] : undefined;
+  // A K-fold reads like a replicate set, with folds where the seeds are (ADR-123).
+  const kfold = group.kind === "kfold";
 
   return (
     <>
@@ -327,19 +331,21 @@ function ReplicatesBody({ group, accent, knownRunIds, onOpenRun }: RunGroupDetai
           </div>
           {/* A std is only comparable between runs that divide alike. */}
           <div style={noteStyle}>{t.runDetail.cv.stdNote(stdDdof({ std_ddof: group.std_ddof }))}</div>
-          {headline && hasFewSeeds(headline.n) && (
+          {/* Few folds is a K-fold's design, not a shortfall worth a warning. */}
+          {!kfold && headline && hasFewSeeds(headline.n) && (
             <div style={{ ...noteStyle, color: STOPPED_COLOR }}>
               ⚠ {t.runGroup.detail.fewSeeds(headline.n)}
             </div>
           )}
         </GroupSection>
       )}
-      <GroupSection title={t.runGroup.detail.seedsTitle}>
+      <GroupSection title={kfold ? t.runGroup.detail.foldsTitle : t.runGroup.detail.seedsTitle}>
         <SeedsTable
           seeds={group.children ?? []}
           accent={accent}
           metric={group.metric}
           showVariant={false}
+          byFold={kfold}
           knownRunIds={knownRunIds}
           onOpenRun={onOpenRun}
         />
@@ -565,9 +571,13 @@ export function RunGroupDetail(props: RunGroupDetailProps) {
               </span>
             )}
           </Row>
-          <Row label={t.runGroup.detail.seedsAsked}>
-            {group.seeds.length > 0 ? group.seeds.join(", ") : "—"}
-          </Row>
+          {group.kind === "kfold" ? (
+            <Row label={t.runGroup.detail.foldsAsked}>{group.n_requested}</Row>
+          ) : (
+            <Row label={t.runGroup.detail.seedsAsked}>
+              {group.seeds.length > 0 ? group.seeds.join(", ") : "—"}
+            </Row>
+          )}
           <Row label={t.runGroup.detail.trainingsDone}>
             {group.n_finished}/{group.n_requested}
           </Row>
@@ -580,7 +590,11 @@ export function RunGroupDetail(props: RunGroupDetailProps) {
           <div style={{ ...noteStyle, color: STOPPED_COLOR }}>■ {t.runGroup.detail.stopped}</div>
         )}
       </GroupSection>
-      {group.kind === "replicates" ? <ReplicatesBody {...props} /> : <ComparisonBody {...props} />}
+      {group.kind === "replicated_comparison" ? (
+        <ComparisonBody {...props} />
+      ) : (
+        <ReplicatesBody {...props} />
+      )}
     </>
   );
 }

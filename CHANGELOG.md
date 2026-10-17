@@ -23,6 +23,15 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
   Antes eram três retângulos soltos à direita. As partículas e as setas passam pelas mesmas linhas.
   Os outros desenhos não mudaram (ADR-118).
 
+### Changed
+
+- **Um K-fold aparece no histórico como um grupo, com os folds dentro.** Antes cada fold
+  era um run solto e, na regressão e na segmentação, a média ± desvio só existia no relatório
+  em `outputs/reports`. Agora o K-fold é uma entrada só, com a média e o desvio de cada métrica,
+  e os folds abrem a partir dela, como nas réplicas. Dois K-folds com o mesmo nome não se
+  sobrescrevem mais. A média é de validação (cada fold mede no seu pedaço do treino) e aparece
+  como "(val)", não mais na coluna de teste ([ADR-123](docs/dev/DECISIONS.md)).
+
 ### Fixed
 
 - **O seletor de pasta diz o que aconteceu quando não escolhe nada.** Em Regressão, Segmentação,

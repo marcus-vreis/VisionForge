@@ -54,6 +54,8 @@ class FoldResult:
     val_size: int
     metrics: dict[str, float] = field(default_factory=dict)
     error: str = ""
+    # The fold's own run folder; None when it failed before training.
+    run_dir: str | None = None
 
 
 @dataclass
@@ -203,6 +205,7 @@ def run_regression_cross_validation(
                 cancel_token=cancel_token,
             )
             trained = True
+            record.run_dir = str(result.model_path.parent)
             cut = result.stopped
             # 0 epochs only when stopped before the first: nothing to score.
             if result.total_epochs:

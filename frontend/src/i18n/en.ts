@@ -984,9 +984,11 @@ export const en: Dict = {
     kind: {
       replicates: "Replicates",
       replicated_comparison: "Replicated comparison",
+      kfold: "K-fold",
     },
     card: {
       seeds: (finished: number, requested: number) => `${finished}/${requested} seeds`,
+      folds: (finished: number, requested: number) => `${finished}/${requested} folds`,
       trainings: (finished: number, requested: number) =>
         `${finished}/${requested} trainings`,
       variants: (n: number) => `${n} ${n === 1 ? "variant" : "variants"}`,
@@ -1000,6 +1002,10 @@ export const en: Dict = {
         low !== null && high !== null
           ? `mean of ${n} seeds · 95% CI: [${low}, ${high}]`
           : `mean of ${n} ${n === 1 ? "seed" : "seeds"} · no CI (a single seed)`,
+      foldMeanTitle: (n: number, std: string | null) =>
+        std !== null
+          ? `mean of ${n} folds (validation) · std ${std}`
+          : `mean of ${n} ${n === 1 ? "fold" : "folds"} (validation)`,
       deleteTitle: "Delete this group (its seeds stay in the history)",
     },
     deleteNote:
@@ -1013,9 +1019,11 @@ export const en: Dict = {
       eyebrow: {
         replicates: "// replicate set",
         replicated_comparison: "// replicated comparison",
+        kfold: "// cross-validation (K-fold)",
       },
       metric: "metric",
       seedsAsked: "seeds asked",
+      foldsAsked: "folds",
       trainingsDone: "trainings finished",
       alpha: "alpha",
       direction: {
@@ -1034,6 +1042,7 @@ export const en: Dict = {
         std: "std",
         range: "min – max",
         seed: "seed",
+        fold: "fold",
         status: "status",
         run: "run",
         variant: "variant",
@@ -1051,6 +1060,7 @@ export const en: Dict = {
       fewSeeds: (n: number) =>
         `With ${n} ${n === 1 ? "seed" : "seeds"} the 95% CI is wide and fragile: below 5 seeds it does not measure precision.`,
       seedsTitle: "Seeds",
+      foldsTitle: "Folds",
       open: "open",
       removed: "removed from the history",
       noRun: "no run",

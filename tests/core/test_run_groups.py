@@ -458,3 +458,88 @@ class TestReplicatedComparisonGroup:
 
 def _reject(constant: str) -> None:
     raise AssertionError(f"run.json carries {constant}, which is not JSON")
+
+
+def _kfold_report(models_dir: Path, name: str, values: list[float]) -> dict[str, Any]:
+    folds = [
+        {
+            "fold": i,
+            "status": "success",
+            "run_dir": str(_child_run(models_dir, f"{name}_fold{i}", epochs=2)),
+            "metrics": {"r2": v},
+            "error": "",
+        }
+        for i, v in enumerate(values)
+    ]
+    return {
+        "metric": "r2",
+        "n_folds": len(values),
+        "fold_results": folds,
+        # The job's own aggregate; the group must copy it, not recompute it.
+        "aggregate": {
+            "r2": {"mean": 0.123, "std": 0.045, "n": len(values), "std_ddof": 1}
+        },
+        "stopped": False,
+        "report_dir": None,
+    }
+
+
+class TestKFoldGroup:
+    """A K-fold is a History group whose children are its folds (ADR-123)."""
+
+    def test_folds_are_the_children_and_carry_the_group_id(
+        self, tmp_path: Path
+    ) -> None:
+        report = _kfold_report(tmp_path, "reg", [0.1, 0.2, 0.3])
+        run_dir = write_run_group(
+            kind="kfold",
+            group_id="reg_cv_1",
+            name="reg",
+            config={"name": "reg"},
+            report=report,
+            report_json=None,
+            models_dir=tmp_path,
+        )
+
+        assert run_dir == group_run_dir(tmp_path, "reg", "kfold", "reg_cv_1")
+        assert run_dir == tmp_path / "reg_cv" / "reg_cv_1"
+        data = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+        group = data["group"]
+        assert group["kind"] == "kfold"
+        assert [c["fold"] for c in group["children"]] == [0, 1, 2]
+        assert group["n_requested"] == 3 and group["n_finished"] == 3
+        assert group["aggregates"] == report["aggregate"]
+        # Six epochs over three folds, as every run writes total_epochs.
+        assert data["metrics"]["total_epochs"] == 6
+        for child in group["children"]:
+            child_json = json.loads(
+                (Path(child["run_dir"]) / "run.json").read_text(encoding="utf-8")
+            )
+            assert child_json["group_id"] == "reg_cv_1"
+
+    def test_the_mean_is_listed_as_a_validation_score(self, tmp_path: Path) -> None:
+        # A fold scores on its held-out fold, not on the test split: writing the
+        # mean as test_r2 would put it in the test column of the history.
+        report = _kfold_report(tmp_path, "reg", [0.1, 0.2])
+        run_dir = write_run_group(
+            kind="kfold",
+            group_id="g",
+            name="reg",
+            config={"name": "reg"},
+            report=report,
+            report_json=None,
+            models_dir=tmp_path,
+        )
+        metrics = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))[
+            "metrics"
+        ]
+        assert metrics["val_r2"] == 0.123
+        assert "test_r2" not in metrics
+
+    def test_a_stopped_fold_is_not_counted_as_finished(self, tmp_path: Path) -> None:
+        report = _kfold_report(tmp_path, "reg", [0.1, 0.2])
+        report["fold_results"][1]["status"] = "stopped"
+        report["stopped"] = True
+        group = build_group("kfold", report, None)
+        assert group["n_finished"] == 1
+        assert group["stopped"] is True

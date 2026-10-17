@@ -19,6 +19,13 @@ from visionforge.utils.config import ExperimentConfig
 from visionforge.utils.selftest_data import build_classification_dataset
 
 
+def _kfold_run_json(models_dir: Path, name: str) -> Path:
+    """The K-fold's group run.json, in ``<models>/<name>_cv/<group_id>/`` (ADR-123)."""
+    found = sorted((Path(models_dir) / f"{name}_cv").glob("*/run.json"))
+    assert len(found) == 1, found
+    return found[0]
+
+
 def _config(base: Path, tmp_path: Path, epochs: int) -> ExperimentConfig:
     return ExperimentConfig.model_validate(
         {
@@ -45,7 +52,7 @@ def _config(base: Path, tmp_path: Path, epochs: int) -> ExperimentConfig:
 
 
 def _run_json(config: ExperimentConfig) -> dict[str, Any]:
-    path = config.output.models_dir / f"{config.name}_cv" / "run.json"
+    path = _kfold_run_json(config.output.models_dir, config.name)
     data: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
     return data
 

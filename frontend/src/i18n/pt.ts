@@ -1067,10 +1067,12 @@ export const pt = {
     kind: {
       replicates: "Réplicas",
       replicated_comparison: "Comparação replicada",
+      kfold: "K-fold",
     },
     // The History card.
     card: {
       seeds: (finished: number, requested: number) => `${finished}/${requested} seeds`,
+      folds: (finished: number, requested: number) => `${finished}/${requested} folds`,
       trainings: (finished: number, requested: number) =>
         `${finished}/${requested} treinos`,
       variants: (n: number) => `${n} ${n === 1 ? "variante" : "variantes"}`,
@@ -1084,6 +1086,11 @@ export const pt = {
         low !== null && high !== null
           ? `média de ${n} seeds · IC 95%: [${low}, ${high}]`
           : `média de ${n} ${n === 1 ? "seed" : "seeds"} · sem IC (uma seed só)`,
+      // A K-fold reports mean ± sample std over its folds, no interval.
+      foldMeanTitle: (n: number, std: string | null) =>
+        std !== null
+          ? `média de ${n} folds (validação) · desvio ${std}`
+          : `média de ${n} ${n === 1 ? "fold" : "folds"} (validação)`,
       deleteTitle: "Excluir este grupo (as seeds continuam no histórico)",
     },
     // Appended to the confirmation of a delete that includes a group.
@@ -1099,9 +1106,11 @@ export const pt = {
       eyebrow: {
         replicates: "// conjunto de réplicas",
         replicated_comparison: "// comparação replicada",
+        kfold: "// validação cruzada (K-fold)",
       },
       metric: "métrica",
       seedsAsked: "seeds pedidas",
+      foldsAsked: "folds",
       trainingsDone: "treinos concluídos",
       alpha: "alfa",
       direction: {
@@ -1121,6 +1130,7 @@ export const pt = {
         std: "desvio",
         range: "min – max",
         seed: "seed",
+        fold: "fold",
         status: "status",
         run: "run",
         variant: "variante",
@@ -1139,6 +1149,7 @@ export const pt = {
         `Com ${n} ${n === 1 ? "seed" : "seeds"} o IC 95% é largo e frágil: abaixo de 5 seeds ele não mede precisão.`,
       // The seeds and the runs they became.
       seedsTitle: "Seeds",
+      foldsTitle: "Folds",
       open: "abrir",
       removed: "removido do histórico",
       noRun: "sem run",

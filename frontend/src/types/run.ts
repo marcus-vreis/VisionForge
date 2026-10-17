@@ -123,9 +123,10 @@ export interface RunSummary {
   group?: RunGroupBrief | null;
 }
 
-/** How a replicate job is told apart: a set of seeds of one config, or one
- *  set of seeds per variant with paired tests between them. */
-export type GroupKind = "replicates" | "replicated_comparison";
+/** How a group job is told apart: a set of seeds of one config, one set of
+ *  seeds per variant with paired tests between them, or the folds of a K-fold
+ *  (ADR-123). */
+export type GroupKind = "replicates" | "replicated_comparison" | "kfold";
 
 /** Distribution of one metric over a group's seeds, as the report recorded it
  *  (`aggregate_replicates`). Copied by the server, never recomputed here. */
@@ -164,9 +165,13 @@ export interface RunGroupBrief {
   best_by_mean: string | null;
 }
 
-/** One seed of a group. `run_id` is null for a seed that never got a run. */
+/** One seed (or, in a K-fold, one fold) of a group. `run_id` is null for a
+ *  unit that never got a run. */
 export interface GroupChild {
-  seed: number;
+  /** Null in a K-fold, whose children are folds. */
+  seed: number | null;
+  /** The fold's index (from 0), K-fold only. */
+  fold?: number | null;
   variant: string | null;
   /** `success`, `failed` or `stopped` (see lib/unit-status). */
   status: string;

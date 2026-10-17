@@ -357,3 +357,39 @@ class TestActionsOnAGroup:
             "/api/runs/20260101_000000_000001/test", json={"data_dir": str(tmp_path)}
         )
         assert "conjunto de réplicas" not in str(resp.json().get("detail", ""))
+
+
+class TestKFold:
+    """A K-fold is one History entry, its folds under it (ADR-123)."""
+
+    def test_history_lists_the_kfold_as_a_group_of_its_folds(
+        self, client_and_routes: tuple, tmp_path: Path
+    ) -> None:
+        client, _ = client_and_routes
+        resp = client.post(
+            "/api/regression/cv",
+            json={"config": _config(tmp_path), "n_folds": 2, "fold_seed": 3},
+        )
+        assert resp.status_code == 200, resp.text
+        run_id = resp.json()["run_id"]
+        assert _finish(client)["status"] == "completed"
+
+        report = client.get(f"/api/experiment/result/{run_id}").json()["report"]
+        group_json = _group_json(tmp_path / "models", run_id)
+        assert group_json["group"]["kind"] == "kfold"
+        # Copied from the report, not recomputed.
+        assert group_json["group"]["aggregates"] == report["aggregate"]
+
+        runs = client.get("/api/runs").json()
+        group = next(r for r in runs if r["run_id"] == run_id)
+        folds = [r for r in runs if r.get("group_id") == run_id]
+        assert group["group"]["kind"] == "kfold"
+        assert group["group"]["n_finished"] == 2
+        assert sorted(group["group"]["child_ids"]) == sorted(r["run_id"] for r in folds)
+        assert len(folds) == 2
+        # The mean is a validation score and is listed as one, with its spread.
+        assert "r2" not in group["final_metrics"]
+        assert group["task"] == "regression"
+        mean = group["final_metrics"]["val_r2"]
+        assert mean == pytest.approx(report["aggregate"]["r2"]["mean"])
+        assert group["group"]["final_aggregates"]["val_r2"] == report["aggregate"]["r2"]

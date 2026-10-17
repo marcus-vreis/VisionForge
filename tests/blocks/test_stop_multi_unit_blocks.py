@@ -26,6 +26,13 @@ from visionforge.utils.selftest_data import (
 )
 
 
+def _kfold_run_json(models_dir: Path, name: str) -> Path:
+    """The K-fold's group run.json, in ``<models>/<name>_cv/<group_id>/`` (ADR-123)."""
+    found = sorted((Path(models_dir) / f"{name}_cv").glob("*/run.json"))
+    assert len(found) == 1, found
+    return found[0]
+
+
 def _output(tmp_path: Path) -> dict[str, str]:
     return {
         "models_dir": str(tmp_path / "models"),
@@ -107,7 +114,7 @@ class TestClassificationKFold:
         assert report["std_accuracy"] is None
 
         run_json = json.loads(
-            (config.output.models_dir / "stop_multi_cv" / "run.json").read_text(
+            _kfold_run_json(config.output.models_dir, "stop_multi").read_text(
                 encoding="utf-8"
             )
         )
@@ -162,7 +169,7 @@ class TestClassificationKFold:
 
         assert [r["status"] for r in block._fold_results] == ["success"]
         run_json = json.loads(
-            (config.output.models_dir / "stop_multi_cv" / "run.json").read_text(
+            _kfold_run_json(config.output.models_dir, "stop_multi").read_text(
                 encoding="utf-8"
             )
         )
@@ -187,13 +194,14 @@ class TestClassificationKFold:
         assert report["n_folds_ok"] == 0
         assert report["mean_accuracy"] is None
         run_json = json.loads(
-            (config.output.models_dir / "stop_multi_cv" / "run.json").read_text(
+            _kfold_run_json(config.output.models_dir, "stop_multi").read_text(
                 encoding="utf-8"
             )
         )
         assert run_json["status"] == "completed"
         assert run_json["metrics"]["cv_aggregate"]["n_folds_ok"] == 0
-        assert run_json["metrics"]["test_accuracy"] is None
+        # No fold finished, so there is no mean to list (ADR-123: under val_).
+        assert "val_accuracy" not in run_json["metrics"]
 
     def test_all_folds_failing_without_a_stop_still_raises(
         self, tmp_path: Path

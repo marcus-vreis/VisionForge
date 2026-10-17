@@ -11,6 +11,14 @@ from PIL import Image
 
 from visionforge.utils.config import ExperimentConfig
 
+
+def _kfold_run_json(models_dir: Path, name: str) -> Path:
+    """The K-fold's group run.json, in ``<models>/<name>_cv/<group_id>/`` (ADR-123)."""
+    found = sorted((Path(models_dir) / f"{name}_cv").glob("*/run.json"))
+    assert len(found) == 1, found
+    return found[0]
+
+
 # ── fixtures ──────────────────────────────────────────────────────────────────
 
 
@@ -328,9 +336,7 @@ class TestReportAndArtifacts:
         """run() must also write models_dir/{name}_cv/run.json so /api/runs
         lists the CV experiment in the history alongside classification runs."""
         self._run_block(cv_config)
-        run_json_path = (
-            cv_config.output.models_dir / f"{cv_config.name}_cv" / "run.json"
-        )
+        run_json_path = _kfold_run_json(cv_config.output.models_dir, cv_config.name)
         assert run_json_path.exists()
         data = json.loads(run_json_path.read_text(encoding="utf-8"))
         # Mirrors the keys RunSummary parser already expects.
@@ -338,8 +344,15 @@ class TestReportAndArtifacts:
         assert data["experiment"] == cv_config.name
         assert "timestamp" in data
         assert data["config"]["block"] == "cross_validation"
-        assert "test_accuracy" in data["metrics"]
-        assert "test_f1" in data["metrics"]
+        # The folds score on held-out folds of train, so the means are
+        # validation scores, never the test column (ADR-123).
+        assert "val_accuracy" in data["metrics"]
+        assert "val_f1" in data["metrics"]
+        assert "test_accuracy" not in data["metrics"]
+        # A History group whose children are the folds (tagging is covered in
+        # tests/core/test_run_groups.py, with real fold runs on disk).
+        assert data["group"]["kind"] == "kfold"
+        assert [c["fold"] for c in data["group"]["children"]] == [0, 1, 2]
         assert "fold_results" in data["metrics"]
         assert len(data["metrics"]["fold_results"]) == 3
         agg = data["metrics"]["cv_aggregate"]
@@ -399,9 +412,9 @@ class TestReportAndArtifacts:
             block.run()
 
         data = json.loads(
-            (
-                cv_config.output.models_dir / f"{cv_config.name}_cv" / "run.json"
-            ).read_text(encoding="utf-8")
+            (_kfold_run_json(cv_config.output.models_dir, cv_config.name)).read_text(
+                encoding="utf-8"
+            )
         )
         assert data["device_used"] == "cuda:0"
         assert data["environment"] == environment

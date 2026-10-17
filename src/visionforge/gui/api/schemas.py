@@ -210,14 +210,14 @@ class DatasetInfo(BaseModel):
 class RunGroupBrief(BaseModel):
     """What the history list needs to show a replicate group as one entry.
 
-    A group is a replicate set or a replicated comparison (ADR-113): one job
-    made of several trainings, each of them a run of its own. Everything here
+    A group is a replicate set, a replicated comparison (ADR-113) or a K-fold
+    (ADR-123): one job made of several trainings, each of them a run of its own. Everything here
     is copied from the group's ``run.json``, which copied it from the job's
     report; nothing is computed on the way. The full section, with the paired
     tests, is served by the run detail.
     """
 
-    kind: Literal["replicates", "replicated_comparison"]
+    kind: Literal["replicates", "replicated_comparison", "kfold"]
     metric: str | None = None
     seeds: list[int] = []
     n_requested: int = 0

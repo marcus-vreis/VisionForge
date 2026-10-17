@@ -5490,3 +5490,44 @@ job's kernels.
 any other cause of a device-side assert (a custom task, a detector) now stops the
 queue with a reason instead of failing every job. The check costs one reduction per
 batch.
+
+## ADR-123 — A K-fold is a History group, like a replicate set
+
+**Date:** 2026-10-17
+**Status:** Accepted
+**Extends:** ADR-113 (replicate groups in History)
+
+**Context:** the GUI validation of 2026-10-16 found every K-fold's folds listed in
+History as loose runs. A classification K-fold also wrote a top-level `run.json` of
+its own, in `<name>_cv/run.json`: a second K-fold of the same name overwrote it, its
+folds did not point to it, and the History detail showed it as a run with no history.
+A regression or segmentation K-fold wrote none: its mean ± std lived only in the
+report under `outputs/reports`. The replicate groups of ADR-113 already solve this
+for seeds: one `run.json` per job, a unique folder per job, children tagged with
+`group_id`, History folding them under one entry with the job's numbers.
+
+**Decision:** a K-fold is a third group kind, `kfold`, written by the same
+`core/run_groups.write_run_group`. Its children are the folds (`fold` instead of
+`seed`), each with the run folder it trained in; its aggregates are the K-fold's own
+mean and standard deviation per metric, copied from the report, never recomputed.
+The folder is `<models>/<name>_cv/<group_id>`, one per job. Every K-fold path writes
+it: the classification block (which stops writing its old `<name>_cv/run.json`) and
+the regression and segmentation runners (whose fold results now record `run_dir`).
+History folds the children under the group, and the group detail shows one row per
+fold, using the replicate view with "fold" where it says "seed". Each fold scores on its
+held-out part of the training split, so the group lists the means under `val_<name>`
+(shown with "(val)"), never in the test column the old classification run.json used
+(`test_accuracy` held the mean validation accuracy). The old `<name>_cv/run.json` files
+already on disk are still listed as before.
+
+**Alternatives considered:**
+- *A separate K-fold view.* More code for the same table: a fold row and a seed row
+  carry the same fields (status, run, metrics).
+- *Sweep and model comparison in the same change.* Their children differ by
+  hyperparameters, not by a repetition index; the ranking view they need is the
+  replicated comparison's, not this one. They follow in their own ADR.
+
+**Consequences:** a K-fold appears once in History with its mean ± std, and its folds
+open from it; two K-folds with the same name stay apart. A fold that could not be
+tagged stays a loose run, as a seed does. The detail of a K-fold no longer shows the
+classification block's `cv_aggregate` keys; the same numbers are in `group.aggregates`.

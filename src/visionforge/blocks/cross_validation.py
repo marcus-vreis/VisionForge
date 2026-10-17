@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 from collections.abc import Callable
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -25,6 +24,7 @@ from visionforge.core.cancellation import (
 from visionforge.core.data import resolve_num_workers
 from visionforge.core.evaluator import Evaluator
 from visionforge.core.replicates import sample_std
+from visionforge.core.run_groups import write_run_group
 from visionforge.core.trainer import Trainer, seed_before_building
 from visionforge.models.factory import ModelFactory
 from visionforge.utils.config import ExperimentConfig
@@ -466,40 +466,14 @@ class CrossValidationBlock(ExperimentBlock):
             json.dumps(summary, indent=2), encoding="utf-8"
         )
 
-    def _provenance_from_folds(self) -> dict[str, Any]:
-        """``device_used``, ``environment`` and ``dataset_fingerprint`` of the
-        first fold whose run.json can be read; empty when none can."""
-        for record in self._fold_results:
-            run_dir = record.get("run_dir")
-            if not run_dir:
-                continue
-            try:
-                fold_json = json.loads(
-                    (Path(run_dir) / "run.json").read_text(encoding="utf-8")
-                )
-            except (OSError, ValueError):
-                continue
-            if not isinstance(fold_json, dict):
-                continue
-            return {
-                key: fold_json[key]
-                for key in ("device_used", "environment", "dataset_fingerprint")
-                if key in fold_json
-            }
-        return {}
-
     def _write_top_level_run_json(self, base_name: str) -> None:
-        """Write a parent-level run.json so /api/runs treats CV like other runs.
+        """Write the K-fold's History entry, its folds tagged under it (ADR-123).
 
-        Aggregate metrics are flattened into the same keys ClassificationBlock
-        uses (test_accuracy, test_f1, best_val_loss, total_epochs) so the
-        existing RunSummary parser works without special-casing. The full
-        per-fold breakdown is preserved under ``metrics.fold_results`` and
-        ``metrics.cv_aggregate`` for RunDetail consumers.
+        A group like a replicate set's: one folder per job, so two K-folds of
+        the same name stay apart, and each fold's run carries the group id. The
+        keys older readers of this run.json use (``metrics.fold_results``,
+        ``metrics.cv_aggregate``, ``best_val_loss``) are kept beside the group.
         """
-        cv_dir = self._config.output.models_dir / f"{base_name}_cv"
-        cv_dir.mkdir(parents=True, exist_ok=True)
-
         successful = [r for r in self._fold_results if r["status"] == "success"]
         accuracies = [r["accuracy"] for r in successful] if successful else []
         f1s = [r["f1"] for r in successful] if successful else []
@@ -512,33 +486,57 @@ class CrossValidationBlock(ExperimentBlock):
 
         mean_acc = float(np.mean(accuracies)) if accuracies else None
         mean_f1 = float(np.mean(f1s)) if f1s else None
-        mean_val_loss = float(np.mean(val_losses)) if val_losses else None
         std_acc = sample_std(accuracies)
         std_f1 = sample_std(f1s)
+        stopped = self._stopped()
 
-        run_json: dict[str, Any] = {
-            "experiment": base_name,
+        def aggregate(values: list[float]) -> dict[str, Any]:
+            return {
+                "mean": float(np.mean(values)),
+                "std": sample_std(values),
+                "n": len(values),
+                "std_ddof": 1,
+            }
+
+        report: dict[str, Any] = {
+            "metric": "accuracy",
+            "n_folds": cv.n_folds,
+            "fold_results": [
+                {
+                    "fold": r["fold"],
+                    "status": r["status"],
+                    "run_dir": r.get("run_dir"),
+                    "error": r.get("error") or "",
+                    "metrics": {
+                        k: r[k]
+                        for k in ("accuracy", "f1", "best_val_loss")
+                        if r.get(k) is not None
+                    },
+                }
+                for r in self._fold_results
+            ],
+            "aggregate": (
+                {"accuracy": aggregate(accuracies), "f1": aggregate(f1s)}
+                if successful
+                else {}
+            ),
+            "stopped": stopped,
+            "report_dir": str(self._config.output.reports_dir / base_name),
+        }
+        write_run_group(
+            kind="kfold",
+            group_id=f"{base_name}_cv_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}",
+            name=base_name,
+            config=self._config.model_dump(mode="json"),
+            report=report,
+            report_json=self._config.output.reports_dir / base_name / "cv_summary.json",
+            models_dir=self._config.output.models_dir,
             # A K-fold the researcher stopped did what was asked of it, even
             # with no fold finished; only genuine failures make it "failed".
-            "status": "completed" if successful or self._stopped() else "failed",
-            # The run-level stop marker (ADR-111), read by History and the GUI.
-            "stopped": self._stopped(),
-            # Naive local time like every other run.json writer — mixing aware
-            # and naive timestamps breaks the history sort (see routes.py).
-            "timestamp": datetime.now().isoformat(),
-            "config": self._config.model_dump(mode="json"),
-            "metrics": {
-                # Mirror the keys the RunSummary parser already understands so
-                # CV results show the aggregate metric in the history list.
-                # No other multi-unit run writes one; the sum is the training
-                # actually done, early-stopped and cut folds included.
-                "total_epochs": sum(
-                    r.get("epochs_completed", 0) or 0 for r in self._fold_results
-                ),
-                "test_accuracy": mean_acc,
-                "test_f1": mean_f1,
-                "best_val_loss": mean_val_loss,
-                # CV-specific keys consumed by RunDetailPanel:
+            status="completed" if successful or stopped else "failed",
+            extra_metrics={
+                "best_val_loss": float(np.mean(val_losses)) if val_losses else None,
+                # The per-fold breakdown the run detail and the model card read.
                 "fold_results": self._fold_results,
                 # Means and stds are over the n_folds_ok folds only; a stopped
                 # run lists fewer folds than n_folds (ADR-111).
@@ -559,17 +557,6 @@ class CrossValidationBlock(ExperimentBlock):
                     "std_f1": std_f1,
                 },
             },
-            "history": [],
-            # Where and on what the folds trained, read from a fold's run.json:
-            # the K-fold trains nothing itself, and a null device with an empty
-            # environment made it the one run that could not say how it was made.
-            "device_used": None,
-            "block": "cross_validation",
-            **self._provenance_from_folds(),
-        }
-
-        (cv_dir / "run.json").write_text(
-            json.dumps(run_json, indent=2), encoding="utf-8"
         )
 
 

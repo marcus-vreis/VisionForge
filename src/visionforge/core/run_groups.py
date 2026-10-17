@@ -1,4 +1,4 @@
-"""Replicate groups as History runs (ADR-113).
+"""Replicate groups and K-folds as History runs (ADR-113, ADR-123).
 
 A replicate set and a replicated comparison (ADR-056, ADR-061) are one job made
 of several trainings. Each seed is an ordinary run, named ``<name>_s<seed>``,
@@ -13,6 +13,9 @@ Nothing is computed here. Every statistic in the group is copied from the
 report the job already built: a second computation could drift from the report
 a paper's table is made from, and the number on screen must be the one on
 disk. The module only reads the report, tags the children, and writes JSON.
+
+A K-fold is the same shape with folds in place of seeds (ADR-123): its children
+are the folds' own runs and its aggregates the K-fold's mean ± std per metric.
 """
 
 from __future__ import annotations
@@ -26,7 +29,7 @@ from typing import Any, Literal
 
 from loguru import logger
 
-GroupKind = Literal["replicates", "replicated_comparison"]
+GroupKind = Literal["replicates", "replicated_comparison", "kfold"]
 
 # The folder under the models directory holds one sub-folder per group, named
 # by the group id, so running the same set twice leaves both in History rather
@@ -34,6 +37,7 @@ GroupKind = Literal["replicates", "replicated_comparison"]
 _DIR_SUFFIX: dict[str, str] = {
     "replicates": "replicates",
     "replicated_comparison": "comparison",
+    "kfold": "cv",
 }
 
 
@@ -77,6 +81,13 @@ def _child(row: dict[str, Any], variant: str | None) -> dict[str, Any]:
     }
 
 
+def _fold_child(row: dict[str, Any]) -> dict[str, Any]:
+    """One fold of a K-fold, as History lists it; ``seed`` stays empty."""
+    child = _child({**row, "seed": None}, None)
+    child["fold"] = row.get("fold")
+    return child
+
+
 def _count(children: list[dict[str, Any]]) -> int:
     return sum(1 for c in children if c["status"] == "success")
 
@@ -107,6 +118,19 @@ def _copy_group(
         "report_path": str(report_json) if report_json is not None else None,
         "report_dir": report.get("report_dir"),
     }
+
+    if kind == "kfold":
+        children = [_fold_child(row) for row in report.get("fold_results") or []]
+        group.update(
+            {
+                "n_folds": report.get("n_folds") or len(children),
+                "n_requested": report.get("n_folds") or len(children),
+                "n_finished": _count(children),
+                "children": children,
+                "aggregates": report.get("aggregate") or {},
+            }
+        )
+        return group
 
     if kind == "replicates":
         children = [_child(row, None) for row in report.get("trials") or []]
@@ -193,7 +217,7 @@ def _writes_bare_names(config: dict[str, Any], donor: dict[str, Any] | None) -> 
 
 
 def _children_of(group: dict[str, Any]) -> list[dict[str, Any]]:
-    if group["kind"] == "replicates":
+    if group["kind"] in ("replicates", "kfold"):
         return list(group["children"])
     return [c for v in group["variants"].values() for c in v["children"]]
 
@@ -207,6 +231,8 @@ def write_run_group(
     report: dict[str, Any],
     report_json: Path | None,
     models_dir: Path,
+    status: str = "completed",
+    extra_metrics: dict[str, Any] | None = None,
 ) -> Path:
     """Write the group's ``run.json`` and tag every child run with its id.
 
@@ -220,6 +246,10 @@ def write_run_group(
     A child whose ``run.json`` cannot be read or rewritten is left alone and
     logged: the group still stands, and that seed stays a loose run rather than
     failing a job whose training already finished.
+
+    ``status`` is "failed" only for a job none of whose units finished and that
+    nobody stopped; ``extra_metrics`` carries keys a writer kept for readers of
+    its older ``run.json`` (the classification K-fold's ``cv_aggregate``).
     """
     group = build_group(kind, report, report_json)
     children = _children_of(group)
@@ -282,16 +312,27 @@ def write_run_group(
                 metrics[key] = agg["mean"]
                 metric_keys[key] = metric_name
         group["metric_keys"] = metric_keys
+    elif kind == "kfold":
+        # Each fold scored on its held-out fold of the training data, so the
+        # mean is a validation score: under ``val_<name>``, never in the
+        # column of the held-out test split.
+        metric_keys = {}
+        for metric_name, agg in group["aggregates"].items():
+            if isinstance(agg, dict) and agg.get("mean") is not None:
+                metrics[f"val_{metric_name}"] = agg["mean"]
+                metric_keys[f"val_{metric_name}"] = metric_name
+        group["metric_keys"] = metric_keys
 
+    metrics.update(extra_metrics or {})
     run_dir = group_run_dir(models_dir, name, kind, group_id)
     run_dir.mkdir(parents=True, exist_ok=True)
     run_json: dict[str, Any] = {
         "id": group_id,
         "experiment": name,
         **inherited,
-        # Completed, as for a K-fold: a stop is the researcher's request, and
+        # Completed even when stopped: a stop is the researcher's request, and
         # ``stopped`` says that the job was cut (ADR-111).
-        "status": "completed",
+        "status": status,
         "stopped": group["stopped"],
         # Naive local time like every other run.json writer.
         "timestamp": datetime.now().isoformat(),

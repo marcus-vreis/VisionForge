@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import time
 from pathlib import Path
 
@@ -98,6 +99,12 @@ class TestRegressionCv:
             # persisted, incl. the flat per-fold CSV (fold_results rows)
             assert (Path(report["report_dir"]) / "cv_summary.json").exists()
             assert (Path(report["report_dir"]) / "cv_ranking.csv").exists()
+            # and listed in History as one group, folds under it (ADR-123)
+            group_json = tmp_path / "models" / "reg_cv_cv" / run_id / "run.json"
+            group = json.loads(group_json.read_text(encoding="utf-8"))["group"]
+            assert group["kind"] == "kfold"
+            assert [c["fold"] for c in group["children"]] == [0, 1]
+            assert group["aggregates"]["r2"]["mean"] == 0.85
         finally:
             routes_mod.run_regression_cross_validation = orig
             routes_mod._current_run = None

@@ -4351,10 +4351,23 @@ def _group_brief(
     """The list view of a group's ``run.json`` section."""
     kind = group["kind"]
     variants: dict[str, Any] = group.get("variants") or {}
-    if kind == "replicates":
+    if kind in ("replicates", "kfold"):
         children = group.get("children") or []
     else:
         children = [c for v in variants.values() for c in v.get("children") or []]
+    if kind == "kfold":
+        # The means sit under val_<name> (ADR-123), which is how the list labels
+        # them; each label gets the aggregate it came from.
+        aggregates = group.get("aggregates") or {}
+        final_aggregates = {
+            f"val_{name}": agg
+            for name, agg in aggregates.items()
+            if f"val_{name}" in final_metrics
+        }
+    elif kind == "replicates":
+        final_aggregates = _group_final_aggregates(task, group, final_metrics)
+    else:
+        final_aggregates = {}
     return RunGroupBrief(
         kind=kind,
         metric=group.get("metric"),
@@ -4363,11 +4376,7 @@ def _group_brief(
         n_finished=int(group.get("n_finished") or 0),
         stopped=bool(group.get("stopped")),
         child_ids=[c["run_id"] for c in children if c.get("run_id")],
-        final_aggregates=(
-            _group_final_aggregates(task, group, final_metrics)
-            if kind == "replicates"
-            else {}
-        ),
+        final_aggregates=final_aggregates,
         variants=list(variants),
         best_by_mean=group.get("best_by_mean"),
     )
@@ -5050,6 +5059,10 @@ async def _execute_task_cv(
             "stopped": stopped,
         }
         report["report_dir"] = _write_advanced_summary(req.config, "cv", report)
+        # One History entry for the job, its folds under it (ADR-123).
+        # The validated config: it names the task (config.task), which the
+        # request's raw dict may leave to the default.
+        _record_run_group("kfold", run_id, config.model_dump(mode="json"), report, "cv")
         _current_run = {
             "run_id": run_id,
             "status": "completed",
@@ -5323,13 +5336,13 @@ async def _execute_replicates(
 
 
 def _record_run_group(
-    kind: Literal["replicates", "replicated_comparison"],
+    kind: Literal["replicates", "replicated_comparison", "kfold"],
     run_id: str,
     config: dict[str, Any],
     report: dict[str, Any],
     report_name: str,
 ) -> None:
-    """Give a finished replicate job its own entry in History (ADR-113).
+    """Give a finished replicate job or K-fold its own entry in History (ADR-113, ADR-123).
 
     The job's trainings are ordinary runs and its numbers sit in the report
     just written; this writes the ``run.json`` that ties them together, copied

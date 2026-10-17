@@ -539,7 +539,9 @@ function RunCard({
           {group
             ? group.kind === "replicates"
               ? t.runGroup.card.seeds(group.n_finished, group.n_requested)
-              : t.runGroup.card.trainings(group.n_finished, group.n_requested)
+              : group.kind === "kfold"
+                ? t.runGroup.card.folds(group.n_finished, group.n_requested)
+                : t.runGroup.card.trainings(group.n_finished, group.n_requested)
             : t.history.card.epochs(run.epochs_completed)}
         </span>
       </div>
@@ -582,13 +584,17 @@ function RunCard({
         >
           {shownMetrics.map(({ key: k, label }) => {
             const shown =
-              group?.kind === "replicates" ? formatAggregate(group.final_aggregates[k]) : null;
+              group?.kind === "replicates" || group?.kind === "kfold"
+                ? formatAggregate(group.final_aggregates[k])
+                : null;
             return (
             <div
               key={k}
               title={
                 shown
-                  ? t.runGroup.card.meanTitle(shown.n, shown.low, shown.high)
+                  ? group?.kind === "kfold"
+                    ? t.runGroup.card.foldMeanTitle(shown.n, shown.std)
+                    : t.runGroup.card.meanTitle(shown.n, shown.low, shown.high)
                   : undefined
               }
               style={{ display: "flex", flexDirection: "column", gap: 1 }}
