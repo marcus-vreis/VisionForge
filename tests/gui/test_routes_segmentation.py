@@ -77,8 +77,10 @@ class TestSegmentationRun:
             resp = client.post("/api/segmentation/run", json=_payload(tmp_path))
             assert resp.status_code == 200, resp.text
 
-            for _ in range(50):
-                if "class" in captured:
+            # Wait for run(), not setup(): has_callback is written in run, and
+            # waiting on setup's key raced the assert below.
+            for _ in range(100):
+                if "has_callback" in captured:
                     break
                 time.sleep(0.05)
             assert captured.get("class") == "SegmentationBlock"
