@@ -59,11 +59,22 @@ def capture_environment() -> dict[str, str]:
         "torch": _safe_version("torch"),
         "torchvision": _safe_version("torchvision"),
         "numpy": _safe_version("numpy"),
-        # The distribution is "visionforge-studio"; "visionforge" is only the
-        # import name, so looking it up reported "unknown" in every run.json.
-        "visionforge": _safe_version("visionforge-studio"),
+        # The version the package itself reports: in a checkout that is the
+        # pyproject's, which the installed metadata lags until a reinstall, and
+        # the distribution's name ("visionforge-studio") once reported
+        # "unknown" here in every run.json.
+        "visionforge": _visionforge_version(),
         **_torch_runtime(),
     }
+
+
+def _visionforge_version() -> str:
+    """``visionforge.__version__``, or "unknown" if the package cannot say."""
+    try:
+        from visionforge import __version__
+    except ImportError:
+        return "unknown"
+    return str(__version__) or "unknown"
 
 
 __all__ = ["capture_environment"]

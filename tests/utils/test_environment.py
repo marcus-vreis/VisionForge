@@ -58,3 +58,13 @@ def test_visionforge_version_is_the_installed_distribution() -> None:
     env = capture_environment()
     assert env["visionforge"] == visionforge.__version__
     assert env["visionforge"] != "unknown"
+
+
+def test_a_checkout_records_the_version_the_package_reports(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    # In a checkout __version__ comes from pyproject.toml while the installed
+    # metadata lags until a reinstall; run.json must record what the package says
+    # (the 0.16.0 bump caught the two disagreeing).
+    import visionforge
+
+    monkeypatch.setattr(visionforge, "__version__", "9.9.9")
+    assert capture_environment()["visionforge"] == "9.9.9"
