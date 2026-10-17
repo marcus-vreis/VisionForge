@@ -5204,6 +5204,8 @@ check had not covered, and a detection run stopped mid-way going to `interrompid
 
 **Amended 2026-10-17: a finished run can replay the stages.** The tab was left on "done" with no way to see the drawing move again. A button "rever animação" (only when the stage is `done` and the family is not PatchCore) walks `preparing`, `training` and `testing` in about 13 s (3 + 6 + 4) and returns to the real stage; it can be clicked again once it ends. It is a generic replay, not the run played back: the numbers stay the run's final ones, and the caption "animação ilustrativa" stays on screen. It is local state (`useReplay`, over `lib/training-replay.ts`) that overrides the stage the tab shows; the story model is untouched. `storyMotion` decides the motion as before, so under `prefers-reduced-motion` the stages are highlighted with still arrows and no particles.
 
+**Amended 2026-10-17: the detector's heads end in a thumbnail.** The three boxes floated at the right with nothing joining them to the network. The drawing now ends in a small stylized image (a frame with three plain shapes as objects, no external image) and each head is linked to its left edge by a curve in the style of the other flows; the three boxes (small, medium, large, one per head, in the task's accent) are drawn over the objects. The forward and validation pulses go head, edge of the thumbnail, box, so they animate with the other flows and the still arrows follow the same route. The thumbnail is illustrative like the rest: where the boxes sit says nothing about a real prediction. Other families are unchanged (`Drawing.thumbnail` is `null`).
+
 ## ADR-119 — The training story names overfitting when the losses show it
 
 **Date:** 2026-10-15

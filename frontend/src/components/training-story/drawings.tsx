@@ -106,6 +106,66 @@ function DataSource({ at, tone }: { at: Pt; tone: Tone }) {
   );
 }
 
+/** The detector's result image: a frame with a few plain shapes as objects, and a
+ *  link from each head. The boxes are drawn over it by the caller. */
+function Thumbnail({
+  thumbnail,
+  links,
+  tone,
+}: {
+  thumbnail: NonNullable<Drawing["thumbnail"]>;
+  links: Array<[Pt, Pt]>;
+  tone: Tone;
+}) {
+  const { frame, objects } = thumbnail;
+  return (
+    <g>
+      {links.map(([from, to], i) => (
+        <path
+          key={i}
+          data-part="head-link"
+          data-head={i}
+          d={curve(from, to)}
+          fill="none"
+          stroke={tone.line}
+          strokeOpacity={tone.webOpacity * 1.9}
+          strokeWidth={1.3}
+        />
+      ))}
+      <rect
+        data-part="thumbnail"
+        x={frame.x}
+        y={frame.y}
+        width={frame.w}
+        height={frame.h}
+        rx={4}
+        fill={tone.line}
+        fillOpacity={tone.fillOpacity * 0.5}
+        stroke={tone.line}
+        strokeOpacity={tone.lineOpacity * 0.7}
+        strokeWidth={1.2}
+      />
+      <g
+        fill={tone.line}
+        fillOpacity={tone.fillOpacity * 1.6}
+        stroke={tone.line}
+        strokeOpacity={tone.lineOpacity * 0.5}
+        strokeWidth={1}
+      >
+        {objects.map((o, i) =>
+          o.shape === "circle" ? (
+            <circle key={i} data-part="thumb-object" cx={o.cx} cy={o.cy} r={o.r} />
+          ) : o.shape === "ellipse" ? (
+            <ellipse key={i} data-part="thumb-object" cx={o.cx} cy={o.cy} rx={o.rx} ry={o.ry} />
+          ) : (
+            <rect key={i} data-part="thumb-object" x={o.x} y={o.y} width={o.w} height={o.h} rx={3} />
+          ),
+        )}
+      </g>
+    </g>
+  );
+}
+
 /** The pulses of a drawing that trains by epochs, or the arrows that stand in. */
 function Flows({
   drawing,
@@ -188,9 +248,14 @@ function EpochDrawing({
           strokeDasharray={arc.kind === "recon" ? "4 4" : undefined}
         />
       ))}
+      {drawing.thumbnail && (
+        <Thumbnail thumbnail={drawing.thumbnail} links={drawing.links} tone={tone} />
+      )}
       {drawing.boxes.map((b, i) => (
         <rect
           key={i}
+          data-part="box"
+          data-head={i}
           x={b.x}
           y={b.y}
           width={b.w}

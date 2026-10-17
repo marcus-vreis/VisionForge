@@ -16,6 +16,11 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 ### Added
 
 - **A aba "Como funciona" ganhou o botão "rever animação".** Com o treino concluído, ele toca de novo, em câmera lenta (cerca de 13 s), os estágios dados, treino e teste com as partículas, e volta ao quadro final; pode ser repetido. É uma animação genérica: os números continuam os finais do run. Com movimento reduzido, só destaca os estágios, sem partículas. Não aparece no PatchCore (ADR-118).
+- **O desenho do detector, na aba "Como funciona", termina numa miniatura de imagem.** As três
+  cabeças se ligam por linhas à miniatura (um quadro com três formas simples como objetos), e as
+  três caixas, pequena, média e grande, aparecem desenhadas sobre esses objetos, na cor de destaque.
+  Antes eram três retângulos soltos à direita. As partículas e as setas passam pelas mesmas linhas.
+  Os outros desenhos não mudaram (ADR-118).
 
 ### Fixed
 

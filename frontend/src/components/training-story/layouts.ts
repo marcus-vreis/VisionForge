@@ -39,6 +39,18 @@ export interface Box {
   h: number;
 }
 
+/** A simple shape standing for an object in the detector's thumbnail. */
+export type ThumbObject =
+  | { shape: "circle"; cx: number; cy: number; r: number }
+  | { shape: "ellipse"; cx: number; cy: number; rx: number; ry: number }
+  | { shape: "rect"; x: number; y: number; w: number; h: number };
+
+/** The small image the detector's heads end in: a frame and the objects in it. */
+export interface Thumbnail {
+  frame: Box;
+  objects: ThumbObject[];
+}
+
 /** A drawing that trains by epochs: every family but PatchCore. */
 export type EpochFamily = Exclude<StoryFamily, "patchcore">;
 
@@ -49,6 +61,10 @@ export interface Drawing {
   webs: Array<[number, number]>;
   arcs: Arc[];
   boxes: Box[];
+  /** The detector's result image, where the boxes sit over the objects. */
+  thumbnail: Thumbnail | null;
+  /** Head to thumbnail links of the detector, one per head. */
+  links: Array<[Pt, Pt]>;
   /** Where the data comes from, left of the first column. */
   dataSource: Pt;
   /** The short route of the data into the first column. */
@@ -98,6 +114,8 @@ function cnn(output: StoryOutput): Drawing {
     webs: adjacent(columns.length),
     arcs: [],
     boxes: [],
+    thumbnail: null,
+    links: [],
     dataSource: DATA_SOURCE,
     skips: [],
     ...routes(columns),
@@ -130,6 +148,8 @@ function transformer(output: StoryOutput): Drawing {
     webs: adjacent(columns.length),
     arcs,
     boxes: [],
+    thumbnail: null,
+    links: [],
     dataSource: DATA_SOURCE,
     skips: [],
     ...routes(columns),
@@ -153,6 +173,8 @@ function encoderDecoder(): Drawing {
     webs: adjacent(columns.length),
     arcs,
     boxes: [],
+    thumbnail: null,
+    links: [],
     dataSource: DATA_SOURCE,
     // The two outer skips carry the signal; the inner one is only drawn.
     skips: [arcs[1].d, arcs[2].d],
@@ -172,17 +194,29 @@ function autoencoder(): Drawing {
     // The output is compared with the input: that is the whole supervision.
     arcs: [{ d: arcPath(neuronAt(columns[6], 1), neuronAt(columns[0], 1), -20), kind: "recon" }],
     boxes: [],
+    thumbnail: null,
+    links: [],
     dataSource: DATA_SOURCE,
     skips: [],
     ...routes(columns),
   };
 }
 
-/** Where the three boxes of the detector sit, small to large. */
+/** The result image of the detector: a frame with three objects of different sizes. */
+const THUMBNAIL: Thumbnail = {
+  frame: { x: 505, y: 38, w: 110, h: 114 },
+  objects: [
+    { shape: "circle", cx: 536, cy: 58, r: 6 },
+    { shape: "rect", x: 572, y: 66, w: 30, h: 24 },
+    { shape: "ellipse", cx: 548, cy: 119, rx: 28, ry: 17 },
+  ],
+};
+
+/** The three boxes, small to large, each one over one object of the thumbnail. */
 const DETECTOR_BOXES: Box[] = [
-  { x: 542, y: 34, w: 36, h: 22 },
-  { x: 534, y: 78, w: 52, h: 34 },
-  { x: 526, y: 125, w: 68, h: 40 },
+  { x: 527, y: 49, w: 18, h: 18 },
+  { x: 567, y: 61, w: 40, h: 34 },
+  { x: 516, y: 98, w: 64, h: 42 },
 ];
 
 function detector(): Drawing {
@@ -192,9 +226,12 @@ function detector(): Drawing {
   const columns = [...backbone, ...neck, heads];
   const trunk = [...backbone, ...neck];
   const centre = (b: Box): Pt => ({ x: b.x + b.w / 2, y: b.y + b.h / 2 });
+  // Each head enters the thumbnail's left edge at the height of its own box.
+  const entry = (k: number): Pt => ({ x: THUMBNAIL.frame.x, y: centre(DETECTOR_BOXES[k]).y });
   const headRoute = (frac: number, k: number): Pt[] => [
     ...chainThrough(trunk, frac, [DATA_SOURCE]),
     neuronAt(heads, k / 2),
+    entry(k),
     centre(DETECTOR_BOXES[k]),
   ];
   return {
@@ -204,6 +241,8 @@ function detector(): Drawing {
     // The feature pyramid: a lateral path from the backbone into the neck.
     arcs: [{ d: arcPath(neuronAt(backbone[2], 1), neuronAt(neck[1], 1), -18), kind: "lateral" }],
     boxes: DETECTOR_BOXES,
+    thumbnail: THUMBNAIL,
+    links: [0, 1, 2].map((k): [Pt, Pt] => [neuronAt(heads, k / 2), entry(k)]),
     dataSource: DATA_SOURCE,
     data: [DATA_SOURCE, neuronAt(backbone[0], 0.5)],
     forward: [headRoute(0.15, 0), headRoute(0.5, 1), headRoute(0.85, 2)],

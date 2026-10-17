@@ -19,6 +19,7 @@ import {
 } from "../../lib/training-story";
 import type { TrainingEvent } from "../../types/run";
 import { StoryDrawing } from "./drawings";
+import { drawingFor } from "./layouts";
 import { TrainingStory } from "./TrainingStory";
 import {
   accentForStory,
@@ -97,10 +98,47 @@ describe("each family's drawing", () => {
   });
 
   it("draws the detector's three boxes, and only the detector's", () => {
-    expect(count(draw("detector", "training", "none"), "<rect")).toBeGreaterThanOrEqual(3 + 3);
+    // Three sheets of data, the thumbnail's frame, its rect object and the boxes.
+    const html = draw("detector", "training", "none");
+    expect(count(html, 'data-part="box"')).toBe(3);
+    expect(count(html, "<rect")).toBe(3 + 1 + 1 + 3);
     for (const family of FAMILIES.filter((f) => f !== "detector" && f !== "patchcore")) {
       // The data source is three small sheets; there is nothing else drawn as a rect.
       expect(count(draw(family, "training", "none"), "<rect"), family).toBe(3);
+      expect(draw(family, "training", "none"), family).not.toContain("data-part=");
+    }
+  });
+
+  it("ends the detector in a thumbnail with the three boxes over its objects, each head linked to it", () => {
+    const html = draw("detector", "training", "none");
+    expect(count(html, 'data-part="thumbnail"')).toBe(1);
+    expect(count(html, 'data-part="thumb-object"')).toBe(3);
+    for (const head of [0, 1, 2]) {
+      expect(count(html, `data-part="head-link" data-head="${head}"`), `head ${head}`).toBe(1);
+      expect(count(html, `data-part="box" data-head="${head}"`), `box ${head}`).toBe(1);
+    }
+    // The boxes are drawn after the thumbnail, so they sit over it.
+    expect(html.indexOf('data-part="thumbnail"')).toBeLessThan(html.indexOf('data-part="box"'));
+  });
+
+  it("keeps the boxes inside the thumbnail, small to large", () => {
+    const { thumbnail, boxes } = drawingFor("detector", "classes");
+    const f = thumbnail!.frame;
+    for (const b of boxes) {
+      expect(b.x).toBeGreaterThanOrEqual(f.x);
+      expect(b.y).toBeGreaterThanOrEqual(f.y);
+      expect(b.x + b.w).toBeLessThanOrEqual(f.x + f.w);
+      expect(b.y + b.h).toBeLessThanOrEqual(f.y + f.h);
+    }
+    const areas = boxes.map((b) => b.w * b.h);
+    expect(areas).toEqual([...areas].sort((a, b) => a - b));
+    expect(drawingFor("cnn", "classes").thumbnail).toBeNull();
+  });
+
+  it("sends the detector's forward pulses through the thumbnail's edge to the boxes", () => {
+    const d = drawingFor("detector", "classes");
+    for (const route of d.forward) {
+      expect(route[route.length - 2].x).toBe(d.thumbnail!.frame.x);
     }
   });
 
