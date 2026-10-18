@@ -5582,6 +5582,6 @@ every trial, marking the best.
 **Consequences:** every multi-run job in VisionForge is now one History entry with its
 runs under it. The CSV writer takes the union of the trials' keys, since a trial that
 failed early lacks the run folder a finished one records. The classification random
-search still gives each trial its own seed (base seed + index), unlike the grid (ADR
-amended 2026-10-16); the trials' gaps in a random search therefore mix the seed with
-the hyperparameters, which its report should say until it is changed.
+search now trains every trial on the base seed, as the grid does since 2026-10-16
+(it gave trial *i* the seed base + *i*, so a gap between trials mixed the seed with
+the hyperparameters); its `best_config.yaml` carries that seed.

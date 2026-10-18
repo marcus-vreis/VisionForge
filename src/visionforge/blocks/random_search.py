@@ -121,7 +121,10 @@ class RandomSearchBlock(ExperimentBlock):
         n_trials = rs.n_trials
 
         for trial_idx in range(n_trials):
-            trial_seed = base_seed + trial_idx
+            # One seed for every trial, as in the grid: a gap between trials is
+            # then the hyperparameters' and not the seed's (ADR-124). The sampling
+            # of the hyperparameters has its own generator (rs.seed).
+            trial_seed = base_seed
             trial_overrides = {
                 name: param.sample(rng) for name, param in self._params.items()
             }
@@ -253,6 +256,7 @@ class RandomSearchBlock(ExperimentBlock):
             self._config,
             best_idx,
             best_overrides,
+            seed=self._config.training.seed,
         )
 
 

@@ -51,6 +51,9 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Fixed
 
+- **A busca aleatória da classificação treina todos os trials com a mesma seed**, como a
+  grade já fazia. Cada trial recebia a seed base + o seu índice, então a diferença entre dois
+  trials misturava o efeito dos hiperparâmetros com o da seed ([ADR-124](docs/dev/DECISIONS.md)).
 - **O `run.json` grava a versão que o VisionForge informa, também num checkout.** Quem roda do
   código-fonte tinha a versão do `pyproject.toml` na interface e a dos metadados instalados
   (mais antiga até reinstalar) no `run.json` de cada run.

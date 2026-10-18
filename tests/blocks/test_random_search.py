@@ -230,10 +230,11 @@ class TestRandomSearchBlockRun:
 
         assert mock_block.run.call_count == base_config.random_search.n_trials  # type: ignore[union-attr]
 
-    def test_training_seed_per_trial_is_master_plus_index(
+    def test_every_trial_trains_on_the_base_seed(
         self, base_config: ExperimentConfig
     ) -> None:
-        """Each trial's training seed must equal base_seed + trial_index."""
+        """One seed for every trial, as in the grid: a gap between trials is then
+        the hyperparameters', not the seed's (ADR-124)."""
         seeds_seen: list[int] = []
 
         def capture_setup(config: ExperimentConfig) -> None:
@@ -251,7 +252,7 @@ class TestRandomSearchBlockRun:
             block.run()
 
         base_seed = base_config.training.seed
-        expected = [base_seed + i for i in range(base_config.random_search.n_trials)]  # type: ignore[union-attr]
+        expected = [base_seed] * base_config.random_search.n_trials  # type: ignore[union-attr]
         assert seeds_seen == expected
 
     def test_empty_search_space_runs_n_trials(
