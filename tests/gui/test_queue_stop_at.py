@@ -410,7 +410,9 @@ class _Runner:
 
 
 class TestExecutorsHandTheTokenOn:
-    def test_comparison(self, client_and_routes: tuple, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    def test_comparison(
+        self, client_and_routes: tuple, monkeypatch, tmp_path: Path
+    ) -> None:  # type: ignore[no-untyped-def]
         _, routes_mod = client_and_routes
         token = CancellationToken()
         runner = _Runner()
@@ -427,7 +429,11 @@ class TestExecutorsHandTheTokenOn:
         state = _run_executor(
             routes_mod,
             routes_mod._execute_comparison(
-                runner, {"name": "c"}, ["a", "b"], "r2", "r"
+                runner,
+                {"name": "c", "output": _output(tmp_path)},
+                ["a", "b"],
+                "r2",
+                "r",
             ),
             token,
         )
@@ -438,7 +444,7 @@ class TestExecutorsHandTheTokenOn:
         assert state["report"]["failed_count"] == 0
         assert [t["model_arch"] for t in state["report"]["top_3"]] == ["a"]
 
-    def test_sweep(self, client_and_routes: tuple, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    def test_sweep(self, client_and_routes: tuple, monkeypatch, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
         from visionforge.gui.api.schemas import SweepRequest
 
         _, routes_mod = client_and_routes
@@ -454,7 +460,9 @@ class TestExecutorsHandTheTokenOn:
         req = SweepRequest(config={"name": "s"}, search_space={"x": [1, 2, 3]})
         state = _run_executor(
             routes_mod,
-            routes_mod._execute_sweep(runner, {"name": "s"}, req, "r2", "r"),
+            routes_mod._execute_sweep(
+                runner, {"name": "s", "output": _output(tmp_path)}, req, "r2", "r"
+            ),
             token,
         )
 
@@ -537,7 +545,7 @@ class TestExecutorsHandTheTokenOn:
             routes_mod,
             routes_mod._execute_replicates(
                 _OwnsItsLoop(),
-                {"name": "rep", "output": {"reports_dir": str(tmp_path)}},
+                {"name": "rep", "output": _output(tmp_path)},
                 [1, 2, 3],
                 "r2",
                 "r",
@@ -583,7 +591,7 @@ class TestExecutorsHandTheTokenOn:
             routes_mod,
             routes_mod._execute_replicates(
                 _LastSeedFinishes(),
-                {"name": "rep", "output": {"reports_dir": str(tmp_path)}},
+                {"name": "rep", "output": _output(tmp_path)},
                 [1, 2],
                 "r2",
                 "r",
@@ -641,7 +649,7 @@ class TestExecutorsHandTheTokenOn:
             routes_mod,
             routes_mod._execute_replicates(
                 runner,
-                {"name": "rep", "output": {"reports_dir": str(tmp_path)}},
+                {"name": "rep", "output": _output(tmp_path)},
                 [1, 2, 3],
                 "r2",
                 "r",
@@ -659,7 +667,7 @@ class TestExecutorsHandTheTokenOn:
         assert report["headline"] is None
 
     def test_replicated_comparison_keeps_what_ran(
-        self, client_and_routes: tuple, monkeypatch
+        self, client_and_routes: tuple, monkeypatch, tmp_path: Path
     ) -> None:  # type: ignore[no-untyped-def]
         """No pair left to test is a failure for a finished run, not a stopped one."""
         from visionforge.gui.api.schemas import ReplicatedComparisonRequest
@@ -687,7 +695,12 @@ class TestExecutorsHandTheTokenOn:
         state = _run_executor(
             routes_mod,
             routes_mod._execute_replicated_comparison(
-                runner, {"name": "rc"}, req, [1, 2], "r2", "r"
+                runner,
+                {"name": "rc", "output": _output(tmp_path)},
+                req,
+                [1, 2],
+                "r2",
+                "r",
             ),
             token,
         )

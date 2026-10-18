@@ -254,7 +254,13 @@ class TestTheExportsFollowTheRanking:
         from visionforge.core.cancellation import CancellationToken
 
         runner = _ScoredRunner("rmse", {"a": 0.5, "b": 0.2, "c": 0.9})
-        base = {**_base(), "output": {"reports_dir": str(tmp_path)}}
+        base = {
+            **_base(),
+            "output": {
+                "reports_dir": str(tmp_path),
+                "models_dir": str(tmp_path / "models"),
+            },
+        }
         routes_mod._active_cancel_token = CancellationToken()
         routes_mod._event_queue = None
         try:
@@ -291,7 +297,13 @@ class TestTheExportsFollowTheRanking:
         from visionforge.gui.api.schemas import SweepRequest
 
         runner = _ScoredRunner("rmse", {0.1: 0.7, 0.2: 0.3, 0.3: 0.5})
-        base = {**_base(), "output": {"reports_dir": str(tmp_path)}}
+        base = {
+            **_base(),
+            "output": {
+                "reports_dir": str(tmp_path),
+                "models_dir": str(tmp_path / "models"),
+            },
+        }
         req = SweepRequest(
             config=base, search_space={"training.learning_rate": [0.1, 0.2, 0.3]}
         )
