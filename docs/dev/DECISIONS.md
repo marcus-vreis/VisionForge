@@ -5544,3 +5544,44 @@ already on disk are still listed as before.
 open from it; two K-folds with the same name stay apart. A fold that could not be
 tagged stays a loose run, as a seed does. The detail of a K-fold no longer shows the
 classification block's `cv_aggregate` keys; the same numbers are in `group.aggregates`.
+
+## ADR-124 — A sweep or a model comparison is a History group of its trials
+
+**Date:** 2026-10-17
+**Status:** Accepted
+**Extends:** ADR-113 (replicate groups), ADR-123 (K-fold groups)
+
+**Context:** after ADR-123 the hyperparameter sweeps and the model comparisons were
+the last jobs whose trainings History listed as loose runs: a grid of four learning
+rates left four unrelated entries, and which one won lived only in the report under
+`outputs/reports`. The validation of 2026-10-16 flagged it, and ADR-123 deferred it
+because the children differ by hyperparameters, not by a repetition index, so they
+need their own view rather than the seed table.
+
+**Decision:** a fourth group kind, `sweep`, written by `core/run_groups.write_run_group`
+for every sweep and model comparison: the task sweeps (`core/sweep.py`, grid, random
+or Optuna), the task model comparison (`core/comparison.py`), and the classification
+grid search, random search and model comparison blocks. Each trial is a child with its
+index, the hyperparameters it tried (`overrides`; a model comparison's is
+`{"model.name": ...}`), its status, metrics and run folder; the group records the
+search mode (`grid`, `random`, `optuna`, `models`), the metric and its direction, and
+the index of the trial the report ranked first (`best_index`). The ranking stays the
+report's: the group copies who led it and recomputes nothing. The trials now record
+their run folder (`SweepTrial.run_dir`, `ComparisonTrial.run_dir`, the classification
+trial record), which also makes the trial CSVs list it. History shows the group with
+"x/y trials", the search mode and the best trial's hyperparameters; its detail lists
+every trial, marking the best.
+
+**Alternatives considered:**
+- *Reuse the replicated-comparison view.* Its paired tests need the same seeds across
+  variants; a sweep has one run per configuration and no test to show.
+- *Recompute the ranking for the group.* A second ranking could drift from the
+  report's; the classification sweeps rank by validation loss and the task sweeps by
+  the chosen metric, and the group keeps each one's own.
+
+**Consequences:** every multi-run job in VisionForge is now one History entry with its
+runs under it. The CSV writer takes the union of the trials' keys, since a trial that
+failed early lacks the run folder a finished one records. The classification random
+search still gives each trial its own seed (base seed + index), unlike the grid (ADR
+amended 2026-10-16); the trials' gaps in a random search therefore mix the seed with
+the hyperparameters, which its report should say until it is changed.

@@ -6,6 +6,7 @@ import {
   fewestSeeds,
   formatAggregate,
   formatNumber,
+  formatOverrides,
   formatP,
   hasFewSeeds,
   holmVerdict,
@@ -553,6 +554,52 @@ function ComparisonBody({ group, accent, knownRunIds, onOpenRun }: RunGroupDetai
   );
 }
 
+/** A sweep or a model comparison (ADR-124): one row per trial, in the order
+ *  the report kept, with what it tried and the trial its ranking put first. */
+function SweepBody({ group, accent, knownRunIds, onOpenRun }: RunGroupDetailProps) {
+  const t = useT();
+  const c = t.runGroup.detail.cols;
+  const metric = group.metric;
+  return (
+    <GroupSection title={t.runGroup.detail.trialsTitle}>
+      <div style={tableBoxStyle}>
+        <table style={tableStyle}>
+          <thead>
+            <tr>
+              <th style={thStyle}>{c.trial}</th>
+              <th style={thStyle}>{c.params}</th>
+              <th style={thStyle}>{metric ?? c.metric}</th>
+              <th style={thStyle}>{c.status}</th>
+              <th style={thStyle}>{c.run}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(group.children ?? []).map((child) => {
+              const best = child.trial_index != null && child.trial_index === group.best_index;
+              return (
+                <tr key={child.trial_index ?? child.run_id ?? ""}>
+                  <td style={{ ...tdLabelStyle, color: best ? accent : undefined }}>
+                    {child.trial_index != null ? child.trial_index + 1 : "—"}
+                    {best && ` · ${t.runGroup.detail.best}`}
+                  </td>
+                  <td style={tdStyle}>{formatOverrides(child.overrides ?? {}) || "—"}</td>
+                  <td style={tdStyle}>{formatNumber(metric ? child.metrics[metric] : null)}</td>
+                  <td style={tdStyle}>
+                    <ChildStatus child={child} />
+                  </td>
+                  <td style={tdStyle}>
+                    <OpenRun child={child} accent={accent} knownRunIds={knownRunIds} onOpenRun={onOpenRun} />
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </GroupSection>
+  );
+}
+
 /** What a replicate group shows in its run detail: the numbers its report
  *  recorded (mean ± CI95, the paired tests) and the runs it is made of. */
 export function RunGroupDetail(props: RunGroupDetailProps) {
@@ -573,6 +620,10 @@ export function RunGroupDetail(props: RunGroupDetailProps) {
           </Row>
           {group.kind === "kfold" ? (
             <Row label={t.runGroup.detail.foldsAsked}>{group.n_requested}</Row>
+          ) : group.kind === "sweep" ? (
+            <Row label={t.runGroup.detail.mode}>
+              {t.runGroup.detail.modes[group.mode ?? ""] ?? group.mode ?? "—"}
+            </Row>
           ) : (
             <Row label={t.runGroup.detail.seedsAsked}>
               {group.seeds.length > 0 ? group.seeds.join(", ") : "—"}
@@ -592,6 +643,8 @@ export function RunGroupDetail(props: RunGroupDetailProps) {
       </GroupSection>
       {group.kind === "replicated_comparison" ? (
         <ComparisonBody {...props} />
+      ) : group.kind === "sweep" ? (
+        <SweepBody {...props} />
       ) : (
         <ReplicatesBody {...props} />
       )}

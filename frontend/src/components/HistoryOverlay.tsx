@@ -2,7 +2,13 @@ import { useCallback, useEffect, useState } from "react";
 import { deleteRun, fetchRuns } from "../api/client";
 import { useI18n, useT } from "../i18n/useT";
 import { cardMetrics } from "../lib/compare-metrics";
-import { foldGroups, formatAggregate, isGroupRun, type HistoryEntry } from "../lib/run-groups";
+import {
+  foldGroups,
+  formatAggregate,
+  formatOverrides,
+  isGroupRun,
+  type HistoryEntry,
+} from "../lib/run-groups";
 import { TASK_ACCENT } from "../lib/task-accent";
 import { FAMILY_ORDER, familyLabel, taskFamily } from "../lib/task-family";
 import type { RunSummary } from "../types/run";
@@ -541,13 +547,38 @@ function RunCard({
               ? t.runGroup.card.seeds(group.n_finished, group.n_requested)
               : group.kind === "kfold"
                 ? t.runGroup.card.folds(group.n_finished, group.n_requested)
-                : t.runGroup.card.trainings(group.n_finished, group.n_requested)
+                : group.kind === "sweep"
+                  ? t.runGroup.card.trials(group.n_finished, group.n_requested)
+                  : t.runGroup.card.trainings(group.n_finished, group.n_requested)
             : t.history.card.epochs(run.epochs_completed)}
         </span>
       </div>
 
       {/* A replicated comparison has no single number: it names its variants and
           the one with the best mean, or says there is none. */}
+      {/* A sweep names how it searched and the hyperparameters ranked first. */}
+      {group?.kind === "sweep" && (
+        <div
+          style={{
+            display: "flex",
+            gap: 14,
+            flexWrap: "wrap",
+            paddingTop: 4,
+            borderTop: "1px solid var(--vf-panel-stroke)",
+            fontFamily: "var(--font-mono)",
+            fontSize: 11,
+            color: "var(--vf-text-dim)",
+          }}
+        >
+          <span>{t.runGroup.detail.modes[group.mode ?? ""] ?? group.mode ?? ""}</span>
+          <span style={{ color: group.best_overrides ? accent : "var(--vf-text-muted)" }}>
+            {group.best_overrides
+              ? t.runGroup.card.best(formatOverrides(group.best_overrides))
+              : t.runGroup.card.noBest}
+          </span>
+        </div>
+      )}
+
       {group?.kind === "replicated_comparison" && (
         <div
           style={{

@@ -4351,7 +4351,7 @@ def _group_brief(
     """The list view of a group's ``run.json`` section."""
     kind = group["kind"]
     variants: dict[str, Any] = group.get("variants") or {}
-    if kind in ("replicates", "kfold"):
+    if kind in ("replicates", "kfold", "sweep"):
         children = group.get("children") or []
     else:
         children = [c for v in variants.values() for c in v.get("children") or []]
@@ -4379,6 +4379,17 @@ def _group_brief(
         final_aggregates=final_aggregates,
         variants=list(variants),
         best_by_mean=group.get("best_by_mean"),
+        mode=group.get("mode"),
+        best_overrides=next(
+            (
+                c.get("overrides")
+                for c in children
+                if kind == "sweep"
+                and c.get("trial_index") == group.get("best_index")
+                and group.get("best_index") is not None
+            ),
+            None,
+        ),
     )
 
 
@@ -4763,6 +4774,28 @@ async def _execute_comparison(
         report["report_dir"] = _write_advanced_summary(
             config_dict, "comparison", report
         )
+        # The comparison's rows are ranked; their index is the order they ran in.
+        order = {name: i for i, name in enumerate(model_names)}
+        rows = [
+            {
+                **row,
+                "trial_index": order.get(row["model_arch"]),
+                "overrides": {"model.name": row["model_arch"]},
+            }
+            for row in report["trials"]
+        ]
+        top = next((r for r in rows if r["status"] == "success"), None)
+        _record_sweep_group(
+            run_id,
+            runner,
+            config_dict,
+            report,
+            mode="models",
+            planned=len(model_names),
+            trials=rows,
+            best_index=top["trial_index"] if top else None,
+            report_name="comparison",
+        )
         _current_run = {
             "run_id": run_id,
             "status": "completed",
@@ -4913,6 +4946,18 @@ async def _execute_sweep(
         report["planned_trials"] = planned
         report["report_dir"] = _write_advanced_summary(
             base_config_dict, "sweep", report
+        )
+        best = report["best_trial"]
+        _record_sweep_group(
+            run_id,
+            runner,
+            base_config_dict,
+            report,
+            mode=req.mode,
+            planned=planned,
+            trials=report["trials"],
+            best_index=best["trial_index"] if best else None,
+            report_name="sweep",
         )
         _current_run = {
             "run_id": run_id,
@@ -5336,7 +5381,7 @@ async def _execute_replicates(
 
 
 def _record_run_group(
-    kind: Literal["replicates", "replicated_comparison", "kfold"],
+    kind: Literal["replicates", "replicated_comparison", "kfold", "sweep"],
     run_id: str,
     config: dict[str, Any],
     report: dict[str, Any],
@@ -5363,6 +5408,37 @@ def _record_run_group(
         )
     except Exception:  # noqa: BLE001 - the report is on disk; do not fail the job
         logger.exception("GUI: could not write the History entry of group {}", run_id)
+
+
+def _record_sweep_group(
+    run_id: str,
+    runner: TaskRunner,
+    config_dict: dict[str, Any],
+    report: dict[str, Any],
+    *,
+    mode: str,
+    planned: int,
+    trials: list[dict[str, Any]],
+    best_index: int | None,
+    report_name: str,
+) -> None:
+    """Give a finished sweep or model comparison its History entry (ADR-124)."""
+    # The validated config names the task (config.task); the raw dict may not.
+    try:
+        config = runner.config_type.model_validate(config_dict).model_dump(mode="json")
+    except Exception:  # noqa: BLE001 - the entry still stands on the raw config
+        config = config_dict
+    group_report = {
+        "metric": report.get("metric"),
+        "metric_direction": report.get("metric_direction"),
+        "mode": mode,
+        "n_planned": planned,
+        "trials": trials,
+        "best_index": best_index,
+        "stopped": report.get("stopped", False),
+        "report_dir": report.get("report_dir"),
+    }
+    _record_run_group("sweep", run_id, config, group_report, report_name)
 
 
 def _replicates_report(

@@ -51,6 +51,8 @@ class SweepTrial:
     metrics: dict[str, float] = field(default_factory=dict)
     training_time_s: float | None = None
     error: str = ""
+    # The trial's own run folder, so History can fold it under the sweep (ADR-124).
+    run_dir: str | None = None
 
 
 def _set_nested(d: dict[str, Any], dot_key: str, value: Any) -> None:
@@ -139,6 +141,7 @@ def _execute_trial(
         trial.metrics = runner.metrics(result)
         trial.training_time_s = result.training_time_s
         trial.error = result.error
+        trial.run_dir = str(result.run_dir) if result.run_dir else None
         if result.stopped and result.status == "success":
             # Cut short by the stop: kept in the list, never ranked (ADR-111).
             trial.status = STOPPED

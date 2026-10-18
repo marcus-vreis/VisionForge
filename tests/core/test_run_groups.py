@@ -543,3 +543,72 @@ class TestKFoldGroup:
         group = build_group("kfold", report, None)
         assert group["n_finished"] == 1
         assert group["stopped"] is True
+
+
+def _sweep_report(models_dir: Path, name: str) -> dict[str, Any]:
+    trials = [
+        {
+            "trial_index": i,
+            "overrides": {"training.learning_rate": lr},
+            "status": "success",
+            "run_dir": str(_child_run(models_dir, f"{name}_t{i}", epochs=3)),
+            "metrics": {"r2": r2},
+            "error": "",
+        }
+        for i, (lr, r2) in enumerate([(0.01, 0.4), (0.001, 0.7)])
+    ]
+    return {
+        "metric": "r2",
+        "metric_direction": "higher",
+        "mode": "grid",
+        "n_planned": 3,
+        "trials": trials,
+        "best_index": 1,
+        "stopped": False,
+        "report_dir": None,
+    }
+
+
+class TestSweepGroup:
+    """A sweep or a model comparison is a History group of its trials (ADR-124)."""
+
+    def test_trials_are_the_children_and_the_best_is_named(
+        self, tmp_path: Path
+    ) -> None:
+        report = _sweep_report(tmp_path, "reg")
+        run_dir = write_run_group(
+            kind="sweep",
+            group_id="reg_sweep_1",
+            name="reg",
+            config={"name": "reg", "task": "regression"},
+            report=report,
+            report_json=None,
+            models_dir=tmp_path,
+        )
+
+        assert run_dir == tmp_path / "reg_sweep" / "reg_sweep_1"
+        data = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+        group = data["group"]
+        assert group["kind"] == "sweep"
+        assert group["mode"] == "grid"
+        assert group["metric"] == "r2" and group["metric_direction"] == "higher"
+        # Asked for three, two ran to the end.
+        assert (group["n_requested"], group["n_finished"]) == (3, 2)
+        assert [c["trial_index"] for c in group["children"]] == [0, 1]
+        assert group["children"][1]["overrides"] == {"training.learning_rate": 0.001}
+        assert group["best_index"] == 1
+        assert data["metrics"]["total_epochs"] == 6
+        for child in group["children"]:
+            child_json = json.loads(
+                (Path(child["run_dir"]) / "run.json").read_text(encoding="utf-8")
+            )
+            assert child_json["group_id"] == "reg_sweep_1"
+
+    def test_a_sweep_nobody_could_rank_has_no_best(self, tmp_path: Path) -> None:
+        report = _sweep_report(tmp_path, "reg")
+        for t in report["trials"]:
+            t["status"] = "failed"
+        report["best_index"] = None
+        group = build_group("sweep", report, None)
+        assert group["best_index"] is None
+        assert group["n_finished"] == 0

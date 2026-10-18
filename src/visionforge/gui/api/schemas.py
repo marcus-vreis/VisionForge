@@ -217,7 +217,7 @@ class RunGroupBrief(BaseModel):
     tests, is served by the run detail.
     """
 
-    kind: Literal["replicates", "replicated_comparison", "kfold"]
+    kind: Literal["replicates", "replicated_comparison", "kfold", "sweep"]
     metric: str | None = None
     seeds: list[int] = []
     n_requested: int = 0
@@ -234,6 +234,10 @@ class RunGroupBrief(BaseModel):
     # mean on the seeds they share (None when no ranking is possible).
     variants: list[str] = []
     best_by_mean: str | None = None
+    # Sweep or model comparison (ADR-124): how it searched ("grid", "random",
+    # "optuna", "models") and the hyperparameters of the trial ranked first.
+    mode: str | None = None
+    best_overrides: dict[str, Any] | None = None
 
 
 class RunSummary(BaseModel):

@@ -16,6 +16,8 @@ disk. The module only reads the report, tags the children, and writes JSON.
 
 A K-fold is the same shape with folds in place of seeds (ADR-123): its children
 are the folds' own runs and its aggregates the K-fold's mean ± std per metric.
+A sweep or a model comparison (ADR-124) has trials for children, each with the
+hyperparameters it tried, and names the trial its ranking put first.
 """
 
 from __future__ import annotations
@@ -29,7 +31,7 @@ from typing import Any, Literal
 
 from loguru import logger
 
-GroupKind = Literal["replicates", "replicated_comparison", "kfold"]
+GroupKind = Literal["replicates", "replicated_comparison", "kfold", "sweep"]
 
 # The folder under the models directory holds one sub-folder per group, named
 # by the group id, so running the same set twice leaves both in History rather
@@ -38,6 +40,7 @@ _DIR_SUFFIX: dict[str, str] = {
     "replicates": "replicates",
     "replicated_comparison": "comparison",
     "kfold": "cv",
+    "sweep": "sweep",
 }
 
 
@@ -88,6 +91,14 @@ def _fold_child(row: dict[str, Any]) -> dict[str, Any]:
     return child
 
 
+def _trial_child(row: dict[str, Any]) -> dict[str, Any]:
+    """One trial of a sweep or a model comparison, as History lists it."""
+    child = _child({**row, "seed": None}, None)
+    child["trial_index"] = row.get("trial_index")
+    child["overrides"] = row.get("overrides") or {}
+    return child
+
+
 def _count(children: list[dict[str, Any]]) -> int:
     return sum(1 for c in children if c["status"] == "success")
 
@@ -118,6 +129,21 @@ def _copy_group(
         "report_path": str(report_json) if report_json is not None else None,
         "report_dir": report.get("report_dir"),
     }
+
+    if kind == "sweep":
+        children = [_trial_child(row) for row in report.get("trials") or []]
+        group.update(
+            {
+                "mode": report.get("mode"),
+                "metric_direction": report.get("metric_direction"),
+                "n_requested": report.get("n_planned") or len(children),
+                "n_finished": _count(children),
+                "children": children,
+                # The ranking is the report's; the group only says who led it.
+                "best_index": report.get("best_index"),
+            }
+        )
+        return group
 
     if kind == "kfold":
         children = [_fold_child(row) for row in report.get("fold_results") or []]
@@ -217,7 +243,7 @@ def _writes_bare_names(config: dict[str, Any], donor: dict[str, Any] | None) -> 
 
 
 def _children_of(group: dict[str, Any]) -> list[dict[str, Any]]:
-    if group["kind"] in ("replicates", "kfold"):
+    if group["kind"] in ("replicates", "kfold", "sweep"):
         return list(group["children"])
     return [c for v in group["variants"].values() for c in v["children"]]
 

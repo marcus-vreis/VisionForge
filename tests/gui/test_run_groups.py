@@ -393,3 +393,64 @@ class TestKFold:
         mean = group["final_metrics"]["val_r2"]
         assert mean == pytest.approx(report["aggregate"]["r2"]["mean"])
         assert group["group"]["final_aggregates"]["val_r2"] == report["aggregate"]["r2"]
+
+
+class TestSweepAndComparison:
+    """A sweep and a model comparison are History groups of their trials (ADR-124)."""
+
+    def _listed(
+        self, client: TestClient, run_id: str
+    ) -> tuple[dict[str, Any], list[Any]]:
+        runs = client.get("/api/runs").json()
+        group = next(r for r in runs if r["run_id"] == run_id)
+        trials = [r for r in runs if r.get("group_id") == run_id]
+        return group, trials
+
+    def test_a_sweep_lists_its_trials_and_its_best(
+        self, client_and_routes: tuple, tmp_path: Path
+    ) -> None:
+        client, _ = client_and_routes
+        resp = client.post(
+            "/api/regression/sweep",
+            json={
+                "config": _config(tmp_path),
+                "mode": "grid",
+                "search_space": {"training.learning_rate": [0.01, 0.001]},
+                "metric": "r2",
+            },
+        )
+        assert resp.status_code == 200, resp.text
+        run_id = resp.json()["run_id"]
+        assert _finish(client)["status"] == "completed"
+
+        report = client.get(f"/api/experiment/result/{run_id}").json()["report"]
+        group, trials = self._listed(client, run_id)
+        assert group["task"] == "regression"
+        assert group["group"]["kind"] == "sweep"
+        assert group["group"]["mode"] == "grid"
+        assert group["group"]["n_finished"] == 2
+        assert len(trials) == 2
+        # The group names the trial the report ranked first, not its own pick.
+        assert group["group"]["best_overrides"] == report["best_trial"]["overrides"]
+
+    def test_a_model_comparison_lists_one_trial_per_architecture(
+        self, client_and_routes: tuple, tmp_path: Path
+    ) -> None:
+        client, _ = client_and_routes
+        resp = client.post(
+            "/api/regression/compare",
+            json={"config": _config(tmp_path), "model_names": ["resnet18", "resnet34"]},
+        )
+        assert resp.status_code == 200, resp.text
+        run_id = resp.json()["run_id"]
+        assert _finish(client)["status"] == "completed"
+
+        group, trials = self._listed(client, run_id)
+        assert group["group"]["kind"] == "sweep"
+        assert group["group"]["mode"] == "models"
+        assert len(trials) == 2
+        detail = client.get(f"/api/runs/{run_id}").json()["group"]
+        assert sorted(c["overrides"]["model.name"] for c in detail["children"]) == [
+            "resnet18",
+            "resnet34",
+        ]

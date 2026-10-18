@@ -60,6 +60,7 @@ class ModelComparisonBlock(ExperimentBlock):
         for index, arch in enumerate(mc.model_names):
             progress.start(runner, index, {"model.name": arch})
             trial_record: dict[str, Any] = {
+                "trial_index": index,
                 "model_arch": arch,
                 "status": "failed",
                 "error": "",
@@ -77,6 +78,10 @@ class ModelComparisonBlock(ExperimentBlock):
                 trial_config = ExperimentConfig.model_validate(trial_raw)
                 result = runner.run(trial_config)
 
+                # The architecture's own run folder (ADR-124).
+                trial_record["run_dir"] = (
+                    str(result.run_dir) if result.run_dir else None
+                )
                 if result.status == "success":
                     trial_record["status"] = "success"
                     trial_record["accuracy"] = result.metrics.get("accuracy")
@@ -135,6 +140,23 @@ class ModelComparisonBlock(ExperimentBlock):
 
         self._trials = ranked + failed
         self._write_artifacts()
+        from visionforge.blocks._search_utils import write_sweep_group
+
+        write_sweep_group(
+            self._config,
+            self._trials,
+            mode="models",
+            overrides_of=lambda t: {"model.name": t["model_arch"]},
+            metric=metric,
+            direction=infer_direction(metric),
+            best_index=ranked[0]["trial_index"] if ranked else None,
+            planned=len(mc.model_names),
+            stopped=job_was_stopped(
+                [t["status"] for t in self._trials],
+                len(mc.model_names),
+                self._cancel_token,
+            ),
+        )
 
     def report(self) -> dict[str, Any]:
         """Return top-3 architectures plus total/failed/stopped counts.

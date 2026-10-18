@@ -16,6 +16,7 @@ import {
   foldGroups,
   formatAggregate,
   formatNumber,
+  formatOverrides,
   formatP,
   hasFewSeeds,
   holmVerdict,
@@ -295,3 +296,16 @@ describe("fewestSeeds", () => {
     expect(enough !== null && hasFewSeeds(enough)).toBe(false);
   });
 });
+
+describe("formatOverrides", () => {
+  it("keeps the last part of each dot-path, joined on one line", () => {
+    expect(formatOverrides({ "training.learning_rate": 0.01, "model.name": "resnet18" })).toBe(
+      "learning_rate=0.01 · name=resnet18",
+    );
+  });
+
+  it("is empty for a trial that varied nothing", () => {
+    expect(formatOverrides({})).toBe("");
+  });
+});
+

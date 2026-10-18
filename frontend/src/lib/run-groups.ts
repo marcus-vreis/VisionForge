@@ -207,3 +207,11 @@ export function fewestSeeds(
   }
   return counts.length > 0 ? Math.min(...counts) : null;
 }
+
+/** A trial's hyperparameters as one short line: the last part of each dot-path
+ *  and its value ("learning_rate=0.01 · name=resnet18"). */
+export function formatOverrides(overrides: Record<string, unknown>): string {
+  return Object.entries(overrides)
+    .map(([path, value]) => `${path.split(".").pop()}=${String(value)}`)
+    .join(" · ");
+}

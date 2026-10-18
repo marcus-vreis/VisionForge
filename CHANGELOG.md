@@ -27,6 +27,12 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Changed
 
+- **Sweeps e comparações de modelos também viram um grupo no histórico.** Antes, uma grade de
+  quatro learning rates deixava quatro runs soltos, e qual venceu só aparecia no relatório.
+  Agora o sweep (grade, aleatório ou Optuna, em qualquer tarefa) e a comparação de modelos são
+  uma entrada só, com "x/y trials", o tipo de busca e os hiperparâmetros do melhor trial; ao
+  abrir, cada trial aparece numa linha com o que testou, a métrica e o link para o run
+  ([ADR-124](docs/dev/DECISIONS.md)).
 - **Os painéis de detecção, regressão, segmentação e anomalia seguem o layout da
   classificação.** K-fold, sweep e réplicas não têm mais um segundo botão de rodar dentro
   do card: o botão da barra de baixo roda tudo, e o card mostra o que vai rodar ("5 seeds")

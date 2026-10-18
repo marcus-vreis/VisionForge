@@ -126,7 +126,7 @@ export interface RunSummary {
 /** How a group job is told apart: a set of seeds of one config, one set of
  *  seeds per variant with paired tests between them, or the folds of a K-fold
  *  (ADR-123). */
-export type GroupKind = "replicates" | "replicated_comparison" | "kfold";
+export type GroupKind = "replicates" | "replicated_comparison" | "kfold" | "sweep";
 
 /** Distribution of one metric over a group's seeds, as the report recorded it
  *  (`aggregate_replicates`). Copied by the server, never recomputed here. */
@@ -163,6 +163,10 @@ export interface RunGroupBrief {
   /** Replicated comparison: the variants and the one with the best mean. */
   variants: string[];
   best_by_mean: string | null;
+  /** Sweep or model comparison (ADR-124): how it searched, and the
+   *  hyperparameters of the trial its ranking put first. */
+  mode?: string | null;
+  best_overrides?: Record<string, unknown> | null;
 }
 
 /** One seed (or, in a K-fold, one fold) of a group. `run_id` is null for a
@@ -172,6 +176,9 @@ export interface GroupChild {
   seed: number | null;
   /** The fold's index (from 0), K-fold only. */
   fold?: number | null;
+  /** Sweep or model comparison: the trial's index and what it tried. */
+  trial_index?: number | null;
+  overrides?: Record<string, unknown>;
   variant: string | null;
   /** `success`, `failed` or `stopped` (see lib/unit-status). */
   status: string;
@@ -246,6 +253,9 @@ export interface RunGroup {
   /** Variants a stop kept from starting. */
   not_run?: string[];
   underpowered?: boolean;
+  // Sweep or model comparison (ADR-124).
+  mode?: string | null;
+  best_index?: number | null;
 }
 
 /** The dataset a run trained on, as far as its run.json can prove it.

@@ -41,6 +41,8 @@ class ComparisonTrial:
     metrics: dict[str, float] = field(default_factory=dict)
     training_time_s: float | None = None
     error: str = ""
+    # The architecture's own run folder (ADR-124).
+    run_dir: str | None = None
 
 
 def run_model_comparison(
@@ -84,6 +86,7 @@ def run_model_comparison(
             trial.metrics = runner.metrics(result)
             trial.training_time_s = result.training_time_s
             trial.error = result.error
+            trial.run_dir = str(result.run_dir) if result.run_dir else None
             if result.stopped and result.status == "success":
                 trial.status = STOPPED
                 trial.error = STOPPED_NOTE

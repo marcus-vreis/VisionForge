@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 from collections.abc import Callable
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -11,6 +12,7 @@ from loguru import logger
 
 from visionforge.blocks.classification import ClassificationBlock
 from visionforge.core.cancellation import STOPPED, STOPPED_NOTE, CancellationToken
+from visionforge.core.run_groups import write_run_group
 from visionforge.core.task_runner import trial_progress_wrapper
 from visionforge.utils.config import ExperimentConfig
 
@@ -58,9 +60,12 @@ def write_trials_csv(csv_path: Path, trials: list[dict[str, Any]]) -> None:
     """Write a list of trial records to a CSV file."""
     if not trials:
         return
-    fieldnames = list(trials[0].keys())
+    # Every key any trial has, in first-seen order: a trial that failed early
+    # lacks keys a finished one records (its run folder), and taking the first
+    # row's keys alone made the writer refuse the rest.
+    fieldnames = list(dict.fromkeys(k for t in trials for k in t))
     with csv_path.open("w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer = csv.DictWriter(f, fieldnames=fieldnames, restval="")
         writer.writeheader()
         writer.writerows(trials)
 
@@ -135,6 +140,10 @@ def run_trial(
         report = block.report()
 
         trial_record["status"] = "success"
+        # The trial's own run folder, so History folds it under the sweep (ADR-124).
+        train = getattr(block, "_train_result", None)
+        if train is not None and train.model_path:
+            trial_record["run_dir"] = str(train.model_path.parent)
         trial_record["best_val_loss"] = report.get("train", {}).get("best_val_loss")
         trial_record["test_accuracy"] = report.get("eval", {}).get("accuracy")
         trial_record["test_f1"] = report.get("eval", {}).get("f1")
@@ -163,7 +172,72 @@ def run_trial(
         torch.cuda.empty_cache()
 
 
+# The per-trial numbers a classification sweep records, in the row a History
+# group lists for each trial.
+_TRIAL_METRIC_KEYS = (
+    "test_accuracy",
+    "test_f1",
+    "best_val_loss",
+    "accuracy",
+    "f1",
+    "auc_roc",
+)
+
+
+def write_sweep_group(
+    config: ExperimentConfig,
+    trials: list[dict[str, Any]],
+    *,
+    mode: str,
+    overrides_of: Callable[[dict[str, Any]], dict[str, Any]],
+    metric: str,
+    direction: str,
+    best_index: int | None,
+    planned: int,
+    stopped: bool,
+) -> None:
+    """Give a classification sweep or model comparison its History entry (ADR-124).
+
+    The last step of a job whose trials and report are done, so a failure is
+    logged, not raised: the researcher keeps the report and loses only the entry.
+    """
+    rows = [
+        {
+            "trial_index": t.get("trial_index", i),
+            "overrides": overrides_of(t),
+            "status": t["status"],
+            "run_dir": t.get("run_dir"),
+            "metrics": {k: t[k] for k in _TRIAL_METRIC_KEYS if t.get(k) is not None},
+            "error": t.get("error") or "",
+        }
+        for i, t in enumerate(trials)
+    ]
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    try:
+        write_run_group(
+            kind="sweep",
+            group_id=f"{config.name}_sweep_{stamp}",
+            name=config.name,
+            config=config.model_dump(mode="json"),
+            report={
+                "metric": metric,
+                "metric_direction": direction,
+                "mode": mode,
+                "n_planned": planned,
+                "trials": rows,
+                "best_index": best_index,
+                "stopped": stopped,
+                "report_dir": str(config.output.reports_dir / config.name),
+            },
+            report_json=None,
+            models_dir=config.output.models_dir,
+        )
+    except Exception:  # noqa: BLE001 - the report is on disk; do not fail the job
+        logger.exception("Could not write the History entry of sweep {}", config.name)
+
+
 __all__ = [
+    "write_sweep_group",
     "set_nested",
     "validate_dot_keys",
     "best_trial",

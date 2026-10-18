@@ -291,6 +291,30 @@ class TestArtifacts:
         # reproduces it carries that seed, not one shifted by its index.
         assert raw["training"]["seed"] == grid_2x2_config.training.seed
 
+    def test_writes_a_history_group_of_its_trials(
+        self, grid_2x2_config: ExperimentConfig
+    ) -> None:
+        """The grid is one History entry, its trials under it (ADR-124)."""
+        import json
+
+        block = self._run_block(grid_2x2_config)
+        found = list(
+            (grid_2x2_config.output.models_dir / f"{grid_2x2_config.name}_sweep").glob(
+                "*/run.json"
+            )
+        )
+        assert len(found) == 1, found
+        group = json.loads(found[0].read_text(encoding="utf-8"))["group"]
+        assert group["kind"] == "sweep"
+        assert group["mode"] == "grid"
+        assert group["n_requested"] == 4
+        assert [c["trial_index"] for c in group["children"]] == [0, 1, 2, 3]
+        # The group names the trial best_trial picked, with its hyperparameters.
+        best = block.report()["best_trial"]
+        assert group["best_index"] == best["trial_index"]
+        keys = list(grid_2x2_config.grid_search.hyperparameters)  # type: ignore[union-attr]
+        assert set(group["children"][0]["overrides"]) == set(keys)
+
     def test_report_returns_best_trial(self, grid_2x2_config: ExperimentConfig) -> None:
         """report() must return dict with best_trial, total_trials, successful_trials."""
         block = self._run_block(grid_2x2_config)

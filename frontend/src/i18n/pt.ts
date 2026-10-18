@@ -1068,11 +1068,13 @@ export const pt = {
       replicates: "Réplicas",
       replicated_comparison: "Comparação replicada",
       kfold: "K-fold",
+      sweep: "Sweep",
     },
     // The History card.
     card: {
       seeds: (finished: number, requested: number) => `${finished}/${requested} seeds`,
       folds: (finished: number, requested: number) => `${finished}/${requested} folds`,
+      trials: (finished: number, requested: number) => `${finished}/${requested} trials`,
       trainings: (finished: number, requested: number) =>
         `${finished}/${requested} treinos`,
       variants: (n: number) => `${n} ${n === 1 ? "variante" : "variantes"}`,
@@ -1107,6 +1109,7 @@ export const pt = {
         replicates: "// conjunto de réplicas",
         replicated_comparison: "// comparação replicada",
         kfold: "// validação cruzada (K-fold)",
+        sweep: "// sweep de hiperparâmetros",
       },
       metric: "métrica",
       seedsAsked: "seeds pedidas",
@@ -1131,6 +1134,8 @@ export const pt = {
         range: "min – max",
         seed: "seed",
         fold: "fold",
+        trial: "trial",
+        params: "hiperparâmetros",
         status: "status",
         run: "run",
         variant: "variante",
@@ -1150,6 +1155,10 @@ export const pt = {
       // The seeds and the runs they became.
       seedsTitle: "Seeds",
       foldsTitle: "Folds",
+      trialsTitle: "Trials",
+      mode: "busca",
+      modes: { grid: "grade", random: "aleatória", optuna: "Optuna", models: "comparação de modelos" } as Record<string, string>,
+      best: "melhor",
       open: "abrir",
       removed: "removido do histórico",
       noRun: "sem run",

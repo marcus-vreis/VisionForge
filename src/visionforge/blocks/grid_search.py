@@ -12,6 +12,7 @@ from visionforge.blocks._search_utils import (
     run_trial,
     validate_dot_keys,
     write_best_config_yaml,
+    write_sweep_group,
     write_trials_csv,
 )
 from visionforge.blocks.base import ExperimentBlock
@@ -107,6 +108,21 @@ class GridSearchBlock(ExperimentBlock):
                 break
 
         self._write_artifacts()
+        best = best_trial(self._trials)
+        write_sweep_group(
+            self._config,
+            self._trials,
+            mode="grid",
+            overrides_of=lambda t: {k: t.get(k) for k in keys},
+            # best_trial ranks by validation loss, lowest first.
+            metric="best_val_loss",
+            direction="lower",
+            best_index=best["trial_index"] if best else None,
+            planned=self._planned,
+            stopped=job_was_stopped(
+                [t["status"] for t in self._trials], self._planned, self._cancel_token
+            ),
+        )
 
         # Single terminal 'end' after the whole sweep so the GUI closes the SSE
         # stream once — inner trial 'end's were rewritten to 'trial_end'.

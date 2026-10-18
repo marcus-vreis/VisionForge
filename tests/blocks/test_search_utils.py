@@ -108,6 +108,22 @@ class TestWriteTrialsCsv:
         assert rows[1]["status"] == "failed"
         assert rows[1]["error"] == "boom"
 
+    def test_a_key_only_later_trials_have_gets_a_column(self, tmp_path: Path) -> None:
+        # A trial that failed early has no run folder; a later one does. Taking
+        # the columns from the first row made the writer refuse the second.
+        trials = [
+            {"trial_index": 0, "status": "failed", "error": "boom"},
+            {"trial_index": 1, "status": "success", "error": "", "run_dir": "C:/r/1"},
+        ]
+        csv_path = tmp_path / "out.csv"
+        write_trials_csv(csv_path, trials)
+
+        with csv_path.open(encoding="utf-8") as f:
+            rows = list(csv_mod.DictReader(f))
+
+        assert rows[0]["run_dir"] == ""
+        assert rows[1]["run_dir"] == "C:/r/1"
+
     def test_handles_error_message_with_commas(self, tmp_path: Path) -> None:
         """Error messages containing commas must round-trip cleanly through CSV."""
         trials = [
