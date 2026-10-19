@@ -13,6 +13,8 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ## [Unreleased]
 
+## [0.17.0] — 2026-10-19
+
 ### Added
 
 - **Tema claro.** Um seletor na barra do topo, ao lado de PT/EN, escolhe entre automático
