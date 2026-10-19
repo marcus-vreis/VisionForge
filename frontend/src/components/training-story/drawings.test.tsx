@@ -25,11 +25,15 @@ import {
   accentForStory,
   FAILED_COLOR,
   GRADIENT_COLOR,
+  IDLE_COLOR,
   INTERRUPTED_COLOR,
+  storyPalette,
   toneFor,
   VALIDATION_COLOR,
   withAlpha,
 } from "./tone";
+import { themeOf } from "./use-viewing";
+import type { Theme } from "../../lib/theme";
 
 const FAMILIES: StoryFamily[] = [
   "cnn",
@@ -54,7 +58,7 @@ function draw(
   family: StoryFamily,
   stage: StoryStage,
   motion: StoryMotion,
-  over: { phase?: StoryPhase | null; accent?: string; output?: "classes" | "value" } = {},
+  over: { phase?: StoryPhase | null; accent?: string; output?: "classes" | "value"; theme?: Theme } = {},
 ) {
   const ph =
     over.phase !== undefined
@@ -73,6 +77,7 @@ function draw(
       motion={motion}
       pulseKey={3}
       label="figure"
+      theme={over.theme}
     />,
   );
 }
@@ -299,6 +304,88 @@ describe("the colours of a drawing", () => {
   it("adds an opacity to an oklch colour, and leaves the rest alone", () => {
     expect(withAlpha("oklch(0.74 0.18 22)", 0.4)).toBe("oklch(0.74 0.18 22 / 0.4)");
     expect(withAlpha("rgba(1, 2, 3, 0.9)", 0.4)).toBe("rgba(1, 2, 3, 0.9)");
+  });
+
+  const TASKS: StoryTask[] = ["classification", "detection", "regression", "segmentation", "anomaly", "custom"];
+  const STAGES = ["queued", "preparing", "training", "testing", "done", "interrupted", "failed"] as const;
+  /** The lightness of an `oklch(L C H)` literal. */
+  const lightness = (color: string) => Number(/^oklch\(([\d.]+) /.exec(color)?.[1]);
+
+  it("keeps the dark theme's colours as they were", () => {
+    expect(storyPalette()).toEqual(storyPalette("dark"));
+    expect(storyPalette("dark")).toMatchObject({
+      failed: FAILED_COLOR,
+      interrupted: INTERRUPTED_COLOR,
+      gradient: GRADIENT_COLOR,
+      validation: VALIDATION_COLOR,
+      idle: IDLE_COLOR,
+    });
+    for (const task of TASKS) {
+      expect(accentForStory(task, undefined, "dark")).toBe(accentForStory(task, undefined));
+      for (const stage of STAGES) {
+        expect(toneFor(stage, ACCENT, "dark")).toEqual(toneFor(stage, ACCENT));
+      }
+    }
+  });
+
+  it("darkens every tone in the light theme, keeping its hue, and never hands over a variable", () => {
+    const dark = storyPalette("dark");
+    const light = storyPalette("light");
+    for (const key of ["failed", "interrupted", "gradient", "validation", "custom"] as const) {
+      expect(lightness(light[key]), key).toBeLessThanOrEqual(0.56);
+      // Lightness mirrored around 0.65, chroma and hue untouched.
+      expect(lightness(light[key]), key).toBeCloseTo(1.3 - lightness(dark[key]), 5);
+      expect(light[key].split(" ").slice(1).join(" "), key).toBe(dark[key].split(" ").slice(1).join(" "));
+    }
+    expect(light.idle).not.toBe(IDLE_COLOR);
+    expect(light.idle.startsWith("rgba(60, 66, 80")).toBe(true);
+    for (const task of TASKS) {
+      const accent = accentForStory(task, "var(--x)", "light");
+      expect(lightness(accent), task).toBeLessThanOrEqual(0.56);
+      for (const stage of STAGES) {
+        const tone = toneFor(stage, accent, "light");
+        expect(tone.line, `${task} ${stage}`).not.toContain("var(");
+        expect(tone.web, `${task} ${stage}`).not.toContain("var(");
+      }
+    }
+  });
+
+  it("matches the light theme's task accents to the tabs' (index.css)", () => {
+    expect(accentForStory("classification", undefined, "light")).toBe("oklch(0.56 0.18 22)");
+    expect(accentForStory("detection", undefined, "light")).toBe("oklch(0.52 0.15 150)");
+    expect(accentForStory("regression", undefined, "light")).toBe("oklch(0.52 0.16 240)");
+    expect(accentForStory("segmentation", undefined, "light")).toBe("oklch(0.52 0.18 305)");
+    expect(accentForStory("anomaly", undefined, "light")).toBe("oklch(0.50 0.15 75)");
+    expect(accentForStory("custom", "oklch(0.7 0.1 10)", "light")).toBe("oklch(0.7 0.1 10)");
+  });
+
+  it("tells the end states apart in the light theme too", () => {
+    const light = storyPalette("light");
+    expect(toneFor("interrupted", ACCENT, "light").line).toBe(light.interrupted);
+    expect(toneFor("failed", ACCENT, "light").line).toBe(light.failed);
+    expect(toneFor("queued", ACCENT, "light").line).toBe(light.idle);
+  });
+
+  it("draws in the light colours when given the light theme", () => {
+    const light = storyPalette("light");
+    const waiting = draw("cnn", "queued", "none", { theme: "light" });
+    expect(waiting).toContain(light.idle);
+    expect(waiting).not.toContain(IDLE_COLOR);
+    const learning = draw("cnn", "training", "particles", { theme: "light" });
+    expect(learning).toContain(light.gradient);
+    expect(learning).toContain(light.validation);
+    expect(learning).not.toContain(GRADIENT_COLOR);
+    expect(learning).not.toContain(VALIDATION_COLOR);
+    const scoring = draw("patchcore", "testing", "particles", { theme: "light", phase: phase("scoring") });
+    expect(scoring).toContain(light.validation);
+    expect(scoring).not.toContain(VALIDATION_COLOR);
+  });
+
+  it("reads the page's theme from data-theme, dark unless it says light", () => {
+    expect(themeOf("light")).toBe("light");
+    expect(themeOf("dark")).toBe("dark");
+    expect(themeOf(undefined)).toBe("dark");
+    expect(themeOf("sepia")).toBe("dark");
   });
 
   it("paints a drawing in the accent it is given", () => {

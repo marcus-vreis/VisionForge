@@ -33,6 +33,10 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 - **A busca aleatória da classificação treina todos os trials com a mesma seed**, como a
   grade já fazia. Cada trial recebia a seed base + o seu índice, então a diferença entre dois
   trials misturava o efeito dos hiperparâmetros com o da seed ([ADR-124](docs/dev/DECISIONS.md)).
+- **Os desenhos da aba "Como funciona" ficam legíveis no tema claro.** Neurônios, fluxos e o
+  estado de espera usavam os tons do tema escuro e quase sumiam no fundo branco; agora o tema
+  claro tem tons mais escuros, com a mesma cor de cada tarefa. O tema escuro não mudou
+  ([ADR-125](docs/dev/DECISIONS.md)).
 
 ## [0.16.0] — 2026-10-17
 

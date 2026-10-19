@@ -23,16 +23,9 @@ import type { RunStatus, TrainingEvent } from "../../types/run";
 import { canReplay } from "../../lib/training-replay";
 import { StoryDrawing } from "./drawings";
 import { LegendGlyph } from "./flow";
-import {
-  accentForStory,
-  FAILED_COLOR,
-  GRADIENT_COLOR,
-  INTERRUPTED_COLOR,
-  VALIDATION_COLOR,
-  withAlpha,
-} from "./tone";
+import { accentForStory, storyPalette, withAlpha } from "./tone";
 import { useReplay } from "./use-replay";
-import { useDocumentVisible, usePrefersReducedMotion } from "./use-viewing";
+import { useDocumentVisible, usePrefersReducedMotion, useResolvedTheme } from "./use-viewing";
 
 export interface TrainingStoryProps {
   events: readonly TrainingEvent[];
@@ -137,12 +130,14 @@ export function TrainingStory({
   const documentVisible = useDocumentVisible();
   const motion = storyMotion({ stage, reducedMotion, documentVisible, sheetVisible });
   const flows = activeFlows(stage, family, phase?.key ?? null);
-  const accent = accentForStory(spec.task, tabAccent);
+  const theme = useResolvedTheme();
+  const palette = storyPalette(theme);
+  const accent = accentForStory(spec.task, tabAccent, theme);
   const patchcore = family === "patchcore";
 
   const slot = slotOf(stage);
   const endColor =
-    stage === "failed" ? FAILED_COLOR : stage === "interrupted" ? INTERRUPTED_COLOR : accent;
+    stage === "failed" ? palette.failed : stage === "interrupted" ? palette.interrupted : accent;
 
   // One sentence: the phase's own while PatchCore is in one, else the stage's.
   const sentence =
@@ -157,12 +152,12 @@ export function TrainingStory({
   const legend = patchcore
     ? [
         { kind: "dot" as const, color: accent, text: s.legend.patchForward },
-        { kind: "diamond" as const, color: VALIDATION_COLOR, text: s.legend.patchScore },
+        { kind: "diamond" as const, color: palette.validation, text: s.legend.patchScore },
       ]
     : [
         { kind: "dot" as const, color: accent, text: s.legend.forward },
-        { kind: "ring" as const, color: GRADIENT_COLOR, text: s.legend.backward },
-        { kind: "diamond" as const, color: VALIDATION_COLOR, text: s.legend.validation },
+        { kind: "ring" as const, color: palette.gradient, text: s.legend.backward },
+        { kind: "diamond" as const, color: palette.validation, text: s.legend.validation },
       ];
 
   return (
@@ -253,6 +248,7 @@ export function TrainingStory({
           motion={motion}
           pulseKey={story.epochsSeen}
           label={s.figure(familyName)}
+          theme={theme}
         />
       </div>
 
@@ -297,8 +293,8 @@ export function TrainingStory({
             fontSize: 11.5,
             lineHeight: 1.5,
             color: "var(--vf-text)",
-            borderLeft: `3px solid ${GRADIENT_COLOR}`,
-            background: withAlpha(GRADIENT_COLOR, 0.1),
+            borderLeft: `3px solid ${palette.gradient}`,
+            background: withAlpha(palette.gradient, 0.1),
             borderRadius: 6,
             padding: "6px 10px",
           }}

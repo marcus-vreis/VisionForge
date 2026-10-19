@@ -29,7 +29,8 @@ import {
   type Drawing,
   type EpochFamily,
 } from "./layouts";
-import { GRADIENT_COLOR, IDLE_COLOR, toneFor, VALIDATION_COLOR, type Tone } from "./tone";
+import type { Theme } from "../../lib/theme";
+import { storyPalette, toneFor, type Tone } from "./tone";
 
 /** What every drawing is given. */
 export interface DrawingProps {
@@ -41,6 +42,8 @@ export interface DrawingProps {
   pulseKey: number;
   /** What a screen reader says the figure is. */
   label: string;
+  /** The theme the page is painted in; the fixed colours follow it. Dark by default. */
+  theme?: Theme;
 }
 
 function Frame({
@@ -174,8 +177,10 @@ function Flows({
   motion,
   pulseKey,
   accent,
-}: Pick<DrawingProps, "stage" | "flows" | "motion" | "pulseKey" | "accent"> & { drawing: Drawing }) {
+  theme,
+}: Pick<DrawingProps, "stage" | "flows" | "motion" | "pulseKey" | "accent" | "theme"> & { drawing: Drawing }) {
   if (motion === "none") return null;
+  const palette = storyPalette(theme);
   const forward = drawing.forward.map(chainPath);
   const backward = drawing.backward.map((r) => chainPath([...r].reverse()));
   if (motion === "arrows") {
@@ -184,11 +189,11 @@ function Flows({
         {flows.data && !flows.forward && <FlowArrows route={drawing.data} color={accent} />}
         {/* One route each, on three different rows so the arrows do not pile up. */}
         {flows.forward && <FlowArrows route={drawing.forward[0]} color={accent} />}
-        {flows.backward && <FlowArrows route={drawing.backward[1]} color={GRADIENT_COLOR} reverse />}
+        {flows.backward && <FlowArrows route={drawing.backward[1]} color={palette.gradient} reverse />}
         {flows.validation && (
           <FlowArrows
             route={stage === "testing" ? drawing.validation : drawing.validation.slice(-2)}
-            color={VALIDATION_COLOR}
+            color={palette.validation}
           />
         )}
       </g>
@@ -212,16 +217,16 @@ function Flows({
         ))}
       {flows.backward &&
         backward.map((d, i) => (
-          <Pulse key={`b${i}`} d={d} color={GRADIENT_COLOR} kind="ring" dur={11} phase={[0.35, 0.8][i % 2]} />
+          <Pulse key={`b${i}`} d={d} color={palette.gradient} kind="ring" dur={11} phase={[0.35, 0.8][i % 2]} />
         ))}
       {flows.validation && stage === "testing" && (
         <>
-          <Pulse d={chainPath(drawing.validation)} color={VALIDATION_COLOR} kind="diamond" dur={7} phase={0.3} />
-          <Pulse d={chainPath(drawing.validation)} color={VALIDATION_COLOR} kind="diamond" dur={7} phase={0.8} />
+          <Pulse d={chainPath(drawing.validation)} color={palette.validation} kind="diamond" dur={7} phase={0.3} />
+          <Pulse d={chainPath(drawing.validation)} color={palette.validation} kind="diamond" dur={7} phase={0.8} />
         </>
       )}
       {flows.validation && stage === "training" && (
-        <OneShotPulse d={chainPath(drawing.validation)} color={VALIDATION_COLOR} trigger={pulseKey} />
+        <OneShotPulse d={chainPath(drawing.validation)} color={palette.validation} trigger={pulseKey} />
       )}
     </g>
   );
@@ -231,8 +236,8 @@ function EpochDrawing({
   drawing,
   ...props
 }: DrawingProps & { drawing: Drawing }) {
-  const { accent, stage, label } = props;
-  const tone = toneFor(stage, accent);
+  const { accent, stage, label, theme } = props;
+  const tone = toneFor(stage, accent, theme);
   const web = useMemo(() => webPaths(drawing.columns, drawing.webs), [drawing]);
   return (
     <Frame label={label} family={drawing.family}>
@@ -338,9 +343,11 @@ export function PatchCoreDrawing({
   motion,
   label,
   phase,
+  theme,
 }: DrawingProps & { phase: StoryPhase | null }) {
   const d = useMemo(() => patchcoreDrawing(), []);
-  const tone = toneFor(stage, accent);
+  const tone = toneFor(stage, accent, theme);
+  const palette = storyPalette(theme);
   const active = zoneOfPhase(phase?.key ?? null);
   const lit = bankLit(stage, phase);
   const running = stage === "training" || stage === "testing";
@@ -387,21 +394,21 @@ export function PatchCoreDrawing({
         ))}
       </g>
       {scoring && (
-        <g fill="none" stroke={VALIDATION_COLOR} strokeOpacity={0.28} strokeWidth={1}>
+        <g fill="none" stroke={palette.validation} strokeOpacity={0.28} strokeWidth={1}>
           {d.nearest.map(([a, b], i) => (
             <path key={i} d={curve(b, a)} />
           ))}
         </g>
       )}
       <path d={queryReach} fill="none" stroke={tone.web} strokeOpacity={tone.webOpacity} strokeWidth={0.9} />
-      <Neurons columns={[d.query]} tone={scoring ? toneFor("training", VALIDATION_COLOR) : tone} />
+      <Neurons columns={[d.query]} tone={scoring ? toneFor("training", palette.validation, theme) : tone} />
       <circle
         cx={d.score.x}
         cy={d.score.y}
         r={9}
-        fill={VALIDATION_COLOR}
+        fill={palette.validation}
         fillOpacity={scoring ? 0.35 : 0.04}
-        stroke={scoring ? VALIDATION_COLOR : IDLE_COLOR}
+        stroke={scoring ? palette.validation : palette.idle}
         strokeOpacity={scoring ? 0.9 : 0.3}
         strokeWidth={1.6}
       />
@@ -416,7 +423,7 @@ export function PatchCoreDrawing({
             ))}
           {flows.validation &&
             d.scoring.map((r, i) => (
-              <Pulse key={`v${i}`} d={chainPath(r)} color={VALIDATION_COLOR} kind="diamond" dur={6} phase={[0.3, 0.8][i % 2]} />
+              <Pulse key={`v${i}`} d={chainPath(r)} color={palette.validation} kind="diamond" dur={6} phase={[0.3, 0.8][i % 2]} />
             ))}
         </g>
       )}
@@ -424,7 +431,7 @@ export function PatchCoreDrawing({
         <g>
           {flows.data && !flows.forward && <FlowArrows route={d.data} color={accent} />}
           {flows.forward && <FlowArrows route={route[1] ?? route[0]} color={accent} />}
-          {flows.validation && <FlowArrows route={d.scoring[0]} color={VALIDATION_COLOR} />}
+          {flows.validation && <FlowArrows route={d.scoring[0]} color={palette.validation} />}
         </g>
       )}
     </Frame>

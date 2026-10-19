@@ -10,6 +10,16 @@ export const TASK_ACCENT: Record<string, string> = {
   anomaly: "oklch(0.80 0.15 75)",
 };
 
+/** The same colors for the light theme, as index.css darkens the tabs' accents
+ *  (ADR-125); anomaly, which has no tab color there, is mirrored around 0.65. */
+export const TASK_ACCENT_LIGHT: Record<string, string> = {
+  classification: "oklch(0.56 0.18 22)",
+  detection: "oklch(0.52 0.15 150)",
+  regression: "oklch(0.52 0.16 240)",
+  segmentation: "oklch(0.52 0.18 305)",
+  anomaly: "oklch(0.50 0.15 75)",
+};
+
 const FALLBACK = "var(--vf-text-muted)";
 
 /** The accent of a task as a run records it: classification keeps its problem

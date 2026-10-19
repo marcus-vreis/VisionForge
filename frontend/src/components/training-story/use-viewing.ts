@@ -4,6 +4,7 @@
  */
 
 import { useSyncExternalStore } from "react";
+import type { Theme } from "../../lib/theme";
 
 const REDUCED = "(prefers-reduced-motion: reduce)";
 
@@ -33,5 +34,27 @@ export function useDocumentVisible(): boolean {
     subscribeVisibility,
     () => document.visibilityState !== "hidden",
     () => true,
+  );
+}
+
+function subscribeTheme(onChange: () => void): () => void {
+  const observer = new MutationObserver(onChange);
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  return () => observer.disconnect();
+}
+
+/** The theme a `data-theme` value names: anything but `light` is `dark`, the
+ *  palette the drawings had before ADR-125. */
+export function themeOf(dataTheme: string | undefined): Theme {
+  return dataTheme === "light" ? "light" : "dark";
+}
+
+/** The theme `<html data-theme>` is painted in (ADR-125): the drawings pick
+ *  literal colours by it. Without a DOM it is `dark`. */
+export function useResolvedTheme(): Theme {
+  return useSyncExternalStore(
+    subscribeTheme,
+    () => themeOf(document.documentElement.dataset.theme),
+    () => "dark",
   );
 }

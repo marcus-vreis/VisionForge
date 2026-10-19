@@ -5640,7 +5640,14 @@ can be converted the same way.
 **Consequences:** the light theme reuses the dark layout and accents, so a few
 decorations (glows, the grain) are toned down rather than redesigned. The training
 story's SVG drawings and the task accents (`training-story/tone.ts`, `lib/task-accent.ts`)
-stay literal, since SVG attributes do not resolve CSS variables; they keep their dark-tuned
-tones in the light theme, and the codemod skips both files. A new inline color in a
+stay literal strings, and the codemod skips both files: the drawings derive translucent
+tones from them (`withAlpha`) and their tests compare the markup as text. Instead they
+take the resolved theme (`useResolvedTheme`, which watches `<html data-theme>`) and pick a
+second set of literals for the light one: the task accents as index.css darkens the tabs'
+(`TASK_ACCENT_LIGHT`), the other tones mirrored around 0.65 (validation 0.86 → 0.44), and
+`--lt-idle`'s value for what is waiting. The dark set is unchanged. (Chrome 152 does resolve
+`var()` and `calc()` in SVG presentation attributes, so `CompareRunsPanel`'s chart labels
+with `fill="var(--vf-text-muted)"` follow the theme as they are.) The history's task
+colors still read the dark `TASK_ACCENT`. A new inline color in a
 component should be a token or go through the codemod; a literal written for the dark
 background will look wrong in the light theme.
