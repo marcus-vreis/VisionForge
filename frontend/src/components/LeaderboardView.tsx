@@ -12,6 +12,7 @@ import {
 } from "../lib/leaderboard";
 import { formatAggregate, formatNumber, type HistoryEntry } from "../lib/run-groups";
 import { accentForTask } from "../lib/task-accent";
+import { useResolvedTheme } from "./training-story/use-viewing";
 import { familyLabel, taskFamily } from "../lib/task-family";
 import { MenuSelect } from "./controls";
 
@@ -285,7 +286,7 @@ function BoardCard({
 }) {
   const t = useT();
   const unknown = board.identity.basis === "unknown";
-  const accent = accentForTask(board.task);
+  const accent = accentForTask(board.task, useResolvedTheme());
   const family = taskFamily(board.task);
 
   const metrics = unknown ? [] : boardMetrics(board.entries);

@@ -5647,7 +5647,9 @@ second set of literals for the light one: the task accents as index.css darkens 
 (`TASK_ACCENT_LIGHT`), the other tones mirrored around 0.65 (validation 0.86 → 0.44), and
 `--lt-idle`'s value for what is waiting. The dark set is unchanged. (Chrome 152 does resolve
 `var()` and `calc()` in SVG presentation attributes, so `CompareRunsPanel`'s chart labels
-with `fill="var(--vf-text-muted)"` follow the theme as they are.) The history's task
-colors still read the dark `TASK_ACCENT`. A new inline color in a
+with `fill="var(--vf-text-muted)"` follow the theme as they are.) The history, a run's
+detail, the leaderboard and the run comparison pick their task colors the same way
+(`accentForTask(task, theme)`, `taskAccents(theme)`), so a run is the same color there as
+in its drawing in either theme. A new inline color in a
 component should be a token or go through the codemod; a literal written for the dark
 background will look wrong in the light theme.

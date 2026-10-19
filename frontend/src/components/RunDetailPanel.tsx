@@ -29,6 +29,7 @@ import { stdDdof } from "../lib/cv-std";
 import { STOPPED_COLOR, unitState } from "../lib/unit-status";
 import type { MetricCI } from "../types/run";
 import { accentForTask } from "../lib/task-accent";
+import { useResolvedTheme } from "./training-story/use-viewing";
 import { Lightbox } from "./Lightbox";
 import { RunGroupDetail } from "./RunGroupDetail";
 
@@ -103,6 +104,7 @@ function getConfigRecord(
 
 export function RunDetailPanel({ runId, onBack, onOpenRun, knownRunIds }: RunDetailPanelProps) {
   const { t, locale } = useI18n();
+  const theme = useResolvedTheme();
   const graphLabels: Record<string, string> = t.plots.labels;
   const [detail, setDetail] = useState<RunDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -570,7 +572,7 @@ export function RunDetailPanel({ runId, onBack, onOpenRun, knownRunIds }: RunDet
           {detail.group && (
             <RunGroupDetail
               group={detail.group}
-              accent={accentForTask(task)}
+              accent={accentForTask(task, theme)}
               knownRunIds={knownRunIds}
               onOpenRun={onOpenRun}
             />
@@ -599,7 +601,7 @@ export function RunDetailPanel({ runId, onBack, onOpenRun, knownRunIds }: RunDet
                     style={{
                       padding: "6px 12px",
                       background: "rgb(var(--lt-ink, 255 255 255) / 0.04)",
-                      border: `1px solid ${accentForTask(task)}`,
+                      border: `1px solid ${accentForTask(task, theme)}`,
                       borderRadius: 8,
                       color: "var(--vf-text)",
                       fontFamily: "var(--font-mono)",

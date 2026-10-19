@@ -37,6 +37,10 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
   estado de espera usavam os tons do tema escuro e quase sumiam no fundo branco; agora o tema
   claro tem tons mais escuros, com a mesma cor de cada tarefa. O tema escuro não mudou
   ([ADR-125](docs/dev/DECISIONS.md)).
+- **As cores das tarefas no histórico, no detalhe do run, no leaderboard e na comparação de
+  runs acompanham o tema claro**, com os mesmos tons escurecidos dos desenhos; antes ficavam
+  os tons claros do tema escuro, pouco legíveis no fundo branco. O tema escuro não mudou
+  ([ADR-125](docs/dev/DECISIONS.md)).
 
 ## [0.16.0] — 2026-10-17
 

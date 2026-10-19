@@ -1,3 +1,5 @@
+import type { Theme } from "./theme";
+
 /** The color each task goes by in the interface: classification red, detection
  *  green, regression blue, segmentation violet (anomaly amber). The history list
  *  and a run's detail read it from here, so a run is the same color wherever it
@@ -22,11 +24,18 @@ export const TASK_ACCENT_LIGHT: Record<string, string> = {
 
 const FALLBACK = "var(--vf-text-muted)";
 
+/** The task colors of a theme. They stay literals in both: the training story
+ *  sets them as SVG attributes and the history appends alpha to them. */
+export function taskAccents(theme: Theme = "dark"): Record<string, string> {
+  return theme === "light" ? TASK_ACCENT_LIGHT : TASK_ACCENT;
+}
+
 /** The accent of a task as a run records it: classification keeps its problem
  *  type (`binary`, `multiclass`) where the others keep their own name, and a
  *  researcher's own task (`custom:<key>`) has no color of its own. */
-export function accentForTask(task: string | null | undefined): string {
+export function accentForTask(task: string | null | undefined, theme: Theme = "dark"): string {
   if (!task || task.startsWith("custom:")) return FALLBACK;
-  if (task in TASK_ACCENT && task !== "classification") return TASK_ACCENT[task];
-  return TASK_ACCENT.classification;
+  const accents = taskAccents(theme);
+  if (task in accents && task !== "classification") return accents[task];
+  return accents.classification;
 }

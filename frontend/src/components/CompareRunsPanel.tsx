@@ -17,6 +17,7 @@ import type { TaskDescriptor } from "../lib/custom-tasks";
 import { compareDatasets } from "../lib/dataset-identity";
 import { aggregateForRow, formatAggregate } from "../lib/run-groups";
 import { accentForTask } from "../lib/task-accent";
+import { useResolvedTheme } from "./training-story/use-viewing";
 
 interface CompareRunsPanelProps {
   runIds: string[];
@@ -771,7 +772,7 @@ function EpochCurves({ details, task }: { details: RunDetail[]; task: string }) 
     servedDirections(details),
   );
   const shown = selectedCurves(available, picked);
-  const accent = accentForTask(task);
+  const accent = accentForTask(task, useResolvedTheme());
   const without = details.filter((d) => d.history.length === 0);
 
   if (available.length === 0 && without.length === 0) return null;
