@@ -14,6 +14,15 @@ só os comandos mudam:
 Leva de 5 a 15 minutos, quase tudo de download: o PyTorch tem de 200 MB (CPU) a uns
 3 GB (CUDA).
 
+**O que já foi conferido:** em 19/10/2026, a 0.17.0 do PyPI foi instalada seguindo os
+passos 2, 3 e 5 deste guia no Windows, no Ubuntu e no macOS (Apple Silicon), com Python
+3.12 e 3.13; nos seis casos o `doctor` terminou em `environment looks good` e o
+`selftest --quick` em `5/5 cases passed` (workflow
+[Install from PyPI](https://github.com/marcus-vreis/VisionForge/actions/workflows/install-smoke.yml),
+que roda de novo a cada release). Essas máquinas não têm GPU nem tela: o passo 4 com placa
+NVIDIA e a interface no navegador foram usados no Windows (a partir do código-fonte), mas
+ainda não no Linux nem no Mac.
+
 **Requisitos:** Python 3.12 ou 3.13, uns 6 GB livres em disco e internet na instalação.
 Depois de instalado, tudo roda na sua máquina, sem nuvem. Uma GPU NVIDIA deixa o treino
 muito mais rápido, mas não é obrigatória: os datasets de exemplo treinam em segundos na CPU.
