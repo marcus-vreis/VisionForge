@@ -996,6 +996,8 @@ export const en: Dict = {
       variants: (n: number) => `${n} ${n === 1 ? "variant" : "variants"}`,
       best: (label: string) => `best mean: ${label}`,
       noBest: "no best mean",
+      bestTrial: (label: string) => `best trial: ${label}`,
+      noBestTrial: "no finished trial",
       stopped: "stopped",
       stoppedTitle: "Stopped on request: the aggregate uses only what finished.",
       showRuns: (n: number) => `▸ ${n} ${n === 1 ? "run in the group" : "runs in the group"}`,

@@ -215,3 +215,14 @@ export function formatOverrides(overrides: Record<string, unknown>): string {
     .map(([path, value]) => `${path.split(".").pop()}=${String(value)}`)
     .join(" · ");
 }
+
+/** What a sweep's History card names as its best trial; null when none finished. */
+export function sweepBestLabel(
+  mode: string | null | undefined,
+  overrides: Record<string, unknown> | null | undefined,
+): string | null {
+  if (!overrides) return null;
+  // A model comparison varies one thing, the architecture: its name says it all.
+  if (mode === "models" && "model.name" in overrides) return String(overrides["model.name"]);
+  return formatOverrides(overrides) || "—";
+}

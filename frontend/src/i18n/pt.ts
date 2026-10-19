@@ -1080,6 +1080,8 @@ export const pt = {
       variants: (n: number) => `${n} ${n === 1 ? "variante" : "variantes"}`,
       best: (label: string) => `melhor média: ${label}`,
       noBest: "sem melhor média",
+      bestTrial: (label: string) => `melhor trial: ${label}`,
+      noBestTrial: "nenhum trial concluído",
       stopped: "parado",
       stoppedTitle: "Parado a pedido: a agregação usa só o que terminou.",
       showRuns: (n: number) => `▸ ${n} ${n === 1 ? "run do grupo" : "runs do grupo"}`,

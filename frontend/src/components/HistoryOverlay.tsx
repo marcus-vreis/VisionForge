@@ -5,7 +5,7 @@ import { cardMetrics } from "../lib/compare-metrics";
 import {
   foldGroups,
   formatAggregate,
-  formatOverrides,
+  sweepBestLabel,
   isGroupRun,
   type HistoryEntry,
 } from "../lib/run-groups";
@@ -571,11 +571,14 @@ function RunCard({
           }}
         >
           <span>{t.runGroup.detail.modes[group.mode ?? ""] ?? group.mode ?? ""}</span>
-          <span style={{ color: group.best_overrides ? accent : "var(--vf-text-muted)" }}>
-            {group.best_overrides
-              ? t.runGroup.card.best(formatOverrides(group.best_overrides))
-              : t.runGroup.card.noBest}
-          </span>
+          {(() => {
+            const best = sweepBestLabel(group.mode, group.best_overrides);
+            return (
+              <span style={{ color: best ? accent : "var(--vf-text-muted)" }}>
+                {best ? t.runGroup.card.bestTrial(best) : t.runGroup.card.noBestTrial}
+              </span>
+            );
+          })()}
         </div>
       )}
 

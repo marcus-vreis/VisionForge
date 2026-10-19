@@ -18,6 +18,7 @@ import {
   formatNumber,
   formatOverrides,
   formatP,
+  sweepBestLabel,
   hasFewSeeds,
   holmVerdict,
   isGroupRun,
@@ -309,3 +310,21 @@ describe("formatOverrides", () => {
   });
 });
 
+
+describe("sweepBestLabel", () => {
+  it("names the model a comparison ranked first, not a dot-path", () => {
+    expect(sweepBestLabel("models", { "model.name": "resnet18" })).toBe("resnet18");
+  });
+
+  it("lists the hyperparameters a grid or random search ranked first", () => {
+    expect(sweepBestLabel("grid", { "training.learning_rate": 0.01 })).toBe(
+      "learning_rate=0.01",
+    );
+  });
+
+  it("prints a dash for a search with no hyperparameter, and null with no best", () => {
+    expect(sweepBestLabel("grid", {})).toBe("—");
+    expect(sweepBestLabel("grid", null)).toBeNull();
+    expect(sweepBestLabel("grid", undefined)).toBeNull();
+  });
+});
