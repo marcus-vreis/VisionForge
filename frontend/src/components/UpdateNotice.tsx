@@ -119,7 +119,7 @@ export function UpdateNotice() {
           gap: 6,
           padding: "3px 9px",
           borderRadius: 999,
-          background: "rgba(255,255,255,0.03)",
+          background: "rgb(var(--lt-ink, 255 255 255) / 0.03)",
           border: `1px solid ${failed ? "oklch(0.7 0.16 25)" : "var(--accent-vf)"}`,
           color: "var(--vf-text)",
           cursor: "pointer",
@@ -150,9 +150,9 @@ export function UpdateNotice() {
             padding: 14,
             borderRadius: 12,
             // Opaque, like the guide menu: the panel sits over the tab bar.
-            background: "rgba(10,12,16,0.97)",
+            background: "rgb(var(--lt-surface, 10 12 16) / 0.97)",
             border: "1px solid var(--vf-panel-stroke)",
-            boxShadow: "0 12px 30px rgba(0,0,0,0.5)",
+            boxShadow: "0 12px 30px rgb(var(--lt-shade, 0 0 0) / 0.5)",
             display: "flex",
             flexDirection: "column",
             gap: 10,
@@ -176,7 +176,7 @@ export function UpdateNotice() {
                     flex: 1,
                     padding: "6px 8px",
                     borderRadius: 6,
-                    background: "rgba(0,0,0,0.35)",
+                    background: "rgb(var(--lt-shade, 0 0 0) / 0.35)",
                     color: "var(--vf-text)",
                     overflowX: "auto",
                     whiteSpace: "nowrap",
@@ -200,7 +200,7 @@ export function UpdateNotice() {
                 padding: "8px 12px",
                 borderRadius: 8,
                 border: "1px solid var(--accent-vf)",
-                background: "rgba(255,255,255,0.04)",
+                background: "rgb(var(--lt-ink, 255 255 255) / 0.04)",
                 color: "var(--vf-text)",
                 cursor: "pointer",
                 textTransform: "uppercase",
@@ -224,7 +224,7 @@ export function UpdateNotice() {
                     padding: "8px 12px",
                     borderRadius: 8,
                     border: "1px solid var(--accent-vf)",
-                    background: "rgba(255,255,255,0.06)",
+                    background: "rgb(var(--lt-ink, 255 255 255) / 0.06)",
                     color: "var(--vf-text)",
                     cursor: "pointer",
                     textTransform: "uppercase",
@@ -240,7 +240,7 @@ export function UpdateNotice() {
           )}
 
           {phase === "error" && error && (
-            <div style={{ ...MONO, lineHeight: 1.5, color: "oklch(0.75 0.15 25)" }}>{error}</div>
+            <div style={{ ...MONO, lineHeight: 1.5, color: "oklch(calc(0.75 - var(--lt-flip, 0) * 0.2) 0.15 25)" }}>{error}</div>
           )}
           {phase === "timeout" && (
             <div style={{ ...MONO, lineHeight: 1.5, color: "var(--vf-text)" }}>{u.timeout}</div>

@@ -3,6 +3,7 @@ import { fetchSystemInfo } from "../api/client";
 import { useI18n } from "../i18n/useT";
 import type { GuideId } from "../lib/guides";
 import { GuideMenu } from "./GuideMenu";
+import { ThemeSwitch } from "./ThemeSwitch";
 import { UpdateNotice } from "./UpdateNotice";
 
 function Logo() {
@@ -13,7 +14,7 @@ function Logo() {
         height: 40,
         borderRadius: 10,
         background:
-          "radial-gradient(circle at 30% 30%, var(--accent-soft), rgba(8,10,14,0.8))",
+          "radial-gradient(circle at 30% 30%, var(--accent-soft), rgb(var(--lt-surface, 8 10 14) / 0.8))",
         border: "1px solid var(--accent-vf)",
         boxShadow:
           "0 0 20px var(--accent-glow), inset 0 0 14px var(--accent-soft)",
@@ -158,7 +159,7 @@ export function Header({
             display: "flex",
             alignItems: "center",
             padding: "0 5px",
-            background: "rgba(255,255,255,0.025)",
+            background: "rgb(var(--lt-ink, 255 255 255) / 0.025)",
             border: "1px solid var(--vf-panel-stroke)",
             borderRadius: 10,
             animation: "fadeUp 700ms ease both",
@@ -189,6 +190,7 @@ export function Header({
             </button>
           ))}
         </div>
+        <ThemeSwitch />
         {onGuide && <GuideMenu onSelect={onGuide} />}
         {profileName && (
           <button
@@ -200,7 +202,7 @@ export function Header({
               alignItems: "center",
               gap: 9,
               padding: "9px 14px",
-              background: "rgba(255,255,255,0.025)",
+              background: "rgb(var(--lt-ink, 255 255 255) / 0.025)",
               border: "1px solid var(--vf-panel-stroke)",
               borderRadius: 10,
               cursor: "pointer",
@@ -244,7 +246,7 @@ export function Header({
               alignItems: "center",
               gap: 9,
               padding: "9px 14px",
-              background: "rgba(255,255,255,0.025)",
+              background: "rgb(var(--lt-ink, 255 255 255) / 0.025)",
               border: "1px solid var(--vf-panel-stroke)",
               borderRadius: 10,
               cursor: "pointer",

@@ -117,6 +117,11 @@ export const pt = {
     // buttons for a screen reader.
     names: { pt: "Português", en: "English" },
   },
+  // The theme switch next to the language pair (ADR-125).
+  theme: {
+    label: "Tema",
+    names: { system: "Automático (segue o sistema)", light: "Claro", dark: "Escuro" },
+  },
   // Messages the API client raises. It is not a component, so it picks the
   // dictionary itself (see api/client.ts).
   errors: {

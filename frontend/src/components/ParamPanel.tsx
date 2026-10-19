@@ -224,7 +224,7 @@ function SchedulerFields({
         marginTop: 4,
         marginBottom: 26,
         padding: 14,
-        background: "rgba(255,255,255,0.015)",
+        background: "rgb(var(--lt-ink, 255 255 255) / 0.015)",
         border: "1px solid var(--vf-panel-stroke)",
         borderRadius: 10,
         display: "flex",
@@ -362,7 +362,7 @@ function WeightsPathField({
           style={{
             flex: 1,
             padding: "8px 12px",
-            background: "rgba(0,0,0,0.30)",
+            background: "rgb(var(--lt-shade, 0 0 0) / 0.30)",
             border: "1px solid var(--vf-panel-stroke)",
             borderRadius: 8,
             fontFamily: "var(--font-mono)",
@@ -435,7 +435,7 @@ function BlockSelector({
       style={{
         marginBottom: 22,
         padding: 16,
-        background: "rgba(255,255,255,0.02)",
+        background: "rgb(var(--lt-ink, 255 255 255) / 0.02)",
         border: "1px solid var(--vf-panel-stroke)",
         borderRadius: 12,
         display: "flex",
@@ -467,7 +467,7 @@ function BlockSelector({
                 padding: "10px 14px",
                 background: selected
                   ? "var(--accent-soft)"
-                  : "rgba(0,0,0,0.30)",
+                  : "rgb(var(--lt-shade, 0 0 0) / 0.30)",
                 border: `1px solid ${selected ? "var(--accent-vf)" : "var(--vf-panel-stroke)"}`,
                 borderRadius: 10,
                 color: selected ? "var(--vf-text)" : "var(--vf-text-dim)",
@@ -567,7 +567,7 @@ function CrossValidationFields({
       style={{
         marginBottom: 26,
         padding: 18,
-        background: "rgba(255,255,255,0.02)",
+        background: "rgb(var(--lt-ink, 255 255 255) / 0.02)",
         border: "1px solid var(--vf-panel-stroke)",
         borderRadius: 12,
         display: "flex",
@@ -665,7 +665,7 @@ const gridAddBtnStyle: React.CSSProperties = {
 const gridRowControlStyle: React.CSSProperties = {
   flex: 1,
   padding: "8px 10px",
-  background: "rgba(0,0,0,0.30)",
+  background: "rgb(var(--lt-shade, 0 0 0) / 0.30)",
   border: "1px solid var(--vf-panel-stroke)",
   borderRadius: 8,
   fontFamily: "var(--font-mono)",
@@ -950,7 +950,7 @@ function RandomSearchFields({
       style={{
         marginBottom: 26,
         padding: 18,
-        background: "rgba(255,255,255,0.02)",
+        background: "rgb(var(--lt-ink, 255 255 255) / 0.02)",
         border: "1px solid var(--vf-panel-stroke)",
         borderRadius: 12,
         display: "flex",
@@ -1149,7 +1149,7 @@ function RandomSearchRow({
 
 const rsInputStyle: React.CSSProperties = {
   padding: "8px 12px",
-  background: "rgba(0,0,0,0.30)",
+  background: "rgb(var(--lt-shade, 0 0 0) / 0.30)",
   border: "1px solid var(--vf-panel-stroke)",
   borderRadius: 8,
   fontFamily: "var(--font-mono)",
@@ -1215,7 +1215,7 @@ function ModelComparisonFields({
       style={{
         marginBottom: 26,
         padding: 18,
-        background: "rgba(255,255,255,0.02)",
+        background: "rgb(var(--lt-ink, 255 255 255) / 0.02)",
         border: "1px solid var(--vf-panel-stroke)",
         borderRadius: 12,
         display: "flex",
@@ -1277,7 +1277,7 @@ function ModelComparisonFields({
                 padding: "8px 12px",
                 background: selected
                   ? "var(--accent-soft)"
-                  : "rgba(0,0,0,0.30)",
+                  : "rgb(var(--lt-shade, 0 0 0) / 0.30)",
                 border: `1px solid ${selected ? "var(--accent-vf)" : "var(--vf-panel-stroke)"}`,
                 borderRadius: 8,
                 fontFamily: "var(--font-mono)",
@@ -1359,7 +1359,7 @@ function TransferLearningFields({
       style={{
         marginBottom: 26,
         padding: 18,
-        background: "rgba(255,255,255,0.02)",
+        background: "rgb(var(--lt-ink, 255 255 255) / 0.02)",
         border: "1px solid var(--vf-panel-stroke)",
         borderRadius: 12,
         display: "flex",
@@ -1448,7 +1448,7 @@ function LockedNumClasses() {
         title={t.paramPanel.lockedClasses.title}
         style={{
           padding: "8px 12px",
-          background: "rgba(0,0,0,0.35)",
+          background: "rgb(var(--lt-shade, 0 0 0) / 0.35)",
           border: "1px dashed var(--vf-panel-stroke)",
           borderRadius: 8,
           fontFamily: "var(--font-mono)",
@@ -1552,7 +1552,7 @@ function SchemaFieldVF({
       <div
         style={{
           padding: 18,
-          background: "rgba(255,255,255,0.015)",
+          background: "rgb(var(--lt-ink, 255 255 255) / 0.015)",
           border: "1px solid var(--vf-panel-stroke)",
           borderRadius: 12,
           display: "grid",
@@ -1864,7 +1864,7 @@ export function ParamPanel({
         style={{
           position: "relative",
           padding: 48,
-          background: "rgba(10,12,16,0.55)",
+          background: "rgb(var(--lt-surface, 10 12 16) / 0.55)",
           backdropFilter: "blur(20px) saturate(140%)",
           WebkitBackdropFilter: "blur(20px) saturate(140%)",
           border: "1px solid var(--vf-panel-stroke)",
@@ -1911,7 +1911,7 @@ export function ParamPanel({
       <section
         style={{
           padding: 28,
-          background: "rgba(10,12,16,0.55)",
+          background: "rgb(var(--lt-surface, 10 12 16) / 0.55)",
           backdropFilter: "blur(20px) saturate(140%)",
           border: "1px solid var(--vf-panel-stroke)",
           borderRadius: 20,
@@ -1998,13 +1998,13 @@ export function ParamPanel({
       style={{
         position: "relative",
         padding: 28,
-        background: "rgba(10,12,16,0.55)",
+        background: "rgb(var(--lt-surface, 10 12 16) / 0.55)",
         backdropFilter: "blur(20px) saturate(140%)",
         WebkitBackdropFilter: "blur(20px) saturate(140%)",
         border: "1px solid var(--vf-panel-stroke)",
         borderRadius: 20,
         boxShadow:
-          "0 30px 80px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.04)",
+          "0 30px 80px rgb(var(--lt-shade, 0 0 0) / 0.4), inset 0 1px 0 rgb(var(--lt-ink, 255 255 255) / 0.04)",
         overflow: "hidden",
         animation: "fadeUp 360ms ease forwards",
       }}
@@ -2091,7 +2091,7 @@ export function ParamPanel({
             borderRadius: 10,
             fontFamily: "var(--font-mono)",
             fontSize: 12,
-            color: "oklch(0.85 0.14 22)",
+            color: "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.14 22)",
             whiteSpace: "pre-line",
             lineHeight: 1.6,
           }}
@@ -2678,7 +2678,7 @@ export function ParamPanel({
             borderRadius: 10,
             fontFamily: "var(--font-mono)",
             fontSize: 12,
-            color: "oklch(0.85 0.14 22)",
+            color: "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.14 22)",
           }}
         >
           <div style={{ fontWeight: 600, marginBottom: 8 }}>
@@ -2690,7 +2690,7 @@ export function ParamPanel({
                 <span style={{ color: "var(--vf-text)" }}>
                   {humanizeFieldPath(t, err.field)}
                 </span>
-                <span style={{ color: "oklch(0.85 0.14 22)" }}>
+                <span style={{ color: "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.14 22)" }}>
                   {" — "}
                   {err.message}
                 </span>

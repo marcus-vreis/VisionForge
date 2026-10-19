@@ -18,7 +18,7 @@ import { MenuSelect } from "./controls";
 /** The amber the History already uses for a run a stop cut, here for a caution. */
 const CAUTION_BG = "oklch(0.84 0.12 85 / 0.08)";
 const CAUTION_BORDER = "oklch(0.84 0.12 85 / 0.4)";
-const CAUTION_TEXT = "oklch(0.90 0.12 85)";
+const CAUTION_TEXT = "oklch(calc(0.90 - var(--lt-flip, 0) * 0.5) 0.12 85)";
 
 interface LeaderboardViewProps {
   /** History's entries, a replicate group being one with its seeds folded under it. */
@@ -88,7 +88,7 @@ function TickBox({
         height: 18,
         padding: 0,
         borderRadius: 4,
-        border: `1.5px solid ${checked ? "oklch(0.78 0.18 150)" : "var(--vf-panel-stroke)"}`,
+        border: `1.5px solid ${checked ? "oklch(calc(0.78 - var(--lt-flip, 0) * 0.26) 0.18 150)" : "var(--vf-panel-stroke)"}`,
         background: checked ? "oklch(0.78 0.18 150 / 0.3)" : "transparent",
         color: "var(--vf-text)",
         fontSize: 11,
@@ -261,7 +261,7 @@ function lineStyle(ticked: boolean): React.CSSProperties {
     gap: 10,
     padding: "8px 10px",
     borderRadius: 8,
-    background: ticked ? "rgba(120, 200, 130, 0.10)" : "rgba(255,255,255,0.02)",
+    background: ticked ? "rgba(120, 200, 130, 0.10)" : "rgb(var(--lt-ink, 255 255 255) / 0.02)",
     border: `1px solid ${ticked ? "oklch(0.78 0.18 150 / 0.6)" : "transparent"}`,
   };
 }
@@ -302,7 +302,7 @@ function BoardCard({
     <section
       style={{
         padding: "14px 16px",
-        background: "rgba(255,255,255,0.025)",
+        background: "rgb(var(--lt-ink, 255 255 255) / 0.025)",
         border: "1px solid var(--vf-panel-stroke)",
         borderRadius: 12,
         display: "flex",
@@ -321,7 +321,7 @@ function BoardCard({
           </span>
           {!unknown && (
             <Pill
-              color="oklch(0.86 0.11 250)"
+              color="oklch(calc(0.86 - var(--lt-flip, 0) * 0.42) 0.11 250)"
               title={
                 board.identity.basis === "fingerprint"
                   ? t.leaderboard.basisTitle.fingerprint(
@@ -395,7 +395,7 @@ function BoardCard({
                 marginLeft: "auto",
                 padding: "6px 12px",
                 background: "oklch(0.78 0.18 150 / 0.30)",
-                border: "1px solid oklch(0.78 0.18 150)",
+                border: "1px solid oklch(calc(0.78 - var(--lt-flip, 0) * 0.26) 0.18 150)",
                 borderRadius: 10,
                 color: "var(--vf-text)",
                 fontFamily: MONO,

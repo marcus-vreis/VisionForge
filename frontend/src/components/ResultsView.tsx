@@ -72,8 +72,8 @@ function MetricCard({ label, value, accent, highlight, ci }: MetricCardProps) {
         borderRadius: 12,
         border: "1px solid var(--vf-panel-stroke)",
         background: highlight
-          ? `linear-gradient(180deg, ${accent}22 0%, rgba(12,14,18,0.5) 100%)`
-          : "rgba(12,14,18,0.55)",
+          ? `linear-gradient(180deg, ${accent}22 0%, rgb(var(--lt-surface, 12 14 18) / 0.5) 100%)`
+          : "rgb(var(--lt-surface, 12 14 18) / 0.55)",
         position: "relative",
         overflow: "hidden",
       }}
@@ -145,13 +145,13 @@ export function ResultsView({
         position: "relative",
         animation: "sheetIn 360ms cubic-bezier(0.2, 0.9, 0.2, 1) forwards",
         padding: 28,
-        background: "rgba(10,12,16,0.55)",
+        background: "rgb(var(--lt-surface, 10 12 16) / 0.55)",
         backdropFilter: "blur(20px) saturate(140%)",
         WebkitBackdropFilter: "blur(20px) saturate(140%)",
         border: "1px solid var(--vf-panel-stroke)",
         borderRadius: 20,
         boxShadow:
-          "0 30px 80px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.04)",
+          "0 30px 80px rgb(var(--lt-shade, 0 0 0) / 0.4), inset 0 1px 0 rgb(var(--lt-ink, 255 255 255) / 0.04)",
       }}
     >
       {/* Header */}
@@ -214,7 +214,7 @@ export function ResultsView({
             height: 36,
             borderRadius: "50%",
             border: "1px solid var(--vf-panel-stroke)",
-            background: "rgba(255,255,255,0.03)",
+            background: "rgb(var(--lt-ink, 255 255 255) / 0.03)",
             color: "var(--vf-text)",
             fontSize: 20,
             lineHeight: "1",
@@ -286,7 +286,7 @@ export function ResultsView({
                     borderRadius: 12,
                     border: `1px solid ${taskAccent}33`,
                     overflow: "hidden",
-                    background: "rgba(0,0,0,0.3)",
+                    background: "rgb(var(--lt-shade, 0 0 0) / 0.3)",
                     padding: 0,
                     cursor: "zoom-in",
                     display: "flex",
@@ -386,7 +386,7 @@ export function ResultsView({
               style={{
                 fontFamily: "var(--font-mono)",
                 fontSize: 11,
-                background: "rgba(0,0,0,0.45)",
+                background: "rgb(var(--lt-shade, 0 0 0) / 0.45)",
                 border: "1px solid var(--vf-panel-stroke)",
                 borderRadius: 10,
                 padding: "12px 14px",
@@ -487,7 +487,7 @@ function CrossValidationReport({
       <div
         style={{
           padding: 14,
-          background: "rgba(255,255,255,0.025)",
+          background: "rgb(var(--lt-ink, 255 255 255) / 0.025)",
           border: "1px solid var(--vf-panel-stroke)",
           borderRadius: 12,
           overflowX: "auto",
@@ -528,10 +528,10 @@ function CrossValidationReport({
                       ...cvTdStyle,
                       color:
                         state === "ok"
-                          ? "oklch(0.85 0.16 150)"
+                          ? "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.16 150)"
                           : state === "stopped"
                             ? STOPPED_COLOR
-                            : "oklch(0.85 0.14 22)",
+                            : "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.14 22)",
                     }}
                   >
                     {state === "ok"
@@ -570,8 +570,8 @@ function AggregateCard({
         borderRadius: 12,
         border: "1px solid var(--vf-panel-stroke)",
         background: highlight
-          ? `linear-gradient(180deg, ${accent}22 0%, rgba(12,14,18,0.5) 100%)`
-          : "rgba(12,14,18,0.55)",
+          ? `linear-gradient(180deg, ${accent}22 0%, rgb(var(--lt-surface, 12 14 18) / 0.5) 100%)`
+          : "rgb(var(--lt-surface, 12 14 18) / 0.55)",
       }}
     >
       <div
@@ -673,7 +673,7 @@ function TaskCvReport({
         <div
           style={{
             padding: 16,
-            background: `linear-gradient(180deg, ${accent}1c 0%, rgba(12,14,18,0.5) 100%)`,
+            background: `linear-gradient(180deg, ${accent}1c 0%, rgb(var(--lt-surface, 12 14 18) / 0.5) 100%)`,
             border: `1px solid ${accent}55`,
             borderRadius: 12,
             fontFamily: "var(--font-mono)",
@@ -693,7 +693,7 @@ function TaskCvReport({
       <div
         style={{
           padding: 14,
-          background: "rgba(255,255,255,0.025)",
+          background: "rgb(var(--lt-ink, 255 255 255) / 0.025)",
           border: "1px solid var(--vf-panel-stroke)",
           borderRadius: 12,
           overflowX: "auto",
@@ -834,7 +834,7 @@ function ReplicatesReport({
         <div
           style={{
             padding: 16,
-            background: `linear-gradient(180deg, ${accent}1c 0%, rgba(12,14,18,0.5) 100%)`,
+            background: `linear-gradient(180deg, ${accent}1c 0%, rgb(var(--lt-surface, 12 14 18) / 0.5) 100%)`,
             border: `1px solid ${accent}55`,
             borderRadius: 12,
             fontFamily: "var(--font-mono)",
@@ -866,7 +866,7 @@ function ReplicatesReport({
       <div
         style={{
           padding: 14,
-          background: "rgba(255,255,255,0.025)",
+          background: "rgb(var(--lt-ink, 255 255 255) / 0.025)",
           border: "1px solid var(--vf-panel-stroke)",
           borderRadius: 12,
           overflowX: "auto",
@@ -922,7 +922,7 @@ function ReplicatesReport({
       <div
         style={{
           padding: 14,
-          background: "rgba(255,255,255,0.025)",
+          background: "rgb(var(--lt-ink, 255 255 255) / 0.025)",
           border: "1px solid var(--vf-panel-stroke)",
           borderRadius: 12,
           overflowX: "auto",
@@ -1038,7 +1038,7 @@ function TaskComparisonReport({
       <div
         style={{
           padding: 14,
-          background: "rgba(255,255,255,0.025)",
+          background: "rgb(var(--lt-ink, 255 255 255) / 0.025)",
           border: "1px solid var(--vf-panel-stroke)",
           borderRadius: 12,
           overflowX: "auto",
@@ -1141,7 +1141,7 @@ function OverrideChips({ overrides }: { overrides: Record<string, unknown> }) {
           key={k}
           style={{
             padding: "3px 8px",
-            background: "rgba(0,0,0,0.30)",
+            background: "rgb(var(--lt-shade, 0 0 0) / 0.30)",
             border: "1px solid var(--vf-panel-stroke)",
             borderRadius: 8,
             fontFamily: "var(--font-mono)",
@@ -1196,7 +1196,7 @@ function TaskSweepReport({
         <div
           style={{
             padding: 16,
-            background: `linear-gradient(180deg, ${accent}1c 0%, rgba(12,14,18,0.5) 100%)`,
+            background: `linear-gradient(180deg, ${accent}1c 0%, rgb(var(--lt-surface, 12 14 18) / 0.5) 100%)`,
             border: `1px solid ${accent}55`,
             borderRadius: 12,
             display: "flex",
@@ -1225,7 +1225,7 @@ function TaskSweepReport({
       <div
         style={{
           padding: 14,
-          background: "rgba(255,255,255,0.025)",
+          background: "rgb(var(--lt-ink, 255 255 255) / 0.025)",
           border: "1px solid var(--vf-panel-stroke)",
           borderRadius: 12,
           overflowX: "auto",
@@ -1357,7 +1357,7 @@ function ModelComparisonReport({
       <div
         style={{
           padding: 14,
-          background: "rgba(255,255,255,0.025)",
+          background: "rgb(var(--lt-ink, 255 255 255) / 0.025)",
           border: "1px solid var(--vf-panel-stroke)",
           borderRadius: 12,
           overflowX: "auto",
@@ -1449,7 +1449,7 @@ function GridStat({
     <div
       style={{
         padding: "8px 12px",
-        background: "rgba(0,0,0,0.30)",
+        background: "rgb(var(--lt-shade, 0 0 0) / 0.30)",
         border: "1px solid var(--vf-panel-stroke)",
         borderRadius: 8,
       }}
@@ -1564,7 +1564,7 @@ function GridSearchReport({
       <div
         style={{
           padding: 16,
-          background: `linear-gradient(180deg, ${accent}1c 0%, rgba(12,14,18,0.5) 100%)`,
+          background: `linear-gradient(180deg, ${accent}1c 0%, rgb(var(--lt-surface, 12 14 18) / 0.5) 100%)`,
           border: `1px solid ${accent}55`,
           borderRadius: 12,
           display: "flex",
@@ -1604,7 +1604,7 @@ function GridSearchReport({
                   key={k}
                   style={{
                     padding: "4px 10px",
-                    background: "rgba(0,0,0,0.30)",
+                    background: "rgb(var(--lt-shade, 0 0 0) / 0.30)",
                     border: "1px solid var(--vf-panel-stroke)",
                     borderRadius: 8,
                     fontFamily: "var(--font-mono)",
@@ -1657,7 +1657,7 @@ function unitText(
 /** The same, for the tables that print a mark (✓ / × why). */
 function markColor(state: ReturnType<typeof unitState>): string {
   if (state === "stopped") return STOPPED_COLOR;
-  return state === "ok" ? "oklch(0.85 0.16 150)" : "oklch(0.85 0.14 22)";
+  return state === "ok" ? "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.16 150)" : "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.14 22)";
 }
 
 function markText(
@@ -1684,7 +1684,7 @@ const cvThStyle: React.CSSProperties = {
 
 const cvTdStyle: React.CSSProperties = {
   padding: "8px 10px",
-  borderBottom: "1px solid rgba(255,255,255,0.04)",
+  borderBottom: "1px solid rgb(var(--lt-ink, 255 255 255) / 0.04)",
   color: "var(--vf-text)",
 };
 

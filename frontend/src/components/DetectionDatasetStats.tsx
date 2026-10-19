@@ -79,7 +79,7 @@ export function DetectionDatasetStats({ baseDir, onApplyClasses }: DetectionData
           padding: "10px 14px",
           fontFamily: "var(--font-mono)",
           fontSize: 11,
-          color: "oklch(0.85 0.14 22)",
+          color: "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.14 22)",
           background: "oklch(0.704 0.191 22.216 / 0.10)",
           border: "1px solid oklch(0.704 0.191 22.216 / 0.4)",
           borderRadius: 10,
@@ -95,7 +95,7 @@ export function DetectionDatasetStats({ baseDir, onApplyClasses }: DetectionData
       style={{
         marginTop: 12,
         padding: "12px 16px",
-        background: "rgba(255,255,255,0.025)",
+        background: "rgb(var(--lt-ink, 255 255 255) / 0.025)",
         border: "1px solid var(--vf-panel-stroke)",
         borderRadius: 12,
         display: "flex",
@@ -121,7 +121,7 @@ export function DetectionDatasetStats({ baseDir, onApplyClasses }: DetectionData
             key={cn}
             style={{
               padding: "3px 9px",
-              background: "rgba(255,255,255,0.04)",
+              background: "rgb(var(--lt-ink, 255 255 255) / 0.04)",
               border: "1px solid var(--vf-panel-stroke)",
               borderRadius: 999,
               fontFamily: "var(--font-mono)",
@@ -146,7 +146,7 @@ export function DetectionDatasetStats({ baseDir, onApplyClasses }: DetectionData
               fontSize: 9,
               letterSpacing: "0.14em",
               textTransform: "uppercase",
-              color: "oklch(0.85 0.16 150)",
+              color: "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.16 150)",
             }}
           >
             ✓ {t.detectionDatasetStats.applied(stats.class_names.length)}
@@ -220,7 +220,7 @@ export function DetectionDatasetStats({ baseDir, onApplyClasses }: DetectionData
               fontSize: 9,
               borderRadius: 6,
               background: "oklch(0.78 0.16 75 / 0.16)",
-              color: "oklch(0.85 0.14 75)",
+              color: "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.14 75)",
               border: "1px solid oklch(0.78 0.16 75 / 0.5)",
               letterSpacing: "0.12em",
               textTransform: "uppercase",
@@ -281,7 +281,7 @@ function DetectionSplitCard({ label, split, classNames }: DetectionSplitCardProp
       <div
         style={{
           padding: "10px 12px",
-          background: "rgba(0,0,0,0.25)",
+          background: "rgb(var(--lt-shade, 0 0 0) / 0.25)",
           border: "1px dashed var(--vf-panel-stroke)",
           borderRadius: 8,
           opacity: 0.55,
@@ -317,7 +317,7 @@ function DetectionSplitCard({ label, split, classNames }: DetectionSplitCardProp
     <div
       style={{
         padding: "10px 12px",
-        background: "rgba(0,0,0,0.30)",
+        background: "rgb(var(--lt-shade, 0 0 0) / 0.30)",
         border: "1px solid var(--vf-panel-stroke)",
         borderRadius: 8,
         display: "flex",
@@ -360,7 +360,7 @@ function DetectionSplitCard({ label, split, classNames }: DetectionSplitCardProp
       >
         <span>{t.detectionDatasetStats.boxes(totalAnn)}</span>
         {split.unlabeled_images > 0 && (
-          <span style={{ color: "oklch(0.85 0.14 75)" }}>
+          <span style={{ color: "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.14 75)" }}>
             {t.detectionDatasetStats.unlabeled(split.unlabeled_images)}
           </span>
         )}
@@ -387,7 +387,7 @@ function DetectionSplitCard({ label, split, classNames }: DetectionSplitCardProp
                 style={{
                   height: 4,
                   width: "100%",
-                  background: "rgba(255,255,255,0.05)",
+                  background: "rgb(var(--lt-ink, 255 255 255) / 0.05)",
                   borderRadius: 2,
                   overflow: "hidden",
                 }}

@@ -466,7 +466,7 @@ export function TrainingOverlay({
         position: "fixed",
         inset: 0,
         zIndex: 90,
-        background: "rgba(4,5,7,0.78)",
+        background: "rgb(var(--lt-surface, 4 5 7) / 0.78)",
         display: visible ? "flex" : "none",
         alignItems: "center",
         justifyContent: "center",
@@ -478,7 +478,7 @@ export function TrainingOverlay({
         data-tour="training-sheet"
         style={{
           width: "min(720px, 100%)",
-          background: "rgba(12,14,18,0.95)",
+          background: "rgb(var(--lt-surface, 12 14 18) / 0.95)",
           border: "1px solid var(--vf-panel-stroke)",
           borderRadius: 18,
           padding: 28,
@@ -558,7 +558,7 @@ export function TrainingOverlay({
               fontFamily: "var(--font-mono)",
               fontSize: 28,
               fontWeight: 600,
-              color: hasFailed ? "oklch(0.74 0.18 22)" : barColor,
+              color: hasFailed ? "oklch(calc(0.74 - var(--lt-flip, 0) * 0.18) 0.18 22)" : barColor,
             }}
           >
             {shareUnknown ? "—" : `${pct}%`}
@@ -571,7 +571,7 @@ export function TrainingOverlay({
             height: 6,
             borderRadius: 999,
             overflow: "hidden",
-            background: "rgba(255,255,255,0.04)",
+            background: "rgb(var(--lt-ink, 255 255 255) / 0.04)",
             marginBottom: 18,
           }}
         >
@@ -580,7 +580,7 @@ export function TrainingOverlay({
               width: `${pct}%`,
               height: "100%",
               background: hasFailed
-                ? `linear-gradient(90deg, oklch(0.74 0.18 22), oklch(0.74 0.18 22 / 0.6))`
+                ? `linear-gradient(90deg, oklch(calc(0.74 - var(--lt-flip, 0) * 0.18) 0.18 22), oklch(0.74 0.18 22 / 0.6))`
                 : `linear-gradient(90deg, ${barColor}, ${barColor}aa)`,
               boxShadow: `0 0 12px ${barColor}`,
               transition: "width 320ms ease",
@@ -599,7 +599,7 @@ export function TrainingOverlay({
               borderRadius: 12,
               fontFamily: "var(--font-mono)",
               fontSize: 12.5,
-              color: "oklch(0.88 0.14 22)",
+              color: "oklch(calc(0.88 - var(--lt-flip, 0) * 0.46) 0.14 22)",
               whiteSpace: "pre-wrap",
               wordBreak: "break-word",
               lineHeight: 1.55,
@@ -645,7 +645,7 @@ export function TrainingOverlay({
                 fontSize: 9,
                 letterSpacing: "0.18em",
                 textTransform: "uppercase",
-                color: "rgba(220, 190, 255, 0.85)",
+                color: "var(--lt-group-fg, rgba(220, 190, 255, 0.85))",
               }}
             >
               {t.trainingOverlay.queueBanner(queueLabel, queueSize)}
@@ -684,7 +684,7 @@ export function TrainingOverlay({
                 fontSize: 9,
                 letterSpacing: "0.18em",
                 textTransform: "uppercase",
-                color: "oklch(0.85 0.14 150)",
+                color: "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.14 150)",
               }}
             >
               {t.trainingOverlay.pipeline(pipelineSummary.length)}
@@ -779,7 +779,7 @@ export function TrainingOverlay({
           style={{
             height: hasFailed ? 120 : 220,
             padding: 16,
-            background: "rgba(0,0,0,0.45)",
+            background: "rgb(var(--lt-shade, 0 0 0) / 0.45)",
             border: "1px solid var(--vf-panel-stroke)",
             borderRadius: 12,
             fontFamily: "var(--font-mono)",
@@ -847,9 +847,9 @@ export function TrainingOverlay({
                 style={{
                   padding: "8px 14px",
                   background: "oklch(0.704 0.191 22.216 / 0.24)",
-                  border: "1px solid oklch(0.78 0.16 22)",
+                  border: "1px solid oklch(calc(0.78 - var(--lt-flip, 0) * 0.26) 0.16 22)",
                   borderRadius: 8,
-                  color: "oklch(0.95 0.10 22)",
+                  color: "oklch(calc(0.95 - var(--lt-flip, 0) * 0.6) 0.10 22)",
                   fontFamily: "var(--font-mono)",
                   fontSize: 11,
                   letterSpacing: "0.10em",
@@ -896,7 +896,7 @@ export function TrainingOverlay({
               lineHeight: 1.6,
               color:
                 stopError !== null
-                  ? "oklch(0.82 0.14 22)"
+                  ? "oklch(calc(0.82 - var(--lt-flip, 0) * 0.34) 0.14 22)"
                   : "var(--vf-text-dim)",
             }}
           >
@@ -946,7 +946,7 @@ export function TrainingOverlay({
                 background: "transparent",
                 border: "1px solid oklch(0.78 0.16 22 / 0.6)",
                 borderRadius: 10,
-                color: "oklch(0.88 0.14 22)",
+                color: "oklch(calc(0.88 - var(--lt-flip, 0) * 0.46) 0.14 22)",
                 fontFamily: "var(--font-mono)",
                 fontSize: 11,
                 letterSpacing: "0.08em",

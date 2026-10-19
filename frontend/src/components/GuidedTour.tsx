@@ -233,7 +233,7 @@ export function GuidedTour({
     ? placeFloating(rect, cardHeight, view)
     : placeCard(rect, cardHeight, view);
 
-  const dim = `rgba(4,5,7,${entered ? 0.74 : 0})`;
+  const dim = `rgb(var(--lt-surface, 4 5 7) / ${entered ? 0.74 : 0})`;
 
   return (
     // Acima da tela de treino (90) e abaixo do Histórico, dos Datasets e da Fila (100).
@@ -282,10 +282,10 @@ export function GuidedTour({
           width: floating ? FLOATING_WIDTH : CARD_WIDTH,
           maxWidth: "calc(100vw - 40px)",
           padding: "20px 22px 18px",
-          background: "rgba(10,12,16,0.94)",
+          background: "rgb(var(--lt-surface, 10 12 16) / 0.94)",
           border: "1px solid var(--vf-panel-stroke)",
           borderRadius: 16,
-          boxShadow: "0 30px 90px rgba(0,0,0,0.62), inset 0 0 26px rgba(255,255,255,0.02)",
+          boxShadow: "0 30px 90px rgb(var(--lt-shade, 0 0 0) / 0.62), inset 0 0 26px rgb(var(--lt-ink, 255 255 255) / 0.02)",
           pointerEvents: "auto",
           opacity: entered ? 1 : 0,
           transform: `translateY(${entered ? 0 : 10}px)`,
@@ -353,7 +353,7 @@ export function GuidedTour({
                   ...noteStyle,
                   color: shownAction.result.ok
                     ? "var(--vf-text-dim)"
-                    : "oklch(0.85 0.14 22)",
+                    : "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.14 22)",
                 }}
               >
                 {shownAction.result.message}
@@ -371,7 +371,7 @@ export function GuidedTour({
                 height: 6,
                 flexShrink: 0,
                 borderRadius: "50%",
-                background: open ? "oklch(0.78 0.18 150)" : "var(--accent-vf)",
+                background: open ? "oklch(calc(0.78 - var(--lt-flip, 0) * 0.26) 0.18 150)" : "var(--accent-vf)",
                 animation: open ? "none" : "pulse-dot 2.6s ease-in-out infinite",
               }}
             />
@@ -519,7 +519,7 @@ function StepBody({
                 width: i === step ? 16 : 5,
                 height: 5,
                 borderRadius: 999,
-                background: i <= step ? "var(--accent-vf)" : "rgba(255,255,255,0.14)",
+                background: i <= step ? "var(--accent-vf)" : "rgb(var(--lt-ink, 255 255 255) / 0.14)",
                 boxShadow: i === step ? "0 0 10px var(--accent-glow)" : "none",
                 transition: "width 380ms cubic-bezier(.16,.84,.24,1), background 380ms ease",
               }}
@@ -582,7 +582,7 @@ const ghostStyle: React.CSSProperties = {
 
 const secondaryStyle: React.CSSProperties = {
   padding: "9px 16px",
-  background: "rgba(255,255,255,0.03)",
+  background: "rgb(var(--lt-ink, 255 255 255) / 0.03)",
   border: "1px solid var(--vf-panel-stroke)",
   borderRadius: 10,
   color: "var(--vf-text-dim)",

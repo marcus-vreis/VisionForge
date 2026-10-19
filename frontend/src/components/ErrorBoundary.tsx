@@ -67,7 +67,7 @@ const kickerStyle: React.CSSProperties = {
   fontSize: 10,
   letterSpacing: "0.22em",
   textTransform: "uppercase",
-  color: "oklch(0.85 0.14 22)",
+  color: "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.14 22)",
 };
 
 const reloadStyle: React.CSSProperties = {

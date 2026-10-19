@@ -237,7 +237,7 @@ export function TrainingStory({
       {/* The drawing. */}
       <div
         style={{
-          background: "rgba(0,0,0,0.45)",
+          background: "rgb(var(--lt-shade, 0 0 0) / 0.45)",
           border: "1px solid var(--vf-panel-stroke)",
           borderRadius: 12,
           padding: "4px 10px",

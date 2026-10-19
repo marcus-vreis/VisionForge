@@ -162,8 +162,8 @@ export function CredentialField({
               fontSize: 11,
               color:
                 feedback.kind === "ok"
-                  ? "oklch(0.88 0.16 150)"
-                  : "oklch(0.85 0.14 22)",
+                  ? "oklch(calc(0.88 - var(--lt-flip, 0) * 0.46) 0.16 150)"
+                  : "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.14 22)",
             }}
           >
             {feedback.kind === "ok" ? "✓ " : "⚠ "}

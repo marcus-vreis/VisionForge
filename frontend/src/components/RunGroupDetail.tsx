@@ -25,8 +25,8 @@ interface RunGroupDetailProps {
   onOpenRun?: (runId: string) => void;
 }
 
-const OK_COLOR = "oklch(0.85 0.16 150)";
-const FAILED_COLOR = "oklch(0.85 0.14 22)";
+const OK_COLOR = "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.16 150)";
+const FAILED_COLOR = "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.14 22)";
 
 const thStyle: CSSProperties = {
   textAlign: "left",
@@ -41,7 +41,7 @@ const thStyle: CSSProperties = {
 
 const tdStyle: CSSProperties = {
   padding: "6px 8px",
-  borderBottom: "1px solid rgba(255,255,255,0.04)",
+  borderBottom: "1px solid rgb(var(--lt-ink, 255 255 255) / 0.04)",
   color: "var(--vf-text)",
 };
 
@@ -53,7 +53,7 @@ const tdLabelStyle: CSSProperties = {
 
 const tableBoxStyle: CSSProperties = {
   padding: 10,
-  background: "rgba(0,0,0,0.30)",
+  background: "rgb(var(--lt-shade, 0 0 0) / 0.30)",
   border: "1px solid var(--vf-panel-stroke)",
   borderRadius: 10,
   overflowX: "auto",
@@ -78,7 +78,7 @@ function GroupSection({ title, children }: { title: string; children: ReactNode 
     <div
       style={{
         padding: "14px 16px",
-        background: "rgba(255,255,255,0.02)",
+        background: "rgb(var(--lt-ink, 255 255 255) / 0.02)",
         border: "1px solid var(--vf-panel-stroke)",
         borderRadius: 12,
         display: "flex",
@@ -183,7 +183,7 @@ function OpenRun({
       title={target}
       style={{
         padding: "3px 9px",
-        background: "rgba(255,255,255,0.04)",
+        background: "rgb(var(--lt-ink, 255 255 255) / 0.04)",
         border: `1px solid ${accent}`,
         borderRadius: 6,
         color: "var(--vf-text)",

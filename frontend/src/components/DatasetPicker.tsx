@@ -33,24 +33,24 @@ interface Feedback {
 
 const FEEDBACK_COLORS: Record<FeedbackKind, { bg: string; border: string; fg: string }> = {
   info: {
-    bg: "rgba(255,255,255,0.04)",
+    bg: "rgb(var(--lt-ink, 255 255 255) / 0.04)",
     border: "var(--vf-panel-stroke)",
     fg: "var(--vf-text-dim)",
   },
   success: {
     bg: "oklch(0.72 0.16 150 / 0.10)",
     border: "oklch(0.72 0.16 150 / 0.45)",
-    fg: "oklch(0.85 0.16 150)",
+    fg: "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.16 150)",
   },
   warning: {
     bg: "oklch(0.83 0.16 80 / 0.10)",
     border: "oklch(0.83 0.16 80 / 0.45)",
-    fg: "oklch(0.88 0.16 80)",
+    fg: "oklch(calc(0.88 - var(--lt-flip, 0) * 0.46) 0.16 80)",
   },
   error: {
     bg: "oklch(0.704 0.191 22.216 / 0.10)",
     border: "oklch(0.704 0.191 22.216 / 0.45)",
-    fg: "oklch(0.85 0.14 22)",
+    fg: "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.14 22)",
   },
 };
 
@@ -213,7 +213,7 @@ export function DatasetPicker({
         data-tour="dataset"
         style={{
           padding: 18,
-          background: "rgba(255,255,255,0.02)",
+          background: "rgb(var(--lt-ink, 255 255 255) / 0.02)",
           border: "1px dashed var(--vf-panel-stroke)",
           borderRadius: 12,
           display: "flex",

@@ -24,12 +24,12 @@ interface CompareRunsPanelProps {
 }
 
 const PALETTE = [
-  "oklch(0.78 0.18 150)", // green
-  "oklch(0.74 0.18 22)", // red
-  "oklch(0.74 0.16 240)", // blue
-  "oklch(0.78 0.18 305)", // purple
-  "oklch(0.84 0.18 75)", // amber
-  "oklch(0.78 0.16 200)", // teal
+  "oklch(calc(0.78 - var(--lt-flip, 0) * 0.26) 0.18 150)", // green
+  "oklch(calc(0.74 - var(--lt-flip, 0) * 0.18) 0.18 22)", // red
+  "oklch(calc(0.74 - var(--lt-flip, 0) * 0.18) 0.16 240)", // blue
+  "oklch(calc(0.78 - var(--lt-flip, 0) * 0.26) 0.18 305)", // purple
+  "oklch(calc(0.84 - var(--lt-flip, 0) * 0.38) 0.18 75)", // amber
+  "oklch(calc(0.78 - var(--lt-flip, 0) * 0.26) 0.16 200)", // teal
 ];
 
 function fmtMetric(v: unknown): string {
@@ -98,7 +98,7 @@ export function CompareRunsPanel({ runIds, onBack }: CompareRunsPanelProps) {
           onClick={onBack}
           style={{
             padding: "6px 12px",
-            background: "rgba(255,255,255,0.04)",
+            background: "rgb(var(--lt-ink, 255 255 255) / 0.04)",
             border: "1px solid var(--vf-panel-stroke)",
             borderRadius: 8,
             color: "var(--vf-text-dim)",
@@ -129,7 +129,7 @@ export function CompareRunsPanel({ runIds, onBack }: CompareRunsPanelProps) {
             background: "oklch(0.704 0.191 22.216 / 0.10)",
             border: "1px solid oklch(0.704 0.191 22.216 / 0.4)",
             borderRadius: 10,
-            color: "oklch(0.85 0.14 22)",
+            color: "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.14 22)",
             fontFamily: "var(--font-mono)",
             fontSize: 12,
           }}
@@ -157,9 +157,9 @@ export function CompareRunsPanel({ runIds, onBack }: CompareRunsPanelProps) {
 }
 
 const VERDICT_STYLE = {
-  same: { icon: "✓", color: "oklch(0.80 0.15 150)" },
+  same: { icon: "✓", color: "oklch(calc(0.80 - var(--lt-flip, 0) * 0.3) 0.15 150)" },
   different: { icon: "✗", color: "oklch(0.72 0.19 25)" },
-  unknown: { icon: "⚠", color: "oklch(0.80 0.13 85)" },
+  unknown: { icon: "⚠", color: "oklch(calc(0.80 - var(--lt-flip, 0) * 0.3) 0.13 85)" },
 };
 
 /** Whether the runs being compared saw the same data.
@@ -189,7 +189,7 @@ function DatasetVerdictRow({ details }: { details: RunDetail[] }) {
         alignItems: "center",
         gap: 8,
         padding: "8px 12px",
-        background: "rgba(255,255,255,0.02)",
+        background: "rgb(var(--lt-ink, 255 255 255) / 0.02)",
         border: "1px solid var(--vf-panel-stroke)",
         borderRadius: 10,
         fontFamily: "var(--font-mono)",
@@ -218,7 +218,7 @@ function Legend({ details }: { details: RunDetail[] }) {
         flexWrap: "wrap",
         gap: 10,
         padding: "8px 12px",
-        background: "rgba(255,255,255,0.02)",
+        background: "rgb(var(--lt-ink, 255 255 255) / 0.02)",
         border: "1px solid var(--vf-panel-stroke)",
         borderRadius: 10,
       }}
@@ -293,7 +293,7 @@ function MixedTasks({
         gap: 8,
       }}
     >
-      <div style={{ color: "oklch(0.88 0.13 85)", fontWeight: 600 }}>
+      <div style={{ color: "oklch(calc(0.88 - var(--lt-flip, 0) * 0.46) 0.13 85)", fontWeight: 600 }}>
         ⚠ {t.compareRuns.mixedTasks.title}
       </div>
       <div style={{ color: "var(--vf-text-dim)", lineHeight: 1.5 }}>
@@ -343,7 +343,7 @@ function MetricsTable({
     <div
       style={{
         padding: 14,
-        background: "rgba(255,255,255,0.025)",
+        background: "rgb(var(--lt-ink, 255 255 255) / 0.025)",
         border: "1px solid var(--vf-panel-stroke)",
         borderRadius: 12,
         overflowX: "auto",
@@ -441,11 +441,11 @@ function MetricsTable({
           style={{
             marginTop: 10,
             paddingTop: 10,
-            borderTop: "1px solid rgba(255,255,255,0.04)",
+            borderTop: "1px solid rgb(var(--lt-ink, 255 255 255) / 0.04)",
             fontFamily: "var(--font-mono)",
             fontSize: 11,
             lineHeight: 1.5,
-            color: "oklch(0.86 0.12 85)",
+            color: "oklch(calc(0.86 - var(--lt-flip, 0) * 0.42) 0.12 85)",
           }}
         >
           ⚠ {t.compareRuns.seedNote[note]}
@@ -468,14 +468,14 @@ const thStyle: React.CSSProperties = {
 
 const tdStyle: React.CSSProperties = {
   padding: "8px 10px",
-  borderBottom: "1px solid rgba(255,255,255,0.04)",
+  borderBottom: "1px solid rgb(var(--lt-ink, 255 255 255) / 0.04)",
   color: "var(--vf-text)",
 };
 
 /** The cell holding a row's highest or lowest value. Neutral on purpose: no
  *  green, no "best" — see `extremeIndexes`. */
 const extremeStyle: React.CSSProperties = {
-  background: "rgba(255,255,255,0.07)",
+  background: "rgb(var(--lt-ink, 255 255 255) / 0.07)",
   fontWeight: 700,
 };
 
@@ -560,7 +560,7 @@ function ConfigDiffTable({ details }: { details: RunDetail[] }) {
     <div
       style={{
         padding: 14,
-        background: "rgba(255,255,255,0.025)",
+        background: "rgb(var(--lt-ink, 255 255 255) / 0.025)",
         border: "1px solid var(--vf-panel-stroke)",
         borderRadius: 12,
         overflowX: "auto",
@@ -614,7 +614,7 @@ function ConfigDiffTable({ details }: { details: RunDetail[] }) {
                         ...(isDifferent
                           ? {
                               background: "oklch(0.78 0.16 75 / 0.16)",
-                              color: "oklch(0.92 0.14 75)",
+                              color: "oklch(calc(0.92 - var(--lt-flip, 0) * 0.54) 0.14 75)",
                               fontWeight: 600,
                             }
                           : {}),
@@ -651,7 +651,7 @@ function PreprocessingCompare({ details }: { details: RunDetail[] }) {
     <div
       style={{
         padding: 14,
-        background: "rgba(255,255,255,0.025)",
+        background: "rgb(var(--lt-ink, 255 255 255) / 0.025)",
         border: "1px solid var(--vf-panel-stroke)",
         borderRadius: 12,
       }}
@@ -683,7 +683,7 @@ function PreprocessingCompare({ details }: { details: RunDetail[] }) {
               key={d.run_id}
               style={{
                 padding: 10,
-                background: "rgba(0,0,0,0.25)",
+                background: "rgb(var(--lt-shade, 0 0 0) / 0.25)",
                 border: "1px solid var(--vf-panel-stroke)",
                 borderRadius: 10,
               }}
@@ -828,7 +828,7 @@ function EpochCurves({ details, task }: { details: RunDetail[]; task: string }) 
                 }
                 style={{
                   padding: "4px 10px",
-                  background: on ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.025)",
+                  background: on ? "rgb(var(--lt-ink, 255 255 255) / 0.08)" : "rgb(var(--lt-ink, 255 255 255) / 0.025)",
                   border: `1px solid ${on ? accent : "var(--vf-panel-stroke)"}`,
                   borderRadius: 999,
                   color: on ? "var(--vf-text)" : "var(--vf-text-dim)",
@@ -900,7 +900,7 @@ function OverlayChart({
     <div
       style={{
         padding: 14,
-        background: "rgba(255,255,255,0.025)",
+        background: "rgb(var(--lt-ink, 255 255 255) / 0.025)",
         border: "1px solid var(--vf-panel-stroke)",
         borderRadius: 12,
       }}

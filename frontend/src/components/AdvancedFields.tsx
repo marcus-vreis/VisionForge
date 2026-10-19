@@ -43,7 +43,7 @@ export function AdvancedFields({
           gap: 8,
           padding: "8px 12px",
           width: "100%",
-          background: "rgba(255,255,255,0.02)",
+          background: "rgb(var(--lt-ink, 255 255 255) / 0.02)",
           border: "1px solid var(--vf-panel-stroke)",
           borderRadius: 8,
           color: "var(--vf-text-dim)",

@@ -171,7 +171,7 @@ export function ExperimentHeader({
             fontFamily: "var(--font-mono)",
             fontSize: 11.5,
             whiteSpace: "pre-line",
-            color: "oklch(0.85 0.14 22)",
+            color: "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.14 22)",
           }}
         >
           {importError}
@@ -183,7 +183,7 @@ export function ExperimentHeader({
             marginTop: 12,
             fontFamily: "var(--font-mono)",
             fontSize: 11.5,
-            color: "oklch(0.85 0.16 150)",
+            color: "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.16 150)",
           }}
         >
           {t.experimentHeader.imported(importedFile)}

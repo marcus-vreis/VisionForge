@@ -797,7 +797,7 @@ export default function App() {
               borderRadius: 12,
               fontFamily: "var(--font-mono)",
               fontSize: 13,
-              color: "oklch(0.85 0.14 22)",
+              color: "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.14 22)",
               whiteSpace: "pre-wrap",
               wordBreak: "break-word",
               lineHeight: 1.55,

@@ -109,7 +109,7 @@ export function CustomTaskPanel({
 
   if (error) {
     return (
-      <div style={{ ...noticeStyle, color: "oklch(0.85 0.14 22)" }}>
+      <div style={{ ...noticeStyle, color: "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.14 22)" }}>
         {t.customTaskPanel.schemaLoadFailed} <strong>{task.key}</strong>: {error}
         <br />
         <Rich text={t.customTaskPanel.schemaLoadHint} />

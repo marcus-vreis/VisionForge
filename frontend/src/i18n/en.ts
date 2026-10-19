@@ -114,6 +114,10 @@ export const en: Dict = {
     switchTo: "Switch to Portuguese",
     names: { pt: "Português", en: "English" },
   },
+  theme: {
+    label: "Theme",
+    names: { system: "Automatic (follows the system)", light: "Light", dark: "Dark" },
+  },
   errors: {
     cannotConnect: "Couldn't reach the server. Check that the backend is running.",
     validation: "There are validation errors in the form.",

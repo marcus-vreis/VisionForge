@@ -166,7 +166,7 @@ export function SweepCard({
           style={{
             marginBottom: 16,
             padding: "12px 14px",
-            background: "rgba(0,0,0,0.22)",
+            background: "rgb(var(--lt-shade, 0 0 0) / 0.22)",
             border: "1px dashed var(--vf-panel-stroke)",
             borderRadius: 10,
           }}
@@ -193,7 +193,7 @@ export function SweepCard({
                   onClick={() => togglePresetPick(m.value)}
                   style={{
                     padding: "5px 10px",
-                    background: picked ? `${accent}22` : "rgba(255,255,255,0.03)",
+                    background: picked ? `${accent}22` : "rgb(var(--lt-ink, 255 255 255) / 0.03)",
                     border: `1px solid ${picked ? accent : "var(--vf-panel-stroke)"}`,
                     borderRadius: 8,
                     color: picked ? "var(--vf-text)" : "var(--vf-text-dim)",
@@ -213,7 +213,7 @@ export function SweepCard({
             disabled={presetPicks.length < 2}
             style={{
               padding: "7px 12px",
-              background: "rgba(255,255,255,0.03)",
+              background: "rgb(var(--lt-ink, 255 255 255) / 0.03)",
               border: "1px solid var(--vf-panel-stroke)",
               borderRadius: 8,
               color:
@@ -239,7 +239,7 @@ export function SweepCard({
               alignItems: "flex-end",
               flexWrap: "wrap",
               padding: "10px 12px",
-              background: "rgba(0,0,0,0.22)",
+              background: "rgb(var(--lt-shade, 0 0 0) / 0.22)",
               border: "1px solid var(--vf-panel-stroke)",
               borderRadius: 10,
             }}
@@ -336,7 +336,7 @@ export function SweepCard({
         style={{
           padding: "8px 14px",
           marginBottom: 16,
-          background: "rgba(255,255,255,0.03)",
+          background: "rgb(var(--lt-ink, 255 255 255) / 0.03)",
           border: "1px dashed var(--vf-panel-stroke)",
           borderRadius: 10,
           color: "var(--vf-text-dim)",

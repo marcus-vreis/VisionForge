@@ -78,7 +78,7 @@ export function MenuSelect({
           alignItems: "center",
           gap: 8,
           padding: "7px 10px",
-          background: accented ? "var(--accent-soft)" : "rgba(0,0,0,0.35)",
+          background: accented ? "var(--accent-soft)" : "rgb(var(--lt-shade, 0 0 0) / 0.35)",
           border: `1px solid ${
             open
               ? "var(--accent-vf)"
@@ -109,7 +109,7 @@ export function MenuSelect({
               top: pos.top,
               left: pos.left,
               minWidth: pos.width,
-              background: "rgba(14,16,22,0.96)",
+              background: "rgb(var(--lt-surface, 14 16 22) / 0.96)",
               backdropFilter: "blur(12px)",
               WebkitBackdropFilter: "blur(12px)",
               border: "1px solid var(--vf-panel-stroke)",
@@ -121,7 +121,7 @@ export function MenuSelect({
               animation: "fadeUp 160ms ease",
               maxHeight: 280,
               overflowY: "auto",
-              boxShadow: "0 24px 60px rgba(0,0,0,0.55)",
+              boxShadow: "0 24px 60px rgb(var(--lt-shade, 0 0 0) / 0.55)",
             }}
           >
             {options.map((opt) => {
@@ -152,7 +152,7 @@ export function MenuSelect({
                   }}
                   onMouseEnter={(e) => {
                     if (!active)
-                      e.currentTarget.style.background = "rgba(255,255,255,0.05)";
+                      e.currentTarget.style.background = "rgb(var(--lt-ink, 255 255 255) / 0.05)";
                   }}
                   onMouseLeave={(e) => {
                     if (!active) e.currentTarget.style.background = "transparent";

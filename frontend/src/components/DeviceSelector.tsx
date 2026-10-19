@@ -104,7 +104,7 @@ export function DeviceSelector({ selection, onChange, variant = "bottom" }: Devi
           padding: variant === "header" ? "8px 14px" : "10px 16px",
           background: cudaActive
             ? "oklch(0.78 0.18 150 / 0.10)"
-            : "rgba(255,255,255,0.03)",
+            : "rgb(var(--lt-ink, 255 255 255) / 0.03)",
           border: "1px solid",
           borderColor: cudaActive
             ? "oklch(0.78 0.18 150 / 0.5)"
@@ -123,7 +123,7 @@ export function DeviceSelector({ selection, onChange, variant = "bottom" }: Devi
             width: 8,
             height: 8,
             borderRadius: "50%",
-            background: cudaActive ? "oklch(0.78 0.18 150)" : "oklch(0.74 0.10 70)",
+            background: cudaActive ? "oklch(calc(0.78 - var(--lt-flip, 0) * 0.26) 0.18 150)" : "oklch(calc(0.74 - var(--lt-flip, 0) * 0.18) 0.10 70)",
             boxShadow: cudaActive ? "0 0 12px oklch(0.78 0.18 150 / 0.8)" : "none",
             animation: "pulse-dot 1.6s ease-in-out infinite",
             flexShrink: 0,
@@ -132,7 +132,7 @@ export function DeviceSelector({ selection, onChange, variant = "bottom" }: Devi
         <span style={{ color: "var(--vf-text-dim)" }}>{t.deviceSelector.using}</span>
         <span
           style={{
-            color: cudaActive ? "oklch(0.85 0.16 150)" : "oklch(0.85 0.10 70)",
+            color: cudaActive ? "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.16 150)" : "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.10 70)",
             fontWeight: 600,
           }}
         >
@@ -149,10 +149,10 @@ export function DeviceSelector({ selection, onChange, variant = "bottom" }: Devi
             top: variant === "header" ? "calc(100% + 10px)" : undefined,
             right: 0,
             minWidth: 280,
-            background: "rgba(12,14,18,0.96)",
+            background: "rgb(var(--lt-surface, 12 14 18) / 0.96)",
             border: "1px solid var(--vf-panel-stroke)",
             borderRadius: 14,
-            boxShadow: "0 30px 80px rgba(0,0,0,0.6)",
+            boxShadow: "0 30px 80px rgb(var(--lt-shade, 0 0 0) / 0.6)",
             padding: 10,
             zIndex: 50,
             display: "flex",

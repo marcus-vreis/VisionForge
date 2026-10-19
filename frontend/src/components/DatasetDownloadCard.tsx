@@ -305,9 +305,9 @@ export function DatasetDownloadCard({
                 fontSize: 12,
                 color:
                   msg.kind === "error"
-                    ? "oklch(0.78 0.16 22)"
+                    ? "oklch(calc(0.78 - var(--lt-flip, 0) * 0.26) 0.16 22)"
                     : msg.kind === "success"
-                      ? "oklch(0.82 0.17 150)"
+                      ? "oklch(calc(0.82 - var(--lt-flip, 0) * 0.34) 0.17 150)"
                       : "var(--vf-text-muted)",
                 whiteSpace: "pre-wrap",
               }}

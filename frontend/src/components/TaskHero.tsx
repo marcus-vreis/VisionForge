@@ -12,7 +12,7 @@ function DataPill({ label, value }: DataPillProps) {
       style={{
         padding: "8px 14px",
         borderRadius: 10,
-        background: "rgba(8,10,14,0.55)",
+        background: "rgb(var(--lt-surface, 8 10 14) / 0.55)",
         border: "1px solid var(--vf-panel-stroke)",
       }}
     >

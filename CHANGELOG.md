@@ -13,6 +13,27 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ## [Unreleased]
 
+### Added
+
+- **Tema claro.** Um seletor na barra do topo, ao lado de PT/EN, escolhe entre automático
+  (segue o tema do sistema operacional, o padrão), claro e escuro; a escolha fica salva no
+  navegador. O tema escuro não mudou ([ADR-125](docs/dev/DECISIONS.md)).
+
+### Changed
+
+- **Sweeps e comparações de modelos também viram um grupo no histórico.** Antes, uma grade de
+  quatro learning rates deixava quatro runs soltos, e qual venceu só aparecia no relatório.
+  Agora o sweep (grade, aleatório ou Optuna, em qualquer tarefa) e a comparação de modelos são
+  uma entrada só, com "x/y trials", o tipo de busca e os hiperparâmetros do melhor trial; ao
+  abrir, cada trial aparece numa linha com o que testou, a métrica e o link para o run
+  ([ADR-124](docs/dev/DECISIONS.md)).
+
+### Fixed
+
+- **A busca aleatória da classificação treina todos os trials com a mesma seed**, como a
+  grade já fazia. Cada trial recebia a seed base + o seu índice, então a diferença entre dois
+  trials misturava o efeito dos hiperparâmetros com o da seed ([ADR-124](docs/dev/DECISIONS.md)).
+
 ## [0.16.0] — 2026-10-17
 
 ### Added
@@ -27,12 +48,6 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Changed
 
-- **Sweeps e comparações de modelos também viram um grupo no histórico.** Antes, uma grade de
-  quatro learning rates deixava quatro runs soltos, e qual venceu só aparecia no relatório.
-  Agora o sweep (grade, aleatório ou Optuna, em qualquer tarefa) e a comparação de modelos são
-  uma entrada só, com "x/y trials", o tipo de busca e os hiperparâmetros do melhor trial; ao
-  abrir, cada trial aparece numa linha com o que testou, a métrica e o link para o run
-  ([ADR-124](docs/dev/DECISIONS.md)).
 - **Os painéis de detecção, regressão, segmentação e anomalia seguem o layout da
   classificação.** K-fold, sweep e réplicas não têm mais um segundo botão de rodar dentro
   do card: o botão da barra de baixo roda tudo, e o card mostra o que vai rodar ("5 seeds")
@@ -51,9 +66,6 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Fixed
 
-- **A busca aleatória da classificação treina todos os trials com a mesma seed**, como a
-  grade já fazia. Cada trial recebia a seed base + o seu índice, então a diferença entre dois
-  trials misturava o efeito dos hiperparâmetros com o da seed ([ADR-124](docs/dev/DECISIONS.md)).
 - **O `run.json` grava a versão que o VisionForge informa, também num checkout.** Quem roda do
   código-fonte tinha a versão do `pyproject.toml` na interface e a dos metadados instalados
   (mais antiga até reinstalar) no `run.json` de cada run.

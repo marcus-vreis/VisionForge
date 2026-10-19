@@ -80,7 +80,7 @@ function FilterChips({
               onClick={() => onChange(o.value)}
               style={{
                 padding: "5px 11px",
-                background: active ? "var(--accent-soft)" : "rgba(255,255,255,0.04)",
+                background: active ? "var(--accent-soft)" : "rgb(var(--lt-ink, 255 255 255) / 0.04)",
                 border: `1px solid ${active ? "var(--accent-vf)" : "var(--vf-panel-stroke)"}`,
                 borderRadius: 999,
                 fontFamily: "var(--font-mono)",
@@ -172,7 +172,7 @@ function TaskTabs({
               style={{
                 padding: "1px 6px",
                 borderRadius: 999,
-                background: on ? "rgba(255,255,255,0.10)" : "rgba(255,255,255,0.04)",
+                background: on ? "rgb(var(--lt-ink, 255 255 255) / 0.10)" : "rgb(var(--lt-ink, 255 255 255) / 0.04)",
                 fontSize: 10,
                 color: "var(--vf-text-dim)",
               }}
@@ -188,9 +188,9 @@ function TaskTabs({
 
 /** Status dot color — completed is muted green, running is accent, failed is red. */
 function statusColor(status: string): string {
-  if (status === "completed") return "oklch(0.78 0.18 150)";
-  if (status === "running") return "oklch(0.74 0.16 240)";
-  if (status === "failed") return "oklch(0.74 0.18 22)";
+  if (status === "completed") return "oklch(calc(0.78 - var(--lt-flip, 0) * 0.26) 0.18 150)";
+  if (status === "running") return "oklch(calc(0.74 - var(--lt-flip, 0) * 0.18) 0.16 240)";
+  if (status === "failed") return "oklch(calc(0.74 - var(--lt-flip, 0) * 0.18) 0.18 22)";
   return "var(--vf-text-muted)";
 }
 
@@ -266,8 +266,8 @@ function RunCard({
         padding: "14px 18px",
         background: selected
           ? "rgba(120, 200, 130, 0.10)"
-          : "rgba(255,255,255,0.025)",
-        border: `1px solid ${selected ? "oklch(0.78 0.18 150)" : "var(--vf-panel-stroke)"}`,
+          : "rgb(var(--lt-ink, 255 255 255) / 0.025)",
+        border: `1px solid ${selected ? "oklch(calc(0.78 - var(--lt-flip, 0) * 0.26) 0.18 150)" : "var(--vf-panel-stroke)"}`,
         borderRadius: 12,
         display: "flex",
         flexDirection: "column",
@@ -287,7 +287,7 @@ function RunCard({
             width: 18,
             height: 18,
             borderRadius: 4,
-            border: `1.5px solid ${selected ? "oklch(0.78 0.18 150)" : "var(--vf-panel-stroke)"}`,
+            border: `1.5px solid ${selected ? "oklch(calc(0.78 - var(--lt-flip, 0) * 0.26) 0.18 150)" : "var(--vf-panel-stroke)"}`,
             background: selected ? "oklch(0.78 0.18 150 / 0.3)" : "transparent",
             display: "flex",
             alignItems: "center",
@@ -316,9 +316,9 @@ function RunCard({
             width: 26,
             height: 26,
             borderRadius: 8,
-            background: deleting ? "rgba(255,255,255,0.04)" : "transparent",
+            background: deleting ? "rgb(var(--lt-ink, 255 255 255) / 0.04)" : "transparent",
             border: "1px solid var(--vf-panel-stroke)",
-            color: deleting ? "var(--vf-text-muted)" : "oklch(0.78 0.16 22)",
+            color: deleting ? "var(--vf-text-muted)" : "oklch(calc(0.78 - var(--lt-flip, 0) * 0.26) 0.16 22)",
             fontSize: 12,
             cursor: deleting ? "wait" : "pointer",
             display: "flex",
@@ -426,7 +426,7 @@ function RunCard({
               borderRadius: 999,
               fontFamily: "var(--font-mono)",
               fontSize: 10,
-              color: "oklch(0.88 0.15 150)",
+              color: "oklch(calc(0.88 - var(--lt-flip, 0) * 0.46) 0.15 150)",
               letterSpacing: "0.10em",
               textTransform: "uppercase",
             }}
@@ -444,7 +444,7 @@ function RunCard({
               borderRadius: 999,
               fontFamily: "var(--font-mono)",
               fontSize: 10,
-              color: "oklch(0.86 0.11 250)",
+              color: "oklch(calc(0.86 - var(--lt-flip, 0) * 0.42) 0.11 250)",
               letterSpacing: "0.10em",
               // A long dataset name must not push the other pills out of the
               // row; the row wraps, but the pill itself has to stay bounded.
@@ -471,7 +471,7 @@ function RunCard({
               borderRadius: 999,
               fontFamily: "var(--font-mono)",
               fontSize: 10,
-              color: "oklch(0.90 0.15 85)",
+              color: "oklch(calc(0.90 - var(--lt-flip, 0) * 0.5) 0.15 85)",
               letterSpacing: "0.10em",
               textTransform: "uppercase",
             }}
@@ -490,7 +490,7 @@ function RunCard({
               borderRadius: 999,
               fontFamily: "var(--font-mono)",
               fontSize: 10,
-              color: "rgba(220, 190, 255, 0.95)",
+              color: "var(--lt-group-fg, rgba(220, 190, 255, 0.95))",
               letterSpacing: "0.10em",
               textTransform: "uppercase",
             }}
@@ -508,7 +508,7 @@ function RunCard({
               borderRadius: 999,
               fontFamily: "var(--font-mono)",
               fontSize: 10,
-              color: "oklch(0.90 0.12 85)",
+              color: "oklch(calc(0.90 - var(--lt-flip, 0) * 0.5) 0.12 85)",
               letterSpacing: "0.10em",
               textTransform: "uppercase",
             }}
@@ -526,7 +526,7 @@ function RunCard({
               borderRadius: 999,
               fontFamily: "var(--font-mono)",
               fontSize: 10,
-              color: "rgba(220, 190, 255, 0.95)",
+              color: "var(--lt-group-fg, rgba(220, 190, 255, 0.95))",
               letterSpacing: "0.10em",
               textTransform: "uppercase",
             }}
@@ -971,7 +971,7 @@ export function HistoryOverlay({
         position: "fixed",
         inset: 0,
         zIndex: 100,
-        background: "rgba(4,5,7,0.72)",
+        background: "rgb(var(--lt-surface, 4 5 7) / 0.72)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -989,10 +989,10 @@ export function HistoryOverlay({
                 // the five built-ins plus a custom task.
                 "min(760px, 100%)",
           maxHeight: "85vh",
-          background: "rgba(12,14,18,0.95)",
+          background: "rgb(var(--lt-surface, 12 14 18) / 0.95)",
           border: "1px solid var(--vf-panel-stroke)",
           borderRadius: 18,
-          boxShadow: "0 50px 120px rgba(0,0,0,0.7)",
+          boxShadow: "0 50px 120px rgb(var(--lt-shade, 0 0 0) / 0.7)",
           overflow: "hidden",
           display: "flex",
           flexDirection: "column",
@@ -1037,7 +1037,7 @@ export function HistoryOverlay({
                   style={{
                     marginLeft: 10,
                     padding: "2px 9px",
-                    background: "rgba(255,255,255,0.06)",
+                    background: "rgb(var(--lt-ink, 255 255 255) / 0.06)",
                     border: "1px solid var(--vf-panel-stroke)",
                     borderRadius: 999,
                     fontSize: 13,
@@ -1069,7 +1069,7 @@ export function HistoryOverlay({
                 title={t.leaderboard.viewRankingTitle}
                 style={{
                   padding: "8px 14px",
-                  background: view === "ranking" ? "var(--accent-soft)" : "rgba(255,255,255,0.04)",
+                  background: view === "ranking" ? "var(--accent-soft)" : "rgb(var(--lt-ink, 255 255 255) / 0.04)",
                   border: `1px solid ${view === "ranking" ? "var(--accent-vf)" : "var(--vf-panel-stroke)"}`,
                   borderRadius: 10,
                   color: view === "ranking" ? "var(--vf-text)" : "var(--vf-text-dim)",
@@ -1092,10 +1092,10 @@ export function HistoryOverlay({
                 }}
                 style={{
                   padding: "8px 14px",
-                  background: selectMode ? "oklch(0.78 0.18 150 / 0.18)" : "rgba(255,255,255,0.04)",
-                  border: `1px solid ${selectMode ? "oklch(0.78 0.18 150)" : "var(--vf-panel-stroke)"}`,
+                  background: selectMode ? "oklch(0.78 0.18 150 / 0.18)" : "rgb(var(--lt-ink, 255 255 255) / 0.04)",
+                  border: `1px solid ${selectMode ? "oklch(calc(0.78 - var(--lt-flip, 0) * 0.26) 0.18 150)" : "var(--vf-panel-stroke)"}`,
                   borderRadius: 10,
-                  color: selectMode ? "oklch(0.88 0.16 150)" : "var(--vf-text-dim)",
+                  color: selectMode ? "oklch(calc(0.88 - var(--lt-flip, 0) * 0.46) 0.16 150)" : "var(--vf-text-dim)",
                   fontFamily: "var(--font-mono)",
                   fontSize: 11,
                   letterSpacing: "0.10em",
@@ -1113,7 +1113,7 @@ export function HistoryOverlay({
                 style={{
                   padding: "8px 14px",
                   background: "oklch(0.78 0.18 150 / 0.30)",
-                  border: "1px solid oklch(0.78 0.18 150)",
+                  border: "1px solid oklch(calc(0.78 - var(--lt-flip, 0) * 0.26) 0.18 150)",
                   borderRadius: 10,
                   color: "var(--vf-text)",
                   fontFamily: "var(--font-mono)",
@@ -1138,9 +1138,9 @@ export function HistoryOverlay({
                 style={{
                   padding: "8px 14px",
                   background: "oklch(0.704 0.191 22.216 / 0.18)",
-                  border: "1px solid oklch(0.78 0.16 22)",
+                  border: "1px solid oklch(calc(0.78 - var(--lt-flip, 0) * 0.26) 0.16 22)",
                   borderRadius: 10,
-                  color: "oklch(0.92 0.12 22)",
+                  color: "oklch(calc(0.92 - var(--lt-flip, 0) * 0.54) 0.12 22)",
                   fontFamily: "var(--font-mono)",
                   fontSize: 11,
                   letterSpacing: "0.10em",
@@ -1160,7 +1160,7 @@ export function HistoryOverlay({
                 height: 36,
                 borderRadius: "50%",
                 border: "1px solid var(--vf-panel-stroke)",
-                background: "rgba(255,255,255,0.03)",
+                background: "rgb(var(--lt-ink, 255 255 255) / 0.03)",
                 color: "var(--vf-text)",
                 fontSize: 20,
                 display: "flex",
@@ -1245,7 +1245,7 @@ export function HistoryOverlay({
                 borderRadius: 12,
                 fontFamily: "var(--font-mono)",
                 fontSize: 13,
-                color: "oklch(0.85 0.14 22)",
+                color: "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.14 22)",
                 lineHeight: 1.55,
               }}
             >
@@ -1345,7 +1345,7 @@ export function HistoryOverlay({
                 borderRadius: 10,
                 fontFamily: "var(--font-mono)",
                 fontSize: 11,
-                color: "oklch(0.88 0.16 150)",
+                color: "oklch(calc(0.88 - var(--lt-flip, 0) * 0.46) 0.16 150)",
               }}
             >
               {selection.length === 0
@@ -1374,7 +1374,7 @@ export function HistoryOverlay({
                   style={{
                     width: "100%",
                     padding: "9px 36px 9px 12px",
-                    background: "rgba(0,0,0,0.35)",
+                    background: "rgb(var(--lt-shade, 0 0 0) / 0.35)",
                     border: "1px solid var(--vf-panel-stroke)",
                     borderRadius: 10,
                     color: "var(--vf-text)",
@@ -1395,7 +1395,7 @@ export function HistoryOverlay({
                       width: 24,
                       height: 24,
                       borderRadius: "50%",
-                      background: "rgba(255,255,255,0.06)",
+                      background: "rgb(var(--lt-ink, 255 255 255) / 0.06)",
                       border: "1px solid var(--vf-panel-stroke)",
                       color: "var(--vf-text-dim)",
                       fontSize: 12,
@@ -1568,7 +1568,7 @@ export function HistoryOverlay({
             position: "fixed",
             inset: 0,
             zIndex: 200,
-            background: "rgba(2,3,5,0.78)",
+            background: "rgb(var(--lt-surface, 2 3 5) / 0.78)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -1578,7 +1578,7 @@ export function HistoryOverlay({
           <div
             style={{
               width: "min(440px, 100%)",
-              background: "rgba(12,14,18,0.98)",
+              background: "rgb(var(--lt-surface, 12 14 18) / 0.98)",
               border: "1px solid var(--vf-panel-stroke)",
               borderRadius: 16,
               padding: 22,
@@ -1593,7 +1593,7 @@ export function HistoryOverlay({
                 fontSize: 10,
                 letterSpacing: "0.20em",
                 textTransform: "uppercase",
-                color: "oklch(0.78 0.16 22)",
+                color: "oklch(calc(0.78 - var(--lt-flip, 0) * 0.26) 0.16 22)",
               }}
             >
               {t.history.confirm.title(pendingDeletes.length)}
@@ -1644,7 +1644,7 @@ export function HistoryOverlay({
                 style={{
                   fontFamily: "var(--font-mono)",
                   fontSize: 11,
-                  color: "oklch(0.86 0.12 85)",
+                  color: "oklch(calc(0.86 - var(--lt-flip, 0) * 0.42) 0.12 85)",
                   lineHeight: 1.6,
                 }}
               >
@@ -1660,7 +1660,7 @@ export function HistoryOverlay({
                   borderRadius: 8,
                   fontFamily: "var(--font-mono)",
                   fontSize: 11,
-                  color: "oklch(0.85 0.14 22)",
+                  color: "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.14 22)",
                 }}
               >
                 {deleteError}
@@ -1697,9 +1697,9 @@ export function HistoryOverlay({
                 style={{
                   padding: "9px 16px",
                   background: "oklch(0.704 0.191 22.216 / 0.20)",
-                  border: "1px solid oklch(0.78 0.16 22)",
+                  border: "1px solid oklch(calc(0.78 - var(--lt-flip, 0) * 0.26) 0.16 22)",
                   borderRadius: 10,
-                  color: "oklch(0.95 0.10 22)",
+                  color: "oklch(calc(0.95 - var(--lt-flip, 0) * 0.6) 0.10 22)",
                   fontFamily: "var(--font-mono)",
                   fontSize: 11,
                   letterSpacing: "0.10em",

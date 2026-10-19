@@ -120,7 +120,7 @@ function SchemaField({
             marginTop: 4,
             fontFamily: "var(--font-mono)",
             fontSize: 11,
-            color: "oklch(0.8 0.15 22)",
+            color: "oklch(calc(0.8 - var(--lt-flip, 0) * 0.3) 0.15 22)",
           }}
         >
           {message}

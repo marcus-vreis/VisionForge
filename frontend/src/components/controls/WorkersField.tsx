@@ -62,7 +62,7 @@ export function WorkersField({
           style={{
             marginLeft: "auto",
             padding: "2px 8px",
-            background: auto ? "var(--accent-soft)" : "rgba(255,255,255,0.04)",
+            background: auto ? "var(--accent-soft)" : "rgb(var(--lt-ink, 255 255 255) / 0.04)",
             border: `1px solid ${auto ? "var(--accent-vf)" : "var(--vf-panel-stroke)"}`,
             borderRadius: 6,
             color: auto ? "var(--vf-text)" : "var(--vf-text-dim)",
@@ -85,7 +85,7 @@ export function WorkersField({
         <div
           style={{
             padding: "8px 12px",
-            background: "rgba(0,0,0,0.35)",
+            background: "rgb(var(--lt-shade, 0 0 0) / 0.35)",
             border: "1px dashed var(--vf-panel-stroke)",
             borderRadius: 8,
             fontFamily: "var(--font-mono)",
@@ -115,7 +115,7 @@ export function WorkersField({
           }}
           style={{
             padding: "8px 12px",
-            background: "rgba(0,0,0,0.30)",
+            background: "rgb(var(--lt-shade, 0 0 0) / 0.30)",
             border: "1px solid var(--vf-panel-stroke)",
             borderRadius: 8,
             fontFamily: "var(--font-mono)",

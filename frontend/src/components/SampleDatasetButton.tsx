@@ -54,7 +54,7 @@ export function SampleDatasetButton({
             marginTop: 4,
             fontFamily: "var(--font-mono)",
             fontSize: 11,
-            color: "oklch(0.85 0.14 22)",
+            color: "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.14 22)",
           }}
         >
           {error}

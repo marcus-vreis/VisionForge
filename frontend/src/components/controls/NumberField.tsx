@@ -3,7 +3,7 @@ import { FieldLabel } from "./FieldLabel";
 const shellStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
-  background: "rgba(12,14,18,0.65)",
+  background: "rgb(var(--lt-surface, 12 14 18) / 0.65)",
   border: "1px solid var(--vf-panel-stroke)",
   borderRadius: 10,
   transition: "border-color 160ms ease, box-shadow 160ms ease",

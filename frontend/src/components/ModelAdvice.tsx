@@ -70,7 +70,7 @@ export function ModelAdvice({
         border: `1px solid ${severe ? "oklch(0.80 0.16 85 / 0.45)" : "var(--vf-panel-stroke)"}`,
         background: severe
           ? "oklch(0.80 0.16 85 / 0.10)"
-          : "rgba(255,255,255,0.03)",
+          : "rgb(var(--lt-ink, 255 255 255) / 0.03)",
         fontSize: 11,
         lineHeight: 1.5,
         color: "var(--vf-text-dim)",

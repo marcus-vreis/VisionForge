@@ -443,7 +443,7 @@ export function RunDetailPanel({ runId, onBack, onOpenRun, knownRunIds }: RunDet
           onClick={onBack}
           style={{
             padding: "6px 12px",
-            background: "rgba(255,255,255,0.04)",
+            background: "rgb(var(--lt-ink, 255 255 255) / 0.04)",
             border: "1px solid var(--vf-panel-stroke)",
             borderRadius: 8,
             color: "var(--vf-text-dim)",
@@ -478,7 +478,7 @@ export function RunDetailPanel({ runId, onBack, onOpenRun, knownRunIds }: RunDet
               background: "oklch(0.80 0.16 85 / 0.14)",
               border: "1px solid oklch(0.80 0.16 85 / 0.45)",
               borderRadius: 8,
-              color: "oklch(0.90 0.15 85)",
+              color: "oklch(calc(0.90 - var(--lt-flip, 0) * 0.5) 0.15 85)",
               fontFamily: "var(--font-mono)",
               fontSize: 11,
               letterSpacing: "0.10em",
@@ -528,11 +528,11 @@ export function RunDetailPanel({ runId, onBack, onOpenRun, knownRunIds }: RunDet
             background:
               resumeMsg.kind === "error"
                 ? "oklch(0.704 0.191 22.216 / 0.10)"
-                : "rgba(255,255,255,0.04)",
+                : "rgb(var(--lt-ink, 255 255 255) / 0.04)",
             border: "1px solid var(--vf-panel-stroke)",
             color:
               resumeMsg.kind === "error"
-                ? "oklch(0.80 0.17 22)"
+                ? "oklch(calc(0.80 - var(--lt-flip, 0) * 0.3) 0.17 22)"
                 : "var(--vf-text-dim)",
           }}
         >
@@ -553,7 +553,7 @@ export function RunDetailPanel({ runId, onBack, onOpenRun, knownRunIds }: RunDet
             background: "oklch(0.704 0.191 22.216 / 0.10)",
             border: "1px solid oklch(0.704 0.191 22.216 / 0.4)",
             borderRadius: 10,
-            color: "oklch(0.85 0.14 22)",
+            color: "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.14 22)",
             fontFamily: "var(--font-mono)",
             fontSize: 12,
           }}
@@ -598,7 +598,7 @@ export function RunDetailPanel({ runId, onBack, onOpenRun, knownRunIds }: RunDet
                     onClick={() => onOpenRun(detail.group_id ?? "")}
                     style={{
                       padding: "6px 12px",
-                      background: "rgba(255,255,255,0.04)",
+                      background: "rgb(var(--lt-ink, 255 255 255) / 0.04)",
                       border: `1px solid ${accentForTask(task)}`,
                       borderRadius: 8,
                       color: "var(--vf-text)",
@@ -673,7 +673,7 @@ export function RunDetailPanel({ runId, onBack, onOpenRun, knownRunIds }: RunDet
                   padding: "4px 0",
                   color:
                     revealMsg.kind === "error"
-                      ? "oklch(0.80 0.17 22)"
+                      ? "oklch(calc(0.80 - var(--lt-flip, 0) * 0.3) 0.17 22)"
                       : "var(--vf-text-dim)",
                 }}
               >
@@ -807,7 +807,7 @@ export function RunDetailPanel({ runId, onBack, onOpenRun, knownRunIds }: RunDet
                     style={{
                       padding: "12px 20px",
                       background:
-                        "linear-gradient(180deg, var(--accent-soft) 0%, rgba(8,10,14,0.4) 100%)",
+                        "linear-gradient(180deg, var(--accent-soft) 0%, rgb(var(--lt-surface, 8 10 14) / 0.4) 100%)",
                       border: "1px solid var(--accent-vf)",
                       borderRadius: 10,
                       color: "var(--vf-text)",
@@ -834,12 +834,12 @@ export function RunDetailPanel({ runId, onBack, onOpenRun, knownRunIds }: RunDet
                             ? "oklch(0.704 0.191 22.216 / 0.10)"
                             : exportMsg.kind === "success"
                               ? "oklch(0.72 0.16 150 / 0.10)"
-                              : "rgba(255,255,255,0.04)",
+                              : "rgb(var(--lt-ink, 255 255 255) / 0.04)",
                         color:
                           exportMsg.kind === "error"
-                            ? "oklch(0.85 0.14 22)"
+                            ? "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.14 22)"
                             : exportMsg.kind === "success"
-                              ? "oklch(0.85 0.16 150)"
+                              ? "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.16 150)"
                               : "var(--vf-text-dim)",
                         wordBreak: "break-all",
                       }}
@@ -945,7 +945,7 @@ export function RunDetailPanel({ runId, onBack, onOpenRun, knownRunIds }: RunDet
                     style={{
                       padding: "12px 20px",
                       background:
-                        "linear-gradient(180deg, var(--accent-soft) 0%, rgba(8,10,14,0.4) 100%)",
+                        "linear-gradient(180deg, var(--accent-soft) 0%, rgb(var(--lt-surface, 8 10 14) / 0.4) 100%)",
                       border: "1px solid var(--accent-vf)",
                       borderRadius: 10,
                       color: "var(--vf-text)",
@@ -972,12 +972,12 @@ export function RunDetailPanel({ runId, onBack, onOpenRun, knownRunIds }: RunDet
                             ? "oklch(0.704 0.191 22.216 / 0.10)"
                             : batchMsg.kind === "success"
                               ? "oklch(0.72 0.16 150 / 0.10)"
-                              : "rgba(255,255,255,0.04)",
+                              : "rgb(var(--lt-ink, 255 255 255) / 0.04)",
                         color:
                           batchMsg.kind === "error"
-                            ? "oklch(0.85 0.14 22)"
+                            ? "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.14 22)"
                             : batchMsg.kind === "success"
-                              ? "oklch(0.85 0.16 150)"
+                              ? "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.16 150)"
                               : "var(--vf-text-dim)",
                         wordBreak: "break-all",
                       }}
@@ -1084,7 +1084,7 @@ export function RunDetailPanel({ runId, onBack, onOpenRun, knownRunIds }: RunDet
                     style={{
                       padding: "12px 20px",
                       background:
-                        "linear-gradient(180deg, var(--accent-soft) 0%, rgba(8,10,14,0.4) 100%)",
+                        "linear-gradient(180deg, var(--accent-soft) 0%, rgb(var(--lt-surface, 8 10 14) / 0.4) 100%)",
                       border: "1px solid var(--accent-vf)",
                       borderRadius: 10,
                       color: "var(--vf-text)",
@@ -1111,12 +1111,12 @@ export function RunDetailPanel({ runId, onBack, onOpenRun, knownRunIds }: RunDet
                             ? "oklch(0.704 0.191 22.216 / 0.10)"
                             : gradcamMsg.kind === "success"
                               ? "oklch(0.72 0.16 150 / 0.10)"
-                              : "rgba(255,255,255,0.04)",
+                              : "rgb(var(--lt-ink, 255 255 255) / 0.04)",
                         color:
                           gradcamMsg.kind === "error"
-                            ? "oklch(0.85 0.14 22)"
+                            ? "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.14 22)"
                             : gradcamMsg.kind === "success"
-                              ? "oklch(0.85 0.16 150)"
+                              ? "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.16 150)"
                               : "var(--vf-text-dim)",
                         wordBreak: "break-all",
                       }}
@@ -1143,12 +1143,12 @@ export function RunDetailPanel({ runId, onBack, onOpenRun, knownRunIds }: RunDet
                               setLightbox({ src: url, caption: item.source })
                             }
                             style={{
-                              background: "rgba(0,0,0,0.3)",
+                              background: "rgb(var(--lt-shade, 0 0 0) / 0.3)",
                               // A wrong prediction is the one worth looking at,
                               // so the border says so before the caption does.
                               border:
                                 item.correct === false
-                                  ? "1px solid oklch(0.74 0.18 22)"
+                                  ? "1px solid oklch(calc(0.74 - var(--lt-flip, 0) * 0.18) 0.18 22)"
                                   : item.correct === true
                                     ? "1px solid oklch(0.72 0.16 150)"
                                     : "1px solid var(--vf-panel-stroke)",
@@ -1227,7 +1227,7 @@ export function RunDetailPanel({ runId, onBack, onOpenRun, knownRunIds }: RunDet
                       type="button"
                       onClick={() => setLightbox({ src: url, caption: g })}
                       style={{
-                        background: "rgba(0,0,0,0.3)",
+                        background: "rgb(var(--lt-shade, 0 0 0) / 0.3)",
                         border: "1px solid var(--vf-panel-stroke)",
                         borderRadius: 10,
                         padding: 0,
@@ -1360,7 +1360,7 @@ export function RunDetailPanel({ runId, onBack, onOpenRun, knownRunIds }: RunDet
                   style={{
                     padding: "12px 20px",
                     background:
-                      "linear-gradient(180deg, var(--accent-soft) 0%, rgba(8,10,14,0.4) 100%)",
+                      "linear-gradient(180deg, var(--accent-soft) 0%, rgb(var(--lt-surface, 8 10 14) / 0.4) 100%)",
                     border: "1px solid var(--accent-vf)",
                     borderRadius: 10,
                     color: "var(--vf-text)",
@@ -1387,12 +1387,12 @@ export function RunDetailPanel({ runId, onBack, onOpenRun, knownRunIds }: RunDet
                           ? "oklch(0.704 0.191 22.216 / 0.10)"
                           : testMsg.kind === "success"
                             ? "oklch(0.72 0.16 150 / 0.10)"
-                            : "rgba(255,255,255,0.04)",
+                            : "rgb(var(--lt-ink, 255 255 255) / 0.04)",
                       color:
                         testMsg.kind === "error"
-                          ? "oklch(0.85 0.14 22)"
+                          ? "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.14 22)"
                           : testMsg.kind === "success"
-                            ? "oklch(0.85 0.16 150)"
+                            ? "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.16 150)"
                             : "var(--vf-text-dim)",
                     }}
                   >
@@ -1528,7 +1528,7 @@ function CrossValidationDetail({ metrics }: { metrics: Record<string, unknown> }
       <div
         style={{
           padding: 10,
-          background: "rgba(0,0,0,0.30)",
+          background: "rgb(var(--lt-shade, 0 0 0) / 0.30)",
           border: "1px solid var(--vf-panel-stroke)",
           borderRadius: 10,
           overflowX: "auto",
@@ -1569,10 +1569,10 @@ function CrossValidationDetail({ metrics }: { metrics: Record<string, unknown> }
                       ...cvTdStyle,
                       color:
                         state === "ok"
-                          ? "oklch(0.85 0.16 150)"
+                          ? "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.16 150)"
                           : state === "stopped"
                             ? STOPPED_COLOR
-                            : "oklch(0.85 0.14 22)",
+                            : "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.14 22)",
                     }}
                   >
                     {state === "ok"
@@ -1614,8 +1614,8 @@ function CVAggregateCard({
         borderRadius: 10,
         border: "1px solid var(--vf-panel-stroke)",
         background: highlight
-          ? "linear-gradient(180deg, var(--accent-soft) 0%, rgba(12,14,18,0.5) 100%)"
-          : "rgba(12,14,18,0.55)",
+          ? "linear-gradient(180deg, var(--accent-soft) 0%, rgb(var(--lt-surface, 12 14 18) / 0.5) 100%)"
+          : "rgb(var(--lt-surface, 12 14 18) / 0.55)",
       }}
     >
       <div
@@ -1668,7 +1668,7 @@ const cvThStyle: React.CSSProperties = {
 
 const cvTdStyle: React.CSSProperties = {
   padding: "6px 8px",
-  borderBottom: "1px solid rgba(255,255,255,0.04)",
+  borderBottom: "1px solid rgb(var(--lt-ink, 255 255 255) / 0.04)",
   color: "var(--vf-text)",
 };
 
@@ -1690,7 +1690,7 @@ function Section({ title, children, action }: SectionProps) {
     <div
       style={{
         padding: "14px 16px",
-        background: "rgba(255,255,255,0.02)",
+        background: "rgb(var(--lt-ink, 255 255 255) / 0.02)",
         border: "1px solid var(--vf-panel-stroke)",
         borderRadius: 12,
       }}
@@ -1723,7 +1723,7 @@ function Section({ title, children, action }: SectionProps) {
 
 const PATH_ROW_BUTTON_STYLE: CSSProperties = {
   padding: "4px 8px",
-  background: "rgba(255,255,255,0.04)",
+  background: "rgb(var(--lt-ink, 255 255 255) / 0.04)",
   border: "1px solid var(--vf-panel-stroke)",
   borderRadius: 6,
   color: "var(--vf-text-dim)",
@@ -1878,7 +1878,7 @@ function GradCamCaption({ item }: { item: GradCamItem }) {
       <div>
         <span style={{ color: "var(--vf-text-muted)" }}>{t.runDetail.gradcam.actual}</span> {item.true_class}
       </div>
-      <div style={{ color: item.correct ? "inherit" : "oklch(0.8 0.16 22)" }}>
+      <div style={{ color: item.correct ? "inherit" : "oklch(calc(0.8 - var(--lt-flip, 0) * 0.3) 0.16 22)" }}>
         <span style={{ color: "var(--vf-text-muted)" }}>{t.runDetail.gradcam.predicted}</span> {predicted}
         {item.correct === false ? " ✗" : " ✓"}
       </div>
@@ -1913,7 +1913,7 @@ function MetricsGrid({
             key={k}
             style={{
               padding: "8px 10px",
-              background: "rgba(0,0,0,0.3)",
+              background: "rgb(var(--lt-shade, 0 0 0) / 0.3)",
               border: "1px solid var(--vf-panel-stroke)",
               borderRadius: 8,
             }}
@@ -1977,7 +1977,7 @@ function TestRow({ test, onOpenImage }: TestRowProps) {
     <div
       style={{
         padding: "10px 14px",
-        background: "rgba(255,255,255,0.025)",
+        background: "rgb(var(--lt-ink, 255 255 255) / 0.025)",
         border: "1px solid var(--vf-panel-stroke)",
         borderRadius: 10,
         display: "flex",
@@ -2011,7 +2011,7 @@ function TestRow({ test, onOpenImage }: TestRowProps) {
               onClick={() => onOpenImage(artifactUrl(p), p)}
               style={{
                 padding: "4px 10px",
-                background: "rgba(255,255,255,0.04)",
+                background: "rgb(var(--lt-ink, 255 255 255) / 0.04)",
                 border: "1px solid var(--vf-panel-stroke)",
                 borderRadius: 6,
                 fontFamily: "var(--font-mono)",
@@ -2135,7 +2135,7 @@ function PipelineSection({ config }: { config: Record<string, unknown> }) {
                   key={`${kind}-${i}`}
                   style={{
                     padding: "5px 10px",
-                    background: "rgba(0,0,0,0.30)",
+                    background: "rgb(var(--lt-shade, 0 0 0) / 0.30)",
                     border: "1px solid var(--vf-panel-stroke)",
                     borderRadius: 8,
                     fontFamily: "var(--font-mono)",
@@ -2185,7 +2185,7 @@ function PipelineSection({ config }: { config: Record<string, unknown> }) {
                 key={k}
                 style={{
                   padding: "6px 10px",
-                  background: "rgba(0,0,0,0.25)",
+                  background: "rgb(var(--lt-shade, 0 0 0) / 0.25)",
                   border: "1px solid var(--vf-panel-stroke)",
                   borderRadius: 6,
                   display: "flex",
@@ -2243,7 +2243,7 @@ const exportLabelStyle: React.CSSProperties = {
 
 const exportInputStyle: React.CSSProperties = {
   padding: "8px 10px",
-  background: "rgba(0,0,0,0.35)",
+  background: "rgb(var(--lt-shade, 0 0 0) / 0.35)",
   border: "1px solid var(--vf-panel-stroke)",
   borderRadius: 8,
   color: "var(--vf-text)",
@@ -2294,7 +2294,7 @@ function ExportResultPanel({ result }: { result: ExportOnnxResponse }) {
       style={{
         marginTop: 12,
         padding: 12,
-        background: "rgba(0,0,0,0.30)",
+        background: "rgb(var(--lt-shade, 0 0 0) / 0.30)",
         border: "1px solid var(--vf-panel-stroke)",
         borderRadius: 10,
         display: "grid",
@@ -2310,7 +2310,7 @@ function ExportResultPanel({ result }: { result: ExportOnnxResponse }) {
           value={
             typeof val.max_diff === "number" ? val.max_diff.toExponential(3) : "—"
           }
-          accent={val.within_tolerance ? "oklch(0.85 0.16 150)" : "oklch(0.85 0.14 22)"}
+          accent={val.within_tolerance ? "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.16 150)" : "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.14 22)"}
         />
       )}
       {bench && (
@@ -2344,7 +2344,7 @@ function ExportResultPanel({ result }: { result: ExportOnnxResponse }) {
             }
             accent={
               typeof bench.speedup === "number" && bench.speedup >= 1
-                ? "oklch(0.85 0.16 150)"
+                ? "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.16 150)"
                 : undefined
             }
           />
@@ -2364,7 +2364,7 @@ function BatchResultPanel({ result }: { result: BatchPredictResponse }) {
       style={{
         marginTop: 12,
         padding: 12,
-        background: "rgba(0,0,0,0.30)",
+        background: "rgb(var(--lt-shade, 0 0 0) / 0.30)",
         border: "1px solid var(--vf-panel-stroke)",
         borderRadius: 10,
         display: "flex",
@@ -2383,7 +2383,7 @@ function BatchResultPanel({ result }: { result: BatchPredictResponse }) {
         <ExportStat
           label={t.runDetail.batch.processed}
           value={String(result.total_processed)}
-          accent="oklch(0.85 0.16 150)"
+          accent="oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.16 150)"
         />
         <ExportStat
           label={t.runDetail.batch.failedCount}
@@ -2391,7 +2391,7 @@ function BatchResultPanel({ result }: { result: BatchPredictResponse }) {
           accent={
             result.failed_count === 0
               ? "var(--vf-text)"
-              : "oklch(0.85 0.14 22)"
+              : "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.14 22)"
           }
         />
       </div>
@@ -2429,7 +2429,7 @@ function BatchResultPanel({ result }: { result: BatchPredictResponse }) {
           title={t.runDetail.copyPath}
           style={{
             padding: "4px 8px",
-            background: "rgba(255,255,255,0.04)",
+            background: "rgb(var(--lt-ink, 255 255 255) / 0.04)",
             border: "1px solid var(--vf-panel-stroke)",
             borderRadius: 6,
             color: "var(--vf-text-dim)",
@@ -2443,7 +2443,7 @@ function BatchResultPanel({ result }: { result: BatchPredictResponse }) {
       </div>
       {failedHead.length > 0 && (
         <details style={{ fontSize: 11, color: "var(--vf-text-muted)" }}>
-          <summary style={{ cursor: "pointer", color: "oklch(0.85 0.14 22)" }}>
+          <summary style={{ cursor: "pointer", color: "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.14 22)" }}>
             {t.runDetail.batch.failedFiles(result.failed_count)}
           </summary>
           <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
@@ -2477,7 +2477,7 @@ function ExportStat({
     <div
       style={{
         padding: "6px 10px",
-        background: "rgba(255,255,255,0.025)",
+        background: "rgb(var(--lt-ink, 255 255 255) / 0.025)",
         border: "1px solid var(--vf-panel-stroke)",
         borderRadius: 6,
       }}
@@ -2528,7 +2528,7 @@ function FormField({ label, value, onChange, placeholder }: FormFieldProps) {
         placeholder={placeholder}
         style={{
           padding: "8px 10px",
-          background: "rgba(0,0,0,0.35)",
+          background: "rgb(var(--lt-shade, 0 0 0) / 0.35)",
           border: "1px solid var(--vf-panel-stroke)",
           borderRadius: 8,
           color: "var(--vf-text)",

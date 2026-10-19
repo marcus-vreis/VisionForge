@@ -132,7 +132,7 @@ export function PreprocessingPanel({
           : {
               marginTop: 18,
               padding: 18,
-              background: "rgba(255,255,255,0.02)",
+              background: "rgb(var(--lt-ink, 255 255 255) / 0.02)",
               border: "1px solid var(--vf-panel-stroke)",
               borderRadius: 12,
             }),
@@ -171,7 +171,7 @@ export function PreprocessingPanel({
                 fontSize: 9,
                 letterSpacing: "0.14em",
                 textTransform: "uppercase",
-                color: "oklch(0.88 0.15 150)",
+                color: "oklch(calc(0.88 - var(--lt-flip, 0) * 0.46) 0.15 150)",
                 background: "oklch(0.72 0.16 150 / 0.14)",
                 border: "1px solid oklch(0.72 0.16 150 / 0.45)",
                 borderRadius: 999,
@@ -279,7 +279,7 @@ export function PreprocessingPanel({
             borderRadius: 10,
             fontFamily: "var(--font-mono)",
             fontSize: 11,
-            color: "oklch(0.85 0.14 22)",
+            color: "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.14 22)",
           }}
         >
           {error}
@@ -338,7 +338,7 @@ function StepRow({
         alignItems: "center",
         gap: 10,
         padding: "8px 12px",
-        background: "rgba(0,0,0,0.30)",
+        background: "rgb(var(--lt-shade, 0 0 0) / 0.30)",
         border: "1px solid var(--vf-panel-stroke)",
         borderRadius: 8,
       }}
@@ -393,7 +393,7 @@ function StepRow({
               style={{
                 width: 70,
                 padding: "3px 6px",
-                background: "rgba(0,0,0,0.40)",
+                background: "rgb(var(--lt-shade, 0 0 0) / 0.40)",
                 border: "1px solid var(--vf-panel-stroke)",
                 borderRadius: 4,
                 color: "var(--vf-text)",
@@ -459,7 +459,7 @@ function PreviewTile({ label, artifact }: { label: string; artifact: string }) {
         display: "flex",
         flexDirection: "column",
         gap: 4,
-        background: "rgba(0,0,0,0.30)",
+        background: "rgb(var(--lt-shade, 0 0 0) / 0.30)",
         border: "1px solid var(--vf-panel-stroke)",
         borderRadius: 8,
         padding: 6,

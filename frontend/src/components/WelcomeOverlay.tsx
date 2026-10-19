@@ -328,7 +328,7 @@ export function WelcomeOverlay({
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        background: `rgba(4,5,7,${phase === "boot" ? 0 : 0.78})`,
+        background: `rgb(var(--lt-surface, 4 5 7) / ${phase === "boot" ? 0 : 0.78})`,
         backdropFilter: `blur(${visible ? 10 : 0}px)`,
         WebkitBackdropFilter: `blur(${visible ? 10 : 0}px)`,
         opacity: phase === "exit" ? 0 : 1,
@@ -454,7 +454,7 @@ export function WelcomeOverlay({
               padding: "12px 30px",
               background: canEnter ? "var(--accent-soft)" : "transparent",
               border: `1px solid ${
-                canEnter ? "var(--accent-vf)" : "rgba(255,255,255,0.10)"
+                canEnter ? "var(--accent-vf)" : "rgb(var(--lt-ink, 255 255 255) / 0.10)"
               }`,
               borderRadius: 12,
               color: canEnter ? "var(--vf-text)" : "var(--vf-text-muted)",
@@ -507,7 +507,7 @@ export function WelcomeOverlay({
               onClick={() => choose(profile)}
               style={{
                 padding: "13px 18px",
-                background: "rgba(255,255,255,0.025)",
+                background: "rgb(var(--lt-ink, 255 255 255) / 0.025)",
                 border: "1px solid var(--vf-panel-stroke)",
                 borderRadius: 12,
                 color: "var(--vf-text)",
@@ -626,7 +626,7 @@ export function WelcomeOverlay({
                 marginTop: 4,
                 fontFamily: "var(--font-mono)",
                 fontSize: 11,
-                color: "oklch(0.82 0.14 22)",
+                color: "oklch(calc(0.82 - var(--lt-flip, 0) * 0.34) 0.14 22)",
               }}
             >
               {createError ?? ""}
@@ -640,7 +640,7 @@ export function WelcomeOverlay({
               padding: "12px 30px",
               background: canCreate ? "var(--accent-soft)" : "transparent",
               border: `1px solid ${
-                canCreate ? "var(--accent-vf)" : "rgba(255,255,255,0.10)"
+                canCreate ? "var(--accent-vf)" : "rgb(var(--lt-ink, 255 255 255) / 0.10)"
               }`,
               borderRadius: 12,
               color: canCreate ? "var(--vf-text)" : "var(--vf-text-muted)",

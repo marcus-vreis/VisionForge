@@ -68,7 +68,7 @@ export function CustomTaskManageCard({
       style={{
         marginTop: 18,
         padding: 18,
-        background: "rgba(255,255,255,0.02)",
+        background: "rgb(var(--lt-ink, 255 255 255) / 0.02)",
         border: "1px solid var(--vf-panel-stroke)",
         borderRadius: 12,
       }}
@@ -124,7 +124,7 @@ export function CustomTaskManageCard({
               title={t.customTaskManage.hideTitle}
               style={{
                 padding: "8px 14px",
-                background: "rgba(255,255,255,0.04)",
+                background: "rgb(var(--lt-ink, 255 255 255) / 0.04)",
                 border: "1px solid var(--vf-panel-stroke)",
                 borderRadius: 8,
                 color: "var(--vf-text)",
@@ -168,7 +168,7 @@ export function CustomTaskManageCard({
                   background: "oklch(0.704 0.191 22.216 / 0.12)",
                   border: "1px solid oklch(0.78 0.16 22 / 0.6)",
                   borderRadius: 8,
-                  color: "oklch(0.88 0.14 22)",
+                  color: "oklch(calc(0.88 - var(--lt-flip, 0) * 0.46) 0.14 22)",
                   fontFamily: "var(--font-mono)",
                   fontSize: 11,
                   letterSpacing: "0.10em",
@@ -214,7 +214,7 @@ export function CustomTaskManageCard({
                     flex: 1,
                     minWidth: 200,
                     padding: "9px 12px",
-                    background: "rgba(0,0,0,0.35)",
+                    background: "rgb(var(--lt-shade, 0 0 0) / 0.35)",
                     border: "1px solid var(--vf-panel-stroke)",
                     borderRadius: 8,
                     color: "var(--vf-text)",
@@ -234,11 +234,11 @@ export function CustomTaskManageCard({
                     background:
                       typed === taskKey
                         ? "oklch(0.704 0.191 22.216 / 0.24)"
-                        : "rgba(255,255,255,0.03)",
-                    border: `1px solid ${typed === taskKey ? "oklch(0.78 0.16 22)" : "var(--vf-panel-stroke)"}`,
+                        : "rgb(var(--lt-ink, 255 255 255) / 0.03)",
+                    border: `1px solid ${typed === taskKey ? "oklch(calc(0.78 - var(--lt-flip, 0) * 0.26) 0.16 22)" : "var(--vf-panel-stroke)"}`,
                     borderRadius: 8,
                     color:
-                      typed === taskKey ? "oklch(0.95 0.10 22)" : "var(--vf-text-muted)",
+                      typed === taskKey ? "oklch(calc(0.95 - var(--lt-flip, 0) * 0.6) 0.10 22)" : "var(--vf-text-muted)",
                     fontFamily: "var(--font-mono)",
                     fontSize: 11,
                     letterSpacing: "0.10em",
@@ -284,7 +284,7 @@ export function CustomTaskManageCard({
                 borderRadius: 8,
                 fontFamily: "var(--font-mono)",
                 fontSize: 11,
-                color: "oklch(0.85 0.14 22)",
+                color: "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.14 22)",
               }}
             >
               {error}

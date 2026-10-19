@@ -5585,3 +5585,62 @@ failed early lacks the run folder a finished one records. The classification ran
 search now trains every trial on the base seed, as the grid does since 2026-10-16
 (it gave trial *i* the seed base + *i*, so a gap between trials mixed the seed with
 the hyperparameters); its `best_config.yaml` carries that seed.
+
+## ADR-125 — A light theme, following the operating system by default
+
+**Date:** 2026-10-18
+**Status:** Accepted
+
+**Context:** the GUI had one palette, dark, fixed in `:root` with `color-scheme: dark`.
+The user asked for a light theme. About a thousand style values already read tokens
+(`var(--vf-*)`, the shadcn layer, the per-task accents), but some 230 neutral fills,
+wells and scrims and about 140 solid status colors (error, success, warning text) were
+literals inside inline styles, written for a dark background: white at 2–6 % alpha for
+fills, near-black at 30–95 % for wells and overlays, and oklch tones of lightness
+0.74–0.95 for text, which all but vanish on white.
+
+**Decision:** three choices, `system` (the default), `light` and `dark`, in a group of
+three buttons next to the language switch, each with `aria-pressed`, like the language
+pair. The choice lives in `localStorage` (`vf.theme`), a per-browser convenience like
+the language (`vf.lang`); `system` follows `prefers-color-scheme` and keeps following
+it while the page is open. The resolved theme is set as `data-theme` on `<html>`, by a
+small inline script in `index.html` before the first paint (no dark flash on a light
+system) and then by `lib/theme.ts`.
+
+The dark theme stays exactly as it was. The light one changes values, not markup:
+
+- `:root[data-theme="light"]` redefines the `--vf-*` and shadcn tokens, the per-task
+  accents (darker, so a 0.74-lightness accent does not wash out on white), the
+  backdrop, the grain and the scrollbar, and sets `color-scheme: light`.
+- The neutral literals become channel tokens with the dark value as the fallback:
+  `rgba(255,255,255,a)` → `rgb(var(--lt-ink, 255 255 255) / a)`,
+  `rgba(0,0,0,a)` → `rgb(var(--lt-shade, 0 0 0) / a)`, and the near-black surfaces
+  (`12,14,18`, `8,10,14`, `4,5,7`…) → `rgb(var(--lt-surface, <same rgb>) / a)`. The
+  `--lt-*` variables exist only under the light theme, so the dark one renders the
+  original numbers.
+- A solid oklch literal of lightness L ≥ 0.74 (a tone meant for a dark background)
+  becomes `oklch(calc(L - var(--lt-flip, 0) * (2L - 1.3)) C H)`: unchanged in dark
+  (`--lt-flip` unset), mirrored around 0.65 in light (0.85 → 0.45, 0.74 → 0.56), so
+  text keeps its hue and gains the contrast it had. Translucent tones (badges' fills)
+  stay as they are; they read on both.
+
+The rewrite is one script (`frontend/scripts/theme-codemod.mjs`), kept so a new literal
+can be converted the same way.
+
+**Alternatives considered:**
+- *Move every literal to a named semantic token* (`--vf-err-fg`, `--vf-well`…). Cleaner
+  names, but about 100 distinct values would each need a name and a review, for no
+  change in what the user sees; the channel tokens and the lightness mirror get both
+  themes from the values already there.
+- *Store the theme on the server profile.* The language is per browser too; a theme is
+  about the screen in front of the user, not the researcher's data.
+- *Two buttons (light/dark) without "system".* Following the OS is what the user asked
+  for as the default, and it needs a third state to come back to.
+
+**Consequences:** the light theme reuses the dark layout and accents, so a few
+decorations (glows, the grain) are toned down rather than redesigned. The training
+story's SVG drawings and the task accents (`training-story/tone.ts`, `lib/task-accent.ts`)
+stay literal, since SVG attributes do not resolve CSS variables; they keep their dark-tuned
+tones in the light theme, and the codemod skips both files. A new inline color in a
+component should be a token or go through the codemod; a literal written for the dark
+background will look wrong in the light theme.

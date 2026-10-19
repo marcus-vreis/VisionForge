@@ -17,7 +17,7 @@ export function unitState(status: string | null | undefined): UnitState {
 
 /** The amber of a stopped unit: apart from the red of a failure and the green of
  *  a success. */
-export const STOPPED_COLOR = "oklch(0.84 0.12 85)";
+export const STOPPED_COLOR = "oklch(calc(0.84 - var(--lt-flip, 0) * 0.38) 0.12 85)";
 
 /** How many units in `rows` ended in `state`. */
 export function countUnits(

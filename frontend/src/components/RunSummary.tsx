@@ -24,11 +24,11 @@ export function RunSummary({
         alignSelf: "center",
         marginLeft: "auto",
         padding: "8px 12px",
-        border: `1px solid ${ready ? accent : warn ? "oklch(0.75 0.16 60)" : "var(--vf-panel-stroke)"}`,
+        border: `1px solid ${ready ? accent : warn ? "oklch(calc(0.75 - var(--lt-flip, 0) * 0.2) 0.16 60)" : "var(--vf-panel-stroke)"}`,
         borderRadius: 10,
         fontFamily: "var(--font-mono)",
         fontSize: 11.5,
-        color: ready ? accent : warn ? "oklch(0.85 0.14 70)" : "var(--vf-text-muted)",
+        color: ready ? accent : warn ? "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.14 70)" : "var(--vf-text-muted)",
         whiteSpace: "nowrap",
       }}
     >

@@ -17,7 +17,7 @@ import { useT } from "../i18n/useT";
 const box: React.CSSProperties = {
   marginTop: 12,
   padding: "12px 16px",
-  background: "rgba(255,255,255,0.025)",
+  background: "rgb(var(--lt-ink, 255 255 255) / 0.025)",
   border: "1px solid var(--vf-panel-stroke)",
   borderRadius: 12,
   display: "flex",
@@ -30,7 +30,7 @@ const warnBox: React.CSSProperties = {
   padding: "10px 14px",
   fontFamily: "var(--font-mono)",
   fontSize: 11,
-  color: "oklch(0.85 0.14 22)",
+  color: "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.14 22)",
   background: "oklch(0.704 0.191 22.216 / 0.10)",
   border: "1px solid oklch(0.704 0.191 22.216 / 0.4)",
   borderRadius: 10,
@@ -46,7 +46,7 @@ const kicker: React.CSSProperties = {
 
 const splitCard: React.CSSProperties = {
   padding: "10px 12px",
-  background: "rgba(0,0,0,0.30)",
+  background: "rgb(var(--lt-shade, 0 0 0) / 0.30)",
   border: "1px solid var(--vf-panel-stroke)",
   borderRadius: 8,
   display: "flex",
@@ -75,7 +75,7 @@ const smallLine: React.CSSProperties = {
   color: "var(--vf-text-muted)",
 };
 
-const warnColor = "oklch(0.85 0.14 75)";
+const warnColor = "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.14 75)";
 
 function MissingSplitCard({ label }: { label: string }) {
   const t = useT();
@@ -172,7 +172,7 @@ export function SegmentationDatasetStats(props: SegmentationDatasetStatsProps) {
             key={id}
             style={{
               padding: "3px 9px",
-              background: id >= 200 ? "oklch(0.78 0.16 75 / 0.12)" : "rgba(255,255,255,0.04)",
+              background: id >= 200 ? "oklch(0.78 0.16 75 / 0.12)" : "rgb(var(--lt-ink, 255 255 255) / 0.04)",
               border: `1px solid ${id >= 200 ? "oklch(0.78 0.16 75 / 0.5)" : "var(--vf-panel-stroke)"}`,
               borderRadius: 999,
               fontFamily: "var(--font-mono)",
@@ -203,7 +203,7 @@ export function SegmentationDatasetStats(props: SegmentationDatasetStatsProps) {
               fontSize: 9,
               letterSpacing: "0.12em",
               textTransform: "uppercase",
-              color: "oklch(0.85 0.16 150)",
+              color: "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.16 150)",
               cursor: "pointer",
             }}
           >
@@ -296,7 +296,7 @@ export function AnomalyDatasetStats(props: AnomalyDatasetStatsProps) {
               key={name}
               style={{
                 padding: "3px 9px",
-                background: "rgba(255,255,255,0.04)",
+                background: "rgb(var(--lt-ink, 255 255 255) / 0.04)",
                 border: "1px solid var(--vf-panel-stroke)",
                 borderRadius: 999,
                 fontFamily: "var(--font-mono)",

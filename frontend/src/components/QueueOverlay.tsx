@@ -92,7 +92,7 @@ export function QueueOverlay({
         position: "fixed",
         inset: 0,
         zIndex: 100,
-        background: "rgba(4,5,7,0.72)",
+        background: "rgb(var(--lt-surface, 4 5 7) / 0.72)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -105,10 +105,10 @@ export function QueueOverlay({
         style={{
           width: "min(680px, 100%)",
           maxHeight: "85vh",
-          background: "rgba(12,14,18,0.95)",
+          background: "rgb(var(--lt-surface, 12 14 18) / 0.95)",
           border: "1px solid var(--vf-panel-stroke)",
           borderRadius: 18,
-          boxShadow: "0 50px 120px rgba(0,0,0,0.7)",
+          boxShadow: "0 50px 120px rgb(var(--lt-shade, 0 0 0) / 0.7)",
           overflow: "hidden",
           display: "flex",
           flexDirection: "column",
@@ -168,7 +168,7 @@ export function QueueOverlay({
               height: 36,
               borderRadius: "50%",
               border: "1px solid var(--vf-panel-stroke)",
-              background: "rgba(255,255,255,0.03)",
+              background: "rgb(var(--lt-ink, 255 255 255) / 0.03)",
               color: "var(--vf-text)",
               fontSize: 20,
               display: "flex",
@@ -201,7 +201,7 @@ export function QueueOverlay({
                 borderRadius: 10,
                 fontFamily: "var(--font-mono)",
                 fontSize: 11,
-                color: "oklch(0.82 0.14 22)",
+                color: "oklch(calc(0.82 - var(--lt-flip, 0) * 0.34) 0.14 22)",
               }}
             >
               {error}
@@ -288,8 +288,8 @@ function JobRow({
           ? "1px solid var(--accent-vf)"
           : "1px solid var(--vf-panel-stroke)",
         background: running
-          ? "linear-gradient(180deg, var(--accent-soft) 0%, rgba(12,14,18,0.5) 100%)"
-          : "rgba(255,255,255,0.025)",
+          ? "linear-gradient(180deg, var(--accent-soft) 0%, rgb(var(--lt-surface, 12 14 18) / 0.5) 100%)"
+          : "rgb(var(--lt-ink, 255 255 255) / 0.025)",
       }}
     >
       <span
@@ -368,7 +368,7 @@ function JobRow({
           padding: "7px 12px",
           borderRadius: 9,
           border: "1px solid var(--vf-panel-stroke)",
-          background: "rgba(255,255,255,0.03)",
+          background: "rgb(var(--lt-ink, 255 255 255) / 0.03)",
           color: "var(--vf-text-dim)",
           fontFamily: "var(--font-mono)",
           fontSize: 11,

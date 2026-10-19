@@ -80,12 +80,12 @@ export function BottomBar({
         // Fixed bar over scrolling content re-blurs every frame; the surface is
         // already ~80% opaque, so a smaller radius is visually identical and
         // roughly halves the per-frame fill cost.
-        background: "rgba(8,10,14,0.82)",
+        background: "rgb(var(--lt-surface, 8 10 14) / 0.82)",
         backdropFilter: "blur(10px)",
         WebkitBackdropFilter: "blur(10px)",
         border: "1px solid var(--vf-panel-stroke)",
         borderRadius: 16,
-        boxShadow: "0 30px 80px rgba(0,0,0,0.5)",
+        boxShadow: "0 30px 80px rgb(var(--lt-shade, 0 0 0) / 0.5)",
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -98,7 +98,7 @@ export function BottomBar({
           alignItems: "center",
           gap: 10,
           padding: "10px 16px",
-          background: "rgba(255,255,255,0.025)",
+          background: "rgb(var(--lt-ink, 255 255 255) / 0.025)",
           border: "1px solid var(--vf-panel-stroke)",
           borderRadius: 10,
           color: "var(--vf-text-dim)",
@@ -138,7 +138,7 @@ export function BottomBar({
           alignItems: "center",
           gap: 10,
           padding: "10px 16px",
-          background: "rgba(255,255,255,0.025)",
+          background: "rgb(var(--lt-ink, 255 255 255) / 0.025)",
           border: "1px solid var(--vf-panel-stroke)",
           borderRadius: 10,
           color: "var(--vf-text-dim)",
@@ -186,7 +186,7 @@ export function BottomBar({
               style={{
                 marginLeft: 4,
                 padding: "2px 7px",
-                background: "rgba(0,0,0,0.35)",
+                background: "rgb(var(--lt-shade, 0 0 0) / 0.35)",
                 color: "var(--accent-vf)",
                 borderRadius: 999,
                 fontSize: 10,
@@ -210,7 +210,7 @@ export function BottomBar({
           position: "relative",
           padding: "14px 38px",
           background:
-            "linear-gradient(180deg, var(--accent-soft) 0%, rgba(8,10,14,0.4) 100%)",
+            "linear-gradient(180deg, var(--accent-soft) 0%, rgb(var(--lt-surface, 8 10 14) / 0.4) 100%)",
           border: "1px solid var(--accent-vf)",
           borderRadius: 12,
           color: "var(--vf-text)",

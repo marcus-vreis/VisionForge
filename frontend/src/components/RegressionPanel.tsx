@@ -135,7 +135,7 @@ export function RegressionPanel({
             borderRadius: 12,
             fontFamily: "var(--font-mono)",
             fontSize: 12,
-            color: "oklch(0.85 0.14 22)",
+            color: "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.14 22)",
           }}
         >
           {validationErrors.slice(0, 5).map((e, i) => (
@@ -223,7 +223,7 @@ export function RegressionPanel({
             <div
               style={{
                 padding: "12px 14px",
-                background: "rgba(12,14,18,0.35)",
+                background: "rgb(var(--lt-surface, 12 14 18) / 0.35)",
                 border: "1px dashed var(--vf-panel-stroke)",
                 borderRadius: 10,
                 fontFamily: "var(--font-mono)",

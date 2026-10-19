@@ -59,7 +59,7 @@ export function SelectField({
           display: "flex",
           alignItems: "center",
           width: "100%",
-          background: "rgba(12,14,18,0.65)",
+          background: "rgb(var(--lt-surface, 12 14 18) / 0.65)",
           border: open
             ? "1px solid var(--accent-vf)"
             : "1px solid var(--vf-panel-stroke)",
@@ -98,7 +98,7 @@ export function SelectField({
               top: pos.top,
               left: pos.left,
               width: pos.width,
-              background: "rgba(14,16,22,0.96)",
+              background: "rgb(var(--lt-surface, 14 16 22) / 0.96)",
               backdropFilter: "blur(12px)",
               border: "1px solid var(--vf-panel-stroke)",
               borderRadius: 10,
@@ -107,7 +107,7 @@ export function SelectField({
               animation: "fadeUp 160ms ease",
               maxHeight: 260,
               overflowY: "auto",
-              boxShadow: "0 24px 60px rgba(0,0,0,0.55)",
+              boxShadow: "0 24px 60px rgb(var(--lt-shade, 0 0 0) / 0.55)",
             }}
           >
             {options.map((opt) => {
@@ -141,7 +141,7 @@ export function SelectField({
                   onMouseEnter={(e) => {
                     if (!active)
                       (e.currentTarget as HTMLButtonElement).style.background =
-                        "rgba(255,255,255,0.04)";
+                        "rgb(var(--lt-ink, 255 255 255) / 0.04)";
                   }}
                   onMouseLeave={(e) => {
                     if (!active)

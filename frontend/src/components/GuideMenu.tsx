@@ -49,7 +49,7 @@ export function GuideMenu({
           alignItems: "center",
           gap: 8,
           padding: "9px 13px",
-          background: "rgba(255,255,255,0.025)",
+          background: "rgb(var(--lt-ink, 255 255 255) / 0.025)",
           border: "1px solid var(--vf-panel-stroke)",
           borderRadius: 10,
           color: "var(--vf-text-dim)",
@@ -74,10 +74,10 @@ export function GuideMenu({
             right: 0,
             width: 280,
             padding: 6,
-            background: "rgba(10,12,16,0.97)",
+            background: "rgb(var(--lt-surface, 10 12 16) / 0.97)",
             border: "1px solid var(--vf-panel-stroke)",
             borderRadius: 12,
-            boxShadow: "0 24px 70px rgba(0,0,0,0.6)",
+            boxShadow: "0 24px 70px rgb(var(--lt-shade, 0 0 0) / 0.6)",
             zIndex: 10,
           }}
         >
@@ -101,7 +101,7 @@ export function GuideMenu({
                 cursor: "pointer",
               }}
               onMouseEnter={(e) =>
-                (e.currentTarget.style.background = "rgba(255,255,255,0.05)")
+                (e.currentTarget.style.background = "rgb(var(--lt-ink, 255 255 255) / 0.05)")
               }
               onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
             >
