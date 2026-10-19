@@ -17,7 +17,9 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 - **Tema claro.** Um seletor na barra do topo, ao lado de PT/EN, escolhe entre automático
   (segue o tema do sistema operacional, o padrão), claro e escuro; a escolha fica salva no
-  navegador. O tema escuro não mudou ([ADR-125](docs/dev/DECISIONS.md)).
+  navegador. Os desenhos da aba "Como funciona" e as cores das tarefas no histórico, no
+  detalhe do run, no leaderboard e na comparação ganham tons mais escuros no tema claro. O tema
+  escuro não mudou ([ADR-125](docs/dev/DECISIONS.md)).
 
 ### Changed
 
@@ -33,14 +35,6 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 - **A busca aleatória da classificação treina todos os trials com a mesma seed**, como a
   grade já fazia. Cada trial recebia a seed base + o seu índice, então a diferença entre dois
   trials misturava o efeito dos hiperparâmetros com o da seed ([ADR-124](docs/dev/DECISIONS.md)).
-- **Os desenhos da aba "Como funciona" ficam legíveis no tema claro.** Neurônios, fluxos e o
-  estado de espera usavam os tons do tema escuro e quase sumiam no fundo branco; agora o tema
-  claro tem tons mais escuros, com a mesma cor de cada tarefa. O tema escuro não mudou
-  ([ADR-125](docs/dev/DECISIONS.md)).
-- **As cores das tarefas no histórico, no detalhe do run, no leaderboard e na comparação de
-  runs acompanham o tema claro**, com os mesmos tons escurecidos dos desenhos; antes ficavam
-  os tons claros do tema escuro, pouco legíveis no fundo branco. O tema escuro não mudou
-  ([ADR-125](docs/dev/DECISIONS.md)).
 
 ## [0.16.0] — 2026-10-17
 
