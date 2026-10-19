@@ -65,3 +65,5 @@ algoritmos
 bui
 mape
 raison
+comandos
+prefere

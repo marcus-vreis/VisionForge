@@ -36,7 +36,8 @@ See `FORM.md`, section 0. Continuing means agreeing; anyone can stop at any time
 1. Background (3 questions) and the **pre-quiz** (5 questions), before opening
    VisionForge.
 2. Tasks, timed by the participant (start and end clock time each):
-   1. Install VisionForge following only the README, and open the interface.
+   1. Install VisionForge following only the README (and `docs/INSTALL.md`, which it
+      links for each system), and open the interface.
    2. Open the "Primeiro treino" guide and follow it to the end with its example
       dataset.
    3. While a training runs, open the "Como funciona" tab and watch it.
@@ -49,8 +50,8 @@ See `FORM.md`, section 0. Continuing means agreeing; anyone can stop at any time
 3. **Post-quiz**: the same 5 questions as the pre-quiz, in a different order.
 4. SUS (10 items) and two open questions.
 
-Participants receive only the PyPI link and the README: task 1 measures whether
-that is enough.
+Participants receive only the PyPI link, the README and `docs/INSTALL.md` (added on
+2026-10-19, before the first participant): task 1 measures whether that is enough.
 
 ## Instruments
 

@@ -17,6 +17,11 @@ Five task families, one interface, no cloud and no notebooks.
 You need **Python 3.12+** and about five minutes. Nothing else — the published
 package already carries the built interface.
 
+A step-by-step guide per system (Windows, Linux, macOS), with getting Python
+itself and the usual errors, is in [`docs/INSTALL.md`](https://github.com/marcus-vreis/VisionForge/blob/main/docs/INSTALL.md) (Portuguese).
+On a Mac: Apple Silicon only (PyTorch has no Intel-Mac builds since 2.3),
+training runs on the CPU, and `doctor --fix` is not needed.
+
 ```bash
 mkdir my-research && cd my-research
 python -m venv .venv
@@ -176,6 +181,7 @@ epoch on synthetic data says nothing about accuracy.
 
 ## Documentation
 
+- [`docs/INSTALL.md`](https://github.com/marcus-vreis/VisionForge/blob/main/docs/INSTALL.md) — install, step by step, per system (Portuguese)
 - [`docs/QUICKSTART.md`](https://github.com/marcus-vreis/VisionForge/blob/main/docs/QUICKSTART.md) — first run, start to finish
 - [`docs/DATASETS.md`](https://github.com/marcus-vreis/VisionForge/blob/main/docs/DATASETS.md) — dataset layouts and the download providers
 - [`docs/custom/`](https://github.com/marcus-vreis/VisionForge/tree/main/docs/custom) — your own models and task families
@@ -229,6 +235,11 @@ GPU.** Cinco tipos de tarefa, uma interface só, sem nuvem e sem notebooks.
 
 Você precisa de **Python 3.12+** e uns cinco minutos. Nada além disso — o
 pacote publicado já vem com a interface pronta.
+
+Um passo a passo por sistema (Windows, Linux, macOS), incluindo como instalar o
+próprio Python e os erros mais comuns, está em [`docs/INSTALL.md`](https://github.com/marcus-vreis/VisionForge/blob/main/docs/INSTALL.md).
+No Mac: só Apple Silicon (o PyTorch não tem versões para Mac Intel desde a 2.3),
+o treino roda na CPU e o `doctor --fix` não é necessário.
 
 ```bash
 mkdir minha-pesquisa && cd minha-pesquisa
@@ -389,6 +400,7 @@ navegador usa. Ele confere que o caminho funciona, não que o modelo é bom — 
 
 ## Documentação
 
+- [`docs/INSTALL.md`](https://github.com/marcus-vreis/VisionForge/blob/main/docs/INSTALL.md) — instalação passo a passo, por sistema
 - [`docs/QUICKSTART.md`](https://github.com/marcus-vreis/VisionForge/blob/main/docs/QUICKSTART.md) — o primeiro treino, do início ao fim
 - [`docs/DATASETS.md`](https://github.com/marcus-vreis/VisionForge/blob/main/docs/DATASETS.md) — formatos de dataset e os provedores de download
 - [`docs/custom/`](https://github.com/marcus-vreis/VisionForge/tree/main/docs/custom) — seus próprios modelos e tarefas

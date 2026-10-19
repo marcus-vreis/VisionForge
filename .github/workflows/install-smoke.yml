@@ -1,0 +1,78 @@
+name: Install from PyPI
+
+# Installs the *published* package the way docs/INSTALL.md tells a new user to,
+# on the three systems it covers, and trains every task once. The other
+# workflows test a checkout; only this one sees what `pip install` really gets
+# (a missing file in the wheel, a dependency with no wheel for macOS).
+
+on:
+  # After a release is on PyPI. Not `release: published`: cd.yml creates the
+  # Release with GITHUB_TOKEN, and events from that token start no workflow.
+  workflow_run:
+    workflows: ["CD — Build & Release"]
+    types: [completed]
+  # A change to this file runs it once, so it is checked before the next release.
+  push:
+    branches: ["development"]
+    paths: [".github/workflows/install-smoke.yml"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "visionforge-studio version (empty = latest on PyPI)"
+        required: false
+        default: ""
+
+jobs:
+  install:
+    name: ${{ matrix.os }}, py${{ matrix.python-version }}
+    # A CD run that failed, or one for a push without a tag, published nothing.
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       startsWith(github.event.workflow_run.head_branch, 'v'))
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # macos-latest is Apple Silicon: PyTorch has had no Intel-Mac wheels
+        # since 2.3, so that is the only Mac the guide supports.
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ["3.12", "3.13"]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Pick the version
+        id: pick
+        env:
+          INPUT: ${{ inputs.version }}
+          TAG: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          VERSION="${INPUT:-${TAG#v}}"
+          echo "spec=visionforge-studio${VERSION:+==$VERSION}" >> "$GITHUB_OUTPUT"
+
+      # The PyPI index can lag a fresh upload by a minute or two.
+      - name: pip install, as the guide says
+        run: |
+          python -m venv .venv
+          if [ -f .venv/Scripts/activate ]; then source .venv/Scripts/activate; else source .venv/bin/activate; fi
+          python -m pip install --upgrade pip
+          for attempt in 1 2 3 4 5; do
+            pip install "${{ steps.pick.outputs.spec }}" && break
+            sleep 60
+          done
+          visionforge --version
+
+      - name: visionforge doctor
+        run: |
+          if [ -f .venv/Scripts/activate ]; then source .venv/Scripts/activate; else source .venv/bin/activate; fi
+          visionforge doctor
+
+      - name: visionforge selftest --quick
+        run: |
+          if [ -f .venv/Scripts/activate ]; then source .venv/Scripts/activate; else source .venv/bin/activate; fi
+          visionforge selftest --quick

@@ -13,6 +13,14 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ## [Unreleased]
 
+### Added
+
+- **Guia de instalação passo a passo por sistema**, em [`docs/INSTALL.md`](docs/INSTALL.md):
+  Windows, Linux e macOS, com como instalar o próprio Python, o que fazer com o PyTorch em
+  cada um e os erros mais comuns. No Mac, só Apple Silicon, com treino na CPU. Um workflow
+  novo (`install-smoke.yml`) instala o pacote publicado no PyPI nos três sistemas e roda
+  `doctor` e `selftest --quick` depois de cada release.
+
 ## [0.17.0] — 2026-10-19
 
 ### Added
