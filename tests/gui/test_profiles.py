@@ -1151,6 +1151,9 @@ class TestEverySubmissionIsScoped:
             (f"/api/{task}/{route}", task, route)
             for task in ("detection", "regression", "segmentation", "anomaly")
             for route in ("compare", "sweep", "replicates", "replicated-comparison")
+            # Anomaly sweeps are refused before queueing: no validation split
+            # to rank on (ADR-131, test_routes_anomaly).
+            if (task, route) != ("anomaly", "sweep")
         ],
         ("/api/regression/cv", "regression", "cv"),
         ("/api/segmentation/cv", "segmentation", "cv"),

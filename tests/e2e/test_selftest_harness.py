@@ -95,6 +95,12 @@ class TestCaseTable:
         cv_tasks = {c.task for c in cases}
         assert cv_tasks == {"classification", "regression", "segmentation"}
 
+    def test_no_sweep_where_there_is_no_validation_split(self, tmp_path: Path) -> None:
+        """Anomaly has nothing labelled to select on; its sweep is refused (ADR-131)."""
+        swept = {c.task for c in build_cases(tmp_path, TASKS, ("sweep",))}
+        assert "anomaly" not in swept
+        assert {"regression", "segmentation", "detection"} <= swept
+
     def test_every_task_can_be_compared(self, tmp_path: Path) -> None:
         """The replicated comparison (ADR-061) is the newest endpoint and the
         one whose bugs were only visible end to end — every task must be

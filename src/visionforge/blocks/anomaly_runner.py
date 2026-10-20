@@ -23,6 +23,14 @@ class AnomalyRunner:
 
     config_type = AnomalyConfig
 
+    # Anomaly trains on normal images only and its one labelled split is the
+    # test set, so a sweep could only rank trials on test AUROC (ADR-131).
+    selection_unavailable = (
+        "Anomaly detection has no labelled validation split to select "
+        "hyperparameters on; its AUROC/F1 come from the test split, so a sweep "
+        "is refused. Compare settings with separate runs or replicates instead."
+    )
+
     # Set by whoever drives the run (the route layer, or the block that owns the
     # comparison) and handed to each block built here, so a stopped job also
     # stops the training in flight (ADR-111). None when nobody can press stop.

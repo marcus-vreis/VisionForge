@@ -5,7 +5,12 @@ from typing import Any
 
 from visionforge.blocks.classification import ClassificationBlock
 from visionforge.core.cancellation import CancellationToken
-from visionforge.core.task_runner import ProgressCallback, RunResult, run_dir_from
+from visionforge.core.task_runner import (
+    ProgressCallback,
+    RunResult,
+    best_epoch_row,
+    run_dir_from,
+)
 from visionforge.utils.config import ExperimentConfig
 
 
@@ -39,6 +44,8 @@ class ClassificationRunner:
             elapsed = time.monotonic() - t0
 
             report = block.report()
+            train = getattr(block, "_train_result", None)
+            best = best_epoch_row(train.history, train.best_epoch) if train else None
             eval_metrics: dict[str, Any] = report.get("eval", {})
             metrics: dict[str, float] = {
                 k: float(v)
@@ -52,6 +59,11 @@ class ClassificationRunner:
                 error="",
                 stopped=bool(report.get("train", {}).get("stopped")),
                 run_dir=run_dir_from(report.get("train", {})),
+                # The trainer measures only accuracy on validation; f1 and
+                # auc_roc exist on the test split alone, so they cannot select.
+                selection_metrics=(
+                    {"accuracy": float(best.val_accuracy)} if best else {}
+                ),
             )
         except Exception as exc:  # noqa: BLE001
             return RunResult(

@@ -7,11 +7,25 @@ from typing import Any
 
 from visionforge.blocks.segmentation import SegmentationBlock
 from visionforge.core.cancellation import CancellationToken
-from visionforge.core.task_runner import ProgressCallback, RunResult, run_dir_from
+from visionforge.core.task_runner import (
+    ProgressCallback,
+    RunResult,
+    best_epoch_row,
+    run_dir_from,
+)
 from visionforge.utils.segmentation_config import SegmentationConfig
 
 # Segmentation's test metrics; miou (higher is better) is the ranking default.
 _METRIC_KEYS = ("miou", "dice", "pixel_acc")
+
+
+def _validation_metrics(block: SegmentationBlock) -> dict[str, float]:
+    """The kept checkpoint's validation metrics, under the test metrics' names."""
+    train = getattr(block, "_train_result", None)
+    best = best_epoch_row(train.history, train.best_epoch) if train else None
+    if best is None:
+        return {}
+    return {k: float(getattr(best, f"val_{k}")) for k in _METRIC_KEYS}
 
 
 class SegmentationRunner:
@@ -47,6 +61,7 @@ class SegmentationRunner:
             metrics = {
                 k: float(test[k]) for k in _METRIC_KEYS if test.get(k) is not None
             }
+            selection = _validation_metrics(block)
             return RunResult(
                 metrics=metrics,
                 status="success",
@@ -54,6 +69,7 @@ class SegmentationRunner:
                 error="",
                 stopped=bool(report.get("train", {}).get("stopped")),
                 run_dir=run_dir_from(report.get("train", {})),
+                selection_metrics=selection,
             )
         except Exception as exc:  # noqa: BLE001
             return RunResult(

@@ -22,14 +22,19 @@ Three things make it safe rather than a trap, and each has a test:
 
 from __future__ import annotations
 
+import errno
 import json
+import os
 import shutil
+import sys
+import time
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from loguru import logger
 from PIL import Image
@@ -37,17 +42,91 @@ from PIL import Image
 from visionforge.core.dataset_fingerprint import fingerprint_dataset
 from visionforge.core.preprocessing import apply_pipeline
 
-# Written into every materialized folder so a sweep can tell a live copy from
-# one a killed process left behind.
+# Published only after every image and label has been written successfully.
 _SENTINEL = ".in-use"
+_LEASE_PREFIX = ".lease-"
+_RELEASE_GRACE_S = 2.0
 
 _IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp"}
 
-# How many callers are currently inside a `with` for a given folder. Process
-# local by design: a folder left behind by a *different* process is exactly what
-# `sweep_orphans` is for, and a refcount shared across processes would need a
-# lock file whose own staleness is the same problem again.
-_USERS: dict[Path, int] = {}
+
+def _try_lock(fd: int) -> bool:
+    """Acquire one OS lock without waiting; process death releases ownership."""
+    try:
+        # sys.platform, not os.name: mypy narrows on it, so each branch type-checks
+        # only on its own system.
+        if sys.platform == "win32":
+            import msvcrt
+
+            os.lseek(fd, 0, os.SEEK_SET)
+            msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError as exc:
+        if exc.errno in {errno.EACCES, errno.EAGAIN, errno.EDEADLK}:
+            return False
+        raise
+    return True
+
+
+@contextmanager
+def _file_lock(
+    path: Path, *, blocking: bool, create: bool = True
+) -> Iterator[int | None]:
+    """Hold a file lock, yielding None immediately when a try-lock is busy."""
+    flags = os.O_RDWR | (os.O_CREAT if create else 0)
+    fd = os.open(path, flags, 0o600)
+    try:
+        # No byte is written: a second opener writing under the first one's
+        # byte-range lock would fail on Windows, and locking past EOF is legal.
+        while not _try_lock(fd):
+            if not blocking:
+                yield None
+                return
+            time.sleep(0.05)
+        yield fd
+    finally:
+        os.close(fd)
+
+
+def _gate_path(cache_root: Path) -> Path:
+    # Never unlink this gate: waiters must all lock the same inode, even after
+    # the last dataset is removed. It lives outside the transient cache tree.
+    return cache_root.parent / f".{cache_root.name}.materialized.lock"
+
+
+def _lease_is_free(lease: Path, grace: float) -> bool:
+    """Try-lock a lease, polling up to `grace` seconds; never waits forever."""
+    deadline = time.monotonic() + grace
+    while True:
+        with _file_lock(lease, blocking=False, create=False) as locked:
+            if locked is not None:
+                return True
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(0.05)
+
+
+def _remove_if_unused(target: Path, grace: float = 0.0) -> bool:
+    """Remove a dataset only after every owner's OS lease has been released.
+
+    `grace` covers Windows, which frees a killed process's byte-range locks a
+    moment after the process is gone; only the startup sweep pays for it.
+    """
+    if not target.is_dir() or target.is_symlink():
+        return False
+    try:
+        for lease in target.glob(f"{_LEASE_PREFIX}*"):
+            if not _lease_is_free(lease, grace):
+                return False
+            lease.unlink()
+        shutil.rmtree(target)
+    except OSError as exc:
+        logger.warning("Could not remove filtered dataset at {}: {}", target, exc)
+        return False
+    return True
 
 
 @dataclass(frozen=True)
@@ -128,52 +207,60 @@ def materialize_dataset(
         yield MaterializedDataset(path=source, filtered=False)
         return
 
+    cache_root = cache_root.resolve()
     target = cache_root / cache_key(source, steps, image_format)
-    if target.exists():
-        logger.info("Reusing filtered dataset at {}", target)
-    else:
-        logger.info(
-            "Filtering {} into {} ({:.1f} MB to read)",
-            source,
-            target,
-            MaterializedDataset.estimate_bytes(source) / 1_048_576,
-        )
-        target.mkdir(parents=True)
-        try:
-            _build(source, target, steps, image_format)
-        except Exception:
-            # A half-written copy would be reused on the next run as if complete.
-            shutil.rmtree(target, ignore_errors=True)
-            raise
-        (target / _SENTINEL).write_text("", encoding="utf-8")
-
-    _USERS[target] = _USERS.get(target, 0) + 1
+    cache_root.mkdir(parents=True, exist_ok=True)
+    gate = _gate_path(cache_root)
     try:
-        yield MaterializedDataset(path=target, filtered=True)
+        with ExitStack() as ownership:
+            with _file_lock(gate, blocking=True):
+                if (target / _SENTINEL).is_file():
+                    logger.info("Reusing filtered dataset at {}", target)
+                else:
+                    logger.info(
+                        "Filtering {} into {} ({:.1f} MB to read)",
+                        source,
+                        target,
+                        MaterializedDataset.estimate_bytes(source) / 1_048_576,
+                    )
+                    if target.exists():
+                        shutil.rmtree(target)
+                    target.mkdir()
+                    try:
+                        _build(source, target, steps, image_format)
+                        (target / _SENTINEL).write_text("", encoding="utf-8")
+                    except BaseException:
+                        shutil.rmtree(target, ignore_errors=True)
+                        raise
+                lease = target / f"{_LEASE_PREFIX}{uuid4().hex}"
+                ownership.enter_context(_file_lock(lease, blocking=True))
+            yield MaterializedDataset(path=target, filtered=True)
     finally:
-        _USERS[target] -= 1
-        if _USERS[target] <= 0:
-            del _USERS[target]
-            shutil.rmtree(target, ignore_errors=True)
-            logger.info("Removed filtered dataset at {}", target)
+        # A concurrent build may hold the gate for a long time. Leave an orphan
+        # for the next sweep instead of delaying teardown behind that build.
+        with _file_lock(gate, blocking=False) as locked:
+            if locked is not None and _remove_if_unused(target):
+                logger.info("Removed filtered dataset at {}", target)
 
 
 def sweep_orphans(cache_root: Path) -> int:
     """Delete filtered copies no live caller is holding. Returns how many.
 
-    Covers the gap no `finally` can: a process killed outright leaves its copy
-    behind, and nothing in that process ever runs again to clean it up. Called
-    at GUI startup, where every folder present is by definition from a process
-    that is already gone.
+    OS leases protect callers in other processes and threads. A busy build or
+    cleanup is skipped immediately; killed owners release their locks in the OS.
     """
     if not cache_root.is_dir():
         return 0
+    cache_root = cache_root.resolve()
     removed = 0
-    for folder in cache_root.iterdir():
-        if not folder.is_dir() or folder in _USERS:
-            continue
-        shutil.rmtree(folder, ignore_errors=True)
-        removed += 1
+    try:
+        with _file_lock(_gate_path(cache_root), blocking=False) as locked:
+            if locked is None:
+                return 0
+            for folder in cache_root.iterdir():
+                removed += _remove_if_unused(folder, grace=_RELEASE_GRACE_S)
+    except OSError as exc:
+        logger.warning("Could not sweep filtered datasets at {}: {}", cache_root, exc)
     if removed:
         logger.info("Removed {} orphaned filtered dataset(s)", removed)
     return removed

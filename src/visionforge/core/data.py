@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from collections.abc import Callable
 from typing import Any
 
@@ -150,6 +151,57 @@ def resolve_num_workers(
     return workers
 
 
+class _SplitImageFolder(ImageFolder):
+    """ImageFolder whose labels come from the training split's class_to_idx (ADR-127).
+
+    Built on its own, a split that lacks a class would renumber the others and
+    score every prediction against the wrong label. A class directory the
+    training split does not know is an error, even when it is empty.
+    """
+
+    def __init__(
+        self,
+        root: str,
+        split: str,
+        class_to_idx: dict[str, int],
+        **kwargs: Any,
+    ) -> None:
+        self._split = split
+        self._train_class_to_idx = class_to_idx
+        # A known class may have no images here; torchvision rejects that by default.
+        super().__init__(root, allow_empty=True, **kwargs)
+        # allow_empty also disables torchvision's no-images check; an empty split would only fail mid-training.
+        if not self.samples:
+            raise ValueError(
+                f"The {split} split ({root}) has no images in any class folder."
+            )
+
+    def find_classes(self, directory: str) -> tuple[list[str], dict[str, int]]:
+        """Reject unknown class directories and return the training vocabulary."""
+        present = sorted(e.name for e in os.scandir(directory) if e.is_dir())
+        unknown = [name for name in present if name not in self._train_class_to_idx]
+        if unknown:
+            raise ValueError(
+                f"The {self._split} split has class folder(s) {unknown} that the "
+                f"training split does not have (training classes: "
+                f"{list(self._train_class_to_idx)}). Move or rename them."
+            )
+        return list(self._train_class_to_idx), dict(self._train_class_to_idx)
+
+
+def _check_training_class_count(train: ImageFolder, config: ExperimentConfig) -> None:
+    """Fail before any GPU time when the class folders and the model outputs disagree."""
+    found = len(train.classes)
+    # Binary uses a single logit for two classes (num_classes=1).
+    expected = 2 if config.task == "binary" else config.model.num_classes
+    if found != expected:
+        raise ValueError(
+            f"Training split has {found} class folder(s) {train.classes}, but "
+            f"task '{config.task}' with model.num_classes={config.model.num_classes} "
+            f"require {expected}."
+        )
+
+
 class DataModule:
     """Wraps ImageFolder datasets and exposes DataLoaders for train/val/test splits."""
 
@@ -171,12 +223,17 @@ class DataModule:
             str(train_path),
             transform=_build_transforms(tc, is_train=True, preprocessing=pp),
         )
-        self._val = ImageFolder(
+        _check_training_class_count(self._train, config)
+        self._val = _SplitImageFolder(
             str(val_path),
+            "val",
+            self._train.class_to_idx,
             transform=_build_transforms(tc, is_train=False, preprocessing=pp),
         )
-        self._test = ImageFolder(
+        self._test = _SplitImageFolder(
             str(test_path),
+            "test",
+            self._train.class_to_idx,
             transform=_build_transforms(tc, is_train=False, preprocessing=pp),
         )
 

@@ -3,6 +3,8 @@
 Grid (cartesian product of value lists), random (sampled from per-param
 distributions) or Optuna (TPE-guided adaptive search) over any task's runner,
 ranking trials by the runner's declared metric — no knowledge of task internals.
+Trials are ranked, and Optuna is steered, by the metric measured on the
+validation split only; the test numbers ride along for the report (ADR-131).
 Overrides are applied by dot-path on a validated base config dict, mirroring the
 classification grid/random search space format so the modes stay consistent.
 
@@ -26,11 +28,13 @@ from loguru import logger
 
 from visionforge.core.cancellation import STOPPED, STOPPED_NOTE, is_cancelled
 from visionforge.core.task_runner import (
+    SELECTION_SPLIT,
     RunResult,
     TaskRunner,
     UnitProgress,
     discard_cut_unit_resume,
     rank_by_metric,
+    require_validation_selection,
     runner_cancel_token,
     runner_metric_direction,
 )
@@ -48,7 +52,12 @@ class SweepTrial:
     trial_index: int
     overrides: dict[str, Any]
     status: str = "failed"
+    # What the trial is ranked by: the runner's validation numbers (ADR-131).
     metrics: dict[str, float] = field(default_factory=dict)
+    # The run's final evaluation (test split when the task has one), reported
+    # beside the ranking and never used to choose a trial.
+    evaluation_metrics: dict[str, float] = field(default_factory=dict)
+    selection_split: str = SELECTION_SPLIT
     training_time_s: float | None = None
     error: str = ""
     # The trial's own run folder, so History can fold it under the sweep (ADR-124).
@@ -111,6 +120,20 @@ def _random_points(
     ]
 
 
+def _selection_problem(selection: dict[str, float], metric: str) -> str:
+    """Why ``metric`` cannot rank this trial, or "" when its value is usable."""
+    value = selection.get(metric)
+    if value is None:
+        return (
+            f"No {SELECTION_SPLIT} value for '{metric}' "
+            f"(validation metrics: {sorted(selection) or 'none'}); a sweep never "
+            "ranks trials on test metrics."
+        )
+    if not math.isfinite(value):
+        return f"The {SELECTION_SPLIT} '{metric}' is not finite ({value}); not ranked."
+    return ""
+
+
 def _execute_trial(
     runner: TaskRunner,
     base_config_dict: dict[str, Any],
@@ -138,7 +161,8 @@ def _execute_trial(
         cfg = runner.config_type.model_validate(cfg_dict)
         result: RunResult = runner.run(cfg)
         trial.status = result.status
-        trial.metrics = runner.metrics(result)
+        trial.metrics = dict(result.selection_metrics)
+        trial.evaluation_metrics = runner.metrics(result)
         trial.training_time_s = result.training_time_s
         trial.error = result.error
         trial.run_dir = str(result.run_dir) if result.run_dir else None
@@ -147,6 +171,12 @@ def _execute_trial(
             trial.status = STOPPED
             trial.error = STOPPED_NOTE
             discard_cut_unit_resume(result)
+        elif result.status == "success" and (
+            problem := _selection_problem(trial.metrics, metric)
+        ):
+            trial.status = "failed"
+            trial.error = problem
+            logger.warning("Sweep trial {} not ranked — {}", index, problem)
         elif result.status == "success":
             logger.info(
                 "Sweep trial {}/{} ok — {}={}",
@@ -260,15 +290,19 @@ def run_sweep(
 
     ``base_config_dict`` must be a fully-populated (validated then dumped) task
     config so every dot-path resolves. Successful trials come first, sorted by
-    ``metric`` descending; failures keep their order at the end. GPU memory is
+    ``metric`` on the validation split (best first in the metric's direction);
+    a trial without a finite validation value fails, test numbers are never a
+    stand-in. Failures keep their order at the end. GPU memory is
     released between trials. A stop carried by the runner (ADR-111) cuts the
     trial in flight and starts no further trial; a trial the runner reports as
     cut is recorded as ``stopped``, outside the ranking.
 
     Raises:
-        ValueError: if ``mode`` is not 'grid', 'random' or 'optuna'.
+        ValueError: if ``mode`` is not 'grid', 'random' or 'optuna', or the
+            runner's task has no validation objective to select on.
         ImportError: for mode 'optuna' when the optuna extra is not installed.
     """
+    require_validation_selection(runner)
     resolved = direction or runner_metric_direction(runner, metric)
     if mode in ("grid", "random"):
         points = (

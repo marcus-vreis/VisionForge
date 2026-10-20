@@ -83,8 +83,10 @@ from visionforge.core.sweep import (
     validate_sweep_space,
 )
 from visionforge.core.task_runner import (
+    SELECTION_SPLIT,
     TaskRunner,
     give_cancel_token,
+    require_validation_selection,
     runner_metric_direction,
 )
 from visionforge.gui.api.dataset_download import credentials_in_play, download_dataset
@@ -4896,13 +4898,16 @@ def _start_sweep(
     """Validate the base config + search space and queue a sweep.
 
     Raises:
-        HTTPException: 422 if a sweep path points under ``output``.
+        HTTPException: 422 if a sweep path points under ``output``, or the task
+            has no validation split to rank trials on (ADR-131).
         RequestValidationError: 422 if the base config or a sweep path is invalid.
     """
     _refuse_output_paths(req.search_space, "profile.where_sweep")
     # Validate the base config (fills defaults) and confirm every sweep path
     # resolves against it before spending GPU time.
     try:
+        # Refused before the job is queued: ranking on test is never an option.
+        require_validation_selection(runner)
         complete = profile.scope_dict(
             config_type.model_validate(req.config).model_dump(mode="json")
         )
@@ -5049,6 +5054,9 @@ def _sweep_report(
         "metric": metric,
         # Which way the trials were ranked; best_trial is the lowest for "lower".
         "metric_direction": direction,
+        # Each trial's `metrics` are measured on this split and rank it; its
+        # `evaluation_metrics` are the final (test) numbers, not used (ADR-131).
+        "selection_split": SELECTION_SPLIT,
         "trials": rows,
         "best_trial": successful[0] if successful else None,
         "total_trials": len(rows),

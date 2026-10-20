@@ -5708,3 +5708,131 @@ it, which matches ADR-114: profiles organise, they do not protect. The greeting
 chip and the welcome take the pronoun from the profile in use; the stored name
 in the browser (`vf.welcome.name`) remains the fallback when the server cannot
 be reached.
+
+## ADR-127 — Static files stay within the resolved SPA root
+
+**Date:** 2026-10-20
+**Status:** Accepted
+
+**Decision:** The SPA fallback resolves its root and requested file and rejects
+paths outside that root before testing or serving files. Legitimate client-side
+routes still receive index.html.
+
+**Reason:** Joining a root with an untrusted path does not prevent traversal.
+An encoded parent segment exposed a temporary file outside the static directory
+in the audit for issue #47. Loopback binding is not a filesystem boundary.
+
+## ADR-128 — Classification splits share the training label vocabulary
+
+**Date:** 2026-10-20
+**Status:** Accepted
+
+**Decision:** Classification validates the training class count against the
+configured output dimension (two classes for the binary one-logit convention).
+Validation and test splits may omit known classes, but their sample labels use
+the training class mapping; unknown classes fail before training, and so does
+a validation or test split with no images at all.
+
+**Reason:** Independent ImageFolder discovery numbered a missing-class split
+differently and silently changed the meaning of its labels (issue #48).
+
+## ADR-129 — Dataset fingerprints version their record encoding
+
+**Date:** 2026-10-20
+**Status:** Accepted
+**Extends:** ADR-061
+
+**Decision:** Fingerprints include an encoding version and frame path and size
+records unambiguously. Comparisons across encoding versions return unknown;
+missing versions identify legacy records. Manifest and content remain distinct.
+
+**Reason:** A file named x1 with two bytes and x with twelve bytes both encoded
+as x12 in the original manifest (issue #51). Hashing cannot fix ambiguous input.
+
+**Consequences:** version 2 frames each record as a length-prefixed UTF-8 path
+plus an 8-byte size, sorts records by the path bytes, and prefixes the preimage
+with the version and method, so a manifest digest never equals a content digest.
+`DatasetFingerprint.encoding_version` is written to `run.json`; a stored
+fingerprint without it reads as version 1. Caches keyed by the digest (the
+filtered-dataset copies of ADR-084) miss once after the upgrade. The leaderboard
+groups runs by method and digest, so a version-1 run and a version-2 run of the
+same folder appear apart rather than as the same dataset; it never merges two
+different datasets.
+
+## ADR-130 — Filtered datasets use operating-system leases
+
+**Date:** 2026-10-20
+**Status:** Accepted
+**Extends:** ADR-084
+
+**Decision:** A stable cache-root lock serializes construction, acquisition and
+deletion. Each active caller holds an operating-system lease; cleanup skips
+busy leases without waiting. A completion marker is published only after a
+successful build. Windows uses msvcrt locks and POSIX uses flock.
+
+**Reason:** A second GUI process cannot infer that another process is dead
+from its own empty reference count (issue #50). Operating-system locks release
+on process exit and avoid PID reuse assumptions. The root lock file remains
+stable to prevent competing processes locking different inodes.
+
+**Consequences:** each owner holds its lease in a `.lease-*` file inside the copy;
+the gate lock lives outside the cache tree (`<cache_root parent>/.<name>.materialized.lock`,
+under the git-ignored `outputs/`) and is never deleted. A copy is reused only when
+its `.in-use` completion marker exists; a half-built one is removed by the next
+builder. On Windows a killed process's byte-range locks are freed shortly after
+it exits, so `sweep_orphans` retries a busy lease for up to 2 s: a GUI starting
+next to a live one spends that long per live copy. Removal when the last user
+leaves is best effort: if another process holds the gate at that moment, the copy
+stays until the next startup sweep.
+
+## ADR-131 — Sweeps select on validation, never on test metrics
+
+**Date:** 2026-10-20
+**Status:** Accepted
+**Extends:** ADR-045, ADR-041, ADR-058
+
+**Context:** the generic sweep (`core/sweep.py`, the GUI's sweep for every task
+but classification's own grid and random search) ranked trials and steered Optuna
+with `runner.metrics(result)`. The regression, segmentation and anomaly runners
+take those from the test split, so hyperparameters were tuned on the hold-out the
+report then presented as an independent evaluation (issue #49).
+
+**Decision:** `RunResult` carries `selection_metrics` (validation) apart from
+`metrics` (final evaluation). The sweep ranks trials and feeds Optuna with
+`selection_metrics` only. `SweepTrial.metrics` holds the validation numbers it was
+ranked on, `SweepTrial.evaluation_metrics` the final ones, and `selection_split`
+is "validation"; the sweep report states `selection_split` too, and the results
+view says the ranking is on validation. A trial without a finite validation value
+for the metric fails with that reason; test numbers are never a fallback.
+
+Each runner takes `selection_metrics` from the validation record of the checkpoint
+its trainer kept (the best-epoch history row), with no extra evaluation pass:
+- Regression: r2, rmse, mae, mse.
+- Segmentation: miou, dice, pixel_acc.
+- Classification: accuracy only; the trainer measures no f1 or AUC on validation,
+  so a sweep ranked on those fails each trial. (Classification's grid and random
+  search blocks already rank on validation loss.)
+- Detection: map50_95 and map50, which Ultralytics and the RT-DETR backend compute
+  on the `val` split of `data.yaml`. If a user points `val` at their test images,
+  nothing here can tell.
+- Researcher tasks that run inside VisionForge's loop (Level 1): the best epoch's
+  `val_metrics`.
+
+A runner that cannot measure on a labelled validation split declares
+`selection_unavailable`, and the sweep is refused before any training; the GUI
+answers 422 with the reason. That covers anomaly detection, which has no
+labelled validation split, and Level 2 researcher tasks, whose returned metrics
+come from a split VisionForge cannot see. The anomaly panel no longer offers a
+sweep, and the self-test has no anomaly sweep case. Replicates and model
+comparisons keep reporting evaluation metrics: they do not choose
+hyperparameters.
+
+**Alternatives considered:**
+- *Fall back to test when validation is missing.* That is the defect itself.
+- *Score anomaly on a slice of the test set.* The test set would then both choose
+  and judge, under a different name.
+
+**Consequences:** sweep tables show validation numbers, so they are not
+comparable with the test numbers History and the replicates show for the same
+run. Error messages from the refusal and the per-trial failures are English, like
+the rest of `core/sweep.py`.

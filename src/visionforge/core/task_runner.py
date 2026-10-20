@@ -14,6 +14,8 @@ from visionforge.core.significance import infer_direction
 class RunResult:
     """Uniform result envelope returned by every TaskRunner implementation."""
 
+    # The final evaluation (test split when the task has one); replicates and
+    # comparisons report these.
     metrics: dict[str, float] = field(default_factory=dict)
     status: str = "failed"
     training_time_s: float | None = None
@@ -26,6 +28,14 @@ class RunResult:
     # The directory the unit trained into, when it has one. The orchestrator
     # needs it to drop the resume state of a unit the stop cut.
     run_dir: Path | None = None
+    # The same metrics measured on the validation split, by the checkpoint the
+    # run kept. A sweep selects hyperparameters on these only, never on
+    # ``metrics`` (ADR-131); empty when the run measured nothing on validation.
+    selection_metrics: dict[str, float] = field(default_factory=dict)
+
+
+# The split every sweep ranks its trials on (ADR-131).
+SELECTION_SPLIT = "validation"
 
 
 @runtime_checkable
@@ -87,6 +97,26 @@ def discard_cut_unit_resume(result: RunResult) -> None:
     """
     if result.run_dir is not None:
         discard_resume_state(result.run_dir)
+
+
+def require_validation_selection(runner: object) -> None:
+    """Refuse a sweep over ``runner`` when its task has no validation objective.
+
+    A runner declares ``selection_unavailable`` (the reason, as text) when its
+    task cannot measure anything on a labelled validation split; ranking its
+    trials would tune hyperparameters on the test split (ADR-131).
+
+    Raises:
+        ValueError: carrying the runner's reason, before any training.
+    """
+    reason = getattr(runner, "selection_unavailable", None)
+    if isinstance(reason, str) and reason:
+        raise ValueError(reason)
+
+
+def best_epoch_row[T](history: list[T], best_epoch: int) -> T | None:
+    """The history record of the epoch whose checkpoint the run kept, if any."""
+    return next((h for h in history if getattr(h, "epoch", None) == best_epoch), None)
 
 
 def runner_metric_direction(runner: object, metric: str) -> Literal["higher", "lower"]:
@@ -234,13 +264,16 @@ class UnitProgress:
 
 __all__ = [
     "ProgressCallback",
+    "SELECTION_SPLIT",
     "RunResult",
     "TaskRunner",
+    "best_epoch_row",
     "UnitProgress",
     "discard_cut_unit_resume",
     "give_cancel_token",
     "give_progress_callback",
     "rank_by_metric",
+    "require_validation_selection",
     "run_dir_from",
     "runner_cancel_token",
     "runner_metric_direction",

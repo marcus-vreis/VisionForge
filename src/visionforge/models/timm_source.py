@@ -3,8 +3,8 @@
 ``timm`` exposes hundreds of pretrained architectures. ``timm.create_model`` builds
 one with a fresh head sized to ``num_classes``, so it serves classification
 (``num_classes``) and regression (``num_targets``) directly — the same
-output-dimension contract as the custom registry. timm is an optional dependency
-(the ``timm`` extra); the import is lazy so VisionForge runs without it installed.
+output-dimension contract as the custom registry. timm ships with VisionForge
+(ADR-106); the import stays lazy so startup does not pay for it.
 """
 
 from __future__ import annotations

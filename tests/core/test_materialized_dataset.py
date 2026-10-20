@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+import subprocess
+import sys
+import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
@@ -14,6 +19,44 @@ from visionforge.core.materialized_dataset import (
 )
 
 GRAYSCALE = [{"kind": "grayscale"}]
+
+
+@contextmanager
+def _other_process_using_dataset(
+    source: Path, cache: Path, ready: Path
+) -> Iterator[tuple[subprocess.Popen[str], Path]]:
+    script = """
+import sys
+from pathlib import Path
+from visionforge.core.materialized_dataset import materialize_dataset
+source, cache, ready = map(Path, sys.argv[1:])
+with materialize_dataset(source, [{"kind": "grayscale"}], cache_root=cache) as out:
+    ready.write_text(str(out.path), encoding="utf-8")
+    sys.stdin.readline()
+"""
+    process = subprocess.Popen(
+        [sys.executable, "-c", script, str(source), str(cache), str(ready)],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        deadline = time.monotonic() + 30
+        while not ready.exists():
+            if process.poll() is not None:
+                pytest.fail(f"Dataset owner exited: {process.communicate()[1]}")
+            if time.monotonic() >= deadline:
+                pytest.fail("Dataset owner did not become ready within 30 seconds")
+            time.sleep(0.02)
+        yield process, Path(ready.read_text(encoding="utf-8"))
+    finally:
+        try:
+            process.communicate(input="\n", timeout=30)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.communicate()
+            raise
 
 
 def _dataset(root: Path) -> Path:
@@ -156,6 +199,26 @@ class TestMaterialize:
 
 
 class TestSweepOrphans:
+    def test_preserves_another_process_live_dataset(self, tmp_path: Path) -> None:
+        src = _dataset(tmp_path / "src")
+        cache = tmp_path / "cache"
+        with _other_process_using_dataset(src, cache, tmp_path / "ready") as (_, path):
+            assert sweep_orphans(cache) == 0
+            assert (path / "train" / "images" / "img0.png").is_file()
+
+    def test_removes_dataset_after_its_owner_is_killed(self, tmp_path: Path) -> None:
+        src = _dataset(tmp_path / "src")
+        cache = tmp_path / "cache"
+        with _other_process_using_dataset(src, cache, tmp_path / "ready") as (
+            process,
+            path,
+        ):
+            process.kill()
+            process.wait(timeout=30)
+            assert path.is_dir()
+            assert sweep_orphans(cache) == 1
+            assert not path.exists()
+
     def test_removes_a_folder_left_by_a_killed_process(self, tmp_path: Path) -> None:
         cache = tmp_path / "cache"
         (cache / "abc123").mkdir(parents=True)

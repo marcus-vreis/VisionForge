@@ -217,6 +217,140 @@ class TestDataModule:
         assert loader.sampler.__class__.__name__ == "RandomSampler"
 
 
+def _classification_config(
+    root: Path,
+    train_classes: tuple[str, ...],
+    eval_classes: tuple[str, ...],
+    *,
+    task: str,
+    num_classes: int,
+) -> ExperimentConfig:
+    for split in ("train", "val", "test"):
+        for name in train_classes if split == "train" else eval_classes:
+            folder = root / split / name
+            folder.mkdir(parents=True)
+            Image.new("RGB", (8, 8)).save(folder / "image.png")
+    return ExperimentConfig.model_validate(
+        {
+            "name": "labels",
+            "task": task,
+            "model": {"num_classes": num_classes, "pretrained": False},
+            "data": {
+                "base_dir": str(root),
+                "num_workers": 0,
+                "pin_memory": False,
+                "transforms": {"image_size": 32},
+            },
+        }
+    )
+
+
+class TestLabelVocabulary:
+    @pytest.mark.parametrize(
+        ("task", "num_classes", "train_classes", "eval_classes", "targets"),
+        [
+            ("binary", 1, ("a", "b"), ("b",), [1]),
+            ("multiclass", 3, ("a", "b", "c"), ("a", "c"), [0, 2]),
+            ("multiclass", 3, ("a", "b", "c"), ("b", "c"), [1, 2]),
+        ],
+    )
+    def test_missing_classes_keep_training_indices(
+        self,
+        tmp_path: Path,
+        task: str,
+        num_classes: int,
+        train_classes: tuple[str, ...],
+        eval_classes: tuple[str, ...],
+        targets: list[int],
+    ) -> None:
+        config = _classification_config(
+            tmp_path, train_classes, eval_classes, task=task, num_classes=num_classes
+        )
+        dm = DataModule(config)
+        assert dm.class_names == list(train_classes)
+        for loader in (dm.val_loader(), dm.test_loader()):
+            dataset = loader.dataset
+            assert dataset.classes == list(train_classes)
+            assert dataset.class_to_idx == dict(
+                zip(
+                    train_classes,
+                    range(num_classes if task == "multiclass" else 2),
+                    strict=True,
+                )
+            )
+            assert dataset.targets == targets
+            assert [label for _, label in dataset.samples] == targets
+            assert dataset.imgs is dataset.samples
+            assert next(iter(loader))[1].tolist() == targets
+
+    @pytest.mark.parametrize("split", ["val", "test"])
+    def test_empty_known_class_directory_is_allowed(
+        self, tmp_path: Path, split: str
+    ) -> None:
+        config = _classification_config(
+            tmp_path, ("a", "b"), ("b",), task="binary", num_classes=1
+        )
+        (tmp_path / split / "a").mkdir()
+        dm = DataModule(config)
+        loader = dm.val_loader() if split == "val" else dm.test_loader()
+        assert next(iter(loader))[1].tolist() == [1]
+
+    @pytest.mark.parametrize("split", ["val", "test"])
+    @pytest.mark.parametrize("remove_folders", [False, True])
+    def test_split_without_images_is_rejected(
+        self, tmp_path: Path, split: str, remove_folders: bool
+    ) -> None:
+        config = _classification_config(
+            tmp_path, ("a", "b"), ("a", "b"), task="binary", num_classes=1
+        )
+        for cls in ("a", "b"):
+            (tmp_path / split / cls / "image.png").unlink()
+            if remove_folders:
+                (tmp_path / split / cls).rmdir()
+        with pytest.raises(ValueError, match=rf"{split}.*no images"):
+            DataModule(config)
+
+    @pytest.mark.parametrize("split", ["val", "test"])
+    @pytest.mark.parametrize("empty", [False, True])
+    def test_unknown_class_is_rejected(
+        self, tmp_path: Path, split: str, empty: bool
+    ) -> None:
+        config = _classification_config(
+            tmp_path, ("a", "b"), ("a", "b"), task="binary", num_classes=1
+        )
+        unknown = tmp_path / split / "unknown"
+        unknown.mkdir()
+        if not empty:
+            Image.new("RGB", (8, 8)).save(unknown / "image.png")
+        with pytest.raises(ValueError, match=rf"{split}.*unknown"):
+            DataModule(config)
+
+    @pytest.mark.parametrize(
+        ("task", "num_classes", "train_classes", "expected"),
+        [
+            ("binary", 1, ("a",), 2),
+            ("binary", 1, ("a", "b", "c"), 2),
+            ("multiclass", 3, ("a", "b"), 3),
+            ("multiclass", 2, ("a", "b", "c"), 2),
+        ],
+    )
+    def test_training_class_count_must_match_outputs(
+        self,
+        tmp_path: Path,
+        task: str,
+        num_classes: int,
+        train_classes: tuple[str, ...],
+        expected: int,
+    ) -> None:
+        config = _classification_config(
+            tmp_path, train_classes, train_classes, task=task, num_classes=num_classes
+        )
+        with pytest.raises(
+            ValueError, match=rf"Training.*{len(train_classes)}.*require {expected}"
+        ):
+            DataModule(config)
+
+
 class TestAugmentToggle:
     """Turning augmentation off must not touch resize or normalization."""
 

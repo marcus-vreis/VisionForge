@@ -156,3 +156,58 @@ class TestOrchestratorsOverCustomRunner:
         assert all(t.status == "success" for t in trials)
         by_scale = {t.overrides["scale"]: t.metrics["mae"] for t in trials}
         assert by_scale[3.0] == pytest.approx(by_scale[1.0] * 3.0)
+
+
+class TestSweepSelectionOverCustomRunner:
+    def test_level1_selects_on_the_kept_epochs_val_metrics(
+        self, tmp_path: Path
+    ) -> None:
+        _register_toy()
+        runner = CustomTaskRunner(get_task("toyrunner"))
+        cfg = runner.config_type.model_validate(_config_dict(tmp_path))
+
+        result = runner.run(cfg)
+
+        assert runner.selection_unavailable is None
+        # One epoch: its val score is the best checkpoint's final val pass.
+        assert result.selection_metrics == pytest.approx({"mae": result.metrics["mae"]})
+
+    def test_level2_sweep_is_refused_before_training(self, tmp_path: Path) -> None:
+        from visionforge.core.sweep import run_sweep
+
+        ran: list[Any] = []
+
+        @register_task(
+            key="ownloop",
+            label="Own loop",
+            accent="#445566",
+            metrics={"mae": "lower"},
+            primary_metric="mae",
+        )
+        class OwnLoopTask(TaskSpec):
+            Config = ToyConfig
+
+            def build_model(self, cfg: Any) -> nn.Module:
+                return nn.Linear(3, 1)
+
+            def build_loaders(self, cfg: Any):
+                return [], [], None
+
+            def compute_loss(self, model: Any, batch: Any, cfg: Any):
+                raise AssertionError("unreachable")
+
+            def compute_metrics(self, model: Any, loader: Any, cfg: Any):
+                raise AssertionError("unreachable")
+
+            def run(self, cfg: Any, ctx: Any) -> dict[str, float]:
+                ran.append(cfg)
+                return {"mae": 0.1}
+
+        runner = CustomTaskRunner(get_task("ownloop"))
+        base = runner.config_type.model_validate(_config_dict(tmp_path)).model_dump(
+            mode="json"
+        )
+
+        with pytest.raises(ValueError, match="validation"):
+            run_sweep(runner, base, {"scale": [1.0, 2.0]}, mode="grid", metric="mae")
+        assert ran == []

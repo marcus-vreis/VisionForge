@@ -309,8 +309,12 @@ def _standalone_cases(
     has_cv: bool,
     metric: str,
     simple_expect: tuple[str, ...],
+    has_sweep: bool = True,
 ) -> list[SelfTestCase]:
     """simple / cv / sweep / replicates for one standalone task.
+
+    ``has_sweep`` is False for a task that has no labelled validation split to
+    select on: the server refuses its sweep before training (ADR-131).
 
     ``simple_expect`` differs per task because each block returns its own
     report shape (train/test sections for regression-family tasks, a
@@ -357,6 +361,8 @@ def _standalone_cases(
             multi_trial=True,
         ),
     ]
+    if not has_sweep:
+        cases = [c for c in cases if c.strategy != "sweep"]
     if has_cv:
         cases.insert(
             1,
@@ -479,6 +485,7 @@ def build_cases(
             has_cv=False,
             metric="auroc",
             simple_expect=("train", "test"),
+            has_sweep=False,
         )
 
     if "detection" in tasks:

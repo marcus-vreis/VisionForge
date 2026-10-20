@@ -928,9 +928,9 @@ export const pt = {
     },
     sweep: {
       title: (mode: string, ok: number, total: number, stopped: number, metric: string) =>
-        `// sweep ${mode} · ${ok}/${total} trials ok${stopped > 0 ? ` · ${stopped} interrompido${stopped === 1 ? "" : "s"}` : ""} · ranking por ${metric}`,
-      // Followed by the metric's value.
-      best: (metric: string) => `👑 melhor trial · ${metric}=`,
+        `// sweep ${mode} · ${ok}/${total} trials ok${stopped > 0 ? ` · ${stopped} interrompido${stopped === 1 ? "" : "s"}` : ""} · ranking por ${metric} na validação`,
+      // Followed by the metric's value: the validation one, what the sweep ranked (ADR-131).
+      best: (metric: string) => `👑 melhor trial · ${metric} (validação)=`,
     },
     // Model comparison on classification.
     modelComparison: {

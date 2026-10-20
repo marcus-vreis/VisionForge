@@ -52,6 +52,11 @@ class DetectionRunner:
             }
             return RunResult(
                 metrics=metrics,
+                # Both trainers score each epoch on the val split (Ultralytics
+                # validates on data.yaml's `val`, torchvision on val_loader)
+                # and no test pass exists, so the reported numbers are already
+                # validation numbers.
+                selection_metrics=dict(metrics),
                 status="success",
                 training_time_s=elapsed,
                 error="",

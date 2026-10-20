@@ -32,6 +32,8 @@ class _FakeRunner:
             return RunResult(status="failed", error="boom")
         return RunResult(
             metrics={"score": 1.0 - abs(lr - 0.05)},
+            # A sweep ranks on validation (ADR-131); the fake scores both alike.
+            selection_metrics={"score": 1.0 - abs(lr - 0.05)},
             status="success",
             training_time_s=0.1,
         )

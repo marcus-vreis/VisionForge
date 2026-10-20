@@ -161,18 +161,18 @@ class TestAnomalyCompareSweep:
             routes_mod.run_model_comparison = orig
             routes_mod._current_run = None
 
-    def test_sweep_dispatches_and_reports(
+    def test_sweep_is_refused_before_queueing(
         self, app_and_routes: tuple, tmp_path: Path
     ) -> None:
-        from visionforge.core.sweep import SweepTrial
-
+        # Anomaly's only labelled split is test, so a sweep would tune on it
+        # (ADR-131): the route answers 422 and never starts the job.
         app, routes_mod = app_and_routes
         routes_mod._current_run = None
+        called: list[object] = []
 
-        def fake_sweep(
-            runner, base, space, *, mode, metric, n_trials, seed, progress_callback=None
-        ):  # type: ignore[no-untyped-def]
-            return [SweepTrial(0, {"model.latent_dim": 32}, "success", {"auroc": 0.9})]
+        def fake_sweep(*args, **kwargs):  # type: ignore[no-untyped-def]
+            called.append(args)
+            return []
 
         orig = routes_mod.run_sweep
         routes_mod.run_sweep = fake_sweep
@@ -184,20 +184,10 @@ class TestAnomalyCompareSweep:
                 "search_space": {"model.latent_dim": [16, 32]},
             }
             resp = client.post("/api/anomaly/sweep", json=payload)
-            assert resp.status_code == 200, resp.text
-            run_id = resp.json()["run_id"]
-
-            status = {"status": "running"}
-            for _ in range(50):
-                status = client.get("/api/experiment/status").json()
-                if status["status"] in ("completed", "failed"):
-                    break
-                time.sleep(0.05)
-            assert status["status"] == "completed", status
-
-            report = client.get(f"/api/experiment/result/{run_id}").json()["report"]
-            assert report["mode"] == "grid"
-            assert report["metric"] == "auroc"
+            assert resp.status_code == 422, resp.text
+            assert "validation" in resp.json()["detail"].lower()
+            assert called == []
+            assert routes_mod._current_run is None
         finally:
             routes_mod.run_sweep = orig
             routes_mod._current_run = None

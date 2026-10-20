@@ -43,11 +43,12 @@ app = FastAPI(title="VisionForge", version=__version__)
 
 @app.on_event("startup")
 async def _sweep_filtered_datasets() -> None:
-    """Remove filtered dataset copies a killed process left behind (ADR-084).
+    """Remove filtered dataset copies a killed process left behind (ADR-084, ADR-130).
 
     The context manager cleans up after itself, including on exception, but
-    nothing in a process that was killed outright ever runs again. Every copy
-    present at startup is by definition from a process that is already gone.
+    nothing in a process that was killed outright ever runs again. A copy whose
+    operating-system lease is still held belongs to another live process (a
+    second GUI on the same workspace) and is left alone.
     """
     from visionforge.core.materialized_dataset import sweep_orphans
 
@@ -95,13 +96,18 @@ async def spa_fallback(path: str) -> FileResponse:
     # index.html made typos and stale clients fail as JSON parse errors.
     if path == "api" or path.startswith("api/"):
         raise HTTPException(status_code=404, detail="Not Found")
-    # STATIC_DIR is a fixed project-local directory; path is joined (not resolved
-    # from user input alone), so traversal outside STATIC_DIR is not possible.
-    file_path = STATIC_DIR / path
+    root = STATIC_DIR.resolve()
+    # Treat Windows separators consistently even when the server runs on Linux.
+    try:
+        file_path = (root / path.replace("\\", "/")).resolve()
+    except (OSError, ValueError, RuntimeError) as exc:
+        raise HTTPException(status_code=404, detail="Not Found") from exc
+    if not file_path.is_relative_to(root):
+        raise HTTPException(status_code=404, detail="Not Found")
     if file_path.is_file() and file_path.name != "index.html":
         return FileResponse(file_path)  # NOSONAR python:S2083
     return FileResponse(  # NOSONAR python:S2083
-        STATIC_DIR / "index.html", headers=_INDEX_HEADERS
+        root / "index.html", headers=_INDEX_HEADERS
     )
 
 

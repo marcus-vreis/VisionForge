@@ -28,8 +28,31 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
   novo (`install-smoke.yml`) instala o pacote publicado no PyPI nos três sistemas e roda
   `doctor` e `selftest --quick` depois de cada release.
 
+### Changed
+
+- **Sweeps escolhem os hiperparâmetros pela validação, nunca pelo teste.** Em regressão,
+  segmentação e anomalia o sweep ranqueava os trials (e guiava o Optuna) pelas métricas de
+  teste, então o "melhor" vinha ajustado ao próprio conjunto que depois o avaliava. Agora
+  o ranking usa o valor de validação do checkpoint guardado, o resultado diz isso, e um trial
+  sem valor de validação falha em vez de cair no teste. A anomalia não tem split de validação
+  rotulado: o sweep dela é recusado antes de treinar e saiu do painel (réplicas continuam)
+  ([ADR-131](docs/dev/DECISIONS.md), issue #49).
+
 ### Fixed
 
+- **O servidor não entrega mais arquivos fora da pasta da interface.** Um caminho com `..`
+  codificado devolvia arquivos de fora; agora responde 404 ([ADR-127](docs/dev/DECISIONS.md),
+  issue #47).
+- **Classificação: um split sem alguma classe não troca mais o rótulo das outras.** Validação e
+  teste usam a numeração do treino; uma classe que o treino não tem, um split sem nenhuma
+  imagem ou um número de classes diferente do modelo param antes de treinar
+  ([ADR-128](docs/dev/DECISIONS.md), issue #48).
+- **Abrir uma segunda GUI na mesma pasta não apaga mais o dataset filtrado de um treino em
+  andamento.** Cada cópia tem um lease do sistema operacional; a limpeza da inicialização só
+  remove a de um processo que já morreu ([ADR-130](docs/dev/DECISIONS.md), issue #50).
+- **A impressão digital do dataset não confunde mais dois manifestos diferentes** (`x1` com 2
+  bytes e `x` com 12 bytes davam o mesmo hash). A nova codificação é versionada; comparar com
+  um run antigo dá "indeterminado", não "igual" ([ADR-129](docs/dev/DECISIONS.md), issue #51).
 - **O nome dado na primeira tela não some mais quando surge outro perfil.** Ele ficava só no
   navegador, e o perfil padrão (onde estão os runs desse primeiro uso) passava a aparecer como
   "Padrão (sem perfil)". Agora o nome fica no servidor e o padrão aparece como "Marcus (padrão)";

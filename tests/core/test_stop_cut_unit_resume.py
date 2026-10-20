@@ -77,6 +77,8 @@ class _UnitRunner:
             self._cancel_token.cancel()
         return RunResult(
             metrics={"score": 0.5},
+            # A sweep ranks on validation (ADR-131); the fake scores both alike.
+            selection_metrics={"score": 0.5},
             status="success",
             training_time_s=0.0,
             stopped=cut,

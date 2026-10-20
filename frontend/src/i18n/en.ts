@@ -864,8 +864,8 @@ export const en: Dict = {
     },
     sweep: {
       title: (mode: string, ok: number, total: number, stopped: number, metric: string) =>
-        `// ${mode} sweep · ${ok}/${total} trials ok${stopped > 0 ? ` · ${stopped} stopped` : ""} · ranked by ${metric}`,
-      best: (metric: string) => `👑 best trial · ${metric}=`,
+        `// ${mode} sweep · ${ok}/${total} trials ok${stopped > 0 ? ` · ${stopped} stopped` : ""} · ranked by validation ${metric}`,
+      best: (metric: string) => `👑 best trial · validation ${metric}=`,
     },
     modelComparison: {
       title: (ok: number, total: number, failed: number, stopped: number) =>

@@ -58,6 +58,8 @@ class _StoppingRunner:
             stopped = self.cut
         return RunResult(
             metrics={"score": 0.5 + 0.1 * index},
+            # A sweep ranks on validation (ADR-131); the fake scores both alike.
+            selection_metrics={"score": 0.5 + 0.1 * index},
             status="success",
             training_time_s=0.0,
             stopped=stopped,

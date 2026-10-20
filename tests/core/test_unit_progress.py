@@ -56,7 +56,10 @@ class _StreamingRunner:
                 {"event": "epoch_end", "epoch": 2, "total_epochs": 2, "train_loss": 0.5}
             )
             emit({"event": "end", "total_epochs": 2})
-        return RunResult(metrics={"score": 0.5}, status="success")
+        # A sweep ranks on validation (ADR-131); the fake scores both alike.
+        return RunResult(
+            metrics={"score": 0.5}, selection_metrics={"score": 0.5}, status="success"
+        )
 
     def metrics(self, result: RunResult) -> dict[str, float]:
         return result.metrics

@@ -15,15 +15,44 @@ or via the GUI, which generates the same Pydantic object either way.
 ### Task
 
 A task defines the problem type. Each task has its own config schema, trainer, metrics,
-and GUI tab. Tasks are independent modules — adding a new task does not modify existing ones.
+runner and GUI tab. Tasks are independent modules — adding a task does not modify existing
+ones. Classification is an `ExperimentConfig` run through the `ExperimentBlock` registry;
+the other four are standalone config/block/run paths (ADR-033/036/037/038, ADR-041) with
+their own `/api/<task>/*` endpoints. All five write the `run.json` contract (ADR-013).
 
-| Task | Status | Config | Loss | Key metrics |
-|---|---|---|---|---|
-| `classification` | ✅ In development | `ClassificationConfig` | BCE / CrossEntropy | Accuracy, F1, AUC-ROC |
-| `regression` | 📋 Planned | `RegressionConfig` | MSE / MAE | R², RMSE, MAE |
-| `detection` | 📋 Planned | `DetectionConfig` | task-specific | mAP, IoU |
-| `segmentation` | 📋 Planned | `SegmentationConfig` | CE / Dice | IoU, Dice |
-| `anomaly_detection` | 📋 Planned | `AnomalyConfig` | reconstruction | AUROC, threshold |
+| Task | Status | Config (`utils/`) | Loss | Key metrics | Primary metric |
+|---|---|---|---|---|---|
+| `classification` | Implemented | `ExperimentConfig` (`config.py`) | `BCEWithLogitsLoss` / `CrossEntropyLoss` | Accuracy, F1, AUC-ROC | `accuracy` |
+| `regression` | Implemented | `RegressionConfig` (`regression_config.py`) | `mse` / `mae` / `huber` | R², RMSE, MAE | `r2` |
+| `detection` | Implemented | `DetectionConfig` (`detection_config.py`) | backend-owned (Ultralytics, torchvision) | mAP@50, mAP@50-95 | `map50_95` |
+| `segmentation` | Implemented | `SegmentationConfig` (`segmentation_config.py`) | `cross_entropy` / `dice` / `combined` | mean IoU, Dice, pixel accuracy | `miou` |
+| `anomaly` | Implemented | `AnomalyConfig` (`anomaly_config.py`) | autoencoder: reconstruction MSE; PatchCore: none (memory bank) | image AUROC, F1, threshold | `auroc` |
+
+The task name is the URL segment (`/api/<task>/*`). In YAML, the `task` field is
+`binary` or `multiclass` for classification (the subtype, below) and `detection`,
+`regression`, `segmentation` or `anomaly` for the others; `visionforge run` dispatches
+on it (`__main__.py`). The primary metric is what each `*Runner`
+returns from `primary_metric()` (`blocks/<task>_runner.py`).
+
+Strategies available per task (each is a route in `gui/api/routes.py`):
+
+| Task | Run | K-fold | Sweep | Model comparison | Replicates | Replicated comparison |
+|---|---|---|---|---|---|---|
+| classification | `POST /api/experiment/run` | block `cross_validation` | blocks `grid_search`, `random_search` | block `model_comparison` | `/api/classification/replicates` | `/api/classification/replicated-comparison` |
+| regression | `/api/regression/run` | `/api/regression/cv` | `/api/regression/sweep` | `/api/regression/compare` | `/api/regression/replicates` | `/api/regression/replicated-comparison` |
+| segmentation | `/api/segmentation/run` | `/api/segmentation/cv` | `/api/segmentation/sweep` | `/api/segmentation/compare` | `/api/segmentation/replicates` | `/api/segmentation/replicated-comparison` |
+| detection | `/api/detection/run` | none | `/api/detection/sweep` | `/api/detection/compare` | `/api/detection/replicates` | `/api/detection/replicated-comparison` |
+| anomaly | `/api/anomaly/run` | none | `/api/anomaly/sweep` | `/api/anomaly/compare` | `/api/anomaly/replicates` | `/api/anomaly/replicated-comparison` |
+
+Sweeps, comparisons and replicates are task-agnostic: they drive any task through the
+`TaskRunner` Protocol (`core/task_runner.py`, ADR-041), so a new task gets them by
+providing a runner.
+
+Researcher-defined tasks (ADR-058) are a sixth, open-ended surface: a documented `.py` in
+`user_tasks/` registered with `@register_task` gets a tab, `run.json` (stamped
+`custom:<key>`), sweeps, replicates and replicated comparison via `CustomTaskRunner`, under
+`/api/custom/{key}/*`. Config is a `BaseTaskConfig` subclass (`tasks/base.py`). Scaffold
+with `visionforge new-task <key>`.
 
 ### Classification subtypes
 
@@ -45,12 +74,16 @@ and exposes a standard three-method interface:
 
 Blocks are composable and interchangeable. The same config can be passed to any block.
 
-The active block is selected by the `block` field in `ExperimentConfig`. The GUI
-dispatcher (`gui/api/routes.py`) routes `block="classification"` to
-`ClassificationBlock` and `block="cross_validation"` to `CrossValidationBlock`;
-the other backend blocks (grid_search, random_search, transfer_learning,
-model_comparison, batch_prediction, export_onnx) are reachable via YAML today
-and gain a GUI surface incrementally (see TASKS.md, Phase 5.6).
+The active block is selected by the `block` field in `ExperimentConfig`
+(classification only). `POST /api/experiment/run` (`_execute_experiment` in
+`gui/api/routes.py`, ADR-026) instantiates the class for `classification`,
+`cross_validation`, `transfer_learning`, `model_comparison`, `grid_search` or
+`random_search`. `batch_prediction` and `export_onnx` are also valid `block` values
+(YAML) but the GUI runs them through `POST /api/runs/{id}/batch_predict` and
+`POST /api/runs/{id}/export_onnx`, which build a one-shot config for the block. The four
+non-classification tasks do not use this registry: `DetectionBlock`, `RegressionBlock`,
+`SegmentationBlock` and `AnomalyBlock` mirror `setup`/`run`/`report` without subclassing
+`ExperimentBlock` (ADR-033/036/037/038).
 
 ### Preprocessing pipeline
 
@@ -79,9 +112,11 @@ markdown model card, is shown in the run detail page, and is surfaced as a badge
 
 ### Cross-validation
 
-`CrossValidationBlock` (selected by `block="cross_validation"`) runs N
-independent trainings, one per fold. Folds are produced by `KFold` or
-`StratifiedKFold` (sklearn) using only the dataset's training split. Each fold:
+K-fold is available for classification (`CrossValidationBlock`, `block="cross_validation"`),
+regression (`blocks/regression_cv.py`) and segmentation (`blocks/segmentation_cv.py`);
+detection and anomaly have none. It runs N independent trainings, one per fold. The
+classification block produces folds with `KFold` or `StratifiedKFold` (sklearn) using only
+the dataset's training split. Each fold:
 
 1. Recomputes `normalize_mean`/`normalize_std` from the fold's training images
    only — preventing the classic data-leakage trap of computing dataset-wide
@@ -89,29 +124,33 @@ independent trainings, one per fold. Folds are produced by `KFold` or
 2. Trains a fresh model with the same hyperparameters as the parent config.
 3. Evaluates against the fold's validation images.
 
-The aggregate output is `cv_summary.json` in `reports_dir/<experiment_name>/`,
+The classification report is `cv_summary.json` in `reports_dir/<experiment_name>/`,
 with per-fold records (`fold`, `train_size`, `val_size`, `accuracy`, `f1`,
 `best_val_loss`, `status`) and aggregate `mean_accuracy ± std_accuracy`,
-`mean_f1 ± std_f1`.
+`mean_f1 ± std_f1`. Regression and segmentation write their own reports under
+`reports_dir`.
 
 The hold-out test split is **not** consumed by CV — it stays reserved for a
 final test of the chosen model.
 
 ### Run
 
-A run is a single execution of an `ExperimentBlock`. It is fully described by a `run.json` file written by the Trainer at completion. This file is the single source of truth for everything the GUI history tab displays.
+A run is a single execution of a task (for classification, of an `ExperimentBlock`). It is fully described by a `run.json` file written by the trainer at completion (ADR-013). This file is the single source of truth for everything the GUI history tab displays. Layout for a classification run (the other tasks write their own artifacts next to `run.json`):
 
 ```
 outputs/
-  <experiment_name>/
-    <timestamp>/          # e.g. 20260321_194000
-      run.json            # full metadata (see schema below)
-      best_model.pth      # best checkpoint by val metric
-      history.json        # per-epoch metrics (also embedded in run.json)
-      loss.png
-      confusion_matrix.png
-      report.html
+  models/
+    <experiment_name>/
+      <timestamp>/            # e.g. 20260321_194000
+        run.json              # full metadata (see schema below)
+        best_model.pth        # best checkpoint by val metric
+        loss.png  accuracy.png
+        confusion_matrix.png  confusion_matrix_normalized.png
+        roc_curve.png         precision_recall_curve.png
+        tensorboard/          # per-epoch scalars (ADR-054)
 ```
+
+The per-epoch history lives inside `run.json` (`history`); there is no separate `history.json`.
 
 #### `run.json` schema
 
@@ -121,12 +160,15 @@ outputs/
   "experiment": "resnet50_binary",
   "timestamp": "2026-03-21T19:40:00",
   "status": "completed",
+  "stopped": false,
   "device_used": "cuda:0 (NVIDIA RTX 4090)",
+  "environment": { "python": "...", "torch": "...", "cuda": "...", "gpu": "..." },
+  "dataset_fingerprint": { "...": "..." },
   "run_dir": "outputs/models/resnet50_binary/20260321_194000",
-  "config": { "data": { "preprocessing": { "steps": [...] } }, "...": "..." },
+  "class_names": ["healthy", "diseased"],
+  "config": { "schema_version": 1, "data": { "preprocessing": { "steps": [...] } }, "...": "..." },
   "metrics": {
-    "best_val_accuracy": 0.94,
-    "best_val_f1": 0.93,
+    "best_val_loss": 0.21,
     "best_epoch": 47,
     "total_epochs": 47,
     "test_accuracy": 0.92,
@@ -144,8 +186,10 @@ outputs/
       "outputs/.../confusion_matrix_normalized.png",
       "outputs/.../roc_curve.png",
       "outputs/.../precision_recall_curve.png"
-    ]
+    ],
+    "report": null
   },
+  "warnings": [],
   "tests": [
     {
       "test_id": "test_20260522_103000_000000",
@@ -166,11 +210,13 @@ augmentation pipeline, and per-model test history. A **+ testar** button calls
 `POST /api/runs/{id}/test` to evaluate the saved checkpoint against a new
 dataset path and append a record to `tests[]`.
 
-**Note:** Cross-validation runs don't currently write `run.json` — they write
-`cv_summary.json` under `reports_dir`. Surfacing CV results in the run history
-is a follow-up tracked in TASKS.md (Phase 5.5 open follow-ups).
+A K-fold is a History group (ADR-123): one group `run.json` in
+`<models_dir>/<name>_cv/<group_id>/`, with the folds as children (`fold`, `run_dir`) and
+the mean ± std copied from the report. The same group mechanism (`core/run_groups.py`,
+ADR-113, ADR-124) folds replicate sets and sweep/comparison trials. Fold metrics are
+reported as `val_<name>`, never as test metrics.
 
-Runs are stored in `outputs/` indexed by experiment name and timestamp.
+Runs are stored under `output.models_dir` (default `outputs/models`) as `<experiment_name>/<timestamp>/`.
 
 ### Device
 
@@ -181,21 +227,19 @@ correct PyTorch build for their hardware — the system never assumes GPU availa
 |---|---|
 | CPU only | Full support, slower training |
 | Single GPU | CUDA acceleration, automatic detection |
-| Multi-GPU (single machine) | `DataParallel` in Phase 2, `DDP` in a future phase |
+| Multi-GPU (single machine) | `multi_cuda`: `DataParallel` in the classification, regression and segmentation trainers (ADR-007); detection passes the GPU ids to Ultralytics. `DistributedDataParallel` is not implemented |
+
+`DeviceConfig.kind` is `cpu`, `cuda` or `multi_cuda`; `gpu_ids` is optional. The device
+actually used is recorded in `run.json` as `device_used`.
 
 ### Config and GUI relationship
 
 Pydantic config models are the single source of truth for both YAML and GUI:
 
-- **YAML** → `load_config(path)` parses and validates the file
-- **GUI** → form fields are auto-generated from `ExperimentConfig.model_json_schema()`:
-  - `Literal["a", "b", "c"]` → `<Select>` dropdown
-  - `int` / `float` → `<Input type="number">`
-  - `bool` → `<Switch>`
-  - Nested Pydantic model (`$ref`) → `<Card>` section
-  - `list[float]` → comma-separated `<Input>`
-- **API** → `POST /api/experiment/run` accepts JSON validated by FastAPI using the same `ExperimentConfig`
-- All three paths produce the same `ExperimentConfig` object
+- **YAML** → `load_config(path)` (`utils/config.py`) parses, migrates `schema_version` (ADR-039) and validates the file. `visionforge run <config.yaml>` runs it; `configs/` holds one example per task.
+- **GUI** → each task panel reads its JSON Schema: `GET /api/schema` (classification), `GET /api/{detection,regression,segmentation,anomaly}/schema`, `GET /api/custom/{key}/schema` for researcher-defined tasks. Classification renders through `ParamPanel`; the other tabs through their own `*Panel` components.
+- **API** → `POST /api/experiment/run` (classification) and `POST /api/<task>/run` accept JSON validated by the same Pydantic config.
+- Every path produces the same config object, validated before any GPU work (ADR-002).
 
 ### Validation rules (Classification)
 

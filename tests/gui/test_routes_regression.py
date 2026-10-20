@@ -258,6 +258,10 @@ class TestRegressionSweep:
             assert report["mode"] == "grid"
             assert report["metric"] == "r2"
             assert report["total_trials"] == 2
+            # The report names the split that ranked the trials (ADR-131).
+            assert report["selection_split"] == "validation"
+            assert report["trials"][0]["selection_split"] == "validation"
+            assert "evaluation_metrics" in report["trials"][0]
             assert report["best_trial"]["overrides"]["training.learning_rate"] == 0.05
             assert (Path(report["report_dir"]) / "sweep_summary.json").exists()
         finally:

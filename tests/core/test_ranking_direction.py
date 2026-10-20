@@ -53,7 +53,10 @@ class _ScoredRunner:
             key = cfg["training"]["learning_rate"]
         value = self.scores[key]
         metrics = {} if value is None else {self.metric: value}
-        return RunResult(metrics=metrics, status="success")
+        # A sweep ranks on validation (ADR-131); the fake scores both alike.
+        return RunResult(
+            metrics=metrics, selection_metrics=dict(metrics), status="success"
+        )
 
     def metrics(self, result: RunResult) -> dict[str, float]:
         return dict(result.metrics)

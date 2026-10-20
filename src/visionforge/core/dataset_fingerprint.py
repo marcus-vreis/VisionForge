@@ -16,6 +16,11 @@ guarantee different things:
 * ``content`` — sha256 over the file bytes as well. Complete, but reads the
   whole dataset; opt-in for when a claim has to be airtight.
 
+Records are length-framed (encoding version 2). Version 1 concatenated path and
+size with no delimiter, so ``x1`` + 2 bytes and ``x`` + 12 bytes collided; a
+fingerprint without ``encoding_version`` is read as version 1 and is never
+compared with a newer one (``same_dataset`` answers ``None``).
+
 Claiming more than the method delivers would be worse than not fingerprinting
 at all, so ``note`` spells out the limitation in the artifact itself.
 """
@@ -23,6 +28,7 @@ at all, so ``note`` spells out the limitation in the artifact itself.
 from __future__ import annotations
 
 import hashlib
+import struct
 from dataclasses import asdict, dataclass
 from pathlib import Path, PureWindowsPath
 from typing import Any, Literal
@@ -34,6 +40,10 @@ Method = Literal["manifest", "content"]
 # Above this the walk is abandoned rather than stalling a training run.
 _MAX_FILES = 200_000
 _CHUNK = 1024 * 1024
+
+ENCODING_VERSION = 2
+_LEGACY_ENCODING_VERSION = 1
+_U64 = struct.Struct(">Q")
 
 _MANIFEST_NOTE = (
     "paths+sizes only: a modification that preserves file size is not detected"
@@ -51,6 +61,7 @@ class DatasetFingerprint:
     total_bytes: int
     root: str
     note: str
+    encoding_version: int = ENCODING_VERSION
 
     def to_dict(self) -> dict[str, Any]:
         """JSON-ready form for run.json."""
@@ -66,6 +77,11 @@ def _unavailable(root: str, note: str) -> DatasetFingerprint:
         root=root,
         note=note,
     )
+
+
+def _frame(data: bytes) -> bytes:
+    """Prefix ``data`` with its 8-byte big-endian length so records cannot blur."""
+    return _U64.pack(len(data)) + data
 
 
 def fingerprint_dataset(
@@ -86,24 +102,32 @@ def fingerprint_dataset(
         return _unavailable(root_str, "base_dir is not a directory")
 
     try:
-        files = sorted(p for p in root_path.rglob("*") if p.is_file())
+        # Sort by the encoded relative path, not by Path, so the order does not
+        # depend on the platform's path comparison or on enumeration order.
+        entries = sorted(
+            (p.relative_to(root_path).as_posix().encode("utf-8"), p)
+            for p in root_path.rglob("*")
+            if p.is_file()
+        )
     except OSError as exc:  # pragma: no cover - permission edge cases
         return _unavailable(root_str, f"could not walk the dataset: {exc}")
 
-    if len(files) > max_files:
+    if len(entries) > max_files:
         return _unavailable(
             root_str, f"more than {max_files} files: fingerprint skipped for speed"
         )
 
     hasher = hashlib.sha256()
+    # The method is part of the preimage so a manifest and a content digest
+    # can never coincide.
+    hasher.update(_frame(f"visionforge-dataset-v{ENCODING_VERSION}:{method}".encode()))
     total = 0
     try:
-        for path in files:
-            relative = path.relative_to(root_path).as_posix()
+        for relative, path in entries:
             size = path.stat().st_size
             total += size
-            hasher.update(relative.encode("utf-8"))
-            hasher.update(str(size).encode("utf-8"))
+            hasher.update(_frame(relative))
+            hasher.update(_U64.pack(size))
             if method == "content":
                 with path.open("rb") as handle:
                     while chunk := handle.read(_CHUNK):
@@ -114,7 +138,7 @@ def fingerprint_dataset(
     return DatasetFingerprint(
         digest=hasher.hexdigest(),
         method=method,
-        n_files=len(files),
+        n_files=len(entries),
         total_bytes=total,
         root=root_str,
         note=_MANIFEST_NOTE if method == "manifest" else _CONTENT_NOTE,
@@ -149,12 +173,17 @@ def same_dataset(a: dict[str, Any], b: dict[str, Any]) -> bool | None:
     """Whether two run.json fingerprints describe the same data.
 
     ``None`` when the question cannot be answered — either digest missing, or
-    the two used different methods (a manifest digest and a content digest of
-    the same data do not match, and pretending otherwise would be a lie).
+    the two used different methods or encoding versions (digests of the same
+    data do not match across either, and pretending otherwise would be a lie).
+    A missing ``encoding_version`` means the legacy encoding.
     """
     if not a.get("digest") or not b.get("digest"):
         return None
     if a.get("method") != b.get("method"):
+        return None
+    if a.get("encoding_version", _LEGACY_ENCODING_VERSION) != b.get(
+        "encoding_version", _LEGACY_ENCODING_VERSION
+    ):
         return None
     return bool(a["digest"] == b["digest"])
 
@@ -184,6 +213,7 @@ def dataset_identity(run_json: dict[str, Any]) -> tuple[str | None, str | None]:
 
 
 __all__ = [
+    "ENCODING_VERSION",
     "DatasetFingerprint",
     "Method",
     "dataset_identity",

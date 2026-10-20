@@ -5,6 +5,9 @@ method does and does not detect, and that it can never break a training run.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Literal
+
+import pytest
 
 from visionforge.core.dataset_fingerprint import (
     dataset_identity,
@@ -91,6 +94,33 @@ class TestContentMethod:
         )
 
 
+class TestRecordEncoding:
+    def test_path_and_size_are_unambiguous(self, tmp_path: Path) -> None:
+        first = _dataset(tmp_path / "one", {"x1": "aa"})
+        second = _dataset(tmp_path / "two", {"x": "a" * 12})
+        assert fingerprint_dataset(first).digest != fingerprint_dataset(second).digest
+
+    @pytest.mark.parametrize("method", ["manifest", "content"])
+    def test_new_encoding_is_persisted(
+        self, tmp_path: Path, method: Literal["manifest", "content"]
+    ) -> None:
+        fp = fingerprint_dataset(tmp_path, method=method)
+        assert fp.to_dict()["encoding_version"] == 2
+
+    @pytest.mark.parametrize("method", ["manifest", "content"])
+    def test_unicode_paths_and_creation_order_are_stable(
+        self, tmp_path: Path, method: Literal["manifest", "content"]
+    ) -> None:
+        files = {"treino/café/雪.png": "á", "val/猫/1.png": "雪"}
+        first = _dataset(tmp_path / "one", files)
+        second = _dataset(tmp_path / "two", dict(reversed(list(files.items()))))
+        a = fingerprint_dataset(first, method=method)
+        b = fingerprint_dataset(second, method=method)
+        assert a.digest == b.digest
+        assert a.total_bytes == b.total_bytes == 5
+        assert same_dataset(a.to_dict(), b.to_dict()) is True
+
+
 class TestFailureModes:
     def test_missing_directory_is_reported_not_raised(self, tmp_path: Path) -> None:
         fp = fingerprint_dataset(tmp_path / "nope")
@@ -149,6 +179,27 @@ class TestSameDataset:
         # A manifest digest and a content digest of the same data differ;
         # returning False would wrongly claim the datasets differ.
         assert same_dataset(self._fp("abc"), self._fp("abc", "content")) is None
+
+    @pytest.mark.parametrize("digest", ["abc", "def"])
+    def test_unanswerable_across_encoding_versions(self, digest: str) -> None:
+        legacy = self._fp("abc")
+        current = {**self._fp(digest), "encoding_version": 2}
+        assert same_dataset(legacy, current) is None
+        assert same_dataset(current, legacy) is None
+
+    def test_missing_encoding_version_is_legacy(self) -> None:
+        assert (
+            same_dataset(self._fp("abc"), {**self._fp("abc"), "encoding_version": 1})
+            is True
+        )
+
+    @pytest.mark.parametrize(("digest", "expected"), [("abc", True), ("def", False)])
+    def test_matching_new_versions_can_be_compared(
+        self, digest: str, expected: bool
+    ) -> None:
+        a = {**self._fp("abc"), "encoding_version": 2}
+        b = {**self._fp(digest), "encoding_version": 2}
+        assert same_dataset(a, b) is expected
 
 
 class TestDatasetIdentity:

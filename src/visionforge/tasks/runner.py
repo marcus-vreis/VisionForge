@@ -16,7 +16,8 @@ import time
 from typing import Any
 
 from visionforge.core.cancellation import CancellationToken
-from visionforge.core.task_runner import RunResult
+from visionforge.core.task_runner import RunResult, best_epoch_row
+from visionforge.tasks.base import TaskSpec
 from visionforge.tasks.engine import GenericTaskEngine
 from visionforge.tasks.registry import TaskInfo
 
@@ -37,6 +38,16 @@ class CustomTaskRunner:
         # Read by the orchestrators to rank trials the way the task declared
         # (`runner_metric_direction`): "score" may well be lower-is-better.
         self.metric_directions = dict(info.metrics)
+        # A Level 2 `run` returns metrics of a split VisionForge cannot see, so
+        # a sweep could be ranking on test numbers (ADR-131). Level 1 scores
+        # every epoch on its val loader and selects on that.
+        self.selection_unavailable: str | None = (
+            f"Task '{info.key}' runs its own loop (Level 2), so VisionForge "
+            "cannot tell which metrics come from a validation split; a sweep "
+            "needs per-epoch validation metrics (Level 1 hooks)."
+            if getattr(info.spec_cls, "run", TaskSpec.run) is not TaskSpec.run
+            else None
+        )
 
     def run(self, cfg: Any) -> RunResult:
         """Run a single training trial and return a uniform RunResult."""
@@ -45,8 +56,14 @@ class CustomTaskRunner:
             result = GenericTaskEngine(self._info, cfg).run(
                 cancel_token=self._cancel_token
             )
+            best = best_epoch_row(
+                getattr(result, "history", []), getattr(result, "best_epoch", 0)
+            )
             return RunResult(
                 metrics=dict(result.metrics),
+                # The kept epoch's scores on the val loader, never the
+                # `test_`-prefixed final pass.
+                selection_metrics=dict(best.val_metrics) if best else {},
                 status="success",
                 training_time_s=time.monotonic() - t0,
                 error="",

@@ -767,7 +767,6 @@ export default function App() {
             accent={activeTask.accent}
             validationErrors={validationErrors}
             busy={status.status === "running"}
-            onSweep={(payload) => void handleSweep("anomaly", payload)}
             onReplicates={(payload) =>
               void handleReplicates("anomaly", payload)
             }

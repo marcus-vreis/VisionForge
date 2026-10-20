@@ -21,15 +21,8 @@ import { AdvancedFields } from "./AdvancedFields";
 import { ExperimentHeader, type PanelStrategy } from "./ExperimentHeader";
 import { ReplicatesCard } from "./ReplicatesCard";
 import { AnomalyDatasetStats } from "./TaskDatasetStats";
-import { SweepCard, type SweepPayload } from "./SweepCard";
 import { TransformsSection } from "./TransformsSection";
 import type { ReplicatesPayload } from "../lib/replicates-form";
-
-const SWEEP_PATH_HINTS = [
-  "model.latent_dim",
-  "model.coreset_ratio",
-  "training.learning_rate",
-];
 
 interface AnomalyPanelProps {
   formData: AnomalyForm;
@@ -37,7 +30,6 @@ interface AnomalyPanelProps {
   accent: string;
   validationErrors: ValidationError[];
   busy?: boolean;
-  onSweep?: (payload: SweepPayload) => void;
   onReplicates?: (payload: ReplicatesPayload) => void;
   /** Lets App label and route the main Treinar button by the active strategy. */
   onStrategyChange?: (strategy: PanelStrategy) => void;
@@ -67,7 +59,6 @@ export function AnomalyPanel({
   accent,
   validationErrors,
   busy,
-  onSweep,
   onReplicates,
   onStrategyChange,
   runSignal,
@@ -149,6 +140,12 @@ export function AnomalyPanel({
           setStrategy(s);
           onStrategyChange?.(s);
         }}
+        // No sweep: anomaly has no labelled validation split to select on, and
+        // the server refuses one rather than tune on the test set (ADR-131).
+        strategies={[
+          { value: "simple", label: t.paramPanel.blocks.simple },
+          { value: "replicates", label: t.taskPanel.replicates },
+        ]}
         onExportYaml={() =>
           exportConfigToYaml(buildAnomalyPayload(formData), formData.name)
         }
@@ -166,17 +163,6 @@ export function AnomalyPanel({
           return null;
         }}
       />
-      {strategy === "sweep" && onSweep && (
-        <SweepCard
-          metrics={compareMetrics}
-          pathHints={SWEEP_PATH_HINTS}
-          modelOptions={anomalyModels(t)}
-          accent={accent}
-          disabled={busy}
-          onSweep={onSweep}
-          runSignal={runSignal}
-        />
-      )}
       {strategy === "replicates" && onReplicates && (
         <ReplicatesCard
           metrics={compareMetrics}

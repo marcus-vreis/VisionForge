@@ -293,16 +293,14 @@ class TestStopAtInTheSnapshot:
     def test_custom_sweeps_and_replicates_still_stop_between_units(
         self, client_and_routes: tuple, tmp_path: Path
     ) -> None:
-        """Even a task that owns its loop ends between trials and replicates."""
+        """Even a task that owns its loop ends between replicates; sweeps between trials."""
         client, _ = client_and_routes
         _register_custom("qtoy2", owns_loop=True)
+        _register_custom("qtoy2l1", owns_loop=False)
         config = _custom(tmp_path)
+        space = {"config": config, "search_space": {"training.epochs": [1, 2]}}
 
-        sweep = self._submitted_stop_at(
-            client,
-            "/api/custom/qtoy2/sweep",
-            {"config": config, "search_space": {"training.epochs": [1, 2]}},
-        )
+        sweep = self._submitted_stop_at(client, "/api/custom/qtoy2l1/sweep", space)
         replicates = self._submitted_stop_at(
             client,
             "/api/custom/qtoy2/replicates",
@@ -310,6 +308,11 @@ class TestStopAtInTheSnapshot:
         )
 
         assert (sweep, replicates) == ("trial", "replicate")
+        # A Level 2 task's metrics come from a split VisionForge cannot see, so
+        # its sweep is refused before queueing (ADR-131).
+        refused = client.post("/api/custom/qtoy2/sweep", json=space)
+        assert refused.status_code == 422
+        assert "validation" in refused.json()["detail"].lower()
 
     def test_the_active_job_carries_it_too(self, client_and_routes: tuple) -> None:
         client, routes_mod = client_and_routes
