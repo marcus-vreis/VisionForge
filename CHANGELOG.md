@@ -15,11 +15,26 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Added
 
+- **A saudação segue o pronome.** Ao dar o nome na entrada ou criar um perfil, você escolhe
+  "Bem-vindo (ele)", "Bem-vinda (ela)" ou "Boas-vindas (neutro)"; o chip do topo e a tela de
+  entrada passam a cumprimentar assim (em inglês, sempre "Welcome"). Perfis antigos usam a forma
+  neutra até a escolha, que se muda clicando no chip do nome ([ADR-126](docs/dev/DECISIONS.md)).
+- **"Quem é você?" a cada aba nova** num servidor com perfis, com o último perfil já marcado:
+  Enter ou um clique continua. Recarregar a mesma aba não pergunta de novo
+  ([ADR-126](docs/dev/DECISIONS.md)).
 - **Guia de instalação passo a passo por sistema**, em [`docs/INSTALL.md`](docs/INSTALL.md):
   Windows, Linux e macOS, com como instalar o próprio Python, o que fazer com o PyTorch em
   cada um e os erros mais comuns. No Mac, só Apple Silicon, com treino na CPU. Um workflow
   novo (`install-smoke.yml`) instala o pacote publicado no PyPI nos três sistemas e roda
   `doctor` e `selftest --quick` depois de cada release.
+
+### Fixed
+
+- **O nome dado na primeira tela não some mais quando surge outro perfil.** Ele ficava só no
+  navegador, e o perfil padrão (onde estão os runs desse primeiro uso) passava a aparecer como
+  "Padrão (sem perfil)". Agora o nome fica no servidor e o padrão aparece como "Marcus (padrão)";
+  quem já tinha um nome salvo o recupera na próxima visita. Nenhum run muda de pasta
+  ([ADR-126](docs/dev/DECISIONS.md)).
 
 ## [0.17.0] — 2026-10-19
 

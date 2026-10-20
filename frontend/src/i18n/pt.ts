@@ -108,7 +108,6 @@ export const pt = {
     guide: "guia",
     guideTitle: "Abrir os guias: tour da interface e primeiro treino",
     changeName: "Trocar nome",
-    welcome: "Bem-vindo,",
   },
   language: {
     label: "Idioma",
@@ -180,17 +179,21 @@ export const pt = {
     cpuSubtitle: "Treinar usando processador",
   },
   welcome: {
-    hello: "Bem-vindo",
-    helloName: (name: string) => `Bem-vindo, ${name}`,
     askName: "Qual é o seu nome?",
     placeholder: "digite aqui",
     nameLabel: "Seu nome",
     enter: "Entrar ↵",
+    // How the welcome and the header greet, by pronoun (ADR-126).
+    greet: { ele: "Bem-vindo", ela: "Bem-vinda", neutro: "Boas-vindas" },
+    pronounLabel: "Como você prefere a saudação?",
+    pronounNames: { ele: "Bem-vindo (ele)", ela: "Bem-vinda (ela)", neutro: "Boas-vindas (neutro)" },
   },
   // Perfis de um servidor compartilhado (ADR-114): uma pasta de saída por pessoa.
   profile: {
     who: "Quem é você?",
     defaultName: "Padrão (sem perfil)",
+    // O padrão com o nome dado na introdução (ADR-126).
+    defaultNamed: (name: string) => `${name} (padrão)`,
     defaultShort: "Padrão",
     listLabel: "Perfis",
     create: "criar novo perfil",

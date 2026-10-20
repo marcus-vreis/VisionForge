@@ -1,12 +1,16 @@
+import { PRONOUNS, type Pronoun } from "./profile";
+
 const KEY = "vf.welcome.name";
+// The pronoun the greeting used last, for the moment before the profile list loads.
+const PRONOUN_KEY = "vf.welcome.pronoun";
 
 /** Nome do pesquisador, guardado localmente.
  *
- * Fica no localStorage e não no backend de propósito: é preferência de
- * interface de quem está na frente da máquina, não estado do servidor — uma
- * instalação local compartilhada não deve reescrever o nome de outro usuário
- * a cada acesso. Leitura e escrita são tolerantes a falha (modo privado /
- * storage bloqueado): sem nome salvo, a introdução simplesmente roda de novo.
+ * É o nome que o header cumprimenta neste navegador. O nome do perfil em uso
+ * fica no servidor (o do padrão também, desde o ADR-126); esta cópia local é o
+ * que a introdução mostra antes de a lista de perfis chegar, e o que sobra se o
+ * servidor não responder. Leitura e escrita são tolerantes a falha (modo
+ * privado / storage bloqueado): sem nome salvo, a introdução roda de novo.
  */
 export function readUserName(): string {
   try {
@@ -36,4 +40,23 @@ export function clearUserName(): void {
  *  que é o que cabe no chip do header sem quebrar a linha. */
 export function normalizeUserName(raw: string): string {
   return raw.trim().replace(/\s+/g, " ").slice(0, 32);
+}
+
+/** O pronome guardado neste navegador, ou null (ADR-126). */
+export function readUserPronoun(): Pronoun | null {
+  try {
+    const raw = localStorage.getItem(PRONOUN_KEY);
+    return PRONOUNS.find((p) => p === raw) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveUserPronoun(pronoun: Pronoun | null | undefined): void {
+  try {
+    if (pronoun) localStorage.setItem(PRONOUN_KEY, pronoun);
+    else localStorage.removeItem(PRONOUN_KEY);
+  } catch {
+    /* storage indisponível — vale só para esta sessão */
+  }
 }

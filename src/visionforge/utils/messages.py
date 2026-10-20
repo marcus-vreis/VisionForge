@@ -657,6 +657,10 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "pt": "Não foi possível criar a pasta do perfil '{slug}': {reason}.",
         "en": "Could not create the folder of profile '{slug}': {reason}.",
     },
+    "profile.save_failed": {
+        "pt": "Não foi possível salvar o perfil '{slug}': {reason}.",
+        "en": "Could not save profile '{slug}': {reason}.",
+    },
     "profile.output_locked": {
         "pt": (
             "A pasta de saída é definida pelo perfil e não pode ser alterada "

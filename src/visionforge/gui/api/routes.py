@@ -111,6 +111,7 @@ from visionforge.gui.api.profiles import (
     default_profile,
     list_profiles,
     resolve_profile,
+    update_profile,
 )
 from visionforge.gui.api.run_queue import (
     NotStoppableError,
@@ -167,6 +168,7 @@ from visionforge.gui.api.schemas import (
     ProfileCreateRequest,
     ProfileInfo,
     ProfileListResponse,
+    ProfileUpdateRequest,
     QueuedJobInfo,
     QueueSnapshot,
     RegressionDatasetStatsRequest,
@@ -559,7 +561,10 @@ async def model_defaults(req: ModelDefaultsRequest) -> ModelDefaultsResponse:
 
 def _profile_info(profile: Profile) -> ProfileInfo:
     return ProfileInfo(
-        slug=profile.slug, name=profile.name, is_default=profile.is_default
+        slug=profile.slug,
+        name=profile.name,
+        is_default=profile.is_default,
+        pronoun=profile.pronoun,
     )
 
 
@@ -585,7 +590,7 @@ async def add_profile(req: ProfileCreateRequest) -> ProfileInfo:
             refuses to make the folders (permissions, full disk).
     """
     try:
-        profile = create_profile(req.name, _PROFILES_DIR, _MODELS_DIR)
+        profile = create_profile(req.name, _PROFILES_DIR, _MODELS_DIR, req.pronoun)
     except ProfileNameError as exc:
         raise HTTPException(422, str(exc)) from exc
     except ProfileExistsError as exc:
@@ -594,6 +599,31 @@ async def add_profile(req: ProfileCreateRequest) -> ProfileInfo:
         logger.warning("GUI: could not create profile for {!r}: {}", req.name, exc)
         raise HTTPException(500, str(exc)) from exc
     logger.info("GUI: created profile {} at {}", profile.slug, profile.root)
+    return _profile_info(profile)
+
+
+@router.put("/profiles/{slug}")
+async def edit_profile(slug: str, req: ProfileUpdateRequest) -> ProfileInfo:
+    """Change a profile's display name and/or pronoun, the default's too (ADR-126).
+
+    Raises:
+        HTTPException: 400 for an unsafe slug, 404 for one with no folder, 422
+            when the new name is empty once tidied, 500 when the OS refuses to
+            write the file.
+    """
+    try:
+        profile = update_profile(
+            slug, _PROFILES_DIR, _MODELS_DIR, name=req.name, pronoun=req.pronoun
+        )
+    except InvalidProfileError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except UnknownProfileError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ProfileNameError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    except ProfileCreateError as exc:
+        logger.warning("GUI: could not save profile {}: {}", slug, exc)
+        raise HTTPException(500, str(exc)) from exc
     return _profile_info(profile)
 
 

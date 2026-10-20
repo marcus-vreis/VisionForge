@@ -1,12 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 
-import { ApiError, createProfile, fetchProfiles } from "../api/client";
+import { ApiError, createProfile, fetchProfiles, updateProfile } from "../api/client";
 import { useT } from "../i18n/useT";
+import { greeting } from "../lib/greeting";
 import {
   DEFAULT_PROFILE_INFO,
+  PRONOUNS,
   canCreateProfile,
+  chosenThisSession,
   clearProfile,
+  defaultHasName,
   hasNamedProfiles,
+  legacyDefaultName,
+  markChosenThisSession,
   needsProfileChoice,
   normalizeProfileName,
   pickStoredProfile,
@@ -14,11 +20,14 @@ import {
   saveProfile,
   slugifyProfile,
   type ProfileInfo,
+  type Pronoun,
 } from "../lib/profile";
 import {
   normalizeUserName,
   readUserName,
+  readUserPronoun,
   saveUserName,
+  saveUserPronoun,
 } from "../lib/user-name";
 
 type Phase = "boot" | "hello" | "ask" | "who" | "create" | "exit" | "done";
@@ -45,9 +54,11 @@ interface WelcomeOverlayProps {
  * nunca pergunta de novo. Quem quiser trocar clica no chip do header.
  *
  * Num servidor com perfis além do padrão, "Quem é você?" lista os perfis e
- * ocupa o lugar do nome: escolher um perfil também diz quem você é. Uma
+ * ocupa o lugar do nome: escolher um perfil também diz quem você é. A pergunta
+ * volta a cada aba nova, com o último perfil já marcado (ADR-126). Uma
  * instalação sem perfis segue o fluxo de sempre, com um "criar perfil" opcional
- * sob o campo do nome.
+ * sob o campo do nome. O nome e o pronome dados aqui vão para o perfil em uso,
+ * o padrão inclusive, e a saudação segue o pronome.
  */
 export function WelcomeOverlay({
   onName,
@@ -59,7 +70,13 @@ export function WelcomeOverlay({
   const saved = forceAsk || forcePick ? "" : readUserName();
   const [phase, setPhase] = useState<Phase>("boot");
   const [name, setName] = useState(saved);
-  const [draft, setDraft] = useState("");
+  // "Trocar nome" abre o campo já com o nome atual, para corrigir em vez de redigitar.
+  const [draft, setDraft] = useState(() => (forceAsk ? readUserName() : ""));
+  // A saudação de entrada usa o pronome deste navegador: a lista ainda não chegou.
+  const [helloPronoun] = useState<Pronoun | null>(() => readUserPronoun());
+  const [pronoun, setPronoun] = useState<Pronoun>(() => readUserPronoun() ?? "neutro");
+  // O perfil marcado em "Quem é você?": o último escolhido, para um clique continuar.
+  const [lastSlug, setLastSlug] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const firstOptionRef = useRef<HTMLButtonElement>(null);
   const createRef = useRef<HTMLInputElement>(null);
@@ -138,16 +155,33 @@ export function WelcomeOverlay({
           : DEFAULT_PROFILE_INFO;
         return chosenRef.current;
       }
+      const legacy = legacyDefaultName(list, stored, readUserName());
+      if (legacy) void nameTheDefault(legacy);
       const chosen = pickStoredProfile(stored, list);
       if (chosen) {
         chosenRef.current = chosen;
         // O nome pode ter mudado no servidor desde que foi guardado.
         if (chosen.name !== stored?.name) saveProfile(chosen);
+        if (chosen.pronoun) setPronoun(chosen.pronoun);
       } else {
-        chosenRef.current = DEFAULT_PROFILE_INFO;
+        chosenRef.current =
+          listRef.current.find((p) => p.is_default) ?? DEFAULT_PROFILE_INFO;
         if (stored) clearProfile();
       }
+      setLastSlug(chosen?.slug ?? null);
       return chosen;
+    };
+
+    /** O nome que só este navegador sabia vira o do padrão no servidor (ADR-126). */
+    const nameTheDefault = async (legacy: string) => {
+      try {
+        const named = await updateProfile(DEFAULT_PROFILE_INFO.slug, { name: legacy });
+        listRef.current = listRef.current.map((p) => (p.is_default ? named : p));
+        if (aliveRef.current) setProfiles(listRef.current);
+        if (chosenRef.current.is_default) chosenRef.current = named;
+      } catch {
+        /* sem servidor, o rótulo segue "Padrão" até a próxima visita */
+      }
     };
 
     if (forcePick) {
@@ -165,7 +199,7 @@ export function WelcomeOverlay({
         () =>
           void load.then((list) => {
             if (!aliveRef.current) return;
-            if (needsProfileChoice(list, settle(list))) {
+            if (needsProfileChoice(list, settle(list), chosenThisSession())) {
               setPhase("who");
               return;
             }
@@ -179,7 +213,9 @@ export function WelcomeOverlay({
         () =>
           void load.then((list) => {
             if (!aliveRef.current) return;
-            setPhase(needsProfileChoice(list, settle(list)) ? "who" : "ask");
+            const asks = needsProfileChoice(list, settle(list), chosenThisSession());
+            // "Trocar nome" é sobre o perfil em uso: vai direto ao campo.
+            setPhase(asks && !forceAsk ? "who" : "ask");
           }),
       );
     }
@@ -206,7 +242,7 @@ export function WelcomeOverlay({
     return () => clearTimeout(id);
   }, [phase]);
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     const value = normalizeUserName(draft);
     if (!value) {
@@ -214,20 +250,37 @@ export function WelcomeOverlay({
       return;
     }
     saveUserName(value);
+    saveUserPronoun(pronoun);
+    markChosenThisSession();
+    // O nome e o pronome são do perfil em uso, o padrão inclusive (ADR-126).
+    if (profilesOk) {
+      try {
+        const saved = await updateProfile(chosenRef.current.slug, { name: value, pronoun });
+        chosenRef.current = saved;
+        listRef.current = listRef.current.map((p) => (p.slug === saved.slug ? saved : p));
+      } catch {
+        /* o nome fica neste navegador; o servidor aprende na próxima visita */
+      }
+    }
     finish(value);
   };
 
   const choose = (profile: ProfileInfo) => {
     chosenRef.current = profile;
     saveProfile({ slug: profile.slug, name: profile.name });
-    if (!profile.is_default) {
+    markChosenThisSession();
+    if (profile.pronoun) {
+      saveUserPronoun(profile.pronoun);
+      setPronoun(profile.pronoun);
+    }
+    if (!profile.is_default || defaultHasName(profile)) {
       // Escolher um perfil já diz quem você é: uma pergunta só, não duas.
       const own = normalizeUserName(profile.name);
       saveUserName(own);
       finish(own);
       return;
     }
-    // "Sem perfil" não diz nome nenhum; quem já tem um salvo o mantém.
+    // Um padrão sem nome ainda: quem já tem um salvo o mantém.
     const kept = readUserName();
     if (kept) finish(kept);
     else setPhase("ask");
@@ -251,7 +304,7 @@ export function WelcomeOverlay({
     setCreating(true);
     setCreateError(null);
     try {
-      const created = await createProfile(display);
+      const created = await createProfile(display, pronoun);
       listRef.current = [...listRef.current, created];
       choose(created);
     } catch (err) {
@@ -386,7 +439,7 @@ export function WelcomeOverlay({
             color: "var(--vf-text)",
           }}
         >
-          {returning ? t.welcome.helloName(name) : t.welcome.hello}
+          {returning ? greeting(t, helloPronoun, name) : greeting(t, helloPronoun)}
         </div>
       </div>
 
@@ -394,7 +447,7 @@ export function WelcomeOverlay({
         <div style={titleStyle}>{t.welcome.askName}</div>
 
         <form
-          onSubmit={submit}
+          onSubmit={(e) => void submit(e)}
           style={{
             marginTop: 38,
             display: "flex",
@@ -448,6 +501,8 @@ export function WelcomeOverlay({
             />
           </div>
 
+          <PronounPicker value={pronoun} onChange={setPronoun} />
+
           <button
             type="submit"
             style={{
@@ -498,29 +553,42 @@ export function WelcomeOverlay({
             overflowY: "auto",
           }}
         >
-          {profiles.map((profile, index) => (
-            <button
-              key={profile.slug}
-              ref={index === 0 ? firstOptionRef : undefined}
-              type="button"
-              className="vf-profile-option"
-              onClick={() => choose(profile)}
-              style={{
-                padding: "13px 18px",
-                background: "rgb(var(--lt-ink, 255 255 255) / 0.025)",
-                border: "1px solid var(--vf-panel-stroke)",
-                borderRadius: 12,
-                color: "var(--vf-text)",
-                fontFamily: "var(--font-display)",
-                fontSize: 19,
-                letterSpacing: "-0.01em",
-                textAlign: "left",
-                cursor: "pointer",
-              }}
-            >
-              {profile.is_default ? t.profile.defaultName : profile.name}
-            </button>
-          ))}
+          {profiles.map((profile, index) => {
+            const isLast = lastSlug === null ? index === 0 : profile.slug === lastSlug;
+            return (
+              <button
+                key={profile.slug}
+                ref={isLast ? firstOptionRef : undefined}
+                type="button"
+                className="vf-profile-option"
+                aria-current={profile.slug === lastSlug ? "true" : undefined}
+                onClick={() => choose(profile)}
+                style={{
+                  padding: "13px 18px",
+                  background:
+                    profile.slug === lastSlug
+                      ? "var(--accent-soft)"
+                      : "rgb(var(--lt-ink, 255 255 255) / 0.025)",
+                  border: `1px solid ${
+                    profile.slug === lastSlug ? "var(--accent-vf)" : "var(--vf-panel-stroke)"
+                  }`,
+                  borderRadius: 12,
+                  color: "var(--vf-text)",
+                  fontFamily: "var(--font-display)",
+                  fontSize: 19,
+                  letterSpacing: "-0.01em",
+                  textAlign: "left",
+                  cursor: "pointer",
+                }}
+              >
+                {profile.is_default
+                  ? defaultHasName(profile)
+                    ? t.profile.defaultNamed(profile.name)
+                    : t.profile.defaultName
+                  : profile.name}
+              </button>
+            );
+          })}
         </div>
 
         <button
@@ -633,6 +701,8 @@ export function WelcomeOverlay({
             </div>
           </div>
 
+          <PronounPicker value={pronoun} onChange={setPronoun} />
+
           <button
             type="submit"
             disabled={!canCreate}
@@ -664,6 +734,62 @@ export function WelcomeOverlay({
         >
           {t.profile.back}
         </button>
+      </div>
+    </div>
+  );
+}
+
+/** "Bem-vindo", "Bem-vinda" ou "Boas-vindas": como a saudação trata a pessoa (ADR-126). */
+function PronounPicker({
+  value,
+  onChange,
+}: {
+  value: Pronoun;
+  onChange: (next: Pronoun) => void;
+}) {
+  const t = useT();
+  return (
+    <div
+      role="radiogroup"
+      aria-label={t.welcome.pronounLabel}
+      style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}
+    >
+      <div
+        style={{
+          fontFamily: "var(--font-mono)",
+          fontSize: 11,
+          letterSpacing: "0.14em",
+          textTransform: "uppercase",
+          color: "var(--vf-text-muted)",
+        }}
+      >
+        {t.welcome.pronounLabel}
+      </div>
+      <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 8 }}>
+        {PRONOUNS.map((p) => {
+          const on = p === value;
+          return (
+            <button
+              key={p}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              onClick={() => onChange(p)}
+              style={{
+                padding: "8px 14px",
+                background: on ? "var(--accent-soft)" : "transparent",
+                border: `1px solid ${on ? "var(--accent-vf)" : "var(--vf-panel-stroke)"}`,
+                borderRadius: 10,
+                color: on ? "var(--vf-text)" : "var(--vf-text-dim)",
+                fontFamily: "var(--font-mono)",
+                fontSize: 12,
+                cursor: "pointer",
+              }}
+            >
+              {t.welcome.pronounNames[p]}
+            </button>
+          );
+        })}
       </div>
     </div>
   );

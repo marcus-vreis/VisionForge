@@ -107,7 +107,6 @@ export const en: Dict = {
     guide: "guide",
     guideTitle: "Open the guides: interface tour and first training",
     changeName: "Change name",
-    welcome: "Welcome,",
   },
   language: {
     label: "Language",
@@ -170,17 +169,20 @@ export const en: Dict = {
     cpuSubtitle: "Train on the CPU",
   },
   welcome: {
-    hello: "Welcome",
-    helloName: (name: string) => `Welcome, ${name}`,
     askName: "What's your name?",
     placeholder: "type here",
     nameLabel: "Your name",
     enter: "Enter ↵",
+    // How the welcome and the header greet, by pronoun (ADR-126).
+    greet: { ele: "Welcome", ela: "Welcome", neutro: "Welcome" },
+    pronounLabel: "Your pronouns",
+    pronounNames: { ele: "he/him", ela: "she/her", neutro: "they/them" },
   },
   // Profiles on a shared server (ADR-114): one output folder per person.
   profile: {
     who: "Who are you?",
     defaultName: "Default (no profile)",
+    defaultNamed: (name: string) => `${name} (default)`,
     defaultShort: "Default",
     listLabel: "Profiles",
     create: "create new profile",

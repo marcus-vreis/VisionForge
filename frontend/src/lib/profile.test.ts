@@ -4,10 +4,15 @@ import {
   DEFAULT_PROFILE_INFO,
   activeProfileSlug,
   canCreateProfile,
+  chosenThisSession,
   clearProfile,
+  defaultHasName,
   hasNamedProfiles,
   isProfileStorageKey,
   isValidProfileSlug,
+  legacyDefaultName,
+  markChosenThisSession,
+  profileLabel,
   jobProfileLabel,
   needsProfileChoice,
   normalizeProfileName,
@@ -175,12 +180,16 @@ describe("who is asked", () => {
     expect(pickStoredProfile(null, listed)).toBeNull();
   });
 
-  it("asks only where there are profiles to choose from and none was chosen", () => {
-    expect(needsProfileChoice(listed, null)).toBe(true);
-    expect(needsProfileChoice(listed, ana)).toBe(false);
+  it("asks where there are profiles to choose from, once per browser session", () => {
+    expect(needsProfileChoice(listed, null, false)).toBe(true);
+    // A stored choice no longer skips the question in a new session (ADR-126)...
+    expect(needsProfileChoice(listed, ana, false)).toBe(true);
+    // ...but answering it once lasts until the tab is closed.
+    expect(needsProfileChoice(listed, ana, true)).toBe(false);
+    expect(needsProfileChoice(listed, null, true)).toBe(true);
     // A one-person install never sees the question.
-    expect(needsProfileChoice([DEFAULT_PROFILE_INFO], null)).toBe(false);
-    expect(needsProfileChoice([], null)).toBe(false);
+    expect(needsProfileChoice([DEFAULT_PROFILE_INFO], null, false)).toBe(false);
+    expect(needsProfileChoice([], null, false)).toBe(false);
   });
 
   it("tells a server with profiles from one without", () => {
@@ -200,6 +209,8 @@ describe("the header", () => {
   it("keeps both when the names differ, for the default profile, or with no profile", () => {
     expect(profileIsTheName(ana, "Marcus")).toBe(false);
     expect(profileIsTheName(DEFAULT_PROFILE_INFO, "default")).toBe(false);
+    // The default named in the welcome (ADR-126) is the name, like any profile.
+    expect(profileIsTheName({ ...DEFAULT_PROFILE_INFO, name: "Marcus" }, "Marcus")).toBe(true);
     expect(profileIsTheName(null, "Ana")).toBe(false);
     expect(profileIsTheName(ana, "")).toBe(false);
   });
@@ -275,5 +286,63 @@ describe("the queue", () => {
     );
     expect(jobProfileLabel({}, "Padrão")).toBe("Padrão");
     expect(jobProfileLabel({ profile: "ana" }, "Padrão")).toBe("ana");
+  });
+});
+
+describe("the default profile's name (ADR-126)", () => {
+  const marcus = { ...DEFAULT_PROFILE_INFO, name: "Marcus" };
+
+  it("labels the default by the welcome's name once it has one", () => {
+    expect(profileLabel(marcus, "Padrão")).toBe("Marcus");
+    expect(profileLabel(DEFAULT_PROFILE_INFO, "Padrão")).toBe("Padrão");
+    expect(profileLabel(ana, "Padrão")).toBe("Ana");
+    expect(defaultHasName(marcus)).toBe(true);
+    expect(defaultHasName(DEFAULT_PROFILE_INFO)).toBe(false);
+    expect(defaultHasName(ana)).toBe(false);
+  });
+
+  it("hands a name kept only in the browser to an unnamed default, once", () => {
+    // The browser greets "Marcus" and is on the default: the server learns it.
+    expect(legacyDefaultName([DEFAULT_PROFILE_INFO, ana], null, "Marcus")).toBe("Marcus");
+    expect(
+      legacyDefaultName([DEFAULT_PROFILE_INFO], { slug: "default", name: "" }, "Marcus"),
+    ).toBe("Marcus");
+    // Already named, no name to give, or this browser is on another profile.
+    expect(legacyDefaultName([marcus], null, "Marcus")).toBeNull();
+    expect(legacyDefaultName([DEFAULT_PROFILE_INFO], null, "")).toBeNull();
+    expect(legacyDefaultName([DEFAULT_PROFILE_INFO, ana], { slug: "ana", name: "Ana" }, "Ana")).toBeNull();
+    // A list that could not be read says nothing about the default.
+    expect(legacyDefaultName([], null, "Marcus")).toBeNull();
+  });
+
+  it("remembers the session's answer apart from the stored profile", () => {
+    const session: Record<string, string> = {};
+    vi.stubGlobal("sessionStorage", {
+      getItem: (k: string) => session[k] ?? null,
+      setItem: (k: string, v: string) => {
+        session[k] = v;
+      },
+      removeItem: (k: string) => {
+        delete session[k];
+      },
+    });
+    expect(chosenThisSession()).toBe(false);
+    markChosenThisSession();
+    expect(chosenThisSession()).toBe(true);
+    vi.unstubAllGlobals();
+  });
+
+  it("treats a blocked session storage as not asked yet", () => {
+    vi.stubGlobal("sessionStorage", {
+      getItem: () => {
+        throw new Error("blocked");
+      },
+      setItem: () => {
+        throw new Error("blocked");
+      },
+    });
+    expect(chosenThisSession()).toBe(false);
+    expect(() => markChosenThisSession()).not.toThrow();
+    vi.unstubAllGlobals();
   });
 });

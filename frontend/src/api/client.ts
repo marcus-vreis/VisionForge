@@ -11,6 +11,7 @@ import {
   activeProfileSlug,
   profileHeaders,
   type ProfileInfo,
+  type Pronoun,
 } from "../lib/profile";
 import type { JsonSchema } from "../types/schema";
 import type {
@@ -371,11 +372,23 @@ export async function fetchProfiles(): Promise<ProfileInfo[]> {
 
 /** Create a profile folder from a display name. 409 when its folder exists and
  *  422 when nothing usable is left of the name. */
-export async function createProfile(name: string): Promise<ProfileInfo> {
+export async function createProfile(name: string, pronoun?: Pronoun): Promise<ProfileInfo> {
   return request<ProfileInfo>("/profiles", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name }),
+    body: JSON.stringify({ name, pronoun }),
+  });
+}
+
+/** Novo nome e/ou pronome de um perfil, o padrão inclusive (ADR-126). */
+export async function updateProfile(
+  slug: string,
+  change: { name?: string; pronoun?: Pronoun },
+): Promise<ProfileInfo> {
+  return request<ProfileInfo>(`/profiles/${encodeURIComponent(slug)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(change),
   });
 }
 

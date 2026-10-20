@@ -2,8 +2,10 @@
 
 A profile IS a folder. ``outputs/profiles/<slug>/`` holds the usual output
 sub-folders (``models``, ``graphics``, ``logs``, ``reports``) and a
-``profile.json`` with the display name. Listing the profiles lists those
-folders, creating one creates the folder; there is no user database.
+``profile.json`` with the display name and the pronoun the greeting uses.
+Listing the profiles lists those folders, creating one creates the folder;
+there is no user database. The default profile's name and pronoun live in
+``outputs/profiles/default.json`` (ADR-126), which no slug can name.
 
 The *default* profile is the folder layout that existed before profiles did
 (``outputs/models`` and its siblings). It is what a request without the
@@ -31,13 +33,19 @@ import unicodedata
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, TypeVar
+from typing import Any, Literal, TypeVar, cast, get_args
 
 from pydantic import BaseModel
 
 from visionforge.utils.messages import tr
 
 DEFAULT_SLUG = "default"
+# Where the default profile keeps its name and pronoun (ADR-126). The dot keeps
+# it out of the listing: no slug can contain one.
+DEFAULT_IDENTITY_FILE = "default.json"
+# How the welcome addresses someone: "Bem-vindo", "Bem-vinda", "Boas-vindas".
+Pronoun = Literal["ele", "ela", "neutro"]
+PRONOUNS: tuple[str, ...] = get_args(Pronoun)
 PROFILE_HEADER = "X-VF-Profile"
 MAX_SLUG_LEN = 40
 MAX_NAME_LEN = 60
@@ -106,6 +114,7 @@ class Profile:
     name: str
     models_dir: Path
     root: Path | None = None
+    pronoun: Pronoun | None = None
 
     @property
     def is_default(self) -> bool:
@@ -141,9 +150,19 @@ class Profile:
         return config.model_copy(update={"output": scoped})
 
 
-def default_profile(models_dir: Path) -> Profile:
-    """The profile that maps to the pre-profile layout (``outputs/models``)."""
-    return Profile(slug=DEFAULT_SLUG, name=DEFAULT_SLUG, models_dir=models_dir)
+def default_profile(models_dir: Path, profiles_dir: Path | None = None) -> Profile:
+    """The profile that maps to the pre-profile layout (``outputs/models``).
+
+    With ``profiles_dir`` it carries the name and pronoun saved for it there;
+    without, or before any was saved, it is named ``default``.
+    """
+    meta = _read_meta(profiles_dir / DEFAULT_IDENTITY_FILE) if profiles_dir else {}
+    return Profile(
+        slug=DEFAULT_SLUG,
+        name=_meta_name(meta) or DEFAULT_SLUG,
+        models_dir=models_dir,
+        pronoun=_meta_pronoun(meta),
+    )
 
 
 def normalize_display_name(raw: str) -> str:
@@ -199,22 +218,38 @@ def _profile_folder(slug: str, profiles_dir: Path) -> Path | None:
     return folder
 
 
-def _read_name(folder: Path, slug: str) -> str:
+def _read_meta(path: Path) -> dict[str, Any]:
+    """A profile's JSON, or ``{}`` when it is missing or unreadable."""
     try:
-        data = json.loads((folder / "profile.json").read_text(encoding="utf-8"))
-        name = normalize_display_name(str(data["name"]))
-    except (OSError, ValueError, KeyError, TypeError):
-        return slug
-    return name or slug
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _meta_name(meta: dict[str, Any]) -> str:
+    raw = meta.get("name")
+    return normalize_display_name(raw) if isinstance(raw, str) else ""
+
+
+def _meta_pronoun(meta: dict[str, Any]) -> Pronoun | None:
+    raw = meta.get("pronoun")
+    return cast(Pronoun, raw) if raw in PRONOUNS else None
+
+
+def _read_name(folder: Path, slug: str) -> str:
+    return _meta_name(_read_meta(folder / "profile.json")) or slug
 
 
 def _build(slug: str, folder: Path, profiles_dir: Path) -> Profile:
     relative_root = profiles_dir / slug
+    meta = _read_meta(folder / "profile.json")
     return Profile(
         slug=slug,
-        name=_read_name(folder, slug),
+        name=_meta_name(meta) or slug,
         models_dir=relative_root / "models",
         root=relative_root,
+        pronoun=_meta_pronoun(meta),
     )
 
 
@@ -229,7 +264,7 @@ def resolve_profile(
     """
     slug = (header or "").strip()
     if not slug or slug == DEFAULT_SLUG:
-        return default_profile(default_models_dir)
+        return default_profile(default_models_dir, profiles_dir)
     if not is_valid_slug(slug):
         raise InvalidProfileError(
             tr("profile.invalid", slug=slug[:60], max_len=MAX_SLUG_LEN)
@@ -254,10 +289,15 @@ def list_profiles(profiles_dir: Path, default_models_dir: Path) -> list[Profile]
             if folder is not None:
                 found.append(_build(entry.name, folder, profiles_dir))
     found.sort(key=lambda p: (p.name.casefold(), p.slug))
-    return [default_profile(default_models_dir), *found]
+    return [default_profile(default_models_dir, profiles_dir), *found]
 
 
-def create_profile(name: str, profiles_dir: Path, default_models_dir: Path) -> Profile:
+def create_profile(
+    name: str,
+    profiles_dir: Path,
+    default_models_dir: Path,
+    pronoun: Pronoun | None = None,
+) -> Profile:
     """Create ``profiles_dir/<slug>`` with the output sub-folders.
 
     Raises:
@@ -295,6 +335,7 @@ def create_profile(name: str, profiles_dir: Path, default_models_dir: Path) -> P
                     "name": display,
                     "slug": slug,
                     "created_at": datetime.now().isoformat(timespec="seconds"),
+                    **({"pronoun": pronoun} if pronoun in PRONOUNS else {}),
                 },
                 ensure_ascii=False,
                 indent=2,
@@ -311,12 +352,63 @@ def create_profile(name: str, profiles_dir: Path, default_models_dir: Path) -> P
     return _build(slug, folder, profiles_dir)
 
 
+def update_profile(
+    slug: str,
+    profiles_dir: Path,
+    default_models_dir: Path,
+    *,
+    name: str | None = None,
+    pronoun: Pronoun | None = None,
+) -> Profile:
+    """Change a profile's display name and/or pronoun; its slug never changes.
+
+    The default profile's go to ``default.json`` (ADR-126). Other keys already
+    in the file (``created_at``) are kept.
+
+    Raises:
+        InvalidProfileError, UnknownProfileError: as ``resolve_profile``.
+        ProfileNameError: the new name is empty once tidied.
+        ProfileCreateError: the OS refused to write the file.
+    """
+    profile = resolve_profile(slug, profiles_dir, default_models_dir)
+    path = (
+        profiles_dir / DEFAULT_IDENTITY_FILE
+        if profile.is_default
+        else profiles_dir / profile.slug / "profile.json"
+    )
+    meta = _read_meta(path)
+    if name is not None:
+        display = normalize_display_name(name)
+        if not display:
+            raise ProfileNameError(tr("profile.name_empty"))
+        meta["name"] = display
+    if pronoun in PRONOUNS:
+        meta["pronoun"] = pronoun
+    if not profile.is_default:
+        meta.setdefault("name", profile.name)
+        meta["slug"] = profile.slug
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+    except OSError as exc:
+        reason = exc.strerror or type(exc).__name__
+        raise ProfileCreateError(
+            tr("profile.save_failed", slug=profile.slug, reason=reason)
+        ) from exc
+    return resolve_profile(slug, profiles_dir, default_models_dir)
+
+
 __all__ = [
+    "DEFAULT_IDENTITY_FILE",
     "DEFAULT_SLUG",
     "MAX_NAME_LEN",
     "MAX_SLUG_LEN",
     "OUTPUT_SUBDIRS",
+    "PRONOUNS",
     "PROFILE_HEADER",
+    "Pronoun",
     "InvalidProfileError",
     "Profile",
     "ProfileCreateError",
@@ -331,4 +423,5 @@ __all__ = [
     "normalize_display_name",
     "resolve_profile",
     "slugify",
+    "update_profile",
 ]

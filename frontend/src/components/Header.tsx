@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { fetchSystemInfo } from "../api/client";
 import { useI18n } from "../i18n/useT";
+import { greeting } from "../lib/greeting";
 import type { GuideId } from "../lib/guides";
+import type { Pronoun } from "../lib/profile";
 import { GuideMenu } from "./GuideMenu";
 import { ThemeSwitch } from "./ThemeSwitch";
 import { UpdateNotice } from "./UpdateNotice";
@@ -56,12 +58,15 @@ function Logo() {
 /** Top header with logo, brand name, and clock. Device selection lives only in the BottomBar. */
 export function Header({
   userName,
+  pronoun,
   onChangeName,
   onGuide,
   profileName,
   onChangeProfile,
 }: {
   userName?: string;
+  /** Como a saudação trata quem usa (ADR-126); sem ele, a forma neutra. */
+  pronoun?: Pronoun | null;
   onChangeName?: () => void;
   /** Abre um guia escolhido no menu (ADR-104, ADR-115). */
   onGuide?: (id: GuideId) => void;
@@ -272,7 +277,7 @@ export function Header({
                 color: "var(--vf-text-dim)",
               }}
             >
-              {t.header.welcome}
+              {`${greeting(t, pronoun)},`}
             </span>
             {/* Sem text-transform: o nome aparece exatamente como foi digitado. */}
             <span

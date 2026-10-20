@@ -32,11 +32,12 @@ import {
   sampleRegressionForm,
   sampleSegmentationForm,
 } from "./lib/guides/sample-forms";
-import { readUserName } from "./lib/user-name";
+import { readUserName, readUserPronoun } from "./lib/user-name";
 import {
   isProfileStorageKey,
   profileAfterStorageChange,
   profileIsTheName,
+  profileLabel,
   readProfile,
   type ProfileInfo,
 } from "./lib/profile";
@@ -643,14 +644,11 @@ export default function App() {
         userName={
           sharedServer && profileIsTheName(profile, userName) ? undefined : userName
         }
+        pronoun={profile?.pronoun ?? readUserPronoun()}
         onChangeName={() => setAskName(true)}
         onGuide={setTour}
         profileName={
-          sharedServer && profile
-            ? profile.is_default
-              ? t.profile.defaultShort
-              : profile.name
-            : undefined
+          sharedServer && profile ? profileLabel(profile, t.profile.defaultShort) : undefined
         }
         onChangeProfile={() => setPickProfile(true)}
       />

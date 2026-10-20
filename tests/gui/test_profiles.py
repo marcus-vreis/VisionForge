@@ -465,7 +465,7 @@ class TestProfilesApi:
         body = client.get("/api/profiles").json()
 
         assert body["profiles"] == [
-            {"slug": "default", "name": "default", "is_default": True}
+            {"slug": "default", "name": "default", "is_default": True, "pronoun": None}
         ]
 
     def test_creating_then_listing(self, client: TestClient, tmp_path: Path) -> None:
@@ -475,6 +475,7 @@ class TestProfilesApi:
             "slug": "joao-silva",
             "name": "João Silva",
             "is_default": False,
+            "pronoun": None,
         }
         assert (tmp_path / "outputs" / "profiles" / "joao-silva" / "models").is_dir()
         slugs = [p["slug"] for p in client.get("/api/profiles").json()["profiles"]]
@@ -510,6 +511,95 @@ class TestProfilesApi:
         self, client: TestClient, body: dict[str, Any]
     ) -> None:
         assert client.post("/api/profiles", json=body).status_code == 422
+
+
+class TestIdentity:
+    """The default's name and every profile's pronoun live on the server (ADR-126)."""
+
+    def test_the_default_takes_the_welcome_name_and_keeps_its_folders(
+        self, client: TestClient, tmp_path: Path
+    ) -> None:
+        resp = client.put(
+            "/api/profiles/default", json={"name": "  Marcus  ", "pronoun": "ele"}
+        )
+
+        assert resp.status_code == 200, resp.text
+        assert resp.json() == {
+            "slug": "default",
+            "name": "Marcus",
+            "is_default": True,
+            "pronoun": "ele",
+        }
+        _make_profile(client, "Luana")
+        listed = client.get("/api/profiles").json()["profiles"]
+        assert [(p["slug"], p["name"]) for p in listed] == [
+            ("default", "Marcus"),
+            ("luana", "Luana"),
+        ]
+        # Not a profile folder, and the default still writes where it always did.
+        assert (tmp_path / "outputs" / "profiles" / "default.json").is_file()
+        assert not (tmp_path / "outputs" / "profiles" / "default").exists()
+
+    def test_a_profile_is_created_with_its_pronoun(self, client: TestClient) -> None:
+        created = client.post("/api/profiles", json={"name": "Luana", "pronoun": "ela"})
+
+        assert created.json()["pronoun"] == "ela"
+        assert client.get("/api/profiles").json()["profiles"][1]["pronoun"] == "ela"
+
+    def test_editing_a_profile_keeps_its_slug_and_creation_date(
+        self, client: TestClient, tmp_path: Path
+    ) -> None:
+        _make_profile(client, "Ana")
+        meta = tmp_path / "outputs" / "profiles" / "ana" / "profile.json"
+        created_at = json.loads(meta.read_text(encoding="utf-8"))["created_at"]
+
+        resp = client.put(
+            "/api/profiles/ana", json={"name": "Ana Lima", "pronoun": "neutro"}
+        )
+
+        assert resp.json() == {
+            "slug": "ana",
+            "name": "Ana Lima",
+            "is_default": False,
+            "pronoun": "neutro",
+        }
+        data = json.loads(meta.read_text(encoding="utf-8"))
+        assert data["created_at"] == created_at
+        assert data["slug"] == "ana"
+
+    def test_only_the_pronoun_can_change(self, client: TestClient) -> None:
+        _make_profile(client, "Ana")
+
+        resp = client.put("/api/profiles/ana", json={"pronoun": "ela"})
+
+        assert resp.json()["name"] == "Ana"
+        assert resp.json()["pronoun"] == "ela"
+
+    @pytest.mark.parametrize(
+        ("slug", "body", "status"),
+        [
+            ("nobody", {"pronoun": "ela"}, 404),
+            ("Ana", {"pronoun": "ela"}, 400),
+            ("default", {"pronoun": "they"}, 422),
+            ("default", {"name": "!!!"}, 200),
+            ("default", {"name": ""}, 422),
+        ],
+    )
+    def test_what_an_edit_refuses(
+        self, client: TestClient, slug: str, body: dict[str, Any], status: int
+    ) -> None:
+        assert client.put(f"/api/profiles/{slug}", json=body).status_code == status
+
+    def test_a_broken_default_json_reads_as_unnamed(
+        self, client: TestClient, tmp_path: Path
+    ) -> None:
+        folder = tmp_path / "outputs" / "profiles"
+        folder.mkdir(parents=True)
+        (folder / "default.json").write_text("{not json", encoding="utf-8")
+
+        default = client.get("/api/profiles").json()["profiles"][0]
+
+        assert (default["name"], default["pronoun"]) == ("default", None)
 
 
 class TestHeaderValidation:

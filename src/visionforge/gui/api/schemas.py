@@ -7,6 +7,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from visionforge.gui.api.profiles import Pronoun
+
 
 class RunStatus(BaseModel):
     """Current state of the experiment runner."""
@@ -55,6 +57,8 @@ class ProfileInfo(BaseModel):
     slug: str
     name: str
     is_default: bool = False
+    # "ele" / "ela" / "neutro": how the welcome greets (ADR-126); None when unset.
+    pronoun: Pronoun | None = None
 
 
 class ProfileListResponse(BaseModel):
@@ -67,6 +71,14 @@ class ProfileCreateRequest(BaseModel):
     """Create a profile from the name the researcher typed."""
 
     name: str = Field(min_length=1, max_length=60)
+    pronoun: Pronoun | None = None
+
+
+class ProfileUpdateRequest(BaseModel):
+    """A new display name and/or pronoun for a profile (ADR-126)."""
+
+    name: str | None = Field(default=None, min_length=1, max_length=60)
+    pronoun: Pronoun | None = None
 
 
 class QueueSnapshot(BaseModel):

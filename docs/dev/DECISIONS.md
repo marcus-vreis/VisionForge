@@ -5653,3 +5653,58 @@ detail, the leaderboard and the run comparison pick their task colors the same w
 in its drawing in either theme. A new inline color in a
 component should be a token or go through the codemod; a literal written for the dark
 background will look wrong in the light theme.
+
+## ADR-126 — The default profile keeps the welcome's name, the picker asks each session, and the greeting follows a pronoun
+
+**Date:** 2026-10-20
+**Status:** Accepted
+**Amends:** ADR-114 (profiles), ADR-090 (the first-run welcome)
+
+**Context:** the user tested the profiles. On a one-person install the welcome
+asks a name ("Marcus"), which ADR-090 keeps in the browser only; the runs go to
+the default profile (`outputs/models`). After creating a profile "Luana", the
+picker listed "Padrão (sem perfil)" and "Luana": "Marcus" had vanished, though
+his runs were all there under the default. The user read it as a lost profile.
+They also asked to be asked who they are on each visit rather than being dropped
+into the last profile, and to choose how the welcome addresses them: Portuguese
+"Bem-vindo" is masculine.
+
+**Decision:**
+
+- **The default profile has a name and a pronoun on the server**, in
+  `outputs/profiles/default.json` (not a valid slug, so the listing never takes
+  it for a profile folder). `GET /api/profiles` reports it as the default's
+  `name` ("default" while none is set), and the picker shows "Marcus (padrão)".
+  The welcome's name prompt writes it; a browser that already holds a name from
+  before this ADR and is on the default writes it once on its next visit, so the
+  existing "Marcus" comes back without being asked again. Nothing moves on disk.
+- **`PUT /api/profiles/{slug}`** changes a profile's display name and pronoun
+  (`default` included); the slug, and so the folder, never changes. The header's
+  name chip, which already reopened the name prompt, now edits the current
+  profile through it.
+- **A pronoun per profile**: `ele`, `ela` or `neutro`, chosen next to the name
+  when it is first given (the name prompt and "criar perfil") and stored in
+  `profile.json` / `default.json`. Portuguese greets "Bem-vindo", "Bem-vinda" or
+  "Boas-vindas"; English says "Welcome" for all three. A profile without one
+  (made before this ADR) greets in the neutral form until it is set.
+- **"Quem é você?" once per browser session** on a server with named profiles,
+  not only when the stored choice is gone: the last profile is preselected, so
+  one click or Enter continues. The answer lives in `sessionStorage`, so a
+  reload in the same tab does not ask again and a new tab or window does.
+
+**Alternatives considered:**
+- *Make the welcome create a real profile.* "Marcus" would be a folder of its
+  own and his earlier runs, under `outputs/models`, would sit in a different
+  profile from the new ones.
+- *Keep the name only in the browser and label the default with it.* Another
+  browser, or the same person on another machine, would still see
+  "Padrão (sem perfil)".
+- *Neutral greeting for everyone, no question.* Simpler, but the user asked for
+  the choice.
+- *Ask on every page load.* A reload would interrupt work for no new answer.
+
+**Consequences:** on a shared server the default profile's name is whoever named
+it, which matches ADR-114: profiles organise, they do not protect. The greeting
+chip and the welcome take the pronoun from the profile in use; the stored name
+in the browser (`vf.welcome.name`) remains the fallback when the server cannot
+be reached.

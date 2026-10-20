@@ -15,6 +15,8 @@ export const DEFAULT_PROFILE = "default";
 
 const SLUG_KEY = "vf.profile";
 const NAME_KEY = "vf.profile.name";
+// Per tab: answering "Quem é você?" once lasts until the tab closes (ADR-126).
+const SESSION_KEY = "vf.profile.session";
 
 /** Mesmos limites do servidor (gui/api/profiles.py). */
 export const MAX_SLUG_LENGTH = 40;
@@ -25,11 +27,17 @@ const WINDOWS_DEVICE = /^(?:con|prn|aux|nul|com[0-9]|lpt[0-9])$/;
 
 const SLUG_PATTERN = new RegExp(`^[a-z0-9][a-z0-9_-]{0,${MAX_SLUG_LENGTH - 1}}$`);
 
+/** Como a saudação trata a pessoa: "Bem-vindo", "Bem-vinda", "Boas-vindas" (ADR-126). */
+export type Pronoun = "ele" | "ela" | "neutro";
+export const PRONOUNS: readonly Pronoun[] = ["ele", "ela", "neutro"];
+
 /** Um perfil como `GET /api/profiles` o devolve. */
 export interface ProfileInfo {
   slug: string;
+  /** No padrão, o nome dado na introdução, ou "default" enquanto não houver. */
   name: string;
   is_default: boolean;
+  pronoun?: Pronoun | null;
 }
 
 /** O que o navegador lembra do perfil escolhido. */
@@ -180,14 +188,62 @@ export function pickStoredProfile(
 
 /** Se a introdução precisa perguntar "quem é você?".
  *
- * Só num servidor com perfis além do padrão e só quando este navegador ainda não
- * escolheu um que exista; uma instalação de uma pessoa nunca vê a pergunta.
+ * Só num servidor com perfis além do padrão, uma vez por sessão do navegador
+ * (ADR-126): uma aba nova pergunta de novo, com o último perfil já marcado;
+ * recarregar a mesma aba não. Uma instalação de uma pessoa nunca vê a pergunta.
  */
 export function needsProfileChoice(
   profiles: readonly ProfileInfo[],
   chosen: ProfileInfo | null,
+  answeredThisSession: boolean,
 ): boolean {
-  return hasNamedProfiles(profiles) && chosen === null;
+  return hasNamedProfiles(profiles) && (chosen === null || !answeredThisSession);
+}
+
+/** Se esta aba já respondeu "Quem é você?". Storage bloqueado conta como não. */
+export function chosenThisSession(): boolean {
+  try {
+    return sessionStorage.getItem(SESSION_KEY) !== null;
+  } catch {
+    return false;
+  }
+}
+
+export function markChosenThisSession(): void {
+  try {
+    sessionStorage.setItem(SESSION_KEY, "1");
+  } catch {
+    /* storage indisponível — a pergunta volta na próxima carga */
+  }
+}
+
+/** Se o perfil padrão já recebeu um nome na introdução (ADR-126). */
+export function defaultHasName(profile: ProfileInfo): boolean {
+  return profile.is_default && profile.name !== "" && profile.name !== DEFAULT_PROFILE;
+}
+
+/** Como um perfil aparece: o padrão pelo nome dado, ou pelo rótulo da interface. */
+export function profileLabel(profile: ProfileInfo, defaultLabel: string): string {
+  if (!profile.is_default) return profile.name;
+  return defaultHasName(profile) ? profile.name : defaultLabel;
+}
+
+/** O nome que este navegador guardou para um padrão que o servidor ainda não conhece.
+ *
+ * Antes do ADR-126 o nome da introdução ficava só no navegador, e o padrão
+ * aparecia como "Padrão (sem perfil)" assim que surgia outro perfil. Quem está
+ * no padrão (ou não escolheu nenhum) e tem um nome salvo o entrega ao servidor
+ * uma vez. Uma lista vazia (falha de leitura) não diz nada sobre o padrão.
+ */
+export function legacyDefaultName(
+  profiles: readonly ProfileInfo[],
+  stored: StoredProfile | null,
+  savedName: string,
+): string | null {
+  const fallback = profiles.find((p) => p.is_default);
+  if (!fallback || defaultHasName(fallback) || !savedName) return null;
+  if (stored && stored.slug !== DEFAULT_PROFILE) return null;
+  return savedName;
 }
 
 /** Se o chip do perfil já diz quem está na tela, dispensando o do nome.
@@ -201,7 +257,7 @@ export function profileIsTheName(
 ): boolean {
   return (
     profile !== null &&
-    !profile.is_default &&
+    (!profile.is_default || defaultHasName(profile)) &&
     userName !== "" &&
     userName === normalizeUserName(profile.name)
   );
