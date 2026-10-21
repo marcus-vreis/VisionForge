@@ -5,6 +5,7 @@ import random
 import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
+from copy import deepcopy
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -19,10 +20,13 @@ from visionforge.core.cancellation import CancellationToken, is_cancelled
 from visionforge.core.dataset_fingerprint import fingerprint_from_config
 from visionforge.core.resume import (
     ResumeState,
+    capture_rng_state,
     clear_resume_state,
     load_resume_state,
+    restore_rng_state,
     save_resume_state,
 )
+from visionforge.core.resume_provenance import validate_resume_dataset
 from visionforge.core.tracking import TensorBoardLogger
 from visionforge.core.training_health import (
     collapsed_predictions,
@@ -171,6 +175,7 @@ class Trainer:
 
     def __init__(self, config: ExperimentConfig) -> None:
         self._config = config
+        self._loader_workers: dict[str, int] = {}
         self._device, self._dp_ids, self._device_label = resolve_device(config.device)
         # Cache last-epoch val probs/labels so callers (block, evaluator) can plot ROC.
         self._last_val_labels: list[int] = []
@@ -205,6 +210,8 @@ class Trainer:
         Returns:
             TrainResult with best epoch, loss, history, and saved model path.
         """
+        if resume_dir is not None:
+            validate_resume_dataset(resume_dir, self._config)
         cfg = self._config.training
         _seed_everything(cfg.seed, deterministic=cfg.deterministic)
 
@@ -273,13 +280,27 @@ class Trainer:
         # DataLoader objects (and re-spawning persistent workers) every epoch.
         train_loader = data_module.train_loader()
         val_loader = data_module.val_loader()
+        self._loader_workers = {
+            name: loader.num_workers
+            for name, loader in (("train", train_loader), ("val", val_loader))
+            if hasattr(loader, "num_workers")
+        }
 
         # Background thread pool for non-blocking checkpoint writes.
         save_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="ckpt")
         save_future = None
 
+        if resumed is not None:
+            restore_rng_state(resumed.rng_state, train_loader, val_loader)
+
         stopped = False
         for epoch in range(start_epoch, cfg.epochs + 1):
+            # A crash or cancellation may coincide with the stopping boundary.
+            if (
+                cfg.early_stopping_patience > 0
+                and patience_counter >= cfg.early_stopping_patience
+            ):
+                break
             # The safe point: the previous epoch's checkpoint is written and its
             # metrics emitted, so stopping here leaves the run directory whole.
             if is_cancelled(cancel_token):
@@ -345,8 +366,33 @@ class Trainer:
                     }
                 )
 
-            # Written every epoch, not only on improvement: the point is to be
-            # current when the run dies, and a run dies on its worst epochs too.
+            if val_loss < best_val_loss:
+                best_val_loss = val_loss
+                best_epoch = epoch
+                patience_counter = 0
+                # Save module.state_dict() to avoid 'module.' key prefix from DataParallel.
+                state_dict = (
+                    model.module.state_dict()  # type: ignore[union-attr]
+                    if isinstance(model, nn.DataParallel)
+                    else model.state_dict()
+                )
+                # The writer must own frozen CPU tensors: state_dict() shares
+                # storage with parameters that the next optimizer step mutates.
+                if save_future is not None:
+                    save_future.result()
+                state_dict = deepcopy(
+                    state_dict,
+                    {
+                        id(value): value.detach().to("cpu", copy=True)
+                        for value in state_dict.values()
+                        if isinstance(value, torch.Tensor)
+                    },
+                )
+                save_future = save_pool.submit(torch.save, state_dict, model_path)
+            else:
+                patience_counter += 1
+
+            # Snapshot the completed epoch, including best metric and patience.
             save_resume_state(
                 run_dir,
                 ResumeState(
@@ -363,35 +409,19 @@ class Trainer:
                     best_epoch=best_epoch,
                     patience_counter=patience_counter,
                     history=[asdict(h) for h in history],
+                    rng_state=capture_rng_state(train_loader, val_loader),
                 ),
             )
 
-            if val_loss < best_val_loss:
-                best_val_loss = val_loss
-                best_epoch = epoch
-                patience_counter = 0
-                # Save module.state_dict() to avoid 'module.' key prefix from DataParallel.
-                state_dict = (
-                    model.module.state_dict()  # type: ignore[union-attr]
-                    if isinstance(model, nn.DataParallel)
-                    else model.state_dict()
-                )
-                # Wait for any previous checkpoint write to finish before
-                # overwriting the dict, then launch a new async write.
-                if save_future is not None:
-                    save_future.result()
-                save_future = save_pool.submit(torch.save, state_dict, model_path)
-            else:
-                patience_counter += 1
-                # 0 disables early stopping outright. Without this guard it
-                # would mean the opposite -- the very first epoch without an
-                # improvement satisfies `1 >= 0` and ends the run.
-                if (
-                    cfg.early_stopping_patience > 0
-                    and patience_counter >= cfg.early_stopping_patience
-                ):
-                    logger.info("Early stopping at epoch {}.", epoch)
-                    break
+            # 0 disables early stopping outright. Without this guard it
+            # would mean the opposite -- the very first epoch without an
+            # improvement satisfies `1 >= 0` and ends the run.
+            if (
+                cfg.early_stopping_patience > 0
+                and patience_counter >= cfg.early_stopping_patience
+            ):
+                logger.info("Early stopping at epoch {}.", epoch)
+                break
 
         if not is_cancelled(cancel_token):
             clear_resume_state(run_dir)
@@ -606,6 +636,7 @@ class Trainer:
             "stopped": result.stopped,
             "device_used": result.device_used,
             "environment": capture_environment(),
+            "runtime": {"loader_workers": getattr(self, "_loader_workers", {})},
             # Proves two runs saw the same data, not just the same path.
             "dataset_fingerprint": fingerprint_from_config(self._config),
             "run_dir": str(run_dir.resolve()),

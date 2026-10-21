@@ -5953,3 +5953,36 @@ the initial stream while status stays healthy, then requires a new stream and
 a real epoch event after recovery. A second browser also verifies a queued job
 starts after the active job stops. E2E runs disable pretrained weights in the
 form so training needs no model download.
+
+## ADR-134 — Epoch-boundary resume restores randomness and completed bookkeeping
+
+**Date:** 2026-10-21
+**Status:** Accepted
+**Extends:** ADR-092, ADR-093
+
+**Decision:** Resume format 2 records Python, NumPy and torch CPU/CUDA RNG
+states, plus explicit loader generators when present. Trainers restore them
+after setup and loader construction, immediately before the next epoch. The
+saved best metric, best epoch and patience describe the epoch just completed.
+Format 1 remains readable with a warning that RNG continuity is unavailable.
+New checkpoints use safe torch loading and atomic publication.
+
+**Reason:** Reseeding at startup restarts the random sequence instead of
+continuing it. The old save order also persisted the previous epoch's best
+metric and patience. Equivalence is tested on CPU with zero loader workers;
+process-local augmentation state with persistent workers and backend-owned
+Ultralytics resume are not covered by that guarantee.
+
+**Dataset identity:** before resuming native training, the recorded dataset
+fingerprint is compared with the current data using the recorded method.
+A confirmed change refuses continuation and preserves the original run. Legacy
+or unavailable identity emits a warning; corrupt existing run metadata fails
+explicitly. This check inherits manifest hashing's same-size-edit limitation.
+When configured outputs lie inside the dataset root, identity is also reported
+as unverifiable: the legacy root manifest includes the run's changing artifacts.
+
+**Best-checkpoint isolation:** classification freezes a CPU copy of model state
+before submitting its asynchronous writer, including state-dict metadata and
+extra state. Waiting for an earlier writer does not freeze tensor storage shared
+with the next optimizer step. The snapshot costs CPU memory and a synchronous
+device-to-host copy on improvement; disk serialization remains asynchronous.

@@ -36,10 +36,13 @@ from visionforge.core.cancellation import CancellationToken, is_cancelled
 from visionforge.core.dataset_fingerprint import fingerprint_from_config
 from visionforge.core.resume import (
     ResumeState,
+    capture_rng_state,
     clear_resume_state,
     load_resume_state,
+    restore_rng_state,
     save_resume_state,
 )
+from visionforge.core.resume_provenance import validate_resume_dataset
 from visionforge.core.tracking import TensorBoardLogger
 from visionforge.core.trainer import _seed_everything, resolve_device
 from visionforge.core.training_health import stagnant_loss, summarize
@@ -131,6 +134,7 @@ class AnomalyTrainer:
 
     def __init__(self, config: AnomalyConfig) -> None:
         self._config = config
+        self._loader_workers: dict[str, int] = {}
         self._percentile = config.training.threshold_percentile
         self._device, self._dp_ids, self._device_label = resolve_device(config.device)
 
@@ -149,6 +153,8 @@ class AnomalyTrainer:
         resume_dir: Path | None = None,
     ) -> AnomalyTrainResult:
         """Train (autoencoder) or fit the memory bank (PatchCore) and score test."""
+        if resume_dir is not None and not isinstance(model, PatchCore):
+            validate_resume_dataset(resume_dir, self._config)
         _seed_everything(
             self._config.training.seed,
             deterministic=self._config.training.deterministic,
@@ -259,6 +265,16 @@ class AnomalyTrainer:
         criterion = nn.MSELoss()
         train_loader = data_module.train_loader()
         test_loader = data_module.test_loader()
+        calibration_loader = _calibration_loader(data_module)
+        self._loader_workers = {
+            name: loader.num_workers
+            for name, loader in (
+                ("train", train_loader),
+                ("test", test_loader),
+                ("calibration", calibration_loader),
+            )
+            if hasattr(loader, "num_workers")
+        }
 
         history: list[AnomalyEpochResult] = []
         best_loss = float("inf")
@@ -285,8 +301,19 @@ class AnomalyTrainer:
             )
         t0 = time.monotonic()
 
+        if resumed is not None:
+            restore_rng_state(
+                resumed.rng_state, train_loader, test_loader, calibration_loader
+            )
+
         stopped = False
         for epoch in range(start_epoch, cfg.epochs + 1):
+            # A crash or cancellation may coincide with the stopping boundary.
+            if (
+                cfg.early_stopping_patience > 0
+                and patience >= cfg.early_stopping_patience
+            ):
+                break
             # The safe point: the previous epoch's checkpoint is written and its
             # metrics emitted, so stopping here leaves the run directory whole.
             if is_cancelled(cancel_token):
@@ -310,9 +337,7 @@ class AnomalyTrainer:
             n = len(train_loader)
             train_loss = total / n if n > 0 else 0.0
 
-            normal_scores = self._collect_scores(
-                model, _calibration_loader(data_module)
-            )[0]
+            normal_scores = self._collect_scores(model, calibration_loader)[0]
             test_scores, test_labels = self._collect_scores(model, test_loader)
             auroc, threshold, f1 = self._metrics(
                 normal_scores, test_scores, test_labels
@@ -350,8 +375,15 @@ class AnomalyTrainer:
                     }
                 )
 
-            # Every epoch, not only on improvement: a run dies on its worst
-            # epochs too, and stale state resumes into a past already left.
+            if train_loss < best_loss:
+                best_loss = train_loss
+                best_epoch = epoch
+                patience = 0
+                torch.save(model.state_dict(), model_path)
+            else:
+                patience += 1
+
+            # Snapshot the completed epoch, including best metric and patience.
             save_resume_state(
                 run_dir,
                 ResumeState(
@@ -364,25 +396,21 @@ class AnomalyTrainer:
                     best_epoch=best_epoch,
                     patience_counter=patience,
                     history=[asdict(h) for h in history],
+                    rng_state=capture_rng_state(
+                        train_loader, test_loader, calibration_loader
+                    ),
                 ),
             )
 
-            if train_loss < best_loss:
-                best_loss = train_loss
-                best_epoch = epoch
-                patience = 0
-                torch.save(model.state_dict(), model_path)
-            else:
-                patience += 1
-                # 0 disables early stopping outright. Without this guard it
-                # would mean the opposite -- the very first epoch without an
-                # improvement satisfies `1 >= 0` and ends the run.
-                if (
-                    cfg.early_stopping_patience > 0
-                    and patience >= cfg.early_stopping_patience
-                ):
-                    logger.info("Early stopping at epoch {}.", epoch)
-                    break
+            # 0 disables early stopping outright. Without this guard it
+            # would mean the opposite -- the very first epoch without an
+            # improvement satisfies `1 >= 0` and ends the run.
+            if (
+                cfg.early_stopping_patience > 0
+                and patience >= cfg.early_stopping_patience
+            ):
+                logger.info("Early stopping at epoch {}.", epoch)
+                break
 
         if not is_cancelled(cancel_token):
             clear_resume_state(run_dir)
@@ -431,6 +459,11 @@ class AnomalyTrainer:
         model.eval()
         train_loader = data_module.train_loader()
         test_loader = data_module.test_loader()
+        self._loader_workers = {
+            name: loader.num_workers
+            for name, loader in (("train", train_loader), ("test", test_loader))
+            if hasattr(loader, "num_workers")
+        }
         t0 = time.monotonic()
 
         # PatchCore has no epochs, so the one `epoch_end` at the end used to be
@@ -595,6 +628,7 @@ class AnomalyTrainer:
             "stopped": result.stopped,
             "device_used": result.device_used,
             "environment": capture_environment(),
+            "runtime": {"loader_workers": getattr(self, "_loader_workers", {})},
             # Proves two runs saw the same data, not just the same path.
             "dataset_fingerprint": fingerprint_from_config(self._config),
             "run_dir": str(run_dir.resolve()),

@@ -19,19 +19,19 @@ nothing else.
 from __future__ import annotations
 
 import os
+import random
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
+import numpy as np
 import torch
 from loguru import logger
 
 RESUME_FILENAME = "resume.pt"
 
-# Bumped when the fields below change shape. A file from a different version is
-# refused rather than partially applied: restoring half a training state is
-# worse than starting over, because the run would look continued and not be.
-_FORMAT_VERSION = 1
+# Version 1 remains readable, but cannot reproduce the random trajectory.
+_FORMAT_VERSION = 2
 
 
 @dataclass
@@ -47,6 +47,91 @@ class ResumeState:
     best_epoch: int
     patience_counter: int
     history: list[dict[str, Any]]
+    rng_state: dict[str, Any] | None = None
+
+
+def _loader_generators(loaders: tuple[Any, ...]) -> dict[str, torch.Generator]:
+    generators = {}
+    for index, loader in enumerate(loaders):
+        for name, owner in (
+            ("loader", loader),
+            ("sampler", getattr(loader, "sampler", None)),
+            (
+                "batch_sampler",
+                getattr(getattr(loader, "batch_sampler", None), "sampler", None),
+            ),
+        ):
+            generator = getattr(owner, "generator", None)
+            if isinstance(generator, torch.Generator):
+                generators[f"{index}.{name}"] = generator
+    return generators
+
+
+def capture_rng_state(*loaders: Any) -> dict[str, Any]:
+    """Capture global RNGs and explicit loader generators without initializing CUDA."""
+    numpy_state = cast(tuple[Any, ...], np.random.get_state())
+    return {
+        "python": random.getstate(),
+        "numpy": (
+            numpy_state[0],
+            numpy_state[1].tolist(),
+            numpy_state[2],
+            numpy_state[3],
+            numpy_state[4],
+        ),
+        "torch": torch.get_rng_state(),
+        "cuda": torch.cuda.get_rng_state_all() if torch.cuda.is_initialized() else [],
+        "loaders": {
+            name: generator.get_state()
+            for name, generator in _loader_generators(loaders).items()
+        },
+    }
+
+
+def _validate_rng_state(state: dict[str, Any]) -> None:
+    # Validate with isolated generators so a corrupt checkpoint cannot partly
+    # reset the process RNGs before loading is refused.
+    random.Random().setstate(state["python"])
+    np.random.RandomState().set_state(state["numpy"])
+    torch.Generator().set_state(state["torch"])
+    for value in state["loaders"].values():
+        torch.Generator().set_state(value)
+    if not isinstance(state["cuda"], list) or any(
+        not isinstance(value, torch.Tensor)
+        or value.dtype != torch.uint8
+        or value.ndim != 1
+        for value in state["cuda"]
+    ):
+        raise ValueError("Invalid CUDA RNG state")
+
+
+def restore_rng_state(state: dict[str, Any] | None, *loaders: Any) -> None:
+    """Restore an epoch boundary after model, optimizer and loader setup."""
+    if state is None:
+        return
+    _validate_rng_state(state)
+    generators = _loader_generators(loaders)
+    if generators.keys() != state["loaders"].keys():
+        raise ValueError("Resume loader generators differ from the saved configuration")
+    random.setstate(state["python"])
+    np.random.set_state(state["numpy"])
+    torch.set_rng_state(state["torch"])
+    for name, generator in generators.items():
+        generator.set_state(state["loaders"][name])
+    if state["cuda"]:
+        if (
+            torch.cuda.is_available()
+            and len(state["cuda"]) == torch.cuda.device_count()
+        ):
+            torch.cuda.set_rng_state_all(state["cuda"])
+        else:
+            logger.warning(
+                "CUDA RNG state cannot be restored on this device configuration; exact resume is unavailable."
+            )
+    if any(getattr(loader, "num_workers", 0) > 0 for loader in loaders):
+        logger.warning(
+            "Resume does not restore DataLoader worker RNGs or prefetch queues; exact resume requires num_workers=0."
+        )
 
 
 def resume_path(run_dir: Path) -> Path:
@@ -74,9 +159,15 @@ def save_resume_state(run_dir: Path, state: ResumeState) -> None:
         "best_epoch": state.best_epoch,
         "patience_counter": state.patience_counter,
         "history": state.history,
+        "rng_state": state.rng_state
+        if state.rng_state is not None
+        else capture_rng_state(),
     }
-    torch.save(payload, tmp)
-    os.replace(tmp, target)
+    try:
+        torch.save(payload, tmp)
+        os.replace(tmp, target)
+    finally:
+        tmp.unlink(missing_ok=True)
 
 
 def load_resume_state(run_dir: Path) -> ResumeState | None:
@@ -89,7 +180,7 @@ def load_resume_state(run_dir: Path) -> ResumeState | None:
     if not target.is_file():
         return None
     try:
-        payload = torch.load(target, map_location="cpu", weights_only=False)
+        payload = torch.load(target, map_location="cpu", weights_only=True)
     except Exception as exc:  # noqa: BLE001 - unreadable state is not fatal
         logger.warning("Resume state at {} could not be read: {}", target, exc)
         return None
@@ -97,7 +188,7 @@ def load_resume_state(run_dir: Path) -> ResumeState | None:
         logger.warning("Resume state at {} is not a state dict; ignoring.", target)
         return None
     version = payload.get("format_version")
-    if version != _FORMAT_VERSION:
+    if version not in (1, _FORMAT_VERSION):
         logger.warning(
             "Resume state at {} is format {}, this build writes {}; ignoring.",
             target,
@@ -106,7 +197,12 @@ def load_resume_state(run_dir: Path) -> ResumeState | None:
         )
         return None
     try:
-        return ResumeState(
+        rng_state = payload["rng_state"] if version == _FORMAT_VERSION else None
+        if version == _FORMAT_VERSION:
+            if not isinstance(rng_state, dict):
+                raise ValueError("Missing RNG snapshot")
+            _validate_rng_state(rng_state)
+        state = ResumeState(
             epoch=int(payload["epoch"]),
             model=payload["model"],
             optimizer=payload["optimizer"],
@@ -116,8 +212,15 @@ def load_resume_state(run_dir: Path) -> ResumeState | None:
             best_epoch=int(payload["best_epoch"]),
             patience_counter=int(payload.get("patience_counter", 0)),
             history=list(payload.get("history", [])),
+            rng_state=rng_state,
         )
-    except (KeyError, TypeError, ValueError) as exc:
+        if version == 1:
+            logger.warning(
+                "Legacy resume state at {} has no RNG snapshot; continuing without exact reproducibility.",
+                target,
+            )
+        return state
+    except (KeyError, TypeError, ValueError, RuntimeError, AttributeError) as exc:
         logger.warning("Resume state at {} is missing fields: {}", target, exc)
         return None
 
@@ -158,9 +261,11 @@ __all__ = [
     "RESUME_FILENAME",
     "ResumeState",
     "can_resume",
+    "capture_rng_state",
     "clear_resume_state",
     "discard_resume_state",
     "load_resume_state",
     "resume_path",
+    "restore_rng_state",
     "save_resume_state",
 ]

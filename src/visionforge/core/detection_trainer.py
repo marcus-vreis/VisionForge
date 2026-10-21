@@ -31,10 +31,13 @@ from visionforge.core.materialized_dataset import materialize_dataset
 from visionforge.core.plotter import MetricsPlotter
 from visionforge.core.resume import (
     ResumeState,
+    capture_rng_state,
     clear_resume_state,
     load_resume_state,
+    restore_rng_state,
     save_resume_state,
 )
+from visionforge.core.resume_provenance import validate_resume_dataset
 from visionforge.core.tracking import TensorBoardLogger
 from visionforge.core.trainer import _seed_everything
 from visionforge.core.training_health import no_detections, summarize
@@ -246,6 +249,7 @@ class DetectionTrainer:
 
     def __init__(self, config: DetectionConfig) -> None:
         self._config = config
+        self._loader_workers: dict[str, int] = {}
         self._device_label = self._resolve_device_label()
         # Set by fit() for the duration of a run when filters produced a copy.
         self._images_root: Path | None = None
@@ -262,6 +266,8 @@ class DetectionTrainer:
             RuntimeError: with an actionable message when DataLoader workers
                 crash at startup on Windows (page-file exhaustion).
         """
+        if resume_dir is not None:
+            validate_resume_dataset(resume_dir, self._config)
         data = self._config.data
         steps = [step.model_dump() for step in data.preprocessing.steps]
         try:
@@ -513,6 +519,11 @@ class DetectionTrainer:
         model_path.parent.mkdir(parents=True, exist_ok=True)
 
         train_loader, val_loader = self._build_loaders(self._config.data.base_dir)
+        self._loader_workers = {
+            name: loader.num_workers
+            for name, loader in (("train", train_loader), ("val", val_loader))
+            if hasattr(loader, "num_workers")
+        }
 
         history: list[DetectionEpochResult] = []
         train_losses: list[float | None] = []
@@ -557,6 +568,8 @@ class DetectionTrainer:
             self._device_label,
         )
         tb = TensorBoardLogger(run_dir / "tensorboard")
+        if resumed is not None:
+            restore_rng_state(resumed.rng_state, train_loader, val_loader)
         stopped = False
         try:
             for epoch in range(start_epoch, cfg.epochs + 1):
@@ -590,27 +603,6 @@ class DetectionTrainer:
                         "map50/val": map50,
                     },
                 )
-                # Every epoch, not only on improvement: a run dies on its
-                # worst epochs too, and stale state resumes into a past already
-                # left.
-                save_resume_state(
-                    run_dir,
-                    ResumeState(
-                        epoch=epoch,
-                        model=model.state_dict(),
-                        optimizer=optimizer.state_dict(),
-                        scheduler=None,
-                        scaler=None,
-                        best_metric=best_map,
-                        best_epoch=best_epoch,
-                        patience_counter=0,
-                        history=[
-                            {**asdict(h), "train_loss": tl}
-                            for h, tl in zip(history, train_losses, strict=False)
-                        ],
-                    ),
-                )
-
                 # Select by validation mAP@50 (higher is better).
                 if map50 > best_map:
                     best_map = map50
@@ -626,6 +618,29 @@ class DetectionTrainer:
                             val_loss=val_loss,
                         )
                     )
+
+                # Every epoch, not only on improvement: a run dies on its
+                # worst epochs too, and stale state resumes into a past already
+                # left.
+                save_resume_state(
+                    run_dir,
+                    ResumeState(
+                        epoch=epoch,
+                        model=model.state_dict(),
+                        optimizer=optimizer.state_dict(),
+                        scheduler=None,
+                        scaler=None,
+                        best_metric=best_map,
+                        best_epoch=best_epoch,
+                        patience_counter=0,
+                        rng_state=capture_rng_state(train_loader, val_loader),
+                        history=[
+                            {**asdict(h), "train_loss": tl}
+                            for h, tl in zip(history, train_losses, strict=False)
+                        ],
+                    ),
+                )
+
         finally:
             tb.close()
 
@@ -964,6 +979,7 @@ class DetectionTrainer:
             "stopped": result.stopped,
             "device_used": result.device_used,
             "environment": capture_environment(),
+            "runtime": {"loader_workers": getattr(self, "_loader_workers", {})},
             # Proves two runs saw the same data, not just the same path.
             "dataset_fingerprint": fingerprint_from_config(self._config),
             "run_dir": str(run_dir.resolve()),
