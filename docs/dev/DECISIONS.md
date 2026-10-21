@@ -5926,8 +5926,12 @@ sample dataset for real.
   runs the suite and uploads the report and traces when it fails.
 
 **Consequences:** the CI job downloads the resnet18 weights each run (the default
-run is pretrained). The connection test pins today's behaviour: when the status
-poll fails the training overlay declares the run failed and does not reconnect,
-although the run finishes on the server. That is a defect of
-`hooks/useExperiment.ts`, tracked separately; the test is to require recovery once
-the hook retries.
+run is pretrained). The connection test first showed a defect: one failed status
+poll made the training overlay declare the run failed and stop watching, although
+the run finished on the server. The poll now lives in `lib/status-poll.ts`: a
+failure the server answered (HTTP error) still ends the watch, but one it did not
+answer is retried after 2, 4, 8, 8 and 8 s, with the overlay saying
+"reconectando…" and the run's status left as it was. After those 30 s the overlay
+says the connection is lost and keeps trying every 10 s; when the server answers,
+the note goes away and the live stream is reattached. The test now requires the
+overlay to recover and end as "treino concluído".

@@ -48,6 +48,12 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Fixed
 
+- **O painel de treino não declara mais falha quando a conexão cai por alguns segundos.** Uma
+  consulta de status sem resposta do servidor agora mostra "reconectando…" e tenta de novo com
+  espera crescente; depois de 30 s sem resposta avisa que a conexão caiu, mas continua tentando e
+  volta a acompanhar o treino (até "treino concluído") quando o servidor responde. Antes, uma
+  única falha encerrava o acompanhamento com "treino falhou", embora o treino seguisse no
+  servidor ([ADR-133](docs/dev/DECISIONS.md)).
 - **O servidor não entrega mais arquivos fora da pasta da interface.** Um caminho com `..`
   codificado devolvia arquivos de fora; agora responde 404 ([ADR-127](docs/dev/DECISIONS.md),
   issue #47).

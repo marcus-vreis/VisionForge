@@ -27,7 +27,7 @@ const events: TrainingEvent[] = [
   },
 ];
 
-function sheet(lang: "pt" | "en", tab: SheetTab, visible = true) {
+function sheet(lang: "pt" | "en", tab: SheetTab, visible = true, status = running) {
   return renderToStaticMarkup(
     <LanguageContext.Provider
       value={{
@@ -38,7 +38,7 @@ function sheet(lang: "pt" | "en", tab: SheetTab, visible = true) {
       }}
     >
       <TrainingOverlay
-        status={running}
+        status={status}
         progressEvents={events}
         visible={visible}
         taskAccent="oklch(0.74 0.18 22)"
@@ -89,5 +89,30 @@ describe("the training sheet's tabs", () => {
   it("lets a minimized sheet's drawing stand still", () => {
     expect(sheet("pt", "story", true)).toContain("animateMotion");
     expect(sheet("pt", "story", false)).not.toContain("animateMotion");
+  });
+});
+
+describe("the training sheet without the server", () => {
+  it.each([
+    ["pt", pt],
+    ["en", en],
+  ] as const)("says it is reconnecting, not that the training failed (%s)", (lang, t) => {
+    const html = sheet(lang, "log", true, { ...running, connection: "reconnecting" });
+    expect(html).toContain(t.trainingOverlay.reconnecting);
+    expect(html).toContain(t.trainingOverlay.reconnectingNote);
+    expect(html).not.toContain(t.trainingOverlay.trainingFailed);
+  });
+
+  it("names a lost connection and that the panel resumes by itself", () => {
+    const html = sheet("pt", "log", true, { ...running, connection: "lost" });
+    expect(html).toContain(pt.trainingOverlay.connectionLost);
+    expect(html).toContain(pt.trainingOverlay.connectionLostNote);
+    expect(html).not.toContain(pt.trainingOverlay.trainingFailed);
+  });
+
+  it("drops the note once the server answers again", () => {
+    const html = sheet("pt", "log");
+    expect(html).not.toContain(pt.trainingOverlay.reconnectingNote);
+    expect(html).toContain(pt.trainingOverlay.training("Classificação"));
   });
 });

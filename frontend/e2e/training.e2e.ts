@@ -37,7 +37,7 @@ test("stops a running training at the end of the current epoch", async ({ page }
   await expect(sheet.getByText(/interrompido na época \d+\/200/)).toBeVisible();
 });
 
-test("tells the user when the server stops answering during a training", async ({ page }) => {
+test("rides out a few seconds without the server and still ends as completed", async ({ page }) => {
   await prepareClassification(page, "e2e_offline", 60);
   const sheet = await train(page);
   await expect(sheet.getByText(/^treinando · /)).toBeVisible();
@@ -48,20 +48,19 @@ test("tells the user when the server stops answering during a training", async (
   await page.route("**/api/experiment/status", down);
   await page.route("**/api/experiment/events", down);
 
-  await expect(sheet.getByText("treino falhou", { exact: true })).toBeVisible({ timeout: 20_000 });
-  await expect(sheet.getByText(/Não foi possível conectar ao servidor/).first()).toBeVisible();
-
+  await expect(sheet.getByText("reconectando…", { exact: true })).toBeVisible({ timeout: 20_000 });
   await page.waitForTimeout(3_000);
+  await expect(sheet.getByText("treino falhou", { exact: true })).toHaveCount(0);
+
   await page.unroute("**/api/experiment/status", down);
   await page.unroute("**/api/experiment/events", down);
 
-  // The overlay does not reconnect once the poll has failed (it stays on the
-  // error); what comes back is the rest of the app: the run finished on the
-  // server and the History lists it.
+  // The overlay picks the run up again and follows it to its end.
+  await expect(sheet.getByText(/^treinando · /)).toBeVisible({ timeout: 20_000 });
+  await expect(sheet.getByText("treino concluído", { exact: true })).toBeVisible({ timeout: 120_000 });
+  await expect(sheet.getByText("treino falhou", { exact: true })).toHaveCount(0);
+
   await sheet.getByRole("button", { name: "Fechar", exact: true }).click();
-  await expect(async () => {
-    await page.keyboard.press("Escape");
-    const card = await findInHistory(page, "e2e_offline");
-    await expect(card.getByText(/^completed$/i)).toBeVisible({ timeout: 2_000 });
-  }).toPass({ timeout: 90_000 });
+  const card = await findInHistory(page, "e2e_offline");
+  await expect(card.getByText(/^completed$/i)).toBeVisible();
 });

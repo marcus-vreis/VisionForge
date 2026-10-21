@@ -8,6 +8,9 @@ export interface RunStatus {
   queued?: number;
   /** 1-based place in the queue while this run is waiting. */
   position?: number;
+  /** Client-side only: the status poll is not reaching the server. The run's
+   *  `status` stays what it last was, since the training goes on there (ADR-133). */
+  connection?: "reconnecting" | "lost";
 }
 
 export interface RunResponse {

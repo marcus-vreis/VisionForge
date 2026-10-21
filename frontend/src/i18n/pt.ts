@@ -1898,6 +1898,12 @@ export const pt = {
       `${position ? `aguardando a GPU — ${position}º na fila` : "aguardando a GPU"}${
         typeof queued === "number" && queued > 1 ? ` · ${queued} submissões esperando` : ""
       }. O treino começa sozinho quando chegar a vez.`,
+    // The status poll is not reaching the server; the run goes on there (ADR-133).
+    reconnecting: "reconectando…",
+    reconnectingNote: "O servidor não respondeu. Tentando de novo — o treino continua no servidor.",
+    connectionLost: "sem conexão com o servidor",
+    connectionLostNote:
+      "Sem resposta há mais de 30 s. O treino pode estar seguindo no servidor; o painel volta a acompanhá-lo sozinho quando o servidor responder, e o Histórico mostra o resultado.",
     errorDetail: "Detalhe do erro",
     unknownError: "Erro desconhecido — verifique os logs do servidor.",
     // The same, as it reads in the log line.

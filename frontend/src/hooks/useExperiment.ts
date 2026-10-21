@@ -13,6 +13,7 @@ import {
 import { useT } from "../i18n/useT";
 import type { Dict } from "../i18n/pt";
 import { PREPROCESS_KIND_LABELS } from "../lib/preprocess-kinds";
+import { startStatusPoll } from "../lib/status-poll";
 import type {
   RunResponse,
   RunResult,
@@ -108,7 +109,7 @@ export function useExperiment(): ExperimentState {
     [],
   );
   const [progressEvents, setProgressEvents] = useState<TrainingEvent[]>([]);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const stopPollRef = useRef<(() => void) | null>(null);
   const esRef = useRef<EventSource | null>(null);
   // Which run this hook is following, and whether it has been seen executing.
   // /experiment/status describes whatever is *active*, so with a queue (ADR-075)
@@ -118,9 +119,9 @@ export function useExperiment(): ExperimentState {
   const startedRef = useRef(false);
 
   const stopPolling = useCallback(() => {
-    if (pollRef.current) {
-      clearInterval(pollRef.current);
-      pollRef.current = null;
+    if (stopPollRef.current) {
+      stopPollRef.current();
+      stopPollRef.current = null;
     }
   }, []);
 
@@ -177,53 +178,63 @@ export function useExperiment(): ExperimentState {
   const startPolling = useCallback(
     () => {
       stopPolling();
-      pollRef.current = setInterval(async () => {
-        try {
-          const s = await fetchStatus();
-          const mine = myRunRef.current;
+      const tick = async () => {
+        const s = await fetchStatus();
+        const mine = myRunRef.current;
 
-          if (mine !== null && s.run_id !== mine) {
-            if (startedRef.current) {
-              // Our run held the slot and no longer does: it finished and the
-              // next queued job took over. Its report is still fetchable by id.
-              await collectResult(mine);
-              return;
-            }
-            // Still waiting behind someone else — show where in line.
-            try {
-              const q = await fetchQueue();
-              const index = q.pending.findIndex((p) => p.run_id === mine);
-              setStatus({
-                status: "queued",
-                run_id: mine,
-                error: null,
-                queued: q.pending.length,
-                position: index >= 0 ? index + 1 : undefined,
-              });
-            } catch {
-              // Queue endpoint hiccup — keep waiting rather than failing the run.
-            }
+        if (mine !== null && s.run_id !== mine) {
+          if (startedRef.current) {
+            // Our run held the slot and no longer does: it finished and the
+            // next queued job took over. Its report is still fetchable by id.
+            await collectResult(mine);
             return;
           }
-
-          if (mine !== null && s.status === "running") {
-            if (!startedRef.current) {
-              startedRef.current = true;
-              openEventSource(); // it is our turn: attach to the live stream
-            }
+          // Still waiting behind someone else — show where in line.
+          try {
+            const q = await fetchQueue();
+            const index = q.pending.findIndex((p) => p.run_id === mine);
+            setStatus({
+              status: "queued",
+              run_id: mine,
+              error: null,
+              queued: q.pending.length,
+              position: index >= 0 ? index + 1 : undefined,
+            });
+          } catch {
+            // Queue endpoint hiccup — keep waiting rather than failing the run.
           }
-          setStatus(s);
+          return;
+        }
 
-          if (s.status === "completed" && s.run_id) {
-            await collectResult(s.run_id);
-          } else if (s.status === "failed") {
-            stopPolling();
-            setError(
-              s.error ?? tRef.current.experiment.failedNoDetail,
-            );
+        if (mine !== null && s.status === "running") {
+          if (!startedRef.current) {
+            startedRef.current = true;
+            openEventSource(); // it is our turn: attach to the live stream
           }
-        } catch (e) {
+        }
+        setStatus(s);
+
+        if (s.status === "completed" && s.run_id) {
+          await collectResult(s.run_id);
+        } else if (s.status === "failed") {
           stopPolling();
+          setError(
+            s.error ?? tRef.current.experiment.failedNoDetail,
+          );
+        }
+      };
+      stopPollRef.current = startStatusPoll({
+        tick,
+        onConnection: (connection) => {
+          setStatus((prev) => ({ ...prev, connection: connection ?? undefined }));
+          // The live stream dropped with the connection; attach again so the
+          // epochs that follow keep arriving.
+          if (connection === null && startedRef.current && esRef.current === null) {
+            openEventSource();
+          }
+        },
+        onError: (e) => {
+          stopPollRef.current = null;
           const msg =
             e instanceof ApiError
               ? e.message
@@ -234,8 +245,8 @@ export function useExperiment(): ExperimentState {
             run_id: prev.run_id,
             error: msg,
           }));
-        }
-      }, 2000);
+        },
+      });
     },
     [stopPolling, collectResult, openEventSource],
   );

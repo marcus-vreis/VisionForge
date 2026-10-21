@@ -1701,6 +1701,12 @@ export const en: Dict = {
       `${position ? `waiting for the GPU — ${ordinal(position)} in line` : "waiting for the GPU"}${
         typeof queued === "number" && queued > 1 ? ` · ${queued} runs waiting` : ""
       }. The run starts automatically when its turn comes.`,
+    // The status poll is not reaching the server; the run goes on there (ADR-133).
+    reconnecting: "reconnecting…",
+    reconnectingNote: "The server did not answer. Trying again — the training goes on on the server.",
+    connectionLost: "no connection to the server",
+    connectionLostNote:
+      "No answer for over 30 s. The training may still be going on the server; this panel picks it up again by itself once the server answers, and the History shows the result.",
     errorDetail: "Error details",
     unknownError: "Unknown error — check the server logs.",
     logUnknownError: "unknown error",

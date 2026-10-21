@@ -521,13 +521,17 @@ export function TrainingOverlay({
                   : stopOutcomeNow === "stopped"
                     ? t.trainingOverlay.stopped
                     : t.trainingOverlay.trainingComplete
-                : isQueued
-                  ? t.trainingOverlay.queued(taskLabel)
-                  : latestEpoch === undefined && latestPhase
-                    ? // Diz o que está acontecendo: "montando o banco" por uma
-                      // hora é espera; uma barra muda sem legenda é suspeita.
-                      `${phaseName(t, latestPhase.label)} · ${latestPhase.done}/${latestPhase.total}`
-                    : t.trainingOverlay.training(taskLabel)}
+                : status.connection === "lost"
+                  ? t.trainingOverlay.connectionLost
+                  : status.connection === "reconnecting"
+                    ? t.trainingOverlay.reconnecting
+                    : isQueued
+                      ? t.trainingOverlay.queued(taskLabel)
+                      : latestEpoch === undefined && latestPhase
+                        ? // Diz o que está acontecendo: "montando o banco" por uma
+                          // hora é espera; uma barra muda sem legenda é suspeita.
+                          `${phaseName(t, latestPhase.label)} · ${latestPhase.done}/${latestPhase.total}`
+                        : t.trainingOverlay.training(taskLabel)}
             </div>
             <div
               style={{
@@ -550,6 +554,21 @@ export function TrainingOverlay({
                 }}
               >
                 {t.trainingOverlay.queuedNote(status.position, status.queued)}
+              </div>
+            )}
+            {!isFinished && status.connection && (
+              <div
+                role="status"
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 11,
+                  marginTop: 6,
+                  color: "var(--vf-text-muted)",
+                }}
+              >
+                {status.connection === "lost"
+                  ? t.trainingOverlay.connectionLostNote
+                  : t.trainingOverlay.reconnectingNote}
               </div>
             )}
           </div>
