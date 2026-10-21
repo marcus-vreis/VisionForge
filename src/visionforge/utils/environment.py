@@ -8,8 +8,13 @@ platform, and key-library versions so they can be persisted into ``run.json``.
 
 from __future__ import annotations
 
+import os
 import platform
+import re
+import subprocess
+import tomllib
 from importlib import metadata
+from pathlib import Path
 
 
 def _safe_version(package: str) -> str:
@@ -59,12 +64,25 @@ def capture_environment() -> dict[str, str]:
         "torch": _safe_version("torch"),
         "torchvision": _safe_version("torchvision"),
         "numpy": _safe_version("numpy"),
+        **{
+            name: _safe_version(name)
+            for name in (
+                "scipy",
+                "scikit-learn",
+                "ultralytics",
+                "timm",
+                "optuna",
+                "pillow",
+                "pydantic",
+            )
+        },
         # The version the package itself reports: in a checkout that is the
         # pyproject's, which the installed metadata lags until a reinstall, and
         # the distribution's name ("visionforge-studio") once reported
         # "unknown" here in every run.json.
         "visionforge": _visionforge_version(),
         **_torch_runtime(),
+        **_source_revision(),
     }
 
 
@@ -75,6 +93,56 @@ def _visionforge_version() -> str:
     except ImportError:
         return "unknown"
     return str(__version__) or "unknown"
+
+
+def _source_revision() -> dict[str, str]:
+    """Identify only the checkout containing the imported package's source."""
+    unknown = {"git_revision": "unknown", "git_dirty": "unknown"}
+    try:
+        source = Path(__file__).resolve()
+        package_dir = source.parent.parent
+        root = package_dir.parent.parent
+        if package_dir.name != "visionforge" or package_dir.parent.name != "src":
+            return unknown
+        if not (root / ".git").exists():
+            return unknown
+        project = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
+        if project.get("project", {}).get("name") != "visionforge-studio":
+            return unknown
+        # Git environment overrides can otherwise identify a different repository.
+        env = {
+            key: value
+            for key, value in os.environ.items()
+            if not key.startswith("GIT_")
+        }
+
+        def git(*args: str) -> str:
+            result = subprocess.run(
+                ["git", "-c", "core.fsmonitor=false", "-C", str(root), *args],
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=2,
+                env=env,
+            )
+            return result.stdout.strip()
+
+        if Path(git("rev-parse", "--show-toplevel")).resolve() != root:
+            return unknown
+        revision = git("rev-parse", "HEAD")
+        if re.fullmatch(r"[0-9a-f]{40,64}", revision) is None:
+            return unknown
+        dirty = bool(
+            git(
+                "status",
+                "--porcelain",
+                "--untracked-files=normal",
+                "--ignore-submodules=all",
+            )
+        )
+        return {"git_revision": revision, "git_dirty": str(dirty).lower()}
+    except Exception:  # noqa: BLE001 - provenance cannot fail a training run
+        return unknown
 
 
 __all__ = ["capture_environment"]

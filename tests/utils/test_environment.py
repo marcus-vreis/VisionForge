@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 import platform
+import subprocess
+from pathlib import Path
+
+import pytest
 
 from visionforge.utils.environment import capture_environment
 
@@ -68,3 +72,132 @@ def test_a_checkout_records_the_version_the_package_reports(monkeypatch) -> None
 
     monkeypatch.setattr(visionforge, "__version__", "9.9.9")
     assert capture_environment()["visionforge"] == "9.9.9"
+
+
+def test_records_extended_dependency_versions() -> None:
+    env = capture_environment()
+    for name in (
+        "scipy",
+        "scikit-learn",
+        "ultralytics",
+        "timm",
+        "optuna",
+        "pillow",
+        "pydantic",
+    ):
+        assert name in env
+        assert isinstance(env[name], str)
+
+
+def _source_checkout(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    from visionforge.utils import environment
+
+    root = tmp_path / "checkout"
+    source = root / "src" / "visionforge" / "utils" / "environment.py"
+    source.parent.mkdir(parents=True)
+    source.write_text("", encoding="utf-8")
+    (root / "pyproject.toml").write_text(
+        '[project]\nname = "visionforge-studio"\n', encoding="utf-8"
+    )
+    for args in (
+        ["init", "--quiet"],
+        ["add", "."],
+        [
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.org",
+            "commit",
+            "-qm",
+            "initial",
+        ],
+    ):
+        subprocess.run(["git", "-C", str(root), *args], check=True, capture_output=True)
+    monkeypatch.setattr(environment, "__file__", str(source))
+    return root
+
+
+def test_records_actual_source_revision_and_dirty_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _source_checkout(tmp_path, monkeypatch)
+    revision = subprocess.check_output(
+        ["git", "-C", str(root), "rev-parse", "HEAD"], text=True
+    ).strip()
+    env = capture_environment()
+    assert env["git_revision"] == revision
+    assert env["git_dirty"] == "false"
+    (root / "untracked.txt").write_text("dirty", encoding="utf-8")
+    assert capture_environment()["git_dirty"] == "true"
+
+
+def test_installed_package_does_not_report_current_workspace_git(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from visionforge.utils import environment
+
+    root = _source_checkout(tmp_path, monkeypatch)
+    monkeypatch.chdir(root)
+    monkeypatch.setattr(
+        environment,
+        "__file__",
+        str(tmp_path / "site-packages/visionforge/utils/environment.py"),
+    )
+    env = capture_environment()
+    assert env["git_revision"] == "unknown"
+    assert env["git_dirty"] == "unknown"
+
+
+def test_git_failure_is_bounded_and_does_not_break_capture(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from visionforge.utils import environment
+
+    _source_checkout(tmp_path, monkeypatch)
+
+    def unavailable(*args: object, **kwargs: object) -> None:
+        assert kwargs["timeout"] == 2
+        raise subprocess.TimeoutExpired("git", 2)
+
+    monkeypatch.setattr(environment.subprocess, "run", unavailable)
+    env = capture_environment()
+    assert env["git_revision"] == "unknown"
+    assert env["git_dirty"] == "unknown"
+
+
+def test_import_never_invokes_git(monkeypatch: pytest.MonkeyPatch) -> None:
+    import importlib
+
+    from visionforge.utils import environment
+
+    calls = []
+    monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs: calls.append(args))
+    importlib.reload(environment)
+    assert calls == []
+
+
+def test_source_layout_without_own_git_does_not_use_ancestor_repository(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from visionforge.utils import environment
+
+    root = _source_checkout(tmp_path, monkeypatch)
+    nested = root / "nested/src/visionforge/utils/environment.py"
+    nested.parent.mkdir(parents=True)
+    nested.write_text("", encoding="utf-8")
+    (root / "nested/pyproject.toml").write_text(
+        '[project]\nname="visionforge-studio"\n'
+    )
+    monkeypatch.setattr(environment, "__file__", str(nested))
+    assert capture_environment()["git_revision"] == "unknown"
+
+
+def test_source_identity_ignores_git_environment_overrides(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _source_checkout(tmp_path, monkeypatch)
+    monkeypatch.setenv("GIT_DIR", str(tmp_path / "unrelated.git"))
+    monkeypatch.setenv("GIT_WORK_TREE", str(tmp_path))
+    assert capture_environment()["git_revision"] != "unknown"
+    assert capture_environment()["git_dirty"] == "false"
+    assert root.is_dir()

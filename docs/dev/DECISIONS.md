@@ -5986,3 +5986,29 @@ before submitting its asynchronous writer, including state-dict metadata and
 extra state. Waiting for an earlier writer does not freeze tensor storage shared
 with the next optimizer step. The snapshot costs CPU memory and a synchronous
 device-to-host copy on improvement; disk serialization remains asynchronous.
+
+## ADR-135 — Provenance identifies the source and exports contained artifacts
+
+**Date:** 2026-10-21
+**Status:** Accepted
+**Extends:** ADR-013, ADR-057
+
+**Decision:** Environment metadata adds versions of training/statistical
+dependencies and the actual package checkout's Git revision and dirty flag.
+Installed distributions with no verified source checkout report unknown; the
+researcher's current directory is never used as a proxy for package source.
+Git probes are local, bounded and deferred until metadata is requested.
+Native trainers also record the effective loader worker counts in run.json;
+the configured automatic value alone does not describe the process layout used.
+
+An experiment bundle includes run.json and explicitly selected config,
+history, prediction and model artifacts contained inside that run directory.
+It contains a SHA-256/size manifest and records missing or excluded artifacts.
+It never walks the dataset or arbitrary output directories. Export refuses an
+existing destination and publishes atomically. Verification checks member
+names, declared sizes and digests without extracting the archive.
+
+**Reason:** A package version alone does not identify local edits or the
+versions of libraries that compute metrics. A portable record needs integrity
+checks without silently copying unrelated files or overwriting an earlier
+export.
