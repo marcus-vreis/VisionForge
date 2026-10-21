@@ -38,6 +38,9 @@ test("stops a running training at the end of the current epoch", async ({ page }
 });
 
 test("rides out a few seconds without the server and still ends as completed", async ({ page }) => {
+  // 60 epochs keep the run going through the outage here; a CI runner trains
+  // them on a much slower CPU, so the end gets minutes, not the default 3.
+  test.setTimeout(600_000);
   await prepareClassification(page, "e2e_offline", 60);
   const sheet = await train(page);
   await expect(sheet.getByText(/^treinando · /)).toBeVisible();
@@ -56,8 +59,8 @@ test("rides out a few seconds without the server and still ends as completed", a
   await page.unroute("**/api/experiment/events", down);
 
   // The overlay picks the run up again and follows it to its end.
-  await expect(sheet.getByText(/^treinando · /)).toBeVisible({ timeout: 20_000 });
-  await expect(sheet.getByText("treino concluído", { exact: true })).toBeVisible({ timeout: 120_000 });
+  await expect(sheet.getByText("reconectando…", { exact: true })).toHaveCount(0, { timeout: 20_000 });
+  await expect(sheet.getByText("treino concluído", { exact: true })).toBeVisible({ timeout: 480_000 });
   await expect(sheet.getByText("treino falhou", { exact: true })).toHaveCount(0);
 
   await sheet.getByRole("button", { name: "Fechar", exact: true }).click();
