@@ -54,6 +54,17 @@ export async function prepareClassification(page: Page, name: string, epochs: nu
   await epochField.press("Enter");
   await expect(fieldByLabel(page, "Épocas")).toHaveValue(String(epochs));
 
+  // Random initialization keeps this real training independent of the network
+  // and of any ImageNet weights cached on the developer's machine.
+  const pretrained = page
+    .getByText("Pesos pré-treinados", { exact: true })
+    .locator("xpath=ancestor::div[.//button][1]")
+    .getByRole("button", { name: /^(ativado|desativado)$/i });
+  if ((await pretrained.textContent())?.trim().toLowerCase() === "ativado") {
+    await pretrained.click();
+  }
+  await expect(pretrained).toHaveText(/desativado/i);
+
   const device = page.locator("[data-tour='device']");
   await device.getByRole("button").first().click();
   await device.getByRole("button", { name: /Treinar usando processador/ }).click();

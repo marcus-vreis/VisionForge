@@ -48,6 +48,10 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Fixed
 
+- **As épocas voltam ao painel quando só o stream de progresso cai.** A consulta de status
+  saudável agora reabre um SSE ausente; antes o painel só reconectava depois de uma falha
+  também nessa consulta. O teste em navegador cobre essa recuperação e a passagem de um
+  segundo treino pela fila ([ADR-133](docs/dev/DECISIONS.md), #52).
 - **O painel de treino não declara mais falha quando a conexão cai por alguns segundos.** Uma
   consulta de status sem resposta do servidor agora mostra "reconectando…" e tenta de novo com
   espera crescente; depois de 30 s sem resposta avisa que a conexão caiu, mas continua tentando e

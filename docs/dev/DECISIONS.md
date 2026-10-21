@@ -5925,15 +5925,17 @@ sample dataset for real.
   `visionforge` in CI); the port is 8765 unless `VF_E2E_PORT` says otherwise.
   Locally the installed Chrome is used (no browser download); CI installs
   Playwright's chromium.
-- Three serial tests, one worker, no retries (there is one training slot, and a
+- Five serial tests, one worker, no retries (there is one training slot, and a
   retry would meet the runs of the failed attempt): one epoch through to the
-  History, stopping a training, and the status poll failing for a few seconds.
+  History, stopping a training, a brief status outage, a second browser's queued
+  run, and a dropped event stream while status remains available.
 - The suite tests the built bundle in `src/visionforge/gui/static`, which is
   committed: rebuild it before running locally. A new CI job, `e2e`, builds it,
   runs the suite and uploads the report and traces when it fails.
 
-**Consequences:** the CI job downloads the resnet18 weights each run (the default
-run is pretrained). The connection test first showed a defect: one failed status
+**Consequences:** the tests disable pretrained weights in the form and use
+random initialization, so no weights download is needed. The connection test
+first showed a defect: one failed status
 poll made the training overlay declare the run failed and stop watching, although
 the run finished on the server. The poll now lives in `lib/status-poll.ts`: a
 failure the server answered (HTTP error) still ends the watch, but one it did not
@@ -5942,3 +5944,12 @@ answer is retried after 2, 4, 8, 8 and 8 s, with the overlay saying
 says the connection is lost and keeps trying every 10 s; when the server answers,
 the note goes away and the live stream is reattached. The test now requires the
 overlay to recover and end as "treino concluído".
+
+**Update (2026-10-21):** every healthy status poll for the page's running job
+reattaches a missing event stream, even when the status endpoint never went
+offline. An SSE error closes EventSource; waiting for a status-network recovery
+alone left progress permanently disconnected. The browser regression blocks
+the initial stream while status stays healthy, then requires a new stream and
+a real epoch event after recovery. A second browser also verifies a queued job
+starts after the active job stops. E2E runs disable pretrained weights in the
+form so training needs no model download.

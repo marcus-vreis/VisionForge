@@ -207,9 +207,10 @@ export function useExperiment(): ExperimentState {
         }
 
         if (mine !== null && s.status === "running") {
-          if (!startedRef.current) {
-            startedRef.current = true;
-            openEventSource(); // it is our turn: attach to the live stream
+          startedRef.current = true;
+          if (esRef.current === null) {
+            // The stream may fail independently of the status endpoint.
+            openEventSource();
           }
         }
         setStatus(s);
