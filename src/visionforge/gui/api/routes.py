@@ -105,16 +105,11 @@ from visionforge.gui.api.profiles import (
     PROFILE_HEADER,
     InvalidProfileError,
     Profile,
-    ProfileCreateError,
-    ProfileExistsError,
-    ProfileNameError,
     UnknownProfileError,
-    create_profile,
     default_profile,
-    list_profiles,
     resolve_profile,
-    update_profile,
 )
+from visionforge.gui.api.profiles_routes import build_profiles_router
 from visionforge.gui.api.run_queue import (
     NotStoppableError,
     QueuedJob,
@@ -167,10 +162,6 @@ from visionforge.gui.api.schemas import (
     PreprocessPreviewRequest,
     PreprocessPreviewResponse,
     PreprocessPreviewStep,
-    ProfileCreateRequest,
-    ProfileInfo,
-    ProfileListResponse,
-    ProfileUpdateRequest,
     QueuedJobInfo,
     QueueSnapshot,
     RegressionDatasetStatsRequest,
@@ -561,72 +552,9 @@ async def model_defaults(req: ModelDefaultsRequest) -> ModelDefaultsResponse:
     )
 
 
-def _profile_info(profile: Profile) -> ProfileInfo:
-    return ProfileInfo(
-        slug=profile.slug,
-        name=profile.name,
-        is_default=profile.is_default,
-        pronoun=profile.pronoun,
-    )
-
-
-@router.get("/profiles")
-async def get_profiles() -> ProfileListResponse:
-    """Every profile, the default one first (ADR-114).
-
-    Deliberately not behind ``current_profile``: the picker must be able to list
-    them while the browser still holds a slug that no longer exists.
-    """
-    return ProfileListResponse(
-        profiles=[_profile_info(p) for p in list_profiles(_PROFILES_DIR, _MODELS_DIR)]
-    )
-
-
-@router.post("/profiles", status_code=201)
-async def add_profile(req: ProfileCreateRequest) -> ProfileInfo:
-    """Create ``outputs/profiles/<slug>/`` for a display name (ADR-114).
-
-    Raises:
-        HTTPException: 422 when nothing usable is left of the name or it is
-            reserved, 409 when that folder already exists, 500 when the OS
-            refuses to make the folders (permissions, full disk).
-    """
-    try:
-        profile = create_profile(req.name, _PROFILES_DIR, _MODELS_DIR, req.pronoun)
-    except ProfileNameError as exc:
-        raise HTTPException(422, str(exc)) from exc
-    except ProfileExistsError as exc:
-        raise HTTPException(409, str(exc)) from exc
-    except ProfileCreateError as exc:
-        logger.warning("GUI: could not create profile for {!r}: {}", req.name, exc)
-        raise HTTPException(500, str(exc)) from exc
-    logger.info("GUI: created profile {} at {}", profile.slug, profile.root)
-    return _profile_info(profile)
-
-
-@router.put("/profiles/{slug}")
-async def edit_profile(slug: str, req: ProfileUpdateRequest) -> ProfileInfo:
-    """Change a profile's display name and/or pronoun, the default's too (ADR-126).
-
-    Raises:
-        HTTPException: 400 for an unsafe slug, 404 for one with no folder, 422
-            when the new name is empty once tidied, 500 when the OS refuses to
-            write the file.
-    """
-    try:
-        profile = update_profile(
-            slug, _PROFILES_DIR, _MODELS_DIR, name=req.name, pronoun=req.pronoun
-        )
-    except InvalidProfileError as exc:
-        raise HTTPException(400, str(exc)) from exc
-    except UnknownProfileError as exc:
-        raise HTTPException(404, str(exc)) from exc
-    except ProfileNameError as exc:
-        raise HTTPException(422, str(exc)) from exc
-    except ProfileCreateError as exc:
-        logger.warning("GUI: could not save profile {}: {}", slug, exc)
-        raise HTTPException(500, str(exc)) from exc
-    return _profile_info(profile)
+# Profile endpoints live in profiles_routes.py (ADR-132). The paths stay owned
+# here so tests that repoint routes._MODELS_DIR / _PROFILES_DIR still reach them.
+router.include_router(build_profiles_router(lambda: (_PROFILES_DIR, _MODELS_DIR)))
 
 
 @router.get("/runs")

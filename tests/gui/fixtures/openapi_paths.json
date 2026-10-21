@@ -1,0 +1,1418 @@
+{
+  "DELETE /api/credentials/{provider}": {
+    "operationId": "forget_credential_route_api_credentials__provider__delete",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "path:provider:required"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "CredentialsResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "DELETE /api/custom/{key}": {
+    "operationId": "delete_custom_task_api_custom__key__delete",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "path:key:required",
+      "query:confirm:optional"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "CustomTaskActionResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "DELETE /api/queue/{run_id}": {
+    "operationId": "cancel_queued_run_api_queue__run_id__delete",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "path:run_id:required"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "DELETE /api/runs/{run_id}": {
+    "operationId": "delete_run_api_runs__run_id__delete",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional",
+      "path:run_id:required"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "GET /api/anomaly/schema": {
+    "operationId": "get_anomaly_schema_api_anomaly_schema_get",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "GET /api/artifacts/{file_path}": {
+    "operationId": "serve_artifact_api_artifacts__file_path__get",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "path:file_path:required"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": null
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "GET /api/credentials": {
+    "operationId": "get_credentials_api_credentials_get",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "CredentialsResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "GET /api/custom/{key}/schema": {
+    "operationId": "custom_task_schema_api_custom__key__schema_get",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "path:key:required"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "GET /api/dataset/file": {
+    "operationId": "serve_dataset_file_api_dataset_file_get",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "query:path:required"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": null
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "GET /api/detection/schema": {
+    "operationId": "get_detection_schema_api_detection_schema_get",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "GET /api/device/info": {
+    "operationId": "get_device_info_api_device_info_get",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "DeviceInfoResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "GET /api/experiment/events": {
+    "operationId": "experiment_events_api_experiment_events_get",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": null
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "GET /api/experiment/result/{run_id}": {
+    "operationId": "get_result_api_experiment_result__run_id__get",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "path:run_id:required"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "RunResult"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "GET /api/experiment/status": {
+    "operationId": "get_status_api_experiment_status_get",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "RunStatus"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "GET /api/health": {
+    "operationId": "health_api_health_get",
+    "parameters": [],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      }
+    }
+  },
+  "GET /api/profiles": {
+    "operationId": "get_profiles_api_profiles_get",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "ProfileListResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "GET /api/queue": {
+    "operationId": "get_queue_api_queue_get",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "QueueSnapshot"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "GET /api/regression/schema": {
+    "operationId": "get_regression_schema_api_regression_schema_get",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "GET /api/runs": {
+    "operationId": "list_runs_api_runs_get",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "array[RunSummary]"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "GET /api/runs/{run_id}": {
+    "operationId": "get_run_detail_api_runs__run_id__get",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional",
+      "path:run_id:required"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "RunDetail"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "GET /api/runs/{run_id}/export_md": {
+    "operationId": "export_run_markdown_api_runs__run_id__export_md_get",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional",
+      "path:run_id:required"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": null
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "GET /api/schema": {
+    "operationId": "get_schema_api_schema_get",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "GET /api/segmentation/schema": {
+    "operationId": "get_segmentation_schema_api_segmentation_schema_get",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "GET /api/system/info": {
+    "operationId": "get_system_info_api_system_info_get",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "SystemInfo"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "GET /api/tasks": {
+    "operationId": "list_tasks_api_tasks_get",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "TaskListResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "GET /api/update": {
+    "operationId": "get_update_api_update_get",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "GET /{path}": {
+    "operationId": "spa_fallback__path__get",
+    "parameters": [
+      "path:path:required"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": null
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/anomaly/compare": {
+    "operationId": "compare_anomaly_api_anomaly_compare_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {
+      "application/json": "ComparisonRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "RunResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/anomaly/dataset/stats": {
+    "operationId": "anomaly_dataset_stats_api_anomaly_dataset_stats_post",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {
+      "application/json": "AnomalyDatasetStatsRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "AnomalyDatasetStatsResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/anomaly/replicated-comparison": {
+    "operationId": "replicated_comparison_anomaly_api_anomaly_replicated_comparison_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {
+      "application/json": "ReplicatedComparisonRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "RunResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/anomaly/replicates": {
+    "operationId": "replicates_anomaly_api_anomaly_replicates_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {
+      "application/json": "ReplicatesRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "RunResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/anomaly/run": {
+    "operationId": "run_anomaly_api_anomaly_run_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {
+      "application/json": "AnomalyConfig"
+    },
+    "responses": {
+      "200": {
+        "application/json": "RunResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/anomaly/sweep": {
+    "operationId": "sweep_anomaly_api_anomaly_sweep_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {
+      "application/json": "SweepRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "RunResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/checkpoint/pick": {
+    "operationId": "pick_checkpoint_file_api_checkpoint_pick_post",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "CheckpointPickResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/classification/replicated-comparison": {
+    "operationId": "replicated_comparison_classification_api_classification_replicated_comparison_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {
+      "application/json": "ReplicatedComparisonRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "RunResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/classification/replicates": {
+    "operationId": "replicates_classification_api_classification_replicates_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {
+      "application/json": "ReplicatesRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "RunResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/credentials": {
+    "operationId": "save_credential_route_api_credentials_post",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {
+      "application/json": "CredentialSaveRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "CredentialsResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/custom/{key}/hide": {
+    "operationId": "hide_custom_task_api_custom__key__hide_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "path:key:required"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "CustomTaskActionResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/custom/{key}/replicated-comparison": {
+    "operationId": "replicated_comparison_custom_api_custom__key__replicated_comparison_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional",
+      "path:key:required"
+    ],
+    "requestBody": {
+      "application/json": "ReplicatedComparisonRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "RunResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/custom/{key}/replicates": {
+    "operationId": "replicates_custom_task_api_custom__key__replicates_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional",
+      "path:key:required"
+    ],
+    "requestBody": {
+      "application/json": "ReplicatesRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "RunResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/custom/{key}/run": {
+    "operationId": "run_custom_task_api_custom__key__run_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional",
+      "path:key:required"
+    ],
+    "requestBody": {
+      "application/json": "object"
+    },
+    "responses": {
+      "200": {
+        "application/json": "RunResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/custom/{key}/sweep": {
+    "operationId": "sweep_custom_task_api_custom__key__sweep_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional",
+      "path:key:required"
+    ],
+    "requestBody": {
+      "application/json": "SweepRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "RunResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/custom/{key}/unhide": {
+    "operationId": "unhide_custom_task_api_custom__key__unhide_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "path:key:required"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "CustomTaskActionResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/dataset/detect": {
+    "operationId": "detect_dataset_api_dataset_detect_post",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {
+      "application/json": "DatasetDetectRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "DatasetDetectResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/dataset/download": {
+    "operationId": "dataset_download_api_dataset_download_post",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {
+      "application/json": "DatasetDownloadRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "DatasetDownloadResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/dataset/pick": {
+    "operationId": "pick_dataset_folder_api_dataset_pick_post",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "DatasetPickResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/dataset/preview_augment": {
+    "operationId": "preview_augment_api_dataset_preview_augment_post",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {
+      "application/json": "AugmentPreviewRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "AugmentPreviewResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/dataset/preview_preprocess": {
+    "operationId": "preview_preprocess_api_dataset_preview_preprocess_post",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {
+      "application/json": "PreprocessPreviewRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "PreprocessPreviewResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/dataset/samples": {
+    "operationId": "dataset_samples_api_dataset_samples_post",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {
+      "application/json": "DatasetSamplesRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "DatasetSamplesResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/dataset/stats": {
+    "operationId": "dataset_stats_api_dataset_stats_post",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {
+      "application/json": "DatasetStatsRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "DatasetStatsResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/detection/compare": {
+    "operationId": "compare_detection_api_detection_compare_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {
+      "application/json": "ComparisonRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "RunResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/detection/dataset/pick_yaml": {
+    "operationId": "pick_detection_yaml_api_detection_dataset_pick_yaml_post",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "DatasetPickResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/detection/dataset/samples": {
+    "operationId": "detection_dataset_samples_api_detection_dataset_samples_post",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {
+      "application/json": "DetectionDatasetSamplesRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "DetectionDatasetSamplesResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/detection/dataset/stats": {
+    "operationId": "detection_dataset_stats_api_detection_dataset_stats_post",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {
+      "application/json": "DetectionDatasetStatsRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "DetectionDatasetStatsResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/detection/replicated-comparison": {
+    "operationId": "replicated_comparison_detection_api_detection_replicated_comparison_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {
+      "application/json": "ReplicatedComparisonRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "RunResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/detection/replicates": {
+    "operationId": "replicates_detection_api_detection_replicates_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {
+      "application/json": "ReplicatesRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "RunResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/detection/run": {
+    "operationId": "run_detection_api_detection_run_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {
+      "application/json": "DetectionConfig"
+    },
+    "responses": {
+      "200": {
+        "application/json": "RunResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/detection/sweep": {
+    "operationId": "sweep_detection_api_detection_sweep_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {
+      "application/json": "SweepRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "RunResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/experiment/run": {
+    "operationId": "run_experiment_api_experiment_run_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {
+      "application/json": "ExperimentConfig"
+    },
+    "responses": {
+      "200": {
+        "application/json": "RunResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/model/defaults": {
+    "operationId": "model_defaults_api_model_defaults_post",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {
+      "application/json": "ModelDefaultsRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "ModelDefaultsResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/profiles": {
+    "operationId": "add_profile_api_profiles_post",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {
+      "application/json": "ProfileCreateRequest"
+    },
+    "responses": {
+      "201": {
+        "application/json": "ProfileInfo"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/regression/compare": {
+    "operationId": "compare_regression_api_regression_compare_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {
+      "application/json": "ComparisonRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "RunResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/regression/cv": {
+    "operationId": "cv_regression_api_regression_cv_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {
+      "application/json": "TaskCvRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "RunResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/regression/dataset/stats": {
+    "operationId": "regression_dataset_stats_api_regression_dataset_stats_post",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {
+      "application/json": "RegressionDatasetStatsRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "RegressionDatasetStatsResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/regression/replicated-comparison": {
+    "operationId": "replicated_comparison_regression_api_regression_replicated_comparison_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {
+      "application/json": "ReplicatedComparisonRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "RunResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/regression/replicates": {
+    "operationId": "replicates_regression_api_regression_replicates_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {
+      "application/json": "ReplicatesRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "RunResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/regression/run": {
+    "operationId": "run_regression_api_regression_run_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {
+      "application/json": "RegressionConfig"
+    },
+    "responses": {
+      "200": {
+        "application/json": "RunResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/regression/sweep": {
+    "operationId": "sweep_regression_api_regression_sweep_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {
+      "application/json": "SweepRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "RunResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/runs/{run_id}/batch_predict": {
+    "operationId": "batch_predict_run_api_runs__run_id__batch_predict_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional",
+      "path:run_id:required"
+    ],
+    "requestBody": {
+      "application/json": "BatchPredictRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "BatchPredictResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/runs/{run_id}/export_onnx": {
+    "operationId": "export_run_to_onnx_api_runs__run_id__export_onnx_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional",
+      "path:run_id:required"
+    ],
+    "requestBody": {
+      "application/json": "ExportOnnxRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "ExportOnnxResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/runs/{run_id}/gradcam": {
+    "operationId": "gradcam_run_api_runs__run_id__gradcam_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional",
+      "path:run_id:required"
+    ],
+    "requestBody": {
+      "application/json": "GradCamRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "GradCamResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/runs/{run_id}/resume": {
+    "operationId": "resume_run_api_runs__run_id__resume_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional",
+      "path:run_id:required"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "RunResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/runs/{run_id}/reveal": {
+    "operationId": "reveal_run_folder_api_runs__run_id__reveal_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional",
+      "path:run_id:required"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/runs/{run_id}/test": {
+    "operationId": "test_run_on_dataset_api_runs__run_id__test_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional",
+      "path:run_id:required"
+    ],
+    "requestBody": {
+      "application/json": "RunTestRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "RunTestResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/sample-dataset": {
+    "operationId": "sample_dataset_api_sample_dataset_post",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {
+      "application/json": "SampleDatasetRequest"
+    },
+    "responses": {
+      "201": {
+        "application/json": "SampleDatasetResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/segmentation/compare": {
+    "operationId": "compare_segmentation_api_segmentation_compare_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {
+      "application/json": "ComparisonRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "RunResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/segmentation/cv": {
+    "operationId": "cv_segmentation_api_segmentation_cv_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {
+      "application/json": "TaskCvRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "RunResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/segmentation/dataset/stats": {
+    "operationId": "segmentation_dataset_stats_api_segmentation_dataset_stats_post",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {
+      "application/json": "SegmentationDatasetStatsRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "SegmentationDatasetStatsResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/segmentation/replicated-comparison": {
+    "operationId": "replicated_comparison_segmentation_api_segmentation_replicated_comparison_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {
+      "application/json": "ReplicatedComparisonRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "RunResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/segmentation/replicates": {
+    "operationId": "replicates_segmentation_api_segmentation_replicates_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {
+      "application/json": "ReplicatesRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "RunResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/segmentation/run": {
+    "operationId": "run_segmentation_api_segmentation_run_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {
+      "application/json": "SegmentationConfig"
+    },
+    "responses": {
+      "200": {
+        "application/json": "RunResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/segmentation/sweep": {
+    "operationId": "sweep_segmentation_api_segmentation_sweep_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {
+      "application/json": "SweepRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "RunResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/update/apply": {
+    "operationId": "apply_update_api_update_apply_post",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "PUT /api/profiles/{slug}": {
+    "operationId": "edit_profile_api_profiles__slug__put",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "path:slug:required"
+    ],
+    "requestBody": {
+      "application/json": "ProfileUpdateRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "ProfileInfo"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  }
+}

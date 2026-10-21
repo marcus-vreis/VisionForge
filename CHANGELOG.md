@@ -15,6 +15,9 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Added
 
+- **Testes de ponta a ponta da interface** (`npm run e2e` em `frontend/`): abrem a GUI de verdade
+  numa pasta descartável, treinam o dataset de exemplo na CPU até o histórico, param um treino e
+  simulam a queda da conexão; rodam num job novo da CI ([ADR-133](docs/dev/DECISIONS.md), #52).
 - **Comparar arquiteturas na anomalia.** O painel de anomalia ganha a estratégia "Comparar
   arquiteturas": escolha os modelos (autoencoder, PatchCore) e a métrica, e o botão Treinar
   roda um de cada com a mesma config e mostra a tabela comparativa. Ela mede no conjunto de

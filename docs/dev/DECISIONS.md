@@ -5851,3 +5851,83 @@ the same config and tunes nothing, so ranking it on test is the evaluation the
 runs would report one by one. The card (`CompareModelsCard`) and the
 `runCompare` client call are task-agnostic; regression, segmentation and detection
 do not offer them yet.
+
+## ADR-132 — routes.py is split one domain at a time, behind an OpenAPI contract test
+
+**Date:** 2026-10-21
+**Status:** Accepted
+
+**Context:** `gui/api/routes.py` is about 5,600 lines and holds endpoints, task
+dispatch, the state of the running job, report writing and dataset operations
+(issue #54). Reviewing a change to one task means reading code that also drives
+the queue of every other. It is debt seen by inspection, not an observed defect.
+
+**Decision:** shrink it in steps, one domain per change, keeping every HTTP
+contract.
+
+- *Target shape.* Thin routers per domain (profiles, system, datasets,
+  runs/history, queue and run state, task dispatch): a router validates input,
+  resolves the request's dependencies (language, profile), calls a service and
+  maps errors to HTTP status codes. Execution and report services carry no
+  FastAPI import and are testable without HTTP. The queue and the running job's
+  state (`_current_run`, `_event_queue`, `_active_cancel_token`, the job queue)
+  get one explicit owner that routers command through methods.
+- *No cycles, no side effects on import.* A router never imports `routes.py`.
+  Shared values (`_MODELS_DIR`, `_PROFILES_DIR`) keep one owner and reach the
+  routers as a callable read per request until a shared dependencies module
+  exists; tests that repoint `routes._MODELS_DIR` keep working. Importing a
+  router or service starts no training, opens no connection and creates no folder.
+- *The gate.* `tests/gui/test_openapi_contract.py` compares every operation
+  (method, path, operationId, parameters, request and response schema names)
+  with `tests/gui/fixtures/openapi_paths.json`. Moving an endpoint must leave the
+  fixture untouched; an intended API change regenerates it in the same change
+  (`VF_UPDATE_OPENAPI_CONTRACT=1`) and the diff is reviewed.
+- *Order.* profiles (done: `gui/api/profiles_routes.py`), system, datasets,
+  runs/history, queue and run state, task dispatch. A step starts only after the
+  previous one is verified.
+
+**Alternatives considered:** a single rewrite into routers and services (one
+unreviewable diff over the code that ties UI, data and training together);
+separate services or processes (nothing here needs to scale out).
+
+**Consequences:** the contract test sees operations, not the fields inside a
+schema; a renamed field in a response model still passes it. Until a shared
+dependencies module exists, `routes.py` owns the output folders and the
+language dependency, and the extracted router is mounted from it so it inherits
+`request_lang`.
+
+## ADR-133 — An end-to-end GUI suite drives the built SPA against a real server on the CPU
+
+**Date:** 2026-10-21
+**Status:** Accepted
+
+**Context:** the frontend tests (Vitest) mock the API and the self-test drives
+the API without a browser. Nothing checked that what a researcher clicks
+(welcome, sample dataset, epochs, device, Train, Stop, History) reaches the
+trainer and comes back to the screen (issue #52).
+
+**Decision:** a small Playwright suite, `frontend/e2e/*.e2e.ts` (`npm run e2e`),
+drives the SPA served by a real `visionforge gui` and trains the classification
+sample dataset for real.
+
+- The server starts through `e2e/serve.mjs` from `frontend/e2e/.work`, recreated
+  on every run and git-ignored, so the suite never writes to the user's
+  `outputs/` or `datasets/`. It runs with `CUDA_VISIBLE_DEVICES=""` and the tests
+  pick CPU in the device selector: it never takes a GPU a real training is using.
+- `VF_E2E_EXECUTABLE` selects the server (the project venv locally, the installed
+  `visionforge` in CI); the port is 8765 unless `VF_E2E_PORT` says otherwise.
+  Locally the installed Chrome is used (no browser download); CI installs
+  Playwright's chromium.
+- Three serial tests, one worker, no retries (there is one training slot, and a
+  retry would meet the runs of the failed attempt): one epoch through to the
+  History, stopping a training, and the status poll failing for a few seconds.
+- The suite tests the built bundle in `src/visionforge/gui/static`, which is
+  committed: rebuild it before running locally. A new CI job, `e2e`, builds it,
+  runs the suite and uploads the report and traces when it fails.
+
+**Consequences:** the CI job downloads the resnet18 weights each run (the default
+run is pretrained). The connection test pins today's behaviour: when the status
+poll fails the training overlay declares the run failed and does not reconnect,
+although the run finishes on the server. That is a defect of
+`hooks/useExperiment.ts`, tracked separately; the test is to require recovery once
+the hook retries.
