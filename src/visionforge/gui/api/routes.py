@@ -8,7 +8,6 @@ import csv
 import io
 import json
 import os
-import platform
 import re
 import traceback
 import uuid
@@ -25,7 +24,6 @@ from fastapi.responses import FileResponse, JSONResponse, Response, StreamingRes
 from loguru import logger
 from pydantic import ValidationError
 
-from visionforge import __version__
 from visionforge.blocks.anomaly import AnomalyBlock
 from visionforge.blocks.anomaly_runner import AnomalyRunner
 from visionforge.blocks.batch_prediction import BatchPredictionBlock
@@ -55,14 +53,7 @@ from visionforge.core.data import DataModule
 from visionforge.core.dataset_fingerprint import dataset_identity
 from visionforge.core.detection_data import resolve_yolo_split
 from visionforge.core.evaluator import Evaluator
-from visionforge.core.image_size import median_image_side, suggested_image_size
 from visionforge.core.latex_export import report_to_latex
-from visionforge.core.learning_rate import (
-    collapse_evidence,
-    is_collapse_prone,
-    suggested_learning_rate,
-    suggested_optimizer,
-)
 from visionforge.core.loader_lifecycle import describe_worker_spawn_failure
 from visionforge.core.plotter import MetricsPlotter
 from visionforge.core.replicated_comparison import (
@@ -100,7 +91,6 @@ from visionforge.gui.api.folder_opener import (
     open_folder,
 )
 from visionforge.gui.api.gpu_health import cuda_context_broken
-from visionforge.gui.api.model_notes import collapse_note
 from visionforge.gui.api.profiles import (
     PROFILE_HEADER,
     InvalidProfileError,
@@ -129,7 +119,6 @@ from visionforge.gui.api.schemas import (
     BatchPredictRequest,
     BatchPredictResponse,
     CheckpointPickResponse,
-    CollapseEvidenceResponse,
     ComparisonRequest,
     CredentialEntry,
     CredentialSaveRequest,
@@ -150,15 +139,11 @@ from visionforge.gui.api.schemas import (
     DetectionDatasetStatsRequest,
     DetectionDatasetStatsResponse,
     DetectionSplitStats,
-    DeviceInfoResponse,
     ExportOnnxRequest,
     ExportOnnxResponse,
-    GPUInfo,
     GradCamItem,
     GradCamRequest,
     GradCamResponse,
-    ModelDefaultsRequest,
-    ModelDefaultsResponse,
     PreprocessPreviewRequest,
     PreprocessPreviewResponse,
     PreprocessPreviewStep,
@@ -185,11 +170,11 @@ from visionforge.gui.api.schemas import (
     SegmentationSplitStats,
     SplitStats,
     SweepRequest,
-    SystemInfo,
     TaskCvRequest,
     TaskDescriptor,
     TaskListResponse,
 )
+from visionforge.gui.api.system_routes import build_system_router
 from visionforge.gui.api.torch_batch_predict import (
     batch_predict_anomaly_run,
     batch_predict_regression_run,
@@ -466,90 +451,11 @@ async def get_schema() -> dict[str, Any]:
     return ExperimentConfig.model_json_schema()
 
 
-@router.get("/system/info")
-async def get_system_info() -> SystemInfo:
-    """CPU probe used to derive sensible defaults (workers, threads).
-
-    Suggested workers follow PyTorch's common heuristic min(cpu_count, 8):
-    too many workers fight the GIL on small datasets and burn RAM on the
-    DataLoader pre-fetch queues without speeding things up.
-    """
-    import os
-
-    cpu = os.cpu_count() or 1
-    return SystemInfo(
-        cpu_count=cpu,
-        # What the machine can commit, not just how many cores it has: workers
-        # are processes that re-import torch, and the CPU count says nothing
-        # about whether there is memory for them (ADR-098).
-        suggested_workers=worker_budget(loader_pools=3),
-        platform=platform.system(),
-        version=__version__,
-    )
-
-
-@router.get("/device/info")
-async def get_device_info() -> DeviceInfoResponse:
-    """Probe the runtime and return the real list of selectable devices."""
-    info = check_cuda()
-    gpus = [
-        GPUInfo(
-            index=d.index,
-            name=d.name,
-            total_memory_mb=d.total_memory_mb,
-            compute_capability=d.compute_capability,
-        )
-        for d in info.devices
-    ]
-    return DeviceInfoResponse(
-        cuda_available=info.available,
-        cuda_version=info.cuda_version,
-        cpu_name=platform.processor() or platform.machine() or "CPU",
-        gpus=gpus,
-    )
-
-
-@router.post("/model/defaults")
-async def model_defaults(req: ModelDefaultsRequest) -> ModelDefaultsResponse:
-    """Suggested settings for this architecture (ADR-099/100).
-
-    Offered to the form so choosing a model updates the fields in front of the
-    researcher, rather than substituting values behind them: the failure this
-    comes from is a number that appeared without anyone knowing why.
-    """
-    arch = req.architecture
-    optimizer = suggested_optimizer(arch)
-    rate = suggested_learning_rate(arch, optimizer)
-
-    median: int | None = None
-    size: int | None = None
-    if req.base_dir:
-        root = Path(req.base_dir)
-        median = median_image_side(root)
-        size = suggested_image_size(root, arch, pretrained=req.pretrained)
-
-    note: str | None = None
-    prone = is_collapse_prone(arch, "adam", 1e-3)
-    evidence = collapse_evidence(arch) if prone else None
-    if prone:
-        note = collapse_note(arch, optimizer, rate, evidence)
-    elif median is not None and size is not None and median < size:
-        note = tr("model.small_images", median=median)
-
-    return ModelDefaultsResponse(
-        architecture=arch,
-        optimizer=optimizer,
-        learning_rate=rate,
-        image_size=size,
-        dataset_median_side=median,
-        collapse_prone=prone,
-        collapse_evidence=(
-            CollapseEvidenceResponse.model_validate(asdict(evidence))
-            if evidence is not None
-            else None
-        ),
-        note=note,
-    )
+# Read probes per request so runtime overrides remain effective (ADR-132).
+# Three loader pools reserve memory for train, validation and test (ADR-098).
+router.include_router(
+    build_system_router(lambda: check_cuda(), lambda: worker_budget(loader_pools=3))
+)
 
 
 # Profile endpoints live in profiles_routes.py (ADR-132). The paths stay owned

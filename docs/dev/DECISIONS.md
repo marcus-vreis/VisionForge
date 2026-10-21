@@ -5896,6 +5896,13 @@ dependencies module exists, `routes.py` owns the output folders and the
 language dependency, and the extracted router is mounted from it so it inherits
 `request_lang`.
 
+**Update (2026-10-21):** system information, device information and model
+defaults move to `system_routes.py`; `system_service.py` composes their payloads
+without FastAPI. Runtime probes remain injected and are resolved per request.
+The profile and system routers inherit the parent language dependency; the
+OpenAPI fixture remains unchanged. Update endpoints stay with the execution
+state they depend on. Further domains remain incremental work under this ADR.
+
 ## ADR-133 — An end-to-end GUI suite drives the built SPA against a real server on the CPU
 
 **Date:** 2026-10-21
