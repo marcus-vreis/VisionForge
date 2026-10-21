@@ -39,7 +39,9 @@ class TestReplicatesEndpoints:
         # Probe the APIRouter directly: depending on the Starlette version,
         # app.routes may hide included-router children entirely.
         _, routes_mod = app_and_routes
-        paths = {route.path for route in routes_mod.router.routes}
+        # getattr: newer FastAPI keeps an included router (profiles, ADR-132) as an
+        # entry without a path of its own.
+        paths = {getattr(route, "path", None) for route in routes_mod.router.routes}
         for task in (
             "classification",
             "regression",

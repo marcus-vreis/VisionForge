@@ -144,6 +144,8 @@ class TestEndpointsExposed:
         # app.routes may hide included-router children entirely.
         from visionforge.gui.api.routes import router
 
-        paths = {route.path for route in router.routes}
+        # getattr: newer FastAPI keeps an included router (profiles, ADR-132) as an
+        # entry without a path of its own.
+        paths = {getattr(route, "path", None) for route in router.routes}
         for task in ("segmentation", "anomaly", "regression"):
             assert f"/api/{task}/dataset/stats" in paths
