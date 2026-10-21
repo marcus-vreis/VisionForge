@@ -35,6 +35,14 @@ class CrossValidationConfig(BaseModel):
     stratified: bool = True
     shuffle: bool = True
     fold_seed: int = 42
+    group_manifest: Path | None = Field(
+        default=None,
+        description=(
+            "Optional path,group CSV; image paths are relative to data.base_dir. "
+            "Relative manifest paths are also resolved against data.base_dir. "
+            "All training images require a group; folds keep groups disjoint."
+        ),
+    )
 
 
 class ModelConfig(BaseModel):

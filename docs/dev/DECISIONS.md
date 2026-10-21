@@ -6012,3 +6012,36 @@ names, declared sizes and digests without extracting the archive.
 versions of libraries that compute metrics. A portable record needs integrity
 checks without silently copying unrelated files or overwriting an earlier
 export.
+
+**CLI:** `visionforge bundle RUN_DIR DESTINATION.zip` exports the record and
+`visionforge verify-bundle DESTINATION.zip` checks it. Both print JSON; invalid
+requests or archives exit with code 2. No training or dataset copying occurs.
+
+## ADR-136 — Data audits compare content and classification CV respects groups
+
+**Date:** 2026-10-21
+**Status:** Accepted
+**Extends:** ADR-013, ADR-128
+
+**Decision:** A read-only dataset audit hashes image bytes to find exact
+duplicates across declared splits, reporting unreadable and unsafe paths with
+bounded details and deterministic ordering. It does not infer visual similarity.
+Optional CSV metadata uses path,group columns with dataset-relative image paths.
+Strict audits report groups crossing split boundaries as invalid.
+
+Classification cross-validation can consume this group metadata and use
+GroupKFold or StratifiedGroupKFold, preserving the current split strategy when
+no group manifest is provided. Every training sample must have one group;
+invalid, ambiguous and missing mappings fail before training. The number of
+distinct training groups must support the requested fold count.
+
+**Reason:** Correct class indices and disjoint filenames do not prevent related
+samples or identical image bytes from leaking across evaluation boundaries.
+Group identity must come from the researcher; the application cannot infer a
+patient, plant or acquisition session from image content.
+
+**CLI:** `visionforge audit-data ROOT` prints a JSON report; repeated
+`--split NAME=PATH` overrides split locations, `--groups` supplies metadata and
+`--strict-groups` requires disjoint groups. `--json` writes a new report without
+overwriting an existing file. Exit codes are 0 for a clean audit, 1 for findings
+and 2 for invalid requests. Auditing never changes the dataset.

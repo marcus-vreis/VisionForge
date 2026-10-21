@@ -67,3 +67,4 @@ mape
 raison
 comandos
 prefere
+foto

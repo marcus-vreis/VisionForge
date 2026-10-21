@@ -117,6 +117,53 @@ def _bind_language_from_env() -> None:
         set_lang(lang)
 
 
+def _run_evidence_command(
+    args: argparse.Namespace, parser: argparse.ArgumentParser
+) -> None:
+    """Run read-only audits or explicit bundle exports with JSON output."""
+    try:
+        if args.command == "audit-data":
+            from visionforge.core.dataset_audit import audit_dataset
+
+            splits: dict[str, str] | None = None
+            if args.split:
+                splits = {}
+                for value in args.split:
+                    name, separator, path = value.partition("=")
+                    if not separator or not name or not path or name in splits:
+                        raise ValueError("Each split must be a unique NAME=PATH pair.")
+                    splits[name] = path
+            report = audit_dataset(
+                args.root,
+                splits,
+                group_manifest=args.groups,
+                strict_groups=args.strict_groups,
+            )
+            payload = json.dumps(report, indent=2, ensure_ascii=False)
+            if args.json is not None:
+                args.json.parent.mkdir(parents=True, exist_ok=True)
+                with args.json.open("x", encoding="utf-8") as stream:
+                    stream.write(payload + "\n")
+            print(payload)
+            if not report["ok"]:
+                raise SystemExit(1)
+        elif args.command == "bundle":
+            from visionforge.core.experiment_bundle import export_experiment_bundle
+
+            path = export_experiment_bundle(args.run_dir, args.destination)
+            print(json.dumps({"bundle": str(path)}, ensure_ascii=False))
+        else:
+            from visionforge.core.experiment_bundle import verify_experiment_bundle
+
+            print(
+                json.dumps(
+                    verify_experiment_bundle(args.bundle), indent=2, ensure_ascii=False
+                )
+            )
+    except (OSError, ValueError) as exc:
+        parser.exit(2, f"visionforge: {exc}\n")
+
+
 def main() -> None:
     """Run a VisionForge experiment or start the GUI from the command line."""
     from visionforge.utils.logger import setup_logger
@@ -202,6 +249,32 @@ def main() -> None:
         "--force", action="store_true", help="overwrite an existing file"
     )
 
+    audit_parser = subparsers.add_parser(
+        "audit-data", help="Audit dataset splits without training."
+    )
+    audit_parser.add_argument("root", type=Path, help="dataset root")
+    audit_parser.add_argument(
+        "--split", action="append", help="split NAME=PATH; repeat for each split"
+    )
+    audit_parser.add_argument(
+        "--groups", type=Path, help="path,group CSV relative to the dataset root"
+    )
+    audit_parser.add_argument(
+        "--strict-groups", action="store_true", help="report groups crossing splits"
+    )
+    audit_parser.add_argument(
+        "--json", type=Path, help="write a new JSON report (never overwrite)"
+    )
+    bundle_parser = subparsers.add_parser(
+        "bundle", help="Export an experiment record with integrity hashes."
+    )
+    bundle_parser.add_argument("run_dir", type=Path)
+    bundle_parser.add_argument("destination", type=Path)
+    verify_parser = subparsers.add_parser(
+        "verify-bundle", help="Verify an experiment record without extracting it."
+    )
+    verify_parser.add_argument("bundle", type=Path)
+
     args = parser.parse_args()
     _bind_language_from_env()
 
@@ -213,6 +286,10 @@ def main() -> None:
         reconfigure = getattr(stream, "reconfigure", None)
         if reconfigure is not None:
             reconfigure(encoding="utf-8", errors="replace")
+
+    if args.command in {"audit-data", "bundle", "verify-bundle"}:
+        _run_evidence_command(args, parser)
+        return
 
     setup_logger()
 

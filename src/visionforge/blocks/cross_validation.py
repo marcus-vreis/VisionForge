@@ -1,15 +1,23 @@
 from __future__ import annotations
 
+import inspect
 import json
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from datetime import datetime
-from typing import Any
+from pathlib import Path
+from typing import Any, cast
 
 import numpy as np
 import torch
 import torchvision.transforms as T
 from loguru import logger
-from sklearn.model_selection import KFold, StratifiedKFold
+from numpy.typing import NDArray
+from sklearn.model_selection import (
+    GroupKFold,
+    KFold,
+    StratifiedGroupKFold,
+    StratifiedKFold,
+)
 from torch.utils.data import DataLoader, Subset
 from torchvision.datasets import ImageFolder
 
@@ -22,12 +30,57 @@ from visionforge.core.cancellation import (
     job_was_stopped,
 )
 from visionforge.core.data import resolve_num_workers
+from visionforge.core.dataset_audit import load_group_manifest
 from visionforge.core.evaluator import Evaluator
 from visionforge.core.replicates import sample_std
 from visionforge.core.run_groups import write_run_group
 from visionforge.core.trainer import Trainer, seed_before_building
 from visionforge.models.factory import ModelFactory
-from visionforge.utils.config import ExperimentConfig
+from visionforge.utils.config import CrossValidationConfig, DataConfig, ExperimentConfig
+
+
+def _split_pool(
+    dataset: ImageFolder, data: DataConfig, cv: CrossValidationConfig
+) -> Iterator[tuple[NDArray[np.int64], NDArray[np.int64]]]:
+    indices = np.arange(len(dataset))
+    targets = np.array(dataset.targets)
+    options = {
+        "n_splits": cv.n_folds,
+        "shuffle": cv.shuffle,
+        "random_state": cv.fold_seed if cv.shuffle else None,
+    }
+    if cv.group_manifest is not None:
+        groups = load_group_manifest(
+            data.base_dir,
+            cv.group_manifest,
+            [Path(path) for path, _ in dataset.samples],
+            allow_other_images=True,
+        )
+        if len(set(groups)) < cv.n_folds:
+            raise ValueError(
+                f"Grouped CV requires at least {cv.n_folds} distinct groups; "
+                f"found {len(set(groups))}."
+            )
+        if cv.stratified:
+            grouped = StratifiedGroupKFold(**options)
+        elif "shuffle" in inspect.signature(GroupKFold).parameters:
+            grouped = GroupKFold(**options)
+        else:
+            if cv.shuffle:
+                raise ValueError(
+                    "Shuffled GroupKFold requires scikit-learn>=1.6; "
+                    "set cross_validation.shuffle=false or upgrade scikit-learn."
+                )
+            grouped = GroupKFold(n_splits=cv.n_folds)
+        return cast(
+            Iterator[tuple[NDArray[np.int64], NDArray[np.int64]]],
+            grouped.split(indices, targets, groups),
+        )
+    if cv.stratified:
+        split_iter = StratifiedKFold(**options).split(indices, targets)
+    else:
+        split_iter = KFold(**options).split(indices)
+    return cast(Iterator[tuple[NDArray[np.int64], NDArray[np.int64]]], split_iter)
 
 
 class _FoldDataModule:
@@ -199,25 +252,7 @@ class CrossValidationBlock(ExperimentBlock):
 
         # Load without normalization — only used to get targets and for stat computation.
         raw_dataset = ImageFolder(str(pool_dir), transform=T.ToTensor())
-        targets = np.array(raw_dataset.targets)
-        n_samples = len(raw_dataset)
-        indices = np.arange(n_samples)
-
-        splitter: KFold | StratifiedKFold
-        if cv.stratified:
-            splitter = StratifiedKFold(
-                n_splits=cv.n_folds,
-                shuffle=cv.shuffle,
-                random_state=cv.fold_seed if cv.shuffle else None,
-            )
-            split_iter = splitter.split(indices, targets)
-        else:
-            splitter = KFold(
-                n_splits=cv.n_folds,
-                shuffle=cv.shuffle,
-                random_state=cv.fold_seed if cv.shuffle else None,
-            )
-            split_iter = splitter.split(indices)
+        split_iter = _split_pool(raw_dataset, data_cfg, cv)
 
         base_name = self._config.name
 

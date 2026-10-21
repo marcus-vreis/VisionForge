@@ -50,7 +50,7 @@ Foundational utilities. No module-level import of another VisionForge package; t
 | `config.py` | Pydantic v2 models for experiment configuration. `load_config(path)` reads a YAML file and validates all fields before any training starts. `model_json_schema()` drives the GUI config form. |
 | `cuda.py` | Runtime device detection. `check_cuda()` returns a `CUDAInfo` snapshot including a `GPUDevice` per visible GPU. Adapts transparently to CPU, single GPU, or multi-GPU and logs device name + CUDA version on startup. |
 | `<task>_config.py` | One standalone Pydantic config tree per non-classification task (`detection_config.py`, `regression_config.py`, `segmentation_config.py`, `anomaly_config.py`) per ADR-033/036/037/038, reusing the shared `OutputConfig`/`DeviceConfig`/`TransformConfig` blocks from `config.py`. |
-| `environment.py` | The `run.json` environment block (ADR-057): Python, torch/torchvision, numpy, CUDA, cuDNN and the GPU model — what makes a recorded number reproducible. |
+| `environment.py` | The `run.json` environment block (ADR-057/135): library versions, CUDA/cuDNN, GPU model and the imported source checkout's Git revision/dirty flag. Unavailable source identity is explicit. |
 | `doctor.py` | `visionforge doctor` — inspects the machine and prints the exact torch install line for it (torch is user-managed per ADR-005). |
 | `messages.py` | Server-written texts in the language of the request (`tr(key, **params)`, ADR-116). |
 | `workers.py` · `credentials.py` · `redact.py` | DataLoader worker budget; local store for dataset-provider API keys; masking of credentials before text is shown or logged. |
@@ -86,11 +86,14 @@ Imports `utils/`, plus `models/` from the four non-classification trainers (see 
 | `significance.py` | Paired significance testing (ADR-061) — paired t / Wilcoxon chosen and *justified* per comparison, Cohen's `d_z`, percentile bootstrap CIs, Holm-Bonferroni across the family, and `min_achievable_p` so an underpowered "not significant" is never read as "no effect". |
 | `latex_export.py` | Paper-ready `booktabs` tables (ADR-061) for replicates / sweep / K-fold / comparison reports, written beside the JSON and CSV. Table notes state what each interval covers and which correction was applied. |
 | `dataset_fingerprint.py` | `dataset_fingerprint` in every `run.json` (ADR-061) — sha256 over the sorted path+size manifest of `data.base_dir`, so "same dataset" becomes checkable. Records the method used, because `manifest` cannot see a same-size edit and `content` can. |
+| `dataset_audit.py` | Read-only cross-split SHA-256 duplicate checks and explicit group manifests (ADR-136). Classification CV consumes the same mapping with GroupKFold/StratifiedGroupKFold. |
+| `experiment_bundle.py` | Contained experiment records (ADR-135): allowlisted run artifacts in a ZIP with a SHA-256/size manifest, atomic export without overwrite, verification without extraction. CLI: `bundle` and `verify-bundle`. |
+| `resume_provenance.py` | Compare a resumed run's recorded dataset fingerprint before native training; reject confirmed changes and warn when legacy identity cannot be verified (ADR-134). |
 | `preprocessing.py` | The filter pipeline (blur, edges, wavelet, CLAHE…) shared by every task, applied before augmentation and normalization. |
 | `gradcam.py` · `onnx_export.py` · `batch_predict.py` | Post-training tooling: explainability heatmaps, ONNX export with a latency benchmark, and batch inference to CSV. |
 | `<task>_data.py` · `<task>_trainer.py` | One pair per standalone task per ADR-033/036/037/038: `regression_*`, `segmentation_*`, `anomaly_*`, and for detection `detection_data.py` (Ultralytics `data.yaml`), `detection_dataset.py` (YOLO-format adapter for torchvision), `detection_metrics.py` (mAP@0.5) and `detection_trainer.py`. A new task adds files here and never edits existing ones. |
 | `run_groups.py` | Replicate sets, K-folds, sweeps and comparisons as History groups (ADR-113, ADR-123, ADR-124): one group `run.json` per job in `<models_dir>/<name>_<suffix>/<group_id>/`, children tagged with `group_id`. |
-| `cancellation.py` · `resume.py` · `loader_lifecycle.py` | Cooperative stop signal; resume state for an interrupted run; deterministic shutdown of DataLoader worker pools. |
+| `cancellation.py` · `resume.py` · `loader_lifecycle.py` | Cooperative stop signal; epoch-boundary resume including RNG and loader generators (ADR-134); deterministic shutdown of DataLoader worker pools. Native runs record effective worker counts in `run.json.runtime`. |
 | `training_health.py` · `metric_ci.py` · `image_size.py` · `learning_rate.py` · `materialized_dataset.py` | Warnings for runs that produced a number instead of a result; bootstrap CIs for one run's test metrics (ADR-074/076); suggested resolution and learning rate; filtered on-disk dataset copies for backends that own their pipeline (ADR-084, ADR-130). |
 
 ### `tasks/` — researcher-defined tasks (ADR-058)

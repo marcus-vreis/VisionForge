@@ -15,6 +15,14 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Added
 
+- **Auditoria de splits pela CLI** (`visionforge audit-data`): encontra imagens idênticas
+  em splits diferentes, arquivos inválidos e grupos compartilhados. O K-fold de classificação
+  aceita um CSV `path,group` para manter amostras relacionadas no mesmo fold
+  ([ADR-136](docs/dev/DECISIONS.md)).
+- **Registros portáteis do experimento** (`visionforge bundle` e `verify-bundle`): exportam
+  metadados e artefatos contidos no run com manifesto SHA-256, sem copiar o dataset e sem
+  sobrescrever um arquivo existente. O ambiente registra mais versões de bibliotecas e a
+  revisão do código quando disponível ([ADR-135](docs/dev/DECISIONS.md)).
 - **Testes de ponta a ponta da interface** (`npm run e2e` em `frontend/`): abrem a GUI de verdade
   numa pasta descartável, treinam o dataset de exemplo na CPU até o histórico, param um treino e
   simulam a queda da conexão; rodam num job novo da CI ([ADR-133](docs/dev/DECISIONS.md), #52).
@@ -48,6 +56,11 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Fixed
 
+- **Retomada preserva a sequência aleatória e o estado da época concluída.** Checkpoints
+  formato 2 guardam os estados de RNG e os generators dos loaders, além de melhor época e
+  patience atualizados. Os testes com zero workers comparam treino contínuo e retomado;
+  formatos antigos continuam legíveis com aviso. Mudanças comprovadas no dataset impedem
+  a retomada ([ADR-134](docs/dev/DECISIONS.md)).
 - **As épocas voltam ao painel quando só o stream de progresso cai.** A consulta de status
   saudável agora reabre um SSE ausente; antes o painel só reconectava depois de uma falha
   também nessa consulta. O teste em navegador cobre essa recuperação e a passagem de um
