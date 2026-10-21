@@ -5,8 +5,9 @@ import { importConfigFromYaml } from "../lib/yaml-config";
 import type { Dict } from "../i18n/pt";
 
 /** Which experiment strategy the standalone-task panel is set to. The strategy
- *  cards (SweepCard / ReplicatesCard / CV) render only for the selected mode. */
-export type PanelStrategy = "simple" | "cv" | "sweep" | "replicates";
+ *  cards (SweepCard / ReplicatesCard / CV / CompareModelsCard) render only for
+ *  the selected mode. */
+export type PanelStrategy = "simple" | "cv" | "sweep" | "replicates" | "compare";
 
 function defaultStrategies(t: Dict): { value: PanelStrategy; label: string }[] {
   return [

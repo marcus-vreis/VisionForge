@@ -141,6 +141,7 @@ export const pt = {
       cv: "▶ Rodar K-fold",
       sweep: "▶ Rodar sweep",
       replicates: "▶ Rodar réplicas",
+      compare: "▶ Comparar arquiteturas",
     },
     error: "Erro",
     // Names a run in the tab title when the server sent no run id.
@@ -925,6 +926,9 @@ export const pt = {
     comparison: {
       title: (ok: number, total: number, failed: number, stopped: number, metric: string) =>
         `// comparação de arquiteturas · ${ok}/${total} ok${failed > 0 ? ` · ${failed} ${failed === 1 ? "falhou" : "falharam"}` : ""}${stopped > 0 ? ` · ${stopped} interrompido${stopped === 1 ? "" : "s"}` : ""} · ranking por ${metric}`,
+      // Under an anomaly comparison: the ranking read the test set (ADR-131).
+      testSetNote:
+        "Métricas do conjunto de teste. Relatório comparativo, não seleção de modelo.",
     },
     sweep: {
       title: (mode: string, ok: number, total: number, stopped: number, metric: string) =>
@@ -1315,8 +1319,13 @@ export const pt = {
   // The anomaly-detection form (components/AnomalyPanel.tsx).
   anomalyPanel: {
     namePlaceholder: "anomaly_001",
-    // The image-level F1 the sweep and the replicates can rank by.
+    // The image-level F1 the comparison and the replicates can rank by.
     imageF1: "F1 (imagem)",
+    compareLabel: "Comparar arquiteturas",
+    // Anomaly has no labelled validation split, so the comparison reads the
+    // test set: it reports, it does not pick a model (ADR-131).
+    compareNote:
+      "Treina cada arquitetura com a mesma config e mede todas no conjunto de teste. É um relatório comparativo, não uma seleção: a anomalia não tem validação rotulada, e escolher o modelo pelo teste deixaria o número otimista. Para afirmar que uma é melhor, rode réplicas de cada uma.",
     model: {
       title: "Modelo · anomalia",
       method: "Método",
@@ -1713,6 +1722,7 @@ export const pt = {
       cv: "K folds sobre o treino → métricas fold a fold + média ± desvio",
       sweep: "grid / random / optuna sobre a config abaixo",
       replicates: "mesma config, N seeds → média ± IC 95%",
+      compare: "uma run por arquitetura, mesma config → tabela comparativa",
     },
   },
   // The K-fold launcher (components/CvCard.tsx).
@@ -1728,6 +1738,14 @@ export const pt = {
     summary: (folds: number) => `${folds} folds · roda pelo botão abaixo`,
   },
   // The multi-seed launcher (components/ReplicatesCard.tsx).
+  // The architecture comparison launcher (components/CompareModelsCard.tsx).
+  compareModelsCard: {
+    title: "Comparação de arquiteturas · relatório",
+    metric: "Ordenar por",
+    summary: (n: number) =>
+      `${n} arquitetura${n === 1 ? "" : "s"} · roda pelo botão abaixo`,
+    blocked: "Selecione pelo menos 2 arquiteturas para comparar.",
+  },
   replicatesCard: {
     title: "Réplicas multi-seed · rigor estatístico",
     description:

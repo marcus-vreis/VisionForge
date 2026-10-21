@@ -134,6 +134,7 @@ export const en: Dict = {
       cv: "▶ Run K-fold",
       sweep: "▶ Run sweep",
       replicates: "▶ Run replicates",
+      compare: "▶ Compare architectures",
     },
     error: "Error",
     unnamedRun: "unnamed run",
@@ -861,6 +862,7 @@ export const en: Dict = {
     comparison: {
       title: (ok: number, total: number, failed: number, stopped: number, metric: string) =>
         `// architecture comparison · ${ok}/${total} ok${failed > 0 ? ` · ${failed} failed` : ""}${stopped > 0 ? ` · ${stopped} stopped` : ""} · ranked by ${metric}`,
+      testSetNote: "Test-set metrics. A comparison report, not a model selection.",
     },
     sweep: {
       title: (mode: string, ok: number, total: number, stopped: number, metric: string) =>
@@ -1211,6 +1213,9 @@ export const en: Dict = {
   anomalyPanel: {
     namePlaceholder: "anomaly_001",
     imageF1: "F1 (image-level)",
+    compareLabel: "Compare architectures",
+    compareNote:
+      "Trains each architecture with the same config and measures all of them on the test set. It is a comparison report, not a selection: anomaly has no labelled validation split, and picking the model by the test set would make its number optimistic. To claim one is better, run replicates of each.",
     model: {
       title: "Model · anomaly",
       method: "Method",
@@ -1552,6 +1557,7 @@ export const en: Dict = {
       cv: "K folds over the training set → per-fold metrics + mean ± std",
       sweep: "grid / random / optuna over the config below",
       replicates: "same config, N seeds → mean ± 95% CI",
+      compare: "one run per architecture, same config → comparison table",
     },
   },
   cvCard: {
@@ -1563,6 +1569,13 @@ export const en: Dict = {
     shuffleHint: "before splitting",
     foldSeed: "Fold seed",
     summary: (folds: number) => `${folds} folds · run it with the button below`,
+  },
+  compareModelsCard: {
+    title: "Architecture comparison · report",
+    metric: "Order by",
+    summary: (n: number) =>
+      `${n} architecture${n === 1 ? "" : "s"} · run it with the button below`,
+    blocked: "Select at least 2 architectures to compare.",
   },
   replicatesCard: {
     title: "Multi-seed replicates · statistical rigor",

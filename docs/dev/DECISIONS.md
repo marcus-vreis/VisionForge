@@ -5836,3 +5836,18 @@ hyperparameters.
 comparable with the test numbers History and the replicates show for the same
 run. Error messages from the refusal and the per-trial failures are English, like
 the rest of `core/sweep.py`.
+
+**Amended 2026-10-21: the anomaly panel compares architectures through
+`/api/anomaly/compare`.** Removing the sweep also removed the "architectures"
+preset, the panel's only way to set autoencoder against PatchCore. The panel gets
+a "Comparar arquiteturas" strategy instead: a card with one checkbox per anomaly
+model (all picked, at least two to run) and the ranking metric (AUROC or image
+F1), sent by the main Train button to the existing comparison route, whose report
+the results view already draws. The card and the results table both say the
+numbers are test-set metrics and that the table is a comparison report, not a
+model selection; the card adds that a claim of one being better needs replicates
+of each. Nothing on the server changes: a comparison trains each model once with
+the same config and tunes nothing, so ranking it on test is the evaluation the
+runs would report one by one. The card (`CompareModelsCard`) and the
+`runCompare` client call are task-agnostic; regression, segmentation and detection
+do not offer them yet.

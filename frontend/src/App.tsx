@@ -7,6 +7,7 @@ import {
   runCustomSweep,
   runCustomTask,
   runReplicates,
+  runCompare,
   runSweep,
   runTaskCv,
 } from "./api/client";
@@ -14,6 +15,7 @@ import type { CvPayload } from "./components/CvCard";
 import type { PanelStrategy } from "./components/ExperimentHeader";
 import type { SweepPayload } from "./components/SweepCard";
 import type { ReplicatesPayload } from "./lib/replicates-form";
+import type { ComparePayload } from "./lib/compare-form";
 import { announce, requestPermission, resetTitle } from "./lib/run-notify";
 import { serverRunning } from "./lib/run-control";
 import { GENERIC_STORY, storySpecFor, type StorySpec } from "./lib/story-family";
@@ -626,6 +628,23 @@ export default function App() {
     await submit({ config, ...payload }, { run: (p) => runSweep(task, p) });
   };
 
+  // Model comparison (ADR-044): one unit per architecture, ranked by the
+  // chosen metric. Same overlay/results flow.
+  const handleCompare = async (task: AdvancedTask, payload: ComparePayload) => {
+    startRun(false);
+    setResultsVisible(false);
+    setOverlayVisible(true);
+    setPipelineSummary([]);
+    setBlockKind("model_comparison");
+    setQueueSize(payload.model_names.length);
+    const config = {
+      ...buildTaskBase(task),
+      device: { kind: device.kind, gpu_ids: device.gpu_ids },
+    };
+    setStorySpec(storySpecFor(task, config));
+    await submit({ config, ...payload }, { run: (p) => runCompare(task, p) });
+  };
+
   const showResults = resultsVisible && result !== null;
 
   return (
@@ -673,6 +692,12 @@ export default function App() {
           <ResultsView
             result={result}
             taskAccent={activeTask.accent}
+            // Anomaly ranks on the test set: say so under its comparison (ADR-131).
+            comparisonNote={
+              activeKey === "anomaly"
+                ? t.resultsView.comparison.testSetNote
+                : undefined
+            }
             // Only a stopped run lists fewer units than it planned; for any other
             // the report's own count is the one to trust.
             submittedUnits={result.stopped === true ? (queueSize ?? null) : null}
@@ -770,6 +795,7 @@ export default function App() {
             onReplicates={(payload) =>
               void handleReplicates("anomaly", payload)
             }
+            onCompare={(payload) => void handleCompare("anomaly", payload)}
             onStrategyChange={setActiveStrategy}
             runSignal={runSignal}
           />

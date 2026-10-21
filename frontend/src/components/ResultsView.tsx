@@ -17,6 +17,8 @@ interface ResultsViewProps {
    *  A stopped job lists only the units that ran, and its header counts against
    *  this when the report does not say how many were planned. */
   submittedUnits?: number | null;
+  /** Shown under a standalone-task comparison, e.g. which split it ranked on. */
+  comparisonNote?: string;
 }
 
 /** Format metric values for display. */
@@ -125,6 +127,7 @@ export function ResultsView({
   onClose,
   taskAccent,
   submittedUnits = null,
+  comparisonNote,
 }: ResultsViewProps) {
   const t = useT();
   const metricLabels: Record<string, string> = t.resultsView.metricLabels;
@@ -349,6 +352,7 @@ export function ResultsView({
             report={result.report}
             accent={taskAccent}
             submitted={submittedUnits}
+            note={comparisonNote}
           />
         ) : isTaskSweepReport(result.report) ? (
           <TaskSweepReport
@@ -995,10 +999,12 @@ function TaskComparisonReport({
   report,
   accent,
   submitted = null,
+  note,
 }: {
   report: Record<string, unknown>;
   accent: string;
   submitted?: number | null;
+  note?: string;
 }) {
   const t = useT();
   const trials = (report["trials"] as TaskComparisonTrial[]) ?? [];
@@ -1114,6 +1120,18 @@ function TaskComparisonReport({
           </tbody>
         </table>
       </div>
+      {note && (
+        <div
+          style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: 10,
+            color: "var(--vf-text-muted)",
+            fontStyle: "italic",
+          }}
+        >
+          {note}
+        </div>
+      )}
     </div>
   );
 }

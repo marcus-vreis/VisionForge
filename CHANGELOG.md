@@ -15,6 +15,11 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Added
 
+- **Comparar arquiteturas na anomalia.** O painel de anomalia ganha a estratégia "Comparar
+  arquiteturas": escolha os modelos (autoencoder, PatchCore) e a métrica, e o botão Treinar
+  roda um de cada com a mesma config e mostra a tabela comparativa. Ela mede no conjunto de
+  teste e é um relatório, não uma seleção de modelo; substitui o preset de arquiteturas que
+  saiu com o sweep ([ADR-131](docs/dev/DECISIONS.md)).
 - **A saudação segue o pronome.** Ao dar o nome na entrada ou criar um perfil, você escolhe
   "Bem-vindo (ele)", "Bem-vinda (ela)" ou "Boas-vindas (neutro)"; o chip do topo e a tela de
   entrada passam a cumprimentar assim (em inglês, sempre "Welcome"). Perfis antigos usam a forma

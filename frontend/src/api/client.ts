@@ -259,6 +259,19 @@ export async function runSweep(
   });
 }
 
+/** Train N architectures of a standalone task on the same config and rank
+ *  them (ADR-044). */
+export async function runCompare(
+  task: string,
+  payload: Record<string, unknown>,
+): Promise<RunResponse> {
+  return request<RunResponse>(`/${task}/compare`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
 /** K-fold cross-validation over a standalone task's train split (ADR-050:
  *  regression rows / segmentation image-mask pairs). */
 export async function runTaskCv(

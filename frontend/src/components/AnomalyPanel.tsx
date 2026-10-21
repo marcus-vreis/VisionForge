@@ -21,8 +21,10 @@ import { AdvancedFields } from "./AdvancedFields";
 import { ExperimentHeader, type PanelStrategy } from "./ExperimentHeader";
 import { ReplicatesCard } from "./ReplicatesCard";
 import { AnomalyDatasetStats } from "./TaskDatasetStats";
+import { CompareModelsCard } from "./CompareModelsCard";
 import { TransformsSection } from "./TransformsSection";
 import type { ReplicatesPayload } from "../lib/replicates-form";
+import type { ComparePayload } from "../lib/compare-form";
 
 interface AnomalyPanelProps {
   formData: AnomalyForm;
@@ -31,6 +33,7 @@ interface AnomalyPanelProps {
   validationErrors: ValidationError[];
   busy?: boolean;
   onReplicates?: (payload: ReplicatesPayload) => void;
+  onCompare?: (payload: ComparePayload) => void;
   /** Lets App label and route the main Treinar button by the active strategy. */
   onStrategyChange?: (strategy: PanelStrategy) => void;
   /** Incremented by Treinar so the selected strategy's card runs. */
@@ -60,6 +63,7 @@ export function AnomalyPanel({
   validationErrors,
   busy,
   onReplicates,
+  onCompare,
   onStrategyChange,
   runSignal,
 }: AnomalyPanelProps) {
@@ -142,8 +146,10 @@ export function AnomalyPanel({
         }}
         // No sweep: anomaly has no labelled validation split to select on, and
         // the server refuses one rather than tune on the test set (ADR-131).
+        // The comparison stays: it reports test metrics and tunes nothing.
         strategies={[
           { value: "simple", label: t.paramPanel.blocks.simple },
+          { value: "compare", label: t.anomalyPanel.compareLabel },
           { value: "replicates", label: t.taskPanel.replicates },
         ]}
         onExportYaml={() =>
@@ -163,6 +169,17 @@ export function AnomalyPanel({
           return null;
         }}
       />
+      {strategy === "compare" && onCompare && (
+        <CompareModelsCard
+          models={anomalyModels(t)}
+          metrics={compareMetrics}
+          note={t.anomalyPanel.compareNote}
+          accent={accent}
+          disabled={busy}
+          onCompare={onCompare}
+          runSignal={runSignal}
+        />
+      )}
       {strategy === "replicates" && onReplicates && (
         <ReplicatesCard
           metrics={compareMetrics}
