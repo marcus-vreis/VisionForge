@@ -6132,3 +6132,19 @@ request cancellation waits for the writer before removing temporary files.
 **Reason:** The local-first interface must expose the safeguards available to
 CLI users. Hashing and ZIP creation must not block status polling or copy data
 outside the selected run/profile.
+
+## ADR-141 — A restricted CPU baseline checks classification parity before a study
+
+**Date:** 2026-10-21
+**Status:** Accepted
+**Extends:** ADR-061, ADR-134
+
+**Decision:** The workflow benchmark starts with an independent native PyTorch
+classification baseline and a matched VisionForge adapter. Both load identical
+initial ResNet18 weights, fixed transforms, splits, seed, optimizer and CPU worker
+settings. A paired harness records phase timings and verifies histories, selected
+weights and test predictions before any performance interpretation.
+
+**Reason:** Runtime and human effort cannot be attributed to tooling when the
+underlying experiments differ. Synthetic runs validate the harness only; they
+are not usability observations, scientific benchmarks or evidence of superiority.

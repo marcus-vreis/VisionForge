@@ -59,3 +59,32 @@ descriptive summaries, without population-wide or causal claims.
 Recruitment/consent process, sample and stopping rule, task script, baseline
 implementation, mistake checklist, timing instrumentation and exact software
 versions. No external participant has been recruited by this repository change.
+
+## Engineering check before collecting workflow measurements
+
+`native_classification.py` provides an independent CPU PyTorch baseline;
+`paired_classification.py` checks it against the public VisionForge Trainer and
+DataModule. Supply real ImageFolder train/val/test splits and a torchvision
+ResNet18 state dictionary with the corresponding output count:
+
+```bash
+python -m research.workflow_benchmark.paired_classification DATA INITIAL.pth OUTPUT --seed 37 --epochs 2 --batch-size 4
+```
+
+The CLI hides CUDA before importing torch and bounds CPU threads. The restricted
+recipe uses 32px resize/center crop, fixed normalization, no augmentation,
+pretrained downloads, AMP or scheduler, SGD with zero momentum and workers=0.
+At 32px the last training batch must contain at least two images for BatchNorm.
+All splits must contain the same class vocabulary. Exact-byte image audit
+findings must be resolved before pairing.
+
+The harness requires identical histories, selected epochs, test predictions and
+best-state tensors, while recording the shared initial-weights hash, dataset
+content fingerprint and environment. Failed pairs retain paired_result.json and
+any completed artifacts; existing outputs are never overwritten.
+
+These are numerical engineering checks. Synthetic test fixtures are not study
+participants or a model-quality benchmark. Phase timings include different
+artifact-writing responsibilities in each implementation; no speed ratio or
+human-effort effect is inferred from them. Align the study's output/timing scopes
+and counterbalance execution order before collecting comparative measurements.

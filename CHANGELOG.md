@@ -26,6 +26,9 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
   ([ADR-140](docs/dev/DECISIONS.md)).
 - **Validação do pacote instalado**: a CI instala o wheel fora do checkout e executa
   treino CPU, auditoria e verificação do bundle ([ADR-139](docs/dev/DECISIONS.md)).
+- **Baseline CPU de classificação**: harness pareado com PyTorch nativo, mesmos pesos
+  iniciais e receita restrita, para conferir equivalência numérica. Não é um resultado
+  científico nem uma comparação de produtividade ([ADR-141](docs/dev/DECISIONS.md)).
 - **Auditoria de splits pela CLI** (`visionforge audit-data`): encontra imagens idênticas
   em splits diferentes, arquivos inválidos e grupos compartilhados. O K-fold de classificação
   aceita um CSV `path,group` para manter amostras relacionadas no mesmo fold
