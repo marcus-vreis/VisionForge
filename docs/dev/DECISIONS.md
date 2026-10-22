@@ -6099,3 +6099,18 @@ continuation because it has no resumable epoch loop.
 **Reason:** A user asking to continue must not unknowingly pay for a new training
 trajectory after a checkpoint disappears or becomes unreadable. Probing history
 must still tolerate older and damaged runs without breaking the listing.
+
+## ADR-139 — CI validates installed distributions outside the checkout
+
+**Date:** 2026-10-21
+**Status:** Accepted
+**Extends:** ADR-073, ADR-133
+
+**Decision:** A separate CPU job builds distributions, installs the wheel without
+editable source paths and executes a synthetic workflow outside the repository.
+It checks package origin, installed static assets, CLI commands, a tiny training
+and the resulting experiment bundle. CI actions use supported Node runtimes.
+
+**Reason:** Editable installs can hide missing files and imports that depend on
+the checkout. Publishing is too late to discover that the built package cannot
+serve its own interface or execute the documented workflow.
