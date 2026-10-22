@@ -170,38 +170,49 @@ def save_resume_state(run_dir: Path, state: ResumeState) -> None:
         tmp.unlink(missing_ok=True)
 
 
-def load_resume_state(run_dir: Path) -> ResumeState | None:
-    """Read the state, or None when there is nothing usable to continue from.
+class ResumeStateError(ValueError):
+    """An explicitly requested checkpoint cannot continue training."""
 
-    Never raises: every failure here means "start fresh", and a run that cannot
-    be continued is a smaller problem than one that refuses to start.
-    """
+    def __init__(self, path: Path, reason: str) -> None:
+        self.path = path
+        self.reason = reason
+        super().__init__(
+            f"Cannot resume from {path}: {reason}. Start a new run explicitly."
+        )
+
+
+def require_resume_state(run_dir: Path) -> ResumeState:
+    """Read a requested continuation or fail without starting a new run."""
     target = resume_path(run_dir)
     if not target.is_file():
-        return None
+        raise ResumeStateError(target, "checkpoint missing")
     try:
         payload = torch.load(target, map_location="cpu", weights_only=True)
-    except Exception as exc:  # noqa: BLE001 - unreadable state is not fatal
-        logger.warning("Resume state at {} could not be read: {}", target, exc)
-        return None
+    except Exception as exc:  # noqa: BLE001 - normalize serialization failures
+        raise ResumeStateError(target, "checkpoint unreadable") from exc
     if not isinstance(payload, dict):
-        logger.warning("Resume state at {} is not a state dict; ignoring.", target)
-        return None
+        raise ResumeStateError(target, "checkpoint invalid")
     version = payload.get("format_version")
     if version not in (1, _FORMAT_VERSION):
-        logger.warning(
-            "Resume state at {} is format {}, this build writes {}; ignoring.",
-            target,
-            version,
-            _FORMAT_VERSION,
-        )
-        return None
+        raise ResumeStateError(target, f"unsupported checkpoint format {version}")
     try:
         rng_state = payload["rng_state"] if version == _FORMAT_VERSION else None
         if version == _FORMAT_VERSION:
             if not isinstance(rng_state, dict):
                 raise ValueError("Missing RNG snapshot")
             _validate_rng_state(rng_state)
+        if not isinstance(payload["model"], dict) or not isinstance(
+            payload["optimizer"], dict
+        ):
+            raise ValueError("Invalid model or optimizer state")
+        history = payload.get("history", [])
+        if not isinstance(history, list) or any(
+            not isinstance(row, dict) for row in history
+        ):
+            raise ValueError("Invalid epoch history")
+        for name in ("scheduler", "scaler"):
+            if payload.get(name) is not None and not isinstance(payload[name], dict):
+                raise ValueError(f"Invalid {name} state")
         state = ResumeState(
             epoch=int(payload["epoch"]),
             model=payload["model"],
@@ -211,17 +222,35 @@ def load_resume_state(run_dir: Path) -> ResumeState | None:
             best_metric=float(payload["best_metric"]),
             best_epoch=int(payload["best_epoch"]),
             patience_counter=int(payload.get("patience_counter", 0)),
-            history=list(payload.get("history", [])),
+            history=history,
             rng_state=rng_state,
         )
+        if min(state.epoch, state.best_epoch, state.patience_counter) < 0:
+            raise ValueError("Invalid epoch bookkeeping")
         if version == 1:
             logger.warning(
                 "Legacy resume state at {} has no RNG snapshot; continuing without exact reproducibility.",
                 target,
             )
         return state
-    except (KeyError, TypeError, ValueError, RuntimeError, AttributeError) as exc:
-        logger.warning("Resume state at {} is missing fields: {}", target, exc)
+    except (
+        KeyError,
+        TypeError,
+        ValueError,
+        OverflowError,
+        RuntimeError,
+        AttributeError,
+    ) as exc:
+        raise ResumeStateError(target, "checkpoint invalid") from exc
+
+
+def load_resume_state(run_dir: Path) -> ResumeState | None:
+    """Probe resumability without failing history listings on damaged files."""
+    try:
+        return require_resume_state(run_dir)
+    except ResumeStateError as exc:
+        if exc.reason != "checkpoint missing":
+            logger.warning("{}", exc)
         return None
 
 

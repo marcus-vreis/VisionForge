@@ -15,7 +15,7 @@ from visionforge.core.detection_trainer import (
     DetectionTrainer,
     _is_worker_spawn_crash,
 )
-from visionforge.core.resume import RESUME_FILENAME
+from visionforge.core.resume import RESUME_FILENAME, ResumeStateError
 from visionforge.utils.detection_config import DetectionConfig
 
 
@@ -613,7 +613,7 @@ class TestTorchvisionResume:
         # The plot needs one train loss per epoch, including the restored ones.
         assert (finished.run_dir / "results.png").exists()
 
-    def test_unreadable_state_starts_a_fresh_run(
+    def test_unreadable_requested_state_preserves_the_stopped_run(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setattr(
@@ -631,10 +631,14 @@ class TestTorchvisionResume:
         )
         (stopped.run_dir / RESUME_FILENAME).write_bytes(b"not a checkpoint")
 
-        finished = DetectionTrainer(cfg).fit(resume_dir=stopped.run_dir)
+        before = (stopped.run_dir / "run.json").read_bytes()
+        directories = set(cfg.output.models_dir.rglob("run.json"))
+        with pytest.raises(ResumeStateError, match="unreadable"):
+            DetectionTrainer(cfg).fit(resume_dir=stopped.run_dir)
 
-        assert finished.run_dir != stopped.run_dir
-        assert [h.epoch for h in finished.history] == [1, 2]
+        assert (stopped.run_dir / RESUME_FILENAME).read_bytes() == b"not a checkpoint"
+        assert (stopped.run_dir / "run.json").read_bytes() == before
+        assert set(cfg.output.models_dir.rglob("run.json")) == directories
 
 
 class TestTorchvisionOptimizer:

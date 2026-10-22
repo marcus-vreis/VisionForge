@@ -38,7 +38,7 @@ from visionforge.core.resume import (
     ResumeState,
     capture_rng_state,
     clear_resume_state,
-    load_resume_state,
+    require_resume_state,
     restore_rng_state,
     save_resume_state,
 )
@@ -153,7 +153,10 @@ class AnomalyTrainer:
         resume_dir: Path | None = None,
     ) -> AnomalyTrainResult:
         """Train (autoencoder) or fit the memory bank (PatchCore) and score test."""
-        if resume_dir is not None and not isinstance(model, PatchCore):
+        if resume_dir is not None and isinstance(model, PatchCore):
+            raise ValueError("Cannot resume PatchCore: it has no resumable epoch loop.")
+        resumed = require_resume_state(resume_dir) if resume_dir is not None else None
+        if resume_dir is not None:
             validate_resume_dataset(resume_dir, self._config)
         _seed_everything(
             self._config.training.seed,
@@ -165,11 +168,6 @@ class AnomalyTrainer:
         # path can be continued at all. Resolved before anything is created: a
         # resumed run must continue in its own directory, or it leaves an empty
         # one behind and writes its TensorBoard events where nothing will look.
-        resumed = (
-            load_resume_state(resume_dir)
-            if resume_dir is not None and not isinstance(model, PatchCore)
-            else None
-        )
         run_dir = (
             resume_dir
             if resumed is not None and resume_dir is not None

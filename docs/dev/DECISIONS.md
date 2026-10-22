@@ -6082,3 +6082,20 @@ from the interface.
 run in the neutral color they used before (`accentForTask` has no color for
 `custom:` tasks). In the light theme a chosen color is used as is, without the
 darkening the built-in accents get.
+
+## ADR-138 — Explicit resume refuses unusable state before training setup
+
+**Date:** 2026-10-21
+**Status:** Accepted
+**Extends:** ADR-092, ADR-093, ADR-134
+
+**Decision:** Native trainers require a usable checkpoint whenever resume_dir is
+provided. Missing, unreadable, unsupported and invalid state raise a specific
+ValueError before model/device preparation, optimizer creation or output writes.
+Read-only capability probes retain the nullable load_resume_state contract.
+An explicit Ultralytics continuation requires its last.pt; PatchCore rejects
+continuation because it has no resumable epoch loop.
+
+**Reason:** A user asking to continue must not unknowingly pay for a new training
+trajectory after a checkpoint disappears or becomes unreadable. Probing history
+must still tolerate older and damaged runs without breaking the listing.
