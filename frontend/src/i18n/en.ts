@@ -48,6 +48,30 @@ const ordinal = (n: number): string => {
 
 /** English. Typed as the Portuguese dictionary, so the two cannot drift. */
 export const en: Dict = {
+  evidence: {
+    audit: "Audit images",
+    auditing: "Auditing images…",
+    title: "Split audit",
+    scope: "Exact duplicates by SHA-256. Visual similarity is not checked.",
+    clean: "No findings in the audited splits.",
+    findings: "The audit found problems.",
+    failed: "Failed to audit the images.",
+    groupManifest: "Group CSV (optional)",
+    groupHint: "Columns path,group; paths relative to the dataset root. In K-fold, whole groups stay in the same fold.",
+    groupPlaceholder: "groups.csv",
+    strictGroups: "Require a group for every image",
+    strictHint: "Use with a group CSV to detect images without a group.",
+    duplicateCount: (n: number) => `Exact duplicate groups: ${n}`,
+    missingCount: (n: number) => `Missing splits: ${n}`,
+    emptyCount: (n: number) => `Empty splits: ${n}`,
+    unreadableCount: (n: number) => `Unreadable images: ${n}`,
+    groupCount: (n: number) => `Groups crossing splits: ${n}`,
+    imageCount: (split: string, n: number) => `${split}: ${n} images`,
+    details: "Details (up to 5 findings per category, 5 paths per group)",
+    bundle: "Download experiment bundle",
+    bundling: "Preparing bundle…",
+    bundleFailed: "Failed to download the bundle.",
+  },
   common: {
     back: "Back",
     skip: "Skip",

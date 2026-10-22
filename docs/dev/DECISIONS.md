@@ -6114,3 +6114,21 @@ and the resulting experiment bundle. CI actions use supported Node runtimes.
 **Reason:** Editable installs can hide missing files and imports that depend on
 the checkout. Publishing is too late to discover that the built package cannot
 serve its own interface or execute the documented workflow.
+
+## ADR-140 — The GUI exposes image audits, classification groups and run bundles
+
+**Date:** 2026-10-21
+**Status:** Accepted
+**Extends:** ADR-114, ADR-135, ADR-136
+
+**Decision:** Dataset audits run explicitly on local image splits through a
+dedicated endpoint off the event loop. Classification CV exposes group-manifest
+selection. History can download a contained run bundle; the server resolves runs
+inside the active profile and cleans temporary archives after the response.
+Audit findings are visible without silently rewriting data or training settings.
+An in-process reservation excludes continuation while source files are copied;
+request cancellation waits for the writer before removing temporary files.
+
+**Reason:** The local-first interface must expose the safeguards available to
+CLI users. Hashing and ZIP creation must not block status polling or copy data
+outside the selected run/profile.

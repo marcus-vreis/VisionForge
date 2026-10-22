@@ -26,6 +26,9 @@ const child = spawn(exe, ["gui", "--port", port, "--no-browser"], {
     // The suite trains on the CPU even when the UI would offer a GPU: the
     // machine's GPU may be busy with a real training.
     CUDA_VISIBLE_DEVICES: "",
+    OMP_NUM_THREADS: "1",
+    MKL_NUM_THREADS: "1",
+    OPENBLAS_NUM_THREADS: "1",
     VISIONFORGE_NO_BROWSER: "1",
   },
 });

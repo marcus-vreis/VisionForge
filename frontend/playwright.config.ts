@@ -40,6 +40,7 @@ export default defineConfig({
   expect: { timeout: 15_000 },
   reporter: CI ? [["list"], ["html", { open: "never" }]] : [["list"]],
   use: {
+    launchOptions: { args: ["--disable-gpu"] },
     baseURL: `http://127.0.0.1:${PORT}`,
     locale: "pt-BR",
     actionTimeout: 15_000,

@@ -27,6 +27,67 @@ import type {
 
 const BASE = "/api";
 
+export interface DatasetAuditRequest {
+  base_dir: string;
+  splits?: Record<string, string> | null;
+  group_manifest?: string | null;
+  strict_groups?: boolean;
+}
+
+export interface DatasetAuditReport {
+  ok: boolean;
+  root: string;
+  hash_algorithm: "sha256";
+  visual_similarity_checked: false;
+  image_counts: Record<string, number>;
+  duplicate_groups: { sha256: string; splits: string[]; paths: string[] }[];
+  missing_splits: string[];
+  empty_splits: string[];
+  unreadable_count: number;
+  unreadable: { path: string; reason: string }[];
+  group_manifest: string | null;
+  strict_groups: boolean;
+  group_overlaps: { group: string; splits: string[]; paths: string[] }[];
+}
+
+/** Explicitly audit image splits for exact duplicates and group leakage. */
+export async function auditDataset(body: DatasetAuditRequest): Promise<DatasetAuditReport> {
+  return request<DatasetAuditReport>("/dataset/audit", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+/** Download the run's evidence ZIP with the active profile and language. */
+export async function downloadRunBundle(runId: string): Promise<void> {
+  let res: Response;
+  try {
+    res = await fetch(`${BASE}/runs/${encodeURIComponent(runId)}/bundle`, withContext());
+  } catch (error) {
+    throw new ApiError(0, errorTexts().cannotConnect,
+      error instanceof Error ? error.message : String(error));
+  }
+  if (!res.ok) {
+    let detail: unknown;
+    try { detail = (await res.json() as { detail?: unknown }).detail; } catch { /* Non-JSON error. */ }
+    throw new ApiError(res.status, typeof detail === "string" ? detail : `HTTP ${res.status}`);
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  const disposition = res.headers.get("content-disposition") ?? "";
+  anchor.download = disposition.match(/filename="([^"]+)"/)?.[1] ?? `${runId}.zip`;
+  try {
+    document.body.appendChild(anchor);
+    anchor.click();
+  } finally {
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  }
+}
+
 /**
  * The language on screen, resolved the way the provider seeds it.
  *

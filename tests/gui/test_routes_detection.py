@@ -73,19 +73,19 @@ class TestDetectionRun:
         DetectionBlock.report = fake_report  # type: ignore[method-assign]
 
         try:
-            client = TestClient(app, raise_server_exceptions=True)
-            resp = client.post("/api/detection/run", json=_payload(tmp_path))
-            assert resp.status_code == 200, resp.text
+            with TestClient(app, raise_server_exceptions=True) as client:
+                resp = client.post("/api/detection/run", json=_payload(tmp_path))
+                assert resp.status_code == 200, resp.text
 
-            # Wait for run(), not setup(): has_callback is written in run, and
-            # waiting on setup's key raced the assert below.
-            for _ in range(100):
-                if "has_callback" in captured:
-                    break
-                time.sleep(0.05)
-            assert captured.get("class") == "DetectionBlock"
-            assert captured.get("model") == "yolo11n"
-            assert captured.get("has_callback") is True
+                # Wait for run(), not setup(): has_callback is written in run, and
+                # waiting on setup's key raced the assert below.
+                for _ in range(100):
+                    if "has_callback" in captured:
+                        break
+                    time.sleep(0.05)
+                assert captured.get("class") == "DetectionBlock"
+                assert captured.get("model") == "yolo11n"
+                assert captured.get("has_callback") is True
         finally:
             DetectionBlock.setup = orig_setup  # type: ignore[method-assign]
             DetectionBlock.run = orig_run  # type: ignore[method-assign]

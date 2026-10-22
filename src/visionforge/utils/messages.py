@@ -550,6 +550,22 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "en": "Batch inference is not supported for '{task}' runs yet.",
     },
     # ── runs and the queue ───────────────────────────────────────────────────
+    "evidence.audit_failed": {
+        "pt": "Não foi possível auditar as imagens: {error}",
+        "en": "Could not audit images: {error}",
+    },
+    "evidence.bundle_failed": {
+        "pt": "Não foi possível exportar o experimento: {error}",
+        "en": "Could not export the experiment: {error}",
+    },
+    "evidence.run_busy": {
+        "pt": "Este run está em execução ou aguarda retomada. Exporte após o término.",
+        "en": "This run is active or queued for continuation. Export after it finishes.",
+    },
+    "evidence.export_busy": {
+        "pt": "O experimento está sendo exportado. Aguarde o término antes de continuar.",
+        "en": "The experiment is being exported. Wait for it to finish before continuing.",
+    },
     "run.not_found": {
         "pt": "Run '{run_id}' não encontrado.",
         "en": "Run '{run_id}' not found.",

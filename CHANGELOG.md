@@ -19,6 +19,13 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
   PT/EN, escolhe a cor da tela dela entre dez opções ou qualquer outra; "voltar à cor original"
   devolve a do registro. A tela da tarefa já passa a usar a cor que ela registrou, em vez do
   vermelho ([ADR-137](docs/dev/DECISIONS.md)).
+
+- **Evidências pela GUI**: auditoria de imagens e grupos nos splits de classificação,
+  CSV de grupos no K-fold e download do bundle no histórico. A exportação recusa runs
+  ativos ou na fila e bloqueia a retomada enquanto lê os artefatos
+  ([ADR-140](docs/dev/DECISIONS.md)).
+- **Validação do pacote instalado**: a CI instala o wheel fora do checkout e executa
+  treino CPU, auditoria e verificação do bundle ([ADR-139](docs/dev/DECISIONS.md)).
 - **Auditoria de splits pela CLI** (`visionforge audit-data`): encontra imagens idênticas
   em splits diferentes, arquivos inválidos e grupos compartilhados. O K-fold de classificação
   aceita um CSV `path,group` para manter amostras relacionadas no mesmo fold
@@ -62,6 +69,14 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 - **A tela de anomalia é âmbar, como a aba e o histórico já mostravam**; estava vermelha como a
   de classificação ([ADR-137](docs/dev/DECISIONS.md)).
+
+- **Retomada explícita falha antes de preparar o treino** se o checkpoint estiver ausente,
+  ilegível ou incompatível. Nenhuma nova execução é iniciada silenciosamente; PatchCore
+  recusa a retomada e Ultralytics exige `weights/last.pt`
+  ([ADR-138](docs/dev/DECISIONS.md)).
+- **K-fold de classificação reaparece na GUI** quando o schema representa a configuração
+  opcional com `anyOf`; o CSV de grupos é preservado ao exportar e importar o YAML
+  ([ADR-140](docs/dev/DECISIONS.md)).
 - **Retomada preserva a sequência aleatória e o estado da época concluída.** Checkpoints
   formato 2 guardam os estados de RNG e os generators dos loaders, além de melhor época e
   patience atualizados. Os testes com zero workers comparam treino contínuo e retomado;

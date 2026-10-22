@@ -307,6 +307,21 @@
       }
     }
   },
+  "GET /api/runs/{run_id}/bundle": {
+    "operationId": "download_bundle_api_runs__run_id__bundle_get",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional",
+      "path:run_id:required"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
   "GET /api/runs/{run_id}/export_md": {
     "operationId": "export_run_markdown_api_runs__run_id__export_md_get",
     "parameters": [
@@ -691,6 +706,23 @@
     "responses": {
       "200": {
         "application/json": "CustomTaskActionResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/dataset/audit": {
+    "operationId": "audit_images_api_dataset_audit_post",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {
+      "application/json": "DatasetAuditRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
       },
       "422": {
         "application/json": "HTTPValidationError"

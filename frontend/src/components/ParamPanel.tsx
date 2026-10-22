@@ -12,6 +12,7 @@ import {
 import { AugmentPreview } from "./AugmentPreview";
 import { DatasetPicker } from "./DatasetPicker";
 import { DatasetStats } from "./DatasetStats";
+import { DatasetAudit } from "./DatasetAudit";
 import {
   PreprocessingPanel,
   type PreprocessingStep as PreprocessingUIStep,
@@ -541,7 +542,7 @@ function BlockSelector({
 }
 
 
-/** Cross-validation hyperparameters — n_folds, stratified, shuffle, fold_seed. */
+/** Classification cross-validation settings, including optional group isolation. */
 function CrossValidationFields({
   schema,
   defs,
@@ -556,7 +557,9 @@ function CrossValidationFields({
   errors: ValidationError[];
 }) {
   const t = useT();
-  const resolved = resolveSchema(schema, defs);
+  // Pydantic wraps this optional config in anyOf[$ref, null].
+  const configSchema = schema.anyOf?.find((branch) => branch.type !== "null") ?? schema;
+  const resolved = resolveSchema(configSchema, defs);
   if (!resolved.properties) return null;
 
   const setParam = (k: string, v: unknown) => onChange({ ...value, [k]: v });
@@ -564,6 +567,7 @@ function CrossValidationFields({
 
   return (
     <div
+      data-testid="classification-cross-validation"
       style={{
         marginBottom: 26,
         padding: 18,
@@ -608,6 +612,14 @@ function CrossValidationFields({
           ) : null,
         )}
       </div>
+      <TextField
+        label={t.evidence.groupManifest}
+        value={typeof value.group_manifest === "string" ? value.group_manifest : ""}
+        onChange={(v) => setParam("group_manifest", v.trim() ? v : null)}
+        placeholder={t.evidence.groupPlaceholder}
+        help={t.evidence.groupHint}
+        mono
+      />
     </div>
   );
 }
@@ -2452,6 +2464,13 @@ export function ParamPanel({
             };
           })
         }
+      />
+
+      <DatasetAudit
+        baseDir={(dataData["base_dir"] as string) ?? ""}
+        trainDir={(dataData["train_dir"] as string) ?? "train"}
+        valDir={(dataData["val_dir"] as string) ?? "val"}
+        testDir={(dataData["test_dir"] as string) ?? "test"}
       />
 
       {/* Classes — task + nº de classes, alimentados pela detecção do dataset.

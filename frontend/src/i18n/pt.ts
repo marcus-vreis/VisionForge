@@ -48,6 +48,30 @@ const measuredNote = (facts: CollapseFacts, whatHappened: string): string => {
  * with `common` for the words every screen repeats.
  */
 export const pt = {
+  evidence: {
+    audit: "Auditar imagens",
+    auditing: "Auditando imagens…",
+    title: "Auditoria dos splits",
+    scope: "Duplicatas exatas por SHA-256. Similaridade visual não é verificada.",
+    clean: "Nenhum achado nos splits auditados.",
+    findings: "A auditoria encontrou problemas.",
+    failed: "Não foi possível auditar as imagens.",
+    groupManifest: "CSV de grupos (opcional)",
+    groupHint: "Colunas path,group; caminhos relativos à raiz do dataset. No K-fold, grupos inteiros ficam no mesmo fold.",
+    groupPlaceholder: "groups.csv",
+    strictGroups: "Exigir grupo para todas as imagens",
+    strictHint: "Use com um CSV de grupos para detectar imagens sem grupo.",
+    duplicateCount: (n: number) => `Grupos de duplicatas exatas: ${n}`,
+    missingCount: (n: number) => `Splits ausentes: ${n}`,
+    emptyCount: (n: number) => `Splits vazios: ${n}`,
+    unreadableCount: (n: number) => `Imagens ilegíveis: ${n}`,
+    groupCount: (n: number) => `Grupos entre splits: ${n}`,
+    imageCount: (split: string, n: number) => `${split}: ${n} imagens`,
+    details: "Detalhes (até 5 achados por categoria, 5 caminhos por grupo)",
+    bundle: "Baixar bundle do experimento",
+    bundling: "Preparando bundle…",
+    bundleFailed: "Não foi possível baixar o bundle.",
+  },
   common: {
     back: "Voltar",
     skip: "Pular",
