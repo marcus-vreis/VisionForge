@@ -5,6 +5,7 @@ import { greeting } from "../lib/greeting";
 import type { GuideId } from "../lib/guides";
 import type { Pronoun } from "../lib/profile";
 import { GuideMenu } from "./GuideMenu";
+import { TaskColorDot } from "./TaskColorDot";
 import { ThemeSwitch } from "./ThemeSwitch";
 import { UpdateNotice } from "./UpdateNotice";
 
@@ -63,6 +64,7 @@ export function Header({
   onGuide,
   profileName,
   onChangeProfile,
+  taskColor,
 }: {
   userName?: string;
   /** Como a saudação trata quem usa (ADR-126); sem ele, a forma neutra. */
@@ -74,6 +76,13 @@ export function Header({
    *  não aparece e uma instalação de uma pessoa não vê nada novo. */
   profileName?: string;
   onChangeProfile?: () => void;
+  /** The open tab's color picker, only when it is a researcher's task (ADR-137). */
+  taskColor?: {
+    color: string;
+    registered: string;
+    taskLabel: string;
+    onChange: (color: string | null) => void;
+  };
 } = {}) {
   const [time, setTime] = useState(() => new Date());
   // Read from the backend rather than hardcoded: a screenshot of a bug then
@@ -155,6 +164,7 @@ export function Header({
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+        {taskColor && <TaskColorDot {...taskColor} />}
         {/* Two real buttons rather than one that flips: each language is a
             target of its own, and aria-pressed says which one is on. */}
         <div

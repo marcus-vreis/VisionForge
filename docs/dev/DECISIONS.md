@@ -6045,3 +6045,40 @@ patient, plant or acquisition session from image content.
 `--strict-groups` requires disjoint groups. `--json` writes a new report without
 overwriting an existing file. Exit codes are 0 for a clean audit, 1 for findings
 and 2 for invalid requests. Auditing never changes the dataset.
+
+## ADR-137 — Anomaly is amber on screen, and a researcher's task wears its own color
+
+**Date:** 2026-10-21
+**Status:** Accepted
+**Amends:** ADR-058 (researcher tasks), ADR-125 (light theme)
+
+**Context:** the stage takes its accent tokens (`--accent-vf` and its three
+derived tones) from a `.stage[data-task=…]` block in `index.css`. Classification,
+detection, regression and segmentation had one; anomaly did not, so its screen
+fell back to the default red, the classification color, although its tab, the
+history and the training story already call it amber. A researcher's task
+registers a `#rrggbb` accent (`@register_task(accent=…)`) that colored only its
+tab; the rest of its screen was red too. The user also asked to choose that color
+from the interface.
+
+**Decision:**
+- `index.css` gains the anomaly block, in both themes, with the amber the rest of
+  the interface uses (`oklch(0.80 0.15 75)`, `oklch(0.50 0.15 75)` in light).
+- A researcher's task drives the stage from its own color: `lib/task-color.ts`
+  derives the four tokens with `color-mix` and the stage sets them inline.
+- A dot in the header, shown only while a researcher's task is open, picks its
+  color: ten swatches, a free color input and "back to the original color". The
+  choice is per browser (`vf.taskColor.<key>`), like the theme and the language;
+  only `#rrggbb` values are read back. The task's tab and screen follow it.
+
+**Alternatives considered:**
+- *Store the color with the task on the server.* The color is a preference of
+  whoever looks at the screen, as the theme is; the registered accent remains
+  the task's own default.
+- *Let built-in tasks be recolored too.* Their colors identify them across the
+  history, the training story and the documentation.
+
+**Consequences:** the history and the training story still show a researcher's
+run in the neutral color they used before (`accentForTask` has no color for
+`custom:` tasks). In the light theme a chosen color is used as is, without the
+darkening the built-in accents get.

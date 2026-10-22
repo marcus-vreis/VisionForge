@@ -80,6 +80,12 @@ import {
   mergeTasks,
   type TaskDescriptor,
 } from "./lib/custom-tasks";
+import {
+  readTaskColor,
+  saveTaskColor,
+  stageAccentVars,
+  withTaskColors,
+} from "./lib/task-color";
 import { CustomTaskPanel } from "./components/CustomTaskPanel";
 import { ContentBoundary } from "./components/ErrorBoundary";
 import { ResultsView } from "./components/ResultsView";
@@ -209,10 +215,32 @@ export default function App() {
   // /api/tasks (ADR-058). One form per custom key so switching tabs
   // preserves what the researcher typed.
   const [taskRows, setTaskRows] = useState<TaskDescriptor[]>([]);
-  const tasks = useMemo(
+  // A researcher's task can wear another color than the one it registered
+  // (ADR-137); the choice is per browser.
+  // Bumped when a color is chosen, so the stored colors are read again.
+  const [colorVersion, setColorVersion] = useState(0);
+  const registeredTasks = useMemo(
     () => mergeTasks(t, taskDefinitions(t), taskRows),
     [t, taskRows],
   );
+  const taskColors = useMemo(() => {
+    const stored: Record<string, string> = {};
+    for (const task of registeredTasks) {
+      const color = isCustomTask(task) ? readTaskColor(task.key) : null;
+      if (color) stored[task.key] = color;
+    }
+    return stored;
+    // colorVersion is the signal that storage changed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [registeredTasks, colorVersion]);
+  const tasks = useMemo(
+    () => withTaskColors(registeredTasks, taskColors, isCustomTask),
+    [registeredTasks, taskColors],
+  );
+  const chooseTaskColor = (key: string, color: string | null) => {
+    saveTaskColor(key, color);
+    setColorVersion((v) => v + 1);
+  };
   const [customForms, setCustomForms] = useState<
     Record<string, Record<string, unknown>>
   >({});
@@ -652,6 +680,8 @@ export default function App() {
       className="stage"
       data-task={activeKey}
       style={{
+        // index.css colors the built-in tasks; a researcher's task takes its own.
+        ...(isCustomTask(activeTask) ? stageAccentVars(activeTask.accent) : {}),
         minHeight: "100vh",
         position: "relative",
         overflow: "hidden",
@@ -670,6 +700,18 @@ export default function App() {
           sharedServer && profile ? profileLabel(profile, t.profile.defaultShort) : undefined
         }
         onChangeProfile={() => setPickProfile(true)}
+        taskColor={
+          isCustomTask(activeTask)
+            ? {
+                color: activeTask.accent,
+                registered:
+                  registeredTasks.find((task) => task.key === activeTask.key)?.accent ??
+                  activeTask.accent,
+                taskLabel: activeTask.label,
+                onChange: (color) => chooseTaskColor(activeTask.key, color),
+              }
+            : undefined
+        }
       />
 
       <TabBar tasks={tasks} activeKey={activeKey} setActiveKey={setActiveKey} />

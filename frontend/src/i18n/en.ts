@@ -113,6 +113,12 @@ export const en: Dict = {
     switchTo: "Switch to Portuguese",
     names: { pt: "Português", en: "English" },
   },
+  taskColor: {
+    label: (task: string) => `${task} color`,
+    title: "Task color",
+    other: "Other color",
+    reset: "Back to the original color",
+  },
   theme: {
     label: "Theme",
     names: { system: "Automatic (follows the system)", light: "Light", dark: "Dark" },

@@ -15,6 +15,10 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Added
 
+- **Cor das tarefas que você criou.** Com uma tarefa sua aberta, uma bolinha no topo, ao lado de
+  PT/EN, escolhe a cor da tela dela entre dez opções ou qualquer outra; "voltar à cor original"
+  devolve a do registro. A tela da tarefa já passa a usar a cor que ela registrou, em vez do
+  vermelho ([ADR-137](docs/dev/DECISIONS.md)).
 - **Auditoria de splits pela CLI** (`visionforge audit-data`): encontra imagens idênticas
   em splits diferentes, arquivos inválidos e grupos compartilhados. O K-fold de classificação
   aceita um CSV `path,group` para manter amostras relacionadas no mesmo fold
@@ -56,6 +60,8 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Fixed
 
+- **A tela de anomalia é âmbar, como a aba e o histórico já mostravam**; estava vermelha como a
+  de classificação ([ADR-137](docs/dev/DECISIONS.md)).
 - **Retomada preserva a sequência aleatória e o estado da época concluída.** Checkpoints
   formato 2 guardam os estados de RNG e os generators dos loaders, além de melhor época e
   patience atualizados. Os testes com zero workers comparam treino contínuo e retomado;

@@ -117,6 +117,13 @@ export const pt = {
     names: { pt: "Português", en: "English" },
   },
   // The theme switch next to the language pair (ADR-125).
+  // The color picker of a researcher's own task, in the header (ADR-137).
+  taskColor: {
+    label: (task: string) => `Cor de ${task}`,
+    title: "Cor da tarefa",
+    other: "Outra cor",
+    reset: "Voltar à cor original",
+  },
   theme: {
     label: "Tema",
     names: { system: "Automático (segue o sistema)", light: "Claro", dark: "Escuro" },
