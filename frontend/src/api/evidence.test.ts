@@ -39,7 +39,7 @@ describe("experiment bundle download", () => {
     const anchor = { href: "", download: "", click: vi.fn(), remove: vi.fn() };
     const appendChild = vi.fn();
     vi.stubGlobal("document", { createElement: () => anchor, body: { appendChild } });
-    const createObjectURL = vi.fn(() => "blob:evidence");
+    const createObjectURL = vi.fn<typeof URL.createObjectURL>(() => "blob:evidence");
     const revokeObjectURL = vi.fn();
     vi.stubGlobal("URL", { createObjectURL, revokeObjectURL });
 
