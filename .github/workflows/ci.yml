@@ -392,6 +392,14 @@ jobs:
         with:
           fetch-depth: 0
 
+      - uses: actions/setup-python@v7.0.0
+        with:
+          python-version: "3.13"
+
+      - name: Read analyzed project version
+        id: sonar-version
+        run: python scripts/sonar_project_version.py >> "$GITHUB_OUTPUT"
+
       - name: Download coverage XML
         uses: actions/download-artifact@v8.0.2
         with:
@@ -403,4 +411,5 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         with:
           args: >
+            -Dsonar.projectVersion=${{ steps.sonar-version.outputs.version }}
             -Dsonar.python.coverage.reportPaths=coverage.xml

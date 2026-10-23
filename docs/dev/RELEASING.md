@@ -122,3 +122,22 @@ never paste credentials into issues, logs or PRs. Follow the
 
 The codespell allowlist includes `afterall` to preserve Playwright's `test.afterAll`
 API. Review hook rewrites before pushing and rerun affected checks if code changed.
+
+### Analyzed version and New Code reference
+
+The Sonar job derives `sonar.projectVersion` from `project.version` in the
+analyzed checkout's `pyproject.toml` (ADR-147). It does not import an installed
+VisionForge package, which may have a different version, or maintain a second
+version in `sonar-project.properties`. A package version bump needs no additional
+Sonar edit. Local scanner invocations must pass the same property explicitly;
+`python scripts/sonar_project_version.py` prints `version=<checkout version>`.
+
+Before correcting the old `0.0.1` label on 2026-10-23, Administration > New code
+showed **Previous version**. The overview showed 330 overall findings on the
+older baseline. Correcting the label to the actual source version can move the
+New Code reference. Compare the analyzed SCM revision, overall findings and
+New Code reference before and after the scan; a changed New Code gate alone is
+not evidence of debt removal. Do not reset dates, change the definition or
+lower gate thresholds to make the transition pass. See the official
+[version parameter](https://docs.sonarsource.com/sonarqube-cloud/analyzing-source-code/analysis-parameters/parameters-not-settable-in-ui)
+and [New Code definition](https://docs.sonarsource.com/sonarqube-cloud/managing-your-projects/project-analysis/configuring-new-code-calculation).
