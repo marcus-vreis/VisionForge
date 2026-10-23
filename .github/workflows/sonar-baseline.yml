@@ -1,0 +1,46 @@
+name: Sonar integration baseline bootstrap
+
+on:
+  push:
+    branches: ["codex/sonar-baseline-bootstrap"]
+
+permissions:
+  contents: read
+
+jobs:
+  baseline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CUDA_VISIBLE_DEVICES: "-1"
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: f0c84898201d9db338ec28dfc9e3e5c5acefd5c7
+          fetch-depth: 0
+      - uses: actions/setup-python@v7.0.0
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v10.3.1
+      - name: Install CPU dependencies
+        run: |
+          uv venv --python 3.13
+          source .venv/bin/activate
+          uv pip install -e ".[dev]"
+          uv pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+      - name: Measure coverage of the actual integration commit
+        run: |
+          source .venv/bin/activate
+          test "$(git rev-parse HEAD)" = f0c84898201d9db338ec28dfc9e3e5c5acefd5c7
+          pytest --cov=src --cov-report=xml --cov-report=term-missing --cov-fail-under=70
+      - name: Analyze the integration baseline
+        uses: SonarSource/sonarqube-scan-action@v8.3.0
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >-
+            -Dsonar.branch.name=development
+            -Dsonar.scm.revision=f0c84898201d9db338ec28dfc9e3e5c5acefd5c7
+            -Dsonar.python.coverage.reportPaths=coverage.xml
