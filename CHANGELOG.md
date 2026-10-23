@@ -88,6 +88,10 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Fixed
 
+- **O melhor checkpoint de regressão e segmentação guarda os pesos da época certa.** Ele era
+  gravado numa thread a partir dos próprios tensores de treino, que a época seguinte continuava
+  alterando; quando o melhor não era a última época, `best_model.pth` podia sair com pesos
+  misturados. Agora a gravação recebe uma cópia, como a classificação já fazia.
 - **Rótulos dos formulários associados aos controles**: clicar no texto foca o campo
   correto; leitores de tela recebem o nome, a ajuda, o erro e os estados dos controles.
   Instâncias com rótulos repetidos usam IDs distintos ([ADR-142](docs/dev/DECISIONS.md), #59).
