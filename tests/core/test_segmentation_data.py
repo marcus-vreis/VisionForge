@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pickle
+import random
 from pathlib import Path
 
 import numpy as np
@@ -172,21 +173,66 @@ class TestSegmentationDataset:
         restored = pickle.loads(pickle.dumps(ds))
         assert len(restored) == 2
 
-    def test_joint_hflip_keeps_image_and_mask_aligned(self, tmp_path: Path) -> None:
-        # With hflip on and a fixed seed, both image and mask must flip together.
-        _make_split(tmp_path, "train", 1)
-        d = _config(tmp_path, {"data": {"transforms": {"horizontal_flip": True}}}).data
+    @pytest.mark.parametrize(("seed", "flipped"), [(1, True), (2, False)])
+    def test_joint_hflip_keeps_image_and_mask_aligned(
+        self, tmp_path: Path, seed: int, flipped: bool
+    ) -> None:
+        images = tmp_path / "train/images"
+        masks = tmp_path / "train/masks"
+        images.mkdir(parents=True)
+        masks.mkdir(parents=True)
+        labels = np.zeros((32, 32), dtype=np.uint8)
+        labels[2:12, 3:9] = 1
+        labels[19:28, 17:30] = 2
+        pixels = np.stack([labels == 1, labels == 2, labels == 0], axis=-1)
+        pixels = pixels.astype(np.uint8) * 255
+        Image.fromarray(pixels).save(images / "sample.png")
+        Image.fromarray(labels).save(masks / "sample.png")
+        d = _config(
+            tmp_path,
+            {
+                "data": {
+                    "transforms": {
+                        "horizontal_flip": True,
+                        "rotation_degrees": 0,
+                        "color_jitter": False,
+                        "normalize_mean": [0.0, 0.0, 0.0],
+                        "normalize_std": [1.0, 1.0, 1.0],
+                    }
+                }
+            },
+        ).data
         ds = SegmentationDataset(
-            tmp_path / "train" / "images",
-            tmp_path / "train" / "masks",
+            images,
+            masks,
             image_size=32,
             ignore_index=255,
             transform_cfg=d.transforms,
             preprocessing_cfg=d.preprocessing,
             is_train=True,
         )
-        # Reading the same item must yield mask spatial dims unchanged (no desync crash).
-        _, mask = ds[0]
+        state = random.getstate()
+        try:
+            random.seed(seed)
+            image, mask = ds[0]
+            random.seed(seed)
+            repeated_image, repeated_mask = ds[0]
+        finally:
+            random.setstate(state)
+
+        expected_pixels = pixels[:, ::-1] if flipped else pixels
+        expected_labels = labels[:, ::-1] if flipped else labels
+        expected_image = (
+            torch.from_numpy(expected_pixels.copy()).permute(2, 0, 1).float() / 255
+        )
+        expected_mask = torch.from_numpy(expected_labels.copy()).long()
+        assert torch.equal(image, expected_image)
+        assert torch.equal(mask, expected_mask)
+        assert torch.equal(image[0], (mask == 1).float())
+        assert torch.equal(image[1], (mask == 2).float())
+        assert torch.equal(image[2], (mask == 0).float())
+        assert torch.equal(image, repeated_image)
+        assert torch.equal(mask, repeated_mask)
         assert mask.shape == (32, 32)
 
 
