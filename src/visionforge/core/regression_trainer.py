@@ -14,6 +14,7 @@ import math
 import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
+from copy import deepcopy
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -297,8 +298,18 @@ class RegressionTrainer:
                     if isinstance(model, nn.DataParallel)
                     else model.state_dict()
                 )
+                # The writer must own frozen CPU tensors: state_dict() shares
+                # storage with parameters that the next optimizer step mutates.
                 if save_future is not None:
                     save_future.result()
+                state_dict = deepcopy(
+                    state_dict,
+                    {
+                        id(value): value.detach().to("cpu", copy=True)
+                        for value in state_dict.values()
+                        if isinstance(value, torch.Tensor)
+                    },
+                )
                 save_future = save_pool.submit(torch.save, state_dict, model_path)
             else:
                 patience_counter += 1
