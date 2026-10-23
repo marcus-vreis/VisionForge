@@ -26,6 +26,7 @@ from visionforge.utils.config import (
     migrate_config_dict,
 )
 from visionforge.utils.messages import tr
+from visionforge.utils.paths import RunName
 
 # torchvision segmentation families + a hand-rolled U-Net. Explicit so
 # config validation rejects an unsupported name before any weights are loaded.
@@ -171,7 +172,7 @@ class SegmentationTransferLearningConfig(BaseModel):
 class SegmentationConfig(BaseModel):
     """Top-level semantic-segmentation experiment configuration."""
 
-    name: str = Field(default="segmentation_001", min_length=1)
+    name: RunName = Field(default="segmentation_001", min_length=1)
     schema_version: int = Field(default=CURRENT_SCHEMA_VERSION, ge=1)
     task: Literal["segmentation"] = "segmentation"
     model: SegmentationModelConfig = Field(default_factory=SegmentationModelConfig)

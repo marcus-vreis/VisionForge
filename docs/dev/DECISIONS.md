@@ -6082,3 +6082,22 @@ from the interface.
 run in the neutral color they used before (`accentForTask` has no color for
 `custom:` tasks). In the light theme a chosen color is used as is, without the
 darkening the built-in accents get.
+
+## ADR-146 — Run identifiers and group metadata stay inside the selected model root
+
+**Date:** 2026-10-23
+**Status:** Accepted
+**Extends:** ADR-002, ADR-113, ADR-123, ADR-124
+
+**Decision:** Built-in and custom task configs validate run names as portable,
+single directory components. Group names and IDs use the same validation. A group
+writer validates its destination and every child metadata/staging path against
+the selected model root before tagging any child. Escaping symlinks or junctions
+and multiply linked metadata files are rejected. Explicit model roots outside
+outputs remain supported.
+
+**Reason:** A name containing parent segments could create a group outside the
+configured root; a child report could redirect tagging to an unrelated run.json.
+Preflight validation prevents partial tagging when a later path is invalid and
+stops existing staging aliases from redirecting writes. Existing unsafe names
+are rejected rather than silently rewritten; ordinary Unicode names remain intact.

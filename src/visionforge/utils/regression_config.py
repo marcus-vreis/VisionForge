@@ -27,6 +27,7 @@ from visionforge.utils.config import (
     migrate_config_dict,
 )
 from visionforge.utils.messages import tr
+from visionforge.utils.paths import RunName
 
 # Backbones reused from the classification factory; regression swaps the final
 # layer for a linear head rather than a softmax classifier.
@@ -206,7 +207,7 @@ class RegressionTransferLearningConfig(BaseModel):
 class RegressionConfig(BaseModel):
     """Top-level image-regression experiment configuration."""
 
-    name: str = Field(default="regression_001", min_length=1)
+    name: RunName = Field(default="regression_001", min_length=1)
     schema_version: int = Field(default=CURRENT_SCHEMA_VERSION, ge=1)
     task: Literal["regression"] = "regression"
     model: RegressionModelConfig = Field(default_factory=RegressionModelConfig)

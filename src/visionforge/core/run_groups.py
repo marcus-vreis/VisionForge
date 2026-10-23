@@ -25,11 +25,15 @@ from __future__ import annotations
 import contextlib
 import json
 import math
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal
 
 from loguru import logger
+
+from visionforge.utils.messages import tr
+from visionforge.utils.paths import validate_path_component
 
 GroupKind = Literal["replicates", "replicated_comparison", "kfold", "sweep"]
 
@@ -46,7 +50,35 @@ _DIR_SUFFIX: dict[str, str] = {
 
 def group_run_dir(models_dir: Path, name: str, kind: GroupKind, group_id: str) -> Path:
     """Where a group's ``run.json`` lives: ``<models>/<name>_<suffix>/<group_id>``."""
-    return Path(models_dir) / f"{name}_{_DIR_SUFFIX[kind]}" / group_id
+    validate_path_component(name)
+    validate_path_component(group_id)
+    path = Path(models_dir) / f"{name}_{_DIR_SUFFIX[kind]}" / group_id
+    _contained_path(models_dir, path)
+    return path
+
+
+def _contained_path(root: Path, path: Path) -> Path:
+    lexical_root = Path(os.path.abspath(root))
+    canonical_root = lexical_root.resolve()
+    lexical_path = Path(os.path.abspath(path))
+    if not (
+        lexical_path.is_relative_to(lexical_root)
+        or lexical_path.is_relative_to(canonical_root)
+    ):
+        raise ValueError(tr("group.path_outside_root", path=path, root=root))
+    resolved = lexical_path.resolve()
+    if not resolved.is_relative_to(canonical_root):
+        raise ValueError(tr("group.path_outside_root", path=path, root=root))
+    return resolved
+
+
+def _metadata_path(root: Path, run_dir: Path) -> Path:
+    path = _contained_path(root, run_dir / "run.json")
+    staging = _contained_path(root, path.with_name(path.name + ".tmp"))
+    for candidate in (path, staging):
+        if candidate.is_file() and candidate.stat().st_nlink > 1:
+            raise ValueError(tr("group.linked_metadata", path=candidate))
+    return path
 
 
 def _json_safe(value: Any) -> Any:
@@ -279,13 +311,20 @@ def write_run_group(
     """
     group = build_group(kind, report, report_json)
     children = _children_of(group)
+    run_dir = _contained_path(
+        models_dir, group_run_dir(models_dir, name, kind, group_id)
+    )
+    group_json = _metadata_path(models_dir, run_dir)
+    # Validate the complete write set before the first otherwise valid child is tagged.
+    child_paths = [
+        _metadata_path(models_dir, Path(child["run_dir"]))
+        for child in children
+        if child["run_dir"]
+    ]
 
     total_epochs = 0
     donor: dict[str, Any] | None = None
-    for child in children:
-        if not child["run_dir"]:
-            continue
-        path = Path(child["run_dir"]) / "run.json"
+    for path in child_paths:
         data = _read_json(path)
         if data is None:
             logger.warning("Replicate group {}: no readable {}", group_id, path)
@@ -350,7 +389,6 @@ def write_run_group(
         group["metric_keys"] = metric_keys
 
     metrics.update(extra_metrics or {})
-    run_dir = group_run_dir(models_dir, name, kind, group_id)
     run_dir.mkdir(parents=True, exist_ok=True)
     run_json: dict[str, Any] = {
         "id": group_id,
@@ -371,7 +409,7 @@ def write_run_group(
         "block": kind,
         "group": group,
     }
-    _write_json(run_dir / "run.json", run_json)
+    _write_json(group_json, run_json)
     return run_dir
 
 

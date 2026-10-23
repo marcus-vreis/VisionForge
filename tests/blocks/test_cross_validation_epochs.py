@@ -113,7 +113,7 @@ class TestKFoldEpochs:
         cut.stopped = True
         cut.total_epochs = 2
         cut.best_val_loss = 0.5
-        cut.model_path = tmp_path / "missing.pth"
+        cut.model_path = config.output.models_dir / "cut_fold" / "missing.pth"
         with (
             patch("visionforge.blocks.cross_validation.Trainer") as trainer_cls,
             patch("visionforge.blocks.cross_validation.torch.load", return_value={}),
