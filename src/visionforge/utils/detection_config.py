@@ -23,6 +23,7 @@ from visionforge.utils.config import (
     migrate_config_dict,
 )
 from visionforge.utils.messages import tr
+from visionforge.utils.paths import RunName
 
 # Model names per backend. Explicit so config validation rejects a name that
 # does not belong to the chosen backend before any weights are downloaded.
@@ -273,7 +274,7 @@ class DetectionTrainingConfig(BaseModel):
 class DetectionConfig(BaseModel):
     """Top-level object-detection experiment configuration."""
 
-    name: str = Field(default="detection_001", min_length=1)
+    name: RunName = Field(default="detection_001", min_length=1)
     schema_version: int = Field(default=CURRENT_SCHEMA_VERSION, ge=1)
     task: Literal["detection"] = "detection"
     model: DetectionModelConfig = Field(default_factory=DetectionModelConfig)

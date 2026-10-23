@@ -28,6 +28,7 @@ from visionforge.utils.config import (
     SchedulerConfig,
     TransformConfig,
 )
+from visionforge.utils.paths import RunName
 
 if TYPE_CHECKING:  # pragma: no cover - annotations only
     import torch
@@ -75,7 +76,7 @@ class BaseTaskConfig(BaseModel):
     """
 
     schema_version: int = CURRENT_SCHEMA_VERSION
-    name: str = "custom_run"
+    name: RunName = "custom_run"
     data: TaskDataConfig
     training: TaskTrainingConfig = Field(default_factory=TaskTrainingConfig)
     output: OutputConfig = Field(default_factory=OutputConfig)

@@ -5,6 +5,7 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from visionforge.utils.messages import tr
+from visionforge.utils.paths import RunName
 
 # Bumped whenever a breaking change is made to the experiment config schema. A
 # config carries the version it was written with so old YAML/run.json files can
@@ -425,7 +426,7 @@ class ExportONNXConfig(BaseModel):
 class ExperimentConfig(BaseModel):
     """Top-level experiment configuration."""
 
-    name: str = Field(default="experiment_001", min_length=1)
+    name: RunName = Field(default="experiment_001", min_length=1)
     schema_version: int = Field(default=CURRENT_SCHEMA_VERSION, ge=1)
     task: Literal["binary", "multiclass"] = "multiclass"
     block: Literal[

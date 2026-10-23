@@ -28,6 +28,7 @@ from visionforge.utils.config import (
     migrate_config_dict,
 )
 from visionforge.utils.messages import tr
+from visionforge.utils.paths import RunName
 
 # PatchCore feature-extractor backbones (frozen ImageNet). The autoencoder is
 # hand-rolled and ignores this field.
@@ -124,7 +125,7 @@ class AnomalyTrainingConfig(BaseModel):
 class AnomalyConfig(BaseModel):
     """Top-level anomaly-detection experiment configuration."""
 
-    name: str = Field(default="anomaly_001", min_length=1)
+    name: RunName = Field(default="anomaly_001", min_length=1)
     schema_version: int = Field(default=CURRENT_SCHEMA_VERSION, ge=1)
     task: Literal["anomaly"] = "anomaly"
     model: AnomalyModelConfig = Field(default_factory=AnomalyModelConfig)

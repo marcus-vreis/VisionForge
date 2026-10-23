@@ -1046,6 +1046,18 @@ CATALOG: dict[str, dict[Lang, str]] = {
             "or 'f1' instead."
         ),
     },
+    "config.unsafe_path_component": {
+        "pt": "'{value}' não é um nome de pasta válido: use um único componente, sem separadores ou caracteres reservados.",
+        "en": "'{value}' is not a valid directory name: use a single component without separators or reserved characters.",
+    },
+    "group.path_outside_root": {
+        "pt": "O caminho '{path}' não pertence à raiz de modelos autorizada '{root}'.",
+        "en": "Path '{path}' is outside the authorized model root '{root}'.",
+    },
+    "group.linked_metadata": {
+        "pt": "O arquivo de metadados '{path}' tem múltiplos hard links e não pode ser alterado como parte de um grupo.",
+        "en": "Metadata file '{path}' has multiple hard links and cannot be changed as part of a group.",
+    },
     "config.file_not_found": {
         "pt": "Arquivo de config não encontrado: {path}",
         "en": "Config file not found: {path}",

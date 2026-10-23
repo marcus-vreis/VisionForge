@@ -683,6 +683,7 @@ class TestAnErrorDuringTheStopIsAFailure:
         block._cancel_token = token
 
         cut = MagicMock(stopped=True, total_epochs=1, best_val_loss=0.4)
+        cut.model_path = config.output.models_dir / "cut_fold" / "best_model.pth"
 
         def fit(*args: Any, **kwargs: Any) -> Any:
             token.cancel()

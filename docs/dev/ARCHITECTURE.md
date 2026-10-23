@@ -48,6 +48,7 @@ Foundational utilities. No module-level import of another VisionForge package; t
 |---|---|
 | `logger.py` | Centralized loguru setup. Two sinks: colored terminal + rotating file. Call `setup_logger()` once from the entry point. |
 | `config.py` | Pydantic v2 models for experiment configuration. `load_config(path)` reads a YAML file and validates all fields before any training starts. `model_json_schema()` drives the GUI config form. |
+| `paths.py` | Portable run-name validation shared by all task configs and group identifiers. Names stay single directory components; configured output roots remain explicit paths. |
 | `cuda.py` | Runtime device detection. `check_cuda()` returns a `CUDAInfo` snapshot including a `GPUDevice` per visible GPU. Adapts transparently to CPU, single GPU, or multi-GPU and logs device name + CUDA version on startup. |
 | `<task>_config.py` | One standalone Pydantic config tree per non-classification task (`detection_config.py`, `regression_config.py`, `segmentation_config.py`, `anomaly_config.py`) per ADR-033/036/037/038, reusing the shared `OutputConfig`/`DeviceConfig`/`TransformConfig` blocks from `config.py`. |
 | `environment.py` | The `run.json` environment block (ADR-057/135): library versions, CUDA/cuDNN, GPU model and the imported source checkout's Git revision/dirty flag. Unavailable source identity is explicit. |
