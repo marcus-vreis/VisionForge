@@ -103,3 +103,22 @@ meet the newer runner requirements. Artifact uploads remain ZIPs; download
 digest mismatches now fail. Sonar's scanner signature verification stays enabled
 with its new default. The Docker-based publishing and paper actions have no
 Node runtime to migrate. Workflow permissions were not expanded.
+
+## SonarCloud integration branch
+
+The `marcus-vreis_VisionForge` project uses `development` as its SonarCloud main
+branch (ADR-144). The Free plan limits PR analysis to that target. The GitHub
+release branch remains `main`; changing the Sonar label does not publish code.
+
+The scanner analyzes PRs and pushes to `development`. A push analysis checks the
+base branch's own checkout and coverage after a merge. Renaming an old Sonar
+branch preserves its old analysis; it does not create a current baseline.
+Check the analyzed revision and the quality gate, not just a historical Passed badge.
+
+CI authenticates with the repository Actions secret `SONAR_TOKEN`. Browser login
+does not refresh that secret. Replace it directly in GitHub when rotating a token;
+never paste credentials into issues, logs or PRs. Follow the
+[token lifecycle documentation](https://docs.sonarsource.com/sonarqube-cloud/managing-your-account/managing-tokens).
+
+The codespell allowlist includes `afterall` to preserve Playwright's `test.afterAll`
+API. Review hook rewrites before pushing and rerun affected checks if code changed.

@@ -28,7 +28,7 @@ test.beforeAll(async () => {
   url = server.resolvedUrls!.local[0];
 });
 
-test.after all(async () => { await server?.close(); });
+test.afterAll(async () => { await server?.close(); });
 
 test("labels focus unique inputs and retain feedback across keyboard edits", async ({ page }) => {
   await page.goto(`${url}__controls`);

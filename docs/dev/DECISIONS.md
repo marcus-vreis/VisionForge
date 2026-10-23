@@ -6183,3 +6183,19 @@ The paired CLI defers torch imports until CUDA is hidden and CPU threads are bou
 confusing a small CPU parity check with a full benchmark. Resource contention from
 an active training job excludes comparative timing claims; larger corpora and
 GPU measurements require separately scheduled execution and matched protocols.
+
+## ADR-144 — SonarCloud follows the integration branch
+
+**Date:** 2026-10-23
+**Status:** Accepted
+**Extends:** ADR-139
+
+**Decision:** VisionForge's main branch in SonarCloud is `development`, matching
+the target of contribution PRs. The scanner runs on pull requests and on pushes
+to `development`, where it refreshes the base analysis using that branch's own
+checkout and coverage. GitHub's release branch remains `main`.
+
+**Reason:** The Free plan only analyzes PRs targeting the Sonar main branch. A
+renamed branch with a months-old analysis is not an up-to-date baseline; scanning
+the integration branch after each merge keeps the reference tied to real code
+without relabeling a PR head as its base or requiring a paid organization plan.
