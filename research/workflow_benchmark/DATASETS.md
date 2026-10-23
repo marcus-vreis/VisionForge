@@ -21,7 +21,12 @@ COCO download sizes are recorded in the project's own
 Image use follows the [COCO terms](https://cocodataset.org/#termsofuse), not the
 license of its API implementation. Access and terms can change; recheck at acquisition.
 This table is a proposed expansion, not evidence that the adapters already exist.
-Only classification has an implemented paired native baseline in this directory.
+Classification and segmentation have implemented paired native baselines in this
+directory. Segmentation is verified only on synthetic CPU fixtures; the
+Oxford-IIIT Pet trimap mapping (1 pet -> 1, 2 background -> 0, 3 border -> 255
+ignored) is fixed in `trimap_labels.py` and ADR-149, but the dataset has not been
+acquired, split or run. Its acquisition, validation split, architecture and
+budget are separate steps that need explicit authorization.
 
 ## First CPU pilot
 

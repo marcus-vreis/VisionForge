@@ -3,12 +3,30 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
-import os
-import time
 from pathlib import Path
 from typing import Any
+
+from . import phase_contract
+
+VISIONFORGE_INCLUDES = {
+    "setup": [
+        "ExperimentConfig validation",
+        "DataModule ImageFolder indexing of train/val/test",
+        "ResNet18 construction and initial-weights load",
+        "initial-weights SHA-256",
+        "Trainer construction",
+    ],
+    "training": [
+        "Trainer.fit: seeding, optimizer and loss construction",
+        "per-epoch training and validation passes",
+        "best-checkpoint writes",
+        "per-epoch resume state, TensorBoard logs, health checks and run.json",
+    ],
+    "evaluation": ["best-checkpoint reload", "test pass with predictions"],
+    "evidence": ["best-checkpoint SHA-256", "result assembly"],
+}
+EXECUTION_ORDER = ["native_pytorch", "visionforge_trainer"]
 
 
 def run_visionforge(
@@ -21,121 +39,156 @@ def run_visionforge(
     batch_size: int,
     image_size: int = 32,
     learning_rate: float = 0.01,
+    concurrent_workload: str = "undeclared",
 ) -> dict[str, Any]:
     """Execute the baseline recipe through the public CPU Trainer and DataModule."""
     import torch
     from torch import nn
-    from torchvision import datasets, models
+    from torchvision import models
 
     from visionforge.core.data import DataModule
     from visionforge.core.trainer import Trainer
     from visionforge.utils.config import ExperimentConfig
 
-    if output.exists() or output.resolve().is_relative_to(dataset.resolve()):
-        raise ValueError("Output must be new and outside the dataset")
-    start = time.perf_counter()
-    classes = datasets.ImageFolder(dataset / "train").classes
-    cfg = ExperimentConfig.model_validate(
-        {
-            "name": "paired_cpu",
-            "task": "multiclass",
-            "model": {
-                "name": "resnet18",
-                "num_classes": len(classes),
-                "pretrained": False,
-            },
-            "data": {
-                "base_dir": str(dataset.resolve()),
-                "num_workers": 0,
-                "pin_memory": False,
-                "transforms": {
-                    "image_size": image_size,
-                    "augment": False,
-                    "normalize_mean": [0.5] * 3,
-                    "normalize_std": [0.5] * 3,
-                },
-            },
-            "training": {
-                "epochs": epochs,
-                "batch_size": batch_size,
-                "seed": seed,
-                "optimizer": "sgd",
-                "learning_rate": learning_rate,
-                "weight_decay": 0,
-                "early_stopping_patience": 0,
-                "mixed_precision": False,
-                "deterministic": True,
-                "scheduler": {"kind": "none"},
-            },
-            "device": {"kind": "cpu"},
-            "output": {
-                f"{name}_dir": str(output.resolve() / name)
-                for name in ("models", "graphics", "logs", "reports")
-            },
-        }
+    from .native_classification import preflight
+
+    dataset = Path(dataset).resolve()
+    initial_weights = Path(initial_weights).resolve()
+    output = Path(output).resolve()
+    class_to_idx = preflight(
+        dataset,
+        initial_weights,
+        output,
+        epochs=epochs,
+        batch_size=batch_size,
+        image_size=image_size,
+        learning_rate=learning_rate,
     )
-    data = DataModule(cfg)
+    output.mkdir(parents=True, exist_ok=False)
+    recorder = phase_contract.PhaseRecorder(
+        "visionforge_trainer",
+        output / "visionforge_result.json",
+        VISIONFORGE_INCLUDES,
+        phase_contract.capture_conditions(concurrent_workload),
+    )
+    data = None
     try:
-        with torch.device("cpu"):
-            model = models.resnet18(weights=None)
+        with recorder.phase("setup"):
+            cfg = ExperimentConfig.model_validate(
+                _config(
+                    dataset,
+                    output,
+                    len(class_to_idx),
+                    seed,
+                    epochs,
+                    batch_size,
+                    image_size,
+                    learning_rate,
+                )
+            )
+            data = DataModule(cfg)
             classes = data.class_names
-            model.fc = nn.Linear(model.fc.in_features, len(classes))
-        model.load_state_dict(
-            torch.load(initial_weights, map_location="cpu", weights_only=True)
-        )
-        setup_seconds = time.perf_counter() - start
-        training_start = time.perf_counter()
-        result = Trainer(cfg).fit(model, data)
-        training_seconds = time.perf_counter() - training_start
-        evaluation_start = time.perf_counter()
-        model.load_state_dict(
-            torch.load(result.model_path, map_location="cpu", weights_only=True)
-        )
-        model.eval()
+            with torch.device("cpu"):
+                model = models.resnet18(weights=None)
+                model.fc = nn.Linear(model.fc.in_features, len(classes))
+            model.load_state_dict(
+                torch.load(initial_weights, map_location="cpu", weights_only=True)
+            )
+            initial_hash = phase_contract.sha256_file(initial_weights)
+            trainer = Trainer(cfg)
+
+        with recorder.phase("training"):
+            result = trainer.fit(model, data)
+
         targets: list[int] = []
         predictions: list[int] = []
-        with torch.no_grad():
-            for images, labels in data.test_loader():
-                targets.extend(labels.tolist())
-                predictions.extend(model(images).argmax(dim=1).tolist())
-        evaluation_seconds = time.perf_counter() - evaluation_start
-        report = {
-            "workflow": "visionforge_trainer",
-            "device": "cpu",
-            "seed": seed,
-            "initial_weights_sha256": hashlib.sha256(
-                initial_weights.read_bytes()
-            ).hexdigest(),
-            "class_to_idx": {name: index for index, name in enumerate(classes)},
-            "history": [
-                {
-                    "epoch": row.epoch,
-                    "train_loss": row.train_loss,
-                    "val_loss": row.val_loss,
-                    "train_acc": row.train_accuracy,
-                    "val_acc": row.val_accuracy,
-                }
-                for row in result.history
-            ],
-            "best_epoch": result.best_epoch,
-            "best_val_loss": result.best_val_loss,
-            "test_accuracy": sum(
-                a == b for a, b in zip(targets, predictions, strict=True)
+        with recorder.phase("evaluation"):
+            model.load_state_dict(
+                torch.load(result.model_path, map_location="cpu", weights_only=True)
             )
-            / len(targets),
-            "test_targets": targets,
-            "test_predictions": predictions,
-            "best_model": str(result.model_path),
-            "setup_seconds": setup_seconds,
-            "train_seconds": training_seconds,
-            "evaluation_seconds": evaluation_seconds,
-        }
-        (output / "visionforge_result.json").write_text(
-            json.dumps(report, indent=2, allow_nan=False) + "\n", encoding="utf-8"
-        )
-        return report
+            model.eval()
+            with torch.inference_mode():
+                for images, labels in data.test_loader():
+                    targets.extend(labels.tolist())
+                    predictions.extend(model(images).argmax(dim=1).tolist())
+
+        with recorder.phase("evidence"):
+            results = {
+                "device": "cpu",
+                "seed": seed,
+                "initial_weights_sha256": initial_hash,
+                "class_to_idx": {name: index for index, name in enumerate(classes)},
+                "history": [
+                    {
+                        "epoch": row.epoch,
+                        "train_loss": row.train_loss,
+                        "val_loss": row.val_loss,
+                        "train_acc": row.train_accuracy,
+                        "val_acc": row.val_accuracy,
+                    }
+                    for row in result.history
+                ],
+                "best_epoch": result.best_epoch,
+                "best_val_loss": result.best_val_loss,
+                "test_accuracy": sum(
+                    a == b for a, b in zip(targets, predictions, strict=True)
+                )
+                / len(targets),
+                "test_targets": targets,
+                "test_predictions": predictions,
+                "best_model": str(result.model_path),
+                "best_model_sha256": phase_contract.sha256_file(result.model_path),
+            }
+        return recorder.complete(results)
     finally:
-        data.close()
+        if data is not None:
+            data.close()
+
+
+def _config(
+    dataset: Path,
+    output: Path,
+    num_classes: int,
+    seed: int,
+    epochs: int,
+    batch_size: int,
+    image_size: int,
+    learning_rate: float,
+) -> dict[str, Any]:
+    """Build the restricted recipe as an ExperimentConfig payload."""
+    return {
+        "name": "paired_cpu",
+        "task": "multiclass",
+        "model": {"name": "resnet18", "num_classes": num_classes, "pretrained": False},
+        "data": {
+            "base_dir": str(dataset),
+            "num_workers": 0,
+            "pin_memory": False,
+            "transforms": {
+                "image_size": image_size,
+                "augment": False,
+                "normalize_mean": [0.5] * 3,
+                "normalize_std": [0.5] * 3,
+            },
+        },
+        "training": {
+            "epochs": epochs,
+            "batch_size": batch_size,
+            "seed": seed,
+            "optimizer": "sgd",
+            "learning_rate": learning_rate,
+            "weight_decay": 0,
+            "early_stopping_patience": 0,
+            "mixed_precision": False,
+            "deterministic": True,
+            "scheduler": {"kind": "none"},
+        },
+        "device": {"kind": "cpu"},
+        "output": {
+            f"{name}_dir": str(output / name)
+            for name in ("models", "graphics", "logs", "reports")
+        },
+    }
 
 
 def run_pair(
@@ -146,6 +199,7 @@ def run_pair(
     seed: int = 37,
     epochs: int = 2,
     batch_size: int = 4,
+    concurrent_workload: str = "undeclared",
 ) -> dict[str, Any]:
     """Preserve both runs and require matching histories, predictions and weights."""
     import torch
@@ -173,22 +227,38 @@ def run_pair(
     report: dict[str, Any] = {
         "purpose": "engineering_parity_only",
         "status": "running",
+        "failed_phase": None,
+        "phase_contract": phase_contract.contract_header(),
+        "execution_order": EXECUTION_ORDER,
         "seed": seed,
         "epochs": epochs,
         "batch_size": batch_size,
+        "concurrent_workload": concurrent_workload,
         "dataset_fingerprint": fingerprint,
         "environment": capture_environment(),
-        "timing_scope": "Implementation phase observations; no speed or human-effort comparison is inferred.",
     }
-    result_path = output / "paired_result.json"
+    options: dict[str, Any] = {
+        "seed": seed,
+        "epochs": epochs,
+        "batch_size": batch_size,
+        "concurrent_workload": concurrent_workload,
+    }
+    runners = {
+        "native_pytorch": ("native", run_native),
+        "visionforge_trainer": ("visionforge", run_visionforge),
+    }
     try:
-        options = {"seed": seed, "epochs": epochs, "batch_size": batch_size}
-        native = run_native(dataset, initial_weights, output / "native", **options)
-        report["native"] = native
-        platform = run_visionforge(
-            dataset, initial_weights, output / "visionforge", **options
-        )
-        report["visionforge"] = platform
+        for workflow in EXECUTION_ORDER:
+            key, runner = runners[workflow]
+            try:
+                report[key] = runner(dataset, initial_weights, output / key, **options)
+            except phase_contract.PhaseFailure as failure:
+                report.update(
+                    {key: failure.report, "failed_phase": f"{key}.{failure.phase}"}
+                )
+                raise
+        report["failed_phase"] = "comparison"
+        native, platform = report["native"], report["visionforge"]
         compared = (
             "initial_weights_sha256",
             "class_to_idx",
@@ -215,17 +285,17 @@ def run_pair(
         if fingerprint != fingerprint_dataset(dataset, method="content").to_dict():
             mismatches.append("dataset_changed")
         report.update(
-            status="passed" if not mismatches else "failed", mismatches=mismatches
+            status="passed" if not mismatches else "failed",
+            mismatches=mismatches,
+            failed_phase="comparison" if mismatches else None,
         )
         if mismatches:
             raise ValueError(f"Paired experiments differ: {', '.join(mismatches)}")
     except Exception as exc:
-        report.update(status="failed", error=str(exc))
+        report.update(status="failed", error=f"{type(exc).__name__}: {exc}")
         raise
     finally:
-        result_path.write_text(
-            json.dumps(report, indent=2, allow_nan=False) + "\n", encoding="utf-8"
-        )
+        phase_contract.write_report_once(output / "paired_result.json", report)
     return report
 
 
@@ -238,6 +308,11 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=37)
     parser.add_argument("--epochs", type=int, default=2)
     parser.add_argument("--batch-size", type=int, default=4)
+    parser.add_argument(
+        "--concurrent-workload",
+        default="undeclared",
+        help="What else ran on this machine; recorded in every report.",
+    )
     args = parser.parse_args()
     result = run_pair(
         args.dataset,
@@ -246,6 +321,7 @@ def main() -> None:
         seed=args.seed,
         epochs=args.epochs,
         batch_size=args.batch_size,
+        concurrent_workload=args.concurrent_workload,
     )
     print(
         json.dumps(
@@ -259,7 +335,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     # Must precede the first torch import in CLI use.
-    os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-    for name in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS"):
-        os.environ[name] = "1"
+    phase_contract.prepare_cpu_process()
     main()

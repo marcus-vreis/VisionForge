@@ -19,6 +19,20 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
   de origem e hashes por imagem; plano de expansão para datasets públicos. O piloto
   verifica paridade numérica e não mede superioridade ([ADR-143](docs/dev/DECISIONS.md)).
 
+- **Fases comparáveis no benchmark de workflow**: os caminhos nativo e VisionForge
+  cronometram setup, treino, avaliação e evidências com as mesmas fronteiras e
+  registram o trabalho de cada fase, cache, versões, threads, prioridade e carga
+  concorrente declarada. Uma falha grava o relatório parcial com a fase, sem
+  sobrescrever resultados; relatórios antigos ficam marcados como escopo legado.
+  O CLI roda em CPU, com um thread e prioridade baixa ([ADR-148](docs/dev/DECISIONS.md)).
+
+- **Paridade de segmentação no benchmark de workflow**: baseline PyTorch independente
+  e harness pareado com o `SegmentationTrainer`, com receita restrita em CPU, pixels
+  ignorados fora da loss e das métricas, máscara inteiramente ignorada recusada no
+  preflight e conversão fixa do trimap do Oxford-IIIT Pet (sem download). Perdas,
+  pesos e predições precisam ser idênticos; métricas aceitam 1e-12. Verificado só
+  com fixtures sintéticas ([ADR-149](docs/dev/DECISIONS.md)).
+
 - **Cor das tarefas que você criou.** Com uma tarefa sua aberta, uma bolinha no topo, ao lado de
   PT/EN, escolhe a cor da tela dela entre dez opções ou qualquer outra; "voltar à cor original"
   devolve a do registro. A tela da tarefa já passa a usar a cor que ela registrou, em vez do
