@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import os
+import sys
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -72,7 +72,7 @@ def test_artifact_containment(
 
 
 def _link_directory(link: Path, target: Path) -> None:
-    if os.name == "nt":
+    if sys.platform == "win32":
         import _winapi
 
         _winapi.CreateJunction(str(target), str(link))
