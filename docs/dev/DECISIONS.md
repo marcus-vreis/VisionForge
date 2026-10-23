@@ -6233,3 +6233,22 @@ configured root; a child report could redirect tagging to an unrelated run.json.
 Preflight validation prevents partial tagging when a later path is invalid and
 stops existing staging aliases from redirecting writes. Existing unsafe names
 are rejected rather than silently rewritten; ordinary Unicode names remain intact.
+
+## ADR-147 — Sonar analysis versions come from the analyzed checkout
+
+**Date:** 2026-10-23
+**Status:** Accepted
+**Extends:** ADR-073, ADR-144
+
+**Decision:** The Sonar CI job reads `project.version` from its checkout's
+`pyproject.toml` using Python's standard library and passes it as
+`sonar.projectVersion`. Missing or unsafe values fail before scanning; neither
+installed-package metadata nor build numbers supply a fallback. The properties
+file contains no duplicate fixed version.
+
+**Reason:** The fixed `0.0.1` label no longer represents the source version
+`0.17.0`. The project's effective New Code definition was verified as Previous
+version before this correction. A real version transition can advance that
+reference; a greener New Code gate after the transition does not demonstrate
+that historical findings were fixed. The definition, quality gate, rules and
+exclusions stay unchanged, and overall findings remain subject to triage.
