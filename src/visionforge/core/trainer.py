@@ -4,7 +4,7 @@ import json
 import random
 import time
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 from copy import deepcopy
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
@@ -82,6 +82,28 @@ def frozen_state_dict(state_dict: dict[str, Any]) -> dict[str, Any]:
             if isinstance(value, torch.Tensor)
         },
     )
+
+
+def save_best_checkpoint(
+    pool: ThreadPoolExecutor,
+    pending: Future[None] | None,
+    model: nn.Module,
+    path: Path,
+) -> Future[None]:
+    """Write ``model``'s weights to ``path`` in ``pool`` once ``pending`` is done.
+
+    The writer gets a frozen copy (``frozen_state_dict``), so training can go
+    on while it writes; ``module.state_dict()`` drops the ``module.`` prefix
+    DataParallel adds to every key.
+    """
+    state = (
+        model.module.state_dict()  # type: ignore[union-attr]
+        if isinstance(model, nn.DataParallel)
+        else model.state_dict()
+    )
+    if pending is not None:
+        pending.result()
+    return pool.submit(torch.save, frozen_state_dict(state), path)
 
 
 def _seed_everything(seed: int, *, deterministic: bool = False) -> None:
@@ -387,16 +409,8 @@ class Trainer:
                 best_val_loss = val_loss
                 best_epoch = epoch
                 patience_counter = 0
-                # Save module.state_dict() to avoid 'module.' key prefix from DataParallel.
-                state_dict = (
-                    model.module.state_dict()  # type: ignore[union-attr]
-                    if isinstance(model, nn.DataParallel)
-                    else model.state_dict()
-                )
-                if save_future is not None:
-                    save_future.result()
-                save_future = save_pool.submit(
-                    torch.save, frozen_state_dict(state_dict), model_path
+                save_future = save_best_checkpoint(
+                    save_pool, save_future, model, model_path
                 )
             else:
                 patience_counter += 1

@@ -38,8 +38,8 @@ from visionforge.core.resume_provenance import validate_resume_dataset
 from visionforge.core.tracking import TensorBoardLogger
 from visionforge.core.trainer import (
     _seed_everything,
-    frozen_state_dict,
     resolve_device,
+    save_best_checkpoint,
 )
 from visionforge.core.training_health import stagnant_loss, summarize
 from visionforge.models.factory import final_linear
@@ -296,15 +296,8 @@ class RegressionTrainer:
                 best_val_loss = val_loss
                 best_epoch = epoch
                 patience_counter = 0
-                state_dict = (
-                    model.module.state_dict()  # type: ignore[union-attr]
-                    if isinstance(model, nn.DataParallel)
-                    else model.state_dict()
-                )
-                if save_future is not None:
-                    save_future.result()
-                save_future = save_pool.submit(
-                    torch.save, frozen_state_dict(state_dict), model_path
+                save_future = save_best_checkpoint(
+                    save_pool, save_future, model, model_path
                 )
             else:
                 patience_counter += 1
