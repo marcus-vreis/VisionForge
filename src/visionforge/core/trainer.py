@@ -67,6 +67,23 @@ class TrainResult:
     stopped: bool = False
 
 
+def frozen_state_dict(state_dict: dict[str, Any]) -> dict[str, Any]:
+    """A copy of ``state_dict`` whose tensors live on the CPU and own their memory.
+
+    ``model.state_dict()`` shares storage with the parameters, which the next
+    optimizer step mutates; a checkpoint written from it in a background thread
+    could capture a later epoch's weights.
+    """
+    return deepcopy(
+        state_dict,
+        {
+            id(value): value.detach().to("cpu", copy=True)
+            for value in state_dict.values()
+            if isinstance(value, torch.Tensor)
+        },
+    )
+
+
 def _seed_everything(seed: int, *, deterministic: bool = False) -> None:
     """Seed every RNG and configure cuDNN performance mode.
 
@@ -376,19 +393,11 @@ class Trainer:
                     if isinstance(model, nn.DataParallel)
                     else model.state_dict()
                 )
-                # The writer must own frozen CPU tensors: state_dict() shares
-                # storage with parameters that the next optimizer step mutates.
                 if save_future is not None:
                     save_future.result()
-                state_dict = deepcopy(
-                    state_dict,
-                    {
-                        id(value): value.detach().to("cpu", copy=True)
-                        for value in state_dict.values()
-                        if isinstance(value, torch.Tensor)
-                    },
+                save_future = save_pool.submit(
+                    torch.save, frozen_state_dict(state_dict), model_path
                 )
-                save_future = save_pool.submit(torch.save, state_dict, model_path)
             else:
                 patience_counter += 1
 
