@@ -250,10 +250,11 @@ class TestClassificationResume:
 
         before = (run_dir / "run.json").read_bytes()
         directories = set(cfg.output.models_dir.rglob("run.json"))
+        trainer = Trainer(cfg)
+        model = TinyClassifier()
+        data = FakeClassificationData()
         with pytest.raises(ResumeStateError, match="unreadable"):
-            Trainer(cfg).fit(
-                TinyClassifier(), FakeClassificationData(), resume_dir=run_dir
-            )
+            trainer.fit(model, data, resume_dir=run_dir)
 
         assert (run_dir / RESUME_FILENAME).read_bytes() == b"not a checkpoint"
         assert (run_dir / "run.json").read_bytes() == before

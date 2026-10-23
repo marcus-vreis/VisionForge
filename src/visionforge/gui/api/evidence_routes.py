@@ -92,7 +92,9 @@ def build_evidence_router(
     """Build endpoints with profile/run lookups owned by the parent router."""
     router = APIRouter()
 
-    @router.post("/dataset/audit")
+    @router.post(
+        "/dataset/audit", responses={400: {"description": "Dataset audit failed"}}
+    )
     async def audit_images(req: DatasetAuditRequest) -> dict[str, Any]:
         """Read image splits without blocking status polling or changing data."""
         try:
@@ -106,7 +108,15 @@ def build_evidence_router(
         except (OSError, ValueError) as exc:
             raise HTTPException(400, tr("evidence.audit_failed", error=exc)) from exc
 
-    @router.get("/runs/{run_id}/bundle", response_class=FileResponse)
+    @router.get(
+        "/runs/{run_id}/bundle",
+        response_class=FileResponse,
+        responses={
+            400: {"description": "Invalid profile or experiment bundle"},
+            404: {"description": "Profile or run not found"},
+            409: {"description": "Run is being written or exported"},
+        },
+    )
     async def download_bundle(
         run_id: str,
         x_vf_profile: Annotated[str | None, Header(alias=PROFILE_HEADER)] = None,

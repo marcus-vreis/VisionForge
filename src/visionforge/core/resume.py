@@ -181,6 +181,21 @@ class ResumeStateError(ValueError):
         )
 
 
+def _validate_resume_payload(payload: dict[str, Any]) -> None:
+    if not isinstance(payload["model"], dict) or not isinstance(
+        payload["optimizer"], dict
+    ):
+        raise ValueError("Invalid model or optimizer state")
+    history = payload.get("history", [])
+    if not isinstance(history, list) or any(
+        not isinstance(row, dict) for row in history
+    ):
+        raise ValueError("Invalid epoch history")
+    for name in ("scheduler", "scaler"):
+        if payload.get(name) is not None and not isinstance(payload[name], dict):
+            raise ValueError(f"Invalid {name} state")
+
+
 def require_resume_state(run_dir: Path) -> ResumeState:
     """Read a requested continuation or fail without starting a new run."""
     target = resume_path(run_dir)
@@ -201,18 +216,7 @@ def require_resume_state(run_dir: Path) -> ResumeState:
             if not isinstance(rng_state, dict):
                 raise ValueError("Missing RNG snapshot")
             _validate_rng_state(rng_state)
-        if not isinstance(payload["model"], dict) or not isinstance(
-            payload["optimizer"], dict
-        ):
-            raise ValueError("Invalid model or optimizer state")
-        history = payload.get("history", [])
-        if not isinstance(history, list) or any(
-            not isinstance(row, dict) for row in history
-        ):
-            raise ValueError("Invalid epoch history")
-        for name in ("scheduler", "scaler"):
-            if payload.get(name) is not None and not isinstance(payload[name], dict):
-                raise ValueError(f"Invalid {name} state")
+        _validate_resume_payload(payload)
         state = ResumeState(
             epoch=int(payload["epoch"]),
             model=payload["model"],
@@ -222,7 +226,7 @@ def require_resume_state(run_dir: Path) -> ResumeState:
             best_metric=float(payload["best_metric"]),
             best_epoch=int(payload["best_epoch"]),
             patience_counter=int(payload.get("patience_counter", 0)),
-            history=history,
+            history=payload.get("history", []),
             rng_state=rng_state,
         )
         if min(state.epoch, state.best_epoch, state.patience_counter) < 0:

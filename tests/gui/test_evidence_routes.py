@@ -40,6 +40,23 @@ def _run(root: Path) -> Path:
     return run
 
 
+@pytest.mark.parametrize(
+    ("path", "method", "status_codes"),
+    [
+        ("/api/dataset/audit", "post", {"400"}),
+        ("/api/runs/{run_id}/bundle", "get", {"400", "404", "409"}),
+    ],
+)
+def test_openapi_documents_evidence_errors(
+    client: TestClient, path: str, method: str, status_codes: set[str]
+) -> None:
+    """Evidence clients can discover every explicit error response in OpenAPI."""
+    response = client.get("/openapi.json")
+    assert response.status_code == 200
+    responses = response.json()["paths"][path][method]["responses"]
+    assert status_codes <= responses.keys()
+
+
 def test_audit_exposes_findings_without_rewriting_inputs(
     client: TestClient, tmp_path: Path
 ) -> None:
@@ -155,14 +172,17 @@ def test_bundle_resolves_only_the_requested_profile(client: TestClient) -> None:
 @pytest.mark.parametrize("resuming", [False, True])
 @pytest.mark.parametrize("requested_id", ["example_run", "run"])
 def test_active_or_resuming_runs_cannot_be_exported(
-    client: TestClient, resuming: bool, requested_id: str
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    resuming: bool,
+    requested_id: str,
 ) -> None:
     run = _run(Path("outputs/models"))
     occupy_queue(routes, "new_resume_id" if resuming else "example_run")
-    if resuming:
-        assert routes._RUN_QUEUE._active is not None
-        routes._RUN_QUEUE._active.resume_dir = run
     try:
+        if resuming:
+            assert routes._RUN_QUEUE._active is not None
+            monkeypatch.setattr(routes._RUN_QUEUE._active, "resume_dir", run)
         response = client.get(f"/api/runs/{requested_id}/bundle")
         assert response.status_code == 409
     finally:

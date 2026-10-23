@@ -1993,13 +1993,22 @@ async def serve_dataset_file(path: str) -> FileResponse:
     return FileResponse(resolved)  # NOSONAR python:S2083
 
 
-@router.get("/artifacts/{file_path:path}")
+@router.get(
+    "/artifacts/{file_path:path}",
+    responses={
+        403: {"description": "Path outside outputs"},
+        404: {"description": "File not found"},
+    },
+)
 async def serve_artifact(file_path: str) -> FileResponse:
     """Serve output files (plots, models) with path traversal protection."""
-    resolved = Path(
-        file_path
-    ).resolve()  # NOSONAR pythonsecurity:S6549 - re-checked with is_relative_to below before FileResponse
-    outputs_dir = Path("outputs").resolve()
+    candidate = Path(os.path.abspath(file_path))
+    outputs_root = Path(os.path.abspath("outputs"))
+    if not candidate.is_relative_to(outputs_root):
+        raise HTTPException(403, tr("file.access_denied"))
+
+    resolved = candidate.resolve()
+    outputs_dir = outputs_root.resolve()
 
     if not resolved.is_relative_to(outputs_dir):
         raise HTTPException(403, tr("file.access_denied"))
@@ -2007,7 +2016,7 @@ async def serve_artifact(file_path: str) -> FileResponse:
     if not resolved.is_file():
         raise HTTPException(404, tr("file.not_found"))
 
-    return FileResponse(resolved)  # NOSONAR python:S2083
+    return FileResponse(resolved)
 
 
 # ── private helpers ──────────────────────────────────────────────────────────

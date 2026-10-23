@@ -6199,3 +6199,18 @@ checkout and coverage. GitHub's release branch remains `main`.
 renamed branch with a months-old analysis is not an up-to-date baseline; scanning
 the integration branch after each merge keeps the reference tied to real code
 without relabeling a PR head as its base or requiring a paid organization plan.
+
+## ADR-145 — Artifact paths pass lexical authorization before resolution
+
+**Date:** 2026-10-23
+**Status:** Accepted
+**Extends:** ADR-127, ADR-140
+
+**Decision:** Artifact requests must lie inside the absolute outputs root before
+filesystem resolution. The resolved path must still remain inside the resolved
+root before existence checks or serving. External aliases pointing into outputs
+are rejected, as are internal aliases pointing outside it.
+
+**Reason:** Resolving an unauthorized path consults filesystem entries before
+the containment check. Lexical authorization rejects those requests first;
+canonical containment remains necessary to prevent symlink or junction escapes.
