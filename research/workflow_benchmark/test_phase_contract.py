@@ -172,7 +172,10 @@ def test_cli_guard_hides_cuda_limits_threads_and_lowers_priority() -> None:
         "assert not torch.cuda.is_available()\n"
         "assert torch.get_num_threads() == 1, torch.get_num_threads()\n"
         "after = process_priority()\n"
-        "assert after != before, (before, after)\n"
+        # A runner that already starts below normal (GitHub's Windows images do)
+        # cannot go lower; anywhere else the guard must have changed it.
+        "assert after != before or before in ('below_normal', 'idle'), "
+        "(before, after)\n"
         "assert after in ('below_normal', 'idle') or after.startswith('nice='), after\n"
     )
     process = subprocess.run(

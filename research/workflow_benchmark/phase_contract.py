@@ -183,6 +183,10 @@ def capture_conditions(concurrent_workload: str) -> dict[str, Any]:
 
 def _kernel32() -> Any:
     """Return kernel32 with pointer-sized process handles declared."""
+    # sys.platform, which mypy narrows on: on Linux the rest is unreachable and
+    # ctypes.WinDLL, which does not exist there, is not type-checked.
+    if sys.platform != "win32":
+        raise OSError("kernel32 exists only on Windows")
     import ctypes
     from ctypes import wintypes
 
