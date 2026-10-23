@@ -10,8 +10,6 @@ import time
 from pathlib import Path
 from typing import Any
 
-from .native_classification import run_native
-
 
 def run_visionforge(
     dataset: Path,
@@ -155,6 +153,8 @@ def run_pair(
     from visionforge.core.dataset_audit import audit_dataset
     from visionforge.core.dataset_fingerprint import fingerprint_dataset
     from visionforge.utils.environment import capture_environment
+
+    from .native_classification import run_native
 
     dataset, initial_weights, output = (
         dataset.resolve(),

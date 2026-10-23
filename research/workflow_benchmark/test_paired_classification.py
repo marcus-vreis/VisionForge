@@ -1,6 +1,8 @@
 """Synthetic pairs check implementation parity, not scientific performance."""
 
 import json
+import subprocess
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -11,6 +13,22 @@ from torch import nn
 from torchvision import models
 
 from research.workflow_benchmark.paired_classification import run_pair
+
+
+def test_pair_module_defers_torch_import_until_cpu_cli_guard() -> None:
+    """Keep accelerator libraries unloaded until the CLI can hide CUDA."""
+    process = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import sys; import research.workflow_benchmark.paired_classification; "
+            "assert 'torch' not in sys.modules, 'torch imported before the CPU guard'",
+        ],
+        cwd=Path(__file__).resolve().parents[2],
+        capture_output=True,
+        text=True,
+    )
+    assert process.returncode == 0, process.stderr
 
 
 @pytest.mark.parametrize("class_count", [2, 3])

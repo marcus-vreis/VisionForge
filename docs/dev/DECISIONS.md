@@ -6165,3 +6165,21 @@ technology nor focuses it when clicked. Repeated labels need distinct targets,
 and closed tooltips must not remove field instructions from the accessibility
 tree. Linking existing validation messages identifies the invalid field without
 changing form values, task accents or training behavior.
+
+## ADR-143 — Public classification pilots preserve official data provenance
+
+**Date:** 2026-10-23
+**Status:** Accepted
+**Extends:** ADR-141
+
+**Decision:** The first public-data engineering pilot uses a seeded, balanced
+CIFAR-10 subset. Preparation accepts only a locally supplied binary archive
+matching the authors' checksum, derives validation from official training records,
+and preserves official test membership, source indices and content hashes in a
+manifest. It neither downloads data nor overwrites an existing output directory.
+The paired CLI defers torch imports until CUDA is hidden and CPU threads are bounded.
+
+**Reason:** A reproducible public corpus complements domain-specific data without
+confusing a small CPU parity check with a full benchmark. Resource contention from
+an active training job excludes comparative timing claims; larger corpora and
+GPU measurements require separately scheduled execution and matched protocols.

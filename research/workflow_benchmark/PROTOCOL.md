@@ -62,6 +62,10 @@ versions. No external participant has been recruited by this repository change.
 
 ## Engineering check before collecting workflow measurements
 
+The public-data staging plan and reproducible CIFAR-10 subset preparation are in
+[DATASETS.md](DATASETS.md). CPU pilots can run while the GPU is occupied, but
+concurrent-workload timings cannot support performance comparisons.
+
 `native_classification.py` provides an independent CPU PyTorch baseline;
 `paired_classification.py` checks it against the public VisionForge Trainer and
 DataModule. Supply real ImageFolder train/val/test splits and a torchvision

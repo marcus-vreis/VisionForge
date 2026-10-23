@@ -15,6 +15,10 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Added
 
+- **Preparação auditável do CIFAR-10**: subconjunto CPU com checksum oficial, índices
+  de origem e hashes por imagem; plano de expansão para datasets públicos. O piloto
+  verifica paridade numérica e não mede superioridade ([ADR-143](docs/dev/DECISIONS.md)).
+
 - **Cor das tarefas que você criou.** Com uma tarefa sua aberta, uma bolinha no topo, ao lado de
   PT/EN, escolhe a cor da tela dela entre dez opções ou qualquer outra; "voltar à cor original"
   devolve a do registro. A tela da tarefa já passa a usar a cor que ela registrou, em vez do
