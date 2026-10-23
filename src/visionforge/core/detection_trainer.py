@@ -58,6 +58,8 @@ except ImportError:  # pragma: no cover - exercised via monkeypatch in tests
 # Module global so tests can patch it without ultralytics installed.
 YOLO: Any = _YOLO
 
+_ULTRALYTICS_CHECKPOINT = "last.pt"
+
 # Every augmentation knob at the value that makes it do nothing. `auto_augment`
 # is a policy name rather than a magnitude, so its "off" is None.
 _NEUTRAL_AUGMENTATION: dict[str, Any] = {
@@ -271,9 +273,10 @@ class DetectionTrainer:
         if resume_dir is not None:
             if self._config.model.backend == "torchvision":
                 resumed = require_resume_state(resume_dir)
-            elif not (resume_dir / "weights" / "last.pt").is_file():
+            elif not (resume_dir / "weights" / _ULTRALYTICS_CHECKPOINT).is_file():
                 raise ResumeStateError(
-                    resume_dir / "weights" / "last.pt", "checkpoint missing"
+                    resume_dir / "weights" / _ULTRALYTICS_CHECKPOINT,
+                    "checkpoint missing",
                 )
             validate_resume_dataset(resume_dir, self._config)
         data = self._config.data
@@ -328,7 +331,9 @@ class DetectionTrainer:
         # rest from the args.yaml it wrote. Writing our own resume.pt beside it
         # would be a second, worse copy of state it already keeps.
         last_weights = (
-            resume_dir / "weights" / "last.pt" if resume_dir is not None else None
+            resume_dir / "weights" / _ULTRALYTICS_CHECKPOINT
+            if resume_dir is not None
+            else None
         )
         resuming = last_weights is not None and last_weights.is_file()
         history: list[DetectionEpochResult] = []

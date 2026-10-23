@@ -633,8 +633,9 @@ class TestTorchvisionResume:
 
         before = (stopped.run_dir / "run.json").read_bytes()
         directories = set(cfg.output.models_dir.rglob("run.json"))
+        trainer = DetectionTrainer(cfg)
         with pytest.raises(ResumeStateError, match="unreadable"):
-            DetectionTrainer(cfg).fit(resume_dir=stopped.run_dir)
+            trainer.fit(resume_dir=stopped.run_dir)
 
         assert (stopped.run_dir / RESUME_FILENAME).read_bytes() == b"not a checkpoint"
         assert (stopped.run_dir / "run.json").read_bytes() == before

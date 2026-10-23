@@ -83,6 +83,33 @@ async def _finish_export(worker: asyncio.Future[Path]) -> None:
         raise cancellation
 
 
+async def _bundle_response(run_dir: Path) -> FileResponse:
+    temporary: TemporaryDirectory[str] | None = None
+    try:
+        temporary = TemporaryDirectory(prefix="visionforge-bundle-")
+        destination = Path(temporary.name) / "experiment.zip"
+        # Shield the executor Future itself: cancellation cannot close the
+        # source lease or remove files while the writer still owns them.
+        worker = asyncio.get_running_loop().run_in_executor(
+            None, export_experiment_bundle, run_dir, destination
+        )
+        await _finish_export(worker)
+        return FileResponse(
+            destination,
+            media_type="application/zip",
+            filename="experiment.zip",
+            background=BackgroundTask(temporary.cleanup),
+        )
+    except (OSError, ValueError) as exc:
+        if temporary is not None:
+            temporary.cleanup()
+        raise HTTPException(400, tr("evidence.bundle_failed", error=exc)) from exc
+    except BaseException:
+        if temporary is not None:
+            temporary.cleanup()
+        raise
+
+
 def build_evidence_router(
     resolve_run: Callable[[str, Profile], Path | None],
     resolve_profile: Callable[[str | None], Profile],
@@ -128,32 +155,12 @@ def build_evidence_router(
             raise HTTPException(404, tr("run.not_found", run_id=run_id))
         if not exports.reserve(run_dir):
             raise HTTPException(409, tr("evidence.export_busy"))
-        temporary: TemporaryDirectory[str] | None = None
         try:
             if is_writing(run_id, run_dir, profile):
                 raise HTTPException(409, tr("evidence.run_busy"))
-            temporary = TemporaryDirectory(prefix="visionforge-bundle-")
-            destination = Path(temporary.name) / "experiment.zip"
-            # Shield the executor Future itself: cancellation cannot close the
-            # source lease or remove files while the writer still owns them.
-            worker = asyncio.get_running_loop().run_in_executor(
-                None, export_experiment_bundle, run_dir, destination
-            )
-            await _finish_export(worker)
-            return FileResponse(
-                destination,
-                media_type="application/zip",
-                filename="experiment.zip",
-                background=BackgroundTask(temporary.cleanup),
-            )
+            return await _bundle_response(run_dir)
         except (OSError, ValueError) as exc:
-            if temporary is not None:
-                temporary.cleanup()
             raise HTTPException(400, tr("evidence.bundle_failed", error=exc)) from exc
-        except BaseException:
-            if temporary is not None:
-                temporary.cleanup()
-            raise
         finally:
             exports.release(run_dir)
 

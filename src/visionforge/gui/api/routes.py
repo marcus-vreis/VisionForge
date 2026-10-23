@@ -674,7 +674,14 @@ async def reveal_run_folder(
     return {"run_id": run_dir.name, "run_dir": str(run_dir.resolve())}
 
 
-@router.post("/runs/{run_id}/resume")
+@router.post(
+    "/runs/{run_id}/resume",
+    responses={
+        404: {"description": "Run not found"},
+        409: {"description": "Run is busy or cannot continue"},
+        500: {"description": "Run metadata is unreadable"},
+    },
+)
 async def resume_run(run_id: str, profile: ProfileDep) -> RunResponse:
     """Continue a stopped run in its own directory (ADR-092/093).
 

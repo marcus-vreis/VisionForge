@@ -42,8 +42,10 @@ def test_corrupt_requested_resume_never_creates_a_new_run(tmp_path: Path) -> Non
         }
     )
     model = nn.Linear(4, 2)
+    trainer = Trainer(cfg)
+    data = object()
     with pytest.raises(ValueError, match="resume"):
-        Trainer(cfg).fit(model, object(), resume_dir=run)
+        trainer.fit(model, data, resume_dir=run)
 
     assert checkpoint.read_bytes() == b"broken checkpoint"
     assert not (tmp_path / "models").exists()
@@ -112,11 +114,9 @@ def test_native_trainers_refuse_unusable_resume_before_output_or_model_setup(
         trainer = DetectionTrainer(DetectionConfig.model_validate(payload))
     model = nn.Linear(4, 2)
     before = {name: value.clone() for name, value in model.state_dict().items()}
+    fit_args = () if task == "detection" else (model, object())
     with pytest.raises(ResumeStateError, match=kind):
-        if task == "detection":
-            trainer.fit(resume_dir=run)
-        else:
-            trainer.fit(model, object(), resume_dir=run)
+        trainer.fit(*fit_args, resume_dir=run)
     assert not (tmp_path / "models").exists()
     assert all(
         torch.equal(value, before[name]) for name, value in model.state_dict().items()
@@ -146,8 +146,10 @@ def test_patchcore_rejects_explicit_continuation(tmp_path: Path) -> None:
         }
     )
     model = PatchCore(pretrained=False)
+    trainer = AnomalyTrainer(cfg)
+    data = object()
     with pytest.raises(ValueError, match="Cannot resume PatchCore"):
-        AnomalyTrainer(cfg).fit(model, object(), resume_dir=tmp_path)
+        trainer.fit(model, data, resume_dir=tmp_path)
     assert not (tmp_path / "models").exists()
     assert not model.is_fitted
 

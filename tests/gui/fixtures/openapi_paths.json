@@ -1237,9 +1237,12 @@
       "200": {
         "application/json": "RunResponse"
       },
+      "404": {},
+      "409": {},
       "422": {
         "application/json": "HTTPValidationError"
-      }
+      },
+      "500": {}
     }
   },
   "POST /api/runs/{run_id}/reveal": {
