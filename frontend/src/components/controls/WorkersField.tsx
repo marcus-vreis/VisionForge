@@ -4,6 +4,7 @@ import { fetchSystemInfo } from "../../api/client";
 import { useT } from "../../i18n/useT";
 import { paramHelp } from "../../lib/param-help";
 import { InfoDot } from "./InfoDot";
+import { useFieldAccessibility } from "./useFieldAccessibility";
 
 /** The worker count, automatic by default and only a number when asked for.
  *
@@ -25,6 +26,8 @@ export function WorkersField({
   onChange: (v: number) => void;
 }) {
   const t = useT();
+  const help = paramHelp(t, "num_workers");
+  const field = useFieldAccessibility({ help });
   const [suggested, setSuggested] = useState<number | null>(null);
   const auto = value < 0;
 
@@ -54,9 +57,12 @@ export function WorkersField({
           gap: 8,
         }}
       >
-        <span>{t.workersField.label}</span>
-        <InfoDot text={paramHelp(t, "num_workers") ?? ""} />
+        <label htmlFor={field.id}>{t.workersField.label}</label>
+        <InfoDot text={help ?? ""} />
+        {help && <span id={field.helpId} className="sr-only">{help}</span>}
         <button
+          id={auto ? field.id : undefined}
+          aria-describedby={auto ? field["aria-describedby"] : undefined}
           type="button"
           onClick={() => onChange(auto ? (suggested ?? 2) : -1)}
           style={{
@@ -105,6 +111,8 @@ export function WorkersField({
         </div>
       ) : (
         <input
+          id={field.id}
+          aria-describedby={field["aria-describedby"]}
           type="number"
           value={value}
           min={0}

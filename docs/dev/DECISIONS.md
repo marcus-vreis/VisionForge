@@ -6082,3 +6082,135 @@ from the interface.
 run in the neutral color they used before (`accentForTask` has no color for
 `custom:` tasks). In the light theme a chosen color is used as is, without the
 darkening the built-in accents get.
+
+## ADR-138 — Explicit resume refuses unusable state before training setup
+
+**Date:** 2026-10-21
+**Status:** Accepted
+**Extends:** ADR-092, ADR-093, ADR-134
+
+**Decision:** Native trainers require a usable checkpoint whenever resume_dir is
+provided. Missing, unreadable, unsupported and invalid state raise a specific
+ValueError before model/device preparation, optimizer creation or output writes.
+Read-only capability probes retain the nullable load_resume_state contract.
+An explicit Ultralytics continuation requires its last.pt; PatchCore rejects
+continuation because it has no resumable epoch loop.
+
+**Reason:** A user asking to continue must not unknowingly pay for a new training
+trajectory after a checkpoint disappears or becomes unreadable. Probing history
+must still tolerate older and damaged runs without breaking the listing.
+
+## ADR-139 — CI validates installed distributions outside the checkout
+
+**Date:** 2026-10-21
+**Status:** Accepted
+**Extends:** ADR-073, ADR-133
+
+**Decision:** A separate CPU job builds distributions, installs the wheel without
+editable source paths and executes a synthetic workflow outside the repository.
+It checks package origin, installed static assets, CLI commands, a tiny training
+and the resulting experiment bundle. CI actions use supported Node runtimes.
+
+**Reason:** Editable installs can hide missing files and imports that depend on
+the checkout. Publishing is too late to discover that the built package cannot
+serve its own interface or execute the documented workflow.
+
+## ADR-140 — The GUI exposes image audits, classification groups and run bundles
+
+**Date:** 2026-10-21
+**Status:** Accepted
+**Extends:** ADR-114, ADR-135, ADR-136
+
+**Decision:** Dataset audits run explicitly on local image splits through a
+dedicated endpoint off the event loop. Classification CV exposes group-manifest
+selection. History can download a contained run bundle; the server resolves runs
+inside the active profile and cleans temporary archives after the response.
+Audit findings are visible without silently rewriting data or training settings.
+An in-process reservation excludes continuation while source files are copied;
+request cancellation waits for the writer before removing temporary files.
+
+**Reason:** The local-first interface must expose the safeguards available to
+CLI users. Hashing and ZIP creation must not block status polling or copy data
+outside the selected run/profile.
+
+## ADR-141 — A restricted CPU baseline checks classification parity before a study
+
+**Date:** 2026-10-21
+**Status:** Accepted
+**Extends:** ADR-061, ADR-134
+
+**Decision:** The workflow benchmark starts with an independent native PyTorch
+classification baseline and a matched VisionForge adapter. Both load identical
+initial ResNet18 weights, fixed transforms, splits, seed, optimizer and CPU worker
+settings. A paired harness records phase timings and verifies histories, selected
+weights and test predictions before any performance interpretation.
+
+**Reason:** Runtime and human effort cannot be attributed to tooling when the
+underlying experiments differ. Synthetic runs validate the harness only; they
+are not usability observations, scientific benchmarks or evidence of superiority.
+
+## ADR-142 — Shared form controls expose labels and field feedback semantically
+
+**Date:** 2026-10-23
+**Status:** Accepted
+**Extends:** ADR-140
+
+**Decision:** Shared controls use React `useId` for stable per-instance label
+associations and `aria-describedby` for hints, persistent help and validation
+errors. Toggles expose switch state; segmented choices expose a named group and
+pressed state. Browser tests locate fields by their accessible labels.
+
+**Reason:** Decorative text above an input neither names it for assistive
+technology nor focuses it when clicked. Repeated labels need distinct targets,
+and closed tooltips must not remove field instructions from the accessibility
+tree. Linking existing validation messages identifies the invalid field without
+changing form values, task accents or training behavior.
+
+## ADR-143 — Public classification pilots preserve official data provenance
+
+**Date:** 2026-10-23
+**Status:** Accepted
+**Extends:** ADR-141
+
+**Decision:** The first public-data engineering pilot uses a seeded, balanced
+CIFAR-10 subset. Preparation accepts only a locally supplied binary archive
+matching the authors' checksum, derives validation from official training records,
+and preserves official test membership, source indices and content hashes in a
+manifest. It neither downloads data nor overwrites an existing output directory.
+The paired CLI defers torch imports until CUDA is hidden and CPU threads are bounded.
+
+**Reason:** A reproducible public corpus complements domain-specific data without
+confusing a small CPU parity check with a full benchmark. Resource contention from
+an active training job excludes comparative timing claims; larger corpora and
+GPU measurements require separately scheduled execution and matched protocols.
+
+## ADR-144 — SonarCloud follows the integration branch
+
+**Date:** 2026-10-23
+**Status:** Accepted
+**Extends:** ADR-139
+
+**Decision:** VisionForge's main branch in SonarCloud is `development`, matching
+the target of contribution PRs. The scanner runs on pull requests and on pushes
+to `development`, where it refreshes the base analysis using that branch's own
+checkout and coverage. GitHub's release branch remains `main`.
+
+**Reason:** The Free plan only analyzes PRs targeting the Sonar main branch. A
+renamed branch with a months-old analysis is not an up-to-date baseline; scanning
+the integration branch after each merge keeps the reference tied to real code
+without relabeling a PR head as its base or requiring a paid organization plan.
+
+## ADR-145 — Artifact paths pass lexical authorization before resolution
+
+**Date:** 2026-10-23
+**Status:** Accepted
+**Extends:** ADR-127, ADR-140
+
+**Decision:** Artifact requests must lie inside the absolute outputs root before
+filesystem resolution. The resolved path must still remain inside the resolved
+root before existence checks or serving. External aliases pointing into outputs
+are rejected, as are internal aliases pointing outside it.
+
+**Reason:** Resolving an unauthorized path consults filesystem entries before
+the containment check. Lexical authorization rejects those requests first;
+canonical containment remains necessary to prevent symlink or junction escapes.

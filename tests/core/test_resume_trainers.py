@@ -11,13 +11,14 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+import pytest
 import torch
 import torch.nn as nn
 
 from visionforge.core.anomaly_trainer import AnomalyTrainer
 from visionforge.core.cancellation import CancellationToken
 from visionforge.core.regression_trainer import RegressionTrainer
-from visionforge.core.resume import RESUME_FILENAME, load_resume_state
+from visionforge.core.resume import RESUME_FILENAME, ResumeStateError, load_resume_state
 from visionforge.core.segmentation_trainer import SegmentationTrainer
 from visionforge.core.trainer import Trainer
 from visionforge.models.anomaly_factory import ConvAutoencoder
@@ -232,8 +233,10 @@ class TestClassificationResume:
         assert state.epoch == 1
         assert len(state.history) == 1
 
-    def test_unreadable_state_starts_a_fresh_run(self, tmp_path: Path) -> None:
-        """A corrupt file must not hijack the old directory and overwrite it."""
+    def test_unreadable_state_preserves_the_run_and_refuses_resume(
+        self, tmp_path: Path
+    ) -> None:
+        """An explicit continuation must fail without modifying or replacing the run."""
         cfg = _classification_config(tmp_path)
         token = CancellationToken()
         stopped = Trainer(cfg).fit(
@@ -245,12 +248,17 @@ class TestClassificationResume:
         run_dir = stopped.model_path.parent
         (run_dir / RESUME_FILENAME).write_bytes(b"not a checkpoint")
 
-        finished = Trainer(cfg).fit(
-            TinyClassifier(), FakeClassificationData(), resume_dir=run_dir
-        )
+        before = (run_dir / "run.json").read_bytes()
+        directories = set(cfg.output.models_dir.rglob("run.json"))
+        trainer = Trainer(cfg)
+        model = TinyClassifier()
+        data = FakeClassificationData()
+        with pytest.raises(ResumeStateError, match="unreadable"):
+            trainer.fit(model, data, resume_dir=run_dir)
 
-        assert finished.model_path.parent != run_dir
-        assert [h.epoch for h in finished.history] == [1, 2, 3]
+        assert (run_dir / RESUME_FILENAME).read_bytes() == b"not a checkpoint"
+        assert (run_dir / "run.json").read_bytes() == before
+        assert set(cfg.output.models_dir.rglob("run.json")) == directories
 
 
 class TestRegressionResume:

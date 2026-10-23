@@ -32,6 +32,7 @@ import { accentForTask } from "../lib/task-accent";
 import { useResolvedTheme } from "./training-story/use-viewing";
 import { Lightbox } from "./Lightbox";
 import { RunGroupDetail } from "./RunGroupDetail";
+import { DownloadBundleButton } from "./DownloadBundleButton";
 
 interface RunDetailPanelProps {
   runId: string;
@@ -495,6 +496,7 @@ export function RunDetailPanel({ runId, onBack, onOpenRun, knownRunIds }: RunDet
               : ""}
           </button>
         )}
+        {detail && <DownloadBundleButton key={runId} runId={runId} />}
         {/* A model card describes a trained model; a group has none. */}
         {!detail?.group && (
           <button

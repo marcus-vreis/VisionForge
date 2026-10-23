@@ -6,13 +6,22 @@ export function FieldLabel({
   hint,
   dot = false,
   help,
+  htmlFor,
+  id,
+  hintId,
+  helpId,
 }: {
   children: React.ReactNode;
   hint?: string;
   dot?: boolean;
   /** Explanation for this field, shown in an info dot beside the label. */
   help?: string;
+  htmlFor?: string;
+  id?: string;
+  hintId?: string;
+  helpId?: string;
 }) {
+  const Label = htmlFor ? "label" : "span";
   return (
     <div
       style={{
@@ -42,10 +51,12 @@ export function FieldLabel({
       {/* The label never wraps: a hint beside it squeezed "NOME DO / EXPERIMENTO"
           onto two lines, which pushed that field below its neighbours. The hint
           gives way instead, cut with an ellipsis and whole in its tooltip. */}
-      <span style={{ whiteSpace: "nowrap", flexShrink: 0 }}>{children}</span>
+      <Label id={id} htmlFor={htmlFor} style={{ whiteSpace: "nowrap", flexShrink: 0 }}>{children}</Label>
       {help && <InfoDot text={help} />}
+      {help && helpId && <span id={helpId} className="sr-only">{help}</span>}
       {hint && (
         <span
+          id={hintId}
           title={hint}
           style={{
             marginLeft: "auto",

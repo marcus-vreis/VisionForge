@@ -32,7 +32,7 @@ from visionforge.core.resume import (
     ResumeState,
     capture_rng_state,
     clear_resume_state,
-    load_resume_state,
+    require_resume_state,
     restore_rng_state,
     save_resume_state,
 )
@@ -274,6 +274,7 @@ class SegmentationTrainer:
         resume_dir: Path | None = None,
     ) -> SegmentationTrainResult:
         """Run the segmentation training loop (best checkpoint by val mIoU)."""
+        resumed = require_resume_state(resume_dir) if resume_dir is not None else None
         if resume_dir is not None:
             validate_resume_dataset(resume_dir, self._config)
         cfg = self._config.training
@@ -288,7 +289,6 @@ class SegmentationTrainer:
         # Resolved before anything is created: a resumed run must continue in its
         # own directory, or it leaves an empty one behind and writes its
         # TensorBoard events somewhere nothing will look.
-        resumed = load_resume_state(resume_dir) if resume_dir is not None else None
         run_dir = (
             resume_dir
             if resumed is not None and resume_dir is not None

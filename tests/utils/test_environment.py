@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import platform
 import subprocess
 from pathlib import Path
@@ -99,6 +100,10 @@ def _source_checkout(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     (root / "pyproject.toml").write_text(
         '[project]\nname = "visionforge-studio"\n', encoding="utf-8"
     )
+    # Commit hooks export repository routing even when Git runs with another cwd.
+    git_env = {
+        key: value for key, value in os.environ.items() if not key.startswith("GIT_")
+    }
     for args in (
         ["init", "--quiet"],
         ["add", "."],
@@ -112,9 +117,42 @@ def _source_checkout(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
             "initial",
         ],
     ):
-        subprocess.run(["git", "-C", str(root), *args], check=True, capture_output=True)
+        subprocess.run(
+            ["git", "-C", str(root), *args],
+            check=True,
+            capture_output=True,
+            env=git_env,
+        )
     monkeypatch.setattr(environment, "__file__", str(source))
     return root
+
+
+def test_source_fixture_isolates_inherited_git_repository(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A commit hook must not redirect the fixture into its caller's repository."""
+    clean_env = {
+        key: value for key, value in os.environ.items() if not key.startswith("GIT_")
+    }
+    foreign = tmp_path / "foreign.git"
+    subprocess.run(
+        ["git", "init", "--bare", "--quiet", str(foreign)], check=True, env=clean_env
+    )
+    original_config = (foreign / "config").read_bytes()
+    original_head = (foreign / "HEAD").read_bytes()
+    monkeypatch.setenv("GIT_DIR", str(foreign))
+    monkeypatch.setenv("GIT_INDEX_FILE", str(foreign / "hook-index"))
+
+    root = _source_checkout(tmp_path, monkeypatch)
+
+    assert (foreign / "config").read_bytes() == original_config
+    assert (foreign / "HEAD").read_bytes() == original_head
+    assert not (foreign / "hook-index").exists()
+    expected = subprocess.check_output(
+        ["git", "-C", str(root), "rev-parse", "HEAD"], env=clean_env, text=True
+    ).strip()
+    assert capture_environment()["git_revision"] == expected
+    assert capture_environment()["git_dirty"] == "false"
 
 
 def test_records_actual_source_revision_and_dirty_state(
@@ -122,7 +160,13 @@ def test_records_actual_source_revision_and_dirty_state(
 ) -> None:
     root = _source_checkout(tmp_path, monkeypatch)
     revision = subprocess.check_output(
-        ["git", "-C", str(root), "rev-parse", "HEAD"], text=True
+        ["git", "-C", str(root), "rev-parse", "HEAD"],
+        text=True,
+        env={
+            key: value
+            for key, value in os.environ.items()
+            if not key.startswith("GIT_")
+        },
     ).strip()
     env = capture_environment()
     assert env["git_revision"] == revision
