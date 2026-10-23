@@ -88,3 +88,9 @@ def test_profile_endpoints_are_in_the_contract() -> None:
     expected = json.loads(FIXTURE.read_text(encoding="utf-8"))
     for key in ("GET /api/profiles", "POST /api/profiles", "PUT /api/profiles/{slug}"):
         assert key in expected
+
+
+def test_resume_errors_are_documented() -> None:
+    """Continuation clients can discover missing, busy and unreadable runs."""
+    responses = app.openapi()["paths"]["/api/runs/{run_id}/resume"]["post"]["responses"]
+    assert {"404", "409", "500"} <= responses.keys()

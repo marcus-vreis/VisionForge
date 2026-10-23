@@ -31,9 +31,10 @@ from visionforge.core.materialized_dataset import materialize_dataset
 from visionforge.core.plotter import MetricsPlotter
 from visionforge.core.resume import (
     ResumeState,
+    ResumeStateError,
     capture_rng_state,
     clear_resume_state,
-    load_resume_state,
+    require_resume_state,
     restore_rng_state,
     save_resume_state,
 )
@@ -56,6 +57,8 @@ except ImportError:  # pragma: no cover - exercised via monkeypatch in tests
 
 # Module global so tests can patch it without ultralytics installed.
 YOLO: Any = _YOLO
+
+_ULTRALYTICS_CHECKPOINT = "last.pt"
 
 # Every augmentation knob at the value that makes it do nothing. `auto_augment`
 # is a policy name rather than a magnitude, so its "off" is None.
@@ -266,7 +269,15 @@ class DetectionTrainer:
             RuntimeError: with an actionable message when DataLoader workers
                 crash at startup on Windows (page-file exhaustion).
         """
+        resumed = None
         if resume_dir is not None:
+            if self._config.model.backend == "torchvision":
+                resumed = require_resume_state(resume_dir)
+            elif not (resume_dir / "weights" / _ULTRALYTICS_CHECKPOINT).is_file():
+                raise ResumeStateError(
+                    resume_dir / "weights" / _ULTRALYTICS_CHECKPOINT,
+                    "checkpoint missing",
+                )
             validate_resume_dataset(resume_dir, self._config)
         data = self._config.data
         steps = [step.model_dump() for step in data.preprocessing.steps]
@@ -284,7 +295,7 @@ class DetectionTrainer:
                 self._images_root = prepared.path if prepared.filtered else None
                 if self._config.model.backend == "torchvision":
                     return self._fit_torchvision(
-                        progress_callback, cancel_token, resume_dir
+                        progress_callback, cancel_token, resume_dir, resumed
                     )
                 return self._fit_ultralytics(
                     progress_callback, cancel_token, resume_dir
@@ -320,7 +331,9 @@ class DetectionTrainer:
         # rest from the args.yaml it wrote. Writing our own resume.pt beside it
         # would be a second, worse copy of state it already keeps.
         last_weights = (
-            resume_dir / "weights" / "last.pt" if resume_dir is not None else None
+            resume_dir / "weights" / _ULTRALYTICS_CHECKPOINT
+            if resume_dir is not None
+            else None
         )
         resuming = last_weights is not None and last_weights.is_file()
         history: list[DetectionEpochResult] = []
@@ -472,6 +485,7 @@ class DetectionTrainer:
         progress_callback: Callable[[dict[str, Any]], None] | None = None,
         cancel_token: CancellationToken | None = None,
         resume_dir: Path | None = None,
+        resume_state: ResumeState | None = None,
     ) -> DetectionTrainResult:
         """Train a torchvision detector with a loss-dict loop.
 
@@ -492,12 +506,14 @@ class DetectionTrainer:
 
         # `training.seed` used to reach only Ultralytics, so torchvision runs
         # were unseeded and `seed: 42` in the config was a claim nothing backed.
+        resumed = resume_state
+        if resume_dir is not None and resumed is None:
+            resumed = require_resume_state(resume_dir)
         _seed_everything(cfg.seed, deterministic=cfg.deterministic)
 
         # Resolved before anything is created: a resumed run must continue in its
         # own directory, or it leaves an empty one behind and writes its
         # TensorBoard events somewhere nothing will look.
-        resumed = load_resume_state(resume_dir) if resume_dir is not None else None
         run_dir = (
             resume_dir
             if resumed is not None and resume_dir is not None

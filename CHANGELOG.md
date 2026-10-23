@@ -15,10 +15,24 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Added
 
+- **Preparação auditável do CIFAR-10**: subconjunto CPU com checksum oficial, índices
+  de origem e hashes por imagem; plano de expansão para datasets públicos. O piloto
+  verifica paridade numérica e não mede superioridade ([ADR-143](docs/dev/DECISIONS.md)).
+
 - **Cor das tarefas que você criou.** Com uma tarefa sua aberta, uma bolinha no topo, ao lado de
   PT/EN, escolhe a cor da tela dela entre dez opções ou qualquer outra; "voltar à cor original"
   devolve a do registro. A tela da tarefa já passa a usar a cor que ela registrou, em vez do
   vermelho ([ADR-137](docs/dev/DECISIONS.md)).
+
+- **Evidências pela GUI**: auditoria de imagens e grupos nos splits de classificação,
+  CSV de grupos no K-fold e download do bundle no histórico. A exportação recusa runs
+  ativos ou na fila e bloqueia a retomada enquanto lê os artefatos
+  ([ADR-140](docs/dev/DECISIONS.md)).
+- **Validação do pacote instalado**: a CI instala o wheel fora do checkout e executa
+  treino CPU, auditoria e verificação do bundle ([ADR-139](docs/dev/DECISIONS.md)).
+- **Baseline CPU de classificação**: harness pareado com PyTorch nativo, mesmos pesos
+  iniciais e receita restrita, para conferir equivalência numérica. Não é um resultado
+  científico nem uma comparação de produtividade ([ADR-141](docs/dev/DECISIONS.md)).
 - **Auditoria de splits pela CLI** (`visionforge audit-data`): encontra imagens idênticas
   em splits diferentes, arquivos inválidos e grupos compartilhados. O K-fold de classificação
   aceita um CSV `path,group` para manter amostras relacionadas no mesmo fold
@@ -60,8 +74,20 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Fixed
 
+- **Rótulos dos formulários associados aos controles**: clicar no texto foca o campo
+  correto; leitores de tela recebem o nome, a ajuda, o erro e os estados dos controles.
+  Instâncias com rótulos repetidos usam IDs distintos ([ADR-142](docs/dev/DECISIONS.md), #59).
+
 - **A tela de anomalia é âmbar, como a aba e o histórico já mostravam**; estava vermelha como a
   de classificação ([ADR-137](docs/dev/DECISIONS.md)).
+
+- **Retomada explícita falha antes de preparar o treino** se o checkpoint estiver ausente,
+  ilegível ou incompatível. Nenhuma nova execução é iniciada silenciosamente; PatchCore
+  recusa a retomada e Ultralytics exige `weights/last.pt`
+  ([ADR-138](docs/dev/DECISIONS.md)).
+- **K-fold de classificação reaparece na GUI** quando o schema representa a configuração
+  opcional com `anyOf`; o CSV de grupos é preservado ao exportar e importar o YAML
+  ([ADR-140](docs/dev/DECISIONS.md)).
 - **Retomada preserva a sequência aleatória e o estado da época concluída.** Checkpoints
   formato 2 guardam os estados de RNG e os generators dos loaders, além de melhor época e
   patience atualizados. Os testes com zero workers comparam treino contínuo e retomado;

@@ -1,4 +1,6 @@
 import { FieldLabel } from "./FieldLabel";
+import { FieldError } from "./FieldError";
+import { useFieldAccessibility } from "./useFieldAccessibility";
 
 interface SegmentedOption {
   value: string;
@@ -6,6 +8,7 @@ interface SegmentedOption {
 }
 
 interface SegmentedProps {
+  error?: string;
   /** Explanation shown in the label info dot. */
   help?: string;
   label: string;
@@ -23,16 +26,22 @@ export function Segmented({
   options,
   hint,
   help,
+  error,
 }: SegmentedProps) {
+  const field = useFieldAccessibility({ hint, help, error });
   const normalize = (opt: string | SegmentedOption): SegmentedOption =>
     typeof opt === "string" ? { value: opt, label: opt } : opt;
 
   return (
     <div>
-      <FieldLabel dot hint={hint} help={help}>
+      <FieldLabel dot id={field.labelId} hintId={field.hintId} helpId={field.helpId} hint={hint} help={help}>
         {label}
       </FieldLabel>
       <div
+        role="group"
+        aria-labelledby={field.labelId}
+        aria-describedby={field["aria-describedby"]}
+        aria-invalid={field["aria-invalid"]}
         style={{
           display: "flex",
           background: "rgb(var(--lt-surface, 12 14 18) / 0.65)",
@@ -49,6 +58,7 @@ export function Segmented({
             <button
               key={o.value}
               type="button"
+              aria-pressed={active}
               title={o.label}
               onClick={() => onChange(o.value)}
               style={{
@@ -89,6 +99,7 @@ export function Segmented({
           );
         })}
       </div>
+      <FieldError id={field.errorId} error={error} />
     </div>
   );
 }

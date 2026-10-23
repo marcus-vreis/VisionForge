@@ -18,13 +18,9 @@ export async function enter(page: Page, name = "E2E"): Promise<void> {
   await expect(field).toBeHidden();
 }
 
-/** The input under a form field's visible label (the number fields have no <label for>). */
+/** The input associated with a form field's visible label. */
 export function fieldByLabel(page: Page, label: string): Locator {
-  return page
-    .getByText(label, { exact: true })
-    .first()
-    .locator("xpath=ancestor::div[.//input][1]//input")
-    .first();
+  return page.getByLabel(label, { exact: true }).first();
 }
 
 /**
@@ -56,11 +52,8 @@ export async function prepareClassification(page: Page, name: string, epochs: nu
 
   // Random initialization keeps this real training independent of the network
   // and of any ImageNet weights cached on the developer's machine.
-  const pretrained = page
-    .getByText("Pesos pré-treinados", { exact: true })
-    .locator("xpath=ancestor::div[.//button][1]")
-    .getByRole("button", { name: /^(ativado|desativado)$/i });
-  if ((await pretrained.textContent())?.trim().toLowerCase() === "ativado") {
+  const pretrained = page.getByRole("switch", { name: "Pesos pré-treinados", exact: true });
+  if (await pretrained.isChecked()) {
     await pretrained.click();
   }
   await expect(pretrained).toHaveText(/desativado/i);

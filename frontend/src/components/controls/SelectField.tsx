@@ -2,6 +2,8 @@ import { Chevron } from "./Chevron";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { FieldLabel } from "./FieldLabel";
+import { FieldError } from "./FieldError";
+import { useFieldAccessibility } from "./useFieldAccessibility";
 import { useAnchoredMenu } from "./useAnchoredMenu";
 
 export interface SelectOption {
@@ -11,6 +13,7 @@ export interface SelectOption {
 }
 
 interface SelectFieldProps {
+  error?: string;
   /** Explanation shown in the label info dot. */
   help?: string;
   label: string;
@@ -32,7 +35,9 @@ export function SelectField({
   options,
   hint,
   help,
+  error,
 }: SelectFieldProps) {
+  const field = useFieldAccessibility({ hint, help, error });
   const [open, setOpen] = useState(false);
   const { pos, wrapRef, btnRef, menuRef, closeRef } = useAnchoredMenu(open);
 
@@ -45,13 +50,29 @@ export function SelectField({
 
   const current = options.map(normalize).find((o) => o.value === value);
   const currentLabel = current?.label ?? value;
+  const menuId = `${field.id}-options`;
+
+  const closeMenu = () => {
+    setOpen(false);
+    btnRef.current?.focus();
+  };
 
   return (
-    <div ref={wrapRef} style={{ position: "relative" }}>
-      <FieldLabel dot hint={hint} help={help}>
+    <div ref={wrapRef} style={{ position: "relative" }} onKeyDown={(event) => {
+      if (event.key === "Escape" && open) {
+        event.stopPropagation();
+        closeMenu();
+      }
+    }}>
+      <FieldLabel dot htmlFor={field.id} hintId={field.hintId} helpId={field.helpId} hint={hint} help={help}>
         {label}
       </FieldLabel>
       <button
+        id={field.id}
+        aria-describedby={field["aria-describedby"]}
+        aria-invalid={field["aria-invalid"]}
+        aria-expanded={open}
+        aria-controls={open ? menuId : undefined}
         ref={btnRef}
         type="button"
         onClick={() => setOpen((o) => !o)}
@@ -92,6 +113,9 @@ export function SelectField({
         pos &&
         createPortal(
           <div
+            id={menuId}
+            role="group"
+            aria-label={label}
             ref={menuRef}
             style={{
               position: "fixed",
@@ -117,9 +141,10 @@ export function SelectField({
                 <button
                   key={o.value}
                   type="button"
+                  aria-pressed={active}
                   onClick={() => {
                     onChange(o.value);
-                    setOpen(false);
+                    closeMenu();
                   }}
                   style={{
                     display: "flex",
@@ -167,6 +192,7 @@ export function SelectField({
           </div>,
           document.body,
         )}
+      <FieldError id={field.errorId} error={error} />
     </div>
   );
 }

@@ -34,6 +34,7 @@ from collections import deque
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Literal
 
 from loguru import logger
@@ -75,6 +76,7 @@ class QueuedJob:
     # display name the queue panel prints. The queue itself stays shared.
     profile: str = "default"
     profile_name: str = "default"
+    resume_dir: Path | None = None
 
     def describe(self) -> dict[str, Any]:
         """JSON-ready form for the queue endpoint (never includes the callable)."""
@@ -169,6 +171,23 @@ class RunQueue:
     def is_busy(self) -> bool:
         """True while a job is executing."""
         return self._active is not None
+
+    def is_writing(self, run_id: str, run_dir: Path, profile: str) -> bool:
+        """Whether an active or queued job can change the selected run."""
+        jobs = list(self._pending)
+        if self._active is not None:
+            jobs.append(self._active)
+        return any(
+            job.profile == profile
+            and (
+                job.run_id in {run_id, f"{run_dir.parent.name}_{run_dir.name}"}
+                or (
+                    job.resume_dir is not None
+                    and job.resume_dir.resolve() == run_dir.resolve()
+                )
+            )
+            for job in jobs
+        )
 
     def pending_count(self) -> int:
         """How many jobs are waiting to start."""

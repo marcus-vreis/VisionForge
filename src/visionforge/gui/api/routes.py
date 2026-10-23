@@ -83,6 +83,7 @@ from visionforge.core.task_runner import (
 from visionforge.gui.api.dataset_download import credentials_in_play, download_dataset
 from visionforge.gui.api.detection_export import export_detection_run
 from visionforge.gui.api.detection_testing import evaluate_detection_run
+from visionforge.gui.api.evidence_routes import EvidenceExports, build_evidence_router
 from visionforge.gui.api.folder_opener import (
     FolderOpenError,
     can_reveal,
@@ -321,6 +322,7 @@ def _finish_job(job: QueuedJob) -> dict[str, Any] | None:
 
 
 _RUN_QUEUE = RunQueue(on_start=_begin_job, on_finish=_finish_job)
+_EVIDENCE_EXPORTS = EvidenceExports()
 
 
 def _task_label_from_config(config_type: type[Any]) -> str:
@@ -372,6 +374,7 @@ def _submit_job(
     start: Callable[[], Awaitable[None]],
     stop_at: StopPoint | None | Literal["auto"] = "auto",
     profile: Profile | None = None,
+    resume_dir: Path | None = None,
 ) -> RunResponse:
     """Queue a training job and report whether it started or is waiting.
 
@@ -402,6 +405,7 @@ def _submit_job(
             start=start_in_lang,
             stop_at=_stop_point(strategy) if stop_at == "auto" else stop_at,
             profile=owner.slug,
+            resume_dir=resume_dir,
             profile_name=owner.name,
         )
     )
@@ -461,6 +465,16 @@ router.include_router(
 # Profile endpoints live in profiles_routes.py (ADR-132). The paths stay owned
 # here so tests that repoint routes._MODELS_DIR / _PROFILES_DIR still reach them.
 router.include_router(build_profiles_router(lambda: (_PROFILES_DIR, _MODELS_DIR)))
+router.include_router(
+    build_evidence_router(
+        lambda run_id, profile: _find_run_dir(run_id, profile),
+        lambda header: current_profile(header),
+        lambda run_id, run_dir, profile: _RUN_QUEUE.is_writing(
+            run_id, run_dir, profile.slug
+        ),
+        _EVIDENCE_EXPORTS,
+    )
+)
 
 
 @router.get("/runs")
@@ -660,7 +674,14 @@ async def reveal_run_folder(
     return {"run_id": run_dir.name, "run_dir": str(run_dir.resolve())}
 
 
-@router.post("/runs/{run_id}/resume")
+@router.post(
+    "/runs/{run_id}/resume",
+    responses={
+        404: {"description": "Run not found"},
+        409: {"description": "Run is busy or cannot continue"},
+        500: {"description": "Run metadata is unreadable"},
+    },
+)
 async def resume_run(run_id: str, profile: ProfileDep) -> RunResponse:
     """Continue a stopped run in its own directory (ADR-092/093).
 
@@ -673,6 +694,8 @@ async def resume_run(run_id: str, profile: ProfileDep) -> RunResponse:
     run_dir = _find_run_dir(run_id, profile)
     if run_dir is None:
         raise HTTPException(404, tr("run.not_found", run_id=run_id))
+    if _EVIDENCE_EXPORTS.is_exporting(run_dir):
+        raise HTTPException(409, tr("evidence.export_busy"))
     _reject_group_action(run_dir)
     try:
         data: dict[str, Any] = json.loads(
@@ -716,6 +739,7 @@ async def resume_run(run_id: str, profile: ProfileDep) -> RunResponse:
         "simple",
         lambda: executor(config, job_id, resume_dir=run_dir),
         profile=profile,
+        resume_dir=run_dir,
     )
 
 
@@ -1976,13 +2000,22 @@ async def serve_dataset_file(path: str) -> FileResponse:
     return FileResponse(resolved)  # NOSONAR python:S2083
 
 
-@router.get("/artifacts/{file_path:path}")
+@router.get(
+    "/artifacts/{file_path:path}",
+    responses={
+        403: {"description": "Path outside outputs"},
+        404: {"description": "File not found"},
+    },
+)
 async def serve_artifact(file_path: str) -> FileResponse:
     """Serve output files (plots, models) with path traversal protection."""
-    resolved = Path(
-        file_path
-    ).resolve()  # NOSONAR pythonsecurity:S6549 - re-checked with is_relative_to below before FileResponse
-    outputs_dir = Path("outputs").resolve()
+    candidate = Path(os.path.abspath(file_path))
+    outputs_root = Path(os.path.abspath("outputs"))
+    if not candidate.is_relative_to(outputs_root):
+        raise HTTPException(403, tr("file.access_denied"))
+
+    resolved = candidate.resolve()
+    outputs_dir = outputs_root.resolve()
 
     if not resolved.is_relative_to(outputs_dir):
         raise HTTPException(403, tr("file.access_denied"))
@@ -1990,7 +2023,7 @@ async def serve_artifact(file_path: str) -> FileResponse:
     if not resolved.is_file():
         raise HTTPException(404, tr("file.not_found"))
 
-    return FileResponse(resolved)  # NOSONAR python:S2083
+    return FileResponse(resolved)
 
 
 # ── private helpers ──────────────────────────────────────────────────────────

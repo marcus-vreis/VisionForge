@@ -6,6 +6,12 @@ checagens disponíveis e os limites de cada uma.
 
 ## Antes de treinar: auditar os splits
 
+Na GUI de classificação, abra a seção de dados e use **Auditar imagens**. A
+auditoria usa as pastas de treino, validação e teste configuradas no formulário.
+Ela só começa quando solicitada; editar os caminhos invalida o resultado exibido.
+O painel mostra duplicatas exatas, imagens ilegíveis e splits ausentes/vazios.
+O CSV de grupos e a opção de grupos estritos são opcionais.
+
 ```bash
 visionforge audit-data datasets/meu_dataset
 visionforge audit-data datasets/meu_dataset --json auditoria.json
@@ -78,11 +84,19 @@ explica essa restrição antes de construir o modelo. Sem `group_manifest`, o
 comportamento anterior do K-fold continua disponível. Esta opção é de CV de
 classificação, não uma promessa de CV por grupos para todas as tarefas.
 
+Na GUI de classificação, o formulário de K-fold também aceita o caminho do CSV.
+O valor acompanha a configuração ao salvar/exportar YAML.
+
 ## Retomar um treino
 
 O estado de retomada formato 2 preserva modelo, optimizer, scheduler, scaler,
 histórico, melhor época, patience e os estados aleatórios. Arquivos formato 1
 continuam legíveis com um aviso sobre a ausência de continuidade aleatória.
+
+Uma retomada solicitada exige um checkpoint utilizável. Arquivo ausente,
+ilegível ou incompatível interrompe o pedido antes de preparar o modelo; não
+inicia outro treino automaticamente. A consulta ao histórico continua tolerando
+arquivos antigos ou danificados. PatchCore não oferece retomada por épocas.
 
 A equivalência foi testada em CPU, no mesmo ambiente, com `num_workers=0`, para
 os loops nativos de classificação, regressão, segmentação, autoencoder e detecção
@@ -97,6 +111,10 @@ a verificação avisa que a identidade não pode ser comprovada. O método `mani
 também não detecta alterações de conteúdo que preservem tamanho e caminho.
 
 ## Exportar e verificar os registros
+
+No detalhe de um run no histórico, **Baixar bundle do experimento** baixa esse
+registro. O download respeita o perfil ativo. Um run em execução ou aguardando
+retomada precisa terminar antes da exportação.
 
 Copie o caminho da pasta do run no histórico e substitua `CAMINHO_DO_RUN`:
 

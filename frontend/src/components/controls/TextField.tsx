@@ -2,6 +2,8 @@ import { Eye, EyeOff } from "lucide-react";
 import { useState } from "react";
 import { useT } from "../../i18n/useT";
 import { FieldLabel } from "./FieldLabel";
+import { FieldError } from "./FieldError";
+import { useFieldAccessibility } from "./useFieldAccessibility";
 
 const shellStyle: React.CSSProperties = {
   display: "flex",
@@ -13,6 +15,7 @@ const shellStyle: React.CSSProperties = {
 };
 
 interface TextFieldProps {
+  error?: string;
   /** Explanation shown in the label info dot. */
   help?: string;
   label: string;
@@ -36,18 +39,23 @@ export function TextField({
   mono = false,
   help,
   secret = false,
+  error,
 }: TextFieldProps) {
+  const field = useFieldAccessibility({ hint, help, error });
   const t = useT();
   const [revealed, setRevealed] = useState(false);
   const masked = secret && !revealed;
 
   return (
     <div>
-      <FieldLabel dot hint={hint} help={help}>
+      <FieldLabel dot htmlFor={field.id} hintId={field.hintId} helpId={field.helpId} hint={hint} help={help}>
         {label}
       </FieldLabel>
       <div style={shellStyle}>
         <input
+          id={field.id}
+          aria-describedby={field["aria-describedby"]}
+          aria-invalid={field["aria-invalid"]}
           type={masked ? "password" : "text"}
           // `off` is ignored by browsers for password inputs, which still offer
           // to fill a saved *login* here; `new-password` is the value that stops it.
@@ -91,6 +99,7 @@ export function TextField({
           </button>
         )}
       </div>
+      <FieldError id={field.errorId} error={error} />
     </div>
   );
 }
