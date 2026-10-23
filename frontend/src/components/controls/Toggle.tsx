@@ -1,7 +1,10 @@
 import { useT } from "../../i18n/useT";
 import { FieldLabel } from "./FieldLabel";
+import { useFieldAccessibility } from "./useFieldAccessibility";
+import { FieldError } from "./FieldError";
 
 interface ToggleProps {
+  error?: string;
   /** Explanation shown in the label info dot. */
   help?: string;
   label: string;
@@ -11,14 +14,20 @@ interface ToggleProps {
 }
 
 /** Full-width toggle button with an inline track indicator. */
-export function Toggle({ label, value, onChange, hint, help }: ToggleProps) {
+export function Toggle({ label, value, onChange, hint, help, error }: ToggleProps) {
+  const field = useFieldAccessibility({ hint, help, error });
   const t = useT();
   return (
     <div>
-      <FieldLabel dot hint={hint} help={help}>
+      <FieldLabel dot htmlFor={field.id} hintId={field.hintId} helpId={field.helpId} hint={hint} help={help}>
         {label}
       </FieldLabel>
       <button
+        id={field.id}
+        role="switch"
+        aria-checked={value}
+        aria-describedby={field["aria-describedby"]}
+        aria-invalid={field["aria-invalid"]}
         type="button"
         onClick={() => onChange(!value)}
         style={{
@@ -70,6 +79,7 @@ export function Toggle({ label, value, onChange, hint, help }: ToggleProps) {
           {value ? t.toggle.on : t.toggle.off}
         </span>
       </button>
+      <FieldError id={field.errorId} error={error} />
     </div>
   );
 }

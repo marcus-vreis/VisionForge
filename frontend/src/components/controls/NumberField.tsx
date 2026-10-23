@@ -1,4 +1,6 @@
 import { FieldLabel } from "./FieldLabel";
+import { FieldError } from "./FieldError";
+import { useFieldAccessibility } from "./useFieldAccessibility";
 
 const shellStyle: React.CSSProperties = {
   display: "flex",
@@ -23,6 +25,7 @@ const inputStyle: React.CSSProperties = {
 };
 
 interface NumberFieldProps {
+  error?: string;
   label: string;
   value: number;
   onChange: (v: number) => void;
@@ -51,7 +54,9 @@ export function NumberField({
   suffix,
   emptyValue,
   help,
+  error,
 }: NumberFieldProps) {
+  const field = useFieldAccessibility({ hint, help, error });
   const onBlur = (e: React.FocusEvent<HTMLInputElement>) => {
     const raw = e.target.value.trim();
     // An empty box is an intention, not a typo: where the caller says what it
@@ -69,11 +74,14 @@ export function NumberField({
 
   return (
     <div>
-      <FieldLabel dot hint={hint} help={help}>
+      <FieldLabel dot htmlFor={field.id} hintId={field.hintId} helpId={field.helpId} hint={hint} help={help}>
         {label}
       </FieldLabel>
       <div style={shellStyle}>
         <input
+          id={field.id}
+          aria-describedby={field["aria-describedby"]}
+          aria-invalid={field["aria-invalid"]}
           type="text"
           inputMode="decimal"
           defaultValue={value}
@@ -98,6 +106,7 @@ export function NumberField({
           </span>
         )}
       </div>
+      <FieldError id={field.errorId} error={error} />
     </div>
   );
 }

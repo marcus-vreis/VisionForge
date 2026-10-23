@@ -6148,3 +6148,20 @@ weights and test predictions before any performance interpretation.
 **Reason:** Runtime and human effort cannot be attributed to tooling when the
 underlying experiments differ. Synthetic runs validate the harness only; they
 are not usability observations, scientific benchmarks or evidence of superiority.
+
+## ADR-142 — Shared form controls expose labels and field feedback semantically
+
+**Date:** 2026-10-23
+**Status:** Accepted
+**Extends:** ADR-140
+
+**Decision:** Shared controls use React `useId` for stable per-instance label
+associations and `aria-describedby` for hints, persistent help and validation
+errors. Toggles expose switch state; segmented choices expose a named group and
+pressed state. Browser tests locate fields by their accessible labels.
+
+**Reason:** Decorative text above an input neither names it for assistive
+technology nor focuses it when clicked. Repeated labels need distinct targets,
+and closed tooltips must not remove field instructions from the accessibility
+tree. Linking existing validation messages identifies the invalid field without
+changing form values, task accents or training behavior.

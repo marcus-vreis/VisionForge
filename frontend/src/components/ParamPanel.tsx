@@ -1609,24 +1609,13 @@ function SchemaFieldVF({
     return (
       <div>
         <SelectField
+          error={errorMsg}
           help={help}
           label={label}
           value={String(value ?? resolved.default ?? resolved.enum?.[0] ?? "")}
           onChange={(v) => handleChange(v)}
           options={opts}
         />
-        {errorMsg && (
-          <p
-            style={{
-              fontSize: 11,
-              color: "oklch(0.704 0.191 22.216)",
-              marginTop: 4,
-              fontFamily: "var(--font-mono)",
-            }}
-          >
-            {errorMsg}
-          </p>
-        )}
         {gridExt}
       </div>
     );
@@ -1640,24 +1629,13 @@ function SchemaFieldVF({
     return (
       <div>
         <Segmented
+          error={errorMsg}
           help={help}
           label={label}
           value={String(value ?? resolved.default ?? resolved.enum?.[0] ?? "")}
           onChange={(v) => handleChange(v)}
           options={opts}
         />
-        {errorMsg && (
-          <p
-            style={{
-              fontSize: 11,
-              color: "oklch(0.704 0.191 22.216)",
-              marginTop: 4,
-              fontFamily: "var(--font-mono)",
-            }}
-          >
-            {errorMsg}
-          </p>
-        )}
         {gridExt}
       </div>
     );
@@ -1667,23 +1645,12 @@ function SchemaFieldVF({
     return (
       <div>
         <Toggle
+          error={errorMsg}
           help={help}
           label={label}
           value={Boolean(value)}
           onChange={(v) => onChange(v)}
         />
-        {errorMsg && (
-          <p
-            style={{
-              fontSize: 11,
-              color: "oklch(0.704 0.191 22.216)",
-              marginTop: 4,
-              fontFamily: "var(--font-mono)",
-            }}
-          >
-            {errorMsg}
-          </p>
-        )}
       </div>
     );
   }
@@ -1692,6 +1659,7 @@ function SchemaFieldVF({
     return (
       <div>
         <NumberField
+          error={errorMsg}
           help={help}
           label={label}
           value={(value as number) ?? 0}
@@ -1699,18 +1667,6 @@ function SchemaFieldVF({
           min={resolved.minimum ?? resolved.exclusiveMinimum}
           step={resolved.type === "integer" ? 1 : undefined}
         />
-        {errorMsg && (
-          <p
-            style={{
-              fontSize: 11,
-              color: "oklch(0.704 0.191 22.216)",
-              marginTop: 4,
-              fontFamily: "var(--font-mono)",
-            }}
-          >
-            {errorMsg}
-          </p>
-        )}
         {gridExt}
       </div>
     );
@@ -1721,6 +1677,7 @@ function SchemaFieldVF({
     return (
       <div>
         <TextField
+          error={errorMsg}
           help={help}
           label={label}
           value={arrVal.join(", ")}
@@ -1735,18 +1692,6 @@ function SchemaFieldVF({
           placeholder={t.paramPanel.normalizePlaceholder}
           mono
         />
-        {errorMsg && (
-          <p
-            style={{
-              fontSize: 11,
-              color: "oklch(0.704 0.191 22.216)",
-              marginTop: 4,
-              fontFamily: "var(--font-mono)",
-            }}
-          >
-            {errorMsg}
-          </p>
-        )}
       </div>
     );
   }
@@ -1755,24 +1700,13 @@ function SchemaFieldVF({
   return (
     <div>
       <TextField
+        error={errorMsg}
         help={help}
         label={label}
         value={String(value ?? "")}
         onChange={(v) => onChange(v)}
         mono={name === "base_dir"}
       />
-      {errorMsg && (
-        <p
-          style={{
-            fontSize: 11,
-            color: "oklch(0.704 0.191 22.216)",
-            marginTop: 4,
-            fontFamily: "var(--font-mono)",
-          }}
-        >
-          {errorMsg}
-        </p>
-      )}
     </div>
   );
 }

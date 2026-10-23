@@ -61,7 +61,7 @@ test("explicit image audit, persisted K-fold groups and experiment bundle downlo
   await page.getByRole("button", { name: "K-Fold (CV)", exact: true }).click();
   const cv = page.getByTestId("classification-cross-validation");
   await expect(cv).toBeVisible();
-  const groupField = cv.getByPlaceholder("groups.csv", { exact: true });
+  const groupField = cv.getByLabel("CSV de grupos (opcional)", { exact: true });
   await expect(groupField).toHaveCount(1);
   await groupField.fill("groups.csv");
   // Switching strategy preserves the classification configuration.

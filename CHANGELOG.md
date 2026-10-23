@@ -70,6 +70,10 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Fixed
 
+- **Rótulos dos formulários associados aos controles**: clicar no texto foca o campo
+  correto; leitores de tela recebem o nome, a ajuda, o erro e os estados dos controles.
+  Instâncias com rótulos repetidos usam IDs distintos ([ADR-142](docs/dev/DECISIONS.md), #59).
+
 - **A tela de anomalia é âmbar, como a aba e o histórico já mostravam**; estava vermelha como a
   de classificação ([ADR-137](docs/dev/DECISIONS.md)).
 
