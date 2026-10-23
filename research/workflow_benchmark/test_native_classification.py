@@ -46,7 +46,7 @@ def test_native_repeats_exactly_and_evaluates_best_checkpoint(
         for name in ("first", "repeat")
     ]
     first, repeat = results
-    ignored = {"setup_seconds", "train_seconds", "evaluation_seconds", "best_model"}
+    ignored = {"phases", "best_model"}
     assert {k: v for k, v in first.items() if k not in ignored} == {
         k: v for k, v in repeat.items() if k not in ignored
     }
@@ -78,8 +78,9 @@ def test_native_repeats_exactly_and_evaluates_best_checkpoint(
         assert (
             json.loads((checkpoint.parent / "native_result.json").read_text()) == result
         )
-        for timing in ("setup_seconds", "train_seconds", "evaluation_seconds"):
-            assert result[timing] >= 0
+        assert [phase["seconds"] >= 0 for phase in result["phases"].values()] == [
+            True
+        ] * 4
         for row in result["history"]:
             assert set(row) == {
                 "epoch",

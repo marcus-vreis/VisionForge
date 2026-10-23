@@ -6252,3 +6252,70 @@ version before this correction. A real version transition can advance that
 reference; a greener New Code gate after the transition does not demonstrate
 that historical findings were fixed. The definition, quality gate, rules and
 exclusions stay unchanged, and overall findings remain subject to triage.
+
+## ADR-148 — Workflow benchmark reports share a phase contract
+
+**Date:** 2026-10-23
+**Status:** Accepted
+**Extends:** ADR-141, ADR-143
+
+**Decision:** The native and VisionForge classification paths time the same four
+machine phases: setup, training, evaluation and evidence. Both run one shared,
+untimed preflight before creating their output directory. Setup ends with data,
+model and initial weights ready; training ends when the best checkpoint is on
+disk; evaluation reloads it and predicts the test split; evidence hashes that
+checkpoint and assembles the report. Each report lists the work each path does
+inside every phase, the cache conditions, library versions, CPU threads, process
+priority and the operator's declaration of concurrent workloads. A failure in
+any phase writes a partial report naming the failed phase and keeps completed
+artifacts. Reports are created exclusively and never replace an earlier file.
+Reports without `phase_contract` keep their original implementation-phase scope;
+readers classify them as legacy and do not reinterpret their timings. Phase
+times are machine wall-clock time; human effort is never derived from them. The
+paired CLI hides CUDA and limits threads before importing torch, then lowers its
+process priority.
+
+**Reason:** The earlier timings began and ended at different points and
+silently included different artifact writes, so they could not be compared.
+Fixed boundaries plus a disclosed work list make differences visible without
+pretending the implementations do identical work. Recording failure phases keeps
+failed runs in the dataset instead of dropping them. Synthetic fixtures and runs
+under concurrent load still cannot support speed or human-effort claims.
+
+## ADR-149 — Segmentation parity uses a restricted CPU recipe and a fixed trimap map
+
+**Date:** 2026-10-23
+**Status:** Accepted
+**Extends:** ADR-143, ADR-148
+
+**Decision:** The workflow benchmark adds an independent native PyTorch
+segmentation path and a paired harness that runs it against the public
+`SegmentationDataModule` and `SegmentationTrainer` under the ADR-148 phase
+contract. The restricted recipe is binary segmentation (background 0,
+foreground 1, ignore 255), no augmentation, bilinear image and nearest-neighbour
+mask resize, fixed normalization, cross-entropy with `ignore_index`, SGD without
+momentum or scheduler, workers=0 and a small fully convolutional network whose
+initial weights both paths load from the same file. The best checkpoint is the
+first epoch with the highest validation mean IoU, as in the trainer. Metrics come
+from one confusion matrix over non-ignored pixels; mean IoU and Dice average the
+classes present in ground truth or prediction. The shared preflight refuses a
+mask whose resized pixels are all ignored, because an all-ignored batch makes
+cross-entropy undefined; such a mask contributes nothing to the confusion matrix.
+Oxford-IIIT Pet trimaps map 1 (pet) to 1, 2 (background) to 0 and 3 (border) to
+255; any other value is an error. The harness requires identical losses, best
+epoch, per-image confusion matrices, test predictions and best-state tensors,
+and allows a 1e-12 absolute difference only on mean IoU, Dice and pixel accuracy.
+The report records source revision, dataset fingerprint, weights and prediction
+hashes, environment and the failed phase, and is never overwritten.
+
+**Reason:** Both implementations execute the same torch operations in the same
+order on one CPU thread, so losses, weights and predictions have no legitimate
+source of difference and any tolerance would hide a recipe drift. The metric
+reductions differ by library (NumPy versus torch, both float64) over identical
+integer confusion matrices, so only rounding can differ; one changed pixel moves
+a metric by at least one over the labelled pixel count, far above 1e-12 for any
+planned dataset size. The model is a harness input rather than a VisionForge
+architecture because the check targets data, loss, selection and metrics, and a
+tiny network keeps the fixture tests within seconds on one thread. Synthetic
+fixtures prove integration only; the Oxford-IIIT Pet acquisition, its splits,
+architecture and full budget remain separate, authorised steps.
