@@ -318,7 +318,7 @@ def run_pair(
     from visionforge.core.dataset_fingerprint import fingerprint_dataset
     from visionforge.utils.environment import capture_environment
 
-    from .native_segmentation import run_native
+    from .native_segmentation import preflight, run_native
 
     dataset, initial_weights, output = (
         Path(dataset).resolve(),
@@ -329,6 +329,15 @@ def run_pair(
         raise ValueError("Dataset and output must be separate directories")
     if output.exists():
         raise FileExistsError(output)
+    preflight(
+        dataset,
+        initial_weights,
+        output,
+        epochs=epochs,
+        batch_size=batch_size,
+        image_size=image_size,
+        learning_rate=learning_rate,
+    )
     fingerprint = fingerprint_dataset(dataset, method="content").to_dict()
     output.mkdir(parents=True)
     options: dict[str, Any] = {

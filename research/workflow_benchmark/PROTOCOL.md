@@ -56,9 +56,12 @@ descriptive summaries, without population-wide or causal claims.
 
 ## Pending before collection
 
-Recruitment/consent process, sample and stopping rule, task script, baseline
-implementation, mistake checklist, timing instrumentation and exact software
-versions. No external participant has been recruited by this repository change.
+Recruitment/consent process, sample and stopping rule, participant task script,
+mistake checklist, human-session timing instrumentation and frozen software
+versions. The restricted classification and segmentation CPU baselines and
+machine-phase instrumentation are implemented (ADR-148/149). Full-data recipes
+and native baselines for detection, regression and anomaly remain extensions.
+No external participant has been recruited by this repository change.
 
 ## Engineering check before collecting workflow measurements
 

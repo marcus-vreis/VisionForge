@@ -6288,6 +6288,13 @@ pretending the implementations do identical work. Recording failure phases keeps
 failed runs in the dataset instead of dropping them. Synthetic fixtures and runs
 under concurrent load still cannot support speed or human-effort claims.
 
+**Update (2026-10-24):** The paired entry points also run preflight before
+creating the pair's parent output directory, rather than relying only on each
+runner's check after that directory exists. Rejected controls or missing weights
+therefore create neither a directory nor a partial pair report. JSON is
+serialized before opening the exclusive report file, so a non-serializable or
+non-finite value cannot reserve an empty file and prevent a valid retry.
+
 ## ADR-149 — Segmentation parity uses a restricted CPU recipe and a fixed trimap map
 
 **Date:** 2026-10-23
