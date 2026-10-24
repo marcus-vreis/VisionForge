@@ -814,6 +814,7 @@ necessary because folds shrink the training set.
 **Date:** 2026-06
 **Status:** Accepted
 **Extends:** ADR-005, ADR-048/049
+**Superseded by:** ADR-106 (timm ships with VisionForge).
 
 **Decision:** Researchers can use any `timm` architecture via a `timm_model` field
 on `ModelConfig` and `RegressionModelConfig` (classification + regression — timm
@@ -903,6 +904,7 @@ tests with tiny models (ADR-010).
 **Date:** 2026-06
 **Status:** Accepted
 **Extends:** ADR-005, ADR-013
+**Superseded by:** ADR-106 (dependencies bundled).
 
 **Decision:** Training writes per-epoch scalars to `<run_dir>/tensorboard/` via a
 `core/tracking.TensorBoardLogger`. The logger lazily imports

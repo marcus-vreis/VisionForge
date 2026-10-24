@@ -30,6 +30,7 @@ from visionforge.tasks import (
     clear_task_registry,
     register_task,
 )
+from visionforge.utils.messages import using_lang
 from visionforge.utils.selftest_data import (
     build_anomaly_dataset,
     build_classification_dataset,
@@ -310,7 +311,10 @@ class TestStopAtInTheSnapshot:
         assert (sweep, replicates) == ("trial", "replicate")
         # A Level 2 task's metrics come from a split VisionForge cannot see, so
         # its sweep is refused before queueing (ADR-131).
-        refused = client.post("/api/custom/qtoy2/sweep", json=space)
+        with using_lang("en"):
+            refused = client.post(
+                "/api/custom/qtoy2/sweep", json=space, headers={"X-VF-Lang": "en"}
+            )
         assert refused.status_code == 422
         assert "validation" in refused.json()["detail"].lower()
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv as csv_mod
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import patch
 
@@ -283,6 +284,23 @@ class TestRunTrial:
         assert record["status"] == "success"
         assert record["best_val_loss"] == 0.3
         assert record["test_accuracy"] == 0.9
+
+    def test_relative_model_path_records_absolute_run_dir(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        config = self._make_config(tmp_path)
+        model_path = Path("outputs/models/trial/model.pt")
+        record: dict[str, Any] = {}
+        with patch("visionforge.blocks._search_utils.ClassificationBlock") as block_cls:
+            block = block_cls.return_value
+            block._train_result = SimpleNamespace(model_path=model_path)
+            block.report.return_value = {"train": {"best_val_loss": 0.3}}
+            run_trial(config, 0, 1, 10, {}, record)
+
+        assert record["status"] == "success"
+        assert Path(record["run_dir"]).is_absolute()
+        assert record["run_dir"] == str(model_path.parent.resolve())
 
     def test_failed_trial_records_error(self, tmp_path: Path) -> None:
         config = self._make_config(tmp_path)

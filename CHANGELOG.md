@@ -88,6 +88,10 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Fixed
 
+- **O histórico usa a cor da tarefa do pesquisador.** Corridas de `custom:<chave>` apareciam
+  em cinza na lista, no detalhe, no ranking e na comparação; agora levam a cor registrada
+  pela tarefa ou a escolhida no navegador (ADR-137).
+
 - **O melhor checkpoint de regressão e segmentação guarda os pesos da época certa.** Ele era
   gravado numa thread a partir dos próprios tensores de treino, que a época seguinte continuava
   alterando; quando o melhor não era a última época, `best_model.pth` podia sair com pesos

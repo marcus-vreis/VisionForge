@@ -20,6 +20,7 @@ from visionforge.core.task_runner import RunResult, best_epoch_row
 from visionforge.tasks.base import TaskSpec
 from visionforge.tasks.engine import GenericTaskEngine
 from visionforge.tasks.registry import TaskInfo
+from visionforge.utils.messages import tr
 
 
 class CustomTaskRunner:
@@ -38,14 +39,16 @@ class CustomTaskRunner:
         # Read by the orchestrators to rank trials the way the task declared
         # (`runner_metric_direction`): "score" may well be lower-is-better.
         self.metric_directions = dict(info.metrics)
+
+    @property
+    def selection_unavailable(self) -> str | None:
+        """Explain why Level 2 selection is unavailable in the caller's language."""
         # A Level 2 `run` returns metrics of a split VisionForge cannot see, so
         # a sweep could be ranking on test numbers (ADR-131). Level 1 scores
         # every epoch on its val loader and selects on that.
-        self.selection_unavailable: str | None = (
-            f"Task '{info.key}' runs its own loop (Level 2), so VisionForge "
-            "cannot tell which metrics come from a validation split; a sweep "
-            "needs per-epoch validation metrics (Level 1 hooks)."
-            if getattr(info.spec_cls, "run", TaskSpec.run) is not TaskSpec.run
+        return (
+            tr("sweep.level2_selection_unavailable", task=self._info.key)
+            if getattr(self._info.spec_cls, "run", TaskSpec.run) is not TaskSpec.run
             else None
         )
 

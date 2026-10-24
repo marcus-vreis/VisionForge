@@ -6,6 +6,7 @@ import pytest
 
 from visionforge.core.sweep import run_sweep
 from visionforge.core.task_runner import RunResult
+from visionforge.utils.messages import using_lang
 
 
 class Config:
@@ -77,18 +78,20 @@ def test_test_metrics_are_never_a_fallback_for_missing_validation() -> None:
         def run(self, cfg: dict[str, Any]) -> RunResult:
             return RunResult(metrics={"score": 0.99}, status="success")
 
-    trials = run_sweep(
-        TestOnlyRunner(), {"candidate": 0.1}, {}, mode="grid", metric="score"
-    )
+    with using_lang("en"):
+        trials = run_sweep(
+            TestOnlyRunner(), {"candidate": 0.1}, {}, mode="grid", metric="score"
+        )
     assert trials[0].status == "failed"
     assert "validation" in trials[0].error.lower()
 
 
 @pytest.mark.parametrize("value", [float("nan"), float("inf"), -float("inf")])
 def test_nonfinite_validation_is_not_ranked(value: float) -> None:
-    trials = run_sweep(
-        SplitRunner(), {"candidate": value}, {}, mode="grid", metric="score"
-    )
+    with using_lang("en"):
+        trials = run_sweep(
+            SplitRunner(), {"candidate": value}, {}, mode="grid", metric="score"
+        )
     assert trials[0].status == "failed"
     assert "finite" in trials[0].error.lower()
 
@@ -102,5 +105,29 @@ def test_anomaly_sweep_rejects_test_only_objective_before_training(
         raise AssertionError("unsafe anomaly sweep started training")
 
     monkeypatch.setattr(AnomalyRunner, "run", unexpected_run)
-    with pytest.raises(ValueError, match="validation"):
+    with using_lang("en"), pytest.raises(ValueError, match="validation"):
         run_sweep(AnomalyRunner(), {}, {}, mode="grid", metric="auroc")
+
+
+@pytest.mark.parametrize(
+    ("selection", "text"),
+    [({}, "Nenhum valor de validation"), ({"score": float("nan")}, "não é finito")],
+)
+def test_selection_problems_use_portuguese(
+    selection: dict[str, float], text: str
+) -> None:
+    from visionforge.core.sweep import _selection_problem
+
+    with using_lang("pt"):
+        assert text in _selection_problem(selection, "score")
+
+
+def test_anomaly_selection_reason_uses_language_at_access() -> None:
+    from visionforge.blocks.anomaly_runner import AnomalyRunner
+    from visionforge.core.task_runner import require_validation_selection
+
+    runner = AnomalyRunner()
+    with using_lang("pt"), pytest.raises(ValueError, match="validação rotulado"):
+        require_validation_selection(runner)
+    with using_lang("en"), pytest.raises(ValueError, match="labelled validation"):
+        require_validation_selection(runner)

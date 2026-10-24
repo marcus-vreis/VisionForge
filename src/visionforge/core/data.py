@@ -16,6 +16,7 @@ from visionforge.utils.config import (
     PreprocessingConfig,
     TransformConfig,
 )
+from visionforge.utils.messages import tr
 from visionforge.utils.workers import suggested_workers
 
 _LOADER_POOLS = 3
@@ -172,9 +173,7 @@ class _SplitImageFolder(ImageFolder):
         super().__init__(root, allow_empty=True, **kwargs)
         # allow_empty also disables torchvision's no-images check; an empty split would only fail mid-training.
         if not self.samples:
-            raise ValueError(
-                f"The {split} split ({root}) has no images in any class folder."
-            )
+            raise ValueError(tr("data.empty_split", split=split, root=root))
 
     def find_classes(self, directory: str) -> tuple[list[str], dict[str, int]]:
         """Reject unknown class directories and return the training vocabulary."""
@@ -182,9 +181,12 @@ class _SplitImageFolder(ImageFolder):
         unknown = [name for name in present if name not in self._train_class_to_idx]
         if unknown:
             raise ValueError(
-                f"The {self._split} split has class folder(s) {unknown} that the "
-                f"training split does not have (training classes: "
-                f"{list(self._train_class_to_idx)}). Move or rename them."
+                tr(
+                    "data.unknown_classes",
+                    split=self._split,
+                    unknown=unknown,
+                    classes=list(self._train_class_to_idx),
+                )
             )
         return list(self._train_class_to_idx), dict(self._train_class_to_idx)
 
@@ -196,9 +198,14 @@ def _check_training_class_count(train: ImageFolder, config: ExperimentConfig) ->
     expected = 2 if config.task == "binary" else config.model.num_classes
     if found != expected:
         raise ValueError(
-            f"Training split has {found} class folder(s) {train.classes}, but "
-            f"task '{config.task}' with model.num_classes={config.model.num_classes} "
-            f"require {expected}."
+            tr(
+                "data.class_count_mismatch",
+                found=found,
+                classes=train.classes,
+                task=config.task,
+                num_classes=config.model.num_classes,
+                expected=expected,
+            )
         )
 
 

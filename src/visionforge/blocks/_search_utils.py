@@ -143,7 +143,7 @@ def run_trial(
         # The trial's own run folder, so History folds it under the sweep (ADR-124).
         train = getattr(block, "_train_result", None)
         if train is not None and train.model_path:
-            trial_record["run_dir"] = str(train.model_path.parent)
+            trial_record["run_dir"] = str(train.model_path.parent.resolve())
         trial_record["best_val_loss"] = report.get("train", {}).get("best_val_loss")
         trial_record["test_accuracy"] = report.get("eval", {}).get("accuracy")
         trial_record["test_f1"] = report.get("eval", {}).get("f1")
