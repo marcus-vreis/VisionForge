@@ -47,7 +47,8 @@ class TestFasterRCNNFamily:
         model.eval()
         with torch.no_grad():
             out = model([torch.rand(3, 128, 128)])
-        assert isinstance(out, list) and len(out) == 1
+        assert isinstance(out, list)
+        assert len(out) == 1
         assert {"boxes", "labels", "scores"} <= set(out[0].keys())
 
 
@@ -56,7 +57,8 @@ class TestSSDFamily:
     def test_builds_and_accepts_max_label(self, name: str) -> None:
         model = build_torchvision_detector(name, num_classes=2, pretrained=False)
         losses = _train_forward_loss(model, num_classes=2)
-        assert isinstance(losses, dict) and len(losses) > 0
+        assert isinstance(losses, dict)
+        assert len(losses) > 0
         assert all(isinstance(v, torch.Tensor) for v in losses.values())
 
 
@@ -66,7 +68,8 @@ class TestRetinaNet:
             "retinanet_resnet50_fpn", num_classes=3, pretrained=False
         )
         losses = _train_forward_loss(model, num_classes=3)
-        assert isinstance(losses, dict) and len(losses) > 0
+        assert isinstance(losses, dict)
+        assert len(losses) > 0
 
 
 class TestUnknown:

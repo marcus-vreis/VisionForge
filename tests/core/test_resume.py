@@ -71,7 +71,8 @@ class TestRoundTrip:
 
         got = load_resume_state(tmp_path)
 
-        assert got is not None and got.epoch == 7
+        assert got is not None
+        assert got.epoch == 7
 
 
 class TestRefusesRatherThanGuesses:
@@ -162,7 +163,9 @@ def test_legacy_resume_retains_training_state_and_warns(tmp_path: Path) -> None:
         state = load_resume_state(tmp_path)
     finally:
         logger.remove(sink)
-    assert state is not None and state.epoch == 3 and state.rng_state is None
+    assert state is not None
+    assert state.epoch == 3
+    assert state.rng_state is None
     assert any("Legacy resume" in message for message in messages)
     restore_rng_state(None)
 
@@ -203,11 +206,13 @@ def test_atomic_save_failure_preserves_previous_checkpoint(
         monkeypatch.setattr("visionforge.core.resume.torch.save", fail_write)
     else:
         monkeypatch.setattr("visionforge.core.resume.os.replace", fail_replace)
+    new_state = _state(4)
     with pytest.raises(OSError):
-        save_resume_state(tmp_path, _state(4))
+        save_resume_state(tmp_path, new_state)
     assert resume_path(tmp_path).read_bytes() == before
     loaded = load_resume_state(tmp_path)
-    assert loaded is not None and loaded.epoch == 3
+    assert loaded is not None
+    assert loaded.epoch == 3
     assert not list(tmp_path.glob("*.tmp"))
 
 
@@ -245,7 +250,8 @@ def test_initialized_cuda_rng_is_captured_and_restored_without_gpu(
     restored: list[torch.Tensor] = []
     monkeypatch.setattr(torch.cuda, "set_rng_state_all", restored.extend)
     restore_rng_state(state)
-    assert len(restored) == 1 and torch.equal(restored[0], cuda_state)
+    assert len(restored) == 1
+    assert torch.equal(restored[0], cuda_state)
 
 
 def test_incompatible_cuda_and_worker_rng_limits_are_reported(

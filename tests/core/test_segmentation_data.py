@@ -267,13 +267,15 @@ class TestSegmentationDataModule:
         self, tmp_path: Path
     ) -> None:
         _make_split(tmp_path, "val", 2)
+        config = _config(tmp_path)
         with pytest.raises(FileNotFoundError, match="train"):
-            SegmentationDataModule(_config(tmp_path))
+            SegmentationDataModule(config)
 
     def test_training_still_needs_the_val_split_up_front(self, tmp_path: Path) -> None:
         _make_split(tmp_path, "train", 2)
+        config = _config(tmp_path)
         with pytest.raises(FileNotFoundError, match="val"):
-            SegmentationDataModule(_config(tmp_path))
+            SegmentationDataModule(config)
 
 
 class TestSegmentationDataModuleEvaluationOnly:

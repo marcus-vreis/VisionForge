@@ -80,7 +80,8 @@ class TestGenericTaskEngineLevel1:
         )
 
         kinds = [e["event"] for e in events]
-        assert kinds[0] == "start" and kinds[-1] == "end"
+        assert kinds[0] == "start"
+        assert kinds[-1] == "end"
         assert kinds.count("epoch_end") == 3
         assert all("val_mae" in e for e in events if e["event"] == "epoch_end")
 
@@ -88,7 +89,8 @@ class TestGenericTaskEngineLevel1:
         assert result.best_epoch >= 1
         assert "mae" in result.metrics
         assert "test_mae" in result.metrics  # test loader was provided
-        assert result.model_path is not None and result.model_path.is_file()
+        assert result.model_path is not None
+        assert result.model_path.is_file()
 
         run_json = json.loads((result.run_dir / "run.json").read_text("utf-8"))
         assert run_json["task"] == "custom:toyreg"
@@ -177,8 +179,9 @@ class TestGenericTaskEngineLevel1:
             def compute_metrics(self, model: nn.Module, loader: Any, cfg: Any):
                 return {"other": 1.0}
 
+        engine = GenericTaskEngine(get_task("badmetrics"), _config(tmp_path))
         with pytest.raises(ValueError, match="primary metric"):
-            GenericTaskEngine(get_task("badmetrics"), _config(tmp_path)).run()
+            engine.run()
 
     def test_lower_is_better_selects_min_checkpoint(self, tmp_path: Path) -> None:
         values = iter([3.0, 1.0, 2.0, 5.0])
@@ -231,7 +234,8 @@ class TestGenericTaskEngineStop:
 
         assert result.total_epochs == 1  # of 3 configured
         assert result.stopped is True
-        assert result.model_path is not None and result.model_path.is_file()
+        assert result.model_path is not None
+        assert result.model_path.is_file()
         assert "mae" in result.metrics
 
     def test_stopped_before_the_first_epoch_keeps_nothing(self, tmp_path: Path) -> None:

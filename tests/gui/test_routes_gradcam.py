@@ -87,27 +87,24 @@ class TestExecuteRunGradcam:
     def test_detection_run_rejected(self, tmp_path: Path) -> None:
         run_dir = _make_run_dir(tmp_path, task="detection")
         input_dir = _make_input_dir(tmp_path, n=1)
+        request = GradCamRequest(input_dir=str(input_dir), num_samples=1)
         with pytest.raises(ValueError, match="classification"):
-            _execute_run_gradcam(
-                run_dir, GradCamRequest(input_dir=str(input_dir), num_samples=1)
-            )
+            _execute_run_gradcam(run_dir, request)
 
     def test_empty_input_dir_raises(self, tmp_path: Path) -> None:
         run_dir = _make_run_dir(tmp_path)
         empty = tmp_path / "empty"
         empty.mkdir()
+        request = GradCamRequest(input_dir=str(empty), num_samples=3)
         with pytest.raises(ValueError, match="[Nn]o image"):
-            _execute_run_gradcam(
-                run_dir, GradCamRequest(input_dir=str(empty), num_samples=3)
-            )
+            _execute_run_gradcam(run_dir, request)
 
     def test_anomaly_run_rejected(self, tmp_path: Path) -> None:
         run_dir = _make_run_dir(tmp_path, task="anomaly")
         input_dir = _make_input_dir(tmp_path, n=1)
+        request = GradCamRequest(input_dir=str(input_dir), num_samples=1)
         with pytest.raises(ValueError, match="não está disponível"):
-            _execute_run_gradcam(
-                run_dir, GradCamRequest(input_dir=str(input_dir), num_samples=1)
-            )
+            _execute_run_gradcam(run_dir, request)
 
 
 def _make_regression_run_dir(tmp: Path) -> Path:
@@ -183,7 +180,8 @@ class TestRegressionGradcam:
         for item in resp.items:
             assert Path(item.overlay).is_file()
             assert item.predicted_class is None
-            assert item.prediction is not None and item.prediction.startswith("pred=")
+            assert item.prediction is not None
+            assert item.prediction.startswith("pred=")
 
 
 class TestSegmentationGradcam:
@@ -198,7 +196,8 @@ class TestSegmentationGradcam:
         for item in resp.items:
             assert Path(item.overlay).is_file()
             assert item.predicted_class == 1  # the requested target class
-            assert item.prediction is not None and "class 1" in item.prediction
+            assert item.prediction is not None
+            assert "class 1" in item.prediction
 
 
 class TestClassNamesSurviveARename:

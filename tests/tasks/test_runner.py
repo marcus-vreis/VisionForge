@@ -82,7 +82,8 @@ class TestCustomTaskRunner:
 
         assert result.status == "success"
         assert result.error == ""
-        assert result.training_time_s is not None and result.training_time_s > 0
+        assert result.training_time_s is not None
+        assert result.training_time_s > 0
         assert "mae" in runner.metrics(result)
         assert runner.primary_metric() == "mae"
 

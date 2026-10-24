@@ -251,7 +251,8 @@ def test_standalone_stochastic_resume_matches_continuous(
         cancel_token=token,
     )
     state = load_resume_state(stopped.model_path.parent)
-    assert state is not None and state.best_epoch == stopped.best_epoch
+    assert state is not None
+    assert state.best_epoch == stopped.best_epoch
     resumed_model = copy.deepcopy(initial)
     resumed = trainer_factory().fit(
         resumed_model, TaskData(task), resume_dir=stopped.model_path.parent
@@ -291,8 +292,10 @@ def test_changed_dataset_refuses_resume_without_touching_model_or_checkpoint(
     sample.write_bytes(b"changed dataset content")
     model = nn.Linear(4, 1)
     before = copy.deepcopy(model.state_dict())
+    trainer = Trainer(cfg)
+    data = RandomizedData()
     with pytest.raises(ValueError, match="dataset.*changed"):
-        Trainer(cfg).fit(model, RandomizedData(), resume_dir=run)
+        trainer.fit(model, data, resume_dir=run)
     for name, value in before.items():
         assert torch.equal(model.state_dict()[name], value)
     assert (run / "resume.pt").read_bytes() == checkpoint
@@ -337,7 +340,8 @@ def test_resumed_patience_stops_on_the_same_epoch(
         cancel_token=token,
     )
     state = load_resume_state(stopped.model_path.parent)
-    assert state is not None and state.patience_counter == stop_epoch - 1
+    assert state is not None
+    assert state.patience_counter == stop_epoch - 1
     resumed_model = copy.deepcopy(initial)
     resumed = Trainer(cfg).fit(
         resumed_model,
@@ -436,7 +440,8 @@ def test_torchvision_stochastic_resume_matches_continuous(
 
     stopped = DetectionTrainer(cfg).fit(progress_callback=stop, cancel_token=token)
     state = load_resume_state(stopped.run_dir)
-    assert state is not None and state.best_epoch == stopped.best_epoch == 1
+    assert state is not None
+    assert state.best_epoch == stopped.best_epoch == 1
     resumed = DetectionTrainer(cfg).fit(resume_dir=stopped.run_dir)
     assert resumed.history == continuous.history
     report = json.loads((resumed.run_dir / "run.json").read_text("utf-8"))

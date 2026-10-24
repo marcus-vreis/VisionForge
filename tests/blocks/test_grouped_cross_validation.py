@@ -68,8 +68,9 @@ def test_rejects_insufficient_groups_before_training(tmp_path: Path) -> None:
         )
     )
     cv = CrossValidationConfig(n_folds=2, group_manifest=manifest)
+    data = DataConfig(base_dir=tmp_path)
     with pytest.raises(ValueError, match="distinct groups"):
-        _split_pool(pool, DataConfig(base_dir=tmp_path), cv)
+        _split_pool(pool, data, cv)
 
 
 def test_relative_manifest_and_seed_reproduce_folds(tmp_path: Path) -> None:
@@ -89,8 +90,9 @@ def test_rejects_unknown_manifest_path(tmp_path: Path) -> None:
     with manifest.open("a") as stream:
         stream.write("\ntrain/class0/missing.png,missing")
     cv = CrossValidationConfig(n_folds=2, group_manifest=manifest)
+    data = DataConfig(base_dir=tmp_path)
     with pytest.raises(ValueError, match="Unknown"):
-        _split_pool(pool, DataConfig(base_dir=tmp_path), cv)
+        _split_pool(pool, data, cv)
 
 
 def test_dataset_root_alias_preserves_manifest_paths(tmp_path: Path) -> None:
@@ -126,9 +128,11 @@ def test_legacy_group_kfold_signature(tmp_path: Path, shuffle: bool) -> None:
     def legacy_group_kfold(n_splits: int = 5) -> GroupKFold:
         return GroupKFold(n_splits=n_splits)
 
+    data = DataConfig(base_dir=tmp_path)
+
     with patch("visionforge.blocks.cross_validation.GroupKFold", legacy_group_kfold):
         if shuffle:
             with pytest.raises(ValueError, match="scikit-learn>=1.6"):
-                _split_pool(pool, DataConfig(base_dir=tmp_path), cv)
+                _split_pool(pool, data, cv)
         else:
-            assert len(list(_split_pool(pool, DataConfig(base_dir=tmp_path), cv))) == 2
+            assert len(list(_split_pool(pool, data, cv))) == 2

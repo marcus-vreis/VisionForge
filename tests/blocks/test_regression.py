@@ -121,7 +121,7 @@ class TestWorkerPoolTeardown:
             ),
             patch(
                 "visionforge.blocks.regression.RegressionDataModule",
-                lambda cfg: module,
+                return_value=module,
             ),
         ):
             block.run()
@@ -140,7 +140,7 @@ class TestWorkerPoolTeardown:
             ),
             patch(
                 "visionforge.blocks.regression.RegressionDataModule",
-                lambda cfg: module,
+                return_value=module,
             ),
             patch(
                 "visionforge.blocks.regression.RegressionTrainer.fit",

@@ -85,11 +85,13 @@ class TestAnomalyDataModule:
         # test/ present but train/good/ empty
         _img(tmp_path / "test" / "good" / "g.png")
         (tmp_path / "train" / "good").mkdir(parents=True)
+        config = _config(tmp_path)
         with pytest.raises(ValueError, match="[Nn]o .*normal"):
-            AnomalyDataModule(_config(tmp_path))
+            AnomalyDataModule(config)
 
     def test_missing_test_raises(self, tmp_path: Path) -> None:
         for i in range(2):
             _img(tmp_path / "train" / "good" / f"n{i}.png")
+        config = _config(tmp_path)
         with pytest.raises(ValueError, match="test"):
-            AnomalyDataModule(_config(tmp_path))
+            AnomalyDataModule(config)
