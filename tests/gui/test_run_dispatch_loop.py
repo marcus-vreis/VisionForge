@@ -86,7 +86,9 @@ def gated_regression() -> Iterator[_Gated]:
         gated.gate.set()
         for pool in pools:
             pool.shutdown(wait=True)
-        (RegressionBlock.setup, RegressionBlock.run, RegressionBlock.report) = originals
+        (RegressionBlock.setup, RegressionBlock.run, RegressionBlock.report) = (  # type: ignore[method-assign]
+            originals
+        )
         release_queue(routes_mod)
 
 
