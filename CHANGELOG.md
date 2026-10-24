@@ -18,26 +18,22 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 - **Preparação auditável do CIFAR-10**: subconjunto CPU com checksum oficial, índices
   de origem e hashes por imagem; plano de expansão para datasets públicos. O piloto
   verifica paridade numérica e não mede superioridade ([ADR-143](docs/dev/DECISIONS.md)).
-
 - **Fases comparáveis no benchmark de workflow**: os caminhos nativo e VisionForge
   cronometram setup, treino, avaliação e evidências com as mesmas fronteiras e
   registram o trabalho de cada fase, cache, versões, threads, prioridade e carga
   concorrente declarada. Uma falha grava o relatório parcial com a fase, sem
   sobrescrever resultados; relatórios antigos ficam marcados como escopo legado.
   O CLI roda em CPU, com um thread e prioridade baixa ([ADR-148](docs/dev/DECISIONS.md)).
-
 - **Paridade de segmentação no benchmark de workflow**: baseline PyTorch independente
   e harness pareado com o `SegmentationTrainer`, com receita restrita em CPU, pixels
   ignorados fora da loss e das métricas, máscara inteiramente ignorada recusada no
   preflight e conversão fixa do trimap do Oxford-IIIT Pet (sem download). Perdas,
   pesos e predições precisam ser idênticos; métricas aceitam 1e-12. Verificado só
   com fixtures sintéticas ([ADR-149](docs/dev/DECISIONS.md)).
-
 - **Cor das tarefas que você criou.** Com uma tarefa sua aberta, uma bolinha no topo, ao lado de
   PT/EN, escolhe a cor da tela dela entre dez opções ou qualquer outra; "voltar à cor original"
   devolve a do registro. A tela da tarefa já passa a usar a cor que ela registrou, em vez do
   vermelho ([ADR-137](docs/dev/DECISIONS.md)).
-
 - **Evidências pela GUI**: auditoria de imagens e grupos nos splits de classificação,
   CSV de grupos no K-fold e download do bundle no histórico. A exportação recusa runs
   ativos ou na fila e bloqueia a retomada enquanto lê os artefatos
@@ -94,7 +90,6 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 - **O histórico usa a cor da tarefa do pesquisador.** Corridas de `custom:<chave>` apareciam
   em cinza na lista, no detalhe, no ranking e na comparação; agora levam a cor registrada
   pela tarefa ou a escolhida no navegador (ADR-137).
-
 - **O melhor checkpoint de regressão e segmentação guarda os pesos da época certa.** Ele era
   gravado numa thread a partir dos próprios tensores de treino, que a época seguinte continuava
   alterando; quando o melhor não era a última época, `best_model.pth` podia sair com pesos
@@ -102,10 +97,8 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 - **Rótulos dos formulários associados aos controles**: clicar no texto foca o campo
   correto; leitores de tela recebem o nome, a ajuda, o erro e os estados dos controles.
   Instâncias com rótulos repetidos usam IDs distintos ([ADR-142](docs/dev/DECISIONS.md), #59).
-
 - **A tela de anomalia é âmbar, como a aba e o histórico já mostravam**; estava vermelha como a
   de classificação ([ADR-137](docs/dev/DECISIONS.md)).
-
 - **Retomada explícita falha antes de preparar o treino** se o checkpoint estiver ausente,
   ilegível ou incompatível. Nenhuma nova execução é iniciada silenciosamente; PatchCore
   recusa a retomada e Ultralytics exige `weights/last.pt`
