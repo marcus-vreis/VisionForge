@@ -9,42 +9,28 @@ from ``core.trainer`` so device handling stays identical across tasks.
 
 from __future__ import annotations
 
-import json
 import math
-import time
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
-from dataclasses import asdict, dataclass, field
-from datetime import datetime
+from dataclasses import dataclass, field
+from functools import partial
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import torch
 import torch.nn as nn
-from loguru import logger
 
-from visionforge.core.cancellation import CancellationToken, is_cancelled
-from visionforge.core.dataset_fingerprint import fingerprint_from_config
-from visionforge.core.resume import (
-    ResumeState,
-    capture_rng_state,
-    clear_resume_state,
-    require_resume_state,
-    restore_rng_state,
-    save_resume_state,
-)
-from visionforge.core.resume_provenance import validate_resume_dataset
+from visionforge.core import trainer as trainer_common
+from visionforge.core import training_loop
+from visionforge.core.cancellation import CancellationToken
 from visionforge.core.tracking import TensorBoardLogger
-from visionforge.core.trainer import (
-    _seed_everything,
-    resolve_device,
-    save_best_checkpoint,
-)
 from visionforge.core.training_health import stagnant_loss, summarize
 from visionforge.models.factory import final_linear
-from visionforge.utils.environment import capture_environment
 from visionforge.utils.regression_config import RegressionConfig
+
+_seed_everything = trainer_common._seed_everything
+resolve_device = trainer_common.resolve_device
+save_best_checkpoint = trainer_common.save_best_checkpoint
 
 
 @dataclass
@@ -93,6 +79,7 @@ class _MetricAccumulator:
         self.sum_y_sq = 0.0
 
     def update(self, preds: torch.Tensor, targets: torch.Tensor) -> None:
+        """Accumulate pooled regression errors and target moments."""
         diff = preds - targets
         self.n += targets.numel()
         self.sum_sq_err += float((diff * diff).sum().item())
@@ -112,18 +99,17 @@ class _MetricAccumulator:
         return mse, rmse, mae, r2
 
 
-class RegressionTrainer:
+class RegressionTrainer(training_loop.GradientTrainerMethods):
     """Manages the full training loop for one regression experiment."""
+
+    _epoch_result_type = RegressionEpochResult
+    _initial_best = float("inf")
+    _epoch_fields = ("val_mse", "val_rmse", "val_mae", "val_r2")
 
     def __init__(self, config: RegressionConfig) -> None:
         self._config = config
         self._loader_workers: dict[str, int] = {}
         self._device, self._dp_ids, self._device_label = resolve_device(config.device)
-
-    @property
-    def device_label(self) -> str:
-        """Human-readable label of the device actually used (or fallback)."""
-        return self._device_label
 
     def fit(
         self,
@@ -134,253 +120,34 @@ class RegressionTrainer:
         cancel_token: CancellationToken | None = None,
         resume_dir: Path | None = None,
     ) -> RegressionTrainResult:
-        """Run the regression training loop.
-
-        Args:
-            model: nn.Module emitting ``num_targets`` continuous outputs.
-            data_module: object exposing train_loader() and val_loader().
-            optimizer: pre-built optimizer; when None, one is built from config.
-            progress_callback: called at start/end and after each epoch with a
-                progress dict. Safe to call from a worker thread.
-        """
-        resumed = require_resume_state(resume_dir) if resume_dir is not None else None
-        if resume_dir is not None:
-            validate_resume_dataset(resume_dir, self._config)
-        cfg = self._config.training
-        _seed_everything(cfg.seed, deterministic=cfg.deterministic)
-        logger.info("RegressionTrainer using device: {}", self._device_label)
-
-        model = self._prepare_model(model)
-        self._apply_transfer_learning(model)
-        optimizer = optimizer if optimizer is not None else self._build_optimizer(model)
-        criterion = self._build_criterion()
-        scheduler = self._build_scheduler(optimizer)
-        # Resolved before anything is created: a resumed run must continue in its
-        # own directory, or it leaves an empty one behind and writes its
-        # TensorBoard events somewhere nothing will look.
-        run_dir = (
-            resume_dir
-            if resumed is not None and resume_dir is not None
-            else self._make_run_dir()
+        """Run the regression training loop."""
+        return training_loop.fit_training(
+            self,
+            model,
+            data_module,
+            optimizer,
+            progress_callback,
+            cancel_token,
+            resume_dir,
+            result_type=RegressionTrainResult,
+            seed=_seed_everything,
+            tensorboard_factory=TensorBoardLogger,
+            save_best=save_best_checkpoint,
+            metric_name="val_loss",
+            best_field="best_val_loss",
+            log_format="RegressionTrainer using device: {}",
         )
-        model_path = run_dir / "best_model.pth"
-        tb = TensorBoardLogger(run_dir / "tensorboard")
-
-        history: list[RegressionEpochResult] = []
-        best_val_loss = float("inf")
-        best_epoch = 0
-        patience_counter = 0
-        start_epoch = 1
-
-        # Weights alone cannot continue: the optimizer and scheduler come back
-        # too, or the search restarts where the loss curve never was.
-        if resumed is not None:
-            model.load_state_dict(resumed.model)
-            optimizer.load_state_dict(resumed.optimizer)
-            if scheduler is not None and resumed.scheduler is not None:
-                scheduler.load_state_dict(resumed.scheduler)
-            best_val_loss = resumed.best_metric
-            best_epoch = resumed.best_epoch
-            patience_counter = resumed.patience_counter
-            history = [RegressionEpochResult(**h) for h in resumed.history]
-            start_epoch = resumed.epoch + 1
-            logger.info(
-                "Resuming {} at epoch {} of {}.",
-                run_dir.name,
-                start_epoch,
-                cfg.epochs,
-            )
-        t0 = time.monotonic()
-
-        if progress_callback is not None:
-            progress_callback(
-                {
-                    "event": "start",
-                    "total_epochs": cfg.epochs,
-                    "device": self._device_label,
-                }
-            )
-
-        train_loader = data_module.train_loader()
-        val_loader = data_module.val_loader()
-        self._loader_workers = {
-            name: loader.num_workers
-            for name, loader in (("train", train_loader), ("val", val_loader))
-            if hasattr(loader, "num_workers")
-        }
-        save_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="ckpt")
-        save_future = None
-
-        if resumed is not None:
-            restore_rng_state(resumed.rng_state, train_loader, val_loader)
-
-        stopped = False
-        for epoch in range(start_epoch, cfg.epochs + 1):
-            # A crash or cancellation may coincide with the stopping boundary.
-            if (
-                cfg.early_stopping_patience > 0
-                and patience_counter >= cfg.early_stopping_patience
-            ):
-                break
-            # The safe point: the previous epoch's checkpoint is written and its
-            # metrics emitted, so stopping here leaves the run directory whole.
-            if is_cancelled(cancel_token):
-                logger.info(
-                    "Run cancelled at epoch {}; keeping the best checkpoint so far.",
-                    epoch,
-                )
-                stopped = True
-                break
-
-            train_loss = self._train_epoch(model, train_loader, optimizer, criterion)
-            val_loss, mse, rmse, mae, r2 = self._eval_epoch(
-                model, val_loader, criterion
-            )
-
-            if scheduler is not None:
-                if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
-                    scheduler.step(val_loss)
-                else:
-                    scheduler.step()
-
-            result = RegressionEpochResult(
-                epoch=epoch,
-                train_loss=train_loss,
-                val_loss=val_loss,
-                val_mse=mse,
-                val_rmse=rmse,
-                val_mae=mae,
-                val_r2=r2,
-            )
-            history.append(result)
-            tb.log_scalars(
-                epoch,
-                {
-                    "loss/train": train_loss,
-                    "loss/val": val_loss,
-                    "r2/val": r2,
-                    "rmse/val": rmse,
-                    "mae/val": mae,
-                    "mse/val": mse,
-                },
-            )
-
-            logger.info(
-                "Epoch {}/{} | train_loss={:.4f} val_loss={:.4f} "
-                "rmse={:.4f} mae={:.4f} r2={:.4f}",
-                epoch,
-                cfg.epochs,
-                train_loss,
-                val_loss,
-                rmse,
-                mae,
-                r2,
-            )
-
-            if progress_callback is not None:
-                progress_callback(
-                    {
-                        "event": "epoch_end",
-                        "epoch": epoch,
-                        "total_epochs": cfg.epochs,
-                        "train_loss": train_loss,
-                        "val_loss": val_loss,
-                        "val_rmse": rmse,
-                        "val_mae": mae,
-                        "val_r2": r2,
-                        "elapsed_s": round(time.monotonic() - t0, 3),
-                    }
-                )
-
-            if val_loss < best_val_loss:
-                best_val_loss = val_loss
-                best_epoch = epoch
-                patience_counter = 0
-                save_future = save_best_checkpoint(
-                    save_pool, save_future, model, model_path
-                )
-            else:
-                patience_counter += 1
-
-            # Snapshot the completed epoch, including best metric and patience.
-            save_resume_state(
-                run_dir,
-                ResumeState(
-                    epoch=epoch,
-                    model=model.state_dict(),
-                    optimizer=optimizer.state_dict(),
-                    scheduler=scheduler.state_dict() if scheduler is not None else None,
-                    scaler=None,
-                    best_metric=best_val_loss,
-                    best_epoch=best_epoch,
-                    patience_counter=patience_counter,
-                    history=[asdict(h) for h in history],
-                    rng_state=capture_rng_state(train_loader, val_loader),
-                ),
-            )
-
-            # 0 disables early stopping outright. Without this guard it
-            # would mean the opposite -- the very first epoch without an
-            # improvement satisfies `1 >= 0` and ends the run.
-            if (
-                cfg.early_stopping_patience > 0
-                and patience_counter >= cfg.early_stopping_patience
-            ):
-                logger.info("Early stopping at epoch {}.", epoch)
-                break
-
-        if not is_cancelled(cancel_token):
-            clear_resume_state(run_dir)
-
-        if save_future is not None:
-            save_future.result()
-        save_pool.shutdown(wait=False)
-
-        # A run that never moved still reports metrics; say so (ADR-099).
-        health = summarize([stagnant_loss([h.train_loss for h in history])])
-        for warning in health:
-            logger.warning("{}", warning["message"])
-
-        train_result = RegressionTrainResult(
-            stopped=stopped,
-            best_epoch=best_epoch,
-            best_val_loss=best_val_loss,
-            total_epochs=len(history),
-            device_used=self._device_label,
-            history=history,
-            model_path=model_path,
-            warnings=health,
-        )
-        self._write_run_json(run_dir, train_result)
-        tb.close()
-
-        if self._device.type == "cuda":
-            torch.cuda.empty_cache()
-
-        if progress_callback is not None:
-            progress_callback({"event": "end", "total_epochs": len(history)})
-
-        return train_result
 
     def evaluate(
         self, model: nn.Module, loader: Any
     ) -> tuple[float, float, float, float]:
-        """Compute (mse, rmse, mae, r2) for ``model`` over ``loader``.
-
-        Reusable by the block for test-set metrics and any future per-model test
-        endpoint; moves the model to the resolved device and runs inference-only.
-        """
+        """Compute (mse, rmse, mae, r2) for the model over the loader."""
         return self.evaluate_with_predictions(model, loader)[0]
 
     def evaluate_with_predictions(
         self, model: nn.Module, loader: Any
     ) -> tuple[tuple[float, float, float, float], np.ndarray, np.ndarray]:
-        """As ``evaluate``, plus the per-sample targets and predictions.
-
-        The arrays are what the bootstrap intervals resample (ADR-076); the
-        aggregates come from the same pass, so a caller never risks reporting a
-        metric computed differently from its interval.
-        """
+        """Return regression metrics, per-sample targets and predictions."""
         model = model.to(self._device)
         model.eval()
         metrics = _MetricAccumulator()
@@ -407,32 +174,34 @@ class RegressionTrainer:
 
     # ── private helpers ────────────────────────────────────────────────────────
 
-    def _prepare_model(self, model: nn.Module) -> nn.Module:
-        model = model.to(self._device)
-        if self._dp_ids:
-            model = nn.DataParallel(model, device_ids=self._dp_ids)
-        return model
+    _report_epoch = staticmethod(
+        partial(
+            training_loop.report_epoch,
+            scalar_fields={
+                "loss/train": "train_loss",
+                "loss/val": "val_loss",
+                "r2/val": "val_r2",
+                "rmse/val": "val_rmse",
+                "mae/val": "val_mae",
+                "mse/val": "val_mse",
+            },
+            event_fields=("train_loss", "val_loss", "val_rmse", "val_mae", "val_r2"),
+            log_format="Epoch {}/{} | train_loss={:.4f} val_loss={:.4f} rmse={:.4f} mae={:.4f} r2={:.4f}",
+            log_fields=("train_loss", "val_loss", "val_rmse", "val_mae", "val_r2"),
+        )
+    )
 
-    def _apply_transfer_learning(self, model: nn.Module) -> None:
-        """Freeze the backbone for feature extraction (no-op otherwise).
-
-        ``feature_extraction`` freezes every child except the head (the last
-        named child); ``fine_tuning`` and the unset case leave all params
-        trainable — the LR split happens in ``_build_optimizer``.
-        """
-        tl = self._config.transfer_learning
-        if tl is None or tl.mode != "feature_extraction":
-            return
-        head, backbone = self._split_named_params(model)
-        for p in backbone:
-            p.requires_grad = False
-        for p in head:
-            p.requires_grad = True
+    @staticmethod
+    def _training_warnings(
+        history: list[RegressionEpochResult],
+    ) -> list[dict[str, str]]:
+        """Summarize and log training health warnings for the completed run."""
+        return training_loop.training_warnings(history, summarize, stagnant_loss)
 
     @staticmethod
     def _split_named_params(
         model: nn.Module,
-    ) -> tuple[list[nn.Parameter], list[nn.Parameter]]:
+    ) -> training_loop.ParameterGroups:
         """Return (head_params, backbone_params) split at the final Linear.
 
         The head is the last ``nn.Linear``, not the last named child: on VGG and
@@ -457,45 +226,6 @@ class RegressionTrainer:
         backbone.extend(param for param in parameters if id(param) not in head_ids)
         return head, backbone
 
-    def _build_optimizer(self, model: nn.Module) -> torch.optim.Optimizer:
-        cfg = self._config.training
-        builders: dict[str, Callable[..., torch.optim.Optimizer]] = {
-            "adam": torch.optim.Adam,
-            "sgd": torch.optim.SGD,
-            "adamw": torch.optim.AdamW,
-        }
-        builder = builders[cfg.optimizer]
-        tl = self._config.transfer_learning
-
-        if tl is None:
-            return builder(
-                model.parameters(),
-                lr=cfg.learning_rate,
-                weight_decay=cfg.weight_decay,
-            )
-
-        if tl.mode == "feature_extraction":
-            trainable = [p for p in model.parameters() if p.requires_grad]
-            return builder(
-                trainable, lr=cfg.learning_rate, weight_decay=cfg.weight_decay
-            )
-
-        # fine_tuning: backbone at a reduced LR, head at the full LR.
-        head, backbone = self._split_named_params(model)
-        groups = [
-            {
-                "params": backbone,
-                "lr": cfg.learning_rate * tl.backbone_lr_multiplier,
-                "weight_decay": cfg.weight_decay,
-            },
-            {
-                "params": head,
-                "lr": cfg.learning_rate,
-                "weight_decay": cfg.weight_decay,
-            },
-        ]
-        return builder(groups)
-
     def _build_criterion(self) -> nn.Module:
         cfg = self._config.training
         if cfg.loss == "mae":
@@ -504,35 +234,6 @@ class RegressionTrainer:
             return nn.HuberLoss(delta=cfg.huber_delta)
         return nn.MSELoss()
 
-    def _build_scheduler(
-        self, optimizer: torch.optim.Optimizer
-    ) -> torch.optim.lr_scheduler.LRScheduler | None:
-        sched_cfg = self._config.training.scheduler
-        kind = sched_cfg.kind
-        if kind == "none":
-            return None
-        if kind == "cosine":
-            return torch.optim.lr_scheduler.CosineAnnealingLR(
-                optimizer, T_max=self._config.training.epochs
-            )
-        if kind == "step":
-            return torch.optim.lr_scheduler.StepLR(
-                optimizer, step_size=sched_cfg.step_size, gamma=sched_cfg.gamma
-            )
-        return torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer,
-            mode="min",
-            patience=sched_cfg.patience,
-            factor=sched_cfg.factor,
-            min_lr=sched_cfg.min_lr,
-        )
-
-    def _make_run_dir(self) -> Path:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-        run_dir = self._config.output.models_dir / self._config.name / timestamp
-        run_dir.mkdir(parents=True, exist_ok=False)
-        return run_dir
-
     def _train_epoch(
         self,
         model: nn.Module,
@@ -540,19 +241,14 @@ class RegressionTrainer:
         optimizer: torch.optim.Optimizer,
         criterion: nn.Module,
     ) -> float:
-        model.train()
-        total_loss = 0.0
-        for inputs, targets in loader:
-            inputs = inputs.to(self._device, non_blocking=True)
-            targets = targets.to(self._device, non_blocking=True)
-            optimizer.zero_grad(set_to_none=True)
-            outputs = model(inputs)
-            loss = criterion(outputs, targets)
-            loss.backward()
-            optimizer.step()
-            total_loss += loss.item()
-        n = len(loader)
-        return total_loss / n if n > 0 else 0.0
+        """Train one epoch using the shared optimization loop."""
+        return training_loop.train_epoch(
+            model,
+            loader,
+            optimizer,
+            criterion,
+            self._device,
+        )
 
     def _eval_epoch(
         self,
@@ -578,61 +274,28 @@ class RegressionTrainer:
         return val_loss, mse, rmse, mae, r2
 
     def _write_run_json(self, run_dir: Path, result: RegressionTrainResult) -> None:
-        """Write the ADR-013 run.json with regression metrics + history."""
-        best = next((r for r in result.history if r.epoch == result.best_epoch), None)
-        run_json: dict[str, Any] = {
-            "id": f"{self._config.name}_{run_dir.name}",
-            "experiment": self._config.name,
-            "timestamp": datetime.now().isoformat(),
-            "status": "completed",
-            # True when the stop cut this run (ADR-111); "completed" says only
-            # that it ended cleanly, with total_epochs as far as it got.
-            "stopped": result.stopped,
-            "device_used": result.device_used,
-            "environment": capture_environment(),
-            "runtime": {"loader_workers": getattr(self, "_loader_workers", {})},
-            # Proves two runs saw the same data, not just the same path.
-            "dataset_fingerprint": fingerprint_from_config(self._config),
-            "run_dir": str(run_dir.resolve()),
-            "config": self._config.model_dump(mode="json"),
-            "metrics": {
-                # No epoch, no best: null rather than the inf sentinel (not
-                # JSON) or a 0.0 that reads as a measured result (ADR-111).
-                "best_val_loss": result.best_val_loss if result.total_epochs else None,
-                "best_epoch": result.best_epoch,
-                "total_epochs": result.total_epochs,
-                "mse": best.val_mse if best else None,
-                "rmse": best.val_rmse if best else None,
-                "mae": best.val_mae if best else None,
-                "r2": best.val_r2 if best else None,
+        """Write the ADR-013 run.json with regression metrics and history."""
+        training_loop.write_task_run_json(
+            self._config,
+            run_dir,
+            result,
+            getattr(self, "_loader_workers", {}),
+            best_metric="best_val_loss",
+            epoch_metrics={
+                "mse": "val_mse",
+                "rmse": "val_rmse",
+                "mae": "val_mae",
+                "r2": "val_r2",
             },
-            "history": [
-                {
-                    "epoch": r.epoch,
-                    "train_loss": r.train_loss,
-                    "val_loss": r.val_loss,
-                    "val_mse": r.val_mse,
-                    "val_rmse": r.val_rmse,
-                    "val_mae": r.val_mae,
-                    "val_r2": r.val_r2,
-                }
-                for r in result.history
-            ],
-            "artifacts": {
-                # None when nothing was trained: every reader then says "no
-                # checkpoint" instead of failing to open a path (ADR-111).
-                "model": (
-                    str(result.model_path) if result.model_path.is_file() else None
-                ),
-                "graphics": [],
-                "report": None,
-            },
-            "tests": [],
-            # Empty on a healthy run (ADR-099).
-            "warnings": result.warnings,
-        }
-        (run_dir / "run.json").write_text(
-            json.dumps(run_json, indent=2), encoding="utf-8"
+            history_fields=(
+                "epoch",
+                "train_loss",
+                "val_loss",
+                "val_mse",
+                "val_rmse",
+                "val_mae",
+                "val_r2",
+            ),
         )
 
 

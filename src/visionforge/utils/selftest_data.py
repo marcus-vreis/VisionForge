@@ -111,14 +111,15 @@ def build_anomaly_dataset(base: Path, *, size: int = 64, normals: int = 8) -> Pa
     for d in (train_good, test_good, test_bad):
         d.mkdir(parents=True, exist_ok=True)
 
-    def _normal(i: int) -> np.ndarray:
+    def _normal() -> np.ndarray:
+        """Generate normal image noise from the shared seeded generator."""
         return rng.integers(90, 130, (size, size, 3), dtype=np.uint8)
 
     for i in range(normals):
-        Image.fromarray(_normal(i), "RGB").save(train_good / f"n{i}.png")
+        Image.fromarray(_normal(), "RGB").save(train_good / f"n{i}.png")
     for i in range(4):
-        Image.fromarray(_normal(i), "RGB").save(test_good / f"n{i}.png")
-        bad = _normal(i)
+        Image.fromarray(_normal(), "RGB").save(test_good / f"n{i}.png")
+        bad = _normal()
         bad[size // 3 : 2 * size // 3, size // 3 : 2 * size // 3] = 255
         Image.fromarray(bad, "RGB").save(test_bad / f"d{i}.png")
     return base

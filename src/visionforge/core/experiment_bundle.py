@@ -124,54 +124,10 @@ def export_experiment_bundle(run_dir: Path | str, destination: Path | str) -> Pa
     destination = Path(destination).absolute()
     if destination.exists() or destination.is_symlink():
         raise FileExistsError(destination)
-    run_path = _contained_file(root, RUN_FILENAME)
-    with run_path.open("rb") as handle:
-        raw = handle.read(_MAX_RUN_BYTES + 1)
-    if len(raw) > _MAX_RUN_BYTES:
-        raise ValueError("run.json exceeds size limit")
-    data = json.loads(raw)
-    if not isinstance(data, dict) or not isinstance(data.get("artifacts", {}), dict):
-        raise ValueError("run.json must contain an object with an artifacts object")
+    run_path, raw, data = _read_run_record(root)
     files = {RUN_FILENAME: run_path}
     notes: list[dict[str, str]] = []
-    for category, values in data.get("artifacts", {}).items():
-        label = (
-            category
-            if category in {*_EXTENSIONS, "graphics", "report"}
-            else "unsupported"
-        )
-        if values is None:
-            notes.append({"artifact": label, "reason": "not recorded"})
-            continue
-        values = values if isinstance(values, list) else [values]
-        for value in values:
-            if category not in _EXTENSIONS or not isinstance(value, str):
-                notes.append(
-                    {
-                        "artifact": label,
-                        "reason": "unsupported artifact category or value",
-                    }
-                )
-                continue
-            if Path(value).suffix.lower() not in _EXTENSIONS[category]:
-                notes.append({"artifact": category, "reason": "unsupported file type"})
-                continue
-            try:
-                path = _contained_file(root, value)
-            except FileNotFoundError:
-                notes.append({"artifact": category, "reason": "missing local file"})
-            except (ValueError, OSError):
-                notes.append(
-                    {"artifact": category, "reason": "outside run or linked file"}
-                )
-            else:
-                name = path.relative_to(root).as_posix()
-                if name.casefold() == MANIFEST_FILENAME:
-                    notes.append(
-                        {"artifact": category, "reason": "reserved bundle member name"}
-                    )
-                    continue
-                files[name] = path
+    _collect_recorded_artifacts(root, data, files, notes)
     for name in _CONVENTIONAL:
         try:
             files[name] = _contained_file(root, name)
@@ -187,35 +143,7 @@ def export_experiment_bundle(run_dir: Path | str, destination: Path | str) -> Pa
     os.close(descriptor)
     temporary_path = Path(temporary)
     try:
-        records: dict[str, dict[str, int | str]] = {
-            RUN_FILENAME: {"size": len(raw), "sha256": hashlib.sha256(raw).hexdigest()}
-        }
-        total_size = len(raw)
-        with zipfile.ZipFile(
-            temporary_path, "w", compression=zipfile.ZIP_DEFLATED
-        ) as bundle:
-            bundle.writestr(RUN_FILENAME, raw)
-            for name, source in sorted(files.items()):
-                if name == RUN_FILENAME:
-                    continue
-                with (
-                    source.open("rb") as handle,
-                    bundle.open(name, "w", force_zip64=True) as target,
-                ):
-                    if not stat.S_ISREG(os.fstat(handle.fileno()).st_mode):
-                        raise ValueError("artifact is not a regular file")
-                    records[name] = _copy_and_hash(handle, target)
-                total_size += int(records[name]["size"])
-                if total_size > _MAX_TOTAL_BYTES:
-                    raise ValueError(BUNDLE_SIZE_LIMIT_ERROR)
-            manifest = json.dumps(
-                {"format_version": 1, "files": records, "notes": notes}, indent=2
-            ).encode()
-            if len(manifest) > _MAX_MANIFEST_BYTES:
-                raise ValueError("bundle manifest exceeds size limit")
-            if total_size + len(manifest) > _MAX_TOTAL_BYTES:
-                raise ValueError(BUNDLE_SIZE_LIMIT_ERROR)
-            bundle.writestr(MANIFEST_FILENAME, manifest)
+        _write_bundle_archive(temporary_path, raw, files, notes)
         # A hard link publishes the completed file atomically without replacing a competitor.
         os.link(temporary_path, destination)
     finally:
@@ -231,23 +159,7 @@ def verify_experiment_bundle(bundle_path: Path | str) -> dict[str, Any]:
     """
     try:
         with zipfile.ZipFile(bundle_path) as bundle:
-            members = bundle.infolist()
-            names = [member.filename for member in members]
-            if len(members) > _MAX_MEMBERS or len(set(names)) != len(names):
-                raise ValueError("bundle member count exceeds limit or duplicates")
-            if any(not _safe_name(member.orig_filename) for member in members):
-                raise ValueError("unsafe bundle member path")
-            if any(
-                stat.S_ISLNK(member.external_attr >> 16) or member.is_dir()
-                for member in members
-            ):
-                raise ValueError("linked or directory bundle member")
-            if sum(member.file_size for member in members) > _MAX_TOTAL_BYTES:
-                raise ValueError(BUNDLE_SIZE_LIMIT_ERROR)
-            if MANIFEST_FILENAME not in names or RUN_FILENAME not in names:
-                raise ValueError("missing bundle metadata")
-            if bundle.getinfo(MANIFEST_FILENAME).file_size > _MAX_MANIFEST_BYTES:
-                raise ValueError("bundle manifest exceeds size limit")
+            names = _validate_bundle_members(bundle)
             manifest = json.loads(bundle.read(MANIFEST_FILENAME))
             if not isinstance(manifest, dict) or manifest.get("format_version") != 1:
                 raise ValueError("unsupported bundle manifest")
@@ -256,18 +168,7 @@ def verify_experiment_bundle(bundle_path: Path | str) -> dict[str, Any]:
                 MANIFEST_FILENAME
             }:
                 raise ValueError("manifest does not match bundle members")
-            for name, record in records.items():
-                if (
-                    not isinstance(record, dict)
-                    or record.get("size") != bundle.getinfo(name).file_size
-                ):
-                    raise ValueError("bundle integrity check failed: size")
-                digest = hashlib.sha256()
-                with bundle.open(name) as handle:
-                    while chunk := handle.read(_CHUNK_SIZE):
-                        digest.update(chunk)
-                if record.get("sha256") != digest.hexdigest():
-                    raise ValueError("bundle integrity check failed: SHA256")
+            _verify_bundle_records(bundle, records)
             return manifest
     except (
         zipfile.BadZipFile,
@@ -278,6 +179,152 @@ def verify_experiment_bundle(bundle_path: Path | str) -> dict[str, Any]:
         RuntimeError,
     ) as exc:
         raise ValueError("invalid experiment bundle") from exc
+
+
+def _read_run_record(root: Path) -> tuple[Path, bytes, dict[str, Any]]:
+    """Read and validate the bounded run record before collecting artifacts."""
+    run_path = _contained_file(root, RUN_FILENAME)
+    with run_path.open("rb") as handle:
+        raw = handle.read(_MAX_RUN_BYTES + 1)
+    if len(raw) > _MAX_RUN_BYTES:
+        raise ValueError("run.json exceeds size limit")
+    data = json.loads(raw)
+    if not isinstance(data, dict) or not isinstance(data.get("artifacts", {}), dict):
+        raise ValueError("run.json must contain an object with an artifacts object")
+    return run_path, raw, data
+
+
+def _collect_recorded_artifacts(
+    root: Path,
+    data: dict[str, Any],
+    files: dict[str, Path],
+    notes: list[dict[str, str]],
+) -> None:
+    """Collect supported recorded artifacts while retaining omission notes."""
+    for category, values in data.get("artifacts", {}).items():
+        label = (
+            category
+            if category in {*_EXTENSIONS, "graphics", "report"}
+            else "unsupported"
+        )
+        if values is None:
+            notes.append({"artifact": label, "reason": "not recorded"})
+            continue
+        values = values if isinstance(values, list) else [values]
+        for value in values:
+            _collect_artifact(root, category, label, value, files, notes)
+
+
+def _collect_artifact(
+    root: Path,
+    category: str,
+    label: str,
+    value: Any,
+    files: dict[str, Path],
+    notes: list[dict[str, str]],
+) -> None:
+    """Validate one artifact and preserve its original omission reason."""
+    if category not in _EXTENSIONS or not isinstance(value, str):
+        notes.append(
+            {
+                "artifact": label,
+                "reason": "unsupported artifact category or value",
+            }
+        )
+        return
+    if Path(value).suffix.lower() not in _EXTENSIONS[category]:
+        notes.append({"artifact": category, "reason": "unsupported file type"})
+        return
+    try:
+        path = _contained_file(root, value)
+    except FileNotFoundError:
+        notes.append({"artifact": category, "reason": "missing local file"})
+    except (ValueError, OSError):
+        notes.append({"artifact": category, "reason": "outside run or linked file"})
+    else:
+        name = path.relative_to(root).as_posix()
+        if name.casefold() == MANIFEST_FILENAME:
+            notes.append(
+                {"artifact": category, "reason": "reserved bundle member name"}
+            )
+            return
+        files[name] = path
+
+
+def _write_bundle_archive(
+    temporary_path: Path,
+    raw: bytes,
+    files: dict[str, Path],
+    notes: list[dict[str, str]],
+) -> None:
+    """Write bounded artifact contents and their integrity manifest to a ZIP."""
+    records: dict[str, dict[str, int | str]] = {
+        RUN_FILENAME: {"size": len(raw), "sha256": hashlib.sha256(raw).hexdigest()}
+    }
+    total_size = len(raw)
+    with zipfile.ZipFile(
+        temporary_path, "w", compression=zipfile.ZIP_DEFLATED
+    ) as bundle:
+        bundle.writestr(RUN_FILENAME, raw)
+        for name, source in sorted(files.items()):
+            if name == RUN_FILENAME:
+                continue
+            with (
+                source.open("rb") as handle,
+                bundle.open(name, "w", force_zip64=True) as target,
+            ):
+                if not stat.S_ISREG(os.fstat(handle.fileno()).st_mode):
+                    raise ValueError("artifact is not a regular file")
+                records[name] = _copy_and_hash(handle, target)
+            total_size += int(records[name]["size"])
+            if total_size > _MAX_TOTAL_BYTES:
+                raise ValueError(BUNDLE_SIZE_LIMIT_ERROR)
+        manifest = json.dumps(
+            {"format_version": 1, "files": records, "notes": notes}, indent=2
+        ).encode()
+        if len(manifest) > _MAX_MANIFEST_BYTES:
+            raise ValueError("bundle manifest exceeds size limit")
+        if total_size + len(manifest) > _MAX_TOTAL_BYTES:
+            raise ValueError(BUNDLE_SIZE_LIMIT_ERROR)
+        bundle.writestr(MANIFEST_FILENAME, manifest)
+
+
+def _validate_bundle_members(bundle: zipfile.ZipFile) -> list[str]:
+    """Reject unsafe archive members before reading bundle metadata."""
+    members = bundle.infolist()
+    names = [member.filename for member in members]
+    if len(members) > _MAX_MEMBERS or len(set(names)) != len(names):
+        raise ValueError("bundle member count exceeds limit or duplicates")
+    if any(not _safe_name(member.orig_filename) for member in members):
+        raise ValueError("unsafe bundle member path")
+    if any(
+        stat.S_ISLNK(member.external_attr >> 16) or member.is_dir()
+        for member in members
+    ):
+        raise ValueError("linked or directory bundle member")
+    if sum(member.file_size for member in members) > _MAX_TOTAL_BYTES:
+        raise ValueError(BUNDLE_SIZE_LIMIT_ERROR)
+    if MANIFEST_FILENAME not in names or RUN_FILENAME not in names:
+        raise ValueError("missing bundle metadata")
+    if bundle.getinfo(MANIFEST_FILENAME).file_size > _MAX_MANIFEST_BYTES:
+        raise ValueError("bundle manifest exceeds size limit")
+    return names
+
+
+def _verify_bundle_records(bundle: zipfile.ZipFile, records: dict[str, Any]) -> None:
+    """Verify recorded member sizes and streaming SHA256 checksums."""
+    for name, record in records.items():
+        if (
+            not isinstance(record, dict)
+            or record.get("size") != bundle.getinfo(name).file_size
+        ):
+            raise ValueError("bundle integrity check failed: size")
+        digest = hashlib.sha256()
+        with bundle.open(name) as handle:
+            while chunk := handle.read(_CHUNK_SIZE):
+                digest.update(chunk)
+        if record.get("sha256") != digest.hexdigest():
+            raise ValueError("bundle integrity check failed: SHA256")
 
 
 __all__ = ["export_experiment_bundle", "verify_experiment_bundle"]

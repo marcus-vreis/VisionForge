@@ -24,7 +24,7 @@ from tests.core.test_regression_trainer import (
 from tests.core.test_regression_trainer import _config as _regression_config
 from tests.core.test_segmentation_trainer import FakeSegDataModule, TinySegModel
 from tests.core.test_segmentation_trainer import _config as _segmentation_config
-from visionforge.core import regression_trainer, segmentation_trainer
+from visionforge.core import regression_trainer, segmentation_trainer, training_loop
 from visionforge.core.regression_trainer import RegressionTrainer
 from visionforge.core.segmentation_trainer import SegmentationTrainer
 
@@ -82,7 +82,7 @@ def test_best_checkpoint_does_not_alias_the_training_weights(
     module: Any, fit: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _POOLS.clear()
-    monkeypatch.setattr(module, "ThreadPoolExecutor", _RecordingPool)
+    monkeypatch.setattr(training_loop, "ThreadPoolExecutor", _RecordingPool)
     model = DummyRegressor() if module is regression_trainer else TinySegModel(3)
 
     fit(tmp_path, model)

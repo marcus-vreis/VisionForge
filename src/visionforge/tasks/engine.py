@@ -147,6 +147,7 @@ class GenericTaskEngine:
         emit: ProgressCallback,
         cancel_token: CancellationToken | None = None,
     ) -> TaskRunResult:
+        """Run the Level 1 epoch loop with checkpoint and stop handling."""
         model = spec.build_model(cfg).to(self._device)
         train_loader, val_loader, test_loader = spec.build_loaders(cfg)
         optimizer = self._build_optimizer(model)
@@ -183,28 +184,13 @@ class GenericTaskEngine:
                     )
                     stopped = True
                     break
-                model.train()
-                total = 0.0
-                batches = 0
-                for batch in train_loader:
-                    optimizer.zero_grad(set_to_none=True)
-                    with torch.autocast(self._device.type, enabled=use_amp):
-                        loss = spec.compute_loss(model, batch, cfg)
-                    scaler.scale(loss).backward()
-                    scaler.step(optimizer)
-                    scaler.update()
-                    total += float(loss.detach())
-                    batches += 1
-                train_loss = total / batches if batches else 0.0
+                train_loss = self._train_epoch(
+                    spec, model, train_loader, cfg, optimizer, scaler, use_amp
+                )
 
                 model.eval()
                 val_metrics = spec.compute_metrics(model, val_loader, cfg)
-                if primary not in val_metrics:
-                    raise ValueError(
-                        f"compute_metrics must return the declared primary metric "
-                        f"'{primary}' (got: {sorted(val_metrics)})."
-                    )
-                value = float(val_metrics[primary])
+                value = self._primary_metric_value(val_metrics, primary)
                 history.append(TaskEpochResult(epoch, train_loss, dict(val_metrics)))
                 tb.log_scalars(
                     epoch,
@@ -243,16 +229,84 @@ class GenericTaskEngine:
                         logger.info("Early stopping at epoch {}.", epoch)
                         break
 
-                if scheduler is not None:
-                    if isinstance(
-                        scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau
-                    ):
-                        scheduler.step(value)
-                    else:
-                        scheduler.step()
+                self._step_scheduler(scheduler, value)
         finally:
             tb.close()
 
+        return self._finish_level1(
+            spec,
+            cfg,
+            run_dir,
+            emit,
+            model,
+            val_loader,
+            test_loader,
+            model_path,
+            history,
+            best_epoch,
+            stopped,
+        )
+
+    @staticmethod
+    def _primary_metric_value(val_metrics: dict[str, float], primary: str) -> float:
+        """Validate and read the declared primary validation metric."""
+        if primary not in val_metrics:
+            raise ValueError(
+                f"compute_metrics must return the declared primary metric "
+                f"'{primary}' (got: {sorted(val_metrics)})."
+            )
+        return float(val_metrics[primary])
+
+    def _train_epoch(
+        self,
+        spec: Any,
+        model: nn.Module,
+        train_loader: Any,
+        cfg: BaseTaskConfig,
+        optimizer: torch.optim.Optimizer,
+        scaler: Any,
+        use_amp: bool,
+    ) -> float:
+        """Train one epoch and return its mean batch loss."""
+        model.train()
+        total = 0.0
+        batches = 0
+        for batch in train_loader:
+            optimizer.zero_grad(set_to_none=True)
+            with torch.autocast(self._device.type, enabled=use_amp):
+                loss = spec.compute_loss(model, batch, cfg)
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
+            total += float(loss.detach())
+            batches += 1
+        return total / batches if batches else 0.0
+
+    @staticmethod
+    def _step_scheduler(scheduler: Any | None, value: float) -> None:
+        """Step the scheduler with the primary metric only for plateau mode."""
+        if scheduler is None:
+            return
+        if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
+            scheduler.step(value)
+        else:
+            scheduler.step()
+
+    def _finish_level1(
+        self,
+        spec: Any,
+        cfg: BaseTaskConfig,
+        run_dir: Path,
+        emit: ProgressCallback,
+        model: nn.Module,
+        val_loader: Any,
+        test_loader: Any,
+        model_path: Path,
+        history: list[TaskEpochResult],
+        best_epoch: int,
+        stopped: bool,
+    ) -> TaskRunResult:
+        """Save final artifacts and report completed or stopped training."""
         if not history:
             # Stopped before its first epoch. Saving the untrained weights here
             # and scoring them would report a result nothing was trained for.

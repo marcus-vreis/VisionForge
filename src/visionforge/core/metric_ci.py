@@ -102,16 +102,7 @@ def bootstrap_classification_cis(
     if n < _MIN_SAMPLES or n_resamples < 2:
         return {}
 
-    proba = (
-        np.asarray(y_proba_full, dtype=float)
-        if y_proba_full is not None and len(y_proba_full) > 0
-        else None
-    )
-    if proba is not None and proba.shape[0] != n:
-        raise ValueError(
-            f"y_proba_full must have one row per sample "
-            f"({proba.shape[0]} rows for {n} samples)."
-        )
+    proba = _classification_probabilities(y_proba_full, n)
 
     n_classes = (
         proba.shape[1] if proba is not None else int(max(true.max(), pred.max())) + 1
@@ -133,18 +124,19 @@ def bootstrap_classification_cis(
         chunk = min(_chunk_size(n), n_resamples - drawn)
         idx = rng.integers(0, n, size=(chunk, n))
         acc, prec, rec, f1 = _confusion_metrics(true, pred, idx, n_classes, average)
-        collected["accuracy"].append(acc)
-        collected["precision"].append(prec)
-        collected["recall"].append(rec)
-        collected["f1"].append(f1)
+        for name, values in {
+            "accuracy": acc,
+            "precision": prec,
+            "recall": rec,
+            "f1": f1,
+        }.items():
+            collected[name].append(values)
         if auc_ready is not None:
             values, usable = auc_ready(idx)
             auc_values.append(values[usable])
         drawn += chunk
 
-    point, auc_point = _point_estimates(
-        true, pred, proba, n_classes, average, auc_ready
-    )
+    point, auc_point = _point_estimates(true, pred, n_classes, average, auc_ready)
     out: dict[str, MetricCI] = {}
     for name, parts in collected.items():
         out[name] = _interval(name, point[name], np.concatenate(parts), confidence, n)
@@ -155,6 +147,21 @@ def bootstrap_classification_cis(
         if merged.size >= 2:
             out["auc_roc"] = _interval("auc_roc", auc_point, merged, confidence, n)
     return out
+
+
+def _classification_probabilities(
+    y_proba_full: Sequence[Sequence[float]] | None, n: int
+) -> np.ndarray | None:
+    """Convert per-class probabilities and require one row per sample."""
+    if y_proba_full is None or len(y_proba_full) == 0:
+        return None
+    proba = np.asarray(y_proba_full, dtype=float)
+    if proba.shape[0] != n:
+        raise ValueError(
+            f"y_proba_full must have one row per sample "
+            f"({proba.shape[0]} rows for {n} samples)."
+        )
+    return proba
 
 
 def bootstrap_regression_cis(
@@ -586,7 +593,6 @@ def _auc_batch(
 def _point_estimates(
     true: np.ndarray,
     pred: np.ndarray,
-    proba: np.ndarray | None,
     n_classes: int,
     average: Literal["binary", "macro"],
     auc_ready: Any,

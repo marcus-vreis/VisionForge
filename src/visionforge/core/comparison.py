@@ -105,9 +105,7 @@ def run_model_comparison(
             logger.warning("Comparison: {} failed — {}", arch, exc)
         finally:
             progress.finish(runner, index, trial.status)
-            gc.collect()
-            if torch is not None and torch.cuda.is_available():
-                torch.cuda.empty_cache()
+            _release_trial_memory()
         trials.append(trial)
         if is_cancelled(token):
             logger.info(
@@ -123,6 +121,13 @@ def run_model_comparison(
     resolved = direction or runner_metric_direction(runner, metric)
     ranked = rank_by_metric(successful, lambda t: t.metrics.get(metric), resolved)
     return ranked + failed
+
+
+def _release_trial_memory() -> None:
+    """Release unused CPU and available CUDA memory between architectures."""
+    gc.collect()
+    if torch is not None and torch.cuda.is_available():
+        torch.cuda.empty_cache()
 
 
 __all__ = ["ComparisonTrial", "run_model_comparison"]

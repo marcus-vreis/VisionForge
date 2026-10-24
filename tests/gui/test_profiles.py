@@ -209,7 +209,7 @@ class TestFolders:
     ) -> None:
         profiles = tmp_path / "profiles"
 
-        profile = create_profile("João Silva", profiles, tmp_path / "models")
+        profile = create_profile("João Silva", profiles)
 
         folder = profiles / "joao-silva"
         for sub in ("models", "graphics", "logs", "reports"):
@@ -223,10 +223,10 @@ class TestFolders:
     def test_the_same_slug_twice_is_refused_and_names_the_first(
         self, tmp_path: Path
     ) -> None:
-        create_profile("João", tmp_path / "p", tmp_path / "m")
+        create_profile("João", tmp_path / "p")
 
         with pytest.raises(ProfileExistsError, match="João"):
-            create_profile("Joao", tmp_path / "p", tmp_path / "m")
+            create_profile("Joao", tmp_path / "p")
 
     @pytest.mark.parametrize(
         "name",
@@ -237,7 +237,7 @@ class TestFolders:
         self, tmp_path: Path, name: str
     ) -> None:
         with pytest.raises(ProfileNameError):
-            create_profile(name, tmp_path / "p", tmp_path / "m")
+            create_profile(name, tmp_path / "p")
 
         assert not (tmp_path / "p").exists() or not any((tmp_path / "p").iterdir())
 
@@ -245,7 +245,7 @@ class TestFolders:
         self, tmp_path: Path
     ) -> None:
         for name in ("zeca", "Bia", "ana"):
-            create_profile(name, tmp_path / "p", tmp_path / "m")
+            create_profile(name, tmp_path / "p")
 
         listed = list_profiles(tmp_path / "p", tmp_path / "m")
 
@@ -293,7 +293,7 @@ class TestFolders:
         monkeypatch.setattr(Path, "mkdir", deny)
 
         with pytest.raises(ProfileCreateError, match="Não foi possível criar"):
-            create_profile("Ana", tmp_path / "p", tmp_path / "m")
+            create_profile("Ana", tmp_path / "p")
 
     def test_a_profiles_root_that_is_a_file_is_not_reported_as_taken(
         self, tmp_path: Path
@@ -301,7 +301,7 @@ class TestFolders:
         (tmp_path / "p").write_text("not a folder", encoding="utf-8")
 
         with pytest.raises(ProfileCreateError):
-            create_profile("Ana", tmp_path / "p", tmp_path / "m")
+            create_profile("Ana", tmp_path / "p")
 
     def test_a_full_disk_leaves_no_half_made_profile_to_trip_over(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -315,11 +315,11 @@ class TestFolders:
 
             patched.setattr(Path, "write_text", full)
             with pytest.raises(ProfileCreateError, match="No space left"):
-                create_profile("Ana", profiles, tmp_path / "m")
+                create_profile("Ana", profiles)
 
         assert not (profiles / "ana").exists()
         # The same name works once the disk has room; it was not left "taken".
-        assert create_profile("Ana", profiles, tmp_path / "m").slug == "ana"
+        assert create_profile("Ana", profiles).slug == "ana"
 
 
 class TestResolve:
@@ -335,7 +335,7 @@ class TestResolve:
     def test_a_named_profile_lives_under_the_profiles_folder(
         self, tmp_path: Path
     ) -> None:
-        create_profile("Ana", tmp_path / "p", tmp_path / "m")
+        create_profile("Ana", tmp_path / "p")
 
         profile = resolve_profile("ana", tmp_path / "p", tmp_path / "m")
 
@@ -370,7 +370,7 @@ class TestResolve:
         ]
 
     def test_a_models_folder_linked_elsewhere_is_refused(self, tmp_path: Path) -> None:
-        create_profile("Ana", tmp_path / "p", tmp_path / "m")
+        create_profile("Ana", tmp_path / "p")
         models = tmp_path / "p" / "ana" / "models"
         models.rmdir()
         outside = tmp_path / "outside"
@@ -384,7 +384,7 @@ class TestResolve:
     def test_any_output_folder_linked_elsewhere_is_refused(
         self, tmp_path: Path, sub: str
     ) -> None:
-        create_profile("Ana", tmp_path / "p", tmp_path / "m")
+        create_profile("Ana", tmp_path / "p")
         linked = tmp_path / "p" / "ana" / sub
         linked.rmdir()
         outside = tmp_path / "outside"
@@ -415,7 +415,7 @@ class TestScoping:
     def test_a_named_profile_forces_all_four_output_folders(
         self, tmp_path: Path
     ) -> None:
-        create_profile("Ana", tmp_path / "p", tmp_path / "m")
+        create_profile("Ana", tmp_path / "p")
         profile = resolve_profile("ana", tmp_path / "p", tmp_path / "m")
         raw: dict[str, Any] = {
             "name": "x",
@@ -435,7 +435,7 @@ class TestScoping:
         assert raw["output"]["models_dir"] == "elsewhere"  # the input is not mutated
 
     def test_a_config_without_output_gets_one(self, tmp_path: Path) -> None:
-        create_profile("Ana", tmp_path / "p", tmp_path / "m")
+        create_profile("Ana", tmp_path / "p")
         profile = resolve_profile("ana", tmp_path / "p", tmp_path / "m")
 
         assert set(profile.scope_dict({"name": "x"})["output"]) == {
@@ -446,7 +446,7 @@ class TestScoping:
         }
 
     def test_a_validated_model_is_copied_not_mutated(self, tmp_path: Path) -> None:
-        create_profile("Ana", tmp_path / "p", tmp_path / "m")
+        create_profile("Ana", tmp_path / "p")
         profile = resolve_profile("ana", tmp_path / "p", tmp_path / "m")
         original = _Cfg()
 

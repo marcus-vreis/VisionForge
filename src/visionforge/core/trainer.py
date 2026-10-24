@@ -6,8 +6,7 @@ import time
 from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
 from copy import deepcopy
-from dataclasses import asdict, dataclass, field
-from datetime import datetime
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -16,17 +15,12 @@ import torch
 import torch.nn as nn
 from loguru import logger
 
+from visionforge.core import training_loop
 from visionforge.core.cancellation import CancellationToken, is_cancelled
-from visionforge.core.dataset_fingerprint import fingerprint_from_config
 from visionforge.core.resume import (
     ResumeState,
-    capture_rng_state,
     clear_resume_state,
-    require_resume_state,
-    restore_rng_state,
-    save_resume_state,
 )
-from visionforge.core.resume_provenance import validate_resume_dataset
 from visionforge.core.tracking import TensorBoardLogger
 from visionforge.core.training_health import (
     collapsed_predictions,
@@ -35,7 +29,6 @@ from visionforge.core.training_health import (
 )
 from visionforge.utils.config import DeviceConfig, ExperimentConfig
 from visionforge.utils.cuda import check_cuda
-from visionforge.utils.environment import capture_environment
 
 
 @dataclass
@@ -68,12 +61,7 @@ class TrainResult:
 
 
 def frozen_state_dict(state_dict: dict[str, Any]) -> dict[str, Any]:
-    """A copy of ``state_dict`` whose tensors live on the CPU and own their memory.
-
-    ``model.state_dict()`` shares storage with the parameters, which the next
-    optimizer step mutates; a checkpoint written from it in a background thread
-    could capture a later epoch's weights.
-    """
+    """Copy state tensors to independent CPU storage for asynchronous writes."""
     return deepcopy(
         state_dict,
         {
@@ -90,12 +78,7 @@ def save_best_checkpoint(
     model: nn.Module,
     path: Path,
 ) -> Future[None]:
-    """Write ``model``'s weights to ``path`` in ``pool`` once ``pending`` is done.
-
-    The writer gets a frozen copy (``frozen_state_dict``), so training can go
-    on while it writes; ``module.state_dict()`` drops the ``module.`` prefix
-    DataParallel adds to every key.
-    """
+    """Save frozen model weights after the pending checkpoint completes."""
     state = (
         model.module.state_dict()  # type: ignore[union-attr]
         if isinstance(model, nn.DataParallel)
@@ -135,28 +118,12 @@ def _seed_everything(seed: int, *, deterministic: bool = False) -> None:
 
 
 def seed_before_building(training: Any) -> None:
-    """Seed before a model is built, not only before it trains (ADR-121).
-
-    A pretrained network gets a new head for the task's classes, and that head
-    is drawn from the global RNG when the model is created. The trainers seed in
-    ``fit``, after the blocks had already created the model, so the head came
-    from whatever state the RNG was in: two runs of the same config and seed
-    started from different weights and ended 0.09 accuracy apart. Every block
-    that builds a model to train calls this first; ``fit`` still seeds again,
-    so the data order does not depend on how much randomness the build used.
-    """
+    """Seed model construction using the configured determinism settings."""
     _seed_everything(training.seed, deterministic=training.deterministic)
 
 
 def resolve_device(device_cfg: DeviceConfig) -> tuple[torch.device, list[int], str]:
-    """Resolve a DeviceConfig into a torch.device + (optional) DataParallel ids.
-
-    Returns:
-        Tuple of (torch.device, gpu_ids_list, human_label).
-        gpu_ids_list is empty when kind=='cpu' or single-GPU. The human label is
-        a short string used in logs and run.json so the user can verify after the
-        fact which device was *actually* used.
-    """
+    """Resolve the requested device, DataParallel ids and display label."""
     info = check_cuda()
 
     if device_cfg.kind == "cpu":
@@ -172,21 +139,7 @@ def resolve_device(device_cfg: DeviceConfig) -> tuple[torch.device, list[int], s
     available_ids = [d.index for d in info.devices]
 
     if device_cfg.kind == "cuda":
-        if device_cfg.gpu_ids:
-            primary = device_cfg.gpu_ids[0]
-            if primary not in available_ids:
-                logger.warning(
-                    "GPU {} not in available {}; using GPU 0.", primary, available_ids
-                )
-                primary = 0
-        else:
-            primary = 0
-        name = (
-            info.devices[primary].name
-            if primary < len(info.devices)
-            else f"cuda:{primary}"
-        )
-        return torch.device(f"cuda:{primary}"), [], f"cuda:{primary} ({name})"
+        return _resolve_single_cuda(device_cfg, info, available_ids)
 
     # multi_cuda
     requested = device_cfg.gpu_ids if device_cfg.gpu_ids else available_ids
@@ -207,6 +160,25 @@ def resolve_device(device_cfg: DeviceConfig) -> tuple[torch.device, list[int], s
     primary = valid[0]
     names = ", ".join(info.devices[i].name for i in valid if i < len(info.devices))
     return torch.device(f"cuda:{primary}"), valid, f"multi_cuda{valid} ({names})"
+
+
+def _resolve_single_cuda(
+    device_cfg: DeviceConfig, info: Any, available_ids: list[int]
+) -> tuple[torch.device, list[int], str]:
+    """Select the requested CUDA device or retain the GPU 0 fallback."""
+    if device_cfg.gpu_ids:
+        primary = device_cfg.gpu_ids[0]
+        if primary not in available_ids:
+            logger.warning(
+                "GPU {} not in available {}; using GPU 0.", primary, available_ids
+            )
+            primary = 0
+    else:
+        primary = 0
+    name = (
+        info.devices[primary].name if primary < len(info.devices) else f"cuda:{primary}"
+    )
+    return torch.device(f"cuda:{primary}"), [], f"cuda:{primary} ({name})"
 
 
 class Trainer:
@@ -237,26 +209,105 @@ class Trainer:
         cancel_token: CancellationToken | None = None,
         resume_dir: Path | None = None,
     ) -> TrainResult:
-        """Run the training loop.
-
-        Args:
-            model: nn.Module with the correct final layer.
-            data_module: object exposing train_loader() and val_loader().
-            optimizer: pre-built optimizer; when None, one is built from config.
-            progress_callback: called after each epoch and at start/end with a
-                progress dict. Safe to call from a worker thread.
-
-        Returns:
-            TrainResult with best epoch, loss, history, and saved model path.
-        """
-        resumed = require_resume_state(resume_dir) if resume_dir is not None else None
-        if resume_dir is not None:
-            validate_resume_dataset(resume_dir, self._config)
+        """Train the model and return its best checkpoint and epoch history."""
+        resumed = training_loop.load_resume_state(resume_dir, self._config)
         cfg = self._config.training
         _seed_everything(cfg.seed, deterministic=cfg.deterministic)
 
         logger.info("Trainer using device: {}", self._device_label)
 
+        model, optimizer, criterion, scheduler, scaler, run_dir, tb = (
+            self._initialize_training(model, optimizer, resume_dir, resumed)
+        )
+        model_path = run_dir / "best_model.pth"
+
+        history, best_val_loss, best_epoch, patience_counter, start_epoch = (
+            self._restore_training(
+                model, optimizer, scheduler, scaler, resumed, run_dir
+            )
+        )
+        t0 = time.monotonic()
+
+        train_loader, val_loader, self._loader_workers = training_loop.start_training(
+            data_module, progress_callback, cfg.epochs, self._device_label
+        )
+        best_val_loss, best_epoch, patience_counter, save_pool, save_future, stopped = (
+            training_loop.run_epochs(
+                model=model,
+                model_path=model_path,
+                history=history,
+                best_metric=best_val_loss,
+                best_epoch=best_epoch,
+                patience_counter=patience_counter,
+                start_epoch=start_epoch,
+                total_epochs=cfg.epochs,
+                train_loader=train_loader,
+                val_loader=val_loader,
+                resumed=resumed,
+                cancel_token=cancel_token,
+                compute_epoch=lambda epoch: self._compute_epoch_result(
+                    epoch,
+                    model,
+                    train_loader,
+                    val_loader,
+                    optimizer,
+                    criterion,
+                    scheduler,
+                    scaler=scaler,
+                ),
+                report=lambda result: self._report_epoch(
+                    result, tb, progress_callback, t0
+                ),
+                early_stop=self._early_stopping_reached,
+                metric_name="val_loss",
+                save_best=save_best_checkpoint,
+                components=lambda: self._checkpoint_components(
+                    model, optimizer, scheduler, scaler
+                ),
+            )
+        )
+
+        if not is_cancelled(cancel_token):
+            clear_resume_state(run_dir)
+
+        train_result = TrainResult(
+            stopped=stopped,
+            best_epoch=best_epoch,
+            best_val_loss=best_val_loss,
+            total_epochs=len(history),
+            device_used=self._device_label,
+            history=history,
+            model_path=model_path,
+        )
+        return self._finish_training(
+            train_result,
+            run_dir,
+            data_module,
+            tb,
+            save_pool,
+            save_future,
+            progress_callback,
+        )
+
+    # ── private helpers ────────────────────────────────────────────────────────
+
+    def _initialize_training(
+        self,
+        model: nn.Module,
+        optimizer: torch.optim.Optimizer | None,
+        resume_dir: Path | None,
+        resumed: ResumeState | None,
+    ) -> tuple[
+        nn.Module,
+        torch.optim.Optimizer,
+        nn.Module,
+        Any,
+        Any,
+        Path,
+        TensorBoardLogger,
+    ]:
+        """Prepare the model, optimization tools and output directory."""
+        cfg = self._config.training
         model = self._prepare_model(model)
         optimizer = optimizer if optimizer is not None else self._build_optimizer(model)
         criterion = self._build_criterion()
@@ -275,180 +326,90 @@ class Trainer:
             if resumed is not None and resume_dir is not None
             else self._make_run_dir()
         )
-        model_path = run_dir / "best_model.pth"
         tb = TensorBoardLogger(run_dir / "tensorboard")
 
-        history: list[EpochResult] = []
-        best_val_loss = float("inf")
-        best_epoch = 0
-        patience_counter = 0
-        start_epoch = 1
+        return model, optimizer, criterion, scheduler, scaler, run_dir, tb
 
-        # Continuing means restoring the optimizer and scheduler too: weights
-        # alone restart the search somewhere the loss curve never was.
-        if resumed is not None:
-            model.load_state_dict(resumed.model)
-            optimizer.load_state_dict(resumed.optimizer)
-            if scheduler is not None and resumed.scheduler is not None:
-                scheduler.load_state_dict(resumed.scheduler)
-            if scaler is not None and resumed.scaler is not None:
-                scaler.load_state_dict(resumed.scaler)
-            best_val_loss = resumed.best_metric
-            best_epoch = resumed.best_epoch
-            patience_counter = resumed.patience_counter
-            history = [EpochResult(**h) for h in resumed.history]
-            start_epoch = resumed.epoch + 1
-            logger.info(
-                "Resuming {} at epoch {} of {}.",
-                run_dir.name,
-                start_epoch,
-                cfg.epochs,
-            )
-        t0 = time.monotonic()
+    def _restore_training(
+        self,
+        model: nn.Module,
+        optimizer: torch.optim.Optimizer,
+        scheduler: Any,
+        scaler: Any,
+        resumed: ResumeState | None,
+        run_dir: Path,
+    ) -> tuple[list[EpochResult], float, int, int, int]:
+        """Restore optimization state and classification epoch history."""
+        return training_loop.restore_training_state(
+            resumed,
+            model,
+            optimizer,
+            scheduler,
+            run_dir,
+            self._config.training.epochs,
+            EpochResult,
+            float("inf"),
+            scaler,
+        )
 
-        if progress_callback is not None:
-            progress_callback(
-                {
-                    "event": "start",
-                    "total_epochs": cfg.epochs,
-                    "device": self._device_label,
-                }
-            )
+    def _step_scheduler(self, scheduler: Any, val_loss: float) -> None:
+        """Advance the scheduler using validation loss for plateau mode."""
+        training_loop.step_scheduler(scheduler, val_loss)
 
-        # Build loaders ONCE — reusing them across epochs avoids re-creating
-        # DataLoader objects (and re-spawning persistent workers) every epoch.
-        train_loader = data_module.train_loader()
-        val_loader = data_module.val_loader()
-        self._loader_workers = {
-            name: loader.num_workers
-            for name, loader in (("train", train_loader), ("val", val_loader))
-            if hasattr(loader, "num_workers")
-        }
+    def _report_epoch(
+        self,
+        result: EpochResult,
+        tb: TensorBoardLogger,
+        progress_callback: Callable[[dict[str, Any]], None] | None,
+        t0: float,
+    ) -> None:
+        """Report the task-specific epoch metrics and progress event."""
+        training_loop.report_epoch(
+            result,
+            tb,
+            progress_callback,
+            t0,
+            self._config.training.epochs,
+            {
+                "loss/train": "train_loss",
+                "loss/val": "val_loss",
+                "accuracy/train": "train_accuracy",
+                "accuracy/val": "val_accuracy",
+            },
+            ("train_loss", "train_accuracy", "val_loss", "val_accuracy"),
+            "Epoch {}/{} | train_loss={:.4f} train_acc={:.4f} val_loss={:.4f} val_acc={:.4f}",
+            ("train_loss", "train_accuracy", "val_loss", "val_accuracy"),
+        )
 
-        # Background thread pool for non-blocking checkpoint writes.
-        save_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="ckpt")
-        save_future = None
+    def _checkpoint_components(
+        self,
+        model: nn.Module,
+        optimizer: torch.optim.Optimizer,
+        scheduler: Any,
+        scaler: Any,
+    ) -> dict[str, Any]:
+        """Snapshot model and optimization components for exact continuation."""
+        return training_loop.checkpoint_components(
+            model, optimizer, scheduler, scaler, unwrap_model=True
+        )
 
-        if resumed is not None:
-            restore_rng_state(resumed.rng_state, train_loader, val_loader)
+    def _early_stopping_reached(self, patience_counter: int) -> bool:
+        """Keep zero patience disabled at the stopping boundary."""
+        return training_loop.early_stopping_reached(
+            patience_counter, self._config.training.early_stopping_patience
+        )
 
-        stopped = False
-        for epoch in range(start_epoch, cfg.epochs + 1):
-            # A crash or cancellation may coincide with the stopping boundary.
-            if (
-                cfg.early_stopping_patience > 0
-                and patience_counter >= cfg.early_stopping_patience
-            ):
-                break
-            # The safe point: the previous epoch's checkpoint is written and its
-            # metrics emitted, so stopping here leaves the run directory whole.
-            if is_cancelled(cancel_token):
-                logger.info(
-                    "Run cancelled at epoch {}; keeping the best checkpoint so far.",
-                    epoch,
-                )
-                stopped = True
-                break
-
-            train_loss, train_acc = self._train_epoch(
-                model, train_loader, optimizer, criterion, scaler=scaler
-            )
-            val_loss, val_acc = self._eval_epoch(model, val_loader, criterion)
-
-            # Plateau scheduler is reactive — step it after we have val loss.
-            # The other schedulers step monotonically by epoch.
-            if scheduler is not None:
-                if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
-                    scheduler.step(val_loss)
-                else:
-                    scheduler.step()
-
-            result = EpochResult(
-                epoch=epoch,
-                train_loss=train_loss,
-                train_accuracy=train_acc,
-                val_loss=val_loss,
-                val_accuracy=val_acc,
-            )
-            history.append(result)
-            tb.log_scalars(
-                epoch,
-                {
-                    "loss/train": train_loss,
-                    "loss/val": val_loss,
-                    "accuracy/train": train_acc,
-                    "accuracy/val": val_acc,
-                },
-            )
-
-            logger.info(
-                "Epoch {}/{} | train_loss={:.4f} train_acc={:.4f} val_loss={:.4f} val_acc={:.4f}",
-                epoch,
-                cfg.epochs,
-                train_loss,
-                train_acc,
-                val_loss,
-                val_acc,
-            )
-
-            if progress_callback is not None:
-                progress_callback(
-                    {
-                        "event": "epoch_end",
-                        "epoch": epoch,
-                        "total_epochs": cfg.epochs,
-                        "train_loss": train_loss,
-                        "train_accuracy": train_acc,
-                        "val_loss": val_loss,
-                        "val_accuracy": val_acc,
-                        "elapsed_s": round(time.monotonic() - t0, 3),
-                    }
-                )
-
-            if val_loss < best_val_loss:
-                best_val_loss = val_loss
-                best_epoch = epoch
-                patience_counter = 0
-                save_future = save_best_checkpoint(
-                    save_pool, save_future, model, model_path
-                )
-            else:
-                patience_counter += 1
-
-            # Snapshot the completed epoch, including best metric and patience.
-            save_resume_state(
-                run_dir,
-                ResumeState(
-                    epoch=epoch,
-                    model=(
-                        model.module.state_dict()  # type: ignore[union-attr]
-                        if isinstance(model, nn.DataParallel)
-                        else model.state_dict()
-                    ),
-                    optimizer=optimizer.state_dict(),
-                    scheduler=scheduler.state_dict() if scheduler is not None else None,
-                    scaler=scaler.state_dict() if scaler is not None else None,
-                    best_metric=best_val_loss,
-                    best_epoch=best_epoch,
-                    patience_counter=patience_counter,
-                    history=[asdict(h) for h in history],
-                    rng_state=capture_rng_state(train_loader, val_loader),
-                ),
-            )
-
-            # 0 disables early stopping outright. Without this guard it
-            # would mean the opposite -- the very first epoch without an
-            # improvement satisfies `1 >= 0` and ends the run.
-            if (
-                cfg.early_stopping_patience > 0
-                and patience_counter >= cfg.early_stopping_patience
-            ):
-                logger.info("Early stopping at epoch {}.", epoch)
-                break
-
-        if not is_cancelled(cancel_token):
-            clear_resume_state(run_dir)
-
+    def _finish_training(
+        self,
+        train_result: TrainResult,
+        run_dir: Path,
+        data_module: Any,
+        tb: TensorBoardLogger,
+        save_pool: ThreadPoolExecutor,
+        save_future: Future[None] | None,
+        progress_callback: Callable[[dict[str, Any]], None] | None,
+    ) -> TrainResult:
+        """Summarize health, finish checkpoint writes and publish the run."""
         # A run that collapsed still reports an accuracy, so say so out loud
         # rather than letting the number stand on its own (ADR-099).
         health = summarize(
@@ -459,9 +420,10 @@ class Trainer:
                     if self._config.task == "binary"
                     else self._config.model.num_classes,
                 ),
-                stagnant_loss([h.train_loss for h in history]),
+                stagnant_loss([h.train_loss for h in train_result.history]),
             ]
         )
+        train_result.warnings = health
         for warning in health:
             logger.warning("{}", warning["message"])
 
@@ -470,16 +432,6 @@ class Trainer:
             save_future.result()
         save_pool.shutdown(wait=False)
 
-        train_result = TrainResult(
-            stopped=stopped,
-            best_epoch=best_epoch,
-            best_val_loss=best_val_loss,
-            total_epochs=len(history),
-            device_used=self._device_label,
-            history=history,
-            model_path=model_path,
-            warnings=health,
-        )
         self._write_run_json(
             run_dir, train_result, getattr(data_module, "class_names", None)
         )
@@ -495,18 +447,42 @@ class Trainer:
             # `epoch_end` carries: on a stopped run the two differ, and the
             # difference is how the overlay tells "stopped" from "finished"
             # (lib/run-control.ts, ADR-111).
-            progress_callback({"event": "end", "total_epochs": len(history)})
+            progress_callback(
+                {"event": "end", "total_epochs": len(train_result.history)}
+            )
 
         return train_result
 
-    # ── private helpers ────────────────────────────────────────────────────────
+    def _compute_epoch_result(
+        self,
+        epoch: int,
+        model: nn.Module,
+        train_loader: Any,
+        val_loader: Any,
+        optimizer: torch.optim.Optimizer,
+        criterion: nn.Module,
+        scheduler: Any,
+        scaler: torch.amp.GradScaler | None = None,
+    ) -> EpochResult:
+        """Compute the task-specific epoch metrics and advance its scheduler."""
+        train_loss, train_acc = self._train_epoch(
+            model, train_loader, optimizer, criterion, scaler=scaler
+        )
+        val_loss, val_acc = self._eval_epoch(model, val_loader, criterion)
+
+        self._step_scheduler(scheduler, val_loss)
+
+        return EpochResult(
+            epoch=epoch,
+            train_loss=train_loss,
+            train_accuracy=train_acc,
+            val_loss=val_loss,
+            val_accuracy=val_acc,
+        )
 
     def _prepare_model(self, model: nn.Module) -> nn.Module:
-        """Move model to device; wrap with DataParallel when multi_cuda is requested."""
-        model = model.to(self._device)
-        if self._dp_ids:
-            model = nn.DataParallel(model, device_ids=self._dp_ids)
-        return model
+        """Move the model to its device and apply DataParallel when configured."""
+        return training_loop.prepare_model(model, self._device, self._dp_ids)
 
     def _build_optimizer(self, model: nn.Module) -> torch.optim.Optimizer:
         cfg = self._config.training
@@ -529,33 +505,14 @@ class Trainer:
     def _build_scheduler(
         self, optimizer: torch.optim.Optimizer
     ) -> torch.optim.lr_scheduler.LRScheduler | None:
-        """Build a torch scheduler from the SchedulerConfig, or None for 'none'."""
-        sched_cfg = self._config.training.scheduler
-        kind = sched_cfg.kind
-        if kind == "none":
-            return None
-        if kind == "cosine":
-            return torch.optim.lr_scheduler.CosineAnnealingLR(
-                optimizer, T_max=self._config.training.epochs
-            )
-        if kind == "step":
-            return torch.optim.lr_scheduler.StepLR(
-                optimizer, step_size=sched_cfg.step_size, gamma=sched_cfg.gamma
-            )
-        # plateau — reactive on validation loss; stepped manually with val_loss.
-        return torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer,
-            mode="min",
-            patience=sched_cfg.patience,
-            factor=sched_cfg.factor,
-            min_lr=sched_cfg.min_lr,
-        )
+        """Build the configured learning-rate scheduler."""
+        return training_loop.build_scheduler(optimizer, self._config.training)
 
     def _make_run_dir(self) -> Path:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-        run_dir = self._config.output.models_dir / self._config.name / timestamp
-        run_dir.mkdir(parents=True, exist_ok=False)
-        return run_dir
+        """Create the configured timestamped output directory."""
+        return training_loop.make_run_dir(
+            self._config.output.models_dir, self._config.name
+        )
 
     def _train_epoch(
         self,
@@ -650,19 +607,13 @@ class Trainer:
     ) -> None:
         """Write the run.json file with full run metadata."""
         run_json: dict[str, Any] = {
-            "id": f"{self._config.name}_{run_dir.name}",
-            "experiment": self._config.name,
-            "timestamp": datetime.now().isoformat(),
-            "status": "completed",
-            # True when the stop cut this run (ADR-111); "completed" says only
-            # that it ended cleanly, with total_epochs as far as it got.
-            "stopped": result.stopped,
-            "device_used": result.device_used,
-            "environment": capture_environment(),
-            "runtime": {"loader_workers": getattr(self, "_loader_workers", {})},
-            # Proves two runs saw the same data, not just the same path.
-            "dataset_fingerprint": fingerprint_from_config(self._config),
-            "run_dir": str(run_dir.resolve()),
+            **training_loop.run_json_header(
+                self._config,
+                run_dir,
+                result.stopped,
+                result.device_used,
+                getattr(self, "_loader_workers", {}),
+            ),
             # The index->name mapping the checkpoint was trained with. Recorded
             # because it used to be recovered by re-reading the training folder,
             # which silently stopped working the moment a dataset was renamed or
@@ -688,19 +639,7 @@ class Trainer:
                 }
                 for r in result.history
             ],
-            "artifacts": {
-                # None when nothing was trained: every reader then says "no
-                # checkpoint" instead of failing to open a path (ADR-111).
-                "model": (
-                    str(result.model_path) if result.model_path.is_file() else None
-                ),
-                "graphics": [],
-                "report": None,
-            },
-            "tests": [],
-            # Empty on a healthy run. When it is not, the metrics above need
-            # reading with it in hand (ADR-099).
-            "warnings": result.warnings,
+            **training_loop.run_json_tail(result),
         }
         (run_dir / "run.json").write_text(
             json.dumps(run_json, indent=2), encoding="utf-8"

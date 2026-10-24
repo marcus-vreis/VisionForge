@@ -98,28 +98,7 @@ class Evaluator:
         y_prob = np.array(all_probs)
 
         avg = "binary" if self._config.task == "binary" else "macro"
-        auc_roc: float | None = None
-
-        if self._config.task == "binary" and len(np.unique(y_true)) == 2:
-            auc_roc = float(roc_auc_score(y_true, y_prob))
-        elif self._config.task == "multiclass" and len(all_proba_full) > 0:
-            n_classes = len(all_proba_full[0])
-            present = np.unique(y_true)
-            if len(present) > 1 and n_classes >= 2:
-                proba = np.array(all_proba_full)
-                try:
-                    if n_classes == 2:
-                        # sklearn's ovr mode rejects two columns; the ROC plot
-                        # scores the second one, so the number must too.
-                        auc_roc = float(roc_auc_score(y_true, proba[:, 1]))
-                    else:
-                        auc_roc = float(
-                            roc_auc_score(
-                                y_true, proba, multi_class="ovr", average="macro"
-                            )
-                        )
-                except ValueError:
-                    auc_roc = None
+        auc_roc = _classification_auc(self._config.task, y_true, y_prob, all_proba_full)
 
         return EvalResult(
             accuracy=float(accuracy_score(y_true, y_pred)),
@@ -136,6 +115,32 @@ class Evaluator:
             y_proba_full=all_proba_full,
             y_pred=all_preds,
         )
+
+
+def _classification_auc(
+    task: str,
+    y_true: np.ndarray,
+    y_prob: np.ndarray,
+    all_proba_full: list[list[float]],
+) -> float | None:
+    """Compute classification AUC when the split supports the configured task."""
+    if task == "binary" and len(np.unique(y_true)) == 2:
+        return float(roc_auc_score(y_true, y_prob))
+    if task != "multiclass" or len(all_proba_full) == 0:
+        return None
+    n_classes = len(all_proba_full[0])
+    present = np.unique(y_true)
+    if len(present) <= 1 or n_classes < 2:
+        return None
+    proba = np.array(all_proba_full)
+    try:
+        if n_classes == 2:
+            # sklearn's ovr mode rejects two columns; the ROC plot
+            # scores the second one, so the number must too.
+            return float(roc_auc_score(y_true, proba[:, 1]))
+        return float(roc_auc_score(y_true, proba, multi_class="ovr", average="macro"))
+    except ValueError:
+        return None
 
 
 def bootstrap_eval_cis(

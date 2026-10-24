@@ -661,6 +661,11 @@ def _summarize(report: dict[str, Any]) -> str:
         first = next(iter(agg.items()), None)
         if first and isinstance(first[1], dict):
             return f"{first[0]}={first[1].get('mean', 0):.4f}"
+    return _summarize_task_metrics(report)
+
+
+def _summarize_task_metrics(report: dict[str, Any]) -> str:
+    """Summarize direct metrics or the first numeric standalone section."""
     if "metrics" in report and isinstance(report["metrics"], dict):
         first = next(iter(report["metrics"].items()), None)
         return f"{first[0]}={first[1]:.4f}" if first else "ok"

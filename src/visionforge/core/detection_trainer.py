@@ -14,7 +14,6 @@ import json
 import sys
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -22,8 +21,8 @@ import torch
 from loguru import logger
 from torch.utils.data import DataLoader
 
+from visionforge.core import training_loop
 from visionforge.core.cancellation import CancellationToken, is_cancelled
-from visionforge.core.dataset_fingerprint import fingerprint_from_config
 from visionforge.core.detection_data import DetectionDataModule, resolve_yolo_split
 from visionforge.core.detection_dataset import DetectionDataset, detection_collate
 from visionforge.core.detection_metrics import mean_average_precision_50
@@ -44,7 +43,6 @@ from visionforge.core.trainer import _seed_everything
 from visionforge.core.training_health import no_detections, summarize
 from visionforge.models.detection_factory import build_torchvision_detector
 from visionforge.utils.detection_config import DetectionConfig
-from visionforge.utils.environment import capture_environment
 from visionforge.utils.messages import tr
 from visionforge.utils.workers import suggested_workers
 
@@ -383,36 +381,9 @@ class DetectionTrainer:
             nonlocal finished, cut
             if finished:
                 return
-            epoch = int(getattr(trainer, "epoch", len(history))) + 1
-            metrics: dict[str, Any] = getattr(trainer, "metrics", {}) or {}
-            map50 = _extract(metrics, _MAP50_KEY)
-            map95 = _extract(metrics, _MAP5095_KEY)
-            box_loss = _extract(metrics, _BOXLOSS_KEY)
-            # `trainer.metrics` only holds what the validator returned, so the
-            # training losses are not in it: Ultralytics keeps their running
-            # mean in `trainer.tloss` and labels it through `label_loss_items`.
-            train_metrics = _train_loss_metrics(trainer)
-            train_losses = {
-                k: _extract(train_metrics, v) for k, v in _TRAIN_LOSS_KEYS.items()
-            }
-            val_losses = {k: _extract(metrics, v) for k, v in _VAL_LOSS_KEYS.items()}
-            result = DetectionEpochResult(
-                epoch=epoch,
-                map50=map50,
-                map50_95=map95,
-                box_loss=box_loss,
-                precision=_extract(metrics, _PRECISION_KEY),
-                recall=_extract(metrics, _RECALL_KEY),
-                **train_losses,
-                **val_losses,
+            epoch = self._record_ultralytics_epoch(
+                trainer, history, progress_callback, cfg.epochs
             )
-            # On a resumed run the seeded history can overlap what Ultralytics
-            # re-reports, so the epoch replaces its own record instead of
-            # appending a second one under the same number.
-            history[:] = [h for h in history if h.epoch < epoch]
-            history.append(result)
-            if progress_callback is not None:
-                progress_callback(_epoch_event(result, cfg.epochs))
             # Ultralytics owns this loop; `trainer.stop` is the same flag its own
             # early stopping sets, and the only cooperative exit it exposes.
             if is_cancelled(cancel_token):
@@ -428,11 +399,9 @@ class DetectionTrainer:
         # once its loop is entered. Checked once more before handing over.
         if is_cancelled(cancel_token):
             logger.info("Run cancelled before its first epoch; nothing trained.")
-            result = self._build_result(run_dir, history, stopped=True)
-            self._write_run_json(run_dir, result)
-            if progress_callback is not None:
-                progress_callback({"event": "end", "total_epochs": len(history)})
-            return result
+            return self._finish_ultralytics_training(
+                run_dir, history, True, progress_callback
+            )
 
         model.add_callback("on_fit_epoch_end", _on_epoch_end)
         logger.info(
@@ -460,11 +429,63 @@ class DetectionTrainer:
             **self._ultralytics_train_kwargs(),
         )
 
-        result = self._build_result(run_dir, history, stopped=cut)
+        return self._finish_ultralytics_training(
+            run_dir, history, cut, progress_callback
+        )
+
+    def _finish_ultralytics_training(
+        self,
+        run_dir: Path,
+        history: list[DetectionEpochResult],
+        stopped: bool,
+        progress_callback: Callable[[dict[str, Any]], None] | None,
+    ) -> DetectionTrainResult:
+        """Build the detection summary and emit the final progress event."""
+        result = self._build_result(run_dir, history, stopped=stopped)
         self._write_run_json(run_dir, result)
         if progress_callback is not None:
             progress_callback({"event": "end", "total_epochs": len(history)})
         return result
+
+    def _record_ultralytics_epoch(
+        self,
+        trainer: Any,
+        history: list[DetectionEpochResult],
+        progress_callback: Callable[[dict[str, Any]], None] | None,
+        total_epochs: int,
+    ) -> int:
+        """Record the backend metrics once per epoch and report progress."""
+        epoch = int(getattr(trainer, "epoch", len(history))) + 1
+        metrics: dict[str, Any] = getattr(trainer, "metrics", {}) or {}
+        map50 = _extract(metrics, _MAP50_KEY)
+        map95 = _extract(metrics, _MAP5095_KEY)
+        box_loss = _extract(metrics, _BOXLOSS_KEY)
+        # `trainer.metrics` only holds what the validator returned, so the
+        # training losses are not in it: Ultralytics keeps their running
+        # mean in `trainer.tloss` and labels it through `label_loss_items`.
+        train_metrics = _train_loss_metrics(trainer)
+        train_losses = {
+            k: _extract(train_metrics, v) for k, v in _TRAIN_LOSS_KEYS.items()
+        }
+        val_losses = {k: _extract(metrics, v) for k, v in _VAL_LOSS_KEYS.items()}
+        result = DetectionEpochResult(
+            epoch=epoch,
+            map50=map50,
+            map50_95=map95,
+            box_loss=box_loss,
+            precision=_extract(metrics, _PRECISION_KEY),
+            recall=_extract(metrics, _RECALL_KEY),
+            **train_losses,
+            **val_losses,
+        )
+        # On a resumed run the seeded history can overlap what Ultralytics
+        # re-reports, so the epoch replaces its own record instead of
+        # appending a second one under the same number.
+        history[:] = [h for h in history if h.epoch < epoch]
+        history.append(result)
+        if progress_callback is not None:
+            progress_callback(_epoch_event(result, total_epochs))
+        return epoch
 
     def _history_from_run_json(self, run_dir: Path) -> list[DetectionEpochResult]:
         """Read the epochs a previous attempt recorded, or none when unreadable."""
@@ -541,32 +562,9 @@ class DetectionTrainer:
             if hasattr(loader, "num_workers")
         }
 
-        history: list[DetectionEpochResult] = []
-        train_losses: list[float | None] = []
-        best_map = -1.0
-        best_epoch = 0
-        start_epoch = 1
-
-        # Weights alone cannot continue: the optimizer comes back too, or the
-        # search restarts somewhere the loss curve never was.
-        if resumed is not None:
-            model.load_state_dict(resumed.model)
-            optimizer.load_state_dict(resumed.optimizer)
-            best_map = resumed.best_metric
-            best_epoch = resumed.best_epoch
-            # The plot needs the train loss per epoch, which is not part of
-            # DetectionEpochResult, so it rides along in the same records.
-            for entry in resumed.history:
-                record = dict(entry)
-                train_losses.append(record.pop("train_loss", None))
-                history.append(DetectionEpochResult(**record))
-            start_epoch = resumed.epoch + 1
-            logger.info(
-                "Resuming {} at epoch {} of {}.",
-                run_dir.name,
-                start_epoch,
-                cfg.epochs,
-            )
+        history, train_losses, best_map, best_epoch, start_epoch = (
+            self._restore_torchvision_training(model, optimizer, resumed, run_dir)
+        )
 
         if progress_callback is not None:
             progress_callback(
@@ -663,6 +661,70 @@ class DetectionTrainer:
         if not is_cancelled(cancel_token):
             clear_resume_state(run_dir)
 
+        result = DetectionTrainResult(
+            stopped=stopped,
+            best_epoch=best_epoch,
+            best_map50_95=None,
+            total_epochs=len(history),
+            device_used=self._device_label,
+            history=history,
+            model_path=model_path,
+            run_dir=run_dir,
+        )
+        return self._finish_torchvision_training(
+            model, result, train_losses, best_map, progress_callback
+        )
+
+    def _restore_torchvision_training(
+        self,
+        model: torch.nn.Module,
+        optimizer: torch.optim.Optimizer,
+        resumed: ResumeState | None,
+        run_dir: Path,
+    ) -> tuple[list[DetectionEpochResult], list[float | None], float, int, int]:
+        """Restore weights, optimizer and recorded epochs for detection."""
+        cfg = self._config.training
+        history: list[DetectionEpochResult] = []
+        train_losses: list[float | None] = []
+        best_map = -1.0
+        best_epoch = 0
+        start_epoch = 1
+
+        # Weights alone cannot continue: the optimizer comes back too, or the
+        # search restarts somewhere the loss curve never was.
+        if resumed is not None:
+            model.load_state_dict(resumed.model)
+            optimizer.load_state_dict(resumed.optimizer)
+            best_map = resumed.best_metric
+            best_epoch = resumed.best_epoch
+            # The plot needs the train loss per epoch, which is not part of
+            # DetectionEpochResult, so it rides along in the same records.
+            for entry in resumed.history:
+                record = dict(entry)
+                train_losses.append(record.pop("train_loss", None))
+                history.append(DetectionEpochResult(**record))
+            start_epoch = resumed.epoch + 1
+            logger.info(
+                "Resuming {} at epoch {} of {}.",
+                run_dir.name,
+                start_epoch,
+                cfg.epochs,
+            )
+
+        return history, train_losses, best_map, best_epoch, start_epoch
+
+    def _finish_torchvision_training(
+        self,
+        model: torch.nn.Module,
+        result: DetectionTrainResult,
+        train_losses: list[float | None],
+        best_map: float,
+        progress_callback: Callable[[dict[str, Any]], None] | None,
+    ) -> DetectionTrainResult:
+        """Keep trained weights, render history and publish detection results."""
+        run_dir = result.run_dir
+        model_path = result.model_path
+        history = result.history
         # No epoch improved on the -1 sentinel (NaN mAP): keep the weights so
         # the run has a checkpoint. Not for a run stopped before its first
         # epoch -- those weights were never trained (ADR-111).
@@ -678,17 +740,7 @@ class DetectionTrainer:
         )
         for warning in tv_health:
             logger.warning("{}", warning["message"])
-        result = DetectionTrainResult(
-            stopped=stopped,
-            warnings=tv_health,
-            best_epoch=best_epoch,
-            best_map50_95=None,
-            total_epochs=len(history),
-            device_used=self._device_label,
-            history=history,
-            model_path=model_path,
-            run_dir=run_dir,
-        )
+        result.warnings = tv_health
         self._write_run_json(run_dir, result)
         if progress_callback is not None:
             progress_callback({"event": "end", "total_epochs": len(history)})
@@ -943,10 +995,10 @@ class DetectionTrainer:
         return f"cuda:{d.gpu_ids[0] if d.gpu_ids else 0}"
 
     def _make_run_dir(self) -> Path:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-        run_dir = self._config.output.models_dir / self._config.name / timestamp
-        run_dir.mkdir(parents=True, exist_ok=False)
-        return run_dir
+        """Create the configured timestamped output directory."""
+        return training_loop.make_run_dir(
+            self._config.output.models_dir, self._config.name
+        )
 
     def _render_torchvision_plot(
         self,
@@ -986,19 +1038,13 @@ class DetectionTrainer:
         ]
         best = next((h for h in result.history if h.epoch == result.best_epoch), None)
         run_json: dict[str, Any] = {
-            "id": f"{self._config.name}_{run_dir.name}",
-            "experiment": self._config.name,
-            "timestamp": datetime.now().isoformat(),
-            "status": "completed",
-            # True when the stop cut this run (ADR-111); "completed" says only
-            # that it ended cleanly, with total_epochs as far as it got.
-            "stopped": result.stopped,
-            "device_used": result.device_used,
-            "environment": capture_environment(),
-            "runtime": {"loader_workers": getattr(self, "_loader_workers", {})},
-            # Proves two runs saw the same data, not just the same path.
-            "dataset_fingerprint": fingerprint_from_config(self._config),
-            "run_dir": str(run_dir.resolve()),
+            **training_loop.run_json_header(
+                self._config,
+                run_dir,
+                result.stopped,
+                result.device_used,
+                getattr(self, "_loader_workers", {}),
+            ),
             "config": self._config.model_dump(mode="json"),
             "metrics": {
                 "map50_95": result.best_map50_95,
@@ -1026,18 +1072,7 @@ class DetectionTrainer:
                 }
                 for h in result.history
             ],
-            "artifacts": {
-                # None when nothing was trained: every reader then says "no
-                # checkpoint" instead of failing to open a path (ADR-111).
-                "model": (
-                    str(result.model_path) if result.model_path.is_file() else None
-                ),
-                "graphics": graphics,
-                "report": None,
-            },
-            "tests": [],
-            # Empty on a healthy run (ADR-099/101).
-            "warnings": result.warnings,
+            **training_loop.run_json_tail(result, graphics),
         }
         (run_dir / "run.json").write_text(
             json.dumps(run_json, indent=2), encoding="utf-8"

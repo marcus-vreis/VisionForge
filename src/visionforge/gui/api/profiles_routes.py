@@ -94,9 +94,9 @@ def build_profiles_router(dirs: ProfileDirs) -> APIRouter:
                 reserved, 409 when that folder already exists, 500 when the OS
                 refuses to make the folders (permissions, full disk).
         """
-        profiles_dir, models_dir = dirs()
+        profiles_dir, _ = dirs()
         try:
-            profile = create_profile(req.name, profiles_dir, models_dir, req.pronoun)
+            profile = create_profile(req.name, profiles_dir, req.pronoun)
         except ProfileNameError as exc:
             raise HTTPException(422, str(exc)) from exc
         except ProfileExistsError as exc:
