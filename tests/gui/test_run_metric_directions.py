@@ -150,7 +150,9 @@ class TestCustomTaskDirections:
         self, app_and_routes: tuple, tmp_path: Path
     ) -> None:
         _, routes_mod = app_and_routes
-        with patch.object(routes_mod, "get_task", return_value=self._task()):
+        with patch(
+            "visionforge.gui.api.run_history.get_task", return_value=self._task()
+        ):
             body = _detail(
                 app_and_routes,
                 tmp_path,
@@ -179,7 +181,7 @@ class TestCustomTaskDirections:
         def missing(key: str) -> TaskInfo:
             raise KeyError(key)
 
-        with patch.object(routes_mod, "get_task", missing):
+        with patch("visionforge.gui.api.run_history.get_task", missing):
             body = _detail(
                 app_and_routes,
                 tmp_path,
