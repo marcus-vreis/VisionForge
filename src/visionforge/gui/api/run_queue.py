@@ -144,7 +144,7 @@ class RunQueue:
             NotStoppableError: the job is running and its ``stop_at`` is None.
                 The token is left untouched, so nothing claims a stop.
         """
-        for job in list(self._pending):
+        for job in self._pending:
             if job.run_id == run_id:
                 self._pending.remove(job)
                 logger.info("Queue: {} cancelled before it started.", run_id)

@@ -39,6 +39,8 @@ from pydantic import BaseModel
 
 from visionforge.utils.messages import tr
 
+PROFILE_FILENAME = "profile.json"
+
 DEFAULT_SLUG = "default"
 # Where the default profile keeps its name and pronoun (ADR-126). The dot keeps
 # it out of the listing: no slug can contain one.
@@ -238,12 +240,12 @@ def _meta_pronoun(meta: dict[str, Any]) -> Pronoun | None:
 
 
 def _read_name(folder: Path, slug: str) -> str:
-    return _meta_name(_read_meta(folder / "profile.json")) or slug
+    return _meta_name(_read_meta(folder / PROFILE_FILENAME)) or slug
 
 
 def _build(slug: str, folder: Path, profiles_dir: Path) -> Profile:
     relative_root = profiles_dir / slug
-    meta = _read_meta(folder / "profile.json")
+    meta = _read_meta(folder / PROFILE_FILENAME)
     return Profile(
         slug=slug,
         name=_meta_name(meta) or slug,
@@ -329,7 +331,7 @@ def create_profile(
         made = True
         for sub in OUTPUT_SUBDIRS:
             (folder / sub).mkdir()
-        (folder / "profile.json").write_text(
+        (folder / PROFILE_FILENAME).write_text(
             json.dumps(
                 {
                     "name": display,
@@ -374,7 +376,7 @@ def update_profile(
     path = (
         profiles_dir / DEFAULT_IDENTITY_FILE
         if profile.is_default
-        else profiles_dir / profile.slug / "profile.json"
+        else profiles_dir / profile.slug / PROFILE_FILENAME
     )
     meta = _read_meta(path)
     if name is not None:

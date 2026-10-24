@@ -12,6 +12,10 @@ from sklearn.metrics import auc, precision_recall_curve, roc_curve
 from visionforge.core.trainer import EpochResult
 from visionforge.utils.messages import tr_artifact
 
+PLOT_TRAIN_KEY = "plot.train"
+PLOT_VAL_KEY = "plot.val"
+PLOT_EPOCH_KEY = "plot.epoch"
+
 
 class MetricsPlotter:
     """Generates and saves metric plots for a training run.
@@ -38,18 +42,18 @@ class MetricsPlotter:
         ax.plot(
             epochs,
             train_losses,
-            label=tr_artifact("plot.train"),
+            label=tr_artifact(PLOT_TRAIN_KEY),
             linewidth=2,
             color="#3b82f6",
         )
         ax.plot(
             epochs,
             val_losses,
-            label=tr_artifact("plot.val"),
+            label=tr_artifact(PLOT_VAL_KEY),
             linewidth=2,
             color="#f59e0b",
         )
-        ax.set_xlabel(tr_artifact("plot.epoch"))
+        ax.set_xlabel(tr_artifact(PLOT_EPOCH_KEY))
         ax.set_ylabel(tr_artifact("plot.loss"))
         ax.set_title(tr_artifact("plot.title_loss"))
         # There is no epoch 1.5, and a figure that implies one invites the
@@ -82,7 +86,7 @@ class MetricsPlotter:
         ax = fig.subplots()
 
         ax.plot(epochs, values, label=label, linewidth=2, color=color, marker="o")
-        ax.set_xlabel(tr_artifact("plot.epoch"))
+        ax.set_xlabel(tr_artifact(PLOT_EPOCH_KEY))
         ax.set_ylabel(ylabel or label)
         ax.set_title(title or tr_artifact("plot.title_over_epochs", label=label))
         ax.legend()
@@ -304,13 +308,13 @@ class MetricsPlotter:
         ve, vl = _clean(epochs, val_losses)
         if tl:
             ax_loss.plot(
-                te, tl, label=tr_artifact("plot.train"), linewidth=2, color="#3b82f6"
+                te, tl, label=tr_artifact(PLOT_TRAIN_KEY), linewidth=2, color="#3b82f6"
             )
         if vl:
             ax_loss.plot(
-                ve, vl, label=tr_artifact("plot.val"), linewidth=2, color="#f59e0b"
+                ve, vl, label=tr_artifact(PLOT_VAL_KEY), linewidth=2, color="#f59e0b"
             )
-        ax_loss.set_xlabel(tr_artifact("plot.epoch"))
+        ax_loss.set_xlabel(tr_artifact(PLOT_EPOCH_KEY))
         ax_loss.set_ylabel(tr_artifact("plot.loss"))
         ax_loss.set_title(tr_artifact("plot.title_loss"))
         if tl or vl:
@@ -323,7 +327,7 @@ class MetricsPlotter:
                 me, mv, label="mAP@50", linewidth=2, color="#10b981", marker="o"
             )
             ax_map.legend()
-        ax_map.set_xlabel(tr_artifact("plot.epoch"))
+        ax_map.set_xlabel(tr_artifact(PLOT_EPOCH_KEY))
         ax_map.set_ylabel("mAP@50")
         ax_map.set_title(tr_artifact("plot.title_val_map50"))
         ax_map.grid(True, alpha=0.3)
@@ -345,18 +349,18 @@ class MetricsPlotter:
         ax.plot(
             epochs,
             train_accs,
-            label=tr_artifact("plot.train"),
+            label=tr_artifact(PLOT_TRAIN_KEY),
             linewidth=2,
             color="#10b981",
         )
         ax.plot(
             epochs,
             val_accs,
-            label=tr_artifact("plot.val"),
+            label=tr_artifact(PLOT_VAL_KEY),
             linewidth=2,
             color="#8b5cf6",
         )
-        ax.set_xlabel(tr_artifact("plot.epoch"))
+        ax.set_xlabel(tr_artifact(PLOT_EPOCH_KEY))
         ax.set_ylabel(tr_artifact("plot.accuracy"))
         ax.set_title(tr_artifact("plot.title_accuracy"))
         ax.set_ylim(0.0, 1.05)

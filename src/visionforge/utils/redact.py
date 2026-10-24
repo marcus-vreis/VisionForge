@@ -112,7 +112,7 @@ _PATTERNS: tuple[re.Pattern[str], ...] = (
     ),
     # A bare `Bearer KEY`. Eight characters or more, so the English word
     # ("the bearer of …") is not mistaken for the scheme.
-    re.compile(r"\bbearer\s+(?P<val>[A-Za-z0-9._~+/=-]{8,})", re.IGNORECASE),
+    re.compile(r"\bbearer\s+(?P<val>[a-z0-9._~+/=-]{8,})", re.IGNORECASE),
     # `https://user:PASSWORD@host`, as in a proxy URL. The scheme is capped: an
     # unbounded `[a-z0-9+.-]*` made every position of a long `a-a-a-…` run scan to
     # the end of it, which is quadratic on text nobody controls.

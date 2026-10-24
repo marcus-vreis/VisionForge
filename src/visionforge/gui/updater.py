@@ -111,7 +111,8 @@ def run_install(command: list[str], log: Path) -> int:
             else 0
         )
         try:
-            completed = subprocess.run(  # noqa: S603 - argv from the server, no shell
+            # argv from the server, no shell
+            completed = subprocess.run(  # noqa: S603
                 command,
                 stdout=out,
                 stderr=subprocess.STDOUT,
@@ -168,7 +169,8 @@ def relaunch(command: list[str], cwd: str) -> None:
         )
     else:
         kwargs["start_new_session"] = True
-    subprocess.Popen(command, **kwargs)  # noqa: S603 - argv from the server, no shell
+    # argv from the server, no shell
+    subprocess.Popen(command, **kwargs)  # noqa: S603
 
 
 def main(args: dict[str, Any]) -> int:

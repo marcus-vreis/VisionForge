@@ -208,6 +208,45 @@ from visionforge.utils.regression_config import RegressionConfig
 from visionforge.utils.segmentation_config import SegmentationConfig
 from visionforge.utils.workers import suggested_workers as worker_budget
 
+SCAN_BASE_MISSING_KEY = "scan.base_missing"
+CUSTOM_TASK_PREFIX = "custom:"
+RUN_BAD_JSON_KEY = "run.bad_json"
+RUN_NOT_FOUND_KEY = "run.not_found"
+PICK_NO_TKINTER_KEY = "pick.no_tkinter"
+PICK_FAILED_KEY = "pick.failed"
+RUN_NO_MESSAGE_KEY = "run.no_message"
+RUN_FILENAME = "run.json"
+MARKDOWN_TABLE_SEPARATOR = "|---|---|"
+CANCELLED_MESSAGE = "Cancelado."
+
+_BAD_REQUEST: dict[int | str, dict[str, Any]] = {
+    400: {"description": "Invalid request"}
+}
+_FORBIDDEN: dict[int | str, dict[str, Any]] = {403: {"description": "Access denied"}}
+_NOT_FOUND: dict[int | str, dict[str, Any]] = {
+    404: {"description": "Resource not found"}
+}
+_CONFLICT: dict[int | str, dict[str, Any]] = {
+    409: {"description": "Operation conflicts with current state"}
+}
+_UNPROCESSABLE: dict[int | str, dict[str, Any]] = {
+    422: {
+        "description": "Invalid request",
+        # Keeps FastAPI's validation-error schema that a description-only entry would drop.
+        "content": {
+            "application/json": {
+                "schema": {"$ref": "#/components/schemas/HTTPValidationError"}
+            }
+        },
+    }
+}
+_SERVER_ERROR: dict[int | str, dict[str, Any]] = {
+    500: {"description": "Operation failed"}
+}
+_UNAVAILABLE: dict[int | str, dict[str, Any]] = {
+    503: {"description": "GPU context unavailable"}
+}
+
 # Common split folder names per role. Lowercased, accent-stripped at match time.
 _TRAIN_ALIASES = {"train", "training", "treino", "trains", "tr"}
 _VAL_ALIASES = {
@@ -477,25 +516,25 @@ router.include_router(
 )
 
 
-@router.get("/runs")
+@router.get("/runs", responses={**_BAD_REQUEST, **_NOT_FOUND})
 async def list_runs(profile: ProfileDep) -> list[RunSummary]:
     """Return the profile's historical runs sorted by started_at descending."""
     return _load_runs(profile.models_dir.resolve())
 
 
-@router.get("/runs/{run_id}")
+@router.get("/runs/{run_id}", responses={**_BAD_REQUEST, **_NOT_FOUND, **_SERVER_ERROR})
 async def get_run_detail(
     run_id: str, request: Request, profile: ProfileDep
 ) -> RunDetail:
     """Return the full run.json for a specific run_id."""
     run_dir = _find_run_dir(run_id, profile)
     if run_dir is None:
-        raise HTTPException(404, tr("run.not_found", run_id=run_id))
-    run_json_path = run_dir / "run.json"
+        raise HTTPException(404, tr(RUN_NOT_FOUND_KEY, run_id=run_id))
+    run_json_path = run_dir / RUN_FILENAME
     try:
         data: dict[str, Any] = json.loads(run_json_path.read_text(encoding="utf-8"))
     except Exception as exc:  # noqa: BLE001
-        raise HTTPException(500, tr("run.bad_json", error=exc)) from exc
+        raise HTTPException(500, tr(RUN_BAD_JSON_KEY, error=exc)) from exc
 
     status = data.get("status", "completed")
     started, finished = _run_span(run_dir.name, data["timestamp"], status)
@@ -560,9 +599,9 @@ def _metric_directions(
     A task no longer registered has nothing declared and is judged by its names.
     """
     declared: dict[str, str] = {}
-    if task.startswith("custom:"):
+    if task.startswith(CUSTOM_TASK_PREFIX):
         try:
-            info = get_task(task.removeprefix("custom:"))
+            info = get_task(task.removeprefix(CUSTOM_TASK_PREFIX))
         except KeyError:
             info = None
         if info is not None:
@@ -607,7 +646,7 @@ async def get_update(request: Request) -> dict[str, Any]:
     )
 
 
-@router.post("/update/apply")
+@router.post("/update/apply", responses={**_FORBIDDEN, **_CONFLICT, **_SERVER_ERROR})
 async def apply_update(request: Request) -> dict[str, str]:
     """Install the announced release and restart the GUI (ADR-120).
 
@@ -642,7 +681,10 @@ async def apply_update(request: Request) -> dict[str, str]:
     return {"status": "restarting", "target": status["latest"]}
 
 
-@router.post("/runs/{run_id}/reveal")
+@router.post(
+    "/runs/{run_id}/reveal",
+    responses={**_BAD_REQUEST, **_FORBIDDEN, **_NOT_FOUND, **_SERVER_ERROR},
+)
 async def reveal_run_folder(
     run_id: str, request: Request, profile: ProfileDep
 ) -> dict[str, str]:
@@ -666,7 +708,7 @@ async def reveal_run_folder(
         raise HTTPException(403, tr("reveal.remote_client"))
     run_dir = _find_run_dir(run_id, profile)
     if run_dir is None:
-        raise HTTPException(404, tr("run.not_found", run_id=run_id))
+        raise HTTPException(404, tr(RUN_NOT_FOUND_KEY, run_id=run_id))
     try:
         open_folder(run_dir)
     except FolderOpenError as exc:
@@ -677,6 +719,8 @@ async def reveal_run_folder(
 @router.post(
     "/runs/{run_id}/resume",
     responses={
+        **_BAD_REQUEST,
+        **_UNAVAILABLE,
         404: {"description": "Run not found"},
         409: {"description": "Run is busy or cannot continue"},
         500: {"description": "Run metadata is unreadable"},
@@ -693,16 +737,16 @@ async def resume_run(run_id: str, profile: ProfileDep) -> RunResponse:
     """
     run_dir = _find_run_dir(run_id, profile)
     if run_dir is None:
-        raise HTTPException(404, tr("run.not_found", run_id=run_id))
+        raise HTTPException(404, tr(RUN_NOT_FOUND_KEY, run_id=run_id))
     if _EVIDENCE_EXPORTS.is_exporting(run_dir):
         raise HTTPException(409, tr("evidence.export_busy"))
     _reject_group_action(run_dir)
     try:
         data: dict[str, Any] = json.loads(
-            (run_dir / "run.json").read_text(encoding="utf-8")
+            (run_dir / RUN_FILENAME).read_text(encoding="utf-8")
         )
     except Exception as exc:  # noqa: BLE001
-        raise HTTPException(500, tr("run.bad_json", error=exc)) from exc
+        raise HTTPException(500, tr(RUN_BAD_JSON_KEY, error=exc)) from exc
 
     resumable, _ = _resume_status(run_dir, data)
     if not resumable:
@@ -743,7 +787,7 @@ async def resume_run(run_id: str, profile: ProfileDep) -> RunResponse:
     )
 
 
-@router.delete("/runs/{run_id}")
+@router.delete("/runs/{run_id}", responses={**_BAD_REQUEST, **_NOT_FOUND, **_CONFLICT})
 async def delete_run(run_id: str, profile: ProfileDep) -> dict[str, str]:
     """Permanently remove a run directory and all its artifacts.
 
@@ -756,7 +800,7 @@ async def delete_run(run_id: str, profile: ProfileDep) -> dict[str, str]:
 
     run_dir = _find_run_dir(run_id, profile)
     if run_dir is None:
-        raise HTTPException(404, tr("run.not_found", run_id=run_id))
+        raise HTTPException(404, tr(RUN_NOT_FOUND_KEY, run_id=run_id))
 
     # Block deleting the active run — its files are held open by the trainer.
     if (
@@ -783,7 +827,10 @@ async def delete_run(run_id: str, profile: ProfileDep) -> dict[str, str]:
     return {"run_id": run_id, "status": "deleted"}
 
 
-@router.get("/runs/{run_id}/export_md")
+@router.get(
+    "/runs/{run_id}/export_md",
+    responses={**_BAD_REQUEST, **_NOT_FOUND, **_SERVER_ERROR},
+)
 async def export_run_markdown(
     run_id: str,
     profile: ProfileDep,
@@ -796,12 +843,12 @@ async def export_run_markdown(
     """
     run_dir = _find_run_dir(run_id, profile)
     if run_dir is None:
-        raise HTTPException(404, tr("run.not_found", run_id=run_id))
-    run_json_path = run_dir / "run.json"
+        raise HTTPException(404, tr(RUN_NOT_FOUND_KEY, run_id=run_id))
+    run_json_path = run_dir / RUN_FILENAME
     try:
         data: dict[str, Any] = json.loads(run_json_path.read_text(encoding="utf-8"))
     except Exception as exc:  # noqa: BLE001
-        raise HTTPException(500, tr("run.bad_json", error=exc)) from exc
+        raise HTTPException(500, tr(RUN_BAD_JSON_KEY, error=exc)) from exc
 
     with using_lang(parse_lang(x_vf_lang) or "en"):
         md = _render_run_markdown(run_dir, data)
@@ -827,7 +874,7 @@ def _reject_group_action(run_dir: Path) -> None:
         HTTPException: 400 pointing at the seeds, which are ordinary runs.
     """
     try:
-        data = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+        data = json.loads((run_dir / RUN_FILENAME).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return
     if isinstance(data, dict) and isinstance(data.get("group"), dict):
@@ -847,21 +894,25 @@ def _reject_custom_task_action(run_dir: Path, action: str) -> None:
     Raises:
         HTTPException: 400 naming the task, so the GUI can hide the action.
     """
-    run_json = run_dir / "run.json"
+    run_json = run_dir / RUN_FILENAME
     if not run_json.exists():
         return
     try:
         task = json.loads(run_json.read_text(encoding="utf-8")).get("task", "")
     except (OSError, json.JSONDecodeError):
         return
-    if isinstance(task, str) and task.startswith("custom:"):
+    if isinstance(task, str) and task.startswith(CUSTOM_TASK_PREFIX):
         raise HTTPException(
             400,
-            tr("run.custom_action", action=action, task=task[len("custom:") :]),
+            tr(
+                "run.custom_action", action=action, task=task[len(CUSTOM_TASK_PREFIX) :]
+            ),
         )
 
 
-@router.post("/runs/{run_id}/test")
+@router.post(
+    "/runs/{run_id}/test", responses={**_BAD_REQUEST, **_NOT_FOUND, **_SERVER_ERROR}
+)
 async def test_run_on_dataset(
     run_id: str, req: RunTestRequest, profile: ProfileDep
 ) -> RunTestResponse:
@@ -872,7 +923,7 @@ async def test_run_on_dataset(
     """
     run_dir = _find_run_dir(run_id, profile)
     if run_dir is None:
-        raise HTTPException(404, tr("run.not_found", run_id=run_id))
+        raise HTTPException(404, tr(RUN_NOT_FOUND_KEY, run_id=run_id))
 
     _reject_group_action(run_dir)
     _reject_custom_task_action(run_dir, "test")
@@ -891,7 +942,10 @@ async def test_run_on_dataset(
     return result
 
 
-@router.post("/runs/{run_id}/gradcam")
+@router.post(
+    "/runs/{run_id}/gradcam",
+    responses={**_BAD_REQUEST, **_NOT_FOUND, **_SERVER_ERROR},
+)
 async def gradcam_run(
     run_id: str, req: GradCamRequest, profile: ProfileDep
 ) -> GradCamResponse:
@@ -902,7 +956,7 @@ async def gradcam_run(
     """
     run_dir = _find_run_dir(run_id, profile)
     if run_dir is None:
-        raise HTTPException(404, tr("run.not_found", run_id=run_id))
+        raise HTTPException(404, tr(RUN_NOT_FOUND_KEY, run_id=run_id))
     _reject_group_action(run_dir)
     _reject_custom_task_action(run_dir, "gradcam")
     try:
@@ -914,7 +968,10 @@ async def gradcam_run(
         raise HTTPException(500, f"{type(exc).__name__}: {exc}") from exc
 
 
-@router.post("/runs/{run_id}/batch_predict")
+@router.post(
+    "/runs/{run_id}/batch_predict",
+    responses={**_BAD_REQUEST, **_NOT_FOUND, **_SERVER_ERROR},
+)
 async def batch_predict_run(
     run_id: str, req: BatchPredictRequest, profile: ProfileDep
 ) -> BatchPredictResponse:
@@ -926,7 +983,7 @@ async def batch_predict_run(
     """
     run_dir = _find_run_dir(run_id, profile)
     if run_dir is None:
-        raise HTTPException(404, tr("run.not_found", run_id=run_id))
+        raise HTTPException(404, tr(RUN_NOT_FOUND_KEY, run_id=run_id))
 
     _reject_group_action(run_dir)
     _reject_custom_task_action(run_dir, "batch_predict")
@@ -943,7 +1000,10 @@ async def batch_predict_run(
     return result
 
 
-@router.post("/runs/{run_id}/export_onnx")
+@router.post(
+    "/runs/{run_id}/export_onnx",
+    responses={**_BAD_REQUEST, **_NOT_FOUND, **_SERVER_ERROR},
+)
 async def export_run_to_onnx(
     run_id: str, req: ExportOnnxRequest, profile: ProfileDep
 ) -> ExportOnnxResponse:
@@ -954,7 +1014,7 @@ async def export_run_to_onnx(
     """
     run_dir = _find_run_dir(run_id, profile)
     if run_dir is None:
-        raise HTTPException(404, tr("run.not_found", run_id=run_id))
+        raise HTTPException(404, tr(RUN_NOT_FOUND_KEY, run_id=run_id))
 
     _reject_group_action(run_dir)
     _reject_custom_task_action(run_dir, "export_onnx")
@@ -977,7 +1037,9 @@ async def detect_dataset(req: DatasetDetectRequest) -> DatasetDetectResponse:
     return _detect_dataset_layout(req.base_dir)
 
 
-@router.post("/dataset/preview_preprocess")
+@router.post(
+    "/dataset/preview_preprocess", responses={**_BAD_REQUEST, **_UNPROCESSABLE}
+)
 async def preview_preprocess(
     req: PreprocessPreviewRequest,
 ) -> PreprocessPreviewResponse:
@@ -1056,7 +1118,12 @@ async def pick_dataset_folder() -> DatasetPickResponse:
     return await asyncio.to_thread(_open_native_folder_dialog)
 
 
-@router.post("/sample-dataset", status_code=201, response_model=SampleDatasetResponse)
+@router.post(
+    "/sample-dataset",
+    status_code=201,
+    response_model=SampleDatasetResponse,
+    responses={**_BAD_REQUEST, **_SERVER_ERROR},
+)
 async def sample_dataset(
     req: SampleDatasetRequest,
 ) -> SampleDatasetResponse | JSONResponse:
@@ -1097,7 +1164,7 @@ async def sample_dataset(
     )
 
 
-@router.post("/dataset/download")
+@router.post("/dataset/download", responses={**_BAD_REQUEST, **_SERVER_ERROR})
 async def dataset_download(req: DatasetDownloadRequest) -> DatasetDownloadResponse:
     """One-shot download of a dataset to a local folder (ADR-055).
 
@@ -1153,7 +1220,10 @@ def _execute_dataset_download(req: DatasetDownloadRequest) -> DatasetDownloadRes
     )
 
 
-@router.post("/experiment/run")
+@router.post(
+    "/experiment/run",
+    responses={**_BAD_REQUEST, **_NOT_FOUND, **_UNPROCESSABLE, **_UNAVAILABLE},
+)
 async def run_experiment(config: ExperimentConfig, profile: ProfileDep) -> RunResponse:
     """Start a training experiment, or queue it if one is already running."""
     config = profile.scope_model(config)
@@ -1244,7 +1314,10 @@ async def regression_dataset_stats(
     return await asyncio.to_thread(_collect_regression_dataset_stats, req)
 
 
-@router.post("/detection/run")
+@router.post(
+    "/detection/run",
+    responses={**_BAD_REQUEST, **_NOT_FOUND, **_UNPROCESSABLE, **_UNAVAILABLE},
+)
 async def run_detection(config: DetectionConfig, profile: ProfileDep) -> RunResponse:
     """Start an object-detection training run in the background.
 
@@ -1273,7 +1346,10 @@ async def get_regression_schema() -> dict[str, Any]:
     return RegressionConfig.model_json_schema()
 
 
-@router.post("/regression/run")
+@router.post(
+    "/regression/run",
+    responses={**_BAD_REQUEST, **_NOT_FOUND, **_UNPROCESSABLE, **_UNAVAILABLE},
+)
 async def run_regression(config: RegressionConfig, profile: ProfileDep) -> RunResponse:
     """Start an image-regression training run in the background.
 
@@ -1302,7 +1378,10 @@ async def get_segmentation_schema() -> dict[str, Any]:
     return SegmentationConfig.model_json_schema()
 
 
-@router.post("/segmentation/run")
+@router.post(
+    "/segmentation/run",
+    responses={**_BAD_REQUEST, **_NOT_FOUND, **_UNPROCESSABLE, **_UNAVAILABLE},
+)
 async def run_segmentation(
     config: SegmentationConfig, profile: ProfileDep
 ) -> RunResponse:
@@ -1333,7 +1412,7 @@ async def get_anomaly_schema() -> dict[str, Any]:
     return AnomalyConfig.model_json_schema()
 
 
-@router.post("/anomaly/run")
+@router.post("/anomaly/run", responses={**_BAD_REQUEST, **_NOT_FOUND, **_UNAVAILABLE})
 async def run_anomaly(config: AnomalyConfig, profile: ProfileDep) -> RunResponse:
     """Start an anomaly-detection training run in the background.
 
@@ -1357,7 +1436,9 @@ async def run_anomaly(config: AnomalyConfig, profile: ProfileDep) -> RunResponse
     )
 
 
-@router.post("/regression/compare")
+@router.post(
+    "/regression/compare", responses={**_BAD_REQUEST, **_NOT_FOUND, **_UNAVAILABLE}
+)
 async def compare_regression(
     req: ComparisonRequest, profile: ProfileDep
 ) -> RunResponse:
@@ -1365,7 +1446,9 @@ async def compare_regression(
     return _start_comparison(req, RegressionConfig, RegressionRunner(), profile)
 
 
-@router.post("/segmentation/compare")
+@router.post(
+    "/segmentation/compare", responses={**_BAD_REQUEST, **_NOT_FOUND, **_UNAVAILABLE}
+)
 async def compare_segmentation(
     req: ComparisonRequest, profile: ProfileDep
 ) -> RunResponse:
@@ -1373,37 +1456,53 @@ async def compare_segmentation(
     return _start_comparison(req, SegmentationConfig, SegmentationRunner(), profile)
 
 
-@router.post("/regression/sweep")
+@router.post(
+    "/regression/sweep",
+    responses={**_BAD_REQUEST, **_NOT_FOUND, **_UNPROCESSABLE, **_UNAVAILABLE},
+)
 async def sweep_regression(req: SweepRequest, profile: ProfileDep) -> RunResponse:
     """Run a grid/random hyperparameter sweep for regression (ADR-045)."""
     return _start_sweep(req, RegressionConfig, RegressionRunner(), profile)
 
 
-@router.post("/segmentation/sweep")
+@router.post(
+    "/segmentation/sweep",
+    responses={**_BAD_REQUEST, **_NOT_FOUND, **_UNPROCESSABLE, **_UNAVAILABLE},
+)
 async def sweep_segmentation(req: SweepRequest, profile: ProfileDep) -> RunResponse:
     """Run a grid/random hyperparameter sweep for segmentation (ADR-045)."""
     return _start_sweep(req, SegmentationConfig, SegmentationRunner(), profile)
 
 
-@router.post("/detection/compare")
+@router.post(
+    "/detection/compare", responses={**_BAD_REQUEST, **_NOT_FOUND, **_UNAVAILABLE}
+)
 async def compare_detection(req: ComparisonRequest, profile: ProfileDep) -> RunResponse:
     """Train N detectors on the same dataset and rank them (ADR-044)."""
     return _start_comparison(req, DetectionConfig, DetectionRunner(), profile)
 
 
-@router.post("/detection/sweep")
+@router.post(
+    "/detection/sweep",
+    responses={**_BAD_REQUEST, **_NOT_FOUND, **_UNPROCESSABLE, **_UNAVAILABLE},
+)
 async def sweep_detection(req: SweepRequest, profile: ProfileDep) -> RunResponse:
     """Run a grid/random hyperparameter sweep for detection (ADR-045)."""
     return _start_sweep(req, DetectionConfig, DetectionRunner(), profile)
 
 
-@router.post("/anomaly/compare")
+@router.post(
+    "/anomaly/compare", responses={**_BAD_REQUEST, **_NOT_FOUND, **_UNAVAILABLE}
+)
 async def compare_anomaly(req: ComparisonRequest, profile: ProfileDep) -> RunResponse:
     """Train N anomaly models on the same dataset and rank them (ADR-044)."""
     return _start_comparison(req, AnomalyConfig, AnomalyRunner(), profile)
 
 
-@router.post("/anomaly/sweep")
+@router.post(
+    "/anomaly/sweep",
+    responses={**_BAD_REQUEST, **_NOT_FOUND, **_UNPROCESSABLE, **_UNAVAILABLE},
+)
 async def sweep_anomaly(req: SweepRequest, profile: ProfileDep) -> RunResponse:
     """Run a grid/random hyperparameter sweep for anomaly detection (ADR-045)."""
     return _start_sweep(req, AnomalyConfig, AnomalyRunner(), profile)
@@ -1479,7 +1578,7 @@ async def list_tasks() -> TaskListResponse:
     return TaskListResponse(tasks=[*_BUILTIN_TASK_DESCRIPTORS, *custom])
 
 
-@router.post("/custom/{key}/hide")
+@router.post("/custom/{key}/hide", responses=_NOT_FOUND)
 async def hide_custom_task(key: str) -> CustomTaskActionResponse:
     """Stop rendering a custom task's tab, keeping its file untouched."""
     from visionforge.tasks.manage import set_hidden
@@ -1504,7 +1603,7 @@ async def unhide_custom_task(key: str) -> CustomTaskActionResponse:
     )
 
 
-@router.delete("/custom/{key}")
+@router.delete("/custom/{key}", responses={**_BAD_REQUEST, **_NOT_FOUND})
 async def delete_custom_task(key: str, confirm: str = "") -> CustomTaskActionResponse:
     """Delete a custom task's source file. ``confirm`` must repeat the key.
 
@@ -1535,7 +1634,7 @@ async def get_credentials() -> CredentialsResponse:
     )
 
 
-@router.post("/credentials")
+@router.post("/credentials", responses=_BAD_REQUEST)
 async def save_credential_route(req: CredentialSaveRequest) -> CredentialsResponse:
     """Store (or replace) one provider's key, then return the masked status."""
     from visionforge.utils.credentials import config_dir, credential_status
@@ -1572,7 +1671,7 @@ def _get_custom_task_or_404(key: str) -> Any:
         raise HTTPException(404, exc.args[0] if exc.args else str(exc)) from exc
 
 
-@router.get("/custom/{key}/schema")
+@router.get("/custom/{key}/schema", responses=_NOT_FOUND)
 async def custom_task_schema(key: str) -> dict[str, Any]:
     """JSON Schema of a custom task's Config — drives the generic form."""
     info = _get_custom_task_or_404(key)
@@ -1599,7 +1698,9 @@ def _localize_task_schema(schema: dict[str, Any]) -> dict[str, Any]:
     return schema
 
 
-@router.post("/custom/{key}/run")
+@router.post(
+    "/custom/{key}/run", responses={**_BAD_REQUEST, **_NOT_FOUND, **_UNAVAILABLE}
+)
 async def run_custom_task(
     key: str, config: dict[str, Any], profile: ProfileDep
 ) -> RunResponse:
@@ -1686,7 +1787,10 @@ async def _execute_custom_task(info: Any, cfg: Any, run_id: str) -> None:
             await queue.put(None)
 
 
-@router.post("/custom/{key}/sweep")
+@router.post(
+    "/custom/{key}/sweep",
+    responses={**_BAD_REQUEST, **_NOT_FOUND, **_UNPROCESSABLE, **_UNAVAILABLE},
+)
 async def sweep_custom_task(
     key: str, req: SweepRequest, profile: ProfileDep
 ) -> RunResponse:
@@ -1702,7 +1806,10 @@ async def sweep_custom_task(
     return _start_sweep(req, info.spec_cls.Config, CustomTaskRunner(info), profile)
 
 
-@router.post("/custom/{key}/replicates")
+@router.post(
+    "/custom/{key}/replicates",
+    responses={**_BAD_REQUEST, **_NOT_FOUND, **_UNPROCESSABLE, **_UNAVAILABLE},
+)
 async def replicates_custom_task(
     key: str, req: ReplicatesRequest, profile: ProfileDep
 ) -> RunResponse:
@@ -1711,7 +1818,7 @@ async def replicates_custom_task(
     return _start_replicates(req, info.spec_cls.Config, CustomTaskRunner(info), profile)
 
 
-@router.post("/regression/cv")
+@router.post("/regression/cv", responses={**_BAD_REQUEST, **_NOT_FOUND, **_UNAVAILABLE})
 async def cv_regression(req: TaskCvRequest, profile: ProfileDep) -> RunResponse:
     """Run K-fold cross-validation for regression (ADR-050) in the background."""
     return _start_task_cv(
@@ -1719,7 +1826,9 @@ async def cv_regression(req: TaskCvRequest, profile: ProfileDep) -> RunResponse:
     )
 
 
-@router.post("/segmentation/cv")
+@router.post(
+    "/segmentation/cv", responses={**_BAD_REQUEST, **_NOT_FOUND, **_UNAVAILABLE}
+)
 async def cv_segmentation(req: TaskCvRequest, profile: ProfileDep) -> RunResponse:
     """Run K-fold cross-validation for segmentation in the background."""
     return _start_task_cv(
@@ -1731,7 +1840,10 @@ async def cv_segmentation(req: TaskCvRequest, profile: ProfileDep) -> RunRespons
     )
 
 
-@router.post("/classification/replicates")
+@router.post(
+    "/classification/replicates",
+    responses={**_BAD_REQUEST, **_NOT_FOUND, **_UNPROCESSABLE, **_UNAVAILABLE},
+)
 async def replicates_classification(
     req: ReplicatesRequest, profile: ProfileDep
 ) -> RunResponse:
@@ -1739,7 +1851,10 @@ async def replicates_classification(
     return _start_replicates(req, ExperimentConfig, ClassificationRunner(), profile)
 
 
-@router.post("/regression/replicates")
+@router.post(
+    "/regression/replicates",
+    responses={**_BAD_REQUEST, **_NOT_FOUND, **_UNPROCESSABLE, **_UNAVAILABLE},
+)
 async def replicates_regression(
     req: ReplicatesRequest, profile: ProfileDep
 ) -> RunResponse:
@@ -1747,7 +1862,10 @@ async def replicates_regression(
     return _start_replicates(req, RegressionConfig, RegressionRunner(), profile)
 
 
-@router.post("/segmentation/replicates")
+@router.post(
+    "/segmentation/replicates",
+    responses={**_BAD_REQUEST, **_NOT_FOUND, **_UNPROCESSABLE, **_UNAVAILABLE},
+)
 async def replicates_segmentation(
     req: ReplicatesRequest, profile: ProfileDep
 ) -> RunResponse:
@@ -1755,7 +1873,10 @@ async def replicates_segmentation(
     return _start_replicates(req, SegmentationConfig, SegmentationRunner(), profile)
 
 
-@router.post("/detection/replicates")
+@router.post(
+    "/detection/replicates",
+    responses={**_BAD_REQUEST, **_NOT_FOUND, **_UNPROCESSABLE, **_UNAVAILABLE},
+)
 async def replicates_detection(
     req: ReplicatesRequest, profile: ProfileDep
 ) -> RunResponse:
@@ -1763,7 +1884,10 @@ async def replicates_detection(
     return _start_replicates(req, DetectionConfig, DetectionRunner(), profile)
 
 
-@router.post("/anomaly/replicates")
+@router.post(
+    "/anomaly/replicates",
+    responses={**_BAD_REQUEST, **_NOT_FOUND, **_UNPROCESSABLE, **_UNAVAILABLE},
+)
 async def replicates_anomaly(
     req: ReplicatesRequest, profile: ProfileDep
 ) -> RunResponse:
@@ -1771,7 +1895,10 @@ async def replicates_anomaly(
     return _start_replicates(req, AnomalyConfig, AnomalyRunner(), profile)
 
 
-@router.post("/classification/replicated-comparison")
+@router.post(
+    "/classification/replicated-comparison",
+    responses={**_BAD_REQUEST, **_NOT_FOUND, **_UNPROCESSABLE, **_UNAVAILABLE},
+)
 async def replicated_comparison_classification(
     req: ReplicatedComparisonRequest, profile: ProfileDep
 ) -> RunResponse:
@@ -1781,7 +1908,10 @@ async def replicated_comparison_classification(
     )
 
 
-@router.post("/regression/replicated-comparison")
+@router.post(
+    "/regression/replicated-comparison",
+    responses={**_BAD_REQUEST, **_NOT_FOUND, **_UNPROCESSABLE, **_UNAVAILABLE},
+)
 async def replicated_comparison_regression(
     req: ReplicatedComparisonRequest, profile: ProfileDep
 ) -> RunResponse:
@@ -1791,7 +1921,10 @@ async def replicated_comparison_regression(
     )
 
 
-@router.post("/segmentation/replicated-comparison")
+@router.post(
+    "/segmentation/replicated-comparison",
+    responses={**_BAD_REQUEST, **_NOT_FOUND, **_UNPROCESSABLE, **_UNAVAILABLE},
+)
 async def replicated_comparison_segmentation(
     req: ReplicatedComparisonRequest, profile: ProfileDep
 ) -> RunResponse:
@@ -1801,7 +1934,10 @@ async def replicated_comparison_segmentation(
     )
 
 
-@router.post("/detection/replicated-comparison")
+@router.post(
+    "/detection/replicated-comparison",
+    responses={**_BAD_REQUEST, **_NOT_FOUND, **_UNPROCESSABLE, **_UNAVAILABLE},
+)
 async def replicated_comparison_detection(
     req: ReplicatedComparisonRequest, profile: ProfileDep
 ) -> RunResponse:
@@ -1811,7 +1947,10 @@ async def replicated_comparison_detection(
     )
 
 
-@router.post("/anomaly/replicated-comparison")
+@router.post(
+    "/anomaly/replicated-comparison",
+    responses={**_BAD_REQUEST, **_NOT_FOUND, **_UNPROCESSABLE, **_UNAVAILABLE},
+)
 async def replicated_comparison_anomaly(
     req: ReplicatedComparisonRequest, profile: ProfileDep
 ) -> RunResponse:
@@ -1819,7 +1958,10 @@ async def replicated_comparison_anomaly(
     return _start_replicated_comparison(req, AnomalyConfig, AnomalyRunner(), profile)
 
 
-@router.post("/custom/{key}/replicated-comparison")
+@router.post(
+    "/custom/{key}/replicated-comparison",
+    responses={**_BAD_REQUEST, **_NOT_FOUND, **_UNPROCESSABLE, **_UNAVAILABLE},
+)
 async def replicated_comparison_custom(
     key: str, req: ReplicatedComparisonRequest, profile: ProfileDep
 ) -> RunResponse:
@@ -1882,7 +2024,7 @@ async def get_queue() -> QueueSnapshot:
     )
 
 
-@router.delete("/queue/{run_id}")
+@router.delete("/queue/{run_id}", responses={**_NOT_FOUND, **_CONFLICT})
 async def cancel_queued_run(run_id: str) -> dict[str, str]:
     """Stop a job, whether it is waiting or already training.
 
@@ -1905,7 +2047,10 @@ async def cancel_queued_run(run_id: str) -> dict[str, str]:
     return {"run_id": run_id, "status": "cancelled"}
 
 
-@router.get("/experiment/result/{run_id}")
+@router.get(
+    "/experiment/result/{run_id}",
+    responses={**_NOT_FOUND, **_CONFLICT, **_SERVER_ERROR},
+)
 async def get_result(run_id: str) -> RunResult:
     """Fetch the result of a completed experiment.
 
@@ -1917,7 +2062,7 @@ async def get_result(run_id: str) -> RunResult:
     if state is None:
         state = _RUN_QUEUE.record(run_id)
     if state is None:
-        raise HTTPException(404, tr("run.not_found", run_id=run_id))
+        raise HTTPException(404, tr(RUN_NOT_FOUND_KEY, run_id=run_id))
 
     if state["status"] == "running":
         raise HTTPException(409, tr("run.still_running"))
@@ -1928,7 +2073,7 @@ async def get_result(run_id: str) -> RunResult:
         )
 
     run_dir = state.get("run_dir")
-    run_json_path = Path(run_dir) / "run.json" if run_dir else None
+    run_json_path = Path(run_dir) / RUN_FILENAME if run_dir else None
 
     report = state.get("report") or {}
     stopped = _report_stopped(report)
@@ -1967,7 +2112,7 @@ def _report_stopped(report: dict[str, Any]) -> bool:
     return False
 
 
-@router.get("/dataset/file")
+@router.get("/dataset/file", responses={**_BAD_REQUEST, **_FORBIDDEN, **_NOT_FOUND})
 async def serve_dataset_file(path: str) -> FileResponse:
     """Serve a local image file for dataset preview thumbnails.
 
@@ -1991,7 +2136,7 @@ async def serve_dataset_file(path: str) -> FileResponse:
         raise HTTPException(400, tr("file.not_absolute"))
     try:
         resolved = candidate.resolve(strict=True)  # NOSONAR pythonsecurity:S6549
-    except (FileNotFoundError, OSError) as exc:
+    except OSError as exc:
         raise HTTPException(404, tr("file.not_found")) from exc
     if resolved.suffix.lower() not in _IMAGE_EXTS:
         raise HTTPException(400, tr("file.not_image"))
@@ -2083,8 +2228,7 @@ def _render_run_markdown(run_dir: Path, data: dict[str, Any]) -> str:
     metrics: dict[str, Any] = data.get("metrics", {})
     history: list[dict[str, Any]] = data.get("history", [])
 
-    lines.append(f"# {name}")
-    lines.append("")
+    lines.extend([f"# {name}", ""])
     # The History lists a run by its folder name, so the card carries the same
     # id; run.json's own "id" is "<experiment>_<folder>" and matched nothing the
     # user sees. A bare Path (no folder) falls back to it.
@@ -2110,10 +2254,13 @@ def _render_run_markdown(run_dir: Path, data: dict[str, Any]) -> str:
     artifacts = data.get("artifacts", {})
     if artifacts.get("model"):
         lines.append(f"- **{tr_artifact('card.checkpoint')}:** `{artifacts['model']}`")
-    lines.append("")
-
-    lines.append(f"## {tr_artifact('card.configuration')}")
-    lines.append("")
+    lines.extend(
+        [
+            "",
+            f"## {tr_artifact('card.configuration')}",
+            "",
+        ]
+    )
     model_cfg = config.get("model") or {}
     training_cfg = config.get("training") or {}
     # Each task has its own config shape: a row whose field the task does not
@@ -2153,10 +2300,14 @@ def _render_run_markdown(run_dir: Path, data: dict[str, Any]) -> str:
     data_cfg = config.get("data", {})
     pp_steps = data_cfg.get("preprocessing", {}).get("steps", [])
     if pp_steps:
-        lines.append(f"## {tr_artifact('card.preprocessing')}")
-        lines.append("")
-        lines.append(tr_artifact("card.preprocessing_intro"))
-        lines.append("")
+        lines.extend(
+            [
+                f"## {tr_artifact('card.preprocessing')}",
+                "",
+                tr_artifact("card.preprocessing_intro"),
+                "",
+            ]
+        )
         for i, step in enumerate(pp_steps, start=1):
             kind = step.get("kind", "?")
             params = ", ".join(f"{k}={v!r}" for k, v in step.items() if k != "kind")
@@ -2170,10 +2321,14 @@ def _render_run_markdown(run_dir: Path, data: dict[str, Any]) -> str:
     if tx and isinstance(data_cfg.get("image_size"), int):
         tx["image_size"] = data_cfg["image_size"]
     if tx:
-        lines.append(f"## {tr_artifact('card.augmentation')}")
-        lines.append("")
-        lines.append(f"| {tr_artifact('card.field')} | {tr_artifact('card.value')} |")
-        lines.append("|---|---|")
+        lines.extend(
+            [
+                f"## {tr_artifact('card.augmentation')}",
+                "",
+                f"| {tr_artifact('card.field')} | {tr_artifact('card.value')} |",
+                MARKDOWN_TABLE_SEPARATOR,
+            ]
+        )
         for k, v in tx.items():
             lines.append(f"| {k} | `{v}` |")
         lines.append("")
@@ -2187,7 +2342,7 @@ def _render_run_markdown(run_dir: Path, data: dict[str, Any]) -> str:
         if has_cis:
             header += f" {tr_artifact('card.ci_bootstrap')} |"
         lines.append(header)
-        lines.append("|---|---|---|" if has_cis else "|---|---|")
+        lines.append("|---|---|---|" if has_cis else MARKDOWN_TABLE_SEPARATOR)
         for k, v in metrics.items():
             value = _card_value(v)
             if not has_cis:
@@ -2225,19 +2380,23 @@ def _render_run_markdown(run_dir: Path, data: dict[str, Any]) -> str:
                 if key != "epoch" and key not in columns:
                     columns.append(key)
 
-        lines.append(f"## {tr_artifact('card.history', n=len(history))}")
-        lines.append("")
-        lines.append(f"| {tr_artifact('card.epoch')} | " + " | ".join(columns) + " |")
-        lines.append("|---" * (len(columns) + 1) + "|")
+        lines.extend(
+            [
+                f"## {tr_artifact('card.history', n=len(history))}",
+                "",
+                f"| {tr_artifact('card.epoch')} | " + " | ".join(columns) + " |",
+                "|---" * (len(columns) + 1) + "|",
+            ]
+        )
         for epoch in history:
             cells = [str(epoch.get("epoch", "?"))]
             for key in columns:
                 cell = epoch.get(key)
-                cells.append(
-                    f"{cell:.4f}"
-                    if isinstance(cell, float)
-                    else str(cell if cell is not None else "—")
-                )
+                if isinstance(cell, float):
+                    formatted_cell = f"{cell:.4f}"
+                else:
+                    formatted_cell = str(cell) if cell is not None else "—"
+                cells.append(formatted_cell)
             lines.append("| " + " | ".join(cells) + " |")
         lines.append("")
 
@@ -2254,19 +2413,19 @@ def _render_run_markdown(run_dir: Path, data: dict[str, Any]) -> str:
         lines.append(f"## {tr_artifact('card.tests', n=len(tests))}")
         lines.append("")
         for t in tests:
-            lines.append(f"### {t.get('label', t.get('test_id'))}")
-            lines.append(
-                f"- **{tr_artifact('card.test_base_dir')}:** `{t.get('base_dir')}`"
-            )
-            lines.append(
-                f"- **{tr_artifact('card.test_timestamp')}:** {t.get('timestamp')}"
+            lines.extend(
+                [
+                    f"### {t.get('label', t.get('test_id'))}",
+                    f"- **{tr_artifact('card.test_base_dir')}:** `{t.get('base_dir')}`",
+                    f"- **{tr_artifact('card.test_timestamp')}:** {t.get('timestamp')}",
+                ]
             )
             m = t.get("metrics", {})
             if m:
                 lines.append(
                     f"| {tr_artifact('card.metric')} | {tr_artifact('card.value')} |"
                 )
-                lines.append("|---|---|")
+                lines.append(MARKDOWN_TABLE_SEPARATOR)
                 for k, v in m.items():
                     lines.append(f"| {k} | {_card_value(v)} |")
             lines.append("")
@@ -2292,7 +2451,7 @@ def _find_run_dir(run_id: str, profile: Profile | None = None) -> Path | None:
     # drive) is legitimate and the History already lists it.
     confine = not profile.is_default
     # run_id == timestamp folder OR experiment_name+timestamp; check both forms.
-    for run_json in models_dir.rglob("run.json"):
+    for run_json in models_dir.rglob(RUN_FILENAME):
         d = run_json.parent
         if confine and not d.resolve().is_relative_to(models_dir):
             continue
@@ -2613,7 +2772,7 @@ def _collect_dataset_stats(req: DatasetStatsRequest) -> DatasetStatsResponse:
             splits={},
             class_names=[],
             imbalanced=False,
-            message=tr("scan.base_missing", path=req.base_dir),
+            message=tr(SCAN_BASE_MISSING_KEY, path=req.base_dir),
         )
 
     split_map = {"train": req.train_dir, "val": req.val_dir, "test": req.test_dir}
@@ -2697,7 +2856,8 @@ def _crop_to_data_uri(
             crop.thumbnail((160, 160))
             buf = io.BytesIO()
             crop.save(buf, format="PNG")
-    except Exception:  # noqa: BLE001 - a bad image costs one thumbnail, not the panel
+    # a bad image costs one thumbnail, not the panel
+    except Exception:  # noqa: BLE001
         return None
     return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
 
@@ -2806,7 +2966,7 @@ def _collect_detection_dataset_stats(
             splits={},
             class_names=[],
             imbalanced=False,
-            message=tr("scan.base_missing", path=req.base_dir),
+            message=tr(SCAN_BASE_MISSING_KEY, path=req.base_dir),
         )
 
     declared_names = _read_yolo_class_names(base)
@@ -2907,7 +3067,7 @@ def _collect_segmentation_dataset_stats(
             base_dir=req.base_dir,
             splits={},
             mask_class_ids=[],
-            message=tr("scan.base_missing", path=req.base_dir),
+            message=tr(SCAN_BASE_MISSING_KEY, path=req.base_dir),
         )
 
     splits: dict[str, SegmentationSplitStats] = {}
@@ -2980,7 +3140,7 @@ def _collect_anomaly_dataset_stats(
             test_anomalous={},
             missing_train=True,
             missing_test=True,
-            message=tr("scan.base_missing", path=req.base_dir),
+            message=tr(SCAN_BASE_MISSING_KEY, path=req.base_dir),
         )
 
     train_normal_dir = base / req.train_dir / req.normal_dir
@@ -3028,7 +3188,7 @@ def _collect_regression_dataset_stats(
         return RegressionDatasetStatsResponse(
             base_dir=req.base_dir,
             splits={},
-            message=tr("scan.base_missing", path=req.base_dir),
+            message=tr(SCAN_BASE_MISSING_KEY, path=req.base_dir),
         )
 
     images_root = base / req.images_dir
@@ -3119,7 +3279,7 @@ def _check_detection_dataset(config: DetectionConfig) -> None:
         return  # an explicit data.yaml names its own splits; Ultralytics owns them
     base = Path(data.base_dir)
     if not base.is_dir():
-        _refuse(tr("scan.base_missing", path=base))
+        _refuse(tr(SCAN_BASE_MISSING_KEY, path=base))
     splits = {s: resolve_yolo_split(base, s) for s in ("train", "val", "test")}
     if all(resolved is None for resolved in splits.values()):
         _refuse(tr("scan.no_yolo_split"))
@@ -3243,7 +3403,7 @@ def _open_native_checkpoint_dialog() -> CheckpointPickResponse:
         return CheckpointPickResponse(
             path="",
             cancelled=True,
-            message=tr("pick.no_tkinter"),
+            message=tr(PICK_NO_TKINTER_KEY),
         )
 
     try:
@@ -3262,11 +3422,13 @@ def _open_native_checkpoint_dialog() -> CheckpointPickResponse:
         return CheckpointPickResponse(
             path="",
             cancelled=True,
-            message=tr("pick.failed", error=exc),
+            message=tr(PICK_FAILED_KEY, error=exc),
         )
 
     if not chosen:
-        return CheckpointPickResponse(path="", cancelled=True, message="Cancelado.")
+        return CheckpointPickResponse(
+            path="", cancelled=True, message=CANCELLED_MESSAGE
+        )
 
     return CheckpointPickResponse(path=str(Path(chosen).resolve()), cancelled=False)
 
@@ -3284,7 +3446,7 @@ def _open_native_yaml_dialog() -> DatasetPickResponse:
         return DatasetPickResponse(
             path="",
             cancelled=True,
-            message=tr("pick.no_tkinter"),
+            message=tr(PICK_NO_TKINTER_KEY),
         )
 
     try:
@@ -3303,11 +3465,11 @@ def _open_native_yaml_dialog() -> DatasetPickResponse:
         return DatasetPickResponse(
             path="",
             cancelled=True,
-            message=tr("pick.failed", error=exc),
+            message=tr(PICK_FAILED_KEY, error=exc),
         )
 
     if not chosen:
-        return DatasetPickResponse(path="", cancelled=True, message="Cancelado.")
+        return DatasetPickResponse(path="", cancelled=True, message=CANCELLED_MESSAGE)
 
     return DatasetPickResponse(path=str(Path(chosen).resolve()), cancelled=False)
 
@@ -3335,7 +3497,7 @@ def _open_native_folder_dialog() -> DatasetPickResponse:
         return DatasetPickResponse(
             path="",
             cancelled=True,
-            message=tr("pick.no_tkinter"),
+            message=tr(PICK_NO_TKINTER_KEY),
         )
 
     try:
@@ -3348,11 +3510,11 @@ def _open_native_folder_dialog() -> DatasetPickResponse:
         return DatasetPickResponse(
             path="",
             cancelled=True,
-            message=tr("pick.failed", error=exc),
+            message=tr(PICK_FAILED_KEY, error=exc),
         )
 
     if not chosen:
-        return DatasetPickResponse(path="", cancelled=True, message="Cancelado.")
+        return DatasetPickResponse(path="", cancelled=True, message=CANCELLED_MESSAGE)
 
     resolved = Path(chosen).resolve()
     _remember_dataset_root(resolved)
@@ -3371,7 +3533,7 @@ def _execute_batch_predict(
     supplies ``input_dir``, ``output_csv`` (default: timestamped under
     ``run_dir/predictions/``) and the recursive flag.
     """
-    run_json_path = run_dir / "run.json"
+    run_json_path = run_dir / RUN_FILENAME
     data: dict[str, Any] = json.loads(run_json_path.read_text(encoding="utf-8"))
     task = str(data.get("config", {}).get("task", ""))
 
@@ -3453,7 +3615,7 @@ def _execute_onnx_export(run_dir: Path, req: ExportOnnxRequest) -> ExportOnnxRes
     request supplies the export-specific knobs. The exported file defaults
     to ``<run_dir>/best_model.onnx`` next to the checkpoint.
     """
-    run_json_path = run_dir / "run.json"
+    run_json_path = run_dir / RUN_FILENAME
     data: dict[str, Any] = json.loads(run_json_path.read_text(encoding="utf-8"))
     # Detection exports via Ultralytics; regression/segmentation via the shared
     # core helper (their own factory builds the model); classification below.
@@ -3511,7 +3673,7 @@ def _run_task(data: dict[str, Any]) -> str:
     *problem* type (binary/multiclass/multilabel) there.
     """
     top = data.get("task")
-    if isinstance(top, str) and top.startswith("custom:"):
+    if isinstance(top, str) and top.startswith(CUSTOM_TASK_PREFIX):
         return top
     task = data.get("config", {}).get("task")
     if task in ("regression", "segmentation", "anomaly", "detection"):
@@ -3711,7 +3873,7 @@ def _evaluate_standalone_run(
         "artifacts": {},
     }
     data.setdefault("tests", []).append(record)
-    (run_dir / "run.json").write_text(json.dumps(data, indent=2), encoding="utf-8")
+    (run_dir / RUN_FILENAME).write_text(json.dumps(data, indent=2), encoding="utf-8")
 
     return RunTestResponse(
         test_id=test_id,
@@ -3729,7 +3891,7 @@ def _execute_run_test(run_dir: Path, req: RunTestRequest) -> RunTestResponse:
 
     Updates run.json so each model accumulates its own test history.
     """
-    run_json_path = run_dir / "run.json"
+    run_json_path = run_dir / RUN_FILENAME
     data: dict[str, Any] = json.loads(run_json_path.read_text(encoding="utf-8"))
     task = _run_task(data)
 
@@ -3905,7 +4067,7 @@ def _execute_run_gradcam(run_dir: Path, req: GradCamRequest) -> GradCamResponse:
     from visionforge.gui.api.torch_gradcam import build_gradcam
 
     data: dict[str, Any] = json.loads(
-        (run_dir / "run.json").read_text(encoding="utf-8")
+        (run_dir / RUN_FILENAME).read_text(encoding="utf-8")
     )
     checkpoint_path = data.get("artifacts", {}).get("model")
     if not checkpoint_path or not Path(checkpoint_path).is_file():
@@ -3990,7 +4152,7 @@ def _load_runs(models_dir: Path) -> list[RunSummary]:
         return []
 
     summaries: list[RunSummary] = []
-    for run_json_path in models_dir.rglob("run.json"):
+    for run_json_path in models_dir.rglob(RUN_FILENAME):
         try:
             data: dict[str, Any] = json.loads(run_json_path.read_text(encoding="utf-8"))
             summary = _parse_run_summary(run_json_path.parent, data)
@@ -4054,7 +4216,7 @@ def _summary_metrics(task: str, metrics: dict[str, Any]) -> dict[str, float]:
     so there is no fixed map: the first three numeric metrics are surfaced
     under their real names, which is what the generic history card renders.
     """
-    if task.startswith("custom:"):
+    if task.startswith(CUSTOM_TASK_PREFIX):
         declared: dict[str, float] = {}
         for name, value in metrics.items():
             if name in ("total_epochs", "best_epoch") or len(declared) >= 3:
@@ -4176,7 +4338,7 @@ def _parse_run_summary(run_dir: Path, data: dict[str, Any]) -> RunSummary:
         or config.get("block")
         or (
             task
-            if task in _STANDALONE_TASKS or task.startswith("custom:")
+            if task in _STANDALONE_TASKS or task.startswith(CUSTOM_TASK_PREFIX)
             else "classification"
         )
     )
@@ -4232,7 +4394,7 @@ def _group_final_aggregates(
     """
     aggregates: dict[str, Any] = group.get("aggregates") or {}
     metric_keys: dict[str, str] = group.get("metric_keys") or {}
-    if task.startswith("custom:"):
+    if task.startswith(CUSTOM_TASK_PREFIX):
         sources = {label: label for label in final_metrics}
     else:
         sources = _SUMMARY_METRIC_KEYS.get(task, _SUMMARY_METRIC_KEYS["classification"])
@@ -4374,7 +4536,7 @@ async def _execute_experiment(
     except Exception as e:
         logger.exception("GUI: Experiment {} failed", run_id)
         cls = type(e).__name__
-        msg = str(e) or tr("run.no_message")
+        msg = str(e) or tr(RUN_NO_MESSAGE_KEY)
         # A worker-spawn failure surfaces as a torch DLL error, which sends the
         # reader after the wrong thing entirely.
         spawn_hint = describe_worker_spawn_failure(e)
@@ -4428,7 +4590,7 @@ async def _execute_detection(
     except Exception as e:
         logger.exception("GUI: Detection {} failed", run_id)
         cls = type(e).__name__
-        msg = str(e) or tr("run.no_message")
+        msg = str(e) or tr(RUN_NO_MESSAGE_KEY)
         _current_run = {
             "run_id": run_id,
             "status": "failed",
@@ -4479,7 +4641,7 @@ async def _execute_regression(
     except Exception as e:
         logger.exception("GUI: Regression {} failed", run_id)
         cls = type(e).__name__
-        msg = str(e) or tr("run.no_message")
+        msg = str(e) or tr(RUN_NO_MESSAGE_KEY)
         _current_run = {
             "run_id": run_id,
             "status": "failed",
@@ -4530,7 +4692,7 @@ async def _execute_segmentation(
     except Exception as e:
         logger.exception("GUI: Segmentation {} failed", run_id)
         cls = type(e).__name__
-        msg = str(e) or tr("run.no_message")
+        msg = str(e) or tr(RUN_NO_MESSAGE_KEY)
         _current_run = {
             "run_id": run_id,
             "status": "failed",
@@ -4581,7 +4743,7 @@ async def _execute_anomaly(
     except Exception as e:
         logger.exception("GUI: Anomaly {} failed", run_id)
         cls = type(e).__name__
-        msg = str(e) or tr("run.no_message")
+        msg = str(e) or tr(RUN_NO_MESSAGE_KEY)
         _current_run = {
             "run_id": run_id,
             "status": "failed",
@@ -5311,7 +5473,8 @@ def _record_run_group(
             report_json=Path(report["report_dir"]) / f"{report_name}_summary.json",
             models_dir=models_dir,
         )
-    except Exception:  # noqa: BLE001 - the report is on disk; do not fail the job
+    # the report is on disk; do not fail the job
+    except Exception:  # noqa: BLE001
         logger.exception("GUI: could not write the History entry of group {}", run_id)
 
 
@@ -5331,7 +5494,8 @@ def _record_sweep_group(
     # The validated config names the task (config.task); the raw dict may not.
     try:
         config = runner.config_type.model_validate(config_dict).model_dump(mode="json")
-    except Exception:  # noqa: BLE001 - the entry still stands on the raw config
+    # the entry still stands on the raw config
+    except Exception:  # noqa: BLE001
         config = config_dict
     group_report = {
         "metric": report.get("metric"),

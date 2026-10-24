@@ -154,7 +154,8 @@ def audit_dataset(
             split_root, followlinks=False, onerror=walk_error
         ):
             directories.sort()
-            for name in list(directories):
+            # Snapshot the names because rejected directories are removed during traversal.
+            for name in tuple(directories):
                 path = Path(current) / name
                 if path.is_symlink() or not path.resolve().is_relative_to(root):
                     directories.remove(name)
@@ -167,9 +168,8 @@ def audit_dataset(
                     if not path.resolve(strict=True).is_relative_to(root):
                         record_issue(path, "path escapes dataset root")
                         continue
-                    with path.open("rb") as stream:
-                        with Image.open(stream) as image:
-                            image.verify()
+                    with path.open("rb") as stream, Image.open(stream) as image:
+                        image.verify()
                     with path.open("rb") as stream:
                         digest = hashlib.file_digest(stream, "sha256").hexdigest()
                 except (

@@ -31,7 +31,7 @@ def _ap_all_points(recalls: np.ndarray, precisions: np.ndarray) -> float:
     mpre = np.concatenate(([0.0], precisions, [0.0]))
     for i in range(len(mpre) - 1, 0, -1):
         mpre[i - 1] = max(mpre[i - 1], mpre[i])
-    idx = np.where(mrec[1:] != mrec[:-1])[0]
+    idx = np.nonzero(mrec[1:] != mrec[:-1])[0]
     return float(np.sum((mrec[idx + 1] - mrec[idx]) * mpre[idx + 1]))
 
 

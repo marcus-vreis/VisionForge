@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 from fastapi import APIRouter, HTTPException
 from loguru import logger
@@ -29,6 +30,30 @@ from visionforge.gui.api.schemas import (
 # (profiles_dir, models_dir), read on every request. routes.py owns both paths
 # (tests and the CLI repoint them), so they are handed in, not imported back.
 ProfileDirs = Callable[[], tuple[Path, Path]]
+
+_BAD_REQUEST: dict[int | str, dict[str, Any]] = {
+    400: {"description": "Invalid profile slug"}
+}
+_NOT_FOUND: dict[int | str, dict[str, Any]] = {
+    404: {"description": "Profile not found"}
+}
+_CONFLICT: dict[int | str, dict[str, Any]] = {
+    409: {"description": "Profile already exists"}
+}
+_UNPROCESSABLE: dict[int | str, dict[str, Any]] = {
+    422: {
+        "description": "Invalid request",
+        # Keeps FastAPI's validation-error schema that a description-only entry would drop.
+        "content": {
+            "application/json": {
+                "schema": {"$ref": "#/components/schemas/HTTPValidationError"}
+            }
+        },
+    }
+}
+_SERVER_ERROR: dict[int | str, dict[str, Any]] = {
+    500: {"description": "Profile could not be saved"}
+}
 
 
 def _profile_info(profile: Profile) -> ProfileInfo:
@@ -56,7 +81,11 @@ def build_profiles_router(dirs: ProfileDirs) -> APIRouter:
             profiles=[_profile_info(p) for p in list_profiles(profiles_dir, models_dir)]
         )
 
-    @router.post("/profiles", status_code=201)
+    @router.post(
+        "/profiles",
+        status_code=201,
+        responses={**_CONFLICT, **_UNPROCESSABLE, **_SERVER_ERROR},
+    )
     async def add_profile(req: ProfileCreateRequest) -> ProfileInfo:
         """Create ``outputs/profiles/<slug>/`` for a display name (ADR-114).
 
@@ -78,7 +107,10 @@ def build_profiles_router(dirs: ProfileDirs) -> APIRouter:
         logger.info("GUI: created profile {} at {}", profile.slug, profile.root)
         return _profile_info(profile)
 
-    @router.put("/profiles/{slug}")
+    @router.put(
+        "/profiles/{slug}",
+        responses={**_BAD_REQUEST, **_NOT_FOUND, **_UNPROCESSABLE, **_SERVER_ERROR},
+    )
     async def edit_profile(slug: str, req: ProfileUpdateRequest) -> ProfileInfo:
         """Change a profile's display name and/or pronoun, the default's too (ADR-126).
 

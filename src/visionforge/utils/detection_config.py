@@ -14,6 +14,7 @@ import yaml
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from visionforge.utils.config import (
+    CONFIG_PATH_MISSING_KEY,
     CURRENT_SCHEMA_VERSION,
     DETERMINISTIC_DESCRIPTION,
     DeviceConfig,
@@ -97,7 +98,7 @@ class DetectionModelConfig(BaseModel):
         if v is None:
             return v
         if not v.exists():
-            raise ValueError(tr("config.path_missing", field="weights_path", path=v))
+            raise ValueError(tr(CONFIG_PATH_MISSING_KEY, field="weights_path", path=v))
         if not v.is_file():
             raise ValueError(tr("config.not_a_file", field="weights_path", path=v))
         return v
@@ -148,7 +149,7 @@ class DetectionDataConfig(BaseModel):
         if v is None:
             return v
         if not v.exists():
-            raise ValueError(tr("config.path_missing", field="data_yaml", path=v))
+            raise ValueError(tr(CONFIG_PATH_MISSING_KEY, field="data_yaml", path=v))
         if not v.is_file():
             raise ValueError(tr("config.not_a_file", field="data_yaml", path=v))
         return v
@@ -159,7 +160,7 @@ class DetectionDataConfig(BaseModel):
         if v is None:
             return v
         if not v.exists():
-            raise ValueError(tr("config.path_missing", field="base_dir", path=v))
+            raise ValueError(tr(CONFIG_PATH_MISSING_KEY, field="base_dir", path=v))
         if not v.is_dir():
             raise ValueError(tr("config.not_a_dir", field="base_dir", path=v))
         return v
