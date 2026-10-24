@@ -16,6 +16,8 @@ from typing import Any
 
 from visionforge.utils.messages import tr_artifact
 
+LATEX_EXPERIMENT_KEY = "latex.experiment"
+
 # Characters that would otherwise break compilation or silently render wrong.
 _ESCAPES = {
     "\\": r"\textbackslash{}",
@@ -144,7 +146,7 @@ def replicates_to_latex(report: dict[str, Any], *, experiment: str = "") -> str:
     return _table(
         caption=tr_artifact(
             "latex.replicates_caption",
-            experiment=escape(experiment or tr_artifact("latex.experiment")),
+            experiment=escape(experiment or tr_artifact(LATEX_EXPERIMENT_KEY)),
             n=n,
         ),
         label="tab:replicates",
@@ -187,7 +189,7 @@ def sweep_to_latex(report: dict[str, Any], *, experiment: str = "") -> str:
     return _table(
         caption=tr_artifact(
             "latex.sweep_caption",
-            experiment=escape(experiment or tr_artifact("latex.experiment")),
+            experiment=escape(experiment or tr_artifact(LATEX_EXPERIMENT_KEY)),
             mode=escape(report.get("mode", "grid")),
             metric=escape(metric),
         ),
@@ -256,7 +258,7 @@ def cv_to_latex(report: dict[str, Any], *, experiment: str = "") -> str:
     n_folds = report.get("n_folds", len(folds))
     statuses = [f.get("status", "success") for f in folds]
     finished = statuses.count("success")
-    shown = escape(experiment or tr_artifact("latex.experiment"))
+    shown = escape(experiment or tr_artifact(LATEX_EXPERIMENT_KEY))
     if finished < n_folds:
         detail = _counts(
             stopped=statuses.count("stopped"),
@@ -316,7 +318,7 @@ def comparison_to_latex(
     return _table(
         caption=tr_artifact(
             "latex.comparison_caption",
-            experiment=escape(experiment or tr_artifact("latex.experiment")),
+            experiment=escape(experiment or tr_artifact(LATEX_EXPERIMENT_KEY)),
         ),
         label="tab:comparison",
         column_spec="lrcccr",

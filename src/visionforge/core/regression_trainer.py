@@ -452,8 +452,9 @@ class RegressionTrainer:
         )
         head: list[nn.Parameter] = []
         backbone: list[nn.Parameter] = []
-        for param in core.parameters():
-            (head if id(param) in head_ids else backbone).append(param)
+        parameters = tuple(core.parameters())
+        head.extend(param for param in parameters if id(param) in head_ids)
+        backbone.extend(param for param in parameters if id(param) not in head_ids)
         return head, backbone
 
     def _build_optimizer(self, model: nn.Module) -> torch.optim.Optimizer:

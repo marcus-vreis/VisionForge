@@ -27,6 +27,8 @@
       "200": {
         "application/json": "CustomTaskActionResponse"
       },
+      "400": {},
+      "404": {},
       "422": {
         "application/json": "HTTPValidationError"
       }
@@ -43,6 +45,8 @@
       "200": {
         "application/json": "object"
       },
+      "404": {},
+      "409": {},
       "422": {
         "application/json": "HTTPValidationError"
       }
@@ -60,6 +64,9 @@
       "200": {
         "application/json": "object"
       },
+      "400": {},
+      "404": {},
+      "409": {},
       "422": {
         "application/json": "HTTPValidationError"
       }
@@ -124,6 +131,7 @@
       "200": {
         "application/json": "object"
       },
+      "404": {},
       "422": {
         "application/json": "HTTPValidationError"
       }
@@ -140,6 +148,9 @@
       "200": {
         "application/json": null
       },
+      "400": {},
+      "403": {},
+      "404": {},
       "422": {
         "application/json": "HTTPValidationError"
       }
@@ -201,9 +212,12 @@
       "200": {
         "application/json": "RunResult"
       },
+      "404": {},
+      "409": {},
       "422": {
         "application/json": "HTTPValidationError"
-      }
+      },
+      "500": {}
     }
   },
   "GET /api/experiment/status": {
@@ -287,6 +301,8 @@
       "200": {
         "application/json": "array[RunSummary]"
       },
+      "400": {},
+      "404": {},
       "422": {
         "application/json": "HTTPValidationError"
       }
@@ -304,9 +320,12 @@
       "200": {
         "application/json": "RunDetail"
       },
+      "400": {},
+      "404": {},
       "422": {
         "application/json": "HTTPValidationError"
-      }
+      },
+      "500": {}
     }
   },
   "GET /api/runs/{run_id}/bundle": {
@@ -339,9 +358,12 @@
       "200": {
         "application/json": null
       },
+      "400": {},
+      "404": {},
       "422": {
         "application/json": "HTTPValidationError"
-      }
+      },
+      "500": {}
     }
   },
   "GET /api/schema": {
@@ -429,6 +451,7 @@
       "200": {
         "application/json": null
       },
+      "404": {},
       "422": {
         "application/json": "HTTPValidationError"
       }
@@ -447,9 +470,12 @@
       "200": {
         "application/json": "RunResponse"
       },
+      "400": {},
+      "404": {},
       "422": {
         "application/json": "HTTPValidationError"
-      }
+      },
+      "503": {}
     }
   },
   "POST /api/anomaly/dataset/stats": {
@@ -482,9 +508,12 @@
       "200": {
         "application/json": "RunResponse"
       },
+      "400": {},
+      "404": {},
       "422": {
         "application/json": "HTTPValidationError"
-      }
+      },
+      "503": {}
     }
   },
   "POST /api/anomaly/replicates": {
@@ -500,9 +529,12 @@
       "200": {
         "application/json": "RunResponse"
       },
+      "400": {},
+      "404": {},
       "422": {
         "application/json": "HTTPValidationError"
-      }
+      },
+      "503": {}
     }
   },
   "POST /api/anomaly/run": {
@@ -518,9 +550,12 @@
       "200": {
         "application/json": "RunResponse"
       },
+      "400": {},
+      "404": {},
       "422": {
         "application/json": "HTTPValidationError"
-      }
+      },
+      "503": {}
     }
   },
   "POST /api/anomaly/sweep": {
@@ -536,9 +571,12 @@
       "200": {
         "application/json": "RunResponse"
       },
+      "400": {},
+      "404": {},
       "422": {
         "application/json": "HTTPValidationError"
-      }
+      },
+      "503": {}
     }
   },
   "POST /api/checkpoint/pick": {
@@ -569,9 +607,12 @@
       "200": {
         "application/json": "RunResponse"
       },
+      "400": {},
+      "404": {},
       "422": {
         "application/json": "HTTPValidationError"
-      }
+      },
+      "503": {}
     }
   },
   "POST /api/classification/replicates": {
@@ -587,9 +628,12 @@
       "200": {
         "application/json": "RunResponse"
       },
+      "400": {},
+      "404": {},
       "422": {
         "application/json": "HTTPValidationError"
-      }
+      },
+      "503": {}
     }
   },
   "POST /api/credentials": {
@@ -604,6 +648,7 @@
       "200": {
         "application/json": "CredentialsResponse"
       },
+      "400": {},
       "422": {
         "application/json": "HTTPValidationError"
       }
@@ -620,6 +665,7 @@
       "200": {
         "application/json": "CustomTaskActionResponse"
       },
+      "404": {},
       "422": {
         "application/json": "HTTPValidationError"
       }
@@ -639,9 +685,12 @@
       "200": {
         "application/json": "RunResponse"
       },
+      "400": {},
+      "404": {},
       "422": {
         "application/json": "HTTPValidationError"
-      }
+      },
+      "503": {}
     }
   },
   "POST /api/custom/{key}/replicates": {
@@ -658,9 +707,12 @@
       "200": {
         "application/json": "RunResponse"
       },
+      "400": {},
+      "404": {},
       "422": {
         "application/json": "HTTPValidationError"
-      }
+      },
+      "503": {}
     }
   },
   "POST /api/custom/{key}/run": {
@@ -677,9 +729,12 @@
       "200": {
         "application/json": "RunResponse"
       },
+      "400": {},
+      "404": {},
       "422": {
         "application/json": "HTTPValidationError"
-      }
+      },
+      "503": {}
     }
   },
   "POST /api/custom/{key}/sweep": {
@@ -696,9 +751,12 @@
       "200": {
         "application/json": "RunResponse"
       },
+      "400": {},
+      "404": {},
       "422": {
         "application/json": "HTTPValidationError"
-      }
+      },
+      "503": {}
     }
   },
   "POST /api/custom/{key}/unhide": {
@@ -764,9 +822,11 @@
       "200": {
         "application/json": "DatasetDownloadResponse"
       },
+      "400": {},
       "422": {
         "application/json": "HTTPValidationError"
-      }
+      },
+      "500": {}
     }
   },
   "POST /api/dataset/pick": {
@@ -813,6 +873,7 @@
       "200": {
         "application/json": "PreprocessPreviewResponse"
       },
+      "400": {},
       "422": {
         "application/json": "HTTPValidationError"
       }
@@ -865,9 +926,12 @@
       "200": {
         "application/json": "RunResponse"
       },
+      "400": {},
+      "404": {},
       "422": {
         "application/json": "HTTPValidationError"
-      }
+      },
+      "503": {}
     }
   },
   "POST /api/detection/dataset/pick_yaml": {
@@ -932,9 +996,12 @@
       "200": {
         "application/json": "RunResponse"
       },
+      "400": {},
+      "404": {},
       "422": {
         "application/json": "HTTPValidationError"
-      }
+      },
+      "503": {}
     }
   },
   "POST /api/detection/replicates": {
@@ -950,9 +1017,12 @@
       "200": {
         "application/json": "RunResponse"
       },
+      "400": {},
+      "404": {},
       "422": {
         "application/json": "HTTPValidationError"
-      }
+      },
+      "503": {}
     }
   },
   "POST /api/detection/run": {
@@ -968,9 +1038,12 @@
       "200": {
         "application/json": "RunResponse"
       },
+      "400": {},
+      "404": {},
       "422": {
         "application/json": "HTTPValidationError"
-      }
+      },
+      "503": {}
     }
   },
   "POST /api/detection/sweep": {
@@ -986,9 +1059,12 @@
       "200": {
         "application/json": "RunResponse"
       },
+      "400": {},
+      "404": {},
       "422": {
         "application/json": "HTTPValidationError"
-      }
+      },
+      "503": {}
     }
   },
   "POST /api/experiment/run": {
@@ -1004,9 +1080,12 @@
       "200": {
         "application/json": "RunResponse"
       },
+      "400": {},
+      "404": {},
       "422": {
         "application/json": "HTTPValidationError"
-      }
+      },
+      "503": {}
     }
   },
   "POST /api/model/defaults": {
@@ -1038,9 +1117,11 @@
       "201": {
         "application/json": "ProfileInfo"
       },
+      "409": {},
       "422": {
         "application/json": "HTTPValidationError"
-      }
+      },
+      "500": {}
     }
   },
   "POST /api/regression/compare": {
@@ -1056,9 +1137,12 @@
       "200": {
         "application/json": "RunResponse"
       },
+      "400": {},
+      "404": {},
       "422": {
         "application/json": "HTTPValidationError"
-      }
+      },
+      "503": {}
     }
   },
   "POST /api/regression/cv": {
@@ -1074,9 +1158,12 @@
       "200": {
         "application/json": "RunResponse"
       },
+      "400": {},
+      "404": {},
       "422": {
         "application/json": "HTTPValidationError"
-      }
+      },
+      "503": {}
     }
   },
   "POST /api/regression/dataset/stats": {
@@ -1109,9 +1196,12 @@
       "200": {
         "application/json": "RunResponse"
       },
+      "400": {},
+      "404": {},
       "422": {
         "application/json": "HTTPValidationError"
-      }
+      },
+      "503": {}
     }
   },
   "POST /api/regression/replicates": {
@@ -1127,9 +1217,12 @@
       "200": {
         "application/json": "RunResponse"
       },
+      "400": {},
+      "404": {},
       "422": {
         "application/json": "HTTPValidationError"
-      }
+      },
+      "503": {}
     }
   },
   "POST /api/regression/run": {
@@ -1145,9 +1238,12 @@
       "200": {
         "application/json": "RunResponse"
       },
+      "400": {},
+      "404": {},
       "422": {
         "application/json": "HTTPValidationError"
-      }
+      },
+      "503": {}
     }
   },
   "POST /api/regression/sweep": {
@@ -1163,9 +1259,12 @@
       "200": {
         "application/json": "RunResponse"
       },
+      "400": {},
+      "404": {},
       "422": {
         "application/json": "HTTPValidationError"
-      }
+      },
+      "503": {}
     }
   },
   "POST /api/runs/{run_id}/batch_predict": {
@@ -1182,9 +1281,12 @@
       "200": {
         "application/json": "BatchPredictResponse"
       },
+      "400": {},
+      "404": {},
       "422": {
         "application/json": "HTTPValidationError"
-      }
+      },
+      "500": {}
     }
   },
   "POST /api/runs/{run_id}/export_onnx": {
@@ -1201,9 +1303,12 @@
       "200": {
         "application/json": "ExportOnnxResponse"
       },
+      "400": {},
+      "404": {},
       "422": {
         "application/json": "HTTPValidationError"
-      }
+      },
+      "500": {}
     }
   },
   "POST /api/runs/{run_id}/gradcam": {
@@ -1220,9 +1325,12 @@
       "200": {
         "application/json": "GradCamResponse"
       },
+      "400": {},
+      "404": {},
       "422": {
         "application/json": "HTTPValidationError"
-      }
+      },
+      "500": {}
     }
   },
   "POST /api/runs/{run_id}/resume": {
@@ -1237,12 +1345,14 @@
       "200": {
         "application/json": "RunResponse"
       },
+      "400": {},
       "404": {},
       "409": {},
       "422": {
         "application/json": "HTTPValidationError"
       },
-      "500": {}
+      "500": {},
+      "503": {}
     }
   },
   "POST /api/runs/{run_id}/reveal": {
@@ -1257,9 +1367,13 @@
       "200": {
         "application/json": "object"
       },
+      "400": {},
+      "403": {},
+      "404": {},
       "422": {
         "application/json": "HTTPValidationError"
-      }
+      },
+      "500": {}
     }
   },
   "POST /api/runs/{run_id}/test": {
@@ -1276,9 +1390,12 @@
       "200": {
         "application/json": "RunTestResponse"
       },
+      "400": {},
+      "404": {},
       "422": {
         "application/json": "HTTPValidationError"
-      }
+      },
+      "500": {}
     }
   },
   "POST /api/sample-dataset": {
@@ -1293,9 +1410,11 @@
       "201": {
         "application/json": "SampleDatasetResponse"
       },
+      "400": {},
       "422": {
         "application/json": "HTTPValidationError"
-      }
+      },
+      "500": {}
     }
   },
   "POST /api/segmentation/compare": {
@@ -1311,9 +1430,12 @@
       "200": {
         "application/json": "RunResponse"
       },
+      "400": {},
+      "404": {},
       "422": {
         "application/json": "HTTPValidationError"
-      }
+      },
+      "503": {}
     }
   },
   "POST /api/segmentation/cv": {
@@ -1329,9 +1451,12 @@
       "200": {
         "application/json": "RunResponse"
       },
+      "400": {},
+      "404": {},
       "422": {
         "application/json": "HTTPValidationError"
-      }
+      },
+      "503": {}
     }
   },
   "POST /api/segmentation/dataset/stats": {
@@ -1364,9 +1489,12 @@
       "200": {
         "application/json": "RunResponse"
       },
+      "400": {},
+      "404": {},
       "422": {
         "application/json": "HTTPValidationError"
-      }
+      },
+      "503": {}
     }
   },
   "POST /api/segmentation/replicates": {
@@ -1382,9 +1510,12 @@
       "200": {
         "application/json": "RunResponse"
       },
+      "400": {},
+      "404": {},
       "422": {
         "application/json": "HTTPValidationError"
-      }
+      },
+      "503": {}
     }
   },
   "POST /api/segmentation/run": {
@@ -1400,9 +1531,12 @@
       "200": {
         "application/json": "RunResponse"
       },
+      "400": {},
+      "404": {},
       "422": {
         "application/json": "HTTPValidationError"
-      }
+      },
+      "503": {}
     }
   },
   "POST /api/segmentation/sweep": {
@@ -1418,9 +1552,12 @@
       "200": {
         "application/json": "RunResponse"
       },
+      "400": {},
+      "404": {},
       "422": {
         "application/json": "HTTPValidationError"
-      }
+      },
+      "503": {}
     }
   },
   "POST /api/update/apply": {
@@ -1433,9 +1570,12 @@
       "200": {
         "application/json": "object"
       },
+      "403": {},
+      "409": {},
       "422": {
         "application/json": "HTTPValidationError"
-      }
+      },
+      "500": {}
     }
   },
   "PUT /api/profiles/{slug}": {
@@ -1451,9 +1591,12 @@
       "200": {
         "application/json": "ProfileInfo"
       },
+      "400": {},
+      "404": {},
       "422": {
         "application/json": "HTTPValidationError"
-      }
+      },
+      "500": {}
     }
   }
 }

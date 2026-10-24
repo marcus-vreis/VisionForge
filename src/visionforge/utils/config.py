@@ -7,6 +7,9 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from visionforge.utils.messages import tr
 from visionforge.utils.paths import RunName
 
+CONFIG_PATH_MISSING_KEY = "config.path_missing"
+CONFIG_NOT_A_FILE_KEY = "config.not_a_file"
+
 # Bumped whenever a breaking change is made to the experiment config schema. A
 # config carries the version it was written with so old YAML/run.json files can
 # be migrated forward (see ``migrate_config_dict``) without losing traceability —
@@ -93,9 +96,9 @@ class ModelConfig(BaseModel):
         if v is None:
             return v
         if not v.exists():
-            raise ValueError(tr("config.path_missing", field="weights_path", path=v))
+            raise ValueError(tr(CONFIG_PATH_MISSING_KEY, field="weights_path", path=v))
         if not v.is_file():
-            raise ValueError(tr("config.not_a_file", field="weights_path", path=v))
+            raise ValueError(tr(CONFIG_NOT_A_FILE_KEY, field="weights_path", path=v))
         return v
 
     @field_validator("custom_model", "timm_model")
@@ -253,7 +256,7 @@ class DataConfig(BaseModel):
     @classmethod
     def base_dir_must_exist(cls, v: Path) -> Path:
         if not v.exists():
-            raise ValueError(tr("config.path_missing", field="base_dir", path=v))
+            raise ValueError(tr(CONFIG_PATH_MISSING_KEY, field="base_dir", path=v))
         if not v.is_dir():
             raise ValueError(tr("config.not_a_dir", field="base_dir", path=v))
         return v
@@ -380,16 +383,18 @@ class BatchPredictionConfig(BaseModel):
     @classmethod
     def checkpoint_must_be_file(cls, v: Path) -> Path:
         if not v.exists():
-            raise ValueError(tr("config.path_missing", field="checkpoint_path", path=v))
+            raise ValueError(
+                tr(CONFIG_PATH_MISSING_KEY, field="checkpoint_path", path=v)
+            )
         if not v.is_file():
-            raise ValueError(tr("config.not_a_file", field="checkpoint_path", path=v))
+            raise ValueError(tr(CONFIG_NOT_A_FILE_KEY, field="checkpoint_path", path=v))
         return v
 
     @field_validator("input_dir")
     @classmethod
     def input_dir_must_be_directory(cls, v: Path) -> Path:
         if not v.exists():
-            raise ValueError(tr("config.path_missing", field="input_dir", path=v))
+            raise ValueError(tr(CONFIG_PATH_MISSING_KEY, field="input_dir", path=v))
         if not v.is_dir():
             raise ValueError(tr("config.not_a_dir", field="input_dir", path=v))
         return v
@@ -417,9 +422,11 @@ class ExportONNXConfig(BaseModel):
     @classmethod
     def checkpoint_path_must_be_file(cls, v: Path) -> Path:
         if not v.exists():
-            raise ValueError(tr("config.path_missing", field="checkpoint_path", path=v))
+            raise ValueError(
+                tr(CONFIG_PATH_MISSING_KEY, field="checkpoint_path", path=v)
+            )
         if not v.is_file():
-            raise ValueError(tr("config.not_a_file", field="checkpoint_path", path=v))
+            raise ValueError(tr(CONFIG_NOT_A_FILE_KEY, field="checkpoint_path", path=v))
         return v
 
 

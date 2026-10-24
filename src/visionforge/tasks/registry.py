@@ -172,7 +172,8 @@ def _import_file(path: Path) -> None:
     sys.modules[module_name] = module
     try:
         spec.loader.exec_module(module)
-    except Exception as exc:  # noqa: BLE001 — a bad user file must name itself, not crash discovery
+    # a bad user file must name itself, not crash discovery
+    except Exception as exc:  # noqa: BLE001
         sys.modules.pop(module_name, None)
         logger.warning("Failed to import user-task file {}: {}", path, exc)
 

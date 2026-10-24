@@ -14,6 +14,11 @@ from loguru import logger
 from visionforge import __version__
 from visionforge.gui.api.routes import router as api_router
 
+INDEX_FILENAME = "index.html"
+NOT_FOUND_DETAIL = "Not Found"
+
+_NOT_FOUND = {404: {"description": "Resource not found"}}
+
 STATIC_DIR = Path(__file__).parent / "static"
 
 
@@ -27,7 +32,7 @@ def _read_spa_bundle() -> str:
     feature silently does nothing. Capturing the bundle name here, at import,
     gives the SPA something to compare itself against and name the cause.
     """
-    index = STATIC_DIR / "index.html"
+    index = STATIC_DIR / INDEX_FILENAME
     if not index.is_file():
         return ""
     match = re.search(
@@ -89,25 +94,25 @@ app.include_router(api_router)
 _INDEX_HEADERS = {"Cache-Control": "no-cache, must-revalidate"}
 
 
-@app.get("/{path:path}")
+@app.get("/{path:path}", responses=_NOT_FOUND)
 async def spa_fallback(path: str) -> FileResponse:
     """Serve the React SPA — static files or index.html fallback."""
     # An unknown /api/... is a client error, not a deep link: answering 200 with
     # index.html made typos and stale clients fail as JSON parse errors.
     if path == "api" or path.startswith("api/"):
-        raise HTTPException(status_code=404, detail="Not Found")
+        raise HTTPException(status_code=404, detail=NOT_FOUND_DETAIL)
     root = STATIC_DIR.resolve()
     # Treat Windows separators consistently even when the server runs on Linux.
     try:
         file_path = (root / path.replace("\\", "/")).resolve()
     except (OSError, ValueError, RuntimeError) as exc:
-        raise HTTPException(status_code=404, detail="Not Found") from exc
+        raise HTTPException(status_code=404, detail=NOT_FOUND_DETAIL) from exc
     if not file_path.is_relative_to(root):
-        raise HTTPException(status_code=404, detail="Not Found")
-    if file_path.is_file() and file_path.name != "index.html":
+        raise HTTPException(status_code=404, detail=NOT_FOUND_DETAIL)
+    if file_path.is_file() and file_path.name != INDEX_FILENAME:
         return FileResponse(file_path)  # NOSONAR python:S2083
     return FileResponse(  # NOSONAR python:S2083
-        root / "index.html", headers=_INDEX_HEADERS
+        root / INDEX_FILENAME, headers=_INDEX_HEADERS
     )
 
 

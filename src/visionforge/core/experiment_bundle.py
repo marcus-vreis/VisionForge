@@ -11,18 +11,24 @@ import zipfile
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import IO, Any
 
+SAFETENSORS_SUFFIX = ".safetensors"
+JSON_SUFFIX = ".json"
+BUNDLE_SIZE_LIMIT_ERROR = "bundle exceeds size limit"
+RUN_FILENAME = "run.json"
+MANIFEST_FILENAME = "manifest.json"
+
 _MAX_MEMBERS = 4096
 _MAX_MANIFEST_BYTES = 4 * 1024 * 1024
 _MAX_RUN_BYTES = 16 * 1024 * 1024
 _MAX_TOTAL_BYTES = 16 * 1024**3
 _CHUNK_SIZE = 1024 * 1024
 _EXTENSIONS = {
-    "model": {".pt", ".pth", ".onnx", ".safetensors"},
-    "weights": {".pt", ".pth", ".onnx", ".safetensors"},
-    "checkpoint": {".pt", ".pth", ".safetensors"},
-    "config": {".json", ".yaml", ".yml"},
-    "history": {".json", ".csv", ".jsonl"},
-    "predictions": {".json", ".csv", ".jsonl", ".parquet", ".npz"},
+    "model": {".pt", ".pth", ".onnx", SAFETENSORS_SUFFIX},
+    "weights": {".pt", ".pth", ".onnx", SAFETENSORS_SUFFIX},
+    "checkpoint": {".pt", ".pth", SAFETENSORS_SUFFIX},
+    "config": {JSON_SUFFIX, ".yaml", ".yml"},
+    "history": {JSON_SUFFIX, ".csv", ".jsonl"},
+    "predictions": {JSON_SUFFIX, ".csv", ".jsonl", ".parquet", ".npz"},
 }
 _CONVENTIONAL = (
     "config.json",
@@ -99,7 +105,7 @@ def _copy_and_hash(source: IO[bytes], target: IO[bytes]) -> dict[str, int | str]
     while chunk := source.read(_CHUNK_SIZE):
         size += len(chunk)
         if size > _MAX_TOTAL_BYTES:
-            raise ValueError("bundle exceeds size limit")
+            raise ValueError(BUNDLE_SIZE_LIMIT_ERROR)
         digest.update(chunk)
         target.write(chunk)
     return {"size": size, "sha256": digest.hexdigest()}
@@ -118,7 +124,7 @@ def export_experiment_bundle(run_dir: Path | str, destination: Path | str) -> Pa
     destination = Path(destination).absolute()
     if destination.exists() or destination.is_symlink():
         raise FileExistsError(destination)
-    run_path = _contained_file(root, "run.json")
+    run_path = _contained_file(root, RUN_FILENAME)
     with run_path.open("rb") as handle:
         raw = handle.read(_MAX_RUN_BYTES + 1)
     if len(raw) > _MAX_RUN_BYTES:
@@ -126,7 +132,7 @@ def export_experiment_bundle(run_dir: Path | str, destination: Path | str) -> Pa
     data = json.loads(raw)
     if not isinstance(data, dict) or not isinstance(data.get("artifacts", {}), dict):
         raise ValueError("run.json must contain an object with an artifacts object")
-    files = {"run.json": run_path}
+    files = {RUN_FILENAME: run_path}
     notes: list[dict[str, str]] = []
     for category, values in data.get("artifacts", {}).items():
         label = (
@@ -160,7 +166,7 @@ def export_experiment_bundle(run_dir: Path | str, destination: Path | str) -> Pa
                 )
             else:
                 name = path.relative_to(root).as_posix()
-                if name.casefold() == "manifest.json":
+                if name.casefold() == MANIFEST_FILENAME:
                     notes.append(
                         {"artifact": category, "reason": "reserved bundle member name"}
                     )
@@ -182,15 +188,15 @@ def export_experiment_bundle(run_dir: Path | str, destination: Path | str) -> Pa
     temporary_path = Path(temporary)
     try:
         records: dict[str, dict[str, int | str]] = {
-            "run.json": {"size": len(raw), "sha256": hashlib.sha256(raw).hexdigest()}
+            RUN_FILENAME: {"size": len(raw), "sha256": hashlib.sha256(raw).hexdigest()}
         }
         total_size = len(raw)
         with zipfile.ZipFile(
             temporary_path, "w", compression=zipfile.ZIP_DEFLATED
         ) as bundle:
-            bundle.writestr("run.json", raw)
+            bundle.writestr(RUN_FILENAME, raw)
             for name, source in sorted(files.items()):
-                if name == "run.json":
+                if name == RUN_FILENAME:
                     continue
                 with (
                     source.open("rb") as handle,
@@ -201,15 +207,15 @@ def export_experiment_bundle(run_dir: Path | str, destination: Path | str) -> Pa
                     records[name] = _copy_and_hash(handle, target)
                 total_size += int(records[name]["size"])
                 if total_size > _MAX_TOTAL_BYTES:
-                    raise ValueError("bundle exceeds size limit")
+                    raise ValueError(BUNDLE_SIZE_LIMIT_ERROR)
             manifest = json.dumps(
                 {"format_version": 1, "files": records, "notes": notes}, indent=2
             ).encode()
             if len(manifest) > _MAX_MANIFEST_BYTES:
                 raise ValueError("bundle manifest exceeds size limit")
             if total_size + len(manifest) > _MAX_TOTAL_BYTES:
-                raise ValueError("bundle exceeds size limit")
-            bundle.writestr("manifest.json", manifest)
+                raise ValueError(BUNDLE_SIZE_LIMIT_ERROR)
+            bundle.writestr(MANIFEST_FILENAME, manifest)
         # A hard link publishes the completed file atomically without replacing a competitor.
         os.link(temporary_path, destination)
     finally:
@@ -237,17 +243,17 @@ def verify_experiment_bundle(bundle_path: Path | str) -> dict[str, Any]:
             ):
                 raise ValueError("linked or directory bundle member")
             if sum(member.file_size for member in members) > _MAX_TOTAL_BYTES:
-                raise ValueError("bundle exceeds size limit")
-            if "manifest.json" not in names or "run.json" not in names:
+                raise ValueError(BUNDLE_SIZE_LIMIT_ERROR)
+            if MANIFEST_FILENAME not in names or RUN_FILENAME not in names:
                 raise ValueError("missing bundle metadata")
-            if bundle.getinfo("manifest.json").file_size > _MAX_MANIFEST_BYTES:
+            if bundle.getinfo(MANIFEST_FILENAME).file_size > _MAX_MANIFEST_BYTES:
                 raise ValueError("bundle manifest exceeds size limit")
-            manifest = json.loads(bundle.read("manifest.json"))
+            manifest = json.loads(bundle.read(MANIFEST_FILENAME))
             if not isinstance(manifest, dict) or manifest.get("format_version") != 1:
                 raise ValueError("unsupported bundle manifest")
             records = manifest.get("files")
             if not isinstance(records, dict) or set(records) != set(names) - {
-                "manifest.json"
+                MANIFEST_FILENAME
             }:
                 raise ValueError("manifest does not match bundle members")
             for name, record in records.items():
@@ -270,7 +276,6 @@ def verify_experiment_bundle(bundle_path: Path | str) -> dict[str, Any]:
         UnicodeError,
         json.JSONDecodeError,
         RuntimeError,
-        NotImplementedError,
     ) as exc:
         raise ValueError("invalid experiment bundle") from exc
 

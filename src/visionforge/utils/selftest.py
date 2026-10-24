@@ -39,6 +39,9 @@ from visionforge.utils.selftest_data import (
     build_segmentation_dataset,
 )
 
+LEARNING_RATE_FIELD = "training.learning_rate"
+EXPERIMENT_RUN_ENDPOINT = "/api/experiment/run"
+
 TASKS = (
     "classification",
     "regression",
@@ -136,7 +139,8 @@ class _EventCollector:
                         continue
                     kind = str(json.loads(payload).get("event", "?"))
                     self.counts[kind] = self.counts.get(kind, 0) + 1
-        except Exception as exc:  # noqa: BLE001 — a dead stream is a finding, not a crash
+        # a dead stream is a finding, not a crash
+        except Exception as exc:  # noqa: BLE001
             self.counts["<stream-error>"] = 1
             logger.debug("Self-test SSE stream ended: {}", exc)
 
@@ -330,7 +334,7 @@ def _standalone_cases(
             {
                 "config": payload,
                 "mode": "grid",
-                "search_space": {"training.learning_rate": [0.001, 0.002]},
+                "search_space": {LEARNING_RATE_FIELD: [0.001, 0.002]},
                 "metric": metric,
             },
             ("best_trial", "total_trials"),
@@ -352,7 +356,7 @@ def _standalone_cases(
                 "config": payload,
                 "variants": {
                     "baseline": {},
-                    "lr_alto": {"training.learning_rate": 0.002},
+                    "lr_alto": {LEARNING_RATE_FIELD: 0.002},
                 },
                 "seeds": [1, 2],
                 "metric": metric,
@@ -401,22 +405,20 @@ def build_cases(
         grid_cfg = {
             **simple,
             "block": "grid_search",
-            "grid_search": {
-                "hyperparameters": {"training.learning_rate": [0.001, 0.002]}
-            },
+            "grid_search": {"hyperparameters": {LEARNING_RATE_FIELD: [0.001, 0.002]}},
         }
         cases += [
             SelfTestCase(
                 "classification",
                 "simple",
-                "/api/experiment/run",
+                EXPERIMENT_RUN_ENDPOINT,
                 simple,
                 ("train", "eval"),
             ),
             SelfTestCase(
                 "classification",
                 "cv",
-                "/api/experiment/run",
+                EXPERIMENT_RUN_ENDPOINT,
                 cv_cfg,
                 ("mean_accuracy",),
                 multi_trial=True,
@@ -424,7 +426,7 @@ def build_cases(
             SelfTestCase(
                 "classification",
                 "sweep",
-                "/api/experiment/run",
+                EXPERIMENT_RUN_ENDPOINT,
                 grid_cfg,
                 ("best_trial",),
                 multi_trial=True,
@@ -447,7 +449,7 @@ def build_cases(
                     "config": simple,
                     "variants": {
                         "baseline": {},
-                        "lr_alto": {"training.learning_rate": 0.002},
+                        "lr_alto": {LEARNING_RATE_FIELD: 0.002},
                     },
                     "seeds": [1, 2],
                     "metric": "accuracy",
@@ -628,7 +630,8 @@ def run_case(base_url: str, case: SelfTestCase) -> SelfTestOutcome:
         outcome.detail = _summarize(report)
         outcome.status = "passed"
         return outcome
-    except Exception as exc:  # noqa: BLE001 — one broken case must not abort the sweep
+    # one broken case must not abort the sweep
+    except Exception as exc:  # noqa: BLE001
         outcome.detail = f"{type(exc).__name__}: {exc}"
         return outcome
     finally:

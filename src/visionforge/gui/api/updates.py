@@ -79,7 +79,8 @@ def fetch_latest(
         with opener(PYPI_URL, timeout=timeout) as response:
             payload = json.loads(response.read().decode("utf-8"))
         version = payload["info"]["version"]
-    except Exception as exc:  # noqa: BLE001 - offline is not an error worth raising
+    # offline is not an error worth raising
+    except Exception as exc:  # noqa: BLE001
         logger.debug("Update check failed: {}", exc)
         return None
     return version if parse_version(version) is not None else None
@@ -287,7 +288,8 @@ def spawn_updater(*, version: str, host: str, port: int) -> Path:
         )
     else:
         kwargs["start_new_session"] = True
-    subprocess.Popen(command, **kwargs)  # noqa: S603 - fixed argv, no shell
+    # fixed argv, no shell
+    subprocess.Popen(command, **kwargs)  # noqa: S603
     logger.info("Update to {} started; log at {}", version, log)
     return log
 
