@@ -38,6 +38,7 @@ from visionforge.core.task_runner import (
     runner_cancel_token,
     runner_metric_direction,
 )
+from visionforge.utils.messages import tr
 
 try:  # torch is the heavy hardware extra; the cache flush is best-effort.
     import torch
@@ -124,13 +125,19 @@ def _selection_problem(selection: dict[str, float], metric: str) -> str:
     """Why ``metric`` cannot rank this trial, or "" when its value is usable."""
     value = selection.get(metric)
     if value is None:
-        return (
-            f"No {SELECTION_SPLIT} value for '{metric}' "
-            f"(validation metrics: {sorted(selection) or 'none'}); a sweep never "
-            "ranks trials on test metrics."
+        return tr(
+            "sweep.missing_validation_value",
+            split=SELECTION_SPLIT,
+            metric=metric,
+            metrics=sorted(selection) or tr("sweep.no_metrics"),
         )
     if not math.isfinite(value):
-        return f"The {SELECTION_SPLIT} '{metric}' is not finite ({value}); not ranked."
+        return tr(
+            "sweep.nonfinite_validation_value",
+            split=SELECTION_SPLIT,
+            metric=metric,
+            value=value,
+        )
     return ""
 
 

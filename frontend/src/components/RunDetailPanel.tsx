@@ -29,6 +29,7 @@ import { stdDdof } from "../lib/cv-std";
 import { STOPPED_COLOR, unitState } from "../lib/unit-status";
 import type { MetricCI } from "../types/run";
 import { accentForTask } from "../lib/task-accent";
+import { useCustomAccents } from "../lib/custom-accents";
 import { useResolvedTheme } from "./training-story/use-viewing";
 import { Lightbox } from "./Lightbox";
 import { RunGroupDetail } from "./RunGroupDetail";
@@ -106,6 +107,7 @@ function getConfigRecord(
 export function RunDetailPanel({ runId, onBack, onOpenRun, knownRunIds }: RunDetailPanelProps) {
   const { t, locale } = useI18n();
   const theme = useResolvedTheme();
+  const customAccents = useCustomAccents();
   const graphLabels: Record<string, string> = t.plots.labels;
   const [detail, setDetail] = useState<RunDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -574,7 +576,7 @@ export function RunDetailPanel({ runId, onBack, onOpenRun, knownRunIds }: RunDet
           {detail.group && (
             <RunGroupDetail
               group={detail.group}
-              accent={accentForTask(task, theme)}
+              accent={accentForTask(task, theme, customAccents)}
               knownRunIds={knownRunIds}
               onOpenRun={onOpenRun}
             />
@@ -603,7 +605,7 @@ export function RunDetailPanel({ runId, onBack, onOpenRun, knownRunIds }: RunDet
                     style={{
                       padding: "6px 12px",
                       background: "rgb(var(--lt-ink, 255 255 255) / 0.04)",
-                      border: `1px solid ${accentForTask(task, theme)}`,
+                      border: `1px solid ${accentForTask(task, theme, customAccents)}`,
                       borderRadius: 8,
                       color: "var(--vf-text)",
                       fontFamily: "var(--font-mono)",

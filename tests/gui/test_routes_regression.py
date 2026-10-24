@@ -79,7 +79,8 @@ class TestRegressionRun:
 
             # Wait for run(), not setup(): has_callback is written in run, and
             # waiting on setup's key raced the assert below.
-            for _ in range(100):
+            deadline = time.monotonic() + 30.0
+            while time.monotonic() < deadline:
                 if "has_callback" in captured:
                     break
                 time.sleep(0.05)

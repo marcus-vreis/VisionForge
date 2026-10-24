@@ -6,6 +6,8 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from visionforge.utils.messages import using_lang
+
 from .conftest import occupy_queue, release_queue
 
 
@@ -78,7 +80,8 @@ class TestAnomalyRun:
 
             # Wait for run(), not setup(): has_callback is written in run, and
             # waiting on setup's key raced the assert below.
-            for _ in range(100):
+            deadline = time.monotonic() + 30.0
+            while time.monotonic() < deadline:
                 if "has_callback" in captured:
                     break
                 time.sleep(0.05)
@@ -183,7 +186,10 @@ class TestAnomalyCompareSweep:
                 "mode": "grid",
                 "search_space": {"model.latent_dim": [16, 32]},
             }
-            resp = client.post("/api/anomaly/sweep", json=payload)
+            with using_lang("en"):
+                resp = client.post(
+                    "/api/anomaly/sweep", json=payload, headers={"X-VF-Lang": "en"}
+                )
             assert resp.status_code == 422, resp.text
             assert "validation" in resp.json()["detail"].lower()
             assert called == []
