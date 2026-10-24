@@ -1,3 +1,4 @@
+import { isHexColor } from "./task-color";
 import type { Theme } from "./theme";
 
 /** The color each task goes by in the interface: classification red, detection
@@ -31,11 +32,32 @@ export function taskAccents(theme: Theme = "dark"): Record<string, string> {
 }
 
 /** The accent of a task as a run records it: classification keeps its problem
- *  type (`binary`, `multiclass`) where the others keep their own name, and a
- *  researcher's own task (`custom:<key>`) has no color of its own. */
-export function accentForTask(task: string | null | undefined, theme: Theme = "dark"): string {
-  if (!task || task.startsWith("custom:")) return FALLBACK;
+ *  type (`binary`, `multiclass`) where the others keep their own name. A
+ *  researcher's own task (`custom:<key>`) takes the color from `customAccents`
+ *  (see `customAccentMap`) and stays neutral when it has none. */
+export function accentForTask(
+  task: string | null | undefined,
+  theme: Theme = "dark",
+  customAccents: Readonly<Record<string, string>> = {},
+): string {
+  if (!task) return FALLBACK;
+  if (task.startsWith("custom:")) {
+    const color = customAccents[task];
+    // Callers append alpha to the result (`${accent}1a`), so only #rrggbb is safe.
+    return color && isHexColor(color) ? color : FALLBACK;
+  }
   const accents = taskAccents(theme);
   if (task in accents && task !== "classification") return accents[task];
   return accents.classification;
+}
+
+/** The colors of the researcher's tasks, keyed by the name a run records
+ *  (`custom:<key>`). Takes the tabs' tasks, whose accent already carries the
+ *  per-browser choice of ADR-137. */
+export function customAccentMap(
+  tasks: readonly { key: string; accent: string; custom?: boolean }[],
+): Record<string, string> {
+  const map: Record<string, string> = {};
+  for (const task of tasks) if (task.custom) map[`custom:${task.key}`] = task.accent;
+  return map;
 }

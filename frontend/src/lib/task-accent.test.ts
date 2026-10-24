@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { TASK_ACCENT, TASK_ACCENT_LIGHT, accentForTask, taskAccents } from "./task-accent";
+import { TASK_ACCENT, TASK_ACCENT_LIGHT, accentForTask, customAccentMap, taskAccents } from "./task-accent";
 
 describe("accentForTask", () => {
   it("colors each task as the interface does", () => {
@@ -48,5 +48,34 @@ describe("accentForTask", () => {
     for (const color of [...Object.values(TASK_ACCENT), ...Object.values(TASK_ACCENT_LIGHT)]) {
       expect(color).toMatch(/^oklch\(0\.\d+ 0\.\d+ \d+\)$/);
     }
+  });
+});
+
+describe("accentForTask with researcher tasks", () => {
+  const custom = { "custom:foo": "#2dd4bf", "custom:bad": "teal" };
+
+  it("uses the color the task registered or the researcher chose", () => {
+    expect(accentForTask("custom:foo", "dark", custom)).toBe("#2dd4bf");
+    expect(accentForTask("custom:foo", "light", custom)).toBe("#2dd4bf");
+  });
+
+  it("falls back to neutral for an unknown task or a color that is not #rrggbb", () => {
+    expect(accentForTask("custom:other", "dark", custom)).toBe("var(--vf-text-muted)");
+    expect(accentForTask("custom:bad", "dark", custom)).toBe("var(--vf-text-muted)");
+  });
+
+  it("leaves built-in tasks alone", () => {
+    expect(accentForTask("detection", "dark", custom)).toBe("oklch(0.78 0.18 150)");
+  });
+});
+
+describe("customAccentMap", () => {
+  it("keys the colors by the task name a run records", () => {
+    expect(
+      customAccentMap([
+        { key: "foo", accent: "#2dd4bf", custom: true },
+        { key: "detection", accent: "#ff0000", custom: false },
+      ]),
+    ).toEqual({ "custom:foo": "#2dd4bf" });
   });
 });
