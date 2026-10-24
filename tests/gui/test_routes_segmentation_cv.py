@@ -34,7 +34,7 @@ def _payload(tmp_path: Path) -> dict:
 
 class TestSegmentationCv:
     def test_cv_dispatches_and_reports_fold_table(
-        self, app_and_routes: tuple, tmp_path: Path
+        self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
     ) -> None:
         from visionforge.blocks.regression_cv import (
             CrossValidationReport,
@@ -65,7 +65,7 @@ class TestSegmentationCv:
         orig = routes_mod.run_segmentation_cross_validation
         routes_mod.run_segmentation_cross_validation = fake_cv
         try:
-            client = TestClient(app, raise_server_exceptions=True)
+            client = live_client
             resp = client.post(
                 "/api/segmentation/cv",
                 json={"config": _payload(tmp_path), "n_folds": 2},

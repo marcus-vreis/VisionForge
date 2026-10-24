@@ -46,7 +46,7 @@ class TestRegressionSchema:
 
 class TestRegressionRun:
     def test_run_dispatches_regression_block_with_callback(
-        self, app_and_routes: tuple, tmp_path: Path
+        self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
     ) -> None:
         from visionforge.blocks.regression import RegressionBlock
 
@@ -73,7 +73,7 @@ class TestRegressionRun:
         RegressionBlock.report = fake_report  # type: ignore[method-assign]
 
         try:
-            client = TestClient(app, raise_server_exceptions=True)
+            client = live_client
             resp = client.post("/api/regression/run", json=_payload(tmp_path))
             assert resp.status_code == 200, resp.text
 
@@ -121,7 +121,7 @@ class TestRegressionRun:
 
 class TestRegressionCompare:
     def test_compare_dispatches_and_reports(
-        self, app_and_routes: tuple, tmp_path: Path
+        self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
     ) -> None:
         from visionforge.core.comparison import ComparisonTrial
 
@@ -143,7 +143,7 @@ class TestRegressionCompare:
         orig = routes_mod.run_model_comparison
         routes_mod.run_model_comparison = fake_compare
         try:
-            client = TestClient(app, raise_server_exceptions=True)
+            client = live_client
             payload = {
                 "config": _payload(tmp_path),
                 "model_names": ["resnet18", "resnet50"],
@@ -218,7 +218,7 @@ class TestRegressionCompare:
 
 class TestRegressionSweep:
     def test_grid_sweep_dispatches_and_reports(
-        self, app_and_routes: tuple, tmp_path: Path
+        self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
     ) -> None:
         from visionforge.core.sweep import SweepTrial
 
@@ -236,7 +236,7 @@ class TestRegressionSweep:
         orig = routes_mod.run_sweep
         routes_mod.run_sweep = fake_sweep
         try:
-            client = TestClient(app, raise_server_exceptions=True)
+            client = live_client
             payload = {
                 "config": _payload(tmp_path),
                 "mode": "grid",

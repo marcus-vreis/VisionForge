@@ -47,7 +47,7 @@ class TestAnomalySchema:
 
 class TestAnomalyRun:
     def test_run_dispatches_anomaly_block_with_callback(
-        self, app_and_routes: tuple, tmp_path: Path
+        self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
     ) -> None:
         from visionforge.blocks.anomaly import AnomalyBlock
 
@@ -74,7 +74,7 @@ class TestAnomalyRun:
         AnomalyBlock.report = fake_report  # type: ignore[method-assign]
 
         try:
-            client = TestClient(app, raise_server_exceptions=True)
+            client = live_client
             resp = client.post("/api/anomaly/run", json=_payload(tmp_path))
             assert resp.status_code == 200, resp.text
 
@@ -122,7 +122,7 @@ class TestAnomalyRun:
 
 class TestAnomalyCompareSweep:
     def test_compare_dispatches_and_reports(
-        self, app_and_routes: tuple, tmp_path: Path
+        self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
     ) -> None:
         from visionforge.core.comparison import ComparisonTrial
 
@@ -140,7 +140,7 @@ class TestAnomalyCompareSweep:
         orig = routes_mod.run_model_comparison
         routes_mod.run_model_comparison = fake_compare
         try:
-            client = TestClient(app, raise_server_exceptions=True)
+            client = live_client
             payload = {
                 "config": _payload(tmp_path),
                 "model_names": ["autoencoder", "patchcore"],
