@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from visionforge.gui.api.routes import _summary_metrics
+from visionforge.gui.api.run_history import summary_metrics as _summary_metrics
 
 
 class TestEachTaskSurfacesItsOwnMetrics:
@@ -142,7 +142,9 @@ class TestBlockLabel:
         from datetime import datetime
         from pathlib import Path
 
-        from visionforge.gui.api.routes import _parse_run_summary
+        from visionforge.gui.api.run_history import (
+            parse_run_summary as _parse_run_summary,
+        )
 
         data = {
             "experiment": "e",
@@ -177,7 +179,9 @@ class TestCustomTaskBlock:
         from datetime import datetime
         from pathlib import Path
 
-        from visionforge.gui.api.routes import _parse_run_summary
+        from visionforge.gui.api.run_history import (
+            parse_run_summary as _parse_run_summary,
+        )
 
         data = {
             "experiment": "e",

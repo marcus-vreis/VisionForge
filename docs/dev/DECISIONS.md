@@ -5907,6 +5907,8 @@ state they depend on. Further domains remain incremental work under this ADR.
 
 **Update (2026-10-24):** datasets are done: dataset, picker and credential endpoints (and the helpers only they use) move to `datasets_routes.py`, which owns the dataset-root allow-list; `routes.py` imports from it, never the reverse. The OpenAPI fixture is unchanged. Next: runs/history.
 
+**Update (2026-10-24):** runs/history is done: `GET /runs`, `GET /runs/{run_id}` and `DELETE /runs/{run_id}` move to `runs_routes.py` (`build_runs_router`, lookups and the running job read per request from `routes.py`); the `run.json` parsing (list summary, run span, resume status, metric directions) moves to `run_history.py`, free of FastAPI; the error-response docs shared by routers move to `http_responses.py`. Reveal, resume, export and the per-run actions stay in `routes.py` with the execution state they use. The OpenAPI fixture is unchanged. Next: queue and run state.
+
 ## ADR-133 — An end-to-end GUI suite drives the built SPA against a real server on the CPU
 
 **Date:** 2026-10-21

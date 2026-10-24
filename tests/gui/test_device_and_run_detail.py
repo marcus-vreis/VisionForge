@@ -638,7 +638,9 @@ class TestDatasetOnRunSchemas:
     """The history has to name the dataset on runs older than the fingerprint."""
 
     def test_summary_names_the_dataset_of_a_legacy_run(self, tmp_path: Path) -> None:
-        from visionforge.gui.api.routes import _parse_run_summary
+        from visionforge.gui.api.run_history import (
+            parse_run_summary as _parse_run_summary,
+        )
 
         data = {
             "experiment": "coffee",
