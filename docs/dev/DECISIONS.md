@@ -5047,6 +5047,12 @@ first draft put the second step on the folder row, and the card covered the coun
 
 **Amended 2026-10-17: the sample dataset is one click away in every task panel.** The sample could only be created by the guide, and only for the open tab, so the segmentation one was hard to find. Each panel (classification, detection, regression, segmentation, anomaly) now has a small "usar dataset de exemplo" button under its folder row (`SampleDatasetButton`). It calls `createSample(task)`, the same call the guide's button makes, and applies the result with the `sample-forms` functions the guide uses, so the folder, the class count and the image size land exactly as in the guide; a 409 reuses the existing folder. A failure shows as a red line under the button. The guide only changed to share `createSample`.
 
+**Update (2026-10-24):** The sample-dataset endpoint declares HTTP 409 in
+OpenAPI when the sample folder already exists, matching its existing response
+with `detail` and `path`. This case returns `JSONResponse` rather than raising
+`HTTPException`, so the exception-documentation check did not expose the missing
+declaration. The HTTP contract snapshot records the added status explicitly.
+
 ## ADR-118 — Training story: an illustrative animation driven by real stages
 
 **Date:** 2026-10-13

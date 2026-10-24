@@ -843,7 +843,7 @@ async def preview_preprocess(
     "/sample-dataset",
     status_code=201,
     response_model=SampleDatasetResponse,
-    responses={**_BAD_REQUEST, **_SERVER_ERROR},
+    responses={**_BAD_REQUEST, **_CONFLICT, **_SERVER_ERROR},
 )
 async def sample_dataset(
     req: SampleDatasetRequest,

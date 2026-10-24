@@ -94,3 +94,9 @@ def test_resume_errors_are_documented() -> None:
     """Continuation clients can discover missing, busy and unreadable runs."""
     responses = app.openapi()["paths"]["/api/runs/{run_id}/resume"]["post"]["responses"]
     assert {"404", "409", "500"} <= responses.keys()
+
+
+def test_sample_dataset_conflict_is_documented() -> None:
+    """Clients can discover the existing-folder response carrying a usable path."""
+    responses = app.openapi()["paths"]["/api/sample-dataset"]["post"]["responses"]
+    assert {"400", "409", "500"} <= responses.keys()
