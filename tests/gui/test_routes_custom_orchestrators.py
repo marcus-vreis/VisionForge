@@ -106,7 +106,7 @@ class TestRoutesExist:
 
 class TestCustomReplicates:
     def test_dispatch_uses_declared_primary_metric(
-        self, app_and_routes: tuple, tmp_path: Path
+        self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
     ) -> None:
         from visionforge.core.replicates import ReplicateTrial
 
@@ -128,7 +128,7 @@ class TestCustomReplicates:
         orig = routes_mod.run_replicates
         routes_mod.run_replicates = fake_replicates
         try:
-            client = TestClient(app, raise_server_exceptions=True)
+            client = live_client
             resp = client.post(
                 "/api/custom/toyorch/replicates",
                 json={"config": _payload(tmp_path), "seeds": [7, 8]},
@@ -198,7 +198,7 @@ class TestCustomReplicates:
 
 class TestCustomSweep:
     def test_grid_sweep_over_the_tasks_own_field(
-        self, app_and_routes: tuple, tmp_path: Path
+        self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
     ) -> None:
         from visionforge.core.sweep import SweepTrial
 
@@ -222,7 +222,7 @@ class TestCustomSweep:
         orig = routes_mod.run_sweep
         routes_mod.run_sweep = fake_sweep
         try:
-            client = TestClient(app, raise_server_exceptions=True)
+            client = live_client
             resp = client.post(
                 "/api/custom/toyorch/sweep",
                 json={

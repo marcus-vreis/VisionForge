@@ -121,7 +121,7 @@ class TestSegmentationRun:
 
 class TestSegmentationCompare:
     def test_compare_dispatches_and_reports(
-        self, app_and_routes: tuple, tmp_path: Path
+        self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
     ) -> None:
         from visionforge.core.comparison import ComparisonTrial
 
@@ -139,7 +139,7 @@ class TestSegmentationCompare:
         orig = routes_mod.run_model_comparison
         routes_mod.run_model_comparison = fake_compare
         try:
-            client = TestClient(app, raise_server_exceptions=True)
+            client = live_client
             payload = {
                 "config": _payload(tmp_path),
                 "model_names": ["unet", "deeplabv3_resnet50"],
@@ -180,7 +180,7 @@ class TestSegmentationCompare:
 
 class TestSegmentationSweep:
     def test_random_sweep_dispatches_and_reports(
-        self, app_and_routes: tuple, tmp_path: Path
+        self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
     ) -> None:
         from visionforge.core.sweep import SweepTrial
 
@@ -199,7 +199,7 @@ class TestSegmentationSweep:
         orig = routes_mod.run_sweep
         routes_mod.run_sweep = fake_sweep
         try:
-            client = TestClient(app, raise_server_exceptions=True)
+            client = live_client
             payload = {
                 "config": _payload(tmp_path),
                 "mode": "random",

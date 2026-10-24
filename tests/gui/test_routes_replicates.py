@@ -54,7 +54,7 @@ class TestReplicatesEndpoints:
 
 class TestRegressionReplicates:
     def test_replicates_dispatch_and_aggregate_report(
-        self, app_and_routes: tuple, tmp_path: Path
+        self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
     ) -> None:
         from visionforge.core.replicates import ReplicateTrial
 
@@ -75,7 +75,7 @@ class TestRegressionReplicates:
         orig = routes_mod.run_replicates
         routes_mod.run_replicates = fake_replicates
         try:
-            client = TestClient(app, raise_server_exceptions=True)
+            client = live_client
             payload = {
                 "config": _payload(tmp_path),
                 "seeds": [7, 8, 9],
@@ -115,7 +115,7 @@ class TestRegressionReplicates:
             routes_mod._current_run = None
 
     def test_seeds_derived_from_config_seed_when_omitted(
-        self, app_and_routes: tuple, tmp_path: Path
+        self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
     ) -> None:
         from visionforge.core.replicates import ReplicateTrial
 
@@ -131,7 +131,7 @@ class TestRegressionReplicates:
         orig = routes_mod.run_replicates
         routes_mod.run_replicates = fake_replicates
         try:
-            client = TestClient(app, raise_server_exceptions=True)
+            client = live_client
             payload = {"config": _payload(tmp_path), "n_replicates": 3}
             resp = client.post("/api/regression/replicates", json=payload)
             assert resp.status_code == 200, resp.text
@@ -211,7 +211,7 @@ class TestUnknownMetricGuard:
     """
 
     def test_replicates_reject_metric_nobody_reported(
-        self, app_and_routes: tuple, tmp_path: Path
+        self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
     ) -> None:
         from visionforge.core.replicates import ReplicateTrial
 
@@ -225,7 +225,7 @@ class TestUnknownMetricGuard:
         orig = routes_mod.run_replicates
         routes_mod.run_replicates = fake_replicates
         try:
-            client = TestClient(app, raise_server_exceptions=True)
+            client = live_client
             resp = client.post(
                 "/api/regression/replicates",
                 json={

@@ -78,7 +78,7 @@ class TestRoutesExist:
 
 class TestDispatch:
     def test_report_carries_the_paired_matrix(
-        self, app_and_routes: tuple, tmp_path: Path
+        self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
     ) -> None:
         app, routes_mod = app_and_routes
         routes_mod._current_run = None
@@ -118,7 +118,7 @@ class TestDispatch:
         orig = routes_mod.run_replicated_comparison
         routes_mod.run_replicated_comparison = fake_comparison
         try:
-            client = TestClient(app, raise_server_exceptions=True)
+            client = live_client
             resp = client.post(
                 "/api/regression/replicated-comparison",
                 json={
@@ -149,7 +149,7 @@ class TestDispatch:
             routes_mod._current_run = None
 
     def test_seeds_derived_from_the_config_when_omitted(
-        self, app_and_routes: tuple, tmp_path: Path
+        self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
     ) -> None:
         app, routes_mod = app_and_routes
         routes_mod._current_run = None
@@ -164,7 +164,7 @@ class TestDispatch:
         orig = routes_mod.run_replicated_comparison
         routes_mod.run_replicated_comparison = fake_comparison
         try:
-            client = TestClient(app, raise_server_exceptions=True)
+            client = live_client
             resp = client.post(
                 "/api/regression/replicated-comparison",
                 json={
@@ -247,7 +247,7 @@ class TestGuards:
             release_queue(routes_mod)
 
     def test_all_variants_failing_marks_the_run_failed(
-        self, app_and_routes: tuple, tmp_path: Path
+        self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
     ) -> None:
         app, routes_mod = app_and_routes
         routes_mod._current_run = None
@@ -260,7 +260,7 @@ class TestGuards:
         orig = routes_mod.run_replicated_comparison
         routes_mod.run_replicated_comparison = fake_comparison
         try:
-            client = TestClient(app, raise_server_exceptions=True)
+            client = live_client
             resp = client.post(
                 "/api/regression/replicated-comparison",
                 json={

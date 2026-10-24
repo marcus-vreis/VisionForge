@@ -639,7 +639,7 @@ class TestApiRunsEndpoint:
         assert body["path"] == chosen
 
     def test_post_experiment_run_dispatches_cross_validation_block(
-        self, app_and_routes: tuple, tmp_path: Path
+        self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
     ) -> None:
         """When config.block='cross_validation' the worker must instantiate
         CrossValidationBlock instead of ClassificationBlock.
@@ -696,7 +696,7 @@ class TestApiRunsEndpoint:
                     "fold_seed": 42,
                 },
             }
-            client = TestClient(app, raise_server_exceptions=True)
+            client = live_client
             resp = client.post("/api/experiment/run", json=payload)
 
             assert resp.status_code == 200
@@ -716,7 +716,7 @@ class TestApiRunsEndpoint:
             routes_mod._current_run = None
 
     def test_post_experiment_run_dispatches_transfer_learning_block(
-        self, app_and_routes: tuple, tmp_path: Path
+        self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
     ) -> None:
         """block='transfer_learning' must instantiate TransferLearningBlock."""
         from visionforge.blocks.transfer_learning import TransferLearningBlock
@@ -763,7 +763,7 @@ class TestApiRunsEndpoint:
                     "backbone_lr_multiplier": 0.1,
                 },
             }
-            client = TestClient(app, raise_server_exceptions=True)
+            client = live_client
             resp = client.post("/api/experiment/run", json=payload)
             assert resp.status_code == 200, resp.text
 
@@ -782,7 +782,7 @@ class TestApiRunsEndpoint:
             routes_mod._current_run = None
 
     def test_post_experiment_run_dispatches_model_comparison_block(
-        self, app_and_routes: tuple, tmp_path: Path
+        self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
     ) -> None:
         """block='model_comparison' must instantiate ModelComparisonBlock."""
         from visionforge.blocks.model_comparison import ModelComparisonBlock
@@ -829,7 +829,7 @@ class TestApiRunsEndpoint:
                     "metric": "f1",
                 },
             }
-            client = TestClient(app, raise_server_exceptions=True)
+            client = live_client
             resp = client.post("/api/experiment/run", json=payload)
             assert resp.status_code == 200, resp.text
 
@@ -849,7 +849,7 @@ class TestApiRunsEndpoint:
             routes_mod._current_run = None
 
     def test_post_experiment_run_dispatches_grid_search_block(
-        self, app_and_routes: tuple, tmp_path: Path
+        self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
     ) -> None:
         """block='grid_search' must instantiate GridSearchBlock with the dict
         hyperparameter space exactly as submitted."""
@@ -903,14 +903,16 @@ class TestApiRunsEndpoint:
                     }
                 },
             }
-            client = TestClient(app, raise_server_exceptions=True)
+            client = live_client
             resp = client.post("/api/experiment/run", json=payload)
             assert resp.status_code == 200, resp.text
 
             import time
 
+            # Wait for run(), not setup(): has_callback is written in run, which
+            # executes on a pool thread after setup has already been recorded.
             for _ in range(50):
-                if "class" in captured:
+                if "has_callback" in captured:
                     break
                 time.sleep(0.05)
             assert captured.get("class") == "GridSearchBlock"
@@ -925,7 +927,7 @@ class TestApiRunsEndpoint:
             routes_mod._current_run = None
 
     def test_post_experiment_run_dispatches_random_search_block(
-        self, app_and_routes: tuple, tmp_path: Path
+        self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
     ) -> None:
         """block='random_search' must instantiate RandomSearchBlock with the
         submitted search_space + n_trials exactly as the payload describes."""
@@ -984,7 +986,7 @@ class TestApiRunsEndpoint:
                     },
                 },
             }
-            client = TestClient(app, raise_server_exceptions=True)
+            client = live_client
             resp = client.post("/api/experiment/run", json=payload)
             assert resp.status_code == 200, resp.text
 
