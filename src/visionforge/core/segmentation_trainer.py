@@ -11,12 +11,9 @@ the segmentation standard, not by val loss. Reuses ``resolve_device`` and
 
 from __future__ import annotations
 
-import json
-import time
 from collections.abc import Callable
-from concurrent.futures import Future, ThreadPoolExecutor
-from dataclasses import asdict, dataclass, field
-from datetime import datetime
+from dataclasses import dataclass, field
+from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -24,34 +21,23 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from loguru import logger
 
-from visionforge.core.cancellation import CancellationToken, is_cancelled
-from visionforge.core.dataset_fingerprint import fingerprint_from_config
-from visionforge.core.resume import (
-    ResumeState,
-    capture_rng_state,
-    clear_resume_state,
-    require_resume_state,
-    restore_rng_state,
-    save_resume_state,
-)
-from visionforge.core.resume_provenance import validate_resume_dataset
+from visionforge.core import trainer as trainer_common
+from visionforge.core import training_loop
+from visionforge.core.cancellation import CancellationToken
 from visionforge.core.tracking import TensorBoardLogger
-from visionforge.core.trainer import (
-    _seed_everything,
-    resolve_device,
-    save_best_checkpoint,
-)
 from visionforge.core.training_health import (
     collapsed_segmentation,
     stagnant_loss,
     summarize,
 )
 from visionforge.models.segmentation_factory import segmentation_logits
-from visionforge.utils.environment import capture_environment
 from visionforge.utils.messages import tr
 from visionforge.utils.segmentation_config import SegmentationConfig
+
+_seed_everything = trainer_common._seed_everything
+resolve_device = trainer_common.resolve_device
+save_best_checkpoint = trainer_common.save_best_checkpoint
 
 
 @dataclass
@@ -90,13 +76,7 @@ def per_image_confusion(
     num_classes: int,
     ignore_index: int,
 ) -> np.ndarray:
-    """One KxK confusion matrix per image in the batch.
-
-    Applies the same ignore-index and in-range filtering as
-    ``SegmentationMetricAccumulator.update``, so the matrices sum to exactly the
-    accumulator's — that identity is what lets a bootstrap interval (ADR-076)
-    bracket the metric a run actually reports.
-    """
+    """Return one KxK confusion matrix per image using valid target pixels."""
     preds = logits.argmax(dim=1).reshape(logits.shape[0], -1)
     truth = target.reshape(target.shape[0], -1)
     out = np.zeros((truth.shape[0], num_classes, num_classes), dtype=np.int64)
@@ -132,6 +112,7 @@ class SegmentationMetricAccumulator:
         self._cm = torch.zeros(num_classes, num_classes, dtype=torch.long)
 
     def update(self, logits: torch.Tensor, target: torch.Tensor) -> None:
+        """Accumulate confusion counts for valid target classes."""
         preds = logits.argmax(dim=1)
         valid = target != self._ignore
         t = target[valid].to(torch.long)
@@ -175,15 +156,7 @@ class SegmentationMetricAccumulator:
 
 
 def check_mask_ids(masks: torch.Tensor, num_classes: int, ignore_index: int) -> None:
-    """Refuse a mask id the model has no output for, while the batch is on the CPU.
-
-    On CUDA such a target trips a device-side assert inside the loss, and that
-    poisons the process's CUDA context: every later job fails, CPU ones included,
-    until the server restarts. One ``max`` over an integer batch is cheap.
-
-    Raises:
-        ValueError: a mask id outside ``0..num_classes-1`` that is not ``ignore_index``.
-    """
+    """Reject out-of-range mask ids on CPU before they poison CUDA state."""
     valid = masks[masks != ignore_index]
     if valid.numel() == 0:
         return
@@ -205,11 +178,7 @@ def check_mask_ids(masks: torch.Tensor, num_classes: int, ignore_index: int) -> 
 def dice_loss(
     logits: torch.Tensor, target: torch.Tensor, ignore_index: int
 ) -> torch.Tensor:
-    """Soft multi-class Dice loss (1 - mean Dice over classes).
-
-    Computes Dice over softmax probabilities against a one-hot target, masking
-    out ``ignore_index`` pixels. Differentiable and safe when a class is absent.
-    """
+    """Compute soft multi-class Dice loss while masking ignored targets."""
     num_classes = logits.shape[1]
     probs = F.softmax(logits, dim=1)
 
@@ -236,6 +205,7 @@ class _CombinedLoss(nn.Module):
         self._ignore = ignore_index
 
     def forward(self, logits: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        """Compute the configured segmentation criterion."""
         loss: torch.Tensor = self._ce(logits, target) + dice_loss(
             logits, target, self._ignore
         )
@@ -250,11 +220,16 @@ class _DiceCriterion(nn.Module):
         self._ignore = ignore_index
 
     def forward(self, logits: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        """Compute the configured segmentation criterion."""
         return dice_loss(logits, target, self._ignore)
 
 
-class SegmentationTrainer:
+class SegmentationTrainer(training_loop.GradientTrainerMethods):
     """Manages the full training loop for one segmentation experiment."""
+
+    _epoch_result_type = SegmentationEpochResult
+    _initial_best = -1.0
+    _epoch_fields = ("val_miou", "val_dice", "val_pixel_acc")
 
     def __init__(self, config: SegmentationConfig) -> None:
         self._config = config
@@ -262,11 +237,6 @@ class SegmentationTrainer:
         self._num_classes = config.model.num_classes
         self._ignore_index = config.data.ignore_index
         self._device, self._dp_ids, self._device_label = resolve_device(config.device)
-
-    @property
-    def device_label(self) -> str:
-        """Human-readable label of the device actually used (or fallback)."""
-        return self._device_label
 
     def fit(
         self,
@@ -278,144 +248,24 @@ class SegmentationTrainer:
         resume_dir: Path | None = None,
     ) -> SegmentationTrainResult:
         """Run the segmentation training loop (best checkpoint by val mIoU)."""
-        resumed = require_resume_state(resume_dir) if resume_dir is not None else None
-        if resume_dir is not None:
-            validate_resume_dataset(resume_dir, self._config)
-        cfg = self._config.training
-        _seed_everything(cfg.seed, deterministic=cfg.deterministic)
-        logger.info("SegmentationTrainer using device: {}", self._device_label)
-
-        model = self._prepare_model(model)
-        self._apply_transfer_learning(model)
-        optimizer = optimizer if optimizer is not None else self._build_optimizer(model)
-        criterion = self._build_criterion()
-        scheduler = self._build_scheduler(optimizer)
-        # Resolved before anything is created: a resumed run must continue in its
-        # own directory, or it leaves an empty one behind and writes its
-        # TensorBoard events somewhere nothing will look.
-        run_dir = self._resolve_run_dir(resumed, resume_dir)
-        model_path = run_dir / "best_model.pth"
-        tb = TensorBoardLogger(run_dir / "tensorboard")
-
-        history, best_val_miou, best_epoch, patience_counter, start_epoch = (
-            self._restore_training_state(resumed, model, optimizer, scheduler, run_dir)
+        return training_loop.fit_training(
+            self,
+            model,
+            data_module,
+            optimizer,
+            progress_callback,
+            cancel_token,
+            resume_dir,
+            result_type=SegmentationTrainResult,
+            seed=_seed_everything,
+            tensorboard_factory=TensorBoardLogger,
+            save_best=save_best_checkpoint,
+            metric_name="val_miou",
+            best_field="best_val_miou",
+            log_format="SegmentationTrainer using device: {}",
+            higher_is_better=True,
+            ensure_checkpoint=self._ensure_checkpoint,
         )
-        t0 = time.monotonic()
-
-        if progress_callback is not None:
-            progress_callback(
-                {
-                    "event": "start",
-                    "total_epochs": cfg.epochs,
-                    "device": self._device_label,
-                }
-            )
-
-        train_loader = data_module.train_loader()
-        val_loader = data_module.val_loader()
-        self._loader_workers = {
-            name: loader.num_workers
-            for name, loader in (("train", train_loader), ("val", val_loader))
-            if hasattr(loader, "num_workers")
-        }
-        save_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="ckpt")
-        save_future = None
-
-        if resumed is not None:
-            restore_rng_state(resumed.rng_state, train_loader, val_loader)
-
-        stopped = False
-        for epoch in range(start_epoch, cfg.epochs + 1):
-            # A crash or cancellation may coincide with the stopping boundary.
-            if self._early_stopping_reached(
-                patience_counter, cfg.early_stopping_patience
-            ):
-                break
-            # The safe point: the previous epoch's checkpoint is written and its
-            # metrics emitted, so stopping here leaves the run directory whole.
-            if is_cancelled(cancel_token):
-                logger.info(
-                    "Run cancelled at epoch {}; keeping the best checkpoint so far.",
-                    epoch,
-                )
-                stopped = True
-                break
-
-            train_loss = self._train_epoch(model, train_loader, optimizer, criterion)
-            val_loss, miou, dice, pixel_acc = self._eval_epoch(
-                model, val_loader, criterion
-            )
-
-            self._step_scheduler(scheduler, val_loss)
-
-            result = SegmentationEpochResult(
-                epoch=epoch,
-                train_loss=train_loss,
-                val_loss=val_loss,
-                val_miou=miou,
-                val_dice=dice,
-                val_pixel_acc=pixel_acc,
-            )
-            history.append(result)
-            self._report_epoch(result, tb, progress_callback, t0, cfg.epochs)
-
-            if miou > best_val_miou:
-                best_val_miou = miou
-                best_epoch = epoch
-                patience_counter = 0
-                save_future = save_best_checkpoint(
-                    save_pool, save_future, model, model_path
-                )
-            else:
-                patience_counter += 1
-
-            # Snapshot the completed epoch, including best metric and patience.
-            save_resume_state(
-                run_dir,
-                ResumeState(
-                    epoch=epoch,
-                    model=model.state_dict(),
-                    optimizer=optimizer.state_dict(),
-                    scheduler=self._scheduler_state_dict(scheduler),
-                    scaler=None,
-                    best_metric=best_val_miou,
-                    best_epoch=best_epoch,
-                    patience_counter=patience_counter,
-                    history=[asdict(h) for h in history],
-                    rng_state=capture_rng_state(train_loader, val_loader),
-                ),
-            )
-
-            # 0 disables early stopping outright. Without this guard it
-            # would mean the opposite -- the very first epoch without an
-            # improvement satisfies `1 >= 0` and ends the run.
-            if self._early_stopping_reached(
-                patience_counter, cfg.early_stopping_patience
-            ):
-                logger.info("Early stopping at epoch {}.", epoch)
-                break
-
-        self._finish_checkpoint_writes(run_dir, cancel_token, save_pool, save_future)
-
-        health = self._training_warnings(history)
-
-        best_epoch, best_val_miou = self._ensure_checkpoint(
-            model, model_path, history, best_epoch, best_val_miou
-        )
-        train_result = SegmentationTrainResult(
-            stopped=stopped,
-            best_epoch=best_epoch,
-            best_val_miou=best_val_miou,
-            total_epochs=len(history),
-            device_used=self._device_label,
-            history=history,
-            model_path=model_path,
-            warnings=health,
-        )
-        self._write_run_json(run_dir, train_result)
-        self._close_training(tb, progress_callback, len(history))
-
-        return train_result
 
     def evaluate(self, model: nn.Module, loader: Any) -> tuple[float, float, float]:
         """Compute (mean_iou, dice, pixel_acc) for ``model`` over ``loader``."""
@@ -424,14 +274,7 @@ class SegmentationTrainer:
     def evaluate_with_confusion(
         self, model: nn.Module, loader: Any
     ) -> tuple[tuple[float, float, float], np.ndarray]:
-        """As ``evaluate``, plus one KxK confusion matrix **per image**.
-
-        Per-image rather than per-pixel because the image is the sampling unit
-        the bootstrap intervals resample (ADR-076) — pixels inside one image are
-        not independent draws. Summing the returned matrices reproduces the
-        accumulator's single matrix exactly, so the aggregates and the intervals
-        cannot describe different numbers.
-        """
+        """Return segmentation metrics and one KxK confusion matrix per image."""
         model = model.to(self._device)
         model.eval()
         metrics = SegmentationMetricAccumulator(self._num_classes, self._ignore_index)
@@ -458,158 +301,51 @@ class SegmentationTrainer:
 
     # ── private helpers ────────────────────────────────────────────────────────
 
-    def _resolve_run_dir(
-        self, resumed: ResumeState | None, resume_dir: Path | None
-    ) -> Path:
-        """Reuse the resumed run directory before creating any output artifacts."""
-        if resumed is not None and resume_dir is not None:
-            return resume_dir
-        return self._make_run_dir()
-
-    @staticmethod
-    def _early_stopping_reached(patience_counter: int, patience: int) -> bool:
-        """Check patience while preserving zero as the disabled setting."""
-        return patience > 0 and patience_counter >= patience
-
-    @staticmethod
-    def _step_scheduler(
-        scheduler: torch.optim.lr_scheduler.LRScheduler | None, val_loss: float
-    ) -> None:
-        """Advance the scheduler using validation loss only for plateau scheduling."""
-        if scheduler is None:
-            return
-        if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
-            scheduler.step(val_loss)
-            return
-        scheduler.step()
-
-    def _restore_training_state(
-        self,
-        resumed: ResumeState | None,
-        model: nn.Module,
-        optimizer: torch.optim.Optimizer,
-        scheduler: torch.optim.lr_scheduler.LRScheduler | None,
-        run_dir: Path,
-    ) -> tuple[list[SegmentationEpochResult], float, int, int, int]:
-        """Restore weights and training bookkeeping without restoring loader randomness."""
-        if resumed is None:
-            return [], -1.0, 0, 0, 1
-        # Weights alone cannot continue: the optimizer and scheduler come back
-        # too, or the search restarts where the loss curve never was.
-        model.load_state_dict(resumed.model)
-        optimizer.load_state_dict(resumed.optimizer)
-        if scheduler is not None and resumed.scheduler is not None:
-            scheduler.load_state_dict(resumed.scheduler)
-        best_val_miou = resumed.best_metric
-        best_epoch = resumed.best_epoch
-        patience_counter = resumed.patience_counter
-        history = [SegmentationEpochResult(**h) for h in resumed.history]
-        start_epoch = resumed.epoch + 1
-        logger.info(
-            "Resuming {} at epoch {} of {}.",
-            run_dir.name,
-            start_epoch,
-            self._config.training.epochs,
-        )
-        return history, best_val_miou, best_epoch, patience_counter, start_epoch
-
-    @staticmethod
-    def _report_epoch(
-        result: SegmentationEpochResult,
-        tb: TensorBoardLogger,
-        progress_callback: Callable[[dict[str, Any]], None] | None,
-        t0: float,
-        total_epochs: int,
-    ) -> None:
-        """Report a completed epoch to TensorBoard, logs and the progress callback."""
-        epoch = result.epoch
-        train_loss = result.train_loss
-        val_loss = result.val_loss
-        miou = result.val_miou
-        dice = result.val_dice
-        pixel_acc = result.val_pixel_acc
-        tb.log_scalars(
-            epoch,
-            {
-                "loss/train": train_loss,
-                "loss/val": val_loss,
-                "miou/val": miou,
-                "dice/val": dice,
-                "pixel_acc/val": pixel_acc,
+    _report_epoch = staticmethod(
+        partial(
+            training_loop.report_epoch,
+            scalar_fields={
+                "loss/train": "train_loss",
+                "loss/val": "val_loss",
+                "miou/val": "val_miou",
+                "dice/val": "val_dice",
+                "pixel_acc/val": "val_pixel_acc",
             },
+            event_fields=(
+                "train_loss",
+                "val_loss",
+                "val_miou",
+                "val_dice",
+                "val_pixel_acc",
+            ),
+            log_format="Epoch {}/{} | train_loss={:.4f} val_loss={:.4f} mIoU={:.4f} dice={:.4f} pixel_acc={:.4f}",
+            log_fields=(
+                "train_loss",
+                "val_loss",
+                "val_miou",
+                "val_dice",
+                "val_pixel_acc",
+            ),
         )
-
-        logger.info(
-            "Epoch {}/{} | train_loss={:.4f} val_loss={:.4f} "
-            "mIoU={:.4f} dice={:.4f} pixel_acc={:.4f}",
-            epoch,
-            total_epochs,
-            train_loss,
-            val_loss,
-            miou,
-            dice,
-            pixel_acc,
-        )
-
-        if progress_callback is not None:
-            progress_callback(
-                {
-                    "event": "epoch_end",
-                    "epoch": epoch,
-                    "total_epochs": total_epochs,
-                    "train_loss": train_loss,
-                    "val_loss": val_loss,
-                    "val_miou": miou,
-                    "val_dice": dice,
-                    "val_pixel_acc": pixel_acc,
-                    "elapsed_s": round(time.monotonic() - t0, 3),
-                }
-            )
-
-    @staticmethod
-    def _scheduler_state_dict(
-        scheduler: torch.optim.lr_scheduler.LRScheduler | None,
-    ) -> dict[str, Any] | None:
-        """Capture scheduler state only when scheduling is enabled."""
-        if scheduler is None:
-            return None
-        state: dict[str, Any] = scheduler.state_dict()
-        return state
-
-    @staticmethod
-    def _finish_checkpoint_writes(
-        run_dir: Path,
-        cancel_token: CancellationToken | None,
-        save_pool: ThreadPoolExecutor,
-        save_future: Future[None] | None,
-    ) -> None:
-        """Clear completed resume state and wait for outstanding checkpoint writes."""
-        if not is_cancelled(cancel_token):
-            clear_resume_state(run_dir)
-
-        if save_future is not None:
-            save_future.result()
-        save_pool.shutdown(wait=False)
+    )
 
     def _training_warnings(
         self, history: list[SegmentationEpochResult]
     ) -> list[dict[str, str]]:
         """Summarize and log training health warnings for the completed run."""
-        # A run that never moved still reports metrics; say so (ADR-099).
-        last = getattr(self, "_last_metrics", None)
-        health = summarize(
-            [
-                stagnant_loss([h.train_loss for h in history]),
+        return training_loop.training_warnings(
+            history,
+            summarize,
+            stagnant_loss,
+            additional=lambda: [
                 collapsed_segmentation(
-                    getattr(last, "per_class_iou", []),
-                    present_classes=getattr(last, "present_classes", 0),
-                ),
-            ]
+                    getattr(getattr(self, "_last_metrics", None), "per_class_iou", []),
+                    present_classes=getattr(
+                        getattr(self, "_last_metrics", None), "present_classes", 0
+                    ),
+                )
+            ],
         )
-        for warning in health:
-            logger.warning("{}", warning["message"])
-
-        return health
 
     @staticmethod
     def _ensure_checkpoint(
@@ -636,47 +372,10 @@ class SegmentationTrainer:
 
         return best_epoch, best_val_miou
 
-    def _close_training(
-        self,
-        tb: TensorBoardLogger,
-        progress_callback: Callable[[dict[str, Any]], None] | None,
-        total_epochs: int,
-    ) -> None:
-        """Close logging, release cached device memory and emit the final event."""
-        tb.close()
-
-        if self._device.type == "cuda":
-            torch.cuda.empty_cache()
-
-        if progress_callback is not None:
-            progress_callback({"event": "end", "total_epochs": total_epochs})
-
-    def _prepare_model(self, model: nn.Module) -> nn.Module:
-        model = model.to(self._device)
-        if self._dp_ids:
-            model = nn.DataParallel(model, device_ids=self._dp_ids)
-        return model
-
-    def _apply_transfer_learning(self, model: nn.Module) -> None:
-        """Freeze the backbone for feature extraction (no-op otherwise).
-
-        ``feature_extraction`` freezes every child except the dense head (the last
-        named child); ``fine_tuning`` and the unset case leave all params
-        trainable — the LR split happens in ``_build_optimizer``.
-        """
-        tl = self._config.transfer_learning
-        if tl is None or tl.mode != "feature_extraction":
-            return
-        head, backbone = self._split_named_params(model)
-        for p in backbone:
-            p.requires_grad = False
-        for p in head:
-            p.requires_grad = True
-
     @staticmethod
     def _split_named_params(
         model: nn.Module,
-    ) -> tuple[list[nn.Parameter], list[nn.Parameter]]:
+    ) -> training_loop.ParameterGroups:
         """Return (head_params, backbone_params) split by the last named child.
 
         Unwraps DataParallel so the head is the model's own final layer. The dense
@@ -692,45 +391,6 @@ class SegmentationTrainer:
             (head if name == head_name else backbone).extend(child.parameters())
         return head, backbone
 
-    def _build_optimizer(self, model: nn.Module) -> torch.optim.Optimizer:
-        cfg = self._config.training
-        builders: dict[str, Callable[..., torch.optim.Optimizer]] = {
-            "adam": torch.optim.Adam,
-            "sgd": torch.optim.SGD,
-            "adamw": torch.optim.AdamW,
-        }
-        builder = builders[cfg.optimizer]
-        tl = self._config.transfer_learning
-
-        if tl is None:
-            return builder(
-                model.parameters(),
-                lr=cfg.learning_rate,
-                weight_decay=cfg.weight_decay,
-            )
-
-        if tl.mode == "feature_extraction":
-            trainable = [p for p in model.parameters() if p.requires_grad]
-            return builder(
-                trainable, lr=cfg.learning_rate, weight_decay=cfg.weight_decay
-            )
-
-        # fine_tuning: backbone at a reduced LR, head at the full LR.
-        head, backbone = self._split_named_params(model)
-        groups = [
-            {
-                "params": backbone,
-                "lr": cfg.learning_rate * tl.backbone_lr_multiplier,
-                "weight_decay": cfg.weight_decay,
-            },
-            {
-                "params": head,
-                "lr": cfg.learning_rate,
-                "weight_decay": cfg.weight_decay,
-            },
-        ]
-        return builder(groups)
-
     def _build_criterion(self) -> nn.Module:
         loss = self._config.training.loss
         if loss == "dice":
@@ -739,35 +399,6 @@ class SegmentationTrainer:
             return _CombinedLoss(self._ignore_index)
         return nn.CrossEntropyLoss(ignore_index=self._ignore_index)
 
-    def _build_scheduler(
-        self, optimizer: torch.optim.Optimizer
-    ) -> torch.optim.lr_scheduler.LRScheduler | None:
-        sched_cfg = self._config.training.scheduler
-        kind = sched_cfg.kind
-        if kind == "none":
-            return None
-        if kind == "cosine":
-            return torch.optim.lr_scheduler.CosineAnnealingLR(
-                optimizer, T_max=self._config.training.epochs
-            )
-        if kind == "step":
-            return torch.optim.lr_scheduler.StepLR(
-                optimizer, step_size=sched_cfg.step_size, gamma=sched_cfg.gamma
-            )
-        return torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer,
-            mode="min",
-            patience=sched_cfg.patience,
-            factor=sched_cfg.factor,
-            min_lr=sched_cfg.min_lr,
-        )
-
-    def _make_run_dir(self) -> Path:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-        run_dir = self._config.output.models_dir / self._config.name / timestamp
-        run_dir.mkdir(parents=True, exist_ok=False)
-        return run_dir
-
     def _train_epoch(
         self,
         model: nn.Module,
@@ -775,20 +406,18 @@ class SegmentationTrainer:
         optimizer: torch.optim.Optimizer,
         criterion: nn.Module,
     ) -> float:
-        model.train()
-        total_loss = 0.0
-        for inputs, targets in loader:
-            check_mask_ids(targets, self._num_classes, self._ignore_index)
-            inputs = inputs.to(self._device, non_blocking=True)
-            targets = targets.to(self._device, non_blocking=True)
-            optimizer.zero_grad(set_to_none=True)
-            logits = segmentation_logits(model(inputs))
-            loss = criterion(logits, targets)
-            loss.backward()
-            optimizer.step()
-            total_loss += loss.item()
-        n = len(loader)
-        return total_loss / n if n > 0 else 0.0
+        """Train one epoch using the shared optimization loop."""
+        return training_loop.train_epoch(
+            outputs_transform=segmentation_logits,
+            validate_targets=lambda targets: check_mask_ids(
+                targets, self._num_classes, self._ignore_index
+            ),
+            model=model,
+            loader=loader,
+            optimizer=optimizer,
+            criterion=criterion,
+            device=self._device,
+        )
 
     def _eval_epoch(
         self,
@@ -814,63 +443,26 @@ class SegmentationTrainer:
         return val_loss, miou, dice, pixel_acc
 
     def _write_run_json(self, run_dir: Path, result: SegmentationTrainResult) -> None:
-        """Write the ADR-013 run.json with segmentation metrics + history."""
-        best = next((r for r in result.history if r.epoch == result.best_epoch), None)
-        run_json: dict[str, Any] = {
-            "id": f"{self._config.name}_{run_dir.name}",
-            "experiment": self._config.name,
-            "timestamp": datetime.now().isoformat(),
-            "status": "completed",
-            # True when the stop cut this run (ADR-111); "completed" says only
-            # that it ended cleanly, with total_epochs as far as it got.
-            "stopped": result.stopped,
-            "device_used": result.device_used,
-            "environment": capture_environment(),
-            "runtime": {"loader_workers": getattr(self, "_loader_workers", {})},
-            # Proves two runs saw the same data, not just the same path.
-            "dataset_fingerprint": fingerprint_from_config(self._config),
-            "run_dir": str(run_dir.resolve()),
-            "config": self._config.model_dump(mode="json"),
-            "metrics": {
-                # No epoch, no best: null rather than the -1 sentinel or a 0.0
-                # that reads as a measured result (ADR-111).
-                "best_val_miou": result.best_val_miou if result.total_epochs else None,
-                "best_epoch": result.best_epoch,
-                "total_epochs": result.total_epochs,
-                # Validation score at the best epoch. The test split is
-                # test_<name>, written after evaluation; the bare names were
-                # ambiguous and old run.json files still carry them (readers
-                # fall back to them).
-                "val_miou": best.val_miou if best else None,
-                "val_dice": best.val_dice if best else None,
-                "val_pixel_acc": best.val_pixel_acc if best else None,
+        """Write the ADR-013 run.json with segmentation metrics and history."""
+        training_loop.write_task_run_json(
+            self._config,
+            run_dir,
+            result,
+            getattr(self, "_loader_workers", {}),
+            best_metric="best_val_miou",
+            epoch_metrics={
+                "val_miou": "val_miou",
+                "val_dice": "val_dice",
+                "val_pixel_acc": "val_pixel_acc",
             },
-            "history": [
-                {
-                    "epoch": r.epoch,
-                    "train_loss": r.train_loss,
-                    "val_loss": r.val_loss,
-                    "val_miou": r.val_miou,
-                    "val_dice": r.val_dice,
-                    "val_pixel_acc": r.val_pixel_acc,
-                }
-                for r in result.history
-            ],
-            "artifacts": {
-                # None when nothing was trained: every reader then says "no
-                # checkpoint" instead of failing to open a path (ADR-111).
-                "model": (
-                    str(result.model_path) if result.model_path.is_file() else None
-                ),
-                "graphics": [],
-                "report": None,
-            },
-            "tests": [],
-            # Empty on a healthy run (ADR-099).
-            "warnings": result.warnings,
-        }
-        (run_dir / "run.json").write_text(
-            json.dumps(run_json, indent=2), encoding="utf-8"
+            history_fields=(
+                "epoch",
+                "train_loss",
+                "val_loss",
+                "val_miou",
+                "val_dice",
+                "val_pixel_acc",
+            ),
         )
 
 

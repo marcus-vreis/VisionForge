@@ -18,11 +18,9 @@ the resulting image-level F1. Reuses ``resolve_device``/``_seed_everything``.
 
 from __future__ import annotations
 
-import json
 import time
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -32,23 +30,14 @@ import torch.nn as nn
 from loguru import logger
 from sklearn.metrics import f1_score, roc_auc_score
 
+from visionforge.core import resume, training_loop
 from visionforge.core.cancellation import CancellationToken, is_cancelled
-from visionforge.core.dataset_fingerprint import fingerprint_from_config
-from visionforge.core.resume import (
-    ResumeState,
-    capture_rng_state,
-    clear_resume_state,
-    require_resume_state,
-    restore_rng_state,
-    save_resume_state,
-)
 from visionforge.core.resume_provenance import validate_resume_dataset
 from visionforge.core.tracking import TensorBoardLogger
 from visionforge.core.trainer import _seed_everything, resolve_device
 from visionforge.core.training_health import stagnant_loss, summarize
 from visionforge.models.anomaly_factory import ConvAutoencoder, PatchCore
 from visionforge.utils.anomaly_config import AnomalyConfig
-from visionforge.utils.environment import capture_environment
 
 
 def compute_auroc(scores: torch.Tensor, labels: torch.Tensor) -> float:
@@ -68,12 +57,7 @@ def compute_threshold(normal_scores: torch.Tensor, percentile: float) -> float:
 
 
 def score_images(model: nn.Module, inputs: torch.Tensor) -> torch.Tensor:
-    """Per-image anomaly score (reconstruction error or patch distance).
-
-    Shared by the training loop and batch-prediction so both families score the
-    same way: ConvAutoencoder = mean squared reconstruction error, PatchCore =
-    max patch nearest-neighbor distance.
-    """
+    """Score images using reconstruction error or PatchCore patch distance."""
     if isinstance(model, ConvAutoencoder):
         recon = model(inputs)
         err: torch.Tensor = ((recon - inputs) ** 2).mean(dim=(1, 2, 3))
@@ -129,7 +113,7 @@ def _calibration_loader(data_module: Any) -> Any:
     return data_module.train_loader()
 
 
-class AnomalyTrainer:
+class AnomalyTrainer(training_loop.TrainingOutput):
     """Manages training/scoring for one anomaly-detection experiment."""
 
     def __init__(self, config: AnomalyConfig) -> None:
@@ -137,11 +121,6 @@ class AnomalyTrainer:
         self._loader_workers: dict[str, int] = {}
         self._percentile = config.training.threshold_percentile
         self._device, self._dp_ids, self._device_label = resolve_device(config.device)
-
-    @property
-    def device_label(self) -> str:
-        """Human-readable label of the device actually used (or fallback)."""
-        return self._device_label
 
     def fit(
         self,
@@ -155,7 +134,9 @@ class AnomalyTrainer:
         """Train (autoencoder) or fit the memory bank (PatchCore) and score test."""
         if resume_dir is not None and isinstance(model, PatchCore):
             raise ValueError("Cannot resume PatchCore: it has no resumable epoch loop.")
-        resumed = require_resume_state(resume_dir) if resume_dir is not None else None
+        resumed = (
+            resume.require_resume_state(resume_dir) if resume_dir is not None else None
+        )
         if resume_dir is not None:
             validate_resume_dataset(resume_dir, self._config)
         _seed_everything(
@@ -218,22 +199,13 @@ class AnomalyTrainer:
     def evaluate(
         self, model: nn.Module, calibration_loader: Any, test_loader: Any
     ) -> tuple[float, float, float]:
-        """Return (auroc, threshold, image_f1) for ``model`` on the test split.
-
-        The threshold is a percentile of the *unaugmented* training normals; the
-        F1 uses that threshold against the binary test labels.
-        """
+        """Return test AUROC, calibrated threshold and image-level F1."""
         return self.evaluate_with_scores(model, calibration_loader, test_loader)[0]
 
     def evaluate_with_scores(
         self, model: nn.Module, calibration_loader: Any, test_loader: Any
     ) -> tuple[tuple[float, float, float], np.ndarray, np.ndarray]:
-        """As ``evaluate``, plus the per-image test labels and anomaly scores.
-
-        Those arrays are what the bootstrap intervals resample (ADR-076), and
-        they come from the same pass that produced the aggregates, so a report
-        cannot show a metric computed differently from its interval.
-        """
+        """Return anomaly metrics, per-image test labels and anomaly scores."""
         model = model.to(self._device)
         model.eval()
         normal_scores = self._collect_scores(model, calibration_loader)[0]
@@ -256,7 +228,7 @@ class AnomalyTrainer:
         progress_callback: Callable[[dict[str, Any]], None] | None,
         tb: TensorBoardLogger,
         cancel_token: CancellationToken | None = None,
-        resumed: ResumeState | None = None,
+        resumed: resume.ResumeState | None = None,
     ) -> AnomalyTrainResult:
         cfg = self._config.training
         optimizer = optimizer or self._build_optimizer(model)
@@ -300,7 +272,7 @@ class AnomalyTrainer:
         t0 = time.monotonic()
 
         if resumed is not None:
-            restore_rng_state(
+            resume.restore_rng_state(
                 resumed.rng_state, train_loader, test_loader, calibration_loader
             )
 
@@ -340,9 +312,9 @@ class AnomalyTrainer:
                 patience += 1
 
             # Snapshot the completed epoch, including best metric and patience.
-            save_resume_state(
+            resume.save_resume_state(
                 run_dir,
-                ResumeState(
+                resume.ResumeState(
                     epoch=epoch,
                     model=model.state_dict(),
                     optimizer=optimizer.state_dict(),
@@ -352,7 +324,7 @@ class AnomalyTrainer:
                     best_epoch=best_epoch,
                     patience_counter=patience,
                     history=[asdict(h) for h in history],
-                    rng_state=capture_rng_state(
+                    rng_state=resume.capture_rng_state(
                         train_loader, test_loader, calibration_loader
                     ),
                 ),
@@ -366,7 +338,7 @@ class AnomalyTrainer:
                 break
 
         if not is_cancelled(cancel_token):
-            clear_resume_state(run_dir)
+            resume.clear_resume_state(run_dir)
 
         return self._build_autoencoder_result(
             model, model_path, history, best_epoch, stopped
@@ -420,7 +392,7 @@ class AnomalyTrainer:
     def _autoencoder_early_stopping_reached(self, patience: int) -> bool:
         """Keep zero patience disabled at both epoch stopping boundaries."""
         limit = self._config.training.early_stopping_patience
-        return limit > 0 and patience >= limit
+        return bool(limit > 0 and patience >= limit)
 
     def _train_autoencoder_epoch(
         self,
@@ -507,6 +479,7 @@ class AnomalyTrainer:
         # the only output — and the memory bank takes minutes to hours to build.
         # An hour of silence reads as a hung process, so each phase reports.
         def phase(label: str, done: int, total: int) -> None:
+            """Emit progress for a completed PatchCore fitting phase."""
             if progress_callback is None:
                 return
             progress_callback(
@@ -646,65 +619,27 @@ class AnomalyTrainer:
             model.parameters(), lr=cfg.learning_rate, weight_decay=cfg.weight_decay
         )
 
-    def _make_run_dir(self) -> Path:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-        run_dir = self._config.output.models_dir / self._config.name / timestamp
-        run_dir.mkdir(parents=True, exist_ok=False)
-        return run_dir
-
     def _write_run_json(self, run_dir: Path, result: AnomalyTrainResult) -> None:
-        """Write the ADR-013 run.json with anomaly metrics + history."""
-        best = next((r for r in result.history if r.epoch == result.best_epoch), None)
-        run_json: dict[str, Any] = {
-            "id": f"{self._config.name}_{run_dir.name}",
-            "experiment": self._config.name,
-            "timestamp": datetime.now().isoformat(),
-            "status": "completed",
-            # True when the stop cut this run (ADR-111); "completed" says only
-            # that it ended cleanly, with total_epochs as far as it got.
-            "stopped": result.stopped,
-            "device_used": result.device_used,
-            "environment": capture_environment(),
-            "runtime": {"loader_workers": getattr(self, "_loader_workers", {})},
-            # Proves two runs saw the same data, not just the same path.
-            "dataset_fingerprint": fingerprint_from_config(self._config),
-            "run_dir": str(run_dir.resolve()),
-            "config": self._config.model_dump(mode="json"),
-            "metrics": {
-                "best_auroc": result.best_auroc,
-                "best_epoch": result.best_epoch,
-                "total_epochs": result.total_epochs,
-                # Null when nothing was scored, not a 0.0 that reads as a
-                # measured AUROC (ADR-111).
-                "auroc": best.val_auroc if best else None,
-                "threshold": best.val_threshold if best else None,
-                "image_f1": best.val_image_f1 if best else None,
+        """Write the ADR-013 run.json with anomaly metrics and history."""
+        training_loop.write_task_run_json(
+            self._config,
+            run_dir,
+            result,
+            getattr(self, "_loader_workers", {}),
+            best_metric="best_auroc",
+            epoch_metrics={
+                "auroc": "val_auroc",
+                "threshold": "val_threshold",
+                "image_f1": "val_image_f1",
             },
-            "history": [
-                {
-                    "epoch": r.epoch,
-                    "train_loss": r.train_loss,
-                    "val_auroc": r.val_auroc,
-                    "val_image_f1": r.val_image_f1,
-                    "val_threshold": r.val_threshold,
-                }
-                for r in result.history
-            ],
-            "artifacts": {
-                # None when nothing was trained: every reader then says "no
-                # checkpoint" instead of failing to open a path (ADR-111).
-                "model": (
-                    str(result.model_path) if result.model_path.is_file() else None
-                ),
-                "graphics": [],
-                "report": None,
-            },
-            "tests": [],
-            # Empty on a healthy run (ADR-099).
-            "warnings": result.warnings,
-        }
-        (run_dir / "run.json").write_text(
-            json.dumps(run_json, indent=2), encoding="utf-8"
+            history_fields=(
+                "epoch",
+                "train_loss",
+                "val_auroc",
+                "val_image_f1",
+                "val_threshold",
+            ),
+            mask_empty_best=False,
         )
 
 

@@ -14,7 +14,6 @@ import json
 import sys
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -22,8 +21,8 @@ import torch
 from loguru import logger
 from torch.utils.data import DataLoader
 
+from visionforge.core import training_loop
 from visionforge.core.cancellation import CancellationToken, is_cancelled
-from visionforge.core.dataset_fingerprint import fingerprint_from_config
 from visionforge.core.detection_data import DetectionDataModule, resolve_yolo_split
 from visionforge.core.detection_dataset import DetectionDataset, detection_collate
 from visionforge.core.detection_metrics import mean_average_precision_50
@@ -44,7 +43,6 @@ from visionforge.core.trainer import _seed_everything
 from visionforge.core.training_health import no_detections, summarize
 from visionforge.models.detection_factory import build_torchvision_detector
 from visionforge.utils.detection_config import DetectionConfig
-from visionforge.utils.environment import capture_environment
 from visionforge.utils.messages import tr
 from visionforge.utils.workers import suggested_workers
 
@@ -997,10 +995,10 @@ class DetectionTrainer:
         return f"cuda:{d.gpu_ids[0] if d.gpu_ids else 0}"
 
     def _make_run_dir(self) -> Path:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-        run_dir = self._config.output.models_dir / self._config.name / timestamp
-        run_dir.mkdir(parents=True, exist_ok=False)
-        return run_dir
+        """Create the configured timestamped output directory."""
+        return training_loop.make_run_dir(
+            self._config.output.models_dir, self._config.name
+        )
 
     def _render_torchvision_plot(
         self,
@@ -1040,19 +1038,13 @@ class DetectionTrainer:
         ]
         best = next((h for h in result.history if h.epoch == result.best_epoch), None)
         run_json: dict[str, Any] = {
-            "id": f"{self._config.name}_{run_dir.name}",
-            "experiment": self._config.name,
-            "timestamp": datetime.now().isoformat(),
-            "status": "completed",
-            # True when the stop cut this run (ADR-111); "completed" says only
-            # that it ended cleanly, with total_epochs as far as it got.
-            "stopped": result.stopped,
-            "device_used": result.device_used,
-            "environment": capture_environment(),
-            "runtime": {"loader_workers": getattr(self, "_loader_workers", {})},
-            # Proves two runs saw the same data, not just the same path.
-            "dataset_fingerprint": fingerprint_from_config(self._config),
-            "run_dir": str(run_dir.resolve()),
+            **training_loop.run_json_header(
+                self._config,
+                run_dir,
+                result.stopped,
+                result.device_used,
+                getattr(self, "_loader_workers", {}),
+            ),
             "config": self._config.model_dump(mode="json"),
             "metrics": {
                 "map50_95": result.best_map50_95,
@@ -1080,18 +1072,7 @@ class DetectionTrainer:
                 }
                 for h in result.history
             ],
-            "artifacts": {
-                # None when nothing was trained: every reader then says "no
-                # checkpoint" instead of failing to open a path (ADR-111).
-                "model": (
-                    str(result.model_path) if result.model_path.is_file() else None
-                ),
-                "graphics": graphics,
-                "report": None,
-            },
-            "tests": [],
-            # Empty on a healthy run (ADR-099/101).
-            "warnings": result.warnings,
+            **training_loop.run_json_tail(result, graphics),
         }
         (run_dir / "run.json").write_text(
             json.dumps(run_json, indent=2), encoding="utf-8"
