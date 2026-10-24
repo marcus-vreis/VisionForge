@@ -1411,6 +1411,7 @@
         "application/json": "SampleDatasetResponse"
       },
       "400": {},
+      "409": {},
       "422": {
         "application/json": "HTTPValidationError"
       },
