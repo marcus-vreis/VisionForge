@@ -16,6 +16,7 @@ from visionforge.utils.config import (
     PreprocessingStep,
     TransformConfig,
 )
+from visionforge.utils.messages import using_lang
 
 
 @pytest.fixture
@@ -307,7 +308,7 @@ class TestLabelVocabulary:
             (tmp_path / split / cls / "image.png").unlink()
             if remove_folders:
                 (tmp_path / split / cls).rmdir()
-        with pytest.raises(ValueError, match=rf"{split}.*no images"):
+        with using_lang("en"), pytest.raises(ValueError, match=rf"{split}.*no images"):
             DataModule(config)
 
     @pytest.mark.parametrize("split", ["val", "test"])
@@ -322,7 +323,7 @@ class TestLabelVocabulary:
         unknown.mkdir()
         if not empty:
             Image.new("RGB", (8, 8)).save(unknown / "image.png")
-        with pytest.raises(ValueError, match=rf"{split}.*unknown"):
+        with using_lang("en"), pytest.raises(ValueError, match=rf"{split}.*unknown"):
             DataModule(config)
 
     @pytest.mark.parametrize(
@@ -345,9 +346,36 @@ class TestLabelVocabulary:
         config = _classification_config(
             tmp_path, train_classes, train_classes, task=task, num_classes=num_classes
         )
-        with pytest.raises(
-            ValueError, match=rf"Training.*{len(train_classes)}.*require {expected}"
+        with (
+            using_lang("en"),
+            pytest.raises(
+                ValueError, match=rf"Training.*{len(train_classes)}.*require {expected}"
+            ),
         ):
+            DataModule(config)
+
+    @pytest.mark.parametrize(
+        ("problem", "text"),
+        [
+            ("empty", "não tem imagens"),
+            ("unknown", "Mova ou renomeie"),
+            ("count", "exigem 2"),
+        ],
+    )
+    def test_vocabulary_errors_use_portuguese(
+        self, tmp_path: Path, problem: str, text: str
+    ) -> None:
+        classes = ("a",) if problem == "count" else ("a", "b")
+        config = _classification_config(
+            tmp_path, classes, classes, task="binary", num_classes=1
+        )
+        if problem == "empty":
+            for name in classes:
+                (tmp_path / "val" / name / "image.png").unlink()
+        elif problem == "unknown":
+            (tmp_path / "val" / "unknown").mkdir()
+
+        with using_lang("pt"), pytest.raises(ValueError, match=text):
             DataModule(config)
 
 

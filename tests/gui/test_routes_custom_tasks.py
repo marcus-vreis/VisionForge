@@ -72,7 +72,10 @@ def _payload(tmp_path: Path) -> dict:
         "name": "toy_api_run",
         "data": {"base_dir": str(tmp_path)},
         "training": {"epochs": 1, "batch_size": 4},
-        "output": {"models_dir": str(tmp_path / "models")},
+        "output": {
+            "models_dir": str(tmp_path / "models"),
+            "reports_dir": str(tmp_path / "reports"),
+        },
         "device": {"kind": "cpu"},
     }
 
