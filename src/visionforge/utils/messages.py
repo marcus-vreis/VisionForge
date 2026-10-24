@@ -1129,6 +1129,10 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "pt": "O caminho '{path}' não pertence à raiz de modelos autorizada '{root}'.",
         "en": "Path '{path}' is outside the authorized model root '{root}'.",
     },
+    "audit.manifest_outside_root": {
+        "pt": "O manifesto de grupos '{path}' está fora da raiz do dataset '{root}'.",
+        "en": "Group manifest '{path}' is outside the dataset root '{root}'.",
+    },
     "group.linked_metadata": {
         "pt": "O arquivo de metadados '{path}' tem múltiplos hard links e não pode ser alterado como parte de um grupo.",
         "en": "Metadata file '{path}' has multiple hard links and cannot be changed as part of a group.",

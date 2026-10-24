@@ -88,6 +88,9 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Fixed
 
+- **Manifesto de grupos restrito à raiz do dataset**: caminho absoluto, `..` ou symlink
+  que saia da raiz agora é recusado (HTTP 400 na API; CLI e CV agrupada seguem a mesma
+  regra) ([ADR-150](docs/dev/DECISIONS.md)).
 - **O histórico usa a cor da tarefa do pesquisador.** Corridas de `custom:<chave>` apareciam
   em cinza na lista, no detalhe, no ranking e na comparação; agora levam a cor registrada
   pela tarefa ou a escolhida no navegador (ADR-137).

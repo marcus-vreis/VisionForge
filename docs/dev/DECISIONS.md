@@ -6321,3 +6321,23 @@ architecture because the check targets data, loss, selection and metrics, and a
 tiny network keeps the fixture tests within seconds on one thread. Synthetic
 fixtures prove integration only; the Oxford-IIIT Pet acquisition, its splits,
 architecture and full budget remain separate, authorised steps.
+
+## ADR-150 — The group manifest must resolve inside the dataset root
+
+**Date:** 2026-10-23
+**Status:** Accepted
+
+**Decision:** `load_group_manifest` resolves the manifest (absolute or relative to
+the dataset root, following symlinks) and refuses it with a localized
+`ValueError` unless it lies under the resolved root. `POST /api/dataset/audit`
+already maps `ValueError` to HTTP 400, so a request naming `/etc/x.csv`,
+`../x.csv` or a symlink leaving the root can no longer make the server open
+arbitrary CSV files. The CSV rows were already contained; only the manifest
+itself was not.
+
+**Consequences:** The CLI (`audit-data --groups`) and grouped cross-validation
+(`cross_validation.group_manifest`) share the function and therefore the rule: a
+manifest stored outside the dataset root must be copied or linked inside it.
+This is a deliberate behaviour change for local users who kept manifests
+elsewhere.
+
