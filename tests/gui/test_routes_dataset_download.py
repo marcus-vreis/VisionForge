@@ -548,7 +548,7 @@ class TestHuggingFaceDownload:
 
 class TestExecuteRoute:
     def test_execute_builds_response(self, _fake_cifar: None, tmp_path: Path) -> None:
-        from visionforge.gui.api.routes import _execute_dataset_download
+        from visionforge.gui.api.datasets_routes import _execute_dataset_download
         from visionforge.gui.api.schemas import DatasetDownloadRequest
 
         resp = _execute_dataset_download(
@@ -662,7 +662,9 @@ class TestADownloadErrorDoesNotLeakTheCredential:
         def boom(*args: Any, **kwargs: Any) -> None:
             raise ConnectionError(message)
 
-        monkeypatch.setattr("visionforge.gui.api.routes.download_dataset", boom)
+        monkeypatch.setattr(
+            "visionforge.gui.api.datasets_routes.download_dataset", boom
+        )
 
         resp = _post_download(
             client, tmp_path, provider="roboflow", api_key=SECRET, version=1
@@ -687,7 +689,9 @@ class TestADownloadErrorDoesNotLeakTheCredential:
                 f"retries exceeded with url: /?api_key={SECRET}"
             )
 
-        monkeypatch.setattr("visionforge.gui.api.routes.download_dataset", boom)
+        monkeypatch.setattr(
+            "visionforge.gui.api.datasets_routes.download_dataset", boom
+        )
 
         resp = _post_download(
             client, tmp_path, provider="roboflow", api_key=SECRET, version=1
@@ -714,7 +718,9 @@ class TestADownloadErrorDoesNotLeakTheCredential:
         def boom(*args: Any, **kwargs: Any) -> None:
             raise exc_type(f"cannot fetch /?api_key={SECRET} for {SECRET}")
 
-        monkeypatch.setattr("visionforge.gui.api.routes.download_dataset", boom)
+        monkeypatch.setattr(
+            "visionforge.gui.api.datasets_routes.download_dataset", boom
+        )
 
         resp = _post_download(
             client, tmp_path, provider="roboflow", api_key=SECRET, version=1

@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-from visionforge.gui.api.routes import (
+from visionforge.gui.api.datasets_routes import (
     _collect_anomaly_dataset_stats,
     _collect_regression_dataset_stats,
     _collect_segmentation_dataset_stats,

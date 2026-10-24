@@ -14,6 +14,7 @@ from PIL import Image
 def client_and_cache(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> tuple[TestClient, Path]:
+    from visionforge.gui.api import datasets_routes
     from visionforge.gui.api import routes as routes_mod
     from visionforge.gui.server import app
 
@@ -21,7 +22,7 @@ def client_and_cache(
     monkeypatch.setattr(routes_mod, "_PREVIEW_CACHE_DIR", cache)
     # A preview registers its dataset root in a module-level allow-list; keep
     # that from leaking into the other tests.
-    monkeypatch.setattr(routes_mod, "_ALLOWED_DATASET_ROOTS", set())
+    monkeypatch.setattr(datasets_routes, "_ALLOWED_DATASET_ROOTS", set())
     return TestClient(app), cache
 
 

@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-from visionforge.gui.api.routes import _render_augment_preview
+from visionforge.gui.api.datasets_routes import _render_augment_preview
 from visionforge.gui.api.schemas import AugmentPreviewRequest
 
 
