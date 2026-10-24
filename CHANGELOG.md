@@ -88,6 +88,10 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Fixed
 
+- **Manifesto de grupos restrito à raiz do dataset**: caminho absoluto, `..` ou symlink
+  que saia da raiz agora é recusado (HTTP 400 na API; CLI e CV agrupada seguem a mesma
+  regra) ([ADR-150](docs/dev/DECISIONS.md)).
+
 - **O melhor checkpoint de regressão e segmentação guarda os pesos da época certa.** Ele era
   gravado numa thread a partir dos próprios tensores de treino, que a época seguinte continuava
   alterando; quando o melhor não era a última época, `best_model.pth` podia sair com pesos

@@ -12,6 +12,8 @@ from typing import Any
 
 from PIL import Image
 
+from visionforge.utils.messages import tr
+
 _IMAGE_SUFFIXES = {
     ".jpg",
     ".jpeg",
@@ -49,7 +51,7 @@ def load_group_manifest(
     """Read an exact path,group CSV mapping in the supplied image order.
 
     Raises:
-        ValueError: if paths escape root or CSV coverage is not exact.
+        ValueError: if the manifest or paths escape root, or CSV coverage is not exact.
     """
     root = root.absolute()
     resolved_root = root.resolve(strict=True)
@@ -59,7 +61,9 @@ def load_group_manifest(
             raise ValueError(f"Image path escapes dataset root: {path}")
         relative = path.absolute().relative_to(root).as_posix()
         expected[relative] = path
-    manifest_path = manifest if manifest.is_absolute() else root / manifest
+    manifest_path = (root / manifest).resolve()  # absolute manifests replace root
+    if not manifest_path.is_relative_to(resolved_root):
+        raise ValueError(tr("audit.manifest_outside_root", path=manifest, root=root))
     groups: dict[str, str] = {}
     with manifest_path.open(encoding="utf-8-sig", newline="") as stream:
         reader = csv.DictReader(stream)

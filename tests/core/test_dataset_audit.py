@@ -217,3 +217,44 @@ def test_identical_pixels_with_different_bytes_are_not_duplicates(
     report = audit_dataset(tmp_path, {"train": "train", "val": "val"})
     assert report["duplicate_groups"] == []
     assert report["ok"] is True
+
+
+def _manifest_dataset(tmp_path: Path) -> tuple[Path, Path, Path]:
+    root = tmp_path / "root"
+    image = _image(root, "train/a/a.png")
+    outside = tmp_path / "outside.csv"
+    outside.write_text("path,group\ntrain/a/a.png,g\n")
+    return root, image, outside
+
+
+@pytest.mark.parametrize("reference", ["absolute", "parent"])
+def test_manifest_outside_root_is_rejected(tmp_path: Path, reference: str) -> None:
+    root, image, outside = _manifest_dataset(tmp_path)
+    manifest = outside if reference == "absolute" else Path("../outside.csv")
+
+    with pytest.raises(ValueError, match="outside the dataset root|fora da raiz"):
+        load_group_manifest(root, manifest, [image])
+    with pytest.raises(ValueError, match="outside the dataset root|fora da raiz"):
+        audit_dataset(root, group_manifest=manifest)
+
+
+def test_manifest_symlink_escaping_root_is_rejected(tmp_path: Path) -> None:
+    root, image, outside = _manifest_dataset(tmp_path)
+    link = root / "groups.csv"
+    try:
+        link.symlink_to(outside)
+    except (OSError, NotImplementedError):
+        pytest.skip("symlinks not permitted on this OS")
+
+    with pytest.raises(ValueError, match="outside the dataset root|fora da raiz"):
+        load_group_manifest(root, Path("groups.csv"), [image])
+
+
+def test_manifest_inside_root_keeps_working(tmp_path: Path) -> None:
+    root, image, _ = _manifest_dataset(tmp_path)
+    inner = root / "meta" / "groups.csv"
+    inner.parent.mkdir()
+    inner.write_text("path,group\ntrain/a/a.png,g\n")
+
+    assert load_group_manifest(root, Path("meta/groups.csv"), [image]) == ["g"]
+    assert load_group_manifest(root, inner, [image]) == ["g"]
