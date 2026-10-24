@@ -13,6 +13,8 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ## [Unreleased]
 
+## [0.18.0] — 2026-10-24
+
 ### Added
 
 - **Preparação auditável do CIFAR-10**: subconjunto CPU com checksum oficial, índices
