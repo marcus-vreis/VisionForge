@@ -140,12 +140,11 @@ class TestRegressionDatasetStats:
 
 class TestEndpointsExposed:
     def test_all_three_stats_routes_registered(self) -> None:
-        # Probe the APIRouter directly: depending on the Starlette version,
-        # app.routes may hide included-router children entirely.
-        from visionforge.gui.api.routes import router
+        # The OpenAPI document is the served contract: it lists every route
+        # however the routers are split (ADR-132), while router.routes hides an
+        # included router's children on newer FastAPI versions.
+        from visionforge.gui.server import app
 
-        # getattr: newer FastAPI keeps an included router (profiles, ADR-132) as an
-        # entry without a path of its own.
-        paths = {getattr(route, "path", None) for route in router.routes}
+        paths = set(app.openapi()["paths"])
         for task in ("segmentation", "anomaly", "regression"):
             assert f"/api/{task}/dataset/stats" in paths
