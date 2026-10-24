@@ -9,8 +9,9 @@ import {
   isGroupRun,
   type HistoryEntry,
 } from "../lib/run-groups";
-import { taskAccents } from "../lib/task-accent";
+import { accentForTask } from "../lib/task-accent";
 import { useResolvedTheme } from "./training-story/use-viewing";
+import { useCustomAccents } from "../lib/custom-accents";
 import { FAMILY_ORDER, familyLabel, taskFamily } from "../lib/task-family";
 import type { RunSummary } from "../types/run";
 import { CompareRunsPanel } from "./CompareRunsPanel";
@@ -122,7 +123,8 @@ function TaskTabs({
   total: number;
 }) {
   const t = useT();
-  const accents = taskAccents(useResolvedTheme());
+  const theme = useResolvedTheme();
+  const customAccents = useCustomAccents();
   const entries: { key: string; label: string; count: number }[] = [
     { key: "all", label: t.history.allTab, count: total },
     ...tasks.map((task) => ({
@@ -145,7 +147,7 @@ function TaskTabs({
     >
       {entries.map((e) => {
         const on = e.key === active;
-        const accent = e.key === "all" ? "var(--vf-text-dim)" : accents[e.key] ?? "var(--vf-text-muted)";
+        const accent = e.key === "all" ? "var(--vf-text-dim)" : accentForTask(e.key, theme, customAccents);
         return (
           <button
             key={e.key}
@@ -238,7 +240,7 @@ function RunCard({
   // Keyed by family: a classification run records `binary`/`multiclass`, which
   // has no accent of its own — the card used to fall back to grey for the most
   // common task in the list.
-  const accent = taskAccents(useResolvedTheme())[taskFamily(run.task)] ?? "var(--vf-text-muted)";
+  const accent = accentForTask(run.task, useResolvedTheme(), useCustomAccents());
   const dot = statusColor(run.status);
   // The server already projected the run onto its headline numbers
   // (`final_metrics`, in the order it sends them); the card names them from the

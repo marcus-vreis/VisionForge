@@ -46,6 +46,8 @@ import {
 import { useT } from "./i18n/useT";
 import { DatasetsOverlay } from "./components/DatasetsOverlay";
 import { HistoryOverlay } from "./components/HistoryOverlay";
+import { CustomAccentsContext } from "./lib/custom-accents";
+import { customAccentMap } from "./lib/task-accent";
 import { QueueOverlay } from "./components/QueueOverlay";
 import { ParamPanel } from "./components/ParamPanel";
 import { DetectionPanel } from "./components/DetectionPanel";
@@ -237,6 +239,7 @@ export default function App() {
     () => withTaskColors(registeredTasks, taskColors, isCustomTask),
     [registeredTasks, taskColors],
   );
+  const customAccents = useMemo(() => customAccentMap(tasks), [tasks]);
   const chooseTaskColor = (key: string, color: string | null) => {
     saveTaskColor(key, color);
     setColorVersion((v) => v + 1);
@@ -894,6 +897,7 @@ export default function App() {
       />
 
       {showHistory && (
+      <CustomAccentsContext.Provider value={customAccents}>
       <HistoryOverlay
         onClose={() => setShowHistory(false)}
         onCountChange={setHistoryCount}
@@ -904,6 +908,7 @@ export default function App() {
           isCustomTask(activeTask) ? `custom:${activeKey}` : activeKey
         }
       />
+      </CustomAccentsContext.Provider>
       )}
 
       <DatasetsOverlay
