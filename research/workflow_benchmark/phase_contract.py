@@ -123,8 +123,9 @@ def contract_header() -> dict[str, Any]:
 
 def write_report_once(path: Path, report: Mapping[str, Any]) -> None:
     """Create the report file exclusively; an existing file is never replaced."""
+    payload = json.dumps(report, indent=2, allow_nan=False) + "\n"
     with Path(path).open("x", encoding="utf-8") as stream:
-        stream.write(json.dumps(report, indent=2, allow_nan=False) + "\n")
+        stream.write(payload)
 
 
 def sha256_file(path: Path) -> str:

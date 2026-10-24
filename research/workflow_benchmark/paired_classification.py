@@ -208,7 +208,7 @@ def run_pair(
     from visionforge.core.dataset_fingerprint import fingerprint_dataset
     from visionforge.utils.environment import capture_environment
 
-    from .native_classification import run_native
+    from .native_classification import preflight, run_native
 
     dataset, initial_weights, output = (
         dataset.resolve(),
@@ -219,6 +219,15 @@ def run_pair(
         raise ValueError("Dataset and output must be separate directories")
     if output.exists():
         raise FileExistsError(output)
+    preflight(
+        dataset,
+        initial_weights,
+        output,
+        epochs=epochs,
+        batch_size=batch_size,
+        image_size=32,
+        learning_rate=0.01,
+    )
     audit = audit_dataset(dataset)
     if not audit["ok"]:
         raise ValueError("Dataset image audit has findings; inspect before pairing")

@@ -122,6 +122,19 @@ def test_existing_report_is_never_overwritten(tmp_path: Path) -> None:
     assert report_path.read_text(encoding="utf-8") == "earlier"
 
 
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), object()])
+def test_invalid_report_does_not_reserve_an_empty_file(
+    tmp_path: Path, value: object
+) -> None:
+    """A serialization failure leaves the path available for a valid report."""
+    report_path = tmp_path / "result.json"
+    with pytest.raises((ValueError, TypeError)):
+        phase_contract.write_report_once(report_path, {"metric": value})
+    assert not report_path.exists()
+    phase_contract.write_report_once(report_path, {"metric": 0.5})
+    assert json.loads(report_path.read_text(encoding="utf-8")) == {"metric": 0.5}
+
+
 def test_legacy_reports_keep_their_original_scope(tmp_path: Path) -> None:
     """Pre-contract timings are labelled legacy and left byte-for-byte intact."""
     legacy = {
