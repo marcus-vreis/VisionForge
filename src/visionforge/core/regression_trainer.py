@@ -13,7 +13,7 @@ import json
 import math
 import time
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -158,38 +158,13 @@ class RegressionTrainer:
         # Resolved before anything is created: a resumed run must continue in its
         # own directory, or it leaves an empty one behind and writes its
         # TensorBoard events somewhere nothing will look.
-        run_dir = (
-            resume_dir
-            if resumed is not None and resume_dir is not None
-            else self._make_run_dir()
-        )
+        run_dir = self._resolve_run_dir(resumed, resume_dir)
         model_path = run_dir / "best_model.pth"
         tb = TensorBoardLogger(run_dir / "tensorboard")
 
-        history: list[RegressionEpochResult] = []
-        best_val_loss = float("inf")
-        best_epoch = 0
-        patience_counter = 0
-        start_epoch = 1
-
-        # Weights alone cannot continue: the optimizer and scheduler come back
-        # too, or the search restarts where the loss curve never was.
-        if resumed is not None:
-            model.load_state_dict(resumed.model)
-            optimizer.load_state_dict(resumed.optimizer)
-            if scheduler is not None and resumed.scheduler is not None:
-                scheduler.load_state_dict(resumed.scheduler)
-            best_val_loss = resumed.best_metric
-            best_epoch = resumed.best_epoch
-            patience_counter = resumed.patience_counter
-            history = [RegressionEpochResult(**h) for h in resumed.history]
-            start_epoch = resumed.epoch + 1
-            logger.info(
-                "Resuming {} at epoch {} of {}.",
-                run_dir.name,
-                start_epoch,
-                cfg.epochs,
-            )
+        history, best_val_loss, best_epoch, patience_counter, start_epoch = (
+            self._restore_training_state(resumed, model, optimizer, scheduler, run_dir)
+        )
         t0 = time.monotonic()
 
         if progress_callback is not None:
@@ -217,9 +192,8 @@ class RegressionTrainer:
         stopped = False
         for epoch in range(start_epoch, cfg.epochs + 1):
             # A crash or cancellation may coincide with the stopping boundary.
-            if (
-                cfg.early_stopping_patience > 0
-                and patience_counter >= cfg.early_stopping_patience
+            if self._early_stopping_reached(
+                patience_counter, cfg.early_stopping_patience
             ):
                 break
             # The safe point: the previous epoch's checkpoint is written and its
@@ -237,11 +211,7 @@ class RegressionTrainer:
                 model, val_loader, criterion
             )
 
-            if scheduler is not None:
-                if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
-                    scheduler.step(val_loss)
-                else:
-                    scheduler.step()
+            self._step_scheduler(scheduler, val_loss)
 
             result = RegressionEpochResult(
                 epoch=epoch,
@@ -253,44 +223,7 @@ class RegressionTrainer:
                 val_r2=r2,
             )
             history.append(result)
-            tb.log_scalars(
-                epoch,
-                {
-                    "loss/train": train_loss,
-                    "loss/val": val_loss,
-                    "r2/val": r2,
-                    "rmse/val": rmse,
-                    "mae/val": mae,
-                    "mse/val": mse,
-                },
-            )
-
-            logger.info(
-                "Epoch {}/{} | train_loss={:.4f} val_loss={:.4f} "
-                "rmse={:.4f} mae={:.4f} r2={:.4f}",
-                epoch,
-                cfg.epochs,
-                train_loss,
-                val_loss,
-                rmse,
-                mae,
-                r2,
-            )
-
-            if progress_callback is not None:
-                progress_callback(
-                    {
-                        "event": "epoch_end",
-                        "epoch": epoch,
-                        "total_epochs": cfg.epochs,
-                        "train_loss": train_loss,
-                        "val_loss": val_loss,
-                        "val_rmse": rmse,
-                        "val_mae": mae,
-                        "val_r2": r2,
-                        "elapsed_s": round(time.monotonic() - t0, 3),
-                    }
-                )
+            self._report_epoch(result, tb, progress_callback, t0, cfg.epochs)
 
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
@@ -309,7 +242,7 @@ class RegressionTrainer:
                     epoch=epoch,
                     model=model.state_dict(),
                     optimizer=optimizer.state_dict(),
-                    scheduler=scheduler.state_dict() if scheduler is not None else None,
+                    scheduler=self._scheduler_state_dict(scheduler),
                     scaler=None,
                     best_metric=best_val_loss,
                     best_epoch=best_epoch,
@@ -322,24 +255,15 @@ class RegressionTrainer:
             # 0 disables early stopping outright. Without this guard it
             # would mean the opposite -- the very first epoch without an
             # improvement satisfies `1 >= 0` and ends the run.
-            if (
-                cfg.early_stopping_patience > 0
-                and patience_counter >= cfg.early_stopping_patience
+            if self._early_stopping_reached(
+                patience_counter, cfg.early_stopping_patience
             ):
                 logger.info("Early stopping at epoch {}.", epoch)
                 break
 
-        if not is_cancelled(cancel_token):
-            clear_resume_state(run_dir)
+        self._finish_checkpoint_writes(run_dir, cancel_token, save_pool, save_future)
 
-        if save_future is not None:
-            save_future.result()
-        save_pool.shutdown(wait=False)
-
-        # A run that never moved still reports metrics; say so (ADR-099).
-        health = summarize([stagnant_loss([h.train_loss for h in history])])
-        for warning in health:
-            logger.warning("{}", warning["message"])
+        health = self._training_warnings(history)
 
         train_result = RegressionTrainResult(
             stopped=stopped,
@@ -352,13 +276,7 @@ class RegressionTrainer:
             warnings=health,
         )
         self._write_run_json(run_dir, train_result)
-        tb.close()
-
-        if self._device.type == "cuda":
-            torch.cuda.empty_cache()
-
-        if progress_callback is not None:
-            progress_callback({"event": "end", "total_epochs": len(history)})
+        self._close_training(tb, progress_callback, len(history))
 
         return train_result
 
@@ -406,6 +324,168 @@ class RegressionTrainer:
         )
 
     # ── private helpers ────────────────────────────────────────────────────────
+
+    def _resolve_run_dir(
+        self, resumed: ResumeState | None, resume_dir: Path | None
+    ) -> Path:
+        """Reuse the resumed run directory before creating any output artifacts."""
+        if resumed is not None and resume_dir is not None:
+            return resume_dir
+        return self._make_run_dir()
+
+    @staticmethod
+    def _early_stopping_reached(patience_counter: int, patience: int) -> bool:
+        """Check patience while preserving zero as the disabled setting."""
+        return patience > 0 and patience_counter >= patience
+
+    @staticmethod
+    def _step_scheduler(
+        scheduler: torch.optim.lr_scheduler.LRScheduler | None, val_loss: float
+    ) -> None:
+        """Advance the scheduler using validation loss only for plateau scheduling."""
+        if scheduler is None:
+            return
+        if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
+            scheduler.step(val_loss)
+            return
+        scheduler.step()
+
+    def _restore_training_state(
+        self,
+        resumed: ResumeState | None,
+        model: nn.Module,
+        optimizer: torch.optim.Optimizer,
+        scheduler: torch.optim.lr_scheduler.LRScheduler | None,
+        run_dir: Path,
+    ) -> tuple[list[RegressionEpochResult], float, int, int, int]:
+        """Restore weights and training bookkeeping without restoring loader randomness."""
+        if resumed is None:
+            return [], float("inf"), 0, 0, 1
+        # Weights alone cannot continue: the optimizer and scheduler come back
+        # too, or the search restarts where the loss curve never was.
+        model.load_state_dict(resumed.model)
+        optimizer.load_state_dict(resumed.optimizer)
+        if scheduler is not None and resumed.scheduler is not None:
+            scheduler.load_state_dict(resumed.scheduler)
+        best_val_loss = resumed.best_metric
+        best_epoch = resumed.best_epoch
+        patience_counter = resumed.patience_counter
+        history = [RegressionEpochResult(**h) for h in resumed.history]
+        start_epoch = resumed.epoch + 1
+        logger.info(
+            "Resuming {} at epoch {} of {}.",
+            run_dir.name,
+            start_epoch,
+            self._config.training.epochs,
+        )
+        return history, best_val_loss, best_epoch, patience_counter, start_epoch
+
+    @staticmethod
+    def _report_epoch(
+        result: RegressionEpochResult,
+        tb: TensorBoardLogger,
+        progress_callback: Callable[[dict[str, Any]], None] | None,
+        t0: float,
+        total_epochs: int,
+    ) -> None:
+        """Report a completed epoch to TensorBoard, logs and the progress callback."""
+        epoch = result.epoch
+        train_loss = result.train_loss
+        val_loss = result.val_loss
+        rmse = result.val_rmse
+        mae = result.val_mae
+        r2 = result.val_r2
+        mse = result.val_mse
+        tb.log_scalars(
+            epoch,
+            {
+                "loss/train": train_loss,
+                "loss/val": val_loss,
+                "r2/val": r2,
+                "rmse/val": rmse,
+                "mae/val": mae,
+                "mse/val": mse,
+            },
+        )
+
+        logger.info(
+            "Epoch {}/{} | train_loss={:.4f} val_loss={:.4f} "
+            "rmse={:.4f} mae={:.4f} r2={:.4f}",
+            epoch,
+            total_epochs,
+            train_loss,
+            val_loss,
+            rmse,
+            mae,
+            r2,
+        )
+
+        if progress_callback is not None:
+            progress_callback(
+                {
+                    "event": "epoch_end",
+                    "epoch": epoch,
+                    "total_epochs": total_epochs,
+                    "train_loss": train_loss,
+                    "val_loss": val_loss,
+                    "val_rmse": rmse,
+                    "val_mae": mae,
+                    "val_r2": r2,
+                    "elapsed_s": round(time.monotonic() - t0, 3),
+                }
+            )
+
+    @staticmethod
+    def _scheduler_state_dict(
+        scheduler: torch.optim.lr_scheduler.LRScheduler | None,
+    ) -> dict[str, Any] | None:
+        """Capture scheduler state only when scheduling is enabled."""
+        if scheduler is None:
+            return None
+        state: dict[str, Any] = scheduler.state_dict()
+        return state
+
+    @staticmethod
+    def _finish_checkpoint_writes(
+        run_dir: Path,
+        cancel_token: CancellationToken | None,
+        save_pool: ThreadPoolExecutor,
+        save_future: Future[None] | None,
+    ) -> None:
+        """Clear completed resume state and wait for outstanding checkpoint writes."""
+        if not is_cancelled(cancel_token):
+            clear_resume_state(run_dir)
+
+        if save_future is not None:
+            save_future.result()
+        save_pool.shutdown(wait=False)
+
+    @staticmethod
+    def _training_warnings(
+        history: list[RegressionEpochResult],
+    ) -> list[dict[str, str]]:
+        """Summarize and log training health warnings for the completed run."""
+        # A run that never moved still reports metrics; say so (ADR-099).
+        health = summarize([stagnant_loss([h.train_loss for h in history])])
+        for warning in health:
+            logger.warning("{}", warning["message"])
+
+        return health
+
+    def _close_training(
+        self,
+        tb: TensorBoardLogger,
+        progress_callback: Callable[[dict[str, Any]], None] | None,
+        total_epochs: int,
+    ) -> None:
+        """Close logging, release cached device memory and emit the final event."""
+        tb.close()
+
+        if self._device.type == "cuda":
+            torch.cuda.empty_cache()
+
+        if progress_callback is not None:
+            progress_callback({"event": "end", "total_epochs": total_epochs})
 
     def _prepare_model(self, model: nn.Module) -> nn.Module:
         model = model.to(self._device)

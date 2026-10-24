@@ -307,10 +307,7 @@ class AnomalyTrainer:
         stopped = False
         for epoch in range(start_epoch, cfg.epochs + 1):
             # A crash or cancellation may coincide with the stopping boundary.
-            if (
-                cfg.early_stopping_patience > 0
-                and patience >= cfg.early_stopping_patience
-            ):
+            if self._autoencoder_early_stopping_reached(patience):
                 break
             # The safe point: the previous epoch's checkpoint is written and its
             # metrics emitted, so stopping here leaves the run directory whole.
@@ -322,18 +319,9 @@ class AnomalyTrainer:
                 stopped = True
                 break
 
-            model.train()
-            total = 0.0
-            for inputs, _ in train_loader:
-                inputs = inputs.to(self._device, non_blocking=True)
-                optimizer.zero_grad(set_to_none=True)
-                recon = model(inputs)
-                loss = criterion(recon, inputs)
-                loss.backward()
-                optimizer.step()
-                total += loss.item()
-            n = len(train_loader)
-            train_loss = total / n if n > 0 else 0.0
+            train_loss = self._train_autoencoder_epoch(
+                model, train_loader, optimizer, criterion
+            )
 
             normal_scores = self._collect_scores(model, calibration_loader)[0]
             test_scores, test_labels = self._collect_scores(model, test_loader)
@@ -341,37 +329,7 @@ class AnomalyTrainer:
                 normal_scores, test_scores, test_labels
             )
             history.append(AnomalyEpochResult(epoch, train_loss, auroc, threshold, f1))
-            tb.log_scalars(
-                epoch,
-                {
-                    "loss/recon_train": train_loss,
-                    "auroc/val": auroc,
-                    "image_f1/val": f1,
-                    "threshold/val": threshold,
-                },
-            )
-
-            logger.info(
-                "Epoch {}/{} | recon_loss={:.4f} auroc={:.4f} f1={:.4f}",
-                epoch,
-                cfg.epochs,
-                train_loss,
-                auroc,
-                f1,
-            )
-            if progress_callback is not None:
-                progress_callback(
-                    {
-                        "event": "epoch_end",
-                        "epoch": epoch,
-                        "total_epochs": cfg.epochs,
-                        "train_loss": train_loss,
-                        "val_auroc": auroc,
-                        "val_image_f1": f1,
-                        "val_threshold": threshold,
-                        "elapsed_s": round(time.monotonic() - t0, 3),
-                    }
-                )
+            self._report_autoencoder_epoch(history[-1], tb, progress_callback, t0)
 
             if train_loss < best_loss:
                 best_loss = train_loss
@@ -403,16 +361,97 @@ class AnomalyTrainer:
             # 0 disables early stopping outright. Without this guard it
             # would mean the opposite -- the very first epoch without an
             # improvement satisfies `1 >= 0` and ends the run.
-            if (
-                cfg.early_stopping_patience > 0
-                and patience >= cfg.early_stopping_patience
-            ):
+            if self._autoencoder_early_stopping_reached(patience):
                 logger.info("Early stopping at epoch {}.", epoch)
                 break
 
         if not is_cancelled(cancel_token):
             clear_resume_state(run_dir)
 
+        return self._build_autoencoder_result(
+            model, model_path, history, best_epoch, stopped
+        )
+
+    def _report_autoencoder_epoch(
+        self,
+        result: AnomalyEpochResult,
+        tb: TensorBoardLogger,
+        progress_callback: Callable[[dict[str, Any]], None] | None,
+        t0: float,
+    ) -> None:
+        """Log reconstruction metrics and emit the completed epoch event."""
+        epoch = result.epoch
+        train_loss = result.train_loss
+        auroc = result.val_auroc
+        threshold = result.val_threshold
+        f1 = result.val_image_f1
+        tb.log_scalars(
+            epoch,
+            {
+                "loss/recon_train": train_loss,
+                "auroc/val": auroc,
+                "image_f1/val": f1,
+                "threshold/val": threshold,
+            },
+        )
+
+        logger.info(
+            "Epoch {}/{} | recon_loss={:.4f} auroc={:.4f} f1={:.4f}",
+            epoch,
+            self._config.training.epochs,
+            train_loss,
+            auroc,
+            f1,
+        )
+        if progress_callback is not None:
+            progress_callback(
+                {
+                    "event": "epoch_end",
+                    "epoch": epoch,
+                    "total_epochs": self._config.training.epochs,
+                    "train_loss": train_loss,
+                    "val_auroc": auroc,
+                    "val_image_f1": f1,
+                    "val_threshold": threshold,
+                    "elapsed_s": round(time.monotonic() - t0, 3),
+                }
+            )
+
+    def _autoencoder_early_stopping_reached(self, patience: int) -> bool:
+        """Keep zero patience disabled at both epoch stopping boundaries."""
+        limit = self._config.training.early_stopping_patience
+        return limit > 0 and patience >= limit
+
+    def _train_autoencoder_epoch(
+        self,
+        model: nn.Module,
+        train_loader: Any,
+        optimizer: torch.optim.Optimizer,
+        criterion: nn.Module,
+    ) -> float:
+        """Train one reconstruction epoch and return its mean batch loss."""
+        model.train()
+        total = 0.0
+        for inputs, _ in train_loader:
+            inputs = inputs.to(self._device, non_blocking=True)
+            optimizer.zero_grad(set_to_none=True)
+            recon = model(inputs)
+            loss = criterion(recon, inputs)
+            loss.backward()
+            optimizer.step()
+            total += loss.item()
+        n = len(train_loader)
+        return total / n if n > 0 else 0.0
+
+    def _build_autoencoder_result(
+        self,
+        model: nn.Module,
+        model_path: Path,
+        history: list[AnomalyEpochResult],
+        best_epoch: int,
+        stopped: bool,
+    ) -> AnomalyTrainResult:
+        """Keep the trained checkpoint and summarize reconstruction training."""
         if not history:
             # Stopped before its first epoch: there is nothing to keep, and
             # saving the untrained weights would hand the block a "result" to

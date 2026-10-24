@@ -117,51 +117,115 @@ def _bind_language_from_env() -> None:
         set_lang(lang)
 
 
+def _parse_audit_splits(values: list[str] | None) -> dict[str, str] | None:
+    """Parse unique NAME=PATH pairs for a dataset audit."""
+    if not values:
+        return None
+    splits: dict[str, str] = {}
+    for value in values:
+        name, separator, path = value.partition("=")
+        if not separator or not name or not path or name in splits:
+            raise ValueError("Each split must be a unique NAME=PATH pair.")
+        splits[name] = path
+    return splits
+
+
+def _run_audit_data_command(args: argparse.Namespace) -> None:
+    """Audit a dataset and optionally save a new JSON report."""
+    from visionforge.core.dataset_audit import audit_dataset
+
+    splits = _parse_audit_splits(args.split)
+    report = audit_dataset(
+        args.root,
+        splits,
+        group_manifest=args.groups,
+        strict_groups=args.strict_groups,
+    )
+    payload = json.dumps(report, indent=2, ensure_ascii=False)
+    if args.json is not None:
+        args.json.parent.mkdir(parents=True, exist_ok=True)
+        with args.json.open("x", encoding="utf-8") as stream:
+            stream.write(payload + "\n")
+    print(payload)
+    if not report["ok"]:
+        raise SystemExit(1)
+
+
+def _run_bundle_command(args: argparse.Namespace) -> None:
+    """Export an experiment bundle and print its path as JSON."""
+    from visionforge.core.experiment_bundle import export_experiment_bundle
+
+    path = export_experiment_bundle(args.run_dir, args.destination)
+    print(json.dumps({"bundle": str(path)}, ensure_ascii=False))
+
+
+def _run_verify_bundle_command(args: argparse.Namespace) -> None:
+    """Verify a bundle and print the resulting JSON report."""
+    from visionforge.core.experiment_bundle import verify_experiment_bundle
+
+    print(
+        json.dumps(verify_experiment_bundle(args.bundle), indent=2, ensure_ascii=False)
+    )
+
+
 def _run_evidence_command(
     args: argparse.Namespace, parser: argparse.ArgumentParser
 ) -> None:
     """Run read-only audits or explicit bundle exports with JSON output."""
+    commands = {
+        "audit-data": _run_audit_data_command,
+        "bundle": _run_bundle_command,
+    }
+    command = commands.get(args.command, _run_verify_bundle_command)
     try:
-        if args.command == "audit-data":
-            from visionforge.core.dataset_audit import audit_dataset
-
-            splits: dict[str, str] | None = None
-            if args.split:
-                splits = {}
-                for value in args.split:
-                    name, separator, path = value.partition("=")
-                    if not separator or not name or not path or name in splits:
-                        raise ValueError("Each split must be a unique NAME=PATH pair.")
-                    splits[name] = path
-            report = audit_dataset(
-                args.root,
-                splits,
-                group_manifest=args.groups,
-                strict_groups=args.strict_groups,
-            )
-            payload = json.dumps(report, indent=2, ensure_ascii=False)
-            if args.json is not None:
-                args.json.parent.mkdir(parents=True, exist_ok=True)
-                with args.json.open("x", encoding="utf-8") as stream:
-                    stream.write(payload + "\n")
-            print(payload)
-            if not report["ok"]:
-                raise SystemExit(1)
-        elif args.command == "bundle":
-            from visionforge.core.experiment_bundle import export_experiment_bundle
-
-            path = export_experiment_bundle(args.run_dir, args.destination)
-            print(json.dumps({"bundle": str(path)}, ensure_ascii=False))
-        else:
-            from visionforge.core.experiment_bundle import verify_experiment_bundle
-
-            print(
-                json.dumps(
-                    verify_experiment_bundle(args.bundle), indent=2, ensure_ascii=False
-                )
-            )
+        command(args)
     except (OSError, ValueError) as exc:
         parser.exit(2, f"visionforge: {exc}\n")
+
+
+def _run_selftest_command(args: argparse.Namespace) -> None:
+    """Validate selections and run the self-test command."""
+    import sys as _sys
+    import tempfile
+
+    from visionforge.utils.logger import logger
+    from visionforge.utils.selftest import (
+        STRATEGIES,
+        TASKS,
+        format_report,
+        run_selftest,
+    )
+
+    tasks = TASKS if args.tasks == "all" else tuple(args.tasks.split(","))
+    if args.quick:
+        strategies: tuple[str, ...] = ("simple",)
+    else:
+        strategies = (
+            STRATEGIES
+            if args.strategies == "all"
+            else tuple(args.strategies.split(","))
+        )
+    unknown = [t for t in tasks if t not in TASKS] + [
+        s for s in strategies if s not in STRATEGIES
+    ]
+    if unknown:
+        logger.error("Unknown task/strategy: {}", ", ".join(unknown))
+        _sys.exit(2)
+
+    workdir = args.workdir or Path(tempfile.mkdtemp(prefix="visionforge_selftest_"))
+    logger.info("Self-test workdir: {}", workdir)
+    outcomes = run_selftest(workdir, tasks=tasks, strategies=strategies)
+    report = format_report(outcomes)
+    print(f"\n{report}\n")  # noqa: T201 — the table IS the command's output
+
+    if args.json is not None:
+        args.json.parent.mkdir(parents=True, exist_ok=True)
+        args.json.write_text(
+            json.dumps([vars(o) for o in outcomes], indent=2), encoding="utf-8"
+        )
+        logger.info("Wrote {}", args.json)
+
+    _sys.exit(0 if all(o.status == "passed" for o in outcomes) else 1)
 
 
 def main() -> None:
@@ -294,47 +358,7 @@ def main() -> None:
     setup_logger()
 
     if args.command == "selftest":
-        import sys as _sys
-        import tempfile
-
-        from visionforge.utils.logger import logger
-        from visionforge.utils.selftest import (
-            STRATEGIES,
-            TASKS,
-            format_report,
-            run_selftest,
-        )
-
-        tasks = TASKS if args.tasks == "all" else tuple(args.tasks.split(","))
-        if args.quick:
-            strategies: tuple[str, ...] = ("simple",)
-        else:
-            strategies = (
-                STRATEGIES
-                if args.strategies == "all"
-                else tuple(args.strategies.split(","))
-            )
-        unknown = [t for t in tasks if t not in TASKS] + [
-            s for s in strategies if s not in STRATEGIES
-        ]
-        if unknown:
-            logger.error("Unknown task/strategy: {}", ", ".join(unknown))
-            _sys.exit(2)
-
-        workdir = args.workdir or Path(tempfile.mkdtemp(prefix="visionforge_selftest_"))
-        logger.info("Self-test workdir: {}", workdir)
-        outcomes = run_selftest(workdir, tasks=tasks, strategies=strategies)
-        report = format_report(outcomes)
-        print(f"\n{report}\n")  # noqa: T201 — the table IS the command's output
-
-        if args.json is not None:
-            args.json.parent.mkdir(parents=True, exist_ok=True)
-            args.json.write_text(
-                json.dumps([vars(o) for o in outcomes], indent=2), encoding="utf-8"
-            )
-            logger.info("Wrote {}", args.json)
-
-        _sys.exit(0 if all(o.status == "passed" for o in outcomes) else 1)
+        _run_selftest_command(args)
 
     if args.command == "new-task":
         import sys as _sys

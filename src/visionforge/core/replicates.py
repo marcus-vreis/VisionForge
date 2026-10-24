@@ -276,9 +276,7 @@ def run_replicates(
             logger.warning("Replicate seed={} failed — {}", seed, exc)
         finally:
             stream.finish(runner, unit, trial.status)
-            gc.collect()
-            if torch is not None and torch.cuda.is_available():
-                torch.cuda.empty_cache()
+            _release_replicate_memory()
         trials.append(trial)
         if is_cancelled(token):
             logger.info(
@@ -289,6 +287,13 @@ def run_replicates(
         stream.end(len(trials))
 
     return trials
+
+
+def _release_replicate_memory() -> None:
+    """Release unused CPU and available CUDA memory between seeds."""
+    gc.collect()
+    if torch is not None and torch.cuda.is_available():
+        torch.cuda.empty_cache()
 
 
 __all__ = [

@@ -66,7 +66,7 @@ class BatchPredictionBlock(ExperimentBlock):
             writer.writeheader()
 
             for path in paths:
-                row = self._process_image(path, is_binary, fieldnames)
+                row = self._process_image(path, is_binary)
                 if row is not None:
                     writer.writerow(row)
                     self._total_processed += 1
@@ -118,7 +118,6 @@ class BatchPredictionBlock(ExperimentBlock):
         self,
         path: Path,
         is_binary: bool,
-        fieldnames: list[str],
     ) -> dict[str, Any] | None:
         """Load, transform, and run inference on a single image.
 

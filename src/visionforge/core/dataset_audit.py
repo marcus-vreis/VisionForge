@@ -6,7 +6,7 @@ import csv
 import hashlib
 import os
 from collections import defaultdict
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from pathlib import Path, PureWindowsPath
 from typing import Any
 
@@ -55,12 +55,7 @@ def load_group_manifest(
     """
     root = root.absolute()
     resolved_root = root.resolve(strict=True)
-    expected: dict[str, Path] = {}
-    for path in image_paths:
-        if not path.resolve(strict=True).is_relative_to(resolved_root):
-            raise ValueError(f"Image path escapes dataset root: {path}")
-        relative = path.absolute().relative_to(root).as_posix()
-        expected[relative] = path
+    expected = _expected_manifest_images(root, resolved_root, image_paths)
     manifest_path = (root / manifest).resolve()  # absolute manifests replace root
     if not manifest_path.is_relative_to(resolved_root):
         raise ValueError(tr("audit.manifest_outside_root", path=manifest, root=root))
@@ -77,15 +72,10 @@ def load_group_manifest(
                 raise ValueError(f"Invalid group manifest row {number}: group required")
             if relative in groups:
                 raise ValueError(f"Duplicate group manifest path: {relative}")
-            if relative not in expected:
-                candidate = root / relative
-                if not (
-                    allow_other_images
-                    and candidate.resolve().is_relative_to(resolved_root)
-                    and candidate.is_file()
-                    and candidate.suffix.lower() in _IMAGE_SUFFIXES
-                ):
-                    raise ValueError(f"Unknown group manifest path: {relative}")
+            if relative not in expected and not _allowed_manifest_image(
+                root, resolved_root, relative, allow_other_images
+            ):
+                raise ValueError(f"Unknown group manifest path: {relative}")
             groups[relative] = group
     missing = sorted(expected.keys() - groups.keys())
     if missing:
@@ -93,6 +83,32 @@ def load_group_manifest(
     return [
         groups[path.absolute().relative_to(root).as_posix()] for path in image_paths
     ]
+
+
+def _expected_manifest_images(
+    root: Path, resolved_root: Path, image_paths: Sequence[Path]
+) -> dict[str, Path]:
+    """Index expected image paths after checking dataset containment."""
+    expected: dict[str, Path] = {}
+    for path in image_paths:
+        if not path.resolve(strict=True).is_relative_to(resolved_root):
+            raise ValueError(f"Image path escapes dataset root: {path}")
+        relative = path.absolute().relative_to(root).as_posix()
+        expected[relative] = path
+    return expected
+
+
+def _allowed_manifest_image(
+    root: Path, resolved_root: Path, relative: str, allow_other_images: bool
+) -> bool:
+    """Check whether an extra manifest entry names a contained image."""
+    candidate = root / relative
+    return (
+        allow_other_images
+        and candidate.resolve().is_relative_to(resolved_root)
+        and candidate.is_file()
+        and candidate.suffix.lower() in _IMAGE_SUFFIXES
+    )
 
 
 def audit_dataset(
@@ -109,12 +125,7 @@ def audit_dataset(
         ValueError: if root, split paths, or a supplied group manifest are invalid.
     """
     root = Path(root).resolve(strict=True)
-    if not root.is_dir():
-        raise ValueError(f"Dataset root is not a directory: {root}")
-    if max_issues < 0:
-        raise ValueError("max_issues must be non-negative")
-    if strict_groups and group_manifest is None:
-        raise ValueError("strict_groups requires a group manifest")
+    _validate_audit_options(root, group_manifest, strict_groups, max_issues)
     split_paths = (
         dict(splits)
         if splits is not None
@@ -132,6 +143,7 @@ def audit_dataset(
     memberships: list[str] = []
 
     def record_issue(path: Path, reason: str) -> None:
+        """Count every unreadable image while bounding the reported details."""
         nonlocal unreadable_count
         unreadable_count += 1
         if len(issues) < max_issues:
@@ -147,68 +159,16 @@ def audit_dataset(
             continue
         present.append(split)
 
-        def walk_error(error: OSError, directory: Path = split_root) -> None:
-            record_issue(Path(error.filename or directory), type(error).__name__)
-
-        for current, directories, files in os.walk(
-            split_root, followlinks=False, onerror=walk_error
-        ):
-            directories.sort()
-            # Snapshot the names because rejected directories are removed during traversal.
-            for name in tuple(directories):
-                path = Path(current) / name
-                if path.is_symlink() or not path.resolve().is_relative_to(root):
-                    directories.remove(name)
-                    record_issue(path, "directory link is not followed")
-            for name in sorted(files):
-                path = Path(current) / name
-                if path.suffix.lower() not in _IMAGE_SUFFIXES:
-                    continue
-                try:
-                    if not path.resolve(strict=True).is_relative_to(root):
-                        record_issue(path, "path escapes dataset root")
-                        continue
-                    with path.open("rb") as stream, Image.open(stream) as image:
-                        image.verify()
-                    with path.open("rb") as stream:
-                        digest = hashlib.file_digest(stream, "sha256").hexdigest()
-                except (
-                    OSError,
-                    ValueError,
-                    SyntaxError,
-                    Image.DecompressionBombError,
-                ) as error:
-                    record_issue(path, type(error).__name__)
-                    continue
-                relative = path.relative_to(root).as_posix()
-                counts[split] += 1
-                hashes[digest].append((split, relative))
-                images.append(path)
-                memberships.append(split)
-    duplicates = [
-        {
-            "sha256": digest,
-            "splits": sorted({split for split, _ in entries}),
-            "paths": sorted(path for _, path in entries),
-        }
-        for digest, entries in sorted(hashes.items())
-        if len({split for split, _ in entries}) > 1
-    ]
+        for path, digest in _walk_split_images(root, split_root, record_issue):
+            relative = path.relative_to(root).as_posix()
+            counts[split] += 1
+            hashes[digest].append((split, relative))
+            images.append(path)
+            memberships.append(split)
+    duplicates = _cross_split_groups(hashes, "sha256")
     overlaps: list[dict[str, Any]] = []
     if group_manifest is not None:
-        groups = load_group_manifest(root, Path(group_manifest), images)
-        grouped: dict[str, list[tuple[str, str]]] = defaultdict(list)
-        for path, split, group in zip(images, memberships, groups, strict=True):
-            grouped[group].append((split, path.relative_to(root).as_posix()))
-        overlaps = [
-            {
-                "group": group,
-                "splits": sorted({split for split, _ in entries}),
-                "paths": sorted(path for _, path in entries),
-            }
-            for group, entries in sorted(grouped.items())
-            if len({split for split, _ in entries}) > 1
-        ]
+        overlaps = _group_overlaps(root, Path(group_manifest), images, memberships)
     empty = [split for split in present if counts[split] == 0]
     return {
         "ok": not (
@@ -231,3 +191,101 @@ def audit_dataset(
         "strict_groups": strict_groups,
         "group_overlaps": overlaps,
     }
+
+
+def _validate_audit_options(
+    root: Path, group_manifest: Path | None, strict_groups: bool, max_issues: int
+) -> None:
+    """Reject invalid audit inputs before traversing the dataset."""
+    if not root.is_dir():
+        raise ValueError(f"Dataset root is not a directory: {root}")
+    if max_issues < 0:
+        raise ValueError("max_issues must be non-negative")
+    if strict_groups and group_manifest is None:
+        raise ValueError("strict_groups requires a group manifest")
+
+
+def _prune_linked_directories(
+    root: Path,
+    current: str,
+    directories: list[str],
+    record_issue: Callable[[Path, str], None],
+) -> None:
+    """Keep traversal inside the root without following directory links."""
+    # Snapshot the names because rejected directories are removed during traversal.
+    for name in tuple(directories):
+        path = Path(current) / name
+        if path.is_symlink() or not path.resolve().is_relative_to(root):
+            directories.remove(name)
+            record_issue(path, "directory link is not followed")
+
+
+def _verified_image_digest(
+    root: Path, path: Path, record_issue: Callable[[Path, str], None]
+) -> str | None:
+    """Hash a readable contained image and record any verification failure."""
+    try:
+        if not path.resolve(strict=True).is_relative_to(root):
+            record_issue(path, "path escapes dataset root")
+            return None
+        with path.open("rb") as stream, Image.open(stream) as image:
+            image.verify()
+        with path.open("rb") as stream:
+            return hashlib.file_digest(stream, "sha256").hexdigest()
+    except (
+        OSError,
+        ValueError,
+        SyntaxError,
+        Image.DecompressionBombError,
+    ) as error:
+        record_issue(path, type(error).__name__)
+        return None
+
+
+def _walk_split_images(
+    root: Path, split_root: Path, record_issue: Callable[[Path, str], None]
+) -> Iterator[tuple[Path, str]]:
+    """Yield verified image paths and hashes in deterministic traversal order."""
+
+    def walk_error(error: OSError, directory: Path = split_root) -> None:
+        """Report traversal failures against their filename or split directory."""
+        record_issue(Path(error.filename or directory), type(error).__name__)
+
+    for current, directories, files in os.walk(
+        split_root, followlinks=False, onerror=walk_error
+    ):
+        directories.sort()
+        _prune_linked_directories(root, current, directories, record_issue)
+        for name in sorted(files):
+            path = Path(current) / name
+            if path.suffix.lower() not in _IMAGE_SUFFIXES:
+                continue
+            digest = _verified_image_digest(root, path, record_issue)
+            if digest is not None:
+                yield path, digest
+
+
+def _cross_split_groups(
+    grouped: Mapping[str, list[tuple[str, str]]], key: str
+) -> list[dict[str, Any]]:
+    """Describe groups whose entries belong to more than one split."""
+    return [
+        {
+            key: identifier,
+            "splits": sorted({split for split, _ in entries}),
+            "paths": sorted(path for _, path in entries),
+        }
+        for identifier, entries in sorted(grouped.items())
+        if len({split for split, _ in entries}) > 1
+    ]
+
+
+def _group_overlaps(
+    root: Path, manifest: Path, images: list[Path], memberships: list[str]
+) -> list[dict[str, Any]]:
+    """Load image groups and describe their overlap across dataset splits."""
+    groups = load_group_manifest(root, manifest, images)
+    grouped: dict[str, list[tuple[str, str]]] = defaultdict(list)
+    for path, split, group in zip(images, memberships, groups, strict=True):
+        grouped[group].append((split, path.relative_to(root).as_posix()))
+    return _cross_split_groups(grouped, "group")

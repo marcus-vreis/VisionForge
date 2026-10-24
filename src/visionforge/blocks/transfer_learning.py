@@ -183,47 +183,62 @@ class TransferLearningBlock(ExperimentBlock):
         children = list(model.named_children())
 
         if tl.mode == "feature_extraction":
-            head = final_linear(model)
-            if head is None:
-                raise ValueError(
-                    "feature_extraction needs a final Linear layer to train, "
-                    f"and {type(model).__name__} has none."
-                )
+            self._freeze_backbone(model, children)
+            return
+        if tl.mode == "fine_tuning":
+            self._freeze_before_layer(model, children, tl.unfreeze_from_layer)
+
+    def _freeze_backbone(
+        self, model: nn.Module, children: list[tuple[str, nn.Module]]
+    ) -> None:
+        """Freeze all parameters except the final linear head."""
+        head = final_linear(model)
+        if head is None:
+            raise ValueError(
+                "feature_extraction needs a final Linear layer to train, "
+                f"and {type(model).__name__} has none."
+            )
+        for param in model.parameters():
+            param.requires_grad = False
+        for param in head.parameters():
+            param.requires_grad = True
+        for name, _child in children:
+            self._frozen_layers.append(name)
+        logger.debug(
+            "Feature extraction: {} trainable parameters in the head.",
+            sum(p.numel() for p in head.parameters()),
+        )
+
+    def _freeze_before_layer(
+        self,
+        model: nn.Module,
+        children: list[tuple[str, nn.Module]],
+        unfreeze_from_layer: str | None,
+    ) -> None:
+        """Freeze children before the configured fine-tuning boundary."""
+        if unfreeze_from_layer is None:
+            # All layers trainable — nothing to freeze.
             for param in model.parameters():
-                param.requires_grad = False
-            for param in head.parameters():
                 param.requires_grad = True
-            for name, _child in children:
-                self._frozen_layers.append(name)
-            logger.debug(
-                "Feature extraction: {} trainable parameters in the head.",
-                sum(p.numel() for p in head.parameters()),
+            return
+
+        layer_names = [name for name, _ in children]
+        if unfreeze_from_layer not in layer_names:
+            raise ValueError(
+                f"unfreeze_from_layer='{unfreeze_from_layer}' not found in model. "
+                f"Available layers: {layer_names}"
             )
 
-        elif tl.mode == "fine_tuning":
-            if tl.unfreeze_from_layer is None:
-                # All layers trainable — nothing to freeze.
-                for param in model.parameters():
-                    param.requires_grad = True
-                return
-
-            layer_names = [name for name, _ in children]
-            if tl.unfreeze_from_layer not in layer_names:
-                raise ValueError(
-                    f"unfreeze_from_layer='{tl.unfreeze_from_layer}' not found in model. "
-                    f"Available layers: {layer_names}"
-                )
-
-            # Freeze layers before unfreeze_from_layer, thaw the rest.
-            freeze = True
-            for name, child in children:
-                if name == tl.unfreeze_from_layer:
-                    freeze = False
-                for param in child.parameters():
-                    param.requires_grad = not freeze
-                if freeze:
-                    self._frozen_layers.append(name)
-                    logger.debug("Froze layer: {}", name)
+        # Freeze layers before unfreeze_from_layer, thaw the rest.
+        freeze = True
+        for name, child in children:
+            if name == unfreeze_from_layer:
+                freeze = False
+            for param in child.parameters():
+                param.requires_grad = not freeze
+            if freeze:
+                self._frozen_layers.append(name)
+                logger.debug("Froze layer: {}", name)
 
     # ── optimizer construction ────────────────────────────────────────────────
 

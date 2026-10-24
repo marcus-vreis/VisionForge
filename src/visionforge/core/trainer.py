@@ -172,21 +172,7 @@ def resolve_device(device_cfg: DeviceConfig) -> tuple[torch.device, list[int], s
     available_ids = [d.index for d in info.devices]
 
     if device_cfg.kind == "cuda":
-        if device_cfg.gpu_ids:
-            primary = device_cfg.gpu_ids[0]
-            if primary not in available_ids:
-                logger.warning(
-                    "GPU {} not in available {}; using GPU 0.", primary, available_ids
-                )
-                primary = 0
-        else:
-            primary = 0
-        name = (
-            info.devices[primary].name
-            if primary < len(info.devices)
-            else f"cuda:{primary}"
-        )
-        return torch.device(f"cuda:{primary}"), [], f"cuda:{primary} ({name})"
+        return _resolve_single_cuda(device_cfg, info, available_ids)
 
     # multi_cuda
     requested = device_cfg.gpu_ids if device_cfg.gpu_ids else available_ids
@@ -207,6 +193,25 @@ def resolve_device(device_cfg: DeviceConfig) -> tuple[torch.device, list[int], s
     primary = valid[0]
     names = ", ".join(info.devices[i].name for i in valid if i < len(info.devices))
     return torch.device(f"cuda:{primary}"), valid, f"multi_cuda{valid} ({names})"
+
+
+def _resolve_single_cuda(
+    device_cfg: DeviceConfig, info: Any, available_ids: list[int]
+) -> tuple[torch.device, list[int], str]:
+    """Select the requested CUDA device or retain the GPU 0 fallback."""
+    if device_cfg.gpu_ids:
+        primary = device_cfg.gpu_ids[0]
+        if primary not in available_ids:
+            logger.warning(
+                "GPU {} not in available {}; using GPU 0.", primary, available_ids
+            )
+            primary = 0
+    else:
+        primary = 0
+    name = (
+        info.devices[primary].name if primary < len(info.devices) else f"cuda:{primary}"
+    )
+    return torch.device(f"cuda:{primary}"), [], f"cuda:{primary} ({name})"
 
 
 class Trainer:
@@ -257,53 +262,16 @@ class Trainer:
 
         logger.info("Trainer using device: {}", self._device_label)
 
-        model = self._prepare_model(model)
-        optimizer = optimizer if optimizer is not None else self._build_optimizer(model)
-        criterion = self._build_criterion()
-        scheduler = self._build_scheduler(optimizer)
-        # AMP only meaningful on CUDA; on CPU AMP is a no-op + warning.
-        use_amp = cfg.mixed_precision and self._device.type == "cuda"
-        # torch.amp.* is the non-deprecated API (the torch.cuda.amp.* aliases emit
-        # a FutureWarning since torch 2.4). The generic namespace exists since 2.3,
-        # which is the project's floor (pyproject torch>=2.3), so this is safe.
-        scaler = torch.amp.GradScaler("cuda", enabled=use_amp) if use_amp else None
-        # Resolved before anything is created: a resumed run must continue in its
-        # own directory, or it leaves an empty one behind and writes its
-        # TensorBoard events somewhere nothing will look.
-        run_dir = (
-            resume_dir
-            if resumed is not None and resume_dir is not None
-            else self._make_run_dir()
+        model, optimizer, criterion, scheduler, scaler, run_dir, tb = (
+            self._initialize_training(model, optimizer, resume_dir, resumed)
         )
         model_path = run_dir / "best_model.pth"
-        tb = TensorBoardLogger(run_dir / "tensorboard")
 
-        history: list[EpochResult] = []
-        best_val_loss = float("inf")
-        best_epoch = 0
-        patience_counter = 0
-        start_epoch = 1
-
-        # Continuing means restoring the optimizer and scheduler too: weights
-        # alone restart the search somewhere the loss curve never was.
-        if resumed is not None:
-            model.load_state_dict(resumed.model)
-            optimizer.load_state_dict(resumed.optimizer)
-            if scheduler is not None and resumed.scheduler is not None:
-                scheduler.load_state_dict(resumed.scheduler)
-            if scaler is not None and resumed.scaler is not None:
-                scaler.load_state_dict(resumed.scaler)
-            best_val_loss = resumed.best_metric
-            best_epoch = resumed.best_epoch
-            patience_counter = resumed.patience_counter
-            history = [EpochResult(**h) for h in resumed.history]
-            start_epoch = resumed.epoch + 1
-            logger.info(
-                "Resuming {} at epoch {} of {}.",
-                run_dir.name,
-                start_epoch,
-                cfg.epochs,
+        history, best_val_loss, best_epoch, patience_counter, start_epoch = (
+            self._restore_training(
+                model, optimizer, scheduler, scaler, resumed, run_dir
             )
+        )
         t0 = time.monotonic()
 
         if progress_callback is not None:
@@ -335,10 +303,7 @@ class Trainer:
         stopped = False
         for epoch in range(start_epoch, cfg.epochs + 1):
             # A crash or cancellation may coincide with the stopping boundary.
-            if (
-                cfg.early_stopping_patience > 0
-                and patience_counter >= cfg.early_stopping_patience
-            ):
+            if self._early_stopping_reached(patience_counter):
                 break
             # The safe point: the previous epoch's checkpoint is written and its
             # metrics emitted, so stopping here leaves the run directory whole.
@@ -355,13 +320,7 @@ class Trainer:
             )
             val_loss, val_acc = self._eval_epoch(model, val_loader, criterion)
 
-            # Plateau scheduler is reactive — step it after we have val loss.
-            # The other schedulers step monotonically by epoch.
-            if scheduler is not None:
-                if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
-                    scheduler.step(val_loss)
-                else:
-                    scheduler.step()
+            self._step_scheduler(scheduler, val_loss)
 
             result = EpochResult(
                 epoch=epoch,
@@ -371,39 +330,7 @@ class Trainer:
                 val_accuracy=val_acc,
             )
             history.append(result)
-            tb.log_scalars(
-                epoch,
-                {
-                    "loss/train": train_loss,
-                    "loss/val": val_loss,
-                    "accuracy/train": train_acc,
-                    "accuracy/val": val_acc,
-                },
-            )
-
-            logger.info(
-                "Epoch {}/{} | train_loss={:.4f} train_acc={:.4f} val_loss={:.4f} val_acc={:.4f}",
-                epoch,
-                cfg.epochs,
-                train_loss,
-                train_acc,
-                val_loss,
-                val_acc,
-            )
-
-            if progress_callback is not None:
-                progress_callback(
-                    {
-                        "event": "epoch_end",
-                        "epoch": epoch,
-                        "total_epochs": cfg.epochs,
-                        "train_loss": train_loss,
-                        "train_accuracy": train_acc,
-                        "val_loss": val_loss,
-                        "val_accuracy": val_acc,
-                        "elapsed_s": round(time.monotonic() - t0, 3),
-                    }
-                )
+            self._report_epoch(result, tb, progress_callback, t0)
 
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
@@ -420,14 +347,7 @@ class Trainer:
                 run_dir,
                 ResumeState(
                     epoch=epoch,
-                    model=(
-                        model.module.state_dict()  # type: ignore[union-attr]
-                        if isinstance(model, nn.DataParallel)
-                        else model.state_dict()
-                    ),
-                    optimizer=optimizer.state_dict(),
-                    scheduler=scheduler.state_dict() if scheduler is not None else None,
-                    scaler=scaler.state_dict() if scaler is not None else None,
+                    **self._checkpoint_components(model, optimizer, scheduler, scaler),
                     best_metric=best_val_loss,
                     best_epoch=best_epoch,
                     patience_counter=patience_counter,
@@ -439,16 +359,208 @@ class Trainer:
             # 0 disables early stopping outright. Without this guard it
             # would mean the opposite -- the very first epoch without an
             # improvement satisfies `1 >= 0` and ends the run.
-            if (
-                cfg.early_stopping_patience > 0
-                and patience_counter >= cfg.early_stopping_patience
-            ):
+            if self._early_stopping_reached(patience_counter):
                 logger.info("Early stopping at epoch {}.", epoch)
                 break
 
         if not is_cancelled(cancel_token):
             clear_resume_state(run_dir)
 
+        train_result = TrainResult(
+            stopped=stopped,
+            best_epoch=best_epoch,
+            best_val_loss=best_val_loss,
+            total_epochs=len(history),
+            device_used=self._device_label,
+            history=history,
+            model_path=model_path,
+        )
+        return self._finish_training(
+            train_result,
+            run_dir,
+            data_module,
+            tb,
+            save_pool,
+            save_future,
+            progress_callback,
+        )
+
+    # ── private helpers ────────────────────────────────────────────────────────
+
+    def _initialize_training(
+        self,
+        model: nn.Module,
+        optimizer: torch.optim.Optimizer | None,
+        resume_dir: Path | None,
+        resumed: ResumeState | None,
+    ) -> tuple[
+        nn.Module,
+        torch.optim.Optimizer,
+        nn.Module,
+        Any,
+        Any,
+        Path,
+        TensorBoardLogger,
+    ]:
+        """Prepare the model, optimization tools and output directory."""
+        cfg = self._config.training
+        model = self._prepare_model(model)
+        optimizer = optimizer if optimizer is not None else self._build_optimizer(model)
+        criterion = self._build_criterion()
+        scheduler = self._build_scheduler(optimizer)
+        # AMP only meaningful on CUDA; on CPU AMP is a no-op + warning.
+        use_amp = cfg.mixed_precision and self._device.type == "cuda"
+        # torch.amp.* is the non-deprecated API (the torch.cuda.amp.* aliases emit
+        # a FutureWarning since torch 2.4). The generic namespace exists since 2.3,
+        # which is the project's floor (pyproject torch>=2.3), so this is safe.
+        scaler = torch.amp.GradScaler("cuda", enabled=use_amp) if use_amp else None
+        # Resolved before anything is created: a resumed run must continue in its
+        # own directory, or it leaves an empty one behind and writes its
+        # TensorBoard events somewhere nothing will look.
+        run_dir = (
+            resume_dir
+            if resumed is not None and resume_dir is not None
+            else self._make_run_dir()
+        )
+        tb = TensorBoardLogger(run_dir / "tensorboard")
+
+        return model, optimizer, criterion, scheduler, scaler, run_dir, tb
+
+    def _restore_training(
+        self,
+        model: nn.Module,
+        optimizer: torch.optim.Optimizer,
+        scheduler: Any,
+        scaler: Any,
+        resumed: ResumeState | None,
+        run_dir: Path,
+    ) -> tuple[list[EpochResult], float, int, int, int]:
+        """Restore optimization state and return the previous epoch counters."""
+        cfg = self._config.training
+        history: list[EpochResult] = []
+        best_val_loss = float("inf")
+        best_epoch = 0
+        patience_counter = 0
+        start_epoch = 1
+
+        # Continuing means restoring the optimizer and scheduler too: weights
+        # alone restart the search somewhere the loss curve never was.
+        if resumed is not None:
+            model.load_state_dict(resumed.model)
+            optimizer.load_state_dict(resumed.optimizer)
+            if scheduler is not None and resumed.scheduler is not None:
+                scheduler.load_state_dict(resumed.scheduler)
+            if scaler is not None and resumed.scaler is not None:
+                scaler.load_state_dict(resumed.scaler)
+            best_val_loss = resumed.best_metric
+            best_epoch = resumed.best_epoch
+            patience_counter = resumed.patience_counter
+            history = [EpochResult(**h) for h in resumed.history]
+            start_epoch = resumed.epoch + 1
+            logger.info(
+                "Resuming {} at epoch {} of {}.",
+                run_dir.name,
+                start_epoch,
+                cfg.epochs,
+            )
+        return history, best_val_loss, best_epoch, patience_counter, start_epoch
+
+    def _step_scheduler(self, scheduler: Any, val_loss: float) -> None:
+        """Step the scheduler with validation loss only when it is reactive."""
+        # Plateau scheduler is reactive — step it after we have val loss.
+        # The other schedulers step monotonically by epoch.
+        if scheduler is None:
+            return
+        if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
+            scheduler.step(val_loss)
+            return
+        scheduler.step()
+
+    def _report_epoch(
+        self,
+        result: EpochResult,
+        tb: TensorBoardLogger,
+        progress_callback: Callable[[dict[str, Any]], None] | None,
+        t0: float,
+    ) -> None:
+        """Log the completed epoch and emit its progress event."""
+        epoch = result.epoch
+        train_loss = result.train_loss
+        train_acc = result.train_accuracy
+        val_loss = result.val_loss
+        val_acc = result.val_accuracy
+        tb.log_scalars(
+            epoch,
+            {
+                name: getattr(result, field)
+                for name, field in {
+                    "loss/train": "train_loss",
+                    "loss/val": "val_loss",
+                    "accuracy/train": "train_accuracy",
+                    "accuracy/val": "val_accuracy",
+                }.items()
+            },
+        )
+
+        logger.info(
+            "Epoch {}/{} | train_loss={:.4f} train_acc={:.4f} val_loss={:.4f} val_acc={:.4f}",
+            epoch,
+            self._config.training.epochs,
+            train_loss,
+            train_acc,
+            val_loss,
+            val_acc,
+        )
+
+        if progress_callback is not None:
+            progress_callback(
+                {
+                    "event": "epoch_end",
+                    "epoch": epoch,
+                    "total_epochs": self._config.training.epochs,
+                    "train_loss": train_loss,
+                    "train_accuracy": train_acc,
+                    "val_loss": val_loss,
+                    "val_accuracy": val_acc,
+                    "elapsed_s": round(time.monotonic() - t0, 3),
+                }
+            )
+
+    def _checkpoint_components(
+        self,
+        model: nn.Module,
+        optimizer: torch.optim.Optimizer,
+        scheduler: Any,
+        scaler: Any,
+    ) -> dict[str, Any]:
+        """Snapshot model and optimization components for exact continuation."""
+        return {
+            "model": (
+                model.module.state_dict()  # type: ignore[union-attr]
+                if isinstance(model, nn.DataParallel)
+                else model.state_dict()
+            ),
+            "optimizer": optimizer.state_dict(),
+            "scheduler": scheduler.state_dict() if scheduler is not None else None,
+            "scaler": scaler.state_dict() if scaler is not None else None,
+        }
+
+    def _early_stopping_reached(self, patience_counter: int) -> bool:
+        """Keep zero patience disabled at both epoch stopping boundaries."""
+        patience = self._config.training.early_stopping_patience
+        return patience > 0 and patience_counter >= patience
+
+    def _finish_training(
+        self,
+        train_result: TrainResult,
+        run_dir: Path,
+        data_module: Any,
+        tb: TensorBoardLogger,
+        save_pool: ThreadPoolExecutor,
+        save_future: Future[None] | None,
+        progress_callback: Callable[[dict[str, Any]], None] | None,
+    ) -> TrainResult:
+        """Summarize health, finish checkpoint writes and publish the run."""
         # A run that collapsed still reports an accuracy, so say so out loud
         # rather than letting the number stand on its own (ADR-099).
         health = summarize(
@@ -459,9 +571,10 @@ class Trainer:
                     if self._config.task == "binary"
                     else self._config.model.num_classes,
                 ),
-                stagnant_loss([h.train_loss for h in history]),
+                stagnant_loss([h.train_loss for h in train_result.history]),
             ]
         )
+        train_result.warnings = health
         for warning in health:
             logger.warning("{}", warning["message"])
 
@@ -470,16 +583,6 @@ class Trainer:
             save_future.result()
         save_pool.shutdown(wait=False)
 
-        train_result = TrainResult(
-            stopped=stopped,
-            best_epoch=best_epoch,
-            best_val_loss=best_val_loss,
-            total_epochs=len(history),
-            device_used=self._device_label,
-            history=history,
-            model_path=model_path,
-            warnings=health,
-        )
         self._write_run_json(
             run_dir, train_result, getattr(data_module, "class_names", None)
         )
@@ -495,11 +598,11 @@ class Trainer:
             # `epoch_end` carries: on a stopped run the two differ, and the
             # difference is how the overlay tells "stopped" from "finished"
             # (lib/run-control.ts, ADR-111).
-            progress_callback({"event": "end", "total_epochs": len(history)})
+            progress_callback(
+                {"event": "end", "total_epochs": len(train_result.history)}
+            )
 
         return train_result
-
-    # ── private helpers ────────────────────────────────────────────────────────
 
     def _prepare_model(self, model: nn.Module) -> nn.Module:
         """Move model to device; wrap with DataParallel when multi_cuda is requested."""

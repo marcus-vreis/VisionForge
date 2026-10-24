@@ -105,6 +105,42 @@ class _FoldDataModule:
         )
 
 
+def _emit_fold_start(
+    progress_callback: Callable[[dict[str, Any]], None] | None,
+    fold_idx: int,
+    n_folds: int,
+) -> None:
+    """Announce a fold before its training attempt."""
+    if progress_callback is not None:
+        progress_callback(
+            {
+                "event": "trial_start",
+                "trial_index": fold_idx,
+                "total_trials": n_folds,
+                "overrides": {"fold": fold_idx + 1},
+            }
+        )
+
+
+def _emit_untrained_fold_end(
+    progress_callback: Callable[[dict[str, Any]], None] | None,
+    trained: bool,
+    fold_idx: int,
+    n_folds: int,
+    record: FoldResult,
+) -> None:
+    """Close folds whose trainer did not emit its own end event."""
+    if progress_callback is not None and not trained:
+        progress_callback(
+            {
+                "event": "trial_end",
+                "trial_index": fold_idx,
+                "total_trials": n_folds,
+                "status": record.status,
+            }
+        )
+
+
 def run_regression_cross_validation(
     config: RegressionConfig,
     *,
@@ -164,15 +200,7 @@ def run_regression_cross_validation(
     for fold_idx, (train_idx, val_idx) in enumerate(splitter.split(range(n_samples))):
         # trial_start/trial_end is the vocabulary the GUI overlay tracks; the
         # wrapped inner callback streams each fold's epochs with trial context.
-        if progress_callback is not None:
-            progress_callback(
-                {
-                    "event": "trial_start",
-                    "trial_index": fold_idx,
-                    "total_trials": n_folds,
-                    "overrides": {"fold": fold_idx + 1},
-                }
-            )
+        _emit_fold_start(progress_callback, fold_idx, n_folds)
         record = FoldResult(
             fold=fold_idx,
             status="failed",
@@ -247,15 +275,7 @@ def run_regression_cross_validation(
         folds.append(record)
         # A fold whose trainer finished already emitted its own end, rewritten
         # to trial_end; one that died first is closed here, exactly once.
-        if progress_callback is not None and not trained:
-            progress_callback(
-                {
-                    "event": "trial_end",
-                    "trial_index": fold_idx,
-                    "total_trials": n_folds,
-                    "status": record.status,
-                }
-            )
+        _emit_untrained_fold_end(progress_callback, trained, fold_idx, n_folds, record)
         if is_cancelled(cancel_token):
             logger.info("K-fold stopped after {} of {} folds.", len(folds), n_folds)
             break

@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 import time
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -293,38 +293,13 @@ class SegmentationTrainer:
         # Resolved before anything is created: a resumed run must continue in its
         # own directory, or it leaves an empty one behind and writes its
         # TensorBoard events somewhere nothing will look.
-        run_dir = (
-            resume_dir
-            if resumed is not None and resume_dir is not None
-            else self._make_run_dir()
-        )
+        run_dir = self._resolve_run_dir(resumed, resume_dir)
         model_path = run_dir / "best_model.pth"
         tb = TensorBoardLogger(run_dir / "tensorboard")
 
-        history: list[SegmentationEpochResult] = []
-        best_val_miou = -1.0
-        best_epoch = 0
-        patience_counter = 0
-        start_epoch = 1
-
-        # Weights alone cannot continue: the optimizer and scheduler come back
-        # too, or the search restarts where the loss curve never was.
-        if resumed is not None:
-            model.load_state_dict(resumed.model)
-            optimizer.load_state_dict(resumed.optimizer)
-            if scheduler is not None and resumed.scheduler is not None:
-                scheduler.load_state_dict(resumed.scheduler)
-            best_val_miou = resumed.best_metric
-            best_epoch = resumed.best_epoch
-            patience_counter = resumed.patience_counter
-            history = [SegmentationEpochResult(**h) for h in resumed.history]
-            start_epoch = resumed.epoch + 1
-            logger.info(
-                "Resuming {} at epoch {} of {}.",
-                run_dir.name,
-                start_epoch,
-                cfg.epochs,
-            )
+        history, best_val_miou, best_epoch, patience_counter, start_epoch = (
+            self._restore_training_state(resumed, model, optimizer, scheduler, run_dir)
+        )
         t0 = time.monotonic()
 
         if progress_callback is not None:
@@ -352,9 +327,8 @@ class SegmentationTrainer:
         stopped = False
         for epoch in range(start_epoch, cfg.epochs + 1):
             # A crash or cancellation may coincide with the stopping boundary.
-            if (
-                cfg.early_stopping_patience > 0
-                and patience_counter >= cfg.early_stopping_patience
+            if self._early_stopping_reached(
+                patience_counter, cfg.early_stopping_patience
             ):
                 break
             # The safe point: the previous epoch's checkpoint is written and its
@@ -372,59 +346,18 @@ class SegmentationTrainer:
                 model, val_loader, criterion
             )
 
-            if scheduler is not None:
-                if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
-                    scheduler.step(val_loss)
-                else:
-                    scheduler.step()
+            self._step_scheduler(scheduler, val_loss)
 
-            history.append(
-                SegmentationEpochResult(
-                    epoch=epoch,
-                    train_loss=train_loss,
-                    val_loss=val_loss,
-                    val_miou=miou,
-                    val_dice=dice,
-                    val_pixel_acc=pixel_acc,
-                )
+            result = SegmentationEpochResult(
+                epoch=epoch,
+                train_loss=train_loss,
+                val_loss=val_loss,
+                val_miou=miou,
+                val_dice=dice,
+                val_pixel_acc=pixel_acc,
             )
-            tb.log_scalars(
-                epoch,
-                {
-                    "loss/train": train_loss,
-                    "loss/val": val_loss,
-                    "miou/val": miou,
-                    "dice/val": dice,
-                    "pixel_acc/val": pixel_acc,
-                },
-            )
-
-            logger.info(
-                "Epoch {}/{} | train_loss={:.4f} val_loss={:.4f} "
-                "mIoU={:.4f} dice={:.4f} pixel_acc={:.4f}",
-                epoch,
-                cfg.epochs,
-                train_loss,
-                val_loss,
-                miou,
-                dice,
-                pixel_acc,
-            )
-
-            if progress_callback is not None:
-                progress_callback(
-                    {
-                        "event": "epoch_end",
-                        "epoch": epoch,
-                        "total_epochs": cfg.epochs,
-                        "train_loss": train_loss,
-                        "val_loss": val_loss,
-                        "val_miou": miou,
-                        "val_dice": dice,
-                        "val_pixel_acc": pixel_acc,
-                        "elapsed_s": round(time.monotonic() - t0, 3),
-                    }
-                )
+            history.append(result)
+            self._report_epoch(result, tb, progress_callback, t0, cfg.epochs)
 
             if miou > best_val_miou:
                 best_val_miou = miou
@@ -443,7 +376,7 @@ class SegmentationTrainer:
                     epoch=epoch,
                     model=model.state_dict(),
                     optimizer=optimizer.state_dict(),
-                    scheduler=scheduler.state_dict() if scheduler is not None else None,
+                    scheduler=self._scheduler_state_dict(scheduler),
                     scaler=None,
                     best_metric=best_val_miou,
                     best_epoch=best_epoch,
@@ -456,48 +389,19 @@ class SegmentationTrainer:
             # 0 disables early stopping outright. Without this guard it
             # would mean the opposite -- the very first epoch without an
             # improvement satisfies `1 >= 0` and ends the run.
-            if (
-                cfg.early_stopping_patience > 0
-                and patience_counter >= cfg.early_stopping_patience
+            if self._early_stopping_reached(
+                patience_counter, cfg.early_stopping_patience
             ):
                 logger.info("Early stopping at epoch {}.", epoch)
                 break
 
-        if not is_cancelled(cancel_token):
-            clear_resume_state(run_dir)
+        self._finish_checkpoint_writes(run_dir, cancel_token, save_pool, save_future)
 
-        if save_future is not None:
-            save_future.result()
-        save_pool.shutdown(wait=False)
+        health = self._training_warnings(history)
 
-        # A run that never moved still reports metrics; say so (ADR-099).
-        last = getattr(self, "_last_metrics", None)
-        health = summarize(
-            [
-                stagnant_loss([h.train_loss for h in history]),
-                collapsed_segmentation(
-                    getattr(last, "per_class_iou", []),
-                    present_classes=getattr(last, "present_classes", 0),
-                ),
-            ]
+        best_epoch, best_val_miou = self._ensure_checkpoint(
+            model, model_path, history, best_epoch, best_val_miou
         )
-        for warning in health:
-            logger.warning("{}", warning["message"])
-
-        # Guard: if mIoU never improved past the -1 sentinel (degenerate run),
-        # still persist the final weights so the block can reload something.
-        # Not for a run stopped before its first epoch: those weights are
-        # untrained, and the block would score them as a result (ADR-111).
-        if history and not model_path.is_file():
-            torch.save(
-                model.module.state_dict()  # type: ignore[union-attr]
-                if isinstance(model, nn.DataParallel)
-                else model.state_dict(),
-                model_path,
-            )
-            best_epoch = best_epoch or len(history)
-            best_val_miou = max(best_val_miou, 0.0)
-
         train_result = SegmentationTrainResult(
             stopped=stopped,
             best_epoch=best_epoch,
@@ -509,13 +413,7 @@ class SegmentationTrainer:
             warnings=health,
         )
         self._write_run_json(run_dir, train_result)
-        tb.close()
-
-        if self._device.type == "cuda":
-            torch.cuda.empty_cache()
-
-        if progress_callback is not None:
-            progress_callback({"event": "end", "total_epochs": len(history)})
+        self._close_training(tb, progress_callback, len(history))
 
         return train_result
 
@@ -559,6 +457,199 @@ class SegmentationTrainer:
         return metrics.compute(), stacked
 
     # ── private helpers ────────────────────────────────────────────────────────
+
+    def _resolve_run_dir(
+        self, resumed: ResumeState | None, resume_dir: Path | None
+    ) -> Path:
+        """Reuse the resumed run directory before creating any output artifacts."""
+        if resumed is not None and resume_dir is not None:
+            return resume_dir
+        return self._make_run_dir()
+
+    @staticmethod
+    def _early_stopping_reached(patience_counter: int, patience: int) -> bool:
+        """Check patience while preserving zero as the disabled setting."""
+        return patience > 0 and patience_counter >= patience
+
+    @staticmethod
+    def _step_scheduler(
+        scheduler: torch.optim.lr_scheduler.LRScheduler | None, val_loss: float
+    ) -> None:
+        """Advance the scheduler using validation loss only for plateau scheduling."""
+        if scheduler is None:
+            return
+        if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
+            scheduler.step(val_loss)
+            return
+        scheduler.step()
+
+    def _restore_training_state(
+        self,
+        resumed: ResumeState | None,
+        model: nn.Module,
+        optimizer: torch.optim.Optimizer,
+        scheduler: torch.optim.lr_scheduler.LRScheduler | None,
+        run_dir: Path,
+    ) -> tuple[list[SegmentationEpochResult], float, int, int, int]:
+        """Restore weights and training bookkeeping without restoring loader randomness."""
+        if resumed is None:
+            return [], -1.0, 0, 0, 1
+        # Weights alone cannot continue: the optimizer and scheduler come back
+        # too, or the search restarts where the loss curve never was.
+        model.load_state_dict(resumed.model)
+        optimizer.load_state_dict(resumed.optimizer)
+        if scheduler is not None and resumed.scheduler is not None:
+            scheduler.load_state_dict(resumed.scheduler)
+        best_val_miou = resumed.best_metric
+        best_epoch = resumed.best_epoch
+        patience_counter = resumed.patience_counter
+        history = [SegmentationEpochResult(**h) for h in resumed.history]
+        start_epoch = resumed.epoch + 1
+        logger.info(
+            "Resuming {} at epoch {} of {}.",
+            run_dir.name,
+            start_epoch,
+            self._config.training.epochs,
+        )
+        return history, best_val_miou, best_epoch, patience_counter, start_epoch
+
+    @staticmethod
+    def _report_epoch(
+        result: SegmentationEpochResult,
+        tb: TensorBoardLogger,
+        progress_callback: Callable[[dict[str, Any]], None] | None,
+        t0: float,
+        total_epochs: int,
+    ) -> None:
+        """Report a completed epoch to TensorBoard, logs and the progress callback."""
+        epoch = result.epoch
+        train_loss = result.train_loss
+        val_loss = result.val_loss
+        miou = result.val_miou
+        dice = result.val_dice
+        pixel_acc = result.val_pixel_acc
+        tb.log_scalars(
+            epoch,
+            {
+                "loss/train": train_loss,
+                "loss/val": val_loss,
+                "miou/val": miou,
+                "dice/val": dice,
+                "pixel_acc/val": pixel_acc,
+            },
+        )
+
+        logger.info(
+            "Epoch {}/{} | train_loss={:.4f} val_loss={:.4f} "
+            "mIoU={:.4f} dice={:.4f} pixel_acc={:.4f}",
+            epoch,
+            total_epochs,
+            train_loss,
+            val_loss,
+            miou,
+            dice,
+            pixel_acc,
+        )
+
+        if progress_callback is not None:
+            progress_callback(
+                {
+                    "event": "epoch_end",
+                    "epoch": epoch,
+                    "total_epochs": total_epochs,
+                    "train_loss": train_loss,
+                    "val_loss": val_loss,
+                    "val_miou": miou,
+                    "val_dice": dice,
+                    "val_pixel_acc": pixel_acc,
+                    "elapsed_s": round(time.monotonic() - t0, 3),
+                }
+            )
+
+    @staticmethod
+    def _scheduler_state_dict(
+        scheduler: torch.optim.lr_scheduler.LRScheduler | None,
+    ) -> dict[str, Any] | None:
+        """Capture scheduler state only when scheduling is enabled."""
+        if scheduler is None:
+            return None
+        state: dict[str, Any] = scheduler.state_dict()
+        return state
+
+    @staticmethod
+    def _finish_checkpoint_writes(
+        run_dir: Path,
+        cancel_token: CancellationToken | None,
+        save_pool: ThreadPoolExecutor,
+        save_future: Future[None] | None,
+    ) -> None:
+        """Clear completed resume state and wait for outstanding checkpoint writes."""
+        if not is_cancelled(cancel_token):
+            clear_resume_state(run_dir)
+
+        if save_future is not None:
+            save_future.result()
+        save_pool.shutdown(wait=False)
+
+    def _training_warnings(
+        self, history: list[SegmentationEpochResult]
+    ) -> list[dict[str, str]]:
+        """Summarize and log training health warnings for the completed run."""
+        # A run that never moved still reports metrics; say so (ADR-099).
+        last = getattr(self, "_last_metrics", None)
+        health = summarize(
+            [
+                stagnant_loss([h.train_loss for h in history]),
+                collapsed_segmentation(
+                    getattr(last, "per_class_iou", []),
+                    present_classes=getattr(last, "present_classes", 0),
+                ),
+            ]
+        )
+        for warning in health:
+            logger.warning("{}", warning["message"])
+
+        return health
+
+    @staticmethod
+    def _ensure_checkpoint(
+        model: nn.Module,
+        model_path: Path,
+        history: list[SegmentationEpochResult],
+        best_epoch: int,
+        best_val_miou: float,
+    ) -> tuple[int, float]:
+        """Save final weights when completed epochs produced no best checkpoint."""
+        # Guard: if mIoU never improved past the -1 sentinel (degenerate run),
+        # still persist the final weights so the block can reload something.
+        # Not for a run stopped before its first epoch: those weights are
+        # untrained, and the block would score them as a result (ADR-111).
+        if history and not model_path.is_file():
+            torch.save(
+                model.module.state_dict()  # type: ignore[union-attr]
+                if isinstance(model, nn.DataParallel)
+                else model.state_dict(),
+                model_path,
+            )
+            best_epoch = best_epoch or len(history)
+            best_val_miou = max(best_val_miou, 0.0)
+
+        return best_epoch, best_val_miou
+
+    def _close_training(
+        self,
+        tb: TensorBoardLogger,
+        progress_callback: Callable[[dict[str, Any]], None] | None,
+        total_epochs: int,
+    ) -> None:
+        """Close logging, release cached device memory and emit the final event."""
+        tb.close()
+
+        if self._device.type == "cuda":
+            torch.cuda.empty_cache()
+
+        if progress_callback is not None:
+            progress_callback({"event": "end", "total_epochs": total_epochs})
 
     def _prepare_model(self, model: nn.Module) -> nn.Module:
         model = model.to(self._device)

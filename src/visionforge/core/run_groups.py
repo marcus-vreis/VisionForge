@@ -162,47 +162,61 @@ def _copy_group(
         "report_dir": report.get("report_dir"),
     }
 
-    if kind == "sweep":
-        children = [_trial_child(row) for row in report.get("trials") or []]
-        group.update(
-            {
-                "mode": report.get("mode"),
-                "metric_direction": report.get("metric_direction"),
-                "n_requested": report.get("n_planned") or len(children),
-                "n_finished": _count(children),
-                "children": children,
-                # The ranking is the report's; the group only says who led it.
-                "best_index": report.get("best_index"),
-            }
-        )
-        return group
+    copiers = {
+        "sweep": _copy_sweep_group,
+        "kfold": _copy_kfold_group,
+        "replicates": _copy_replicate_group,
+    }
+    copiers.get(kind, _copy_comparison_group)(group, report)
+    return group
 
-    if kind == "kfold":
-        children = [_fold_child(row) for row in report.get("fold_results") or []]
-        group.update(
-            {
-                "n_folds": report.get("n_folds") or len(children),
-                "n_requested": report.get("n_folds") or len(children),
-                "n_finished": _count(children),
-                "children": children,
-                "aggregates": report.get("aggregate") or {},
-            }
-        )
-        return group
 
-    if kind == "replicates":
-        children = [_child(row, None) for row in report.get("trials") or []]
-        group.update(
-            {
-                "n_requested": len(group["seeds"]),
-                "n_finished": _count(children),
-                "seeds_finished": _seeds_finished(children),
-                "children": children,
-                "aggregates": report.get("aggregates") or {},
-            }
-        )
-        return group
+def _copy_sweep_group(group: dict[str, Any], report: dict[str, Any]) -> None:
+    """Copy trial children and the report's sweep ranking."""
+    children = [_trial_child(row) for row in report.get("trials") or []]
+    group.update(
+        {
+            "mode": report.get("mode"),
+            "metric_direction": report.get("metric_direction"),
+            "n_requested": report.get("n_planned") or len(children),
+            "n_finished": _count(children),
+            "children": children,
+            # The ranking is the report's; the group only says who led it.
+            "best_index": report.get("best_index"),
+        }
+    )
 
+
+def _copy_kfold_group(group: dict[str, Any], report: dict[str, Any]) -> None:
+    """Copy fold children and their reported aggregates."""
+    children = [_fold_child(row) for row in report.get("fold_results") or []]
+    group.update(
+        {
+            "n_folds": report.get("n_folds") or len(children),
+            "n_requested": report.get("n_folds") or len(children),
+            "n_finished": _count(children),
+            "children": children,
+            "aggregates": report.get("aggregate") or {},
+        }
+    )
+
+
+def _copy_replicate_group(group: dict[str, Any], report: dict[str, Any]) -> None:
+    """Copy seed children and their reported aggregates."""
+    children = [_child(row, None) for row in report.get("trials") or []]
+    group.update(
+        {
+            "n_requested": len(group["seeds"]),
+            "n_finished": _count(children),
+            "seeds_finished": _seeds_finished(children),
+            "children": children,
+            "aggregates": report.get("aggregates") or {},
+        }
+    )
+
+
+def _copy_comparison_group(group: dict[str, Any], report: dict[str, Any]) -> None:
+    """Copy variant children and the comparison statistics already reported."""
     variants: dict[str, Any] = {}
     all_children: list[dict[str, Any]] = []
     for label, variant in (report.get("variants") or {}).items():
@@ -236,7 +250,6 @@ def _copy_group(
             "power_note": report.get("power_note") or "",
         }
     )
-    return group
 
 
 def _read_json(path: Path) -> dict[str, Any] | None:
@@ -322,28 +335,7 @@ def write_run_group(
         if child["run_dir"]
     ]
 
-    total_epochs = 0
-    donor: dict[str, Any] | None = None
-    for path in child_paths:
-        data = _read_json(path)
-        if data is None:
-            logger.warning("Replicate group {}: no readable {}", group_id, path)
-            continue
-        donor = donor or data
-        total_epochs += int((data.get("metrics") or {}).get("total_epochs") or 0)
-        data["group_id"] = group_id
-        try:
-            _write_json(path, data)
-        except OSError as exc:
-            # Windows: an antivirus or the indexer can hold a run.json for a
-            # moment. That seed stays a loose run; the others are still tagged
-            # and the group is still written.
-            logger.warning(
-                "Replicate group {}: could not tag {} ({}); that seed stays loose",
-                group_id,
-                path,
-                exc,
-            )
+    total_epochs, donor = _tag_group_children(child_paths, group_id)
 
     # Task identity and provenance come from a child: a researcher-defined task
     # stamps ``task: custom:<key>`` at the top level, which the group's own
@@ -363,30 +355,7 @@ def write_run_group(
     }
 
     metrics: dict[str, Any] = {"total_epochs": total_epochs}
-    if kind == "replicates":
-        # The means under the keys a single run of this task writes, so a
-        # reader of ``metrics`` that knows nothing about groups (the history
-        # list, the comparison table) still finds the number the job is about
-        # in the row where it belongs. ``metric_keys`` says which aggregate
-        # filled which key, so nobody has to guess the correspondence.
-        bare = _writes_bare_names(config, donor)
-        metric_keys: dict[str, str] = {}
-        for metric_name, agg in group["aggregates"].items():
-            if isinstance(agg, dict) and agg.get("mean") is not None:
-                key = metric_name if bare else f"test_{metric_name}"
-                metrics[key] = agg["mean"]
-                metric_keys[key] = metric_name
-        group["metric_keys"] = metric_keys
-    elif kind == "kfold":
-        # Each fold scored on its held-out fold of the training data, so the
-        # mean is a validation score: under ``val_<name>``, never in the
-        # column of the held-out test split.
-        metric_keys = {}
-        for metric_name, agg in group["aggregates"].items():
-            if isinstance(agg, dict) and agg.get("mean") is not None:
-                metrics[f"val_{metric_name}"] = agg["mean"]
-                metric_keys[f"val_{metric_name}"] = metric_name
-        group["metric_keys"] = metric_keys
+    _copy_group_metrics(group, config, donor, metrics)
 
     metrics.update(extra_metrics or {})
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -411,6 +380,59 @@ def write_run_group(
     }
     _write_json(group_json, run_json)
     return run_dir
+
+
+def _tag_group_children(
+    child_paths: list[Path], group_id: str
+) -> tuple[int, dict[str, Any] | None]:
+    """Tag readable children and retain their epoch total and first donor."""
+    total_epochs = 0
+    donor: dict[str, Any] | None = None
+    for path in child_paths:
+        data = _read_json(path)
+        if data is None:
+            logger.warning("Replicate group {}: no readable {}", group_id, path)
+            continue
+        donor = donor or data
+        total_epochs += int((data.get("metrics") or {}).get("total_epochs") or 0)
+        data["group_id"] = group_id
+        try:
+            _write_json(path, data)
+        except OSError as exc:
+            # Windows: an antivirus or the indexer can hold a run.json for a
+            # moment. That seed stays a loose run; the others are still tagged
+            # and the group is still written.
+            logger.warning(
+                "Replicate group {}: could not tag {} ({}); that seed stays loose",
+                group_id,
+                path,
+                exc,
+            )
+
+    return total_epochs, donor
+
+
+def _copy_group_metrics(
+    group: dict[str, Any],
+    config: dict[str, Any],
+    donor: dict[str, Any] | None,
+    metrics: dict[str, Any],
+) -> None:
+    """Copy aggregate means under the metric names used by History readers."""
+    kind = group["kind"]
+    if kind not in ("replicates", "kfold"):
+        return
+    # Fold means describe validation; replicate means follow the task's run keys.
+    prefix = "val_"
+    if kind == "replicates":
+        prefix = "" if _writes_bare_names(config, donor) else "test_"
+    metric_keys: dict[str, str] = {}
+    for metric_name, agg in group["aggregates"].items():
+        if isinstance(agg, dict) and agg.get("mean") is not None:
+            key = metric_name if not prefix else f"{prefix}{metric_name}"
+            metrics[key] = agg["mean"]
+            metric_keys[key] = metric_name
+    group["metric_keys"] = metric_keys
 
 
 __all__ = ["GroupKind", "build_group", "group_run_dir", "write_run_group"]

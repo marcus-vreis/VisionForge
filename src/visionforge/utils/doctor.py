@@ -310,82 +310,10 @@ def _run_install(tag: str) -> int:
     return subprocess.run(install, check=False).returncode
 
 
-def run_doctor(
-    fix: bool = False,
-    confirm_fn: Callable[[str], bool] = _default_confirm,
-) -> int:
-    """Run the full environment diagnostic, print a report, and optionally install.
-
-    Args:
-        fix: When True, prompt the user and run the recommended install on confirmation.
-        confirm_fn: Callable that receives a prompt string and returns True for 'yes'.
-            Injected so tests can control it without shelling out.
-
-    Returns:
-        0 if everything looks good, 1 if any issue was detected.
-    """
-    issues: list[str] = []
-
-    # --- Python version ---
-    py = check_python()
-    py_marker = "OK" if py["ok"] else "FAIL"
-    print(f"[{py_marker}] Python {py['version']}", end="")
-    if not py["ok"]:
-        print(f"  (requires >={MIN_PYTHON[0]}.{MIN_PYTHON[1]})")
-        issues.append("python-version")
-    else:
-        print()
-
-    # --- GPU / driver ---
-    # Probe torch first: a working CUDA build is stronger evidence of a usable
-    # GPU than nvidia-smi, which is simply absent from PATH on plenty of
-    # machines. Recommending the CPU wheel to someone whose GPU already works
-    # is the worst answer doctor can give, and it used to give it.
-    torch_info = probe_torch()
-    driver_cuda = detect_driver_cuda()
-    torch_says_cuda = torch_info["importable"] and torch_info["cuda_available"]
-
-    if driver_cuda:
-        print(f"[OK] CUDA driver version: {driver_cuda}")
-    elif torch_says_cuda:
-        print(
-            "[OK] GPU usable via torch "
-            f"(CUDA build {torch_info['cuda_build']}); nvidia-smi not on PATH"
-        )
-    else:
-        print("[INFO] No CUDA-capable GPU detected (nvidia-smi not found or failed)")
-
-    # --- Wheel recommendation (always shown — this is doctor's primary value) ---
-    tag = select_wheel_tag(driver_cuda)
-    # "Runs on GPU" alone is not enough to keep an install: an older CUDA build on
-    # an RTX 50 imports, reports the GPU, and fails at the first kernel. What
-    # settles it is the build — as new as the one this driver calls for, keep it.
-    # This matters more since ADR-107, because the fix now *uninstalls* torch;
-    # printing that to someone whose setup is already right would be sabotage.
-    installed_build = _cuda_int(torch_info["cuda_build"])
-    wanted_build = _cuda_int(tag[2:4] + "." + tag[4:]) if tag.startswith("cu") else None
-    already_working = torch_says_cuda and (
-        not driver_cuda
-        or (
-            installed_build is not None
-            and wanted_build is not None
-            and installed_build >= wanted_build
-        )
-    )
-    commands, _index_url = build_install_command(tag)
-    steps = "\n".join(f"         {line}" for line in commands)
-    print()
-    if already_working:
-        print("  Recommended wheel: keep the current install")
-        print(f"  Reason           : torch {torch_info['version']} already runs on GPU")
-    else:
-        print(f"  Recommended wheel: {tag}")
-        print("  Install commands :")
-        for line in commands:
-            print(f"    {line}")
-    print()
-
-    # --- torch probe ---
+def _report_torch_issues(
+    torch_info: TorchProbe, driver_cuda: str | None, steps: str, issues: list[str]
+) -> None:
+    """Print torch diagnostics and collect missing or mismatched installs."""
     if not torch_info["importable"]:
         # Not an INFO: torch is what trains. Reporting "environment looks good"
         # while the one required dependency is missing sends a new user off to
@@ -417,12 +345,37 @@ def run_doctor(
             )
             issues.append("torch-cuda-mismatch")
 
-    # --- Workspace ---
-    # Custom models and tasks are picked up from folders *relative to the
-    # working directory*, which works but is invisible: a pip-installed user
-    # has no repo to look at, and running from a different folder silently
-    # loses them. Printing the resolved paths turns that into something you
-    # can see and act on.
+
+def _keep_installed_torch(
+    torch_info: TorchProbe, driver_cuda: str | None, tag: str, torch_says_cuda: bool
+) -> bool:
+    """Keep a usable CUDA build when it meets the driver recommendation."""
+    installed_build = _cuda_int(torch_info["cuda_build"])
+    wanted_build = _cuda_int(tag[2:4] + "." + tag[4:]) if tag.startswith("cu") else None
+    return torch_says_cuda and (
+        not driver_cuda
+        or (
+            installed_build is not None
+            and wanted_build is not None
+            and installed_build >= wanted_build
+        )
+    )
+
+
+def _report_python_version(issues: list[str]) -> None:
+    """Print the Python version and collect unsupported-version issues."""
+    py = check_python()
+    py_marker = "OK" if py["ok"] else "FAIL"
+    print(f"[{py_marker}] Python {py['version']}", end="")
+    if not py["ok"]:
+        print(f"  (requires >={MIN_PYTHON[0]}.{MIN_PYTHON[1]})")
+        issues.append("python-version")
+    else:
+        print()
+
+
+def _report_workspace() -> None:
+    """Show resolved custom model and task locations and discovery counts."""
     print()
     print(f"  Working directory: {Path.cwd()}")
     for label, folder in (
@@ -435,6 +388,77 @@ def run_doctor(
             print(f"  {label:17}: {path.resolve()}  ({n} found)")
         else:
             print(f"  {label:17}: {path.resolve()}  (create it to add your own)")
+
+
+def run_doctor(
+    fix: bool = False,
+    confirm_fn: Callable[[str], bool] = _default_confirm,
+) -> int:
+    """Run the full environment diagnostic, print a report, and optionally install.
+
+    Args:
+        fix: When True, prompt the user and run the recommended install on confirmation.
+        confirm_fn: Callable that receives a prompt string and returns True for 'yes'.
+            Injected so tests can control it without shelling out.
+
+    Returns:
+        0 if everything looks good, 1 if any issue was detected.
+    """
+    issues: list[str] = []
+
+    _report_python_version(issues)
+
+    # --- GPU / driver ---
+    # Probe torch first: a working CUDA build is stronger evidence of a usable
+    # GPU than nvidia-smi, which is simply absent from PATH on plenty of
+    # machines. Recommending the CPU wheel to someone whose GPU already works
+    # is the worst answer doctor can give, and it used to give it.
+    torch_info = probe_torch()
+    driver_cuda = detect_driver_cuda()
+    torch_says_cuda = torch_info["importable"] and torch_info["cuda_available"]
+
+    if driver_cuda:
+        print(f"[OK] CUDA driver version: {driver_cuda}")
+    elif torch_says_cuda:
+        print(
+            "[OK] GPU usable via torch "
+            f"(CUDA build {torch_info['cuda_build']}); nvidia-smi not on PATH"
+        )
+    else:
+        print("[INFO] No CUDA-capable GPU detected (nvidia-smi not found or failed)")
+
+    # --- Wheel recommendation (always shown — this is doctor's primary value) ---
+    tag = select_wheel_tag(driver_cuda)
+    # "Runs on GPU" alone is not enough to keep an install: an older CUDA build on
+    # an RTX 50 imports, reports the GPU, and fails at the first kernel. What
+    # settles it is the build — as new as the one this driver calls for, keep it.
+    # This matters more since ADR-107, because the fix now *uninstalls* torch;
+    # printing that to someone whose setup is already right would be sabotage.
+    already_working = _keep_installed_torch(
+        torch_info, driver_cuda, tag, torch_says_cuda
+    )
+    commands, _index_url = build_install_command(tag)
+    steps = "\n".join(f"         {line}" for line in commands)
+    print()
+    if already_working:
+        print("  Recommended wheel: keep the current install")
+        print(f"  Reason           : torch {torch_info['version']} already runs on GPU")
+    else:
+        print(f"  Recommended wheel: {tag}")
+        print("  Install commands :")
+        for line in commands:
+            print(f"    {line}")
+    print()
+
+    _report_torch_issues(torch_info, driver_cuda, steps, issues)
+
+    # --- Workspace ---
+    # Custom models and tasks are picked up from folders *relative to the
+    # working directory*, which works but is invisible: a pip-installed user
+    # has no repo to look at, and running from a different folder silently
+    # loses them. Printing the resolved paths turns that into something you
+    # can see and act on.
+    _report_workspace()
 
     # --- Verdict ---
     print()

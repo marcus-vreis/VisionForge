@@ -297,7 +297,6 @@ def list_profiles(profiles_dir: Path, default_models_dir: Path) -> list[Profile]
 def create_profile(
     name: str,
     profiles_dir: Path,
-    default_models_dir: Path,
     pronoun: Pronoun | None = None,
 ) -> Profile:
     """Create ``profiles_dir/<slug>`` with the output sub-folders.
