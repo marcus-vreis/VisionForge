@@ -211,7 +211,8 @@ class TestTorchSwapSteps:
 
         assert code == 0
         assert "uninstall" in calls[0]
-        assert "install" in calls[1] and "uninstall" not in calls[1]
+        assert "install" in calls[1]
+        assert "uninstall" not in calls[1]
 
     def test_the_distribution_name_is_not_the_import_name(self) -> None:
         """Plain `visionforge` on PyPI is an unrelated project; pointing users

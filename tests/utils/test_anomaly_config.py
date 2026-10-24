@@ -85,10 +85,9 @@ class TestModelName:
         assert cfg.model.name == name
 
     def test_invalid_model_rejected(self, tmp_path: Path) -> None:
+        raw = _base_config(tmp_path, {"model": {"name": "ganomaly999"}})
         with pytest.raises(ValidationError):
-            AnomalyConfig.model_validate(
-                _base_config(tmp_path, {"model": {"name": "ganomaly999"}})
-            )
+            AnomalyConfig.model_validate(raw)
 
     @pytest.mark.parametrize(
         "backbone", ["resnet18", "resnet34", "resnet50", "wide_resnet50_2"]

@@ -49,7 +49,8 @@ class TestBootstrapCI:
         values = [0.80, 0.82, 0.79, 0.85, 0.81]
         a = bootstrap_ci(values, seed=1)
         b = bootstrap_ci(values, seed=99)
-        assert a is not None and b is not None
+        assert a is not None
+        assert b is not None
         assert a.ci_low == pytest.approx(b.ci_low, abs=0.005)
         assert a.ci_high == pytest.approx(b.ci_high, abs=0.005)
 
@@ -65,7 +66,8 @@ class TestBootstrapCI:
         values = [0.1, 0.4, 0.35, 0.8, 0.55]
         narrow = bootstrap_ci(values, confidence=0.80, seed=1)
         wide = bootstrap_ci(values, confidence=0.99, seed=1)
-        assert narrow is not None and wide is not None
+        assert narrow is not None
+        assert wide is not None
         assert wide.ci_low < narrow.ci_low
         assert wide.ci_high > narrow.ci_high
 
@@ -117,7 +119,8 @@ class TestPairedComparison:
         assert result.mean_difference > 0  # a is better
         assert result.effect_size > 0.8
         assert result.effect_label == "large"
-        assert result.label_a == "novo" and result.label_b == "baseline"
+        assert result.label_a == "novo"
+        assert result.label_b == "baseline"
 
     def test_difference_ci_excludes_zero_for_a_consistent_win(self) -> None:
         a, b = self._groups()

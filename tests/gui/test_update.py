@@ -165,7 +165,8 @@ class TestStatus:
     ) -> None:
         s = _status(monkeypatch, latest="0.15.0")
 
-        assert s["available"] and s["can_apply"]
+        assert s["available"]
+        assert s["can_apply"]
         assert s["blocked"] is None
         assert s["command"] == "pip install --upgrade visionforge-studio==0.15.0"
 
@@ -174,8 +175,10 @@ class TestStatus:
     ) -> None:
         for latest in ("0.14.0", None):
             s = _status(monkeypatch, latest=latest)
-            assert not s["available"] and not s["can_apply"]
-            assert s["blocked"] is None and s["command"] is None
+            assert not s["available"]
+            assert not s["can_apply"]
+            assert s["blocked"] is None
+            assert s["command"] is None
 
     @pytest.mark.parametrize(
         ("kwargs", "reason"),
@@ -191,7 +194,8 @@ class TestStatus:
     ) -> None:
         s = _status(monkeypatch, latest="0.15.0", **kwargs)
 
-        assert s["available"] and not s["can_apply"]
+        assert s["available"]
+        assert not s["can_apply"]
         assert s["blocked"] == reason
 
     def test_a_checkout_is_told_to_git_pull(
@@ -209,7 +213,8 @@ class TestStatus:
 
         s = updates.update_status(client_is_local=True, busy=False)
 
-        assert s["check_disabled"] and not s["available"]
+        assert s["check_disabled"]
+        assert not s["available"]
 
     def test_the_last_attempt_is_reported(
         self, monkeypatch: pytest.MonkeyPatch
@@ -257,7 +262,8 @@ class TestRoutes:
     def test_get_reports_the_update(self, routes: dict[str, Any]) -> None:
         body = _client(routes["app"]).get("/api/update").json()
 
-        assert body["available"] and body["can_apply"]
+        assert body["available"]
+        assert body["can_apply"]
         assert body["latest"] == "0.15.0"
 
     def test_get_tells_a_remote_client_it_cannot_apply(
@@ -265,7 +271,8 @@ class TestRoutes:
     ) -> None:
         body = _client(routes["app"], "192.168.1.20").get("/api/update").json()
 
-        assert body["available"] and body["blocked"] == "remote"
+        assert body["available"]
+        assert body["blocked"] == "remote"
 
     def test_apply_spawns_the_updater_and_stops_the_server(
         self, routes: dict[str, Any]
@@ -281,7 +288,8 @@ class TestRoutes:
         resp = _client(routes["app"], "10.0.0.5").post("/api/update/apply")
 
         assert resp.status_code == 403
-        assert routes["spawned"] == [] and routes["shutdown"] == 0
+        assert routes["spawned"] == []
+        assert routes["shutdown"] == 0
 
     def test_apply_refuses_a_page_of_another_site(self, routes: dict[str, Any]) -> None:
         resp = _client(routes["app"]).post(
@@ -341,7 +349,9 @@ class TestUpdater:
         code = updater.main(args)
 
         status = json.loads((tmp_path / "status.json").read_text(encoding="utf-8"))
-        assert code == 0 and status["ok"] and status["target"] == "0.15.0"
+        assert code == 0
+        assert status["ok"]
+        assert status["target"] == "0.15.0"
         assert "installed" in (tmp_path / "update.log").read_text(encoding="utf-8")
         assert relaunched == [(["visionforge", "gui"], str(tmp_path))]
 
@@ -368,7 +378,8 @@ class TestUpdater:
 
         assert updater.main(args) == 3
         status = json.loads((tmp_path / "status.json").read_text(encoding="utf-8"))
-        assert status["ok"] is False and status["returncode"] == 3
+        assert status["ok"] is False
+        assert status["returncode"] == 3
         assert relaunched == [["gui"]]
 
     def test_a_server_that_never_lets_go_is_not_replaced(
@@ -552,7 +563,9 @@ class TestUpdaterSafety:
         code = updater.main(self._args(tmp_path, ["new"], ["old"]))
 
         status = json.loads((tmp_path / "status.json").read_text(encoding="utf-8"))
-        assert code == 1 and status["ok"] is False and status["restored"] is True
+        assert code == 1
+        assert status["ok"] is False
+        assert status["restored"] is True
         assert ran == [["new"], ["old"], ["relaunch"]]
 
     def test_a_successful_install_restores_nothing(
@@ -573,7 +586,8 @@ class TestUpdaterSafety:
         updater.main(self._args(tmp_path, ["new"], ["old"]))
 
         status = json.loads((tmp_path / "status.json").read_text(encoding="utf-8"))
-        assert ran == [["new"]] and status["restored"] is None
+        assert ran == [["new"]]
+        assert status["restored"] is None
 
     def test_the_server_names_its_launcher_only_when_started_through_it(
         self, monkeypatch: pytest.MonkeyPatch

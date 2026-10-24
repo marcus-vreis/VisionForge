@@ -188,17 +188,21 @@ def client() -> TestClient:
 class TestSSEEventQueue:
     """Unit tests for the queue-based event plumbing in routes."""
 
-    def test_get_events_returns_text_event_stream(self, client: TestClient) -> None:
+    def test_get_events_returns_text_event_stream(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """GET /api/experiment/events must use content-type text/event-stream."""
-        routes_mod._current_run = None
-        routes_mod._event_queue = None
+        monkeypatch.setattr(routes_mod, "_current_run", None)
+        monkeypatch.setattr(routes_mod, "_event_queue", None)
         with client.stream("GET", "/api/experiment/events") as resp:
             assert "text/event-stream" in resp.headers["content-type"]
 
-    def test_get_events_closes_when_no_active_run(self, client: TestClient) -> None:
+    def test_get_events_closes_when_no_active_run(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """With no active run the stream must yield a sentinel and close cleanly."""
-        routes_mod._current_run = None
-        routes_mod._event_queue = None
+        monkeypatch.setattr(routes_mod, "_current_run", None)
+        monkeypatch.setattr(routes_mod, "_event_queue", None)
         chunks: list[str] = []
         with client.stream("GET", "/api/experiment/events") as resp:
             for line in resp.iter_lines():
@@ -307,9 +311,11 @@ class TestSSEEventQueue:
         kinds = [e["event"] for e in collected]
         assert kinds == ["start"] + ["epoch_end"] * n_epochs + ["end"]
 
-    def test_sse_endpoint_exists(self, client: TestClient) -> None:
+    def test_sse_endpoint_exists(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """GET /api/experiment/events must not return 404 or 405."""
-        routes_mod._current_run = None
-        routes_mod._event_queue = None
+        monkeypatch.setattr(routes_mod, "_current_run", None)
+        monkeypatch.setattr(routes_mod, "_event_queue", None)
         with client.stream("GET", "/api/experiment/events") as resp:
             assert resp.status_code not in (404, 405)

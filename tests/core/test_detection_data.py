@@ -93,8 +93,9 @@ class TestSynthesis:
         base = tmp_path / "ds"
         _make_layout(base, "images_split", ("train",))
         cfg = _config(tmp_path, {"base_dir": str(base)})
+        module = DetectionDataModule(cfg)
         with pytest.raises(ValueError, match="val"):
-            DetectionDataModule(cfg).resolve_data_yaml()
+            module.resolve_data_yaml()
 
 
 # ── class names ───────────────────────────────────────────────────────────────

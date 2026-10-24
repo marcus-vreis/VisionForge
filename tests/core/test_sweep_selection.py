@@ -36,7 +36,7 @@ class SplitRunner:
         return result
 
     def metrics(self, result: RunResult) -> dict[str, float]:
-        return result.metrics
+        return dict(result.metrics)
 
     def primary_metric(self) -> str:
         return "score"
@@ -105,8 +105,9 @@ def test_anomaly_sweep_rejects_test_only_objective_before_training(
         raise AssertionError("unsafe anomaly sweep started training")
 
     monkeypatch.setattr(AnomalyRunner, "run", unexpected_run)
+    runner = AnomalyRunner()
     with using_lang("en"), pytest.raises(ValueError, match="validation"):
-        run_sweep(AnomalyRunner(), {}, {}, mode="grid", metric="auroc")
+        run_sweep(runner, {}, {}, mode="grid", metric="auroc")
 
 
 @pytest.mark.parametrize(

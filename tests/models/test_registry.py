@@ -72,7 +72,8 @@ class TestLoadUserModels:
         assert "from_file" in names
         model = build_custom_model("from_file", num_outputs=3, user_models_dir=tmp_path)
         assert isinstance(model, nn.Linear)
-        assert model.in_features == 4 and model.out_features == 3
+        assert model.in_features == 4
+        assert model.out_features == 3
 
     def test_missing_directory_is_noop(self, tmp_path: Path) -> None:
         assert load_user_models(tmp_path / "does_not_exist") == []

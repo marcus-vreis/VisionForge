@@ -154,7 +154,8 @@ class TestReportFormatting:
             ]
         )
         assert "classification/simple" in text
-        assert "PASS" in text and "FAIL" in text
+        assert "PASS" in text
+        assert "FAIL" in text
         assert "1/2 cases passed" in text
         assert "failed: regression/sweep" in text
 

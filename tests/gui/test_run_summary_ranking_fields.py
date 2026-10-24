@@ -188,7 +188,7 @@ class TestMetricDirectionsOnTheList:
             metrics={"total_epochs": 3, "score": 0.3, "iou": 0.7},
         )
 
-        with patch.object(routes_mod, "get_task", lambda _key: task):
+        with patch.object(routes_mod, "get_task", return_value=task):
             run = _listed(app_and_routes, tmp_path)["mine"]
 
         assert run["metric_directions"] == {"score": "lower", "iou": "higher"}

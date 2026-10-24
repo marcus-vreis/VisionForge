@@ -249,6 +249,7 @@ class TestDetectionBothBackends:
             "build_torchvision_detector",
             lambda *a, **k: (_ for _ in ()).throw(RuntimeError("stop")),
         )
+        trainer = module.DetectionTrainer(cfg)
         with pytest.raises(RuntimeError, match="stop"):
-            module.DetectionTrainer(cfg).fit()
+            trainer.fit()
         assert spy.calls == [(7, True)]

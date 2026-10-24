@@ -68,10 +68,7 @@ class TestPackageImport:
         import visionforge.__main__ as main_module
 
         monkeypatch.setattr(sys, "argv", ["visionforge"])
-        try:
-            main_module.main()
-        except Exception as exc:
-            pytest.fail(f"main() raised an unexpected exception: {exc}")
+        main_module.main()
 
 
 class TestMainWithConfig:

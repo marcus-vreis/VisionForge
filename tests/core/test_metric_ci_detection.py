@@ -62,7 +62,8 @@ class TestBootstrapDetectionCis:
         ci = bootstrap_detection_cis(preds, gts, n_resamples=40, seed=0)["map50"]
 
         assert ci.value == 1.0
-        assert ci.ci_low == 1.0 and ci.ci_high == 1.0
+        assert ci.ci_low == 1.0
+        assert ci.ci_high == 1.0
 
     def test_more_disagreement_gives_a_wider_interval(self) -> None:
         """The interval has to track the evidence, not just exist."""

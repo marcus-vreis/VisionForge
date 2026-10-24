@@ -62,7 +62,7 @@ class _StreamingRunner:
         )
 
     def metrics(self, result: RunResult) -> dict[str, float]:
-        return result.metrics
+        return dict(result.metrics)
 
     def primary_metric(self) -> str:
         return "score"
@@ -260,7 +260,8 @@ def test_every_runner_hands_its_callback_to_the_block(
     runner._progress_callback = sink
     runner.run(MagicMock())
 
-    assert built and built[0]._progress_callback is sink
+    assert built
+    assert built[0]._progress_callback is sink
 
 
 def test_the_classification_comparison_block_streams_its_models(

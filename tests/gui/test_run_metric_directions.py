@@ -150,7 +150,7 @@ class TestCustomTaskDirections:
         self, app_and_routes: tuple, tmp_path: Path
     ) -> None:
         _, routes_mod = app_and_routes
-        with patch.object(routes_mod, "get_task", lambda _key: self._task()):
+        with patch.object(routes_mod, "get_task", return_value=self._task()):
             body = _detail(
                 app_and_routes,
                 tmp_path,

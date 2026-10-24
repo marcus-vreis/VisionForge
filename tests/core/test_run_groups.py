@@ -507,7 +507,8 @@ class TestKFoldGroup:
         group = data["group"]
         assert group["kind"] == "kfold"
         assert [c["fold"] for c in group["children"]] == [0, 1, 2]
-        assert group["n_requested"] == 3 and group["n_finished"] == 3
+        assert group["n_requested"] == 3
+        assert group["n_finished"] == 3
         assert group["aggregates"] == report["aggregate"]
         # Six epochs over three folds, as every run writes total_epochs.
         assert data["metrics"]["total_epochs"] == 6
@@ -591,7 +592,8 @@ class TestSweepGroup:
         group = data["group"]
         assert group["kind"] == "sweep"
         assert group["mode"] == "grid"
-        assert group["metric"] == "r2" and group["metric_direction"] == "higher"
+        assert group["metric"] == "r2"
+        assert group["metric_direction"] == "higher"
         # Asked for three, two ran to the end.
         assert (group["n_requested"], group["n_finished"]) == (3, 2)
         assert [c["trial_index"] for c in group["children"]] == [0, 1]

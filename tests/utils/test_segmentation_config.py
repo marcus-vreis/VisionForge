@@ -100,10 +100,9 @@ class TestModelName:
         assert cfg.model.name == name
 
     def test_invalid_backbone_rejected(self, tmp_path: Path) -> None:
+        raw = _base_config(tmp_path, {"model": {"name": "segnet999"}})
         with pytest.raises(ValidationError):
-            SegmentationConfig.model_validate(
-                _base_config(tmp_path, {"model": {"name": "segnet999"}})
-            )
+            SegmentationConfig.model_validate(raw)
 
 
 # ── ignore_index coherence ────────────────────────────────────────────────────
@@ -124,16 +123,15 @@ class TestIgnoreIndexCoherence:
 
     def test_ignore_index_colliding_with_class_rejected(self, tmp_path: Path) -> None:
         # ignore_index=2 collides with a real class id when num_classes=4 (ids 0..3)
+        raw = _base_config(
+            tmp_path,
+            {
+                "model": {"name": "fcn_resnet50", "num_classes": 4},
+                "data": {"base_dir": str(tmp_path), "ignore_index": 2},
+            },
+        )
         with pytest.raises(ValidationError, match="ignore_index"):
-            SegmentationConfig.model_validate(
-                _base_config(
-                    tmp_path,
-                    {
-                        "model": {"name": "fcn_resnet50", "num_classes": 4},
-                        "data": {"base_dir": str(tmp_path), "ignore_index": 2},
-                    },
-                )
-            )
+            SegmentationConfig.model_validate(raw)
 
     def test_negative_ignore_index_allowed(self, tmp_path: Path) -> None:
         # -1 is a common "no ignore" sentinel and never collides with a class id.

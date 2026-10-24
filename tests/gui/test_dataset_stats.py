@@ -105,7 +105,8 @@ class TestCollectDatasetSamples:
             DatasetSamplesRequest(base_dir=str(tmp_path), split="test")
         )
         assert resp.samples == {}
-        assert resp.message and "não encontrado" in resp.message
+        assert resp.message
+        assert "não encontrado" in resp.message
 
 
 class TestDatasetSamplesEndpoint:
