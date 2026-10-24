@@ -19,11 +19,11 @@ import torch.nn as nn
 from fastapi.testclient import TestClient
 from PIL import Image
 
+from visionforge.gui.api.datasets_routes import _open_native_folder_dialog
 from visionforge.gui.api.routes import (
     _execute_batch_predict,
     _execute_onnx_export,
     _execute_run_test,
-    _open_native_folder_dialog,
 )
 from visionforge.gui.api.schemas import (
     BatchPredictRequest,
