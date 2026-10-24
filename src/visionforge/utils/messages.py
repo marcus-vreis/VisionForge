@@ -95,6 +95,81 @@ def using_lang(lang: Lang) -> Iterator[None]:
 # other language wants the parts in another order. Braces that are meant
 # literally are doubled.
 CATALOG: dict[str, dict[Lang, str]] = {
+    # ── class vocabulary (core/data.py) ─────────────────────────────────────
+    "data.empty_split": {
+        "pt": "O split {split} ({root}) não tem imagens em nenhuma pasta de classe.",
+        "en": "The {split} split ({root}) has no images in any class folder.",
+    },
+    "data.unknown_classes": {
+        "pt": (
+            "O split {split} tem pasta(s) de classe {unknown} ausentes no split "
+            "de treino (classes de treino: {classes}). Mova ou renomeie essas pastas."
+        ),
+        "en": (
+            "The {split} split has class folder(s) {unknown} that the "
+            "training split does not have (training classes: "
+            "{classes}). Move or rename them."
+        ),
+    },
+    "data.class_count_mismatch": {
+        "pt": (
+            "O split de treino tem {found} pasta(s) de classe {classes}, mas "
+            "a tarefa '{task}' com model.num_classes={num_classes} "
+            "exigem {expected}."
+        ),
+        "en": (
+            "Training split has {found} class folder(s) {classes}, but "
+            "task '{task}' with model.num_classes={num_classes} "
+            "require {expected}."
+        ),
+    },
+    # ── validation selection (core/sweep.py, task runners) ──────────────────
+    "sweep.no_metrics": {"pt": "nenhuma", "en": "none"},
+    "sweep.missing_validation_value": {
+        "pt": (
+            "Nenhum valor de {split} para '{metric}' "
+            "(métricas de validação: {metrics}); um sweep nunca "
+            "classifica tentativas por métricas de teste."
+        ),
+        "en": (
+            "No {split} value for '{metric}' "
+            "(validation metrics: {metrics}); a sweep never "
+            "ranks trials on test metrics."
+        ),
+    },
+    "sweep.nonfinite_validation_value": {
+        "pt": (
+            "O valor de {split} '{metric}' não é finito ({value}); "
+            "tentativa fora do ranking."
+        ),
+        "en": "The {split} '{metric}' is not finite ({value}); not ranked.",
+    },
+    "sweep.anomaly_selection_unavailable": {
+        "pt": (
+            "A detecção de anomalias não tem split de validação rotulado para "
+            "selecionar hiperparâmetros; AUROC/F1 vêm do split de teste, por isso "
+            "um sweep é recusado. Compare configurações em execuções separadas "
+            "ou réplicas."
+        ),
+        "en": (
+            "Anomaly detection has no labelled validation split to select "
+            "hyperparameters on; its AUROC/F1 come from the test split, so a sweep "
+            "is refused. Compare settings with separate runs or replicates instead."
+        ),
+    },
+    "sweep.level2_selection_unavailable": {
+        "pt": (
+            "A tarefa '{task}' executa seu próprio loop (Level 2), então o "
+            "VisionForge não consegue identificar quais métricas vêm de um "
+            "split de validação; um sweep exige métricas de validação por época "
+            "(hooks Level 1)."
+        ),
+        "en": (
+            "Task '{task}' runs its own loop (Level 2), so VisionForge "
+            "cannot tell which metrics come from a validation split; a sweep "
+            "needs per-epoch validation metrics (Level 1 hooks)."
+        ),
+    },
     # ── training health (core/training_health.py) ────────────────────────────
     "health.value_label": {"pt": "valor", "en": "value"},
     "health.collapsed_predictions": {

@@ -17,6 +17,7 @@ from visionforge.tasks import (
 )
 from visionforge.tasks.registry import TaskInfo
 from visionforge.tasks.runner import CustomTaskRunner
+from visionforge.utils.messages import using_lang
 
 
 @pytest.fixture(autouse=True)
@@ -208,6 +209,10 @@ class TestSweepSelectionOverCustomRunner:
             mode="json"
         )
 
-        with pytest.raises(ValueError, match="validation"):
+        with using_lang("pt"):
+            reason = runner.selection_unavailable
+            assert reason is not None
+            assert "validação por época" in reason
+        with using_lang("en"), pytest.raises(ValueError, match="validation"):
             run_sweep(runner, base, {"scale": [1.0, 2.0]}, mode="grid", metric="mae")
         assert ran == []

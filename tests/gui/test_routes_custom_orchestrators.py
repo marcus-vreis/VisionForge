@@ -28,10 +28,12 @@ from .conftest import occupy_queue, release_queue
 
 
 @pytest.fixture(autouse=True)
-def _clean_registry():
+def _clean_registry(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.chdir(tmp_path)
     clear_task_registry()
     yield
     clear_task_registry()
+    assert not (tmp_path / "outputs").exists()
 
 
 @pytest.fixture
@@ -78,7 +80,10 @@ def _payload(tmp_path: Path) -> dict:
         "name": "toy_orch_run",
         "data": {"base_dir": str(tmp_path)},
         "training": {"epochs": 1, "batch_size": 4},
-        "output": {"models_dir": str(tmp_path / "models")},
+        "output": {
+            "models_dir": str(tmp_path / "models"),
+            "reports_dir": str(tmp_path / "reports"),
+        },
         "device": {"kind": "cpu"},
     }
 

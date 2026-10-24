@@ -9,6 +9,7 @@ from visionforge.blocks.anomaly import AnomalyBlock
 from visionforge.core.cancellation import CancellationToken
 from visionforge.core.task_runner import ProgressCallback, RunResult, run_dir_from
 from visionforge.utils.anomaly_config import AnomalyConfig
+from visionforge.utils.messages import tr
 
 # Anomaly's test metrics; auroc (higher is better) is the ranking default.
 _METRIC_KEYS = ("auroc", "image_f1")
@@ -25,11 +26,10 @@ class AnomalyRunner:
 
     # Anomaly trains on normal images only and its one labelled split is the
     # test set, so a sweep could only rank trials on test AUROC (ADR-131).
-    selection_unavailable = (
-        "Anomaly detection has no labelled validation split to select "
-        "hyperparameters on; its AUROC/F1 come from the test split, so a sweep "
-        "is refused. Compare settings with separate runs or replicates instead."
-    )
+    @property
+    def selection_unavailable(self) -> str:
+        """Explain why selection is unavailable in the caller's language."""
+        return tr("sweep.anomaly_selection_unavailable")
 
     # Set by whoever drives the run (the route layer, or the block that owns the
     # comparison) and handed to each block built here, so a stopped job also
