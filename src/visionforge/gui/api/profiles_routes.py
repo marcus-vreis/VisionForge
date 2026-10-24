@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 from fastapi import APIRouter, HTTPException
 from loguru import logger
@@ -30,10 +31,16 @@ from visionforge.gui.api.schemas import (
 # (tests and the CLI repoint them), so they are handed in, not imported back.
 ProfileDirs = Callable[[], tuple[Path, Path]]
 
-_BAD_REQUEST = {400: {"description": "Invalid profile slug"}}
-_NOT_FOUND = {404: {"description": "Profile not found"}}
-_CONFLICT = {409: {"description": "Profile already exists"}}
-_UNPROCESSABLE = {
+_BAD_REQUEST: dict[int | str, dict[str, Any]] = {
+    400: {"description": "Invalid profile slug"}
+}
+_NOT_FOUND: dict[int | str, dict[str, Any]] = {
+    404: {"description": "Profile not found"}
+}
+_CONFLICT: dict[int | str, dict[str, Any]] = {
+    409: {"description": "Profile already exists"}
+}
+_UNPROCESSABLE: dict[int | str, dict[str, Any]] = {
     422: {
         "description": "Invalid request",
         # Keeps FastAPI's validation-error schema that a description-only entry would drop.
@@ -44,7 +51,9 @@ _UNPROCESSABLE = {
         },
     }
 }
-_SERVER_ERROR = {500: {"description": "Profile could not be saved"}}
+_SERVER_ERROR: dict[int | str, dict[str, Any]] = {
+    500: {"description": "Profile could not be saved"}
+}
 
 
 def _profile_info(profile: Profile) -> ProfileInfo:

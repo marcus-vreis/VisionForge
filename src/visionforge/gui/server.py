@@ -17,7 +17,9 @@ from visionforge.gui.api.routes import router as api_router
 INDEX_FILENAME = "index.html"
 NOT_FOUND_DETAIL = "Not Found"
 
-_NOT_FOUND = {404: {"description": "Resource not found"}}
+_NOT_FOUND: dict[int | str, dict[str, Any]] = {
+    404: {"description": "Resource not found"}
+}
 
 STATIC_DIR = Path(__file__).parent / "static"
 

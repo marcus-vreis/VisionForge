@@ -219,11 +219,17 @@ RUN_FILENAME = "run.json"
 MARKDOWN_TABLE_SEPARATOR = "|---|---|"
 CANCELLED_MESSAGE = "Cancelado."
 
-_BAD_REQUEST = {400: {"description": "Invalid request"}}
-_FORBIDDEN = {403: {"description": "Access denied"}}
-_NOT_FOUND = {404: {"description": "Resource not found"}}
-_CONFLICT = {409: {"description": "Operation conflicts with current state"}}
-_UNPROCESSABLE = {
+_BAD_REQUEST: dict[int | str, dict[str, Any]] = {
+    400: {"description": "Invalid request"}
+}
+_FORBIDDEN: dict[int | str, dict[str, Any]] = {403: {"description": "Access denied"}}
+_NOT_FOUND: dict[int | str, dict[str, Any]] = {
+    404: {"description": "Resource not found"}
+}
+_CONFLICT: dict[int | str, dict[str, Any]] = {
+    409: {"description": "Operation conflicts with current state"}
+}
+_UNPROCESSABLE: dict[int | str, dict[str, Any]] = {
     422: {
         "description": "Invalid request",
         # Keeps FastAPI's validation-error schema that a description-only entry would drop.
@@ -234,8 +240,12 @@ _UNPROCESSABLE = {
         },
     }
 }
-_SERVER_ERROR = {500: {"description": "Operation failed"}}
-_UNAVAILABLE = {503: {"description": "GPU context unavailable"}}
+_SERVER_ERROR: dict[int | str, dict[str, Any]] = {
+    500: {"description": "Operation failed"}
+}
+_UNAVAILABLE: dict[int | str, dict[str, Any]] = {
+    503: {"description": "GPU context unavailable"}
+}
 
 # Common split folder names per role. Lowercased, accent-stripped at match time.
 _TRAIN_ALIASES = {"train", "training", "treino", "trains", "tr"}
