@@ -139,8 +139,9 @@ class TestBackendGuards:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setattr(dt_mod, "YOLO", None)
+        trainer = DetectionTrainer(_config(tmp_path))
         with pytest.raises(RuntimeError, match="ultralytics"):
-            DetectionTrainer(_config(tmp_path)).fit()
+            trainer.fit()
 
 
 # ── ultralytics path (mocked) ─────────────────────────────────────────────────
@@ -369,8 +370,9 @@ class TestTorchvisionPath:
                 "output": {"models_dir": str(tmp_path / "models")},
             }
         )
+        trainer = DetectionTrainer(cfg)
         with pytest.raises(ValueError, match="base_dir"):
-            DetectionTrainer(cfg).fit()
+            trainer.fit()
 
     def test_trains_streams_and_writes_run_json(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch

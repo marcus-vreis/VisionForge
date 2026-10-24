@@ -73,5 +73,6 @@ class TestDetectionDataset:
         _make_image(images / "b.jpg", 16, 16)
         ds = DetectionDataset(images, labels)
         imgs, targets = detection_collate([ds[0], ds[1]])
-        assert len(imgs) == 2 and len(targets) == 2
+        assert len(imgs) == 2
+        assert len(targets) == 2
         assert all(isinstance(t, torch.Tensor) for t in imgs)

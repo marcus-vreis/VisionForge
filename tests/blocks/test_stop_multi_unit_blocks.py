@@ -134,7 +134,8 @@ class TestClassificationKFold:
         assert aggregate["n_folds_failed"] == 0
 
         kinds = [e["event"] for e in callback.events]
-        assert kinds[-1] == "end" and kinds.count("end") == 1
+        assert kinds[-1] == "end"
+        assert kinds.count("end") == 1
         # One trial_end per fold that started, the cut one included, never two.
         assert kinds.count("trial_start") == kinds.count("trial_end") == 2
         # The cut fold stopped after its first epoch rather than running both.
@@ -352,10 +353,12 @@ class TestClassificationModelComparison:
         assert [t["status"] for t in block._trials] == ["success", "success"]
         assert block.report()["stopped_count"] == 0
 
-    def test_stops_between_architectures(self, tmp_path: Path) -> None:
+    def test_stops_between_architectures(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from visionforge.blocks.model_comparison import ModelComparisonBlock
 
-        _FakeRunner.cut = True
+        monkeypatch.setattr(_FakeRunner, "cut", True)
         config = ExperimentConfig.model_validate(
             _classification_raw(
                 tmp_path,

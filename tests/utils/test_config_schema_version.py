@@ -47,14 +47,14 @@ class TestSchemaVersionField:
         assert dumped["schema_version"] == CURRENT_SCHEMA_VERSION
 
     def test_future_version_rejected(self, tmp_path: Path) -> None:
+        raw = _raw(tmp_path, {"schema_version": CURRENT_SCHEMA_VERSION + 1})
         with pytest.raises(ValidationError, match="newer version"):
-            ExperimentConfig.model_validate(
-                _raw(tmp_path, {"schema_version": CURRENT_SCHEMA_VERSION + 1})
-            )
+            ExperimentConfig.model_validate(raw)
 
     def test_zero_or_negative_rejected(self, tmp_path: Path) -> None:
+        raw = _raw(tmp_path, {"schema_version": 0})
         with pytest.raises(ValidationError):
-            ExperimentConfig.model_validate(_raw(tmp_path, {"schema_version": 0}))
+            ExperimentConfig.model_validate(raw)
 
 
 class TestMigrateConfigDict:

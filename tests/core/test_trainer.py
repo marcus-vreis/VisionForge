@@ -110,18 +110,20 @@ class TestSeedEverything:
         b = [py_random.random() for _ in range(10)]
         assert a == b
 
-    def test_default_enables_benchmark(self) -> None:
+    def test_default_enables_benchmark(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Default (non-deterministic) mode must enable cuDNN auto-tuning."""
-        cudnn.deterministic = True
-        cudnn.benchmark = False
+        monkeypatch.setattr(cudnn, "deterministic", True)
+        monkeypatch.setattr(cudnn, "benchmark", False)
         _seed_everything(0)
         assert cudnn.deterministic is False
         assert cudnn.benchmark is True
 
-    def test_deterministic_disables_benchmark(self) -> None:
+    def test_deterministic_disables_benchmark(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Deterministic mode must disable cuDNN auto-tuning for reproducibility."""
-        cudnn.deterministic = False
-        cudnn.benchmark = True
+        monkeypatch.setattr(cudnn, "deterministic", False)
+        monkeypatch.setattr(cudnn, "benchmark", True)
         _seed_everything(0, deterministic=True)
         assert cudnn.deterministic is True
         assert cudnn.benchmark is False

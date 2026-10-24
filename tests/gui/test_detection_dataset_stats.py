@@ -6,7 +6,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from visionforge.gui.api.routes import _collect_detection_dataset_stats
+from visionforge.gui.api.datasets_routes import _collect_detection_dataset_stats
 from visionforge.gui.api.schemas import DetectionDatasetStatsRequest
 
 

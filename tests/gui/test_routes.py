@@ -10,7 +10,8 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
-from visionforge.gui.api.routes import _detect_dataset_layout, _load_runs
+from visionforge.gui.api.datasets_routes import _detect_dataset_layout
+from visionforge.gui.api.routes import _load_runs
 from visionforge.gui.api.schemas import RunSummary
 
 from .conftest import occupy_queue, release_queue
@@ -602,14 +603,15 @@ class TestApiRunsEndpoint:
         self, app_and_routes: tuple
     ) -> None:
         """POST /api/checkpoint/pick must return cancelled=True when no file chosen."""
+        from visionforge.gui.api import datasets_routes
         from visionforge.gui.api.schemas import CheckpointPickResponse
 
-        app, routes_mod = app_and_routes
+        app, _ = app_and_routes
 
         def fake_open() -> CheckpointPickResponse:
             return CheckpointPickResponse(path="", cancelled=True, message="Cancelado.")
 
-        with patch.object(routes_mod, "_open_native_checkpoint_dialog", fake_open):
+        with patch.object(datasets_routes, "_open_native_checkpoint_dialog", fake_open):
             client = TestClient(app, raise_server_exceptions=True)
             resp = client.post("/api/checkpoint/pick")
         assert resp.status_code == 200
@@ -619,15 +621,16 @@ class TestApiRunsEndpoint:
 
     def test_checkpoint_pick_returns_chosen_path(self, app_and_routes: tuple) -> None:
         """POST /api/checkpoint/pick must return the absolute file path."""
+        from visionforge.gui.api import datasets_routes
         from visionforge.gui.api.schemas import CheckpointPickResponse
 
-        app, routes_mod = app_and_routes
+        app, _ = app_and_routes
         chosen = "/abs/path/to/model.pth"
 
         def fake_open() -> CheckpointPickResponse:
             return CheckpointPickResponse(path=chosen, cancelled=False)
 
-        with patch.object(routes_mod, "_open_native_checkpoint_dialog", fake_open):
+        with patch.object(datasets_routes, "_open_native_checkpoint_dialog", fake_open):
             client = TestClient(app, raise_server_exceptions=True)
             resp = client.post("/api/checkpoint/pick")
         assert resp.status_code == 200

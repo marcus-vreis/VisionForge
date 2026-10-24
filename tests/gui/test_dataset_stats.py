@@ -8,7 +8,7 @@ import numpy as np
 from fastapi.testclient import TestClient
 from PIL import Image
 
-from visionforge.gui.api.routes import (
+from visionforge.gui.api.datasets_routes import (
     _collect_dataset_samples,
     _collect_dataset_stats,
 )
@@ -105,7 +105,8 @@ class TestCollectDatasetSamples:
             DatasetSamplesRequest(base_dir=str(tmp_path), split="test")
         )
         assert resp.samples == {}
-        assert resp.message and "não encontrado" in resp.message
+        assert resp.message
+        assert "não encontrado" in resp.message
 
 
 class TestDatasetSamplesEndpoint:
@@ -138,7 +139,7 @@ class TestServeDatasetFile:
 
     def test_rejects_path_outside_probed_roots(self, tmp_path: Path) -> None:
         """A valid image file outside every session root must be refused."""
-        from visionforge.gui.api.routes import _ALLOWED_DATASET_ROOTS
+        from visionforge.gui.api.datasets_routes import _ALLOWED_DATASET_ROOTS
         from visionforge.gui.server import app
 
         rogue_dir = tmp_path / "elsewhere"

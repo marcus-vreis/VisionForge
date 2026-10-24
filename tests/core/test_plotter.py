@@ -259,7 +259,8 @@ class TestTaskDiagnostics:
             [1.0, 2.0, 3.0], [1.1, 1.9, 3.4], save_path, target_name="age"
         )
 
-        assert save_path.exists() and save_path.stat().st_size > 0
+        assert save_path.exists()
+        assert save_path.stat().st_size > 0
 
     def test_regression_scatter_survives_an_empty_split(self, tmp_path: Path) -> None:
         """No test rows must not raise — the block still wants its other plots."""
@@ -286,7 +287,8 @@ class TestTaskDiagnostics:
 
         MetricsPlotter.residual_histogram([1.0, 2.0, 3.0], [1.5, 2.5, 3.5], save_path)
 
-        assert save_path.exists() and save_path.stat().st_size > 0
+        assert save_path.exists()
+        assert save_path.stat().st_size > 0
 
     def test_residual_histogram_survives_an_empty_split(self, tmp_path: Path) -> None:
         save_path = tmp_path / "empty_residuals.png"
@@ -302,7 +304,8 @@ class TestTaskDiagnostics:
             [0.8, 0.4, 0.0], ["fundo", "gato", "borda"], save_path
         )
 
-        assert save_path.exists() and save_path.stat().st_size > 0
+        assert save_path.exists()
+        assert save_path.stat().st_size > 0
 
     def test_per_class_bars_falls_back_to_indices_without_names(
         self, tmp_path: Path
@@ -321,7 +324,8 @@ class TestTaskDiagnostics:
             [0, 0, 1, 1], [0.1, 0.2, 0.8, 0.9], save_path, threshold=0.5
         )
 
-        assert save_path.exists() and save_path.stat().st_size > 0
+        assert save_path.exists()
+        assert save_path.stat().st_size > 0
 
     def test_score_histogram_handles_a_single_class(self, tmp_path: Path) -> None:
         """A split with no defects must still plot the normals it does have."""

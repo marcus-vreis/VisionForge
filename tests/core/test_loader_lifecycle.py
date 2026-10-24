@@ -121,11 +121,14 @@ class TestBlockClosesOnFailure:
         it = FakeIterator()
         cache.cached("train", lambda: FakeLoader(it))
 
-        with pytest.raises(RuntimeError, match="training blew up"):
+        def failing_run() -> None:
             try:
                 raise RuntimeError("training blew up")
             finally:
                 cache.close()
+
+        with pytest.raises(RuntimeError, match="training blew up"):
+            failing_run()
 
         assert it.shutdown_calls == 1
 

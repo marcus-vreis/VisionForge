@@ -5905,6 +5905,8 @@ The profile and system routers inherit the parent language dependency; the
 OpenAPI fixture remains unchanged. Update endpoints stay with the execution
 state they depend on. Further domains remain incremental work under this ADR.
 
+**Update (2026-10-24):** datasets are done: dataset, picker and credential endpoints (and the helpers only they use) move to `datasets_routes.py`, which owns the dataset-root allow-list; `routes.py` imports from it, never the reverse. The OpenAPI fixture is unchanged. Next: runs/history.
+
 ## ADR-133 — An end-to-end GUI suite drives the built SPA against a real server on the CPU
 
 **Date:** 2026-10-21

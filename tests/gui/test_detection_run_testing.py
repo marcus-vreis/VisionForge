@@ -104,8 +104,9 @@ class TestTorchvisionDetectionTest:
             num_classes=1,
             checkpoint=str(tmp_path / "missing.pt"),
         )
+        request = RunTestRequest(data_dir=str(ds))
         with pytest.raises(FileNotFoundError):
-            evaluate_detection_run(run_dir, RunTestRequest(data_dir=str(ds)), data)
+            evaluate_detection_run(run_dir, request, data)
 
     def test_no_yolo_split_raises(self, tmp_path: Path) -> None:
         from visionforge.models.detection_factory import build_torchvision_detector
@@ -125,8 +126,9 @@ class TestTorchvisionDetectionTest:
             num_classes=1,
             checkpoint=str(ckpt),
         )
+        request = RunTestRequest(data_dir=str(empty))
         with pytest.raises(ValueError, match="split"):
-            evaluate_detection_run(run_dir, RunTestRequest(data_dir=str(empty)), data)
+            evaluate_detection_run(run_dir, request, data)
 
 
 class TestUltralyticsDetectionTest:
@@ -222,6 +224,7 @@ class TestUltralyticsDetectionTest:
             num_classes=2,
             checkpoint=str(ckpt),
         )
+        request = RunTestRequest(data_dir=str(ds))
         with patch("visionforge.core.detection_trainer.YOLO", None):
             with pytest.raises(RuntimeError, match="ultralytics"):
-                evaluate_detection_run(run_dir, RunTestRequest(data_dir=str(ds)), data)
+                evaluate_detection_run(run_dir, request, data)

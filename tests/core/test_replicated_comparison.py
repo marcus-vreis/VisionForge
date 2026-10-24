@@ -52,7 +52,7 @@ class _FakeRunner:
         )
 
     def metrics(self, result: RunResult) -> dict[str, float]:
-        return result.metrics
+        return dict(result.metrics)
 
     def primary_metric(self) -> str:
         return "accuracy"
@@ -82,16 +82,19 @@ def _base() -> dict[str, Any]:
 
 class TestValidation:
     def test_rejects_a_single_variant(self) -> None:
+        base = _base()
         with pytest.raises(ValueError, match="at least 2 variants"):
-            validate_variants(_base(), {"only": {}})
+            validate_variants(base, {"only": {}})
 
     def test_rejects_an_unknown_override_path(self) -> None:
+        base = _base()
         with pytest.raises(ValueError, match="training.nope"):
-            validate_variants(_base(), {"a": {}, "b": {"training.nope": 1}})
+            validate_variants(base, {"a": {}, "b": {"training.nope": 1}})
 
     def test_names_the_offending_variant(self) -> None:
+        base = _base()
         with pytest.raises(ValueError, match="Variant 'b'"):
-            validate_variants(_base(), {"a": {}, "b": {"bogus.path": 1}})
+            validate_variants(base, {"a": {}, "b": {"bogus.path": 1}})
 
     def test_accepts_a_baseline_with_no_overrides(self) -> None:
         validate_variants(
@@ -99,10 +102,10 @@ class TestValidation:
         )
 
     def test_rejects_fewer_than_two_seeds(self) -> None:
+        runner = _FakeRunner()
+        base = _base()
         with pytest.raises(ValueError, match="at least 2 seeds"):
-            run_replicated_comparison(
-                _FakeRunner(), _base(), {"a": {}, "b": {}}, [1], "accuracy"
-            )
+            run_replicated_comparison(runner, base, {"a": {}, "b": {}}, [1], "accuracy")
 
 
 class TestRunReplicatedComparison:

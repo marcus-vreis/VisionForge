@@ -47,7 +47,8 @@ def test_regression_export_creates_validated_onnx(tmp_path: Path) -> None:
     resp = export_regression_run(run_dir, ExportOnnxRequest(benchmark=False), data)
     assert Path(resp.output_onnx).exists()
     assert resp.file_size_bytes > 0
-    assert resp.validation is not None and resp.validation["passed"] is True
+    assert resp.validation is not None
+    assert resp.validation["passed"] is True
 
 
 def test_segmentation_export_handles_dict_output(tmp_path: Path) -> None:
@@ -68,4 +69,5 @@ def test_segmentation_export_handles_dict_output(tmp_path: Path) -> None:
     resp = export_segmentation_run(run_dir, ExportOnnxRequest(benchmark=False), data)
     assert Path(resp.output_onnx).exists()
     assert resp.file_size_bytes > 0
-    assert resp.validation is not None and resp.validation["passed"] is True
+    assert resp.validation is not None
+    assert resp.validation["passed"] is True

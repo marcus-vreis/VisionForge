@@ -100,6 +100,7 @@ class TestRegressionCsvDataset:
         assert target.tolist() == [1.5, 2.5]
 
     def test_missing_csv_raises(self, tmp_path: Path) -> None:
+        transform = _transform()
         with pytest.raises(
             FileNotFoundError, match="Manifest de regressão não encontrado"
         ):
@@ -108,42 +109,45 @@ class TestRegressionCsvDataset:
                 tmp_path,
                 "image",
                 ["target"],
-                _transform(),  # type: ignore[arg-type]
+                transform,  # type: ignore[arg-type]
             )
 
     def test_missing_column_raises(self, tmp_path: Path) -> None:
         (tmp_path / "m.csv").write_text("image,wrong\nx.png,1\n", encoding="utf-8")
+        transform = _transform()
         with pytest.raises(ValueError, match=r"não tem a\(s\) coluna"):
             RegressionCsvDataset(
                 tmp_path / "m.csv",
                 tmp_path,
                 "image",
                 ["target"],
-                _transform(),  # type: ignore[arg-type]
+                transform,  # type: ignore[arg-type]
             )
 
     def test_non_numeric_target_raises(self, tmp_path: Path) -> None:
         (tmp_path / "m.csv").write_text(
             "image,target\nx.png,notanumber\n", encoding="utf-8"
         )
+        transform = _transform()
         with pytest.raises(ValueError, match="alvo não numérico"):
             RegressionCsvDataset(
                 tmp_path / "m.csv",
                 tmp_path,
                 "image",
                 ["target"],
-                _transform(),  # type: ignore[arg-type]
+                transform,  # type: ignore[arg-type]
             )
 
     def test_empty_manifest_raises(self, tmp_path: Path) -> None:
         (tmp_path / "m.csv").write_text("image,target\n", encoding="utf-8")
+        transform = _transform()
         with pytest.raises(ValueError, match="no rows"):
             RegressionCsvDataset(
                 tmp_path / "m.csv",
                 tmp_path,
                 "image",
                 ["target"],
-                _transform(),  # type: ignore[arg-type]
+                transform,  # type: ignore[arg-type]
             )
 
 
@@ -181,17 +185,19 @@ class TestRegressionDataModule:
         self, regression_root: Path
     ) -> None:
         (regression_root / "train.csv").unlink()
+        config = _config(regression_root)
         with pytest.raises(
             FileNotFoundError, match=r"Manifest de regressão não encontrado.*train\.csv"
         ):
-            RegressionDataModule(_config(regression_root))
+            RegressionDataModule(config)
 
     def test_training_still_needs_val_csv_up_front(self, regression_root: Path) -> None:
         (regression_root / "val.csv").unlink()
+        config = _config(regression_root)
         with pytest.raises(
             FileNotFoundError, match=r"Manifest de regressão não encontrado.*val\.csv"
         ):
-            RegressionDataModule(_config(regression_root))
+            RegressionDataModule(config)
 
 
 class TestRegressionDataModuleEvaluationOnly:
