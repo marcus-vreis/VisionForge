@@ -361,7 +361,7 @@ class TestCanRevealFlag:
         run_dir = _write_run(tmp_path)
         with (
             patch.object(routes_mod, "_MODELS_DIR", tmp_path),
-            patch.object(folder_opener, "opener_available", lambda: True),
+            patch.object(folder_opener, "opener_available", return_value=True),
         ):
             resp = _client(app, host).get(f"/api/runs/{run_dir.name}")
         assert resp.status_code == 200
@@ -393,7 +393,7 @@ class TestCanRevealFlag:
         run_dir = _write_run(tmp_path)
         with (
             patch.object(routes_mod, "_MODELS_DIR", tmp_path),
-            patch.object(folder_opener, "opener_available", lambda: False),
+            patch.object(folder_opener, "opener_available", return_value=False),
         ):
             resp = _client(app, "127.0.0.1").get(f"/api/runs/{run_dir.name}")
         assert resp.json()["can_reveal"] is False

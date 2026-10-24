@@ -61,8 +61,9 @@ class TestAutomaticIsTheDefault:
     def test_below_minus_one_is_refused(
         self, config_cls: type[BaseModel], field: str
     ) -> None:
+        raw = _minimal(config_cls, {field: -2})
         with pytest.raises(ValueError):
-            config_cls.model_validate(_minimal(config_cls, {field: -2}))
+            config_cls.model_validate(raw)
 
     @pytest.mark.parametrize(("config_cls", "field"), WORKER_FIELDS)
     def test_the_field_says_what_minus_one_does(

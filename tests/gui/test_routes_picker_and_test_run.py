@@ -251,10 +251,9 @@ class TestExecuteRunTest:
         data["artifacts"]["model"] = None
         (run_dir / "run.json").write_text(json.dumps(data), encoding="utf-8")
 
+        request = RunTestRequest(data_dir=str(dataset_root / "test"))
         with pytest.raises(FileNotFoundError, match="não tem um checkpoint utilizável"):
-            _execute_run_test(
-                run_dir, RunTestRequest(data_dir=str(dataset_root / "test"))
-            )
+            _execute_run_test(run_dir, request)
 
 
 # ── /api/runs/{id}/test endpoint integration ─────────────────────────────────
@@ -326,10 +325,9 @@ class TestClassificationOnlyActionsRejectDetection:
 
     def test_batch_predict_rejects_detection(self, tmp_path: Path) -> None:
         run_dir = self._make_detection_run(tmp_path)
+        request = BatchPredictRequest(input_dir=str(tmp_path))
         with pytest.raises(ValueError, match="detection"):
-            _execute_batch_predict(
-                run_dir, BatchPredictRequest(input_dir=str(tmp_path))
-            )
+            _execute_batch_predict(run_dir, request)
 
     def test_onnx_export_rejects_torchvision_detection(self, tmp_path: Path) -> None:
         # Ultralytics detection export is supported (brick F); torchvision is not.
@@ -341,8 +339,9 @@ class TestClassificationOnlyActionsRejectDetection:
         ckpt.write_bytes(b"fake")
         data["artifacts"]["model"] = str(ckpt)
         (run_dir / "run.json").write_text(json.dumps(data), encoding="utf-8")
+        request = ExportOnnxRequest()
         with pytest.raises(ValueError, match="torchvision"):
-            _execute_onnx_export(run_dir, ExportOnnxRequest())
+            _execute_onnx_export(run_dir, request)
 
 
 class TestDatasetPickEndpoint:

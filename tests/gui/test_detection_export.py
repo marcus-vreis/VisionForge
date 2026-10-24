@@ -57,20 +57,23 @@ class TestDetectionOnnxExport:
         ckpt = tmp_path / "best.pt"
         ckpt.write_bytes(b"fake")
         data = _make_run(run_dir, backend="torchvision", checkpoint=str(ckpt))
+        request = ExportOnnxRequest()
         with pytest.raises(ValueError, match="torchvision"):
-            export_detection_run(run_dir, ExportOnnxRequest(), data)
+            export_detection_run(run_dir, request, data)
 
     def test_missing_checkpoint_raises(self, tmp_path: Path) -> None:
         run_dir = tmp_path / "models" / "det" / "run2"
         data = _make_run(run_dir, checkpoint=str(tmp_path / "missing.pt"))
+        request = ExportOnnxRequest()
         with pytest.raises(FileNotFoundError):
-            export_detection_run(run_dir, ExportOnnxRequest(), data)
+            export_detection_run(run_dir, request, data)
 
     def test_ultralytics_absent_raises(self, tmp_path: Path) -> None:
         run_dir = tmp_path / "models" / "det" / "run3"
         ckpt = tmp_path / "best.pt"
         ckpt.write_bytes(b"fake")
         data = _make_run(run_dir, checkpoint=str(ckpt))
+        request = ExportOnnxRequest()
         with patch("visionforge.core.detection_trainer.YOLO", None):
             with pytest.raises(RuntimeError, match="ultralytics"):
-                export_detection_run(run_dir, ExportOnnxRequest(), data)
+                export_detection_run(run_dir, request, data)

@@ -24,10 +24,7 @@ def tmp_log_dir(tmp_path: Path) -> Path:
 class TestSetupLogger:
     def test_setup_does_not_raise(self, tmp_log_dir: Path) -> None:
         """setup_logger() should run without raising any exception."""
-        try:
-            setup_logger(log_dir=tmp_log_dir)
-        except Exception as exc:
-            pytest.fail(f"setup_logger() raised an unexpected exception: {exc}")
+        setup_logger(log_dir=tmp_log_dir)
 
     def test_log_file_is_created(self, tmp_log_dir: Path) -> None:
         """Log file should exist on disk after setup_logger() is called."""

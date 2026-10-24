@@ -107,5 +107,6 @@ class TestBatchPredictUnsupportedTasks:
         run_dir = self._make_run(tmp_path, task)
         inbox = tmp_path / "inbox"
         inbox.mkdir()
+        request = BatchPredictRequest(input_dir=str(inbox))
         with pytest.raises(ValueError, match=task):
-            _execute_batch_predict(run_dir, BatchPredictRequest(input_dir=str(inbox)))
+            _execute_batch_predict(run_dir, request)

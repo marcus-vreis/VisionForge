@@ -116,7 +116,8 @@ class TestResolveDeviceMultiCuda:
         assert device == torch.device("cuda:0")
         assert ids == [0, 1]
         assert label.startswith("multi_cuda")
-        assert "RTX 4090" in label and "RTX 3090" in label
+        assert "RTX 4090" in label
+        assert "RTX 3090" in label
 
     def test_explicit_ids_are_honoured(self) -> None:
         with patch(

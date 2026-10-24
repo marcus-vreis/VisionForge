@@ -154,17 +154,20 @@ class TestMaterialize:
     def test_a_raising_run_does_not_leave_the_copy_behind(self, tmp_path: Path) -> None:
         """Runs die for real — see ADR-081."""
         src = _dataset(tmp_path / "src")
-        leaked: Path | None = None
+        leaked: list[Path] = []
 
-        with pytest.raises(RuntimeError, match="boom"):
+        def failing_run() -> None:
             with materialize_dataset(
                 src, GRAYSCALE, cache_root=tmp_path / "cache"
             ) as out:
-                leaked = out.path
+                leaked.append(out.path)
                 raise RuntimeError("boom")
 
-        assert leaked is not None
-        assert not leaked.exists()
+        with pytest.raises(RuntimeError, match="boom"):
+            failing_run()
+
+        assert len(leaked) == 1
+        assert not leaked[0].exists()
 
     def test_an_inner_user_does_not_delete_it_under_the_outer_one(
         self, tmp_path: Path

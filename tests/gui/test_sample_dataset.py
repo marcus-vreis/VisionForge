@@ -8,7 +8,6 @@ its panel runs, so a folder the endpoint calls finished is one that trains.
 
 from __future__ import annotations
 
-from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
@@ -40,13 +39,13 @@ TASKS = ["classification", "detection", "regression", "segmentation", "anomaly"]
 
 
 @pytest.fixture
-def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
+def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     import visionforge.gui.api.routes as routes_mod
     from visionforge.gui.server import app
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(routes_mod, "_SAMPLE_DATASETS_DIR", Path("datasets"))
-    yield TestClient(app, raise_server_exceptions=True, client=("127.0.0.1", 50000))
+    return TestClient(app, raise_server_exceptions=True, client=("127.0.0.1", 50000))
 
 
 def _output(tmp_path: Path) -> dict[str, str]:

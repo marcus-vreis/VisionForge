@@ -12,6 +12,7 @@ import json
 from pathlib import Path
 
 import pytest
+from fastapi import HTTPException
 
 from visionforge.gui.api.routes import (
     _gradcam_class_names,
@@ -81,10 +82,10 @@ class TestCustomTaskActionsAreRefused:
     def test_custom_run_is_rejected_by_name(self, tmp_path: Path) -> None:
         run_dir = _run_json(tmp_path, {"task": "custom:vlm_pseudo_label"})
 
-        with pytest.raises(Exception) as excinfo:  # HTTPException
+        with pytest.raises(HTTPException) as excinfo:
             _reject_custom_task_action(run_dir, "export_onnx")
 
-        message = str(getattr(excinfo.value, "detail", excinfo.value))
+        message = str(excinfo.value.detail)
         assert "vlm_pseudo_label" in message
         assert "export_onnx" in message
 
@@ -176,8 +177,9 @@ class TestPreprocessingStepErrors:
 
         from visionforge.core.preprocessing import apply_step
 
+        image = Image.new("RGB", (8, 8))
         with pytest.raises(ValueError) as excinfo:
-            apply_step(Image.new("RGB", (8, 8)), "blur")
+            apply_step(image, "blur")
 
         message = str(excinfo.value)
         assert "'blur'" in message
@@ -216,10 +218,11 @@ class TestOneFolderTestDispatch:
 
         run_dir = _run_json(tmp_path, {"config": {"task": "segmentation"}})
 
+        request = RunTestRequest(data_dir=str(tmp_path / "gone"))
         with pytest.raises(ValueError, match="não encontrado"):
             _evaluate_standalone_run(
                 run_dir,
-                RunTestRequest(data_dir=str(tmp_path / "gone")),
+                request,
                 {"config": {"task": "segmentation"}},
                 "segmentation",
             )
@@ -233,10 +236,11 @@ class TestOneFolderTestDispatch:
         folder.mkdir()
         run_dir = _run_json(tmp_path, {"config": {"task": "regression"}})
 
+        request = RunTestRequest(data_dir=str(folder))
         with pytest.raises(ValueError, match=r"\.csv"):
             _evaluate_standalone_run(
                 run_dir,
-                RunTestRequest(data_dir=str(folder)),
+                request,
                 {"config": {"task": "regression"}},
                 "regression",
             )
@@ -250,7 +254,6 @@ class TestOneFolderTestDispatch:
         payload = {"config": {"task": "segmentation"}, "artifacts": {"model": None}}
         run_dir = _run_json(tmp_path, payload)
 
+        request = RunTestRequest(data_dir=str(folder))
         with pytest.raises(FileNotFoundError, match="checkpoint"):
-            _evaluate_standalone_run(
-                run_dir, RunTestRequest(data_dir=str(folder)), payload, "segmentation"
-            )
+            _evaluate_standalone_run(run_dir, request, payload, "segmentation")

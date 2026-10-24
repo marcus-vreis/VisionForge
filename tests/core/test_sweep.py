@@ -39,7 +39,7 @@ class _FakeRunner:
         )
 
     def metrics(self, result: RunResult) -> dict[str, float]:
-        return result.metrics
+        return dict(result.metrics)
 
     def primary_metric(self) -> str:
         return "score"
@@ -213,18 +213,21 @@ class TestOptunaSweep:
 
 class TestGuards:
     def test_unknown_mode_raises(self) -> None:
+        runner = _FakeRunner()
+        base = _base()
         with pytest.raises(ValueError, match="mode"):
             run_sweep(
-                _FakeRunner(),
-                _base(),
+                runner,
+                base,
                 {"training.learning_rate": [0.1]},
                 mode="bogus",
                 metric="score",
             )
 
     def test_validate_sweep_space_rejects_unknown_path(self) -> None:
+        base = _base()
         with pytest.raises(ValueError, match="Unknown sweep path"):
-            validate_sweep_space(_base(), ["training.nope"])
+            validate_sweep_space(base, ["training.nope"])
 
     def test_validate_sweep_space_accepts_known_paths(self) -> None:
         validate_sweep_space(_base(), ["training.learning_rate", "model.name"])

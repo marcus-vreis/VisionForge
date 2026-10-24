@@ -73,9 +73,11 @@ class TestRegressionCrossValidation:
             assert {"mean", "std"} <= report.aggregate[name].keys()
 
     def test_rejects_too_few_folds(self, tmp_path: Path) -> None:
+        config = _config(tmp_path)
         with pytest.raises(ValueError, match="n_folds"):
-            run_regression_cross_validation(_config(tmp_path), n_folds=1)
+            run_regression_cross_validation(config, n_folds=1)
 
     def test_rejects_more_folds_than_rows(self, tmp_path: Path) -> None:
+        config = _config(tmp_path)
         with pytest.raises(ValueError, match="exceed"):
-            run_regression_cross_validation(_config(tmp_path), n_folds=_N_ROWS + 1)
+            run_regression_cross_validation(config, n_folds=_N_ROWS + 1)

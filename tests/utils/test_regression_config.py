@@ -96,19 +96,18 @@ class TestTargetCoherence:
         assert cfg.data.target_columns == ["x", "y", "z"]
 
     def test_mismatch_targets_rejected(self, tmp_path: Path) -> None:
+        raw = _base_config(
+            tmp_path,
+            {
+                "model": {"name": "resnet50", "num_targets": 2},
+                "data": {
+                    "base_dir": str(tmp_path),
+                    "target_columns": ["only_one"],
+                },
+            },
+        )
         with pytest.raises(ValidationError, match="num_targets"):
-            RegressionConfig.model_validate(
-                _base_config(
-                    tmp_path,
-                    {
-                        "model": {"name": "resnet50", "num_targets": 2},
-                        "data": {
-                            "base_dir": str(tmp_path),
-                            "target_columns": ["only_one"],
-                        },
-                    },
-                )
-            )
+            RegressionConfig.model_validate(raw)
 
     def test_empty_target_columns_rejected(self, tmp_path: Path) -> None:
         with pytest.raises(ValidationError, match="at least one column"):
@@ -134,10 +133,9 @@ class TestFieldValidation:
             RegressionDataConfig(base_dir=f, target_columns=["t"])
 
     def test_invalid_backbone_rejected(self, tmp_path: Path) -> None:
+        raw = _base_config(tmp_path, {"model": {"name": "resnet999"}})
         with pytest.raises(ValidationError):
-            RegressionConfig.model_validate(
-                _base_config(tmp_path, {"model": {"name": "resnet999"}})
-            )
+            RegressionConfig.model_validate(raw)
 
     def test_num_targets_must_be_positive(self) -> None:
         with pytest.raises(ValidationError):

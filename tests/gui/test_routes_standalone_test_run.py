@@ -197,8 +197,9 @@ class TestRegressionTestRun:
         # No checkpoint on purpose: the folder complaint must come first.
         run_dir = _regression_run(tmp_path, with_checkpoint=False)
 
+        request = RunTestRequest(data_dir=str(tmp_path / "ds"))
         with pytest.raises(ValueError, match="manifesto"):
-            _execute_run_test(run_dir, RunTestRequest(data_dir=str(tmp_path / "ds")))
+            _execute_run_test(run_dir, request)
 
     def test_a_missing_path_is_named_before_the_checkpoint_is_checked(
         self, tmp_path: Path
@@ -207,20 +208,18 @@ class TestRegressionTestRun:
         # because a complaint about the checkpoint would send them the wrong way.
         run_dir = _regression_run(tmp_path, with_checkpoint=False)
 
+        request = RunTestRequest(data_dir=str(tmp_path / "nope.csv"))
         with pytest.raises(ValueError, match="não encontrado"):
-            _execute_run_test(
-                run_dir, RunTestRequest(data_dir=str(tmp_path / "nope.csv"))
-            )
+            _execute_run_test(run_dir, request)
 
     def test_a_run_without_its_checkpoint_is_a_missing_file(
         self, tmp_path: Path
     ) -> None:
         run_dir = _regression_run(tmp_path, with_checkpoint=False)
 
+        request = RunTestRequest(data_dir=str(tmp_path / "ds" / "test.csv"))
         with pytest.raises(FileNotFoundError, match="checkpoint"):
-            _execute_run_test(
-                run_dir, RunTestRequest(data_dir=str(tmp_path / "ds" / "test.csv"))
-            )
+            _execute_run_test(run_dir, request)
 
 
 class TestSegmentationTestRun:
@@ -244,8 +243,9 @@ class TestSegmentationTestRun:
         empty = tmp_path / "empty"
         empty.mkdir()
 
+        request = RunTestRequest(data_dir=str(empty))
         with pytest.raises(ValueError, match="Nenhum par imagem/máscara"):
-            _execute_run_test(run_dir, RunTestRequest(data_dir=str(empty)))
+            _execute_run_test(run_dir, request)
 
     def test_images_without_a_masks_folder_name_the_missing_folder(
         self, tmp_path: Path
@@ -255,8 +255,9 @@ class TestSegmentationTestRun:
         holdout = tmp_path / "holdout"
         shutil.copytree(other / "test" / "images", holdout / "images")
 
+        request = RunTestRequest(data_dir=str(holdout))
         with pytest.raises(ValueError, match="masks") as excinfo:
-            _execute_run_test(run_dir, RunTestRequest(data_dir=str(holdout)))
+            _execute_run_test(run_dir, request)
 
         message = str(excinfo.value)
         assert str(holdout / "masks") in message
@@ -287,8 +288,9 @@ class TestAnomalyTestRun:
         holdout = tmp_path / "holdout"
         shutil.copytree(other / "test", holdout)
 
+        request = RunTestRequest(data_dir=str(holdout))
         with pytest.raises(ValueError, match="limiar") as excinfo:
-            _execute_run_test(run_dir, RunTestRequest(data_dir=str(holdout)))
+            _execute_run_test(run_dir, request)
 
         message = str(excinfo.value)
         assert str(tmp_path / "train" / "good") in message
