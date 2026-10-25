@@ -6127,6 +6127,17 @@ and the resulting experiment bundle. CI actions use supported Node runtimes.
 the checkout. Publishing is too late to discover that the built package cannot
 serve its own interface or execute the documented workflow.
 
+**Update (2026-10-25):** The published-package smoke test retries the same spec
+up to five times with pip's HTTP cache disabled, waiting 60 seconds only between
+attempts. Exhaustion exits with pip's status before any VisionForge command.
+The spec passes through a step environment variable to preserve it literally.
+After the 0.18.1 release ([issue #90](https://github.com/marcus-vreis/VisionForge/issues/90)),
+three runners still listed only 0.18.0 across five
+attempts, while three passed; rerunning failed jobs on new VMs passed. Index
+propagation or HTTP caching is a plausible explanation, not a confirmed cause.
+Each attempt requests the index without reusing pip's local HTTP cache and
+preserves installation failures rather than masking them with a missing CLI error.
+
 ## ADR-140 — The GUI exposes image audits, classification groups and run bundles
 
 **Date:** 2026-10-21
