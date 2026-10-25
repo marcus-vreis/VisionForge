@@ -13,6 +13,31 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ## [Unreleased]
 
+## [0.18.1] — 2026-10-24
+
+### Changed
+
+- **API separada por domínio**: rotas de datasets e histórico de execuções ficam
+  em módulos próprios, preservando o contrato OpenAPI e o estado compartilhado
+  ([ADR-132](docs/dev/DECISIONS.md), #80, #82).
+- **Laços de treino e validação cruzada compartilhados**: regressão e segmentação
+  reutilizam módulos internos de treino e CV, preservando as receitas e os
+  contratos de checkpoint ([#78](https://github.com/marcus-vreis/VisionForge/pull/78)).
+
+### Fixed
+
+- **Benchmark sem outputs inválidos**: os pares de classificação e segmentação
+  validam as entradas antes de criar diretórios; uma falha de serialização JSON
+  não deixa um relatório vazio que bloqueie a tentativa corrigida
+  ([ADR-148](docs/dev/DECISIONS.md), #85).
+- **Conflito do dataset de exemplo no OpenAPI**: o HTTP 409 já retornado quando
+  a pasta existe passa a constar no contrato da API
+  ([ADR-117](docs/dev/DECISIONS.md), #88).
+- **Testes de despacho da GUI**: o cliente de teste mantém o event loop ativo
+  enquanto a fila executa o trabalho; corrigidas estruturas de testes apontadas
+  pelo Sonar, sem mudar o comportamento do serviço
+  ([ADR-132](docs/dev/DECISIONS.md), #79, #81).
+
 ## [0.18.0] — 2026-10-24
 
 ### Added

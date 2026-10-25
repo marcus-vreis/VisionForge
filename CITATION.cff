@@ -10,7 +10,7 @@ url: "https://github.com/marcus-vreis/VisionForge"
 license: MIT
 # Concept DOI: always resolves to the latest version archived on Zenodo.
 doi: 10.5281/zenodo.23425765
-version: 0.18.0
+version: 0.18.1
 date-released: 2026-10-24
 keywords:
   - computer-vision
