@@ -8,10 +8,10 @@ tags:
   - PyTorch
 authors:
   - name: Marcus Vinícius Reis
-    orcid: <ORCID>
+    orcid: 0009-0002-1464-431X
     affiliation: 1
 affiliations:
-  - name: <affiliation>
+  - name: Universidade Federal de São Carlos (UFSCar)
     index: 1
 date: <submission date, e.g. 9 October 2026>
 bibliography: paper.bib
