@@ -11,7 +11,7 @@ import re
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from loguru import logger
 
@@ -168,30 +168,9 @@ _SUMMARY_METRIC_KEYS: dict[str, dict[str, str]] = {
 
 
 def summary_metrics(task: str, metrics: dict[str, Any]) -> dict[str, float]:
-    """Project run.json metrics onto the task-specific history-card metric set.
-
-    Missing or non-numeric values are skipped so a partially-written run.json
-    (Ultralytics omits mAP early in training) never raises.
-
-    A headline read from a ``test_*`` key that the run never wrote (no test
-    split was scored) falls back to the validation value under the bare name and
-    is projected as ``val_<label>``, so the card is not empty and says which
-    split the number is from.
-
-    A researcher-defined task (``custom:<key>``) declares its own metric names,
-    so there is no fixed map: the first three numeric metrics are surfaced
-    under their real names, which is what the generic history card renders.
-    """
+    """Project run.json metrics onto the task-specific history-card metric set."""
     if task.startswith(CUSTOM_TASK_PREFIX):
-        declared: dict[str, float] = {}
-        for name, value in metrics.items():
-            if name in ("total_epochs", "best_epoch") or len(declared) >= 3:
-                continue
-            try:
-                declared[name] = float(value)
-            except (TypeError, ValueError):
-                continue
-        return declared
+        return _custom_summary_metrics(metrics)
 
     key_map = _SUMMARY_METRIC_KEYS.get(task, _SUMMARY_METRIC_KEYS["classification"])
     out: dict[str, float] = {}
@@ -200,19 +179,33 @@ def summary_metrics(task: str, metrics: dict[str, Any]) -> dict[str, float]:
         if value is not None:
             out[label] = value
             continue
-        # No held-out score for this headline: the run never evaluated a test
-        # split. Every trainer writes the validation score at the best epoch
-        # under the bare name, so send that one, under a name that says which
-        # split it is (the card prints it as "(val)").
         if src.startswith("test_"):
-            bare = src.removeprefix("test_")
-            # Newer runs name the split (val_miou); older ones kept the bare name.
-            value = _finite_float(metrics.get(f"val_{bare}"))
-            if value is None:
-                value = _finite_float(metrics.get(bare))
+            value = _validation_metric(metrics, src)
             if value is not None:
                 out[f"val_{label}"] = value
     return out
+
+
+def _custom_summary_metrics(metrics: dict[str, Any]) -> dict[str, float]:
+    """Keep the first three convertible custom metrics under their declared names."""
+    declared: dict[str, float] = {}
+    for name, value in metrics.items():
+        if name in ("total_epochs", "best_epoch") or len(declared) >= 3:
+            continue
+        try:
+            declared[name] = float(value)
+        except (TypeError, ValueError):
+            continue
+    return declared
+
+
+def _validation_metric(metrics: dict[str, Any], test_key: str) -> float | None:
+    """Read the named or legacy bare validation score when no test score exists."""
+    bare = test_key.removeprefix("test_")
+    value = _finite_float(metrics.get(f"val_{bare}"))
+    if value is None:
+        value = _finite_float(metrics.get(bare))
+    return value
 
 
 def _finite_float(value: Any) -> float | None:
@@ -286,28 +279,8 @@ def parse_run_summary(run_dir: Path, data: dict[str, Any]) -> RunSummary:
     # of the task writes (run_groups), so the projection reads them as any run's.
     final_metrics = summary_metrics(task, metrics)
 
-    data_cfg = config.get("data") or {}
-    pp_cfg = data_cfg.get("preprocessing") or {}
-    pp_steps = pp_cfg.get("steps") or []
-    preprocessing_count = len(pp_steps) if isinstance(pp_steps, list) else 0
-
-    # The block field was added in 2026-05; older run.json files don't have
-    # it, so fall back to the config dict (also written by every block) and
-    # finally infer from the task (detection writes no block marker) before
-    # defaulting to classification.
-    # Standalone tasks (ADR-033/036/037/038) have no `block` field in their
-    # config, so the old fallback labelled every one of them "classification" —
-    # a segmentation run filed under the wrong block in the very filter meant to
-    # separate them. Their task *is* their block.
-    block = (
-        data.get("block")
-        or config.get("block")
-        or (
-            task
-            if task in _STANDALONE_TASKS or task.startswith(CUSTOM_TASK_PREFIX)
-            else "classification"
-        )
-    )
+    preprocessing_count = _preprocessing_count(config)
+    block = _summary_block(data, config, task)
 
     # Custom tasks declare no architecture; the researcher's label is the most
     # useful thing to show in that column.
@@ -317,9 +290,7 @@ def parse_run_summary(run_dir: Path, data: dict[str, Any]) -> RunSummary:
     resumable, configured_epochs = resume_status(run_dir, data)
     # Only a digest that proves something is sent: an ``unavailable`` fingerprint
     # has an empty one, and a method without a digest identifies nothing.
-    fingerprint = data.get("dataset_fingerprint") or {}
-    dataset_digest = fingerprint.get("digest") or None
-    dataset_method = (fingerprint.get("method") or None) if dataset_digest else None
+    dataset_digest, dataset_method = _summary_fingerprint(data)
 
     return RunSummary(
         run_id=run_dir.name,
@@ -346,6 +317,32 @@ def parse_run_summary(run_dir: Path, data: dict[str, Any]) -> RunSummary:
         group_id=data.get("group_id"),
         group=_group_brief(group, task, final_metrics) if group else None,
     )
+
+
+def _preprocessing_count(config: dict[str, Any]) -> int:
+    """Count list-valued preprocessing steps in the saved config."""
+    data_cfg = config.get("data") or {}
+    pp_cfg = data_cfg.get("preprocessing") or {}
+    pp_steps = pp_cfg.get("steps") or []
+    return len(pp_steps) if isinstance(pp_steps, list) else 0
+
+
+def _summary_block(data: dict[str, Any], config: dict[str, Any], task: str) -> str:
+    """Resolve the explicit block or infer one for older standalone runs."""
+    explicit = data.get("block") or config.get("block")
+    if explicit:
+        return cast(str, explicit)
+    if task in _STANDALONE_TASKS or task.startswith(CUSTOM_TASK_PREFIX):
+        return task
+    return "classification"
+
+
+def _summary_fingerprint(data: dict[str, Any]) -> tuple[str | None, str | None]:
+    """Expose the fingerprint method only when its digest identifies data."""
+    fingerprint = data.get("dataset_fingerprint") or {}
+    digest = fingerprint.get("digest") or None
+    method = (fingerprint.get("method") or None) if digest else None
+    return digest, method
 
 
 def _group_final_aggregates(
