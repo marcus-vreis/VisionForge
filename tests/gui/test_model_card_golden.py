@@ -28,7 +28,9 @@ def test_preserves_complete_model_card(source: Path, lang: Literal["pt", "en"]) 
     original = copy.deepcopy(data)
     with using_lang(lang):
         result = _render_run_markdown(Path("fixture/run_1"), data)
-    assert result == source.with_suffix(f".{lang}.md").read_text(encoding="utf-8")
+    expected = source.with_suffix(f".{lang}.md").read_text(encoding="utf-8")
+    # The goldens were captured on Windows; the card prints the OS path separator.
+    assert result == expected.replace("fixture\\run_1", str(Path("fixture/run_1")))
     assert data == original
 
 
