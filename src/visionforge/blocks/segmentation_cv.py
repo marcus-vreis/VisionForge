@@ -75,21 +75,25 @@ def run_segmentation_cross_validation(
     _cv_common.validate_fold_count(n_folds, len(train_ds), "train pairs")
 
     return run_folds(
-        config,
-        train_ds,
-        val_ds,
-        create_model=SegmentationModelFactory.create,
-        create_trainer=SegmentationTrainer,
-        metric="miou",
-        metric_names=_METRIC_NAMES,
-        aggregate_names=_METRIC_NAMES,
-        log_format="Fold {}/{}: miou={:.4f} dice={:.4f}",
-        log_fields=("miou", "dice"),
-        n_folds=n_folds,
-        shuffle=shuffle,
-        seed=seed,
-        progress_callback=progress_callback,
-        cancel_token=cancel_token,
+        _cv_common.FoldContext(
+            config=config,
+            train_ds=train_ds,
+            val_ds=val_ds,
+            split=_cv_common.FoldSplit(n_folds, shuffle, seed),
+            progress_callback=progress_callback,
+            cancel_token=cancel_token,
+        ),
+        _cv_common.FoldTask(
+            create_model=SegmentationModelFactory.create,
+            create_trainer=SegmentationTrainer,
+            metrics=_cv_common.FoldMetrics(
+                primary="miou",
+                names=_METRIC_NAMES,
+                aggregate_names=_METRIC_NAMES,
+                log_format="Fold {}/{}: miou={:.4f} dice={:.4f}",
+                log_fields=("miou", "dice"),
+            ),
+        ),
     )
 
 

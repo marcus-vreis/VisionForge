@@ -79,21 +79,25 @@ def run_regression_cross_validation(
     _cv_common.validate_fold_count(n_folds, len(train_ds), "training rows")
 
     return run_folds(
-        config,
-        train_ds,
-        val_ds,
-        create_model=RegressionModelFactory.create,
-        create_trainer=RegressionTrainer,
-        metric="r2",
-        metric_names=("mse", "rmse", "mae", "r2"),
-        aggregate_names=_METRIC_NAMES,
-        log_format="Fold {}/{}: r2={:.4f} rmse={:.4f}",
-        log_fields=("r2", "rmse"),
-        n_folds=n_folds,
-        shuffle=shuffle,
-        seed=seed,
-        progress_callback=progress_callback,
-        cancel_token=cancel_token,
+        _cv_common.FoldContext(
+            config=config,
+            train_ds=train_ds,
+            val_ds=val_ds,
+            split=_cv_common.FoldSplit(n_folds, shuffle, seed),
+            progress_callback=progress_callback,
+            cancel_token=cancel_token,
+        ),
+        _cv_common.FoldTask(
+            create_model=RegressionModelFactory.create,
+            create_trainer=RegressionTrainer,
+            metrics=_cv_common.FoldMetrics(
+                primary="r2",
+                names=("mse", "rmse", "mae", "r2"),
+                aggregate_names=_METRIC_NAMES,
+                log_format="Fold {}/{}: r2={:.4f} rmse={:.4f}",
+                log_fields=("r2", "rmse"),
+            ),
+        ),
     )
 
 

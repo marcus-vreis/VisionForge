@@ -4,12 +4,14 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any
+from pathlib import Path
+from typing import Any, Protocol
 
 import numpy as np
 import torch
 from loguru import logger
 from sklearn.model_selection import KFold
+from torch import nn
 from torch.utils.data import DataLoader, Subset
 
 from visionforge.blocks._search_utils import make_trial_progress_wrapper
@@ -19,9 +21,13 @@ from visionforge.core.cancellation import (
     CancellationToken,
     is_cancelled,
 )
+from visionforge.core.regression_data import RegressionCsvDataset
 from visionforge.core.replicates import sample_std
 from visionforge.core.resume import discard_resume_state
+from visionforge.core.segmentation_data import SegmentationDataset
 from visionforge.core.trainer import seed_before_building
+from visionforge.utils.regression_config import RegressionConfig
+from visionforge.utils.segmentation_config import SegmentationConfig
 
 
 @dataclass
@@ -79,6 +85,74 @@ class _FoldDataModule:
         return DataLoader(
             self._val, batch_size=self._batch_size, shuffle=False, num_workers=0
         )
+
+
+class FoldTrainingResult(Protocol):
+    """Expose the training outcome required to score and stop a fold."""
+
+    model_path: Path
+    total_epochs: int
+    stopped: bool
+
+
+class FoldTrainer(Protocol):
+    """Describe the native training and evaluation operations used by CV."""
+
+    def fit(
+        self,
+        model: nn.Module,
+        data_module: _FoldDataModule,
+        *,
+        progress_callback: Callable[[dict[str, Any]], None] | None,
+        cancel_token: CancellationToken | None,
+    ) -> FoldTrainingResult:
+        """Train one fold and return its checkpoint and completion state."""
+        ...
+
+    def evaluate(self, model: nn.Module, loader: DataLoader[Any]) -> tuple[float, ...]:
+        """Score a fold's held-out loader with the restored best checkpoint."""
+        ...
+
+
+@dataclass(frozen=True)
+class FoldSplit:
+    """Specify the reproducible K-fold partition without changing task config."""
+
+    n_folds: int
+    shuffle: bool
+    seed: int
+
+
+@dataclass(frozen=True)
+class FoldContext:
+    """Bind task configuration, paired dataset views and CV lifecycle controls."""
+
+    config: RegressionConfig | SegmentationConfig
+    train_ds: RegressionCsvDataset | SegmentationDataset
+    val_ds: RegressionCsvDataset | SegmentationDataset
+    split: FoldSplit
+    progress_callback: Callable[[dict[str, Any]], None] | None
+    cancel_token: CancellationToken | None
+
+
+@dataclass(frozen=True)
+class FoldMetrics:
+    """Preserve the task's evaluation, aggregation and logging metric order."""
+
+    primary: str
+    names: tuple[str, ...]
+    aggregate_names: tuple[str, ...]
+    log_format: str
+    log_fields: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class FoldTask:
+    """Provide fold-local model and trainer factories with their metric contract."""
+
+    create_model: Callable[[Any], nn.Module]
+    create_trainer: Callable[[Any], FoldTrainer]
+    metrics: FoldMetrics
 
 
 def _emit_fold_start(
@@ -166,22 +240,15 @@ def _score_fold(
 
 
 def _run_fold(
-    config: Any,
-    train_ds: Any,
-    val_ds: Any,
+    context: FoldContext,
+    task: FoldTask,
     train_idx: Any,
     val_idx: Any,
     record: FoldResult,
-    n_folds: int,
-    progress_callback: Callable[[dict[str, Any]], None] | None,
-    cancel_token: CancellationToken | None,
-    create_model: Callable[..., Any],
-    create_trainer: Callable[..., Any],
-    metric_names: tuple[str, ...],
-    log_format: str,
-    log_fields: tuple[str, ...],
-) -> tuple[bool, bool, Any]:
+) -> tuple[bool, bool, FoldTrainingResult | None]:
     """Train one fold while isolating failures and preserving stop outcomes."""
+    config = context.config
+    n_folds = context.split.n_folds
     trained = False
     cut = False
     result = None
@@ -190,20 +257,20 @@ def _run_fold(
             update={"name": f"{config.name}_fold{record.fold}"}
         )
         fold_data = _FoldDataModule(
-            Subset(train_ds, train_idx.tolist()),
-            Subset(val_ds, val_idx.tolist()),
+            Subset(context.train_ds, train_idx.tolist()),
+            Subset(context.val_ds, val_idx.tolist()),
             config.training.batch_size,
         )
         seed_before_building(fold_config.training)
-        model = create_model(fold_config.model)
-        trainer = create_trainer(fold_config)
+        model = task.create_model(fold_config.model)
+        trainer = task.create_trainer(fold_config)
         result = trainer.fit(
             model,
             fold_data,
             progress_callback=make_trial_progress_wrapper(
-                progress_callback, record.fold, n_folds
+                context.progress_callback, record.fold, n_folds
             ),
-            cancel_token=cancel_token,
+            cancel_token=context.cancel_token,
         )
         trained = True
         record.run_dir = str(result.model_path.parent)
@@ -214,10 +281,10 @@ def _run_fold(
             trainer,
             fold_data,
             record,
-            metric_names,
+            task.metrics.names,
             n_folds,
-            log_format,
-            log_fields,
+            task.metrics.log_format,
+            task.metrics.log_fields,
         )
     except Exception as exc:  # noqa: BLE001
         record.error = str(exc)
@@ -230,31 +297,19 @@ def _run_fold(
     return trained, cut, result
 
 
-def run_folds(
-    config: Any,
-    train_ds: Any,
-    val_ds: Any,
-    *,
-    n_folds: int,
-    shuffle: bool,
-    seed: int,
-    progress_callback: Callable[[dict[str, Any]], None] | None,
-    cancel_token: CancellationToken | None,
-    create_model: Callable[..., Any],
-    create_trainer: Callable[..., Any],
-    metric: str,
-    metric_names: tuple[str, ...],
-    aggregate_names: tuple[str, ...],
-    log_format: str,
-    log_fields: tuple[str, ...],
-) -> CrossValidationReport:
+def run_folds(context: FoldContext, task: FoldTask) -> CrossValidationReport:
     """Execute K folds with shared failure, progress and cancellation handling."""
+    n_folds = context.split.n_folds
+    progress_callback = context.progress_callback
+    cancel_token = context.cancel_token
     splitter = KFold(
-        n_splits=n_folds, shuffle=shuffle, random_state=seed if shuffle else None
+        n_splits=n_folds,
+        shuffle=context.split.shuffle,
+        random_state=context.split.seed if context.split.shuffle else None,
     )
     folds: list[FoldResult] = []
     for fold_idx, (train_idx, val_idx) in enumerate(
-        splitter.split(range(len(train_ds)))
+        splitter.split(range(len(context.train_ds)))
     ):
         _emit_fold_start(progress_callback, fold_idx, n_folds)
         record = FoldResult(
@@ -263,26 +318,12 @@ def run_folds(
             train_size=len(train_idx),
             val_size=len(val_idx),
         )
-        trained, cut, result = _run_fold(
-            config,
-            train_ds,
-            val_ds,
-            train_idx,
-            val_idx,
-            record,
-            n_folds,
-            progress_callback,
-            cancel_token,
-            create_model,
-            create_trainer,
-            metric_names,
-            log_format,
-            log_fields,
-        )
+        trained, cut, result = _run_fold(context, task, train_idx, val_idx, record)
         if cut:
             record.status = STOPPED
             record.error = STOPPED_NOTE
             # A stopped fold cannot resume independently of its parent K-fold job.
+            assert result is not None
             discard_resume_state(result.model_path.parent)
         folds.append(record)
         _emit_untrained_fold_end(progress_callback, trained, fold_idx, n_folds, record)
@@ -291,9 +332,9 @@ def run_folds(
             break
     return CrossValidationReport(
         n_folds=n_folds,
-        metric=metric,
+        metric=task.metrics.primary,
         folds=folds,
-        aggregate=aggregate_folds(folds, aggregate_names),
+        aggregate=aggregate_folds(folds, task.metrics.aggregate_names),
     )
 
 

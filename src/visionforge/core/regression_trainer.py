@@ -125,17 +125,18 @@ class RegressionTrainer(training_loop.GradientTrainerMethods):
             self,
             model,
             data_module,
-            optimizer,
-            progress_callback,
-            cancel_token,
-            resume_dir,
-            result_type=RegressionTrainResult,
-            seed=_seed_everything,
-            tensorboard_factory=TensorBoardLogger,
-            save_best=save_best_checkpoint,
-            metric_name="val_loss",
-            best_field="best_val_loss",
-            log_format="RegressionTrainer using device: {}",
+            training_loop.FitOptions(
+                optimizer, progress_callback, cancel_token, resume_dir
+            ),
+            training_loop.FitServices(
+                _seed_everything, TensorBoardLogger, save_best_checkpoint
+            ),
+            training_loop.FitResultAdapter(
+                result_type=RegressionTrainResult,
+                metric=training_loop.MetricPolicy("val_loss"),
+                best_field="best_val_loss",
+                log_format="RegressionTrainer using device: {}",
+            ),
         )
 
     def evaluate(
