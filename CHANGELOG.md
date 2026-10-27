@@ -13,6 +13,20 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ## [Unreleased]
 
+### Changed
+
+- **Contextos tipados nos laços de treino e CV**: `run_epochs`, `fit_training`,
+  `save_epoch_checkpoint`, `_run_fold` e `run_folds` passam a receber contextos
+  tipados em vez de 14 a 19 parâmetros soltos, preservando receitas, checkpoints e
+  retomada ([ADR-151](docs/dev/DECISIONS.md), [#94](https://github.com/marcus-vreis/VisionForge/pull/94), #87).
+- **API mais modular**: a renderização do model card vira seções puras em
+  `gui/api/model_card.py`, com goldens pt/en ([ADR-152](docs/dev/DECISIONS.md),
+  [#95](https://github.com/marcus-vreis/VisionForge/pull/95)); as varreduras de
+  datasets perdem complexidade sem mudar o contrato OpenAPI
+  ([ADR-153](docs/dev/DECISIONS.md), [#96](https://github.com/marcus-vreis/VisionForge/pull/96));
+  projeções do histórico de execuções ficam em módulo próprio
+  ([#93](https://github.com/marcus-vreis/VisionForge/pull/93)). Continuação da #86.
+
 ## [0.18.1] — 2026-10-24
 
 ### Changed
