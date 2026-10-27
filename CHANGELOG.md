@@ -13,6 +13,8 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ## [Unreleased]
 
+## [0.18.2] — 2026-10-27
+
 ### Changed
 
 - **Contextos tipados nos laços de treino e CV**: `run_epochs`, `fit_training`,
