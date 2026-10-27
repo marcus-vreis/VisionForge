@@ -6,7 +6,7 @@ import json
 import time
 from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -14,6 +14,7 @@ from typing import Any
 import torch
 import torch.nn as nn
 from loguru import logger
+from torch.utils.data import DataLoader
 
 from visionforge.core.cancellation import CancellationToken, is_cancelled
 from visionforge.core.dataset_fingerprint import fingerprint_from_config
@@ -30,6 +31,97 @@ from visionforge.core.tracking import TensorBoardLogger
 from visionforge.utils.environment import capture_environment
 
 type ParameterGroups = tuple[list[nn.Parameter], list[nn.Parameter]]
+
+
+@dataclass(frozen=True)
+class MetricPolicy:
+    """Select the epoch metric and its checkpoint improvement direction."""
+
+    name: str
+    higher_is_better: bool = False
+
+
+@dataclass
+class EpochState[Epoch]:
+    """Carry completed history and stopping bookkeeping between epochs."""
+
+    history: list[Epoch]
+    best_metric: float
+    best_epoch: int
+    patience_counter: int
+    start_epoch: int
+
+
+@dataclass(frozen=True)
+class EpochRuntime:
+    """Bind loaders and lifecycle boundaries for one epoch loop."""
+
+    train_loader: DataLoader[Any]
+    val_loader: DataLoader[Any]
+    total_epochs: int
+    resumed: ResumeState | None
+    cancel_token: CancellationToken | None
+
+
+@dataclass(frozen=True)
+class CheckpointContext:
+    """Bind a model's checkpoint destination and serialization adapters."""
+
+    model: nn.Module
+    model_path: Path
+    save_best: Callable[
+        [ThreadPoolExecutor, Future[None] | None, nn.Module, Path], Future[None]
+    ]
+    components: Callable[[], dict[str, Any]]
+
+
+@dataclass
+class CheckpointWrites:
+    """Track the serial checkpoint writer and its pending best-model save."""
+
+    pool: ThreadPoolExecutor
+    future: Future[None] | None = None
+
+
+@dataclass(frozen=True)
+class EpochCallbacks[Epoch]:
+    """Provide task computation, reporting and the early-stop boundary."""
+
+    compute: Callable[[int], Epoch]
+    report: Callable[[Epoch], None]
+    early_stop: Callable[[int], bool]
+
+
+@dataclass(frozen=True)
+class FitOptions:
+    """Carry caller-owned optimization, progress and continuation controls."""
+
+    optimizer: torch.optim.Optimizer | None
+    progress_callback: Callable[[dict[str, Any]], None] | None
+    cancel_token: CancellationToken | None
+    resume_dir: Path | None
+
+
+@dataclass(frozen=True)
+class FitServices:
+    """Provide the task's seeding, logging and checkpoint implementations."""
+
+    seed: Callable[..., None]
+    tensorboard_factory: Callable[[Path], TensorBoardLogger]
+    save_best: Callable[
+        [ThreadPoolExecutor, Future[None] | None, nn.Module, Path], Future[None]
+    ]
+
+
+@dataclass(frozen=True)
+class FitResultAdapter[Result]:
+    """Describe task-specific ranking and final training-result construction."""
+
+    result_type: Callable[..., Result]
+    metric: MetricPolicy
+    best_field: str
+    log_format: str
+    ensure_checkpoint: Callable[..., tuple[int, float]] | None = None
 
 
 def build_scheduler(
@@ -195,42 +287,38 @@ def checkpoint_components(
 
 def save_epoch_checkpoint(
     metric: float,
-    best_metric: float,
-    best_epoch: int,
-    patience_counter: int,
     epoch: int,
-    model: nn.Module,
-    model_path: Path,
-    save_pool: ThreadPoolExecutor,
-    save_future: Future[None] | None,
-    save_best: Callable[..., Future[None]],
-    components: Callable[[], dict[str, Any]],
-    history: Any,
-    train_loader: Any,
-    val_loader: Any,
-    *,
-    higher_is_better: bool = False,
-) -> tuple[float, int, int, Future[None] | None]:
+    state: EpochState[Any],
+    checkpoint: CheckpointContext,
+    writes: CheckpointWrites,
+    runtime: EpochRuntime,
+    policy: MetricPolicy,
+) -> None:
     """Save an improved checkpoint and snapshot every completed epoch for resume."""
-    improved = metric > best_metric if higher_is_better else metric < best_metric
+    improved = (
+        metric > state.best_metric
+        if policy.higher_is_better
+        else metric < state.best_metric
+    )
     if improved:
-        best_metric, best_epoch, patience_counter = metric, epoch, 0
-        save_future = save_best(save_pool, save_future, model, model_path)
+        state.best_metric, state.best_epoch, state.patience_counter = metric, epoch, 0
+        writes.future = checkpoint.save_best(
+            writes.pool, writes.future, checkpoint.model, checkpoint.model_path
+        )
     else:
-        patience_counter += 1
+        state.patience_counter += 1
     save_resume_state(
-        model_path.parent,
+        checkpoint.model_path.parent,
         ResumeState(
             epoch=epoch,
-            **components(),
-            best_metric=best_metric,
-            best_epoch=best_epoch,
-            patience_counter=patience_counter,
-            history=[asdict(h) for h in history],
-            rng_state=capture_rng_state(train_loader, val_loader),
+            **checkpoint.components(),
+            best_metric=state.best_metric,
+            best_epoch=state.best_epoch,
+            patience_counter=state.patience_counter,
+            history=[asdict(h) for h in state.history],
+            rng_state=capture_rng_state(runtime.train_loader, runtime.val_loader),
         ),
     )
-    return best_metric, best_epoch, patience_counter, save_future
 
 
 def finish_checkpoint_writes(
@@ -411,63 +499,41 @@ def load_resume_state(resume_dir: Path | None, config: Any) -> ResumeState | Non
     return resumed
 
 
-def run_epochs(
-    model: nn.Module,
-    model_path: Path,
-    history: Any,
-    best_metric: float,
-    best_epoch: int,
-    patience_counter: int,
-    start_epoch: int,
-    total_epochs: int,
-    train_loader: Any,
-    val_loader: Any,
-    resumed: ResumeState | None,
-    cancel_token: CancellationToken | None,
-    compute_epoch: Callable[[int], Any],
-    report: Callable[[Any], None],
-    early_stop: Callable[[int], bool],
-    metric_name: str,
-    save_best: Callable[..., Future[None]],
-    components: Callable[[], dict[str, Any]],
-    *,
-    higher_is_better: bool = False,
-) -> tuple[float, int, int, ThreadPoolExecutor, Future[None] | None, bool]:
+def run_epochs[Epoch](
+    state: EpochState[Epoch],
+    runtime: EpochRuntime,
+    checkpoint: CheckpointContext,
+    callbacks: EpochCallbacks[Epoch],
+    metric: MetricPolicy,
+) -> tuple[CheckpointWrites, bool]:
     """Run epochs with shared stopping boundaries and checkpoint bookkeeping."""
-    save_pool = checkpoint_pool(resumed, train_loader, val_loader)
-    save_future = None
+    writes = CheckpointWrites(
+        checkpoint_pool(runtime.resumed, runtime.train_loader, runtime.val_loader)
+    )
     stopped = False
-    for epoch in range(start_epoch, total_epochs + 1):
+    for epoch in range(state.start_epoch, runtime.total_epochs + 1):
         # Resuming at a stopping boundary must not train an extra epoch.
-        if early_stop(patience_counter):
+        if callbacks.early_stop(state.patience_counter):
             break
-        if cancelled_at_epoch(cancel_token, epoch):
+        if cancelled_at_epoch(runtime.cancel_token, epoch):
             stopped = True
             break
-        result = compute_epoch(epoch)
-        history.append(result)
-        report(result)
-        best_metric, best_epoch, patience_counter, save_future = save_epoch_checkpoint(
-            getattr(result, metric_name),
-            best_metric,
-            best_epoch,
-            patience_counter,
+        result = callbacks.compute(epoch)
+        state.history.append(result)
+        callbacks.report(result)
+        save_epoch_checkpoint(
+            getattr(result, metric.name),
             epoch,
-            model,
-            model_path,
-            save_pool,
-            save_future,
-            save_best,
-            components,
-            history,
-            train_loader,
-            val_loader,
-            higher_is_better=higher_is_better,
+            state,
+            checkpoint,
+            writes,
+            runtime,
+            metric,
         )
-        if early_stop(patience_counter):
+        if callbacks.early_stop(state.patience_counter):
             logger.info("Early stopping at epoch {}.", epoch)
             break
-    return best_metric, best_epoch, patience_counter, save_pool, save_future, stopped
+    return writes, stopped
 
 
 def seed_training(
@@ -515,29 +581,22 @@ def fit_training[Result](
     trainer: Any,
     model: nn.Module,
     data_module: Any,
-    optimizer: torch.optim.Optimizer | None,
-    progress_callback: Callable[[dict[str, Any]], None] | None,
-    cancel_token: CancellationToken | None,
-    resume_dir: Path | None,
-    *,
-    seed: Callable[..., None],
-    tensorboard_factory: Callable[[Path], Any],
-    save_best: Callable[..., Future[None]],
-    result_type: Callable[..., Result],
-    metric_name: str,
-    best_field: str,
-    log_format: str,
-    higher_is_better: bool = False,
-    ensure_checkpoint: Callable[..., tuple[int, float]] | None = None,
+    options: FitOptions,
+    services: FitServices,
+    adapter: FitResultAdapter[Result],
 ) -> Result:
     """Fit a non-AMP task with explicit metric, checkpoint and result adapters."""
+    optimizer = options.optimizer
+    progress_callback = options.progress_callback
+    cancel_token = options.cancel_token
+    resume_dir = options.resume_dir
     resumed = load_resume_state(resume_dir, trainer._config)
     cfg = trainer._config.training
     seed_training(
         cfg,
-        seed,
+        services.seed,
         trainer._device_label,
-        log_format,
+        adapter.log_format,
     )
 
     model, optimizer, criterion, scheduler = prepare_training(
@@ -554,7 +613,7 @@ def fit_training[Result](
     # TensorBoard events somewhere nothing will look.
     run_dir = trainer._resolve_run_dir(resumed, resume_dir)
     model_path = run_dir / "best_model.pth"
-    tb = tensorboard_factory(run_dir / "tensorboard")
+    tb = services.tensorboard_factory(run_dir / "tensorboard")
 
     history, best_val_loss, best_epoch, patience_counter, start_epoch = (
         trainer._restore_training_state(resumed, model, optimizer, scheduler, run_dir)
@@ -564,54 +623,45 @@ def fit_training[Result](
     train_loader, val_loader, trainer._loader_workers = start_training(
         data_module, progress_callback, cfg.epochs, trainer._device_label
     )
-    best_val_loss, best_epoch, patience_counter, save_pool, save_future, stopped = (
-        run_epochs(
+    state = EpochState(
+        history, best_val_loss, best_epoch, patience_counter, start_epoch
+    )
+    writes, stopped = run_epochs(
+        state,
+        EpochRuntime(train_loader, val_loader, cfg.epochs, resumed, cancel_token),
+        CheckpointContext(
             model,
             model_path,
-            history,
-            best_val_loss,
-            best_epoch,
-            patience_counter,
-            start_epoch,
-            cfg.epochs,
-            train_loader,
-            val_loader,
-            resumed,
-            cancel_token,
-            lambda epoch: trainer._compute_epoch_result(
-                epoch,
-                model,
-                train_loader,
-                val_loader,
-                optimizer,
-                criterion,
-                scheduler,
+            services.save_best,
+            lambda: checkpoint_components(model, optimizer, scheduler),
+        ),
+        EpochCallbacks(
+            compute=lambda epoch: trainer._compute_epoch_result(
+                epoch, model, train_loader, val_loader, optimizer, criterion, scheduler
             ),
-            lambda result: trainer._report_epoch(
+            report=lambda result: trainer._report_epoch(
                 result, tb, progress_callback, t0, cfg.epochs
             ),
-            lambda counter: trainer._early_stopping_reached(
+            early_stop=lambda counter: trainer._early_stopping_reached(
                 counter, cfg.early_stopping_patience
             ),
-            metric_name,
-            save_best,
-            lambda: checkpoint_components(model, optimizer, scheduler),
-            higher_is_better=higher_is_better,
-        )
+        ),
+        adapter.metric,
     )
+    best_val_loss, best_epoch = state.best_metric, state.best_epoch
 
-    trainer._finish_checkpoint_writes(run_dir, cancel_token, save_pool, save_future)
+    trainer._finish_checkpoint_writes(run_dir, cancel_token, writes.pool, writes.future)
 
     health = trainer._training_warnings(history)
 
-    if ensure_checkpoint is not None:
-        best_epoch, best_val_loss = ensure_checkpoint(
+    if adapter.ensure_checkpoint is not None:
+        best_epoch, best_val_loss = adapter.ensure_checkpoint(
             model, model_path, history, best_epoch, best_val_loss
         )
-    train_result = result_type(
+    train_result = adapter.result_type(
         stopped=stopped,
         best_epoch=best_epoch,
-        **{best_field: best_val_loss},
+        **{adapter.best_field: best_val_loss},
         total_epochs=len(history),
         device_used=trainer._device_label,
         history=history,
