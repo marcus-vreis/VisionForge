@@ -71,61 +71,7 @@ def build_runs_router(
         run_dir = find_run_dir(run_id, profile)
         if run_dir is None:
             raise HTTPException(404, tr(RUN_NOT_FOUND_KEY, run_id=run_id))
-        run_json_path = run_dir / RUN_FILENAME
-        try:
-            data: dict[str, Any] = json.loads(run_json_path.read_text(encoding="utf-8"))
-        except Exception as exc:  # noqa: BLE001
-            raise HTTPException(500, tr(RUN_BAD_JSON_KEY, error=exc)) from exc
-
-        status = data.get("status", "completed")
-        started, finished = run_span(run_dir.name, data["timestamp"], status)
-
-        dataset_name, dataset_root = dataset_identity(data)
-        resumable, configured_epochs = resume_status(run_dir, data)
-        fingerprint = data.get("dataset_fingerprint") or {}
-        dataset = (
-            DatasetInfo(
-                name=dataset_name,
-                root=dataset_root or "",
-                n_files=fingerprint.get("n_files"),
-                total_bytes=fingerprint.get("total_bytes"),
-                method=fingerprint.get("method"),
-                digest=fingerprint.get("digest") or None,
-                note=fingerprint.get("note"),
-            )
-            if dataset_name
-            else None
-        )
-
-        task = run_task(data)
-        metrics: dict[str, Any] = data.get("metrics", {})
-        history: list[dict[str, Any]] = data.get("history", [])
-
-        return RunDetail(
-            run_id=run_dir.name,
-            experiment_name=data.get("experiment", run_dir.parent.name),
-            status=status,
-            started_at=started,
-            finished_at=finished,
-            device_used=data.get("device_used"),
-            environment=data.get("environment", {}),
-            run_dir=data.get("run_dir", str(run_dir.resolve())),
-            config=data.get("config", {}),
-            metrics=metrics,
-            metric_cis=data.get("metric_cis", {}),
-            history=history,
-            artifacts=data.get("artifacts", {}),
-            tests=data.get("tests", []),
-            dataset=dataset,
-            resumable=resumable,
-            configured_epochs=configured_epochs,
-            stopped=bool(data.get("stopped")),
-            group_id=data.get("group_id"),
-            group=data.get("group") if isinstance(data.get("group"), dict) else None,
-            task=task,
-            can_reveal=can_reveal(client_host(request)),
-            metric_directions=metric_directions(task, metrics, history),
-        )
+        return _build_run_detail(run_dir, _read_run_json(run_dir), client_host(request))
 
     @router.delete("/runs/{run_id}", responses={**BAD_REQUEST, **NOT_FOUND, **CONFLICT})
     async def delete_run(run_id: str, profile: ProfileDep) -> dict[str, str]:
@@ -140,29 +86,99 @@ def build_runs_router(
         if run_dir is None:
             raise HTTPException(404, tr(RUN_NOT_FOUND_KEY, run_id=run_id))
 
-        run = current_run()
-        # Block deleting the active run — its files are held open by the trainer.
-        if (
-            run is not None
-            and run.get("status") == "running"
-            and run.get("run_id") == run_id
-        ):
-            raise HTTPException(409, tr("run.cannot_delete_active"))
-
-        resolved = run_dir.resolve()
-        models_dir = profile.models_dir.resolve()
-        try:
-            resolved.relative_to(models_dir)
-        except ValueError as exc:
-            raise HTTPException(
-                400, tr("run.delete_outside", models_dir=models_dir, path=resolved)
-            ) from exc
-
-        if not resolved.is_dir():
-            raise HTTPException(404, tr("run.dir_missing", path=resolved))
-
-        shutil.rmtree(resolved)
-        logger.info("GUI: deleted run {} at {}", run_id, resolved)
+        _delete_run_directory(run_id, run_dir, profile, current_run())
         return {"run_id": run_id, "status": "deleted"}
 
     return router
+
+
+def _read_run_json(run_dir: Path) -> dict[str, Any]:
+    """Read the run file and map parsing errors to the existing HTTP response."""
+    try:
+        data: dict[str, Any] = json.loads(
+            (run_dir / RUN_FILENAME).read_text(encoding="utf-8")
+        )
+        return data
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(500, tr(RUN_BAD_JSON_KEY, error=exc)) from exc
+
+
+def _run_dataset(data: dict[str, Any]) -> DatasetInfo | None:
+    """Project the saved dataset identity and fingerprint into detail fields."""
+    dataset_name, dataset_root = dataset_identity(data)
+    if not dataset_name:
+        return None
+    fingerprint = data.get("dataset_fingerprint") or {}
+    return DatasetInfo(
+        name=dataset_name,
+        root=dataset_root or "",
+        n_files=fingerprint.get("n_files"),
+        total_bytes=fingerprint.get("total_bytes"),
+        method=fingerprint.get("method"),
+        digest=fingerprint.get("digest") or None,
+        note=fingerprint.get("note"),
+    )
+
+
+def _build_run_detail(
+    run_dir: Path, data: dict[str, Any], host: str | None
+) -> RunDetail:
+    """Build the full detail response from one saved run."""
+    status = data.get("status", "completed")
+    started, finished = run_span(run_dir.name, data["timestamp"], status)
+    resumable, configured_epochs = resume_status(run_dir, data)
+    task = run_task(data)
+    metrics: dict[str, Any] = data.get("metrics", {})
+    history: list[dict[str, Any]] = data.get("history", [])
+    return RunDetail(
+        run_id=run_dir.name,
+        experiment_name=data.get("experiment", run_dir.parent.name),
+        status=status,
+        started_at=started,
+        finished_at=finished,
+        device_used=data.get("device_used"),
+        environment=data.get("environment", {}),
+        run_dir=data.get("run_dir", str(run_dir.resolve())),
+        config=data.get("config", {}),
+        metrics=metrics,
+        metric_cis=data.get("metric_cis", {}),
+        history=history,
+        artifacts=data.get("artifacts", {}),
+        tests=data.get("tests", []),
+        dataset=_run_dataset(data),
+        resumable=resumable,
+        configured_epochs=configured_epochs,
+        stopped=bool(data.get("stopped")),
+        group_id=data.get("group_id"),
+        group=data.get("group") if isinstance(data.get("group"), dict) else None,
+        task=task,
+        can_reveal=can_reveal(host),
+        metric_directions=metric_directions(task, metrics, history),
+    )
+
+
+def _delete_run_directory(
+    run_id: str, run_dir: Path, profile: Profile, run: dict[str, Any] | None
+) -> None:
+    """Reject active or unconfined runs before deleting their directory."""
+    if (
+        run is not None
+        and run.get("status") == "running"
+        and run.get("run_id") == run_id
+    ):
+        raise HTTPException(409, tr("run.cannot_delete_active"))
+
+    resolved = run_dir.resolve()
+    models_dir = profile.models_dir.resolve()
+    try:
+        resolved.relative_to(models_dir)
+    except ValueError as exc:
+        raise HTTPException(
+            400, tr("run.delete_outside", models_dir=models_dir, path=resolved)
+        ) from exc
+
+    if not resolved.is_dir():
+        raise HTTPException(404, tr("run.dir_missing", path=resolved))
+
+    shutil.rmtree(resolved)
+    logger.info("GUI: deleted run {} at {}", run_id, resolved)

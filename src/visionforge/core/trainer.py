@@ -231,21 +231,24 @@ class Trainer:
         train_loader, val_loader, self._loader_workers = training_loop.start_training(
             data_module, progress_callback, cfg.epochs, self._device_label
         )
-        best_val_loss, best_epoch, patience_counter, save_pool, save_future, stopped = (
-            training_loop.run_epochs(
-                model=model,
-                model_path=model_path,
-                history=history,
-                best_metric=best_val_loss,
-                best_epoch=best_epoch,
-                patience_counter=patience_counter,
-                start_epoch=start_epoch,
-                total_epochs=cfg.epochs,
-                train_loader=train_loader,
-                val_loader=val_loader,
-                resumed=resumed,
-                cancel_token=cancel_token,
-                compute_epoch=lambda epoch: self._compute_epoch_result(
+        state = training_loop.EpochState(
+            history, best_val_loss, best_epoch, patience_counter, start_epoch
+        )
+        writes, stopped = training_loop.run_epochs(
+            state,
+            training_loop.EpochRuntime(
+                train_loader, val_loader, cfg.epochs, resumed, cancel_token
+            ),
+            training_loop.CheckpointContext(
+                model,
+                model_path,
+                save_best_checkpoint,
+                lambda: self._checkpoint_components(
+                    model, optimizer, scheduler, scaler
+                ),
+            ),
+            training_loop.EpochCallbacks(
+                compute=lambda epoch: self._compute_epoch_result(
                     epoch,
                     model,
                     train_loader,
@@ -259,13 +262,10 @@ class Trainer:
                     result, tb, progress_callback, t0
                 ),
                 early_stop=self._early_stopping_reached,
-                metric_name="val_loss",
-                save_best=save_best_checkpoint,
-                components=lambda: self._checkpoint_components(
-                    model, optimizer, scheduler, scaler
-                ),
-            )
+            ),
+            training_loop.MetricPolicy("val_loss"),
         )
+        best_val_loss, best_epoch = state.best_metric, state.best_epoch
 
         if not is_cancelled(cancel_token):
             clear_resume_state(run_dir)
@@ -284,8 +284,8 @@ class Trainer:
             run_dir,
             data_module,
             tb,
-            save_pool,
-            save_future,
+            writes.pool,
+            writes.future,
             progress_callback,
         )
 

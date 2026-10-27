@@ -6389,3 +6389,27 @@ equality, including a sanitized run.json from the offline E2E fixture. Synthetic
 edge fixtures cover missing fields and stopped runs; none are research evidence.
 Queue ownership, dataset inspection and standalone evaluation remain separate
 increments.
+
+## ADR-151 — Typed contexts for native epoch loops and standalone CV
+
+**Date:** 2026-10
+**Status:** Accepted
+
+**Decision:** `save_epoch_checkpoint`, `run_epochs` and `fit_training` receive
+typed dataclasses for completed epoch state, loaders and lifecycle controls,
+checkpoint dependencies and pending writes, task callbacks, metric policy and
+fit adapters. `_run_fold` and `run_folds` receive typed fold data/lifecycle and
+task factory/metric contexts. Dependency contexts are frozen; completed epoch
+state and pending checkpoint writes remain mutable and local to one fit.
+
+**Reason:** Issue #87 identifies five long signatures left by the shared-loop
+extraction. Grouping dependencies by lifetime keeps checkpoint bookkeeping and
+callbacks coherent without a generic kwargs container or changing task recipes.
+Classification retains its AMP path; regression and segmentation retain their
+fit adapters. Optimizer and seed defaults, strict best-metric comparison, fold
+splits, reporting order, checkpoint formats and `run.json` remain unchanged.
+Resume still restores optimizer, scheduler and scaler before restoring RNGs
+after loader setup. CPU tests cover history, checkpoint state, stopping and
+failure boundaries; paired classification and segmentation harnesses check
+engineering parity without making performance or model-quality claims.
+
