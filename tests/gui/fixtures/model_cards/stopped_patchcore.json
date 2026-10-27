@@ -1,0 +1,12 @@
+{
+  "stopped": true,
+  "status": "stopped",
+  "config": {
+    "model": {
+      "name": "patchcore"
+    }
+  },
+  "metrics": {
+    "total_epochs": 1
+  }
+}

@@ -6371,6 +6371,8 @@ elsewhere.
 
 ## ADR-153 — Dataset inspection separates parsing, split scans and layout reporting
 
+## ADR-152 — Model-card rendering is split into pure sections
+
 **Date:** 2026-10
 **Status:** Accepted
 **Extends:** ADR-132
@@ -6388,6 +6390,21 @@ Characterization tests preserve the distinct YOLO field rules for crops and
 counts, the 20-decodable-mask, 500-image-check and 50,000-row limits, and the
 complete, partial and unrecognized layout responses. The OpenAPI contract stays
 unchanged.
+
+**Decision:** Model-card rendering lives in `gui/api/model_card.py`, with sections
+for identity, configuration, preprocessing, augmentation, metrics, history, plots
+and external tests. `routes.py` retains its renderer and stopped-extent aliases
+for existing callers. Section functions only format the supplied run.json data
+using the current artifact language; they do not mutate it or perform I/O.
+
+**Reason:** `_render_run_markdown` combines independent document sections in one
+API hotspot (#86). Extracting each section makes its ordering and optional-field
+rules reviewable without changing route dependencies or runtime state. Complete
+PT/EN golden files checked against the pre-extraction renderer protect Markdown
+equality, including a sanitized run.json from the offline E2E fixture. Synthetic
+edge fixtures cover missing fields and stopped runs; none are research evidence.
+Queue ownership, dataset inspection and standalone evaluation remain separate
+increments.
 
 ## ADR-151 — Typed contexts for native epoch loops and standalone CV
 
