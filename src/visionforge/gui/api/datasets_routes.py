@@ -1070,9 +1070,10 @@ def _scan_regression_rows(
         if rows > 50_000:
             rows = 50_000
             break
-        if checked_images < 500 and req.image_column in row:
+        image_name = row.get(req.image_column)
+        if checked_images < 500 and image_name is not None:
             checked_images += 1
-            if not (images_root / str(row[req.image_column])).is_file():
+            if not (images_root / str(image_name)).is_file():
                 missing_images += 1
         _accumulate_target_sums(row, req.target_columns, sums)
 
