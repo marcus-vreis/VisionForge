@@ -6369,6 +6369,27 @@ manifest stored outside the dataset root must be copied or linked inside it.
 This is a deliberate behaviour change for local users who kept manifests
 elsewhere.
 
+## ADR-152 — Model-card rendering is split into pure sections
+
+**Date:** 2026-10
+**Status:** Accepted
+**Extends:** ADR-132
+
+**Decision:** Model-card rendering lives in `gui/api/model_card.py`, with sections
+for identity, configuration, preprocessing, augmentation, metrics, history, plots
+and external tests. `routes.py` retains its renderer and stopped-extent aliases
+for existing callers. Section functions only format the supplied run.json data
+using the current artifact language; they do not mutate it or perform I/O.
+
+**Reason:** `_render_run_markdown` combines independent document sections in one
+API hotspot (#86). Extracting each section makes its ordering and optional-field
+rules reviewable without changing route dependencies or runtime state. Complete
+PT/EN golden files checked against the pre-extraction renderer protect Markdown
+equality, including a sanitized run.json from the offline E2E fixture. Synthetic
+edge fixtures cover missing fields and stopped runs; none are research evidence.
+Queue ownership, dataset inspection and standalone evaluation remain separate
+increments.
+
 ## ADR-151 — Typed contexts for native epoch loops and standalone CV
 
 **Date:** 2026-10
