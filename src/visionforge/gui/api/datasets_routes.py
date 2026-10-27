@@ -686,28 +686,7 @@ def _collect_detection_dataset_samples(
     crops: dict[str, list[str]] = {}
 
     for image_path in sorted(images_dir.iterdir()):
-        if not image_path.is_file() or image_path.suffix.lower() not in _IMAGE_EXTS:
-            continue
-        label_path = labels_dir / f"{image_path.stem}.txt"
-        if not label_path.is_file():
-            continue
-        for line in label_path.read_text(
-            encoding="utf-8", errors="ignore"
-        ).splitlines():
-            parts = line.split()
-            if len(parts) < 5:
-                continue
-            try:
-                cid = int(float(parts[0]))
-                box = tuple(float(v) for v in parts[1:5])
-            except ValueError:
-                continue
-            name = names[cid] if 0 <= cid < len(names) else f"class_{cid}"
-            if len(crops.get(name, [])) >= req.per_class:
-                continue
-            uri = _crop_to_data_uri(image_path, box)  # type: ignore[arg-type]
-            if uri is not None:
-                crops.setdefault(name, []).append(uri)
+        _sample_detection_image(image_path, labels_dir, names, req.per_class, crops)
 
     return DetectionDatasetSamplesResponse(
         base_dir=req.base_dir,
@@ -715,6 +694,47 @@ def _collect_detection_dataset_samples(
         crops=crops,
         message=None if crops else tr("scan.no_boxes"),
     )
+
+
+def _sample_detection_image(
+    image_path: Path,
+    labels_dir: Path,
+    names: list[str],
+    per_class: int,
+    crops: dict[str, list[str]],
+) -> None:
+    """Add bounded crops for one image with a matching YOLO label file."""
+    if not image_path.is_file() or image_path.suffix.lower() not in _IMAGE_EXTS:
+        return
+    label_path = labels_dir / f"{image_path.stem}.txt"
+    if not label_path.is_file():
+        return
+    for line in label_path.read_text(encoding="utf-8", errors="ignore").splitlines():
+        parsed = _parse_sample_box(line)
+        if parsed is None:
+            continue
+        cid, box = parsed
+        name = names[cid] if 0 <= cid < len(names) else f"class_{cid}"
+        if len(crops.get(name, [])) >= per_class:
+            continue
+        uri = _crop_to_data_uri(image_path, box)
+        if uri is not None:
+            crops.setdefault(name, []).append(uri)
+
+
+def _parse_sample_box(
+    line: str,
+) -> tuple[int, tuple[float, float, float, float]] | None:
+    """Parse the first five YOLO fields used for a crop, ignoring later fields."""
+    parts = line.split()
+    if len(parts) < 5:
+        return None
+    try:
+        cid = int(float(parts[0]))
+        x, y, width, height = (float(v) for v in parts[1:5])
+    except ValueError:
+        return None
+    return cid, (x, y, width, height)
 
 
 def _count_split_instances(
@@ -734,21 +754,28 @@ def _count_split_instances(
     unlabeled = 0
     for img in images:
         label_path = labels_dir / f"{img.stem}.txt"
-        instances = 0
-        if label_path.is_file():
-            for line in label_path.read_text(encoding="utf-8").splitlines():
-                parts = line.split()
-                if len(parts) != 5:
-                    continue
-                try:
-                    cls = int(float(parts[0]))
-                except ValueError:
-                    continue
-                counts[cls] = counts.get(cls, 0) + 1
-                instances += 1
-        if instances == 0:
+        class_ids = _label_class_ids(label_path)
+        for cls in class_ids:
+            counts[cls] = counts.get(cls, 0) + 1
+        if not class_ids:
             unlabeled += 1
     return len(images), counts, unlabeled
+
+
+def _label_class_ids(label_path: Path) -> list[int]:
+    """Read class IDs from exactly five-field YOLO annotation rows."""
+    if not label_path.is_file():
+        return []
+    ids: list[int] = []
+    for line in label_path.read_text(encoding="utf-8").splitlines():
+        parts = line.split()
+        if len(parts) != 5:
+            continue
+        try:
+            ids.append(int(float(parts[0])))
+        except ValueError:
+            continue
+    return ids
 
 
 def _collect_detection_dataset_stats(
@@ -873,44 +900,9 @@ def _collect_segmentation_dataset_stats(
         ("val", req.val_dir),
         ("test", req.test_dir),
     ):
-        split_dir = base / dname
-        if not split_dir.is_dir():
-            splits[role] = SegmentationSplitStats(
-                images=0, masks=0, paired=0, missing=True
-            )
-            continue
-        imgs = _image_stems(split_dir / req.images_subdir)
-        masks = _image_stems(split_dir / req.masks_subdir)
-        splits[role] = SegmentationSplitStats(
-            images=len(imgs),
-            masks=len(masks),
-            paired=len(imgs & masks),
-            unpaired_images=len(imgs - masks),
-            unpaired_masks=len(masks - imgs),
-        )
+        splits[role] = _segmentation_split_stats(base / dname, req)
 
-    # Class ids from up to 20 train masks — enough to suggest num_classes and
-    # surface an ignore_index value without scanning the whole dataset.
-    class_ids: set[int] = set()
-    mask_dir = base / req.train_dir / req.masks_subdir
-    if mask_dir.is_dir():
-        import numpy as np
-        from PIL import Image
-
-        sampled = 0
-        for p in sorted(mask_dir.iterdir()):
-            if sampled >= 20:
-                break
-            if not (p.is_file() and p.suffix.lower() in _IMAGE_EXTS):
-                continue
-            try:
-                with Image.open(p) as im:
-                    class_ids.update(
-                        int(v) for v in np.unique(np.asarray(im.convert("L")))
-                    )
-                sampled += 1
-            except OSError:
-                continue
+    class_ids = _sample_mask_class_ids(base / req.train_dir / req.masks_subdir)
 
     message = None
     if all(s.missing for s in splits.values()):
@@ -919,9 +911,51 @@ def _collect_segmentation_dataset_stats(
     return SegmentationDatasetStatsResponse(
         base_dir=str(base.resolve()),
         splits=splits,
-        mask_class_ids=sorted(class_ids),
+        mask_class_ids=class_ids,
         message=message,
     )
+
+
+def _segmentation_split_stats(
+    split_dir: Path, req: SegmentationDatasetStatsRequest
+) -> SegmentationSplitStats:
+    """Count image and mask stem matches in one segmentation split."""
+    if not split_dir.is_dir():
+        return SegmentationSplitStats(images=0, masks=0, paired=0, missing=True)
+    imgs = _image_stems(split_dir / req.images_subdir)
+    masks = _image_stems(split_dir / req.masks_subdir)
+    return SegmentationSplitStats(
+        images=len(imgs),
+        masks=len(masks),
+        paired=len(imgs & masks),
+        unpaired_images=len(imgs - masks),
+        unpaired_masks=len(masks - imgs),
+    )
+
+
+def _sample_mask_class_ids(mask_dir: Path) -> list[int]:
+    """Read class IDs from at most 20 decodable train masks."""
+    if not mask_dir.is_dir():
+        return []
+    import numpy as np
+    from PIL import Image
+
+    class_ids: set[int] = set()
+    sampled = 0
+    for path in sorted(mask_dir.iterdir()):
+        if sampled >= 20:
+            break
+        if not (path.is_file() and path.suffix.lower() in _IMAGE_EXTS):
+            continue
+        try:
+            with Image.open(path) as image:
+                class_ids.update(
+                    int(value) for value in np.unique(np.asarray(image.convert("L")))
+                )
+            sampled += 1
+        except OSError:
+            continue
+    return sorted(class_ids)
 
 
 def _collect_anomaly_dataset_stats(
@@ -988,63 +1022,13 @@ def _collect_regression_dataset_stats(
             message=tr(SCAN_BASE_MISSING_KEY, path=req.base_dir),
         )
 
-    images_root = base / req.images_dir
-    expected = [req.image_column, *req.target_columns]
     splits: dict[str, RegressionSplitStats] = {}
     for role, fname in (
         ("train", req.train_csv),
         ("val", req.val_csv),
         ("test", req.test_csv),
     ):
-        csv_path = base / fname
-        if not csv_path.is_file():
-            splits[role] = RegressionSplitStats(rows=0, missing=True)
-            continue
-        rows = 0
-        missing_images = 0
-        checked_images = 0
-        sums: dict[str, tuple[int, float, float, float]] = {}
-        try:
-            with csv_path.open(newline="", encoding="utf-8") as f:
-                reader = csv.DictReader(f)
-                header = reader.fieldnames or []
-                missing_columns = [c for c in expected if c not in header]
-                for row in reader:
-                    rows += 1
-                    if rows > 50_000:
-                        rows = 50_000
-                        break
-                    if checked_images < 500 and req.image_column in row:
-                        checked_images += 1
-                        if not (images_root / str(row[req.image_column])).is_file():
-                            missing_images += 1
-                    for col in req.target_columns:
-                        if col not in row:
-                            continue
-                        try:
-                            v = float(row[col])
-                        except (TypeError, ValueError):
-                            continue
-                        n, total, lo, hi = sums.get(col, (0, 0.0, v, v))
-                        sums[col] = (n + 1, total + v, min(lo, v), max(hi, v))
-        except OSError as exc:
-            splits[role] = RegressionSplitStats(
-                rows=0, missing=True, missing_columns=[str(exc)]
-            )
-            continue
-
-        splits[role] = RegressionSplitStats(
-            rows=rows,
-            missing_columns=missing_columns,
-            missing_images=missing_images,
-            checked_images=checked_images,
-            targets={
-                col: RegressionTargetStats(
-                    count=n, mean=total / n if n else None, min=lo, max=hi
-                )
-                for col, (n, total, lo, hi) in sums.items()
-            },
-        )
+        splits[role] = _regression_split_stats(base / fname, base / req.images_dir, req)
 
     message = None
     if all(s.missing for s in splits.values()):
@@ -1055,6 +1039,80 @@ def _collect_regression_dataset_stats(
         splits=splits,
         message=message,
     )
+
+
+def _regression_split_stats(
+    csv_path: Path, images_root: Path, req: RegressionDatasetStatsRequest
+) -> RegressionSplitStats:
+    """Scan one CSV manifest with the existing row and image sample limits."""
+    if not csv_path.is_file():
+        return RegressionSplitStats(rows=0, missing=True)
+    try:
+        with csv_path.open(newline="", encoding="utf-8") as stream:
+            return _scan_regression_rows(csv.DictReader(stream), images_root, req)
+    except OSError as exc:
+        return RegressionSplitStats(rows=0, missing=True, missing_columns=[str(exc)])
+
+
+def _scan_regression_rows(
+    reader: csv.DictReader[str], images_root: Path, req: RegressionDatasetStatsRequest
+) -> RegressionSplitStats:
+    """Aggregate bounded rows and image checks from an open manifest."""
+    rows = 0
+    missing_images = 0
+    checked_images = 0
+    sums: dict[str, tuple[int, float, float, float]] = {}
+    header = reader.fieldnames or []
+    expected = [req.image_column, *req.target_columns]
+    missing_columns = [column for column in expected if column not in header]
+    for row in reader:
+        rows += 1
+        if rows > 50_000:
+            rows = 50_000
+            break
+        if checked_images < 500 and req.image_column in row:
+            checked_images += 1
+            if not (images_root / str(row[req.image_column])).is_file():
+                missing_images += 1
+        _accumulate_target_sums(row, req.target_columns, sums)
+
+    return RegressionSplitStats(
+        rows=rows,
+        missing_columns=missing_columns,
+        missing_images=missing_images,
+        checked_images=checked_images,
+        targets={
+            column: RegressionTargetStats(
+                count=count, mean=total / count if count else None, min=lo, max=hi
+            )
+            for column, (count, total, lo, hi) in sums.items()
+        },
+    )
+
+
+def _accumulate_target_sums(
+    row: dict[str, str | None],
+    columns: list[str],
+    sums: dict[str, tuple[int, float, float, float]],
+) -> None:
+    """Accumulate numeric target values in one CSV row."""
+    for column in columns:
+        if column not in row:
+            continue
+        cell = row[column]
+        if cell is None:
+            continue
+        try:
+            value = float(cell)
+        except (TypeError, ValueError):
+            continue
+        count, total, lo, hi = sums.get(column, (0, 0.0, value, value))
+        sums[column] = (
+            count + 1,
+            total + value,
+            min(lo, value),
+            max(hi, value),
+        )
 
 
 def _open_native_checkpoint_dialog() -> CheckpointPickResponse:
@@ -1244,10 +1302,16 @@ def _detect_dataset_layout(base_dir_str: str) -> DatasetDetectResponse:
             message=tr("detect.no_subfolders", path=base),
         )
 
+    train_dir, val_dir, test_dir = _find_split_dirs(children)
+    candidates = sorted(c.name for c in children)
+    return _layout_response(base, candidates, train_dir, val_dir, test_dir)
+
+
+def _find_split_dirs(children: list[Path]) -> tuple[str | None, str | None, str | None]:
+    """Match each split role to its first recognized child directory."""
     train_dir: str | None = None
     val_dir: str | None = None
     test_dir: str | None = None
-
     for child in children:
         if train_dir is None and _match_alias(child.name, _TRAIN_ALIASES):
             train_dir = child.name
@@ -1255,42 +1319,50 @@ def _detect_dataset_layout(base_dir_str: str) -> DatasetDetectResponse:
             val_dir = child.name
         elif test_dir is None and _match_alias(child.name, _TEST_ALIASES):
             test_dir = child.name
+    return train_dir, val_dir, test_dir
 
-    candidates = sorted(c.name for c in children)
-    found = [v for v in (train_dir, val_dir, test_dir) if v]
 
-    if len(found) >= 2:
-        missing = []
-        if not train_dir:
-            missing.append(tr("detect.role_train"))
-        if not val_dir:
-            missing.append(tr("detect.role_val"))
-        if not test_dir:
-            missing.append(tr("detect.role_test"))
-        if missing:
-            message = tr("detect.partial", missing=", ".join(missing))
-            return DatasetDetectResponse(
-                base_dir=str(base),
-                detected=False,
-                train_dir=train_dir,
-                val_dir=val_dir,
-                test_dir=test_dir,
-                candidates=candidates,
-                message=message,
-            )
+def _layout_response(
+    base: Path,
+    candidates: list[str],
+    train_dir: str | None,
+    val_dir: str | None,
+    test_dir: str | None,
+) -> DatasetDetectResponse:
+    """Report a complete, partial, or unrecognized split layout."""
+    found = [name for name in (train_dir, val_dir, test_dir) if name]
+    if len(found) < 2:
         return DatasetDetectResponse(
             base_dir=str(base),
-            detected=True,
-            train_dir=train_dir,
-            val_dir=val_dir,
-            test_dir=test_dir,
+            detected=False,
             candidates=candidates,
-            message=tr("detect.found", train=train_dir, val=val_dir, test=test_dir),
+            message=tr("detect.unrecognized", found=", ".join(candidates)),
         )
-
+    missing = _missing_split_roles(train_dir, val_dir, test_dir)
+    if missing:
+        message = tr("detect.partial", missing=", ".join(missing))
+    else:
+        message = tr("detect.found", train=train_dir, val=val_dir, test=test_dir)
     return DatasetDetectResponse(
         base_dir=str(base),
-        detected=False,
+        detected=not missing,
+        train_dir=train_dir,
+        val_dir=val_dir,
+        test_dir=test_dir,
         candidates=candidates,
-        message=tr("detect.unrecognized", found=", ".join(candidates)),
+        message=message,
     )
+
+
+def _missing_split_roles(
+    train_dir: str | None, val_dir: str | None, test_dir: str | None
+) -> list[str]:
+    """Name absent roles in train, validation, test order for the message."""
+    missing = []
+    if not train_dir:
+        missing.append(tr("detect.role_train"))
+    if not val_dir:
+        missing.append(tr("detect.role_val"))
+    if not test_dir:
+        missing.append(tr("detect.role_test"))
+    return missing

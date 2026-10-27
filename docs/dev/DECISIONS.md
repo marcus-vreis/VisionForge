@@ -6369,3 +6369,23 @@ manifest stored outside the dataset root must be copied or linked inside it.
 This is a deliberate behaviour change for local users who kept manifests
 elsewhere.
 
+## ADR-153 — Dataset inspection separates parsing, split scans and layout reporting
+
+**Date:** 2026-10
+**Status:** Accepted
+**Extends:** ADR-132
+
+**Decision:** The dataset inspection functions in `datasets_routes.py` delegate
+YOLO crop parsing and per-image sampling, annotation class counting, segmentation
+pairing and mask sampling, regression manifest reading and target aggregation,
+and layout role matching and reporting to private helpers in the same domain.
+The router, request/response schemas and localization calls keep their contracts.
+
+**Reason:** Issue #86 identifies five S3776 hotspots in dataset inspection.
+Separating those responsibilities removes nested traversal and parsing from the
+collectors without moving unrelated API state or introducing import side effects.
+Characterization tests preserve the distinct YOLO field rules for crops and
+counts, the 20-decodable-mask, 500-image-check and 50,000-row limits, and the
+complete, partial and unrecognized layout responses. The OpenAPI contract stays
+unchanged.
+
