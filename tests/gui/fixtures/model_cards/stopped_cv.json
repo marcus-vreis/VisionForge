@@ -1,0 +1,10 @@
+{
+  "stopped": true,
+  "status": "stopped",
+  "metrics": {
+    "cv_aggregate": {
+      "n_folds": 3,
+      "n_folds_ok": 1
+    }
+  }
+}

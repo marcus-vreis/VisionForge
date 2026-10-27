@@ -1,0 +1,17 @@
+{
+  "status": "custom-status",
+  "task_label": "Custom",
+  "config": {
+    "training": {
+      "scheduler": {
+        "kind": "none"
+      }
+    }
+  },
+  "tests": [
+    {
+      "test_id": "extra",
+      "metrics": {}
+    }
+  ]
+}
