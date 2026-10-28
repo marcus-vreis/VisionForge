@@ -252,19 +252,19 @@ class SegmentationTrainer(training_loop.GradientTrainerMethods):
             self,
             model,
             data_module,
-            optimizer,
-            progress_callback,
-            cancel_token,
-            resume_dir,
-            result_type=SegmentationTrainResult,
-            seed=_seed_everything,
-            tensorboard_factory=TensorBoardLogger,
-            save_best=save_best_checkpoint,
-            metric_name="val_miou",
-            best_field="best_val_miou",
-            log_format="SegmentationTrainer using device: {}",
-            higher_is_better=True,
-            ensure_checkpoint=self._ensure_checkpoint,
+            training_loop.FitOptions(
+                optimizer, progress_callback, cancel_token, resume_dir
+            ),
+            training_loop.FitServices(
+                _seed_everything, TensorBoardLogger, save_best_checkpoint
+            ),
+            training_loop.FitResultAdapter(
+                result_type=SegmentationTrainResult,
+                metric=training_loop.MetricPolicy("val_miou", higher_is_better=True),
+                best_field="best_val_miou",
+                log_format="SegmentationTrainer using device: {}",
+                ensure_checkpoint=self._ensure_checkpoint,
+            ),
         )
 
     def evaluate(self, model: nn.Module, loader: Any) -> tuple[float, float, float]:

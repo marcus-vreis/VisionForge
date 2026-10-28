@@ -5,13 +5,15 @@ type: software
 authors:
   - family-names: "Reis"
     given-names: "Marcus Vinícius"
+    orcid: "https://orcid.org/0009-0002-1464-431X"
+    affiliation: "Universidade Federal de São Carlos (UFSCar)"
 repository-code: "https://github.com/marcus-vreis/VisionForge"
 url: "https://github.com/marcus-vreis/VisionForge"
 license: MIT
 # Concept DOI: always resolves to the latest version archived on Zenodo.
 doi: 10.5281/zenodo.23425765
-version: 0.18.1
-date-released: 2026-10-24
+version: 0.18.2
+date-released: 2026-10-27
 keywords:
   - computer-vision
   - deep-learning

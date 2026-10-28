@@ -55,14 +55,21 @@ jobs:
           VERSION="${INPUT:-${TAG#v}}"
           echo "spec=visionforge-studio${VERSION:+==$VERSION}" >> "$GITHUB_OUTPUT"
 
-      # The PyPI index can lag a fresh upload by a minute or two.
+      # The index can temporarily omit a fresh upload; do not reuse pip's HTTP cache.
       - name: pip install, as the guide says
+        env:
+          SPEC: ${{ steps.pick.outputs.spec }}
         run: |
           python -m venv .venv
           if [ -f .venv/Scripts/activate ]; then source .venv/Scripts/activate; else source .venv/bin/activate; fi
           python -m pip install --upgrade pip
           for attempt in 1 2 3 4 5; do
-            pip install "${{ steps.pick.outputs.spec }}" && break
+            if pip install --no-cache-dir "$SPEC"; then
+              break
+            else
+              status=$?
+            fi
+            if [ "$attempt" -eq 5 ]; then exit "$status"; fi
             sleep 60
           done
           visionforge --version

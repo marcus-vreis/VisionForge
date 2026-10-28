@@ -6127,6 +6127,17 @@ and the resulting experiment bundle. CI actions use supported Node runtimes.
 the checkout. Publishing is too late to discover that the built package cannot
 serve its own interface or execute the documented workflow.
 
+**Update (2026-10-25):** The published-package smoke test retries the same spec
+up to five times with pip's HTTP cache disabled, waiting 60 seconds only between
+attempts. Exhaustion exits with pip's status before any VisionForge command.
+The spec passes through a step environment variable to preserve it literally.
+After the 0.18.1 release ([issue #90](https://github.com/marcus-vreis/VisionForge/issues/90)),
+three runners still listed only 0.18.0 across five
+attempts, while three passed; rerunning failed jobs on new VMs passed. Index
+propagation or HTTP caching is a plausible explanation, not a confirmed cause.
+Each attempt requests the index without reusing pip's local HTTP cache and
+preserves installation failures rather than masking them with a missing CLI error.
+
 ## ADR-140 — The GUI exposes image audits, classification groups and run bundles
 
 **Date:** 2026-10-21
@@ -6358,3 +6369,66 @@ manifest stored outside the dataset root must be copied or linked inside it.
 This is a deliberate behaviour change for local users who kept manifests
 elsewhere.
 
+## ADR-151 — Typed contexts for native epoch loops and standalone CV
+
+**Date:** 2026-10
+**Status:** Accepted
+
+**Decision:** `save_epoch_checkpoint`, `run_epochs` and `fit_training` receive
+typed dataclasses for completed epoch state, loaders and lifecycle controls,
+checkpoint dependencies and pending writes, task callbacks, metric policy and
+fit adapters. `_run_fold` and `run_folds` receive typed fold data/lifecycle and
+task factory/metric contexts. Dependency contexts are frozen; completed epoch
+state and pending checkpoint writes remain mutable and local to one fit.
+
+**Reason:** Issue #87 identifies five long signatures left by the shared-loop
+extraction. Grouping dependencies by lifetime keeps checkpoint bookkeeping and
+callbacks coherent without a generic kwargs container or changing task recipes.
+Classification retains its AMP path; regression and segmentation retain their
+fit adapters. Optimizer and seed defaults, strict best-metric comparison, fold
+splits, reporting order, checkpoint formats and `run.json` remain unchanged.
+Resume still restores optimizer, scheduler and scaler before restoring RNGs
+after loader setup. CPU tests cover history, checkpoint state, stopping and
+failure boundaries; paired classification and segmentation harnesses check
+engineering parity without making performance or model-quality claims.
+
+## ADR-152 — Model-card rendering is split into pure sections
+
+**Date:** 2026-10
+**Status:** Accepted
+**Extends:** ADR-132
+
+**Decision:** Model-card rendering lives in `gui/api/model_card.py`, with sections
+for identity, configuration, preprocessing, augmentation, metrics, history, plots
+and external tests. `routes.py` retains its renderer and stopped-extent aliases
+for existing callers. Section functions only format the supplied run.json data
+using the current artifact language; they do not mutate it or perform I/O.
+
+**Reason:** `_render_run_markdown` combines independent document sections in one
+API hotspot (#86). Extracting each section makes its ordering and optional-field
+rules reviewable without changing route dependencies or runtime state. Complete
+PT/EN golden files checked against the pre-extraction renderer protect Markdown
+equality, including a sanitized run.json from the offline E2E fixture. Synthetic
+edge fixtures cover missing fields and stopped runs; none are research evidence.
+Queue ownership, dataset inspection and standalone evaluation remain separate
+increments.
+
+## ADR-153 — Dataset inspection separates parsing, split scans and layout reporting
+
+**Date:** 2026-10
+**Status:** Accepted
+**Extends:** ADR-132
+
+**Decision:** The dataset inspection functions in `datasets_routes.py` delegate
+YOLO crop parsing and per-image sampling, annotation class counting, segmentation
+pairing and mask sampling, regression manifest reading and target aggregation,
+and layout role matching and reporting to private helpers in the same domain.
+The router, request/response schemas and localization calls keep their contracts.
+
+**Reason:** Issue #86 identifies five S3776 hotspots in dataset inspection.
+Separating those responsibilities removes nested traversal and parsing from the
+collectors without moving unrelated API state or introducing import side effects.
+Characterization tests preserve the distinct YOLO field rules for crops and
+counts, the 20-decodable-mask, 500-image-check and 50,000-row limits, and the
+complete, partial and unrecognized layout responses. The OpenAPI contract stays
+unchanged.

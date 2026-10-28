@@ -1,0 +1,86 @@
+{
+  "id": "exp_1",
+  "experiment": "exp",
+  "timestamp": "2026-05-22T10:00:00",
+  "status": "completed",
+  "device_used": "cpu",
+  "config": {
+    "task": "binary",
+    "model": {
+      "name": "resnet18",
+      "num_classes": 1,
+      "pretrained": false
+    },
+    "training": {
+      "optimizer": "adam",
+      "learning_rate": 0.001,
+      "epochs": 5,
+      "batch_size": 4,
+      "seed": 0,
+      "mixed_precision": true,
+      "scheduler": {
+        "kind": "step"
+      }
+    },
+    "data": {
+      "preprocessing": {
+        "steps": [
+          {
+            "kind": "resize"
+          },
+          {
+            "kind": "blur",
+            "radius": 2
+          }
+        ]
+      },
+      "transforms": {
+        "flip": true
+      },
+      "image_size": 64
+    }
+  },
+  "metrics": {
+    "accuracy": 0.8,
+    "total_epochs": 2,
+    "missing": null,
+    "test_loss": 0.25
+  },
+  "metric_cis": {
+    "accuracy": {
+      "ci_low": 0.7,
+      "ci_high": 0.9,
+      "n_samples": 40,
+      "n_resamples": 1000
+    }
+  },
+  "history": [
+    {
+      "epoch": 1,
+      "loss": 0.5,
+      "phase": "warmup"
+    },
+    {
+      "epoch": 2,
+      "val_miou": 0.8,
+      "loss": null
+    }
+  ],
+  "artifacts": {
+    "model": "m.pth",
+    "graphics": [
+      "cm.png"
+    ]
+  },
+  "tests": [
+    {
+      "label": "ext",
+      "base_dir": "d",
+      "timestamp": "t",
+      "metrics": {
+        "accuracy": 0.5
+      }
+    }
+  ],
+  "stopped": true
+}
