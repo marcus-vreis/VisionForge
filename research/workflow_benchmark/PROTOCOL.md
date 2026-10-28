@@ -228,3 +228,41 @@ with mocked CUDA instrumentation are engineering checks only.
 - Pet: `python -m research.workflow_benchmark.prepare_pet <images.tar.gz>
   <annotations.tar.gz> <saida>` (teste distribuído; validação de 15% do
   trainval, seed 37; MD5 e SHA-256 dos arquivos no manifesto).
+
+## Deteccao (VOC2007)
+
+`prepare_voc.py` reads local uncompressed VOC2007 trainval/test archives in
+sequential member order. It preserves official train.txt/val.txt/test.txt
+membership (2501/2510/4952 in the official corpus), maps the fixed alphabetical
+20-class vocabulary to YOLO IDs 0..19, excludes difficult=1, and converts
+1-based inclusive boxes to zero-based half-open boxes before normalization.
+Image dimensions are checked against XML; empty labels are retained. The
+manifest records source URLs, archive MD5/SHA-256, conversion and split counts.
+
+`paired_detection.py DATA INITIAL.pth OUTPUT --seed 37 --epochs 2 --batch-size 2`
+compares native PyTorch with `DetectionTrainer.fit` using torchvision SSDLite320
+MobileNetV3 Large, no pretrained downloads, SGD (lr=0.01, momentum=0.937,
+weight_decay=5e-4), workers=0, no AMP/scheduler/augmentation. Create VOC initial
+weights with `python -m research.workflow_benchmark.native_detection
+--make-initial INITIAL.pth --seed 37`. Synthetic fixtures declare three classes
+in their manifest; absent class metadata defaults to the 20 VOC classes.
+
+Both paths construct/load/place the model before seeding. A scoped monkeypatch
+of `detection_trainer.build_torchvision_detector` returns the prebuilt model
+without consuming RNG after the Trainer seeds, and is restored even on failure.
+Training, validation loss in train mode (including BatchNorm updates), and
+validation mAP each create a separate loader iterator in that order. Train and
+validation batches must have at least two images for SSDLite BatchNorm. Strict
+validation mAP improvement selects the first best checkpoint; absent test uses
+the first available split, evaluated in sorted order.
+
+The shared `visionforge.core.detection_metrics.mean_average_precision_50` uses
+all-points AP, not official VOC2007 11-point AP; difficult objects are removed
+because this evaluator has no difficult flag. Both test paths use the same
+`evaluate_detector`. Predictions retain complete float32 values in JSON; their
+SHA-256 uses canonical JSON rounded to 1e-6. CPU additionally requires exact
+prediction arrays; CUDA uses declared absolute tolerance for boxes/scores and
+exact labels. Losses/weights use parity_atol; mAP uses 1e-12 absolute tolerance.
+The existing content fingerprint covers all files including YOLO labels. The
+four shared phases retain partial failure reports. This is engineering parity,
+not a VOC model-quality result or a comparative performance claim.

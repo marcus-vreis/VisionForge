@@ -95,3 +95,9 @@ collecting comparisons. Measure GPU runtime only on an otherwise available GPU.
 Source images, archives and weights stay in ignored local directories. Publish
 scripts, protocols and permitted evidence; obtain explicit authorization before
 committing generated research results or redistributing any dataset material.
+
+## Additional detection parity corpus
+
+| Task | Dataset and primary source | Recipe and limitation |
+|---|---|---|
+| Detection | [Pascal VOC2007](http://host.robots.ox.ac.uk/pascal/VOC/voc2007/) | Local VOCtrainval_06-Nov-2007.tar and VOCtest_06-Nov-2007.tar; official train/val/test lists, 20 alphabetical classes, difficult excluded. `prepare_voc.py` writes YOLO labels and archive hashes. SSDLite parity uses shared all-points mAP@50, not official VOC2007 11-point AP; real-corpus execution is separate from synthetic CPU checks. |
