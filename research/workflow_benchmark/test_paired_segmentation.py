@@ -54,6 +54,12 @@ def test_native_and_platform_match_on_trimap_derived_masks(
         learning_rate=learning_rate,
     )
 
+    assert report["device"] == "cpu"
+    assert report["parity_atol"] == 0.0
+    assert report["weights_max_abs_diff"] == 0.0
+    for side in ("native", "visionforge"):
+        assert report[side]["device"] == "cpu"
+        assert report[side]["conditions"]["device"] == "cpu"
     assert report["status"] == "passed", report.get("mismatches")
     assert report["mismatches"] == []
     assert report["failed_phase"] is None

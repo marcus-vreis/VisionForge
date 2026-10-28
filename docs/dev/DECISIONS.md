@@ -6432,3 +6432,29 @@ Characterization tests preserve the distinct YOLO field rules for crops and
 counts, the 20-decodable-mask, 500-image-check and 50,000-row limits, and the
 complete, partial and unrecognized layout responses. The OpenAPI contract stays
 unchanged.
+
+## ADR-154 — Explicit device selection in the workflow benchmark
+
+**Date:** 2026-10
+**Status:** Accepted
+**Extends:** ADR-148, ADR-149
+
+**Decision:** The restricted paired recipes accept CPU (default) or single-device
+CUDA through the existing DeviceConfig.kind. CPU keeps its process guard and
+exact comparisons by default. CUDA preserves visibility, threads and priority,
+requires an explicit finite nonnegative parity tolerance, enables deterministic
+algorithms and cuDNN, and sets CUBLAS_WORKSPACE_CONFIG before importing torch.
+Each CUDA phase synchronizes before both timer boundaries and records peak
+allocated VRAM bytes. Initial and comparison state dictionaries and best
+checkpoints stay on CPU. Reports include device conditions, weight maximum
+absolute difference, tolerance and declared concurrent workload.
+
+**Reason:** CPU-only timing cannot measure accelerator runtime or memory. CUDA
+launches are asynchronous, and equivalent kernels need not produce bitwise
+identical floating-point weights across the two execution paths. Explicit
+absolute tolerance (zero relative tolerance, integer buffers exact) makes that
+trade-off auditable without silently weakening existing CPU checks. Histories,
+selected epochs and predictions retain the existing checks; CUDA tolerance
+applies only to floating-point weights. Unavailable CUDA and missing tolerance
+fail before any output. Mocked CUDA tests cover instrumentation on CPU; real
+GPU measurements require separate authorization and no undeclared load.

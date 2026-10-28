@@ -58,6 +58,12 @@ def test_native_and_platform_match_with_shared_weights(
 
     report = run_pair(dataset, initial, output, seed=37, epochs=2, batch_size=4)
 
+    assert report["device"] == "cpu"
+    assert report["parity_atol"] == 0.0
+    assert report["weights_max_abs_diff"] == 0.0
+    for side in ("native", "visionforge"):
+        assert report[side]["device"] == "cpu"
+        assert report[side]["conditions"]["device"] == "cpu"
     assert report["status"] == "passed"
     assert report["purpose"] == "engineering_parity_only"
     assert report["mismatches"] == []

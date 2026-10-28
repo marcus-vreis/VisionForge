@@ -186,3 +186,33 @@ Oxford-IIIT Pet trimaps are converted by `trimap_labels.py`: 1 (pet) becomes 1,
 2 (background) becomes 0, 3 (border, not classified) becomes 255; any other
 value is refused. The conversion reads local files only and is not wired to a
 download. Synthetic fixtures prove the integration, not segmentation quality.
+
+## GPU engineering checks (ADR-154)
+
+All four recipe modules accept `--device {cpu,cuda}` (default `cpu`). CPU keeps
+the existing CUDA mask, single thread and low priority. CUDA keeps the caller's
+visibility, threads and priority; unavailable CUDA fails before output creation.
+Both paths use visible CUDA index 0 for model placement, timing and memory.
+Use the same visible single GPU, recipe, weights and data for both paths.
+
+CUDA requires an explicit `--parity-atol VALUE`, finite and nonnegative; CPU
+uses 0.0 when omitted. State dictionaries are loaded and compared on CPU with
+absolute tolerance and zero relative tolerance for floating-point weights;
+integer buffers remain exact. Pair reports record `parity_atol` and
+`weights_max_abs_diff` (null for incompatible or nonfinite states). Histories,
+selected epochs, predictions and metrics keep their existing comparison rules;
+the weight tolerance does not waive a divergence elsewhere.
+
+Before importing torch, CUDA sets `CUBLAS_WORKSPACE_CONFIG=:4096:8`. Both paths
+use deterministic algorithms, `cudnn.benchmark=False` and
+`cudnn.deterministic=True`. Each CUDA phase resets peak allocation statistics,
+synchronizes immediately before starting and stopping its wall-clock timer,
+and records `peak_vram_bytes` from `max_memory_allocated` (allocated tensors,
+including live allocations at phase entry; not reserved memory or other
+processes). Conditions include device kind, GPU name, CUDA/cuDNN versions and
+total GPU memory. Best checkpoints remain CPU state dictionaries.
+
+Declare other activity with `--concurrent-workload`; `undeclared` means unknown,
+not idle. Concurrent GPU/CPU/I/O load invalidates comparative performance claims.
+GPU measurements and real training require separate authorization; CPU tests
+with mocked CUDA instrumentation are engineering checks only.
