@@ -1,13 +1,15 @@
-"""Shared phase boundaries, failure reports and CPU guard for benchmark runs (ADR-148).
+"""Shared phase boundaries, failure reports and device guards for benchmark runs (ADR-148).
 
 Importing this module must not load torch: the paired CLI calls
-``prepare_cpu_process`` before any accelerator library is imported.
+``prepare_process`` before any accelerator library is imported.
 """
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
+import math
 import os
 import platform
 import sys
@@ -86,11 +88,22 @@ class PhaseRecorder:
         entry: dict[str, Any] = {"status": "running", "seconds": None}
         entry["includes"] = list(self._includes[name])
         self.report["phases"][name] = entry
+        cuda = self.report["conditions"].get("device") == "cuda"
+        if cuda:
+            import torch
+
+            torch.cuda.reset_peak_memory_stats(0)
+            torch.cuda.synchronize(0)
         start = time.perf_counter()
         try:
             yield
         except Exception as exc:
-            entry.update(status="failed", seconds=time.perf_counter() - start)
+            if cuda:
+                torch.cuda.synchronize(0)
+            elapsed = time.perf_counter() - start
+            if cuda:
+                entry["peak_vram_bytes"] = torch.cuda.max_memory_allocated(0)
+            entry.update(status="failed", seconds=elapsed)
             self.report.update(
                 status="failed",
                 failed_phase=name,
@@ -98,7 +111,12 @@ class PhaseRecorder:
             )
             write_report_once(self._path, self.report)
             raise PhaseFailure(self.report["workflow"], name, self.report) from exc
-        entry.update(status="completed", seconds=time.perf_counter() - start)
+        if cuda:
+            torch.cuda.synchronize(0)
+        elapsed = time.perf_counter() - start
+        if cuda:
+            entry["peak_vram_bytes"] = torch.cuda.max_memory_allocated(0)
+        entry.update(status="completed", seconds=elapsed)
 
     def complete(self, results: Mapping[str, Any]) -> dict[str, Any]:
         """Merge results after the last phase and write the completed report."""
@@ -160,11 +178,23 @@ def _package_version(name: str) -> str:
         return "unknown"
 
 
-def capture_conditions(concurrent_workload: str) -> dict[str, Any]:
+def capture_conditions(concurrent_workload: str, device: str = "cpu") -> dict[str, Any]:
     """Record cache state, versions, threads, CUDA mask, priority and declared load."""
     import torch
 
+    accelerator = {}
+    if device == "cuda":
+        accelerator = {
+            "gpu_name": torch.cuda.get_device_name(0),
+            "cuda_version": torch.version.cuda,
+            "cudnn_version": torch.backends.cudnn.version(),
+            "cudnn_benchmark": torch.backends.cudnn.benchmark,
+            "cudnn_deterministic": torch.backends.cudnn.deterministic,
+            "gpu_total_memory_bytes": torch.cuda.get_device_properties(0).total_memory,
+        }
     return {
+        "device": device,
+        **accelerator,
         "cache": dict(CACHE_CONDITIONS),
         "versions": {
             "python": platform.python_version(),
@@ -222,3 +252,75 @@ def prepare_cpu_process() -> None:
         kernel32.GetCurrentProcess(), _BELOW_NORMAL_PRIORITY_CLASS
     ):
         raise OSError("SetPriorityClass failed to lower process priority")
+
+
+def validate_device(device: str, parity_atol: float | None = None) -> float:
+    """Validate device and absolute weight tolerance before creating outputs."""
+    if device not in ("cpu", "cuda"):
+        raise ValueError("device must be cpu or cuda")
+    if device == "cuda" and parity_atol is None:
+        raise ValueError("--parity-atol is required for cuda")
+    atol = 0.0 if parity_atol is None else parity_atol
+    if not math.isfinite(atol) or atol < 0:
+        raise ValueError("--parity-atol must be finite and nonnegative")
+    if device == "cuda":
+        os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
+        import torch
+
+        if not torch.cuda.is_available():
+            raise RuntimeError("CUDA is unavailable; select --device cpu")
+        torch.use_deterministic_algorithms(True)
+        torch.backends.cudnn.benchmark = False
+        torch.backends.cudnn.deterministic = True
+    return atol
+
+
+def prepare_process(device: str) -> None:
+    """Prepare CPU as before, or validate CUDA without changing process resources."""
+    if device == "cpu":
+        prepare_cpu_process()
+    elif device == "cuda":
+        validate_device(device, 0.0)
+    else:
+        raise ValueError("device must be cpu or cuda")
+
+
+def device_arguments(parser: argparse.ArgumentParser) -> None:
+    """Add the shared device and explicit CUDA weight-tolerance controls."""
+    parser.add_argument("--device", choices=("cpu", "cuda"), default="cpu")
+    parser.add_argument("--parity-atol", type=float, default=None)
+
+
+def prepare_cli(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    """Validate CLI controls and prepare the process before importing torch."""
+    try:
+        args.parity_atol = validate_device(args.device, args.parity_atol)
+        prepare_process(args.device)
+    except (ValueError, RuntimeError) as exc:
+        parser.error(str(exc))
+
+
+def compare_weights(
+    native: Mapping[str, Any], platform: Mapping[str, Any], atol: float
+) -> tuple[bool, float | None]:
+    """Compare CPU tensors with absolute float tolerance and exact integer buffers."""
+    import torch
+
+    if native.keys() != platform.keys():
+        return False, None
+    equal = True
+    maximum = 0.0
+    for name, left in native.items():
+        left, right = left.detach().cpu(), platform[name].detach().cpu()
+        if left.shape != right.shape or left.dtype != right.dtype:
+            return False, None
+        if not torch.isfinite(left).all() or not torch.isfinite(right).all():
+            return False, None
+        diff = (left.to(torch.float64) - right.to(torch.float64)).abs()
+        maximum = max(maximum, diff.max().item() if diff.numel() else 0.0)
+        equal = equal and (
+            torch.allclose(left, right, rtol=0.0, atol=atol)
+            if left.is_floating_point() and atol > 0
+            else torch.equal(left, right)
+        )
+    return bool(equal), maximum

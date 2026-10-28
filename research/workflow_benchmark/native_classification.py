@@ -1,6 +1,12 @@
-"""Independent CPU recipe for engineering checks of paired classification runs."""
+"""Independent device-selectable recipe for engineering checks of paired classification runs."""
 
 from __future__ import annotations
+
+if __name__ == "__main__":
+    from .paired_classification import main
+
+    main(native=True)
+    raise SystemExit
 
 import math
 import random
@@ -39,6 +45,7 @@ def _epoch(
     criterion: nn.Module,
     optimizer: torch.optim.Optimizer | None = None,
     *,
+    device: str = "cpu",
     targets: list[int] | None = None,
     predictions: list[int] | None = None,
 ) -> tuple[float, float]:
@@ -48,7 +55,10 @@ def _epoch(
     count = 0
     with torch.set_grad_enabled(optimizer is not None):
         for images, labels in loader:
-            images, labels = images.to("cpu"), labels.to("cpu")
+            images, labels = (
+                images.to("cuda:0" if device == "cuda" else device),
+                labels.to("cuda:0" if device == "cuda" else device),
+            )
             if optimizer is not None:
                 optimizer.zero_grad(set_to_none=True)
             logits = model(images)
@@ -129,8 +139,11 @@ def run_native(
     image_size: int = 32,
     learning_rate: float = 0.01,
     concurrent_workload: str = "undeclared",
+    device: str = "cpu",
+    parity_atol: float | None = None,
 ) -> dict[str, Any]:
-    """Run the restricted CPU ResNet18 recipe under the shared phase contract."""
+    """Run the restricted ResNet18 recipe under the shared phase contract."""
+    parity_atol = phase_contract.validate_device(device, parity_atol)
     dataset = Path(dataset).resolve()
     initial_weights = Path(initial_weights).resolve()
     output = Path(output).resolve()
@@ -148,7 +161,7 @@ def run_native(
         "native_pytorch",
         output / "native_result.json",
         NATIVE_INCLUDES,
-        phase_contract.capture_conditions(concurrent_workload),
+        phase_contract.capture_conditions(concurrent_workload, device),
     )
     checkpoint = output / "best_model.pth"
 
@@ -177,6 +190,7 @@ def run_native(
         model.load_state_dict(
             torch.load(initial_weights, map_location="cpu", weights_only=True)
         )
+        model.to("cuda:0" if device == "cuda" else device)
         initial_hash = phase_contract.sha256_file(initial_weights)
         optimizer = torch.optim.SGD(
             model.parameters(), lr=learning_rate, weight_decay=0
@@ -189,14 +203,18 @@ def run_native(
     with recorder.phase("training"):
         random.seed(seed)
         np.random.seed(seed)
-        # Seed only the CPU generator; accelerator state is outside this recipe.
+        # Keep the CPU seed path unchanged; seed CUDA only when selected.
         torch.random.default_generator.manual_seed(seed)
         torch.use_deterministic_algorithms(True)
+        torch.backends.cudnn.benchmark = False
+        torch.backends.cudnn.deterministic = True
+        if device == "cuda":
+            torch.cuda.manual_seed_all(seed)
         for epoch in range(1, epochs + 1):
             train_loss, train_acc = _epoch(
-                model, loaders["train"], criterion, optimizer
+                model, loaders["train"], criterion, optimizer, device=device
             )
-            val_loss, val_acc = _epoch(model, loaders["val"], criterion)
+            val_loss, val_acc = _epoch(model, loaders["val"], criterion, device=device)
             history.append(
                 {
                     "epoch": epoch,
@@ -225,13 +243,15 @@ def run_native(
             model,
             loaders["test"],
             criterion,
+            device=device,
             targets=test_targets,
             predictions=test_predictions,
         )
 
     with recorder.phase("evidence"):
         results: dict[str, Any] = {
-            "device": "cpu",
+            "device": device,
+            "parity_atol": parity_atol,
             "seed": seed,
             "initial_weights_sha256": initial_hash,
             "class_to_idx": class_to_idx,

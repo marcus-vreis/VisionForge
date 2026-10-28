@@ -1,10 +1,16 @@
-"""Independent CPU recipe for engineering checks of paired segmentation runs (ADR-149).
+"""Independent device-selectable recipe for engineering checks of paired segmentation runs (ADR-149).
 
 Mirrors the restricted recipe of ``SegmentationDataModule``/``SegmentationTrainer``
 with plain PIL, NumPy and torch, without importing VisionForge.
 """
 
 from __future__ import annotations
+
+if __name__ == "__main__":
+    from .paired_segmentation import main
+
+    main(native=True)
+    raise SystemExit
 
 import math
 import random
@@ -231,6 +237,8 @@ def _pass(
     loader: DataLoader,  # type: ignore[type-arg]
     criterion: nn.Module,
     optimizer: torch.optim.Optimizer | None = None,
+    *,
+    device: str = "cpu",
 ) -> tuple[float, np.ndarray]:
     """Return the mean batch loss and the split confusion matrix."""
     model.train(optimizer is not None)
@@ -238,6 +246,8 @@ def _pass(
     confusion = np.zeros((NUM_CLASSES, NUM_CLASSES), dtype=np.int64)
     with torch.set_grad_enabled(optimizer is not None):
         for images, masks in loader:
+            images = images.to("cuda:0" if device == "cuda" else device)
+            masks = masks.to("cuda:0" if device == "cuda" else device)
             if optimizer is not None:
                 optimizer.zero_grad(set_to_none=True)
             logits = model(images)
@@ -246,9 +256,9 @@ def _pass(
                 loss.backward()
                 optimizer.step()
             total += loss.item()
-            predicted = logits.detach().argmax(dim=1).numpy()
+            predicted = logits.detach().argmax(dim=1).cpu().numpy()
             confusion += confusion_matrix(
-                predicted, masks.numpy(), NUM_CLASSES, IGNORE_INDEX
+                predicted, masks.cpu().numpy(), NUM_CLASSES, IGNORE_INDEX
             )
     return total / len(loader), confusion
 
@@ -256,6 +266,8 @@ def _pass(
 def _predict(
     model: nn.Module,
     loader: DataLoader,  # type: ignore[type-arg]
+    *,
+    device: str = "cpu",
 ) -> tuple[np.ndarray, list[list[list[int]]]]:
     """Return uint8 [N,S,S] predictions and one confusion matrix per image."""
     model.eval()
@@ -263,8 +275,10 @@ def _predict(
     per_image: list[list[list[int]]] = []
     with torch.inference_mode():
         for images, masks in loader:
-            predicted = model(images).argmax(dim=1).numpy()
-            for guess, truth in zip(predicted, masks.numpy(), strict=True):
+            images = images.to("cuda:0" if device == "cuda" else device)
+            masks = masks.to("cuda:0" if device == "cuda" else device)
+            predicted = model(images).argmax(dim=1).cpu().numpy()
+            for guess, truth in zip(predicted, masks.cpu().numpy(), strict=True):
                 per_image.append(
                     confusion_matrix(guess, truth, NUM_CLASSES, IGNORE_INDEX).tolist()
                 )
@@ -289,8 +303,11 @@ def run_native(
     image_size: int = 32,
     learning_rate: float = 0.01,
     concurrent_workload: str = "undeclared",
+    device: str = "cpu",
+    parity_atol: float | None = None,
 ) -> dict[str, Any]:
-    """Run the restricted CPU segmentation recipe under the shared phase contract."""
+    """Run the restricted segmentation recipe under the shared phase contract."""
+    parity_atol = phase_contract.validate_device(device, parity_atol)
     dataset = Path(dataset).resolve()
     initial_weights = Path(initial_weights).resolve()
     output = Path(output).resolve()
@@ -308,7 +325,7 @@ def run_native(
         "native_pytorch",
         output / "native_result.json",
         NATIVE_INCLUDES,
-        phase_contract.capture_conditions(concurrent_workload),
+        phase_contract.capture_conditions(concurrent_workload, device),
     )
     best = BestCheckpoint(output / "best_model.pth")
 
@@ -327,6 +344,7 @@ def run_native(
         model.load_state_dict(
             torch.load(initial_weights, map_location="cpu", weights_only=True)
         )
+        model.to("cuda:0" if device == "cuda" else device)
         initial_hash = phase_contract.sha256_file(initial_weights)
         optimizer = torch.optim.SGD(
             model.parameters(), lr=learning_rate, weight_decay=0
@@ -337,11 +355,18 @@ def run_native(
     with recorder.phase("training"):
         random.seed(seed)
         np.random.seed(seed)
-        # CPU generator only; accelerator state is outside this recipe.
+        # Keep the CPU seed path unchanged; seed CUDA only when selected.
         torch.random.default_generator.manual_seed(seed)
+        torch.use_deterministic_algorithms(True)
+        torch.backends.cudnn.benchmark = False
+        torch.backends.cudnn.deterministic = True
+        if device == "cuda":
+            torch.cuda.manual_seed_all(seed)
         for epoch in range(1, epochs + 1):
-            train_loss, _ = _pass(model, loaders["train"], criterion, optimizer)
-            val_loss, confusion = _pass(model, loaders["val"], criterion)
+            train_loss, _ = _pass(
+                model, loaders["train"], criterion, optimizer, device=device
+            )
+            val_loss, confusion = _pass(model, loaders["val"], criterion, device=device)
             scores = segmentation_metrics(confusion)
             history.append(
                 {
@@ -359,14 +384,15 @@ def run_native(
         model.load_state_dict(
             torch.load(best.path, map_location="cpu", weights_only=True)
         )
-        predictions, per_image = _predict(model, loaders["test"])
+        predictions, per_image = _predict(model, loaders["test"], device=device)
         test_metrics = segmentation_metrics(np.array(per_image).sum(axis=0))
 
     with recorder.phase("evidence"):
         predictions_path = output / "test_predictions.npy"
         save_predictions(predictions_path, predictions)
         results: dict[str, Any] = {
-            "device": "cpu",
+            "device": device,
+            "parity_atol": parity_atol,
             "seed": seed,
             "architecture": ARCHITECTURE,
             "num_classes": NUM_CLASSES,

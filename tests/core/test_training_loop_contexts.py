@@ -289,7 +289,8 @@ def test_resumed_contexts_preserve_full_checkpoint_trajectory(
     assert interrupted.scaler["_growth_tracker"] == 2
     assert interrupted.rng_state is not None
     assert interrupted.rng_state["loaders"]
-    assert interrupted.rng_state["cuda"] == []
+    expected_cuda = torch.cuda.device_count() if torch.cuda.is_initialized() else 0
+    assert len(interrupted.rng_state["cuda"]) == expected_cuda
     resumed = train(tmp_path / "resumed", resumed=interrupted)
     assert resumed.epoch == continuous.epoch == 4
     _assert_same_state(asdict(resumed), asdict(continuous))

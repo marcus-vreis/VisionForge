@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -40,8 +41,10 @@ def run_visionforge(
     image_size: int = 32,
     learning_rate: float = 0.01,
     concurrent_workload: str = "undeclared",
+    device: str = "cpu",
+    parity_atol: float | None = None,
 ) -> dict[str, Any]:
-    """Execute the baseline recipe through the public CPU Trainer and DataModule."""
+    """Execute the baseline recipe through the public Trainer and DataModule."""
     import torch
     from torch import nn
     from torchvision import models
@@ -52,6 +55,7 @@ def run_visionforge(
 
     from .native_classification import preflight
 
+    parity_atol = phase_contract.validate_device(device, parity_atol)
     dataset = Path(dataset).resolve()
     initial_weights = Path(initial_weights).resolve()
     output = Path(output).resolve()
@@ -69,7 +73,7 @@ def run_visionforge(
         "visionforge_trainer",
         output / "visionforge_result.json",
         VISIONFORGE_INCLUDES,
-        phase_contract.capture_conditions(concurrent_workload),
+        phase_contract.capture_conditions(concurrent_workload, device),
     )
     data = None
     try:
@@ -84,6 +88,7 @@ def run_visionforge(
                     batch_size,
                     image_size,
                     learning_rate,
+                    device,
                 )
             )
             data = DataModule(cfg)
@@ -94,11 +99,17 @@ def run_visionforge(
             model.load_state_dict(
                 torch.load(initial_weights, map_location="cpu", weights_only=True)
             )
+            model.to("cuda:0" if device == "cuda" else device)
             initial_hash = phase_contract.sha256_file(initial_weights)
             trainer = Trainer(cfg)
 
         with recorder.phase("training"):
+            torch.use_deterministic_algorithms(True)
+            torch.backends.cudnn.benchmark = False
+            torch.backends.cudnn.deterministic = True
             result = trainer.fit(model, data)
+            if next(model.parameters()).device.type != device:
+                raise RuntimeError(f"Trainer did not use requested device {device}")
 
         targets: list[int] = []
         predictions: list[int] = []
@@ -110,11 +121,17 @@ def run_visionforge(
             with torch.inference_mode():
                 for images, labels in data.test_loader():
                     targets.extend(labels.tolist())
-                    predictions.extend(model(images).argmax(dim=1).tolist())
+                    predictions.extend(
+                        model(images.to("cuda:0" if device == "cuda" else device))
+                        .argmax(dim=1)
+                        .tolist()
+                    )
 
         with recorder.phase("evidence"):
             results = {
-                "device": "cpu",
+                "device": next(model.parameters()).device.type,
+                "trainer_device": result.device_used,
+                "parity_atol": parity_atol,
                 "seed": seed,
                 "initial_weights_sha256": initial_hash,
                 "class_to_idx": {name: index for index, name in enumerate(classes)},
@@ -154,10 +171,11 @@ def _config(
     batch_size: int,
     image_size: int,
     learning_rate: float,
+    device: str = "cpu",
 ) -> dict[str, Any]:
     """Build the restricted recipe as an ExperimentConfig payload."""
     return {
-        "name": "paired_cpu",
+        "name": f"paired_{device}",
         "task": "multiclass",
         "model": {"name": "resnet18", "num_classes": num_classes, "pretrained": False},
         "data": {
@@ -183,7 +201,7 @@ def _config(
             "deterministic": True,
             "scheduler": {"kind": "none"},
         },
-        "device": {"kind": "cpu"},
+        "device": {"kind": device},
         "output": {
             f"{name}_dir": str(output / name)
             for name in ("models", "graphics", "logs", "reports")
@@ -200,6 +218,8 @@ def run_pair(
     epochs: int = 2,
     batch_size: int = 4,
     concurrent_workload: str = "undeclared",
+    device: str = "cpu",
+    parity_atol: float | None = None,
 ) -> dict[str, Any]:
     """Preserve both runs and require matching histories, predictions and weights."""
     import torch
@@ -210,6 +230,7 @@ def run_pair(
 
     from .native_classification import preflight, run_native
 
+    parity_atol = phase_contract.validate_device(device, parity_atol)
     dataset, initial_weights, output = (
         dataset.resolve(),
         initial_weights.resolve(),
@@ -243,6 +264,8 @@ def run_pair(
         "epochs": epochs,
         "batch_size": batch_size,
         "concurrent_workload": concurrent_workload,
+        "device": device,
+        "parity_atol": parity_atol,
         "dataset_fingerprint": fingerprint,
         "environment": capture_environment(),
     }
@@ -251,6 +274,8 @@ def run_pair(
         "epochs": epochs,
         "batch_size": batch_size,
         "concurrent_workload": concurrent_workload,
+        "device": device,
+        "parity_atol": parity_atol,
     }
     runners = {
         "native_pytorch": ("native", run_native),
@@ -285,10 +310,10 @@ def run_pair(
         platform_state = torch.load(
             platform["best_model"], map_location="cpu", weights_only=True
         )
-        equal_weights = native_state.keys() == platform_state.keys() and all(
-            torch.equal(value, platform_state[name])
-            for name, value in native_state.items()
+        equal_weights, maximum = phase_contract.compare_weights(
+            native_state, platform_state, parity_atol
         )
+        report["weights_max_abs_diff"] = maximum
         if not equal_weights:
             mismatches.append("best_weights")
         if fingerprint != fingerprint_dataset(dataset, method="content").to_dict():
@@ -308,8 +333,8 @@ def run_pair(
     return report
 
 
-def main() -> None:
-    """Run an engineering pair using supplied data and initial weights, on CPU."""
+def main(*, native: bool = False) -> None:
+    """Run the native recipe or pair on the explicitly selected device."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("dataset", type=Path)
     parser.add_argument("initial_weights", type=Path)
@@ -322,8 +347,15 @@ def main() -> None:
         default="undeclared",
         help="What else ran on this machine; recorded in every report.",
     )
+    phase_contract.device_arguments(parser)
     args = parser.parse_args()
-    result = run_pair(
+    phase_contract.prepare_cli(args, parser)
+    runner: Callable[..., dict[str, Any]] = run_pair
+    if native:
+        from .native_classification import run_native
+
+        runner = run_native
+    result = runner(
         args.dataset,
         args.initial_weights,
         args.output,
@@ -331,12 +363,17 @@ def main() -> None:
         epochs=args.epochs,
         batch_size=args.batch_size,
         concurrent_workload=args.concurrent_workload,
+        device=args.device,
+        parity_atol=args.parity_atol,
     )
     print(
         json.dumps(
             {
                 "status": result["status"],
-                "report": str(args.output / "paired_result.json"),
+                "report": str(
+                    args.output
+                    / ("native_result.json" if native else "paired_result.json")
+                ),
             }
         )
     )
@@ -344,5 +381,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     # Must precede the first torch import in CLI use.
-    phase_contract.prepare_cpu_process()
     main()
