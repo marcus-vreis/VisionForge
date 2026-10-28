@@ -216,3 +216,15 @@ Declare other activity with `--concurrent-workload`; `undeclared` means unknown,
 not idle. Concurrent GPU/CPU/I/O load invalidates comparative performance claims.
 GPU measurements and real training require separate authorization; CPU tests
 with mocked CUDA instrumentation are engineering checks only.
+
+## Receita v2 e Pet em CUDA (ADR-155)
+
+- Classificação: `--weight-decay 5e-4 --scheduler cosine` é a receita v2; sem as
+  flags vale a receita anterior.
+- Segmentação em CUDA: o determinismo do PyTorch fica em `warn_only` por causa
+  de `nll_loss2d`; as losses de época são comparadas com `--parity-atol` e tudo o
+  mais segue o ADR-149. Isso significa que uma execução CUDA não é
+  bit-reprodutível, apenas equivalente dentro da tolerância declarada.
+- Pet: `python -m research.workflow_benchmark.prepare_pet <images.tar.gz>
+  <annotations.tar.gz> <saida>` (teste distribuído; validação de 15% do
+  trainval, seed 37; MD5 e SHA-256 dos arquivos no manifesto).

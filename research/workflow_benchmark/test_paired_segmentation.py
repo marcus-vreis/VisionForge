@@ -148,6 +148,14 @@ def test_comparison_tolerates_metric_rounding_only() -> None:
     loss = _result()
     loss["history"][0]["train_loss"] = 0.7 + 1e-15
     assert paired.compare_results(native, loss) == ["history"]
+    assert paired.compare_results(native, loss, loss_atol=1e-12) == []
+    cuda_noise = _result()
+    cuda_noise["history"][0]["val_loss"] += 1e-9
+    assert paired.compare_results(native, cuda_noise) == ["history"]
+    assert paired.compare_results(native, cuda_noise, loss_atol=1e-3) == []
+    metric_noise = _result()
+    metric_noise["history"][0]["val_miou"] += 1e-9
+    assert paired.compare_results(native, metric_noise, loss_atol=1e-3) == ["history"]
 
     test_metric = _result()
     test_metric["test_metrics"]["pixel_acc"] = 0.5 + 1e-9

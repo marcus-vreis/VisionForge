@@ -357,7 +357,7 @@ def run_native(
         np.random.seed(seed)
         # Keep the CPU seed path unchanged; seed CUDA only when selected.
         torch.random.default_generator.manual_seed(seed)
-        torch.use_deterministic_algorithms(True)
+        torch.use_deterministic_algorithms(True, warn_only=device == "cuda")
         torch.backends.cudnn.benchmark = False
         torch.backends.cudnn.deterministic = True
         if device == "cuda":

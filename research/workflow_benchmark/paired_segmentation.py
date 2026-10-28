@@ -18,6 +18,7 @@ RECIPE_NUM_CLASSES = 2
 # NumPy and torch float64 reductions over identical integer confusion matrices
 # differ by rounding only; one changed pixel moves a metric by >= 1/labelled pixels.
 METRIC_ABS_TOLERANCE = 1e-12
+_LOSS_KEYS = frozenset({"train_loss", "val_loss"})
 TOLERANCES = {
     "losses": "exact",
     "best_epoch": "exact",
@@ -190,7 +191,7 @@ def run_visionforge(
             trainer = SegmentationTrainer(cfg)
 
         with recorder.phase("training"):
-            torch.use_deterministic_algorithms(True)
+            torch.use_deterministic_algorithms(True, warn_only=device == "cuda")
             torch.backends.cudnn.benchmark = False
             torch.backends.cudnn.deterministic = True
             result = trainer.fit(model, data)
@@ -270,7 +271,9 @@ def _close(a: float, b: float) -> bool:
 
 
 def _history_matches(
-    native: list[Mapping[str, Any]], platform: list[Mapping[str, Any]]
+    native: list[Mapping[str, Any]],
+    platform: list[Mapping[str, Any]],
+    loss_atol: float = 0.0,
 ) -> bool:
     if len(native) != len(platform):
         return False
@@ -278,24 +281,29 @@ def _history_matches(
         if left.keys() != right.keys():
             return False
         for key, value in left.items():
-            same = (
-                _close(value, right[key])
-                if key in _METRIC_KEYS
-                else value == right[key]
-            )
+            if key in _METRIC_KEYS:
+                same = _close(value, right[key])
+            elif key in _LOSS_KEYS:
+                same = abs(value - right[key]) <= loss_atol
+            else:
+                same = value == right[key]
             if not same:
                 return False
     return True
 
 
 def compare_results(
-    native: Mapping[str, Any], platform: Mapping[str, Any]
+    native: Mapping[str, Any], platform: Mapping[str, Any], loss_atol: float = 0.0
 ) -> list[str]:
-    """Return the names of compared fields that differ beyond the ADR-149 tolerances."""
+    """Return the names of compared fields that differ beyond the ADR-149 tolerances.
+
+    ``loss_atol`` relaxes only the epoch losses (CUDA ``nll_loss2d`` reduces
+    non-deterministically); metrics, predictions and confusions stay exact.
+    """
     mismatches: list[str] = []
     if native["initial_weights_sha256"] != platform["initial_weights_sha256"]:
         mismatches.append("initial_weights_sha256")
-    if not _history_matches(native["history"], platform["history"]):
+    if not _history_matches(native["history"], platform["history"], loss_atol):
         mismatches.append("history")
     if native["best_epoch"] != platform["best_epoch"]:
         mismatches.append("best_epoch")
@@ -409,7 +417,7 @@ def run_pair(
                 raise
         report["failed_phase"] = "comparison"
         native, platform = report["native"], report["visionforge"]
-        mismatches = compare_results(native, platform)
+        mismatches = compare_results(native, platform, loss_atol=parity_atol)
         import torch
 
         equal_weights, maximum = phase_contract.compare_weights(

@@ -6458,3 +6458,27 @@ selected epochs and predictions retain the existing checks; CUDA tolerance
 applies only to floating-point weights. Unavailable CUDA and missing tolerance
 fail before any output. Mocked CUDA tests cover instrumentation on CPU; real
 GPU measurements require separate authorization and no undeclared load.
+
+## ADR-155 — Receita v2 de classificação e determinismo parcial da segmentação em CUDA
+
+**Date:** 2026-10-28
+**Status:** Accepted
+**Extends:** ADR-149, ADR-154
+
+**Decision:** Os pares de classificação aceitam `--weight-decay` e
+`--scheduler {none,cosine}` (padrão igual à receita anterior), espelhados no
+lado nativo e na configuração do Trainer. A segmentação em CUDA ativa
+`use_deterministic_algorithms(True, warn_only=True)` nos dois lados, porque
+`nll_loss2d` não tem implementação determinística em CUDA, e compara as losses
+de época com a tolerância `--parity-atol`; mIoU, Dice, acurácia de pixel, época
+escolhida, confusões por imagem e predições continuam com as tolerâncias do
+ADR-149. A CPU mantém a comparação exata. `prepare_pet.py` monta os splits do
+Oxford-IIIT Pet preservando o `test.txt` distribuído e sorteando a validação só
+do `trainval.txt`.
+
+**Reason:** A calibração em GPU mostrou losses divergindo em ~1e-9 entre os
+caminhos, com pesos, métricas e predições idênticos. Exigir igualdade exata da
+loss reprovaria um par equivalente; relaxar só a loss mantém as demais
+verificações estritas e auditáveis. Uma execução em CUDA não é bit-reprodutível
+neste caminho; a paridade fica garantida pela tolerância declarada e pelo
+relatório.
