@@ -74,7 +74,7 @@ variant finished.
 
 ## Prior work
 
-The verified literature, and what this study adds to it, is in `LITERATURE.md`.
+The literature notes behind this study are kept in the maintainers' private research repository; the verified references are in `paper/paper.bib`.
 Seed variance swallowing small effects is established (Picard 2021; Bouthillier et
 al. 2021; Summers & Dinneen 2021); what is not measured is the ratio of seed SD to
 ablation effect and the reversal rate in small-data fine-tuning of ImageNet-pretrained
