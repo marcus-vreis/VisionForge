@@ -71,3 +71,15 @@ export function countChanged(
     (p) => JSON.stringify(at(current, p)) !== JSON.stringify(at(defaults, p)),
   ).length;
 }
+
+/** Server validation errors (`field` is the pydantic loc) whose path starts
+ *  with one of `prefixes`, e.g. ["data", "model.num_classes"]. */
+export function errorsUnder(
+  errors: ReadonlyArray<{ field: string[] }>,
+  prefixes: readonly string[],
+): number {
+  return errors.filter((e) => {
+    const path = e.field.filter((p) => p !== "body").join(".");
+    return prefixes.some((p) => path === p || path.startsWith(`${p}.`));
+  }).length;
+}

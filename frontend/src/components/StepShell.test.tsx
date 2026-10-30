@@ -94,3 +94,17 @@ describe("BottomBar train lock", () => {
     expect(trainButton(bar(null))).not.toContain("disabled");
   });
 });
+
+describe("errorsUnder", () => {
+  it("matches whole path segments, ignoring the body prefix", async () => {
+    const { errorsUnder } = await import("../lib/steps");
+    const errors = [
+      { field: ["body", "data", "base_dir"] },
+      { field: ["training", "epochs"] },
+      { field: ["training_extra"] },
+    ];
+    expect(errorsUnder(errors, ["data"])).toBe(1);
+    expect(errorsUnder(errors, ["training"])).toBe(1);
+    expect(errorsUnder(errors, ["model"])).toBe(0);
+  });
+});
