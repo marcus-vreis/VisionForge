@@ -297,7 +297,9 @@ class TestRealRegressionSweep:
         return config.model_dump(mode="json")
 
     def _run_dirs(self, tmp_path: Path) -> list[Path]:
-        return sorted((tmp_path / "models").glob("cut_reg/*"))
+        # A sweep trial is named after the value it varies (core/trial_name.py),
+        # so its folder is cut_reg_lr0.001, not cut_reg.
+        return sorted((tmp_path / "models").glob("cut_reg*/*"))
 
     def test_the_cut_trial_cannot_be_continued_alone(
         self, tmp_path: Path, cut_after_first_epoch: None

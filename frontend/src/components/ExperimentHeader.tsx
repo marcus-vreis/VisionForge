@@ -73,21 +73,33 @@ const yamlBtnSecondaryStyle: React.CSSProperties = {
   color: "var(--vf-text-dim)",
 };
 
-/** Canonical experiment header (ADR-059): every task panel opens with the same
- *  card — experiment name + YAML export/import side by side, and the strategy
- *  selector below, in the same box — mirroring the classification layout. */
-export function ExperimentHeader({
+interface ExperimentNameCardProps {
+  name: string;
+  onNameChange: (name: string) => void;
+  placeholder: string;
+  /** Hint under the field; the generic one when absent. */
+  hint?: string;
+  /** Shown beside the YAML buttons, e.g. "usar sugestão". */
+  extraAction?: React.ReactNode;
+  onExportYaml: () => void;
+  onImportConfig: ExperimentHeaderProps["onImportConfig"];
+  /** Title of the card; the experiment kicker when absent. */
+  title?: string;
+}
+
+/** Experiment name + YAML export/import. Since ADR-155 it sits on the Revisão
+ *  step, where the name is suggested from the configuration. */
+export function ExperimentNameCard({
   name,
   onNameChange,
   placeholder,
-  strategy,
-  onStrategyChange,
-  strategies,
+  hint,
+  extraAction,
   onExportYaml,
   onImportConfig,
-}: ExperimentHeaderProps) {
+  title,
+}: ExperimentNameCardProps) {
   const t = useT();
-  const strategyOptions = strategies ?? defaultStrategies(t);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importError, setImportError] = useState<string | null>(null);
   // The file name, not the sentence: the sentence follows the language.
@@ -122,7 +134,7 @@ export function ExperimentHeader({
           e.target.value = "";
         }}
       />
-      <div style={sectionLabel}>{t.experimentHeader.title}</div>
+      <div style={sectionLabel}>{title ?? t.experimentHeader.title}</div>
       <div
         style={{
           display: "flex",
@@ -131,17 +143,18 @@ export function ExperimentHeader({
           flexWrap: "wrap",
         }}
       >
-        <div style={{ flex: "1 1 280px" }}>
+        <div style={{ flex: "1 1 280px", minWidth: 0 }}>
           <TextField
             label={t.experimentHeader.nameLabel}
             value={name}
             onChange={onNameChange}
             placeholder={placeholder}
-            hint={t.experimentHeader.nameHint}
+            hint={hint ?? t.experimentHeader.nameHint}
             mono
           />
         </div>
-        <div style={{ display: "flex", gap: 8, paddingBottom: 2 }}>
+        <div style={{ display: "flex", gap: 8, paddingBottom: 2, flexWrap: "wrap" }}>
+          {extraAction}
           <button
             type="button"
             onClick={onExportYaml}
@@ -190,25 +203,51 @@ export function ExperimentHeader({
           {t.experimentHeader.imported(importedFile)}
         </div>
       )}
+    </div>
+  );
+}
 
-      <div
-        style={{
-          marginTop: 18,
-          paddingTop: 18,
-          borderTop: "1px solid var(--vf-panel-stroke)",
-        }}
-      >
-        <div style={sectionLabel}>{t.experimentHeader.strategyTitle}</div>
-        <div>
-          <Segmented
-            label={t.experimentHeader.mode}
-            value={strategy}
-            onChange={(v) => onStrategyChange(v as PanelStrategy)}
-            options={strategyOptions}
-            hint={t.experimentHeader.hints[strategy]}
-          />
-        </div>
-      </div>
+/** The strategy selector of the standalone panels: the Estratégia step's
+ *  first card (ADR-155). The strategy's own card renders below it. */
+export function StrategyCard({
+  strategy,
+  onStrategyChange,
+  strategies,
+}: Pick<ExperimentHeaderProps, "strategy" | "onStrategyChange" | "strategies">) {
+  const t = useT();
+  const strategyOptions = strategies ?? defaultStrategies(t);
+  return (
+    <div style={card}>
+      <div style={sectionLabel}>{t.experimentHeader.strategyTitle}</div>
+      <Segmented
+        label={t.experimentHeader.mode}
+        value={strategy}
+        onChange={(v) => onStrategyChange(v as PanelStrategy)}
+        options={strategyOptions}
+        hint={t.experimentHeader.hints[strategy]}
+      />
+    </div>
+  );
+}
+
+/** Canonical experiment header (ADR-059): name + YAML and the strategy in one
+ *  card. The task panels now place the two parts on different steps
+ *  (ADR-155); this composition stays for anything that wants both at once. */
+export function ExperimentHeader(props: ExperimentHeaderProps) {
+  return (
+    <div style={{ display: "grid", gap: 16 }}>
+      <ExperimentNameCard
+        name={props.name}
+        onNameChange={props.onNameChange}
+        placeholder={props.placeholder}
+        onExportYaml={props.onExportYaml}
+        onImportConfig={props.onImportConfig}
+      />
+      <StrategyCard
+        strategy={props.strategy}
+        onStrategyChange={props.onStrategyChange}
+        strategies={props.strategies}
+      />
     </div>
   );
 }

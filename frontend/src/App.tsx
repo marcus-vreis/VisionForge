@@ -26,6 +26,7 @@ import { Header } from "./components/Header";
 import { WelcomeOverlay } from "./components/WelcomeOverlay";
 import { GuidedTour } from "./components/GuidedTour";
 import { readTourSeen } from "./lib/tour";
+import { StepNavContext, type StepId, type StepNav } from "./lib/steps";
 import type { GuideContext, GuideId, GuideTask } from "./lib/guides";
 import {
   sampleAnomalyForm,
@@ -255,6 +256,18 @@ export default function App() {
     Record<string, PanelStrategy>
   >({});
   const [runSignal, setRunSignal] = useState(0);
+  // The step each task shows (ADR-155), here so switching task tabs keeps it.
+  const [stepByTask, setStepByTask] = useState<Record<string, StepId>>({});
+  const stepNav = useMemo<StepNav>(
+    () => ({
+      stepFor: (key) => stepByTask[key] ?? "data",
+      setStep: (key, step) =>
+        setStepByTask((prev) =>
+          prev[key] === step ? prev : { ...prev, [key]: step },
+        ),
+    }),
+    [stepByTask],
+  );
 
   // What the guides read and change (ADR-115, ADR-117). Each task keeps its
   // dataset folder in its own form, so the "dataset set" gate follows what the
@@ -678,6 +691,21 @@ export default function App() {
 
   const showResults = resultsVisible && result !== null;
 
+  // Treinar unlocks on the Revisão step once the dataset is set (ADR-155).
+  // A researcher's own task has no dataset field App can read: its review is
+  // the only gate.
+  const activeStep = stepNav.stepFor(activeKey);
+  const datasetReady = isCustomTask(activeTask)
+    ? true
+    : (guideDatasetPaths[activeKey as GuideTask] ?? "").trim() !== "";
+  const trainLockReason = showResults
+    ? null
+    : activeStep !== "review"
+      ? t.bottomBar.trainLockedReview
+      : !datasetReady
+        ? t.bottomBar.trainLockedData
+        : null;
+
   return (
     <div
       className="stage"
@@ -687,7 +715,9 @@ export default function App() {
         ...(isCustomTask(activeTask) ? stageAccentVars(activeTask.accent) : {}),
         minHeight: "100vh",
         position: "relative",
-        overflow: "hidden",
+        // `clip`, not `hidden`: a hidden overflow is a scroll container, and
+        // the step rail's `position: sticky` would stick to it, not the page.
+        overflow: "clip",
         fontFamily: "var(--font-sans)",
         color: "var(--vf-text)",
       }}
@@ -733,6 +763,7 @@ export default function App() {
         {/* A crash in a panel leaves the header, tabs and bottom bar up with a
             notice in its place, instead of a blank page. */}
         <ContentBoundary resetKey={activeKey}>
+        <StepNavContext.Provider value={stepNav}>
         {showResults ? (
           <ResultsView
             result={result}
@@ -853,6 +884,7 @@ export default function App() {
             validationErrors={validationErrors}
           />
         )}
+        </StepNavContext.Provider>
         </ContentBoundary>
 
         {error && !showOverlay && (
@@ -886,6 +918,7 @@ export default function App() {
         onTrain={() => void handleTrain()}
         disabled={status.status === "running"}
         trainLabel={t.app.train[activeStrategy] ?? t.app.train.simple}
+        lockReason={trainLockReason}
         historyCount={historyCount}
         queuedCount={queuedCount}
         serverRunning={serverBusy}
