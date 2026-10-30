@@ -186,7 +186,14 @@ export function SegmentationPanel({
     },
     { step: "image", rows: [{ label: t.taskPanel.dataset.imageSize, value: `${formData.data.image_size} px`, changed: formData.data.image_size !== defaults.data.image_size }] },
   ];
-  const metadata = (id: Exclude<StepId, "review">) => ({ changes: id === "strategy" ? Number(strategy !== "simple") : countChanged(formData, defaults, paths[id]), errors: errorsUnder(validationErrors, paths[id]) });
+  // Server errors carry payload paths (buildSegmentationPayload), which differ
+  // from the form's for transfer learning and the image transforms.
+  const errorPaths: Record<Exclude<StepId, "review">, string[]> = {
+    ...paths,
+    model: ["model", "transfer_learning"],
+    image: ["data.image_size", "data.preprocessing", "data.transforms"],
+  };
+  const metadata = (id: Exclude<StepId, "review">) => ({ changes: id === "strategy" ? Number(strategy !== "simple") : countChanged(formData, defaults, paths[id]), errors: errorsUnder(validationErrors, errorPaths[id]) });
   return (<StepShell taskKey="segmentation" steps={[
     {
       id: "data", ...metadata("data"), summary: datasetLabel(datasetPath), missing: !datasetPath.trim(), content: (

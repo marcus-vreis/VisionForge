@@ -61,3 +61,26 @@ describe("SegmentationPanel steps", () => {
   });
 
 });
+
+describe("SegmentationPanel server errors", () => {
+  it("counts payload-path errors on the model and image steps", () => {
+    const html = renderToStaticMarkup(
+      <LanguageContext.Provider value={lang}>
+        <SegmentationPanel
+          formData={makeDefaultSegmentationForm()}
+          setFormData={() => {}}
+          accent="#abc"
+          validationErrors={[
+            { field: ["body", "transfer_learning", "backbone_lr_multiplier"], message: "x" },
+            { field: ["body", "data", "transforms", "rotation_degrees"], message: "y" },
+          ]}
+        />
+      </LanguageContext.Provider>,
+    );
+    const rail = html.slice(html.indexOf("<nav"), html.indexOf("</nav>"));
+    const chips = [...rail.matchAll(/<button[^>]*>([\s\S]*?)<\/button>/g)].map((m) => m[1]);
+    const labelled = (label: string) => chips.find((c) => c.includes(`>${label}<`)) ?? "";
+    expect(labelled(pt.stepShell.steps.model)).toContain(">1 erro<");
+    expect(labelled(pt.stepShell.steps.image)).toContain(">1 erro<");
+  });
+});

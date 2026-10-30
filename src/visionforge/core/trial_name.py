@@ -35,7 +35,8 @@ def _format_value(value: Any) -> str:
         return "on" if value else "off"
     if isinstance(value, float):
         return format(value, "g")
-    return _UNSAFE.sub("-", str(value)).strip("-")
+    # A run name may not end with a dot (utils/paths.py, Windows folders).
+    return _UNSAFE.sub("-", str(value)).strip("-").rstrip(".")
 
 
 def _short_key(dot_key: str) -> str:

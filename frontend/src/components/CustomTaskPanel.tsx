@@ -177,7 +177,9 @@ export function CustomTaskSteps({
 }: CustomTaskPanelProps & { schema: JsonSchema }) {
   const t = useT();
   const [strategy, setStrategy] = useState<PanelStrategy>("simple");
-  const taskKey = `custom:${task.key}`;
+  // App keys the step of every task by its tab key (`activeKey`), which for
+  // a researcher's task is its bare key: the Treinar lock reads that entry.
+  const taskKey = task.key;
 
   // Custom tasks have no K-fold endpoint, so the selector offers exactly what the API supports.
   const strategies: { value: PanelStrategy; label: string }[] = [

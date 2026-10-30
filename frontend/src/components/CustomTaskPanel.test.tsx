@@ -85,3 +85,29 @@ describe("CustomTaskPanel steps", () => {
     expect(section(html, "training")).not.toContain(pt.experimentHeader.nameLabel);
   });
 });
+
+
+describe("CustomTaskSteps step key", () => {
+  it("reads its step under the tab key App uses for the Treinar lock", () => {
+    const keys: string[] = [];
+    renderToStaticMarkup(
+      <LanguageContext.Provider value={lang}>
+        <StepNavContext.Provider
+          value={{ stepFor: (k) => (keys.push(k), "data"), setStep: () => {} }}
+        >
+          <CustomTaskSteps
+            task={task}
+            schema={schema}
+            formData={{ name: "tarefa_teste_001", alpha: 0.5, data: { base_dir: "" }, training: { epochs: 10 } }}
+            setFormData={() => {}}
+            validationErrors={[]}
+            onSweep={() => {}}
+            onReplicates={() => {}}
+            onRemoved={() => {}}
+          />
+        </StepNavContext.Provider>
+      </LanguageContext.Provider>,
+    );
+    expect(new Set(keys)).toEqual(new Set(["tarefa_teste"]));
+  });
+});

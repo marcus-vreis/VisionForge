@@ -1,4 +1,5 @@
 from visionforge.core.trial_name import trial_name
+from visionforge.utils.paths import validate_path_component
 
 
 def test_learning_rate_is_shortened() -> None:
@@ -29,3 +30,8 @@ def test_booleans_and_small_floats() -> None:
 
 def test_no_overrides_returns_the_base() -> None:
     assert trial_name("x", {}) == "x"
+
+
+def test_names_stay_valid_folder_names() -> None:
+    name = trial_name("x", {"training.scheduler.kind": "a/b.", "model.name": "c:d"})
+    assert validate_path_component(name) == name == "x_kinda-b_c-d"
