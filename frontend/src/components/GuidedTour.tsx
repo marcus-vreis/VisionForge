@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { revealStepFor } from "../lib/steps";
 
 import { useT } from "../i18n/useT";
 import {
@@ -166,8 +167,18 @@ export function GuidedTour({
     const el = anchor
       ? document.querySelector(`[data-tour="${anchor}"]`)
       : null;
+    // O alvo pode estar numa etapa escondida da configuração (ADR-138): pede a
+    // etapa dele. O Treinar só libera na Revisão, então o passo do botão abre
+    // a Revisão.
+    const revealed =
+      anchor === "train"
+        ? revealStepFor(null, "review")
+        : el?.closest("[data-step][hidden]")
+          ? revealStepFor(el)
+          : false;
     // A tela de treino é fixa e é o que o passo flutuante quer ver inteira.
-    if (el && !floating) {
+    const bring = () => {
+      if (!el || floating) return;
       if (alignTop) {
         // Um passo de cartão alto (o botão do dataset de exemplo) não cabe nem
         // acima nem abaixo de um alvo no meio da tela, e centralizado cobriria o
@@ -180,7 +191,10 @@ export function GuidedTour({
       } else {
         el.scrollIntoView({ behavior: "smooth", block: "center" });
       }
-    }
+    };
+    // Uma etapa recém-aberta só tem posição depois do próximo render.
+    const reveal = revealed ? window.setTimeout(bring, 60) : undefined;
+    if (!revealed) bring();
     const raf = window.requestAnimationFrame(() => {
       setAnimate(true);
       measure();
@@ -189,6 +203,7 @@ export function GuidedTour({
     return () => {
       window.cancelAnimationFrame(raf);
       window.clearTimeout(id);
+      window.clearTimeout(reveal);
     };
   }, [anchor, floating, alignTop, measure]);
 

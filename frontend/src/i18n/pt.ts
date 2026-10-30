@@ -187,6 +187,8 @@ export const pt = {
   },
   bottomBar: {
     reopenTraining: "🔬 abrir treino",
+    trainLockedReview: "Abra a etapa Revisão para liberar o Treinar",
+    trainLockedData: "Escolha o dataset na etapa Dados para liberar o Treinar",
     running: "Executando…",
     history: "histórico",
     datasets: "datasets",
@@ -1736,6 +1738,47 @@ export const pt = {
   // experiment name, the YAML round trip and the strategy selector. The strategy
   // names themselves are `paramPanel.blocks.simple`, `taskPanel.sweep` and
   // `taskPanel.replicates`.
+  // The six-step configuration (components/StepShell.tsx, ADR-138).
+  stepShell: {
+    steps: {
+      data: "Dados",
+      strategy: "Estratégia",
+      model: "Modelo",
+      training: "Treinamento",
+      image: "Imagem e aumento",
+      review: "Revisão",
+    },
+    leads: {
+      data: "De onde vêm as imagens e o que foi encontrado nelas.",
+      strategy: "Quantos treinos rodar e como compará-los.",
+      model: "O que treina e de onde parte.",
+      training: "Quanto e como treinar; o resto fica em Avançado.",
+      image: "Como cada imagem chega ao modelo, com preview.",
+      review: "Confira, dê um nome e treine pela barra abaixo.",
+    },
+    status: {
+      default: "padrão",
+      changes: (n: number) => `${n} ${n === 1 ? "ajuste" : "ajustes"}`,
+      missing: "falta",
+      errors: (n: number) => `${n} ${n === 1 ? "erro" : "erros"}`,
+    },
+    stepLabel: (i: number, n: number) => `etapa ${i} de ${n}`,
+    navLabel: "Etapas da configuração",
+    prev: "← Anterior",
+    next: "Próximo →",
+    goReview: "Revisar →",
+    review: {
+      nameTitle: "Nome do experimento",
+      nameHint: "sugerido a partir do dataset, modelo e épocas; edite à vontade",
+      useSuggestion: "usar sugestão",
+      trialNote: (keys: string) => `cada trial recebe no nome o valor de ${keys}`,
+      edit: "editar",
+      ready: "Tudo certo. O botão Treinar, na barra abaixo, está liberado.",
+      blocked: "Falta escolher o dataset na etapa Dados para liberar o Treinar.",
+      errorsTitle: "Problemas na última tentativa",
+      noChanges: "valores padrão",
+    },
+  },
   experimentHeader: {
     title: "Experimento",
     nameLabel: "Nome do experimento",

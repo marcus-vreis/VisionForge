@@ -26,6 +26,9 @@ interface BottomBarProps {
   /** What the button will actually run, from the panel's strategy selector —
    * so "Treinar" never silently starts a plain run while Sweep is selected. */
   trainLabel?: string;
+  /** Why Treinar is locked, shown as its tooltip; absent when it can run. The
+   *  configuration is checked on the Revisão step first (ADR-138). */
+  lockReason?: string | null;
 }
 
 /** Fixed bottom action bar with History, Treinar, and device selector. */
@@ -44,6 +47,7 @@ export function BottomBar({
   trainingMinimized = false,
   onReopenTraining,
   trainLabel,
+  lockReason,
 }: BottomBarProps) {
   const t = useT();
   // While a run is minimized, the central button reopens the overlay rather
@@ -56,6 +60,11 @@ export function BottomBar({
     }
     onTrain();
   };
+
+  // A running or minimized training keeps its own button state: the lock is
+  // about starting a new run.
+  const locked = Boolean(lockReason) && !isRunning && !trainingMinimized;
+  const blocked = (disabled && !trainingMinimized) || locked;
 
   const centerLabel = trainingMinimized
     ? t.bottomBar.reopenTraining
@@ -204,7 +213,9 @@ export function BottomBar({
         type="button"
         data-tour="train"
         onClick={handleCenterClick}
-        disabled={disabled && !trainingMinimized}
+        disabled={blocked}
+        title={locked ? (lockReason ?? undefined) : undefined}
+        aria-description={locked ? (lockReason ?? undefined) : undefined}
         style={{
           flex: "0 0 auto",
           position: "relative",
@@ -222,8 +233,8 @@ export function BottomBar({
           boxShadow:
             "inset 0 0 18px var(--accent-glow), 0 0 30px var(--accent-soft)",
           overflow: "hidden",
-          cursor: disabled && !trainingMinimized ? "not-allowed" : "pointer",
-          opacity: disabled && !trainingMinimized ? 0.55 : 1,
+          cursor: blocked ? "not-allowed" : "pointer",
+          opacity: blocked ? 0.55 : 1,
         }}
       >
         <span
