@@ -1738,7 +1738,7 @@ export const pt = {
   // experiment name, the YAML round trip and the strategy selector. The strategy
   // names themselves are `paramPanel.blocks.simple`, `taskPanel.sweep` and
   // `taskPanel.replicates`.
-  // The six-step configuration (components/StepShell.tsx, ADR-138).
+  // The six-step configuration (components/StepShell.tsx, ADR-155).
   stepShell: {
     steps: {
       data: "Dados",
@@ -1767,6 +1767,17 @@ export const pt = {
     prev: "← Anterior",
     next: "Próximo →",
     goReview: "Revisar →",
+    groups: {
+      mechanics: "// mecânica",
+      schedule: "Schedule de LR",
+      loss: "Pesos da loss",
+      color: "Cor",
+      geometry: "Geometria",
+      composition: "Composição",
+      other: "Outros",
+    },
+    transferLocked:
+      "Transfer learning é um treino simples: o backend roda um bloco por vez. Volte a estratégia para Treino simples para ligá-lo.",
     review: {
       nameTitle: "Nome do experimento",
       nameHint: "sugerido a partir do dataset, modelo e épocas; edite à vontade",

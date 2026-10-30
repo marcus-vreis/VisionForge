@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { isAutoName, rememberSuggestion } from "./experiment-name";
 
 /** Keeps the experiment name on the suggestion while the researcher has not
- *  written their own (ADR-138). Runs when the suggestion changes, not on every
+ *  written their own (ADR-155). Runs when the suggestion changes, not on every
  *  keystroke, so clearing the field to type a new name is not undone. */
 export function useAutoExperimentName(
   taskKey: string,

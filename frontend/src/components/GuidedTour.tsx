@@ -167,7 +167,7 @@ export function GuidedTour({
     const el = anchor
       ? document.querySelector(`[data-tour="${anchor}"]`)
       : null;
-    // O alvo pode estar numa etapa escondida da configuração (ADR-138): pede a
+    // O alvo pode estar numa etapa escondida da configuração (ADR-155): pede a
     // etapa dele. O Treinar só libera na Revisão, então o passo do botão abre
     // a Revisão.
     const revealed =

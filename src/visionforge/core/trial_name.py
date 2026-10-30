@@ -20,7 +20,7 @@ SHORT_KEYS: dict[str, str] = {
     "weight_decay": "wd",
     "epochs": "e",
     "momentum": "mom",
-    "dropout": "do",
+    "dropout": "drop",
     "image_size": "img",
     "imgsz": "img",
     "optimizer": "opt",

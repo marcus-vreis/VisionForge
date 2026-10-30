@@ -1573,7 +1573,7 @@ export const en: Dict = {
       device: "Device",
     },
   },
-  // The six-step configuration (components/StepShell.tsx, ADR-138).
+  // The six-step configuration (components/StepShell.tsx, ADR-155).
   stepShell: {
     steps: {
       data: "Data",
@@ -1602,6 +1602,17 @@ export const en: Dict = {
     prev: "← Back",
     next: "Next →",
     goReview: "Review →",
+    groups: {
+      mechanics: "// mechanics",
+      schedule: "LR schedule",
+      loss: "Loss weights",
+      color: "Color",
+      geometry: "Geometry",
+      composition: "Composition",
+      other: "Other",
+    },
+    transferLocked:
+      "Transfer learning is a single run: the backend runs one block at a time. Set the strategy back to Single run to turn it on.",
     review: {
       nameTitle: "Experiment name",
       nameHint: "suggested from dataset, model and epochs; edit freely",

@@ -1,4 +1,4 @@
-/** The experiment name the Revisão step suggests (ADR-138).
+/** The experiment name the Revisão step suggests (ADR-155).
  *
  * The name used to be the first field of every panel, filled with "config" or
  * "detection_001", so History filled up with runs nobody could tell apart. The
@@ -18,7 +18,7 @@ const SHORT_KEYS: Record<string, string> = {
   weight_decay: "wd",
   epochs: "e",
   momentum: "mom",
-  dropout: "do",
+  dropout: "drop",
   image_size: "img",
   imgsz: "img",
   optimizer: "opt",

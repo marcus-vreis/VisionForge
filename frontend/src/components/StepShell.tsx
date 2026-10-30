@@ -20,7 +20,7 @@ export interface StepDef {
   content: ReactNode;
 }
 
-/** The task configuration split into steps (ADR-138).
+/** The task configuration split into steps (ADR-155).
  *
  * Every step stays mounted and the inactive ones are only `hidden`: the
  * strategy cards listen to the bottom bar's run signal, and the dataset stats
@@ -45,7 +45,9 @@ export function StepShell({
     else setLocalStep(id);
   };
   const setStepRef = useRef(setStep);
-  setStepRef.current = setStep;
+  useEffect(() => {
+    setStepRef.current = setStep;
+  });
   const topRef = useRef<HTMLDivElement>(null);
 
   const go = (id: StepId) => {
