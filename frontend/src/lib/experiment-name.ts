@@ -87,6 +87,8 @@ export type NameStrategy =
 export interface NameParts {
   /** Folder or data.yaml path of the dataset. */
   datasetPath: string;
+  /** Starts the name when there is no dataset path (a custom task's key). */
+  fallbackLabel?: string;
   model?: string;
   epochs?: number;
   learningRate?: number;
@@ -125,7 +127,7 @@ export function suggestExperimentName(p: NameParts): string {
   const varied = new Set((p.sweepKeys ?? []).map(shortKey));
   const parts: string[] = [];
   const dataset = datasetLabel(p.datasetPath);
-  parts.push(dataset || "experimento");
+  parts.push(dataset || slug(p.fallbackLabel ?? "") || "experimento");
   if (p.model && !varied.has("model")) parts.push(slug(p.model));
   if (p.epochs != null && Number.isFinite(p.epochs) && !varied.has("e")) {
     parts.push(`e${p.epochs}`);
@@ -140,6 +142,27 @@ export function suggestExperimentName(p: NameParts): string {
   const strategy = strategyPart(p);
   if (strategy) parts.push(strategy);
   return parts.join("_");
+}
+
+/** The suggestion for a researcher's task. A task may have no dataset folder
+ *  (the example generates its data) or no model block, so with no folder the
+ *  name starts with the task's key, which still tells its runs apart. */
+export function suggestCustomTaskName(
+  taskKey: string,
+  form: Record<string, unknown>,
+  strategy: NameStrategy,
+): string {
+  const block = (name: string) => (form[name] ?? {}) as Record<string, unknown>;
+  const text = (v: unknown) => (typeof v === "string" && v.trim() !== "" ? v : undefined);
+  const number = (v: unknown) => (typeof v === "number" ? v : undefined);
+  return suggestExperimentName({
+    datasetPath: text(block("data").base_dir) ?? text(block("data").root) ?? "",
+    fallbackLabel: taskKey,
+    model: text(block("model").name),
+    epochs: number(block("training").epochs),
+    learningRate: number(block("training").learning_rate),
+    strategy,
+  });
 }
 
 // The last suggestion per task survives the panel unmounting when the

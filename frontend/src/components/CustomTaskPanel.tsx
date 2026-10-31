@@ -8,7 +8,7 @@ import {
   type CustomTaskDefinition,
 } from "../lib/custom-tasks";
 import { exportConfigToYaml } from "../lib/yaml-config";
-import { suggestExperimentName } from "../lib/experiment-name";
+import { suggestCustomTaskName } from "../lib/experiment-name";
 import { resolveSchema, visibleChildren } from "../lib/schema-form";
 import { countChanged, errorsUnder, type StepId } from "../lib/steps";
 import { useAutoExperimentName } from "../lib/use-auto-experiment-name";
@@ -224,14 +224,7 @@ export function CustomTaskSteps({
   const epochs = num(at(formData, "training", "epochs"));
   const lr = num(at(formData, "training", "learning_rate"));
   const modelName = str(at(formData, "model", "name"));
-  const suggestion = suggestExperimentName({
-    datasetPath:
-      str(at(formData, "data", "base_dir")) ?? str(at(formData, "data", "root")) ?? "",
-    model: modelName,
-    epochs,
-    learningRate: lr,
-    strategy,
-  });
+  const suggestion = suggestCustomTaskName(task.key, formData, strategy);
   const defaultNames = [`${task.key}_001`];
   if (typeof defaults.name === "string") defaultNames.push(defaults.name);
   useAutoExperimentName(
