@@ -40,6 +40,8 @@ def run_visionforge(
     batch_size: int,
     image_size: int = 32,
     learning_rate: float = 0.01,
+    weight_decay: float = 0.0,
+    scheduler: str = "none",
     concurrent_workload: str = "undeclared",
     device: str = "cpu",
     parity_atol: float | None = None,
@@ -67,6 +69,8 @@ def run_visionforge(
         batch_size=batch_size,
         image_size=image_size,
         learning_rate=learning_rate,
+        weight_decay=weight_decay,
+        scheduler=scheduler,
     )
     output.mkdir(parents=True, exist_ok=False)
     recorder = phase_contract.PhaseRecorder(
@@ -89,6 +93,8 @@ def run_visionforge(
                     image_size,
                     learning_rate,
                     device,
+                    weight_decay=weight_decay,
+                    scheduler=scheduler,
                 )
             )
             data = DataModule(cfg)
@@ -133,6 +139,8 @@ def run_visionforge(
                 "trainer_device": result.device_used,
                 "parity_atol": parity_atol,
                 "seed": seed,
+                "weight_decay": weight_decay,
+                "scheduler": scheduler,
                 "initial_weights_sha256": initial_hash,
                 "class_to_idx": {name: index for index, name in enumerate(classes)},
                 "history": [
@@ -172,6 +180,9 @@ def _config(
     image_size: int,
     learning_rate: float,
     device: str = "cpu",
+    *,
+    weight_decay: float = 0.0,
+    scheduler: str = "none",
 ) -> dict[str, Any]:
     """Build the restricted recipe as an ExperimentConfig payload."""
     return {
@@ -195,11 +206,11 @@ def _config(
             "seed": seed,
             "optimizer": "sgd",
             "learning_rate": learning_rate,
-            "weight_decay": 0,
+            "weight_decay": weight_decay,
             "early_stopping_patience": 0,
             "mixed_precision": False,
             "deterministic": True,
-            "scheduler": {"kind": "none"},
+            "scheduler": {"kind": scheduler},
         },
         "device": {"kind": device},
         "output": {
@@ -217,6 +228,8 @@ def run_pair(
     seed: int = 37,
     epochs: int = 2,
     batch_size: int = 4,
+    weight_decay: float = 0.0,
+    scheduler: str = "none",
     concurrent_workload: str = "undeclared",
     device: str = "cpu",
     parity_atol: float | None = None,
@@ -248,6 +261,8 @@ def run_pair(
         batch_size=batch_size,
         image_size=32,
         learning_rate=0.01,
+        weight_decay=weight_decay,
+        scheduler=scheduler,
     )
     audit = audit_dataset(dataset)
     if not audit["ok"]:
@@ -263,6 +278,8 @@ def run_pair(
         "seed": seed,
         "epochs": epochs,
         "batch_size": batch_size,
+        "weight_decay": weight_decay,
+        "scheduler": scheduler,
         "concurrent_workload": concurrent_workload,
         "device": device,
         "parity_atol": parity_atol,
@@ -273,6 +290,8 @@ def run_pair(
         "seed": seed,
         "epochs": epochs,
         "batch_size": batch_size,
+        "weight_decay": weight_decay,
+        "scheduler": scheduler,
         "concurrent_workload": concurrent_workload,
         "device": device,
         "parity_atol": parity_atol,
@@ -342,6 +361,8 @@ def main(*, native: bool = False) -> None:
     parser.add_argument("--seed", type=int, default=37)
     parser.add_argument("--epochs", type=int, default=2)
     parser.add_argument("--batch-size", type=int, default=4)
+    parser.add_argument("--weight-decay", type=float, default=0.0)
+    parser.add_argument("--scheduler", choices=("none", "cosine"), default="none")
     parser.add_argument(
         "--concurrent-workload",
         default="undeclared",
@@ -362,6 +383,8 @@ def main(*, native: bool = False) -> None:
         seed=args.seed,
         epochs=args.epochs,
         batch_size=args.batch_size,
+        weight_decay=args.weight_decay,
+        scheduler=args.scheduler,
         concurrent_workload=args.concurrent_workload,
         device=args.device,
         parity_atol=args.parity_atol,

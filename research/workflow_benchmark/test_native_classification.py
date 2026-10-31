@@ -152,6 +152,9 @@ def test_epoch_averages_batch_losses_and_weights_accuracy_by_sample() -> None:
         ({"learning_rate": 0}, "learning_rate"),
         ({"learning_rate": float("nan")}, "learning_rate"),
         ({"learning_rate": float("inf")}, "learning_rate"),
+        ({"weight_decay": -1e-4}, "weight_decay"),
+        ({"weight_decay": float("nan")}, "weight_decay"),
+        ({"scheduler": "step"}, "scheduler"),
     ],
 )
 def test_invalid_parameters_leave_no_output(
