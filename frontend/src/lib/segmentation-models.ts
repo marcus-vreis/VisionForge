@@ -6,9 +6,11 @@ import type { PreprocessingStep } from "../components/PreprocessingPanel";
 import type { Dict } from "../i18n/pt";
 import {
   mergeFormShape,
+  overlayImported,
   stepsFromPayload,
   transferFromPayload,
   transformsFormFromPayload,
+  unmanagedFields,
 } from "./form-import";
 import {
   buildPreprocessingPayload,
@@ -92,6 +94,8 @@ export interface SegmentationForm {
   /** Augmentation/normalization (data.transforms) — joint image+mask hflip/
    *  rotation, image-only jitter. ADR-059. */
   transforms: TransformsForm;
+  /** Fields of an imported YAML with no control in this form; sent unchanged. */
+  imported?: Record<string, unknown>;
 }
 
 export function makeDefaultSegmentationForm(): SegmentationForm {
@@ -137,7 +141,7 @@ export function ignoreIndexCollides(form: SegmentationForm): boolean {
 export function buildSegmentationPayload(
   form: SegmentationForm,
 ): Record<string, unknown> {
-  return {
+  return overlayImported(form.imported, {
     name: form.name,
     model: { ...form.model, num_classes: Math.max(form.model.num_classes, 1) },
     data: {
@@ -149,7 +153,7 @@ export function buildSegmentationPayload(
     },
     training: { ...form.training },
     transfer_learning: buildTransferLearning(form),
-  };
+  });
 }
 
 /** Map the transfer-learning form fields to the SegmentationConfig payload shape.
@@ -184,5 +188,11 @@ export function segmentationFormFromPayload(
   if (tl.backbone_lr_multiplier !== null) {
     form.backbone_lr_multiplier = tl.backbone_lr_multiplier;
   }
+  const imported = unmanagedFields(makeDefaultSegmentationForm(), payload, [
+    "data.transforms",
+    "data.preprocessing",
+    "transfer_learning",
+  ]);
+  if (Object.keys(imported).length > 0) form.imported = imported;
   return form;
 }
