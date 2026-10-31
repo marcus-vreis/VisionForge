@@ -6482,3 +6482,56 @@ loss reprovaria um par equivalente; relaxar só a loss mantém as demais
 verificações estritas e auditáveis. Uma execução em CUDA não é bit-reprodutível
 neste caminho; a paridade fica garantida pela tolerância declarada e pelo
 relatório.
+
+## ADR-156 — Task configuration in six steps, Treinar unlocked on the review
+
+**Date:** 2026-10-29
+**Status:** Accepted
+**Amends:** ADR-059 (canonical experiment header)
+
+**Context:** every task configured on one long page: experiment name and
+strategy on top, then model, training, dataset, preprocessing and augmentation
+stacked in that order, the dataset (the only thing a first run needs) in the
+middle. Detection spread its Ultralytics knobs over three top-level sections and
+put the image size beside the dataset path; segmentation kept the number of
+classes under Model and warned about `ignore_index` in a banner above the
+header. Names defaulted to `config` or `detection_001`, so History filled with
+runs nobody could tell apart, and a sweep ran every trial under the same name.
+The user sketched the flow by steps and approved a standalone demo
+(`.claude/plans/2026-10-29-wizard-etapas/`), asking for one Treinar button only,
+locked until the last step, and a suggested experiment name on that step.
+
+**Decision:**
+- Every task panel renders `StepShell` with six steps: Dados, Estratégia, Modelo,
+  Treinamento, Imagem e aumento, Revisão (a researcher's task uses those its
+  schema fills). The rail shows each step's state: `padrão`, `n ajustes`,
+  `falta`, `n erros`. Any step opens at any time; server errors bring the first
+  step with one to the front.
+- All steps stay mounted and the inactive ones are `hidden`. The strategy cards
+  listen to the bottom bar's run signal and the dataset stats fill other fields
+  as they load; unmounting them would break both. The guided tour asks for the
+  step that holds its target (`vf:reveal-step`).
+- The step per task lives in App, so switching task tabs keeps it.
+- Treinar exists only in the bottom bar. It is locked, with the reason as its
+  tooltip, until the active step is Revisão and the dataset is set.
+- The experiment name moves to Revisão, prefilled with
+  `<dataset>_<model>_e<epochs>_lr<lr>[_<strategy>]` (`lib/experiment-name.ts`).
+  The suggestion follows the configuration while the name is empty, a task
+  default or the previous suggestion; a typed or imported name stays.
+- Sweep trials are named after what they vary (`core/trial_name.py`):
+  `…_grid-lr` runs `…_grid-lr_lr0.001`, `…_grid-lr_lr0.002`, with the same
+  short keys as the suggestion. Each trial's folder follows its name.
+- Classification's transfer learning moves from the strategy to Modelo, as in
+  segmentation and regression; Estratégia answers only "how many runs and how".
+- Detection groups its advanced training knobs (optimizer, LR schedule, loss
+  gains, regularization and mechanics) under one Advanced block and its
+  augmentation by kind, with the image size on the image step; segmentation's
+  number of classes and `ignore_index` sit with the dataset that defines them.
+
+**Alternatives considered:**
+- *A wizard that forces the order.* Most runs change one or two values from the
+  defaults; making each step a gate would cost clicks on every run.
+- *Unmount inactive steps.* Simpler DOM, but the run signal and the dataset
+  effects would then depend on which step is on screen.
+- *Treinar enabled from step one when the data is set.* The user asked for the
+  review to be the gate, so a run is never started from a half-checked screen.

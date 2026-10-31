@@ -14,6 +14,7 @@ from visionforge.blocks.classification import ClassificationBlock
 from visionforge.core.cancellation import STOPPED, STOPPED_NOTE, CancellationToken
 from visionforge.core.run_groups import write_run_group
 from visionforge.core.task_runner import trial_progress_wrapper
+from visionforge.core.trial_name import trial_name
 from visionforge.utils.config import ExperimentConfig
 
 
@@ -129,6 +130,7 @@ def run_trial(
     base_raw["training"]["seed"] = trial_seed
     for dot_key, val in trial_overrides.items():
         set_nested(base_raw, dot_key, val)
+    base_raw["name"] = trial_name(base_raw["name"], trial_overrides)
 
     block = ClassificationBlock()
     try:

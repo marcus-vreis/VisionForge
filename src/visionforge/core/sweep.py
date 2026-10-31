@@ -38,6 +38,7 @@ from visionforge.core.task_runner import (
     runner_cancel_token,
     runner_metric_direction,
 )
+from visionforge.core.trial_name import trial_name
 from visionforge.utils.messages import tr
 
 try:  # torch is the heavy hardware extra; the cache flush is best-effort.
@@ -165,6 +166,8 @@ def _execute_trial(
         cfg_dict = copy.deepcopy(base_config_dict)
         for path, value in overrides.items():
             _set_nested(cfg_dict, path, value)
+        if isinstance(cfg_dict.get("name"), str):
+            cfg_dict["name"] = trial_name(cfg_dict["name"], overrides)
         cfg = runner.config_type.model_validate(cfg_dict)
         result: RunResult = runner.run(cfg)
         trial.status = result.status

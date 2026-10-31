@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { enter, fieldByLabel, findInHistory } from "./helpers";
+import { enter, fieldByLabel, findInHistory, openStep } from "./helpers";
 
 const work = path.join(path.dirname(fileURLToPath(import.meta.url)), ".work");
 
@@ -58,6 +58,7 @@ test("explicit image audit, persisted K-fold groups and experiment bundle downlo
   await expect(audit.getByRole("alert")).toContainText("Não foi possível auditar as imagens.");
   await fieldByLabel(page, "Pasta base do dataset").fill(dataset);
 
+  await openStep(page, "Estratégia");
   await page.getByRole("button", { name: "K-Fold (CV)", exact: true }).click();
   const cv = page.getByTestId("classification-cross-validation");
   await expect(cv).toBeVisible();
@@ -69,6 +70,7 @@ test("explicit image audit, persisted K-fold groups and experiment bundle downlo
   await expect(cv).toHaveCount(0);
   await page.getByRole("button", { name: "K-Fold (CV)", exact: true }).click();
   await expect(groupField).toHaveValue("groups.csv");
+  await openStep(page, "Revisão");
   const configDownload = page.waitForEvent("download");
   await page.getByTitle("Exportar configuração atual como arquivo .yaml").click();
   const configStream = await (await configDownload).createReadStream();
