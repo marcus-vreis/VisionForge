@@ -5,6 +5,7 @@ import {
   rememberSuggestion,
   resetSuggestions,
   shortKey,
+  suggestCustomTaskName,
   suggestExperimentName,
 } from "./experiment-name";
 
@@ -95,5 +96,27 @@ describe("isAutoName", () => {
   it("keeps suggestions apart per task", () => {
     rememberSuggestion("detection", "a");
     expect(isAutoName("segmentation", "a", [])).toBe(false);
+  });
+});
+
+describe("suggestCustomTaskName", () => {
+  const training = { epochs: 10, learning_rate: 0.001 };
+
+  it("names a task with no dataset folder after the task", () => {
+    expect(suggestCustomTaskName("example_counting", { data: { base_dir: "" }, training }, "simple")).toBe(
+      "example_counting_e10_lr0.001",
+    );
+  });
+
+  it("prefers the dataset folder when there is one", () => {
+    expect(
+      suggestCustomTaskName("example_counting", { data: { base_dir: "C:/data/contagem" }, training }, "simple"),
+    ).toBe("contagem_e10_lr0.001");
+  });
+
+  it("includes the model when the task's config has one", () => {
+    expect(
+      suggestCustomTaskName("t", { data: { base_dir: "pet" }, model: { name: "unet" }, training }, "simple"),
+    ).toBe("pet_unet_e10_lr0.001");
   });
 });
