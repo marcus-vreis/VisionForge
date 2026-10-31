@@ -1749,7 +1749,8 @@ def _render_preprocess_preview(
     _remember_dataset_root(req.base_dir)
     base = Path(req.base_dir)
     split_dir = base / req.split
-    if not split_dir.is_dir():
+    yolo_split = None if split_dir.is_dir() else resolve_yolo_split(base, req.split)
+    if not split_dir.is_dir() and yolo_split is None:
         return PreprocessPreviewResponse(
             original="",
             steps=[],
@@ -1759,8 +1760,13 @@ def _render_preprocess_preview(
             message=tr("scan.split_missing", split=req.split),
         )
 
-    # Pick the first available class + first image inside it.
-    class_dirs = [d for d in sorted(split_dir.iterdir()) if d.is_dir()]
+    # Pick the first available class + first image inside it. The images/<split>
+    # layout has no class folders: its images sit loose in that one directory.
+    class_dirs = (
+        [yolo_split[0]]
+        if yolo_split is not None
+        else [d for d in sorted(split_dir.iterdir()) if d.is_dir()]
+    )
     if not class_dirs:
         return PreprocessPreviewResponse(
             original="",
