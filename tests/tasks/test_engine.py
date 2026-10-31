@@ -71,6 +71,28 @@ def _config(tmp_path: Path, **training: Any) -> BaseTaskConfig:
     )
 
 
+def test_sgd_preserves_the_zero_momentum_optimization_recipe(tmp_path: Path) -> None:
+    """Three updates follow plain SGD with the configured weight decay."""
+    _register_toy()
+    engine = GenericTaskEngine(
+        get_task("toyreg"),
+        _config(tmp_path, optimizer="sgd", learning_rate=0.07, weight_decay=0.03),
+    )
+    model = nn.Linear(1, 1, bias=False).double()
+    with torch.no_grad():
+        model.weight.fill_(2.0)
+    optimizer = engine._build_optimizer(model)
+    inputs = torch.tensor([[1.5]], dtype=torch.float64)
+    target = torch.tensor([[0.25]], dtype=torch.float64)
+    expected = 2.0
+    for _ in range(3):
+        optimizer.zero_grad(set_to_none=True)
+        nn.functional.mse_loss(model(inputs), target).backward()
+        optimizer.step()
+        expected -= 0.07 * (2 * (1.5 * expected - 0.25) * 1.5 + 0.03 * expected)
+        assert model.weight.item() == pytest.approx(expected, rel=1e-14, abs=1e-15)
+
+
 class TestGenericTaskEngineLevel1:
     def test_trains_streams_and_writes_run_json(self, tmp_path: Path) -> None:
         _register_toy()
