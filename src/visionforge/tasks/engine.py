@@ -371,7 +371,7 @@ class GenericTaskEngine:
         params = [p for p in model.parameters() if p.requires_grad]
         if cfg.optimizer == "sgd":
             return torch.optim.SGD(
-                params, lr=cfg.learning_rate, weight_decay=cfg.weight_decay
+                params, lr=cfg.learning_rate, momentum=0, weight_decay=cfg.weight_decay
             )
         if cfg.optimizer == "adamw":
             return torch.optim.AdamW(
