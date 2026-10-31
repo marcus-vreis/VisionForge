@@ -415,7 +415,7 @@ function WeightsPathField({
 /** Block selector — the first card of the Estratégia step.
  *
  * Transfer learning is not offered here: it is a single run with a frozen
- * backbone, switched on in Modelo (ADR-155). The backend still runs one block
+ * backbone, switched on in Modelo (ADR-156). The backend still runs one block
  * at a time, so with it on, "Treino simples" shows as the active strategy.
  */
 function BlockSelector({
@@ -1699,7 +1699,7 @@ function SchemaFieldVF({
   );
 }
 
-// The step cards (ADR-155): the same surface the other task panels use.
+// The step cards (ADR-156): the same surface the other task panels use.
 const card: React.CSSProperties = {
   background: "var(--vf-panel)",
   border: "1px solid var(--vf-panel-stroke)",
@@ -1816,7 +1816,7 @@ function withBlock(
   return next;
 }
 
-/** The classification configuration, split into steps (ADR-155). */
+/** The classification configuration, split into steps (ADR-156). */
 export function ParamPanel({
   task,
   schema,

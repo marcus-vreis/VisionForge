@@ -1738,7 +1738,7 @@ export const pt = {
   // experiment name, the YAML round trip and the strategy selector. The strategy
   // names themselves are `paramPanel.blocks.simple`, `taskPanel.sweep` and
   // `taskPanel.replicates`.
-  // The six-step configuration (components/StepShell.tsx, ADR-155).
+  // The six-step configuration (components/StepShell.tsx, ADR-156).
   stepShell: {
     steps: {
       data: "Dados",

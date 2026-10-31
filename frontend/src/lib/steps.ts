@@ -1,6 +1,6 @@
 import { createContext, useContext } from "react";
 
-/** The six steps every task's configuration is split into (ADR-155). The order
+/** The six steps every task's configuration is split into (ADR-156). The order
  *  is the suggested sequence, but any step opens at any time. */
 export const STEP_IDS = [
   "data",

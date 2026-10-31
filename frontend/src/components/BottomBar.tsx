@@ -27,7 +27,7 @@ interface BottomBarProps {
    * so "Treinar" never silently starts a plain run while Sweep is selected. */
   trainLabel?: string;
   /** Why Treinar is locked, shown as its tooltip; absent when it can run. The
-   *  configuration is checked on the Revisão step first (ADR-155). */
+   *  configuration is checked on the Revisão step first (ADR-156). */
   lockReason?: string | null;
 }
 

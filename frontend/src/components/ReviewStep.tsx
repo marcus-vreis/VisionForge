@@ -50,7 +50,7 @@ const kicker: React.CSSProperties = {
   color: "var(--vf-text-muted)",
 };
 
-/** The last step (ADR-155): the name, suggested and editable; one card per
+/** The last step (ADR-156): the name, suggested and editable; one card per
  *  step with its key values; the problems of the last attempt. Treinar itself
  *  stays in the bottom bar, the only one on the page. */
 export function ReviewStep({

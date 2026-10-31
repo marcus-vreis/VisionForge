@@ -20,7 +20,7 @@ export interface StepDef {
   content: ReactNode;
 }
 
-/** The task configuration split into steps (ADR-155).
+/** The task configuration split into steps (ADR-156).
  *
  * Every step stays mounted and the inactive ones are only `hidden`: the
  * strategy cards listen to the bottom bar's run signal, and the dataset stats

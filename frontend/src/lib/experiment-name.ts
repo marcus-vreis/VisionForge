@@ -1,4 +1,4 @@
-/** The experiment name the Revisão step suggests (ADR-155).
+/** The experiment name the Revisão step suggests (ADR-156).
  *
  * The name used to be the first field of every panel, filled with "config" or
  * "detection_001", so History filled up with runs nobody could tell apart. The

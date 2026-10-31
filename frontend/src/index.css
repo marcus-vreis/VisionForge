@@ -360,7 +360,7 @@
     ::selection { background: var(--accent-soft); color: var(--vf-text); }
 }
 
-/* ── Configuration steps (components/StepShell.tsx, ADR-155) ─────────────── */
+/* ── Configuration steps (components/StepShell.tsx, ADR-156) ─────────────── */
 .vf-steps {
   display: grid;
   grid-template-columns: 228px minmax(0, 1fr);

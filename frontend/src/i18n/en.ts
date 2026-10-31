@@ -1573,7 +1573,7 @@ export const en: Dict = {
       device: "Device",
     },
   },
-  // The six-step configuration (components/StepShell.tsx, ADR-155).
+  // The six-step configuration (components/StepShell.tsx, ADR-156).
   stepShell: {
     steps: {
       data: "Data",

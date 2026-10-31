@@ -119,7 +119,7 @@ const baseForm = {
   data: { base_dir: "" },
 };
 
-describe("classification steps (ADR-155)", () => {
+describe("classification steps (ADR-156)", () => {
   it("splits the configuration into the six steps", () => {
     const html = renderSteps(baseForm);
     for (const step of ["data", "strategy", "model", "training", "image", "review"]) {

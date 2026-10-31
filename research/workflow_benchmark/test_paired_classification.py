@@ -104,6 +104,40 @@ RUNNERS = {
 }
 
 
+def test_pair_with_weight_decay_and_cosine_keeps_parity(tmp_path: Path) -> None:
+    dataset = tmp_path / "dataset"
+    for role, split in enumerate(("train", "val", "test")):
+        for label in range(2):
+            folder = dataset / split / f"class{label}"
+            folder.mkdir(parents=True)
+            for index in range(3):
+                pixels = np.random.default_rng(
+                    role * 100 + label * 10 + index
+                ).integers(0, 256, (36, 40, 3), dtype=np.uint8)
+                Image.fromarray(pixels).save(folder / f"{index}.png")
+    model = models.resnet18(weights=None)
+    model.fc = nn.Linear(model.fc.in_features, 2)
+    initial = tmp_path / "initial.pth"
+    torch.save(model.state_dict(), initial)
+
+    report = run_pair(
+        dataset,
+        initial,
+        tmp_path / "pair",
+        seed=37,
+        epochs=3,
+        batch_size=4,
+        weight_decay=5e-4,
+        scheduler="cosine",
+    )
+
+    assert report["status"] == "passed"
+    assert report["weight_decay"] == 5e-4
+    assert report["scheduler"] == "cosine"
+    assert report["native"]["scheduler"] == report["visionforge"]["scheduler"]
+    assert report["weights_max_abs_diff"] == 0.0
+
+
 @pytest.mark.parametrize("workflow", list(RUNNERS))
 def test_both_paths_report_the_same_phase_contract(
     tmp_path: Path, workflow: str

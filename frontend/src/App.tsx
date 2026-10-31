@@ -256,7 +256,7 @@ export default function App() {
     Record<string, PanelStrategy>
   >({});
   const [runSignal, setRunSignal] = useState(0);
-  // The step each task shows (ADR-155), here so switching task tabs keeps it.
+  // The step each task shows (ADR-156), here so switching task tabs keeps it.
   const [stepByTask, setStepByTask] = useState<Record<string, StepId>>({});
   const stepNav = useMemo<StepNav>(
     () => ({
@@ -691,7 +691,7 @@ export default function App() {
 
   const showResults = resultsVisible && result !== null;
 
-  // Treinar unlocks on the Revisão step once the dataset is set (ADR-155).
+  // Treinar unlocks on the Revisão step once the dataset is set (ADR-156).
   // A researcher's own task has no dataset field App can read: its review is
   // the only gate.
   const activeStep = stepNav.stepFor(activeKey);

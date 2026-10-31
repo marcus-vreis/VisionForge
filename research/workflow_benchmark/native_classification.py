@@ -87,6 +87,8 @@ def preflight(
     batch_size: int,
     image_size: int,
     learning_rate: float,
+    weight_decay: float = 0.0,
+    scheduler: str = "none",
 ) -> dict[str, int]:
     """Validate controls and split layout without creating output; return class_to_idx."""
     if epochs < 1:
@@ -97,6 +99,10 @@ def preflight(
         raise ValueError("image_size must be at least 32")
     if not math.isfinite(learning_rate) or learning_rate <= 0:
         raise ValueError("learning_rate must be finite and positive")
+    if not math.isfinite(weight_decay) or weight_decay < 0:
+        raise ValueError("weight_decay must be finite and non-negative")
+    if scheduler not in ("none", "cosine"):
+        raise ValueError("scheduler must be 'none' or 'cosine'")
     if output == dataset or dataset in output.parents:
         raise ValueError("output must be outside dataset")
     if output.exists():
@@ -138,6 +144,8 @@ def run_native(
     batch_size: int,
     image_size: int = 32,
     learning_rate: float = 0.01,
+    weight_decay: float = 0.0,
+    scheduler: str = "none",
     concurrent_workload: str = "undeclared",
     device: str = "cpu",
     parity_atol: float | None = None,
@@ -155,6 +163,8 @@ def run_native(
         batch_size=batch_size,
         image_size=image_size,
         learning_rate=learning_rate,
+        weight_decay=weight_decay,
+        scheduler=scheduler,
     )
     output.mkdir(parents=True, exist_ok=False)
     recorder = phase_contract.PhaseRecorder(
@@ -193,7 +203,12 @@ def run_native(
         model.to("cuda:0" if device == "cuda" else device)
         initial_hash = phase_contract.sha256_file(initial_weights)
         optimizer = torch.optim.SGD(
-            model.parameters(), lr=learning_rate, weight_decay=0
+            model.parameters(), lr=learning_rate, weight_decay=weight_decay
+        )
+        lr_scheduler = (
+            torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
+            if scheduler == "cosine"
+            else None
         )
         criterion = nn.CrossEntropyLoss()
 
@@ -215,6 +230,8 @@ def run_native(
                 model, loaders["train"], criterion, optimizer, device=device
             )
             val_loss, val_acc = _epoch(model, loaders["val"], criterion, device=device)
+            if lr_scheduler is not None:
+                lr_scheduler.step()
             history.append(
                 {
                     "epoch": epoch,
@@ -253,6 +270,8 @@ def run_native(
             "device": device,
             "parity_atol": parity_atol,
             "seed": seed,
+            "weight_decay": weight_decay,
+            "scheduler": scheduler,
             "initial_weights_sha256": initial_hash,
             "class_to_idx": class_to_idx,
             "history": history,

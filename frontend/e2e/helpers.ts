@@ -23,7 +23,7 @@ export function fieldByLabel(page: Page, label: string): Locator {
   return page.getByLabel(label, { exact: true }).first();
 }
 
-/** Opens a step of the task configuration from its rail (ADR-155). */
+/** Opens a step of the task configuration from its rail (ADR-156). */
 export async function openStep(page: Page, label: string): Promise<void> {
   const tab = page
     .getByRole("navigation", { name: "Etapas da configuração" })
@@ -37,7 +37,7 @@ export async function openStep(page: Page, label: string): Promise<void> {
  *
  * The device is chosen in the UI even though the server is started without a
  * visible GPU: choosing it is part of the flow under test. It ends on the
- * Revisão step, the only one where Treinar is unlocked (ADR-155).
+ * Revisão step, the only one where Treinar is unlocked (ADR-156).
  */
 export async function prepareClassification(page: Page, name: string, epochs: number): Promise<void> {
   await openStep(page, "Dados");

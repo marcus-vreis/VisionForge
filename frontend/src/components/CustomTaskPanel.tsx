@@ -27,7 +27,7 @@ import type { ReplicatesPayload } from "../lib/replicates-form";
 /**
  * The panel a researcher-defined task gets for free (ADR-058).
  *
- * Same step layout as every built-in panel (ADR-155), except the form is
+ * Same step layout as every built-in panel (ADR-156), except the form is
  * generated from `GET /api/custom/{key}/schema` instead of being hand-written:
  * each top-level block of the schema lands on the step it belongs to. Custom
  * tasks have no K-fold endpoint, so the strategy selector offers exactly what

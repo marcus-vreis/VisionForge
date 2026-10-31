@@ -87,7 +87,7 @@ interface ExperimentNameCardProps {
   title?: string;
 }
 
-/** Experiment name + YAML export/import. Since ADR-155 it sits on the Revisão
+/** Experiment name + YAML export/import. Since ADR-156 it sits on the Revisão
  *  step, where the name is suggested from the configuration. */
 export function ExperimentNameCard({
   name,
@@ -208,7 +208,7 @@ export function ExperimentNameCard({
 }
 
 /** The strategy selector of the standalone panels: the Estratégia step's
- *  first card (ADR-155). The strategy's own card renders below it. */
+ *  first card (ADR-156). The strategy's own card renders below it. */
 export function StrategyCard({
   strategy,
   onStrategyChange,
@@ -232,7 +232,7 @@ export function StrategyCard({
 
 /** Canonical experiment header (ADR-059): name + YAML and the strategy in one
  *  card. The task panels now place the two parts on different steps
- *  (ADR-155); this composition stays for anything that wants both at once. */
+ *  (ADR-156); this composition stays for anything that wants both at once. */
 export function ExperimentHeader(props: ExperimentHeaderProps) {
   return (
     <div style={{ display: "grid", gap: 16 }}>
