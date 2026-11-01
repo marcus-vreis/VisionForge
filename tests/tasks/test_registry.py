@@ -16,6 +16,7 @@ from visionforge.tasks import (
     register_task,
     registered_tasks,
 )
+from visionforge.utils.config import CURRENT_SCHEMA_VERSION
 
 
 @pytest.fixture(autouse=True)
@@ -153,7 +154,7 @@ class TestUserTasksDiscovery:
 class TestBaseTaskConfig:
     def test_defaults_validate_and_carry_schema_version(self, tmp_path: Path) -> None:
         cfg = BaseTaskConfig.model_validate({"data": {"base_dir": str(tmp_path)}})
-        assert cfg.schema_version == 1
+        assert cfg.schema_version == CURRENT_SCHEMA_VERSION
         assert cfg.training.epochs == 10
         # True since ADR-098: a custom task's runs reproduce like every other.
         assert cfg.training.deterministic is True
