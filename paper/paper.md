@@ -18,7 +18,11 @@ bibliography: paper.bib
 ---
 
 <!-- Draft. Every <...> must be filled before submission (Task D4 of the plan).
-     Numbers cite research/seed_variance/results/summary.json. -->
+     Numbers cite research/seed_variance/results/summary.json; the training
+     comparison cites results/real_summary.md, the browser series cite
+     results/gui_summary.md, results/diag_summary.md and results/gui_v2_summary.md
+     in the private research repository, whose recipes and per-run results must be
+     public before submission. -->
 
 # Summary
 
@@ -102,8 +106,8 @@ classifier head was once initialised before the seed was set). Confidence
 intervals are clipped to each metric's domain and flagged when clipped.
 
 Every behaviour change is recorded as an architecture decision record in
-`docs/dev/DECISIONS.md` (122 so far). The project has about 4,450 backend and
-1,010 frontend tests, a `visionforge selftest` command that trains every task
+`docs/dev/DECISIONS.md` (more than 150 so far). The project has about 5,200
+backend and 1,050 frontend tests, a `visionforge selftest` command that trains every task
 and strategy through the real API, and continuous integration on each push.
 Everything runs locally; nothing leaves the machine unless the user downloads a
 public dataset.
@@ -115,15 +119,57 @@ committed before the 270 runs, and the reports, the analysis code and its
 tests are public in `research/seed_variance/`, so each number above can be
 re-derived. The study also changed the software: its determinism check exposed
 the head-initialisation bug, and its findings are why the interface flags
-single-seed conclusions. <Usability study: number of participants, mean SUS
+single-seed conclusions.
+
+A layer over the training libraries is only useful if it leaves their results
+alone, so we trained three recipes both through VisionForge and on plain PyTorch
+or Ultralytics, with the same configuration and seeds: ResNet-18 on CIFAR-10 (30
+epochs, six seeds), DeepLabV3-ResNet50 on Oxford-IIIT Pet (40 epochs, six seeds)
+and YOLO11s on VOC2007 (100 epochs, three seeds). The paired difference in test
+accuracy was -0.0004 (95% CI -0.0012 to +0.0003) and in test mIoU +0.0004 (-0.0008
+to +0.0015), with no margin for these differences set in advance; test mAP50
+matched to full precision. The ratio of wall-clock time, VisionForge over native,
+was 1.026 (90% CI 1.008 to 1.044), 1.005 (0.991 to 1.020) and 0.998 (0.995 to
+1.000), inside a margin of 5%. Three runs that fell inside a slowdown of unknown
+cause were repeated with the machine idle; with the original runs the segmentation
+interval, 0.964 to 1.158, leaves the margin. These runs used the command line, so
+they do not measure the browser interface.
+
+We then repeated the classification and segmentation recipes through the browser,
+with three seeds, importing the configuration and pressing Train in a visible
+Chrome window, against margins fixed before the runs. Quality stayed inside its
+margin of 0.005: the paired difference was -0.0005 (95% CI -0.0026 to +0.0016) in
+test accuracy and +0.0007 (-0.0034 to +0.0049) in test mIoU. Time did not stay
+inside its margin of 5%: the ratio, browser over native, was 1.168 (90% CI 1.017
+to 1.341) and 1.120 (1.084 to 1.157). This setup kept the page rendering throughout,
+which we chose as the worst case. A later exploratory series (three blocks, four
+epochs, no margin set in advance) located the cost by comparing epoch time with
+native training. With the browser closed after the job was submitted, the ratio was
+1.009 (90% CI 1.004 to 1.015) for classification and 1.013 (1.007 to 1.018) for
+segmentation; with the window minimized, 1.007 (1.002 to 1.012) and 1.015 (1.010 to
+1.020); with the page visible, 1.168 (1.164 to 1.172) and 1.181 (1.181 to 1.182).
+Looping interface animations accounted for most of that cost, so we ended them while
+a job runs (ADR-157) and repeated the three-seed series, page visible, under the same
+margins. Because the change was chosen after seeing these results, this series tests
+a fix rather than an independent prediction. Quality stayed inside its margin: -0.0005
+(95% CI -0.0026 to +0.0016) in test accuracy and +0.0000 (-0.0026 to +0.0027) in test
+mIoU. The time ratio fell to 1.017 (90% CI 1.014 to 1.020) for segmentation, inside
+the margin, and to 1.047 (1.006 to 1.089) for classification, whose interval still
+leaves it. In the slowest classification run (ratio 1.074) other processes on the
+machine used about 1.5 times the CPU of the other two browser runs; we did not identify
+them or repeat the run, so we cannot attribute the excess to that load. Training
+through the interface left the results unchanged, and its time cost, once large, is
+now small but not shown to be within 5% for every recipe.
+
+<Usability study: number of participants, mean SUS
 and task completion rate, from `research/usability/`.> Each release is
 archived on Zenodo (doi:10.5281/zenodo.23425765) and published on PyPI as
 `visionforge-studio`.
 
 # AI usage disclosure
 
-Generative AI coding assistants, Anthropic's Claude through Claude Code, were
-used throughout the development of VisionForge to draft code, tests,
+Generative AI coding assistants, Anthropic's Claude through Claude Code, OpenAI's
+Codex and Google's Gemini, were used throughout the development of VisionForge to draft code, tests,
 refactorings and documentation, and to draft parts of this paper. The author
 designed the architecture, the statistical methodology and the experiments,
 reviewed and accepted every change, and verified behaviour through the project's
