@@ -103,6 +103,41 @@ class TestPreprocessPreview:
         # The message lists what does exist (ADR-078).
         assert "grayscale" in resp.json()["detail"]
 
+    def test_a_yolo_layout_previews_a_loose_image_from_the_split(
+        self, tmp_path: Path, client_and_cache: tuple[TestClient, Path]
+    ) -> None:
+        client, _cache = client_and_cache
+        images = tmp_path / "ds" / "images" / "train"
+        images.mkdir(parents=True)
+        Image.new("RGB", (48, 48), color=(30, 30, 200)).save(images / "a.jpg")
+        (tmp_path / "ds" / "labels" / "train").mkdir(parents=True)
+
+        resp = _post(
+            client,
+            {"base_dir": str(tmp_path / "ds"), "steps": [{"kind": "grayscale"}]},
+        )
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["message"] is None
+        assert Path(body["source_image"]) == (images / "a.jpg").resolve()
+        assert [s["kind"] for s in body["steps"]] == ["grayscale"]
+        assert Path(body["final"]).is_file()
+
+    def test_a_split_nested_under_its_own_folder_still_previews(
+        self, tmp_path: Path, client_and_cache: tuple[TestClient, Path]
+    ) -> None:
+        client, _cache = client_and_cache
+        images = tmp_path / "ds" / "train" / "images"
+        images.mkdir(parents=True)
+        Image.new("RGB", (48, 48)).save(images / "a.jpg")
+        (tmp_path / "ds" / "train" / "labels").mkdir()
+
+        body = _post(client, {"base_dir": str(tmp_path / "ds"), "steps": []}).json()
+
+        assert body["message"] is None
+        assert Path(body["source_image"]) == (images / "a.jpg").resolve()
+
     def test_a_missing_split_is_a_message_not_an_error(
         self, tmp_path: Path, client_and_cache: tuple[TestClient, Path]
     ) -> None:

@@ -26,6 +26,7 @@ import { Header } from "./components/Header";
 import { WelcomeOverlay } from "./components/WelcomeOverlay";
 import { GuidedTour } from "./components/GuidedTour";
 import { readTourSeen } from "./lib/tour";
+import { StepNavContext, type StepId, type StepNav } from "./lib/steps";
 import type { GuideContext, GuideId, GuideTask } from "./lib/guides";
 import {
   sampleAnomalyForm,
@@ -55,8 +56,7 @@ import { RegressionPanel } from "./components/RegressionPanel";
 import { SegmentationPanel } from "./components/SegmentationPanel";
 import { AnomalyPanel } from "./components/AnomalyPanel";
 import {
-  buildDetectionDataPayload,
-  buildDetectionTrainingPayload,
+  buildDetectionPayload,
   makeDefaultDetectionForm,
   type DetectionForm,
 } from "./lib/detection-models";
@@ -95,6 +95,7 @@ import { TabBar } from "./components/TabBar";
 import { TaskHero } from "./components/TaskHero";
 import { TrainingOverlay } from "./components/TrainingOverlay";
 import { useExperiment } from "./hooks/useExperiment";
+import { useRunMotionPause } from "./hooks/useRunMotionPause";
 import type { RunResponse } from "./types/run";
 import type { JsonSchema } from "./types/schema";
 import { taskDefinitions } from "./types/tasks";
@@ -255,6 +256,18 @@ export default function App() {
     Record<string, PanelStrategy>
   >({});
   const [runSignal, setRunSignal] = useState(0);
+  // The step each task shows (ADR-156), here so switching task tabs keeps it.
+  const [stepByTask, setStepByTask] = useState<Record<string, StepId>>({});
+  const stepNav = useMemo<StepNav>(
+    () => ({
+      stepFor: (key) => stepByTask[key] ?? "data",
+      setStep: (key, step) =>
+        setStepByTask((prev) =>
+          prev[key] === step ? prev : { ...prev, [key]: step },
+        ),
+    }),
+    [stepByTask],
+  );
 
   // What the guides read and change (ADR-115, ADR-117). Each task keeps its
   // dataset folder in its own form, so the "dataset set" gate follows what the
@@ -350,6 +363,8 @@ export default function App() {
     status: status.status,
     seededRunning,
   });
+
+  useRunMotionPause(serverBusy);
 
   // A page reload does not clear the server's queue, so ask once whether
   // anything is already running or waiting.
@@ -472,9 +487,7 @@ export default function App() {
       setBlockKind("detection");
       setQueueSize(undefined);
       const payload: Record<string, unknown> = {
-        ...detectionForm,
-        data: buildDetectionDataPayload(detectionForm.data),
-        training: buildDetectionTrainingPayload(detectionForm.training),
+        ...buildDetectionPayload(detectionForm),
         device: { kind: device.kind, gpu_ids: device.gpu_ids },
       };
       setStorySpec(storySpecFor("detection", payload));
@@ -584,11 +597,7 @@ export default function App() {
     if (task === "regression") return buildRegressionPayload(regressionForm);
     if (task === "segmentation") return buildSegmentationPayload(segmentationForm);
     if (task === "anomaly") return buildAnomalyPayload(anomalyForm);
-    return {
-      ...detectionForm,
-      data: buildDetectionDataPayload(detectionForm.data),
-      training: buildDetectionTrainingPayload(detectionForm.training),
-    };
+    return buildDetectionPayload(detectionForm);
   };
 
   // Task K-fold CV (ADR-050): folds over the train split, fold-a-fold metrics
@@ -678,6 +687,21 @@ export default function App() {
 
   const showResults = resultsVisible && result !== null;
 
+  // Treinar unlocks on the Revisão step once the dataset is set (ADR-156).
+  // A researcher's own task has no dataset field App can read: its review is
+  // the only gate.
+  const activeStep = stepNav.stepFor(activeKey);
+  const datasetReady = isCustomTask(activeTask)
+    ? true
+    : (guideDatasetPaths[activeKey as GuideTask] ?? "").trim() !== "";
+  const trainLockReason = showResults
+    ? null
+    : activeStep !== "review"
+      ? t.bottomBar.trainLockedReview
+      : !datasetReady
+        ? t.bottomBar.trainLockedData
+        : null;
+
   return (
     <div
       className="stage"
@@ -687,7 +711,9 @@ export default function App() {
         ...(isCustomTask(activeTask) ? stageAccentVars(activeTask.accent) : {}),
         minHeight: "100vh",
         position: "relative",
-        overflow: "hidden",
+        // `clip`, not `hidden`: a hidden overflow is a scroll container, and
+        // the step rail's `position: sticky` would stick to it, not the page.
+        overflow: "clip",
         fontFamily: "var(--font-sans)",
         color: "var(--vf-text)",
       }}
@@ -733,6 +759,7 @@ export default function App() {
         {/* A crash in a panel leaves the header, tabs and bottom bar up with a
             notice in its place, instead of a blank page. */}
         <ContentBoundary resetKey={activeKey}>
+        <StepNavContext.Provider value={stepNav}>
         {showResults ? (
           <ResultsView
             result={result}
@@ -853,6 +880,7 @@ export default function App() {
             validationErrors={validationErrors}
           />
         )}
+        </StepNavContext.Provider>
         </ContentBoundary>
 
         {error && !showOverlay && (
@@ -886,6 +914,7 @@ export default function App() {
         onTrain={() => void handleTrain()}
         disabled={status.status === "running"}
         trainLabel={t.app.train[activeStrategy] ?? t.app.train.simple}
+        lockReason={trainLockReason}
         historyCount={historyCount}
         queuedCount={queuedCount}
         serverRunning={serverBusy}

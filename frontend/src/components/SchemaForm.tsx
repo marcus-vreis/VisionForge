@@ -24,6 +24,10 @@ interface SchemaFormProps {
   validationErrors: ValidationError[];
   /** Field names hidden because another surface owns them. */
   omit?: string[];
+  /** Renders only the top-level fields this accepts (`isObject` tells a nested
+   *  block from a scalar of the task's own); the step shell uses it to spread
+   *  one schema over several steps. */
+  include?: (name: string, isObject: boolean) => boolean;
 }
 
 /** Canonical section order (ADR-059), adapted: the researcher's own fields
@@ -242,6 +246,7 @@ export function SchemaForm({
   onChange,
   validationErrors,
   omit = [],
+  include,
 }: SchemaFormProps) {
   const t = useT();
   const defs = schema.$defs ?? {};
@@ -254,6 +259,7 @@ export function SchemaForm({
   for (const [name, child] of visibleChildren(schema, defs)) {
     if (hidden.has(name)) continue;
     const resolved = resolveSchema(child, defs);
+    if (include && !include(name, resolved.type === "object")) continue;
     if (resolved.type === "object") objectByName.set(name, child);
     else scalars.push([name, child]);
   }

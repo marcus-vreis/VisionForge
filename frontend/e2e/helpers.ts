@@ -23,14 +23,24 @@ export function fieldByLabel(page: Page, label: string): Locator {
   return page.getByLabel(label, { exact: true }).first();
 }
 
+/** Opens a step of the task configuration from its rail (ADR-156). */
+export async function openStep(page: Page, label: string): Promise<void> {
+  const tab = page
+    .getByRole("navigation", { name: "Etapas da configuração" })
+    .getByRole("button", { name: label });
+  await tab.click();
+  await expect(tab).toHaveAttribute("aria-current", "step");
+}
+
 /**
  * Prepares a classification run on the sample dataset, on the CPU.
  *
  * The device is chosen in the UI even though the server is started without a
- * visible GPU: choosing it is part of the flow under test.
+ * visible GPU: choosing it is part of the flow under test. It ends on the
+ * Revisão step, the only one where Treinar is unlocked (ADR-156).
  */
 export async function prepareClassification(page: Page, name: string, epochs: number): Promise<void> {
-  await fieldByLabel(page, "Nome do experimento").fill(name);
+  await openStep(page, "Dados");
   // A click can land while the panel re-renders and be lost (seen once in four
   // runs). Clicking again is safe: the server reuses a sample folder that exists.
   await expect(async () => {
@@ -45,11 +55,13 @@ export async function prepareClassification(page: Page, name: string, epochs: nu
     );
   }).toPass({ timeout: 30_000 });
 
+  await openStep(page, "Treinamento");
   const epochField = fieldByLabel(page, "Épocas");
   await epochField.fill(String(epochs));
   await epochField.press("Enter");
   await expect(fieldByLabel(page, "Épocas")).toHaveValue(String(epochs));
 
+  await openStep(page, "Modelo");
   // Random initialization keeps this real training independent of the network
   // and of any ImageNet weights cached on the developer's machine.
   const pretrained = page.getByRole("switch", { name: "Pesos pré-treinados", exact: true });
@@ -61,6 +73,12 @@ export async function prepareClassification(page: Page, name: string, epochs: nu
   const device = page.locator("[data-tour='device']");
   await device.getByRole("button").first().click();
   await device.getByRole("button", { name: /Treinar usando processador/ }).click();
+
+  // The dataset is set, but only the review unlocks the run.
+  await expect(page.locator("[data-tour='train']")).toBeDisabled();
+  await openStep(page, "Revisão");
+  await fieldByLabel(page, "Nome do experimento").fill(name);
+  await expect(page.locator("[data-tour='train']")).toBeEnabled();
 }
 
 /**
@@ -73,7 +91,8 @@ export async function findInHistory(page: Page, name: string): Promise<Locator> 
   await page.locator("[data-tour='history']").click();
   await expect(page.getByText("Treinamentos recentes")).toBeVisible();
   await page.getByPlaceholder(/buscar por nome, arquitetura ou run_id/).fill(name);
-  const card = page.getByText(name, { exact: true }).locator("xpath=ancestor::div[.//*[contains(., 'epoch')]][1]");
+  // Inside the overlay: the step rail behind it also shows the dataset's name.
+  const card = page.getByTestId("history-overlay").getByText(name, { exact: true }).locator("xpath=ancestor::div[.//*[contains(., 'epoch')]][1]");
   await expect(card).toBeVisible();
   return card;
 }

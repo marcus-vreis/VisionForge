@@ -24,10 +24,12 @@ class _FakeRunner:
     def __init__(self, fail_lr: float | None = None) -> None:
         self._fail_lr = fail_lr
         self.seen: list[float] = []
+        self.names: list[str] = []
 
     def run(self, cfg: dict[str, Any]) -> RunResult:
         lr = cfg["training"]["learning_rate"]
         self.seen.append(lr)
+        self.names.append(cfg["name"])
         if self._fail_lr is not None and lr == self._fail_lr:
             return RunResult(status="failed", error="boom")
         return RunResult(
@@ -65,6 +67,17 @@ class TestGridSweep:
         assert len(trials) == 3
         assert all(t.status == "success" for t in trials)
         assert trials[0].overrides["training.learning_rate"] == 0.05
+
+    def test_each_trial_is_named_after_the_value_it_varies(self) -> None:
+        runner = _FakeRunner()
+        run_sweep(
+            runner,
+            _base(),
+            {"training.learning_rate": [0.001, 0.002]},
+            mode="grid",
+            metric="score",
+        )
+        assert runner.names == ["x_lr0.001", "x_lr0.002"]
 
     def test_cartesian_product_of_two_axes(self) -> None:
         trials = run_sweep(

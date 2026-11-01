@@ -186,3 +186,83 @@ Oxford-IIIT Pet trimaps are converted by `trimap_labels.py`: 1 (pet) becomes 1,
 2 (background) becomes 0, 3 (border, not classified) becomes 255; any other
 value is refused. The conversion reads local files only and is not wired to a
 download. Synthetic fixtures prove the integration, not segmentation quality.
+
+## GPU engineering checks (ADR-154)
+
+All four recipe modules accept `--device {cpu,cuda}` (default `cpu`). CPU keeps
+the existing CUDA mask, single thread and low priority. CUDA keeps the caller's
+visibility, threads and priority; unavailable CUDA fails before output creation.
+Both paths use visible CUDA index 0 for model placement, timing and memory.
+Use the same visible single GPU, recipe, weights and data for both paths.
+
+CUDA requires an explicit `--parity-atol VALUE`, finite and nonnegative; CPU
+uses 0.0 when omitted. State dictionaries are loaded and compared on CPU with
+absolute tolerance and zero relative tolerance for floating-point weights;
+integer buffers remain exact. Pair reports record `parity_atol` and
+`weights_max_abs_diff` (null for incompatible or nonfinite states). Histories,
+selected epochs, predictions and metrics keep their existing comparison rules;
+the weight tolerance does not waive a divergence elsewhere.
+
+Before importing torch, CUDA sets `CUBLAS_WORKSPACE_CONFIG=:4096:8`. Both paths
+use deterministic algorithms, `cudnn.benchmark=False` and
+`cudnn.deterministic=True`. Each CUDA phase resets peak allocation statistics,
+synchronizes immediately before starting and stopping its wall-clock timer,
+and records `peak_vram_bytes` from `max_memory_allocated` (allocated tensors,
+including live allocations at phase entry; not reserved memory or other
+processes). Conditions include device kind, GPU name, CUDA/cuDNN versions and
+total GPU memory. Best checkpoints remain CPU state dictionaries.
+
+Declare other activity with `--concurrent-workload`; `undeclared` means unknown,
+not idle. Concurrent GPU/CPU/I/O load invalidates comparative performance claims.
+GPU measurements and real training require separate authorization; CPU tests
+with mocked CUDA instrumentation are engineering checks only.
+
+## Receita v2 e Pet em CUDA (ADR-155)
+
+- Classificação: `--weight-decay 5e-4 --scheduler cosine` é a receita v2; sem as
+  flags vale a receita anterior.
+- Segmentação em CUDA: o determinismo do PyTorch fica em `warn_only` por causa
+  de `nll_loss2d`; as losses de época são comparadas com `--parity-atol` e tudo o
+  mais segue o ADR-149. Isso significa que uma execução CUDA não é
+  bit-reprodutível, apenas equivalente dentro da tolerância declarada.
+- Pet: `python -m research.workflow_benchmark.prepare_pet <images.tar.gz>
+  <annotations.tar.gz> <saida>` (teste distribuído; validação de 15% do
+  trainval, seed 37; MD5 e SHA-256 dos arquivos no manifesto).
+
+## Deteccao (VOC2007)
+
+`prepare_voc.py` reads local uncompressed VOC2007 trainval/test archives in
+sequential member order. It preserves official train.txt/val.txt/test.txt
+membership (2501/2510/4952 in the official corpus), maps the fixed alphabetical
+20-class vocabulary to YOLO IDs 0..19, excludes difficult=1, and converts
+1-based inclusive boxes to zero-based half-open boxes before normalization.
+Image dimensions are checked against XML; empty labels are retained. The
+manifest records source URLs, archive MD5/SHA-256, conversion and split counts.
+
+`paired_detection.py DATA INITIAL.pth OUTPUT --seed 37 --epochs 2 --batch-size 2`
+compares native PyTorch with `DetectionTrainer.fit` using torchvision SSDLite320
+MobileNetV3 Large, no pretrained downloads, SGD (lr=0.01, momentum=0.937,
+weight_decay=5e-4), workers=0, no AMP/scheduler/augmentation. Create VOC initial
+weights with `python -m research.workflow_benchmark.native_detection
+--make-initial INITIAL.pth --seed 37`. Synthetic fixtures declare three classes
+in their manifest; absent class metadata defaults to the 20 VOC classes.
+
+Both paths construct/load/place the model before seeding. A scoped monkeypatch
+of `detection_trainer.build_torchvision_detector` returns the prebuilt model
+without consuming RNG after the Trainer seeds, and is restored even on failure.
+Training, validation loss in train mode (including BatchNorm updates), and
+validation mAP each create a separate loader iterator in that order. Train and
+validation batches must have at least two images for SSDLite BatchNorm. Strict
+validation mAP improvement selects the first best checkpoint; absent test uses
+the first available split, evaluated in sorted order.
+
+The shared `visionforge.core.detection_metrics.mean_average_precision_50` uses
+all-points AP, not official VOC2007 11-point AP; difficult objects are removed
+because this evaluator has no difficult flag. Both test paths use the same
+`evaluate_detector`. Predictions retain complete float32 values in JSON; their
+SHA-256 uses canonical JSON rounded to 1e-6. CPU additionally requires exact
+prediction arrays; CUDA uses declared absolute tolerance for boxes/scores and
+exact labels. Losses/weights use parity_atol; mAP uses 1e-12 absolute tolerance.
+The existing content fingerprint covers all files including YOLO labels. The
+four shared phases retain partial failure reports. This is engineering parity,
+not a VOC model-quality result or a comparative performance claim.

@@ -1,14 +1,18 @@
-import { createContext, useContext, useRef, useState } from "react";
+import { createContext, useContext, useMemo, useState } from "react";
 import { pickCheckpointFile } from "../api/client";
 import { humanizeFieldPath, type ValidationError } from "../hooks/useExperiment";
 import { useT } from "../i18n/useT";
 import type { JsonSchema } from "../types/schema";
 import type { TaskDefinition } from "../types/tasks";
+import { exportConfigToYaml, reviewImportedConfig } from "../lib/yaml-config";
 import {
-  exportConfigToYaml,
-  importConfigFromYaml,
-  reviewImportedConfig,
-} from "../lib/yaml-config";
+  datasetLabel,
+  suggestExperimentName,
+  type NameStrategy,
+} from "../lib/experiment-name";
+import { buildDefaults } from "../lib/schema-defaults";
+import { countChanged, errorsUnder } from "../lib/steps";
+import { useAutoExperimentName } from "../lib/use-auto-experiment-name";
 import { AugmentPreview } from "./AugmentPreview";
 import { DatasetPicker } from "./DatasetPicker";
 import { DatasetStats } from "./DatasetStats";
@@ -22,7 +26,9 @@ import { hasNonDefaultAdvanced, isAdvanced, paramHelp } from "../lib/param-help"
 import { pickerCancelText } from "../lib/picker-feedback";
 import { AdvancedFields } from "./AdvancedFields";
 import { ModelAdvice } from "./ModelAdvice";
+import { ReviewStep, type ReviewRow, type ReviewSection } from "./ReviewStep";
 import { Rich } from "./Rich";
+import { StepShell, type StepDef } from "./StepShell";
 import {
   coerceGridValue,
   isGridableField,
@@ -406,11 +412,11 @@ function WeightsPathField({
 }
 
 
-/** Block selector — toggles between simple training and K-Fold cross-validation.
+/** Block selector — the first card of the Estratégia step.
  *
- * These are the two block kinds wired into the GUI today (the backend has a
- * few more: grid_search, transfer_learning, etc. — exposed in future phases).
- * Selecting K-Fold reveals the CrossValidationFields below.
+ * Transfer learning is not offered here: it is a single run with a frozen
+ * backbone, switched on in Modelo (ADR-156). The backend still runs one block
+ * at a time, so with it on, "Treino simples" shows as the active strategy.
  */
 function BlockSelector({
   value,
@@ -427,18 +433,13 @@ function BlockSelector({
   const options = [
     { value: "classification", label: t.paramPanel.blocks.simple },
     { value: "cross_validation", label: t.paramPanel.blocks.crossValidation },
-    { value: "transfer_learning", label: t.paramPanel.blocks.transferLearning },
     { value: "grid_search", label: t.paramPanel.blocks.gridSearch },
     { value: "random_search", label: t.paramPanel.blocks.randomSearch },
   ];
   return (
     <div
       style={{
-        marginBottom: 22,
-        padding: 16,
-        background: "rgb(var(--lt-ink, 255 255 255) / 0.02)",
-        border: "1px solid var(--vf-panel-stroke)",
-        borderRadius: 12,
+        ...card,
         display: "flex",
         flexDirection: "column",
         gap: 8,
@@ -455,7 +456,7 @@ function BlockSelector({
       >
         {t.paramPanel.kickers.strategy}
       </div>
-      <div style={{ display: "flex", gap: 8 }}>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         {options.map((o) => {
           const selected = value === o.value;
           return (
@@ -496,19 +497,6 @@ function BlockSelector({
           }}
         >
           <Rich text={t.paramPanel.blockHints.crossValidation} />
-        </div>
-      )}
-      {value === "transfer_learning" && (
-        <div
-          style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: 10,
-            color: "var(--vf-text-muted)",
-            lineHeight: 1.5,
-            marginTop: 2,
-          }}
-        >
-          <Rich text={t.paramPanel.blockHints.transferLearning} />
         </div>
       )}
       {value === "grid_search" && (
@@ -569,7 +557,7 @@ function CrossValidationFields({
     <div
       data-testid="classification-cross-validation"
       style={{
-        marginBottom: 26,
+        marginBottom: 0,
         padding: 18,
         background: "rgb(var(--lt-ink, 255 255 255) / 0.02)",
         border: "1px solid var(--vf-panel-stroke)",
@@ -716,7 +704,7 @@ const gridAxisTagStyle: React.CSSProperties = {
 };
 
 const gridBannerStyle: React.CSSProperties = {
-  marginBottom: 22,
+  marginBottom: 0,
   padding: "14px 16px",
   background: "var(--accent-soft)",
   border: "1px solid var(--accent-vf)",
@@ -960,7 +948,7 @@ function RandomSearchFields({
   return (
     <div
       style={{
-        marginBottom: 26,
+        marginBottom: 0,
         padding: 18,
         background: "rgb(var(--lt-ink, 255 255 255) / 0.02)",
         border: "1px solid var(--vf-panel-stroke)",
@@ -1225,7 +1213,7 @@ function ModelComparisonFields({
   return (
     <div
       style={{
-        marginBottom: 26,
+        marginBottom: 0,
         padding: 18,
         background: "rgb(var(--lt-ink, 255 255 255) / 0.02)",
         border: "1px solid var(--vf-panel-stroke)",
@@ -1369,7 +1357,7 @@ function TransferLearningFields({
   return (
     <div
       style={{
-        marginBottom: 26,
+        marginBottom: 0,
         padding: 18,
         background: "rgb(var(--lt-ink, 255 255 255) / 0.02)",
         border: "1px solid var(--vf-panel-stroke)",
@@ -1711,29 +1699,124 @@ function SchemaFieldVF({
   );
 }
 
-const yamlBtnStyle: React.CSSProperties = {
-  padding: "8px 14px",
-  background: "var(--accent-soft)",
-  border: "1px solid var(--accent-vf)",
-  borderRadius: 10,
-  color: "var(--vf-text)",
-  fontFamily: "var(--font-mono)",
-  fontSize: 11,
-  letterSpacing: "0.10em",
-  textTransform: "uppercase" as const,
-  cursor: "pointer",
-  whiteSpace: "nowrap" as const,
-  lineHeight: 1,
-};
-
-const yamlBtnSecondaryStyle: React.CSSProperties = {
-  ...yamlBtnStyle,
-  background: "transparent",
+// The step cards (ADR-156): the same surface the other task panels use.
+const card: React.CSSProperties = {
+  background: "var(--vf-panel)",
   border: "1px solid var(--vf-panel-stroke)",
-  color: "var(--vf-text-dim)",
+  borderRadius: 18,
+  padding: 26,
+  minWidth: 0,
 };
 
-/** Glass card container for classification parameters. */
+const sectionLabel: React.CSSProperties = {
+  fontFamily: "var(--font-mono)",
+  fontSize: 10,
+  color: "var(--vf-text-muted)",
+  letterSpacing: "0.20em",
+  textTransform: "uppercase",
+  marginBottom: 14,
+};
+
+const fieldGrid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
+  gap: 18,
+};
+
+const stepStack: React.CSSProperties = { display: "grid", gap: 16, minWidth: 0 };
+
+const hintText: React.CSSProperties = {
+  fontFamily: "var(--font-mono)",
+  fontSize: 10,
+  color: "var(--vf-text-muted)",
+  lineHeight: 1.5,
+};
+
+// Blocks chosen on the Estratégia step. Transfer learning is a single run
+// with a frozen backbone, so it lives on Modelo; the backend still takes one
+// block at a time, which is why the two cannot be combined.
+const STRATEGY_BLOCKS = [
+  "cross_validation",
+  "grid_search",
+  "random_search",
+  "model_comparison",
+];
+
+const NAME_STRATEGY: Record<string, NameStrategy> = {
+  classification: "simple",
+  cross_validation: "cv",
+  grid_search: "grid",
+  random_search: "random",
+  transfer_learning: "transfer",
+  model_comparison: "compare",
+};
+
+// The schema default ("experiment_001") and the old export fallback.
+const DEFAULT_NAMES = ["config", "experiment_001"];
+
+/** `prev` with `block` set, its own section filled with defaults when absent. */
+function withBlock(
+  prev: Record<string, unknown>,
+  v: string,
+): Record<string, unknown> {
+  // Auto-populate sensible defaults so the field block below has
+  // something to render. Backend Pydantic does the rest of the
+  // validation at submit time.
+  const next: Record<string, unknown> = { ...prev, block: v };
+  if (v === "cross_validation" && !prev["cross_validation"]) {
+    next["cross_validation"] = {
+      n_folds: 5,
+      stratified: true,
+      shuffle: true,
+      fold_seed: 42,
+    };
+  }
+  if (v === "transfer_learning" && !prev["transfer_learning"]) {
+    next["transfer_learning"] = {
+      mode: "feature_extraction",
+      unfreeze_from_layer: null,
+      backbone_lr_multiplier: 0.1,
+    };
+  }
+  if (v === "model_comparison" && !prev["model_comparison"]) {
+    // Default to two light architectures so the user only has to
+    // confirm or extend the list — never an empty selection that
+    // would block submit.
+    next["model_comparison"] = {
+      model_names: ["resnet18", "resnet50"],
+      metric: "f1",
+    };
+  }
+  if (v === "grid_search" && !prev["grid_search"]) {
+    // Axes are now built inline: the user clicks "+ valor ao grid" on
+    // the model/training fields. Start with an empty search space.
+    next["grid_search"] = { hyperparameters: {} };
+  }
+  if (v === "random_search" && !prev["random_search"]) {
+    // Default search_space exercises the two most common axes —
+    // LR (log_uniform) and weight_decay (log_uniform). Cheap to
+    // edit, immediately runnable.
+    next["random_search"] = {
+      n_trials: 10,
+      seed: 42,
+      search_space: {
+        "training.learning_rate": {
+          type: "log_uniform",
+          low: 1e-5,
+          high: 1e-2,
+        },
+        "training.weight_decay": {
+          type: "log_uniform",
+          low: 1e-6,
+          high: 1e-3,
+        },
+      },
+    };
+  }
+  return next;
+}
+
+/** The classification configuration, split into steps (ADR-156). */
 export function ParamPanel({
   task,
   schema,
@@ -1742,69 +1825,103 @@ export function ParamPanel({
   validationErrors,
 }: ParamPanelProps) {
   const t = useT();
-  const [importError, setImportError] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const isClassification = task.key === "classification";
+
+  const block = String(formData["block"] ?? "classification");
+  const modelData = (formData["model"] ?? {}) as Record<string, unknown>;
+  const trainingData = (formData["training"] ?? {}) as Record<string, unknown>;
+  const dataData = (formData["data"] ?? {}) as Record<string, unknown>;
+  const baseDir = String(dataData["base_dir"] ?? "");
+  const gridHyperparameters = (((formData["grid_search"] ??
+    {}) as Record<string, unknown>)["hyperparameters"] ?? {}) as Record<
+    string,
+    unknown[]
+  >;
+  const randomSpace = (((formData["random_search"] ?? {}) as Record<
+    string,
+    unknown
+  >)["search_space"] ?? {}) as Record<string, unknown>;
+  const cvData = (formData["cross_validation"] ?? {}) as Record<string, unknown>;
+  const sweepKeys =
+    block === "grid_search"
+      ? Object.keys(gridHyperparameters)
+      : block === "random_search"
+        ? Object.keys(randomSpace)
+        : [];
+  const asNumber = (v: unknown) => (typeof v === "number" ? v : undefined);
+  const suggestion = suggestExperimentName({
+    datasetPath: baseDir,
+    model: String(modelData["name"] ?? "") || undefined,
+    epochs: asNumber(trainingData["epochs"]),
+    learningRate: asNumber(trainingData["learning_rate"]),
+    strategy: NAME_STRATEGY[block] ?? "simple",
+    sweepKeys,
+    folds:
+      block === "cross_validation" ? asNumber(cvData["n_folds"]) : undefined,
+  });
+  const name = typeof formData["name"] === "string" ? formData["name"] : "";
+  useAutoExperimentName(
+    task.key,
+    name,
+    suggestion,
+    (next) => {
+      // Before the schema arrives the form is replaced wholesale by its
+      // defaults, so a name written now would be lost anyway.
+      if (isClassification && schema) {
+        setFormData((prev) => ({ ...prev, name: next }));
+      }
+    },
+    DEFAULT_NAMES,
+  );
+  const defaults = useMemo(
+    () =>
+      schema
+        ? (buildDefaults(schema, schema.$defs ?? {}) as Record<string, unknown>)
+        : {},
+    [schema],
+  );
 
   const handleExport = () => {
-    const expName = (formData["name"] as string) || "config";
+    const expName = name || "config";
     exportConfigToYaml(formData, expName);
   };
 
-  const handleImportClick = () => {
-    setImportError(null);
-    fileInputRef.current?.click();
+  // ExperimentNameCard parses the file; this vouches for the types.
+  const handleImportConfig = (raw: Record<string, unknown>): string | null => {
+    // Without the schema there is nothing to vouch for the types, and the
+    // panel only offers the import once it has loaded.
+    if (!schema) return null;
+    // Load what we can so the user sees it in the form, but never a value of
+    // the wrong type: the panels call string methods on these fields, and one
+    // number in `data.base_dir` blanks the whole page. A flagged value is
+    // left out (as if the YAML had not set it) and reported below.
+    const { data, issues, ignored, missing } = reviewImportedConfig(
+      t,
+      raw,
+      schema,
+      schema.$defs ?? {},
+    );
+    setFormData(data);
+    if (issues.length === 0) return null;
+    const summary = issues
+      .slice(0, 5)
+      .map((iss) => `· ${humanizeFieldPath(t, iss.field)} — ${iss.message}`)
+      .join("\n");
+    // The list says what was found; the lines after it say what that
+    // leaves to do, each only when it is so.
+    const lines = [
+      t.paramPanel.importWarnings(
+        issues.length,
+        summary,
+        Math.max(0, issues.length - 5),
+      ),
+    ];
+    if (ignored > 0) lines.push(t.paramPanel.importDropped(ignored));
+    if (missing > 0) lines.push(t.paramPanel.importMissing(missing));
+    return lines.join("\n\n");
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    // Reset input so the same file can be re-imported if needed
-    e.target.value = "";
-    void importConfigFromYaml(t, file).then((result) => {
-      if ("error" in result) {
-        setImportError(result.error);
-        return;
-      }
-      // Without the schema there is nothing to vouch for the types, and the
-      // panel only offers the import once it has loaded.
-      if (!schema) return;
-      // Load what we can so the user sees it in the form, but never a value of
-      // the wrong type: the panels call string methods on these fields, and one
-      // number in `data.base_dir` blanks the whole page. A flagged value is
-      // left out (as if the YAML had not set it) and reported below.
-      const { data, issues, ignored, missing } = reviewImportedConfig(
-        t,
-        result.data,
-        schema,
-        schema.$defs ?? {},
-      );
-      setFormData(data);
-      if (issues.length === 0) {
-        setImportError(null);
-      } else {
-        const summary = issues
-          .slice(0, 5)
-          .map(
-            (iss) => `· ${humanizeFieldPath(t, iss.field)} — ${iss.message}`,
-          )
-          .join("\n");
-        // The list says what was found; the lines after it say what that
-        // leaves to do, each only when it is so.
-        const lines = [
-          t.paramPanel.importWarnings(
-            issues.length,
-            summary,
-            Math.max(0, issues.length - 5),
-          ),
-        ];
-        if (ignored > 0) lines.push(t.paramPanel.importDropped(ignored));
-        if (missing > 0) lines.push(t.paramPanel.importMissing(missing));
-        setImportError(lines.join("\n\n"));
-      }
-    });
-  };
-
-  if (task.key !== "classification") {
+  if (!isClassification) {
     return (
       <section
         style={{
@@ -1901,9 +2018,6 @@ export function ParamPanel({
     resolveSchema(schema.properties["data"], defs);
   const dataProps = dataSchema?.properties ?? {};
 
-  const modelData = (formData["model"] ?? {}) as Record<string, unknown>;
-  const trainingData = (formData["training"] ?? {}) as Record<string, unknown>;
-  const dataData = (formData["data"] ?? {}) as Record<string, unknown>;
   // O scheduler mora dentro do avançado; se já houver um escolhido, a seção abre
   // sozinha — esconder uma decisão que a pessoa tomou é pior que mostrar demais.
   const schedulerChosen =
@@ -1916,12 +2030,7 @@ export function ParamPanel({
 
   // Grid search axis state, shared with every SchemaFieldVF via context so each
   // gridable field can render its "+ valor ao grid" affordance.
-  const gridEnabled = formData["block"] === "grid_search";
-  const gridHyperparameters = (((formData["grid_search"] ??
-    {}) as Record<string, unknown>)["hyperparameters"] ?? {}) as Record<
-    string,
-    unknown[]
-  >;
+  const gridEnabled = block === "grid_search";
   const gridCtx: GridContextValue = {
     enabled: gridEnabled,
     hyperparameters: gridHyperparameters,
@@ -1937,722 +2046,618 @@ export function ParamPanel({
       }),
   };
 
-  return (
-    <GridContext.Provider value={gridCtx}>
-    <section
-      key={task.key}
-      style={{
-        position: "relative",
-        padding: 28,
-        background: "rgb(var(--lt-surface, 10 12 16) / 0.55)",
-        backdropFilter: "blur(20px) saturate(140%)",
-        WebkitBackdropFilter: "blur(20px) saturate(140%)",
-        border: "1px solid var(--vf-panel-stroke)",
-        borderRadius: 20,
-        boxShadow:
-          "0 30px 80px rgb(var(--lt-shade, 0 0 0) / 0.4), inset 0 1px 0 rgb(var(--lt-ink, 255 255 255) / 0.04)",
-        overflow: "hidden",
-        animation: "fadeUp 360ms ease forwards",
-      }}
-    >
-      {/* Accent glow corner */}
-      <span
-        style={{
-          position: "absolute",
-          top: -80,
-          right: -80,
-          width: 280,
-          height: 280,
-          borderRadius: "50%",
-          background: "var(--accent-soft)",
-          filter: "blur(40px)",
-          pointerEvents: "none",
-        }}
-      />
+  const tlOn = block === "transfer_learning";
+  const tlLocked = STRATEGY_BLOCKS.includes(block);
 
-      {/* Hidden file input for YAML import */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".yaml,.yml"
-        style={{ display: "none" }}
-        onChange={handleFileChange}
-      />
+  const changed = (paths: readonly string[]) =>
+    countChanged(formData, defaults, paths);
+  const errorsIn = (include: string[], exclude: string[] = []) =>
+    errorsUnder(validationErrors, include) - errorsUnder(validationErrors, exclude);
 
-      {/* Experiment name + task top row + YAML action buttons */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr auto",
-          gap: 18,
-          marginBottom: importError ? 10 : 26,
-          position: "relative",
-          alignItems: "end",
-        }}
-      >
-        {schema.properties?.["name"] && (
-          <SchemaFieldVF
-            name="name"
-            schema={schema.properties["name"]}
-            defs={defs}
-            value={formData["name"]}
-            onChange={(v) =>
-              setFormData((prev) => ({ ...prev, name: v }))
-            }
-            errors={validationErrors}
-            path={["name"]}
-          />
-        )}
-        {/* task (binário/multiclass) e num_classes vivem agora na seção
-            // dataset → // classes, perto da detecção de classes. */}
-        {/* YAML export / import buttons */}
-        <div style={{ display: "flex", gap: 8, paddingBottom: 2 }}>
-          <button
-            type="button"
-            onClick={handleExport}
-            style={yamlBtnStyle}
-            title={t.experimentHeader.exportTitle}
-          >
-            {t.experimentHeader.exportYaml}
-          </button>
-          <button
-            type="button"
-            onClick={handleImportClick}
-            style={yamlBtnSecondaryStyle}
-            title={t.experimentHeader.importTitle}
-          >
-            {t.experimentHeader.importYaml}
-          </button>
-        </div>
-      </div>
+  // DataLoader knobs sit on Treinamento, the transforms on Imagem: both are
+  // under `data`, so they are taken out of the Dados count.
+  const dataElsewhere = [
+    "data.transforms",
+    "data.preprocessing",
+    "data.num_workers",
+    "data.pin_memory",
+  ];
+  const imagePaths = [...IMAGE_KEYS, "augment", ...AUGMENT_KEYS].map(
+    (k) => `data.transforms.${k}`,
+  );
+  const trainingPaths = [
+    ...TRAINING_FIELD_ORDER.map((k) => `training.${k}`),
+    "training.scheduler",
+    "data.num_workers",
+    "data.pin_memory",
+  ];
 
-      {/* Import error banner */}
-      {importError && (
-        <div
-          style={{
-            marginBottom: 18,
-            padding: "10px 14px",
-            background: "oklch(0.704 0.191 22.216 / 0.10)",
-            border: "1px solid oklch(0.704 0.191 22.216 / 0.4)",
-            borderRadius: 10,
-            fontFamily: "var(--font-mono)",
-            fontSize: 12,
-            color: "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.14 22)",
-            whiteSpace: "pre-line",
-            lineHeight: 1.6,
-          }}
-        >
-          {importError}
-        </div>
-      )}
+  const strategyLabel =
+    block === "cross_validation"
+      ? t.paramPanel.blocks.crossValidation
+      : block === "grid_search"
+        ? t.paramPanel.blocks.gridSearch
+        : block === "random_search"
+          ? t.paramPanel.blocks.randomSearch
+          : block === "model_comparison"
+            ? t.anomalyPanel.compareLabel
+            : t.paramPanel.blocks.simple;
 
-      {/* Divider */}
-      <div
-        style={{
-          height: 1,
-          width: "100%",
-          background:
-            "linear-gradient(90deg, transparent, var(--vf-panel-stroke), transparent)",
-          marginBottom: 26,
-        }}
-      />
+  const labels = t.paramPanel.fieldLabels;
+  const show = (v: unknown): string =>
+    v == null || v === ""
+      ? "—"
+      : typeof v === "boolean"
+        ? (v ? t.toggle.on : t.toggle.off).toLowerCase()
+        : Array.isArray(v)
+          ? v.join(", ")
+          : String(v);
+  const row = (label: string, value: unknown, path?: string): ReviewRow => ({
+    label,
+    value: show(value),
+    changed: path ? changed([path]) > 0 : undefined,
+  });
+  const transforms = (dataData["transforms"] ?? {}) as Record<string, unknown>;
+  const tlData = (formData["transfer_learning"] ?? {}) as Record<string, unknown>;
 
-      {/* Block selector — toggles classification / CV / transfer learning */}
-      <BlockSelector
-        value={String(formData["block"] ?? "classification")}
-        onChange={(v) =>
-          setFormData((prev) => {
-            // Auto-populate sensible defaults so the field block below has
-            // something to render. Backend Pydantic does the rest of the
-            // validation at submit time.
-            const next: Record<string, unknown> = { ...prev, block: v };
-            if (v === "cross_validation" && !prev["cross_validation"]) {
-              next["cross_validation"] = {
-                n_folds: 5,
-                stratified: true,
-                shuffle: true,
-                fold_seed: 42,
-              };
-            }
-            if (v === "transfer_learning" && !prev["transfer_learning"]) {
-              next["transfer_learning"] = {
-                mode: "feature_extraction",
-                unfreeze_from_layer: null,
-                backbone_lr_multiplier: 0.1,
-              };
-            }
-            if (v === "model_comparison" && !prev["model_comparison"]) {
-              // Default to two light architectures so the user only has to
-              // confirm or extend the list — never an empty selection that
-              // would block submit.
-              next["model_comparison"] = {
-                model_names: ["resnet18", "resnet50"],
-                metric: "f1",
-              };
-            }
-            if (v === "grid_search" && !prev["grid_search"]) {
-              // Axes are now built inline: the user clicks "+ valor ao grid" on
-              // the model/training fields. Start with an empty search space.
-              next["grid_search"] = { hyperparameters: {} };
-            }
-            if (v === "random_search" && !prev["random_search"]) {
-              // Default search_space exercises the two most common axes —
-              // LR (log_uniform) and weight_decay (log_uniform). Cheap to
-              // edit, immediately runnable.
-              next["random_search"] = {
-                n_trials: 10,
-                seed: 42,
-                search_space: {
-                  "training.learning_rate": {
-                    type: "log_uniform",
-                    low: 1e-5,
-                    high: 1e-2,
-                  },
-                  "training.weight_decay": {
-                    type: "log_uniform",
-                    low: 1e-6,
-                    high: 1e-3,
-                  },
-                },
-              };
-            }
-            return next;
-          })
-        }
-      />
+  const reviewSections: ReviewSection[] = [
+    {
+      step: "data",
+      rows: [
+        row(labels.base_dir, baseDir),
+        row(labels.task, formData["task"], "task"),
+        row(
+          labels.num_classes,
+          formData["task"] === "binary" ? 1 : modelData["num_classes"],
+          "model.num_classes",
+        ),
+      ],
+    },
+    {
+      step: "strategy",
+      rows: [
+        row(t.experimentHeader.strategyTitle, strategyLabel, tlLocked ? "block" : undefined),
+        ...(block === "cross_validation"
+          ? [row(labels.n_folds, cvData["n_folds"], "cross_validation.n_folds")]
+          : []),
+        ...(block === "model_comparison"
+          ? [
+              row(
+                labels.model_names,
+                ((formData["model_comparison"] ?? {}) as Record<string, unknown>)[
+                  "model_names"
+                ],
+              ),
+            ]
+          : []),
+      ],
+    },
+    {
+      step: "model",
+      rows: [
+        row(labels["model.name"], modelData["name"], "model.name"),
+        row(labels.pretrained, modelData["pretrained"], "model.pretrained"),
+        ...(modelData["weights_path"]
+          ? [row(labels.weights_path, modelData["weights_path"], "model.weights_path")]
+          : []),
+        {
+          label: t.paramPanel.blocks.transferLearning,
+          value: tlOn ? show(tlData["mode"]) : show(false),
+          changed: tlOn,
+        },
+      ],
+    },
+    {
+      step: "training",
+      rows: (["epochs", "learning_rate", "batch_size", "seed", "optimizer"] as const).map(
+        (k) => row(labels[k], trainingData[k], `training.${k}`),
+      ),
+    },
+    {
+      step: "image",
+      rows: [
+        row(labels.image_size, transforms["image_size"], "data.transforms.image_size"),
+        row(t.detectionPanel.augmentation.title, augmentOn, "data.transforms.augment"),
+      ],
+    },
+  ];
 
-      {/* Cross-validation fields — only when the block is K-Fold */}
-      {formData["block"] === "cross_validation" &&
-        schema.properties?.["cross_validation"] && (
-          <CrossValidationFields
-            schema={schema.properties["cross_validation"]}
-            defs={defs}
-            value={
-              (formData["cross_validation"] ?? {}) as Record<string, unknown>
-            }
-            onChange={(v) =>
-              setFormData((prev) => ({ ...prev, cross_validation: v }))
-            }
-            errors={validationErrors}
-          />
-        )}
-
-      {/* Transfer learning fields — only when the block is TL */}
-      {formData["block"] === "transfer_learning" &&
-        schema.properties?.["transfer_learning"] && (
-          <TransferLearningFields
-            schema={schema.properties["transfer_learning"]}
-            defs={defs}
-            value={
-              (formData["transfer_learning"] ?? {}) as Record<string, unknown>
-            }
-            onChange={(v) =>
-              setFormData((prev) => ({ ...prev, transfer_learning: v }))
-            }
-            errors={validationErrors}
-          />
-        )}
-
-      {/* Model comparison fields — only when comparing architectures */}
-      {formData["block"] === "model_comparison" &&
-        schema.properties?.["model_comparison"] && (
-          <ModelComparisonFields
-            schema={schema.properties["model_comparison"]}
-            defs={defs}
-            value={
-              (formData["model_comparison"] ?? {}) as Record<string, unknown>
-            }
-            onChange={(v) =>
-              setFormData((prev) => ({ ...prev, model_comparison: v }))
-            }
-            errors={validationErrors}
-          />
-        )}
-
-      {/* Grid search — inline "+" axis editing happens on the model/training
-          fields below; this banner explains the workflow + previews trials. */}
-      {formData["block"] === "grid_search" && (
-        <GridSearchBanner hyperparameters={gridHyperparameters} />
-      )}
-
-      {/* Random search fields — only when block is random_search */}
-      {formData["block"] === "random_search" && (
-        <RandomSearchFields
-          value={(formData["random_search"] ?? {}) as Record<string, unknown>}
-          onChange={(v) =>
-            setFormData((prev) => ({ ...prev, random_search: v }))
-          }
-        />
-      )}
-
-      {/* Model section */}
-      <div
-        style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: 10,
-          color: "var(--vf-text-muted)",
-          letterSpacing: "0.20em",
-          textTransform: "uppercase",
-          marginBottom: 14,
-        }}
-      >
-        {t.paramPanel.kickers.model}
-      </div>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1.5fr 1fr 1fr",
-          gap: 18,
-          marginBottom: 26,
-          position: "relative",
-        }}
-      >
-        {modelProps["name"] && (
-          <SchemaFieldVF
-            name="name"
-            schema={modelProps["name"]}
-            defs={defs}
-            value={modelData["name"]}
-            onChange={(v) => setField("model", "name", v)}
-            errors={validationErrors}
-            path={["model", "name"]}
-          />
-        )}
-        {/* num_classes movido para // dataset → // classes */}
-        {modelProps["pretrained"] && (
-          <SchemaFieldVF
-            name="pretrained"
-            schema={modelProps["pretrained"]}
-            defs={defs}
-            value={modelData["pretrained"]}
-            onChange={(v) => setField("model", "pretrained", v)}
-            errors={validationErrors}
-            path={["model", "pretrained"]}
-          />
-        )}
-        <WeightsPathField
-          value={String(modelData["weights_path"] ?? "")}
-          onChange={(v) => setField("model", "weights_path", v === "" ? null : v)}
-        />
-      </div>
-
-      {/* Divider */}
-      <div
-        style={{
-          height: 1,
-          width: "100%",
-          background:
-            "linear-gradient(90deg, transparent, var(--vf-panel-stroke), transparent)",
-          marginBottom: 26,
-        }}
-      />
-
-      {/* Training section */}
-      <div
-        style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: 10,
-          color: "var(--vf-text-muted)",
-          letterSpacing: "0.20em",
-          textTransform: "uppercase",
-          marginBottom: 14,
-        }}
-      >
-        {t.paramPanel.kickers.training}
-      </div>
-      <div
-        data-tour="training"
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(3, 1fr)",
-          gap: 18,
-          marginBottom: 26,
-          position: "relative",
-        }}
-      >
-        {TRAINING_FIELD_ORDER.filter((key) => !isAdvanced(key)).map((key) =>
-          trainingProps[key] ? (
-            <SchemaFieldVF
-              key={key}
-              name={key}
-              schema={trainingProps[key]}
-              defs={defs}
-              value={trainingData[key]}
-              onChange={(v) => setField("training", key, v)}
-              errors={validationErrors}
-              path={["training", key]}
+  const steps: StepDef[] = [
+    {
+      id: "data",
+      summary: datasetLabel(baseDir) || undefined,
+      changes: changed([
+        "data.train_dir",
+        "data.val_dir",
+        "data.test_dir",
+        "task",
+        "model.num_classes",
+      ]),
+      missing: baseDir.trim() === "",
+      errors: errorsIn(["data", "task", "model.num_classes"], dataElsewhere),
+      content: (
+        <div style={stepStack}>
+          <div style={card}>
+            <div style={sectionLabel}>{t.paramPanel.kickers.dataset}</div>
+            <DatasetPicker
+              baseDir={(dataData["base_dir"] as string) ?? ""}
+              trainDir={(dataData["train_dir"] as string) ?? ""}
+              valDir={(dataData["val_dir"] as string) ?? ""}
+              testDir={(dataData["test_dir"] as string) ?? ""}
+              onChange={(next) =>
+                setFormData((prev) => {
+                  const sec = (prev["data"] ?? {}) as Record<string, unknown>;
+                  return { ...prev, data: { ...sec, ...next } };
+                })
+              }
             />
-          ) : null,
-        )}
-      </div>
-      <AdvancedFields
-        count={
-          TRAINING_FIELD_ORDER.filter((key) => isAdvanced(key) && trainingProps[key])
-            .length + (trainingProps["scheduler"] ? 1 : 0)
-        }
-        startOpen={
-          schedulerChosen ||
-          hasNonDefaultAdvanced(
-            trainingData,
-            Object.fromEntries(
-              Object.entries(trainingProps).map(([k, v]) => [
-                k,
-                resolveSchema(v, defs).default,
-              ]),
-            ),
-          )
-        }
-      >
-        {TRAINING_FIELD_ORDER.filter((key) => isAdvanced(key)).map((key) =>
-          trainingProps[key] ? (
-            <SchemaFieldVF
-              key={key}
-              name={key}
-              schema={trainingProps[key]}
-              defs={defs}
-              value={trainingData[key]}
-              onChange={(v) => setField("training", key, v)}
-              errors={validationErrors}
-              path={["training", key]}
+
+            <DatasetStats
+              baseDir={(dataData["base_dir"] as string) ?? ""}
+              trainDir={(dataData["train_dir"] as string) ?? ""}
+              valDir={(dataData["val_dir"] as string) ?? ""}
+              testDir={(dataData["test_dir"] as string) ?? ""}
+              onApplyClasses={(n) =>
+                setFormData((prev) => {
+                  // 2-class datasets → BCE head (num_classes=1, task=binary)
+                  // Anything else → multiclass with the detected count
+                  const model = (prev["model"] ?? {}) as Record<string, unknown>;
+                  const isBinary = n === 2;
+                  return {
+                    ...prev,
+                    task: isBinary ? "binary" : "multiclass",
+                    model: { ...model, num_classes: isBinary ? 1 : n },
+                  };
+                })
+              }
             />
-          ) : null,
-        )}
-        {trainingProps["scheduler"] && (
-          <div style={{ gridColumn: "1 / -1" }}>
-            <SchedulerFields
-              schema={trainingProps["scheduler"]}
-              defs={defs}
-              value={(trainingData["scheduler"] ?? {}) as Record<string, unknown>}
-              onChange={(v) => setField("training", "scheduler", v)}
-              errors={validationErrors}
+
+            <DatasetAudit
+              baseDir={(dataData["base_dir"] as string) ?? ""}
+              trainDir={(dataData["train_dir"] as string) ?? "train"}
+              valDir={(dataData["val_dir"] as string) ?? "val"}
+              testDir={(dataData["test_dir"] as string) ?? "test"}
             />
           </div>
-        )}
-      </AdvancedFields>
-      <ModelAdvice
-        task="classification"
-        architecture={String(modelData["name"] ?? "")}
-        optimizer={String(trainingData["optimizer"] ?? "adam")}
-        learningRate={Number(trainingData["learning_rate"] ?? 0)}
-        baseDir={String(dataData["base_dir"] ?? "") || undefined}
-        pretrained={modelData["pretrained"] !== false}
-        onApply={(next) => {
-          setField("training", "optimizer", next.optimizer);
-          setField("training", "learning_rate", next.learning_rate);
-        }}
-      />
 
-      {/* Divider */}
-      <div
-        style={{
-          height: 1,
-          width: "100%",
-          background:
-            "linear-gradient(90deg, transparent, var(--vf-panel-stroke), transparent)",
-          marginBottom: 26,
-        }}
-      />
-
-      {/* Data section */}
-      <div
-        style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: 10,
-          color: "var(--vf-text-muted)",
-          letterSpacing: "0.20em",
-          textTransform: "uppercase",
-          marginBottom: 14,
-        }}
-      >
-        {t.paramPanel.kickers.dataset}
-      </div>
-
-      <DatasetPicker
-        baseDir={(dataData["base_dir"] as string) ?? ""}
-        trainDir={(dataData["train_dir"] as string) ?? ""}
-        valDir={(dataData["val_dir"] as string) ?? ""}
-        testDir={(dataData["test_dir"] as string) ?? ""}
-        onChange={(next) =>
-          setFormData((prev) => {
-            const sec = (prev["data"] ?? {}) as Record<string, unknown>;
-            return { ...prev, data: { ...sec, ...next } };
-          })
-        }
-      />
-
-      <DatasetStats
-        baseDir={(dataData["base_dir"] as string) ?? ""}
-        trainDir={(dataData["train_dir"] as string) ?? ""}
-        valDir={(dataData["val_dir"] as string) ?? ""}
-        testDir={(dataData["test_dir"] as string) ?? ""}
-        onApplyClasses={(n) =>
-          setFormData((prev) => {
-            // 2-class datasets → BCE head (num_classes=1, task=binary)
-            // Anything else → multiclass with the detected count
-            const model = (prev["model"] ?? {}) as Record<string, unknown>;
-            const isBinary = n === 2;
-            return {
-              ...prev,
-              task: isBinary ? "binary" : "multiclass",
-              model: { ...model, num_classes: isBinary ? 1 : n },
-            };
-          })
-        }
-      />
-
-      <DatasetAudit
-        baseDir={(dataData["base_dir"] as string) ?? ""}
-        trainDir={(dataData["train_dir"] as string) ?? "train"}
-        valDir={(dataData["val_dir"] as string) ?? "val"}
-        testDir={(dataData["test_dir"] as string) ?? "test"}
-      />
-
-      {/* Classes — task + nº de classes, alimentados pela detecção do dataset.
-          Posicionados aqui (não no topo / em // modelo) porque o número de
-          classes é uma propriedade do dataset selecionado acima. */}
-      <div
-        style={{
-          marginTop: 16,
-          marginBottom: 12,
-          fontFamily: "var(--font-mono)",
-          fontSize: 10,
-          color: "var(--vf-text-muted)",
-          letterSpacing: "0.20em",
-          textTransform: "uppercase",
-        }}
-      >
-        {t.paramPanel.kickers.classes}
-      </div>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: 18,
-          marginBottom: 26,
-        }}
-      >
-        {schema.properties?.["task"] && (
-          <SchemaFieldVF
-            name="task"
-            schema={schema.properties["task"]}
-            defs={defs}
-            value={formData["task"]}
+          {/* Classes — task + nº de classes, alimentados pela detecção do
+              dataset: o número de classes é uma propriedade do dataset. */}
+          <div style={card}>
+            <div style={sectionLabel}>{t.paramPanel.kickers.classes}</div>
+            <div style={fieldGrid}>
+              {schema.properties?.["task"] && (
+                <SchemaFieldVF
+                  name="task"
+                  schema={schema.properties["task"]}
+                  defs={defs}
+                  value={formData["task"]}
+                  onChange={(v) =>
+                    setFormData((prev) => {
+                      // Binary task is incompatible with num_classes >= 2; auto-lock
+                      // num_classes = 1 to mirror the Pydantic model_validator.
+                      const model = (prev["model"] ?? {}) as Record<string, unknown>;
+                      const nextNumClasses =
+                        v === "binary"
+                          ? 1
+                          : (model["num_classes"] === 1 ? 2 : model["num_classes"]);
+                      return {
+                        ...prev,
+                        task: v,
+                        model: { ...model, num_classes: nextNumClasses },
+                      };
+                    })
+                  }
+                  errors={validationErrors}
+                  path={["task"]}
+                />
+              )}
+              {modelProps["num_classes"] &&
+                (formData["task"] === "binary" ? (
+                  <LockedNumClasses />
+                ) : (
+                  <SchemaFieldVF
+                    name="num_classes"
+                    schema={modelProps["num_classes"]}
+                    defs={defs}
+                    value={modelData["num_classes"]}
+                    onChange={(v) => setField("model", "num_classes", v)}
+                    errors={validationErrors}
+                    path={["model", "num_classes"]}
+                  />
+                ))}
+            </div>
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: "strategy",
+      summary: strategyLabel,
+      changes: tlLocked ? changed(["block", block]) : 0,
+      errors: errorsIn(["block", ...STRATEGY_BLOCKS]),
+      content: (
+        <div style={stepStack}>
+          <BlockSelector
+            // Transfer learning is a single run switched on in Modelo.
+            value={tlOn ? "classification" : block}
             onChange={(v) =>
+              setFormData((prev) =>
+                // "Treino simples" already shows as active with transfer
+                // learning on; picking it again must not switch that off.
+                v === "classification" && prev["block"] === "transfer_learning"
+                  ? prev
+                  : withBlock(prev, v),
+              )
+            }
+          />
+
+          {/* Cross-validation fields — only when the block is K-Fold */}
+          {block === "cross_validation" &&
+            schema.properties?.["cross_validation"] && (
+              <CrossValidationFields
+                schema={schema.properties["cross_validation"]}
+                defs={defs}
+                value={cvData}
+                onChange={(v) =>
+                  setFormData((prev) => ({ ...prev, cross_validation: v }))
+                }
+                errors={validationErrors}
+              />
+            )}
+
+          {/* Model comparison fields — only when comparing architectures */}
+          {block === "model_comparison" &&
+            schema.properties?.["model_comparison"] && (
+              <ModelComparisonFields
+                schema={schema.properties["model_comparison"]}
+                defs={defs}
+                value={
+                  (formData["model_comparison"] ?? {}) as Record<string, unknown>
+                }
+                onChange={(v) =>
+                  setFormData((prev) => ({ ...prev, model_comparison: v }))
+                }
+                errors={validationErrors}
+              />
+            )}
+
+          {/* Grid search — inline "+" axis editing happens on the model and
+              training fields; this banner explains the workflow + previews trials. */}
+          {block === "grid_search" && (
+            <GridSearchBanner hyperparameters={gridHyperparameters} />
+          )}
+
+          {/* Random search fields — only when block is random_search */}
+          {block === "random_search" && (
+            <RandomSearchFields
+              value={(formData["random_search"] ?? {}) as Record<string, unknown>}
+              onChange={(v) =>
+                setFormData((prev) => ({ ...prev, random_search: v }))
+              }
+            />
+          )}
+        </div>
+      ),
+    },
+    {
+      id: "model",
+      summary: String(modelData["name"] ?? "") || undefined,
+      changes:
+        changed(["model.name", "model.pretrained", "model.weights_path"]) +
+        (tlOn ? 1 : 0),
+      errors: errorsIn(["model", "transfer_learning"], ["model.num_classes"]),
+      content: (
+        <div style={stepStack}>
+          <div style={card}>
+            <div style={sectionLabel}>{t.paramPanel.kickers.model}</div>
+            <div style={fieldGrid}>
+              {modelProps["name"] && (
+                <SchemaFieldVF
+                  name="name"
+                  schema={modelProps["name"]}
+                  defs={defs}
+                  value={modelData["name"]}
+                  onChange={(v) => setField("model", "name", v)}
+                  errors={validationErrors}
+                  path={["model", "name"]}
+                />
+              )}
+              {modelProps["pretrained"] && (
+                <SchemaFieldVF
+                  name="pretrained"
+                  schema={modelProps["pretrained"]}
+                  defs={defs}
+                  value={modelData["pretrained"]}
+                  onChange={(v) => setField("model", "pretrained", v)}
+                  errors={validationErrors}
+                  path={["model", "pretrained"]}
+                />
+              )}
+              <WeightsPathField
+                value={String(modelData["weights_path"] ?? "")}
+                onChange={(v) => setField("model", "weights_path", v === "" ? null : v)}
+              />
+            </div>
+          </div>
+
+          <div style={card} data-testid="classification-transfer-learning">
+            <div style={fieldGrid}>
+              {/* A disabled fieldset disables the switch inside it. */}
+              <fieldset
+                disabled={tlLocked}
+                style={{
+                  border: 0,
+                  padding: 0,
+                  margin: 0,
+                  minWidth: 0,
+                  opacity: tlLocked ? 0.55 : 1,
+                }}
+              >
+                <Toggle
+                  label={t.paramPanel.blocks.transferLearning}
+                  value={tlOn}
+                  onChange={(on) =>
+                    setFormData((prev) =>
+                      withBlock(prev, on ? "transfer_learning" : "classification"),
+                    )
+                  }
+                />
+              </fieldset>
+            </div>
+            <div style={{ ...hintText, marginTop: 10 }}>
+              {tlLocked ? (
+                t.stepShell.transferLocked
+              ) : (
+                <Rich text={t.paramPanel.blockHints.transferLearning} />
+              )}
+            </div>
+            {tlOn && schema.properties?.["transfer_learning"] && (
+              <div style={{ marginTop: 18 }}>
+                <TransferLearningFields
+                  schema={schema.properties["transfer_learning"]}
+                  defs={defs}
+                  value={tlData}
+                  onChange={(v) =>
+                    setFormData((prev) => ({ ...prev, transfer_learning: v }))
+                  }
+                  errors={validationErrors}
+                />
+              </div>
+            )}
+          </div>
+
+          <ModelAdvice
+            task="classification"
+            architecture={String(modelData["name"] ?? "")}
+            optimizer={String(trainingData["optimizer"] ?? "adam")}
+            learningRate={Number(trainingData["learning_rate"] ?? 0)}
+            baseDir={String(dataData["base_dir"] ?? "") || undefined}
+            pretrained={modelData["pretrained"] !== false}
+            onApply={(next) => {
+              setField("training", "optimizer", next.optimizer);
+              setField("training", "learning_rate", next.learning_rate);
+            }}
+          />
+        </div>
+      ),
+    },
+    {
+      id: "training",
+      summary: `e${show(trainingData["epochs"])} · lr ${show(trainingData["learning_rate"])}`,
+      changes: changed(trainingPaths),
+      errors: errorsIn(["training", "data.num_workers", "data.pin_memory"]),
+      content: (
+        <div data-tour="training" style={card}>
+          <div style={fieldGrid}>
+            {TRAINING_FIELD_ORDER.filter((key) => !isAdvanced(key)).map((key) =>
+              trainingProps[key] ? (
+                <SchemaFieldVF
+                  key={key}
+                  name={key}
+                  schema={trainingProps[key]}
+                  defs={defs}
+                  value={trainingData[key]}
+                  onChange={(v) => setField("training", key, v)}
+                  errors={validationErrors}
+                  path={["training", key]}
+                />
+              ) : null,
+            )}
+          </div>
+          <div style={{ marginTop: 22 }}>
+            <AdvancedFields
+              flush
+              count={
+                TRAINING_FIELD_ORDER.filter((key) => isAdvanced(key) && trainingProps[key])
+                  .length +
+                (trainingProps["scheduler"] ? 1 : 0) +
+                (dataProps["num_workers"] ? 1 : 0) +
+                (dataProps["pin_memory"] ? 1 : 0)
+              }
+              startOpen={
+                schedulerChosen ||
+                hasNonDefaultAdvanced(
+                  trainingData,
+                  Object.fromEntries(
+                    Object.entries(trainingProps).map(([k, v]) => [
+                      k,
+                      resolveSchema(v, defs).default,
+                    ]),
+                  ),
+                ) ||
+                changed(["data.num_workers", "data.pin_memory"]) > 0
+              }
+            >
+              {TRAINING_FIELD_ORDER.filter((key) => isAdvanced(key)).map((key) =>
+                trainingProps[key] ? (
+                  <SchemaFieldVF
+                    key={key}
+                    name={key}
+                    schema={trainingProps[key]}
+                    defs={defs}
+                    value={trainingData[key]}
+                    onChange={(v) => setField("training", key, v)}
+                    errors={validationErrors}
+                    path={["training", key]}
+                  />
+                ) : null,
+              )}
+              {trainingProps["scheduler"] && (
+                <div style={{ gridColumn: "1 / -1" }}>
+                  <SchedulerFields
+                    schema={trainingProps["scheduler"]}
+                    defs={defs}
+                    value={(trainingData["scheduler"] ?? {}) as Record<string, unknown>}
+                    onChange={(v) => setField("training", "scheduler", v)}
+                    errors={validationErrors}
+                  />
+                </div>
+              )}
+              {(dataProps["num_workers"] || dataProps["pin_memory"]) && (
+                <div style={{ ...sectionLabel, gridColumn: "1 / -1", marginBottom: 0 }}>
+                  {t.stepShell.groups.mechanics}
+                </div>
+              )}
+              {dataProps["num_workers"] && (
+                <WorkersField
+                  value={(dataData["num_workers"] as number) ?? -1}
+                  onChange={(v) => setField("data", "num_workers", v)}
+                />
+              )}
+              {dataProps["pin_memory"] && (
+                <SchemaFieldVF
+                  name="pin_memory"
+                  schema={dataProps["pin_memory"]}
+                  defs={defs}
+                  value={dataData["pin_memory"]}
+                  onChange={(v) => setField("data", "pin_memory", v)}
+                  errors={validationErrors}
+                  path={["data", "pin_memory"]}
+                />
+              )}
+            </AdvancedFields>
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: "image",
+      summary:
+        transforms["image_size"] != null
+          ? `${show(transforms["image_size"])} px`
+          : undefined,
+      changes: changed(imagePaths) + changed(["data.preprocessing"]),
+      errors: errorsIn(["data.transforms", "data.preprocessing"]),
+      content: (
+        <div style={stepStack}>
+          {/* Pré-processamento (filtros) — roda antes de augmentation/normalização */}
+          <PreprocessingPanel
+            baseDir={(dataData["base_dir"] as string) ?? ""}
+            steps={toUIPreprocessingSteps(
+              ((dataData["preprocessing"] ?? {}) as Record<string, unknown>)["steps"],
+            )}
+            onChange={(uiSteps) =>
               setFormData((prev) => {
-                // Binary task is incompatible with num_classes >= 2; auto-lock
-                // num_classes = 1 to mirror the Pydantic model_validator.
-                const model = (prev["model"] ?? {}) as Record<string, unknown>;
-                const nextNumClasses =
-                  v === "binary"
-                    ? 1
-                    : (model["num_classes"] === 1 ? 2 : model["num_classes"]);
+                const sec = (prev["data"] ?? {}) as Record<string, unknown>;
+                const pp = (sec["preprocessing"] ?? {}) as Record<string, unknown>;
                 return {
                   ...prev,
-                  task: v,
-                  model: { ...model, num_classes: nextNumClasses },
+                  data: {
+                    ...sec,
+                    preprocessing: {
+                      ...pp,
+                      steps: fromUIPreprocessingSteps(uiSteps),
+                    },
+                  },
                 };
               })
             }
-            errors={validationErrors}
-            path={["task"]}
-          />
-        )}
-        {modelProps["num_classes"] &&
-          (formData["task"] === "binary" ? (
-            <LockedNumClasses />
-          ) : (
-            <SchemaFieldVF
-              name="num_classes"
-              schema={modelProps["num_classes"]}
-              defs={defs}
-              value={modelData["num_classes"]}
-              onChange={(v) => setField("model", "num_classes", v)}
-              errors={validationErrors}
-              path={["model", "num_classes"]}
-            />
-          ))}
-      </div>
-
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(3, 1fr)",
-          gap: 18,
-          marginBottom: 16,
-        }}
-      >
-        {dataProps["num_workers"] && (
-          <WorkersField
-            value={(dataData["num_workers"] as number) ?? -1}
-            onChange={(v) => setField("data", "num_workers", v)}
-          />
-        )}
-        {dataProps["pin_memory"] && (
-          <SchemaFieldVF
-            name="pin_memory"
-            schema={dataProps["pin_memory"]}
-            defs={defs}
-            value={dataData["pin_memory"]}
-            onChange={(v) => setField("data", "pin_memory", v)}
-            errors={validationErrors}
-            path={["data", "pin_memory"]}
-          />
-        )}
-      </div>
-
-      {/* Divider — separa os ajustes de DataLoader das transformações de imagem */}
-      <div
-        style={{
-          height: 1,
-          width: "100%",
-          background:
-            "linear-gradient(90deg, transparent, var(--vf-panel-stroke), transparent)",
-          marginBottom: 26,
-        }}
-      />
-
-      {/* Pré-processamento (filtros) — roda antes de augmentation/normalização */}
-      <PreprocessingPanel
-        baseDir={(dataData["base_dir"] as string) ?? ""}
-        steps={toUIPreprocessingSteps(
-          ((dataData["preprocessing"] ?? {}) as Record<string, unknown>)["steps"],
-        )}
-        onChange={(uiSteps) =>
-          setFormData((prev) => {
-            const sec = (prev["data"] ?? {}) as Record<string, unknown>;
-            const pp = (sec["preprocessing"] ?? {}) as Record<string, unknown>;
-            return {
-              ...prev,
-              data: {
-                ...sec,
-                preprocessing: {
-                  ...pp,
-                  steps: fromUIPreprocessingSteps(uiSteps),
-                },
-              },
-            };
-          })
-        }
-      />
-
-      {/* Augmentation / Transforms sub-section */}
-      {dataProps["transforms"] && (
-        <>
-          <div
-            style={{
-              height: 1,
-              width: "100%",
-              background:
-                "linear-gradient(90deg, transparent, var(--vf-panel-stroke), transparent)",
-              margin: "20px 0 14px",
-            }}
-          />
-          <div
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: 10,
-              color: "var(--vf-text-muted)",
-              letterSpacing: "0.20em",
-              textTransform: "uppercase",
-              marginBottom: 14,
-            }}
-          >
-            {t.paramPanel.kickers.image}
-          </div>
-          <TransformFields
-            keys={IMAGE_KEYS}
-            schema={dataProps["transforms"]}
-            defs={defs}
-            value={dataData["transforms"]}
-            onChange={(v) => setField("data", "transforms", v)}
-            errors={validationErrors}
           />
 
-          <div
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: 10,
-              color: "var(--vf-text-muted)",
-              letterSpacing: "0.20em",
-              textTransform: "uppercase",
-              margin: "20px 0 14px",
-            }}
-          >
-            {t.paramPanel.kickers.augmentation}
-          </div>
-          <TransformFields
-            keys={["augment"]}
-            schema={dataProps["transforms"]}
-            defs={defs}
-            value={dataData["transforms"]}
-            onChange={(v) => setField("data", "transforms", v)}
-            errors={validationErrors}
-          />
-          {augmentOn ? (
+          {dataProps["transforms"] && (
             <>
-              <TransformFields
-                keys={AUGMENT_KEYS}
-                schema={dataProps["transforms"]}
-                defs={defs}
-                value={dataData["transforms"]}
-                onChange={(v) => setField("data", "transforms", v)}
-                errors={validationErrors}
-              />
-              {/* Previewing transforms the run will not apply would show
-                  something that never happens, so it follows the toggle. */}
-              <AugmentPreview
-                baseDir={(dataData["base_dir"] as string) ?? ""}
-                transforms={(dataData["transforms"] ?? {}) as Record<string, unknown>}
-              />
-            </>
-          ) : (
-            <div
-              style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: 11,
-                color: "var(--vf-text-muted)",
-                marginTop: 10,
-              }}
-            >
-              {t.paramPanel.hiddenParams(AUGMENT_KEYS.length)}
-            </div>
-          )}
-        </>
-      )}
+              <div style={card}>
+                <div style={sectionLabel}>{t.paramPanel.kickers.image}</div>
+                <TransformFields
+                  keys={IMAGE_KEYS}
+                  schema={dataProps["transforms"]}
+                  defs={defs}
+                  value={dataData["transforms"]}
+                  onChange={(v) => setField("data", "transforms", v)}
+                  errors={validationErrors}
+                />
+              </div>
 
-      {/* Validation errors summary */}
-      {validationErrors.length > 0 && (
-        <div
-          style={{
-            marginTop: 18,
-            padding: "12px 16px",
-            background: "oklch(0.704 0.191 22.216 / 0.10)",
-            border: "1px solid oklch(0.704 0.191 22.216 / 0.4)",
-            borderRadius: 10,
-            fontFamily: "var(--font-mono)",
-            fontSize: 12,
-            color: "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.14 22)",
-          }}
-        >
-          <div style={{ fontWeight: 600, marginBottom: 8 }}>
-            {t.paramPanel.fieldErrors(validationErrors.length)}
-          </div>
-          <ul style={{ margin: 0, paddingLeft: 18, lineHeight: 1.65 }}>
-            {validationErrors.map((err, i) => (
-              <li key={i}>
-                <span style={{ color: "var(--vf-text)" }}>
-                  {humanizeFieldPath(t, err.field)}
-                </span>
-                <span style={{ color: "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.14 22)" }}>
-                  {" — "}
-                  {err.message}
-                </span>
-              </li>
-            ))}
-          </ul>
+              <div style={card}>
+                <div style={sectionLabel}>{t.paramPanel.kickers.augmentation}</div>
+                <TransformFields
+                  keys={["augment"]}
+                  schema={dataProps["transforms"]}
+                  defs={defs}
+                  value={dataData["transforms"]}
+                  onChange={(v) => setField("data", "transforms", v)}
+                  errors={validationErrors}
+                />
+                {augmentOn ? (
+                  <div style={{ marginTop: 18 }}>
+                    <TransformFields
+                      keys={AUGMENT_KEYS}
+                      schema={dataProps["transforms"]}
+                      defs={defs}
+                      value={dataData["transforms"]}
+                      onChange={(v) => setField("data", "transforms", v)}
+                      errors={validationErrors}
+                    />
+                    {/* Previewing transforms the run will not apply would show
+                        something that never happens, so it follows the toggle. */}
+                    <AugmentPreview
+                      baseDir={(dataData["base_dir"] as string) ?? ""}
+                      transforms={transforms}
+                    />
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 11,
+                      color: "var(--vf-text-muted)",
+                      marginTop: 10,
+                    }}
+                  >
+                    {t.paramPanel.hiddenParams(AUGMENT_KEYS.length)}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </div>
-      )}
-    </section>
+      ),
+    },
+    {
+      id: "review",
+      errors: errorsIn(["name"]),
+      content: (
+        <ReviewStep
+          taskKey={task.key}
+          name={name}
+          onNameChange={(v) => setFormData((prev) => ({ ...prev, name: v }))}
+          suggestion={suggestion}
+          sweepKeys={sweepKeys}
+          onExportYaml={handleExport}
+          onImportConfig={handleImportConfig}
+          sections={reviewSections}
+          errors={validationErrors.map(
+            (err) => `${humanizeFieldPath(t, err.field)} — ${err.message}`,
+          )}
+          ready={baseDir.trim() !== ""}
+        />
+      ),
+    },
+  ];
+
+  return (
+    <GridContext.Provider value={gridCtx}>
+      <StepShell taskKey={task.key} steps={steps} />
     </GridContext.Provider>
   );
 }

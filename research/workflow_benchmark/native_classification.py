@@ -1,6 +1,12 @@
-"""Independent CPU recipe for engineering checks of paired classification runs."""
+"""Independent device-selectable recipe for engineering checks of paired classification runs."""
 
 from __future__ import annotations
+
+if __name__ == "__main__":
+    from .paired_classification import main
+
+    main(native=True)
+    raise SystemExit
 
 import math
 import random
@@ -39,6 +45,7 @@ def _epoch(
     criterion: nn.Module,
     optimizer: torch.optim.Optimizer | None = None,
     *,
+    device: str = "cpu",
     targets: list[int] | None = None,
     predictions: list[int] | None = None,
 ) -> tuple[float, float]:
@@ -48,7 +55,10 @@ def _epoch(
     count = 0
     with torch.set_grad_enabled(optimizer is not None):
         for images, labels in loader:
-            images, labels = images.to("cpu"), labels.to("cpu")
+            images, labels = (
+                images.to("cuda:0" if device == "cuda" else device),
+                labels.to("cuda:0" if device == "cuda" else device),
+            )
             if optimizer is not None:
                 optimizer.zero_grad(set_to_none=True)
             logits = model(images)
@@ -77,6 +87,8 @@ def preflight(
     batch_size: int,
     image_size: int,
     learning_rate: float,
+    weight_decay: float = 0.0,
+    scheduler: str = "none",
 ) -> dict[str, int]:
     """Validate controls and split layout without creating output; return class_to_idx."""
     if epochs < 1:
@@ -87,6 +99,10 @@ def preflight(
         raise ValueError("image_size must be at least 32")
     if not math.isfinite(learning_rate) or learning_rate <= 0:
         raise ValueError("learning_rate must be finite and positive")
+    if not math.isfinite(weight_decay) or weight_decay < 0:
+        raise ValueError("weight_decay must be finite and non-negative")
+    if scheduler not in ("none", "cosine"):
+        raise ValueError("scheduler must be 'none' or 'cosine'")
     if output == dataset or dataset in output.parents:
         raise ValueError("output must be outside dataset")
     if output.exists():
@@ -128,9 +144,14 @@ def run_native(
     batch_size: int,
     image_size: int = 32,
     learning_rate: float = 0.01,
+    weight_decay: float = 0.0,
+    scheduler: str = "none",
     concurrent_workload: str = "undeclared",
+    device: str = "cpu",
+    parity_atol: float | None = None,
 ) -> dict[str, Any]:
-    """Run the restricted CPU ResNet18 recipe under the shared phase contract."""
+    """Run the restricted ResNet18 recipe under the shared phase contract."""
+    parity_atol = phase_contract.validate_device(device, parity_atol)
     dataset = Path(dataset).resolve()
     initial_weights = Path(initial_weights).resolve()
     output = Path(output).resolve()
@@ -142,13 +163,15 @@ def run_native(
         batch_size=batch_size,
         image_size=image_size,
         learning_rate=learning_rate,
+        weight_decay=weight_decay,
+        scheduler=scheduler,
     )
     output.mkdir(parents=True, exist_ok=False)
     recorder = phase_contract.PhaseRecorder(
         "native_pytorch",
         output / "native_result.json",
         NATIVE_INCLUDES,
-        phase_contract.capture_conditions(concurrent_workload),
+        phase_contract.capture_conditions(concurrent_workload, device),
     )
     checkpoint = output / "best_model.pth"
 
@@ -177,9 +200,15 @@ def run_native(
         model.load_state_dict(
             torch.load(initial_weights, map_location="cpu", weights_only=True)
         )
+        model.to("cuda:0" if device == "cuda" else device)
         initial_hash = phase_contract.sha256_file(initial_weights)
         optimizer = torch.optim.SGD(
-            model.parameters(), lr=learning_rate, weight_decay=0
+            model.parameters(), lr=learning_rate, weight_decay=weight_decay
+        )
+        lr_scheduler = (
+            torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
+            if scheduler == "cosine"
+            else None
         )
         criterion = nn.CrossEntropyLoss()
 
@@ -189,14 +218,20 @@ def run_native(
     with recorder.phase("training"):
         random.seed(seed)
         np.random.seed(seed)
-        # Seed only the CPU generator; accelerator state is outside this recipe.
+        # Keep the CPU seed path unchanged; seed CUDA only when selected.
         torch.random.default_generator.manual_seed(seed)
         torch.use_deterministic_algorithms(True)
+        torch.backends.cudnn.benchmark = False
+        torch.backends.cudnn.deterministic = True
+        if device == "cuda":
+            torch.cuda.manual_seed_all(seed)
         for epoch in range(1, epochs + 1):
             train_loss, train_acc = _epoch(
-                model, loaders["train"], criterion, optimizer
+                model, loaders["train"], criterion, optimizer, device=device
             )
-            val_loss, val_acc = _epoch(model, loaders["val"], criterion)
+            val_loss, val_acc = _epoch(model, loaders["val"], criterion, device=device)
+            if lr_scheduler is not None:
+                lr_scheduler.step()
             history.append(
                 {
                     "epoch": epoch,
@@ -225,14 +260,18 @@ def run_native(
             model,
             loaders["test"],
             criterion,
+            device=device,
             targets=test_targets,
             predictions=test_predictions,
         )
 
     with recorder.phase("evidence"):
         results: dict[str, Any] = {
-            "device": "cpu",
+            "device": device,
+            "parity_atol": parity_atol,
             "seed": seed,
+            "weight_decay": weight_decay,
+            "scheduler": scheduler,
             "initial_weights_sha256": initial_hash,
             "class_to_idx": class_to_idx,
             "history": history,

@@ -6432,3 +6432,133 @@ Characterization tests preserve the distinct YOLO field rules for crops and
 counts, the 20-decodable-mask, 500-image-check and 50,000-row limits, and the
 complete, partial and unrecognized layout responses. The OpenAPI contract stays
 unchanged.
+
+## ADR-154 — Explicit device selection in the workflow benchmark
+
+**Date:** 2026-10
+**Status:** Accepted
+**Extends:** ADR-148, ADR-149
+
+**Decision:** The restricted paired recipes accept CPU (default) or single-device
+CUDA through the existing DeviceConfig.kind. CPU keeps its process guard and
+exact comparisons by default. CUDA preserves visibility, threads and priority,
+requires an explicit finite nonnegative parity tolerance, enables deterministic
+algorithms and cuDNN, and sets CUBLAS_WORKSPACE_CONFIG before importing torch.
+Each CUDA phase synchronizes before both timer boundaries and records peak
+allocated VRAM bytes. Initial and comparison state dictionaries and best
+checkpoints stay on CPU. Reports include device conditions, weight maximum
+absolute difference, tolerance and declared concurrent workload.
+
+**Reason:** CPU-only timing cannot measure accelerator runtime or memory. CUDA
+launches are asynchronous, and equivalent kernels need not produce bitwise
+identical floating-point weights across the two execution paths. Explicit
+absolute tolerance (zero relative tolerance, integer buffers exact) makes that
+trade-off auditable without silently weakening existing CPU checks. Histories,
+selected epochs and predictions retain the existing checks; CUDA tolerance
+applies only to floating-point weights. Unavailable CUDA and missing tolerance
+fail before any output. Mocked CUDA tests cover instrumentation on CPU; real
+GPU measurements require separate authorization and no undeclared load.
+
+## ADR-155 — Receita v2 de classificação e determinismo parcial da segmentação em CUDA
+
+**Date:** 2026-10-28
+**Status:** Accepted
+**Extends:** ADR-149, ADR-154
+
+**Decision:** Os pares de classificação aceitam `--weight-decay` e
+`--scheduler {none,cosine}` (padrão igual à receita anterior), espelhados no
+lado nativo e na configuração do Trainer. A segmentação em CUDA ativa
+`use_deterministic_algorithms(True, warn_only=True)` nos dois lados, porque
+`nll_loss2d` não tem implementação determinística em CUDA, e compara as losses
+de época com a tolerância `--parity-atol`; mIoU, Dice, acurácia de pixel, época
+escolhida, confusões por imagem e predições continuam com as tolerâncias do
+ADR-149. A CPU mantém a comparação exata. `prepare_pet.py` monta os splits do
+Oxford-IIIT Pet preservando o `test.txt` distribuído e sorteando a validação só
+do `trainval.txt`.
+
+**Reason:** A calibração em GPU mostrou losses divergindo em ~1e-9 entre os
+caminhos, com pesos, métricas e predições idênticos. Exigir igualdade exata da
+loss reprovaria um par equivalente; relaxar só a loss mantém as demais
+verificações estritas e auditáveis. Uma execução em CUDA não é bit-reprodutível
+neste caminho; a paridade fica garantida pela tolerância declarada e pelo
+relatório.
+
+## ADR-156 — Task configuration in six steps, Treinar unlocked on the review
+
+**Date:** 2026-10-29
+**Status:** Accepted
+**Amends:** ADR-059 (canonical experiment header)
+
+**Context:** every task configured on one long page: experiment name and
+strategy on top, then model, training, dataset, preprocessing and augmentation
+stacked in that order, the dataset (the only thing a first run needs) in the
+middle. Detection spread its Ultralytics knobs over three top-level sections and
+put the image size beside the dataset path; segmentation kept the number of
+classes under Model and warned about `ignore_index` in a banner above the
+header. Names defaulted to `config` or `detection_001`, so History filled with
+runs nobody could tell apart, and a sweep ran every trial under the same name.
+The user sketched the flow by steps and approved a standalone demo
+(`.claude/plans/2026-10-29-wizard-etapas/`), asking for one Treinar button only,
+locked until the last step, and a suggested experiment name on that step.
+
+**Decision:**
+- Every task panel renders `StepShell` with six steps: Dados, Estratégia, Modelo,
+  Treinamento, Imagem e aumento, Revisão (a researcher's task uses those its
+  schema fills). The rail shows each step's state: `padrão`, `n ajustes`,
+  `falta`, `n erros`. Any step opens at any time; server errors bring the first
+  step with one to the front.
+- All steps stay mounted and the inactive ones are `hidden`. The strategy cards
+  listen to the bottom bar's run signal and the dataset stats fill other fields
+  as they load; unmounting them would break both. The guided tour asks for the
+  step that holds its target (`vf:reveal-step`).
+- The step per task lives in App, so switching task tabs keeps it.
+- Treinar exists only in the bottom bar. It is locked, with the reason as its
+  tooltip, until the active step is Revisão and the dataset is set.
+- The experiment name moves to Revisão, prefilled with
+  `<dataset>_<model>_e<epochs>_lr<lr>[_<strategy>]` (`lib/experiment-name.ts`).
+  The suggestion follows the configuration while the name is empty, a task
+  default or the previous suggestion; a typed or imported name stays.
+- Sweep trials are named after what they vary (`core/trial_name.py`):
+  `…_grid-lr` runs `…_grid-lr_lr0.001`, `…_grid-lr_lr0.002`, with the same
+  short keys as the suggestion. Each trial's folder follows its name.
+- Classification's transfer learning moves from the strategy to Modelo, as in
+  segmentation and regression; Estratégia answers only "how many runs and how".
+- Detection groups its advanced training knobs (optimizer, LR schedule, loss
+  gains, regularization and mechanics) under one Advanced block and its
+  augmentation by kind, with the image size on the image step; segmentation's
+  number of classes and `ignore_index` sit with the dataset that defines them.
+
+**Alternatives considered:**
+- *A wizard that forces the order.* Most runs change one or two values from the
+  defaults; making each step a gate would cost clicks on every run.
+- *Unmount inactive steps.* Simpler DOM, but the run signal and the dataset
+  effects would then depend on which step is on screen.
+- *Treinar enabled from step one when the data is set.* The user asked for the
+  review to be the gate, so a run is never started from a half-checked screen.
+
+## ADR-157 — Looping animations end while a job runs
+
+**Date:** 2026-11-01
+**Status:** Accepted
+
+**Decision:** While the server runs a job, `App` marks the root element and
+`index.css` forces `animation-iteration-count: 1` on everything under it. Looping
+animations finish their current cycle and the page stops producing frames.
+
+**Why:** Keeping the page on screen made epochs about 17% slower than native on
+the benchmark machine, while a closed or minimized browser cost about 1%. Four
+loops ran during training (`shimmer`, `spin`, two `pulse-dot`). Cancelling any one
+of them saved 3 to 4 s per epoch, and cancelling all four took the 73 s epoch to
+62.5 s, the native time. One loop is enough to keep frames coming.
+
+**Consequences:**
+- The training spinner and status dots hold still during a run; progress shows
+  in the numbers and charts, which update per batch or epoch.
+- A loop added later is covered without touching this rule.
+- Finite animations such as sheets opening still play.
+
+**Alternatives considered:**
+- *Remove the four loops one by one.* The next loop added would bring the cost
+  back without anyone noticing.
+- *Tell users to minimize the window.* Leaves the cost on the default way of
+  watching a run.

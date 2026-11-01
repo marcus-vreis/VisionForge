@@ -3,6 +3,7 @@ import { en } from "../i18n/en";
 import { pt } from "../i18n/pt";
 import {
   buildSegmentationPayload,
+  segmentationFormFromPayload,
   ignoreIndexCollides,
   makeDefaultSegmentationForm,
   segmentationModels,
@@ -130,5 +131,42 @@ describe("segmentation-models · dropdown text", () => {
     expect(sub(en, "deeplabv3_mobilenet_v3_large")).toBe("light · 11M");
     expect(sub(pt, "unet")).toBe("clássico · 31M");
     expect(sub(en, "unet")).toBe("classic · 31M");
+  });
+});
+
+describe("YAML import keeps what the form has no field for", () => {
+  const imported = {
+    name: "recipe",
+    model: { name: "deeplabv3_resnet50", num_classes: 2, pretrained: true },
+    data: { base_dir: "C:/ds", num_workers: 4, pin_memory: false, image_size: 256 },
+    training: {
+      epochs: 40,
+      optimizer: "adamw",
+      weight_decay: 0.01,
+      scheduler: { kind: "cosine" },
+    },
+    output: { models_dir: "C:/out/models" },
+    device: { kind: "cuda" },
+  };
+
+  it("sends the imported hyperparameters, workers, output and device", () => {
+    const payload = buildSegmentationPayload(segmentationFormFromPayload(imported));
+    expect(payload.training).toMatchObject({ weight_decay: 0.01, scheduler: { kind: "cosine" } });
+    expect(payload.data).toMatchObject({ num_workers: 4, pin_memory: false });
+    expect(payload.output).toEqual({ models_dir: "C:/out/models" });
+    expect(payload.device).toEqual({ kind: "cuda" });
+  });
+
+  it("lets a later edit in the form win over the imported value", () => {
+    const form = segmentationFormFromPayload(imported);
+    form.training.epochs = 5;
+    const payload = buildSegmentationPayload(form);
+    expect(payload.training).toMatchObject({ epochs: 5, weight_decay: 0.01 });
+  });
+
+  it("a form that never imported sends no extra keys", () => {
+    const payload = buildSegmentationPayload(makeDefaultSegmentationForm());
+    expect(payload).not.toHaveProperty("output");
+    expect(payload.training).not.toHaveProperty("weight_decay");
   });
 });

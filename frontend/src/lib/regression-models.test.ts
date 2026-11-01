@@ -3,6 +3,7 @@ import { en } from "../i18n/en";
 import { pt } from "../i18n/pt";
 import {
   buildRegressionPayload,
+  regressionFormFromPayload,
   makeDefaultRegressionForm,
   parseTargetColumns,
   regressionModels,
@@ -168,5 +169,27 @@ describe("regression-models · dropdown text", () => {
     expect(sub(pt, "convnext_tiny")).toBe("moderno · 28M");
     expect(sub(en, "convnext_tiny")).toBe("modern · 28M");
     expect(sub(en, "vit_b_16")).toBe("transformer · 86M");
+  });
+});
+describe("regression-models · import keeps fields without a control", () => {
+  const imported = {
+    name: "r",
+    training: { epochs: 3, weight_decay: 0.01, scheduler: { kind: "cosine" } },
+    data: { num_workers: 2, transforms: { augment: true } },
+    transfer_learning: null,
+    output: { models_dir: "out/models" },
+  };
+
+  it("sends them, and the form still wins on what it edits", () => {
+    const form = regressionFormFromPayload(imported);
+    form.training.epochs = 7;
+    const payload = buildRegressionPayload(form);
+    expect(payload.training).toMatchObject({ epochs: 7, weight_decay: 0.01, scheduler: { kind: "cosine" } });
+    expect(payload.data).toMatchObject({ num_workers: 2 });
+    expect(payload.output).toEqual({ models_dir: "out/models" });
+  });
+
+  it("a form that never imported sends no extra keys", () => {
+    expect(buildRegressionPayload(makeDefaultRegressionForm())).not.toHaveProperty("output");
   });
 });

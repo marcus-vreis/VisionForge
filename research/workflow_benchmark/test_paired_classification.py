@@ -58,6 +58,12 @@ def test_native_and_platform_match_with_shared_weights(
 
     report = run_pair(dataset, initial, output, seed=37, epochs=2, batch_size=4)
 
+    assert report["device"] == "cpu"
+    assert report["parity_atol"] == 0.0
+    assert report["weights_max_abs_diff"] == 0.0
+    for side in ("native", "visionforge"):
+        assert report[side]["device"] == "cpu"
+        assert report[side]["conditions"]["device"] == "cpu"
     assert report["status"] == "passed"
     assert report["purpose"] == "engineering_parity_only"
     assert report["mismatches"] == []
@@ -96,6 +102,40 @@ RUNNERS = {
     "native_pytorch": ("native_result.json", run_native),
     "visionforge_trainer": ("visionforge_result.json", run_visionforge),
 }
+
+
+def test_pair_with_weight_decay_and_cosine_keeps_parity(tmp_path: Path) -> None:
+    dataset = tmp_path / "dataset"
+    for role, split in enumerate(("train", "val", "test")):
+        for label in range(2):
+            folder = dataset / split / f"class{label}"
+            folder.mkdir(parents=True)
+            for index in range(3):
+                pixels = np.random.default_rng(
+                    role * 100 + label * 10 + index
+                ).integers(0, 256, (36, 40, 3), dtype=np.uint8)
+                Image.fromarray(pixels).save(folder / f"{index}.png")
+    model = models.resnet18(weights=None)
+    model.fc = nn.Linear(model.fc.in_features, 2)
+    initial = tmp_path / "initial.pth"
+    torch.save(model.state_dict(), initial)
+
+    report = run_pair(
+        dataset,
+        initial,
+        tmp_path / "pair",
+        seed=37,
+        epochs=3,
+        batch_size=4,
+        weight_decay=5e-4,
+        scheduler="cosine",
+    )
+
+    assert report["status"] == "passed"
+    assert report["weight_decay"] == 5e-4
+    assert report["scheduler"] == "cosine"
+    assert report["native"]["scheduler"] == report["visionforge"]["scheduler"]
+    assert report["weights_max_abs_diff"] == 0.0
 
 
 @pytest.mark.parametrize("workflow", list(RUNNERS))

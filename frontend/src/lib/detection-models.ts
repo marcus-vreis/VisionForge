@@ -4,7 +4,7 @@ import type { PreprocessingStep } from "../components/PreprocessingPanel";
  *  visionforge/utils/detection_config.py (_ULTRALYTICS_MODELS / _TORCHVISION_MODELS).
  *  Keep in sync: a name the backend rejects produces a 422 on submit. */
 
-import { mergeFormShape } from "./form-import";
+import { mergeFormShape, overlayImported, unmanagedFields } from "./form-import";
 
 export const DETECTION_BACKENDS = ["ultralytics", "torchvision"] as const;
 export type DetectionBackend = (typeof DETECTION_BACKENDS)[number];
@@ -113,6 +113,8 @@ export interface DetectionForm {
     preprocessing: PreprocessingStep[];
   };
   training: DetectionTrainingForm;
+  /** Fields of an imported YAML with no control in this form; sent unchanged. */
+  imported?: Record<string, unknown>;
 }
 
 export type DetectionOptimizer =
@@ -233,6 +235,17 @@ export function buildDetectionDataPayload(
     : { ...common, base_dir: data.base_dir };
 }
 
+/** The DetectionConfig wire payload, over the imported fields the form has no
+ *  control for. */
+export function buildDetectionPayload(form: DetectionForm): Record<string, unknown> {
+  return overlayImported(form.imported, {
+    name: form.name,
+    model: { ...form.model },
+    data: buildDetectionDataPayload(form.data),
+    training: buildDetectionTrainingPayload(form.training),
+  });
+}
+
 /** Rebuild the form from an imported DetectionConfig payload (YAML import).
  *  Inverse of the buildDetection*Payload pair: the dataset source is derived
  *  from which field the payload carries, the backend `null` auto_augment maps
@@ -255,6 +268,8 @@ export function detectionFormFromPayload(
   if (!isValidModelForBackend(form.model.backend, form.model.name)) {
     form.model.name = defaultModelForBackend(form.model.backend);
   }
+  const imported = unmanagedFields(makeDefaultDetectionForm(), payload);
+  if (Object.keys(imported).length > 0) form.imported = imported;
   return form;
 }
 

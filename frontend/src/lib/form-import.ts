@@ -35,6 +35,48 @@ export function mergeFormShape<T>(defaults: T, source: unknown): T {
   return defaults;
 }
 
+/** What an imported payload holds that the form has no field for (a scheduler,
+ *  the workers, the output folders). Keys in `skip` are rebuilt by the task's own
+ *  adapters. Kept apart so the import does not silently change the recipe. */
+export function unmanagedFields(
+  defaults: unknown,
+  source: unknown,
+  skip: readonly string[] = [],
+  path = "",
+): Record<string, unknown> {
+  if (!isPlainObject(source)) return {};
+  const shape = isPlainObject(defaults) ? defaults : {};
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(source)) {
+    const here = path ? `${path}.${key}` : key;
+    if (skip.includes(here)) continue;
+    if (!(key in shape)) {
+      out[key] = value;
+    } else if (isPlainObject(shape[key])) {
+      const nested = unmanagedFields(shape[key], value, skip, here);
+      if (Object.keys(nested).length > 0) out[key] = nested;
+    }
+  }
+  return out;
+}
+
+/** Lay the form's own payload over the unmanaged imported fields: what the form
+ *  edits always wins. */
+export function overlayImported(
+  imported: Record<string, unknown> | undefined,
+  payload: Record<string, unknown>,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...imported };
+  for (const [key, value] of Object.entries(payload)) {
+    const base = out[key];
+    out[key] =
+      isPlainObject(base) && isPlainObject(value)
+        ? overlayImported(base, value)
+        : value;
+  }
+  return out;
+}
+
 /** Join a payload list into the comma-separated string the UI edits. */
 export function joinList(value: unknown): string | null {
   if (!Array.isArray(value) || value.length === 0) return null;

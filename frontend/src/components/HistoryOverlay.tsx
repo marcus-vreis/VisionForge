@@ -970,6 +970,7 @@ export function HistoryOverlay({
 
   return (
     <div
+      data-testid="history-overlay"
       onClick={stepBack}
       style={{
         position: "fixed",
