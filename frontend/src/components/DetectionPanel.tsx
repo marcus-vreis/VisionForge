@@ -20,8 +20,7 @@ import {
   DETECTION_BACKENDS,
   DETECTION_MODELS,
   DETECTION_OPTIMIZERS,
-  buildDetectionDataPayload,
-  buildDetectionTrainingPayload,
+  buildDetectionPayload,
   defaultModelForBackend,
   detectionFormFromPayload,
   isValidModelForBackend,
@@ -955,12 +954,7 @@ export function DetectionPanel({
           <ReviewStep taskKey="detection" name={formData.name} onNameChange={(name) => setFormData((p) => ({ ...p, name }))} suggestion={suggestion} sections={sections} errors={validationErrors.map((e) => `${e.field.join(" > ")}: ${e.message}`)} ready={!!datasetPath.trim()}
             onExportYaml={() =>
               exportConfigToYaml(
-                {
-                  name: formData.name,
-                  model: { ...formData.model },
-                  data: buildDetectionDataPayload(formData.data),
-                  training: buildDetectionTrainingPayload(formData.training),
-                },
+                buildDetectionPayload(formData),
                 formData.name,
               )
             }

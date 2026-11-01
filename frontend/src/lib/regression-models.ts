@@ -7,9 +7,11 @@ import type { Dict } from "../i18n/pt";
 import {
   joinList,
   mergeFormShape,
+  overlayImported,
   stepsFromPayload,
   transferFromPayload,
   transformsFormFromPayload,
+  unmanagedFields,
 } from "./form-import";
 import {
   buildPreprocessingPayload,
@@ -88,6 +90,8 @@ export interface RegressionForm {
   preprocessing: PreprocessingStep[];
   /** Augmentation/normalization (data.transforms) — ADR-059. */
   transforms: TransformsForm;
+  /** Fields of an imported YAML with no control in this form; sent unchanged. */
+  imported?: Record<string, unknown>;
 }
 
 export function makeDefaultRegressionForm(): RegressionForm {
@@ -137,7 +141,7 @@ export function buildRegressionPayload(
   form: RegressionForm,
 ): Record<string, unknown> {
   const targets = parseTargetColumns(form.data.target_columns);
-  return {
+  return overlayImported(form.imported, {
     name: form.name,
     model: { ...form.model, num_targets: Math.max(targets.length, 1) },
     data: {
@@ -155,7 +159,7 @@ export function buildRegressionPayload(
     },
     training: { ...form.training },
     transfer_learning: buildTransferLearning(form),
-  };
+  });
 }
 
 /** Map the transfer-learning form fields to the RegressionConfig payload shape.
@@ -196,5 +200,11 @@ export function regressionFormFromPayload(
   if (tl.backbone_lr_multiplier !== null) {
     form.backbone_lr_multiplier = tl.backbone_lr_multiplier;
   }
+  const imported = unmanagedFields(makeDefaultRegressionForm(), payload, [
+    "data.transforms",
+    "data.preprocessing",
+    "transfer_learning",
+  ]);
+  if (Object.keys(imported).length > 0) form.imported = imported;
   return form;
 }

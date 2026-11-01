@@ -6,8 +6,10 @@ import type { PreprocessingStep } from "../components/PreprocessingPanel";
 import type { Dict } from "../i18n/pt";
 import {
   mergeFormShape,
+  overlayImported,
   stepsFromPayload,
   transformsFormFromPayload,
+  unmanagedFields,
 } from "./form-import";
 import {
   buildPreprocessingPayload,
@@ -74,6 +76,8 @@ export interface AnomalyForm {
   /** Augmentation/normalization (data.transforms) — flips/rotations can hurt
    *  orientation-sensitive defects; now visible instead of silently on. */
   transforms: TransformsForm;
+  /** Fields of an imported YAML with no control in this form; sent unchanged. */
+  imported?: Record<string, unknown>;
 }
 
 export function makeDefaultAnomalyForm(): AnomalyForm {
@@ -123,12 +127,17 @@ export function anomalyFormFromPayload(
   const data = (payload.data ?? {}) as Record<string, unknown>;
   form.transforms = transformsFormFromPayload(data.transforms);
   form.preprocessing = stepsFromPayload(data.preprocessing);
+  const imported = unmanagedFields(makeDefaultAnomalyForm(), payload, [
+    "data.transforms",
+    "data.preprocessing",
+  ]);
+  if (Object.keys(imported).length > 0) form.imported = imported;
   return form;
 }
 
 /** Project the form into the AnomalyConfig wire payload. */
 export function buildAnomalyPayload(form: AnomalyForm): Record<string, unknown> {
-  return {
+  return overlayImported(form.imported, {
     name: form.name,
     model: { ...form.model },
     data: {
@@ -139,5 +148,5 @@ export function buildAnomalyPayload(form: AnomalyForm): Record<string, unknown> 
       preprocessing: buildPreprocessingPayload(form.preprocessing),
     },
     training: { ...form.training },
-  };
+  });
 }

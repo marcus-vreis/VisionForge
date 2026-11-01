@@ -3,6 +3,7 @@ import { en } from "../i18n/en";
 import { pt } from "../i18n/pt";
 import {
   buildAnomalyPayload,
+  anomalyFormFromPayload,
   isPatchCore,
   makeDefaultAnomalyForm,
   anomalyBackbones,
@@ -111,5 +112,26 @@ describe("anomaly-models · dropdown text", () => {
     // ResNet-34 and ResNet-50 carry no note, in either language.
     expect(backbone(pt, "resnet34")).toBeUndefined();
     expect(backbone(en, "resnet50")).toBeUndefined();
+  });
+});
+describe("anomaly-models · import keeps fields without a control", () => {
+  const imported = {
+    name: "a",
+    training: { seed: 5, future_knob: 1 },
+    data: { num_workers: 2, transforms: { augment: true } },
+    output: { models_dir: "out/models" },
+  };
+
+  it("sends them, and the form still wins on what it edits", () => {
+    const form = anomalyFormFromPayload(imported);
+    form.training.seed = 9;
+    const payload = buildAnomalyPayload(form);
+    expect(payload.training).toMatchObject({ seed: 9, future_knob: 1 });
+    expect(payload.data).toMatchObject({ num_workers: 2 });
+    expect(payload.output).toEqual({ models_dir: "out/models" });
+  });
+
+  it("a form that never imported sends no extra keys", () => {
+    expect(buildAnomalyPayload(makeDefaultAnomalyForm())).not.toHaveProperty("output");
   });
 });
