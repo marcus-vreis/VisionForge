@@ -13,6 +13,35 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ## [Unreleased]
 
+### Added
+
+- **Pares de paridade com recursos reais**: o benchmark escolhe CPU ou CUDA, aceita
+  weight decay e scheduler cosseno na classificação, prepara o Pet para a segmentação
+  e ganha o par de detecção com VOC2007.
+
+### Changed
+
+- **Configuração em seis etapas**: todas as tarefas passam a ser configuradas em
+  Dados, Estratégia, Modelo, Treinamento, Imagem e aumento, e Revisão. O botão Treinar
+  destrava na Revisão, e o nome do experimento vem sugerido a partir da configuração
+  ([ADR-156](docs/dev/DECISIONS.md)).
+
+### Fixed
+
+- **Treino com a página aberta**: animações em loop terminam enquanto um job roda,
+  porque mantê-las na tela deixava o treino mais lento
+  ([ADR-157](docs/dev/DECISIONS.md), [#107](https://github.com/marcus-vreis/VisionForge/pull/107)).
+- **Importar YAML**: segmentação, regressão, anomalia e detecção preservam os campos
+  sem controle no formulário em vez de descartá-los
+  ([#106](https://github.com/marcus-vreis/VisionForge/pull/106),
+  [#109](https://github.com/marcus-vreis/VisionForge/pull/109)).
+- **SGD das tarefas custom**: o momentum zero fica explícito
+  ([#105](https://github.com/marcus-vreis/VisionForge/pull/105)).
+- **Preview de filtros**: encontra imagens no layout `images/<split>`
+  ([#104](https://github.com/marcus-vreis/VisionForge/pull/104)).
+- **Tarefa custom**: o nome sugerido sem dataset usa a chave da tarefa, e Treinar
+  destrava na Revisão.
+
 ## [0.18.2] — 2026-10-27
 
 ### Changed
