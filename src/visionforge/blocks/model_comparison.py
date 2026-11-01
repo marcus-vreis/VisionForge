@@ -16,6 +16,7 @@ from visionforge.core.cancellation import (
     is_cancelled,
     job_was_stopped,
 )
+from visionforge.core.learning_rate import comparison_trial_rate
 from visionforge.core.significance import infer_direction
 from visionforge.core.task_runner import ProgressCallback, UnitProgress, rank_by_metric
 from visionforge.utils.config import ExperimentConfig
@@ -59,9 +60,16 @@ class ModelComparisonBlock(ExperimentBlock):
 
         for index, arch in enumerate(mc.model_names):
             progress.start(runner, index, {"model.name": arch})
+            rate = comparison_trial_rate(
+                arch,
+                self._config.training.optimizer,
+                self._config.training.learning_rate,
+                mc.lr_policy,
+            ).learning_rate
             trial_record: dict[str, Any] = {
                 "trial_index": index,
                 "model_arch": arch,
+                "effective_learning_rate": rate,
                 "status": "failed",
                 "error": "",
                 "accuracy": None,
@@ -74,6 +82,10 @@ class ModelComparisonBlock(ExperimentBlock):
                 trial_raw = dict(raw_base)
                 trial_raw["model"] = dict(raw_base["model"])
                 trial_raw["model"]["name"] = arch
+                trial_raw["training"] = {
+                    **raw_base["training"],
+                    "learning_rate": rate,
+                }
 
                 trial_config = ExperimentConfig.model_validate(trial_raw)
                 result = runner.run(trial_config)
@@ -146,7 +158,7 @@ class ModelComparisonBlock(ExperimentBlock):
             self._config,
             self._trials,
             mode="models",
-            overrides_of=lambda t: {"model.name": t["model_arch"]},
+            overrides_of=lambda t: _trial_overrides(t, mc.lr_policy),
             metric=metric,
             direction=infer_direction(metric),
             best_index=ranked[0]["trial_index"] if ranked else None,
@@ -207,6 +219,7 @@ class ModelComparisonBlock(ExperimentBlock):
         fieldnames = [
             "rank",
             "model_arch",
+            "effective_learning_rate",
             "accuracy",
             "f1",
             "auc_roc",
@@ -220,12 +233,25 @@ class ModelComparisonBlock(ExperimentBlock):
                     {
                         "rank": rank,
                         "model_arch": trial["model_arch"],
+                        "effective_learning_rate": trial["effective_learning_rate"],
                         "accuracy": trial["accuracy"],
                         "f1": trial["f1"],
                         "auc_roc": trial["auc_roc"],
                         "training_time_s": trial["training_time_s"],
                     }
                 )
+
+
+def _trial_overrides(trial: dict[str, Any], lr_policy: str) -> dict[str, Any]:
+    """What sets this trial apart from the group's config in History.
+
+    Under ``fixed`` the rate is the config's own; under ``suggested`` it differs
+    from it, so the row has to say which one the architecture trained at.
+    """
+    overrides: dict[str, Any] = {"model.name": trial["model_arch"]}
+    if lr_policy == "suggested":
+        overrides["training.learning_rate"] = trial["effective_learning_rate"]
+    return overrides
 
 
 __all__ = ["ModelComparisonBlock"]

@@ -543,6 +543,27 @@ html[data-run-active] *::after {
   color: oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.14 22);
 }
 .vf-review-errors ul { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 4px; }
+.vf-review-lr {
+  background: var(--vf-panel);
+  border: 1px solid var(--vf-panel-stroke);
+  border-radius: 14px;
+  padding: 16px 18px;
+  font-size: 12px;
+}
+.vf-review-lr-title {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--vf-text-muted);
+  margin-bottom: 10px;
+}
+.vf-review-lr table { border-collapse: collapse; font-family: var(--font-mono); }
+.vf-review-lr th, .vf-review-lr td { padding: 3px 18px 3px 0; text-align: left; }
+.vf-review-lr th { font-weight: 500; color: var(--vf-text-muted); }
+.vf-review-lr tr[data-flagged] td { color: oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.14 22); }
+.vf-review-lr ul { margin: 10px 0 0; padding-left: 18px; display: grid; gap: 4px; color: oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.14 22); }
+.vf-review-lr-note { font-size: 12px; color: var(--vf-text-muted); }
 .vf-review-status {
   padding: 12px 16px;
   border: 1px dashed oklch(0.75 0.15 75 / 0.6);

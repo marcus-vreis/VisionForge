@@ -1105,6 +1105,23 @@
       }
     }
   },
+  "POST /api/model/learning-rate-plan": {
+    "operationId": "learning_rate_plan_api_model_learning_rate_plan_post",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {
+      "application/json": "LearningRatePlanRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "LearningRatePlanResponse"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
   "POST /api/profiles": {
     "operationId": "add_profile_api_profiles_post",
     "parameters": [

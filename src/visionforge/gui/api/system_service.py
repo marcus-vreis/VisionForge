@@ -12,9 +12,12 @@ from visionforge.gui.api.schemas import (
     CollapseEvidenceResponse,
     DeviceInfoResponse,
     GPUInfo,
+    LearningRatePlanRequest,
+    LearningRatePlanResponse,
     ModelDefaultsRequest,
     ModelDefaultsResponse,
     SystemInfo,
+    TrialLearningRateResponse,
 )
 from visionforge.utils.cuda import CUDAInfo
 from visionforge.utils.messages import tr
@@ -93,4 +96,49 @@ def model_defaults(req: ModelDefaultsRequest) -> ModelDefaultsResponse:
             else None
         ),
         note=note,
+    )
+
+
+def learning_rate_plan(req: LearningRatePlanRequest) -> LearningRatePlanResponse:
+    """Say what the blocks will train at, using the functions the blocks use."""
+    from visionforge.core.learning_rate import (
+        comparison_trial_rate,
+        grid_learning_rate_plan,
+        trial_learning_rate,
+    )
+
+    if req.block == "random_search":
+        trials = []
+    elif req.block == "grid_search":
+        trials = grid_learning_rate_plan(
+            req.hyperparameters,
+            req.model_name,
+            req.optimizer,
+            req.learning_rate,
+            req.lr_mode,
+        )
+    elif req.block == "model_comparison":
+        trials = [
+            comparison_trial_rate(name, req.optimizer, req.learning_rate, req.lr_policy)
+            for name in req.model_names
+        ]
+    else:
+        trials = [trial_learning_rate(req.model_name, req.optimizer, req.learning_rate)]
+
+    return LearningRatePlanResponse(
+        trials=[
+            TrialLearningRateResponse(
+                architecture=trial.architecture,
+                optimizer=trial.optimizer,
+                learning_rate=trial.learning_rate,
+                multiplier=trial.multiplier,
+                collapse_prone=trial.collapse_prone,
+                collapse_evidence=(
+                    CollapseEvidenceResponse.model_validate(asdict(trial.evidence))
+                    if trial.evidence is not None
+                    else None
+                ),
+            )
+            for trial in trials
+        ]
     )
