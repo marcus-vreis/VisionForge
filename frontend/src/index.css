@@ -319,6 +319,14 @@
     }
 }
 
+/* A running job shares the GPU with this page, and one looping animation is
+   enough to keep frames coming, so loops end while a job runs (ADR-157). */
+html[data-run-active] *,
+html[data-run-active] *::before,
+html[data-run-active] *::after {
+    animation-iteration-count: 1 !important;
+}
+
 /* ============================================================
    Base layer
    ============================================================ */

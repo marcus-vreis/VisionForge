@@ -96,6 +96,7 @@ import { TabBar } from "./components/TabBar";
 import { TaskHero } from "./components/TaskHero";
 import { TrainingOverlay } from "./components/TrainingOverlay";
 import { useExperiment } from "./hooks/useExperiment";
+import { useRunMotionPause } from "./hooks/useRunMotionPause";
 import type { RunResponse } from "./types/run";
 import type { JsonSchema } from "./types/schema";
 import { taskDefinitions } from "./types/tasks";
@@ -363,6 +364,8 @@ export default function App() {
     status: status.status,
     seededRunning,
   });
+
+  useRunMotionPause(serverBusy);
 
   // A page reload does not clear the server's queue, so ask once whether
   // anything is already running or waiting.

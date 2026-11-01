@@ -6535,3 +6535,30 @@ locked until the last step, and a suggested experiment name on that step.
   effects would then depend on which step is on screen.
 - *Treinar enabled from step one when the data is set.* The user asked for the
   review to be the gate, so a run is never started from a half-checked screen.
+
+## ADR-157 — Looping animations end while a job runs
+
+**Date:** 2026-11-01
+**Status:** Accepted
+
+**Decision:** While the server runs a job, `App` marks the root element and
+`index.css` forces `animation-iteration-count: 1` on everything under it. Looping
+animations finish their current cycle and the page stops producing frames.
+
+**Why:** Keeping the page on screen made epochs about 17% slower than native on
+the benchmark machine, while a closed or minimized browser cost about 1%. Four
+loops ran during training (`shimmer`, `spin`, two `pulse-dot`). Cancelling any one
+of them saved 3 to 4 s per epoch, and cancelling all four took the 73 s epoch to
+62.5 s, the native time. One loop is enough to keep frames coming.
+
+**Consequences:**
+- The training spinner and status dots hold still during a run; progress shows
+  in the numbers and charts, which update per batch or epoch.
+- A loop added later is covered without touching this rule.
+- Finite animations such as sheets opening still play.
+
+**Alternatives considered:**
+- *Remove the four loops one by one.* The next loop added would bring the cost
+  back without anyone noticing.
+- *Tell users to minimize the window.* Leaves the cost on the default way of
+  watching a run.
