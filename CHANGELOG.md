@@ -13,6 +13,8 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ## [Unreleased]
 
+## [0.19.0] — 2026-11-01
+
 ### Added
 
 - **Pares de paridade com recursos reais**: o benchmark escolhe CPU ou CUDA, aceita
