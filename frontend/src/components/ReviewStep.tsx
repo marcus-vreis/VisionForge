@@ -1,7 +1,9 @@
+import type { LearningRatePlanRequest } from "../api/client";
 import { useT } from "../i18n/useT";
 import { shortKey } from "../lib/experiment-name";
 import { useStepNav, type StepId } from "../lib/steps";
 import { ExperimentNameCard } from "./ExperimentHeader";
+import { LearningRatePlanCard } from "./LearningRatePlanCard";
 
 export interface ReviewRow {
   label: string;
@@ -28,6 +30,8 @@ interface ReviewStepProps {
     data: Record<string, unknown>,
   ) => string | null | Promise<string | null>;
   sections: ReviewSection[];
+  /** Asks for the rate of each trial; absent on a form with no such list. */
+  learningRatePlan?: LearningRatePlanRequest | null;
   /** Messages of the last failed submission. */
   errors?: string[];
   /** The required data is set: Treinar can run. */
@@ -62,6 +66,7 @@ export function ReviewStep({
   onExportYaml,
   onImportConfig,
   sections,
+  learningRatePlan,
   errors = [],
   ready,
 }: ReviewStepProps) {
@@ -129,6 +134,10 @@ export function ReviewStep({
             </div>
           ))}
       </div>
+
+      {learningRatePlan !== undefined && (
+        <LearningRatePlanCard request={learningRatePlan} />
+      )}
 
       {errors.length > 0 && (
         <div className="vf-review-errors" role="alert">

@@ -3,10 +3,13 @@ import { en } from "../i18n/en";
 import { pt } from "../i18n/pt";
 import type { JsonSchema } from "../types/schema";
 import {
+  canUseLrMultiplier,
   coerceGridValue,
   isGridableField,
   suggestNextGridValue,
   validateGridValue,
+  withGridAxis,
+  withLrMultiplier,
 } from "./grid-axis";
 
 const lrSchema: JsonSchema = { type: "number", exclusiveMinimum: 0 };
@@ -103,5 +106,60 @@ describe("suggestNextGridValue", () => {
 
   it("picks a different enum option", () => {
     expect(suggestNextGridValue("adam", "optimizer", enumSchema)).toBe("sgd");
+  });
+});
+
+describe("the learning-rate multiplier (ADR-158)", () => {
+  const MODEL = "model.name";
+  const RATE = "training.learning_rate";
+  const on = {
+    hyperparameters: { [MODEL]: ["vgg16", "resnet50"], [RATE]: [0.3, 1, 3] },
+    lr_mode: "suggested_multiplier",
+  };
+
+  it("is offered only with models on the grid", () => {
+    expect(canUseLrMultiplier({})).toBe(false);
+    expect(canUseLrMultiplier({ [RATE]: [0.1] })).toBe(false);
+    expect(canUseLrMultiplier({ [MODEL]: ["vgg16"] })).toBe(true);
+  });
+
+  it("replaces absolute rates with factors when turned on", () => {
+    const grid = withLrMultiplier({ hyperparameters: { [MODEL]: ["vgg16"], [RATE]: [0.01] } }, true);
+    expect(grid["lr_mode"]).toBe("suggested_multiplier");
+    expect((grid["hyperparameters"] as Record<string, unknown[]>)[RATE]).toEqual([0.3, 1, 3]);
+  });
+
+  it("drops the factors when turned off, so none is read as a rate", () => {
+    const grid = withLrMultiplier(on, false);
+    expect(grid["lr_mode"]).toBe("absolute");
+    expect(grid["hyperparameters"]).toEqual({ [MODEL]: ["vgg16", "resnet50"] });
+  });
+
+  it("ends when the model axis goes, taking the factors with it", () => {
+    const grid = withGridAxis(on, MODEL, null);
+    expect(grid["lr_mode"]).toBe("absolute");
+    expect(grid["hyperparameters"]).toEqual({});
+  });
+
+  it("ends when the rate axis goes", () => {
+    const grid = withGridAxis(on, RATE, null);
+    expect(grid["lr_mode"]).toBe("absolute");
+    expect(grid["hyperparameters"]).toEqual({ [MODEL]: ["vgg16", "resnet50"] });
+  });
+
+  it("survives a change to another axis", () => {
+    const grid = withGridAxis(on, "training.batch_size", [8, 16]);
+    expect(grid["lr_mode"]).toBe("suggested_multiplier");
+    expect((grid["hyperparameters"] as Record<string, unknown[]>)[RATE]).toEqual([0.3, 1, 3]);
+  });
+
+  it("leaves an absolute grid alone when axes go", () => {
+    const grid = withGridAxis(
+      { hyperparameters: { [RATE]: [0.01, 0.1], [MODEL]: ["vgg16"] } },
+      MODEL,
+      null,
+    );
+    expect(grid["hyperparameters"]).toEqual({ [RATE]: [0.01, 0.1] });
+    expect(grid["lr_mode"]).toBeUndefined();
   });
 });
