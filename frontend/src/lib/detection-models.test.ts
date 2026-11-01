@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   DETECTION_MODELS,
   buildDetectionDataPayload,
+  buildDetectionPayload,
+  detectionFormFromPayload,
   buildDetectionTrainingPayload,
   defaultModelForBackend,
   isValidModelForBackend,
@@ -175,5 +177,29 @@ describe("preprocessing na payload de detecção", () => {
     };
 
     expect(payload.preprocessing.steps).toEqual([]);
+  });
+});
+
+describe("detection-models · import keeps fields without a control", () => {
+  const imported = {
+    name: "d",
+    model: { backend: "ultralytics", name: "yolo11s", num_classes: 20, pretrained: true },
+    data: { data_yaml: "voc.yaml", image_size: 640, cache: true },
+    training: { epochs: 3, future_knob: 1 },
+    output: { models_dir: "out/models" },
+  };
+
+  it("sends them, and the form still wins on what it edits", () => {
+    const form = detectionFormFromPayload(imported);
+    form.training.epochs = 7;
+    const payload = buildDetectionPayload(form);
+    expect(payload.training).toMatchObject({ epochs: 7, future_knob: 1 });
+    expect(payload.data).toMatchObject({ data_yaml: "voc.yaml", cache: true });
+    expect(payload.output).toEqual({ models_dir: "out/models" });
+    expect(payload).not.toHaveProperty("imported");
+  });
+
+  it("a form that never imported sends only its own sections", () => {
+    expect(Object.keys(buildDetectionPayload(makeDefaultDetectionForm())).sort()).toEqual(["data", "model", "name", "training"]);
   });
 });

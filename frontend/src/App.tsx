@@ -56,8 +56,7 @@ import { RegressionPanel } from "./components/RegressionPanel";
 import { SegmentationPanel } from "./components/SegmentationPanel";
 import { AnomalyPanel } from "./components/AnomalyPanel";
 import {
-  buildDetectionDataPayload,
-  buildDetectionTrainingPayload,
+  buildDetectionPayload,
   makeDefaultDetectionForm,
   type DetectionForm,
 } from "./lib/detection-models";
@@ -488,9 +487,7 @@ export default function App() {
       setBlockKind("detection");
       setQueueSize(undefined);
       const payload: Record<string, unknown> = {
-        ...detectionForm,
-        data: buildDetectionDataPayload(detectionForm.data),
-        training: buildDetectionTrainingPayload(detectionForm.training),
+        ...buildDetectionPayload(detectionForm),
         device: { kind: device.kind, gpu_ids: device.gpu_ids },
       };
       setStorySpec(storySpecFor("detection", payload));
@@ -600,11 +597,7 @@ export default function App() {
     if (task === "regression") return buildRegressionPayload(regressionForm);
     if (task === "segmentation") return buildSegmentationPayload(segmentationForm);
     if (task === "anomaly") return buildAnomalyPayload(anomalyForm);
-    return {
-      ...detectionForm,
-      data: buildDetectionDataPayload(detectionForm.data),
-      training: buildDetectionTrainingPayload(detectionForm.training),
-    };
+    return buildDetectionPayload(detectionForm);
   };
 
   // Task K-fold CV (ADR-050): folds over the train split, fold-a-fold metrics
