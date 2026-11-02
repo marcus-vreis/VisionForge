@@ -1028,6 +1028,38 @@ export interface ModelDefaults {
   note: string | null;
 }
 
+export interface LearningRatePlanRequest {
+  block: string;
+  model_name: string;
+  optimizer: string;
+  learning_rate: number;
+  hyperparameters: Record<string, unknown[]>;
+  lr_mode: "absolute" | "suggested_multiplier";
+  model_names: string[];
+  lr_policy: "fixed" | "suggested";
+}
+
+/** One combination of a job and the rate it will train at (ADR-158). */
+export interface TrialLearningRate {
+  architecture: string;
+  optimizer: string;
+  learning_rate: number;
+  /** The factor of the suggested rate; null when the rate is not a factor's. */
+  multiplier: number | null;
+  collapse_prone: boolean;
+  collapse_evidence: CollapseEvidence | null;
+}
+
+export async function fetchLearningRatePlan(
+  body: LearningRatePlanRequest,
+): Promise<{ trials: TrialLearningRate[] }> {
+  return request<{ trials: TrialLearningRate[] }>("/model/learning-rate-plan", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
 /** Suggested settings for a given architecture (ADR-099/100). Offered to the
  *  form, never applied behind the researcher. */
 export async function fetchModelDefaults(

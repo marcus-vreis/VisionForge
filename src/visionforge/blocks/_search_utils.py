@@ -209,6 +209,7 @@ def write_sweep_group(
             "overrides": overrides_of(t),
             "status": t["status"],
             "run_dir": t.get("run_dir"),
+            "effective_learning_rate": t.get("effective_learning_rate"),
             "metrics": {k: t[k] for k in _TRIAL_METRIC_KEYS if t.get(k) is not None},
             "error": t.get("error") or "",
         }

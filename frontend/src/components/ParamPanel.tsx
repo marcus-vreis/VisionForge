@@ -34,7 +34,11 @@ import {
   isGridableField,
   suggestNextGridValue,
   validateGridValue,
+  canUseLrMultiplier,
+  withGridAxis,
+  withLrMultiplier,
 } from "../lib/grid-axis";
+import { learningRatePlanRequest, rateIsPerModel } from "../lib/lr-plan";
 import {
   MenuSelect,
   NumberField,
@@ -808,8 +812,12 @@ function GridAxisExtension({
  * workflow and previews the Cartesian trial count from the active axes. */
 function GridSearchBanner({
   hyperparameters,
+  lrMultiplier,
+  onLrMultiplierChange,
 }: {
   hyperparameters: Record<string, unknown[]>;
+  lrMultiplier: boolean;
+  onLrMultiplierChange: (on: boolean) => void;
 }) {
   const t = useT();
   const axes = Object.entries(hyperparameters).filter(
@@ -826,6 +834,28 @@ function GridSearchBanner({
       >
         <Rich text={t.paramPanel.grid.banner} />
       </div>
+      {canUseLrMultiplier(hyperparameters) && (
+        <label
+          style={{
+            marginTop: 8,
+            display: "flex",
+            gap: 8,
+            alignItems: "baseline",
+            fontFamily: "var(--font-mono)",
+            fontSize: 11,
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={lrMultiplier}
+            onChange={(e) => onLrMultiplierChange(e.target.checked)}
+          />
+          <span>
+            {t.paramPanel.grid.lrMultiplier}
+            {lrMultiplier && ` ${t.paramPanel.grid.lrMultiplierHint}`}
+          </span>
+        </label>
+      )}
       {axes.length > 0 && (
         <div
           style={{
@@ -1202,6 +1232,7 @@ function ModelComparisonFields({
   };
 
   const setMetric = (v: string) => onChange({ ...value, metric: v });
+  const lrPolicy = String(value["lr_policy"] ?? "fixed");
 
   const namesErr = errors.find(
     (e) =>
@@ -1253,6 +1284,19 @@ function ModelComparisonFields({
               onChange={(v) => setMetric(String(v))}
               errors={errors}
               path={["model_comparison", "metric"]}
+            />
+          )}
+        </div>
+        <div style={{ minWidth: 200 }}>
+          {resolved.properties["lr_policy"] && (
+            <SchemaFieldVF
+              name="lr_policy"
+              schema={resolved.properties["lr_policy"]}
+              defs={defs}
+              value={lrPolicy}
+              onChange={(v) => onChange({ ...value, lr_policy: String(v) })}
+              errors={errors}
+              path={["model_comparison", "lr_policy"]}
             />
           )}
         </div>
@@ -2035,15 +2079,14 @@ export function ParamPanel({
     enabled: gridEnabled,
     hyperparameters: gridHyperparameters,
     setAxis: (dotPath, values) =>
-      setFormData((prev) => {
-        const gs = (prev["grid_search"] ?? {}) as Record<string, unknown>;
-        const hp = {
-          ...((gs["hyperparameters"] ?? {}) as Record<string, unknown>),
-        };
-        if (values === null) delete hp[dotPath];
-        else hp[dotPath] = values;
-        return { ...prev, grid_search: { ...gs, hyperparameters: hp } };
-      }),
+      setFormData((prev) => ({
+        ...prev,
+        grid_search: withGridAxis(
+          (prev["grid_search"] ?? {}) as Record<string, unknown>,
+          dotPath,
+          values,
+        ),
+      })),
   };
 
   const tlOn = block === "transfer_learning";
@@ -2150,7 +2193,10 @@ export function ParamPanel({
     {
       step: "training",
       rows: (["epochs", "learning_rate", "batch_size", "seed", "optimizer"] as const).map(
-        (k) => row(labels[k], trainingData[k], `training.${k}`),
+        (k) =>
+          k === "learning_rate" && rateIsPerModel(formData)
+            ? { label: labels[k], value: t.stepShell.review.lrPlan.perModel }
+            : row(labels[k], trainingData[k], `training.${k}`),
       ),
     },
     {
@@ -2324,7 +2370,22 @@ export function ParamPanel({
           {/* Grid search — inline "+" axis editing happens on the model and
               training fields; this banner explains the workflow + previews trials. */}
           {block === "grid_search" && (
-            <GridSearchBanner hyperparameters={gridHyperparameters} />
+            <GridSearchBanner
+              hyperparameters={gridHyperparameters}
+              lrMultiplier={
+                ((formData["grid_search"] ?? {}) as Record<string, unknown>)["lr_mode"] ===
+                "suggested_multiplier"
+              }
+              onLrMultiplierChange={(on) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  grid_search: withLrMultiplier(
+                    (prev["grid_search"] ?? {}) as Record<string, unknown>,
+                    on,
+                  ),
+                }))
+              }
+            />
           )}
 
           {/* Random search fields — only when block is random_search */}
@@ -2646,6 +2707,7 @@ export function ParamPanel({
           onExportYaml={handleExport}
           onImportConfig={handleImportConfig}
           sections={reviewSections}
+          learningRatePlan={learningRatePlanRequest(formData)}
           errors={validationErrors.map(
             (err) => `${humanizeFieldPath(t, err.field)} — ${err.message}`,
           )}

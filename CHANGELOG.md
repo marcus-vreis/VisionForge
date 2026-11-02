@@ -13,6 +13,15 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ## [Unreleased]
 
+### Added
+
+- **Learning rate por modelo na classificação**: `model_comparison.lr_policy: suggested`
+  usa o LR sugerido de cada arquitetura, e `grid_search.lr_mode: suggested_multiplier`
+  lê o eixo de LR como multiplicador dele. O LR efetivo de cada trial aparece no
+  `run.json`, nos relatórios e na Revisão, que também avisa das combinações sinalizadas
+  citando só a medição registrada. O padrão não muda, e `schema_version` passa a 2:
+  configs antigas carregam iguais. (ADR-158)
+
 ## [0.19.0] — 2026-11-01
 
 ### Added

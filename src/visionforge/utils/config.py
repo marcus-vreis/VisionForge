@@ -10,17 +10,21 @@ from visionforge.utils.paths import RunName
 CONFIG_PATH_MISSING_KEY = "config.path_missing"
 CONFIG_NOT_A_FILE_KEY = "config.not_a_file"
 
-# Bumped whenever a breaking change is made to the experiment config schema. A
+# Bumped whenever a change to the config schema would make an older build misread
+# a config, including a new field it would silently ignore (ADR-158). A
 # config carries the version it was written with so old YAML/run.json files can
 # be migrated forward (see ``migrate_config_dict``) without losing traceability —
 # the reproducibility guarantee depends on this (ADR-039).
-CURRENT_SCHEMA_VERSION = 1
+CURRENT_SCHEMA_VERSION = 2
 
 
 class GridSearchConfig(BaseModel):
     """Search space for exhaustive hyperparameter grid search."""
 
     hyperparameters: dict[str, list[Any]] = Field(default_factory=dict)
+    # How the training.learning_rate axis is read (ADR-158): as the rates
+    # themselves, or as factors of each model's suggested rate.
+    lr_mode: Literal["absolute", "suggested_multiplier"] = "absolute"
 
 
 class RandomSearchConfig(BaseModel):
@@ -365,6 +369,9 @@ class ModelComparisonConfig(BaseModel):
 
     model_names: list[_ArchitectureLiteral] = Field(min_length=2)  # type: ignore[valid-type]
     metric: Literal["accuracy", "f1", "auc_roc"] = "f1"
+    # Whether every architecture trains at training.learning_rate or at its own
+    # suggested rate (ADR-158). Fixed by default: older configs must not change.
+    lr_policy: Literal["fixed", "suggested"] = "fixed"
 
 
 class BatchPredictionConfig(BaseModel):
@@ -482,7 +489,26 @@ class ExperimentConfig(BaseModel):
             and self.task == "multiclass"
         ):
             raise ValueError(tr("config.auc_multiclass"))
+        if self.grid_search is not None:
+            _check_grid_lr_mode(self.grid_search)
         return self
+
+
+def _check_grid_lr_mode(grid: GridSearchConfig) -> None:
+    """A multiplier needs both axes: the models it scales and the factors."""
+    if grid.lr_mode != "suggested_multiplier":
+        return
+    axes = grid.hyperparameters
+    factors = axes.get("training.learning_rate")
+    if not axes.get("model.name") or not factors:
+        raise ValueError(tr("config.lr_multiplier_axes"))
+    for factor in factors:
+        if (
+            isinstance(factor, bool)
+            or not isinstance(factor, int | float)
+            or factor <= 0
+        ):
+            raise ValueError(tr("config.lr_multiplier_value", value=factor))
 
 
 def check_schema_version(version: int) -> None:
@@ -502,14 +528,17 @@ def migrate_config_dict(raw: dict[str, Any]) -> dict[str, Any]:
 
     Returns a new dict (the input is not mutated). A config without an explicit
     ``schema_version`` is treated as the initial schema (v1) — every legacy YAML
-    and run.json predates the field. Future breaking schema changes add a step
-    here that rewrites older shapes forward before validation.
+    and run.json predates the field. Each schema change adds a step here that
+    rewrites older shapes forward before validation.
     """
     if not isinstance(raw, dict):
         return raw
     out = dict(raw)
     version = out.get("schema_version", 1)
-    # (no migration steps yet — v1 is the initial schema)
+    # v1 -> v2 (ADR-158): grid_search.lr_mode and model_comparison.lr_policy.
+    # Their defaults keep a v1 config training as written, so no shape changes.
+    if version < 2:
+        version = 2
     out["schema_version"] = version
     return out
 

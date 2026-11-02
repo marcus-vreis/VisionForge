@@ -46,12 +46,16 @@ and nothing is claimed about how it trains.
 So the suggestion is a function of both. It is a *starting point* offered in the
 interface, never a value forced onto a config the researcher wrote — the whole
 failure mode this addresses is a number appearing without the user's knowledge.
+A search uses it per model only when its config asks for that (ADR-158), and the
+rate each trial really trains at is reported as ``TrialLearningRate``.
 """
 
 from __future__ import annotations
 
+import itertools
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Literal
+from typing import Any, Literal
 
 # Architectures that need a gentler adaptive step: the pre-BatchNorm CNNs and
 # the attention families, for different reasons but with the same remedy.
@@ -158,6 +162,111 @@ def collapse_evidence(architecture: str) -> CollapseEvidence | None:
     return None
 
 
+@dataclass(frozen=True)
+class TrialLearningRate:
+    """The rate one trial trains at, and what is known about that combination.
+
+    Attributes:
+        architecture: the trial's model.
+        optimizer: the trial's optimizer.
+        learning_rate: the effective rate, the one the optimizer receives.
+        multiplier: the factor applied to the suggested rate, or ``None`` when
+            the rate was not derived from a factor.
+        collapse_prone: whether ``is_collapse_prone`` flags this exact trio.
+        evidence: what was measured for the family, only when flagged.
+    """
+
+    architecture: str
+    optimizer: str
+    learning_rate: float
+    multiplier: float | None = None
+    collapse_prone: bool = False
+    evidence: CollapseEvidence | None = None
+
+
+def trial_learning_rate(
+    architecture: str,
+    optimizer: str,
+    learning_rate: float,
+    multiplier: float | None = None,
+) -> TrialLearningRate:
+    """Describe a trial whose rate is already decided."""
+    prone = is_collapse_prone(architecture, optimizer, learning_rate)
+    return TrialLearningRate(
+        architecture=architecture,
+        optimizer=optimizer,
+        learning_rate=learning_rate,
+        multiplier=multiplier,
+        collapse_prone=prone,
+        evidence=collapse_evidence(architecture) if prone else None,
+    )
+
+
+def comparison_trial_rate(
+    architecture: str, optimizer: str, configured_rate: float, policy: str
+) -> TrialLearningRate:
+    """The rate of one architecture in a model comparison.
+
+    Args:
+        architecture: the architecture being trained.
+        optimizer: the config's optimizer.
+        configured_rate: the config's ``training.learning_rate``.
+        policy: ``fixed`` keeps the configured rate, ``suggested`` takes the
+            architecture's own.
+    """
+    rate = (
+        suggested_learning_rate(architecture, optimizer)
+        if policy == "suggested"
+        else configured_rate
+    )
+    return trial_learning_rate(architecture, optimizer, rate)
+
+
+def grid_trial_rate(
+    architecture: str, optimizer: str, axis_value: float, lr_mode: str
+) -> TrialLearningRate:
+    """The rate of one grid trial, given its value on the learning-rate axis.
+
+    Args:
+        architecture: the trial's model.
+        optimizer: the trial's optimizer.
+        axis_value: the rate itself, or the factor in ``suggested_multiplier``.
+        lr_mode: ``absolute`` or ``suggested_multiplier``.
+    """
+    if lr_mode != "suggested_multiplier":
+        return trial_learning_rate(architecture, optimizer, axis_value)
+    # Six significant digits, so 3 x 1e-4 is 0.0003 in run names, reports and
+    # run.json, not 0.00030000000000000003.
+    rate = float(f"{suggested_learning_rate(architecture, optimizer) * axis_value:.6g}")
+    return trial_learning_rate(architecture, optimizer, rate, multiplier=axis_value)
+
+
+def grid_learning_rate_plan(
+    hyperparameters: Mapping[str, Sequence[Any]],
+    architecture: str,
+    optimizer: str,
+    learning_rate: float,
+    lr_mode: str = "absolute",
+) -> list[TrialLearningRate]:
+    """Every distinct (model, optimizer, rate) a grid will train.
+
+    Axes that do not touch the rate (batch size, say) would only repeat rows, so
+    they are left out. The arguments after ``hyperparameters`` are the base
+    values an absent axis falls back to. Values that are not positive numbers
+    are skipped: the form sends them while they are being typed, and the config
+    validation refuses them at submission.
+    """
+    architectures = hyperparameters.get("model.name") or [architecture]
+    optimizers = hyperparameters.get("training.optimizer") or [optimizer]
+    rates = hyperparameters.get("training.learning_rate") or [learning_rate]
+    plan = [
+        grid_trial_rate(str(arch), str(opt), float(rate), lr_mode)
+        for arch, opt, rate in itertools.product(architectures, optimizers, rates)
+        if isinstance(rate, int | float) and not isinstance(rate, bool) and rate > 0
+    ]
+    return list(dict.fromkeys(plan))
+
+
 def suggested_optimizer(architecture: str) -> str:
     """The optimizer these weights are normally fine-tuned with.
 
@@ -173,8 +282,13 @@ def suggested_optimizer(architecture: str) -> str:
 
 __all__ = [
     "CollapseEvidence",
+    "TrialLearningRate",
     "collapse_evidence",
+    "comparison_trial_rate",
+    "grid_learning_rate_plan",
+    "grid_trial_rate",
     "is_collapse_prone",
     "suggested_learning_rate",
     "suggested_optimizer",
+    "trial_learning_rate",
 ]

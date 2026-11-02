@@ -1312,6 +1312,8 @@ function TaskSweepReport({
 
 interface ModelComparisonTrial {
   model_arch: string;
+  /** Absent from a report written before ADR-158. */
+  effective_learning_rate?: number;
   status: string;
   error?: string;
   accuracy: number | null;
@@ -1393,6 +1395,7 @@ function ModelComparisonReport({
             <tr>
               <th style={cvThStyle}>{t.resultsView.cols.rank}</th>
               <th style={cvThStyle}>{t.resultsView.cols.architecture}</th>
+              <th style={cvThStyle}>{t.resultsView.modelComparison.learningRate}</th>
               <th style={cvThStyle}>{t.resultsView.modelComparison.accuracy}</th>
               <th style={cvThStyle}>F1</th>
               <th style={cvThStyle}>{t.resultsView.modelComparison.aucRoc}</th>
@@ -1425,6 +1428,7 @@ function ModelComparisonReport({
                   >
                     {trial.model_arch}
                   </td>
+                  <td style={cvTdStyle}>{trial.effective_learning_rate ?? "—"}</td>
                   <td style={cvTdStyle}>{formatMetric(trial.accuracy)}</td>
                   <td style={cvTdStyle}>{formatMetric(trial.f1)}</td>
                   <td style={cvTdStyle}>{formatMetric(trial.auc_roc)}</td>

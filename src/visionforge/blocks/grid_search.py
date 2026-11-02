@@ -17,7 +17,10 @@ from visionforge.blocks._search_utils import (
 )
 from visionforge.blocks.base import ExperimentBlock
 from visionforge.core.cancellation import STOPPED, is_cancelled, job_was_stopped
+from visionforge.core.learning_rate import grid_trial_rate
 from visionforge.utils.config import ExperimentConfig
+
+_LEARNING_RATE_AXIS = "training.learning_rate"
 
 
 class GridSearchBlock(ExperimentBlock):
@@ -62,12 +65,18 @@ class GridSearchBlock(ExperimentBlock):
             # trials is the hyperparameters, so a gap in the ranking is theirs
             # and not the seed's. Seed-to-seed spread is what replicates measure.
             trial_seed = base_seed
-            trial_overrides = dict(zip(keys, combo, strict=True))
+            trial_overrides, multiplier = self._resolve_learning_rate(
+                dict(zip(keys, combo, strict=True))
+            )
 
             trial_record: dict[str, Any] = {
                 "trial_index": trial_idx,
                 "seed": trial_seed,
                 **trial_overrides,
+                "effective_learning_rate": trial_overrides.get(
+                    _LEARNING_RATE_AXIS, self._config.training.learning_rate
+                ),
+                **({} if multiplier is None else {"lr_multiplier": multiplier}),
                 "status": "failed",
                 "error": "",
                 "best_val_loss": None,
@@ -113,7 +122,14 @@ class GridSearchBlock(ExperimentBlock):
             self._config,
             self._trials,
             mode="grid",
-            overrides_of=lambda t: {k: t.get(k) for k in keys},
+            overrides_of=lambda t: {
+                **{k: t.get(k) for k in keys},
+                **(
+                    {"lr_multiplier": t["lr_multiplier"]}
+                    if "lr_multiplier" in t
+                    else {}
+                ),
+            },
             # best_trial ranks by validation loss, lowest first.
             metric="best_val_loss",
             direction="lower",
@@ -162,6 +178,29 @@ class GridSearchBlock(ExperimentBlock):
 
     # ── private ───────────────────────────────────────────────────────────────
 
+    def _resolve_learning_rate(
+        self, overrides: dict[str, Any]
+    ) -> tuple[dict[str, Any], float | None]:
+        """Turn a factor on the rate axis into the rate the trial trains at.
+
+        Returns the overrides to apply and the factor, ``None`` in ``absolute``
+        mode, where the axis already holds the rates. Everything downstream
+        (the trial's config and run.json, its name, the summary) gets the
+        effective rate, so a factor is never mistaken for one.
+        """
+        grid = self._config.grid_search
+        assert grid is not None
+        if grid.lr_mode != "suggested_multiplier":
+            return overrides, None
+        multiplier = overrides[_LEARNING_RATE_AXIS]
+        trial = grid_trial_rate(
+            overrides["model.name"],
+            overrides.get("training.optimizer", self._config.training.optimizer),
+            multiplier,
+            grid.lr_mode,
+        )
+        return {**overrides, _LEARNING_RATE_AXIS: trial.learning_rate}, multiplier
+
     def _write_artifacts(self) -> None:
         """Write grid_search_summary.csv and best_config.yaml to reports_dir."""
         out_dir = self._config.output.reports_dir / self._config.name
@@ -179,7 +218,9 @@ class GridSearchBlock(ExperimentBlock):
             keys = list(hp.keys())
             value_lists = [hp[k] for k in keys]
             combos = list(itertools.product(*value_lists))
-            best_overrides = dict(zip(keys, combos[best_idx], strict=True))
+            best_overrides, _ = self._resolve_learning_rate(
+                dict(zip(keys, combos[best_idx], strict=True))
+            )
         else:
             best_overrides = {}
 

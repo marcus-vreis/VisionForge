@@ -6562,3 +6562,62 @@ of them saved 3 to 4 s per epoch, and cancelling all four took the 73 s epoch to
   back without anyone noticing.
 - *Tell users to minimize the window.* Leaves the cost on the default way of
   watching a run.
+
+---
+
+## ADR-158 — Per-model learning rate in comparisons and grids
+
+**Date:** 2026-11-01
+**Status:** Accepted
+**Extends:** ADR-099, ADR-100 (suggested rates and collapse evidence), ADR-039 (`schema_version`), ADR-156 (Review)
+
+**Decision:** Classification searches can give each model its own learning rate,
+only when the config asks for it.
+
+- `model_comparison.lr_policy`: `fixed` (default) trains every architecture at
+  `training.learning_rate`; `suggested` uses
+  `suggested_learning_rate(arch, optimizer)` per trial.
+- `grid_search.lr_mode`: `absolute` (default) reads the `training.learning_rate`
+  axis as rates; `suggested_multiplier` reads it as factors of each model's
+  suggested rate. It requires the `model.name` and `training.learning_rate` axes
+  and positive numbers.
+- The rate a trial trains at is written everywhere under its real name: the
+  trial's `config.training.learning_rate` in `run.json`, `effective_learning_rate`
+  in `comparison_summary.json`, `ranking.csv`, `grid_search_summary.csv`, the block
+  report and the History group row. A factor is kept apart as `lr_multiplier`, and
+  `best_config.yaml` holds the effective rate.
+- The Review lists each combination's rate from `POST /api/model/learning-rate-plan`,
+  which calls the functions the blocks train with. The form computes no rate, and
+  the training row stops showing a number the trials will not use.
+- The Review warns on `is_collapse_prone`, quoting only `collapse_evidence`. That
+  measurement is one model per family at Adam 1e-3, so the sentence names that
+  setting instead of implying the flagged combination was run.
+- `CURRENT_SCHEMA_VERSION` goes to 2. The step changes no shape: the defaults keep
+  a v1 config training as written.
+
+**Why:** A single rate biases the ranking. At Adam 1e-3, vgg16, alexnet and swin_t
+collapsed and vit_b_16 did not learn (`core/learning_rate.py`), so a comparison
+measured the rate as much as the architecture. A Cartesian grid does not help,
+since the same absolute rates are far from the working point of half the models.
+
+**Consequences:**
+- Sweeps still select on validation, never on the test set (ADR-131). The suggested
+  rate comes from the architecture and optimizer, not from this dataset.
+- The suggested rates were measured on one 4-class setup, for one model per family.
+  `suggested` removes a known failure; it does not tune each model, and a ranking
+  under it should be reported as such. The factors exist to check around the
+  suggestion.
+- An older build refuses a v2 config instead of ignoring `lr_policy` or `lr_mode`.
+  Ignoring them would train at other rates without saying so, and would read 3 as
+  a learning rate. This is why an additive field got a version bump, against the
+  "breaking changes only" wording of ADR-039.
+- Random search has no list in the Review: its rates are sampled at run time.
+- The task-agnostic comparison (`core/comparison.py`, `POST /{task}/compare`) is
+  unchanged: the suggestions and evidence were measured on classification.
+
+**Alternatives considered:**
+- *Silently apply the suggestion in every comparison.* Changes old results and is
+  the failure this module exists to avoid.
+- *A per-model map of rates in the config.* More flexible, but the researcher would
+  transcribe the suggestions by hand, and the grid already covers explicit choices.
+- *Compute the rates in the form.* Two copies of the table, which would drift.
