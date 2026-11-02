@@ -13,6 +13,8 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ## [Unreleased]
 
+## [0.20.0] — 2026-11-02
+
 ### Added
 
 - **Learning rate por modelo na classificação**: `model_comparison.lr_policy: suggested`
