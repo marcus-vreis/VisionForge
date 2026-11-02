@@ -1103,6 +1103,26 @@ CATALOG: dict[str, dict[Lang, str]] = {
             "VisionForge."
         ),
     },
+    "config.lr_multiplier_axes": {
+        "pt": (
+            "grid_search.lr_mode=suggested_multiplier exige os eixos model.name "
+            "e training.learning_rate no grid."
+        ),
+        "en": (
+            "grid_search.lr_mode=suggested_multiplier requires both the model.name "
+            "and the training.learning_rate axes."
+        ),
+    },
+    "config.lr_multiplier_value": {
+        "pt": (
+            "Com lr_mode=suggested_multiplier, os valores de training.learning_rate "
+            "são multiplicadores e precisam ser números positivos; recebido {value}."
+        ),
+        "en": (
+            "With lr_mode=suggested_multiplier, training.learning_rate values are "
+            "multipliers and must be positive numbers; got {value}."
+        ),
+    },
     "config.binary_num_classes": {
         "pt": "A tarefa binária exige num_classes=1, recebido {n}.",
         "en": "Binary task requires num_classes=1, got {n}.",

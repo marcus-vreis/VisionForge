@@ -47,6 +47,13 @@ const measuredNote = (facts: CollapseFacts, whatHappened: string): string => {
  * Organised by where the text appears (one section per component or area),
  * with `common` for the words every screen repeats.
  */
+/** What `collapse_evidence` says, for the Review's warning (lib/lr-plan.ts). */
+export interface LrPlanEvidence {
+  measuredOn: string;
+  accuracy: number;
+  outcome: "collapse" | "fails_to_learn";
+}
+
 export const pt = {
   evidence: {
     audit: "Auditar imagens",
@@ -445,6 +452,7 @@ export const pt = {
       backbone_lr_multiplier: "LR do backbone (×)",
       model_names: "Arquiteturas",
       metric: "Métrica de ranking",
+      lr_policy: "Learning rate por modelo",
     },
     kickers: {
       strategy: "// estratégia de experimento",
@@ -492,6 +500,9 @@ export const pt = {
       axisTag: (values: number) => `grade · ${values} ${values === 1 ? "valor" : "valores"}`,
       banner:
         "**Grid search ativo.** Clique em `+ valor ao grid` nos hiperparâmetros de __Modelo__ e __Treinamento__ para varrer múltiplos valores.",
+      lrMultiplier: "Ler o eixo de learning rate como multiplicador do LR sugerido de cada modelo",
+      lrMultiplierHint:
+        "(os valores do eixo viram fatores, como 0.3, 1 e 3; a Revisão mostra o LR de cada trial)",
       trials: (n: number) =>
         `// ${n} trial${n === 1 ? "" : "s"}${n > 12 ? " ⚠️ alto" : ""}`,
     },
@@ -973,6 +984,7 @@ export const pt = {
     modelComparison: {
       title: (ok: number, total: number, failed: number, stopped: number) =>
         `// comparação de modelos · ${ok}/${total} ok${failed > 0 ? ` · ${failed} ${failed === 1 ? "falhou" : "falharam"}` : ""}${stopped > 0 ? ` · ${stopped} interrompido${stopped === 1 ? "" : "s"}` : ""}`,
+      learningRate: "LR efetivo",
       accuracy: "Accuracy",
       aucRoc: "AUC-ROC",
       // The path goes in backticks, for <Rich>.
@@ -1788,6 +1800,24 @@ export const pt = {
       blocked: "Falta escolher o dataset na etapa Dados para liberar o Treinar.",
       errorsTitle: "Problemas na última tentativa",
       noChanges: "valores padrão",
+      lrPlan: {
+        title: "Learning rate de cada trial",
+        model: "modelo",
+        optimizer: "otimizador",
+        multiplier: "multiplicador",
+        effectiveRate: "LR efetivo",
+        perModel: "por modelo, veja abaixo",
+        unavailable: "Não foi possível calcular o learning rate de cada trial.",
+        combination: (architecture: string, optimizer: string, rate: number) =>
+          `${architecture} com ${optimizer} a ${rate}: combinação sinalizada.`,
+        // The evidence is one run at Adam 1e-3, not a run of this combination.
+        measured: (facts: LrPlanEvidence) =>
+          `Medido: ${facts.measuredOn} com Adam a 1e-3 ${
+            facts.outcome === "collapse" ? "previu uma classe só" : "aprendeu pouco"
+          } (accuracy ${facts.accuracy.toFixed(2)} em 4 classes).`,
+        siblingNotMeasured: (architecture: string) => `${architecture} não foi medido.`,
+        notMeasured: "Esta família não foi medida.",
+      },
     },
   },
   experimentHeader: {

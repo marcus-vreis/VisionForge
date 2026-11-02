@@ -791,6 +791,36 @@ class CollapseEvidenceResponse(BaseModel):
     recovered_accuracy: float | None = None
 
 
+class LearningRatePlanRequest(BaseModel):
+    """The form's search settings, before the dataset or the rest are valid."""
+
+    block: str
+    model_name: str
+    optimizer: str
+    learning_rate: float
+    hyperparameters: dict[str, list[Any]] = Field(default_factory=dict)
+    lr_mode: Literal["absolute", "suggested_multiplier"] = "absolute"
+    model_names: list[str] = Field(default_factory=list)
+    lr_policy: Literal["fixed", "suggested"] = "fixed"
+
+
+class TrialLearningRateResponse(BaseModel):
+    """One combination of a job and the rate it will train at (ADR-158)."""
+
+    architecture: str
+    optimizer: str
+    learning_rate: float
+    multiplier: float | None = None
+    collapse_prone: bool = False
+    collapse_evidence: CollapseEvidenceResponse | None = None
+
+
+class LearningRatePlanResponse(BaseModel):
+    """Empty for a block whose rates are not known in advance (random search)."""
+
+    trials: list[TrialLearningRateResponse]
+
+
 class ModelDefaultsResponse(BaseModel):
     """Suggested starting points for this architecture (ADR-099/100).
 

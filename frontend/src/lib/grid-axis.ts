@@ -56,6 +56,51 @@ export function validateGridValue(
   return null;
 }
 
+const MODEL_AXIS = "model.name";
+const RATE_AXIS = "training.learning_rate";
+/** The factors a new multiplier axis starts with (ADR-158). */
+export const DEFAULT_LR_MULTIPLIERS = [0.3, 1, 3];
+
+type GridSection = Record<string, unknown>;
+
+const axesOf = (grid: GridSection) =>
+  (grid["hyperparameters"] ?? {}) as Record<string, unknown[]>;
+
+/** Whether the rate axis can be read as a factor: there are models to scale. */
+export function canUseLrMultiplier(hyperparameters: Record<string, unknown[]>): boolean {
+  return (hyperparameters[MODEL_AXIS]?.length ?? 0) > 0;
+}
+
+/** Set or drop one axis. A multiplier that loses either axis ends with the
+ *  factors removed too: left behind, 3 would be read as a learning rate of 3. */
+export function withGridAxis(
+  grid: GridSection,
+  dotPath: string,
+  values: unknown[] | null,
+): GridSection {
+  const axes = { ...axesOf(grid) };
+  if (values === null) delete axes[dotPath];
+  else axes[dotPath] = values;
+  if (grid["lr_mode"] !== "suggested_multiplier" || (axes[MODEL_AXIS] && axes[RATE_AXIS])) {
+    return { ...grid, hyperparameters: axes };
+  }
+  delete axes[RATE_AXIS];
+  return { ...grid, hyperparameters: axes, lr_mode: "absolute" };
+}
+
+/** Switch how the rate axis is read. Its values mean different things in each
+ *  mode, so they are never carried across. */
+export function withLrMultiplier(grid: GridSection, on: boolean): GridSection {
+  const axes = { ...axesOf(grid) };
+  if (on) axes[RATE_AXIS] = [...DEFAULT_LR_MULTIPLIERS];
+  else delete axes[RATE_AXIS];
+  return {
+    ...grid,
+    hyperparameters: axes,
+    lr_mode: on ? "suggested_multiplier" : "absolute",
+  };
+}
+
 /** Suggest the next candidate value when the user clicks "+ valor". */
 export function suggestNextGridValue(
   prev: unknown,

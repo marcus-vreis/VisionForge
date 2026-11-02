@@ -1,4 +1,4 @@
-import type { CollapseFacts, Dict } from "./pt";
+import type { CollapseFacts, Dict, LrPlanEvidence } from "./pt";
 
 // Help texts shared by two field names; see the same pair in pt.ts.
 const workersHelp =
@@ -420,6 +420,7 @@ export const en: Dict = {
       backbone_lr_multiplier: "Backbone LR (×)",
       model_names: "Architectures",
       metric: "Ranking metric",
+      lr_policy: "Learning rate per model",
     },
     kickers: {
       strategy: "// experiment strategy",
@@ -467,6 +468,9 @@ export const en: Dict = {
       axisTag: (values: number) => `grid · ${values} ${values === 1 ? "value" : "values"}`,
       banner:
         "**Grid search is on.** Click `+ add to grid` on any __Model__ or __Training__ hyperparameter to sweep several values.",
+      lrMultiplier: "Read the learning rate axis as a multiplier of each model's suggested rate",
+      lrMultiplierHint:
+        "(the axis values become factors, such as 0.3, 1 and 3; the Review shows each trial's rate)",
       trials: (n: number) =>
         `// ${n} trial${n === 1 ? "" : "s"}${n > 12 ? " ⚠️ high" : ""}`,
     },
@@ -904,6 +908,7 @@ export const en: Dict = {
     modelComparison: {
       title: (ok: number, total: number, failed: number, stopped: number) =>
         `// model comparison · ${ok}/${total} ok${failed > 0 ? ` · ${failed} failed` : ""}${stopped > 0 ? ` · ${stopped} stopped` : ""}`,
+      learningRate: "Effective LR",
       accuracy: "Accuracy",
       aucRoc: "AUC-ROC",
       footer: "Top 3 above. The full ranking is in `outputs/reports/<experiment>/ranking.csv`.",
@@ -1623,6 +1628,23 @@ export const en: Dict = {
       blocked: "Choose the dataset in the Data step to enable Train.",
       errorsTitle: "Problems in the last attempt",
       noChanges: "default values",
+      lrPlan: {
+        title: "Learning rate of each trial",
+        model: "model",
+        optimizer: "optimizer",
+        multiplier: "multiplier",
+        effectiveRate: "effective LR",
+        perModel: "per model, see below",
+        unavailable: "Failed to work out the learning rate of each trial.",
+        combination: (architecture: string, optimizer: string, rate: number) =>
+          `${architecture} with ${optimizer} at ${rate}: flagged combination.`,
+        measured: (facts: LrPlanEvidence) =>
+          `Measured: ${facts.measuredOn} with Adam at 1e-3 ${
+            facts.outcome === "collapse" ? "predicted a single class" : "learned little"
+          } (accuracy ${facts.accuracy.toFixed(2)} on 4 classes).`,
+        siblingNotMeasured: (architecture: string) => `${architecture} was not measured.`,
+        notMeasured: "This family was not measured.",
+      },
     },
   },
   experimentHeader: {

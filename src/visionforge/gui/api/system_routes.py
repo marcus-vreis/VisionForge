@@ -9,6 +9,8 @@ from fastapi import APIRouter
 from visionforge.gui.api import system_service
 from visionforge.gui.api.schemas import (
     DeviceInfoResponse,
+    LearningRatePlanRequest,
+    LearningRatePlanResponse,
     ModelDefaultsRequest,
     ModelDefaultsResponse,
     SystemInfo,
@@ -36,5 +38,12 @@ def build_system_router(
     async def model_defaults(req: ModelDefaultsRequest) -> ModelDefaultsResponse:
         """Suggested settings for this architecture (ADR-099/100)."""
         return system_service.model_defaults(req)
+
+    @router.post("/model/learning-rate-plan")
+    async def learning_rate_plan(
+        req: LearningRatePlanRequest,
+    ) -> LearningRatePlanResponse:
+        """The rate each trial of this job will train at (ADR-158)."""
+        return system_service.learning_rate_plan(req)
 
     return router
