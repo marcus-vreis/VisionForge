@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { LanguageContext } from "../i18n/context";
@@ -92,6 +94,15 @@ describe("BottomBar train lock", () => {
 
   it("is enabled when nothing locks it", () => {
     expect(trainButton(bar(null))).not.toContain("disabled");
+  });
+
+  it("keeps the tools named when phone width hides their labels", () => {
+    const html = bar(null);
+    expect(html).toContain(`aria-label="${pt.bottomBar.history}"`);
+    expect(html).toContain(`aria-label="${pt.bottomBar.datasets}"`);
+    expect(html).toContain('class="vf-bottom-bar-label"');
+    const css = readFileSync(resolve(__dirname, "../index.css"), "utf-8");
+    expect(css).toMatch(/@media \(max-width: 640px\)[\s\S]*\.vf-bottom-bar-label[^{]*\{ display: none; \}/);
   });
 });
 

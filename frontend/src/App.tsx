@@ -746,6 +746,7 @@ export default function App() {
       <TabBar tasks={tasks} activeKey={activeKey} setActiveKey={setActiveKey} />
 
       <main
+        className="vf-app-main"
         style={{
           position: "relative",
           zIndex: 2,
