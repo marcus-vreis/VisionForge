@@ -193,7 +193,8 @@ def dice_loss(
     intersection = (probs * one_hot).sum(dims)
     cardinality = probs.sum(dims) + one_hot.sum(dims)
     dice = (2.0 * intersection + 1e-6) / (cardinality + 1e-6)
-    return 1.0 - dice.mean()
+    loss: torch.Tensor = 1.0 - dice.mean()
+    return loss
 
 
 class _CombinedLoss(nn.Module):

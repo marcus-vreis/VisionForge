@@ -73,6 +73,7 @@ export function BottomBar({
       : (trainLabel ?? t.app.train.simple);
   return (
     <div
+      className="vf-bottom-bar"
       style={{
         position: "fixed",
         bottom: 24,
@@ -97,11 +98,12 @@ export function BottomBar({
         boxShadow: "0 30px 80px rgb(var(--lt-shade, 0 0 0) / 0.5)",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <div className="vf-bottom-bar-tools" style={{ display: "flex", alignItems: "center", gap: 8 }}>
       <button
         type="button"
         data-tour="history"
         onClick={onHistory}
+        aria-label={t.bottomBar.history}
         style={{
           display: "flex",
           alignItems: "center",
@@ -119,7 +121,7 @@ export function BottomBar({
         }}
       >
         <span style={{ fontSize: 14 }}>⤺</span>
-        {t.bottomBar.history}
+        <span className="vf-bottom-bar-label">{t.bottomBar.history}</span>
         {historyCount > 0 && (
           <span
             style={{
@@ -142,6 +144,7 @@ export function BottomBar({
         data-tour="datasets"
         onClick={onDatasets}
         title={t.bottomBar.datasetsTitle}
+        aria-label={t.bottomBar.datasets}
         style={{
           display: "flex",
           alignItems: "center",
@@ -159,7 +162,7 @@ export function BottomBar({
         }}
       >
         <span style={{ fontSize: 14 }}>⤓</span>
-        {t.bottomBar.datasets}
+        <span className="vf-bottom-bar-label">{t.bottomBar.datasets}</span>
       </button>
 
       {/* Shown while something is waiting or running: the running job's row is
@@ -172,6 +175,7 @@ export function BottomBar({
           type="button"
           onClick={onQueue}
           title={t.bottomBar.queueTitle}
+          aria-label={t.bottomBar.queue}
           style={{
             display: "flex",
             alignItems: "center",
@@ -189,7 +193,7 @@ export function BottomBar({
           }}
         >
           <span style={{ fontSize: 14 }}>⧗</span>
-          {t.bottomBar.queue}
+          <span className="vf-bottom-bar-label">{t.bottomBar.queue}</span>
           {queuedCount > 0 && (
             <span
               style={{
@@ -214,6 +218,7 @@ export function BottomBar({
         data-tour="train"
         onClick={handleCenterClick}
         disabled={blocked}
+        className="vf-bottom-bar-train"
         title={locked ? (lockReason ?? undefined) : undefined}
         aria-description={locked ? (lockReason ?? undefined) : undefined}
         style={{

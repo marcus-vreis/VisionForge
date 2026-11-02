@@ -113,7 +113,8 @@ class GradCAM:
             mode="bilinear",
             align_corners=False,
         ).squeeze(1)
-        return cam[0].detach()
+        result: torch.Tensor = cam[0].detach()
+        return result
 
     def remove(self) -> None:
         """Detach the forward/backward hooks."""

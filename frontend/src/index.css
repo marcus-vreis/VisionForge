@@ -588,3 +588,29 @@ html[data-run-active] *::after {
   .vf-step-tab { flex: 0 0 auto; width: auto; grid-template-areas: "num text" "num chip"; }
   .vf-step-summary { display: none; }
 }
+
+/* Phone width: the bar's three groups need more than the screen, so its tools
+   go to icons, keeping one row and Treinar in view. Layout here is inline in
+   the components, hence the !important. */
+@media (max-width: 640px) {
+  .vf-app-main { padding: 20px 12px 96px !important; }
+  .vf-bottom-bar {
+    left: 8px !important;
+    right: 8px !important;
+    bottom: 8px !important;
+    gap: 6px !important;
+    padding: 8px !important;
+  }
+  .vf-bottom-bar-tools { gap: 4px !important; }
+  .vf-bottom-bar-tools button { padding: 10px !important; gap: 4px !important; }
+  .vf-bottom-bar-label, .vf-device-using { display: none; }
+  .vf-bottom-bar-train {
+    flex: 1 1 0 !important;
+    min-width: 0;
+    padding: 12px 6px !important;
+    letter-spacing: 0.04em !important;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .vf-bottom-bar [data-tour="device"] button { padding: 10px !important; gap: 6px !important; letter-spacing: 0.04em !important; }
+}

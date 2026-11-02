@@ -129,7 +129,7 @@ export function DeviceSelector({ selection, onChange, variant = "bottom" }: Devi
             flexShrink: 0,
           }}
         />
-        <span style={{ color: "var(--vf-text-dim)" }}>{t.deviceSelector.using}</span>
+        <span className="vf-device-using" style={{ color: "var(--vf-text-dim)" }}>{t.deviceSelector.using}</span>
         <span
           style={{
             color: cudaActive ? "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.16 150)" : "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.10 70)",

@@ -13,6 +13,8 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ## [Unreleased]
 
+## [0.20.0] — 2026-11-02
+
 ### Added
 
 - **Learning rate por modelo na classificação**: `model_comparison.lr_policy: suggested`
@@ -21,6 +23,12 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
   `run.json`, nos relatórios e na Revisão, que também avisa das combinações sinalizadas
   citando só a medição registrada. O padrão não muda, e `schema_version` passa a 2:
   configs antigas carregam iguais. (ADR-158)
+
+### Fixed
+
+- **Barra inferior em tela estreita**: em até 640 px, Histórico e Datasets viram
+  ícones, com o nome mantido para leitores de tela, e Treinar deixa de ser cortado.
+  O respiro lateral e inferior da página também diminui nessa largura.
 
 ## [0.19.0] — 2026-11-01
 
