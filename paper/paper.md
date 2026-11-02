@@ -175,11 +175,10 @@ designed the architecture, the statistical methodology and the experiments,
 reviewed and accepted every change, and verified behaviour through the project's
 automated tests, the `selftest` command and real training runs. Every reference
 was checked against its source. The author takes full responsibility for the
-software and this paper. <Confirm whether other assistants (e.g. GitHub Copilot)
-were used, and adjust.>
+software and this paper.
 
 # Acknowledgements
 
-<Testers (anonymous, as a group); institutional support, if any.>
+<Testers (anonymous, as a group), after the usability study.>
 
 # References
