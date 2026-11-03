@@ -13,6 +13,15 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ## [Unreleased]
 
+## [0.20.2] — 2026-11-03
+
+### Changed
+
+- **Ícone da GUI**: a aba do navegador mostra o símbolo do site do VisionForge,
+  sem o fundo, no lugar do ícone padrão do Vite.
+- **Capturas do README**: as duas imagens mostram a interface da v0.20.1, com o
+  assistente de etapas.
+
 ## [0.20.1] — 2026-11-02
 
 ### Fixed
