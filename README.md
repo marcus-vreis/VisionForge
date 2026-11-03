@@ -10,7 +10,7 @@ Five task families, one interface, no cloud and no notebooks.
 > 🇧🇷 **Este README também está em português** — [role até a versão em
 > português](#português-pt-br).
 
-![VisionForge — classification panel](https://raw.githubusercontent.com/marcus-vreis/VisionForge/main/docs/images/vf-classification.png)
+![VisionForge — classification, data step of the six-step wizard](https://raw.githubusercontent.com/marcus-vreis/VisionForge/main/docs/images/vf-classification.png)
 
 ## Install
 
