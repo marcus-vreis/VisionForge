@@ -11,9 +11,9 @@ import {
   stopOutcome,
   stopSummary,
   stoppedFraction,
-  trialBanner,
 } from "../lib/run-control";
 import { stopLogLine } from "../lib/stop-log";
+import { logLinesFor, type LogLine } from "../lib/training-log";
 import { GENERIC_STORY, type StorySpec } from "../lib/story-family";
 import { phaseName } from "../lib/training-phase";
 import type { SheetTab } from "../lib/training-story";
@@ -58,8 +58,6 @@ interface TrainingOverlayProps {
   onViewResults?: () => void;
 }
 
-/** A log line: the trainer's own text, or one of ours that follows the language. */
-type LogLine = string | ((t: Dict) => string);
 
 /** Where a stop request stands. `requested` means the server accepted it, not
  *  that the run has ended: it still finishes its epoch (ADR-088). */
@@ -197,89 +195,24 @@ export function TrainingOverlay({
     return () => clearInterval(id);
   }, [isRunning, hasRealProgress]);
 
-  // Emit a separator line when a new trial starts (grid/random search).
+  // Append the lines of the events that are new. A run opened mid-way receives
+  // its history in a burst, so this walks them all rather than reading the latest
+  // (ADR-159). The refs make a second strict-mode pass find nothing to add.
+  const loggedEvents = useRef(0);
+  const loggedPhase = useRef<string | null>(null);
   useEffect(() => {
-    if (latestTrialStart === undefined) return;
-    const { trial_index, total_trials, overrides } = latestTrialStart;
-    const line = trialBanner(trial_index, total_trials, overrides);
-    // Defer the append so it does not run synchronously inside the effect body
-    // (avoids cascading renders); same pattern as the terminal-state effect.
-    const timer = setTimeout(() => {
-      setLogs((prev) => {
-        if (prev.at(-1) === line) return prev;
-        return [...prev.slice(-24), line];
-      });
-    }, 0);
-    return () => clearTimeout(timer);
-  }, [latestTrialStart]);
-
-  // Append a log line for each new epoch_end event.
-  useEffect(() => {
-    if (latestEpoch === undefined) return;
-    const { epoch, total_epochs, train_loss, val_loss, val_accuracy } =
-      latestEpoch;
-    const trialTag =
-      latestEpoch.trial_index !== undefined && latestEpoch.total_trials
-        ? `[t${latestEpoch.trial_index + 1}/${latestEpoch.total_trials}] `
-        : "";
-    // Detection runs carry mAP / precision / per-component losses; show those
-    // instead of the classification loss/acc triple. `map50` is present (maybe
-    // null) only on detection events, so it discriminates the task here.
-    const isDetection = latestEpoch.map50 !== undefined;
-    const fmt = (v: number | null | undefined): string =>
-      v === null || v === undefined ? "—" : v.toFixed(4);
-    // Researcher-defined tasks (ADR-058) stream their own declared metrics as
-    // val_<name> and have no val_loss — list what the event actually carries
-    // instead of assuming the classification triple (which crashed the
-    // overlay when a custom task's first epoch arrived).
-    const customMetrics = Object.entries(latestEpoch)
-      .filter(
-        ([k, v]) =>
-          k.startsWith("val_") &&
-          k !== "val_accuracy" &&
-          k !== "val_loss" &&
-          !k.endsWith("_loss") &&
-          typeof v === "number",
-      )
-      .map(([k, v]) => `${k.slice(4)}=${fmt(v as number)}`);
-
-    const metricsPart = isDetection
-      ? [
-          `map50=${fmt(latestEpoch.map50)}`,
-          `map50-95=${fmt(latestEpoch.map50_95)}`,
-          `P=${fmt(latestEpoch.precision)}`,
-          `R=${fmt(latestEpoch.recall)}`,
-          `box=${fmt(latestEpoch.val_box_loss ?? latestEpoch.box_loss)}`,
-          `cls=${fmt(latestEpoch.val_cls_loss)}`,
-          `dfl=${fmt(latestEpoch.val_dfl_loss)}`,
-        ].join(" · ")
-      : customMetrics.length > 0
-        ? [`loss=${fmt(train_loss)}`, ...customMetrics].join(" · ")
-        : `loss=${fmt(train_loss)} · val_loss=${fmt(val_loss)} · val_acc=${fmt(val_accuracy)}`;
-    const line = `> ${trialTag}epoch ${epoch}/${total_epochs} · ${metricsPart}`;
-    // Defer the append (see the trial-separator effect above).
-    const timer = setTimeout(() => {
-      setLogs((prev) => {
-        // Avoid duplicate lines if the effect runs twice in strict-mode.
-        if (prev.at(-1) === line) return prev;
-        return [...prev.slice(-24), line];
-      });
-    }, 0);
-    return () => clearTimeout(timer);
-  }, [latestEpoch]);
-
-  // Uma linha por fase, não por atualização: a montagem do banco reporta ~100
-  // vezes, e cem linhas iguais empurrariam para fora do log tudo que interessa.
-  const phaseLabel = latestPhase?.label;
-  useEffect(() => {
-    if (!phaseLabel) return;
-    // A function of the dictionary, so a known label follows the language.
-    const line: LogLine = (d) => `> ${phaseName(d, phaseLabel)}…`;
-    const timer = setTimeout(() => {
-      setLogs((prev) => [...prev.slice(-24), line]);
-    }, 0);
-    return () => clearTimeout(timer);
-  }, [phaseLabel]);
+    const { lines, phase } = logLinesFor(
+      progressEvents.slice(loggedEvents.current),
+      loggedPhase.current,
+    );
+    loggedEvents.current = progressEvents.length;
+    loggedPhase.current = phase;
+    if (lines.length === 0) return;
+    // Deferred so it does not run synchronously inside the effect body (avoids
+    // cascading renders); same pattern as the terminal-state effect. Not cleared:
+    // the next batch must not cancel this one.
+    setTimeout(() => setLogs((prev) => [...prev, ...lines].slice(-25)), 0);
+  }, [progressEvents]);
 
   // Stopping the running job (ADR-088, ADR-111). Where a stop lands depends on
   // the kind of run, which the queue snapshot knows (`stop_at`) and this sheet

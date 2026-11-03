@@ -17,7 +17,7 @@ import type { SweepPayload } from "./components/SweepCard";
 import type { ReplicatesPayload } from "./lib/replicates-form";
 import type { ComparePayload } from "./lib/compare-form";
 import { announce, requestPermission, resetTitle } from "./lib/run-notify";
-import { serverRunning } from "./lib/run-control";
+import { runIdentityFromJob, serverRunning } from "./lib/run-control";
 import { GENERIC_STORY, storySpecFor, type StorySpec } from "./lib/story-family";
 import type { SheetTab } from "./lib/training-story";
 import { BottomBar } from "./components/BottomBar";
@@ -96,9 +96,20 @@ import { TaskHero } from "./components/TaskHero";
 import { TrainingOverlay } from "./components/TrainingOverlay";
 import { useExperiment } from "./hooks/useExperiment";
 import { useRunMotionPause } from "./hooks/useRunMotionPause";
-import type { RunResponse } from "./types/run";
+import type { QueuedJobInfo, RunResponse } from "./types/run";
 import type { JsonSchema } from "./types/schema";
 import { taskDefinitions } from "./types/tasks";
+
+/** What the training sheet shows about a run, fixed when it is submitted: the
+ *  forms go on changing while it trains or waits (ADR-159). */
+interface RunMeta {
+  custom: boolean;
+  taskKey: string;
+  blockKind: string;
+  pipeline: string[];
+  queueSize: number | undefined;
+  story: StorySpec;
+}
 
 /** Standalone tasks that expose the comparison/sweep advanced surface. */
 type AdvancedTask = "regression" | "segmentation" | "detection" | "anomaly";
@@ -124,7 +135,7 @@ async function readQueueDepth(
 
 export default function App() {
   const t = useT();
-  const { status, result, error, validationErrors, progressEvents, submit, reset } =
+  const { status, result, error, validationErrors, progressEvents, submit, enqueue, attach, reset } =
     useExperiment();
 
   const [activeKey, setActiveKey] = useState("classification");
@@ -195,6 +206,11 @@ export default function App() {
   const [storySpec, setStorySpec] = useState<StorySpec>(GENERIC_STORY);
   const [sheetTab, setSheetTab] = useState<SheetTab>("log");
   const [overlayVisible, setOverlayVisible] = useState(false);
+  // The task the followed run belongs to, which may not be the open tab.
+  const [runTaskKey, setRunTaskKey] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [queueNotice, setQueueNotice] = useState<string | null>(null);
+  const queuedMeta = useRef(new Map<string, RunMeta>());
   const [resultsVisible, setResultsVisible] = useState(false);
   const [schema, setSchema] = useState<JsonSchema | null>(null);
   const [formData, setFormData] = useState<Record<string, unknown>>({});
@@ -355,14 +371,12 @@ export default function App() {
     status.status === "failed";
   const showOverlay = overlayVisible && runActive;
   const activeTask = tasks.find((task) => task.key === activeKey) ?? tasks[0];
-  // While this tab has a run in flight its own polling is authoritative;
-  // otherwise fall back to what was on the server when the page loaded.
-  const queuedCount = runActive ? (status.queued ?? 0) : seededQueueCount;
-  const serverBusy = serverRunning({
-    runActive,
-    status: status.status,
-    seededRunning,
-  });
+  // The queue snapshot, not the followed run: that run may have ended with others
+  // still in line.
+  const queuedCount = seededQueueCount;
+  const serverBusy = serverRunning({ status: status.status, seededRunning });
+  const queueMode = serverBusy || queuedCount > 0;
+  const runTask = tasks.find((task) => task.key === runTaskKey) ?? activeTask;
 
   useRunMotionPause(serverBusy);
 
@@ -372,17 +386,27 @@ export default function App() {
     void readQueueDepth(setSeededQueueCount, setSeededRunning);
   }, []);
 
-  // Keep asking only while a badge or the queue button is up and this tab has
-  // no run of its own to poll: those jobs still drain, and a stale badge is
-  // worse than no badge. Stops on its own once the server is idle.
+  // A followed run that starts or ends changes the line right away.
   useEffect(() => {
-    if (runActive || (seededQueueCount === 0 && !seededRunning)) return;
+    void readQueueDepth(setSeededQueueCount, setSeededRunning);
+  }, [status.status]);
+
+  // Keep asking while anything is up: those jobs still drain, and a stale badge
+  // is worse than no badge. Stops on its own once the server is idle.
+  useEffect(() => {
+    if (!queueMode) return;
     const id = setInterval(
       () => void readQueueDepth(setSeededQueueCount, setSeededRunning),
-      5000,
+      3000,
     );
     return () => clearInterval(id);
-  }, [runActive, seededQueueCount, seededRunning]);
+  }, [queueMode]);
+
+  useEffect(() => {
+    if (queueNotice === null) return;
+    const id = setTimeout(() => setQueueNotice(null), 5000);
+    return () => clearTimeout(id);
+  }, [queueNotice]);
 
   useEffect(() => {
     fetchSchema()
@@ -431,13 +455,71 @@ export default function App() {
     [activeKey],
   );
 
-  // Every run starts fresh, and remembers whether it came from a researcher's own
-  // task (`startCustom`): the training sheet words its stop confirmation for it.
-  const startRun = (custom: boolean) => {
-    reset();
-    setCustomRun(custom);
-    // A new run opens on its log.
+  const showRunMeta = (meta: RunMeta) => {
+    setCustomRun(meta.custom);
+    setRunTaskKey(meta.taskKey);
+    setBlockKind(meta.blockKind);
+    setPipelineSummary(meta.pipeline);
+    setQueueSize(meta.queueSize);
+    setStorySpec(meta.story);
+    // A run opens on its log.
     setSheetTab("log");
+  };
+
+  // Opens the training sheet on a run that is executing. Its record comes from
+  // this tab's submission or, after a reload or from another tab, its queue entry.
+  const watchRun = (runId: string, meta: RunMeta) => {
+    showRunMeta(meta);
+    setResultsVisible(false);
+    setOverlayVisible(true);
+    attach(runId);
+  };
+
+  const watchJob = (job: QueuedJobInfo) => {
+    setShowQueue(false);
+    if (status.run_id === job.run_id && status.status === "running") {
+      setOverlayVisible(true);
+      return;
+    }
+    const identity = runIdentityFromJob(job);
+    watchRun(
+      job.run_id,
+      queuedMeta.current.get(job.run_id) ?? {
+        ...identity,
+        pipeline: [],
+        queueSize: undefined,
+        story: storySpecFor(identity.custom ? "custom" : identity.taskKey, null),
+      },
+    );
+  };
+
+  // Every submission goes through here. With the server idle the run starts fresh
+  // and the sheet follows it; with anything in flight it joins the line, and the
+  // run being followed, its log and its result stay as they are (ADR-159).
+  const launch = async (
+    meta: RunMeta,
+    body: Record<string, unknown>,
+    opts?: Parameters<typeof submit>[1],
+  ) => {
+    setSubmitting(true);
+    try {
+      if (!queueMode) {
+        reset();
+        showRunMeta(meta);
+        setResultsVisible(false);
+        setOverlayVisible(true);
+        await submit(body, opts);
+        return;
+      }
+      const res = await enqueue(body, opts);
+      if (res === null) return;
+      queuedMeta.current.set(res.run_id, meta);
+      void readQueueDepth(setSeededQueueCount, setSeededRunning);
+      if (res.status === "running") watchRun(res.run_id, meta);
+      else setQueueNotice(t.bottomBar.enqueued);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   // A custom task shares the whole single-run surface (overlay, results,
@@ -449,14 +531,18 @@ export default function App() {
     queue?: number,
     run?: (p: Record<string, unknown>) => Promise<RunResponse>,
   ) => {
-    startRun(true);
-    setResultsVisible(false);
-    setOverlayVisible(true);
-    setPipelineSummary([]);
-    setBlockKind(kind);
-    setQueueSize(queue);
-    setStorySpec(storySpecFor("custom", null));
-    await submit(body, { run: run ?? ((p) => runCustomTask(key, p)) });
+    await launch(
+      {
+        custom: true,
+        taskKey: key,
+        blockKind: kind,
+        pipeline: [],
+        queueSize: queue,
+        story: storySpecFor("custom", null),
+      },
+      body,
+      { run: run ?? ((p) => runCustomTask(key, p)) },
+    );
   };
 
   const activeStrategy = strategyByTask[activeKey] ?? "simple";
@@ -480,69 +566,82 @@ export default function App() {
       return;
     }
     if (activeKey === "detection") {
-      startRun(false);
-      setResultsVisible(false);
-      setOverlayVisible(true);
-      setPipelineSummary([]);
-      setBlockKind("detection");
-      setQueueSize(undefined);
       const payload: Record<string, unknown> = {
         ...buildDetectionPayload(detectionForm),
         device: { kind: device.kind, gpu_ids: device.gpu_ids },
       };
-      setStorySpec(storySpecFor("detection", payload));
-      await submit(payload, { detection: true });
+      await launch(
+        {
+          custom: false,
+          taskKey: "detection",
+          blockKind: "detection",
+          pipeline: [],
+          queueSize: undefined,
+          story: storySpecFor("detection", payload),
+        },
+        payload,
+        { detection: true },
+      );
       return;
     }
     if (activeKey === "regression") {
-      startRun(false);
-      setResultsVisible(false);
-      setOverlayVisible(true);
-      setPipelineSummary([]);
-      setBlockKind("regression");
-      setQueueSize(undefined);
       const payload: Record<string, unknown> = {
         ...buildRegressionPayload(regressionForm),
         device: { kind: device.kind, gpu_ids: device.gpu_ids },
       };
-      setStorySpec(storySpecFor("regression", payload));
-      await submit(payload, { regression: true });
+      await launch(
+        {
+          custom: false,
+          taskKey: "regression",
+          blockKind: "regression",
+          pipeline: [],
+          queueSize: undefined,
+          story: storySpecFor("regression", payload),
+        },
+        payload,
+        { regression: true },
+      );
       return;
     }
     if (activeKey === "segmentation") {
-      startRun(false);
-      setResultsVisible(false);
-      setOverlayVisible(true);
-      setPipelineSummary([]);
-      setBlockKind("segmentation");
-      setQueueSize(undefined);
       const payload: Record<string, unknown> = {
         ...buildSegmentationPayload(segmentationForm),
         device: { kind: device.kind, gpu_ids: device.gpu_ids },
       };
-      setStorySpec(storySpecFor("segmentation", payload));
-      await submit(payload, { segmentation: true });
+      await launch(
+        {
+          custom: false,
+          taskKey: "segmentation",
+          blockKind: "segmentation",
+          pipeline: [],
+          queueSize: undefined,
+          story: storySpecFor("segmentation", payload),
+        },
+        payload,
+        { segmentation: true },
+      );
       return;
     }
     if (activeKey === "anomaly") {
-      startRun(false);
-      setResultsVisible(false);
-      setOverlayVisible(true);
-      setPipelineSummary([]);
-      setBlockKind("anomaly");
-      setQueueSize(undefined);
       const payload: Record<string, unknown> = {
         ...buildAnomalyPayload(anomalyForm),
         device: { kind: device.kind, gpu_ids: device.gpu_ids },
       };
-      setStorySpec(storySpecFor("anomaly", payload));
-      await submit(payload, { anomaly: true });
+      await launch(
+        {
+          custom: false,
+          taskKey: "anomaly",
+          blockKind: "anomaly",
+          pipeline: [],
+          queueSize: undefined,
+          story: storySpecFor("anomaly", payload),
+        },
+        payload,
+        { anomaly: true },
+      );
       return;
     }
     if (activeKey !== "classification") return;
-    startRun(false);
-    setResultsVisible(false);
-    setOverlayVisible(true);
     // Inject the live device selection so the backend actually honors it
     // (instead of always defaulting to CUDA when present).
     const payload: Record<string, unknown> = {
@@ -555,12 +654,11 @@ export default function App() {
     const steps = Array.isArray(pp["steps"])
       ? (pp["steps"] as Array<Record<string, unknown>>)
       : [];
-    setPipelineSummary(steps.map((s) => String(s["kind"] ?? "")).filter(Boolean));
+    const pipeline = steps.map((s) => String(s["kind"] ?? "")).filter(Boolean);
 
     // Surface the active block kind + queue size so the overlay can warn
     // about multi-trial blocks before the first SSE epoch lands.
     const kind = String(payload["block"] ?? "classification");
-    setBlockKind(kind);
     let qSize: number | undefined;
     if (kind === "grid_search") {
       const gs = (payload["grid_search"] ?? {}) as Record<string, unknown>;
@@ -583,10 +681,17 @@ export default function App() {
       const names = mc["model_names"];
       qSize = Array.isArray(names) ? names.length : undefined;
     }
-    setQueueSize(qSize);
-
-    setStorySpec(storySpecFor("classification", payload));
-    await submit(payload);
+    await launch(
+      {
+        custom: false,
+        taskKey: "classification",
+        blockKind: kind,
+        pipeline,
+        queueSize: qSize,
+        story: storySpecFor("classification", payload),
+      },
+      payload,
+    );
   };
 
   // Model comparison (ADR-044) for the standalone tasks: trains the picked
@@ -606,18 +711,22 @@ export default function App() {
     task: "regression" | "segmentation",
     payload: CvPayload,
   ) => {
-    startRun(false);
-    setResultsVisible(false);
-    setOverlayVisible(true);
-    setPipelineSummary([]);
-    setBlockKind("cross_validation");
-    setQueueSize(payload.n_folds);
     const config = {
       ...buildTaskBase(task),
       device: { kind: device.kind, gpu_ids: device.gpu_ids },
     };
-    setStorySpec(storySpecFor(task, config));
-    await submit({ config, ...payload }, { run: (p) => runTaskCv(task, p) });
+    await launch(
+      {
+        custom: false,
+        taskKey: task,
+        blockKind: "cross_validation",
+        pipeline: [],
+        queueSize: payload.n_folds,
+        story: storySpecFor(task, config),
+      },
+      { config, ...payload },
+      { run: (p) => runTaskCv(task, p) },
+    );
   };
 
   // Multi-seed replicates (ADR-056): same config, N seeds, mean ± CI report.
@@ -626,18 +735,22 @@ export default function App() {
     task: AdvancedTask,
     payload: ReplicatesPayload,
   ) => {
-    startRun(false);
-    setResultsVisible(false);
-    setOverlayVisible(true);
-    setPipelineSummary([]);
-    setBlockKind("replicates");
-    setQueueSize(payload.seeds?.length ?? payload.n_replicates ?? undefined);
     const config = {
       ...buildTaskBase(task),
       device: { kind: device.kind, gpu_ids: device.gpu_ids },
     };
-    setStorySpec(storySpecFor(task, config));
-    await submit({ config, ...payload }, { run: (p) => runReplicates(task, p) });
+    await launch(
+      {
+        custom: false,
+        taskKey: task,
+        blockKind: "replicates",
+        pipeline: [],
+        queueSize: payload.seeds?.length ?? payload.n_replicates ?? undefined,
+        story: storySpecFor(task, config),
+      },
+      { config, ...payload },
+      { run: (p) => runReplicates(task, p) },
+    );
   };
 
   // Hyperparameter sweep (ADR-045) for the standalone tasks: grid/random search
@@ -646,11 +759,6 @@ export default function App() {
     task: AdvancedTask,
     payload: SweepPayload,
   ) => {
-    startRun(false);
-    setResultsVisible(false);
-    setOverlayVisible(true);
-    setPipelineSummary([]);
-    setBlockKind(payload.mode === "grid" ? "grid_search" : "random_search");
     const space = payload.search_space;
     const qSize =
       payload.mode === "grid"
@@ -659,30 +767,43 @@ export default function App() {
             Object.keys(space).length === 0 ? 0 : 1,
           )
         : payload.n_trials;
-    setQueueSize(qSize || undefined);
     const config = {
       ...buildTaskBase(task),
       device: { kind: device.kind, gpu_ids: device.gpu_ids },
     };
-    setStorySpec(storySpecFor(task, config));
-    await submit({ config, ...payload }, { run: (p) => runSweep(task, p) });
+    await launch(
+      {
+        custom: false,
+        taskKey: task,
+        blockKind: payload.mode === "grid" ? "grid_search" : "random_search",
+        pipeline: [],
+        queueSize: qSize || undefined,
+        story: storySpecFor(task, config),
+      },
+      { config, ...payload },
+      { run: (p) => runSweep(task, p) },
+    );
   };
 
   // Model comparison (ADR-044): one unit per architecture, ranked by the
   // chosen metric. Same overlay/results flow.
   const handleCompare = async (task: AdvancedTask, payload: ComparePayload) => {
-    startRun(false);
-    setResultsVisible(false);
-    setOverlayVisible(true);
-    setPipelineSummary([]);
-    setBlockKind("model_comparison");
-    setQueueSize(payload.model_names.length);
     const config = {
       ...buildTaskBase(task),
       device: { kind: device.kind, gpu_ids: device.gpu_ids },
     };
-    setStorySpec(storySpecFor(task, config));
-    await submit({ config, ...payload }, { run: (p) => runCompare(task, p) });
+    await launch(
+      {
+        custom: false,
+        taskKey: task,
+        blockKind: "model_comparison",
+        pipeline: [],
+        queueSize: payload.model_names.length,
+        story: storySpecFor(task, config),
+      },
+      { config, ...payload },
+      { run: (p) => runCompare(task, p) },
+    );
   };
 
   const showResults = resultsVisible && result !== null;
@@ -785,7 +906,7 @@ export default function App() {
             formData={activeCustomForm}
             setFormData={setActiveCustomForm}
             validationErrors={validationErrors}
-            busy={status.status === "running"}
+            busy={submitting}
             onSweep={(payload) =>
               void startCustom(
                 activeTask.key,
@@ -820,7 +941,7 @@ export default function App() {
             setFormData={setDetectionForm}
             accent={activeTask.accent}
             validationErrors={validationErrors}
-            busy={status.status === "running"}
+            busy={submitting}
             onSweep={(payload) => void handleSweep("detection", payload)}
             onReplicates={(payload) =>
               void handleReplicates("detection", payload)
@@ -834,7 +955,7 @@ export default function App() {
             setFormData={setRegressionForm}
             accent={activeTask.accent}
             validationErrors={validationErrors}
-            busy={status.status === "running"}
+            busy={submitting}
             onSweep={(payload) => void handleSweep("regression", payload)}
             onReplicates={(payload) =>
               void handleReplicates("regression", payload)
@@ -849,7 +970,7 @@ export default function App() {
             setFormData={setSegmentationForm}
             accent={activeTask.accent}
             validationErrors={validationErrors}
-            busy={status.status === "running"}
+            busy={submitting}
             onSweep={(payload) => void handleSweep("segmentation", payload)}
             onReplicates={(payload) =>
               void handleReplicates("segmentation", payload)
@@ -864,7 +985,7 @@ export default function App() {
             setFormData={setAnomalyForm}
             accent={activeTask.accent}
             validationErrors={validationErrors}
-            busy={status.status === "running"}
+            busy={submitting}
             onReplicates={(payload) =>
               void handleReplicates("anomaly", payload)
             }
@@ -913,7 +1034,7 @@ export default function App() {
         onDatasets={() => setShowDatasets(true)}
         onQueue={() => setShowQueue(true)}
         onTrain={() => void handleTrain()}
-        disabled={status.status === "running"}
+        disabled={submitting}
         trainLabel={t.app.train[activeStrategy] ?? t.app.train.simple}
         lockReason={trainLockReason}
         historyCount={historyCount}
@@ -922,8 +1043,8 @@ export default function App() {
         selection={device}
         onSelectionChange={setDevice}
         isRunning={status.status === "running"}
-        trainingMinimized={status.status === "running" && !overlayVisible}
-        onReopenTraining={() => setOverlayVisible(true)}
+        queueMode={queueMode}
+        notice={queueNotice}
       />
 
       {showHistory && (
@@ -951,16 +1072,18 @@ export default function App() {
         onClose={() => setShowQueue(false)}
         onCountChange={setSeededQueueCount}
         onRunningChange={setSeededRunning}
+        onWatch={watchJob}
       />
 
       {runActive && (
         <TrainingOverlay
+          key={status.run_id ?? "pending"}
           status={status}
           progressEvents={progressEvents}
           visible={overlayVisible}
-          taskAccent={activeTask.accent}
-          taskLabel={activeTask.label}
-          taskKey={activeKey}
+          taskAccent={runTask.accent}
+          taskLabel={runTask.label}
+          taskKey={runTask.key}
           pipelineSummary={pipelineSummary}
           blockKind={blockKind}
           queueSize={queueSize}

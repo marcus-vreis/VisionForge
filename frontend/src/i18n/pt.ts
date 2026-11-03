@@ -193,16 +193,16 @@ export const pt = {
     reload: "Recarregar página",
   },
   bottomBar: {
-    reopenTraining: "🔬 abrir treino",
+    enqueue: "Colocar na fila",
+    enqueued: "Na fila: começa quando chegar a vez. Acompanhe pelo botão fila.",
     trainLockedReview: "Abra a etapa Revisão para liberar o Treinar",
     trainLockedData: "Escolha o dataset na etapa Dados para liberar o Treinar",
-    running: "Executando…",
     history: "histórico",
     datasets: "datasets",
     datasetsTitle: "Baixar um dataset para uma pasta local",
     queue: "fila",
     queueTitle:
-      "Ver o treino em execução e os que esperam a GPU — dá para parar um ou remover outro",
+      "Abrir o treino em execução e ver os que esperam a GPU — dá para parar um ou remover outro",
   },
   deviceSelector: {
     using: "usando",
@@ -1970,6 +1970,7 @@ export const pt = {
     position: (n: number) => `${n}º`,
     running: "em execução",
     waiting: (waited: string) => `esperando ${waited}`,
+    watch: "🔬 ver treino",
     removeTitle: "Remover da fila (não afeta treinos já iniciados)",
     stopTitle: "Interromper este treino (o trabalho já feito é mantido)",
     // The running row of a job whose `stop_at` is null (lib/run-control.ts).

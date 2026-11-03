@@ -189,7 +189,9 @@
   "GET /api/experiment/events": {
     "operationId": "experiment_events_api_experiment_events_get",
     "parameters": [
-      "header:X-VF-Lang:optional"
+      "header:X-VF-Lang:optional",
+      "query:after:optional",
+      "query:run_id:optional"
     ],
     "requestBody": {},
     "responses": {

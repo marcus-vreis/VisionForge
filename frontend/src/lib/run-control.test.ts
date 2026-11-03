@@ -10,6 +10,7 @@ import {
   isCustomJob,
   reachedEpoch,
   runEnding,
+  runIdentityFromJob,
   serverRunning,
   showQueueButton,
   stopMode,
@@ -227,7 +228,7 @@ describe("showQueueButton", () => {
 
 describe("serverRunning", () => {
   it("follows the tab's own run while it has one", () => {
-    const base = { runActive: true, seededRunning: false };
+    const base = { seededRunning: false };
     expect(serverRunning({ ...base, status: "running" })).toBe(true);
     // Waiting behind another job still means the server is busy.
     expect(serverRunning({ ...base, status: "queued" })).toBe(true);
@@ -235,19 +236,45 @@ describe("serverRunning", () => {
     expect(serverRunning({ ...base, status: "failed" })).toBe(false);
   });
 
-  it("does not let a stale snapshot override the tab's own finished run", () => {
-    expect(
-      serverRunning({ runActive: true, status: "completed", seededRunning: true }),
-    ).toBe(false);
+  it("stays busy after the followed run ends while the next job runs", () => {
+    expect(serverRunning({ status: "completed", seededRunning: true })).toBe(true);
   });
 
   it("falls back to the queue snapshot when the tab has no run (after a reload)", () => {
     expect(
-      serverRunning({ runActive: false, status: "idle", seededRunning: true }),
+      serverRunning({ status: "idle", seededRunning: true }),
     ).toBe(true);
     expect(
-      serverRunning({ runActive: false, status: "idle", seededRunning: false }),
+      serverRunning({ status: "idle", seededRunning: false }),
     ).toBe(false);
+  });
+});
+
+describe("runIdentityFromJob", () => {
+  it("reads a plain run of a built-in task", () => {
+    expect(runIdentityFromJob({ task: "detection", strategy: "simple" })).toEqual({
+      custom: false,
+      taskKey: "detection",
+      blockKind: "detection",
+    });
+  });
+
+  it("reads a researcher's own task", () => {
+    expect(runIdentityFromJob({ task: "custom:leaf", strategy: "simple" })).toEqual({
+      custom: true,
+      taskKey: "leaf",
+      blockKind: "custom",
+    });
+  });
+
+  it("maps queue strategies to the sheet's block names", () => {
+    const block = (strategy: string) =>
+      runIdentityFromJob({ task: "regression", strategy }).blockKind;
+    expect(block("sweep:grid")).toBe("grid_search");
+    expect(block("sweep:random")).toBe("random_search");
+    expect(block("cv")).toBe("cross_validation");
+    expect(block("comparison")).toBe("model_comparison");
+    expect(block("replicates")).toBe("replicates");
   });
 });
 
