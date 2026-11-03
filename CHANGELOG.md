@@ -13,6 +13,8 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ## [Unreleased]
 
+## [0.20.1] — 2026-11-02
+
 ### Fixed
 
 - **Fila na mesma aba**: com um treino rodando ou esperando, o botão principal vira
