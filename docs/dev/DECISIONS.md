@@ -6621,3 +6621,43 @@ since the same absolute rates are far from the working point of half the models.
 - *A per-model map of rates in the config.* More flexible, but the researcher would
   transcribe the suggestions by hand, and the grid already covers explicit choices.
 - *Compute the rates in the form.* Two copies of the table, which would drift.
+
+## ADR-159 — Queueing and watching a run from the same tab
+
+**Date:** 2026-11-03
+**Status:** Accepted
+**Extends:** ADR-075 (run queue), ADR-088 (stopping a running job)
+
+**Context:** the queue panel says to submit as many runs as you like, and the
+server takes them, but one tab could not: with a run in flight the main button
+only reopened its training sheet. Changing the label would not have been enough.
+The hook followed one run and a new submission erased its state; the sheet read
+its task and strategy from the open form; and the event stream handed each event
+to a single reader, so a reloaded page had no log and a second tab took epochs
+from the first.
+
+**Decision:**
+
+- While anything runs or waits, the main button reads **Add to queue**, still
+  behind the Review lock. The submission leaves the followed run, its log and its
+  result alone, and a short notice confirms it.
+- **View training** on the running row of the queue panel opens the sheet, and
+  replaces the bar's "open training", which only knew this tab's own run. It also
+  works after a reload or from another tab, from the job's queue entry.
+- What the sheet shows about a run is fixed at submission, per run.
+- `gui/api/run_events.py` keeps the current run's events and every reader walks
+  them. `GET /api/experiment/events` gains `after`, so a dropped stream asks only
+  for the rest, and `run_id`, so a client never reads another job's events as its
+  own. Events are per epoch and dropped when the next run starts.
+
+**Consequence:** the sheet does not jump to the next job, and the result of a run
+nobody was watching does not open by itself, since it would interrupt someone
+configuring another run. It is in the History. The tab's title and notification
+follow the watched run only.
+
+**Alternatives considered:**
+
+- *Rename the button only.* Each of the problems above would have shown up as a
+  wrong log or a lost result.
+- *Follow several runs in the hook.* More state for no gain: one GPU runs one job,
+  and only that job has a log to read.

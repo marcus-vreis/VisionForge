@@ -29,17 +29,39 @@ interface ExperimentState {
   progressEvents: TrainingEvent[];
   submit: (
     config: Record<string, unknown>,
-    opts?: {
-      detection?: boolean;
-      regression?: boolean;
-      segmentation?: boolean;
-      anomaly?: boolean;
-      /** Custom submitter (e.g. comparison/sweep endpoints); overrides the
-       *  task-based dispatch when provided. */
-      run?: (config: Record<string, unknown>) => Promise<RunResponse>;
-    },
+    opts?: SubmitOptions,
   ) => Promise<void>;
+  /** Send a run to the queue without leaving the run being followed (ADR-159).
+   *  Null when it was refused; the reason lands in `error`. */
+  enqueue: (
+    config: Record<string, unknown>,
+    opts?: SubmitOptions,
+  ) => Promise<RunResponse | null>;
+  /** Follow a run that is already executing, reading its log from the start. */
+  attach: (runId: string) => void;
   reset: () => void;
+}
+
+interface SubmitOptions {
+  detection?: boolean;
+  regression?: boolean;
+  segmentation?: boolean;
+  anomaly?: boolean;
+  /** Custom submitter (e.g. comparison/sweep endpoints); overrides the
+   *  task-based dispatch when provided. */
+  run?: (config: Record<string, unknown>) => Promise<RunResponse>;
+}
+
+function dispatchRun(
+  config: Record<string, unknown>,
+  opts?: SubmitOptions,
+): Promise<RunResponse> {
+  if (opts?.run) return opts.run(config);
+  if (opts?.detection) return runDetection(config);
+  if (opts?.regression) return runRegression(config);
+  if (opts?.segmentation) return runSegmentation(config);
+  if (opts?.anomaly) return runAnomaly(config);
+  return runExperiment(config);
 }
 
 export interface ValidationError {
@@ -117,6 +139,9 @@ export function useExperiment(): ExperimentState {
   // completion as its own and fetch the wrong result.
   const myRunRef = useRef<string | null>(null);
   const startedRef = useRef(false);
+  // How many events of the followed run have arrived: a stream that reopens asks
+  // only for the rest, since the server keeps them all (ADR-159).
+  const eventCountRef = useRef(0);
 
   const stopPolling = useCallback(() => {
     if (stopPollRef.current) {
@@ -134,7 +159,9 @@ export function useExperiment(): ExperimentState {
 
   const openEventSource = useCallback(() => {
     closeEventSource();
-    const es = new EventSource("/api/experiment/events");
+    const query = new URLSearchParams({ after: String(eventCountRef.current) });
+    if (myRunRef.current !== null) query.set("run_id", myRunRef.current);
+    const es = new EventSource(`/api/experiment/events?${query}`);
     esRef.current = es;
 
     es.onmessage = (ev) => {
@@ -142,6 +169,7 @@ export function useExperiment(): ExperimentState {
         const data = JSON.parse(ev.data) as TrainingEvent;
         // Ignore the empty sentinel emitted when no run is active.
         if (!data.event) return;
+        eventCountRef.current += 1;
         setProgressEvents((prev) => [...prev, data]);
         if (data.event === "end") {
           closeEventSource();
@@ -257,36 +285,42 @@ export function useExperiment(): ExperimentState {
     closeEventSource();
   }, [stopPolling, closeEventSource]);
 
+  const reportSubmitError = useCallback((e: unknown) => {
+    if (e instanceof ApiError) {
+      if (e.status === 422 && e.validationErrors) {
+        setValidationErrors(
+          e.validationErrors.map((err) => ({
+            field: err.loc.filter((l) => l !== "body").map((l) => String(l)),
+            message: err.msg,
+          })),
+        );
+        setError(
+          tRef.current.experiment.validationFailed(e.validationErrors.length),
+        );
+        return;
+      }
+      // Kept for older servers: since ADR-075 a busy server queues the
+      // submission instead of refusing it.
+      setError(e.status === 409 ? tRef.current.experiment.alreadyRunning : e.message);
+      return;
+    }
+    setError(
+      e instanceof Error
+        ? tRef.current.experiment.unexpected(e.message)
+        : tRef.current.experiment.unknown,
+    );
+  }, []);
+
   const submit = useCallback(
-    async (
-      config: Record<string, unknown>,
-      opts?: {
-      detection?: boolean;
-      regression?: boolean;
-      segmentation?: boolean;
-      anomaly?: boolean;
-      /** Custom submitter (e.g. comparison/sweep endpoints); overrides the
-       *  task-based dispatch when provided. */
-      run?: (config: Record<string, unknown>) => Promise<RunResponse>;
-    },
-    ) => {
+    async (config: Record<string, unknown>, opts?: SubmitOptions) => {
       setError(null);
       setResult(null);
       setValidationErrors([]);
       setProgressEvents([]);
+      eventCountRef.current = 0;
 
       try {
-        const res = await (opts?.run
-          ? opts.run(config)
-          : opts?.detection
-            ? runDetection(config)
-            : opts?.regression
-              ? runRegression(config)
-              : opts?.segmentation
-                ? runSegmentation(config)
-                : opts?.anomaly
-                  ? runAnomaly(config)
-                  : runExperiment(config));
+        const res = await dispatchRun(config, opts);
         myRunRef.current = res.run_id;
         startedRef.current = res.status === "running";
         if (res.status === "queued") {
@@ -299,42 +333,42 @@ export function useExperiment(): ExperimentState {
         }
         startPolling();
       } catch (e) {
-        if (e instanceof ApiError) {
-          if (e.status === 422 && e.validationErrors) {
-            setValidationErrors(
-              e.validationErrors.map((err) => ({
-                field: err.loc
-                  .filter((l) => l !== "body")
-                  .map((l) => String(l)),
-                message: err.msg,
-              })),
-            );
-            setError(
-              tRef.current.experiment.validationFailed(e.validationErrors.length),
-            );
-            return;
-          }
-          if (e.status === 409) {
-            // Kept for older servers: since ADR-075 a busy server queues the
-            // submission instead of refusing it.
-            setError(tRef.current.experiment.alreadyRunning);
-            return;
-          }
-          if (e.status === 0) {
-            setError(e.message);
-            return;
-          }
-          setError(e.message);
-          return;
-        }
-        if (e instanceof Error) {
-          setError(tRef.current.experiment.unexpected(e.message));
-          return;
-        }
-        setError(tRef.current.experiment.unknown);
+        reportSubmitError(e);
       }
     },
-    [startPolling, openEventSource],
+    [startPolling, openEventSource, reportSubmitError],
+  );
+
+  const enqueue = useCallback(
+    async (config: Record<string, unknown>, opts?: SubmitOptions) => {
+      setError(null);
+      setValidationErrors([]);
+      try {
+        return await dispatchRun(config, opts);
+      } catch (e) {
+        reportSubmitError(e);
+        return null;
+      }
+    },
+    [reportSubmitError],
+  );
+
+  const attach = useCallback(
+    (runId: string) => {
+      stopPolling();
+      closeEventSource();
+      myRunRef.current = runId;
+      startedRef.current = true;
+      eventCountRef.current = 0;
+      setResult(null);
+      setError(null);
+      setValidationErrors([]);
+      setProgressEvents([]);
+      setStatus({ status: "running", run_id: runId, error: null });
+      openEventSource();
+      startPolling();
+    },
+    [stopPolling, closeEventSource, openEventSource, startPolling],
   );
 
   const reset = useCallback(() => {
@@ -342,6 +376,7 @@ export function useExperiment(): ExperimentState {
     closeEventSource();
     myRunRef.current = null;
     startedRef.current = false;
+    eventCountRef.current = 0;
     setStatus({ status: "idle", run_id: null, error: null });
     setResult(null);
     setError(null);
@@ -349,5 +384,5 @@ export function useExperiment(): ExperimentState {
     setProgressEvents([]);
   }, [stopPolling, closeEventSource]);
 
-  return { status, result, error, validationErrors, progressEvents, submit, reset };
+  return { status, result, error, validationErrors, progressEvents, submit, enqueue, attach, reset };
 }

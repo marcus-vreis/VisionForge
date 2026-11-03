@@ -169,20 +169,38 @@ export function showQueueButton(
 
 /** Whether the server is executing a job, as far as this tab can tell.
  *
- * While the tab has a run of its own, its polling is authoritative: it runs
- * while `running` and it waits behind another job while `queued`. Without one,
- * what the queue snapshot said on load (and keeps saying while it polls) is the
- * best answer there is.
+ * A run this tab follows and is in flight says yes by itself. Otherwise the
+ * queue snapshot answers, even right after the followed run ended: the next job
+ * in line may already be running (ADR-159).
  */
 export function serverRunning(args: {
-  runActive: boolean;
   status: RunStatus["status"];
   seededRunning: boolean;
 }): boolean {
-  if (args.runActive) {
-    return args.status === "running" || args.status === "queued";
+  return args.status === "running" || args.status === "queued" || args.seededRunning;
+}
+
+/** What the training sheet needs to know about a run it did not submit, or whose
+ *  submission a page reload forgot, read from its queue entry (ADR-159). */
+export function runIdentityFromJob(
+  job: Pick<QueuedJobInfo, "task" | "strategy">,
+): { custom: boolean; taskKey: string; blockKind: string } {
+  const custom = job.task.startsWith("custom:");
+  const taskKey = custom ? job.task.slice("custom:".length) : job.task;
+  const strategy = job.strategy;
+  if (strategy === "simple") {
+    return { custom, taskKey, blockKind: custom ? "custom" : job.task };
   }
-  return args.seededRunning;
+  const blockKind = strategy.startsWith("sweep")
+    ? strategy === "sweep:random"
+      ? "random_search"
+      : "grid_search"
+    : strategy === "cv"
+      ? "cross_validation"
+      : strategy === "comparison"
+        ? "model_comparison"
+        : strategy;
+  return { custom, taskKey, blockKind };
 }
 
 type EpochEnd = Extract<TrainingEvent, { event: "epoch_end" }>;

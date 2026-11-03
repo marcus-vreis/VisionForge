@@ -175,16 +175,16 @@ export const en: Dict = {
     reload: "Reload page",
   },
   bottomBar: {
-    reopenTraining: "🔬 open training",
+    enqueue: "Add to queue",
+    enqueued: "Queued: it starts when its turn comes. Follow it from the queue button.",
     trainLockedReview: "Open the Review step to enable Train",
     trainLockedData: "Choose the dataset in the Data step to enable Train",
-    running: "Running…",
     history: "history",
     datasets: "datasets",
     datasetsTitle: "Download a dataset to a local folder",
     queue: "queue",
     queueTitle:
-      "View the run in progress and the ones waiting for the GPU — you can stop one or remove another",
+      "Open the run in progress and see the ones waiting for the GPU — you can stop one or remove another",
   },
   deviceSelector: {
     using: "using",
@@ -1776,6 +1776,7 @@ export const en: Dict = {
     position: (n: number) => ordinal(n),
     running: "running",
     waiting: (waited: string) => `waiting ${waited}`,
+    watch: "🔬 view training",
     removeTitle: "Remove from the queue (does not affect runs already started)",
     stopTitle: "Stop this run (the work done so far is kept)",
     stopUnavailable:

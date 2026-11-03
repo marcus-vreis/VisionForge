@@ -18,11 +18,10 @@ interface BottomBarProps {
   selection: DeviceSelection;
   onSelectionChange: (next: DeviceSelection) => void;
   isRunning: boolean;
-  /** True when training is running but the overlay was minimized; clicking
-   * the Treinar button should reopen the live view instead of starting a
-   * second run. */
-  trainingMinimized?: boolean;
-  onReopenTraining?: () => void;
+  /** Something is running or waiting: the button adds to the line (ADR-159). */
+  queueMode?: boolean;
+  /** One line above the bar, saying what became of the last queued submission. */
+  notice?: string | null;
   /** What the button will actually run, from the panel's strategy selector —
    * so "Treinar" never silently starts a plain run while Sweep is selected. */
   trainLabel?: string;
@@ -44,33 +43,16 @@ export function BottomBar({
   selection,
   onSelectionChange,
   isRunning,
-  trainingMinimized = false,
-  onReopenTraining,
+  queueMode = false,
+  notice,
   trainLabel,
   lockReason,
 }: BottomBarProps) {
   const t = useT();
-  // While a run is minimized, the central button reopens the overlay rather
-  // than triggering a new training (a duplicate run would race with the
-  // current one). The label flips to make the action obvious.
-  const handleCenterClick = () => {
-    if (trainingMinimized && onReopenTraining) {
-      onReopenTraining();
-      return;
-    }
-    onTrain();
-  };
-
-  // A running or minimized training keeps its own button state: the lock is
-  // about starting a new run.
-  const locked = Boolean(lockReason) && !isRunning && !trainingMinimized;
-  const blocked = (disabled && !trainingMinimized) || locked;
-
-  const centerLabel = trainingMinimized
-    ? t.bottomBar.reopenTraining
-    : isRunning
-      ? t.bottomBar.running
-      : (trainLabel ?? t.app.train.simple);
+  const locked = Boolean(lockReason);
+  const blocked = disabled || locked;
+  const startLabel = trainLabel ?? t.app.train.simple;
+  const centerLabel = queueMode ? t.bottomBar.enqueue : startLabel;
   return (
     <div
       className="vf-bottom-bar"
@@ -98,6 +80,27 @@ export function BottomBar({
         boxShadow: "0 30px 80px rgb(var(--lt-shade, 0 0 0) / 0.5)",
       }}
     >
+      {notice && (
+        <div
+          role="status"
+          style={{
+            position: "absolute",
+            left: "50%",
+            bottom: "calc(100% + 8px)",
+            transform: "translateX(-50%)",
+            maxWidth: "100%",
+            padding: "8px 14px",
+            background: "rgb(var(--lt-surface, 8 10 14) / 0.95)",
+            border: "1px solid var(--accent-vf)",
+            borderRadius: 10,
+            color: "var(--vf-text)",
+            fontFamily: "var(--font-mono)",
+            fontSize: 12,
+          }}
+        >
+          {notice}
+        </div>
+      )}
       <div className="vf-bottom-bar-tools" style={{ display: "flex", alignItems: "center", gap: 8 }}>
       <button
         type="button"
@@ -216,10 +219,10 @@ export function BottomBar({
       <button
         type="button"
         data-tour="train"
-        onClick={handleCenterClick}
+        onClick={onTrain}
         disabled={blocked}
         className="vf-bottom-bar-train"
-        title={locked ? (lockReason ?? undefined) : undefined}
+        title={locked ? (lockReason ?? undefined) : queueMode ? startLabel : undefined}
         aria-description={locked ? (lockReason ?? undefined) : undefined}
         style={{
           flex: "0 0 auto",

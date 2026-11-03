@@ -13,6 +13,18 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ## [Unreleased]
 
+## [0.20.1] — 2026-11-02
+
+### Fixed
+
+- **Fila na mesma aba**: com um treino rodando ou esperando, o botão principal vira
+  **Colocar na fila** e o envio não mexe no treino acompanhado. Antes, a fila só
+  recebia treinos de outra aba, apesar do que o painel prometia (ADR-159).
+- **Ver treino na fila**: o treino em execução abre logs e progresso pelo painel da
+  fila, também depois de recarregar a página. O botão **abrir treino** saiu da barra.
+- **Stream de eventos**: `GET /api/experiment/events` entrega o treino desde o início
+  a cada leitor, com `after` e `run_id`. Duas abas não roubam mais épocas uma da outra.
+
 ## [0.20.0] — 2026-11-02
 
 ### Added
