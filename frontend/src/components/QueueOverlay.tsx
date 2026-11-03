@@ -16,6 +16,8 @@ interface QueueOverlayProps {
   /** Same for whether a job is running: the bottom bar keeps the queue button
    *  up while one is, so it has to hear when that stops. */
   onRunningChange?: (running: boolean) => void;
+  /** Opens the training sheet on the running job (ADR-159). */
+  onWatch?: (job: QueuedJobInfo) => void;
 }
 
 /** The run queue as a surface of its own (ADR-075).
@@ -30,6 +32,7 @@ export function QueueOverlay({
   onClose,
   onCountChange,
   onRunningChange,
+  onWatch,
 }: QueueOverlayProps) {
   const t = useT();
   const [active, setActive] = useState<QueuedJobInfo | null>(null);
@@ -234,6 +237,7 @@ export function QueueOverlay({
               showProfile={showProfile}
               running
               stoppable={stopMode(active) !== "none"}
+              onWatch={onWatch ? () => onWatch(active) : undefined}
               onCancel={() => void cancel(active.run_id)}
               cancelling={busyId === active.run_id}
             />
@@ -255,13 +259,14 @@ export function QueueOverlay({
   );
 }
 
-function JobRow({
+export function JobRow({
   job,
   showProfile = false,
   running = false,
   stoppable = true,
   position,
   onCancel,
+  onWatch,
   cancelling = false,
 }: {
   job: QueuedJobInfo;
@@ -273,6 +278,8 @@ function JobRow({
   stoppable?: boolean;
   position?: number;
   onCancel: () => void;
+  /** Only the running job has a log to watch; one still waiting has none yet. */
+  onWatch?: () => void;
   cancelling?: boolean;
 }) {
   const t = useT();
@@ -280,6 +287,7 @@ function JobRow({
     <div
       style={{
         display: "flex",
+        flexWrap: "wrap",
         alignItems: "center",
         gap: 14,
         padding: "12px 14px",
@@ -305,7 +313,7 @@ function JobRow({
         {running ? "▶" : t.queueOverlay.position(position ?? 0)}
       </span>
 
-      <div style={{ flex: 1, minWidth: 0 }}>
+      <div style={{ flex: "1 1 180px", minWidth: 0 }}>
         <div
           style={{
             fontFamily: "var(--font-mono)",
@@ -352,6 +360,26 @@ function JobRow({
           </div>
         )}
       </div>
+
+      {running && onWatch && (
+        <button
+          type="button"
+          onClick={onWatch}
+          style={{
+            padding: "7px 12px",
+            borderRadius: 9,
+            border: "1px solid var(--accent-vf)",
+            background: "var(--accent-soft)",
+            color: "var(--vf-text)",
+            fontFamily: "var(--font-mono)",
+            fontSize: 11,
+            cursor: "pointer",
+            flexShrink: 0,
+          }}
+        >
+          {t.queueOverlay.watch}
+        </button>
+      )}
 
       <button
         type="button"

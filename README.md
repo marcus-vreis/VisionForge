@@ -100,7 +100,12 @@ Point the dataset picker at a folder, pick a task tab, press *Train*. If you
 have no dataset yet, the **⤓ datasets** button downloads one (CIFAR-10, for
 example) already in the layout the task expects.
 
-The interface is available in English and Portuguese (PT/EN switch in the header).
+The interface is available in English and Portuguese (PT/EN switch in the header),
+with a light, dark or automatic theme.
+
+Every task is configured in the same six steps — Data, Strategy, Model,
+Training, Image and augmentation, and Review. *Train* unlocks on the Review
+step, and the experiment name is suggested from the configuration.
 
 The step-by-step walkthrough — dataset download, first run, confidence
 intervals, re-running from YAML — is in
@@ -148,6 +153,13 @@ without touching the package.
   dataset fingerprint, so "same data" is a checkable claim.
 - **Paper-ready output** — every report is also written as a `booktabs` LaTeX
   table, with notes stating what each interval covers.
+
+- **Learning rate per model** (classification) — with
+  `model_comparison.lr_policy: suggested` each architecture trains at its own
+  suggested LR, and `grid_search.lr_mode: suggested_multiplier` reads the LR
+  axis as a multiplier of it. The effective LR of every trial is recorded in
+  `run.json`, in the reports and in Review. The default does not change, and
+  configs written before still load (`schema_version` 2).
 
 After training: run history with config diffs, per-checkpoint testing on new
 data, batch prediction to CSV, Grad-CAM, ONNX export, TensorBoard.
@@ -203,12 +215,13 @@ and the HTTP API may change between minor releases — configs carry a
 Worth knowing before you start:
 
 - **One training at a time**, but submissions queue and start on their own. A
-  job already training cannot be cancelled.
+  job already training can be stopped from the training screen (■ Stop): it
+  ends at its next stop point (the epoch, in a single run) and keeps what it
+  saved. A custom task that owns its loop cannot be stopped.
 - **One-click dataset download covers classification only.** The other tasks
   need a dataset already in their layout.
 - **No K-fold for detection or anomaly**, by design: Ultralytics owns its
   training loop, and an unsupervised fold without anomalies measures nothing.
-- Dark theme only.
 
 Found something?
 [Open an issue](https://github.com/marcus-vreis/VisionForge/issues/new/choose).
@@ -320,7 +333,12 @@ Aponte o seletor de dataset para uma pasta, escolha a aba da tarefa e clique em
 *Treinar*. Se você ainda não tem dataset, o botão **⤓ datasets** baixa um
 (CIFAR-10, por exemplo) já no formato que a tarefa espera.
 
-A interface está em português e inglês (seletor PT/EN no cabeçalho).
+A interface está em português e inglês (seletor PT/EN no cabeçalho), com tema
+claro, escuro ou automático.
+
+Toda tarefa é configurada nas mesmas seis etapas — Dados, Estratégia, Modelo,
+Treinamento, Imagem e aumento, e Revisão. O botão *Treinar* destrava na Revisão
+e o nome do experimento vem sugerido a partir da configuração.
 
 O passo a passo completo — baixar dataset, primeiro treino, intervalos de
 confiança, repetir a partir do YAML — está em
@@ -368,6 +386,13 @@ sem tocar no pacote.
   verificável.
 - **Saída pronta para artigo** — todo relatório sai também como tabela LaTeX
   `booktabs`, com notas dizendo o que cada intervalo cobre.
+
+- **Learning rate por modelo** (classificação) — com
+  `model_comparison.lr_policy: suggested` cada arquitetura treina com o seu LR
+  sugerido, e `grid_search.lr_mode: suggested_multiplier` lê o eixo de LR como
+  multiplicador dele. O LR efetivo de cada trial fica no `run.json`, nos
+  relatórios e na Revisão. O padrão não muda, e configs antigas carregam iguais
+  (`schema_version` 2).
 
 Depois do treino: histórico com diff de config, teste de checkpoints em dados
 novos, predição em lote para CSV, Grad-CAM, exportação ONNX, TensorBoard.
@@ -418,12 +443,13 @@ exportado antes continua funcionando.
 Vale saber antes de começar:
 
 - **Um treino por vez**, mas os envios entram numa fila e começam sozinhos. Um
-  treino já em andamento não pode ser cancelado.
+  treino já em andamento pode ser parado pela tela de treino (■ Parar): ele
+  encerra no próximo ponto de parada (a época, num treino simples) e mantém o que
+  salvou. Uma tarefa custom com laço próprio não pode ser parada.
 - **O download em um clique cobre só classificação.** As outras tarefas
   precisam de um dataset já no formato delas.
 - **Sem K-fold em detecção e anomalia**, de propósito: o Ultralytics é dono do
   próprio laço de treino, e um fold de validação sem anomalias não mede nada.
-- Só tema escuro.
 
 Achou algum problema?
 [Abra uma issue](https://github.com/marcus-vreis/VisionForge/issues/new/choose).

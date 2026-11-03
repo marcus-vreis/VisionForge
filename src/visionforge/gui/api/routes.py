@@ -13,7 +13,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Any, Literal, NoReturn
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from loguru import logger
@@ -105,6 +105,7 @@ from visionforge.gui.api.profiles import (
     resolve_profile,
 )
 from visionforge.gui.api.profiles_routes import build_profiles_router
+from visionforge.gui.api.run_events import RunEventLog
 from visionforge.gui.api.run_history import (
     CUSTOM_TASK_PREFIX,
     RUN_BAD_JSON_KEY,
@@ -225,11 +226,11 @@ router = APIRouter(prefix="/api", dependencies=[Depends(request_lang)])
 # a time); submissions that arrive while it is busy wait in _RUN_QUEUE.
 _current_run: dict[str, Any] | None = None
 
-# Per-run SSE queue; None when no run is active.
-# The Trainer worker thread puts dicts onto this queue via asyncio.run_coroutine_threadsafe;
-# the SSE generator pulls from it and serialises each item as an SSE data line.
-# A None sentinel signals end-of-stream so the generator can close cleanly.
-_event_queue: asyncio.Queue[dict[str, Any] | None] | None = None
+# Per-run event log (ADR-159); None before the first run.
+# The Trainer worker thread puts dicts onto it via asyncio.run_coroutine_threadsafe;
+# each SSE generator reads it from where its client stands and serialises each
+# item as an SSE data line. A None sentinel signals end-of-stream.
+_event_queue: RunEventLog | None = None
 
 # Cancellation token of the job executing right now; None when idle. Handed to
 # the block so DELETE /api/queue/{id} reaches the trainer's epoch boundary
@@ -285,7 +286,7 @@ def _begin_job(job: QueuedJob) -> None:
     """
     global _current_run, _event_queue, _active_cancel_token
 
-    _event_queue = asyncio.Queue()
+    _event_queue = RunEventLog(job.run_id)
     _active_cancel_token = job.cancel_token
     _current_run = {
         "run_id": job.run_id,
@@ -1531,10 +1532,17 @@ async def replicated_comparison_custom(
 
 
 @router.get("/experiment/events")
-async def experiment_events() -> StreamingResponse:
-    """Stream live training progress as Server-Sent Events."""
+async def experiment_events(
+    run_id: str | None = None, after: Annotated[int, Query(ge=0)] = 0
+) -> StreamingResponse:
+    """Stream a run's progress as Server-Sent Events, from its start (ADR-159).
+
+    ``after`` skips the events the client already has, for a stream that dropped.
+    ``run_id`` names the run the client follows: asking for one that is no longer
+    the latest closes at once, instead of serving another job's events as its own.
+    """
     return StreamingResponse(
-        _sse_generator(),
+        _sse_generator(run_id, after),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -1543,17 +1551,16 @@ async def experiment_events() -> StreamingResponse:
     )
 
 
-async def _sse_generator():  # type: ignore[return]
-    """Pull events off _event_queue and yield SSE-formatted lines."""
-    queue = _event_queue
-    if queue is None:
+async def _sse_generator(  # type: ignore[return]
+    run_id: str | None = None, after: int = 0
+):
+    """Read the run's event log and yield SSE-formatted lines."""
+    log = _event_queue
+    if log is None or (run_id is not None and log.run_id != run_id):
         yield "data: {}\n\n"
         return
 
-    while True:
-        item = await queue.get()
-        if item is None:
-            break
+    async for item in log.read(after):
         yield f"data: {json.dumps(item)}\n\n"
 
 
