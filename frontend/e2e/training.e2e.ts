@@ -43,9 +43,9 @@ test("rides out a few seconds without the server and still ends as completed", a
   // already connected. Both real requests must fail during this outage.
   const down = (route: { abort: () => Promise<void> }) => route.abort();
   await page.route("**/api/experiment/status", down);
-  await page.route("**/api/experiment/events", down);
+  await page.route("**/api/experiment/events?*", down);
   const streamFailed = page.waitForEvent("requestfailed", {
-    predicate: (request) => request.url().endsWith("/api/experiment/events"),
+    predicate: (request) => new URL(request.url()).pathname === "/api/experiment/events",
   });
   const pollFailed = page.waitForEvent("requestfailed", {
     predicate: (request) => request.url().endsWith("/api/experiment/status"),
@@ -59,7 +59,7 @@ test("rides out a few seconds without the server and still ends as completed", a
   await expect(sheet.getByText("treino falhou", { exact: true })).toHaveCount(0);
 
   await page.unroute("**/api/experiment/status", down);
-  await page.unroute("**/api/experiment/events", down);
+  await page.unroute("**/api/experiment/events?*", down);
 
   // The overlay picks the run up again and follows it to its end.
   await expect(sheet.getByText("reconectando…", { exact: true })).toHaveCount(0, { timeout: 20_000 });
@@ -107,9 +107,9 @@ test("queues a second browser's run and starts it after the active run stops", a
 test("reconnects the live stream while status polling stays available", async ({ page }) => {
   await prepareClassification(page, "e2e_stream", 200);
   const down = (route: { abort: () => Promise<void> }) => route.abort();
-  await page.route("**/api/experiment/events", down);
+  await page.route("**/api/experiment/events?*", down);
   const streamFailed = page.waitForEvent("requestfailed", {
-    predicate: (request) => request.url().endsWith("/api/experiment/events"),
+    predicate: (request) => new URL(request.url()).pathname === "/api/experiment/events",
   });
   const healthyPoll = page.waitForResponse((response) =>
     response.url().endsWith("/api/experiment/status") && response.ok(),
@@ -120,9 +120,9 @@ test("reconnects the live stream while status polling stays available", async ({
   await expect(sheet.getByText("reconectando…", { exact: true })).toHaveCount(0);
 
   const reconnected = page.waitForResponse((response) =>
-    response.url().endsWith("/api/experiment/events") && response.ok(),
+    new URL(response.url()).pathname === "/api/experiment/events" && response.ok(),
   );
-  await page.unroute("**/api/experiment/events", down);
+  await page.unroute("**/api/experiment/events?*", down);
   await reconnected;
   await expect(sheet.getByText(/^> epoch \d+\/200 · /).first()).toBeVisible({ timeout: 60_000 });
   await sheet.getByRole("button", { name: "■ Parar" }).click();
