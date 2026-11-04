@@ -54,21 +54,36 @@ function sheet(lang: "pt" | "en", tab: SheetTab, visible = true, status = runnin
 }
 
 describe("the training sheet's tabs", () => {
-  it("offers the log and 'Como funciona', side by side", () => {
+  it("offers the log, the results and 'Como funciona', in that order", () => {
     const html = sheet("pt", "log");
     expect(html).toContain('role="tablist"');
     const log = html.indexOf(`>${pt.trainingStory.logTab}<`);
+    const results = html.indexOf(`>${pt.liveResults.tab}<`);
     const story = html.indexOf(`>${pt.trainingStory.tab}<`);
     expect(log).toBeGreaterThan(-1);
-    expect(story).toBeGreaterThan(log);
+    expect(results).toBeGreaterThan(log);
+    expect(story).toBeGreaterThan(results);
     expect(pt.trainingStory.tab).toBe("Como funciona");
+  });
+
+  it("shows the live curves when the results are the open tab", () => {
+    const html = sheet("pt", "results");
+    expect(html).toMatch(/id="training-tab-results"[^>]*aria-selected="true"/s);
+    expect(html).toContain('id="training-panel-results"');
+    expect(html).toContain(pt.liveResults.best(1, pt.compareRuns.curves.val_loss, "0.8000"));
+    expect(html).toContain(`aria-label="${pt.liveResults.lossChart}"`);
+    // The log stays in the page, hidden; the story is not mounted.
+    expect(html).toMatch(/id="training-panel-log"[^>]*hidden/s);
+    expect(html).not.toContain("data-story-stage");
   });
 
   it("opens on the log, with the story left out until it is chosen", () => {
     const html = sheet("pt", "log");
     expect(html).toMatch(/id="training-tab-log"[^>]*aria-selected="true"/s);
     expect(html).toMatch(/id="training-tab-story"[^>]*aria-selected="false"/s);
+    expect(html).toMatch(/id="training-tab-results"[^>]*aria-selected="false"/s);
     expect(html).not.toContain("data-story-stage");
+    expect(html).not.toContain('id="training-panel-results"');
     expect(html).not.toContain("animateMotion");
     // The log is in the page and in view.
     expect(html).toContain("$ visionforge train --task classification");
