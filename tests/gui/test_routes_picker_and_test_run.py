@@ -312,8 +312,9 @@ class TestExecuteRunTest:
     ) -> None:
         run_dir, _ = configured_run
         missing = tmp_path / "não existe"
+        request = RunTestRequest(data_dir=str(missing))
         with pytest.raises(FileNotFoundError, match="não existe"):
-            _execute_run_test(run_dir, RunTestRequest(data_dir=str(missing)))
+            _execute_run_test(run_dir, request)
 
 
 # ── /api/runs/{id}/test endpoint integration ─────────────────────────────────
