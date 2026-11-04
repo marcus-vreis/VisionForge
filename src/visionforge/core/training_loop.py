@@ -56,7 +56,7 @@ class EpochState[Epoch]:
 class EpochRuntime:
     """Bind loaders and lifecycle boundaries for one epoch loop."""
 
-    train_loader: DataLoader[Any]
+    train_loader: DataLoader[Any] | BatchProgressLoader
     val_loader: DataLoader[Any]
     total_epochs: int
     resumed: ResumeState | None
@@ -224,6 +224,114 @@ def restore_training_state[Epoch](
     )
 
 
+# How long an epoch may run before the stream says how far into it the run is.
+# An epoch that ends sooner reports only its epoch_end, so short runs keep the
+# stream they always had and a long epoch stops looking frozen.
+BATCH_PROGRESS_INTERVAL_S = 2.0
+
+
+class BatchProgressReporter:
+    """Says, now and then, how far into its epoch a training run is.
+
+    The overlay only moved at ``epoch_end``, so an epoch of minutes (a large
+    dataset, a slow device) held the progress still for that long. Shared by
+    the loops VisionForge owns (through ``BatchProgressLoader``) and by the one
+    Ultralytics owns (through its batch callbacks).
+    """
+
+    def __init__(
+        self,
+        callback: Callable[[dict[str, Any]], None],
+        total_epochs: int,
+        *,
+        interval_s: float | None = None,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
+        self._callback = callback
+        self._total_epochs = total_epochs
+        self._interval_s = (
+            BATCH_PROGRESS_INTERVAL_S if interval_s is None else interval_s
+        )
+        self._clock = clock
+        self._epoch = 1
+        self._last_report = clock()
+
+    def start_epoch(self, epoch: int) -> None:
+        """Begin timing ``epoch`` (1-based): a resumed run starts past 1."""
+        self._epoch = epoch
+        self._last_report = self._clock()
+
+    def batch_done(self, index: int, total: int) -> None:
+        """Report batch ``index`` (1-based) of ``total`` if enough time passed."""
+        now = self._clock()
+        # The last batch is left to epoch_end, which follows it.
+        if index >= total or now - self._last_report < self._interval_s:
+            return
+        self._last_report = now
+        self._callback(
+            {
+                "event": "batch",
+                "epoch": self._epoch,
+                "batch": index,
+                "total_batches": total,
+                "total_epochs": self._total_epochs,
+            }
+        )
+
+
+class BatchProgressLoader:
+    """A training loader whose iteration feeds a ``BatchProgressReporter``.
+
+    Everything but iteration is delegated, so resume (loader generators) and
+    worker bookkeeping still see the loader it wraps.
+    """
+
+    def __init__(self, loader: Any, reporter: BatchProgressReporter) -> None:
+        self._loader = loader
+        self._reporter = reporter
+        # Set before each epoch (see set_progress_epoch).
+        self.epoch = 1
+
+    def __len__(self) -> int:
+        return len(self._loader)
+
+    def __getattr__(self, name: str) -> Any:
+        if name == "_loader":
+            raise AttributeError(name)
+        return getattr(self._loader, name)
+
+    def __iter__(self) -> Any:
+        try:
+            total = len(self._loader)
+        except TypeError:
+            # A researcher's task may hand over a plain iterable: no total, no share.
+            yield from self._loader
+            return
+        self._reporter.start_epoch(self.epoch)
+        for index, batch in enumerate(self._loader, start=1):
+            yield batch
+            self._reporter.batch_done(index, total)
+
+
+def with_batch_progress(
+    loader: Any,
+    progress_callback: Callable[[dict[str, Any]], None] | None,
+    total_epochs: int,
+) -> Any:
+    """The loader itself without a stream, else one that reports its batches."""
+    if progress_callback is None:
+        return loader
+    return BatchProgressLoader(
+        loader, BatchProgressReporter(progress_callback, total_epochs)
+    )
+
+
+def set_progress_epoch(loader: Any, epoch: int) -> None:
+    """Tell a ``BatchProgressLoader`` which epoch its next pass is."""
+    if isinstance(loader, BatchProgressLoader):
+        loader.epoch = epoch
+
+
 def start_training(
     data_module: Any,
     progress_callback: Callable[[dict[str, Any]], None] | None,
@@ -237,6 +345,7 @@ def start_training(
         )
     train_loader = data_module.train_loader()
     val_loader = data_module.val_loader()
+    train_loader = with_batch_progress(train_loader, progress_callback, total_epochs)
     workers = {
         name: loader.num_workers
         for name, loader in (("train", train_loader), ("val", val_loader))
@@ -518,6 +627,7 @@ def run_epochs[Epoch](
         if cancelled_at_epoch(runtime.cancel_token, epoch):
             stopped = True
             break
+        set_progress_epoch(runtime.train_loader, epoch)
         result = callbacks.compute(epoch)
         state.history.append(result)
         callbacks.report(result)

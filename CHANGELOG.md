@@ -13,6 +13,16 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Testar o modelo em outra pasta**: a pasta escolhida é avaliada sozinha. Antes,
+  o teste procurava `train/` e `val/` ao lado dela e falhava com WinError 3 em
+  qualquer pasta fora desse layout. Escolher a pasta de uma classe só agora diz
+  qual pasta escolher (ADR-080).
+- **Progresso do treino parado**: numa época que passa de 2 s, o stream manda um
+  evento `batch` e a barra avança dentro da época, em todas as tarefas. Antes ela
+  só andava no fim de cada época e parecia travada em épocas longas.
+
 ## [0.20.2] — 2026-11-03
 
 ### Changed

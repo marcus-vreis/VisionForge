@@ -16,6 +16,7 @@ import { stopLogLine } from "../lib/stop-log";
 import { logLinesFor, type LogLine } from "../lib/training-log";
 import { GENERIC_STORY, type StorySpec } from "../lib/story-family";
 import { phaseName } from "../lib/training-phase";
+import { liveBatchFraction } from "../lib/training-progress";
 import type { SheetTab } from "../lib/training-story";
 import { STOPPED_COLOR } from "../lib/unit-status";
 import type { QueuedJobInfo, RunStatus, TrainingEvent } from "../types/run";
@@ -139,13 +140,16 @@ export function TrainingOverlay({
   // Don't double-count: the just-finished trial's epochs are already folded
   // into trialEndCount, so only add an in-flight fraction for a live trial.
   const currentTrialDone = trialEndCount > currentTrialIndex;
+  // Inside a long epoch: the latest batch report, when nothing newer came.
+  const batchFraction = liveBatchFraction(progressEvents);
   const epochFraction =
-    !currentTrialDone &&
+    batchFraction ??
+    (!currentTrialDone &&
     latestEpoch &&
     (latestEpoch.trial_index ?? 0) === currentTrialIndex &&
     totalEpochs > 0
       ? currentEpoch / totalEpochs
-      : 0;
+      : 0);
 
   // Trabalho longo que não é época. O PatchCore não tem épocas — ele extrai
   // features, monta um banco de memória e pontua, e o banco leva de minutos a
@@ -163,10 +167,15 @@ export function TrainingOverlay({
   // Fall back to synthetic crawl when SSE has not delivered an epoch yet.
   const [fakeProgress, setFakeProgress] = useState(0);
   const hasRealProgress =
-    currentEpoch > 0 || trialEndCount > 0 || latestPhase !== undefined;
+    currentEpoch > 0 ||
+    trialEndCount > 0 ||
+    latestPhase !== undefined ||
+    batchFraction !== null;
   const realProgress = isMultiTrial
     ? Math.min(1, (trialEndCount + epochFraction) / totalTrials)
-    : // Sem época ainda, mas com fase em andamento: a fase é o progresso real
+    : batchFraction !== null
+      ? batchFraction
+      : // Sem época ainda, mas com fase em andamento: a fase é o progresso real
       // que existe. `totalEpochs` já vale 1 aqui (veio do evento `start`), então
       // sem esta preferência a conta daria 0/1 o tempo todo.
       latestEpoch === undefined && latestPhase

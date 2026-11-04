@@ -233,7 +233,9 @@ class AnomalyTrainer(training_loop.TrainingOutput):
         cfg = self._config.training
         optimizer = optimizer or self._build_optimizer(model)
         criterion = nn.MSELoss()
-        train_loader = data_module.train_loader()
+        train_loader = training_loop.with_batch_progress(
+            data_module.train_loader(), progress_callback, cfg.epochs
+        )
         test_loader = data_module.test_loader()
         calibration_loader = _calibration_loader(data_module)
         self._loader_workers = {
@@ -291,6 +293,7 @@ class AnomalyTrainer(training_loop.TrainingOutput):
                 stopped = True
                 break
 
+            training_loop.set_progress_epoch(train_loader, epoch)
             train_loss = self._train_autoencoder_epoch(
                 model, train_loader, optimizer, criterion
             )
