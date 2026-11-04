@@ -103,4 +103,36 @@ describe("LiveResults", () => {
     ] as TrainingEvent[];
     expect(render(events)).toContain(pt.trainingStory.overfitting(2));
   });
+
+  it("charts the learning rate the epochs reported", () => {
+    const html = render([epoch(1, 0.9, { lr: 0.1 }), epoch(2, 0.8, { lr: 0.05 })]);
+    expect(html).toContain(`aria-label="${pt.liveResults.lrChart}"`);
+  });
+
+  it("leaves the rate out for a server that does not send it", () => {
+    const html = render([epoch(1, 0.9), epoch(2, 0.8)]);
+    expect(html).not.toContain(`aria-label="${pt.liveResults.lrChart}"`);
+  });
+
+  it("shows the latest epoch's confusion matrix", () => {
+    const html = render([
+      epoch(1, 0.9, { confusion: { classes: ["ok", "defeito"], matrix: [[5, 1], [2, 7]] } }),
+      epoch(2, 0.8, { confusion: { classes: ["ok", "defeito"], matrix: [[6, 0], [1, 8]] } }),
+    ]);
+    expect(html).toContain('data-confusion="matrix"');
+    expect(html).toContain(pt.liveResults.confusionTitle(2));
+    expect(html).toContain('title="defeito → ok: 1"');
+    expect(html).not.toContain('title="defeito → ok: 2"');
+  });
+
+  it("lists the most frequent mistakes when there are too many classes", () => {
+    const classes = Array.from({ length: 31 }, (_, i) => `c${i}`);
+    const html = render([epoch(1, 0.9, { confusion: { classes, top: [[5, 7, 3]] } })]);
+    expect(html).toContain('data-confusion="top"');
+    expect(html).toContain(pt.liveResults.topRow("c5", "c7"));
+  });
+
+  it("draws no confusion for a task that does not send one", () => {
+    expect(render([epoch(1, 0.9)])).not.toContain("data-confusion");
+  });
 });

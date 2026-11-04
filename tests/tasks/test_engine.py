@@ -120,6 +120,12 @@ class TestGenericTaskEngineLevel1:
         assert kinds[-1] == "end"
         assert kinds.count("epoch_end") == 3
         assert all("val_mae" in e for e in events if e["event"] == "epoch_end")
+        cfg_lr = _config(tmp_path).training.learning_rate
+        assert all(
+            e["lr"] == pytest.approx(cfg_lr)
+            for e in events
+            if e["event"] == "epoch_end"
+        )
 
         assert result.total_epochs == 3
         assert result.best_epoch >= 1

@@ -11,13 +11,14 @@ import {
   liveUnits,
   metricKey,
   formatValue,
+  latestConfusion,
   overridesSummary,
   type BestEpoch,
   type CurvePoint,
 } from "../lib/live-results";
 import type { StorySpec } from "../lib/story-family";
 import { overfittingSince } from "../lib/training-story";
-import type { TrainingEvent } from "../types/run";
+import type { LiveConfusion, TrainingEvent } from "../types/run";
 
 const TRAIN_COLOR = "oklch(calc(0.74 - var(--lt-flip, 0) * 0.18) 0.16 240)";
 const VAL_COLOR = "oklch(calc(0.84 - var(--lt-flip, 0) * 0.38) 0.18 75)";
@@ -52,6 +53,7 @@ export function LiveResults({ events, spec, accent }: LiveResultsProps) {
   const metric = metricKey(spec.metric);
   const closed = units.filter((u) => u.closed);
   const multiUnit = units.some((u) => u.index !== null);
+  const confusion = latestConfusion(epochs);
 
   return (
     <div style={{ display: "grid", gap: 12 }}>
@@ -92,6 +94,15 @@ export function LiveResults({ events, spec, accent }: LiveResultsProps) {
         best={best}
         accent={accent}
       />
+      <LiveChart
+        title={r.lrChart}
+        series={[{ name: r.lrChart, color: TRAIN_COLOR, points: curveOf(epochs, "lr") }]}
+        best={best}
+        accent={accent}
+      />
+      {confusion && (
+        <ConfusionView epoch={confusion.epoch} confusion={confusion.confusion} accent={accent} />
+      )}
       {multiUnit && closed.length > 0 && (
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
           <caption
@@ -141,6 +152,125 @@ export function LiveResults({ events, spec, accent }: LiveResultsProps) {
 }
 
 const cell = { padding: "4px 8px 4px 0", borderBottom: "1px solid var(--vf-panel-stroke)" };
+
+const caption = {
+  fontFamily: "var(--font-mono)",
+  fontSize: 10,
+  letterSpacing: "0.12em",
+  textTransform: "uppercase" as const,
+  color: "var(--vf-text-muted)",
+  marginBottom: 6,
+};
+
+/** The latest epoch's validation confusion: the matrix, its cells shaded by the
+ *  share of their row, or the most frequent mistakes when there are too many
+ *  classes for a grid. */
+function ConfusionView({
+  epoch,
+  confusion,
+  accent,
+}: {
+  epoch: number;
+  confusion: LiveConfusion;
+  accent: string;
+}) {
+  const r = useT().liveResults;
+  const { classes, matrix, top } = confusion;
+  const box = {
+    margin: 0,
+    padding: 12,
+    background: "rgb(var(--lt-ink, 255 255 255) / 0.025)",
+    border: "1px solid var(--vf-panel-stroke)",
+    borderRadius: 12,
+  };
+
+  if (matrix) {
+    return (
+      <figure style={box} data-confusion="matrix">
+        <figcaption style={caption}>
+          <span style={{ color: accent }}>//</span> {r.confusionTitle(epoch)}
+          <div style={{ letterSpacing: "0.04em", textTransform: "none", marginTop: 2 }}>
+            {r.confusionAxes}
+          </div>
+        </figcaption>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ borderCollapse: "collapse", fontSize: 11, fontFamily: "var(--font-mono)" }}>
+            <thead>
+              <tr>
+                <th />
+                {classes.map((name) => (
+                  <th key={name} title={name} style={headCell}>
+                    {name}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {matrix.map((row, i) => {
+                const total = row.reduce((sum, n) => sum + n, 0);
+                return (
+                  <tr key={classes[i]}>
+                    <th title={classes[i]} style={{ ...headCell, textAlign: "right" }}>
+                      {classes[i]}
+                    </th>
+                    {row.map((count, j) => {
+                      const share = total > 0 ? count / total : 0;
+                      return (
+                        <td
+                          key={classes[j]}
+                          title={`${classes[i]} → ${classes[j]}: ${count}`}
+                          style={{
+                            minWidth: 28,
+                            padding: "4px 6px",
+                            textAlign: "center",
+                            color: share > 0.5 ? "var(--vf-text)" : "var(--vf-text-dim)",
+                            background: `color-mix(in oklch, ${i === j ? accent : "oklch(0.7 0.18 22)"} ${Math.round(share * 70)}%, transparent)`,
+                            border: "1px solid var(--vf-panel-stroke)",
+                          }}
+                        >
+                          {count}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </figure>
+    );
+  }
+
+  if (!top || top.length === 0) return null;
+  return (
+    <figure style={box} data-confusion="top">
+      <figcaption style={caption}>
+        <span style={{ color: accent }}>//</span> {r.topTitle(epoch)}
+      </figcaption>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+        <tbody>
+          {top.map(([actual, predicted, count]) => (
+            <tr key={`${actual}-${predicted}`} style={{ color: "var(--vf-text-dim)" }}>
+              <td style={cell}>{r.topRow(classes[actual] ?? String(actual), classes[predicted] ?? String(predicted))}</td>
+              <td style={{ ...cell, textAlign: "right", fontFamily: "var(--font-mono)" }}>{count}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </figure>
+  );
+}
+
+const headCell = {
+  maxWidth: 90,
+  padding: "2px 6px",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap" as const,
+  color: "var(--vf-text-muted)",
+  fontWeight: 400,
+};
 
 interface ChartSeries {
   name: string;

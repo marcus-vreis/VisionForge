@@ -6706,3 +6706,44 @@ trainer, or a new checkpoint metric, needs its line in `bestRule`.
 - *Reuse the History comparison chart.* It plots finished runs read from
   `run.json` with one colour per run; the live tab plots two series of one run
   and grows by the epoch.
+
+## ADR-161 — Learning rate and validation confusion in the epoch event
+
+**Date:** 2026-11-04
+**Status:** Accepted
+**Extends:** ADR-160 (the live "Results" tab)
+
+**Context:** the live tab drew only what `epoch_end` already carried. Two more
+figures cost the training almost nothing: the learning rate, which tells a
+schedule apart from a stuck run, and, for classification, the validation
+confusion, whose predictions `_eval_epoch` already computes. This is phase B of
+`docs/dev/design-resultados-ao-vivo-e-colab.md`.
+
+**Decision:**
+
+- Every trainer adds `lr` to `epoch_end`: the rate the epoch trained with, read
+  before the scheduler steps (`training_loop.EpochLr`), from the parameter group
+  the config's `learning_rate` sets (the head when `backbone_lr_multiplier`
+  scales the backbone). Ultralytics reports its own `trainer.lr["lr/pg0"]`,
+  written at the end of the epoch before its scheduler steps.
+- Classification adds `confusion` (`core/live_confusion.py`): the full matrix up
+  to 30 classes, `matrix[true][predicted]`; above that, the 10 most frequent
+  mistakes as `[true, predicted, count]`, ties to the lower class pair. It is
+  `null` rather than wrong when a label falls outside the class list.
+- Neither goes into `run.json`. The history keeps its fields, and the test-set
+  confusion matrix in `metrics` stays the one a paper reports.
+- The key is `confusion`, not `val_confusion`: the client types `val_*` as the
+  numeric metrics of researcher-defined tasks (ADR-058).
+
+**Consequence:** a client that does not know the fields ignores them, so older
+GUIs keep working. The confusion of an epoch is gone once the run ends; the
+optional `live/epoch_metrics.jsonl` of the design was left out until something
+needs it.
+
+**Alternatives considered:**
+
+- *Add `lr` to each task's `EpochResult`.* It would enter `run.json` history and
+  every reader of it, for a number the schedule config already determines.
+- *Read the rate when the epoch is reported.* The scheduler has stepped by then,
+  so it is the next epoch's rate: a StepLR run would show every drop one epoch
+  early.

@@ -393,6 +393,8 @@ class TestTorchvisionPath:
 
         batches = [(e["epoch"], e["batch"]) for e in events if e["event"] == "batch"]
         assert batches == [(1, 1), (2, 1)]
+        rates = [e["lr"] for e in events if e["event"] == "epoch_end"]
+        assert rates == pytest.approx([0.005, 0.005])
 
     def test_trains_streams_and_writes_run_json(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -841,3 +843,19 @@ def test_ultralytics_batches_are_counted_per_epoch() -> None:
         (2, 2),
     ]
     assert all(e["total_batches"] == 3 and e["total_epochs"] == 5 for e in events)
+
+
+def test_ultralytics_rate_is_the_weights_group() -> None:
+    trainer = type(
+        "T", (), {"lr": {"lr/pg0": 0.002, "lr/pg1": 0.002, "lr/pg2": 0.09}}
+    )()
+    assert dt_mod._ultralytics_lr(trainer) == pytest.approx(0.002)
+    assert dt_mod._ultralytics_lr(type("T", (), {})()) is None
+
+
+def test_epoch_event_leaves_out_an_unknown_rate() -> None:
+    result = dt_mod.DetectionEpochResult(
+        epoch=1, map50=0.5, map50_95=None, box_loss=0.1
+    )
+    assert "lr" not in dt_mod._epoch_event(result, 3)
+    assert dt_mod._epoch_event(result, 3, lr=0.01)["lr"] == 0.01

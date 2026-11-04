@@ -6,6 +6,7 @@ import {
   bestRule,
   curveOf,
   formatValue,
+  latestConfusion,
   liveUnits,
   metricKey,
   overridesSummary,
@@ -154,5 +155,18 @@ describe("formatValue", () => {
     expect(formatValue(0)).toBe("0");
     expect(formatValue(0.3)).toBe("0.3000");
     expect(formatValue(123.456)).toBe("123.5");
+  });
+});
+
+describe("latestConfusion", () => {
+  it("takes the latest epoch that sent one", () => {
+    const first = { classes: ["a", "b"], matrix: [[1, 0], [0, 1]] };
+    const second = { classes: ["a", "b"], matrix: [[0, 1], [1, 0]] };
+    const epochs = [epoch(1, { confusion: first }), epoch(2, { confusion: second }), epoch(3)];
+    expect(latestConfusion(epochs)).toEqual({ epoch: 2, confusion: second });
+  });
+
+  it("is null when no epoch sent one", () => {
+    expect(latestConfusion([epoch(1), epoch(2)])).toBeNull();
   });
 });
