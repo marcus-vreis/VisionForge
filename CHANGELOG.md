@@ -13,6 +13,13 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ## [Unreleased]
 
+### Added
+
+- **Aba Resultados na tela de treino**: curvas de loss e da métrica da tarefa
+  época a época, enquanto o treino roda, e um card com a melhor época pela mesma
+  regra que escolhe o checkpoint salvo. Em grid, comparação, validação cruzada e
+  réplicas, uma tabela lista os treinos já concluídos (ADR-160).
+
 ### Fixed
 
 - **Testar o modelo em outra pasta**: a pasta escolhida é avaliada sozinha. Antes,

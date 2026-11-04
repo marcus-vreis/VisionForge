@@ -1890,6 +1890,22 @@ export const en: Dict = {
         : "stopped during extraction · nothing was kept",
     stopTooLate: "> the stop cut nothing: the run finished normally",
   },
+  liveResults: {
+    tab: "Results",
+    empty: "The curves appear once the first epoch ends.",
+    noEpochsPatchcore:
+      "PatchCore does not train in epochs: it builds its memory bank in a single pass. The result comes at the end.",
+    best: (epoch: number, metric: string, value: string) =>
+      `Best epoch: ${epoch} (${metric} ${value})`,
+    bestShort: (epoch: number, metric: string, value: string) =>
+      `epoch ${epoch} · ${metric} ${value}`,
+    bestNote: "the saved checkpoint is from this epoch",
+    lossChart: "Loss",
+    unitsTitle: "Finished trainings",
+    changesCol: "What changes",
+    epochsCol: "Epochs",
+    bestCol: "Best",
+  },
   trainingStory: {
     tab: "How it works",
     logTab: "Log",

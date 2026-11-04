@@ -17,9 +17,10 @@ import { logLinesFor, type LogLine } from "../lib/training-log";
 import { GENERIC_STORY, type StorySpec } from "../lib/story-family";
 import { phaseName } from "../lib/training-phase";
 import { liveBatchFraction } from "../lib/training-progress";
-import type { SheetTab } from "../lib/training-story";
+import { SHEET_TABS, type SheetTab } from "../lib/training-story";
 import { STOPPED_COLOR } from "../lib/unit-status";
 import type { QueuedJobInfo, RunStatus, TrainingEvent } from "../types/run";
+import { LiveResults } from "./LiveResults";
 import { TrainingStory } from "./training-story/TrainingStory";
 
 interface TrainingOverlayProps {
@@ -663,7 +664,7 @@ export function TrainingOverlay({
           </div>
         )}
 
-        {/* Log and "Como funciona": the log is what the sheet opens on. */}
+        {/* Log, results and "Como funciona": the log is what the sheet opens on. */}
         <div
           role="tablist"
           aria-label={t.trainingStory.tabsLabel}
@@ -671,11 +672,13 @@ export function TrainingOverlay({
           onKeyDown={(e) => {
             if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
               e.preventDefault();
-              onTabChange(tab === "log" ? "story" : "log");
+              const step = e.key === "ArrowRight" ? 1 : -1;
+              const at = SHEET_TABS.indexOf(tab);
+              onTabChange(SHEET_TABS[(at + step + SHEET_TABS.length) % SHEET_TABS.length]);
             }
           }}
         >
-          {(["log", "story"] as const).map((name) => {
+          {SHEET_TABS.map((name) => {
             const selected = tab === name;
             return (
               <button
@@ -700,11 +703,26 @@ export function TrainingOverlay({
                   cursor: "pointer",
                 }}
               >
-                {name === "log" ? t.trainingStory.logTab : t.trainingStory.tab}
+                {name === "log"
+                  ? t.trainingStory.logTab
+                  : name === "results"
+                    ? t.liveResults.tab
+                    : t.trainingStory.tab}
               </button>
             );
           })}
         </div>
+
+        {tab === "results" && (
+          <div
+            role="tabpanel"
+            id="training-panel-results"
+            aria-labelledby="training-tab-results"
+            style={{ maxHeight: 420, overflowY: "auto" }}
+          >
+            <LiveResults events={progressEvents} spec={story} accent={taskAccent} />
+          </div>
+        )}
 
         {/* The story is mounted only while it is the open tab, so its animations
             stop with it; the log stays mounted (hidden), to keep what it holds. */}

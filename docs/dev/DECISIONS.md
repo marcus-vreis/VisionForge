@@ -6661,3 +6661,48 @@ follow the watched run only.
   wrong log or a lost result.
 - *Follow several runs in the hook.* More state for no gain: one GPU runs one job,
   and only that job has a log to read.
+
+## ADR-160 — A live "Results" tab on the training sheet
+
+**Date:** 2026-11-04
+**Status:** Accepted
+**Extends:** ADR-118 (the training sheet's tabs), ADR-119 (overfitting sign)
+
+**Context:** during a training the sheet showed the log and the illustrative
+story, so the only way to read the curves or know which epoch the saved model
+came from was to wait for the run to end and open its result. The numbers were
+already on the page: every `epoch_end` carries the losses and the task's metric.
+This is phase A of `docs/dev/design-resultados-ao-vivo-e-colab.md`.
+
+**Decision:**
+
+- A third tab, **Results**, between the log and "How it works". It draws the loss
+  curves and the task's headline metric of the training in flight, from the
+  `epoch_end` events the sheet already receives. Nothing changes on the server
+  and the training pays nothing.
+- A card names the **best epoch** with the rule the trainer applies when it saves
+  `best_model.pth`, so it is the epoch whose weights are kept: lowest `val_loss`
+  for classification and regression, highest `val_miou` for segmentation,
+  highest mAP@50-95 for Ultralytics and mAP@50 for torchvision (it measures no
+  mAP@50-95), lowest training loss for the anomaly autoencoder. A tie keeps the
+  earlier epoch, as the trainers save only on a strict gain. The rules live in
+  `lib/live-results.ts` beside the trainer each one comes from.
+- A researcher's own task gets no card: its metric's direction is declared in
+  its task info and is not in the stream, and a guessed direction would name the
+  wrong checkpoint. PatchCore has no epochs and says so.
+- In a multi-unit job (grid, comparison, cross-validation, replicates) the curves
+  are the running unit's, and a table lists the closed ones with what each
+  changed and its best epoch.
+- The overfitting sign of ADR-119 is repeated here, from the same function.
+
+**Consequence:** the card and the trainer's rule must change together. A new
+trainer, or a new checkpoint metric, needs its line in `bestRule`.
+
+**Alternatives considered:**
+
+- *Have the server send the best epoch in each `epoch_end`.* Exact by
+  construction, but it touches every trainer for a number the client can already
+  compute; left for phase B, which adds server fields anyway.
+- *Reuse the History comparison chart.* It plots finished runs read from
+  `run.json` with one colour per run; the live tab plots two series of one run
+  and grows by the epoch.

@@ -2115,6 +2115,23 @@ export const pt = {
     // to change anything, or the run had ended on its own.
     stopTooLate: "> a parada não cortou nada: o treino terminou normalmente",
   },
+  // The "Resultados" tab of the training sheet (components/LiveResults.tsx, ADR-160).
+  liveResults: {
+    tab: "Resultados",
+    empty: "As curvas aparecem quando a primeira época terminar.",
+    noEpochsPatchcore:
+      "O PatchCore não treina por épocas: ele monta o banco de memória numa passada só. O resultado sai no fim.",
+    best: (epoch: number, metric: string, value: string) =>
+      `Melhor época: ${epoch} (${metric} ${value})`,
+    bestShort: (epoch: number, metric: string, value: string) =>
+      `época ${epoch} · ${metric} ${value}`,
+    bestNote: "o checkpoint salvo é desta época",
+    lossChart: "Loss",
+    unitsTitle: "Treinos concluídos",
+    changesCol: "O que muda",
+    epochsCol: "Épocas",
+    bestCol: "Melhor",
+  },
   // The "Como funciona" tab of the training sheet (components/training-story/, ADR-118).
   // Only the stage and the numbers are real; the caption says the motion is not.
   trainingStory: {
