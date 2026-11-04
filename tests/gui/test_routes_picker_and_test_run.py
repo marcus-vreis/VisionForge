@@ -255,6 +255,66 @@ class TestExecuteRunTest:
         with pytest.raises(FileNotFoundError, match="não tem um checkpoint utilizável"):
             _execute_run_test(run_dir, request)
 
+    def test_a_folder_with_no_training_split_beside_it_is_scored(
+        self, configured_run: tuple[Path, Path], tmp_path: Path
+    ) -> None:
+        """The chosen folder is the whole evaluation set, wherever it lives.
+
+        Regression: the test used to build a full DataModule with base_dir set to
+        the folder's parent, so it demanded ``<parent>/train`` and ``<parent>/val``
+        and failed with WinError 3 on any folder not sitting beside them.
+        """
+        run_dir, _ = configured_run
+        holdout = tmp_path / "Classification - USK-COFFEE ção" / "holdout 2026"
+        for cls in ("class_a", "class_b"):
+            (holdout / cls).mkdir(parents=True)
+            Image.fromarray(np.zeros((32, 32, 3), dtype=np.uint8)).save(
+                holdout / cls / "img.png"
+            )
+        assert not (holdout.parent / "train").exists()
+
+        resp = _execute_run_test(run_dir, RunTestRequest(data_dir=str(holdout)))
+
+        assert resp.label == "holdout 2026"
+        rec = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))["tests"][0]
+        assert Path(rec["base_dir"]) == holdout.resolve()
+        assert rec["metrics"]["accuracy"] in (0.0, 0.5, 1.0)
+
+    def test_the_training_dataset_may_be_gone(
+        self, configured_run: tuple[Path, Path], tmp_path: Path
+    ) -> None:
+        """Class names come from run.json; the training folder is not read."""
+        import shutil
+
+        run_dir, dataset_root = configured_run
+        data = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+        data["class_names"] = ["class_a", "class_b"]
+        (run_dir / "run.json").write_text(json.dumps(data), encoding="utf-8")
+        holdout = tmp_path / "holdout"
+        shutil.copytree(dataset_root / "test", holdout)
+        shutil.rmtree(dataset_root)
+
+        resp = _execute_run_test(run_dir, RunTestRequest(data_dir=str(holdout)))
+
+        assert resp.label == "holdout"
+
+    def test_a_single_class_folder_says_which_folder_to_choose(
+        self, configured_run: tuple[Path, Path]
+    ) -> None:
+        """Picking ``test/class_a`` (images, no sub-folders) is a user error."""
+        run_dir, dataset_root = configured_run
+        request = RunTestRequest(data_dir=str(dataset_root / "test" / "class_a"))
+        with pytest.raises(ValueError, match="uma subpasta por classe"):
+            _execute_run_test(run_dir, request)
+
+    def test_a_missing_folder_names_the_path(
+        self, configured_run: tuple[Path, Path], tmp_path: Path
+    ) -> None:
+        run_dir, _ = configured_run
+        missing = tmp_path / "não existe"
+        with pytest.raises(FileNotFoundError, match="não existe"):
+            _execute_run_test(run_dir, RunTestRequest(data_dir=str(missing)))
+
 
 # ── /api/runs/{id}/test endpoint integration ─────────────────────────────────
 

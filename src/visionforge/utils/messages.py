@@ -543,6 +543,16 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "pt": "Caminho não encontrado: {path}",
         "en": "Path not found: {path}",
     },
+    "testrun.not_class_root": {
+        "pt": (
+            "{path} não tem subpastas: parece a pasta de uma classe só. Escolha "
+            "a pasta que contém uma subpasta por classe (ex.: a pasta test/)."
+        ),
+        "en": (
+            "{path} has no sub-folders: it looks like a single class folder. "
+            "Choose the folder that contains one sub-folder per class (e.g. test/)."
+        ),
+    },
     "testrun.regression_needs_csv": {
         "pt": (
             "Regressão avalia um manifesto: escolha o arquivo .csv com a coluna "

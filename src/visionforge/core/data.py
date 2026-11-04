@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 import torchvision.transforms as T
@@ -308,4 +309,31 @@ class DataModule:
         return list(self._train.classes)  # type: ignore[arg-type]
 
 
-__all__ = ["DataModule"]
+def class_folder_test_loader(
+    config: ExperimentConfig, folder: Path, class_names: list[str]
+) -> DataLoader:  # type: ignore[type-arg]
+    """Loader for one labelled folder scored on its own, with no training split.
+
+    Scoring a saved model needs only the vocabulary it was trained with; going
+    through ``DataModule`` made the folder's parent stand in for a dataset root
+    and demanded a ``train``/``val`` beside it.
+    """
+    cfg = config.data
+    dataset = _SplitImageFolder(
+        str(folder),
+        "test",
+        {name: index for index, name in enumerate(class_names)},
+        transform=_build_transforms(
+            cfg.transforms, is_train=False, preprocessing=cfg.preprocessing
+        ),
+    )
+    return DataLoader(
+        dataset,
+        batch_size=config.training.batch_size,
+        shuffle=False,
+        num_workers=resolve_num_workers(cfg.num_workers, len(dataset)),
+        pin_memory=cfg.pin_memory,
+    )
+
+
+__all__ = ["DataModule", "class_folder_test_loader"]
