@@ -151,7 +151,8 @@ class TestRegressionTrainer:
             progress_callback=events.append,
         )
         rates = [e["lr"] for e in events if e["event"] == "epoch_end"]
-        assert rates and all(r == pytest.approx(0.01) for r in rates)
+        assert rates
+        assert rates == pytest.approx([0.01] * len(rates))
 
     def test_multi_target(self, tmp_path: Path) -> None:
         cfg = _config(

@@ -206,18 +206,15 @@ class GenericTaskEngine:
                     | {f"{k}/val": v for k, v in val_metrics.items()},
                 )
                 emit(
-                    {
-                        "event": "epoch_end",
-                        "epoch": epoch,
-                        "total_epochs": cfg.training.epochs,
-                        "train_loss": train_loss,
-                        # val_accuracy keeps the live monitor's chart populated
-                        # for any task (it plots this compat field).
-                        "val_accuracy": value,
-                        **{f"val_{k}": v for k, v in val_metrics.items()},
-                        **({} if epoch_lr is None else {"lr": epoch_lr}),
-                        "elapsed_s": round(time.monotonic() - t0, 3),
-                    }
+                    self._epoch_event(
+                        epoch,
+                        cfg.training.epochs,
+                        train_loss,
+                        value,
+                        val_metrics,
+                        epoch_lr,
+                        round(time.monotonic() - t0, 3),
+                    )
                 )
 
                 improved = value > best_value if higher_better else value < best_value
@@ -255,6 +252,30 @@ class GenericTaskEngine:
             best_epoch,
             stopped,
         )
+
+    @staticmethod
+    def _epoch_event(
+        epoch: int,
+        total_epochs: int,
+        train_loss: float,
+        value: float,
+        val_metrics: dict[str, float],
+        lr: float | None,
+        elapsed_s: float,
+    ) -> dict[str, Any]:
+        """The ``epoch_end`` event of one epoch."""
+        return {
+            "event": "epoch_end",
+            "epoch": epoch,
+            "total_epochs": total_epochs,
+            "train_loss": train_loss,
+            # val_accuracy keeps the live monitor's chart populated for any
+            # task (it plots this compat field).
+            "val_accuracy": value,
+            **{f"val_{k}": v for k, v in val_metrics.items()},
+            **({} if lr is None else {"lr": lr}),
+            "elapsed_s": elapsed_s,
+        }
 
     @staticmethod
     def _primary_metric_value(val_metrics: dict[str, float], primary: str) -> float:
