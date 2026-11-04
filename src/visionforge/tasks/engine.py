@@ -30,6 +30,7 @@ from visionforge.core.dataset_fingerprint import fingerprint_from_config
 from visionforge.core.plotter import MetricsPlotter
 from visionforge.core.tracking import TensorBoardLogger
 from visionforge.core.trainer import _seed_everything, resolve_device
+from visionforge.core.training_loop import set_progress_epoch, with_batch_progress
 from visionforge.tasks.base import BaseTaskConfig
 from visionforge.tasks.registry import TaskInfo
 from visionforge.utils.environment import capture_environment
@@ -150,6 +151,7 @@ class GenericTaskEngine:
         """Run the Level 1 epoch loop with checkpoint and stop handling."""
         model = spec.build_model(cfg).to(self._device)
         train_loader, val_loader, test_loader = spec.build_loaders(cfg)
+        train_loader = with_batch_progress(train_loader, emit, cfg.training.epochs)
         optimizer = self._build_optimizer(model)
         scheduler = self._build_scheduler(optimizer)
 
@@ -184,6 +186,7 @@ class GenericTaskEngine:
                     )
                     stopped = True
                     break
+                set_progress_epoch(train_loader, epoch)
                 train_loss = self._train_epoch(
                     spec, model, train_loader, cfg, optimizer, scaler, use_amp
                 )

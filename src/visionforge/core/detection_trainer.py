@@ -245,6 +245,31 @@ def _is_worker_spawn_crash(message: str) -> bool:
     )
 
 
+def _report_ultralytics_batches(
+    model: Any, reporter: training_loop.BatchProgressReporter
+) -> None:
+    """Feed Ultralytics' own batch loop into ``reporter``.
+
+    Ultralytics owns the loop and keeps no batch index on the trainer, so the
+    batches are counted here, restarting at each ``on_train_epoch_start``.
+    """
+    seen = 0
+
+    def _on_epoch_start(trainer: Any) -> None:
+        nonlocal seen
+        seen = 0
+        # trainer.epoch is 0-based.
+        reporter.start_epoch(int(trainer.epoch) + 1)
+
+    def _on_batch_end(trainer: Any) -> None:
+        nonlocal seen
+        seen += 1
+        reporter.batch_done(seen, len(trainer.train_loader))
+
+    model.add_callback("on_train_epoch_start", _on_epoch_start)
+    model.add_callback("on_train_batch_end", _on_batch_end)
+
+
 class DetectionTrainer:
     """Wraps Ultralytics training for a `DetectionConfig`."""
 
@@ -404,6 +429,11 @@ class DetectionTrainer:
             )
 
         model.add_callback("on_fit_epoch_end", _on_epoch_end)
+        if progress_callback is not None:
+            _report_ultralytics_batches(
+                model,
+                training_loop.BatchProgressReporter(progress_callback, cfg.epochs),
+            )
         logger.info(
             "Detection training: {} ({} epochs) on {}",
             self._config.model.name,
@@ -556,6 +586,9 @@ class DetectionTrainer:
         model_path.parent.mkdir(parents=True, exist_ok=True)
 
         train_loader, val_loader = self._build_loaders(self._config.data.base_dir)
+        train_loader = training_loop.with_batch_progress(
+            train_loader, progress_callback, cfg.epochs
+        )
         self._loader_workers = {
             name: loader.num_workers
             for name, loader in (("train", train_loader), ("val", val_loader))
@@ -594,6 +627,7 @@ class DetectionTrainer:
                     )
                     stopped = True
                     break
+                training_loop.set_progress_epoch(train_loader, epoch)
                 train_loss = self._run_torchvision_epoch(
                     model, train_loader, device, optimizer
                 )

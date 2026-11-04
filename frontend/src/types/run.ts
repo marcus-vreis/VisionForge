@@ -321,6 +321,17 @@ export type TrainingEvent =
       val_cls_loss?: number | null;
       val_dfl_loss?: number | null;
     }
+  // Progresso dentro de uma época longa: só chega quando a época passa de alguns
+  // segundos sem terminar. Sem ele o overlay ficava parado a época inteira.
+  | {
+      event: "batch";
+      epoch: number;
+      batch: number;
+      total_batches: number;
+      total_epochs: number;
+      trial_index?: number;
+      total_trials?: number;
+    }
   | {
       event: "trial_end";
       total_epochs: number;

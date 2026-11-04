@@ -44,7 +44,7 @@ from visionforge.core.cancellation import (
     job_was_stopped,
 )
 from visionforge.core.comparison import ComparisonTrial, run_model_comparison
-from visionforge.core.data import DataModule
+from visionforge.core.data import class_folder_test_loader
 from visionforge.core.detection_data import resolve_yolo_split
 from visionforge.core.evaluator import Evaluator
 from visionforge.core.latex_export import report_to_latex
@@ -2298,6 +2298,19 @@ def _evaluate_standalone_run(
     )
 
 
+def _class_root_or_raise(folder: Path) -> Path:
+    """The folder a classification test reads: one sub-folder per class.
+
+    A class folder (images, no sub-folders) is the likeliest wrong pick, and
+    ImageFolder would only say it found no class there.
+    """
+    if not folder.is_dir():
+        raise FileNotFoundError(tr("testrun.path_not_found", path=str(folder)))
+    if not any(p.is_dir() for p in folder.iterdir()):
+        raise ValueError(tr("testrun.not_class_root", path=str(folder)))
+    return folder
+
+
 def _execute_run_test(run_dir: Path, req: RunTestRequest) -> RunTestResponse:
     """Reload a saved checkpoint and evaluate it on a new dataset path.
 
@@ -2326,23 +2339,21 @@ def _execute_run_test(run_dir: Path, req: RunTestRequest) -> RunTestResponse:
             tr("testrun.no_checkpoint", run=run_dir.name, model=repr(checkpoint))
         )
 
-    # Point the *test* split at the chosen folder: base_dir is its parent and the
-    # split name is the folder itself, so one folder is all the researcher gives
-    # and the existing DataModule still does the loading.
-    chosen = Path(req.data_dir)
-    test_config_dict = {
-        **base_config_dict,
-        "classification": {
-            "mode": "evaluate",
-            "checkpoint_path": checkpoint,
-        },
-        "data": {
-            **base_config_dict.get("data", {}),
-            "base_dir": str(chosen.parent),
-            "test_dir": chosen.name,
-        },
-    }
-    config = ExperimentConfig.model_validate(test_config_dict)
+    # The chosen folder is the evaluation set on its own (ADR-080): it is not
+    # a split of a dataset root, so nothing beside it is required to exist.
+    chosen = _class_root_or_raise(Path(req.data_dir))
+    config = ExperimentConfig.model_validate(
+        {
+            **base_config_dict,
+            "classification": {"mode": "evaluate", "checkpoint_path": checkpoint},
+            # The training folder may have moved since; config validation only
+            # needs an existing base_dir, and nothing here reads from it.
+            "data": {**base_config_dict.get("data", {}), "base_dir": str(chosen)},
+        }
+    )
+    class_names = _gradcam_class_names(data) or sorted(
+        p.name for p in chosen.iterdir() if p.is_dir()
+    )
 
     model = ModelFactory.create(config.model)
     import torch  # local import — keeps top-level lightweight on cold start
@@ -2354,8 +2365,8 @@ def _execute_run_test(run_dir: Path, req: RunTestRequest) -> RunTestResponse:
     )
     model.load_state_dict(state_dict)  # type: ignore[arg-type]
 
-    data_module = DataModule(config)
-    eval_result = Evaluator(config).evaluate(model, data_module.test_loader())
+    loader = class_folder_test_loader(config, chosen, class_names)
+    eval_result = Evaluator(config).evaluate(model, loader)
 
     timestamp = datetime.now()
     test_id = f"test_{timestamp.strftime('%Y%m%d_%H%M%S_%f')}"
@@ -2367,13 +2378,13 @@ def _execute_run_test(run_dir: Path, req: RunTestRequest) -> RunTestResponse:
     artifacts: dict[str, Any] = {}
     cm_path = tests_dir / f"{test_id}_confusion_matrix.png"
     MetricsPlotter.confusion_matrix_plot(
-        eval_result.confusion_matrix, data_module.class_names, cm_path
+        eval_result.confusion_matrix, class_names, cm_path
     )
     artifacts["confusion_matrix"] = str(cm_path)
 
     cm_norm_path = tests_dir / f"{test_id}_confusion_matrix_normalized.png"
     MetricsPlotter.confusion_matrix_normalized(
-        eval_result.confusion_matrix, data_module.class_names, cm_norm_path
+        eval_result.confusion_matrix, class_names, cm_norm_path
     )
     artifacts["confusion_matrix_normalized"] = str(cm_norm_path)
 
@@ -2381,7 +2392,7 @@ def _execute_run_test(run_dir: Path, req: RunTestRequest) -> RunTestResponse:
     if MetricsPlotter.roc_curve_plot(
         eval_result.y_true,
         eval_result.y_proba_full,
-        data_module.class_names,
+        class_names,
         roc_path,
     ):
         artifacts["roc_curve"] = str(roc_path)
@@ -2390,7 +2401,7 @@ def _execute_run_test(run_dir: Path, req: RunTestRequest) -> RunTestResponse:
     if MetricsPlotter.precision_recall_curve_plot(
         eval_result.y_true,
         eval_result.y_proba_full,
-        data_module.class_names,
+        class_names,
         pr_path,
     ):
         artifacts["precision_recall_curve"] = str(pr_path)
