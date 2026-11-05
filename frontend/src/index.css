@@ -593,19 +593,24 @@ html[data-run-active] *::after {
    go to icons, keeping one row and Treinar in view. Layout here is inline in
    the components, hence the !important. */
 @media (max-width: 640px) {
-  .vf-app-main { padding: 20px 12px 96px !important; }
+  .vf-app-main { padding: 20px 12px !important; padding-bottom: max(96px, var(--vf-bar-clearance, 0px)) !important; }
   .vf-bottom-bar {
     left: 8px !important;
     right: 8px !important;
     bottom: 8px !important;
     gap: 6px !important;
     padding: 8px !important;
+    flex-wrap: wrap !important;
   }
+  /* Tools and device share the first row; Treinar takes the whole second one,
+     so it is never squeezed out of a 375 px screen. */
+  .vf-bottom-bar [data-tour="device"] { order: 1; }
   .vf-bottom-bar-tools { gap: 4px !important; }
   .vf-bottom-bar-tools button { padding: 10px !important; gap: 4px !important; }
   .vf-bottom-bar-label, .vf-device-using { display: none; }
   .vf-bottom-bar-train {
-    flex: 1 1 0 !important;
+    flex: 1 1 100% !important;
+    order: 2;
     min-width: 0;
     padding: 12px 6px !important;
     letter-spacing: 0.04em !important;
