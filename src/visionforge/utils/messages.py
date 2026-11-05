@@ -1056,6 +1056,14 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "pt": "Treino parado: a VM do Colab foi liberada e a época em andamento se perdeu.",
         "en": "Training stopped: the Colab VM was released and the epoch in progress was lost.",
     },
+    "colab.kernel_not_ready": {
+        "pt": "O kernel do Colab não respondeu depois de {attempts} tentativas; a VM foi liberada.",
+        "en": "The Colab kernel did not answer after {attempts} attempts; the VM was released.",
+    },
+    "colab.run_no_start": {
+        "pt": "O treino não começou na VM: nenhum evento em {seconds} s, em {attempts} tentativas. A VM foi liberada.",
+        "en": "The training never started on the VM: no event in {seconds} s, over {attempts} attempts. The VM was released.",
+    },
     "colab.run_no_end": {
         "pt": "O treino no Colab terminou sem o evento final. Última saída: {detail}",
         "en": "The Colab training ended without its final event. Last output: {detail}",

@@ -23,6 +23,7 @@ import json
 import re
 import subprocess
 import threading
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
@@ -47,6 +48,17 @@ from visionforge.utils.messages import tr
 EXEC_TIMEOUT_S = 26 * 3600
 ALLOCATE_TIMEOUT_S = 300.0
 CANCEL_POLL_S = 1.0
+# A kernel that starts slowly can lose the first execute_request: in 0.7.5 the
+# CLI sends it before its websocket is ready, and `exec` then waits forever
+# (second real run, 2026-11-05). So a tiny warm-up `exec` must answer first...
+WARMUP_MARKER = "vf-kernel-ready"
+WARMUP_ATTEMPTS = 3
+WARMUP_TIMEOUT_S = 60.0
+# ...and, as a second defence, a runner that sends no event this long after its
+# `exec` started is killed and sent again once. Its first event goes out before
+# the pip install, so a silent minute means the code never ran.
+STARTUP_TIMEOUT_S = 120.0
+RUN_ATTEMPTS = 2
 _RUNNER = Path(__file__).with_name("colab_remote_runner.py")
 # Session names VisionForge creates; anything else on the account is the user's.
 SESSION_PREFIX = "vf-"
@@ -156,12 +168,82 @@ class ColabJobs:
             )
             script.parent.mkdir(parents=True, exist_ok=True)
             script.write_text(build_script(payload), encoding="utf-8")
-            return self._exec(slug, name, script, on_event, cancelled)
+            warm = self._warm_up(
+                slug, name, script.with_suffix(".warmup.py"), cancelled
+            )
+            if warm is not None:
+                return warm
+            on_event({"event": "remote", "stage": "kernel_ready", "session": name})
+            return self._run_runner(slug, name, script, on_event, cancelled)
         finally:
             stop = self._cli(slug, CLI_TIMEOUT_S, "stop", "-s", name)
             if stop.returncode != 0:
                 logger.warning("colab stop -s {} failed: {}", name, _tail(stop))
             script.unlink(missing_ok=True)
+            script.with_suffix(".warmup.py").unlink(missing_ok=True)
+
+    def _warm_up(
+        self, slug: str, name: str, path: Path, cancelled: Callable[[], bool]
+    ) -> RemoteResult | None:
+        """Wait until the kernel answers a print; None when it did."""
+        path.write_text(f"print({WARMUP_MARKER!r}, flush=True)\n", encoding="utf-8")
+        for attempt in range(1, WARMUP_ATTEMPTS + 1):
+            if cancelled():
+                return RemoteResult("stopped", error=tr("colab.run_stopped"))
+            proc = self._cli(
+                slug,
+                WARMUP_TIMEOUT_S,
+                "exec",
+                "-s",
+                name,
+                "-f",
+                str(path),
+                "--timeout",
+                str(int(WARMUP_TIMEOUT_S / 2)),
+            )
+            # The marker, not the exit code: exec's exit code is not the script's.
+            if WARMUP_MARKER in (proc.stdout or ""):
+                return None
+            logger.warning(
+                "Colab kernel of {} did not answer the warm-up ({}/{}): {}",
+                name,
+                attempt,
+                WARMUP_ATTEMPTS,
+                _tail(proc),
+            )
+        return RemoteResult(
+            "failed", error=tr("colab.kernel_not_ready", attempts=WARMUP_ATTEMPTS)
+        )
+
+    def _run_runner(
+        self,
+        slug: str,
+        name: str,
+        script: Path,
+        on_event: Callable[[dict[str, Any]], None],
+        cancelled: Callable[[], bool],
+    ) -> RemoteResult:
+        for attempt in range(1, RUN_ATTEMPTS + 1):
+            result = self._exec(slug, name, script, on_event, cancelled)
+            if result is not None:
+                return result
+            logger.warning(
+                "Colab runner on {} sent nothing in {:.0f}s ({}/{})",
+                name,
+                STARTUP_TIMEOUT_S,
+                attempt,
+                RUN_ATTEMPTS,
+            )
+            if attempt < RUN_ATTEMPTS:
+                on_event({"event": "remote", "stage": "retry", "session": name})
+        return RemoteResult(
+            "failed",
+            error=tr(
+                "colab.run_no_start",
+                seconds=int(STARTUP_TIMEOUT_S),
+                attempts=RUN_ATTEMPTS,
+            ),
+        )
 
     def _exec(
         self,
@@ -170,7 +252,8 @@ class ColabJobs:
         script: Path,
         on_event: Callable[[dict[str, Any]], None],
         cancelled: Callable[[], bool],
-    ) -> RemoteResult:
+    ) -> RemoteResult | None:
+        """One `exec` of the runner; None when it never started (see STARTUP_TIMEOUT_S)."""
         proc = self._popen(
             [
                 str(cli_path()),
@@ -192,7 +275,10 @@ class ColabJobs:
             bufsize=1,
         )
         stopped = threading.Event()
+        stalled = threading.Event()
+        started = threading.Event()
         done = threading.Event()
+        launched = time.monotonic()
 
         def watch() -> None:
             # Stopping means releasing the VM now: the local exec is killed and
@@ -200,6 +286,13 @@ class ColabJobs:
             while not done.wait(CANCEL_POLL_S):
                 if cancelled():
                     stopped.set()
+                    proc.kill()
+                    return
+                if (
+                    not started.is_set()
+                    and time.monotonic() - launched > STARTUP_TIMEOUT_S
+                ):
+                    stalled.set()
                     proc.kill()
                     return
 
@@ -210,6 +303,8 @@ class ColabJobs:
             assert proc.stdout is not None
             for line in proc.stdout:
                 event = parse_event(line)
+                if event is not None:
+                    started.set()
                 if event is None:
                     if line.strip():
                         other = [*other[-19:], line.rstrip()]
@@ -220,6 +315,8 @@ class ColabJobs:
             proc.wait()
         finally:
             done.set()
+        if stalled.is_set():
+            return None
         return _result(end, stopped.is_set(), other)
 
     # ── sessions left behind ─────────────────────────────────────────────────

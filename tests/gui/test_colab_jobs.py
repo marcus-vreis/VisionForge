@@ -44,7 +44,8 @@ def event_line(event: dict[str, Any]) -> str:
 class FakeExec:
     """`colab exec` streaming lines; `kill` ends the stream early, like a killed process."""
 
-    def __init__(self, lines: list[str], delay: float = 0.0) -> None:
+    def __init__(self, lines: list[str] | None, delay: float = 0.0) -> None:
+        # None: the request was lost, nothing ever comes until the process is killed.
         self._lines = lines
         self._delay = delay
         self.killed = threading.Event()
@@ -54,6 +55,9 @@ class FakeExec:
         self.stdout = self._stream()
 
     def _stream(self):  # type: ignore[no-untyped-def]
+        if self._lines is None:
+            self.killed.wait(10)
+            return
         for line in self._lines:
             if self.killed.is_set():
                 return
@@ -75,10 +79,22 @@ class FakeCli:
     """Records every CLI call; `new` succeeds unless told otherwise."""
 
     def __init__(
-        self, exec_lines: list[str], new_ok: bool = True, delay: float = 0.0
+        self,
+        exec_lines: list[str],
+        new_ok: bool = True,
+        delay: float = 0.0,
+        warmups: list[str] | None = None,
+        runs: list[list[str] | None] | None = None,
     ) -> None:
         self.calls: list[list[str]] = []
         self.exec_lines = exec_lines
+        # What each warm-up exec prints, in order; "" is a lost request (timeout).
+        self.warmups = (
+            list(warmups) if warmups is not None else [cj.WARMUP_MARKER + "\n"]
+        )
+        # What each runner exec streams; None is a runner that never starts.
+        self.runs = list(runs) if runs is not None else None
+        self.execs: list[FakeExec] = []
         self.new_ok = new_ok
         self.delay = delay
         self.exec: FakeExec | None = None
@@ -94,13 +110,20 @@ class FakeCli:
             )
         if command == "sessions":
             return subprocess.CompletedProcess(argv, 0, self.sessions_out, "")
+        if command == "exec":
+            out = self.warmups.pop(0) if self.warmups else ""
+            if not out:
+                return subprocess.CompletedProcess(argv, 124, "", "timeout after 60s")
+            return subprocess.CompletedProcess(argv, 0, out, "")
         return subprocess.CompletedProcess(argv, 0, "", "")
 
     def popen(self, argv: list[str], **kwargs: Any) -> FakeExec:
         self.calls.append(argv[1:])
         script = Path(argv[argv.index("-f") + 1])
         self.script_seen = script.read_text(encoding="utf-8")
-        self.exec = FakeExec(self.exec_lines, self.delay)
+        lines = self.runs.pop(0) if self.runs is not None else self.exec_lines
+        self.exec = FakeExec(lines, self.delay)
+        self.execs.append(self.exec)
         return self.exec
 
     def commands(self) -> list[str]:
@@ -176,15 +199,15 @@ def test_a_job_forwards_events_and_ends_with_the_report() -> None:
     )
     result, events = run(cli)
     assert result == cj.RemoteResult("completed", report={"accuracy": 0.9})
-    assert [e["event"] for e in events] == ["remote", "start", "epoch_end"]
-    assert events[0]["stage"] == "allocated"
-    assert cli.commands() == ["new", "exec", "stop"]
+    assert [e["event"] for e in events] == ["remote", "remote", "start", "epoch_end"]
+    assert [e["stage"] for e in events[:2]] == ["allocated", "kernel_ready"]
+    assert cli.commands() == ["new", "exec", "exec", "stop"]
 
 
 def test_exec_runs_with_a_deadline_longer_than_any_session() -> None:
     cli = FakeCli([event_line({"event": "job_end", "status": "ok"})])
     run(cli)
-    exec_call = next(c for c in cli.calls if c[0] == "exec")
+    exec_call = [c for c in cli.calls if c[0] == "exec"][-1]
     assert float(exec_call[exec_call.index("--timeout") + 1]) >= 24 * 3600
 
 
@@ -243,7 +266,10 @@ def test_stopping_kills_exec_and_releases_the_vm(
     monkeypatch.setattr(cj, "CANCEL_POLL_S", 0.01)
     lines = [event_line({"event": "batch", "batch": i}) for i in range(500)]
     cli = FakeCli(lines, delay=0.005)
-    result, events = run(cli, cancelled=True)
+    events: list[dict[str, Any]] = []
+    jobs = cj.ColabJobs(run=cli.run, popen=cli.popen)
+    # The stop comes while the runner streams, after the warm-up answered.
+    result = jobs.run_job("ana", "T4", PAYLOAD, events.append, lambda: len(events) > 5)
     assert result.outcome == "stopped"
     assert cli.exec is not None and cli.exec.killed.is_set()
     assert len(events) < 500
@@ -470,3 +496,88 @@ def test_colab_run_still_rejects_a_bad_config_before_paying_for_a_vm(
     response = client.post("/api/colab/experiment/run", json=body)
     assert response.status_code == 422
     assert response.json()["detail"][0]["loc"][:3] == ["body", "config", "training"]
+
+
+# ── a kernel that is slow to start (second real run, 2026-11-05) ──────────────
+
+OK_END = [event_line({"event": "job_end", "status": "ok", "report": {"accuracy": 0.7}})]
+
+
+def test_a_slow_kernel_is_warmed_up_before_the_runner() -> None:
+    cli = FakeCli([], warmups=["", "", cj.WARMUP_MARKER + "\n"], runs=[OK_END])
+    result, events = run(cli)
+    assert result.outcome == "completed"
+    assert cli.commands() == ["new", "exec", "exec", "exec", "exec", "stop"]
+    assert len(cli.execs) == 1, "the runner is sent once the kernel answered"
+    assert "kernel_ready" in [e.get("stage") for e in events]
+
+
+def test_a_kernel_that_never_answers_fails_clearly_and_releases_the_vm() -> None:
+    cli = FakeCli([], warmups=["", "", ""], runs=[OK_END])
+    result, _ = run(cli)
+    assert result.outcome == "failed"
+    assert result.error is not None
+    assert str(cj.WARMUP_ATTEMPTS) in result.error
+    assert cli.execs == [], "no runner is sent to a kernel that never answered"
+    assert cli.commands()[-1] == "stop"
+
+
+def test_a_warm_up_without_the_marker_does_not_count() -> None:
+    cli = FakeCli(
+        [], warmups=["[colab] Executing...\n", cj.WARMUP_MARKER + "\n"], runs=[OK_END]
+    )
+    result, _ = run(cli)
+    assert result.outcome == "completed"
+    assert sum(c[0] == "exec" for c in cli.calls) == 3
+
+
+def test_a_lost_runner_request_is_sent_again_on_the_same_vm(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(cj, "STARTUP_TIMEOUT_S", 0.2)
+    monkeypatch.setattr(cj, "CANCEL_POLL_S", 0.02)
+    cli = FakeCli([], runs=[None, OK_END])
+    result, events = run(cli)
+    assert result == cj.RemoteResult("completed", report={"accuracy": 0.7})
+    assert cli.execs[0].killed.is_set()
+    assert len(cli.execs) == 2
+    assert "retry" in [e.get("stage") for e in events]
+    assert cli.commands().count("new") == 1, "the retry reuses the VM"
+
+
+def test_a_runner_that_never_starts_fails_after_the_retry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(cj, "STARTUP_TIMEOUT_S", 0.2)
+    monkeypatch.setattr(cj, "CANCEL_POLL_S", 0.02)
+    cli = FakeCli([], runs=[None, None])
+    result, _ = run(cli)
+    assert result.outcome == "failed"
+    assert result.error is not None
+    assert str(cj.RUN_ATTEMPTS) in result.error
+    assert all(e.killed.is_set() for e in cli.execs)
+    assert cli.commands()[-1] == "stop"
+
+
+def test_a_slow_runner_that_already_sent_an_event_is_not_cut(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(cj, "STARTUP_TIMEOUT_S", 0.2)
+    monkeypatch.setattr(cj, "CANCEL_POLL_S", 0.02)
+    slow = (
+        [event_line({"event": "remote", "stage": "install"})]
+        + [event_line({"event": "batch", "batch": i}) for i in range(30)]
+        + OK_END
+    )
+    cli = FakeCli([], runs=[slow], delay=0.02)
+    result, _ = run(cli)
+    assert result.outcome == "completed"
+    assert len(cli.execs) == 1
+
+
+def test_stopping_during_the_warm_up_skips_the_runner() -> None:
+    cli = FakeCli([], runs=[OK_END])
+    result, _ = run(cli, cancelled=True)
+    assert result.outcome == "stopped"
+    assert cli.execs == []
+    assert cli.commands() == ["new", "stop"]
