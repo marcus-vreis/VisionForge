@@ -1064,6 +1064,18 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "pt": "O treino não começou na VM: nenhum evento em {seconds} s, em {attempts} tentativas. A VM foi liberada.",
         "en": "The training never started on the VM: no event in {seconds} s, over {attempts} attempts. The VM was released.",
     },
+    "colab.download_failed": {
+        "pt": "O treino terminou, mas o run não veio da VM: {detail}. A VM foi liberada e nada foi gravado nos runs.",
+        "en": "The training finished, but the run did not come back from the VM: {detail}. The VM was released and nothing was written to the runs.",
+    },
+    "colab.bundle_too_large": {
+        "pt": "O run na VM tem {size_mb} MB, acima do limite de {limit_mb} MB para importar. A VM foi liberada.",
+        "en": "The run on the VM is {size_mb} MB, over the {limit_mb} MB import limit. The VM was released.",
+    },
+    "colab.import_failed": {
+        "pt": "O run veio da VM, mas não pôde ser importado: {detail}. Nada foi gravado nos runs.",
+        "en": "The run came back from the VM but could not be imported: {detail}. Nothing was written to the runs.",
+    },
     "colab.run_no_end": {
         "pt": "O treino no Colab terminou sem o evento final. Última saída: {detail}",
         "en": "The Colab training ended without its final event. Last output: {detail}",

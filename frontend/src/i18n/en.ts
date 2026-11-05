@@ -1012,6 +1012,8 @@ export const en: Dict = {
         `Stopped at epoch ${done} of ${total} — can be resumed`,
       resumeTitleNoTotal: "Stopped before the end — can be resumed",
       blockTitle: (block: string) => `Experiment block: ${block}`,
+      originColab: "Colab",
+      originColabTitle: "Trained on Google Colab and imported into this profile",
       epochs: (n: number) => `${n} epoch${n !== 1 ? "s" : ""}`,
       inProgress: "in progress",
     },

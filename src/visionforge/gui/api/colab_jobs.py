@@ -25,7 +25,7 @@ import subprocess
 import threading
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal
@@ -40,7 +40,7 @@ from visionforge.gui.api.colab_connection import (
     cli_path,
     profile_home,
 )
-from visionforge.gui.api.colab_remote_runner import EVENT_PREFIX
+from visionforge.gui.api.colab_remote_runner import EVENT_PREFIX, REMOTE_ROOT
 from visionforge.utils.messages import tr
 
 # Longer than a Colab session can live (12 h on the free tier, 24 h on paid
@@ -59,6 +59,10 @@ WARMUP_TIMEOUT_S = 60.0
 # the pip install, so a silent minute means the code never ran.
 STARTUP_TIMEOUT_S = 120.0
 RUN_ATTEMPTS = 2
+# The run comes back as one bundle (ADR-163, phase 3): a checkpoint and its
+# records. The ceiling is refused before downloading, and the import checks it again.
+MAX_BUNDLE_BYTES = 2 * 1024**3
+DOWNLOAD_TIMEOUT_S = 1800.0
 _RUNNER = Path(__file__).with_name("colab_remote_runner.py")
 # Session names VisionForge creates; anything else on the account is the user's.
 SESSION_PREFIX = "vf-"
@@ -75,6 +79,10 @@ class RemoteResult:
     outcome: Outcome
     report: Any = None
     error: str | None = None
+    # Where the runner left the run's bundle on the VM ({"path", "size"}), and the
+    # local copy once `colab download` brought it here (ADR-163, phase 3).
+    remote_bundle: dict[str, Any] | None = None
+    bundle: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -174,13 +182,54 @@ class ColabJobs:
             if warm is not None:
                 return warm
             on_event({"event": "remote", "stage": "kernel_ready", "session": name})
-            return self._run_runner(slug, name, script, on_event, cancelled)
+            result = self._run_runner(slug, name, script, on_event, cancelled)
+            if result.outcome != "completed" or result.remote_bundle is None:
+                return result
+            # Before the `finally`: once the VM stops, its files are gone.
+            on_event({"event": "remote", "stage": "download", "session": name})
+            return self._download(slug, name, result, script.with_suffix(".zip"))
         finally:
             stop = self._cli(slug, CLI_TIMEOUT_S, "stop", "-s", name)
             if stop.returncode != 0:
                 logger.warning("colab stop -s {} failed: {}", name, _tail(stop))
             script.unlink(missing_ok=True)
             script.with_suffix(".warmup.py").unlink(missing_ok=True)
+
+    def _download(
+        self, slug: str, name: str, result: RemoteResult, local: Path
+    ) -> RemoteResult:
+        """Bring the run's bundle here; a failure fails the job with the reason."""
+        remote = result.remote_bundle or {}
+        path, size = remote.get("path"), remote.get("size")
+        if (
+            not isinstance(path, str)
+            or not path.startswith(f"{REMOTE_ROOT.as_posix()}/")
+            or ".." in path.split("/")
+            or not isinstance(size, int)
+        ):
+            return RemoteResult(
+                "failed", error=tr("colab.download_failed", detail=repr(path))
+            )
+        if size > MAX_BUNDLE_BYTES:
+            return RemoteResult(
+                "failed",
+                error=tr(
+                    "colab.bundle_too_large",
+                    size_mb=size // 2**20,
+                    limit_mb=MAX_BUNDLE_BYTES // 2**20,
+                ),
+            )
+        local.unlink(missing_ok=True)
+        proc = self._cli(
+            slug, DOWNLOAD_TIMEOUT_S, "download", "-s", name, path, str(local)
+        )
+        # The file is the proof, as job_end is for exec: its exit code is not trusted.
+        if not local.is_file() or local.stat().st_size != size:
+            local.unlink(missing_ok=True)
+            return RemoteResult(
+                "failed", error=tr("colab.download_failed", detail=_tail(proc))
+            )
+        return replace(result, bundle=local)
 
     def _warm_up(
         self, slug: str, name: str, path: Path, cancelled: Callable[[], bool]
@@ -360,7 +409,12 @@ def _result(
         detail = other[-1] if other else ""
         return RemoteResult("failed", error=tr("colab.run_no_end", detail=detail))
     if end.get("status") == "ok":
-        return RemoteResult("completed", report=end.get("report"))
+        bundle = end.get("bundle")
+        return RemoteResult(
+            "completed",
+            report=end.get("report"),
+            remote_bundle=bundle if isinstance(bundle, dict) else None,
+        )
     error = str(end.get("error") or "")
     if end.get("detail"):
         error = f"{error} ({end['detail']})"

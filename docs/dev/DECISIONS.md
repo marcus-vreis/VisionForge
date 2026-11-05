@@ -6807,7 +6807,7 @@ other pictures (boxes, masks, a scatter, the anomaly map) and are left for later
 ## ADR-163 — Training on Google Colab through the official CLI
 
 **Date:** 2026-11-05
-**Status:** Accepted — phases 1 (connection and login) and 2 (remote training, classification) implemented; the other phases each ship as their own PR
+**Status:** Accepted — phases 1 (connection and login), 2 (remote training, classification) and 3 (importing the result) implemented; phase 4 ships as its own PR
 **Extends:** ADR-075 (the run queue), ADR-114 (profiles), ADR-160 (the live Results tab)
 
 **Context:** many users have no local GPU, and Colab has one. The 2026-11-04
@@ -6878,6 +6878,18 @@ The numbers and the code reading behind this ADR are in the design doc's
 3. **Importing the result.** `colab download` of the zipped run directory at
    the end, imported as a local run with `device_used` and the remote
    environment kept. This is the bundle import the F1 plan already needed.
+   - As built: the VM writes the run with `export_experiment_bundle`, the same
+     format a bundle exported by hand has. The bundle's VM path and size go out
+     in `job_end`, and the job downloads it before `colab stop`.
+   - The file is the proof that the download worked, as `job_end` is for
+     `exec`: the job checks that it exists and has the announced size.
+   - `import_experiment_bundle` verifies the manifest, refuses unsafe names
+     and anything over 2 GB, and builds the run in a staging folder outside
+     `models/`. One rename then puts it in `models/<experiment>/<run>`.
+   - run.json gets `origin: {kind: "colab", ...}`, and History marks the run.
+     The paths recorded on the VM are rewritten to the files that arrived.
+   - Plots are not part of the bundle format, so an imported run has its
+     run.json and checkpoint, but no PNGs.
 4. **Parallel queues.** One Colab queue per account next to the local queue.
    This means decoupling the SSE stream and the result records from the single
    active job of `RunQueue`.
