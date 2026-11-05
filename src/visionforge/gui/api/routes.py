@@ -19,6 +19,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response, StreamingRes
 from loguru import logger
 from pydantic import ValidationError
 
+from visionforge import __version__ as _VF_VERSION
 from visionforge.blocks.anomaly import AnomalyBlock
 from visionforge.blocks.anomaly_runner import AnomalyRunner
 from visionforge.blocks.batch_prediction import BatchPredictionBlock
@@ -41,6 +42,7 @@ from visionforge.blocks.transfer_learning import TransferLearningBlock
 from visionforge.core.cancellation import (
     STOPPED,
     CancellationToken,
+    is_cancelled,
     job_was_stopped,
 )
 from visionforge.core.comparison import ComparisonTrial, run_model_comparison
@@ -73,7 +75,9 @@ from visionforge.core.task_runner import (
     require_validation_selection,
     runner_metric_direction,
 )
+from visionforge.gui.api.colab_connection import PINNED_VERSION as _COLAB_PIN
 from visionforge.gui.api.colab_connection import ColabCli, LoginFlows
+from visionforge.gui.api.colab_jobs import ColabJobs
 from visionforge.gui.api.colab_routes import build_colab_router
 from visionforge.gui.api.datasets_routes import (
     _IMAGE_EXTS,
@@ -132,6 +136,7 @@ from visionforge.gui.api.sample_dataset import (
 from visionforge.gui.api.schemas import (
     BatchPredictRequest,
     BatchPredictResponse,
+    ColabRunRequest,
     ComparisonRequest,
     CustomTaskActionResponse,
     ExportOnnxRequest,
@@ -311,6 +316,7 @@ _EVIDENCE_EXPORTS = EvidenceExports()
 # The Colab CLI and the logins waiting for a code live as long as the server (ADR-163).
 _COLAB_CLI = ColabCli()
 _COLAB_LOGINS = LoginFlows()
+_COLAB_JOBS = ColabJobs()
 
 
 def _task_label_from_config(config_type: type[Any]) -> str:
@@ -346,6 +352,8 @@ _STOP_POINTS: dict[str, StopPoint] = {
     "comparison": "model",
     "replicates": "replicate",
     "replicated-comparison": "replicate",
+    # A Colab job (ADR-163): the stop releases the VM, mid-epoch.
+    "colab": "vm",
 }
 
 
@@ -434,7 +442,7 @@ router.include_router(
 )
 router.include_router(
     build_colab_router(
-        lambda header: current_profile(header), _COLAB_CLI, _COLAB_LOGINS
+        lambda header: current_profile(header), _COLAB_CLI, _COLAB_LOGINS, _COLAB_JOBS
     )
 )
 router.include_router(
@@ -913,6 +921,51 @@ async def run_experiment(config: ExperimentConfig, profile: ProfileDep) -> RunRe
         "classification",
         config.block,
         lambda: _execute_experiment(config, run_id),
+        profile=profile,
+    )
+
+
+@router.post(
+    "/colab/experiment/run",
+    responses={
+        **_BAD_REQUEST,
+        **_NOT_FOUND,
+        **_UNPROCESSABLE,
+        409: {
+            "description": "The Colab CLI is not installed or the profile is not logged in"
+        },
+    },
+)
+async def run_colab_experiment(
+    req: ColabRunRequest, profile: ProfileDep
+) -> RunResponse:
+    """Train a classification experiment on a Colab VM (ADR-163, phase 2).
+
+    It goes through the same queue and the same /experiment/{status,events,result}
+    endpoints as a local run. The dataset comes from ``req.source`` on the VM; the
+    local ``data.base_dir`` is not read.
+    """
+    if _COLAB_CLI.installed_version() != _COLAB_PIN:
+        raise HTTPException(409, tr("colab.not_installed"))
+    if not _COLAB_CLI.logged_in(profile.slug):
+        raise HTTPException(409, tr("colab.not_logged_in"))
+    config = _validate_colab_config(req.config)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    run_id = f"{config.name}_colab_{timestamp}"
+    payload = {
+        "version": _VF_VERSION,
+        # The validated form, so the VM gets the defaults this version fills in;
+        # the runner points data and outputs at the VM.
+        "config": config.model_dump(mode="json"),
+        "source": req.source.model_dump(mode="json"),
+    }
+    return _submit_job(
+        run_id,
+        f"{config.name} · Colab {req.accelerator}",
+        "classification",
+        "colab",
+        lambda: _execute_colab(run_id, profile.slug, req.accelerator, payload),
+        stop_at="vm",
         profile=profile,
     )
 
@@ -2673,6 +2726,72 @@ async def _execute_experiment(
             "run_dir": None,
         }
 
+    finally:
+        if queue is not None:
+            await queue.put(None)
+
+
+def _validate_colab_config(raw: dict[str, Any]) -> ExperimentConfig:
+    """Validate a config whose dataset is not on this machine.
+
+    ``base_dir`` is swapped for a folder that exists only for the check; the VM
+    sets the real one. Any other mistake is still a 422 here, before a runtime
+    is paid for.
+    """
+    data = raw.get("data")
+    probe = {
+        **raw,
+        "data": {**(data if isinstance(data, dict) else {}), "base_dir": "."},
+    }
+    try:
+        return ExperimentConfig.model_validate(probe)
+    except ValidationError as exc:
+        raise RequestValidationError(
+            [{**err, "loc": ("body", "config", *err["loc"])} for err in exc.errors()]
+        ) from None
+
+
+async def _execute_colab(
+    run_id: str, slug: str, accelerator: str, payload: dict[str, Any]
+) -> None:
+    """Run one job on Colab off the event loop and record how it ended."""
+    global _current_run
+
+    loop = asyncio.get_running_loop()
+    queue = _event_queue
+    token = _active_cancel_token
+
+    def _put_event(event: dict[str, Any]) -> None:
+        if queue is not None:
+            asyncio.run_coroutine_threadsafe(queue.put(event), loop)
+
+    try:
+        logger.info("GUI: Starting Colab job {} ({})", run_id, accelerator)
+        result = await asyncio.to_thread(
+            _COLAB_JOBS.run_job,
+            slug,
+            accelerator,
+            payload,
+            _put_event,
+            lambda: is_cancelled(token),
+        )
+        _current_run = {
+            "run_id": run_id,
+            "status": "completed" if result.outcome == "completed" else "failed",
+            "error": result.error,
+            "report": result.report,
+            # The run folder stays on the VM until the import of phase 3.
+            "run_dir": None,
+        }
+    except Exception as e:
+        logger.exception("GUI: Colab job {} failed", run_id)
+        _current_run = {
+            "run_id": run_id,
+            "status": "failed",
+            "error": f"{type(e).__name__}: {e}",
+            "report": None,
+            "run_dir": None,
+        }
     finally:
         if queue is not None:
             await queue.put(None)

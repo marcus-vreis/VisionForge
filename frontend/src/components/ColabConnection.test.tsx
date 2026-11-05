@@ -3,7 +3,12 @@ import { describe, expect, it } from "vitest";
 import type { ColabStatus, ColabUsage } from "../api/client";
 import { LanguageContext } from "../i18n/context";
 import { pt } from "../i18n/pt";
-import { cleanAuthCode, colabStage, roundHours } from "../lib/colab-connection";
+import {
+  cleanAuthCode,
+  colabStage,
+  parseDatasetSource,
+  roundHours,
+} from "../lib/colab-connection";
 import { ColabPanel, type ColabPanelProps } from "./ColabConnection";
 
 const lang = { lang: "pt" as const, t: pt, locale: "pt-BR", setLang: () => {} };
@@ -33,6 +38,8 @@ function panel(over: Partial<ColabPanelProps>) {
     onFinish: noop,
     onCancel: noop,
     onSwitch: noop,
+    sessions: null,
+    onStopSession: noop,
     ...over,
   };
   return renderToStaticMarkup(
@@ -119,5 +126,57 @@ describe("ColabPanel", () => {
     const usage: ColabUsage = { balance: 381.93, rate_per_hour: 0, active_assignments: 0, hours_left: null };
     const html = panel({ status: { ...installed, logged_in: true, account: "a@b.c" }, usage });
     expect(html).toContain(pt.colab.noRate);
+  });
+});
+
+describe("parseDatasetSource", () => {
+  it("reads a zip URL and the two public providers", () => {
+    expect(parseDatasetSource(" https://x.org/coffee.zip ")).toEqual({ kind: "url", url: "https://x.org/coffee.zip" });
+    expect(parseDatasetSource("torchvision:cifar10")).toEqual({
+      kind: "provider",
+      provider: "torchvision",
+      dataset: "cifar10",
+    });
+    expect(parseDatasetSource("hf:owner/beans")).toEqual({
+      kind: "provider",
+      provider: "huggingface",
+      dataset: "owner/beans",
+    });
+  });
+
+  it("refuses a local path or a file URL: the VM cannot read this machine", () => {
+    expect(parseDatasetSource("C:/datasets/coffee")).toBeNull();
+    expect(parseDatasetSource("file:///C:/datasets/coffee.zip")).toBeNull();
+    expect(parseDatasetSource("roboflow:ws/proj")).toBeNull();
+    expect(parseDatasetSource("")).toBeNull();
+  });
+});
+
+describe("ColabPanel when connected", () => {
+  const connected = { ...installed, logged_in: true, account: "a@b.c" };
+
+  it("offers training only when the open task can train on Colab", () => {
+    expect(panel({ status: connected })).not.toContain("data-colab-train");
+    const html = panel({ status: connected, onTrain: noop });
+    expect(html).toContain("data-colab-train");
+    expect(html).toContain(pt.colab.train);
+    expect(html).toContain('<option value="T4" selected="">T4</option>');
+  });
+
+  it("lists the runtimes alive and stops only the ones VisionForge started", () => {
+    const html = panel({
+      status: connected,
+      sessions: [
+        { name: "vf-20261105-140000", hardware: "T4", ours: true },
+        { name: "?", hardware: "CPU", ours: false },
+      ],
+    });
+    expect(html).toContain("vf-20261105-140000 · T4");
+    expect(html.match(new RegExp(pt.colab.stopSession, "g"))?.length).toBe(1);
+    expect(html).toContain(pt.colab.sessionNotOurs);
+  });
+
+  it("says when no runtime is alive", () => {
+    expect(panel({ status: connected, sessions: [] })).toContain(pt.colab.sessionsNone);
   });
 });

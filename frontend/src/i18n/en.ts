@@ -105,6 +105,7 @@ export const en: Dict = {
   // The Colab corner of the header (ADR-163): CLI install, login per profile, balance.
   colab: {
     dialogLabel: "Google Colab",
+    chipRuntimes: (n: number) => (n === 1 ? "1 runtime alive" : `${n} runtimes alive`),
     chip: {
       not_installed: "colab · off",
       installing: "colab · installing…",
@@ -136,7 +137,18 @@ export const en: Dict = {
     noRate: "No runtime is active now; the hours left depend on the GPU you pick.",
     usageFailed: "Failed to read the balance.",
     loadFailed: "Failed to reach the server.",
-    trainingSoon: "Training on Colab comes in the next phase; for now, only the connection.",
+    trainTitle: "Train this experiment on Colab",
+    trainSource: "Dataset on the VM: a zip URL, torchvision:cifar10 or hf:owner/name",
+    sourcePlaceholder: "https://…/dataset.zip",
+    badSource: "Use an http(s) URL of a zip, torchvision:<name> or hf:<owner/name>.",
+    accelerator: "GPU",
+    train: "train on Colab",
+    trainNote:
+      "It enters the same queue as local training. The live tab follows it; the trained files stay on the VM until the import of the next phase.",
+    sessionsTitle: "Runtimes alive on this account",
+    sessionsNone: "No runtime is alive.",
+    stopSession: "stop",
+    sessionNotOurs: "started elsewhere; stop it at colab.research.google.com",
   },
   update: {
     available: (version: string) => `update available · v${version}`,
@@ -1882,6 +1894,7 @@ export const en: Dict = {
         "Stop the replicates? The replicate in progress finishes its current epoch and no other starts. The mean and interval use only the finished replicates; the cut replicate is left out. A stopped set cannot be resumed.",
       phase:
         "Stop PatchCore? During feature extraction nothing is kept. If it is already building the memory bank, that finishes and is saved, and scoring is skipped — you can score it later with “+ test” in the History.",
+      vm: "Stop the training on Colab? The VM is released right away: the epoch in progress is lost, and nothing trained there comes back to this machine yet.",
     },
     stopConfirmCustom: {
       epoch:

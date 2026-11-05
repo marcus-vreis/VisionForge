@@ -1048,6 +1048,18 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "pt": "A CLI do Colab não terminou o login.",
         "en": "The Colab CLI did not finish the login.",
     },
+    "colab.no_accelerator": {
+        "pt": "O Colab não concedeu uma {accelerator} para esta conta: {detail}",
+        "en": "Colab did not grant a {accelerator} to this account: {detail}",
+    },
+    "colab.run_stopped": {
+        "pt": "Treino parado: a VM do Colab foi liberada e a época em andamento se perdeu.",
+        "en": "Training stopped: the Colab VM was released and the epoch in progress was lost.",
+    },
+    "colab.run_no_end": {
+        "pt": "O treino no Colab terminou sem o evento final. Última saída: {detail}",
+        "en": "The Colab training ended without its final event. Last output: {detail}",
+    },
     "colab.login_rejected": {
         "pt": "O Google não aceitou o código. Comece o login de novo e cole o código novo.",
         "en": "Google did not accept the code. Start the login again and paste the new code.",

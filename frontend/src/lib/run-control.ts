@@ -73,6 +73,7 @@ const STOP_POINTS: Record<string, StopPoint> = {
   cv: "fold",
   model_comparison: "model",
   comparison: "model",
+  colab: "vm",
   replicates: "replicate",
   "replicated-comparison": "replicate",
 };

@@ -6807,7 +6807,7 @@ other pictures (boxes, masks, a scatter, the anomaly map) and are left for later
 ## ADR-163 — Training on Google Colab through the official CLI
 
 **Date:** 2026-11-05
-**Status:** Accepted — phase 1 (connection and login) implemented; the other phases each ship as their own PR
+**Status:** Accepted — phases 1 (connection and login) and 2 (remote training, classification) implemented; the other phases each ship as their own PR
 **Extends:** ADR-075 (the run queue), ADR-114 (profiles), ADR-160 (the live Results tab)
 
 **Context:** many users have no local GPU, and Colab has one. The 2026-11-04

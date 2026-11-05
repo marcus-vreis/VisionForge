@@ -43,9 +43,9 @@ class QueuedJobInfo(BaseModel):
     submitted_at: str
     # Where the job stops when asked (ADR-111); None means it cannot be stopped
     # once running, and DELETE answers 409 for it.
-    stop_at: Literal["epoch", "trial", "fold", "model", "replicate", "phase"] | None = (
-        None
-    )
+    stop_at: (
+        Literal["epoch", "trial", "fold", "model", "replicate", "phase", "vm"] | None
+    ) = None
     # Whose folders the job writes into (ADR-114); "default" is the legacy layout.
     profile: str = "default"
     profile_name: str = "default"
@@ -1038,6 +1038,47 @@ class ColabLoginStart(BaseModel):
 
 class ColabLoginFinishRequest(BaseModel):
     code: str = Field(min_length=1, max_length=512)
+
+
+class ColabUrlSource(BaseModel):
+    """A zip at a public http(s) URL, with the config's train/val/test folders inside."""
+
+    kind: Literal["url"] = "url"
+    url: str = Field(pattern=r"^https?://\S+$", max_length=2048)
+
+
+class ColabProviderSource(BaseModel):
+    """A public dataset the VM downloads itself; no credential leaves this machine."""
+
+    kind: Literal["provider"] = "provider"
+    provider: Literal["torchvision", "huggingface"]
+    dataset: str = Field(min_length=1, max_length=200)
+    limit: int | None = Field(default=None, ge=1)
+
+
+class ColabRunRequest(BaseModel):
+    """A classification experiment to train on Colab (ADR-163, phase 2).
+
+    ``config`` is an ``ExperimentConfig`` as JSON. It stays a plain dict because
+    the model checks that ``data.base_dir`` exists on this machine, and for a
+    Colab run the dataset lives elsewhere; the route validates the rest.
+    """
+
+    config: dict[str, Any]
+    source: ColabUrlSource | ColabProviderSource = Field(discriminator="kind")
+    accelerator: Literal["T4", "L4", "A100", "H100", "G4"] = "T4"
+
+
+class ColabSessionInfo(BaseModel):
+    """A runtime alive on the account; ``ours`` when VisionForge started it."""
+
+    name: str
+    hardware: str
+    ours: bool
+
+
+class ColabStopSessionRequest(BaseModel):
+    name: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 
 
 class ColabUsage(BaseModel):
