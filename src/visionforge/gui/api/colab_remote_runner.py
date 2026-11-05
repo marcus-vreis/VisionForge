@@ -111,6 +111,29 @@ def prepare_config(
     return cfg
 
 
+def match_num_classes(cfg: dict[str, Any]) -> dict[str, Any] | None:
+    """Set ``model.num_classes`` to the class folders of the remote training split.
+
+    The GUI reads the classes from a local dataset; for one that exists only on
+    the VM it cannot, so the VM does the same here. Only a multiclass task by
+    folders is touched: a binary one keeps the validation error it would raise.
+    Returns the change, or None when there was nothing to change.
+    """
+    if cfg.get("task", "multiclass") != "multiclass":
+        return None
+    data = cfg.get("data") or {}
+    train = Path(data.get("base_dir", ".")) / str(data.get("train_dir", "train"))
+    if not train.is_dir():
+        return None
+    classes = [p for p in train.iterdir() if p.is_dir() and not p.name.startswith(".")]
+    model = cfg.setdefault("model", {})
+    old = model.get("num_classes")
+    if len(classes) < 2 or old == len(classes):
+        return None
+    model["num_classes"] = len(classes)
+    return {"old": old, "new": len(classes)}
+
+
 def build_block(config: Any) -> Any:
     """The same block choice as the local queue makes for ``config.block``."""
     from visionforge.blocks.classification import ClassificationBlock
@@ -162,6 +185,9 @@ def main(payload: dict[str, Any]) -> None:
         emit({"event": "remote", "stage": "dataset", "environment": environment()})
         base_dir = fetch_dataset(payload["source"], REMOTE_ROOT)
         config = prepare_config(payload["config"], base_dir, payload["source"]["kind"])
+        change = match_num_classes(config)
+        if change is not None:
+            emit({"event": "remote", "stage": "num_classes", **change})
         emit({"event": "remote", "stage": "train", "device": config["device"]["kind"]})
         report = train(config)
         emit(

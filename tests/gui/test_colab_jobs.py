@@ -581,3 +581,85 @@ def test_stopping_during_the_warm_up_skips_the_runner() -> None:
     assert result.outcome == "stopped"
     assert cli.execs == []
     assert cli.commands() == ["new", "stop"]
+
+
+# ── the class count of a dataset that only the VM sees ────────────────────────
+
+
+def _folders(base: Path, split: str, names: list[str]) -> None:
+    for name in names:
+        (base / split / name).mkdir(parents=True, exist_ok=True)
+
+
+def test_num_classes_follows_the_remote_train_folders(tmp_path: Path) -> None:
+    _folders(tmp_path, "train", [str(i) for i in range(10)])
+    cfg: dict[str, Any] = {
+        "task": "multiclass",
+        "data": {"base_dir": str(tmp_path), "train_dir": "train"},
+        "model": {"num_classes": 2},
+    }
+    assert runner.match_num_classes(cfg) == {"old": 2, "new": 10}
+    assert cfg["model"]["num_classes"] == 10
+
+
+def test_num_classes_already_right_is_left_alone(tmp_path: Path) -> None:
+    _folders(tmp_path, "train", ["a", "b", "c"])
+    cfg: dict[str, Any] = {
+        "data": {"base_dir": str(tmp_path), "train_dir": "train"},
+        "model": {"num_classes": 3},
+    }
+    assert runner.match_num_classes(cfg) is None
+
+
+def test_a_binary_task_keeps_its_count_and_its_error(tmp_path: Path) -> None:
+    _folders(tmp_path, "train", ["a", "b", "c"])
+    cfg: dict[str, Any] = {
+        "task": "binary",
+        "data": {"base_dir": str(tmp_path), "train_dir": "train"},
+        "model": {"num_classes": 2},
+    }
+    assert runner.match_num_classes(cfg) is None
+    assert cfg["model"]["num_classes"] == 2
+
+
+def test_hidden_folders_and_files_are_not_classes(tmp_path: Path) -> None:
+    _folders(tmp_path, "train", ["a", "b", ".ipynb_checkpoints"])
+    (tmp_path / "train" / "notes.txt").write_text("x", encoding="utf-8")
+    cfg: dict[str, Any] = {
+        "data": {"base_dir": str(tmp_path), "train_dir": "train"},
+        "model": {"num_classes": 5},
+    }
+    assert runner.match_num_classes(cfg) == {"old": 5, "new": 2}
+
+
+def test_a_missing_train_split_is_left_to_the_training_error(tmp_path: Path) -> None:
+    cfg: dict[str, Any] = {
+        "data": {"base_dir": str(tmp_path), "train_dir": "train"},
+        "model": {"num_classes": 2},
+    }
+    assert runner.match_num_classes(cfg) is None
+
+
+def test_runner_reports_the_class_count_change(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _folders(tmp_path, "train", [str(i) for i in range(10)])
+    monkeypatch.setattr(
+        runner,
+        "prepare_config",
+        lambda config, base, kind: {
+            "data": {"base_dir": str(tmp_path), "train_dir": "train"},
+            "model": {"num_classes": 2},
+            "device": {"kind": "cpu"},
+        },
+    )
+    seen: dict[str, Any] = {}
+
+    def train(cfg: dict[str, Any]) -> dict[str, Any]:
+        seen.update(cfg)
+        return {}
+
+    events = _main_events(monkeypatch, tmp_path, train)
+    change = next(e for e in events if e.get("stage") == "num_classes")
+    assert (change["old"], change["new"]) == (2, 10)
+    assert seen["model"]["num_classes"] == 10
