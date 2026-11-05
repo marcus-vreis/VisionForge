@@ -6803,3 +6803,116 @@ other pictures (boxes, masks, a scatter, the anomaly map) and are left for later
   start writing files and the setting would differ between machines.
 - *A "generate now" button.* Left out: it needs a channel from the GUI to the
   running job, as the stop has (ADR-088), for a convenience.
+
+## ADR-163 — Training on Google Colab through the official CLI
+
+**Date:** 2026-11-05
+**Status:** Accepted — not implemented yet; the phases below each ship as their own PR
+**Extends:** ADR-075 (the run queue), ADR-114 (profiles), ADR-160 (the live Results tab)
+
+**Context:** many users have no local GPU, and Colab has one. The 2026-11-04
+plan in `docs/dev/design-resultados-ao-vivo-e-colab.md` was a hand-run notebook
+(F1), because Colab had no API. Google has since published `google-colab-cli`,
+which allocates a runtime, runs code with live output, moves files and
+releases the VM, all from the user's own account. A spike on 2026-11-05 (one
+run, one T4, a paid account) measured it on this machine:
+- the T4 was granted in 4.1 s;
+- 180 of 180 one-second ticks arrived, with gaps between 0.95 and 1.06 s and an
+  accumulated delay under 0.1 s;
+- `colab stop` left no session behind.
+
+The numbers and the code reading behind this ADR are in the design doc's
+2026-11-05 sections.
+
+**Decision:**
+
+- **Backend.** `google-colab-cli`, pinned to an exact version (0.7.5 today).
+  It is installed by VisionForge into a venv it manages, in
+  `~/.visionforge/colab-cli/venv`, and never into the project environment. A
+  CLI upgrade is a deliberate change: bump the pin, rerun the spike.
+- **Windows runs it natively.** No WSL is needed. The README says "Linux and
+  macOS only", but the only POSIX-only code is `colab console`, which
+  VisionForge does not use.
+- **Login per profile.** Every CLI call runs with `USERPROFILE` and `HOME`
+  pointing at `~/.visionforge/colab/<profile>/`, so the token, the session
+  list and the log stay in that folder.
+  - The login is Google's copy-and-paste OAuth flow. The GUI shows the URL and
+    passes the pasted code to the CLI's stdin.
+  - VisionForge only checks that `token.json` exists. It never reads the
+    token, logs it or sends it anywhere.
+  - The account is identified by the e-mail that `colab whoami` prints.
+- **Queues.** The local queue stays as ADR-075 made it: one job at a time on
+  this machine, on the GPU or the CPU, never both.
+  - Colab gets one queue per Google account, not per profile, because the
+    session quota and the compute units belong to the account.
+  - A local job and a Colab job may run at the same time.
+- **Events come from the `exec` stdout.** The remote runner prints the usual
+  training events, one JSON line each. The backend feeds them into the same SSE
+  stream the Results tab already reads.
+  - The job ends with a final event of its own (status `ok` or `error`),
+    distinct from the per-training `end`.
+  - The exit code of `colab exec` is not trusted: in 0.7.5 a failing script
+    exits 0, and a healthy one exits 1 once it outlives `--timeout`.
+  - `--timeout` is therefore set above the longest job the account allows.
+  - The remote runner never calls `sys.exit`, because that hangs `exec`.
+- **Balance.** The GUI shows the hours left: the balance divided by the chosen
+  accelerator's rate, both read from `colab usage`. It shows this only when the
+  account reports compute units.
+
+**Phases, one PR each:**
+
+1. **Connection and login.**
+   - The managed venv and its pinned install.
+   - The per-profile login from the GUI, with the account shown and a switch
+     to change it.
+   - The "Train on Colab" button stays disabled without a login.
+   - `colab usage` shown as hours left.
+2. **Remote training.**
+   - A remote runner that installs `visionforge-studio` at the local version
+     and gets the dataset from where it already is (URL, Drive, Hugging Face),
+     not through `colab upload`.
+   - It runs the job and prints the events.
+   - The backend relays them to the Results tab and stops the VM in a
+     `finally`.
+   - At startup, VisionForge lists leftover sessions and offers to stop them.
+3. **Importing the result.** `colab download` of the zipped run directory at
+   the end, imported as a local run with `device_used` and the remote
+   environment kept. This is the bundle import the F1 plan already needed.
+4. **Parallel queues.** One Colab queue per account next to the local queue.
+   This means decoupling the SSE stream and the result records from the single
+   active job of `RunQueue`.
+
+**Consequence:**
+- A user without a GPU trains from the same GUI, with the same live tab, on
+  their own Google account. Nothing listens on the user's machine and no tunnel
+  is opened.
+- What VisionForge stores is a token file in a folder the user owns, like the
+  personal credentials in `~/.visionforge/`.
+- The cost is a dependency on a young CLI that talks to Colab's internal
+  endpoints (`/tun/m/...`) and changes often.
+
+**Risks:**
+- A CLI release can break the contract. The pin and the spike are the guard,
+  and `colab update` only announces releases; it never installs one.
+- `colab whoami` is hidden ("developer-only") and may change. Plan B is the
+  OpenID `userinfo` endpoint, which would mean reading the token.
+- Free accounts were not tested: whether they get a T4 at all, and what
+  `colab usage` shows for them. The GUI must say "no GPU on this account"
+  instead of failing quietly.
+- If Google restricts headless use, the hand-run notebook (F1) is still
+  there.
+
+**Alternatives considered:**
+
+- *A notebook the user runs by hand (F1).* No account access is needed, but
+  there is no live tab and no queue, and every run takes manual steps. It
+  stays as the fallback.
+- *Our own OAuth client against the Drive API, plus a tunnel.* VisionForge
+  would own an OAuth client, with Google's app verification and the support
+  that comes with it, and would expose a port on the user's machine. The
+  CLI's flow avoids both.
+- *Running the CLI in WSL.* It works, but it is an installation hurdle on
+  Windows that native support makes unnecessary.
+- *`colab run` instead of `new` + `exec` + `stop`.* Its exit code is
+  reliable, but it creates and releases a VM per call, which breaks a job
+  that uploads, trains and downloads on the same machine.
