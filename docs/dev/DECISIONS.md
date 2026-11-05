@@ -6747,3 +6747,59 @@ needs it.
 - *Read the rate when the epoch is reported.* The scheduler has stepped by then,
   so it is the next epoch's rate: a StepLR run would show every drop one epoch
   early.
+
+## ADR-162 — Live Grad-CAM of fixed validation images
+
+**Date:** 2026-11-04
+**Status:** Accepted
+**Extends:** ADR-160 (the live "Results" tab), ADR-161 (live epoch fields)
+
+**Context:** the curves say how much a classifier learns, not what it looks at.
+`core/gradcam.py` already explains a finished checkpoint, but only after the run,
+and its `GradCAM` writes the parameters' `.grad` and leaves the model in `eval`,
+which is harmless after training and not during it. This is phase C of
+`docs/dev/design-resultados-ao-vivo-e-colab.md`.
+
+**Decision:**
+
+- `training.live_gradcam_every` (classification), **0 by default**: every N
+  epochs, on the last epoch and on each new best (lowest `val_loss`, the
+  checkpoint rule), `core/live_insights.py` explains 6 fixed validation images
+  and the stream sends `{"event": "insight", "kind": "gradcam", "epoch", "best",
+  "images": [{"path", "true_class", "predicted_class"}]}`. The Results tab shows
+  the unit's latest set.
+- The training must not notice it, and a test holds it to that: the same seed on
+  CPU with `deterministic` gives the same history and the same weights with the
+  option at 1 and at 0, with a shuffled training loader that would reorder its
+  batches if any generator moved. A mutant that draws one random number inside
+  the pass fails that test. The rules:
+  1. the samples are chosen once with a `torch.Generator` of their own, taking
+     the classes in turn, and read by index from `val_loader.dataset`, never by
+     iterating the loader; every pass runs inside a fork of the Python, NumPy and
+     torch generators (`preserved_rng`);
+  2. the gradient is `torch.autograd.grad(score, activation)`: no parameter's
+     `.grad` is written. The input requires grad, so a frozen backbone still
+     puts the activation in the graph;
+  3. the model runs in `eval` and goes back to the mode it was in;
+  4. a failure logs one warning and turns the insights off for the run.
+- Files: `insights/latest/` is rewritten each time and copied to
+  `insights/best/` on a new best. Nothing per epoch, nothing in `run.json`.
+  The images are served by the existing `/api/artifacts` route, so a run whose
+  `models_dir` is outside `outputs/` writes them but the tab cannot show them.
+- Overlays undo the run's own `normalize_mean`/`normalize_std`, not ImageNet's.
+
+**Consequence:** a run that turns it on spends K forward and backward passes per
+explained epoch (K = 6) and writes 6 small PNGs. Off by default, a run and its
+`run.json` are unchanged. Detection, segmentation, regression and anomaly need
+other pictures (boxes, masks, a scatter, the anomaly map) and are left for later.
+
+**Alternatives considered:**
+
+- *Reuse `GradCAM` from `core/gradcam.py`.* Its `.backward()` accumulates into
+  the parameters' `.grad`; the optimizer zeroes them before the next step, but a
+  run with gradient accumulation or a custom loop would not, and the rule is
+  simpler kept absolute.
+- *On by default with N = 5 on GPU.* The cost is small, but a default run would
+  start writing files and the setting would differ between machines.
+- *A "generate now" button.* Left out: it needs a channel from the GUI to the
+  running job, as the stop has (ADR-088), for a convenience.

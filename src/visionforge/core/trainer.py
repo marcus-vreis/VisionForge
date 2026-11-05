@@ -18,6 +18,7 @@ from loguru import logger
 from visionforge.core import training_loop
 from visionforge.core.cancellation import CancellationToken, is_cancelled
 from visionforge.core.live_confusion import live_confusion
+from visionforge.core.live_insights import LiveGradCam
 from visionforge.core.resume import (
     ResumeState,
     clear_resume_state,
@@ -234,6 +235,9 @@ class Trainer:
         train_loader, val_loader, self._loader_workers = training_loop.start_training(
             data_module, progress_callback, cfg.epochs, self._device_label
         )
+        insights = LiveGradCam.create(
+            self._config, val_loader, class_names, run_dir, self._device, best_val_loss
+        )
         state = training_loop.EpochState(
             history, best_val_loss, best_epoch, patience_counter, start_epoch
         )
@@ -263,12 +267,14 @@ class Trainer:
                         scaler=scaler,
                     )
                 ),
-                report=lambda result: self._report_epoch(
+                report=lambda result: self._report_and_explain(
                     result,
                     tb,
                     progress_callback,
                     t0,
                     self._live_fields(epoch_lr, class_names),
+                    model,
+                    insights,
                 ),
                 early_stop=self._early_stopping_reached,
             ),
@@ -364,6 +370,23 @@ class Trainer:
     def _step_scheduler(self, scheduler: Any, val_loss: float) -> None:
         """Advance the scheduler using validation loss for plateau mode."""
         training_loop.step_scheduler(scheduler, val_loss)
+
+    def _report_and_explain(
+        self,
+        result: EpochResult,
+        tb: TensorBoardLogger,
+        progress_callback: Callable[[dict[str, Any]], None] | None,
+        t0: float,
+        extra: dict[str, Any],
+        model: nn.Module,
+        insights: LiveGradCam | None,
+    ) -> None:
+        """Report the epoch, then its Grad-CAM when one is due (ADR-162)."""
+        self._report_epoch(result, tb, progress_callback, t0, extra)
+        if insights is not None:
+            insights.after_epoch(
+                model, result.epoch, result.val_loss, progress_callback
+            )
 
     def _live_fields(
         self, epoch_lr: training_loop.EpochLr, class_names: list[str]

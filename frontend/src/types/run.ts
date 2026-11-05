@@ -279,6 +279,13 @@ export interface DatasetInfo {
 /** The validation confusion of one epoch. Up to 30 classes the full matrix,
  *  `matrix[true][predicted]`; above it the most frequent mistakes as
  *  `[true, predicted, count]`, most frequent first. */
+/** One explained image of an `insight` event. `path` is served by `/api/artifacts`. */
+export interface LiveInsightImage {
+  path: string;
+  true_class: string;
+  predicted_class: string;
+}
+
 export interface LiveConfusion {
   classes: string[];
   matrix?: number[][];
@@ -360,5 +367,14 @@ export type TrainingEvent =
       done: number;
       total: number;
       elapsed_s?: number;
+    }
+  // Grad-CAM of fixed validation images, every N epochs when the run asked for it
+  // (`training.live_gradcam_every`, ADR-162). The images are files in the run dir.
+  | {
+      event: "insight";
+      kind: "gradcam";
+      epoch: number;
+      best: boolean;
+      images: LiveInsightImage[];
     }
   | { event: "end"; total_epochs: number; total_trials?: number };

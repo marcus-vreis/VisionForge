@@ -35,7 +35,7 @@ describe("liveUnits", () => {
     ];
     const units = liveUnits(events);
     expect(units).toHaveLength(1);
-    expect(units[0]).toMatchObject({ index: null, overrides: null, closed: false });
+    expect(units[0]).toMatchObject({ index: null, overrides: null, closed: false, insight: null });
     expect(units[0].epochs.map((e) => e.epoch)).toEqual([1, 2]);
   });
 
@@ -168,5 +168,31 @@ describe("latestConfusion", () => {
 
   it("is null when no epoch sent one", () => {
     expect(latestConfusion([epoch(1), epoch(2)])).toBeNull();
+  });
+});
+
+describe("liveUnits and insights", () => {
+  it("keeps each unit's latest Grad-CAM", () => {
+    const insight = (n: number): TrainingEvent => ({
+      event: "insight",
+      kind: "gradcam",
+      epoch: n,
+      best: false,
+      images: [{ path: `outputs/x/insights/latest/0.png`, true_class: "a", predicted_class: "b" }],
+    });
+    const events: TrainingEvent[] = [
+      { event: "trial_start", trial_index: 0, total_trials: 2, overrides: {}, seed: 1 },
+      epoch(1),
+      insight(1),
+      epoch(2),
+      insight(2),
+      { event: "trial_end", trial_index: 0, total_trials: 2, total_epochs: 2 },
+      { event: "trial_start", trial_index: 1, total_trials: 2, overrides: {}, seed: 1 },
+      epoch(1),
+    ];
+    const units = liveUnits(events);
+    expect(units[0].insight?.epoch).toBe(2);
+    // The next trial has not explained anything yet: no picture of the last one.
+    expect(units[1].insight).toBeNull();
   });
 });

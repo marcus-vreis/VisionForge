@@ -14,6 +14,7 @@ import type { MetricDirection } from "./compare-metrics";
 import type { MetricKind, StorySpec } from "./story-family";
 
 export type EpochEnd = Extract<TrainingEvent, { event: "epoch_end" }>;
+export type InsightEvent = Extract<TrainingEvent, { event: "insight" }>;
 
 /** One training of the job: the whole run, or one trial, fold, model or
  *  replicate of a multi-unit job. */
@@ -25,6 +26,8 @@ export interface LiveUnit {
   epochs: EpochEnd[];
   /** The unit reported its `trial_end`. */
   closed: boolean;
+  /** Its latest Grad-CAM (ADR-162), when the run asked for them. */
+  insight: InsightEvent | null;
 }
 
 /** The units of the job in the order they ran. A run without `trial_start`
@@ -34,16 +37,24 @@ export function liveUnits(events: readonly TrainingEvent[]): LiveUnit[] {
   let current: LiveUnit | undefined;
   for (const e of events) {
     if (e.event === "trial_start") {
-      current = { index: e.trial_index, overrides: e.overrides, epochs: [], closed: false };
+      current = {
+        index: e.trial_index,
+        overrides: e.overrides,
+        epochs: [],
+        closed: false,
+        insight: null,
+      };
       units.push(current);
     } else if (e.event === "epoch_end") {
       if (current === undefined) {
-        current = { index: null, overrides: null, epochs: [], closed: false };
+        current = { index: null, overrides: null, epochs: [], closed: false, insight: null };
         units.push(current);
       }
       current.epochs.push(e);
     } else if (e.event === "trial_end" && current !== undefined) {
       current.closed = true;
+    } else if (e.event === "insight" && current !== undefined) {
+      current.insight = e;
     }
   }
   return units;

@@ -135,4 +135,28 @@ describe("LiveResults", () => {
   it("draws no confusion for a task that does not send one", () => {
     expect(render([epoch(1, 0.9)])).not.toContain("data-confusion");
   });
+
+  it("shows the unit's latest Grad-CAM with what each image was read as", () => {
+    const html = render([
+      epoch(1, 0.9),
+      {
+        event: "insight",
+        kind: "gradcam",
+        epoch: 1,
+        best: true,
+        images: [
+          { path: "outputs/models/r/insights/latest/0.png", true_class: "ok", predicted_class: "ok" },
+          { path: "outputs/models/r/insights/latest/1.png", true_class: "ok", predicted_class: "defeito" },
+        ],
+      },
+    ]);
+    expect(html).toContain('data-insight="gradcam"');
+    expect(html).toContain(pt.liveResults.gradcamTitle(1, true));
+    expect(html).toContain("/artifacts/outputs/models/r/insights/latest/1.png?epoch=1");
+    expect(html).toContain(pt.liveResults.gradcamCaption("ok", "defeito"));
+  });
+
+  it("shows no gallery for a run that did not ask for one", () => {
+    expect(render([epoch(1, 0.9)])).not.toContain("data-insight");
+  });
 });
