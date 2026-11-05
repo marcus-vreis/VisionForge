@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import asdict, dataclass
 from datetime import datetime
@@ -90,6 +90,43 @@ class EpochCallbacks[Epoch]:
     compute: Callable[[int], Epoch]
     report: Callable[[Epoch], None]
     early_stop: Callable[[int], bool]
+
+
+def current_lr(optimizer: torch.optim.Optimizer | None) -> float | None:
+    """The learning rate the config's ``learning_rate`` sets, as it is now.
+
+    Fine-tuning with ``backbone_lr_multiplier`` puts the backbone first, at a
+    scaled rate, and the head last at ``learning_rate`` (``build_optimizer``), so
+    the last group is the one to read. Every other optimizer has a single group.
+    """
+    if optimizer is None or not optimizer.param_groups:
+        return None
+    lr = optimizer.param_groups[-1].get("lr")
+    return float(lr) if isinstance(lr, int | float) else None
+
+
+class EpochLr:
+    """The learning rate an epoch trained with.
+
+    The schedulers step at the end of the epoch, inside ``compute``, so the rate
+    read when the epoch is reported is already the next one. ``around`` reads it
+    before the epoch runs.
+    """
+
+    def __init__(self, optimizer: torch.optim.Optimizer | None) -> None:
+        self._optimizer = optimizer
+        self.value: float | None = None
+
+    def around[Epoch](self, compute: Callable[[int], Epoch]) -> Callable[[int], Epoch]:
+        def run(epoch: int) -> Epoch:
+            self.value = current_lr(self._optimizer)
+            return compute(epoch)
+
+        return run
+
+    def fields(self) -> dict[str, Any]:
+        """The ``lr`` field of the epoch event, or none before the first epoch."""
+        return {} if self.value is None else {"lr": self.value}
 
 
 @dataclass(frozen=True)
@@ -468,8 +505,13 @@ def report_epoch(
     event_fields: tuple[str, ...],
     log_format: str,
     log_fields: tuple[str, ...],
+    extra: Mapping[str, Any] | None = None,
 ) -> None:
-    """Report an epoch using the task's scalar names, event fields and log format."""
+    """Report an epoch using the task's scalar names, event fields and log format.
+
+    ``extra`` goes into the progress event only: live figures such as the
+    learning rate, which ``run.json`` does not keep.
+    """
     tb.log_scalars(
         result.epoch,
         {name: getattr(result, field) for name, field in scalar_fields.items()},
@@ -487,6 +529,7 @@ def report_epoch(
                 "epoch": result.epoch,
                 "total_epochs": total_epochs,
                 **{field: getattr(result, field) for field in event_fields},
+                **(extra or {}),
                 "elapsed_s": round(time.monotonic() - t0, 3),
             }
         )
@@ -729,6 +772,7 @@ def fit_training[Result](
         trainer._restore_training_state(resumed, model, optimizer, scheduler, run_dir)
     )
     t0 = time.monotonic()
+    epoch_lr = EpochLr(optimizer)
 
     train_loader, val_loader, trainer._loader_workers = start_training(
         data_module, progress_callback, cfg.epochs, trainer._device_label
@@ -746,11 +790,19 @@ def fit_training[Result](
             lambda: checkpoint_components(model, optimizer, scheduler),
         ),
         EpochCallbacks(
-            compute=lambda epoch: trainer._compute_epoch_result(
-                epoch, model, train_loader, val_loader, optimizer, criterion, scheduler
+            compute=epoch_lr.around(
+                lambda epoch: trainer._compute_epoch_result(
+                    epoch,
+                    model,
+                    train_loader,
+                    val_loader,
+                    optimizer,
+                    criterion,
+                    scheduler,
+                )
             ),
             report=lambda result: trainer._report_epoch(
-                result, tb, progress_callback, t0, cfg.epochs
+                result, tb, progress_callback, t0, cfg.epochs, extra=epoch_lr.fields()
             ),
             early_stop=lambda counter: trainer._early_stopping_reached(
                 counter, cfg.early_stopping_patience

@@ -143,6 +143,17 @@ class TestRegressionTrainer:
         assert events[-1] == "end"
         assert "epoch_end" in events
 
+    def test_epoch_event_carries_the_rate(self, tmp_path: Path) -> None:
+        events: list[dict] = []
+        RegressionTrainer(_config(tmp_path)).fit(
+            DummyRegressor(),
+            FakeRegressionDataModule(),
+            progress_callback=events.append,
+        )
+        rates = [e["lr"] for e in events if e["event"] == "epoch_end"]
+        assert rates
+        assert rates == pytest.approx([0.01] * len(rates))
+
     def test_multi_target(self, tmp_path: Path) -> None:
         cfg = _config(
             tmp_path,

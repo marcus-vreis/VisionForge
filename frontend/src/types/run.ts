@@ -276,6 +276,15 @@ export interface DatasetInfo {
   note?: string | null;
 }
 
+/** The validation confusion of one epoch. Up to 30 classes the full matrix,
+ *  `matrix[true][predicted]`; above it the most frequent mistakes as
+ *  `[true, predicted, count]`, most frequent first. */
+export interface LiveConfusion {
+  classes: string[];
+  matrix?: number[][];
+  top?: [number, number, number][];
+}
+
 /** Discriminated union of SSE events emitted by GET /api/experiment/events.
  *
  * Multi-trial blocks (grid_search, random_search) wrap each inner training in
@@ -303,6 +312,10 @@ export type TrainingEvent =
       val_loss?: number;
       val_accuracy: number;
       elapsed_s?: number;
+      // The rate the epoch trained with (ADR-161); absent on older servers.
+      lr?: number;
+      // Classification only: the epoch's validation confusion (ADR-161).
+      confusion?: LiveConfusion;
       // Custom tasks' declared metrics arrive as val_<name>.
       [customMetric: `val_${string}`]: number | null | undefined | string;
       trial_index?: number;

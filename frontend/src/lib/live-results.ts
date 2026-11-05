@@ -9,7 +9,7 @@
  * Pure on purpose: no DOM and no fetch, so it is covered by plain vitest.
  */
 
-import type { TrainingEvent } from "../types/run";
+import type { LiveConfusion, TrainingEvent } from "../types/run";
 import type { MetricDirection } from "./compare-metrics";
 import type { MetricKind, StorySpec } from "./story-family";
 
@@ -165,4 +165,15 @@ export function formatValue(value: number): string {
   if (size === 0) return "0";
   if (size < 1e-3) return value.toExponential(2);
   return size >= 100 ? value.toFixed(1) : value.toFixed(4);
+}
+
+/** The confusion of the latest epoch that sent one, and that epoch. */
+export function latestConfusion(
+  epochs: readonly EpochEnd[],
+): { epoch: number; confusion: LiveConfusion } | null {
+  for (let i = epochs.length - 1; i >= 0; i -= 1) {
+    const confusion = epochs[i].confusion;
+    if (confusion && confusion.classes.length > 0) return { epoch: epochs[i].epoch, confusion };
+  }
+  return null;
 }

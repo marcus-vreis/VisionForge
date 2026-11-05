@@ -119,6 +119,7 @@ class TestFitAutoencoder:
         assert kinds[-1] == "end"
         epoch_ev = next(e for e in events if e["event"] == "epoch_end")
         assert "val_auroc" in epoch_ev
+        assert epoch_ev["lr"] == pytest.approx(0.01)
 
     def test_a_slow_epoch_streams_its_batches(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch

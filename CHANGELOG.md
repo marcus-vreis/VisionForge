@@ -15,6 +15,10 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Added
 
+- **Learning rate e matriz de confusão na aba Resultados**: o evento de cada
+  época passa a trazer a taxa com que ela treinou, em todas as tarefas, e, na
+  classificação, a confusão da validação (a matriz até 30 classes; acima disso,
+  as 10 confusões mais frequentes). Nada disso entra no `run.json` (ADR-161).
 - **Aba Resultados na tela de treino**: curvas de loss e da métrica da tarefa
   época a época, enquanto o treino roda, e um card com a melhor época pela mesma
   regra que escolhe o checkpoint salvo. Em grid, comparação, validação cruzada e
