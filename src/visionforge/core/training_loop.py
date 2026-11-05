@@ -768,69 +768,84 @@ def fit_training[Result](
     model_path = run_dir / "best_model.pth"
     tb = services.tensorboard_factory(run_dir / "tensorboard")
 
-    history, best_val_loss, best_epoch, patience_counter, start_epoch = (
-        trainer._restore_training_state(resumed, model, optimizer, scheduler, run_dir)
-    )
-    t0 = time.monotonic()
-    epoch_lr = EpochLr(optimizer)
-
-    train_loader, val_loader, trainer._loader_workers = start_training(
-        data_module, progress_callback, cfg.epochs, trainer._device_label
-    )
-    state = EpochState(
-        history, best_val_loss, best_epoch, patience_counter, start_epoch
-    )
-    writes, stopped = run_epochs(
-        state,
-        EpochRuntime(train_loader, val_loader, cfg.epochs, resumed, cancel_token),
-        CheckpointContext(
-            model,
-            model_path,
-            services.save_best,
-            lambda: checkpoint_components(model, optimizer, scheduler),
-        ),
-        EpochCallbacks(
-            compute=epoch_lr.around(
-                lambda epoch: trainer._compute_epoch_result(
-                    epoch,
-                    model,
-                    train_loader,
-                    val_loader,
-                    optimizer,
-                    criterion,
-                    scheduler,
-                )
-            ),
-            report=lambda result: trainer._report_epoch(
-                result, tb, progress_callback, t0, cfg.epochs, extra=epoch_lr.fields()
-            ),
-            early_stop=lambda counter: trainer._early_stopping_reached(
-                counter, cfg.early_stopping_patience
-            ),
-        ),
-        adapter.metric,
-    )
-    best_val_loss, best_epoch = state.best_metric, state.best_epoch
-
-    trainer._finish_checkpoint_writes(run_dir, cancel_token, writes.pool, writes.future)
-
-    health = trainer._training_warnings(history)
-
-    if adapter.ensure_checkpoint is not None:
-        best_epoch, best_val_loss = adapter.ensure_checkpoint(
-            model, model_path, history, best_epoch, best_val_loss
+    # A run that fails between here and the end still releases the writer: its
+    # thread and its open event file would otherwise outlive the run.
+    try:
+        history, best_val_loss, best_epoch, patience_counter, start_epoch = (
+            trainer._restore_training_state(
+                resumed, model, optimizer, scheduler, run_dir
+            )
         )
-    train_result = adapter.result_type(
-        stopped=stopped,
-        best_epoch=best_epoch,
-        **{adapter.best_field: best_val_loss},
-        total_epochs=len(history),
-        device_used=trainer._device_label,
-        history=history,
-        model_path=model_path,
-        warnings=health,
-    )
-    trainer._write_run_json(run_dir, train_result)
+        t0 = time.monotonic()
+        epoch_lr = EpochLr(optimizer)
+
+        train_loader, val_loader, trainer._loader_workers = start_training(
+            data_module, progress_callback, cfg.epochs, trainer._device_label
+        )
+        state = EpochState(
+            history, best_val_loss, best_epoch, patience_counter, start_epoch
+        )
+        writes, stopped = run_epochs(
+            state,
+            EpochRuntime(train_loader, val_loader, cfg.epochs, resumed, cancel_token),
+            CheckpointContext(
+                model,
+                model_path,
+                services.save_best,
+                lambda: checkpoint_components(model, optimizer, scheduler),
+            ),
+            EpochCallbacks(
+                compute=epoch_lr.around(
+                    lambda epoch: trainer._compute_epoch_result(
+                        epoch,
+                        model,
+                        train_loader,
+                        val_loader,
+                        optimizer,
+                        criterion,
+                        scheduler,
+                    )
+                ),
+                report=lambda result: trainer._report_epoch(
+                    result,
+                    tb,
+                    progress_callback,
+                    t0,
+                    cfg.epochs,
+                    extra=epoch_lr.fields(),
+                ),
+                early_stop=lambda counter: trainer._early_stopping_reached(
+                    counter, cfg.early_stopping_patience
+                ),
+            ),
+            adapter.metric,
+        )
+        best_val_loss, best_epoch = state.best_metric, state.best_epoch
+
+        trainer._finish_checkpoint_writes(
+            run_dir, cancel_token, writes.pool, writes.future
+        )
+
+        health = trainer._training_warnings(history)
+
+        if adapter.ensure_checkpoint is not None:
+            best_epoch, best_val_loss = adapter.ensure_checkpoint(
+                model, model_path, history, best_epoch, best_val_loss
+            )
+        train_result = adapter.result_type(
+            stopped=stopped,
+            best_epoch=best_epoch,
+            **{adapter.best_field: best_val_loss},
+            total_epochs=len(history),
+            device_used=trainer._device_label,
+            history=history,
+            model_path=model_path,
+            warnings=health,
+        )
+        trainer._write_run_json(run_dir, train_result)
+    except BaseException:
+        tb.close()
+        raise
     trainer._close_training(tb, progress_callback, len(history))
 
     return train_result

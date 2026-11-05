@@ -227,6 +227,34 @@ class TestMaskIdsOutsideTheModel:
         with using_lang("en"), pytest.raises(ValueError, match="num_classes"):
             trainer.fit(model, data)
 
+    def test_a_run_that_fails_mid_training_closes_its_tensorboard_writer(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:  # type: ignore[no-untyped-def]
+        """The writer's thread and its open event file are released on a failure.
+
+        The shared loop closed TensorBoard only on the way out of a run that
+        finished, so a failure left the SummaryWriter's thread alive for the rest
+        of the process (seen leaking across the test suite, 2026-11-05).
+        """
+        import pytest
+
+        from visionforge.core import segmentation_trainer
+        from visionforge.core.tracking import TensorBoardLogger
+        from visionforge.utils.messages import using_lang
+
+        closed: list[bool] = []
+
+        class Recording(TensorBoardLogger):
+            def close(self) -> None:
+                closed.append(True)
+                super().close()
+
+        monkeypatch.setattr(segmentation_trainer, "TensorBoardLogger", Recording)
+        trainer = SegmentationTrainer(_config(tmp_path))
+        with using_lang("en"), pytest.raises(ValueError, match="num_classes"):
+            trainer.fit(TinySegModel(3), FakeSegDataModule(num_classes=5))
+        assert closed == [True]
+
     def test_the_ignore_index_is_not_an_out_of_range_id(self) -> None:
         from visionforge.core.segmentation_trainer import check_mask_ids
 
