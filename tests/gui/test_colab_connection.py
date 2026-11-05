@@ -13,6 +13,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from visionforge.gui.api import colab_connection as cc
+from visionforge.gui.api.colab_jobs import ColabJobs
 from visionforge.gui.api.colab_routes import build_colab_router
 from visionforge.gui.api.profiles import Profile
 
@@ -149,7 +150,9 @@ def _client(cli: cc.ColabCli, logins: cc.LoginFlows) -> TestClient:
         return Profile(slug=slug, name=slug, models_dir=Path("models"))
 
     app = FastAPI()
-    app.include_router(build_colab_router(resolve, cli, logins), prefix="/api")
+    app.include_router(
+        build_colab_router(resolve, cli, logins, ColabJobs()), prefix="/api"
+    )
     return TestClient(app)
 
 

@@ -10,6 +10,8 @@ import {
   runCompare,
   runSweep,
   runTaskCv,
+  runColabExperiment,
+  type ColabLaunch,
 } from "./api/client";
 import type { CvPayload } from "./components/CvCard";
 import type { PanelStrategy } from "./components/ExperimentHeader";
@@ -549,7 +551,9 @@ export default function App() {
   const setActiveStrategy = (s: PanelStrategy) =>
     setStrategyByTask((prev) => ({ ...prev, [activeKey]: s }));
 
-  const handleTrain = async () => {
+  const handleTrain = async (colab?: ColabLaunch) => {
+    // A Colab run (ADR-163) is a classification payload sent to another route.
+    if (colab && (activeKey !== "classification" || isCustomTask(activeTask))) return;
     // Classification encodes its strategy in config.block, so its payload
     // already carries it; the standalone panels keep theirs in cards, which
     // this signal triggers.
@@ -690,7 +694,8 @@ export default function App() {
         queueSize: qSize,
         story: storySpecFor("classification", payload),
       },
-      payload,
+      colab ? { config: payload, ...colab } : payload,
+      colab ? { run: runColabExperiment } : undefined,
     );
   };
 
@@ -851,6 +856,11 @@ export default function App() {
         }
         onChangeProfile={() => setPickProfile(true)}
         profileSlug={profile?.slug}
+        onTrainColab={
+          activeKey === "classification" && !isCustomTask(activeTask)
+            ? (launch) => void handleTrain(launch)
+            : undefined
+        }
         taskColor={
           isCustomTask(activeTask)
             ? {

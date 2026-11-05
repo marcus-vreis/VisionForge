@@ -1299,6 +1299,47 @@ export async function fetchColabUsage(): Promise<ColabUsage> {
   return request<ColabUsage>("/colab/usage");
 }
 
+/** Where the VM takes the dataset from (ADR-163, phase 2): a public zip, or a
+ *  public dataset it downloads itself. No credential leaves this machine. */
+export type ColabDatasetSource =
+  | { kind: "url"; url: string }
+  | { kind: "provider"; provider: "torchvision" | "huggingface"; dataset: string; limit?: number };
+
+export type ColabAccelerator = "T4" | "L4" | "A100" | "H100" | "G4";
+
+/** What a Colab run adds to the classification payload. */
+export interface ColabLaunch {
+  source: ColabDatasetSource;
+  accelerator: ColabAccelerator;
+}
+
+export async function runColabExperiment(body: Record<string, unknown>): Promise<RunResponse> {
+  return request<RunResponse>("/colab/experiment/run", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+/** A runtime alive on the account; `ours` when VisionForge started it. */
+export interface ColabSessionInfo {
+  name: string;
+  hardware: string;
+  ours: boolean;
+}
+
+export async function fetchColabSessions(): Promise<ColabSessionInfo[]> {
+  return request<ColabSessionInfo[]>("/colab/sessions");
+}
+
+export async function stopColabSession(name: string): Promise<ColabSessionInfo[]> {
+  return request<ColabSessionInfo[]>("/colab/sessions/stop", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+}
+
 /** Outcome of hiding, unhiding or deleting a researcher-defined task. */
 export interface CustomTaskActionResponse {
   key: string;

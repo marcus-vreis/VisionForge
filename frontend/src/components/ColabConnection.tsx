@@ -14,12 +14,22 @@ import {
   finishColabLogin,
   installColabCli,
   logoutColab,
+  fetchColabSessions,
   startColabLogin,
+  stopColabSession,
+  type ColabAccelerator,
+  type ColabLaunch,
+  type ColabSessionInfo,
   type ColabStatus,
   type ColabUsage,
 } from "../api/client";
 import { useT } from "../i18n/useT";
-import { cleanAuthCode, colabStage, roundHours } from "../lib/colab-connection";
+import {
+  cleanAuthCode,
+  colabStage,
+  parseDatasetSource,
+  roundHours,
+} from "../lib/colab-connection";
 
 const MONO: CSSProperties = {
   fontFamily: "var(--font-mono)",
@@ -55,6 +65,16 @@ const ACTION: CSSProperties = {
 };
 
 const INSTALL_POLL_MS = 2000;
+const ACCELERATORS: ColabAccelerator[] = ["T4", "L4", "A100", "H100", "G4"];
+
+const FIELD: CSSProperties = {
+  ...MONO,
+  padding: "6px 8px",
+  borderRadius: 6,
+  border: "1px solid var(--vf-panel-stroke)",
+  background: "rgb(var(--lt-shade, 0 0 0) / 0.35)",
+  color: "var(--vf-text)",
+};
 
 export interface ColabPanelProps {
   status: ColabStatus;
@@ -68,6 +88,93 @@ export interface ColabPanelProps {
   onFinish: (code: string) => void;
   onCancel: () => void;
   onSwitch: () => void;
+  /** Runtimes alive on the account; null until asked. */
+  sessions: ColabSessionInfo[] | null;
+  onStopSession: (name: string) => void;
+  /** Present only when the open task can train on Colab (classification). */
+  onTrain?: (launch: ColabLaunch) => void;
+}
+
+function TrainOnColab({ busy, onTrain }: ColabPanelProps) {
+  const t = useT();
+  const c = t.colab;
+  const [source, setSource] = useState("");
+  const [accelerator, setAccelerator] = useState<ColabAccelerator>("T4");
+  const [bad, setBad] = useState(false);
+  if (!onTrain) return null;
+
+  const submit = () => {
+    const parsed = parseDatasetSource(source);
+    setBad(parsed === null);
+    if (parsed !== null) onTrain({ source: parsed, accelerator });
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }} data-colab-train>
+      <div style={{ ...TEXT, fontWeight: 600 }}>{c.trainTitle}</div>
+      <label style={TEXT} htmlFor="colab-source">
+        {c.trainSource}
+      </label>
+      <input
+        id="colab-source"
+        type="text"
+        autoComplete="off"
+        spellCheck={false}
+        value={source}
+        placeholder={c.sourcePlaceholder}
+        onChange={(e) => setSource(e.target.value)}
+        style={FIELD}
+      />
+      {bad && <div style={ERROR}>{c.badSource}</div>}
+      <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+        <label style={TEXT} htmlFor="colab-accelerator">
+          {c.accelerator}
+        </label>
+        <select
+          id="colab-accelerator"
+          value={accelerator}
+          onChange={(e) => setAccelerator(e.target.value as ColabAccelerator)}
+          style={FIELD}
+        >
+          {ACCELERATORS.map((a) => (
+            <option key={a} value={a}>
+              {a}
+            </option>
+          ))}
+        </select>
+        <button type="button" style={ACTION} disabled={busy} onClick={submit}>
+          {c.train}
+        </button>
+      </div>
+      <div style={{ ...TEXT, color: "var(--vf-text-dim)" }}>{c.trainNote}</div>
+    </div>
+  );
+}
+
+function Sessions({ sessions, busy, onStopSession }: ColabPanelProps) {
+  const t = useT();
+  const c = t.colab;
+  if (sessions === null) return null;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }} data-colab-sessions>
+      <div style={{ ...TEXT, fontWeight: 600 }}>{c.sessionsTitle}</div>
+      {sessions.length === 0 && <div style={{ ...TEXT, color: "var(--vf-text-dim)" }}>{c.sessionsNone}</div>}
+      {sessions.map((s) => (
+        <div key={`${s.name}-${s.hardware}`} style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <span style={TEXT}>
+            {s.name} · {s.hardware}
+          </span>
+          {s.ours ? (
+            <button type="button" style={LINK} disabled={busy} onClick={() => onStopSession(s.name)}>
+              {c.stopSession}
+            </button>
+          ) : (
+            <span style={{ ...TEXT, color: "var(--vf-text-dim)" }}>{c.sessionNotOurs}</span>
+          )}
+        </div>
+      ))}
+    </div>
+  );
 }
 
 /** The panel body, without fetching: what each stage of the connection shows. */
@@ -100,7 +207,13 @@ export function ColabPanel(props: ColabPanelProps) {
         <LoginSteps {...props} />
       )}
 
-      {stage === "connected" && <Connected {...props} />}
+      {stage === "connected" && (
+        <>
+          <Connected {...props} />
+          <Sessions {...props} />
+          <TrainOnColab {...props} />
+        </>
+      )}
 
       {props.error && <div style={ERROR}>{props.error}</div>}
     </div>
@@ -185,7 +298,6 @@ function Connected({ status, usage, usageError, busy, onSwitch }: ColabPanelProp
         <div style={{ ...TEXT, color: "var(--vf-text-dim)" }}>{c.noRate}</div>
       )}
       {usageError && <div style={ERROR}>{c.usageFailed}</div>}
-      <div style={{ ...TEXT, color: "var(--vf-text-dim)" }}>{c.trainingSoon}</div>
       <div style={{ display: "flex", gap: 14 }}>
         <button type="button" style={LINK} disabled={busy} onClick={onSwitch}>
           {c.switchAccount}
@@ -198,7 +310,7 @@ function Connected({ status, usage, usageError, busy, onSwitch }: ColabPanelProp
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 /** The header chip and its panel; one instance per profile (keyed by the header). */
-export function ColabConnection() {
+export function ColabConnection({ onTrain }: { onTrain?: (launch: ColabLaunch) => void } = {}) {
   const t = useT();
   const [status, setStatus] = useState<ColabStatus | null>(null);
   const [usage, setUsage] = useState<ColabUsage | null>(null);
@@ -207,6 +319,7 @@ export function ColabConnection() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(false);
+  const [sessions, setSessions] = useState<ColabSessionInfo[] | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -241,6 +354,15 @@ export function ColabConnection() {
       })
       .catch(() => setUsageError(true));
   }, [open, stage]);
+
+  // Asked once connected, not only when the panel opens: a job cut short by a
+  // crash may have left a VM running, and the chip says so on load.
+  useEffect(() => {
+    if (stage !== "connected") return;
+    fetchColabSessions()
+      .then(setSessions)
+      .catch(() => setSessions(null));
+  }, [stage]);
 
   const act = async (step: () => Promise<ColabStatus | void>) => {
     setBusy(true);
@@ -282,9 +404,22 @@ export function ColabConnection() {
     onSwitch: () =>
       void act(async () => {
         setUsage(null);
+        setSessions(null);
         return logoutColab();
       }),
+    sessions,
+    onStopSession: (name) =>
+      void act(async () => {
+        setSessions(await stopColabSession(name));
+      }),
+    onTrain: onTrain
+      ? (launch) => {
+          setOpen(false);
+          onTrain(launch);
+        }
+      : undefined,
   };
+  const leftovers = sessions?.filter((s) => s.ours).length ?? 0;
 
   return (
     <div style={{ position: "relative" }} data-colab-connection={stage ?? "loading"}>
@@ -315,6 +450,7 @@ export function ColabConnection() {
           }}
         />
         {stage ? t.colab.chip[stage] : t.colab.chip.not_installed}
+        {leftovers > 0 && ` · ${t.colab.chipRuntimes(leftovers)}`}
       </button>
 
       {open && (

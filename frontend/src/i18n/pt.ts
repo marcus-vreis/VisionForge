@@ -112,6 +112,7 @@ export const pt = {
   // The Colab corner of the header (ADR-163): CLI install, login per profile, balance.
   colab: {
     dialogLabel: "Google Colab",
+    chipRuntimes: (n: number) => (n === 1 ? "1 runtime ativo" : `${n} runtimes ativos`),
     chip: {
       not_installed: "colab · desligado",
       installing: "colab · instalando…",
@@ -143,7 +144,18 @@ export const pt = {
     noRate: "Nenhum runtime ativo agora; as horas restantes dependem da GPU escolhida.",
     usageFailed: "Não foi possível ler o saldo.",
     loadFailed: "Não foi possível falar com o servidor.",
-    trainingSoon: "O treino no Colab chega na próxima fase; por enquanto, só a conexão.",
+    trainTitle: "Treinar este experimento no Colab",
+    trainSource: "Dataset na VM: URL de um zip, torchvision:cifar10 ou hf:dono/nome",
+    sourcePlaceholder: "https://…/dataset.zip",
+    badSource: "Use uma URL http(s) de um zip, torchvision:<nome> ou hf:<dono/nome>.",
+    accelerator: "GPU",
+    train: "treinar no Colab",
+    trainNote:
+      "Entra na mesma fila dos treinos locais. A aba ao vivo acompanha; os arquivos treinados ficam na VM até a importação da próxima fase.",
+    sessionsTitle: "Runtimes ativos nesta conta",
+    sessionsNone: "Nenhum runtime ativo.",
+    stopSession: "parar",
+    sessionNotOurs: "aberto fora do VisionForge; pare em colab.research.google.com",
   },
   // The corner of the header that offers a newer release (ADR-120).
   update: {
@@ -2095,6 +2107,7 @@ export const pt = {
         "Parar as réplicas? A réplica em andamento termina a época atual e nenhuma outra começa. A média e o intervalo usam só as réplicas concluídas; a réplica cortada fica de fora. Um conjunto interrompido não pode ser retomado.",
       phase:
         "Parar o PatchCore? Se ainda estiver na extração de features, nada é guardado. Se já estiver montando o banco de memória, ele termina, é salvo e a pontuação é pulada — dá para pontuar depois em “+ testar” no Histórico.",
+      vm: "Parar o treino no Colab? A VM é liberada na hora: a época em andamento se perde, e nada do que foi treinado lá volta para esta máquina por enquanto.",
     },
     // A researcher's own task. Never resumable from the History; and one that owns its
     // training loop (Level 2) has no epoch to stop at, so a trial or replicate in flight

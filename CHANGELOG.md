@@ -15,6 +15,19 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Added
 
+- **Treino de classificação no Google Colab** (fase 2 do ADR-163): com o
+  perfil conectado, o painel "colab" ganha "treinar no Colab".
+  - **Dataset:** a VM pega o dataset de onde ele já está: uma URL de zip, um
+    `torchvision:<nome>` ou um `hf:<dono/nome>` público. Nada sobe desta
+    máquina.
+  - **Fila e eventos:** o job entra na mesma fila dos treinos locais. Os
+    eventos de cada época chegam ao vivo na aba Resultados.
+  - **Stop:** "parar" libera a VM na hora, e a VM é liberada também quando o
+    job termina ou falha.
+  - **Runtimes que sobraram:** o painel lista os runtimes ativos da conta e
+    para os que o VisionForge abriu.
+  - **Resultado:** os arquivos treinados ficam na VM até a importação, que é a
+    fase 3.
 - **Conexão com o Google Colab** (fase 1 do ADR-163): o canto "colab" do
   cabeçalho instala a `google-colab-cli` 0.7.5 num ambiente próprio em
   `~/.visionforge/colab-cli`. Ele também faz o login de copiar e colar com a

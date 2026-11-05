@@ -49,7 +49,8 @@ _MAX_RECORDS = 100
 # Where a running job stops when asked (ADR-111): the boundary after which it
 # starts nothing new. Inside a multi-unit job the training in flight is still cut
 # at its own epoch where it has one; "phase" is PatchCore, which has no epochs.
-StopPoint = Literal["epoch", "trial", "fold", "model", "replicate", "phase"]
+# "vm" is a Colab job (ADR-163): stopping releases the VM at once.
+StopPoint = Literal["epoch", "trial", "fold", "model", "replicate", "phase", "vm"]
 
 
 class NotStoppableError(Exception):

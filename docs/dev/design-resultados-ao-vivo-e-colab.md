@@ -409,3 +409,9 @@ token; por isso fica como plano B.
 
 **Decisão:** o ADR-163 (`docs/dev/DECISIONS.md`) registra o backend Colab e as
 fases de implementação, um PR para cada.
+
+**Fase 2, `num_classes` (2026-11-05):** para um dataset que só existe na VM
+(URL ou provedor), o runner iguala `model.num_classes` ao número de pastas de
+classe do split de treino e emite `{"event": "remote", "stage":
+"num_classes", "old", "new"}`. Só numa tarefa `multiclass`; uma `binary` mantém
+o erro de validação.

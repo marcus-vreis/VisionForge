@@ -27,7 +27,9 @@ export type StopPoint =
   | "fold"
   | "model"
   | "replicate"
-  | "phase";
+  | "phase"
+  // A Colab job (ADR-163): stopping releases the VM at once.
+  | "vm";
 
 /** One entry in the run queue. */
 export interface QueuedJobInfo {
