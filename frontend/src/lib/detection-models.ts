@@ -4,7 +4,12 @@ import type { PreprocessingStep } from "../components/PreprocessingPanel";
  *  visionforge/utils/detection_config.py (_ULTRALYTICS_MODELS / _TORCHVISION_MODELS).
  *  Keep in sync: a name the backend rejects produces a 422 on submit. */
 
-import { mergeFormShape, overlayImported, unmanagedFields } from "./form-import";
+import {
+  mergeFormShape,
+  overlayImported,
+  stepsFromPayload,
+  unmanagedFields,
+} from "./form-import";
 
 export const DETECTION_BACKENDS = ["ultralytics", "torchvision"] as const;
 export type DetectionBackend = (typeof DETECTION_BACKENDS)[number];
@@ -262,13 +267,16 @@ export function detectionFormFromPayload(
   form.data.source = typeof data.data_yaml === "string" && data.data_yaml !== ""
     ? "yaml"
     : "folder";
+  form.data.preprocessing = stepsFromPayload(data.preprocessing);
   if (aug.auto_augment === null) {
     form.training.augmentation.auto_augment = "none";
   }
   if (!isValidModelForBackend(form.model.backend, form.model.name)) {
     form.model.name = defaultModelForBackend(form.model.backend);
   }
-  const imported = unmanagedFields(makeDefaultDetectionForm(), payload);
+  const imported = unmanagedFields(makeDefaultDetectionForm(), payload, [
+    "data.preprocessing",
+  ]);
   if (Object.keys(imported).length > 0) form.imported = imported;
   return form;
 }
