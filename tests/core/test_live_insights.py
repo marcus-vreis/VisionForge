@@ -178,7 +178,8 @@ def test_preserved_rng_leaves_every_generator_as_found() -> None:
         np.random.rand(5)
         torch.rand(5)
         torch.randperm(10)
-    assert (random.random(), np.random.rand(), torch.rand(1).item()) == expected
+    after = (random.random(), np.random.rand(), torch.rand(1).item())
+    assert after == expected
 
 
 def test_gradcam_batch_leaves_parameter_grads_alone() -> None:
