@@ -884,7 +884,8 @@ export default function App() {
           zIndex: 2,
           maxWidth: 1280,
           margin: "0 auto",
-          padding: "34px 40px 140px",
+          padding: "34px 40px",
+          paddingBottom: "max(140px, var(--vf-bar-clearance, 0px))",
         }}
       >
         <TaskHero task={activeTask} />

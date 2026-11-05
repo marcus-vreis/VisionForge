@@ -1,4 +1,6 @@
+import { useEffect, useRef } from "react";
 import { useT } from "../i18n/useT";
+import { barClearance } from "../lib/bar-clearance";
 import { showQueueButton } from "../lib/run-control";
 import { DeviceSelector, type DeviceSelection } from "./DeviceSelector";
 
@@ -49,12 +51,35 @@ export function BottomBar({
   lockReason,
 }: BottomBarProps) {
   const t = useT();
+  const barRef = useRef<HTMLDivElement>(null);
+  // Publish how much room the page needs under its content; the bar wraps to
+  // more rows on narrow screens, so a fixed padding would leave the end covered.
+  useEffect(() => {
+    const bar = barRef.current;
+    if (!bar) return;
+    const root = document.documentElement;
+    const publish = () =>
+      root.style.setProperty(
+        "--vf-bar-clearance",
+        `${barClearance(window.innerHeight, bar.getBoundingClientRect().top)}px`,
+      );
+    publish();
+    const observer = new ResizeObserver(publish);
+    observer.observe(bar);
+    window.addEventListener("resize", publish);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", publish);
+      root.style.removeProperty("--vf-bar-clearance");
+    };
+  }, []);
   const locked = Boolean(lockReason);
   const blocked = disabled || locked;
   const startLabel = trainLabel ?? t.app.train.simple;
   const centerLabel = queueMode ? t.bottomBar.enqueue : startLabel;
   return (
     <div
+      ref={barRef}
       className="vf-bottom-bar"
       style={{
         position: "fixed",
