@@ -1247,6 +1247,58 @@ export async function forgetCredential(
   });
 }
 
+/** Where this profile's Colab connection stands (ADR-163). The token never
+ *  reaches the browser: `account` is the e-mail of the Google account. */
+export interface ColabStatus {
+  pinned_version: string;
+  installed_version: string | null;
+  install_state: "idle" | "installing" | "failed";
+  install_error: string | null;
+  logged_in: boolean;
+  account: string | null;
+  login_pending: boolean;
+}
+
+/** The account's compute units; `hours_left` is null while nothing runs. */
+export interface ColabUsage {
+  balance: number | null;
+  rate_per_hour: number | null;
+  active_assignments: number | null;
+  hours_left: number | null;
+}
+
+export async function fetchColabStatus(): Promise<ColabStatus> {
+  return request<ColabStatus>("/colab/status");
+}
+
+export async function installColabCli(): Promise<ColabStatus> {
+  return request<ColabStatus>("/colab/install", { method: "POST" });
+}
+
+export async function startColabLogin(): Promise<{ url: string }> {
+  return request<{ url: string }>("/colab/login/start", { method: "POST" });
+}
+
+export async function finishColabLogin(code: string): Promise<ColabStatus> {
+  return request<ColabStatus>("/colab/login/finish", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code }),
+  });
+}
+
+export async function cancelColabLogin(): Promise<ColabStatus> {
+  return request<ColabStatus>("/colab/login/cancel", { method: "POST" });
+}
+
+export async function logoutColab(): Promise<ColabStatus> {
+  return request<ColabStatus>("/colab/logout", { method: "POST" });
+}
+
+export async function fetchColabUsage(): Promise<ColabUsage> {
+  return request<ColabUsage>("/colab/usage");
+}
+
 /** Outcome of hiding, unhiding or deleting a researcher-defined task. */
 export interface CustomTaskActionResponse {
   key: string;

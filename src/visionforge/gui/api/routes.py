@@ -73,6 +73,8 @@ from visionforge.core.task_runner import (
     require_validation_selection,
     runner_metric_direction,
 )
+from visionforge.gui.api.colab_connection import ColabCli, LoginFlows
+from visionforge.gui.api.colab_routes import build_colab_router
 from visionforge.gui.api.datasets_routes import (
     _IMAGE_EXTS,
     SCAN_BASE_MISSING_KEY,
@@ -306,6 +308,9 @@ def _finish_job(job: QueuedJob) -> dict[str, Any] | None:
 
 _RUN_QUEUE = RunQueue(on_start=_begin_job, on_finish=_finish_job)
 _EVIDENCE_EXPORTS = EvidenceExports()
+# The Colab CLI and the logins waiting for a code live as long as the server (ADR-163).
+_COLAB_CLI = ColabCli()
+_COLAB_LOGINS = LoginFlows()
 
 
 def _task_label_from_config(config_type: type[Any]) -> str:
@@ -425,6 +430,11 @@ router.include_router(
         lambda header: current_profile(header),
         lambda: _current_run,
         lambda request: _client_host(request),
+    )
+)
+router.include_router(
+    build_colab_router(
+        lambda header: current_profile(header), _COLAB_CLI, _COLAB_LOGINS
     )
 )
 router.include_router(

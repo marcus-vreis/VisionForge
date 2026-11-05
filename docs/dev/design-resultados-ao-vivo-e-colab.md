@@ -254,8 +254,158 @@ automação completa que a seção acima descartava por falta de API.
 - No Windows a dependência do WSL é uma barreira de instalação para o usuário.
 - A conta pode não ter GPU; a GUI precisa dizer isso, e não falhar em silêncio.
 
-**Próximo passo (precisa do usuário):** o spike prático, no WSL:
-`pip install google-colab-cli` num venv, `colab auth` (login no navegador),
-`colab new --gpu T4`, um `colab run` de 3 minutos imprimindo uma linha a cada
-segundo, `colab usage` e `colab stop`. Ele responde a duas coisas que só a conta
-diz: se há GPU no plano dela e qual a latência real da saída.
+**Próximo passo (precisa do usuário):** o spike prático. A seção seguinte
+corrige o plano: ele roda no Windows nativo, e o login não é `colab auth`.
+
+### Atualização 2026-11-05: Windows nativo, login, perfis e filas
+
+**Fatos verificados, lidos no código instalado da `google-colab-cli==0.7.5` e
+testados nesta máquina em 2026-11-05:**
+
+| Pergunta | Resposta | Fonte |
+| --- | --- | --- |
+| Precisa de WSL? | Não. A 0.7.5 instala e roda no Windows nativo com Python 3.13: `colab --help`, `colab version` e o fluxo de login funcionaram. O pacote se declara "OS Independent"; o único trecho que depende de `termios`/`tty` é o `colab console`, e ele já trata a ausência. O "Linux and macOS only" do README não vale para o que o VisionForge usa. | `colab_cli/console.py`, teste local |
+| Como é o login local? | Não é `colab auth`: esse comando autentica a *VM* para serviços do GCP. O login local acontece no primeiro comando que fala com a API (`colab sessions`, por exemplo): a CLI imprime uma URL, o usuário aprova no navegador, o Google mostra um código e o usuário cola esse código no terminal. É o mesmo mecanismo do `gcloud auth application-default login`, sem servidor em localhost. | `colab_cli/auth.py` (`_run_remote_flow`) |
+| Onde fica o token? | Em texto puro, em `~/.config/colab-cli/token.json`, e não no keyring (a tabela de 2026-11-04 estava errada nesse ponto). Os escopos incluem `cloud-platform`, `colaboratory` e `drive.file`. | `colab_cli/auth.py` (`TOKEN_CONFIG_PATH`, `PUBLIC_SCOPES`) |
+| Dá para isolar o login? | Sim. Com `USERPROFILE` (e `HOME`) apontando para uma pasta própria, todo o estado da CLI vai para `<pasta>\.config\colab-cli\`: token, `sessions.json`, `settings.json` e log. O perfil real do Windows não é tocado. | teste local |
+| `--timeout` | Não é limite de silêncio nem corta a saída: é um prazo fixo (`deadline = início + timeout`) que só pesa na espera pela resposta final. Detalhes em "Resultados do spike". | `jupyter_kernel_client/wsclient.py` (`execute_interactive`) |
+| Atualização | `colab update` só avisa que há versão nova; não instala sozinho. Pinar a versão é suficiente. | `colab_cli/auto_update.py` |
+| Saída em pipe | Quando a saída é um pipe, a CLI precisa de `PYTHONUNBUFFERED=1`; sem isso o stdout chega em blocos e a latência medida é falsa. | código da CLI |
+
+**Consequências:**
+- O WSL deixa de ser pré-requisito. A barreira de instalação apontada nos
+  riscos de 2026-11-04 cai.
+- O token em texto puro tem o mesmo nível de proteção das credenciais
+  pessoais em `~/.visionforge/` (`utils/credentials.py`): a pasta é do
+  usuário. O VisionForge nunca lê o conteúdo do token; só testa se o arquivo
+  existe.
+
+**UX proposta (a validar):**
+1. Sem login, o botão "Treinar no Colab" aparece apagado, com a explicação.
+2. O login é feito pelo VisionForge. O backend roda o comando de login, mostra
+   a URL e recebe o código num campo da GUI. O código vai para o stdin do
+   processo da CLI e não é gravado em lugar nenhum.
+3. Uma engrenagem ao lado do botão mostra a conta conectada e permite trocar
+   de conta, o que apaga o `token.json` daquele perfil e refaz o login.
+4. Um login por perfil do VisionForge (ADR-114): o `USERPROFILE` da CLI aponta
+   para `~/.visionforge/colab/<perfil>/`. Dois perfis podem usar contas Google
+   diferentes.
+
+**Filas.** Hoje há uma `RunQueue` em memória por processo do servidor
+(`gui/api/run_queue.py`, ADR-075). Ela é FIFO, roda um job por vez e é a mesma
+para todos os perfis. Ela não distingue GPU de CPU: um job é um job. A proposta:
+- **Fila local:** a atual, sem mudança. Um treino por vez na máquina, em GPU
+  *ou* CPU, nunca os dois em paralelo.
+- **Fila do Colab:** uma por *conta Google*, e não por perfil. A cota de
+  sessões e de compute units é da conta, então dois perfis com a mesma conta
+  dividem a mesma fila. A conta é identificada pelo e-mail que `colab whoami`
+  devolve (ver "Resultados do spike").
+- Um treino local e um no Colab podem rodar ao mesmo tempo, porque não
+  disputam o mesmo hardware. Isso exige que o stream SSE e o registro de
+  resultados (hoje acoplados ao job ativo da `RunQueue`) aceitem mais de um
+  job ativo, uma por fila.
+
+**Saldo restante:** em vez de "% restante", horas estimadas: o saldo dividido
+pela taxa da GPU escolhida, ambos lidos de `colab usage`. Só vale para contas
+com compute units (Pro, Pay As You Go). O plano gratuito não tem limite
+publicado e não foi testado; a GUI só mostra o que a API disser.
+
+**Spike pronto (fora do repo):** `~/.visionforge/colab-cli/`, com o venv
+`venv\` (`google-colab-cli==0.7.5`) e os scripts em `spike\`:
+- `spike.py login`: só o login, num perfil isolado em `spike-profile\`;
+- `spike.py`: `usage`, `new --gpu T4`, `exec tick.py` por 180 s com
+  `--timeout 30`, `usage` e `stop` num `finally`. `VF_SPIKE_CPU_FALLBACK=1`
+  mede num runtime CPU quando não há T4;
+- `reader.py`: carimba a chegada de cada linha. O resumo vai para
+  `results\<timestamp>\summary.json`.
+
+Validado sem alocar runtime:
+- sintaxe;
+- a saída sem login;
+- o fluxo de login, que abortou limpo com o stdin vazio;
+- `tick.py` com `reader.py` em local: gaps de 1,000 s e lag de 0,1 ms.
+
+### Resultados do spike (2026-11-05)
+
+Uma execução numa conta com compute units (um run, uma T4). Os arquivos estão
+em `~/.visionforge/colab-cli/spike/results/20261105-113020/` (`summary.json`,
+`spike.log`, `usage-*.txt`, `exec-stderr.txt`), fora do repo.
+
+| Medida | Valor |
+| --- | --- |
+| Alocação (`colab new --gpu T4`) | concedida em 4,1 s; VM com Tesla T4 15 GB, driver 580.82.07, torch 2.11.0+cu130 |
+| Ticks recebidos | 180 de 180 |
+| Intervalo entre chegadas | p50 1,000 s, mín. 0,948 s, máx. 1,059 s, nenhum acima de 2 s |
+| Atraso relativo (acumulado) | p50 0,048 s, p95 0,075 s, máx. 0,097 s |
+| Atraso absoluto | p50 3,30 s, máx. 3,35 s |
+| `colab usage` antes / com a T4 ativa | 381,93 CU, 0,00/h / 381,93 CU, 1,15/h, 1 assignment |
+| Limpeza | `stop` funcionou e `colab sessions` voltou vazio |
+
+**Leitura:**
+- A saída chega ao vivo, sem lotes: os intervalos ficam colados em 1 s e o
+  atraso relativo não cresce em 3 min. Um evento `batch` a cada 2 s chega à aba
+  Resultados com menos de 0,1 s de variação.
+- O atraso absoluto de cerca de 3,3 s, fixo, *mistura* a latência real com a
+  diferença entre o relógio da VM e o do PC. Esta medida não separa as duas
+  coisas. O atraso relativo, que só compara chegadas, é o número que importa
+  para a GUI.
+- A 1,15 CU/h, os 381,93 CU dão cerca de 330 h de T4. O saldo não mudou nos
+  3 min, provavelmente porque é cobrado em blocos maiores (inferência).
+
+**O `exec` terminou com status 1, e por quê.** O `tick.py` emitiu `done` e
+terminou normalmente. O traceback em `exec-stderr.txt` é um `TimeoutError:
+Timeout waiting for reply`. Lido no código instalado
+(`jupyter_kernel_client/wsclient.py`, `execute_interactive`):
+1. `deadline = monotonic() + timeout` é fixado no início e não se renova.
+2. O loop de saída calcula `max(0, deadline - agora)` mas nunca levanta erro
+   por prazo: passado o prazo, ele continua lendo com espera 0. A saída não é
+   cortada, nem por tempo total nem por silêncio.
+3. Quando o kernel fica `idle`, a resposta final é esperada com o prazo que
+   sobrou, que já é 0. Se ela não chegou no mesmo instante, sai
+   `TimeoutError` e o `exec` termina com 1.
+
+Uma repro num runtime CPU (`new`, quatro `exec` e `stop` num `finally`; 78 s
+no total, `colab sessions` vazio no fim) confirmou o resto:
+
+| Script | `--timeout` | Exit do `colab exec` |
+| --- | --- | --- |
+| `print('done')` | 120 | 0 |
+| `raise ValueError('boom')` | 120 | **0**, com o traceback no stderr |
+| `sys.exit(3)` | 120 | não voltou em 60 s; o processo local foi morto |
+
+**Conclusão:** o VisionForge não pode confiar no exit code do `colab exec`.
+- Um script que falha sai com 0.
+- Um script que termina bem sai com 1 se durar mais que o `--timeout`.
+- `sys.exit` no script trava o `exec`.
+
+A fonte da verdade é o próprio stream. O runner remoto emite como última linha
+um evento próprio de fim de job, com status `ok` ou `error` e a mensagem do
+erro, e não chama `sys.exit`. Esse evento é diferente do `end` atual, que
+marca o fim de cada treino e se repete em jobs com várias unidades (trials,
+folds, réplicas). O exit code só
+indica falha de transporte quando nenhum evento final chegou. O `--timeout`
+deve ser maior que a duração máxima do job (por exemplo, o limite de sessão da
+conta), porque depois do prazo o loop gira com espera 0 e ocupa CPU local.
+
+O `colab run` calcula o exit code a partir dos erros do kernel
+(`_exit_code_from_outputs`), mas cria e libera uma VM própria a cada chamada.
+Isso não serve para um fluxo com upload, treino e download na mesma VM.
+
+**Identificar a conta:** o `token.json` não tem `id_token` nem e-mail (o campo
+`account` vem vazio). A CLI tem um comando oculto, `colab whoami`, que consulta
+o `tokeninfo` do Google e imprime `Email:`, os escopos e quando o token expira, sem
+imprimir o token. Testado com o perfil do spike, ele devolve o e-mail. A fila
+por conta usa esse e-mail como chave. Como é um comando oculto ("developer-only"
+no código), pode mudar sem aviso. A alternativa estável é consultar o
+`userinfo` do OpenID com o mesmo token, o que exigiria o VisionForge ler o
+token; por isso fica como plano B.
+
+**Ainda em aberto:**
+- No plano gratuito não se testou nem se a T4 é concedida nem o que `colab
+  usage` mostra.
+- A diferença de relógio entre a VM e o PC não foi medida em separado.
+- O comportamento com saída longa de verdade (horas, logs grandes) não foi
+  medido.
+
+**Decisão:** o ADR-163 (`docs/dev/DECISIONS.md`) registra o backend Colab e as
+fases de implementação, um PR para cada.

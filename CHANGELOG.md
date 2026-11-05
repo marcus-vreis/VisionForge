@@ -15,6 +15,13 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Added
 
+- **Conexão com o Google Colab** (fase 1 do ADR-163): o canto "colab" do
+  cabeçalho instala a `google-colab-cli` 0.7.5 num ambiente próprio em
+  `~/.visionforge/colab-cli`. Ele também faz o login de copiar e colar com a
+  conta Google, um por perfil, e mostra a conta e o saldo de compute units, com
+  as horas restantes enquanto um runtime estiver ativo. "Trocar de conta"
+  apaga o login daquele perfil. O token fica no servidor; nada é alocado no
+  Colab. O treino remoto chega na fase 2.
 - **Grad-CAM ao vivo na aba Resultados** (classificação): com
   `training.live_gradcam_every` acima de 0, a cada N épocas, na última e em cada
   nova melhor, a aba mostra onde o modelo olha em 6 imagens fixas da validação.

@@ -109,6 +109,42 @@ export const pt = {
       `Mede o ruído de amostragem do split com este modelo fixo — não a ` +
       `variação entre treinos, que réplicas com várias seeds medem.`,
   },
+  // The Colab corner of the header (ADR-163): CLI install, login per profile, balance.
+  colab: {
+    dialogLabel: "Google Colab",
+    chip: {
+      not_installed: "colab · desligado",
+      installing: "colab · instalando…",
+      install_failed: "colab · falhou",
+      logged_out: "colab · entrar",
+      login_pending: "colab · aguardando código",
+      connected: "colab · conectado",
+    },
+    intro:
+      "Treinar no Google Colab usa a sua conta Google e a GPU que ela tiver. O VisionForge conversa com o Colab pela CLI oficial, instalada num ambiente só dela.",
+    install: (version: string) => `instalar a CLI do Colab (v${version})`,
+    installing: "Instalando a CLI do Colab… isso leva um ou dois minutos.",
+    installFailed: "A instalação falhou:",
+    retry: "tentar de novo",
+    login: "entrar com o Google",
+    loginStep1: "1. Abra esta página, entre com a sua conta e dê a permissão.",
+    openPage: "abrir a página do Google",
+    loginStep2: "2. O Google mostra um código. Cole aqui:",
+    codePlaceholder: "código de autorização",
+    badCode: "Cole o código inteiro, sem espaços.",
+    confirm: "confirmar",
+    cancel: "cancelar",
+    account: (email: string) => `Conta: ${email}`,
+    accountUnknown: "Conta conectada (o e-mail não veio).",
+    perProfile: "O login vale só para este perfil.",
+    switchAccount: "trocar de conta",
+    balance: (units: string) => `Saldo: ${units} compute units`,
+    hoursLeft: (hours: number, rate: string) => `≈ ${hours} h no ritmo atual (${rate}/h)`,
+    noRate: "Nenhum runtime ativo agora; as horas restantes dependem da GPU escolhida.",
+    usageFailed: "Não foi possível ler o saldo.",
+    loadFailed: "Não foi possível falar com o servidor.",
+    trainingSoon: "O treino no Colab chega na próxima fase; por enquanto, só a conexão.",
+  },
   // The corner of the header that offers a newer release (ADR-120).
   update: {
     available: (version: string) => `atualização disponível · v${version}`,

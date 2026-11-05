@@ -1013,3 +1013,41 @@ class CustomTaskActionResponse(BaseModel):
     key: str
     action: Literal["hidden", "unhidden", "deleted"]
     detail: str
+
+
+class ColabStatus(BaseModel):
+    """Where the Colab connection of one profile stands (ADR-163).
+
+    ``account`` is the e-mail of the Google account; the token is never sent.
+    """
+
+    pinned_version: str
+    installed_version: str | None
+    install_state: Literal["idle", "installing", "failed"]
+    install_error: str | None
+    logged_in: bool
+    account: str | None
+    login_pending: bool
+
+
+class ColabLoginStart(BaseModel):
+    """The page to open in the browser; Google shows the code to paste back."""
+
+    url: str
+
+
+class ColabLoginFinishRequest(BaseModel):
+    code: str = Field(min_length=1, max_length=512)
+
+
+class ColabUsage(BaseModel):
+    """The account's compute units, as ``colab usage`` reports them.
+
+    ``hours_left`` is the balance over the current rate, so it is None while no
+    runtime is allocated (the rate is then 0).
+    """
+
+    balance: float | None
+    rate_per_hour: float | None
+    active_assignments: int | None
+    hours_left: float | None

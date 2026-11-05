@@ -1007,6 +1007,51 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "pt": "O valor da credencial não pode ficar vazio.",
         "en": "Credential value cannot be empty.",
     },
+    # ── the Colab connection (gui/api/colab_connection.py, ADR-163) ──────────
+    "colab.install_missing": {
+        "pt": "A instalação terminou, mas a google-colab-cli {version} não foi encontrada.",
+        "en": "The install finished, but google-colab-cli {version} was not found.",
+    },
+    "colab.install_failed": {
+        "pt": "Não foi possível instalar a google-colab-cli: {detail}",
+        "en": "Failed to install google-colab-cli: {detail}",
+    },
+    "colab.not_installed": {
+        "pt": "A google-colab-cli ainda não está instalada.",
+        "en": "google-colab-cli is not installed yet.",
+    },
+    "colab.not_logged_in": {
+        "pt": "Este perfil ainda não entrou numa conta Google.",
+        "en": "This profile has not signed in to a Google account yet.",
+    },
+    "colab.cli_failed": {
+        "pt": "O comando colab {command} falhou: {detail}",
+        "en": "colab {command} failed: {detail}",
+    },
+    "colab.cli_timeout": {
+        "pt": "O comando colab {command} não respondeu a tempo.",
+        "en": "colab {command} did not answer in time.",
+    },
+    "colab.login_no_url": {
+        "pt": "A CLI do Colab não mostrou o endereço de autorização.",
+        "en": "The Colab CLI did not print the authorization URL.",
+    },
+    "colab.login_bad_code": {
+        "pt": "O código de autorização está vazio, tem espaços ou é longo demais.",
+        "en": "The authorization code is empty, has spaces or is too long.",
+    },
+    "colab.login_not_started": {
+        "pt": "Nenhum login está esperando um código. Comece o login de novo.",
+        "en": "No login is waiting for a code. Start the login again.",
+    },
+    "colab.login_stuck": {
+        "pt": "A CLI do Colab não terminou o login.",
+        "en": "The Colab CLI did not finish the login.",
+    },
+    "colab.login_rejected": {
+        "pt": "O Google não aceitou o código. Comece o login de novo e cole o código novo.",
+        "en": "Google did not accept the code. Start the login again and paste the new code.",
+    },
     # ── the note of /api/model/defaults (model_notes.py, routes.py) ──────────
     "model.collapse_unmeasured": {
         "pt": (
