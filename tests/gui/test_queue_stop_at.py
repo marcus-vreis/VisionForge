@@ -37,7 +37,7 @@ from visionforge.utils.selftest_data import (
     build_regression_dataset,
 )
 
-from .conftest import occupy_queue, release_queue
+from .conftest import fake_run, job_run, occupy_queue, release_queue, start_job
 
 
 @pytest.fixture
@@ -50,7 +50,7 @@ def client_and_routes():  # type: ignore[no-untyped-def]
         yield TestClient(app, raise_server_exceptions=True), routes_mod
     finally:
         release_queue(routes_mod)
-        routes_mod._active_cancel_token = None
+        routes_mod._JOB_STATES.clear()
 
 
 @pytest.fixture(autouse=True)
@@ -402,11 +402,12 @@ class TestQueueUnit:
 # ── every executor hands the token on ─────────────────────────────────────────
 
 
-def _run_executor(routes_mod: Any, coro: Any, token: CancellationToken) -> dict:
-    routes_mod._active_cancel_token = token
-    routes_mod._event_queue = None
+def _run_executor(
+    routes_mod: Any, coro: Any, token: CancellationToken, run_id: str = "r"
+) -> dict:
+    start_job(routes_mod, run_id, cancel_token=token)
     asyncio.run(coro)
-    return dict(routes_mod._current_run)
+    return dict(job_run(routes_mod, run_id))
 
 
 class _Runner:
@@ -624,13 +625,16 @@ class TestExecutorsHandTheTokenOn:
         self, client_and_routes: tuple, report: dict[str, Any], expected: bool
     ) -> None:
         client, routes_mod = client_and_routes
-        routes_mod._current_run = {
-            "run_id": "single",
-            "status": "completed",
-            "error": None,
-            "report": report,
-            "run_dir": None,
-        }
+        fake_run(
+            routes_mod,
+            {
+                "run_id": "single",
+                "status": "completed",
+                "error": None,
+                "report": report,
+                "run_dir": None,
+            },
+        )
 
         assert client.get("/api/experiment/result/single").json()["stopped"] is expected
 

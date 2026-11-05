@@ -415,3 +415,23 @@ fases de implementação, um PR para cada.
 classe do split de treino e emite `{"event": "remote", "stage":
 "num_classes", "old", "new"}`. Só numa tarefa `multiclass`; uma `binary` mantém
 o erro de validação.
+
+**Fase 4, filas paralelas (backend, 2026-11-05):** a proposta de "Filas", acima,
+ficou assim.
+- `RunLanes` (`gui/api/run_queue.py`) reúne a fila local (`"local"`, a
+  `RunQueue` do ADR-075) e uma fila por conta Google, criada no primeiro job da
+  conta. A chave de cada fila é `colab:<e-mail>`, com o e-mail do `colab whoami`
+  em minúsculas. Um login cujo e-mail não foi lido fica com uma fila só sua,
+  `colab:profile:<slug>`, em vez de dividir uma fila por palpite.
+- Dentro de uma fila, um job por vez; entre filas, ao mesmo tempo.
+- O estado que era do "job ativo" (o log SSE, o token de cancelamento e o
+  status com o relatório) virou um `JobState` por `run_id`, em `routes.py`.
+  Cada executor acha o seu pelo próprio `run_id`.
+  - `/experiment/events` e `/experiment/status` aceitam `run_id`. Sem ele,
+    seguem o job iniciado por último, como antes.
+  - `/experiment/result/{run_id}`, `DELETE /queue/{run_id}` e a trava de
+    apagar um run procuram o job em todas as filas.
+  - Os estados terminados ficam no máximo 50; os que estão rodando nunca saem.
+- `GET /api/queue` mantém `active` e `pending` da fila local e ganha `lanes`:
+  a local primeiro, depois uma por conta. Cada job leva o campo `lane`.
+- A GUI das duas filas fica para o PR seguinte.

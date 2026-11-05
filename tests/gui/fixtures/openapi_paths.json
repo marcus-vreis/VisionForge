@@ -276,7 +276,8 @@
   "GET /api/experiment/status": {
     "operationId": "get_status_api_experiment_status_get",
     "parameters": [
-      "header:X-VF-Lang:optional"
+      "header:X-VF-Lang:optional",
+      "query:run_id:optional"
     ],
     "requestBody": {},
     "responses": {

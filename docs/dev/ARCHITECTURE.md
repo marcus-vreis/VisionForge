@@ -168,7 +168,7 @@ Imports `blocks/`, `tasks/`, `core/`, `models/` and `utils/`. React + shadcn/ui 
 | `api/profiles_routes.py` | Profile endpoints mounted by the shared router, with output directories resolved per request (ADR-132). |
 | `api/evidence_routes.py` | Read-only dataset audits and profile-confined run bundle downloads (ADR-140). A source reservation excludes active/queued training and concurrent resume; cancellation waits for the archive writer before deleting temporary files. |
 | `api/system_routes.py` · `api/system_service.py` | Host/device information and model defaults; thin HTTP handlers delegate to a service with injected runtime probes (ADR-132). |
-| `api/run_queue.py` · `api/profiles.py` · `api/gpu_health.py` | FIFO training queue (ADR-075); profiles as output folders (ADR-114); whether the CUDA context still works (ADR-122). |
+| `api/run_queue.py` · `api/profiles.py` · `api/gpu_health.py` | FIFO training queue (ADR-075), and `RunLanes`: the local queue plus one per Google account, running side by side (ADR-163, phase 4); profiles as output folders (ADR-114); whether the CUDA context still works (ADR-122). |
 | `api/dataset_download.py` · `api/sample_dataset.py` · `api/folder_opener.py` | Provider downloads (ADR-055); synthetic sample datasets for the first-run guides; open a folder in the OS file manager. |
 | `api/torch_gradcam.py` · `api/torch_onnx_export.py` · `api/torch_batch_predict.py` · `api/detection_export.py` · `api/detection_testing.py` | Per-task post-training helpers over the `core/` tools. |
 | `api/updates.py` · `updater.py` | Newer-release notice and install (ADR-120). |

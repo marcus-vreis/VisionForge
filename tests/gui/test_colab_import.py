@@ -15,7 +15,7 @@ from visionforge.gui.api import colab_remote_runner as runner
 from visionforge.gui.api.run_events import RunEventLog
 from visionforge.gui.api.run_history import load_runs
 
-from .conftest import release_queue
+from .conftest import job_run, release_queue, start_job
 from .test_colab_jobs import PAYLOAD, FakeCli, event_line, run
 
 REMOTE = "/content/vf/run-bundle.zip"
@@ -149,7 +149,7 @@ def _execute(
     log = RunEventLog("r1")
 
     async def go() -> list[dict[str, Any]]:
-        routes_mod._event_queue = log
+        start_job(routes_mod, "r1", log=log)
         await routes_mod._execute_colab("r1", "default", "T4", PAYLOAD, models)
         return [e async for e in log.read()]
 
@@ -170,7 +170,7 @@ def test_the_executor_imports_the_run_and_marks_it_as_colab(
             cj.RemoteResult("completed", report={"train": {}}, bundle=local),
             models,
         )
-        current = routes_mod._current_run
+        current = job_run(routes_mod, "r1")
         assert current is not None
         assert current["status"] == "completed"
         assert current["error"] is None
@@ -184,7 +184,6 @@ def test_the_executor_imports_the_run_and_marks_it_as_colab(
         assert not local.exists()
     finally:
         release_queue(routes_mod)
-        routes_mod._event_queue = None
 
 
 def test_a_bundle_that_does_not_import_fails_the_job_and_writes_no_run(
@@ -199,7 +198,7 @@ def test_a_bundle_that_does_not_import_fails_the_job_and_writes_no_run(
         events = _execute(
             monkeypatch, cj.RemoteResult("completed", report={}, bundle=local), models
         )
-        current = routes_mod._current_run
+        current = job_run(routes_mod, "r1")
         assert current is not None
         assert current["status"] == "failed"
         assert current["run_dir"] is None
@@ -210,7 +209,6 @@ def test_a_bundle_that_does_not_import_fails_the_job_and_writes_no_run(
         assert events == [{"event": "remote", "stage": "download"}]
     finally:
         release_queue(routes_mod)
-        routes_mod._event_queue = None
 
 
 def test_an_imported_run_opens_in_the_runs_routes_like_any_other(

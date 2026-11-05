@@ -313,7 +313,11 @@ class TestQueueEndpoints:
 
         body = client.get("/api/queue").json()
 
-        assert body == {"active": None, "pending": []}
+        assert body == {
+            "active": None,
+            "pending": [],
+            "lanes": [{"lane": "local", "active": None, "pending": []}],
+        }
 
     def test_queue_lists_the_active_job_and_what_waits(self, tmp_path) -> None:
         from .conftest import occupy_queue, release_queue
@@ -395,10 +399,10 @@ class TestQueueEndpoints:
             job = routes_mod._RUN_QUEUE._active
             routes_mod._begin_job(job)
 
-            assert routes_mod._active_cancel_token is job.cancel_token
+            assert routes_mod._job_state("holding").token is job.cancel_token
 
             client.delete("/api/queue/holding")
-            assert routes_mod._active_cancel_token.cancelled is True
+            assert routes_mod._job_state("holding").token.cancelled is True
         finally:
             release_queue(routes_mod)
 

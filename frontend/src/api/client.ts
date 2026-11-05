@@ -407,8 +407,11 @@ export async function runCustomReplicates(
   });
 }
 
-export async function fetchStatus(): Promise<RunStatus> {
-  return request<RunStatus>("/experiment/status");
+/** A run's status; with no `runId`, the job started last. A local and a Colab
+ *  job run side by side (ADR-163, phase 4), so a page following one names it. */
+export async function fetchStatus(runId?: string | null): Promise<RunStatus> {
+  const query = runId ? `?run_id=${encodeURIComponent(runId)}` : "";
+  return request<RunStatus>(`/experiment/status${query}`);
 }
 
 /** The active run plus everything waiting behind it (ADR-075). */

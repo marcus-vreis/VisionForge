@@ -157,7 +157,7 @@ class TestCustomRun:
     ) -> None:
         _register_toy()
         app, routes_mod = app_and_routes
-        routes_mod._current_run = None
+        routes_mod._JOB_STATES.clear()
 
         # Context manager = one persistent event loop across requests. Without
         # it TestClient spins a loop per request and the genuinely-async
@@ -181,7 +181,7 @@ class TestCustomRun:
             assert report["total_epochs"] == 1
             run_dir = Path(report["run_dir"])
             assert (run_dir / "run.json").is_file()
-        routes_mod._current_run = None
+        routes_mod._JOB_STATES.clear()
 
     def test_queues_behind_a_running_job(
         self, app_and_routes: tuple, tmp_path: Path
@@ -200,7 +200,7 @@ class TestCustomRun:
     def test_invalid_config_422(self, app_and_routes: tuple, tmp_path: Path) -> None:
         _register_toy()
         app, routes_mod = app_and_routes
-        routes_mod._current_run = None
+        routes_mod._JOB_STATES.clear()
         cfg = _payload(tmp_path)
         cfg["scale"] = -1  # violates gt=0 on the task's own Config
         client = TestClient(app, raise_server_exceptions=True)
@@ -209,7 +209,7 @@ class TestCustomRun:
 
     def test_unknown_key_404(self, app_and_routes: tuple, tmp_path: Path) -> None:
         app, routes_mod = app_and_routes
-        routes_mod._current_run = None
+        routes_mod._JOB_STATES.clear()
         client = TestClient(app, raise_server_exceptions=True)
         resp = client.post("/api/custom/ghost/run", json=_payload(tmp_path))
         assert resp.status_code == 404
@@ -273,7 +273,7 @@ class TestDeletedTaskIsGone:
         from visionforge.tasks.registry import load_user_tasks
 
         app, routes_mod = app_and_routes
-        routes_mod._current_run = None
+        routes_mod._JOB_STATES.clear()
         tasks_dir = tmp_path / "user_tasks"
         tasks_dir.mkdir()
         (tasks_dir / "toydel.py").write_text(
