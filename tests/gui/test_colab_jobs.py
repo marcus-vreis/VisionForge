@@ -668,8 +668,8 @@ def test_runner_reports_the_class_count_change(
 class SlowDeliveryLog(RunEventLog):
     """An event log whose events land a moment late, as on a busy loop (CI, Linux).
 
-    Each event from the job thread is a coroutine scheduled on the loop; closing
-    the stream must wait for them, or the last events of a job vanish.
+    Closing the stream must not overtake an event still landing, or the last
+    events of a job vanish.
     """
 
     async def put(self, item: dict[str, Any] | None) -> None:
@@ -700,6 +700,86 @@ def test_execute_colab_delivers_every_event_before_closing_the_stream(
 
     try:
         assert asyncio.run(go()) == sent
+    finally:
+        release_queue(routes_mod)
+        routes_mod._event_queue = None
+
+
+class RecordingLog(SlowDeliveryLog):
+    """Keeps what has landed in a plain list the job thread can read."""
+
+    def __init__(self, run_id: str) -> None:
+        super().__init__(run_id)
+        self.landed: list[dict[str, Any] | None] = []
+
+    async def put(self, item: dict[str, Any] | None) -> None:
+        await super().put(item)
+        self.landed.append(item)
+
+
+def test_execute_colab_has_each_event_in_the_log_when_on_event_returns(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Delivery cannot depend on how a loop orders thread callbacks (Linux py3.13 CI)."""
+    import visionforge.gui.api.routes as routes_mod
+
+    sent = [{"event": "batch", "batch": i} for i in range(5)]
+    log = RecordingLog("r1")
+    landed_after_each: list[list[dict[str, Any] | None]] = []
+
+    class Jobs:
+        def run_job(self, slug, accelerator, payload, on_event, cancelled):  # type: ignore[no-untyped-def]
+            for event in sent:
+                on_event(event)
+                landed_after_each.append(list(log.landed))
+            return cj.RemoteResult("completed", report={})
+
+    monkeypatch.setattr(routes_mod, "_COLAB_JOBS", Jobs())
+
+    async def go() -> None:
+        routes_mod._event_queue = log
+        await routes_mod._execute_colab("r1", "default", "T4", PAYLOAD)
+
+    try:
+        asyncio.run(go())
+        assert landed_after_each == [sent[: i + 1] for i in range(len(sent))]
+        assert log.landed == [*sent, None]
+    finally:
+        release_queue(routes_mod)
+        routes_mod._event_queue = None
+
+
+class StalledLog(RunEventLog):
+    """Takes the closing ``None`` but never finishes taking an event."""
+
+    async def put(self, item: dict[str, Any] | None) -> None:
+        if item is not None:
+            await asyncio.Event().wait()
+        await super().put(item)
+
+
+def test_execute_colab_drops_an_event_the_loop_never_takes_and_finishes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import visionforge.gui.api.routes as routes_mod
+
+    class Jobs:
+        def run_job(self, slug, accelerator, payload, on_event, cancelled):  # type: ignore[no-untyped-def]
+            on_event({"event": "epoch_end", "epoch": 1})
+            return cj.RemoteResult("completed", report={"accuracy": 0.8})
+
+    monkeypatch.setattr(routes_mod, "_COLAB_JOBS", Jobs())
+    monkeypatch.setattr(routes_mod, "_COLAB_EVENT_TIMEOUT_S", 0.05)
+
+    async def go() -> list[dict[str, Any]]:
+        routes_mod._event_queue = StalledLog("r1")
+        await routes_mod._execute_colab("r1", "default", "T4", PAYLOAD)
+        return [e async for e in routes_mod._event_queue.read()]
+
+    try:
+        assert asyncio.run(go()) == []
+        assert routes_mod._current_run is not None
+        assert routes_mod._current_run["status"] == "completed"
     finally:
         release_queue(routes_mod)
         routes_mod._event_queue = None
