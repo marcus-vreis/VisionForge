@@ -130,7 +130,7 @@ def test_the_insight_event_names_its_images(tmp_path: Path) -> None:
     events, _, _ = _fit(tmp_path, 2, "named")
     insights = [e for e in events if e["event"] == "insight"]
     # Every 2 epochs, plus the last and each new best: at least epochs 2 and 3.
-    assert {2, 3} <= {e["epoch"] for e in insights}
+    assert {e["epoch"] for e in insights} >= {2, 3}
     first = insights[0]
     assert first["kind"] == "gradcam"
     assert len(first["images"]) == LIVE_GRADCAM_SAMPLES
