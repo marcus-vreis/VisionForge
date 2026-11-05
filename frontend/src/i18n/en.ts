@@ -337,6 +337,8 @@ export const en: Dict = {
       "Mixed precision: computes in 16-bit where it can. Trains faster and uses less VRAM, with a low risk of instability.",
     mixed_precision:
       "Runs part of the math in 16-bit precision. Speeds up training and uses less VRAM on recent GPUs; on sensitive models it can cost numerical precision.",
+    live_gradcam_every:
+      "How often, in epochs, to show in the Results tab where the model looks on a few fixed validation images (Grad-CAM). Also shown on the last epoch and on every new best. 0 turns it off. It does not change the training: with the same seed, the numbers come out the same.",
     deterministic:
       "Makes the same config with the same seed return exactly the same numbers. On by default: we measured the cost, and it is zero, or even negative, on short runs.",
     base_dir:
@@ -393,6 +395,7 @@ export const en: Dict = {
       seed: "Seed",
       deterministic: "Deterministic",
       mixed_precision: "Mixed precision (AMP)",
+      live_gradcam_every: "Live Grad-CAM (every N epochs)",
       kind: "Type",
       step_size: "Step size",
       gamma: "Gamma",
@@ -1901,6 +1904,11 @@ export const en: Dict = {
       `epoch ${epoch} · ${metric} ${value}`,
     bestNote: "the saved checkpoint is from this epoch",
     lossChart: "Loss",
+    gradcamTitle: (epoch: number, best: boolean) =>
+      `Validation Grad-CAM · epoch ${epoch}${best ? " · best so far" : ""}`,
+    gradcamNote: "where the model looked to decide; the same images every time",
+    gradcamCaption: (actual: string, predicted: string) =>
+      actual === predicted ? `${actual} ✓` : `${actual} → read as ${predicted}`,
     lrChart: "Learning rate",
     confusionTitle: (epoch: number) => `Validation confusion matrix · epoch ${epoch}`,
     confusionAxes: "rows: true class · columns: predicted class",

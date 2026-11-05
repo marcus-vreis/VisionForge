@@ -46,6 +46,7 @@ export const PARAM_TIER: Record<string, ParamTier> = {
   amp: "advanced",
   deterministic: "advanced",
   mixed_precision: "advanced",
+  live_gradcam_every: "advanced",
   num_workers: "advanced",
   workers: "advanced",
   pin_memory: "advanced",

@@ -367,6 +367,8 @@ export const pt = {
       "Precisão mista: usa 16 bits onde dá. Treina mais rápido e ocupa menos VRAM, com risco baixo de instabilidade.",
     mixed_precision:
       "Faz parte das contas em 16 bits. Acelera o treino e ocupa menos VRAM em GPUs recentes; em modelos sensíveis pode custar precisão numérica.",
+    live_gradcam_every:
+      "A cada quantas épocas mostrar, na aba Resultados, onde o modelo olha em algumas imagens fixas da validação (Grad-CAM). Também mostra na última época e em cada nova melhor. 0 desliga. Não muda o treino: com a mesma seed, os números saem iguais.",
     deterministic:
       "Faz o mesmo config com a mesma seed devolver exatamente os mesmos números. Ligado por padrão: medimos o custo e ele é nulo ou negativo em treinos curtos.",
     base_dir:
@@ -425,6 +427,7 @@ export const pt = {
       seed: "Seed",
       deterministic: "Determinístico",
       mixed_precision: "Precisão mista (AMP)",
+      live_gradcam_every: "Grad-CAM ao vivo (a cada N épocas)",
       kind: "Tipo",
       step_size: "Step size",
       gamma: "Gamma",
@@ -2127,6 +2130,11 @@ export const pt = {
       `época ${epoch} · ${metric} ${value}`,
     bestNote: "o checkpoint salvo é desta época",
     lossChart: "Loss",
+    gradcamTitle: (epoch: number, best: boolean) =>
+      `Grad-CAM da validação · época ${epoch}${best ? " · melhor até aqui" : ""}`,
+    gradcamNote: "onde o modelo olhou para decidir; as mesmas imagens a cada vez",
+    gradcamCaption: (actual: string, predicted: string) =>
+      actual === predicted ? `${actual} ✓` : `${actual} → lida como ${predicted}`,
     lrChart: "Learning rate",
     confusionTitle: (epoch: number) => `Matriz de confusão da validação · época ${epoch}`,
     confusionAxes: "linhas: classe verdadeira · colunas: classe prevista",

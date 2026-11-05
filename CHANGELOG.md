@@ -15,6 +15,11 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Added
 
+- **Grad-CAM ao vivo na aba Resultados** (classificação): com
+  `training.live_gradcam_every` acima de 0, a cada N épocas, na última e em cada
+  nova melhor, a aba mostra onde o modelo olha em 6 imagens fixas da validação.
+  Desligado por padrão; ligado, não muda o treino: com a mesma seed o histórico e
+  os pesos saem iguais (ADR-162).
 - **Learning rate e matriz de confusão na aba Resultados**: o evento de cada
   época passa a trazer a taxa com que ela treinou, em todas as tarefas, e, na
   classificação, a confusão da validação (a matriz até 30 classes; acima disso,

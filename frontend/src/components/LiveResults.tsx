@@ -3,6 +3,7 @@
  *  the units already closed. Everything is read off the events the sheet
  *  receives (lib/live-results.ts). */
 
+import { artifactUrl } from "../api/client";
 import { useT } from "../i18n/useT";
 import {
   bestEpoch,
@@ -15,6 +16,7 @@ import {
   overridesSummary,
   type BestEpoch,
   type CurvePoint,
+  type InsightEvent,
 } from "../lib/live-results";
 import type { StorySpec } from "../lib/story-family";
 import { overfittingSince } from "../lib/training-story";
@@ -100,6 +102,7 @@ export function LiveResults({ events, spec, accent }: LiveResultsProps) {
         best={best}
         accent={accent}
       />
+      {current?.insight && <GradCamGallery insight={current.insight} accent={accent} />}
       {confusion && (
         <ConfusionView epoch={confusion.epoch} confusion={confusion.confusion} accent={accent} />
       )}
@@ -258,6 +261,66 @@ function ConfusionView({
           ))}
         </tbody>
       </table>
+    </figure>
+  );
+}
+
+/** The latest Grad-CAM of the unit: the same validation images each time, so
+ *  two looks at the tab compare like with like. */
+function GradCamGallery({ insight, accent }: { insight: InsightEvent; accent: string }) {
+  const r = useT().liveResults;
+  return (
+    <figure
+      data-insight="gradcam"
+      style={{
+        margin: 0,
+        padding: 12,
+        background: "rgb(var(--lt-ink, 255 255 255) / 0.025)",
+        border: "1px solid var(--vf-panel-stroke)",
+        borderRadius: 12,
+      }}
+    >
+      <figcaption style={caption}>
+        <span style={{ color: accent }}>//</span> {r.gradcamTitle(insight.epoch, insight.best)}
+        <div style={{ letterSpacing: "0.04em", textTransform: "none", marginTop: 2 }}>
+          {r.gradcamNote}
+        </div>
+      </figcaption>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fill, minmax(96px, 1fr))",
+          gap: 8,
+        }}
+      >
+        {insight.images.map((image) => {
+          const label = r.gradcamCaption(image.true_class, image.predicted_class);
+          const wrong = image.true_class !== image.predicted_class;
+          return (
+            <div key={image.path} style={{ display: "grid", gap: 4 }}>
+              {/* The file is rewritten in place each time: the epoch keeps the
+                  browser from showing the previous one from its cache. */}
+              <img
+                src={`${artifactUrl(image.path)}?epoch=${insight.epoch}`}
+                alt={label}
+                style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 6 }}
+              />
+              <span
+                style={{
+                  fontSize: 11,
+                  color: wrong ? "oklch(0.74 0.18 22)" : "var(--vf-text-dim)",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+                title={label}
+              >
+                {label}
+              </span>
+            </div>
+          );
+        })}
+      </div>
     </figure>
   );
 }
