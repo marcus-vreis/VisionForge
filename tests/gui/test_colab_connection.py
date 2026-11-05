@@ -205,7 +205,8 @@ def test_install_failure_is_reported_and_nothing_counts_as_installed() -> None:
     cli = cc.ColabCli(run=fake, python="base-python")
     cli._install()
     assert cli.install_state == "failed"
-    assert cli.install_error is not None and "no network" in cli.install_error
+    assert cli.install_error is not None
+    assert "no network" in cli.install_error
     assert cli.installed_version() is None
 
 
@@ -293,15 +294,17 @@ def test_malformed_codes_never_reach_the_cli(code: str) -> None:
 
 
 def test_finish_without_start_raises() -> None:
+    logins = cc.LoginFlows(popen=FakePopen())
     with pytest.raises(cc.ColabError):
-        cc.LoginFlows(popen=FakePopen()).finish("ana", "4/abc")
+        logins.finish("ana", "4/abc")
 
 
 def test_no_url_kills_the_process(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(cc, "LOGIN_URL_TIMEOUT_S", 0.5)
     popen = FakePopen(prints_url=False)
+    logins = cc.LoginFlows(popen=popen)
     with pytest.raises(cc.ColabError):
-        cc.LoginFlows(popen=popen).start("ana")
+        logins.start("ana")
     assert popen.started[0].killed
 
 

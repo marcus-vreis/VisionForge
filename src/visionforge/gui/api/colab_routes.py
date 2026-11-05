@@ -5,7 +5,7 @@ builder, and FastAPI resolves string annotations against module globals only.
 """
 
 from collections.abc import Callable
-from typing import Annotated, Any
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 
@@ -24,12 +24,8 @@ from visionforge.gui.api.schemas import (
 )
 from visionforge.utils.messages import tr
 
-_CONFLICT: dict[int | str, dict[str, Any]] = {
-    409: {"description": "The CLI is not installed or the profile is not logged in"}
-}
-_BAD_GATEWAY: dict[int | str, dict[str, Any]] = {
-    502: {"description": "The Colab CLI failed"}
-}
+_NOT_READY = "The CLI is not installed or the profile is not logged in"
+_CLI_FAILED = "The Colab CLI failed"
 
 
 def build_colab_router(
@@ -59,9 +55,8 @@ def build_colab_router(
             login_pending=logins.pending(slug),
         )
 
-    def require_installed() -> None:
-        if cli.installed_version() != PINNED_VERSION:
-            raise HTTPException(409, tr("colab.not_installed"))
+    def installed() -> bool:
+        return cli.installed_version() == PINNED_VERSION
 
     @router.get("/colab/status")
     def colab_status(profile: ProfileDep) -> ColabStatus:
@@ -74,16 +69,20 @@ def build_colab_router(
         cli.start_install()
         return status(profile.slug)
 
-    @router.post("/colab/login/start", responses={**_CONFLICT, **_BAD_GATEWAY})
+    @router.post(
+        "/colab/login/start",
+        responses={409: {"description": _NOT_READY}, 502: {"description": _CLI_FAILED}},
+    )
     def colab_login_start(profile: ProfileDep) -> ColabLoginStart:
         """Start Google's login; nothing is allocated on Colab."""
-        require_installed()
+        if not installed():
+            raise HTTPException(409, tr("colab.not_installed"))
         try:
             return ColabLoginStart(url=logins.start(profile.slug))
         except ColabError as exc:
             raise HTTPException(502, str(exc)) from None
 
-    @router.post("/colab/login/finish", responses={**_BAD_GATEWAY})
+    @router.post("/colab/login/finish", responses={502: {"description": _CLI_FAILED}})
     def colab_login_finish(
         req: ColabLoginFinishRequest, profile: ProfileDep
     ) -> ColabStatus:
@@ -107,10 +106,14 @@ def build_colab_router(
         cli.logout(profile.slug)
         return status(profile.slug)
 
-    @router.get("/colab/usage", responses={**_CONFLICT, **_BAD_GATEWAY})
+    @router.get(
+        "/colab/usage",
+        responses={409: {"description": _NOT_READY}, 502: {"description": _CLI_FAILED}},
+    )
     def colab_usage(profile: ProfileDep) -> ColabUsage:
         """Balance and rate of the profile's Google account."""
-        require_installed()
+        if not installed():
+            raise HTTPException(409, tr("colab.not_installed"))
         if not cli.logged_in(profile.slug):
             raise HTTPException(409, tr("colab.not_logged_in"))
         try:

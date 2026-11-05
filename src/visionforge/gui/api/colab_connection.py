@@ -49,7 +49,8 @@ MAX_CODE_LENGTH = 512
 
 _AUTH_URL = re.compile(r"https://accounts\.google\.com/\S+")
 _VERSION = re.compile(r"Version:\s*(\S+)")
-_EMAIL = re.compile(r"^Email:\s*(\S+@\S+)\s*$", re.MULTILINE)
+# Bounded classes on both sides of "@": no backtracking (Sonar S8786).
+_EMAIL = re.compile(r"^Email:[ \t]*([^\s@]+@[^\s@]+)[ \t]*$", re.MULTILINE)
 _BALANCE = re.compile(r"Current balance:\s*([0-9.]+)")
 _RATE = re.compile(r"Usage rate:\s*([0-9.]+)")
 _ASSIGNMENTS = re.compile(r"Active assignments:\s*(\d+)")
