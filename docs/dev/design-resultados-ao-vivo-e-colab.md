@@ -209,3 +209,53 @@ lida em 2026-11-04.
 **Recomendação:** F1 primeiro, sem OAuth e sem túnel. Só seguir para F2/F3
 se houver demanda real, porque o custo de manter OAuth num app open source é
 alto em credenciais, verificação do Google e suporte.
+
+### Atualização 2026-11-04: a CLI oficial do Colab muda a recomendação
+
+O Google publicou a `google-colab-cli` (repositório `googlecolab/google-colab-cli`,
+Apache-2.0). Ela aloca um runtime, roda um script, transfere arquivos e libera a
+VM, tudo por linha de comando e pela conta do usuário. Isso torna possível a
+automação completa que a seção acima descartava por falta de API.
+
+**Fatos verificados, lidos no código e na doc do repositório em 2026-11-04:**
+
+| Pergunta | Resposta | Fonte |
+| --- | --- | --- |
+| Roda no Windows? | Não: o README diz "Linux and macOS only". No WSL desta máquina há Ubuntu 24.04 com Python 3.12.3, e a CLI pede `>=3.12`. | `README.md`, `pyproject.toml` |
+| GPU no plano gratuito? | A doc chama a T4 de "standard free-tier GPU", mas o skill do próprio repositório avisa que "most accounts can only get CPU"; um 400 no `colab new --gpu` significa sem cota. Só se descobre na conta. | `docs/01_session_management.md`, `skills/colab-operator/SKILL.md` |
+| A saída chega ao vivo? | Sim. O `--timeout` de `colab run` é um limite de *silêncio*: "a script that keeps printing can run as long as it needs"; `0` tira o limite (mudança de 2026-10-24). | `docs/05_run_command.md` |
+| A VM é liberada? | `colab run` sem `--keep` libera a VM num `finally`, mesmo se o script falhar. Se o processo local morrer, a VM fica até o backend recolher por inatividade, consumindo compute units. | `docs/05_run_command.md`, `SKILL.md` |
+| Login | OAuth do usuário (`colab auth`, cliente embutido) ou ADC; escopos `userinfo.email` e `colaboratory`. O token fica no keyring; o VisionForge não precisa vê-lo. | `docs/04_automation_and_utility.md` |
+| Upload de arquivos | Pela Contents API do Jupyter, em JSON com base64. Serve para configs e zips pequenos; para datasets de GBs a própria doc admite limite. | `docs/03_file_management.md` |
+| Uso de GPU e saldo | `colab usage` lê o saldo e a taxa de compute units (`/tun/m/ccu-info`); `nvidia-smi` roda na VM via `exec`. | `docs/04_automation_and_utility.md` |
+
+**Arquitetura que isso permite (inferência, a confirmar no spike prático):**
+
+1. **Backend "Colab"** ao lado da fila local: o VisionForge chama a CLI
+   (`wsl.exe -d <distro> colab ...` no Windows; direto em Linux/macOS).
+2. **Dataset:** a VM baixa o dataset de onde ele já está (Drive, Hugging Face,
+   URL), nunca por `colab upload`. Zips pequenos podem subir pela CLI.
+3. **Treino:** `colab run` de um script que instala o `visionforge-studio` e roda
+   `visionforge train`. O script imprime os eventos (`start`, `epoch_end`,
+   `batch`, `insight`...) como linhas JSON no stdout. A CLI repassa a saída ao
+   vivo, e o VisionForge alimenta com ela o mesmo stream SSE da aba Resultados,
+   sem túnel e sem porta aberta. O `batch` a cada 2 s mantém o `--timeout` longe
+   do limite.
+4. **Resultado:** `colab download` do run dir compactado ao fim, importado como
+   uma run local. O histórico fica no VisionForge, mas a importação de bundle
+   (seção F1) continua por fazer.
+5. **Limpeza:** ao iniciar, o VisionForge lista `colab sessions` e oferece parar
+   as que sobraram de uma execução interrompida.
+
+**Riscos novos:**
+- A CLI fala com endpoints internos do Colab (`/tun/m/...`) e se atualiza com
+  frequência (`colab update`), então uma versão nova pode quebrar o contrato.
+  Pinar a versão e testar a cada atualização.
+- No Windows a dependência do WSL é uma barreira de instalação para o usuário.
+- A conta pode não ter GPU; a GUI precisa dizer isso, e não falhar em silêncio.
+
+**Próximo passo (precisa do usuário):** o spike prático, no WSL:
+`pip install google-colab-cli` num venv, `colab auth` (login no navegador),
+`colab new --gpu T4`, um `colab run` de 3 minutos imprimindo uma linha a cada
+segundo, `colab usage` e `colab stop`. Ele responde a duas coisas que só a conta
+diz: se há GPU no plano dela e qual a latência real da saída.
