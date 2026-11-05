@@ -663,3 +663,43 @@ def test_runner_reports_the_class_count_change(
     change = next(e for e in events if e.get("stage") == "num_classes")
     assert (change["old"], change["new"]) == (2, 10)
     assert seen["model"]["num_classes"] == 10
+
+
+class SlowDeliveryLog(RunEventLog):
+    """An event log whose events land a moment late, as on a busy loop (CI, Linux).
+
+    Each event from the job thread is a coroutine scheduled on the loop; closing
+    the stream must wait for them, or the last events of a job vanish.
+    """
+
+    async def put(self, item: dict[str, Any] | None) -> None:
+        if item is not None:
+            await asyncio.sleep(0.01)
+        await super().put(item)
+
+
+def test_execute_colab_delivers_every_event_before_closing_the_stream(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import visionforge.gui.api.routes as routes_mod
+
+    sent = [{"event": "batch", "batch": i} for i in range(20)]
+
+    class Jobs:
+        def run_job(self, slug, accelerator, payload, on_event, cancelled):  # type: ignore[no-untyped-def]
+            for event in sent:
+                on_event(event)
+            return cj.RemoteResult("completed", report={})
+
+    monkeypatch.setattr(routes_mod, "_COLAB_JOBS", Jobs())
+
+    async def go() -> list[dict[str, Any]]:
+        routes_mod._event_queue = SlowDeliveryLog("r1")
+        await routes_mod._execute_colab("r1", "default", "T4", PAYLOAD)
+        return [e async for e in routes_mod._event_queue.read()]
+
+    try:
+        assert asyncio.run(go()) == sent
+    finally:
+        release_queue(routes_mod)
+        routes_mod._event_queue = None

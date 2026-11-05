@@ -2760,10 +2760,21 @@ async def _execute_colab(
     loop = asyncio.get_running_loop()
     queue = _event_queue
     token = _active_cancel_token
+    # Events cross from the job thread through one FIFO inbox and one task that
+    # forwards them in order. A coroutine scheduled per event could land after
+    # the `None` that closes the stream, and a job's last events would vanish
+    # (seen on the Linux CI).
+    inbox: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
 
     def _put_event(event: dict[str, Any]) -> None:
-        if queue is not None:
-            asyncio.run_coroutine_threadsafe(queue.put(event), loop)
+        loop.call_soon_threadsafe(inbox.put_nowait, event)
+
+    async def _forward() -> None:
+        while (event := await inbox.get()) is not None:
+            if queue is not None:
+                await queue.put(event)
+
+    forwarding = asyncio.create_task(_forward())
 
     try:
         logger.info("GUI: Starting Colab job {} ({})", run_id, accelerator)
@@ -2793,6 +2804,10 @@ async def _execute_colab(
             "run_dir": None,
         }
     finally:
+        # The thread has returned, so every event it sent is already in the
+        # inbox (call_soon_threadsafe is FIFO); drain it, then close the stream.
+        inbox.put_nowait(None)
+        await forwarding
         if queue is not None:
             await queue.put(None)
 
