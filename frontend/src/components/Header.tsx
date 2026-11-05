@@ -7,6 +7,7 @@ import type { Pronoun } from "../lib/profile";
 import { GuideMenu } from "./GuideMenu";
 import { TaskColorDot } from "./TaskColorDot";
 import { ThemeSwitch } from "./ThemeSwitch";
+import { ColabConnection } from "./ColabConnection";
 import { UpdateNotice } from "./UpdateNotice";
 
 function Logo() {
@@ -64,12 +65,15 @@ export function Header({
   onGuide,
   profileName,
   onChangeProfile,
+  profileSlug,
   taskColor,
 }: {
   userName?: string;
   /** Como a saudação trata quem usa (ADR-126); sem ele, a forma neutra. */
   pronoun?: Pronoun | null;
   onChangeName?: () => void;
+  /** Slug do perfil em uso: o canto do Colab recomeça quando ele muda (ADR-163). */
+  profileSlug?: string;
   /** Abre um guia escolhido no menu (ADR-104, ADR-115). */
   onGuide?: (id: GuideId) => void;
   /** Perfil em uso (ADR-114). Só vem num servidor que tem perfis: sem ele o chip
@@ -165,6 +169,7 @@ export function Header({
 
       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
         {taskColor && <TaskColorDot {...taskColor} />}
+        <ColabConnection key={profileSlug ?? "default"} />
         {/* Two real buttons rather than one that flips: each language is a
             target of its own, and aria-pressed says which one is on. */}
         <div

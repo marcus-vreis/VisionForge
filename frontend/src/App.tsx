@@ -850,6 +850,7 @@ export default function App() {
           sharedServer && profile ? profileLabel(profile, t.profile.defaultShort) : undefined
         }
         onChangeProfile={() => setPickProfile(true)}
+        profileSlug={profile?.slug}
         taskColor={
           isCustomTask(activeTask)
             ? {
