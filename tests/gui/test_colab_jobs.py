@@ -452,71 +452,28 @@ def test_colab_run_is_queued_with_a_vm_stop(monkeypatch: pytest.MonkeyPatch) -> 
 def test_execute_colab_records_the_report_and_closes_the_stream(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # TEMPORARY CI diagnostic (PR #130): reverted once the Linux py3.13 failure is explained.
-    from loguru import logger
-
     import visionforge.gui.api.routes as routes_mod
-
-    t0 = time.perf_counter()
-    diag: dict[str, Any] = {"fake_ran": False, "puts": []}
-
-    def stamp() -> float:
-        return round((time.perf_counter() - t0) * 1000, 2)
-
-    class DiagLog(RunEventLog):
-        async def put(self, item: dict[str, Any] | None) -> None:
-            diag["puts"].append((stamp(), id(self), item))
-            await super().put(item)
 
     class Jobs:
         def run_job(self, slug, accelerator, payload, on_event, cancelled):  # type: ignore[no-untyped-def]
-            diag["fake_ran"] = True
-            diag["thread_start_ms"] = stamp()
-            diag["thread"] = threading.current_thread().name
             on_event({"event": "epoch_end", "epoch": 1})
-            diag["thread_end_ms"] = stamp()
             return cj.RemoteResult("completed", report={"accuracy": 0.8})
 
     monkeypatch.setattr(routes_mod, "_COLAB_JOBS", Jobs())
-    captured: list[str] = []
-    sink = logger.add(
-        captured.append,
-        level="DEBUG",
-        format="{time:HH:mm:ss.SSS} {name}:{function} {message}",
-    )
 
     async def go() -> list[dict[str, Any]]:
-        log = DiagLog("r1")
-        routes_mod._event_queue = log
-        diag["log_id"] = id(log)
-        diag["queue_id_before"] = id(routes_mod._event_queue)
-        diag["jobs_type_at_call"] = repr(type(routes_mod._COLAB_JOBS))
-        diag["threads_before"] = [t.name for t in threading.enumerate()]
-        diag["execute_start_ms"] = stamp()
+        routes_mod._event_queue = RunEventLog("r1")
         await routes_mod._execute_colab("r1", "default", "T4", PAYLOAD)
-        diag["execute_end_ms"] = stamp()
-        diag["queue_id_after"] = id(routes_mod._event_queue)
-        diag["queue_after_type"] = repr(type(routes_mod._event_queue))
-        diag["own_log_items"] = list(log._items)
-        diag["own_log_closed"] = bool(log._items) and log._items[-1] is None
         await asyncio.sleep(0)
-        current = routes_mod._event_queue
-        diag["read_log_items"] = list(getattr(current, "_items", []))
-        return [e async for e in current.read()]
+        return [e async for e in routes_mod._event_queue.read()]
 
     try:
         events = asyncio.run(go())
-        diag["end_ms"] = stamp()
-        diag["current_run"] = routes_mod._current_run
-        diag["log"] = captured
-        assert events == [{"event": "epoch_end", "epoch": 1}], json.dumps(
-            diag, default=repr, indent=1
-        )
+        assert events == [{"event": "epoch_end", "epoch": 1}]
         assert routes_mod._current_run is not None
         assert routes_mod._current_run["status"] == "completed"
         assert routes_mod._current_run["report"] == {"accuracy": 0.8}
     finally:
-        logger.remove(sink)
         release_queue(routes_mod)
         routes_mod._event_queue = None
 
