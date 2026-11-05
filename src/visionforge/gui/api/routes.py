@@ -49,6 +49,7 @@ from visionforge.core.comparison import ComparisonTrial, run_model_comparison
 from visionforge.core.data import class_folder_test_loader
 from visionforge.core.detection_data import resolve_yolo_split
 from visionforge.core.evaluator import Evaluator
+from visionforge.core.experiment_bundle import import_experiment_bundle
 from visionforge.core.latex_export import report_to_latex
 from visionforge.core.loader_lifecycle import describe_worker_spawn_failure
 from visionforge.core.plotter import MetricsPlotter
@@ -966,7 +967,9 @@ async def run_colab_experiment(
         f"{config.name} · Colab {req.accelerator}",
         "classification",
         "colab",
-        lambda: _execute_colab(run_id, profile.slug, req.accelerator, payload),
+        lambda: _execute_colab(
+            run_id, profile.slug, req.accelerator, payload, profile.models_dir
+        ),
         stop_at="vm",
         profile=profile,
     )
@@ -2753,10 +2756,37 @@ def _validate_colab_config(raw: dict[str, Any]) -> ExperimentConfig:
         ) from None
 
 
+def _import_colab_run(
+    bundle: Path, models_dir: Path, accelerator: str
+) -> tuple[str | None, str | None]:
+    """Import the run a Colab job brought back; (run_dir, None) or (None, error).
+
+    The downloaded zip is removed either way: the imported run is the copy kept.
+    """
+    origin = {
+        "kind": "colab",
+        "accelerator": accelerator,
+        "imported_at": datetime.now().isoformat(),
+    }
+    try:
+        run_dir = import_experiment_bundle(bundle, models_dir, origin=origin)
+    except (ValueError, OSError) as exc:
+        logger.warning("GUI: Colab run in {} not imported: {}", bundle, exc)
+        return None, tr("colab.import_failed", detail=f"{type(exc).__name__}: {exc}")
+    finally:
+        bundle.unlink(missing_ok=True)
+    logger.info("GUI: Colab run imported into {}", run_dir)
+    return str(run_dir), None
+
+
 async def _execute_colab(
-    run_id: str, slug: str, accelerator: str, payload: dict[str, Any]
+    run_id: str,
+    slug: str,
+    accelerator: str,
+    payload: dict[str, Any],
+    models_dir: Path,
 ) -> None:
-    """Run one job on Colab off the event loop and record how it ended."""
+    """Run one job on Colab off the event loop, import its run and record how it ended."""
     global _current_run
 
     loop = asyncio.get_running_loop()
@@ -2793,13 +2823,19 @@ async def _execute_colab(
             _put_event,
             lambda: is_cancelled(token),
         )
+        run_dir, error = None, result.error
+        if result.bundle is not None:
+            run_dir, error = await asyncio.to_thread(
+                _import_colab_run, result.bundle, models_dir, accelerator
+            )
         _current_run = {
             "run_id": run_id,
-            "status": "completed" if result.outcome == "completed" else "failed",
-            "error": result.error,
+            "status": "completed"
+            if result.outcome == "completed" and error is None
+            else "failed",
+            "error": error,
             "report": result.report,
-            # The run folder stays on the VM until the import of phase 3.
-            "run_dir": None,
+            "run_dir": run_dir,
         }
     except Exception as e:
         logger.exception("GUI: Colab job {} failed", run_id)

@@ -298,6 +298,9 @@ class RunSummary(BaseModel):
     group_id: str | None = None
     # Set on the group itself, which is listed as one run.
     group: RunGroupBrief | None = None
+    # Where the run trained when not on this machine: "colab" for a run a Colab
+    # job brought back (ADR-163, phase 3). None for a local run.
+    origin: str | None = None
 
 
 class DatasetDetectRequest(BaseModel):

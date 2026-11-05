@@ -30,6 +30,7 @@ from typing import Any
 EVENT_PREFIX = "@@vf@@ "
 REMOTE_ROOT = Path("/content/vf")
 PACKAGE = "visionforge-studio"
+BUNDLE_NAME = "run-bundle.zip"
 
 
 def emit(event: dict[str, Any]) -> None:
@@ -164,6 +165,25 @@ def train(config_dict: dict[str, Any]) -> Any:
     return block.report()
 
 
+def pack_run(report: Any) -> dict[str, Any] | None:
+    """Zip the trained run as an experiment bundle for ``colab download``.
+
+    The bundle is the format the local import reads (ADR-163, phase 3), so the
+    VM writes it with the library's own export. A block that leaves no single
+    run folder (a search, a comparison) has nothing to bring back yet.
+    """
+    train_section = report.get("train") if isinstance(report, dict) else None
+    run_dir = (train_section or {}).get("run_dir")
+    if not run_dir:
+        return None
+    from visionforge.core.experiment_bundle import export_experiment_bundle
+
+    target = REMOTE_ROOT / BUNDLE_NAME
+    target.unlink(missing_ok=True)
+    export_experiment_bundle(run_dir, target)
+    return {"path": str(target), "size": target.stat().st_size}
+
+
 def environment() -> dict[str, Any]:
     import torch
 
@@ -190,11 +210,14 @@ def main(payload: dict[str, Any]) -> None:
             emit({"event": "remote", "stage": "num_classes", **change})
         emit({"event": "remote", "stage": "train", "device": config["device"]["kind"]})
         report = train(config)
+        emit({"event": "remote", "stage": "pack"})
+        bundle = pack_run(report)
         emit(
             {
                 "event": "job_end",
                 "status": "ok",
                 "report": report,
+                "bundle": bundle,
                 "seconds": round(time.monotonic() - started, 1),
             }
         )

@@ -1093,6 +1093,8 @@ export const pt = {
         `Parou na época ${done} de ${total} — dá para continuar`,
       resumeTitleNoTotal: "Parou antes do fim — dá para continuar",
       blockTitle: (block: string) => `Bloco de experimento: ${block}`,
+      originColab: "Colab",
+      originColabTitle: "Treinado no Google Colab e importado para este perfil",
       epochs: (n: number) => `${n} epoch${n !== 1 ? "s" : ""}`,
       // Where a finished run shows `→ end date`, a running one shows `· this`.
       inProgress: "em andamento",

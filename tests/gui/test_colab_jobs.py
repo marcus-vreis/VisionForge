@@ -29,6 +29,8 @@ PAYLOAD = {
     "config": {"name": "exp"},
     "source": {"kind": "url", "url": "https://x/d.zip"},
 }
+# A job that brings no bundle back never touches the profile's models folder.
+UNUSED_MODELS = Path("models-not-written")
 
 
 @pytest.fixture(autouse=True)
@@ -100,10 +102,17 @@ class FakeCli:
         self.exec: FakeExec | None = None
         self.script_seen: str | None = None
         self.sessions_out = "[colab] No active sessions found on server.\n"
+        # What `colab download` writes to its local path; None: it writes nothing.
+        self.download_bytes: bytes | None = None
 
     def run(self, argv: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
         self.calls.append(argv[1:])
         command = argv[1]
+        if command == "download":
+            if self.download_bytes is None:
+                return subprocess.CompletedProcess(argv, 1, "", "404: file not found")
+            Path(argv[-1]).write_bytes(self.download_bytes)
+            return subprocess.CompletedProcess(argv, 0, "", "")
         if command == "new" and not self.new_ok:
             return subprocess.CompletedProcess(
                 argv, 1, "", "400 Bad Request: no quota for T4"
@@ -463,7 +472,7 @@ def test_execute_colab_records_the_report_and_closes_the_stream(
 
     async def go() -> list[dict[str, Any]]:
         routes_mod._event_queue = RunEventLog("r1")
-        await routes_mod._execute_colab("r1", "default", "T4", PAYLOAD)
+        await routes_mod._execute_colab("r1", "default", "T4", PAYLOAD, UNUSED_MODELS)
         await asyncio.sleep(0)
         return [e async for e in routes_mod._event_queue.read()]
 
@@ -695,7 +704,7 @@ def test_execute_colab_delivers_every_event_before_closing_the_stream(
 
     async def go() -> list[dict[str, Any]]:
         routes_mod._event_queue = SlowDeliveryLog("r1")
-        await routes_mod._execute_colab("r1", "default", "T4", PAYLOAD)
+        await routes_mod._execute_colab("r1", "default", "T4", PAYLOAD, UNUSED_MODELS)
         return [e async for e in routes_mod._event_queue.read()]
 
     try:
@@ -738,7 +747,7 @@ def test_execute_colab_has_each_event_in_the_log_when_on_event_returns(
 
     async def go() -> None:
         routes_mod._event_queue = log
-        await routes_mod._execute_colab("r1", "default", "T4", PAYLOAD)
+        await routes_mod._execute_colab("r1", "default", "T4", PAYLOAD, UNUSED_MODELS)
 
     try:
         asyncio.run(go())
@@ -773,7 +782,7 @@ def test_execute_colab_drops_an_event_the_loop_never_takes_and_finishes(
 
     async def go() -> list[dict[str, Any]]:
         routes_mod._event_queue = StalledLog("r1")
-        await routes_mod._execute_colab("r1", "default", "T4", PAYLOAD)
+        await routes_mod._execute_colab("r1", "default", "T4", PAYLOAD, UNUSED_MODELS)
         return [e async for e in routes_mod._event_queue.read()]
 
     try:

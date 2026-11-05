@@ -126,6 +126,9 @@ export interface RunSummary {
   group_id?: string | null;
   /** Set on the group itself, which History lists as one run (ADR-113). */
   group?: RunGroupBrief | null;
+  /** Where the run trained when not here: "colab" for a run a Colab job
+   *  brought back (ADR-163, phase 3). Absent or null for a local run. */
+  origin?: string | null;
 }
 
 /** How a group job is told apart: a set of seeds of one config, one set of

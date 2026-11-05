@@ -15,6 +15,21 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Added
 
+- **O run treinado no Colab volta para esta máquina** (fase 3 do ADR-163).
+  - **Download:** no fim do job, antes de liberar a VM, o run é empacotado
+    como bundle de experimento e baixado com `colab download`.
+  - **Import:** o run entra em `models/` do perfil como qualquer run local,
+    com o `device_used` e o ambiente da VM (GPU, torch, Python) preservados.
+    O History mostra a marca "Colab".
+  - **Falhas:** se o download ou o import falhar, o job termina com o motivo,
+    a VM é liberada e nada fica pela metade entre os runs. O run é montado
+    numa pasta temporária e movido com um único rename.
+  - **Segurança:** o import recusa membros fora da pasta do run (zip-slip),
+    confere os checksums do manifest e limita o tamanho a 2 GB.
+  - **Reuso:** a mesma função (`import_experiment_bundle`) importa um bundle
+    exportado em outra máquina e baixado à mão.
+  - **O que não vem:** os gráficos não fazem parte do formato do bundle. Um
+    run importado traz o run.json e o checkpoint.
 - **Treino de classificação no Google Colab** (fase 2 do ADR-163): com o
   perfil conectado, o painel "colab" ganha "treinar no Colab".
   - **Dataset:** a VM pega o dataset de onde ele já está: uma URL de zip, um
@@ -26,8 +41,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
     job termina ou falha.
   - **Runtimes que sobraram:** o painel lista os runtimes ativos da conta e
     para os que o VisionForge abriu.
-  - **Resultado:** os arquivos treinados ficam na VM até a importação, que é a
-    fase 3.
+  - **Resultado:** veja a fase 3, acima.
 - **Conexão com o Google Colab** (fase 1 do ADR-163): o canto "colab" do
   cabeçalho instala a `google-colab-cli` 0.7.5 num ambiente próprio em
   `~/.visionforge/colab-cli`. Ele também faz o login de copiar e colar com a
