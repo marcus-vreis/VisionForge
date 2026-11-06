@@ -1093,6 +1093,79 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "pt": "O arquivo de grupos mudou desde a prévia. Refaça a prévia.",
         "en": "The group file changed since the preview. Run the preview again.",
     },
+    # ── converting between YOLO and COCO (gui/api/coco_*.py, ADR-169) ────────
+    "coco.busy": {
+        "pt": "Já existe uma conversão em andamento. Espere ou interrompa a atual.",
+        "en": "A conversion is already running. Wait for it or cancel it.",
+    },
+    "coco.job_missing": {
+        "pt": "Conversão não encontrada. Refaça a prévia.",
+        "en": "Conversion not found. Run the preview again.",
+    },
+    "coco.preview_not_ready": {
+        "pt": _PREVIEW_NOT_READY_PT,
+        "en": _PREVIEW_NOT_READY_EN,
+    },
+    "coco.base_not_opened": {
+        "pt": "Abra o dataset no explorador antes de exportá-lo para COCO.",
+        "en": "Open the dataset in the explorer before exporting it to COCO.",
+    },
+    "coco.base_missing": {
+        "pt": "A pasta do dataset não existe: {path}",
+        "en": "The dataset folder does not exist: {path}",
+    },
+    "coco.source_missing": {
+        "pt": "A pasta do COCO não existe: {path}",
+        "en": "The COCO folder does not exist: {path}",
+    },
+    "coco.base_empty": {
+        "pt": "O dataset não tem imagens para exportar.",
+        "en": "The dataset has no images to export.",
+    },
+    "coco.nothing_to_export": {
+        "pt": "Nenhuma imagem pode ser exportada: todas falharam ao abrir ou têm rótulo malformado.",
+        "en": "No image can be exported: all of them failed to open or have a malformed label.",
+    },
+    "coco.no_annotations": {
+        "pt": "Não achei nenhum arquivo de anotações COCO (.json com images, annotations e categories) na pasta nem em annotations/.",
+        "en": "No COCO annotation file (a .json with images, annotations and categories) was found in the folder or in annotations/.",
+    },
+    "coco.bad_dest_name": {
+        "pt": _BAD_DEST_NAME_PT,
+        "en": _BAD_DEST_NAME_EN,
+    },
+    "coco.dest_exists": {
+        "pt": _DEST_EXISTS_PT,
+        "en": _DEST_EXISTS_EN,
+    },
+    "coco.base_changed": {
+        "pt": "A pasta mudou desde a prévia. Refaça a prévia.",
+        "en": "The folder changed since the preview. Run the preview again.",
+    },
+    "coco.unassigned_split": {
+        "pt": "O arquivo '{name}' ainda não tem divisão. Escolha train, val ou test, ou ignore o arquivo.",
+        "en": "The file '{name}' has no split yet. Pick train, val or test, or skip the file.",
+    },
+    "coco.nothing_selected": {
+        "pt": "Todos os arquivos foram ignorados: não há nada para importar.",
+        "en": "Every file was skipped: there is nothing to import.",
+    },
+    "coco.unknown_json": {
+        "pt": "O arquivo '{name}' não está nesta prévia.",
+        "en": "The file '{name}' is not part of this preview.",
+    },
+    "coco.bad_split": {
+        "pt": "Divisão inválida: '{split}'. Use train, val, test ou skip.",
+        "en": "Invalid split: '{split}'. Use train, val, test or skip.",
+    },
+    "coco.split_taken": {
+        "pt": "Os arquivos '{first}' e '{second}' foram atribuídos à mesma divisão ({split}). Mude um deles ou ignore-o.",
+        "en": "The files '{first}' and '{second}' are assigned to the same split ({split}). Change one or skip it.",
+    },
+    "coco.category_conflict": {
+        "pt": "A categoria {id} se chama '{first}' em um arquivo e '{second}' em outro. Ignore um dos arquivos.",
+        "en": "Category {id} is called '{first}' in one file and '{second}' in another. Skip one of the files.",
+    },
     # ── updating the install from the page (gui/api/routes.py, ADR-120) ──────
     "update.foreign_origin": {
         "pt": "Atualização recusada: o pedido veio de uma página de outro site.",
