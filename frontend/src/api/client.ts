@@ -27,6 +27,13 @@ import type {
   MergeResult,
 } from "../lib/dataset-merge";
 import type {
+  CocoExportPreview,
+  CocoExportResult,
+  CocoImportPlan,
+  CocoImportPreview,
+  CocoImportResult,
+} from "../lib/dataset-coco";
+import type {
   ResplitBody,
   ResplitPlan,
   ResplitPreview,
@@ -1669,4 +1676,84 @@ export async function resplitCancel(jobId: string): Promise<void> {
   await request<unknown>(`${RESPLIT}/${encodeURIComponent(jobId)}/cancel`, {
     method: "POST",
   });
+}
+
+// ── converting between YOLO and COCO into a new dataset (ADR-169) ───────────
+
+const COCO = "/explorer/coco";
+
+type CocoSide = "export" | "import";
+
+const cocoUrl = (side: CocoSide, rest: string) => `${COCO}/${side}${rest}`;
+const cocoJob = (side: CocoSide, jobId: string, rest = "") =>
+  cocoUrl(side, `/${encodeURIComponent(jobId)}${rest}`);
+
+function cocoPost<T>(url: string, body?: unknown): Promise<T> {
+  return request<T>(url, {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(body ?? {}),
+  });
+}
+
+export async function cocoExportPreview(
+  form: ExplorerForm,
+): Promise<IncorporateJob<CocoExportPreview>> {
+  return cocoPost(cocoUrl("export", "/preview"), { base_dir: form.base_dir });
+}
+
+export async function cocoExportStatus<R>(jobId: string): Promise<IncorporateJob<R>> {
+  return request<IncorporateJob<R>>(cocoJob("export", jobId));
+}
+
+/** The preview again, with the destination name checked by the server. */
+export async function cocoExportPlan(jobId: string, destName: string): Promise<unknown> {
+  return cocoPost(cocoJob("export", jobId, "/plan"), { dest_name: destName.trim() });
+}
+
+export async function cocoExportApply(
+  jobId: string,
+  destName: string,
+): Promise<IncorporateJob<CocoExportResult>> {
+  return cocoPost(cocoJob("export", jobId, "/apply"), { dest_name: destName.trim() });
+}
+
+export async function cocoExportCancel(jobId: string): Promise<void> {
+  await cocoPost<unknown>(cocoJob("export", jobId, "/cancel"));
+}
+
+export async function cocoImportPreview(
+  sourceDir: string,
+): Promise<IncorporateJob<CocoImportPreview>> {
+  return cocoPost(cocoUrl("import", "/preview"), { source_dir: sourceDir.trim() });
+}
+
+export async function cocoImportStatus<R>(jobId: string): Promise<IncorporateJob<R>> {
+  return request<IncorporateJob<R>>(cocoJob("import", jobId));
+}
+
+export async function cocoImportPlan(
+  jobId: string,
+  splits: Record<string, string>,
+  destName?: string,
+): Promise<CocoImportPlan> {
+  return cocoPost(cocoJob("import", jobId, "/plan"), {
+    splits,
+    ...(destName ? { dest_name: destName } : {}),
+  });
+}
+
+export async function cocoImportApply(
+  jobId: string,
+  splits: Record<string, string>,
+  destName: string,
+): Promise<IncorporateJob<CocoImportResult>> {
+  return cocoPost(cocoJob("import", jobId, "/apply"), {
+    splits,
+    dest_name: destName.trim(),
+  });
+}
+
+export async function cocoImportCancel(jobId: string): Promise<void> {
+  await cocoPost<unknown>(cocoJob("import", jobId, "/cancel"));
 }

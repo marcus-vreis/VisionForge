@@ -289,6 +289,40 @@
       }
     }
   },
+  "GET /api/explorer/coco/export/{job_id}": {
+    "operationId": "coco_status_api_explorer_coco_export__job_id__get",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "path:job_id:required"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "404": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "GET /api/explorer/coco/import/{job_id}": {
+    "operationId": "coco_status_api_explorer_coco_import__job_id__get",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "path:job_id:required"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "404": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
   "GET /api/explorer/incorporate/{job_id}": {
     "operationId": "incorporate_status_api_explorer_incorporate__job_id__get",
     "parameters": [
@@ -1374,6 +1408,163 @@
         "application/json": "HTTPValidationError"
       },
       "503": {}
+    }
+  },
+  "POST /api/explorer/coco/export/preview": {
+    "operationId": "coco_export_preview_api_explorer_coco_export_preview_post",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {
+      "application/json": "CocoExportPreviewRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "400": {},
+      "403": {},
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/explorer/coco/export/{job_id}/apply": {
+    "operationId": "coco_export_apply_api_explorer_coco_export__job_id__apply_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "path:job_id:required"
+    ],
+    "requestBody": {
+      "application/json": "CocoApplyRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "400": {},
+      "404": {},
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/explorer/coco/export/{job_id}/cancel": {
+    "operationId": "coco_cancel_api_explorer_coco_export__job_id__cancel_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "path:job_id:required"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "404": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/explorer/coco/export/{job_id}/plan": {
+    "operationId": "coco_export_plan_api_explorer_coco_export__job_id__plan_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "path:job_id:required"
+    ],
+    "requestBody": {
+      "application/json": "CocoPlanRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "400": {},
+      "404": {},
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/explorer/coco/import/preview": {
+    "operationId": "coco_import_preview_api_explorer_coco_import_preview_post",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {
+      "application/json": "CocoImportPreviewRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "400": {},
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/explorer/coco/import/{job_id}/apply": {
+    "operationId": "coco_import_apply_api_explorer_coco_import__job_id__apply_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "path:job_id:required"
+    ],
+    "requestBody": {
+      "application/json": "CocoImportApplyRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "400": {},
+      "404": {},
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/explorer/coco/import/{job_id}/cancel": {
+    "operationId": "coco_cancel_api_explorer_coco_import__job_id__cancel_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "path:job_id:required"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "404": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/explorer/coco/import/{job_id}/plan": {
+    "operationId": "coco_import_plan_api_explorer_coco_import__job_id__plan_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "path:job_id:required"
+    ],
+    "requestBody": {
+      "application/json": "CocoImportPlanRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "400": {},
+      "404": {},
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
     }
   },
   "POST /api/explorer/images": {

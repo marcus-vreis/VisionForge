@@ -408,11 +408,8 @@ def _resolve_ratios(
     return {s: raw[s] / total for s in SPLIT_NAMES}
 
 
-def _units(
-    items: list[Item], *, locked: bool, by_group: bool
-) -> tuple[list[_Unit], list[Dropped]]:
-    """Connected sets of items (same bytes, or same group); drop the ones that
-    touch the locked split, apart from the locked images themselves."""
+def _members(items: list[Item], *, by_group: bool) -> list[list[Item]]:
+    """Connected sets of items: the same bytes or (``by_group``) the same group."""
     sets = _DisjointSets(len(items))
     first: dict[tuple[str, str], int] = {}
     for idx, item in enumerate(items):
@@ -427,20 +424,38 @@ def _units(
     members: dict[int, list[Item]] = defaultdict(list)
     for idx, item in enumerate(items):
         members[sets.find(idx)].append(item)
+    return list(members.values())
 
+
+def _dropped_by_lock(group: list[Item], *, locked: bool) -> list[Dropped]:
+    """The pool images of a set that touches the locked split; empty if it does not."""
+    held = [i for i in group if locked and i.split == _TEST]
+    if not held:
+        return []
+    locked_hashes = {i.sha256 for i in held}
+    return [
+        Dropped(
+            i.rel,
+            i.split,
+            DUPLICATE_OF_TEST if i.sha256 in locked_hashes else GROUP_IN_TEST,
+        )
+        for i in group
+        if i not in held
+    ]
+
+
+def _units(
+    items: list[Item], *, locked: bool, by_group: bool
+) -> tuple[list[_Unit], list[Dropped]]:
+    """Connected sets of items (same bytes, or same group); drop the ones that
+    touch the locked split, apart from the locked images themselves."""
     units: list[_Unit] = []
     dropped: list[Dropped] = []
-    for group in members.values():
-        locked_hashes = {i.sha256 for i in group if locked and i.split == _TEST}
-        pool = [i for i in group if not (locked and i.split == _TEST)]
-        if len(pool) < len(group):
-            for item in pool:
-                reason = (
-                    DUPLICATE_OF_TEST if item.sha256 in locked_hashes else GROUP_IN_TEST
-                )
-                dropped.append(Dropped(item.rel, item.split, reason))
-            continue
-        units.append(_unit(group))
+    for group in _members(items, by_group=by_group):
+        if any(locked and i.split == _TEST for i in group):
+            dropped.extend(_dropped_by_lock(group, locked=locked))
+        else:
+            units.append(_unit(group))
     dropped.sort(key=lambda d: d.rel)
     return units, dropped
 

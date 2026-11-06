@@ -35,6 +35,8 @@ import { useT } from "../i18n/useT";
 import { DatasetPicker } from "./DatasetPicker";
 import { Segmented, SelectField, TextField } from "./controls";
 import { button, card, ghostButton, mono, sectionLabel } from "./datasetExplorerStyles";
+import { CocoExportPanel } from "./CocoExportPanel";
+import { CocoImportPanel } from "./CocoImportPanel";
 import { IncorporatePanel } from "./IncorporatePanel";
 import { MergePanel } from "./MergePanel";
 import { ResplitPanel } from "./ResplitPanel";
@@ -519,6 +521,12 @@ export function DatasetExplorer() {
     setForm(next);
     void load(next);
   };
+  // An imported COCO folder becomes a YOLO detection dataset: open it as such.
+  const openDetectionResult = (path: string) => {
+    const next = { ...openResultForm(opened ?? form, path), task: "detection" as const };
+    setForm(next);
+    void load(next);
+  };
   const canOpen = form.base_dir.trim() !== "" && !loading;
 
   return (
@@ -579,6 +587,9 @@ export function DatasetExplorer() {
           {summary ? t.refresh : t.open}
         </button>
       </div>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-start" }}>
+        <CocoImportPanel onOpenResult={openDetectionResult} />
+      </div>
       {loading && <div style={mono}>{t.loading}</div>}
       {error && <div style={{ ...mono, color: "var(--vf-danger, #f87171)" }}>{t.loadFailed(error)}</div>}
       {summary && opened && (
@@ -592,6 +603,7 @@ export function DatasetExplorer() {
                 <IncorporatePanel form={opened} onOpenResult={openResult} />
                 <MergePanel form={opened} onOpenResult={openResult} />
                 <ResplitPanel form={opened} onOpenResult={openResult} />
+                {opened.task === "detection" && <CocoExportPanel form={opened} />}
               </div>
               <Gallery form={opened} summary={summary} />
               <ScanPanel form={opened} />

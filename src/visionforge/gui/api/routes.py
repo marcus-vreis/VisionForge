@@ -77,6 +77,7 @@ from visionforge.core.task_runner import (
     require_validation_selection,
     runner_metric_direction,
 )
+from visionforge.gui.api.coco_routes import router as coco_router
 from visionforge.gui.api.colab_connection import PINNED_VERSION as _COLAB_PIN
 from visionforge.gui.api.colab_connection import ColabCli, LoginFlows
 from visionforge.gui.api.colab_drive import (
@@ -508,6 +509,7 @@ router.include_router(incorporate_router)
 router.include_router(merge_router)
 # Re-splitting a dataset into a new one (ADR-168).
 router.include_router(resplit_router)
+router.include_router(coco_router)
 # History list, detail and delete live in runs_routes.py (ADR-132); the lookups
 # and the running job's state stay owned here and are read per request.
 router.include_router(
