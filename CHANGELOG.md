@@ -15,6 +15,26 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Added
 
+- **Converter YOLO e COCO** (ADR-169, fase 4b da issue #117): na aba Explorar,
+  "Exportar para COCO" (com um dataset de detecção aberto) e "Importar COCO"
+  (sempre visível) escrevem sempre um dataset novo, numa pasta irmã
+  (`<nome>-coco`, `<nome>-yolo`). A origem não é alterada.
+  - **Exportar:** `images/<divisão>/` e um `annotations/instances_<divisão>.json`
+    por divisão, com caixas `[x, y, w, h]` em pixels, `categories` com id = id YOLO + 1
+    e `info` com versão, data e impressão digital da origem. Imagem que não abre
+    ou com linha de rótulo malformada fica de fora e é listada; imagem sem rótulo
+    é mantida sem anotações.
+  - **Importar:** detecta os `.json` de anotações, a divisão pelo nome
+    (`instances_val2017.json` vira `val`; nome sem divisão pede que você escolha ou
+    ignore) e a pasta das imagens. Só as caixas entram (segmentação é ignorada);
+    `iscrowd` é pulado, caixas são recortadas na imagem e as sem área saem; ids
+    de categoria viram 0..N-1 em ordem crescente e nomes repetidos ganham
+    `_<id>`. Tudo que ficou de fora aparece na prévia, por motivo.
+  - **Seguro:** pasta temporária e renomeação atômica (cancelar ou falhar não
+    deixa nada), 409 se a origem mudou depois da prévia, um trabalho por vez e
+    `visionforge_dataset.json` (`kind: "coco_export"` / `"coco_import"`).
+    Ida e volta YOLO, COCO, YOLO mantém nomes e caixas dentro de 1e-5.
+
 - **Refazer divisão** (ADR-168, fase 4a da issue #117): na aba Explorar, o botão
   "Refazer divisão" cria um dataset novo, numa pasta irmã do aberto, com as
   imagens de treino e validação redistribuídas. O original não é alterado.

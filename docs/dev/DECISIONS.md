@@ -7191,3 +7191,42 @@ opening another tab to allow the Drive is fine.
 - *Re-split everything by default.* Makes a new run incomparable with the old ones; it stays one click away.
 - *Moving the copies of a locked-test image to the test too.* It would grow the test set the user asked to keep untouched.
 - *Reading the group file with the audit's reader.* It demands one row per image and a file inside the dataset; a re-split is more useful when a partial, external file is enough.
+
+
+## ADR-169 — Detection datasets convert between YOLO and COCO by writing a new dataset
+
+**Date:** 2026-11-06
+**Status:** Accepted — phase 4b of issue #117 (detection only) implemented
+**Extends:** ADR-168 (re-split), ADR-167 (merge), ADR-166 (incorporate), ADR-165 (explorer), ADR-129 (fingerprint)
+
+**Context:** detection data arrives in two formats. VisionForge trains and explores YOLO; most public datasets and annotation tools speak COCO. Converting by hand is where boxes go wrong (centre against corner, normalized against pixels, ids that start at 1, crowd boxes, boxes that leave the image). As with the other derived-dataset tools, the conversion must not touch its source: a changed folder would change a fingerprint that old `run.json` files remember.
+
+**Decision:**
+
+- **Never in place, shared mechanics.** Both directions write a sibling folder under `.<name>.tmp-<id>` and publish it with one rename (`core/dataset_derived.py`: `link_or_copy`, `claim_name`, `publish`, `ensure_unchanged`, registry). Images are hardlinked (copied when linking fails); cancellation, an error or a destination that appeared meanwhile leaves nothing. The apply is refused (409) if the fingerprint of the source folder changed since the preview, and again inside the write.
+- **Two named conversions.** `yolo_to_coco_bbox` (centre and size normalized to `[0, 1]` → top-left corner and size in absolute pixels, rounded to 6 decimals) and `coco_bbox_to_yolo` (its inverse, after clipping the box to the image). The convention is in the docstring; both are pure and tested on hand-computed values.
+- **Export YOLO → COCO** (`<name>-coco`). `images/<split>/` plus `annotations/instances_<split>.json` per existing split. `images` carry the real width and height (read with PIL), `categories` use `id = yolo id + 1` and `supercategory ""`, `annotations` use `iscrowd 0`, `segmentation []`, `area = w*h`; image and annotation ids are unique across the splits. `info` records the VisionForge version, the date and the source fingerprint. An image that does not open, or whose label has a malformed line (not five fields, a non-numeric or non-finite value, a negative or fractional class id, a width or height ≤ 0) is **excluded and reported**: an image is never half-converted. A background image (no label, or an empty one) is kept with no annotations.
+- **Import COCO → YOLO** (`<name>-yolo`). The folder the user picks is only read. Annotation files are `*.json` at the top and in `annotations/`; a JSON without the `images`, `annotations` and `categories` lists is listed as ignored. The split of each file comes from its name (`train`, `val`/`valid`/`validation`, `test`, with digits such as `val2017`); a name that says none is *unassigned* and the page asks for a split or to skip the file. Two files on one split are refused in the plan (400). The images folder of a file is the first of `images/<token>`, `<token>` (`val2017` as written, then the canonical split), the same with the file stem, folders named like a split (only for files with no detected split), `images`, the folder itself, that holds any of the first 20 `file_name`s; if none does the images are reported missing. A `file_name` that is absolute or contains `..` is refused.
+- **What the import does to boxes and ids.** Boxes only; segmentation is ignored and the preview says so. `iscrowd` boxes are skipped; boxes are clipped to the image, and one with width or height ≤ 0 afterwards is dropped; annotations of an unknown image or category and malformed `bbox`es are skipped; the real image size replaces the JSON one when they differ. Everything is counted by reason and the first 200 are listed. YOLO values are written with 6 decimals; images without annotations get an empty label file. Category ids become `0..N-1` in ascending COCO id; two categories with the same name are both kept and the later one becomes `name_<coco id>` (reported); one id with two different names in two files is refused (400). Blank or multi-line names are normalized so `classes.txt` keeps every id in place. The result has `classes.txt` and a `data.yaml` (`path`, the splits, `names`, `nc`). A file name already taken in a split (subfolders are flattened) becomes `stem-<sha8>`.
+- **Preview does the conversion.** The import preview opens each image (header only) and converts every box, so what the page shows is exactly what the apply writes; the plan (split per file, destination name) is instant and only decides which files feed which split and numbers the classes. The apply links and writes labels.
+- **Record.** `visionforge_dataset.json` (`schema_version` 1, `kind: "coco_export"` or `"coco_import"`): source path and fingerprint, classes, the id mapping (import), counts per split, everything left out or changed by reason with the first 200 listed, and files linked or copied.
+- **API.** `POST /api/explorer/coco/export/preview` (the dataset must have been opened in the explorer, 403 otherwise), `GET .../{job_id}`, `POST .../{job_id}/plan` (checks `dest_name`), `.../apply`, `.../cancel`; the same under `/import/` with `source_dir` instead (no allow-list: the folder is the user's own pick in the local GUI) and `splits` in plan and apply. Export and import share one job registry: one conversion at a time (409 busy). Suggested names are `<name>-coco` and `<name>-yolo`, then `-2`, `-3`. Every raised status is documented with literal keys in `responses=`.
+- **Page.** In the Explorar tab, "Exportar para COCO" (with a detection dataset open: counts per split, what is left out, destination, progress and cancel, the result path; no "open in the explorer", which does not read COCO) and "Importar COCO" (always visible: folder picker, a card per JSON with its split select, images folder, counts and reasons, the COCO id → YOLO id table, destination, apply, then "Abrir no explorador"). Logic in `lib/dataset-coco.ts`; progress bar and polling hook are shared.
+
+**Consequences:**
+
+- The OpenAPI snapshot gains the COCO operations; request models are named `Coco*`.
+- A round trip YOLO → COCO → YOLO keeps class names and boxes within 1e-5 (normalized); it is a test.
+- The import preview keeps the converted boxes of the whole folder in memory and opens every image once; for a very large COCO this is the cost of showing exact numbers.
+- The source fingerprint (manifest method, ADR-129) is "unavailable" above 200 000 files, in which case the "folder changed" check cannot detect anything.
+
+**Risks:**
+
+- A file that says no split is searched for its images only by the folders named like a split, its own stem, `images` and the root; an unusual layout shows every image as missing in the preview.
+- A crash between the first write and the rename leaves a hidden `.<name>.tmp-*` next to the source (as in ADR-166 to 168).
+
+**Alternatives considered:**
+
+- *`pycocotools`.* A new dependency for a format that is plain JSON, and the tool's own readers do more than this needs.
+- *Converting at the apply.* The preview could not then show what is left out and why.
+- *Importing crowd boxes and polygons.* YOLO detection has no crowd flag, and a polygon's bounding box is a different annotation from the one the author drew.
