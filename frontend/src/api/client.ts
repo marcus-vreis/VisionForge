@@ -20,6 +20,12 @@ import type {
   IncorporateResult,
   PlanBody,
 } from "../lib/dataset-incorporate";
+import type {
+  MappingBody,
+  MergePlan,
+  MergePreview,
+  MergeResult,
+} from "../lib/dataset-merge";
 import {
   activeProfileSlug,
   profileHeaders,
@@ -1554,6 +1560,58 @@ export async function incorporateApply(
 
 export async function incorporateCancel(jobId: string): Promise<void> {
   await request<unknown>(`${INCORPORATE}/${encodeURIComponent(jobId)}/cancel`, {
+    method: "POST",
+  });
+}
+
+// ── merging two datasets into a new one (ADR-167) ───────────────────────────
+
+const MERGE = "/explorer/merge";
+
+/** B is read with the same split folder names the form gives A. */
+export async function mergePreview(
+  form: ExplorerForm,
+  otherDir: string,
+): Promise<IncorporateJob<MergePreview>> {
+  return request<IncorporateJob<MergePreview>>(`${MERGE}/preview`, {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify({
+      ...explorerBody(form),
+      other_dir: otherDir.trim(),
+      other_train_dir: form.train_dir,
+      other_val_dir: form.val_dir,
+      other_test_dir: form.test_dir,
+    }),
+  });
+}
+
+export async function mergeStatus<R>(jobId: string): Promise<IncorporateJob<R>> {
+  return request<IncorporateJob<R>>(`${MERGE}/${encodeURIComponent(jobId)}`);
+}
+
+export async function mergePlan(jobId: string, mapping: MappingBody): Promise<MergePlan> {
+  return request<MergePlan>(`${MERGE}/${encodeURIComponent(jobId)}/plan`, {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ mapping }),
+  });
+}
+
+export async function mergeApply(
+  jobId: string,
+  mapping: MappingBody,
+  destName: string,
+): Promise<IncorporateJob<MergeResult>> {
+  return request<IncorporateJob<MergeResult>>(`${MERGE}/${encodeURIComponent(jobId)}/apply`, {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ mapping, dest_name: destName.trim() }),
+  });
+}
+
+export async function mergeCancel(jobId: string): Promise<void> {
+  await request<unknown>(`${MERGE}/${encodeURIComponent(jobId)}/cancel`, {
     method: "POST",
   });
 }

@@ -26,40 +26,16 @@ import {
   type PercentTexts,
 } from "../lib/dataset-incorporate";
 import { runPicker } from "../lib/picker-feedback";
+import { errorMessage as message, useJobPolling } from "../lib/useJobPolling";
 import { useT } from "../i18n/useT";
 import { Segmented, TextField } from "./controls";
 import { button, card, ghostButton, mono, sectionLabel } from "./datasetExplorerStyles";
+import { Progress } from "./JobProgress";
 
 const danger = { ...mono, color: "var(--vf-danger, #f87171)" };
 
-function Progress({ pct }: { pct: number }) {
-  return (
-    <div
-      role="progressbar"
-      aria-valuenow={pct}
-      aria-valuemin={0}
-      aria-valuemax={100}
-      style={{ height: 6, borderRadius: 3, background: "rgb(var(--lt-ink, 255 255 255) / 0.08)" }}
-    >
-      <div style={{ height: "100%", width: `${pct}%`, borderRadius: 3, background: "var(--accent-vf)" }} />
-    </div>
-  );
-}
-
-const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
-
-/** Polls a running job every 500 ms until it leaves "running". */
-function useJobPolling<R>(job: IncorporateJob<R> | null, set: (j: IncorporateJob<R>) => void, fail: (m: string) => void) {
-  const jobId = job?.job_id ?? null;
-  const running = job !== null && !isJobFinished(job.state);
-  useEffect(() => {
-    if (!jobId || !running) return;
-    const timer = setInterval(() => {
-      incorporateStatus<R>(jobId).then(set).catch((e: unknown) => fail(message(e)));
-    }, 500);
-    return () => clearInterval(timer);
-  }, [jobId, running, set, fail]);
-}
+const pollPreview = (id: string) => incorporateStatus<IncorporatePreview>(id);
+const pollApply = (id: string) => incorporateStatus<IncorporateResult>(id);
 
 function PlanView({
   plan,
@@ -204,8 +180,8 @@ export function IncorporatePanel({
     setApplyJob(j);
     if (isJobFinished(j.state)) setCancelling(false);
   }, []);
-  useJobPolling(previewJob, onPreview, fail);
-  useJobPolling(applyJob, onApply, fail);
+  useJobPolling(previewJob, pollPreview, onPreview, fail);
+  useJobPolling(applyJob, pollApply, onApply, fail);
 
   const present = preview?.present ?? { train: true, val: true, test: true };
   const body = buildPlanBody({ accepted, seedText, custom, percents, present });
@@ -298,7 +274,7 @@ export function IncorporatePanel({
     : jobPercent(applyJob?.done ?? 0, applyJob?.total ?? 0);
 
   return (
-    <div style={card}>
+    <div style={{ ...card, flexBasis: "100%" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={sectionLabel}>{t.open}</div>
         <button type="button" style={ghostButton} onClick={() => setExpanded(false)}>
