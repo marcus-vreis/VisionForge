@@ -363,7 +363,8 @@ class TestPlan:
             plan = plan_incorporation(analysis, seed=seed)
             return [(c.rel, s) for c, s in plan.assignments]
 
-        assert assignment(3) == assignment(3)
+        first = assignment(3)
+        assert assignment(3) == first
         assert assignment(3) != assignment(4)
 
     def test_same_seed_gives_the_same_dataset_on_disk(self, tmp_path: Path) -> None:
@@ -488,8 +489,9 @@ class TestBuild:
     ) -> None:
         base = _classification(tmp_path / "ds")
         analysis = _analyze(base, _new_folder(tmp_path / "new", {"cat": 2}))
+        plan = plan_incorporation(analysis)
         with pytest.raises(IncorporateError) as caught:
-            build_incorporated_dataset(analysis, plan_incorporation(analysis), name)
+            build_incorporated_dataset(analysis, plan, name)
         assert caught.value.code == "incorporate.bad_dest_name"
 
     def test_existing_destination_is_never_touched(self, tmp_path: Path) -> None:
@@ -497,8 +499,9 @@ class TestBuild:
         analysis = _analyze(base, _new_folder(tmp_path / "new", {"cat": 2}))
         (tmp_path / "taken").mkdir()
         (tmp_path / "taken" / "keep.txt").write_text("x", encoding="utf-8")
+        plan = plan_incorporation(analysis)
         with pytest.raises(IncorporateError) as caught:
-            build_incorporated_dataset(analysis, plan_incorporation(analysis), "taken")
+            build_incorporated_dataset(analysis, plan, "taken")
         assert caught.value.code == "incorporate.dest_exists"
         assert _files(tmp_path / "taken") == {"keep.txt"}
 
@@ -506,8 +509,9 @@ class TestBuild:
         base = _classification(tmp_path / "ds")
         analysis = _analyze(base, _new_folder(tmp_path / "new", {"cat": 2}))
         _png(base / "train/cat/extra.png", 7777)
+        plan = plan_incorporation(analysis)
         with pytest.raises(DatasetChangedError) as caught:
-            build_incorporated_dataset(analysis, plan_incorporation(analysis), "ds-v2")
+            build_incorporated_dataset(analysis, plan, "ds-v2")
         assert caught.value.code == "incorporate.base_changed"
         assert not (tmp_path / "ds-v2").exists()
 
@@ -518,8 +522,9 @@ class TestBuild:
         source = _new_folder(tmp_path / "new", {"cat": 3})
         analysis = _analyze(base, source)
         _png(source / "cat" / "n1.png", 31337)  # replaced after the preview
+        plan = plan_incorporation(analysis)
         with pytest.raises(DatasetChangedError):
-            build_incorporated_dataset(analysis, plan_incorporation(analysis), "ds-v2")
+            build_incorporated_dataset(analysis, plan, "ds-v2")
         assert not (tmp_path / "ds-v2").exists()
         assert [p.name for p in tmp_path.iterdir() if p.name.startswith(".")] == []
 
@@ -563,10 +568,11 @@ class TestBuild:
             raise OSError(errno.ENOSPC, "disk full")
 
         monkeypatch.setattr("visionforge.core.dataset_incorporate.shutil.copy2", boom)
+        plan = plan_incorporation(analysis)
         with pytest.raises(OSError):
             build_incorporated_dataset(
                 analysis,
-                plan_incorporation(analysis),
+                plan,
                 "ds-v2",
                 link=lambda _s, _d: (_ for _ in ()).throw(OSError(errno.EXDEV, "x")),
             )

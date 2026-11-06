@@ -44,7 +44,6 @@ from visionforge.core.dataset_audit import _verified_image_digest
 from visionforge.core.dataset_explorer import (
     IMAGE_EXTS,
     SPLIT_NAMES,
-    DatasetIndex,
     ExplorerTask,
     build_index,
     read_yolo_class_names,
@@ -68,7 +67,8 @@ NO_CLASS_FOLDER = "no_class_folder"
 UNKNOWN_CLASS = "unknown_class"
 
 _CHUNK = 1024 * 1024
-_CLASS_FILES = ("classes.txt", "names.txt", "data.yaml", "data.yml")
+_CLASSES_TXT = "classes.txt"
+_CLASS_FILES = (_CLASSES_TXT, "names.txt", "data.yaml", "data.yml")
 
 
 class IncorporateError(Exception):
@@ -293,7 +293,7 @@ def analyze_incorporation(
     for path in sources:
         if is_cancelled(token):
             return None
-        _consider(analysis, index, path, source_names, existing, seen_new)
+        _consider(analysis, path, source_names, existing, seen_new)
         tick()
 
     _collect_new_classes(analysis)
@@ -302,7 +302,6 @@ def analyze_incorporation(
 
 def _consider(
     analysis: Analysis,
-    index: DatasetIndex,
     path: Path,
     source_names: list[str],
     existing: Mapping[str, str],
@@ -528,7 +527,8 @@ def plan_incorporation(
     assignments: list[tuple[Candidate, str]] = []
     for stratum in sorted(by_stratum):
         group = sorted(by_stratum[stratum], key=lambda c: (c.sha256, c.rel))
-        rng = random.Random(f"{seed}|{stratum}")
+        # A reproducible split, not a secret: the seed is recorded on purpose.
+        rng = random.Random(f"{seed}|{stratum}")  # NOSONAR python:S2245
         rng.shuffle(group)
         quota = _allocate(len(group), effective, rng)
         start = 0
@@ -727,7 +727,7 @@ def _write(
         tick()
 
     final_ids = {name: i for i, name in enumerate(plan.classes)}
-    layout = _layout(analysis, plan)
+    layout = _layout(analysis)
     taken: dict[Path, set[str]] = {}
     placed = 0
     for cand, split in plan.assignments:
@@ -757,9 +757,7 @@ def _write(
             (tmp / labels_dir).mkdir(parents=True, exist_ok=True)
             _write_label(
                 cand,
-                plan,
                 final_ids,
-                analysis,
                 tmp / labels_dir / f"{Path(name).stem}.txt",
             )
         placed += 1
@@ -785,7 +783,7 @@ def _base_files(base: Path) -> list[str]:
     return found
 
 
-def _layout(analysis: Analysis, plan: Plan) -> dict[str, tuple[Path, Path | None]]:
+def _layout(analysis: Analysis) -> dict[str, tuple[Path, Path | None]]:
     """Where new images of each split go, relative to the dataset root."""
     layout: dict[str, tuple[Path, Path | None]] = {}
     for split in SPLIT_NAMES:
@@ -813,9 +811,7 @@ def _occupied(tmp: Path, folder: Path, labels_dir: Path | None, task: str) -> se
 
 def _write_label(
     cand: Candidate,
-    plan: Plan,
     final_ids: Mapping[str, int],
-    analysis: Analysis,
     target: Path,
 ) -> None:
     """Copy the label byte for byte when no id moves, else write it with new ids."""
@@ -845,7 +841,7 @@ def _write_class_files(analysis: Analysis, plan: Plan, tmp: Path, dest: Path) ->
         return
     base = analysis.base_root
     wrote = False
-    for name in ("classes.txt", "names.txt"):
+    for name in (_CLASSES_TXT, "names.txt"):
         if (base / name).is_file():
             (tmp / name).write_text("\n".join(plan.classes) + "\n", encoding="utf-8")
             wrote = True
@@ -854,7 +850,7 @@ def _write_class_files(analysis: Analysis, plan: Plan, tmp: Path, dest: Path) ->
             _write_yaml(base / name, tmp / name, plan.classes, base, dest)
             wrote = True
     if not wrote:
-        (tmp / "classes.txt").write_text(
+        (tmp / _CLASSES_TXT).write_text(
             "\n".join(plan.classes) + "\n", encoding="utf-8"
         )
 

@@ -20,12 +20,12 @@ def _png(path: Path, seed: int) -> None:
     Image.new("RGB", (8, 8), (seed % 256, seed // 256, 3)).save(path)
 
 
-@pytest.fixture()
+@pytest.fixture
 def client() -> TestClient:
     return TestClient(app, raise_server_exceptions=True)
 
 
-@pytest.fixture()
+@pytest.fixture
 def dataset(tmp_path: Path, client: TestClient) -> Path:
     base = tmp_path / "ds"
     n = 0
@@ -39,7 +39,7 @@ def dataset(tmp_path: Path, client: TestClient) -> Path:
     return base
 
 
-@pytest.fixture()
+@pytest.fixture
 def new_images(tmp_path: Path) -> Path:
     source = tmp_path / "new"
     n = 5000

@@ -40,6 +40,7 @@ from visionforge.utils.paths import validate_path_component
 router = APIRouter(prefix="/explorer/incorporate")
 
 _JOBS = IncorporateJobs()
+_JOB_MISSING = "incorporate.job_missing"
 
 # Refusals that mean "the state of the disk is not what the request assumed".
 _CONFLICT_CODES = {
@@ -74,7 +75,7 @@ def _refuse(exc: IncorporateError) -> HTTPException:
 def _ready_job(job_id: str) -> IncorporateJob:
     job = _JOBS.get(job_id)
     if job is None or job.kind != "preview":
-        raise HTTPException(404, tr("incorporate.job_missing"))
+        raise HTTPException(404, tr(_JOB_MISSING))
     if job.state != "done" or job.analysis is None:
         raise HTTPException(409, tr("incorporate.preview_not_ready"))
     return job
@@ -89,14 +90,15 @@ async def incorporate_preview(req: PreviewRequest) -> dict[str, Any]:
     # Only a dataset the explorer already opened (the same allow-list as thumbnails).
     if not _is_inside_allowed_root(base.resolve()):
         raise HTTPException(403, tr("incorporate.base_not_opened"))
+    # The new-images folder is the user's own pick in the local GUI; it is only read.
     source = Path(req.source_dir)
-    if not source.is_dir():
+    if not source.is_dir():  # NOSONAR pythonsecurity:S6549
         raise HTTPException(400, tr("incorporate.source_missing", path=req.source_dir))
     try:
         job = _JOBS.start_preview(
             base.resolve(),
             req.task,
-            source.resolve(),
+            source.resolve(),  # NOSONAR pythonsecurity:S6549
             _split_dirs(req),
             await asyncio.to_thread(suggest_name, base),
         )
@@ -110,7 +112,7 @@ async def incorporate_status(job_id: str) -> dict[str, Any]:
     """Progress, and the preview or the result once the job has finished."""
     job = _JOBS.get(job_id)
     if job is None:
-        raise HTTPException(404, tr("incorporate.job_missing"))
+        raise HTTPException(404, tr(_JOB_MISSING))
     return job.snapshot()
 
 
@@ -162,7 +164,7 @@ async def incorporate_apply(job_id: str, req: ApplyRequest) -> dict[str, Any]:
 async def incorporate_cancel(job_id: str) -> dict[str, bool]:
     """Ask a running job to stop. An apply removes its temporary folder."""
     if not _JOBS.cancel(job_id):
-        raise HTTPException(404, tr("incorporate.job_missing"))
+        raise HTTPException(404, tr(_JOB_MISSING))
     return {"cancelling": True}
 
 
