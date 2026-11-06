@@ -1,4 +1,4 @@
-"""Dataset explorer core (ADR-164): index, counts, gallery, thumbnails and the scan.
+"""Dataset explorer core (ADR-165): index, counts, gallery, thumbnails and the scan.
 
 Every dataset is a few tiny images built in ``tmp_path``.
 """

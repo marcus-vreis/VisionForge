@@ -1,6 +1,6 @@
 """Read-only dataset explorer: index, distributions, thumbnails and integrity scan.
 
-Phase 1 of the datasets surface (ADR-164). Two layouts are understood, the two the
+Phase 1 of the datasets surface (ADR-165). Two layouts are understood, the two the
 GUI already accepts: an ImageFolder (``<split>/<class>/<image>``) and a YOLO
 detection dataset (``images/<split>`` + ``labels/<split>`` or the transposed one,
 resolved by :func:`resolve_yolo_split`). Nothing here writes to the dataset.

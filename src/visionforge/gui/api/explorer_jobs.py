@@ -1,4 +1,4 @@
-"""Background integrity scans for the dataset explorer (ADR-164).
+"""Background integrity scans for the dataset explorer (ADR-165).
 
 A scan opens and hashes every image, which on a big dataset takes minutes, so it
 runs in a worker thread with a progress counter and a cancellation token instead
@@ -80,7 +80,8 @@ class ScanJobs:
             result = scan_integrity(
                 index, max_images=max_images, token=job.token, on_progress=progress
             )
-        except Exception as exc:  # noqa: BLE001 - reported to the client, not raised
+        # Reported to the client, not raised.
+        except Exception as exc:  # noqa: BLE001
             logger.error("Explorer scan failed: {}", type(exc).__name__)
             job.error = f"{type(exc).__name__}: {exc}"
             job.state = "failed"

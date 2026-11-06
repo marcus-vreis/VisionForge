@@ -1,4 +1,4 @@
-"""Read-only dataset explorer endpoints (ADR-164).
+"""Read-only dataset explorer endpoints (ADR-165).
 
 Summary and gallery come from an index that only lists directories; thumbnails are
 resized server-side so the page never downloads a full-resolution image; the
@@ -36,6 +36,7 @@ from visionforge.gui.api.datasets_routes import (
     _remember_dataset_root,
 )
 from visionforge.gui.api.explorer_jobs import ScanBusyError, ScanJobs
+from visionforge.gui.api.http_responses import BAD_REQUEST, CONFLICT, NOT_FOUND
 from visionforge.utils.messages import tr
 
 router = APIRouter(prefix="/explorer")
@@ -136,7 +137,10 @@ async def explorer_images(req: ExplorerImagesRequest) -> dict[str, Any]:
     return await asyncio.to_thread(work)
 
 
-@router.get("/thumb")
+_FORBIDDEN: dict[int | str, dict[str, Any]] = {403: {"description": "Access denied"}}
+
+
+@router.get("/thumb", responses={**BAD_REQUEST, **_FORBIDDEN, **NOT_FOUND})
 def explorer_thumb(
     root: str, path: str, size: int = 160, label_path: str | None = None
 ) -> Response:
@@ -149,7 +153,8 @@ def explorer_thumb(
     if not base.is_absolute():
         raise HTTPException(400, tr("file.not_absolute"))
     try:
-        resolved_root = base.resolve(strict=True)
+        # Only roots the explorer already opened are served (checked below).
+        resolved_root = base.resolve(strict=True)  # NOSONAR pythonsecurity:S6549
     except OSError as exc:
         raise HTTPException(404, tr("file.not_found")) from exc
     if not _is_inside_allowed_root(resolved_root):
@@ -165,14 +170,15 @@ def explorer_thumb(
         raise HTTPException(400, tr("file.not_image"))
     try:
         data = render_thumbnail(image, size, label)
-    except Exception as exc:  # noqa: BLE001 - a broken file is a 422, not a crash
+    # A broken file is a 422, not a crash.
+    except Exception as exc:  # noqa: BLE001
         raise HTTPException(422, tr("explorer.unreadable_image")) from exc
     return Response(
         data, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=300"}
     )
 
 
-@router.post("/scan")
+@router.post("/scan", responses=CONFLICT)
 async def explorer_scan_start(req: ExplorerScanRequest) -> dict[str, Any]:
     """Start the integrity scan in the background; poll ``/scan/{job_id}``."""
     index = await asyncio.to_thread(_load_index, req, refresh=False)
@@ -183,7 +189,7 @@ async def explorer_scan_start(req: ExplorerScanRequest) -> dict[str, Any]:
     return job.snapshot()
 
 
-@router.get("/scan/{job_id}")
+@router.get("/scan/{job_id}", responses=NOT_FOUND)
 async def explorer_scan_status(job_id: str) -> dict[str, Any]:
     """Progress, and the report once the scan has finished or been cancelled."""
     job = _SCANS.get(job_id)
@@ -192,7 +198,7 @@ async def explorer_scan_status(job_id: str) -> dict[str, Any]:
     return job.snapshot()
 
 
-@router.post("/scan/{job_id}/cancel")
+@router.post("/scan/{job_id}/cancel", responses=NOT_FOUND)
 async def explorer_scan_cancel(job_id: str) -> dict[str, bool]:
     """Ask a running scan to stop; it keeps the partial report."""
     if not _SCANS.cancel(job_id):

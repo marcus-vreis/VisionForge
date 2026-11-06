@@ -1,4 +1,4 @@
-/** Pure helpers of the dataset explorer (ADR-164): request shaping, paging,
+/** Pure helpers of the dataset explorer (ADR-165): request shaping, paging,
  *  distribution bars and scan progress. Kept out of the component so they are
  *  unit-testable without a DOM. */
 

@@ -300,6 +300,7 @@
       "200": {
         "application/json": "object"
       },
+      "404": {},
       "422": {
         "application/json": "HTTPValidationError"
       }
@@ -319,6 +320,9 @@
       "200": {
         "application/json": null
       },
+      "400": {},
+      "403": {},
+      "404": {},
       "422": {
         "application/json": "HTTPValidationError"
       }
@@ -1332,6 +1336,7 @@
       "200": {
         "application/json": "object"
       },
+      "409": {},
       "422": {
         "application/json": "HTTPValidationError"
       }
@@ -1348,6 +1353,7 @@
       "200": {
         "application/json": "object"
       },
+      "404": {},
       "422": {
         "application/json": "HTTPValidationError"
       }

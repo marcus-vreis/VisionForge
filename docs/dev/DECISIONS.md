@@ -6945,7 +6945,7 @@ The numbers and the code reading behind this ADR are in the design doc's
   reliable, but it creates and releases a VM per call, which breaks a job
   that uploads, trains and downloads on the same machine.
 
-## ADR-164 — A read-only dataset explorer in the Datasets surface
+## ADR-165 — A read-only dataset explorer in the Datasets surface
 
 **Date:** 2026-11-05
 **Status:** Accepted — phase 1 of issue #117 (classification and detection, read only) implemented

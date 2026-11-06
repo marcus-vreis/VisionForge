@@ -1,4 +1,4 @@
-"""Dataset explorer endpoints (ADR-164): summary, gallery, thumbnails, scan job."""
+"""Dataset explorer endpoints (ADR-165): summary, gallery, thumbnails, scan job."""
 
 from __future__ import annotations
 

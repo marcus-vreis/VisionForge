@@ -526,7 +526,7 @@ function ScanPanel({ form }: { form: ExplorerForm }) {
   );
 }
 
-/** The read-only dataset explorer (ADR-164): distribution, a filterable gallery
+/** The read-only dataset explorer (ADR-165): distribution, a filterable gallery
  *  and an integrity scan for classification (ImageFolder) and detection (YOLO). */
 export function DatasetExplorer() {
   const t = useT().datasetExplorer;

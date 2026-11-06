@@ -857,7 +857,7 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "en": "Path is not inside any dataset directory probed this session.",
     },
     "file.access_denied": {"pt": "Acesso negado.", "en": "Access denied."},
-    # ── dataset explorer (gui/api/explorer_routes.py, ADR-164) ───────────────
+    # ── dataset explorer (gui/api/explorer_routes.py, ADR-165) ───────────────
     "explorer.scan_busy": {
         "pt": "Já existe uma varredura em andamento. Espere ou interrompa a atual.",
         "en": "A scan is already running. Wait for it or cancel it.",

@@ -15,7 +15,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Added
 
-- **Explorador de datasets** (fase 1 da issue #117, ADR-164): uma aba
+- **Explorador de datasets** (fase 1 da issue #117, ADR-165): uma aba
   "Explorar" no botão **Datasets**, só leitura, para classificação (pastas por
   classe) e detecção (YOLO).
   - **Distribuição:** imagens por classe e split; na detecção, caixas por

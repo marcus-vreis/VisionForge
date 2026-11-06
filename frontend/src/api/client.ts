@@ -1418,7 +1418,7 @@ export async function fetchServerVersion(): Promise<string | null> {
   }
 }
 
-// ── dataset explorer (ADR-164) ───────────────────────────────────────────────
+// ── dataset explorer (ADR-165) ───────────────────────────────────────────────
 
 const JSON_HEADERS = { "Content-Type": "application/json" };
 
