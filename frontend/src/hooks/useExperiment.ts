@@ -207,8 +207,8 @@ export function useExperiment(): ExperimentState {
     () => {
       stopPolling();
       const tick = async () => {
-        const s = await fetchStatus();
         const mine = myRunRef.current;
+        const s = await fetchStatus(mine);
 
         if (mine !== null && s.run_id !== mine) {
           if (startedRef.current) {

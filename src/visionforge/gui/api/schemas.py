@@ -49,6 +49,8 @@ class QueuedJobInfo(BaseModel):
     # Whose folders the job writes into (ADR-114); "default" is the legacy layout.
     profile: str = "default"
     profile_name: str = "default"
+    # The queue that runs it (ADR-163, phase 4): "local" or "colab:<e-mail>".
+    lane: str = "local"
 
 
 class ProfileInfo(BaseModel):
@@ -81,11 +83,28 @@ class ProfileUpdateRequest(BaseModel):
     pronoun: Pronoun | None = None
 
 
+class QueueLane(BaseModel):
+    """One queue that runs jobs one at a time (ADR-163, phase 4).
+
+    ``lane`` is ``"local"`` for this machine, or ``"colab:<e-mail>"`` for a
+    Google account: every profile logged into that account shares it.
+    """
+
+    lane: str
+    active: QueuedJobInfo | None = None
+    pending: list[QueuedJobInfo] = []
+
+
 class QueueSnapshot(BaseModel):
-    """The active job and everything waiting behind it, in submission order."""
+    """The local queue's active job and pending list, and every queue in ``lanes``.
+
+    ``active`` and ``pending`` are the local queue's, as before the Colab queues;
+    ``lanes`` holds the local queue first, then one per Google account.
+    """
 
     active: QueuedJobInfo | None = None
     pending: list[QueuedJobInfo] = []
+    lanes: list[QueueLane] = []
 
 
 class ComparisonRequest(BaseModel):

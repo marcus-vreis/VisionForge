@@ -12,6 +12,8 @@ import visionforge.gui.api.routes as routes_mod
 from visionforge.gui.api.run_events import RunEventLog
 from visionforge.gui.server import app
 
+from .conftest import start_job
+
 
 def _closed_log(run_id: str, count: int) -> RunEventLog:
     log = RunEventLog(run_id)
@@ -66,7 +68,7 @@ def _stream(client: TestClient, query: str) -> list[dict[str, object]]:
 def test_route_replays_the_run_and_refuses_another_runs_id(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(routes_mod, "_event_queue", _closed_log("r1", 2))
+    start_job(routes_mod, "r1", log=_closed_log("r1", 2))
     client = TestClient(app)
     assert [e["epoch"] for e in _stream(client, "")] == [0, 1]
     assert [e["epoch"] for e in _stream(client, "?run_id=r1&after=1")] == [1]

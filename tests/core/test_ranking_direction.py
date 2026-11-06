@@ -264,18 +264,18 @@ class TestTheExportsFollowTheRanking:
                 "models_dir": str(tmp_path / "models"),
             },
         }
-        routes_mod._active_cancel_token = CancellationToken()
-        routes_mod._event_queue = None
+        from tests.gui.conftest import job_run, release_queue, start_job
+
+        start_job(routes_mod, "r", cancel_token=CancellationToken())
         try:
             asyncio.run(
                 routes_mod._execute_comparison(
                     runner, base, ["a", "b", "c"], "rmse", "r"
                 )
             )
-            state = dict(routes_mod._current_run or {})
+            state = dict(job_run(routes_mod, "r") or {})
         finally:
-            routes_mod._active_cancel_token = None
-            routes_mod._current_run = None
+            release_queue(routes_mod)
 
         report = state["report"]
         assert report["metric_direction"] == "lower"
@@ -310,14 +310,14 @@ class TestTheExportsFollowTheRanking:
         req = SweepRequest(
             config=base, search_space={"training.learning_rate": [0.1, 0.2, 0.3]}
         )
-        routes_mod._active_cancel_token = CancellationToken()
-        routes_mod._event_queue = None
+        from tests.gui.conftest import job_run, release_queue, start_job
+
+        start_job(routes_mod, "r", cancel_token=CancellationToken())
         try:
             asyncio.run(routes_mod._execute_sweep(runner, base, req, "rmse", "r"))
-            state = dict(routes_mod._current_run or {})
+            state = dict(job_run(routes_mod, "r") or {})
         finally:
-            routes_mod._active_cancel_token = None
-            routes_mod._current_run = None
+            release_queue(routes_mod)
 
         report = state["report"]
         assert report["metric_direction"] == "lower"

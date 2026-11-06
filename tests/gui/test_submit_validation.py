@@ -27,7 +27,7 @@ def client_and_routes():  # type: ignore[no-untyped-def]
     import visionforge.gui.api.routes as routes_mod
     from visionforge.gui.server import app
 
-    routes_mod._current_run = None
+    routes_mod._JOB_STATES.clear()
     return TestClient(app, raise_server_exceptions=True), routes_mod
 
 

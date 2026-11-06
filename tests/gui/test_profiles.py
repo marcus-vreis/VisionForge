@@ -69,7 +69,7 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):  # type: ignore[no-unt
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(routes_mod, "_MODELS_DIR", Path("outputs/models"))
     monkeypatch.setattr(routes_mod, "_PROFILES_DIR", Path("outputs/profiles"))
-    routes_mod._current_run = None
+    routes_mod._JOB_STATES.clear()
     yield app, routes_mod
     release_queue(routes_mod)
 
@@ -971,8 +971,8 @@ class TestARealRunLandsInItsProfile:
                 yield client
         finally:
             routes_mod._RUN_QUEUE.reset()
-            routes_mod._current_run = None
-            routes_mod._active_cancel_token = None
+            routes_mod._JOB_STATES.clear()
+            routes_mod._JOB_STATES.clear()
             clear_task_registry()
 
     @staticmethod

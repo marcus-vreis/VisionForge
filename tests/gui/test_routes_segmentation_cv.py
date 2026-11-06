@@ -42,7 +42,7 @@ class TestSegmentationCv:
         )
 
         app, routes_mod = app_and_routes
-        routes_mod._current_run = None
+        routes_mod._JOB_STATES.clear()
 
         captured: dict[str, object] = {}
 
@@ -91,7 +91,7 @@ class TestSegmentationCv:
             assert (Path(report["report_dir"]) / "cv_summary.json").exists()
         finally:
             routes_mod.run_segmentation_cross_validation = orig
-            routes_mod._current_run = None
+            routes_mod._JOB_STATES.clear()
 
     def test_queues_behind_a_running_job(
         self, app_and_routes: tuple, tmp_path: Path
@@ -113,7 +113,7 @@ class TestSegmentationCv:
         self, app_and_routes: tuple, tmp_path: Path
     ) -> None:
         app, routes_mod = app_and_routes
-        routes_mod._current_run = None
+        routes_mod._JOB_STATES.clear()
         cfg = _payload(tmp_path)
         # ignore_index colliding with a class id → invalid SegmentationConfig
         cfg["data"]["ignore_index"] = 1

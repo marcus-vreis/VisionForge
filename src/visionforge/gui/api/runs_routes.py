@@ -39,13 +39,13 @@ from visionforge.utils.messages import tr
 def build_runs_router(
     find_run_dir: Callable[[str, Profile], Path | None],
     resolve_profile: Callable[[str | None], Profile],
-    current_run: Callable[[], dict[str, Any] | None],
+    run_state: Callable[[str], dict[str, Any] | None],
     client_host: Callable[[Request], str | None],
 ) -> APIRouter:
     """Build the history endpoints; routes.py owns the lookups, read per request.
 
-    ``current_run`` returns the state of the job executing now, so a delete can
-    refuse that run without this module holding a copy of it.
+    ``run_state`` returns the state of the job with that run id, if one started,
+    so a delete can refuse a running one without this module holding a copy.
     """
     router = APIRouter()
 
@@ -86,7 +86,7 @@ def build_runs_router(
         if run_dir is None:
             raise HTTPException(404, tr(RUN_NOT_FOUND_KEY, run_id=run_id))
 
-        _delete_run_directory(run_id, run_dir, profile, current_run())
+        _delete_run_directory(run_id, run_dir, profile, run_state(run_id))
         return {"run_id": run_id, "status": "deleted"}
 
     return router

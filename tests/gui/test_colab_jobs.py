@@ -22,7 +22,7 @@ from visionforge.gui.api import colab_jobs as cj
 from visionforge.gui.api import colab_remote_runner as runner
 from visionforge.gui.api.run_events import RunEventLog
 
-from .conftest import occupy_queue, release_queue
+from .conftest import job_run, occupy_queue, release_queue, start_job
 
 PAYLOAD = {
     "version": "0.20.2",
@@ -436,7 +436,11 @@ def test_colab_run_is_queued_with_a_vm_stop(monkeypatch: pytest.MonkeyPatch) -> 
         routes_mod._COLAB_CLI, "installed_version", lambda: cc.PINNED_VERSION
     )
     monkeypatch.setattr(routes_mod._COLAB_CLI, "logged_in", lambda slug: True)
-    occupy_queue(routes_mod)
+    monkeypatch.setattr(
+        routes_mod._COLAB_CLI, "account", lambda slug: "Ana@Example.com"
+    )
+    # The account's queue is the busy one: the job waits there, not locally.
+    occupy_queue(routes_mod, lane="colab:ana@example.com")
     try:
         client = TestClient(app)
         body = {
@@ -451,11 +455,29 @@ def test_colab_run_is_queued_with_a_vm_stop(monkeypatch: pytest.MonkeyPatch) -> 
         response = client.post("/api/colab/experiment/run", json=body)
         assert response.status_code == 200
         assert response.json()["status"] == "queued"
-        pending = client.get("/api/queue").json()["pending"]
-        assert pending[0]["strategy"] == "colab"
-        assert pending[0]["stop_at"] == "vm"
+        snapshot = client.get("/api/queue").json()
+        assert snapshot["pending"] == []
+        lanes = {lane["lane"]: lane for lane in snapshot["lanes"]}
+        [pending] = lanes["colab:ana@example.com"]["pending"]
+        assert pending["strategy"] == "colab"
+        assert pending["stop_at"] == "vm"
+        assert pending["lane"] == "colab:ana@example.com"
     finally:
         release_queue(routes_mod)
+
+
+def test_two_profiles_on_one_account_share_its_queue(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import visionforge.gui.api.routes as routes_mod
+
+    accounts = {"ana": "ana@example.com", "lab": "ANA@example.com", "bob": None}
+    monkeypatch.setattr(routes_mod._COLAB_CLI, "account", accounts.get)
+
+    assert routes_mod._colab_lane_of("ana") == routes_mod._colab_lane_of("lab")
+    assert routes_mod._colab_lane_of("ana") == "colab:ana@example.com"
+    # A login whose e-mail was not reported gets a queue of its own.
+    assert routes_mod._colab_lane_of("bob") == "colab:profile:bob"
 
 
 def test_execute_colab_records_the_report_and_closes_the_stream(
@@ -471,20 +493,19 @@ def test_execute_colab_records_the_report_and_closes_the_stream(
     monkeypatch.setattr(routes_mod, "_COLAB_JOBS", Jobs())
 
     async def go() -> list[dict[str, Any]]:
-        routes_mod._event_queue = RunEventLog("r1")
+        start_job(routes_mod, "r1", log=RunEventLog("r1"))
         await routes_mod._execute_colab("r1", "default", "T4", PAYLOAD, UNUSED_MODELS)
         await asyncio.sleep(0)
-        return [e async for e in routes_mod._event_queue.read()]
+        return [e async for e in routes_mod._job_state("r1").log.read()]
 
     try:
         events = asyncio.run(go())
         assert events == [{"event": "epoch_end", "epoch": 1}]
-        assert routes_mod._current_run is not None
-        assert routes_mod._current_run["status"] == "completed"
-        assert routes_mod._current_run["report"] == {"accuracy": 0.8}
+        assert job_run(routes_mod, "r1") is not None
+        assert job_run(routes_mod, "r1")["status"] == "completed"
+        assert job_run(routes_mod, "r1")["report"] == {"accuracy": 0.8}
     finally:
         release_queue(routes_mod)
-        routes_mod._event_queue = None
 
 
 def test_colab_run_still_rejects_a_bad_config_before_paying_for_a_vm(
@@ -703,15 +724,14 @@ def test_execute_colab_delivers_every_event_before_closing_the_stream(
     monkeypatch.setattr(routes_mod, "_COLAB_JOBS", Jobs())
 
     async def go() -> list[dict[str, Any]]:
-        routes_mod._event_queue = SlowDeliveryLog("r1")
+        start_job(routes_mod, "r1", log=SlowDeliveryLog("r1"))
         await routes_mod._execute_colab("r1", "default", "T4", PAYLOAD, UNUSED_MODELS)
-        return [e async for e in routes_mod._event_queue.read()]
+        return [e async for e in routes_mod._job_state("r1").log.read()]
 
     try:
         assert asyncio.run(go()) == sent
     finally:
         release_queue(routes_mod)
-        routes_mod._event_queue = None
 
 
 class RecordingLog(SlowDeliveryLog):
@@ -746,7 +766,7 @@ def test_execute_colab_has_each_event_in_the_log_when_on_event_returns(
     monkeypatch.setattr(routes_mod, "_COLAB_JOBS", Jobs())
 
     async def go() -> None:
-        routes_mod._event_queue = log
+        start_job(routes_mod, "r1", log=log)
         await routes_mod._execute_colab("r1", "default", "T4", PAYLOAD, UNUSED_MODELS)
 
     try:
@@ -755,7 +775,6 @@ def test_execute_colab_has_each_event_in_the_log_when_on_event_returns(
         assert log.landed == [*sent, None]
     finally:
         release_queue(routes_mod)
-        routes_mod._event_queue = None
 
 
 class StalledLog(RunEventLog):
@@ -781,14 +800,13 @@ def test_execute_colab_drops_an_event_the_loop_never_takes_and_finishes(
     monkeypatch.setattr(routes_mod, "_COLAB_EVENT_TIMEOUT_S", 0.05)
 
     async def go() -> list[dict[str, Any]]:
-        routes_mod._event_queue = StalledLog("r1")
+        start_job(routes_mod, "r1", log=StalledLog("r1"))
         await routes_mod._execute_colab("r1", "default", "T4", PAYLOAD, UNUSED_MODELS)
-        return [e async for e in routes_mod._event_queue.read()]
+        return [e async for e in routes_mod._job_state("r1").log.read()]
 
     try:
         assert asyncio.run(go()) == []
-        assert routes_mod._current_run is not None
-        assert routes_mod._current_run["status"] == "completed"
+        assert job_run(routes_mod, "r1") is not None
+        assert job_run(routes_mod, "r1")["status"] == "completed"
     finally:
         release_queue(routes_mod)
-        routes_mod._event_queue = None

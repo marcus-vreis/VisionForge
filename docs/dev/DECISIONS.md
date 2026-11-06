@@ -6807,7 +6807,7 @@ other pictures (boxes, masks, a scatter, the anomaly map) and are left for later
 ## ADR-163 — Training on Google Colab through the official CLI
 
 **Date:** 2026-11-05
-**Status:** Accepted — phases 1 (connection and login), 2 (remote training, classification) and 3 (importing the result) implemented; phase 4 ships as its own PR
+**Status:** Accepted — phases 1 (connection and login), 2 (remote training, classification) and 3 (importing the result) implemented; phase 4 (parallel queues) implemented in the backend, its GUI in the next PR
 **Extends:** ADR-075 (the run queue), ADR-114 (profiles), ADR-160 (the live Results tab)
 
 **Context:** many users have no local GPU, and Colab has one. The 2026-11-04
@@ -6893,6 +6893,16 @@ The numbers and the code reading behind this ADR are in the design doc's
 4. **Parallel queues.** One Colab queue per account next to the local queue.
    This means decoupling the SSE stream and the result records from the single
    active job of `RunQueue`.
+   - As built (backend): `RunLanes` holds the local `RunQueue` and one per
+     account, keyed `colab:<e-mail>` from `colab whoami`. A login with no e-mail
+     reported gets a lane of its own, `colab:profile:<slug>`, rather than one
+     shared by guess.
+   - Each started job has a `JobState` (event log, cancellation token, status)
+     by `run_id`, which its executor looks up; the three single-run globals of
+     `routes.py` are gone. The status and event endpoints take a `run_id` and
+     default to the job started last.
+   - `GET /api/queue` keeps the local lane's `active` and `pending` and adds
+     `lanes`, and every job carries its `lane`.
 
 **Consequence:**
 - A user without a GPU trains from the same GUI, with the same live tab, on

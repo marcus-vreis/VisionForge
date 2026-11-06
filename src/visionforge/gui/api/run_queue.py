@@ -78,6 +78,9 @@ class QueuedJob:
     profile: str = "default"
     profile_name: str = "default"
     resume_dir: Path | None = None
+    # Which queue runs it (ADR-163, phase 4): LOCAL_LANE, or the lane of one
+    # Google account. Set by RunLanes.submit.
+    lane: str = "local"
 
     def describe(self) -> dict[str, Any]:
         """JSON-ready form for the queue endpoint (never includes the callable)."""
@@ -90,6 +93,7 @@ class QueuedJob:
             "stop_at": self.stop_at,
             "profile": self.profile,
             "profile_name": self.profile_name,
+            "lane": self.lane,
         }
 
 
@@ -242,4 +246,85 @@ class RunQueue:
             self._records.pop(next(iter(self._records)))
 
 
-__all__ = ["NotStoppableError", "QueuedJob", "RunQueue", "StopPoint"]
+LOCAL_LANE = "local"
+COLAB_LANE_PREFIX = "colab:"
+
+
+def colab_lane(account: str) -> str:
+    """The lane of one Google account: profiles on the same account share it."""
+    return COLAB_LANE_PREFIX + account
+
+
+class RunLanes:
+    """The queues that may run at the same time (ADR-163, phase 4).
+
+    One lane per resource that runs a job: this machine (GPU or CPU, never both
+    at once, as ADR-075 made it) and each Google account, whose session quota
+    and compute units are the account's. Inside a lane jobs still run one at a
+    time; across lanes they run side by side. A run id lives in one lane, so the
+    lookups below search them all.
+    """
+
+    def __init__(self, local: RunQueue, make_lane: Callable[[], RunQueue]) -> None:
+        self._lanes: dict[str, RunQueue] = {LOCAL_LANE: local}
+        self._make_lane = make_lane
+
+    def lane(self, key: str) -> RunQueue:
+        """The queue of ``key``, created the first time a job goes to it."""
+        if key not in self._lanes:
+            self._lanes[key] = self._make_lane()
+        return self._lanes[key]
+
+    def submit(self, job: QueuedJob, lane: str = LOCAL_LANE) -> str:
+        """Enqueue in ``lane``; ``"running"`` if it starts now, else ``"queued"``."""
+        job.lane = lane
+        return self.lane(lane).submit(job)
+
+    def cancel(self, run_id: str) -> bool:
+        """Stop the job with that id in whichever lane holds it (see RunQueue.cancel)."""
+        return any(queue.cancel(run_id) for queue in list(self._lanes.values()))
+
+    def is_busy(self) -> bool:
+        """True while any lane runs a job or has one waiting."""
+        return any(
+            queue.is_busy() or queue.pending_count() for queue in self._lanes.values()
+        )
+
+    def pending_count(self) -> int:
+        """Jobs waiting to start, over all lanes."""
+        return sum(queue.pending_count() for queue in self._lanes.values())
+
+    def is_writing(self, run_id: str, run_dir: Path, profile: str) -> bool:
+        return any(
+            queue.is_writing(run_id, run_dir, profile) for queue in self._lanes.values()
+        )
+
+    def record(self, run_id: str) -> dict[str, Any] | None:
+        """The terminal snapshot of a finished run, from whichever lane ran it."""
+        for queue in self._lanes.values():
+            snapshot = queue.record(run_id)
+            if snapshot is not None:
+                return snapshot
+        return None
+
+    def snapshots(self) -> list[dict[str, Any]]:
+        """Each lane's active job and pending list, the local lane first."""
+        return [{"lane": key, **queue.snapshot()} for key, queue in self._lanes.items()]
+
+    def reset(self) -> None:
+        """Drop all state and every lane but the local one. For tests."""
+        for queue in self._lanes.values():
+            queue.reset()
+        self._lanes = {LOCAL_LANE: self._lanes[LOCAL_LANE]}
+
+
+__all__ = [
+    "COLAB_LANE_PREFIX",
+    "LOCAL_LANE",
+    "NotStoppableError",
+    "QueuedJob",
+    "RunLanes",
+    "RunQueue",
+    "StopPoint",
+    "colab_lane",
+]

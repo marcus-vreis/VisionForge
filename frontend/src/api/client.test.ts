@@ -6,6 +6,7 @@ import {
   downloadRunMarkdown,
   fetchProfiles,
   fetchRuns,
+  fetchStatus,
   withLang,
   withProfile,
 } from "./client";
@@ -241,5 +242,18 @@ describe("fetchProfiles", () => {
     });
 
     expect((await fetchProfiles()).map((p) => p.slug)).toEqual(["default", "ana"]);
+  });
+});
+
+describe("fetchStatus", () => {
+  it("names the run it follows, since two queues run side by side", async () => {
+    const fetchMock = stubFetch({ status: "running", run_id: "a b", queued: 0 });
+    await fetchStatus("a b");
+    await fetchStatus(null);
+    const urls = (fetchMock.mock.calls as unknown as [string][]).map((c) => c[0]);
+    expect(urls).toEqual([
+      "/api/experiment/status?run_id=a%20b",
+      "/api/experiment/status",
+    ]);
   });
 });

@@ -15,6 +15,15 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Added
 
+- **Filas paralelas, backend** (fase 4 do ADR-163): um job local e um do
+  Colab rodam ao mesmo tempo.
+  - **Filas:** a fila local continua com um job por vez, em GPU ou CPU, e cada
+    conta Google ganha a sua fila. Dois perfis na mesma conta dividem a mesma.
+  - **Estado por job:** o stream, o status, o resultado e o cancelamento são
+    de cada job, por `run_id`. Parar um job não toca no outro.
+  - **API:** `/api/experiment/events` e `/api/experiment/status` aceitam
+    `run_id`, e `GET /api/queue` ganha `lanes`, com a fila de cada job. A
+    tela das duas filas vem no próximo PR.
 - **O run treinado no Colab volta para esta máquina** (fase 3 do ADR-163).
   - **Download:** no fim do job, antes de liberar a VM, o run é empacotado
     como bundle de experimento e baixado com `colab download`.
