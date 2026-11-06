@@ -480,7 +480,7 @@ def _allocate(
     leftover = n - sum(counts.values())
     order = sorted(
         (s for s in SPLIT_NAMES if ratios[s] > 0),
-        key=lambda s: (-(quotas[s] - counts[s]), rng.random()),
+        key=lambda s: (-(quotas[s] - counts[s]), rng.random()),  # NOSONAR python:S2245
     )
     for s in order[:leftover]:
         counts[s] += 1
@@ -529,7 +529,7 @@ def plan_incorporation(
         group = sorted(by_stratum[stratum], key=lambda c: (c.sha256, c.rel))
         # A reproducible split, not a secret: the seed is recorded on purpose.
         rng = random.Random(f"{seed}|{stratum}")  # NOSONAR python:S2245
-        rng.shuffle(group)
+        rng.shuffle(group)  # NOSONAR python:S2245
         quota = _allocate(len(group), effective, rng)
         start = 0
         for split in SPLIT_NAMES:
