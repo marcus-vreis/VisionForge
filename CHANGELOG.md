@@ -15,6 +15,20 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Added
 
+- **Dataset do Google Drive no Colab** (ADR-164): um treino no Colab usa a
+  pasta do dataset do formulário quando ela está no Google Drive para desktop,
+  sem upload.
+  - **Caminho:** a pasta local vira `/content/drive/MyDrive/...` na VM. A
+    pasta "Meu Drive"/"My Drive" é achada sozinha (numa letra de unidade, no
+    perfil do usuário ou pelo `DefaultMountPoint`), ou informada no formulário.
+  - **Permissão pela tela:** o Google pede permissão a cada runtime. A folha de
+    treino mostra "Permitir acesso ao Drive", que abre a página numa aba nova,
+    e o treino segue quando a janela volta ao foco. "Já permiti" é o reserva.
+    Sem a permissão, a tela pede de novo, até 3 vezes.
+  - **Cópia conferida:** a VM copia o dataset para o disco dela e confere a
+    contagem de arquivos com a deste computador antes de treinar.
+  - **Export opcional:** o run também pode ser gravado em
+    `MyDrive/VisionForge/runs/`, além do download.
 - **Explorador de datasets** (fase 1 da issue #117, ADR-165): uma aba
   "Explorar" no botão **Datasets**, só leitura, para classificação (pastas por
   classe) e detecção (YOLO).

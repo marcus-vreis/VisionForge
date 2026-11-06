@@ -6945,6 +6945,85 @@ The numbers and the code reading behind this ADR are in the design doc's
   reliable, but it creates and releases a VM per call, which breaks a job
   that uploads, trains and downloads on the same machine.
 
+## ADR-164 — Colab datasets from the user's Google Drive, with the consent in the GUI
+
+**Date:** 2026-11-06
+**Status:** Accepted — implemented (classification, like ADR-163 phase 2)
+**Extends:** ADR-163 (training on Colab through the official CLI)
+
+**Context:** a Colab run takes its dataset from a public zip or a public
+dataset. Many users keep theirs in Google Drive, synced to the PC by Google
+Drive for desktop, so VisionForge already reads it as a local folder. Two
+spikes on 2026-11-05 (CPU runtimes, `google-colab-cli` 0.7.5, design doc)
+measured `colab drivemount`:
+- it asks for a browser consent and then waits for Enter on stdin. With the
+  consent, the mount sees the files that were already in the Drive (50 of 50
+  top-level entries older than 7 days);
+- the consent is not kept: a new runtime asks again. The credential is
+  ephemeral, per VM (`authorize-for-drive-credentials-ephem`);
+- an Enter sent before the consent gives `Error propagating: 400`, and the CLI
+  then hangs.
+
+Marcus decided that the user must never touch a terminal: the GUI only, and
+opening another tab to allow the Drive is fine.
+
+**Decision:**
+- **The source.** A `drive` source means "the form's own dataset folder". The
+  server translates `data.base_dir` to `/content/drive/MyDrive/...`
+  (`gui/api/colab_drive.py`). It finds "My Drive" in this order:
+  - the folder the user typed;
+  - the `DefaultMountPoint` of Drive for desktop in the registry;
+  - a "My Drive"/"Meu Drive" component right under a drive letter or under
+    the home folder.
+  It sends the local file count along. A folder outside the Drive, or an empty
+  one, is refused before a VM is paid for.
+- **The mount.** It runs after the kernel warm-up and before the runner,
+  whenever the job reads from the Drive or exports to it.
+  - The consent URL becomes a `drive_consent_required` event, and never a log
+    line, because its `state` carries a token.
+  - The job thread waits in a `DriveConsent` until
+    `POST /api/colab/drive/continue` arrives, then writes the Enter itself.
+  - A 400 kills the hung CLI and the mount is tried again with a new URL, up
+    to 3 times.
+  - The person's wait (600 s per attempt) and the CLI's silence (120 s) have
+    deadlines of their own. Neither counts against the runner's startup
+    watchdog.
+- **The copy.** The runner copies the folder to the VM's disk (reading
+  through the FUSE mount is slow) and fails when it finds fewer files than
+  this machine has, which is what a folder still uploading looks like.
+- **The GUI.** The training sheet shows "Allow Drive access", which opens the
+  page in a new tab. The return of the window answers the server (focus, or
+  the tab visible again, only after the window lost it). "I already allowed"
+  is the fallback when the focus never fires.
+- **Export (optional).** The run's bundle is also copied to
+  `MyDrive/VisionForge/runs/`, on top of the phase 3 download. A failure there
+  does not fail the run.
+
+**Consequences:**
+- No upload and no Drive API of our own: the CLI's credential propagation is
+  the only path to the Drive, and the token stays on the server.
+- Every Colab run that uses the Drive needs one click from the person, per
+  runtime. A queued job that reaches the mount while nobody is at the screen
+  waits up to 3 × 10 min, and then fails and releases the VM.
+- "My Drive" in a language other than English or Portuguese, and the mirror
+  mode outside the home folder, need the folder typed by hand.
+
+**Risks:**
+- The flow reads the CLI's English output ("Please visit", "Error
+  propagating", "Mounted at"). A CLI release that rewords it breaks the mount.
+  The pin and the fake-CLI tests are the guard.
+- The detection was never run on a machine with Drive for desktop installed.
+- Answering on focus can send the Enter before the person has finished on
+  Google's page. That costs one attempt (a 400 and a new URL), not the run.
+
+**Alternatives considered:**
+- *Uploading the dataset with `colab upload`.* It works for any folder, but it
+  costs the upload time on every run, which is what the Drive avoids.
+- *Our own OAuth client and the Drive API.* Rejected in ADR-163 for the same
+  reasons: app verification, support, and a token of our own.
+- *Showing the CLI in a terminal for the Enter.* It was the spike's setup, and
+  Marcus ruled it out for users.
+
 ## ADR-165 — A read-only dataset explorer in the Datasets surface
 
 **Date:** 2026-11-05

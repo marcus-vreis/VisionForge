@@ -169,7 +169,9 @@ def test_a_local_job_and_a_colab_job_run_at_once_each_with_its_own_stream(
     colab_may_end = threading.Event()
 
     class Jobs:
-        def run_job(self, slug, accelerator, payload, on_event, cancelled):  # type: ignore[no-untyped-def]
+        def run_job(
+            self, slug, accelerator, payload, on_event, cancelled, consent=None
+        ):  # type: ignore[no-untyped-def]
             on_event({"event": "remote", "stage": "train"})
             colab_started.set()
             assert colab_may_end.wait(5)

@@ -141,7 +141,9 @@ def _execute(
     import visionforge.gui.api.routes as routes_mod
 
     class Jobs:
-        def run_job(self, slug, accelerator, payload, on_event, cancelled):  # type: ignore[no-untyped-def]
+        def run_job(
+            self, slug, accelerator, payload, on_event, cancelled, consent=None
+        ):  # type: ignore[no-untyped-def]
             on_event({"event": "remote", "stage": "download"})
             return result
 

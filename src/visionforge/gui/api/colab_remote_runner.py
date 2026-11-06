@@ -31,6 +31,9 @@ EVENT_PREFIX = "@@vf@@ "
 REMOTE_ROOT = Path("/content/vf")
 PACKAGE = "visionforge-studio"
 BUNDLE_NAME = "run-bundle.zip"
+# Mounted by `colab drivemount` before this script runs (ADR-164).
+DRIVE_ROOT = Path("/content/drive/MyDrive")
+DRIVE_RUNS = DRIVE_ROOT / "VisionForge" / "runs"
 
 
 def emit(event: dict[str, Any]) -> None:
@@ -68,6 +71,8 @@ def fetch_dataset(source: dict[str, Any], root: Path) -> Path:
     if target.exists():
         shutil.rmtree(target)
     target.mkdir(parents=True)
+    if source["kind"] == "drive":
+        return copy_from_drive(source, target)
     if source["kind"] == "url":
         archive = root / "dataset.zip"
         urllib.request.urlretrieve(source["url"], archive)  # noqa: S310 - http(s) checked by the server
@@ -84,6 +89,54 @@ def fetch_dataset(source: dict[str, Any], root: Path) -> Path:
         limit=source.get("limit"),
     )
     return target
+
+
+def count_files(folder: Path) -> int:
+    """Files under ``folder``, hidden ones left out, as the server counts them."""
+    total = 0
+    for _dirpath, dirnames, filenames in os.walk(folder):
+        dirnames[:] = [d for d in dirnames if not d.startswith(".")]
+        total += sum(1 for f in filenames if not f.startswith("."))
+    return total
+
+
+def copy_from_drive(source: dict[str, Any], target: Path) -> Path:
+    """Copy the dataset off the mounted Drive: training straight from it is slow.
+
+    The count is checked against the local one, so a folder Drive for desktop
+    has not finished uploading fails here and not halfway through training.
+    """
+    origin = Path(source["path"])
+    if not origin.is_dir() or DRIVE_ROOT not in (origin, *origin.parents):
+        raise FileNotFoundError(f"not a folder on the mounted Drive: {origin}")
+    started = time.monotonic()
+    shutil.copytree(origin, target, dirs_exist_ok=True)
+    found, expected = count_files(target), int(source.get("files") or 0)
+    emit(
+        {
+            "event": "remote",
+            "stage": "drive_copy",
+            "files": found,
+            "expected": expected,
+            "seconds": round(time.monotonic() - started, 1),
+        }
+    )
+    if found < expected:
+        raise RuntimeError(
+            f"the Drive has {found} of the {expected} files this computer has; "
+            "wait for Drive for desktop to finish syncing"
+        )
+    return target
+
+
+def export_to_drive(bundle: dict[str, Any] | None, run_name: str) -> str | None:
+    """Also keep the run's bundle in MyDrive/VisionForge/runs/; its path there."""
+    if bundle is None:
+        return None
+    DRIVE_RUNS.mkdir(parents=True, exist_ok=True)
+    target = DRIVE_RUNS / f"{run_name}_{time.strftime('%Y%m%d_%H%M%S')}.zip"
+    shutil.copyfile(bundle["path"], target)
+    return str(target)
 
 
 def prepare_config(
@@ -212,6 +265,15 @@ def main(payload: dict[str, Any]) -> None:
         report = train(config)
         emit({"event": "remote", "stage": "pack"})
         bundle = pack_run(report)
+        if payload.get("drive_export"):
+            # A full Drive must not cost the run: the download still brings it here.
+            try:
+                saved = export_to_drive(
+                    bundle, str(payload["config"].get("name") or "run")
+                )
+                emit({"event": "remote", "stage": "drive_export", "path": saved})
+            except OSError as exc:
+                emit({"event": "remote", "stage": "drive_export", "error": str(exc)})
         emit(
             {
                 "event": "job_end",

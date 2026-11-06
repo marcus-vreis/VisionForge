@@ -30,6 +30,7 @@ import {
   parseDatasetSource,
   roundHours,
 } from "../lib/colab-connection";
+import { loadMyDriveRoot, saveMyDriveRoot } from "../lib/drive-consent";
 
 const MONO: CSSProperties = {
   fontFamily: "var(--font-mono)",
@@ -101,31 +102,78 @@ function TrainOnColab({ busy, onTrain }: ColabPanelProps) {
   const [source, setSource] = useState("");
   const [accelerator, setAccelerator] = useState<ColabAccelerator>("T4");
   const [bad, setBad] = useState(false);
+  const [useDrive, setUseDrive] = useState(false);
+  const [driveRoot, setDriveRoot] = useState(loadMyDriveRoot);
+  const [driveExport, setDriveExport] = useState(false);
   if (!onTrain) return null;
 
   const submit = () => {
+    if (useDrive) {
+      saveMyDriveRoot(driveRoot);
+      setBad(false);
+      const root = driveRoot.trim();
+      onTrain({
+        source: root ? { kind: "drive", my_drive_root: root } : { kind: "drive" },
+        accelerator,
+        drive_export: driveExport,
+      });
+      return;
+    }
     const parsed = parseDatasetSource(source);
     setBad(parsed === null);
-    if (parsed !== null) onTrain({ source: parsed, accelerator });
+    if (parsed !== null) onTrain({ source: parsed, accelerator, drive_export: driveExport });
   };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }} data-colab-train>
       <div style={{ ...TEXT, fontWeight: 600 }}>{c.trainTitle}</div>
-      <label style={TEXT} htmlFor="colab-source">
-        {c.trainSource}
+      <label style={{ ...TEXT, display: "flex", gap: 6, alignItems: "center" }}>
+        <input type="checkbox" checked={useDrive} onChange={(e) => setUseDrive(e.target.checked)} />
+        {c.driveSource}
       </label>
-      <input
-        id="colab-source"
-        type="text"
-        autoComplete="off"
-        spellCheck={false}
-        value={source}
-        placeholder={c.sourcePlaceholder}
-        onChange={(e) => setSource(e.target.value)}
-        style={FIELD}
-      />
-      {bad && <div style={ERROR}>{c.badSource}</div>}
+      {useDrive ? (
+        <>
+          <label style={TEXT} htmlFor="colab-drive-root">
+            {c.driveRoot}
+          </label>
+          <input
+            id="colab-drive-root"
+            type="text"
+            autoComplete="off"
+            spellCheck={false}
+            value={driveRoot}
+            placeholder={c.driveRootPlaceholder}
+            onChange={(e) => setDriveRoot(e.target.value)}
+            style={FIELD}
+          />
+          <div style={{ ...TEXT, color: "var(--vf-text-dim)" }}>{c.driveNote}</div>
+        </>
+      ) : (
+        <>
+          <label style={TEXT} htmlFor="colab-source">
+            {c.trainSource}
+          </label>
+          <input
+            id="colab-source"
+            type="text"
+            autoComplete="off"
+            spellCheck={false}
+            value={source}
+            placeholder={c.sourcePlaceholder}
+            onChange={(e) => setSource(e.target.value)}
+            style={FIELD}
+          />
+          {bad && <div style={ERROR}>{c.badSource}</div>}
+        </>
+      )}
+      <label style={{ ...TEXT, display: "flex", gap: 6, alignItems: "center" }}>
+        <input
+          type="checkbox"
+          checked={driveExport}
+          onChange={(e) => setDriveExport(e.target.checked)}
+        />
+        {c.driveExport}
+      </label>
       <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
         <label style={TEXT} htmlFor="colab-accelerator">
           {c.accelerator}

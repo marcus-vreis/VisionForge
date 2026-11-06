@@ -1312,7 +1312,9 @@ export async function fetchColabUsage(): Promise<ColabUsage> {
  *  public dataset it downloads itself. No credential leaves this machine. */
 export type ColabDatasetSource =
   | { kind: "url"; url: string }
-  | { kind: "provider"; provider: "torchvision" | "huggingface"; dataset: string; limit?: number };
+  | { kind: "provider"; provider: "torchvision" | "huggingface"; dataset: string; limit?: number }
+  // The form's own dataset folder, inside Google Drive for desktop (ADR-164).
+  | { kind: "drive"; my_drive_root?: string };
 
 export type ColabAccelerator = "T4" | "L4" | "A100" | "H100" | "G4";
 
@@ -1320,6 +1322,17 @@ export type ColabAccelerator = "T4" | "L4" | "A100" | "H100" | "G4";
 export interface ColabLaunch {
   source: ColabDatasetSource;
   accelerator: ColabAccelerator;
+  /** Also save the run to MyDrive/VisionForge/runs/ (ADR-164). */
+  drive_export?: boolean;
+}
+
+/** Tell a Colab job that the Drive access was granted, so it answers the CLI (ADR-164). */
+export async function continueDriveConsent(runId: string): Promise<{ sent: boolean }> {
+  return request<{ sent: boolean }>("/colab/drive/continue", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ run_id: runId }),
+  });
 }
 
 export async function runColabExperiment(body: Record<string, unknown>): Promise<RunResponse> {

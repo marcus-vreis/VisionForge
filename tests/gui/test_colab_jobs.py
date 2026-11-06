@@ -486,7 +486,9 @@ def test_execute_colab_records_the_report_and_closes_the_stream(
     import visionforge.gui.api.routes as routes_mod
 
     class Jobs:
-        def run_job(self, slug, accelerator, payload, on_event, cancelled):  # type: ignore[no-untyped-def]
+        def run_job(
+            self, slug, accelerator, payload, on_event, cancelled, consent=None
+        ):  # type: ignore[no-untyped-def]
             on_event({"event": "epoch_end", "epoch": 1})
             return cj.RemoteResult("completed", report={"accuracy": 0.8})
 
@@ -716,7 +718,9 @@ def test_execute_colab_delivers_every_event_before_closing_the_stream(
     sent = [{"event": "batch", "batch": i} for i in range(20)]
 
     class Jobs:
-        def run_job(self, slug, accelerator, payload, on_event, cancelled):  # type: ignore[no-untyped-def]
+        def run_job(
+            self, slug, accelerator, payload, on_event, cancelled, consent=None
+        ):  # type: ignore[no-untyped-def]
             for event in sent:
                 on_event(event)
             return cj.RemoteResult("completed", report={})
@@ -757,7 +761,9 @@ def test_execute_colab_has_each_event_in_the_log_when_on_event_returns(
     landed_after_each: list[list[dict[str, Any] | None]] = []
 
     class Jobs:
-        def run_job(self, slug, accelerator, payload, on_event, cancelled):  # type: ignore[no-untyped-def]
+        def run_job(
+            self, slug, accelerator, payload, on_event, cancelled, consent=None
+        ):  # type: ignore[no-untyped-def]
             for event in sent:
                 on_event(event)
                 landed_after_each.append(list(log.landed))
@@ -792,7 +798,9 @@ def test_execute_colab_drops_an_event_the_loop_never_takes_and_finishes(
     import visionforge.gui.api.routes as routes_mod
 
     class Jobs:
-        def run_job(self, slug, accelerator, payload, on_event, cancelled):  # type: ignore[no-untyped-def]
+        def run_job(
+            self, slug, accelerator, payload, on_event, cancelled, consent=None
+        ):  # type: ignore[no-untyped-def]
             on_event({"event": "epoch_end", "epoch": 1})
             return cj.RemoteResult("completed", report={"accuracy": 0.8})
 

@@ -79,6 +79,12 @@ from visionforge.core.task_runner import (
 )
 from visionforge.gui.api.colab_connection import PINNED_VERSION as _COLAB_PIN
 from visionforge.gui.api.colab_connection import ColabCli, LoginFlows
+from visionforge.gui.api.colab_drive import (
+    DriveConsent,
+    count_files,
+    my_drive_roots,
+    remote_path,
+)
 from visionforge.gui.api.colab_jobs import ColabJobs
 from visionforge.gui.api.colab_routes import build_colab_router
 from visionforge.gui.api.datasets_routes import (
@@ -142,6 +148,8 @@ from visionforge.gui.api.sample_dataset import (
 from visionforge.gui.api.schemas import (
     BatchPredictRequest,
     BatchPredictResponse,
+    ColabDriveContinueRequest,
+    ColabDriveSource,
     ColabRunRequest,
     ComparisonRequest,
     CustomTaskActionResponse,
@@ -370,6 +378,8 @@ _EVIDENCE_EXPORTS = EvidenceExports()
 _COLAB_CLI = ColabCli()
 _COLAB_LOGINS = LoginFlows()
 _COLAB_JOBS = ColabJobs()
+# The Colab jobs waiting for (or able to wait for) the Drive consent, by run_id.
+_DRIVE_CONSENTS: dict[str, DriveConsent] = {}
 # How long the Colab job thread waits for the loop to take one event.
 _COLAB_EVENT_TIMEOUT_S = 10.0
 
@@ -1017,7 +1027,12 @@ async def run_colab_experiment(
         # the runner points data and outputs at the VM.
         "config": config.model_dump(mode="json"),
         "source": req.source.model_dump(mode="json"),
+        "drive_export": req.drive_export,
     }
+    if isinstance(req.source, ColabDriveSource):
+        payload["source"] = await asyncio.to_thread(
+            _drive_source, req.config, req.source.my_drive_root
+        )
     return _submit_job(
         run_id,
         f"{config.name} · Colab {req.accelerator}",
@@ -1030,6 +1045,41 @@ async def run_colab_experiment(
         profile=profile,
         lane=await asyncio.to_thread(_colab_lane_of, profile.slug),
     )
+
+
+@router.post(
+    "/colab/drive/continue",
+    responses={404: {"description": "No job is waiting for the Drive consent"}},
+)
+async def continue_drive_consent(req: ColabDriveContinueRequest) -> dict[str, bool]:
+    """Answer the Drive consent prompt of a Colab job (ADR-164).
+
+    The GUI calls it when the person comes back from the consent page, or
+    presses "I already allowed". The server then sends the Enter the CLI waits
+    for; nobody touches a terminal.
+    """
+    consent = _DRIVE_CONSENTS.get(req.run_id)
+    if consent is None or not consent.grant():
+        raise HTTPException(404, tr("colab.drive_not_waiting"))
+    return {"sent": True}
+
+
+def _drive_source(config: dict[str, Any], my_drive_root: str | None) -> dict[str, Any]:
+    """The form's dataset folder as a path on the VM's mounted Drive (ADR-164).
+
+    The local file count goes along: the VM compares it after copying, which
+    catches a folder Drive for desktop has not finished uploading.
+    """
+    data = config.get("data")
+    base_dir = data.get("base_dir") if isinstance(data, dict) else None
+    local = Path(str(base_dir or ""))
+    remote = remote_path(local, my_drive_roots(my_drive_root)) if base_dir else None
+    if remote is None:
+        raise HTTPException(400, tr("colab.drive_not_in_drive", path=str(local)))
+    files = count_files(local)
+    if files == 0:
+        raise HTTPException(400, tr("colab.drive_empty", path=str(local)))
+    return {"kind": "drive", "path": remote.as_posix(), "files": files}
 
 
 def _colab_lane_of(slug: str) -> str:
@@ -2899,6 +2949,7 @@ async def _execute_colab(
 
     try:
         logger.info("GUI: Starting Colab job {} ({})", run_id, accelerator)
+        consent = _DRIVE_CONSENTS.setdefault(run_id, DriveConsent())
         result = await asyncio.to_thread(
             _COLAB_JOBS.run_job,
             slug,
@@ -2906,6 +2957,7 @@ async def _execute_colab(
             payload,
             _put_event,
             lambda: is_cancelled(token),
+            consent=consent,
         )
         run_dir, error = None, result.error
         if result.bundle is not None:
@@ -2931,6 +2983,7 @@ async def _execute_colab(
             "run_dir": None,
         }
     finally:
+        _DRIVE_CONSENTS.pop(run_id, None)
         # The thread has returned, and each event it sent is already in the log.
         if queue is not None:
             await queue.put(None)
