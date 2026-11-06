@@ -7102,3 +7102,46 @@ opening another tab to allow the Drive is fine.
 - *A manifest layer over the original (no copy).* Cheap, but no trainer reads it and every consumer would have to learn it.
 - *Reusing `materialized_dataset`.* It re-encodes images and owns a cache with leases; copying a dataset byte for byte is a different job.
 - *Moving existing images to rebalance.* Out of scope (phase 4, re-splitting) and it would make results incomparable with old runs.
+
+
+## ADR-167 — Merging two datasets writes a new one, with a class mapping
+
+**Date:** 2026-11-06
+**Status:** Accepted — phase 3 of issue #117 (classification and detection) implemented
+**Extends:** ADR-166 (incorporate), ADR-165 (explorer), ADR-129 (fingerprint), ADR-136 (content audit)
+
+**Context:** two datasets of the same problem (two collection campaigns, a public set and the lab's own) have to become one before training, and their classes rarely agree: `Cat` and `cat`, `car` and `vehicle`, a class one side never needed. As with ADR-166, writing into either folder would change a fingerprint that old `run.json` files remember, so the result is a new dataset. Phase 4 (re-splitting) stays separate: a merge that also reshuffles would make results incomparable with both sources.
+
+**Decision:**
+
+- **Never in place, shared mechanics.** The result is a sibling of dataset A (`A.parent/<name>`), built under `.<name>.tmp-<id>` and published with one `os.rename`; cancellation, an error or a destination that appeared meanwhile removes the temporary folder. B is only read. What ADR-166 had inside `dataset_incorporate.py` moved to `core/dataset_derived.py` and both features use it: `link_or_copy`, `free_name`/`claim_name`, the temporary-folder-plus-rename wrapper (`prepare_destination`, `publish`), the fingerprint re-check, the progress counter, the registry writer and the class-file writers (`classes.txt`, `names.txt`, `data.yaml`). The jobs got the same treatment (`gui/api/derived_jobs.py`). Incorporate behaves as before; its tests ran unchanged. `IncorporateError` now derives from `DerivedError`, and `link_or_copy` is still importable from `dataset_incorporate`.
+- **Tasks.** Classification (ImageFolder) and detection (YOLO); both datasets are read as the task of the open one. A source that has no images, that is not a folder, that equals the other or contains it is refused (400).
+- **Class mapping.** One row per class of A and of B (origin, image count), each with a target name or "discard". A class the mapping does not mention keeps its own name, so classes that share a name merge without asking, and two rows with the same target merge. Targets are stripped and must be non-empty; for classification they must be a valid folder name (`validate_path_component`), and two targets that differ only by case are refused (`Cat`/`cat` would be one folder on Windows and two on Linux, so VisionForge does not guess); for detection a target may not contain a line break. Names that differ only by case, spacing, `_` or `-` are reported as a hint and never merged by themselves.
+- **Final order.** A's surviving targets in A's order, then the targets B adds in B's order; ids are renumbered from 0 and the registry records the whole mapping. A label whose ids all stay and whose boxes all survive is linked byte for byte; any other label (an id moved, or a box of a discarded class removed) is written fresh, never through a hardlink, as are `classes.txt`/`names.txt` and `data.yaml` (`names`, `nc`, an absolute `path` that pointed at A, and the folder of a split only B has when A's file did not name it).
+- **Splits.** Each image keeps its own split. The result has a split if either source has it; the preview lists the splits that come from one source only. Detection puts B's images in A's layout for that split (`resolve_yolo_split`: `images/<s>` or `<s>/images`), and in the standard `images/<s>` + `labels/<s>` when A lacks it. Classification uses A's split folder names; the nested folders an image had inside its class are kept.
+- **Duplicates.** SHA-256 of every image of both sources. If the bytes are in both, A's copy stays and B's is dropped and listed; it is flagged when the two copies are in different splits (leakage the merge avoids). If A's copy does not survive the mapping (its class was discarded) B's copy is kept, so nothing is lost to a copy of something the user threw away. Duplicates inside one source are kept and only counted: removing them is the audit's job, not this tool's.
+- **Detection labels.** Boxes of discarded classes are removed and ids remapped. An image that had boxes and lost all of them is dropped and counted; an image that was already empty (background) is kept, with its label. Only valid rows (five numeric fields, integer id >= 0) count, as in the explorer.
+- **What is carried.** Images, YOLO labels, the class list and the registry. Other files of the sources are not copied: in a renamed class folder they would leave a stray folder that looks like a class.
+- **Names.** A file whose name is taken in its target folder becomes `stem-<sha8>` (with a counter if needed); for YOLO the `.txt` stem must be free too and the label follows the image.
+- **Record.** `visionforge_dataset.json` (`schema_version` 1, `kind: "merged"`): both sources (path and manifest fingerprint), the mapping as resolved, the final classes, counts (found per source, images, per split, per class and split with boxes, dropped by reason, duplicates dropped and across splits, repeated inside one source) and files linked or copied. The apply is refused (409) if either fingerprint changed since the preview, and again inside the write; an image whose size or mtime changed is refused too.
+- **API.** `POST /api/explorer/merge/preview` (A must be a dataset the explorer opened, 403 otherwise; B is the user's own pick in the local GUI and is only read), `GET .../{job_id}`, `POST .../{job_id}/plan` (instant: counts per final class and split, dropped images, no hashing), `.../apply`, `.../cancel`. One job at a time. The suggested name is `<A>-<B>`, then `-2`, `-3`.
+- **Page.** A button "Juntar com outro dataset" beside "Incorporar imagens" in the Explore tab: pick the other folder, preview, the mapping table (target box with a datalist of existing names, a discard checkbox, a "merged" mark), live counts through `/plan`, what is dropped and why, destination name, apply with progress and cancel, "open in the explorer". Logic in `lib/dataset-merge.ts`; the progress bar and the polling hook are shared with the incorporate panel.
+
+**Consequences:**
+
+- The OpenAPI snapshot gains five operations; the request models are named `Merge*` so the schemas of the incorporate endpoints keep their names.
+- The preview hashes both datasets completely, the cost of comparing by content (as in ADR-136 and ADR-166).
+- Hardlinks mean the result and the sources share bytes; a tool that rewrites an image in place through the existing inode changes both. The registry says how many files were linked.
+- Near-duplicates are not detected.
+
+**Risks:**
+
+- A crash between the first write and the rename leaves a hidden `.<name>.tmp-*` next to dataset A (same as ADR-166).
+- Class identity is by name. Two datasets that use the same name for different things merge them unless the user renames one; the preview shows the counts so this can be seen, but nothing can check meaning.
+
+**Alternatives considered:**
+
+- *Merge into A in place.* Breaks the fingerprint of every old run.
+- *Automatic merge of names that differ by case or spacing.* A wrong guess is silent and irreversible in the result; a hint costs one click.
+- *Dropping B's copy and A's copy alike when they are in different splits.* Loses data to avoid a problem that keeping A's copy already avoids.
+- *Re-splitting while merging.* That is phase 4 and would make results incomparable with both sources.

@@ -22,14 +22,11 @@ does not have is never created.
 
 from __future__ import annotations
 
-import errno
 import hashlib
-import json
 import math
 import os
 import random
 import shutil
-import uuid
 from collections import Counter, defaultdict
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -41,6 +38,22 @@ from loguru import logger
 
 from visionforge.core.cancellation import CancellationToken, is_cancelled
 from visionforge.core.dataset_audit import _verified_image_digest
+from visionforge.core.dataset_derived import (
+    CLASS_FILES,
+    REGISTRY_NAME,
+    REGISTRY_SCHEMA,
+    DerivedError,
+    ProgressCounter,
+    claim_name,
+    ensure_unchanged,
+    file_sha256,
+    link_or_copy,
+    list_files,
+    prepare_destination,
+    publish,
+    write_class_files,
+    write_registry,
+)
 from visionforge.core.dataset_explorer import (
     IMAGE_EXTS,
     SPLIT_NAMES,
@@ -50,10 +63,7 @@ from visionforge.core.dataset_explorer import (
 )
 from visionforge.core.dataset_fingerprint import fingerprint_dataset
 from visionforge.core.detection_data import resolve_yolo_split
-from visionforge.utils.paths import validate_path_component
 
-REGISTRY_NAME = "visionforge_dataset.json"
-REGISTRY_SCHEMA = 1
 MAX_REPORTED = 200
 DEFAULT_SEED = 0
 
@@ -67,17 +77,12 @@ NO_CLASS_FOLDER = "no_class_folder"
 UNKNOWN_CLASS = "unknown_class"
 
 _CHUNK = 1024 * 1024
-_CLASSES_TXT = "classes.txt"
-_CLASS_FILES = (_CLASSES_TXT, "names.txt", "data.yaml", "data.yml")
+_BAD_DEST = "incorporate.bad_dest_name"
+_DEST_EXISTS = "incorporate.dest_exists"
 
 
-class IncorporateError(Exception):
+class IncorporateError(DerivedError):
     """A refusal with a code the API turns into a translated message."""
-
-    def __init__(self, code: str, **params: object) -> None:
-        super().__init__(code)
-        self.code = code
-        self.params = params
 
 
 class DatasetChangedError(IncorporateError):
@@ -213,11 +218,6 @@ def _parse_label(path: Path) -> tuple[tuple[int, str], ...]:
     return tuple(rows)
 
 
-def _file_sha256(path: Path) -> str:
-    with path.open("rb") as stream:
-        return hashlib.file_digest(stream, "sha256").hexdigest()
-
-
 def analyze_incorporation(
     base_root: Path,
     task: ExplorerTask,
@@ -249,23 +249,15 @@ def analyze_incorporation(
 
     sources = _list_source_images(source_root)
     total = len(index.images) + len(sources)
-    done = 0
-
-    def tick() -> None:
-        nonlocal done
-        done += 1
-        if on_progress and (done % 25 == 0 or done == total):
-            on_progress(done, total)
-
-    if on_progress:
-        on_progress(0, total)
+    progress = ProgressCounter(total, on_progress)
+    tick = progress.tick
 
     existing: dict[str, str] = {}
     for image in index.images:
         if is_cancelled(token):
             return None
         try:
-            existing.setdefault(_file_sha256(base_root / image.rel), image.rel)
+            existing.setdefault(file_sha256(base_root / image.rel), image.rel)
         except OSError:
             logger.warning("Could not hash {} while comparing", image.rel)
         tick()
@@ -569,32 +561,6 @@ def final_classes(analysis: Analysis, accepted: Sequence[str]) -> list[str]:
 # ── writing ───────────────────────────────────────────────────────────────────
 
 
-def link_or_copy(
-    src: Path,
-    dst: Path,
-    *,
-    link: Callable[[Path, Path], None] = os.link,
-) -> str:
-    """Hardlink ``src`` to ``dst``, or copy it when linking is not possible.
-
-    A hardlink needs the same volume and a file system that supports it; any
-    ``OSError`` falls back to a copy. Symbolic links are copied (their target's
-    bytes), never linked, so the result does not depend on the original tree.
-
-    Returns:
-        ``"link"`` or ``"copy"``.
-    """
-    if not src.is_symlink():
-        try:
-            link(src, dst)
-            return "link"
-        except OSError as exc:
-            if exc.errno not in (errno.EXDEV, errno.EPERM, errno.EMLINK, errno.ENOTSUP):
-                logger.debug("hardlink failed ({}), copying {}", exc, src.name)
-    shutil.copy2(src, dst)
-    return "copy"
-
-
 def _copy_verified(
     src: Path, dst: Path, expected: str, size: int, mtime_ns: int
 ) -> None:
@@ -610,32 +576,6 @@ def _copy_verified(
     if digest.hexdigest() != expected:
         raise DatasetChangedError("incorporate.source_changed", path=src.name)
     shutil.copystat(src, dst)
-
-
-def _free_name(taken: set[str], name: str, sha: str, *, with_label: bool) -> str:
-    """``name`` if unused (case-insensitively), else ``stem-<sha8>`` with a counter.
-
-    ``with_label``: the stem's ``.txt`` must be free too (YOLO pairs by stem).
-    """
-
-    def free(candidate: str) -> bool:
-        if candidate.lower() in taken:
-            return False
-        return not (with_label and f"{Path(candidate).stem.lower()}.txt" in taken)
-
-    if free(name):
-        return name
-    stem, ext = os.path.splitext(name)
-    candidate = f"{stem}-{sha[:8]}{ext}"
-    counter = 2
-    while not free(candidate):
-        candidate = f"{stem}-{sha[:8]}-{counter}{ext}"
-        counter += 1
-    return candidate
-
-
-def _remove_tree(path: Path) -> None:
-    shutil.rmtree(path, ignore_errors=True)
 
 
 def build_incorporated_dataset(
@@ -657,35 +597,28 @@ def build_incorporated_dataset(
         IncorporateError: bad or existing destination name; the original or a new
             image changed since the analysis.
     """
-    try:
-        validate_path_component(dest_name)
-    except ValueError as exc:
-        raise IncorporateError("incorporate.bad_dest_name") from exc
     base = analysis.base_root
-    dest = base.parent / dest_name
-    if dest.exists():
-        raise IncorporateError("incorporate.dest_exists", name=dest_name)
-    now = fingerprint_dataset(base).to_dict()
-    if now.get("digest") != analysis.base_fingerprint.get("digest"):
-        raise DatasetChangedError("incorporate.base_changed")
-
-    tmp = base.parent / f".{dest_name}.tmp-{uuid.uuid4().hex[:8]}"
-    try:
-        result = _write(analysis, plan, tmp, dest, token, on_progress, link)
-    except BaseException:
-        _remove_tree(tmp)
-        raise
+    dest = prepare_destination(
+        base.parent,
+        dest_name,
+        error=IncorporateError,
+        bad_name_code=_BAD_DEST,
+        exists_code=_DEST_EXISTS,
+    )
+    ensure_unchanged(
+        base,
+        analysis.base_fingerprint,
+        error=lambda: DatasetChangedError("incorporate.base_changed"),
+    )
+    result = publish(
+        base.parent,
+        dest,
+        lambda tmp: _write(analysis, plan, tmp, dest, token, on_progress, link),
+        error=IncorporateError,
+        exists_code=_DEST_EXISTS,
+    )
     if result is None:
-        _remove_tree(tmp)
         return None
-    try:
-        # Re-checked: a folder created meanwhile must not be replaced or merged.
-        if dest.exists():
-            raise IncorporateError("incorporate.dest_exists", name=dest_name)
-        os.rename(tmp, dest)
-    except BaseException:
-        _remove_tree(tmp)
-        raise
     result["path"] = str(dest)
     return result
 
@@ -701,86 +634,52 @@ def _write(
 ) -> dict[str, Any] | None:
     base = analysis.base_root
     rewritten = _rewritten_files(analysis, plan)
-    files = _base_files(base)
-    total = len(files) + len(plan.assignments)
-    done = 0
+    files = list_files(base)
+    progress = ProgressCounter(len(files) + len(plan.assignments), on_progress)
     methods: Counter[str] = Counter()
 
-    def tick() -> None:
-        nonlocal done
-        done += 1
-        if on_progress and (done % 25 == 0 or done == total):
-            on_progress(done, total)
-
-    if on_progress:
-        on_progress(0, total)
     tmp.mkdir()
     for rel in files:
         if is_cancelled(token):
             return None
-        if rel in rewritten or rel == REGISTRY_NAME:
-            tick()
-            continue
-        target = tmp / rel
-        target.parent.mkdir(parents=True, exist_ok=True)
-        methods[link_or_copy(base / rel, target, link=link)] += 1
-        tick()
+        if rel not in rewritten and rel != REGISTRY_NAME:
+            target = tmp / rel
+            target.parent.mkdir(parents=True, exist_ok=True)
+            methods[link_or_copy(base / rel, target, link=link)] += 1
+        progress.tick()
 
     final_ids = {name: i for i, name in enumerate(plan.classes)}
     layout = _layout(analysis)
     taken: dict[Path, set[str]] = {}
+    detection = analysis.task == "detection"
     placed = 0
     for cand, split in plan.assignments:
         if is_cancelled(token):
             return None
         images_dir, labels_dir = layout[split]
-        folder = (
-            images_dir / cand.names[0]
-            if analysis.task == "classification"
-            else images_dir
-        )
+        folder = images_dir if detection else images_dir / cand.names[0]
         (tmp / folder).mkdir(parents=True, exist_ok=True)
         if folder not in taken:
             taken[folder] = _occupied(tmp, folder, labels_dir, analysis.task)
-        detection = analysis.task == "detection"
-        name = _free_name(
+        name = claim_name(
             taken[folder], Path(cand.rel).name, cand.sha256, with_label=detection
         )
-        taken[folder].add(name.lower())
-        if detection:
-            taken[folder].add(f"{Path(name).stem.lower()}.txt")
         _copy_verified(
             cand.path, tmp / folder / name, cand.sha256, cand.size, cand.mtime_ns
         )
-        if analysis.task == "detection":
+        if detection:
             assert labels_dir is not None and cand.label_path is not None
             (tmp / labels_dir).mkdir(parents=True, exist_ok=True)
-            _write_label(
-                cand,
-                final_ids,
-                tmp / labels_dir / f"{Path(name).stem}.txt",
-            )
+            _write_label(cand, final_ids, tmp / labels_dir / f"{Path(name).stem}.txt")
         placed += 1
-        tick()
+        progress.tick()
 
     _write_class_files(analysis, plan, tmp, dest)
     registry = _registry(analysis, plan, methods, placed)
-    (tmp / REGISTRY_NAME).write_text(
-        json.dumps(registry, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
-    )
+    write_registry(tmp, registry)
     if is_cancelled(token):
         return None
     return {"registry": registry, "added": placed, "link_methods": dict(methods)}
-
-
-def _base_files(base: Path) -> list[str]:
-    found: list[str] = []
-    for current, dirs, names in os.walk(base, followlinks=False):
-        dirs.sort()
-        found.extend(
-            (Path(current) / n).relative_to(base).as_posix() for n in sorted(names)
-        )
-    return found
 
 
 def _layout(analysis: Analysis) -> dict[str, tuple[Path, Path | None]]:
@@ -832,53 +731,13 @@ def _rewritten_files(analysis: Analysis, plan: Plan) -> set[str]:
     """
     if analysis.task != "detection" or len(plan.classes) == len(analysis.base_classes):
         return set()
-    present = {n for n in _CLASS_FILES if (analysis.base_root / n).is_file()}
-    return present
+    return {n for n in CLASS_FILES if (analysis.base_root / n).is_file()}
 
 
 def _write_class_files(analysis: Analysis, plan: Plan, tmp: Path, dest: Path) -> None:
     if analysis.task != "detection" or len(plan.classes) == len(analysis.base_classes):
         return
-    base = analysis.base_root
-    wrote = False
-    for name in (_CLASSES_TXT, "names.txt"):
-        if (base / name).is_file():
-            (tmp / name).write_text("\n".join(plan.classes) + "\n", encoding="utf-8")
-            wrote = True
-    for name in ("data.yaml", "data.yml"):
-        if (base / name).is_file():
-            _write_yaml(base / name, tmp / name, plan.classes, base, dest)
-            wrote = True
-    if not wrote:
-        (tmp / _CLASSES_TXT).write_text(
-            "\n".join(plan.classes) + "\n", encoding="utf-8"
-        )
-
-
-def _write_yaml(
-    src: Path, out: Path, classes: list[str], base: Path, dest: Path
-) -> None:
-    import yaml
-
-    data = yaml.safe_load(src.read_text(encoding="utf-8"))
-    if not isinstance(data, dict):
-        data = {}
-    if isinstance(data.get("names"), dict):
-        data["names"] = dict(enumerate(classes))
-    else:
-        data["names"] = list(classes)
-    if "nc" in data:
-        data["nc"] = len(classes)
-    path_value = data.get("path")
-    if isinstance(path_value, str) and Path(path_value).is_absolute():
-        try:
-            if Path(path_value).resolve() == base:
-                data["path"] = str(dest)
-        except OSError:
-            pass
-    out.write_text(
-        yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encoding="utf-8"
-    )
+    write_class_files(analysis.base_root, tmp, dest, plan.classes)
 
 
 def _registry(
