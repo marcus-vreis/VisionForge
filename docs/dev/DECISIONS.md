@@ -7145,3 +7145,49 @@ opening another tab to allow the Drive is fine.
 - *Automatic merge of names that differ by case or spacing.* A wrong guess is silent and irreversible in the result; a hint costs one click.
 - *Dropping B's copy and A's copy alike when they are in different splits.* Loses data to avoid a problem that keeping A's copy already avoids.
 - *Re-splitting while merging.* That is phase 4 and would make results incomparable with both sources.
+
+
+## ADR-168 — Re-splitting a dataset writes a new one, with the test split locked by default
+
+**Date:** 2026-11-06
+**Status:** Accepted — phase 4a of issue #117 (classification and detection) implemented
+**Extends:** ADR-167 (merge), ADR-166 (incorporate), ADR-165 (explorer), ADR-150 (group manifests), ADR-129 (fingerprint), ADR-136 (content audit)
+
+**Context:** the split a dataset came with is often wrong for the experiment (a validation set of 3 images, a class missing from the test set, copies of one photo on both sides). Fixing it by moving files inside the folder would change a fingerprint that old `run.json` files remember, and re-splitting everything would make a new run incomparable with the old ones, which were evaluated on the old test set. So the result is a new dataset, and the test split is kept as it is unless the user says otherwise.
+
+**Decision:**
+
+- **Never in place, shared mechanics.** The result is a sibling of the opened dataset, built under `.<name>.tmp-<id>` and published with one `os.rename` (`core/dataset_derived.py`: `link_or_copy`, `claim_name`, `publish`, `ensure_unchanged`, registry). Images and labels are hardlinked (copied when linking fails); cancellation, an error or a destination that appeared meanwhile leaves nothing. Class files (`classes.txt`, `names.txt`) are linked unchanged: no class changes here. The YOLO `data.yaml` is re-written (never linked) so its absolute `path` points at the new folder and its split keys follow the splits that exist; `names` are not touched.
+- **What is re-split.** By default the train and val images are pooled and redistributed and test stays exactly as it is (same paths, same bytes). The option "keep the test as it is" is on by default and only counts when the dataset has a test split; with it off, every split is pooled. A positive ratio for the test while it is locked is refused (400).
+- **Ratios.** Per split, relative weights, normalised. Without a request: the current proportions of the pooled splits. A ratio of 0 means the split does not exist in the result (its folder is not created and, for YOLO, its key leaves the yaml). A split the dataset lacked is created only when the user gives it a positive ratio (`images/<split>` + `labels/<split>` for YOLO); the preview says it is new. The ratios must sum to more than zero.
+- **Stratified and seeded.** The stratum is the class (classification: the folder; detection: the most frequent class of the image, ties by name, and images without boxes form their own background stratum, as in ADR-166; the dominant-class rule and the largest-remainder allocation moved to `dataset_derived` and both features use them). The quota of every stratum per split comes from the largest-remainder method; leftovers and equal candidates are ordered with `random.Random(f"{seed}|{stratum}…")` over items sorted by SHA-256, so the result depends on the seed and the content, never on the order of the files. The seed is exposed and recorded.
+- **Units that cannot be split.** Images with the same SHA-256 are always in the same split. With a group file, the images of a group are too. Both relations are joined (a connected set of "same bytes" and "same group" is one unit), so a re-split never creates leakage. Units are placed greedily, largest first, equal sizes in seeded order, each into the split with the largest remaining deficit for its dominant stratum and, when that class is full everywhere, for the images overall. Without groups and without copies every unit is one image and the greedy fill gives exactly the quotas.
+- **Leakage with the locked test.** A pooled image that is an exact copy of a locked image, or that is in a unit that touches the locked split (same group, or a copy of a copy), is dropped from the result and listed with its reason (`duplicate_of_test`, `group_in_test`): moving it would put test content into training. The preview reports how many copy sets were kept together and how many of them were spread over several splits before.
+- **Groups.** A `path,group` CSV (ADR-150 format, UTF-8, paths relative to the dataset root) picked by the user, who may be anywhere on disk because it is only read. Unlike the audit it need not cover every image: an image the file does not list is its own group (counted), and rows naming no image of the dataset are ignored (counted). A repeated path or an empty group is an error. The file's SHA-256 is part of the analysis; the group choice (`by_group`) is a plan option, so switching it needs no new analysis, but a different file does (a new preview).
+- **Preview.** Counts per class and split before and after, images that change split, achieved against requested share per split, dropped images with the reason, copies kept together, and warnings: a new split, an empty split, a split that disappears, a class absent from a split. Changing the ratios, the seed, the lock or the group switch re-plans through `/plan` in milliseconds without hashing again.
+- **Names.** A moved file whose name is taken in its new folder becomes `stem-<sha8>` (with a counter if needed); the YOLO `.txt` follows the image and its stem must be free too. Classification moves go to `<split folder>/<class>/`, so a nested subfolder an image had inside its class is not kept for moved images.
+- **Record.** `visionforge_dataset.json` (`schema_version` 1, `kind: "resplit"`): source path and fingerprint, seed, requested and achieved ratios, the lock, the group file (path, SHA-256, groups, images without a group, ignored rows), counts before and after (per split and per class and split), images moved, dropped by reason with the first 200 listed, copy sets, and files linked or copied. The apply is refused (409) if the dataset fingerprint or the group file changed since the preview, and again inside the write.
+- **API.** `POST /api/explorer/resplit/preview` (the dataset must have been opened in the explorer, 403 otherwise; optional `group_csv`), `GET .../{job_id}`, `POST .../{job_id}/plan` (`ratios`, `seed`, `lock_test`, `by_group`), `.../apply` (+ `dest_name`), `.../cancel`. One job at a time (409 busy). The suggested name is `<name>-resplit`, then `-2`, `-3`.
+- **Page.** A button "Refazer divisão" beside "Incorporar imagens" and "Juntar com outro dataset": optional group file, analysis with progress, lock and group switches, current proportion or custom percentages, seed, before/after table, requested against achieved share, warnings, what was dropped and why, destination name, apply with progress and cancel, "open in the explorer". Logic in `lib/dataset-resplit.ts`; progress bar and polling hook are shared.
+- **Route documentation.** The three derived-dataset routers (incorporate, merge, re-split) now spell their `responses=` out with literal status keys (`{400: {"description": BAD_REQUEST_TEXT}}`) instead of spreading the dicts of `http_responses.py`: Sonar S8415 reads the keys of a literal and does not follow a spread of an imported dict. The OpenAPI snapshot only records paths, so it gains the re-split operations and nothing else.
+
+**Consequences:**
+
+- The OpenAPI snapshot gains five operations; request models are named `Resplit*`.
+- The preview hashes every image once (the cost of comparing by content, as in ADR-136, 166 and 167); everything after it is in memory.
+- A re-split with the test unlocked is a different experiment: its numbers are not comparable with runs that used the old test set. The page says so next to the option.
+- Hardlinks mean the result and the source share bytes (as in ADR-166 and 167).
+- Near-duplicates are not detected; only identical bytes are kept together.
+- With large groups the ratios are approximate: a group is never cut, and the preview shows how far the achieved share is from the requested one.
+
+**Risks:**
+
+- A crash between the first write and the rename leaves a hidden `.<name>.tmp-*` next to the dataset (as in ADR-166 and 167).
+- A class that ends up absent from a split (few images, big groups) breaks per-split class indexing in ImageFolder training; the preview warns, nothing prevents it.
+
+**Alternatives considered:**
+
+- *Re-split in place.* Breaks the fingerprint of every old run and the comparison with them.
+- *Re-split everything by default.* Makes a new run incomparable with the old ones; it stays one click away.
+- *Moving the copies of a locked-test image to the test too.* It would grow the test set the user asked to keep untouched.
+- *Reading the group file with the audit's reader.* It demands one row per image and a file inside the dataset; a re-split is more useful when a partial, external file is enough.

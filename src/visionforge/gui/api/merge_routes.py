@@ -26,10 +26,10 @@ from visionforge.gui.api.datasets_routes import _is_inside_allowed_root
 from visionforge.gui.api.derived_jobs import DerivedJob, JobBusyError
 from visionforge.gui.api.explorer_routes import ExplorerRequest, _split_dirs
 from visionforge.gui.api.http_responses import (
-    BAD_REQUEST,
-    CONFLICT,
-    FORBIDDEN,
-    NOT_FOUND,
+    BAD_REQUEST_TEXT,
+    CONFLICT_TEXT,
+    FORBIDDEN_TEXT,
+    NOT_FOUND_TEXT,
 )
 from visionforge.gui.api.merge_jobs import MergeJobs
 from visionforge.utils.messages import tr
@@ -91,7 +91,14 @@ def _other_split_dirs(req: MergePreviewRequest) -> dict[str, str]:
     }
 
 
-@router.post("/preview", responses={**BAD_REQUEST, **FORBIDDEN, **CONFLICT})
+@router.post(
+    "/preview",
+    responses={
+        400: {"description": BAD_REQUEST_TEXT},
+        403: {"description": FORBIDDEN_TEXT},
+        409: {"description": CONFLICT_TEXT},
+    },
+)
 async def merge_preview(req: MergePreviewRequest) -> dict[str, Any]:
     """Start reading both datasets; poll ``/{job_id}`` for the preview."""
     a_dir = Path(req.base_dir)
@@ -123,7 +130,7 @@ async def merge_preview(req: MergePreviewRequest) -> dict[str, Any]:
     return job.snapshot()
 
 
-@router.get("/{job_id}", responses=NOT_FOUND)
+@router.get("/{job_id}", responses={404: {"description": NOT_FOUND_TEXT}})
 async def merge_status(job_id: str) -> dict[str, Any]:
     """Progress, and the preview or the result once the job has finished."""
     job = _JOBS.get(job_id)
@@ -132,7 +139,14 @@ async def merge_status(job_id: str) -> dict[str, Any]:
     return job.snapshot()
 
 
-@router.post("/{job_id}/plan", responses={**BAD_REQUEST, **NOT_FOUND, **CONFLICT})
+@router.post(
+    "/{job_id}/plan",
+    responses={
+        400: {"description": BAD_REQUEST_TEXT},
+        404: {"description": NOT_FOUND_TEXT},
+        409: {"description": CONFLICT_TEXT},
+    },
+)
 async def merge_plan(job_id: str, req: MergePlanRequest) -> dict[str, Any]:
     """What the result holds for this class mapping; nothing is hashed again."""
     job = _ready_job(job_id)
@@ -143,7 +157,14 @@ async def merge_plan(job_id: str, req: MergePlanRequest) -> dict[str, Any]:
     return plan.summary()
 
 
-@router.post("/{job_id}/apply", responses={**BAD_REQUEST, **NOT_FOUND, **CONFLICT})
+@router.post(
+    "/{job_id}/apply",
+    responses={
+        400: {"description": BAD_REQUEST_TEXT},
+        404: {"description": NOT_FOUND_TEXT},
+        409: {"description": CONFLICT_TEXT},
+    },
+)
 async def merge_apply(job_id: str, req: MergeApplyRequest) -> dict[str, Any]:
     """Start writing the merged dataset; poll ``/{job_id}`` of the returned job."""
     job = _ready_job(job_id)
@@ -166,7 +187,7 @@ async def merge_apply(job_id: str, req: MergeApplyRequest) -> dict[str, Any]:
     return started.snapshot()
 
 
-@router.post("/{job_id}/cancel", responses=NOT_FOUND)
+@router.post("/{job_id}/cancel", responses={404: {"description": NOT_FOUND_TEXT}})
 async def merge_cancel(job_id: str) -> dict[str, bool]:
     """Ask a running job to stop. An apply removes its temporary folder."""
     if not _JOBS.cancel(job_id):

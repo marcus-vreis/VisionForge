@@ -1012,6 +1012,75 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "pt": "A imagem '{path}' mudou desde a prévia. Refaça a prévia.",
         "en": "The image '{path}' changed since the preview. Run the preview again.",
     },
+    # ── re-splitting a dataset (gui/api/resplit_*.py, ADR-168) ───────────────
+    "resplit.busy": {
+        "pt": "Já existe uma nova divisão em andamento. Espere ou interrompa a atual.",
+        "en": "A re-split is already running. Wait for it or cancel it.",
+    },
+    "resplit.job_missing": {
+        "pt": "Divisão não encontrada. Refaça a prévia.",
+        "en": "Re-split not found. Run the preview again.",
+    },
+    "resplit.preview_not_ready": {
+        "pt": "A prévia ainda não terminou ou não deu certo.",
+        "en": "The preview has not finished or did not succeed.",
+    },
+    "resplit.base_not_opened": {
+        "pt": "Abra o dataset no explorador antes de refazer a divisão dele.",
+        "en": "Open the dataset in the explorer before re-splitting it.",
+    },
+    "resplit.base_missing": {
+        "pt": "A pasta do dataset não existe: {path}",
+        "en": "The dataset folder does not exist: {path}",
+    },
+    "resplit.base_empty": {
+        "pt": "O dataset não tem imagens para dividir.",
+        "en": "The dataset has no images to split.",
+    },
+    "resplit.unreadable": {
+        "pt": "Não foi possível ler a imagem '{path}'.",
+        "en": "The image '{path}' could not be read.",
+    },
+    "resplit.group_csv_missing": {
+        "pt": "Não foi possível ler o arquivo de grupos: {path}",
+        "en": "The group file could not be read: {path}",
+    },
+    "resplit.bad_group_csv": {
+        "pt": "Arquivo de grupos inválido ({detail}). Use um CSV UTF-8 com as colunas path,group.",
+        "en": "Invalid group file ({detail}). Use a UTF-8 CSV with the columns path,group.",
+    },
+    "resplit.no_group_csv": {
+        "pt": "Para dividir por grupo, escolha um arquivo de grupos na prévia.",
+        "en": "To split by group, pick a group file in the preview.",
+    },
+    "resplit.bad_ratios": {
+        "pt": "Proporção inválida: use números não negativos com soma maior que zero.",
+        "en": "Invalid ratios: use non-negative numbers that sum to more than zero.",
+    },
+    "resplit.ratio_test_locked": {
+        "pt": "O teste está mantido como está; desmarque a opção para dar uma proporção a ele.",
+        "en": "The test split is kept as it is; untick the option to give it a ratio.",
+    },
+    "resplit.nothing_to_split": {
+        "pt": "Não há imagens para redistribuir com estas opções.",
+        "en": "There are no images to redistribute with these options.",
+    },
+    "resplit.bad_dest_name": {
+        "pt": "Nome de pasta inválido para o dataset novo.",
+        "en": "Invalid folder name for the new dataset.",
+    },
+    "resplit.dest_exists": {
+        "pt": "Já existe uma pasta chamada '{name}' ao lado do dataset. Escolha outro nome.",
+        "en": "A folder named '{name}' already exists next to the dataset. Pick another name.",
+    },
+    "resplit.base_changed": {
+        "pt": "O dataset mudou desde a prévia. Refaça a prévia.",
+        "en": "The dataset changed since the preview. Run the preview again.",
+    },
+    "resplit.group_csv_changed": {
+        "pt": "O arquivo de grupos mudou desde a prévia. Refaça a prévia.",
+        "en": "The group file changed since the preview. Run the preview again.",
+    },
     # ── updating the install from the page (gui/api/routes.py, ADR-120) ──────
     "update.foreign_origin": {
         "pt": "Atualização recusada: o pedido veio de uma página de outro site.",

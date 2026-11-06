@@ -523,7 +523,9 @@ export const pt = {
     duplicatesTitle: (n: number) => `Cópias exatas de A encontradas em B, tiradas de B (${n})`,
     duplicatesHelp: "Fica a cópia de A. Se A não a guarda, a de B é mantida.",
     leakTitle: (n: number) =>
-      `${n} delas estavam em divisões diferentes nos dois datasets: vazamento evitado.`,
+      n === 1
+        ? "Uma delas estava em divisões diferentes nos dois datasets: vazamento evitado."
+        : `${n} delas estavam em divisões diferentes nos dois datasets: vazamento evitado.`,
     duplicateItem: (b: string, a: string) => `${b} = ${a}`,
     destTitle: "4. Pasta de destino",
     destName: "Nome da pasta nova",
@@ -535,6 +537,88 @@ export const pt = {
     done: (n: number, path: string) => `${n} imagens em ${path}`,
     linkedCopied: (linked: number, copied: number) =>
       `${linked} arquivos por hardlink, ${copied} copiados`,
+    openResult: "Abrir no explorador",
+  },
+  datasetResplit: {
+    open: "Refazer divisão",
+    close: "Fechar",
+    intro:
+      "Cria um dataset novo ao lado do original, que não muda. As imagens de treino e validação são juntadas e redistribuídas pela proporção escolhida; o teste fica como está, para os resultados continuarem comparáveis com os de antes.",
+    groupTitle: "1. Grupos (opcional)",
+    groupHelp:
+      "Um CSV com as colunas path,group, com o path relativo à pasta do dataset. Imagens do mesmo grupo vão sempre para a mesma divisão. Imagens que o arquivo não cita formam um grupo cada uma.",
+    groupFile: "Arquivo de grupos",
+    groupPlaceholder: "ex.: C:/dados/grupos.csv (vazio: sem grupos)",
+    analyze: "Analisar",
+    analyzing: (done: number, total: number) =>
+      `Lendo e calculando: ${done} de ${total}`,
+    cancel: "Cancelar",
+    cancelling: "Cancelando…",
+    cancelled: "Cancelado. Nenhuma pasta foi criada.",
+    failed: (reason: string) => `Não deu certo: ${reason}`,
+    previewTitle: "2. Opções e prévia",
+    found: (n: number) => `Imagens: ${n}`,
+    groupsInfo: (groups: number, ungrouped: number) =>
+      `${groups} ${groups === 1 ? "grupo" : "grupos"}; ${ungrouped} ${ungrouped === 1 ? "imagem fora do arquivo" : "imagens fora do arquivo"}`,
+    unknownEntries: (n: number) =>
+      n === 1
+        ? "1 linha do arquivo não é uma imagem do dataset (ignorada)"
+        : `${n} linhas do arquivo não são imagens do dataset (ignoradas)`,
+    lockTest: "Manter o teste como está",
+    lockNoTest: "O dataset não tem teste",
+    lockOnHelp: "O teste não muda; só treino e validação são redistribuídos.",
+    lockOffHelp:
+      "Todas as divisões são juntadas e redistribuídas. Os resultados não serão comparáveis com os de runs que usaram o teste atual.",
+    byGroup: "Dividir por grupo",
+    ratioCustom: "Escolher a proporção",
+    ratioSame: "Mantém a proporção atual das divisões que são redistribuídas.",
+    ratioPercent: (split: string) => `${split} (%)`,
+    ratioHelp:
+      "Zero tira a divisão do resultado. Uma divisão que o dataset não tem só é criada se você der a ela um valor maior que zero.",
+    ratioInvalid: "Use números maiores ou iguais a zero, com algum maior que zero.",
+    seed: "Seed",
+    seedHint: "Mesma seed, mesma divisão. Fica registrada no dataset novo.",
+    seedInvalid: "Use um inteiro maior ou igual a zero.",
+    keptLine: (n: number) => `No resultado: ${n} ${n === 1 ? "imagem" : "imagens"}`,
+    movedLine: (n: number) => `Mudam de divisão: ${n}`,
+    droppedLine: (n: number) => `Ficam de fora: ${n}`,
+    tableTitle: "Imagens por classe e divisão (antes → depois)",
+    lockedMark: "(travado)",
+    ratiosTitle: "Proporção pedida e obtida",
+    ratioLine: (split: string, requested: string, achieved: string) =>
+      `${split}: pedido ${requested}%, obtido ${achieved}%`,
+    duplicatesLine: (sets: number, extras: number) =>
+      `Cópias exatas mantidas juntas: ${sets} ${sets === 1 ? "conjunto" : "conjuntos"} (${extras} ${extras === 1 ? "cópia a mais" : "cópias a mais"}).`,
+    duplicatesLeak: (n: number) =>
+      n === 1
+        ? "Um deles estava em divisões diferentes: vazamento evitado."
+        : `${n} deles estavam em divisões diferentes: vazamento evitado.`,
+    warnNewSplit: (split: string) => `${split} não existia e será criado.`,
+    warnEmptySplit: (split: string) => `${split} ficaria sem nenhuma imagem.`,
+    warnSplitRemoved: (split: string) => `${split} deixa de existir no resultado.`,
+    warnSplitEmptyResult: (split: string) => `Atenção: ${split} fica sem imagens.`,
+    warnClassMissing: (cls: string, split: string) =>
+      `A classe ${cls} não tem nenhuma imagem em ${split}.`,
+    droppedTitle: (n: number) => `Ficam de fora (${n})`,
+    droppedHelp:
+      "Vazariam para o treino: são cópias de imagens do teste travado ou estão num grupo que tem imagem no teste.",
+    reasons: {
+      duplicate_of_test: "cópia exata de uma imagem do teste",
+      group_in_test: "grupo com imagem no teste",
+    } as Record<string, string>,
+    reasonCount: (reason: string, n: number) => `${reason}: ${n}`,
+    moreNotShown: (n: number) => `mais ${n} não mostrados`,
+    destTitle: "3. Pasta de destino",
+    destName: "Nome da pasta nova",
+    destHint: "Fica ao lado do dataset original.",
+    destInvalid: "Nome de pasta inválido.",
+    apply: "Criar dataset novo",
+    applying: (done: number, total: number) => `Escrevendo: ${done} de ${total}`,
+    doneTitle: "Dataset criado",
+    done: (n: number, moved: number, path: string) =>
+      `${n} ${n === 1 ? "imagem" : "imagens"} em ${path}; ${moved} ${moved === 1 ? "mudou" : "mudaram"} de divisão`,
+    linkedCopied: (linked: number, copied: number) =>
+      `${linked} ${linked === 1 ? "arquivo" : "arquivos"} por hardlink, ${copied} ${copied === 1 ? "copiado" : "copiados"}`,
     openResult: "Abrir no explorador",
   },
   lightbox: {

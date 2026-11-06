@@ -44,11 +44,14 @@ from visionforge.core.dataset_derived import (
     REGISTRY_SCHEMA,
     DerivedError,
     ProgressCounter,
+    allocate_largest_remainder,
     claim_name,
+    dominant_class,
     ensure_unchanged,
     file_sha256,
     link_or_copy,
     list_files,
+    occupied_names,
     prepare_destination,
     publish,
     write_class_files,
@@ -123,10 +126,7 @@ class Candidate:
         The most frequent class of the image (ties by name), or ``""`` for a
         detection image without boxes.
         """
-        if not self.names:
-            return ""
-        counts = Counter(self.names)
-        return min(counts, key=lambda n: (-counts[n], n))
+        return dominant_class(self.names)
 
 
 @dataclass(frozen=True)
@@ -463,22 +463,6 @@ def resolve_ratios(
     return {s: raw[s] / total for s in SPLIT_NAMES}
 
 
-def _allocate(
-    n: int, ratios: Mapping[str, float], rng: random.Random
-) -> dict[str, int]:
-    """Split ``n`` items by ``ratios`` with the largest-remainder method."""
-    quotas = {s: n * ratios[s] for s in SPLIT_NAMES}
-    counts = {s: math.floor(q) for s, q in quotas.items()}
-    leftover = n - sum(counts.values())
-    order = sorted(
-        (s for s in SPLIT_NAMES if ratios[s] > 0),
-        key=lambda s: (-(quotas[s] - counts[s]), rng.random()),  # NOSONAR python:S2245
-    )
-    for s in order[:leftover]:
-        counts[s] += 1
-    return counts
-
-
 def plan_incorporation(
     analysis: Analysis,
     *,
@@ -522,7 +506,7 @@ def plan_incorporation(
         # A reproducible split, not a secret: the seed is recorded on purpose.
         rng = random.Random(f"{seed}|{stratum}")  # NOSONAR python:S2245
         rng.shuffle(group)  # NOSONAR python:S2245
-        quota = _allocate(len(group), effective, rng)
+        quota = allocate_largest_remainder(len(group), effective, rng)
         start = 0
         for split in SPLIT_NAMES:
             for cand in group[start : start + quota[split]]:
@@ -660,7 +644,9 @@ def _write(
         folder = images_dir if detection else images_dir / cand.names[0]
         (tmp / folder).mkdir(parents=True, exist_ok=True)
         if folder not in taken:
-            taken[folder] = _occupied(tmp, folder, labels_dir, analysis.task)
+            taken[folder] = occupied_names(
+                tmp, folder, labels_dir if detection else None
+            )
         name = claim_name(
             taken[folder], Path(cand.rel).name, cand.sha256, with_label=detection
         )
@@ -699,13 +685,6 @@ def _layout(analysis: Analysis) -> dict[str, tuple[Path, Path | None]]:
             labels_dir.relative_to(analysis.base_root),
         )
     return layout
-
-
-def _occupied(tmp: Path, folder: Path, labels_dir: Path | None, task: str) -> set[str]:
-    names = {p.name.lower() for p in (tmp / folder).iterdir()}
-    if task == "detection" and labels_dir is not None and (tmp / labels_dir).is_dir():
-        names |= {p.name.lower() for p in (tmp / labels_dir).iterdir()}
-    return names
 
 
 def _write_label(

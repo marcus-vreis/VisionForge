@@ -17,15 +17,19 @@ from __future__ import annotations
 import errno
 import hashlib
 import json
+import math
 import os
+import random
 import shutil
 import uuid
+from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
 from loguru import logger
 
+from visionforge.core.dataset_explorer import SPLIT_NAMES
 from visionforge.core.dataset_fingerprint import fingerprint_dataset
 from visionforge.utils.paths import validate_path_component
 
@@ -151,6 +155,45 @@ class ProgressCounter:
             self._on_progress(self.done, self.total)
 
 
+def occupied_names(tmp: Path, folder: Path, labels_dir: Path | None) -> set[str]:
+    """Lower-case names already in ``folder`` (and in its labels folder, if any)."""
+    names = {p.name.lower() for p in (tmp / folder).iterdir()}
+    if labels_dir is not None and (tmp / labels_dir).is_dir():
+        names |= {p.name.lower() for p in (tmp / labels_dir).iterdir()}
+    return names
+
+
+# ── strata and ratios ─────────────────────────────────────────────────────────
+
+
+def dominant_class(names: Sequence[str]) -> str:
+    """The most frequent class of an image (ties by name), ``""`` if it has none."""
+    if not names:
+        return ""
+    counts = Counter(names)
+    return min(counts, key=lambda n: (-counts[n], n))
+
+
+def allocate_largest_remainder(
+    n: int, ratios: Mapping[str, float], rng: random.Random
+) -> dict[str, int]:
+    """Split ``n`` items by ``ratios`` (over the three splits) by largest remainder.
+
+    Ties between equal remainders are broken by ``rng``, so a seeded generator
+    makes the allocation reproducible. A split with ratio 0 never gets a leftover.
+    """
+    quotas = {s: n * ratios[s] for s in SPLIT_NAMES}
+    counts = {s: math.floor(q) for s, q in quotas.items()}
+    leftover = n - sum(counts.values())
+    order = sorted(
+        (s for s in SPLIT_NAMES if ratios[s] > 0),
+        key=lambda s: (-(quotas[s] - counts[s]), rng.random()),  # NOSONAR python:S2245
+    )
+    for s in order[:leftover]:
+        counts[s] += 1
+    return counts
+
+
 # ── the destination ───────────────────────────────────────────────────────────
 
 
@@ -271,11 +314,13 @@ def write_yaml(
     dest: Path,
     *,
     extra_splits: Mapping[str, str] | None = None,
+    drop_splits: Sequence[str] = (),
 ) -> None:
     """``src`` with ``names`` and ``nc`` updated and an absolute ``path`` re-pointed.
 
     ``extra_splits``: ``{split: images folder}`` for splits the result has and the
     file did not mention; a key the file already has is left alone.
+    ``drop_splits``: splits the result no longer has; their keys are removed.
     """
     import yaml
 
@@ -290,6 +335,8 @@ def write_yaml(
         data["nc"] = len(classes)
     for split, folder in (extra_splits or {}).items():
         data.setdefault(split, folder)
+    for split in drop_splits:
+        data.pop(split, None)
     path_value = data.get("path")
     if isinstance(path_value, str) and Path(path_value).is_absolute():
         try:
@@ -313,12 +360,15 @@ __all__ = [
     "YAML_NAMES",
     "DerivedError",
     "ProgressCounter",
+    "allocate_largest_remainder",
     "claim_name",
+    "dominant_class",
     "ensure_unchanged",
     "file_sha256",
     "free_name",
     "link_or_copy",
     "list_files",
+    "occupied_names",
     "prepare_destination",
     "publish",
     "remove_tree",
