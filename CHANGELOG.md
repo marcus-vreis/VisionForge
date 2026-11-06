@@ -15,6 +15,23 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Added
 
+- **Incorporar imagens a um dataset** (ADR-166, fase 2 da issue #117): na aba
+  Explorar, o botão "Incorporar imagens" cria um dataset novo, numa pasta irmã,
+  com as imagens de uma pasta nova. O original não é alterado.
+  - **Prévia antes de aplicar:** quantas imagens entram por classe e divisão e
+    quantas ficam de fora, com o motivo (não abre, cópia exata por SHA-256 de uma
+    imagem do dataset ou de outra nova, sem `.txt`, `.txt` inválido, fora de uma
+    pasta de classe). Classes novas só entram se forem marcadas e vão para o fim
+    da lista, sem renumerar as que existem.
+  - **Divisão:** as imagens que já existem ficam onde estão. As novas são
+    distribuídas por classe na proporção do dataset ou na que você escolher,
+    com seed registrada; um dataset sem test continua sem test.
+  - **Escrita segura:** hardlink quando a pasta está no mesmo volume, cópia
+    quando não está; tudo vai para uma pasta temporária e termina num único
+    rename. Cancelar não deixa nada no destino.
+  - **Registro:** o dataset novo leva `visionforge_dataset.json` com a origem,
+    o fingerprint do dataset base, a pasta incorporada, a seed, a proporção e as
+    contagens.
 - **Dataset do Google Drive no Colab** (ADR-164): um treino no Colab usa a
   pasta do dataset do formulário quando ela está no Google Drive para desktop,
   sem upload.
