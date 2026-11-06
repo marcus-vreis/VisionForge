@@ -146,6 +146,11 @@ export const pt = {
     loadFailed: "Não foi possível falar com o servidor.",
     trainTitle: "Treinar este experimento no Colab",
     trainSource: "Dataset na VM: URL de um zip, torchvision:cifar10 ou hf:dono/nome",
+    driveSource: "Usar a pasta do dataset do formulário, no Google Drive para desktop",
+    driveRoot: "Pasta \"Meu Drive\" deste computador (se não for achada sozinha)",
+    driveRootPlaceholder: "G:\\Meu Drive",
+    driveExport: "Gravar o run também no Drive (MyDrive/VisionForge/runs)",
+    driveNote: "A VM monta o seu Drive e copia o dataset antes de treinar; o Google pede permissão a cada runtime.",
     sourcePlaceholder: "https://…/dataset.zip",
     badSource: "Use uma URL http(s) de um zip, torchvision:<nome> ou hf:<dono/nome>.",
     accelerator: "GPU",
@@ -2078,6 +2083,14 @@ export const pt = {
     // previous job and not for this machine's GPU (ADR-163).
     queuedColabNote: (account: string, position: number | undefined) =>
       `${position ? `aguardando o Colab de ${account} — ${position}º na fila` : `aguardando o Colab de ${account}`}. O treino começa sozinho quando o anterior dessa conta terminar.`,
+    // The Drive consent of a Colab job (ADR-164): each new runtime asks once.
+    driveConsentTitle: "O Colab pede acesso ao seu Google Drive",
+    driveConsentBody: (attempt: number, attempts: number) =>
+      `Permita numa aba nova e volte para esta janela; o treino segue sozinho. Tentativa ${attempt} de ${attempts}.`,
+    driveConsentOpen: "Permitir acesso ao Drive",
+    driveConsentDone: "Já permiti",
+    driveConsentSending: "Conferindo a permissão…",
+    driveConsentError: "O servidor não recebeu a resposta. Tente \"Já permiti\" de novo.",
     // The status poll is not reaching the server; the run goes on there (ADR-133).
     reconnecting: "reconectando…",
     reconnectingNote: "O servidor não respondeu. Tentando de novo — o treino continua no servidor.",

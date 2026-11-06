@@ -398,4 +398,15 @@ export type TrainingEvent =
       best: boolean;
       images: LiveInsightImage[];
     }
+  // A Colab job reached the Drive mount and Google asks the person to allow it
+  // (ADR-164): the GUI opens `url` in a new tab and answers when they come back.
+  | {
+      event: "drive_consent_required";
+      url: string;
+      attempt: number;
+      attempts: number;
+      session?: string;
+    }
+  // A step of a Colab job on its VM (ADR-163); `stage` names it.
+  | { event: "remote"; stage: string; [key: string]: unknown }
   | { event: "end"; total_epochs: number; total_trials?: number };

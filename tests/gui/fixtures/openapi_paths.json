@@ -690,6 +690,24 @@
       "503": {}
     }
   },
+  "POST /api/colab/drive/continue": {
+    "operationId": "continue_drive_consent_api_colab_drive_continue_post",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {
+      "application/json": "ColabDriveContinueRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "404": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
   "POST /api/colab/experiment/run": {
     "operationId": "run_colab_experiment_api_colab_experiment_run_post",
     "parameters": [
