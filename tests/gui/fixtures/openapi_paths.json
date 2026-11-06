@@ -105,6 +105,57 @@
       }
     }
   },
+  "GET /api/colab/sessions": {
+    "operationId": "colab_sessions_api_colab_sessions_get",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "array[ColabSessionInfo]"
+      },
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "GET /api/colab/status": {
+    "operationId": "colab_status_api_colab_status_get",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "ColabStatus"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "GET /api/colab/usage": {
+    "operationId": "colab_usage_api_colab_usage_get",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "ColabUsage"
+      },
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      },
+      "502": {}
+    }
+  },
   "GET /api/credentials": {
     "operationId": "get_credentials_api_credentials_get",
     "parameters": [
@@ -225,7 +276,8 @@
   "GET /api/experiment/status": {
     "operationId": "get_status_api_experiment_status_get",
     "parameters": [
-      "header:X-VF-Lang:optional"
+      "header:X-VF-Lang:optional",
+      "query:run_id:optional"
     ],
     "requestBody": {},
     "responses": {
@@ -636,6 +688,132 @@
         "application/json": "HTTPValidationError"
       },
       "503": {}
+    }
+  },
+  "POST /api/colab/experiment/run": {
+    "operationId": "run_colab_experiment_api_colab_experiment_run_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {
+      "application/json": "ColabRunRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "RunResponse"
+      },
+      "400": {},
+      "404": {},
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/colab/install": {
+    "operationId": "colab_install_api_colab_install_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "ColabStatus"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/colab/login/cancel": {
+    "operationId": "colab_login_cancel_api_colab_login_cancel_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "ColabStatus"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/colab/login/finish": {
+    "operationId": "colab_login_finish_api_colab_login_finish_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {
+      "application/json": "ColabLoginFinishRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "ColabStatus"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      },
+      "502": {}
+    }
+  },
+  "POST /api/colab/login/start": {
+    "operationId": "colab_login_start_api_colab_login_start_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "ColabLoginStart"
+      },
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      },
+      "502": {}
+    }
+  },
+  "POST /api/colab/logout": {
+    "operationId": "colab_logout_api_colab_logout_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "ColabStatus"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/colab/sessions/stop": {
+    "operationId": "colab_stop_session_api_colab_sessions_stop_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {
+      "application/json": "ColabStopSessionRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "array[ColabSessionInfo]"
+      },
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      },
+      "502": {}
     }
   },
   "POST /api/credentials": {

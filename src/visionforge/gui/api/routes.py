@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import csv
+import dataclasses
 import json
 import os
 import uuid
 from collections.abc import Awaitable, Callable, Iterable
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Any, Literal, NoReturn
@@ -19,6 +20,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response, StreamingRes
 from loguru import logger
 from pydantic import ValidationError
 
+from visionforge import __version__ as _VF_VERSION
 from visionforge.blocks.anomaly import AnomalyBlock
 from visionforge.blocks.anomaly_runner import AnomalyRunner
 from visionforge.blocks.batch_prediction import BatchPredictionBlock
@@ -41,12 +43,14 @@ from visionforge.blocks.transfer_learning import TransferLearningBlock
 from visionforge.core.cancellation import (
     STOPPED,
     CancellationToken,
+    is_cancelled,
     job_was_stopped,
 )
 from visionforge.core.comparison import ComparisonTrial, run_model_comparison
-from visionforge.core.data import DataModule
+from visionforge.core.data import class_folder_test_loader
 from visionforge.core.detection_data import resolve_yolo_split
 from visionforge.core.evaluator import Evaluator
+from visionforge.core.experiment_bundle import import_experiment_bundle
 from visionforge.core.latex_export import report_to_latex
 from visionforge.core.loader_lifecycle import describe_worker_spawn_failure
 from visionforge.core.plotter import MetricsPlotter
@@ -73,6 +77,10 @@ from visionforge.core.task_runner import (
     require_validation_selection,
     runner_metric_direction,
 )
+from visionforge.gui.api.colab_connection import PINNED_VERSION as _COLAB_PIN
+from visionforge.gui.api.colab_connection import ColabCli, LoginFlows
+from visionforge.gui.api.colab_jobs import ColabJobs
+from visionforge.gui.api.colab_routes import build_colab_router
 from visionforge.gui.api.datasets_routes import (
     _IMAGE_EXTS,
     SCAN_BASE_MISSING_KEY,
@@ -116,10 +124,13 @@ from visionforge.gui.api.run_history import load_runs as _load_runs
 from visionforge.gui.api.run_history import resume_status as _resume_status
 from visionforge.gui.api.run_history import run_task as _run_task
 from visionforge.gui.api.run_queue import (
+    LOCAL_LANE,
     NotStoppableError,
     QueuedJob,
+    RunLanes,
     RunQueue,
     StopPoint,
+    colab_lane,
 )
 from visionforge.gui.api.runs_routes import build_runs_router
 from visionforge.gui.api.sample_dataset import (
@@ -130,6 +141,7 @@ from visionforge.gui.api.sample_dataset import (
 from visionforge.gui.api.schemas import (
     BatchPredictRequest,
     BatchPredictResponse,
+    ColabRunRequest,
     ComparisonRequest,
     CustomTaskActionResponse,
     ExportOnnxRequest,
@@ -141,6 +153,7 @@ from visionforge.gui.api.schemas import (
     PreprocessPreviewResponse,
     PreprocessPreviewStep,
     QueuedJobInfo,
+    QueueLane,
     QueueSnapshot,
     ReplicatedComparisonRequest,
     ReplicatesRequest,
@@ -222,20 +235,55 @@ async def request_lang(
 # lookup among them) writes its messages in the language of the page.
 router = APIRouter(prefix="/api", dependencies=[Depends(request_lang)])
 
-# State of the run that is executing right now (the machine still trains one at
-# a time); submissions that arrive while it is busy wait in _RUN_QUEUE.
-_current_run: dict[str, Any] | None = None
 
-# Per-run event log (ADR-159); None before the first run.
-# The Trainer worker thread puts dicts onto it via asyncio.run_coroutine_threadsafe;
-# each SSE generator reads it from where its client stands and serialises each
-# item as an SSE data line. A None sentinel signals end-of-stream.
-_event_queue: RunEventLog | None = None
+@dataclass
+class JobState:
+    """What one started job owns (ADR-163, phase 4).
 
-# Cancellation token of the job executing right now; None when idle. Handed to
-# the block so DELETE /api/queue/{id} reaches the trainer's epoch boundary
-# (ADR-088) instead of only flipping a flag nobody reads.
-_active_cancel_token: CancellationToken | None = None
+    A local job and a Colab job run at the same time, so the state that used to
+    be a single "current run" lives here, one per ``run_id``:
+
+    - ``log``: the run's event log (ADR-159). The trainer thread puts events on
+      it; each SSE reader walks it from where its client stands, and ``None``
+      ends the stream.
+    - ``token``: the job's cancellation token, handed to the block so
+      ``DELETE /api/queue/{id}`` reaches that job's stop boundary (ADR-088).
+    - ``run``: the status, error, report and run folder that
+      ``/experiment/status`` and ``/experiment/result`` read.
+    """
+
+    run_id: str
+    log: RunEventLog
+    token: CancellationToken
+    lane: str = LOCAL_LANE
+    run: dict[str, Any] = dataclasses.field(default_factory=dict)
+
+
+# Started jobs by run_id, oldest first. A finished job stays a while so its
+# stream can be replayed and its result fetched; running ones are never dropped.
+_JOB_STATES: dict[str, JobState] = {}
+_MAX_FINISHED_STATES = 50
+# The job started last: what a client that names no run_id follows.
+_latest_run_id: str | None = None
+
+
+def _job_state(run_id: str) -> JobState:
+    """The state of a started job; the executors read their own through this."""
+    return _JOB_STATES[run_id]
+
+
+def _run_state(run_id: str | None = None) -> dict[str, Any] | None:
+    """A started job's run dict: the one named, or the latest when none is."""
+    key = run_id if run_id is not None else _latest_run_id
+    state = _JOB_STATES.get(key) if key is not None else None
+    return state.run if state is not None else None
+
+
+def _drop_finished_states() -> None:
+    finished = [k for k, s in _JOB_STATES.items() if s.run.get("status") != "running"]
+    for key in finished[: max(0, len(finished) - _MAX_FINISHED_STATES)]:
+        del _JOB_STATES[key]
+
 
 # Default location where Trainer writes run directories. Since ADR-114 this is
 # the models folder of the *default profile*; a named profile reads and writes
@@ -284,28 +332,45 @@ def _begin_job(job: QueuedJob) -> None:
     not exist yet, so it reads the token here — the queue calls this immediately
     before it awaits ``job.start()``.
     """
-    global _current_run, _event_queue, _active_cancel_token
+    global _latest_run_id
 
-    _event_queue = RunEventLog(job.run_id)
-    _active_cancel_token = job.cancel_token
-    _current_run = {
-        "run_id": job.run_id,
-        "status": "running",
-        "error": None,
-        "report": None,
-        "run_dir": None,
-    }
+    _JOB_STATES[job.run_id] = JobState(
+        run_id=job.run_id,
+        log=RunEventLog(job.run_id),
+        token=job.cancel_token,
+        lane=job.lane,
+        run={
+            "run_id": job.run_id,
+            "status": "running",
+            "error": None,
+            "report": None,
+            "run_dir": None,
+        },
+    )
+    _latest_run_id = job.run_id
+    _drop_finished_states()
 
 
 def _finish_job(job: QueuedJob) -> dict[str, Any] | None:
-    """Hand the finished run's terminal state to the queue to keep by run_id."""
-    if _current_run is not None and _current_run.get("run_id") == job.run_id:
-        return dict(_current_run)
-    return None
+    """Hand the finished run's terminal state to its lane to keep by run_id."""
+    state = _JOB_STATES.get(job.run_id)
+    return dict(state.run) if state is not None else None
 
 
-_RUN_QUEUE = RunQueue(on_start=_begin_job, on_finish=_finish_job)
+def _new_lane() -> RunQueue:
+    return RunQueue(on_start=_begin_job, on_finish=_finish_job)
+
+
+# The local lane keeps its name: it is the queue ADR-075 introduced.
+_RUN_QUEUE = _new_lane()
+_LANES = RunLanes(_RUN_QUEUE, _new_lane)
 _EVIDENCE_EXPORTS = EvidenceExports()
+# The Colab CLI and the logins waiting for a code live as long as the server (ADR-163).
+_COLAB_CLI = ColabCli()
+_COLAB_LOGINS = LoginFlows()
+_COLAB_JOBS = ColabJobs()
+# How long the Colab job thread waits for the loop to take one event.
+_COLAB_EVENT_TIMEOUT_S = 10.0
 
 
 def _task_label_from_config(config_type: type[Any]) -> str:
@@ -341,6 +406,8 @@ _STOP_POINTS: dict[str, StopPoint] = {
     "comparison": "model",
     "replicates": "replicate",
     "replicated-comparison": "replicate",
+    # A Colab job (ADR-163): the stop releases the VM, mid-epoch.
+    "colab": "vm",
 }
 
 
@@ -358,6 +425,7 @@ def _submit_job(
     stop_at: StopPoint | None | Literal["auto"] = "auto",
     profile: Profile | None = None,
     resume_dir: Path | None = None,
+    lane: str = LOCAL_LANE,
 ) -> RunResponse:
     """Queue a training job and report whether it started or is waiting.
 
@@ -379,7 +447,7 @@ def _submit_job(
         with using_lang(lang):
             await start()
 
-    status = _RUN_QUEUE.submit(
+    status = _LANES.submit(
         QueuedJob(
             run_id=run_id,
             label=label,
@@ -390,7 +458,8 @@ def _submit_job(
             profile=owner.slug,
             resume_dir=resume_dir,
             profile_name=owner.name,
-        )
+        ),
+        lane,
     )
     return RunResponse(run_id=run_id, status=status)  # type: ignore[arg-type]
 
@@ -423,15 +492,20 @@ router.include_router(
     build_runs_router(
         lambda run_id, profile: _find_run_dir(run_id, profile),
         lambda header: current_profile(header),
-        lambda: _current_run,
+        _run_state,
         lambda request: _client_host(request),
+    )
+)
+router.include_router(
+    build_colab_router(
+        lambda header: current_profile(header), _COLAB_CLI, _COLAB_LOGINS, _COLAB_JOBS
     )
 )
 router.include_router(
     build_evidence_router(
         lambda run_id, profile: _find_run_dir(run_id, profile),
         lambda header: current_profile(header),
-        lambda run_id, run_dir, profile: _RUN_QUEUE.is_writing(
+        lambda run_id, run_dir, profile: _LANES.is_writing(
             run_id, run_dir, profile.slug
         ),
         _EVIDENCE_EXPORTS,
@@ -465,7 +539,7 @@ async def get_update(request: Request) -> dict[str, Any]:
     return await asyncio.to_thread(
         update_status,
         client_is_local=is_loopback_host(_client_host(request)),
-        busy=_RUN_QUEUE.is_busy() or _RUN_QUEUE.pending_count() > 0,
+        busy=_LANES.is_busy(),
     )
 
 
@@ -486,7 +560,7 @@ async def apply_update(request: Request) -> dict[str, str]:
     if origin is not None and not is_loopback_origin(origin):
         raise HTTPException(403, tr("update.foreign_origin"))
     local = is_loopback_host(_client_host(request))
-    busy = _RUN_QUEUE.is_busy() or _RUN_QUEUE.pending_count() > 0
+    busy = _LANES.is_busy()
     status = await asyncio.to_thread(update_status, client_is_local=local, busy=busy)
     if not status["available"]:
         raise HTTPException(409, tr("update.none"))
@@ -907,6 +981,65 @@ async def run_experiment(config: ExperimentConfig, profile: ProfileDep) -> RunRe
     )
 
 
+@router.post(
+    "/colab/experiment/run",
+    responses={
+        **_BAD_REQUEST,
+        **_NOT_FOUND,
+        **_UNPROCESSABLE,
+        409: {
+            "description": "The Colab CLI is not installed or the profile is not logged in"
+        },
+    },
+)
+async def run_colab_experiment(
+    req: ColabRunRequest, profile: ProfileDep
+) -> RunResponse:
+    """Train a classification experiment on a Colab VM (ADR-163, phase 2).
+
+    It goes through the same queue and the same /experiment/{status,events,result}
+    endpoints as a local run. The dataset comes from ``req.source`` on the VM; the
+    local ``data.base_dir`` is not read.
+    """
+    if _COLAB_CLI.installed_version() != _COLAB_PIN:
+        raise HTTPException(409, tr("colab.not_installed"))
+    if not _COLAB_CLI.logged_in(profile.slug):
+        raise HTTPException(409, tr("colab.not_logged_in"))
+    config = _validate_colab_config(req.config)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    run_id = f"{config.name}_colab_{timestamp}"
+    payload = {
+        "version": _VF_VERSION,
+        # The validated form, so the VM gets the defaults this version fills in;
+        # the runner points data and outputs at the VM.
+        "config": config.model_dump(mode="json"),
+        "source": req.source.model_dump(mode="json"),
+    }
+    return _submit_job(
+        run_id,
+        f"{config.name} · Colab {req.accelerator}",
+        "classification",
+        "colab",
+        lambda: _execute_colab(
+            run_id, profile.slug, req.accelerator, payload, profile.models_dir
+        ),
+        stop_at="vm",
+        profile=profile,
+        lane=await asyncio.to_thread(_colab_lane_of, profile.slug),
+    )
+
+
+def _colab_lane_of(slug: str) -> str:
+    """The queue of the Google account the profile is logged into (ADR-163, phase 4).
+
+    The session quota and the compute units are the account's, so two profiles
+    on the same account share one queue. A login whose e-mail ``colab whoami``
+    did not report gets a queue of its own rather than one shared by guess.
+    """
+    account = _COLAB_CLI.account(slug)
+    return colab_lane(account.lower() if account else f"profile:{slug}")
+
+
 @router.get("/detection/schema")
 async def get_detection_schema() -> dict[str, Any]:
     """Return the JSON Schema for DetectionConfig (drives the detection form)."""
@@ -1300,10 +1433,10 @@ def _owns_its_loop(info: Any) -> bool:
 
 async def _execute_custom_task(info: Any, cfg: Any, run_id: str) -> None:
     """Run a custom task's engine in a worker thread and store the report."""
-    global _current_run, _event_queue
+    state = _job_state(run_id)
 
     loop = asyncio.get_running_loop()
-    queue = _event_queue
+    queue = state.log
 
     def _put_event(event: dict[str, Any]) -> None:
         if queue is not None:
@@ -1312,7 +1445,7 @@ async def _execute_custom_task(info: Any, cfg: Any, run_id: str) -> None:
     try:
         engine = GenericTaskEngine(info, cfg)
         logger.info("GUI: Starting custom task '{}' run {}", info.key, run_id)
-        result = await asyncio.to_thread(engine.run, _put_event, _active_cancel_token)
+        result = await asyncio.to_thread(engine.run, _put_event, state.token)
 
         report = {
             "task": f"custom:{info.key}",
@@ -1324,7 +1457,7 @@ async def _execute_custom_task(info: Any, cfg: Any, run_id: str) -> None:
             # True only when the stop cut the training (ADR-111).
             "stopped": result.stopped,
         }
-        _current_run = {
+        state.run = {
             "run_id": run_id,
             "status": "completed",
             "error": None,
@@ -1334,7 +1467,7 @@ async def _execute_custom_task(info: Any, cfg: Any, run_id: str) -> None:
         logger.success("GUI: Custom task {} completed.", run_id)
     except Exception as e:
         logger.exception("GUI: Custom task {} failed", run_id)
-        _current_run = {
+        state.run = {
             "run_id": run_id,
             "status": "failed",
             "error": f"{type(e).__name__}: {e or tr('run.no_message')}",
@@ -1538,8 +1671,10 @@ async def experiment_events(
     """Stream a run's progress as Server-Sent Events, from its start (ADR-159).
 
     ``after`` skips the events the client already has, for a stream that dropped.
-    ``run_id`` names the run the client follows: asking for one that is no longer
-    the latest closes at once, instead of serving another job's events as its own.
+    ``run_id`` names the run the client follows. Each job has its own log
+    (ADR-163, phase 4), so a local run and a Colab run stream side by side; with
+    no ``run_id`` the stream is the job started last. An id with no log here
+    closes at once rather than serving another job's events as its own.
     """
     return StreamingResponse(
         _sse_generator(run_id, after),
@@ -1555,38 +1690,54 @@ async def _sse_generator(  # type: ignore[return]
     run_id: str | None = None, after: int = 0
 ):
     """Read the run's event log and yield SSE-formatted lines."""
-    log = _event_queue
-    if log is None or (run_id is not None and log.run_id != run_id):
+    key = run_id if run_id is not None else _latest_run_id
+    state = _JOB_STATES.get(key) if key is not None else None
+    if state is None:
         yield "data: {}\n\n"
         return
+    log = state.log
 
     async for item in log.read(after):
         yield f"data: {json.dumps(item)}\n\n"
 
 
 @router.get("/experiment/status")
-async def get_status() -> RunStatus:
-    """Poll the current experiment status, plus how many are queued behind it."""
-    queued = _RUN_QUEUE.pending_count()
-    if _current_run is None:
+async def get_status(run_id: str | None = None) -> RunStatus:
+    """Poll a run's status, plus how many jobs wait over all queues.
+
+    ``run_id`` names the run; without it, the job started last (ADR-163, phase 4).
+    """
+    queued = _LANES.pending_count()
+    run = _run_state(run_id)
+    if run is None and run_id is not None:
+        run = _LANES.record(run_id)
+    if run is None:
         return RunStatus(status="idle", queued=queued)
 
     return RunStatus(
-        status=_current_run["status"],
-        run_id=_current_run["run_id"],
-        error=_current_run.get("error"),
+        status=run["status"],
+        run_id=run["run_id"],
+        error=run.get("error"),
         queued=queued,
     )
 
 
 @router.get("/queue")
 async def get_queue() -> QueueSnapshot:
-    """The active run and everything waiting behind it, in submission order."""
-    snap = _RUN_QUEUE.snapshot()
-    return QueueSnapshot(
-        active=QueuedJobInfo(**snap["active"]) if snap["active"] else None,
-        pending=[QueuedJobInfo(**job) for job in snap["pending"]],
-    )
+    """Every queue: its running job and what waits behind it, in submission order.
+
+    ``active`` and ``pending`` stay the local queue's, as before ADR-163 phase 4;
+    ``lanes`` lists the local queue first and then one per Google account.
+    """
+    lanes = [
+        QueueLane(
+            lane=snap["lane"],
+            active=QueuedJobInfo(**snap["active"]) if snap["active"] else None,
+            pending=[QueuedJobInfo(**job) for job in snap["pending"]],
+        )
+        for snap in _LANES.snapshots()
+    ]
+    return QueueSnapshot(active=lanes[0].active, pending=lanes[0].pending, lanes=lanes)
 
 
 @router.delete("/queue/{run_id}", responses={**_NOT_FOUND, **_CONFLICT})
@@ -1604,7 +1755,7 @@ async def cancel_queued_run(run_id: str) -> dict[str, str]:
             (``stop_at`` is null); nothing is asked of it.
     """
     try:
-        found = _RUN_QUEUE.cancel(run_id)
+        found = _LANES.cancel(run_id)
     except NotStoppableError:
         raise HTTPException(409, tr("queue.not_stoppable")) from None
     if not found:
@@ -1619,13 +1770,11 @@ async def cancel_queued_run(run_id: str) -> dict[str, str]:
 async def get_result(run_id: str) -> RunResult:
     """Fetch the result of a completed experiment.
 
-    Reads the live state when the id is the current run, and otherwise the
-    queue's per-run record: with jobs queued back to back, the next one is
-    already running by the time the browser asks for the previous one's report.
+    Reads the job's live state while it is kept, and otherwise its queue's
+    per-run record: with jobs queued back to back, the next one is already
+    running by the time the browser asks for the previous one's report.
     """
-    state = _current_run if (_current_run or {}).get("run_id") == run_id else None
-    if state is None:
-        state = _RUN_QUEUE.record(run_id)
+    state = _run_state(run_id) or _LANES.record(run_id)
     if state is None:
         raise HTTPException(404, tr(RUN_NOT_FOUND_KEY, run_id=run_id))
 
@@ -2298,6 +2447,19 @@ def _evaluate_standalone_run(
     )
 
 
+def _class_root_or_raise(folder: Path) -> Path:
+    """The folder a classification test reads: one sub-folder per class.
+
+    A class folder (images, no sub-folders) is the likeliest wrong pick, and
+    ImageFolder would only say it found no class there.
+    """
+    if not folder.is_dir():
+        raise FileNotFoundError(tr("testrun.path_not_found", path=str(folder)))
+    if not any(p.is_dir() for p in folder.iterdir()):
+        raise ValueError(tr("testrun.not_class_root", path=str(folder)))
+    return folder
+
+
 def _execute_run_test(run_dir: Path, req: RunTestRequest) -> RunTestResponse:
     """Reload a saved checkpoint and evaluate it on a new dataset path.
 
@@ -2326,23 +2488,21 @@ def _execute_run_test(run_dir: Path, req: RunTestRequest) -> RunTestResponse:
             tr("testrun.no_checkpoint", run=run_dir.name, model=repr(checkpoint))
         )
 
-    # Point the *test* split at the chosen folder: base_dir is its parent and the
-    # split name is the folder itself, so one folder is all the researcher gives
-    # and the existing DataModule still does the loading.
-    chosen = Path(req.data_dir)
-    test_config_dict = {
-        **base_config_dict,
-        "classification": {
-            "mode": "evaluate",
-            "checkpoint_path": checkpoint,
-        },
-        "data": {
-            **base_config_dict.get("data", {}),
-            "base_dir": str(chosen.parent),
-            "test_dir": chosen.name,
-        },
-    }
-    config = ExperimentConfig.model_validate(test_config_dict)
+    # The chosen folder is the evaluation set on its own (ADR-080): it is not
+    # a split of a dataset root, so nothing beside it is required to exist.
+    chosen = _class_root_or_raise(Path(req.data_dir))
+    config = ExperimentConfig.model_validate(
+        {
+            **base_config_dict,
+            "classification": {"mode": "evaluate", "checkpoint_path": checkpoint},
+            # The training folder may have moved since; config validation only
+            # needs an existing base_dir, and nothing here reads from it.
+            "data": {**base_config_dict.get("data", {}), "base_dir": str(chosen)},
+        }
+    )
+    class_names = _gradcam_class_names(data) or sorted(
+        p.name for p in chosen.iterdir() if p.is_dir()
+    )
 
     model = ModelFactory.create(config.model)
     import torch  # local import — keeps top-level lightweight on cold start
@@ -2354,8 +2514,8 @@ def _execute_run_test(run_dir: Path, req: RunTestRequest) -> RunTestResponse:
     )
     model.load_state_dict(state_dict)  # type: ignore[arg-type]
 
-    data_module = DataModule(config)
-    eval_result = Evaluator(config).evaluate(model, data_module.test_loader())
+    loader = class_folder_test_loader(config, chosen, class_names)
+    eval_result = Evaluator(config).evaluate(model, loader)
 
     timestamp = datetime.now()
     test_id = f"test_{timestamp.strftime('%Y%m%d_%H%M%S_%f')}"
@@ -2367,13 +2527,13 @@ def _execute_run_test(run_dir: Path, req: RunTestRequest) -> RunTestResponse:
     artifacts: dict[str, Any] = {}
     cm_path = tests_dir / f"{test_id}_confusion_matrix.png"
     MetricsPlotter.confusion_matrix_plot(
-        eval_result.confusion_matrix, data_module.class_names, cm_path
+        eval_result.confusion_matrix, class_names, cm_path
     )
     artifacts["confusion_matrix"] = str(cm_path)
 
     cm_norm_path = tests_dir / f"{test_id}_confusion_matrix_normalized.png"
     MetricsPlotter.confusion_matrix_normalized(
-        eval_result.confusion_matrix, data_module.class_names, cm_norm_path
+        eval_result.confusion_matrix, class_names, cm_norm_path
     )
     artifacts["confusion_matrix_normalized"] = str(cm_norm_path)
 
@@ -2381,7 +2541,7 @@ def _execute_run_test(run_dir: Path, req: RunTestRequest) -> RunTestResponse:
     if MetricsPlotter.roc_curve_plot(
         eval_result.y_true,
         eval_result.y_proba_full,
-        data_module.class_names,
+        class_names,
         roc_path,
     ):
         artifacts["roc_curve"] = str(roc_path)
@@ -2390,7 +2550,7 @@ def _execute_run_test(run_dir: Path, req: RunTestRequest) -> RunTestResponse:
     if MetricsPlotter.precision_recall_curve_plot(
         eval_result.y_true,
         eval_result.y_proba_full,
-        data_module.class_names,
+        class_names,
         pr_path,
     ):
         artifacts["precision_recall_curve"] = str(pr_path)
@@ -2562,10 +2722,10 @@ async def _execute_experiment(
     config: ExperimentConfig, run_id: str, resume_dir: Path | None = None
 ) -> None:
     """Run the experiment in a background thread."""
-    global _current_run, _event_queue
+    state = _job_state(run_id)
 
     loop = asyncio.get_running_loop()
-    queue = _event_queue  # capture at task-start to survive queue replacement
+    queue = state.log
 
     def _put_event(event: dict[str, Any]) -> None:
         if queue is not None:
@@ -2612,7 +2772,7 @@ async def _execute_experiment(
             | ModelComparisonBlock,
         ):
             block._progress_callback = _put_event
-        block._cancel_token = _active_cancel_token
+        block._cancel_token = state.token
         block._resume_dir = resume_dir
 
         logger.info("GUI: Starting experiment {} (block={})", run_id, config.block)
@@ -2628,7 +2788,7 @@ async def _execute_experiment(
             if block._train_result and block._train_result.model_path:
                 run_dir = str(block._train_result.model_path.parent)
 
-        _current_run = {
+        state.run = {
             "run_id": run_id,
             "status": "completed",
             "error": None,
@@ -2644,7 +2804,7 @@ async def _execute_experiment(
         # A worker-spawn failure surfaces as a torch DLL error, which sends the
         # reader after the wrong thing entirely.
         spawn_hint = describe_worker_spawn_failure(e)
-        _current_run = {
+        state.run = {
             "run_id": run_id,
             "status": "failed",
             "error": spawn_hint or f"{cls}: {msg}",
@@ -2657,14 +2817,130 @@ async def _execute_experiment(
             await queue.put(None)
 
 
+def _validate_colab_config(raw: dict[str, Any]) -> ExperimentConfig:
+    """Validate a config whose dataset is not on this machine.
+
+    ``base_dir`` is swapped for a folder that exists only for the check; the VM
+    sets the real one. Any other mistake is still a 422 here, before a runtime
+    is paid for.
+    """
+    data = raw.get("data")
+    probe = {
+        **raw,
+        "data": {**(data if isinstance(data, dict) else {}), "base_dir": "."},
+    }
+    try:
+        return ExperimentConfig.model_validate(probe)
+    except ValidationError as exc:
+        raise RequestValidationError(
+            [{**err, "loc": ("body", "config", *err["loc"])} for err in exc.errors()]
+        ) from None
+
+
+def _import_colab_run(
+    bundle: Path, models_dir: Path, accelerator: str
+) -> tuple[str | None, str | None]:
+    """Import the run a Colab job brought back; (run_dir, None) or (None, error).
+
+    The downloaded zip is removed either way: the imported run is the copy kept.
+    """
+    origin = {
+        "kind": "colab",
+        "accelerator": accelerator,
+        "imported_at": datetime.now().isoformat(),
+    }
+    try:
+        run_dir = import_experiment_bundle(bundle, models_dir, origin=origin)
+    except (ValueError, OSError) as exc:
+        logger.warning("GUI: Colab run in {} not imported: {}", bundle, exc)
+        return None, tr("colab.import_failed", detail=f"{type(exc).__name__}: {exc}")
+    finally:
+        bundle.unlink(missing_ok=True)
+    logger.info("GUI: Colab run imported into {}", run_dir)
+    return str(run_dir), None
+
+
+async def _execute_colab(
+    run_id: str,
+    slug: str,
+    accelerator: str,
+    payload: dict[str, Any],
+    models_dir: Path,
+) -> None:
+    """Run one job on Colab off the event loop, import its run and record how it ended."""
+    state = _job_state(run_id)
+
+    loop = asyncio.get_running_loop()
+    queue = state.log
+    token = state.token
+
+    def _put_event(event: dict[str, Any]) -> None:
+        # The job thread waits until the event is in the log, so by the time
+        # run_job returns every event is there and the `None` below cannot
+        # overtake one. Callbacks merely scheduled from the thread did lose the
+        # race on the Linux py3.13 CI: the stream closed with the event missing.
+        if queue is None:
+            return
+        delivered = asyncio.run_coroutine_threadsafe(queue.put(event), loop)
+        try:
+            delivered.result(timeout=_COLAB_EVENT_TIMEOUT_S)
+        except TimeoutError:
+            # A stalled loop must not stall the VM; the job keeps going.
+            delivered.cancel()
+            logger.warning(
+                "GUI: Colab job {} dropped an event after {}s: {}",
+                run_id,
+                _COLAB_EVENT_TIMEOUT_S,
+                event.get("event"),
+            )
+
+    try:
+        logger.info("GUI: Starting Colab job {} ({})", run_id, accelerator)
+        result = await asyncio.to_thread(
+            _COLAB_JOBS.run_job,
+            slug,
+            accelerator,
+            payload,
+            _put_event,
+            lambda: is_cancelled(token),
+        )
+        run_dir, error = None, result.error
+        if result.bundle is not None:
+            run_dir, error = await asyncio.to_thread(
+                _import_colab_run, result.bundle, models_dir, accelerator
+            )
+        state.run = {
+            "run_id": run_id,
+            "status": "completed"
+            if result.outcome == "completed" and error is None
+            else "failed",
+            "error": error,
+            "report": result.report,
+            "run_dir": run_dir,
+        }
+    except Exception as e:
+        logger.exception("GUI: Colab job {} failed", run_id)
+        state.run = {
+            "run_id": run_id,
+            "status": "failed",
+            "error": f"{type(e).__name__}: {e}",
+            "report": None,
+            "run_dir": None,
+        }
+    finally:
+        # The thread has returned, and each event it sent is already in the log.
+        if queue is not None:
+            await queue.put(None)
+
+
 async def _execute_detection(
     config: DetectionConfig, run_id: str, resume_dir: Path | None = None
 ) -> None:
     """Run an Ultralytics detection training in a background thread."""
-    global _current_run, _event_queue
+    state = _job_state(run_id)
 
     loop = asyncio.get_running_loop()
-    queue = _event_queue
+    queue = state.log
 
     def _put_event(event: dict[str, Any]) -> None:
         if queue is not None:
@@ -2674,7 +2950,7 @@ async def _execute_detection(
         block = DetectionBlock()
         block.setup(config)
         block._progress_callback = _put_event
-        block._cancel_token = _active_cancel_token
+        block._cancel_token = state.token
         block._resume_dir = resume_dir
 
         logger.info("GUI: Starting detection {} ({})", run_id, config.model.name)
@@ -2682,7 +2958,7 @@ async def _execute_detection(
 
         report = block.report()
         run_dir = report.get("detection", {}).get("run_dir")
-        _current_run = {
+        state.run = {
             "run_id": run_id,
             "status": "completed",
             "error": None,
@@ -2695,7 +2971,7 @@ async def _execute_detection(
         logger.exception("GUI: Detection {} failed", run_id)
         cls = type(e).__name__
         msg = str(e) or tr(RUN_NO_MESSAGE_KEY)
-        _current_run = {
+        state.run = {
             "run_id": run_id,
             "status": "failed",
             "error": f"{cls}: {msg}",
@@ -2712,10 +2988,10 @@ async def _execute_regression(
     config: RegressionConfig, run_id: str, resume_dir: Path | None = None
 ) -> None:
     """Run an image-regression training in a background thread."""
-    global _current_run, _event_queue
+    state = _job_state(run_id)
 
     loop = asyncio.get_running_loop()
-    queue = _event_queue
+    queue = state.log
 
     def _put_event(event: dict[str, Any]) -> None:
         if queue is not None:
@@ -2725,7 +3001,7 @@ async def _execute_regression(
         block = RegressionBlock()
         block.setup(config)
         block._progress_callback = _put_event
-        block._cancel_token = _active_cancel_token
+        block._cancel_token = state.token
         block._resume_dir = resume_dir
 
         logger.info("GUI: Starting regression {} ({})", run_id, config.model.name)
@@ -2733,7 +3009,7 @@ async def _execute_regression(
 
         report = block.report()
         run_dir = report.get("train", {}).get("run_dir")
-        _current_run = {
+        state.run = {
             "run_id": run_id,
             "status": "completed",
             "error": None,
@@ -2746,7 +3022,7 @@ async def _execute_regression(
         logger.exception("GUI: Regression {} failed", run_id)
         cls = type(e).__name__
         msg = str(e) or tr(RUN_NO_MESSAGE_KEY)
-        _current_run = {
+        state.run = {
             "run_id": run_id,
             "status": "failed",
             "error": f"{cls}: {msg}",
@@ -2763,10 +3039,10 @@ async def _execute_segmentation(
     config: SegmentationConfig, run_id: str, resume_dir: Path | None = None
 ) -> None:
     """Run a semantic-segmentation training in a background thread."""
-    global _current_run, _event_queue
+    state = _job_state(run_id)
 
     loop = asyncio.get_running_loop()
-    queue = _event_queue
+    queue = state.log
 
     def _put_event(event: dict[str, Any]) -> None:
         if queue is not None:
@@ -2776,7 +3052,7 @@ async def _execute_segmentation(
         block = SegmentationBlock()
         block.setup(config)
         block._progress_callback = _put_event
-        block._cancel_token = _active_cancel_token
+        block._cancel_token = state.token
         block._resume_dir = resume_dir
 
         logger.info("GUI: Starting segmentation {} ({})", run_id, config.model.name)
@@ -2784,7 +3060,7 @@ async def _execute_segmentation(
 
         report = block.report()
         run_dir = report.get("train", {}).get("run_dir")
-        _current_run = {
+        state.run = {
             "run_id": run_id,
             "status": "completed",
             "error": None,
@@ -2797,7 +3073,7 @@ async def _execute_segmentation(
         logger.exception("GUI: Segmentation {} failed", run_id)
         cls = type(e).__name__
         msg = str(e) or tr(RUN_NO_MESSAGE_KEY)
-        _current_run = {
+        state.run = {
             "run_id": run_id,
             "status": "failed",
             "error": f"{cls}: {msg}",
@@ -2814,10 +3090,10 @@ async def _execute_anomaly(
     config: AnomalyConfig, run_id: str, resume_dir: Path | None = None
 ) -> None:
     """Run an anomaly-detection training in a background thread."""
-    global _current_run, _event_queue
+    state = _job_state(run_id)
 
     loop = asyncio.get_running_loop()
-    queue = _event_queue
+    queue = state.log
 
     def _put_event(event: dict[str, Any]) -> None:
         if queue is not None:
@@ -2827,7 +3103,7 @@ async def _execute_anomaly(
         block = AnomalyBlock()
         block.setup(config)
         block._progress_callback = _put_event
-        block._cancel_token = _active_cancel_token
+        block._cancel_token = state.token
         block._resume_dir = resume_dir
 
         logger.info("GUI: Starting anomaly {} ({})", run_id, config.model.name)
@@ -2835,7 +3111,7 @@ async def _execute_anomaly(
 
         report = block.report()
         run_dir = report.get("train", {}).get("run_dir")
-        _current_run = {
+        state.run = {
             "run_id": run_id,
             "status": "completed",
             "error": None,
@@ -2848,7 +3124,7 @@ async def _execute_anomaly(
         logger.exception("GUI: Anomaly {} failed", run_id)
         cls = type(e).__name__
         msg = str(e) or tr(RUN_NO_MESSAGE_KEY)
-        _current_run = {
+        state.run = {
             "run_id": run_id,
             "status": "failed",
             "error": f"{cls}: {msg}",
@@ -2906,9 +3182,9 @@ async def _execute_comparison(
     run_id: str,
 ) -> None:
     """Run a model comparison in a background thread and store the ranked report."""
-    global _current_run, _event_queue
-    queue = _event_queue
-    token = _active_cancel_token
+    state = _job_state(run_id)
+    queue = state.log
+    token = state.token
     # The runner carries the stop into the architecture in flight, and the
     # comparison reads it between architectures (ADR-111).
     give_cancel_token(runner, token)
@@ -2961,7 +3237,7 @@ async def _execute_comparison(
             best_index=top["trial_index"] if top else None,
             report_name="comparison",
         )
-        _current_run = {
+        state.run = {
             "run_id": run_id,
             "status": "completed",
             "error": None,
@@ -2971,7 +3247,7 @@ async def _execute_comparison(
         logger.success("GUI: Comparison {} completed ({} archs).", run_id, len(trials))
     except Exception as e:
         logger.exception("GUI: Comparison {} failed", run_id)
-        _current_run = {
+        state.run = {
             "run_id": run_id,
             "status": "failed",
             "error": f"{type(e).__name__}: {e or tr('run.no_message')}",
@@ -3073,15 +3349,15 @@ async def _execute_sweep(
     run_id: str,
 ) -> None:
     """Run a hyperparameter sweep in a background thread and store the ranked report."""
-    global _current_run, _event_queue
+    state = _job_state(run_id)
     loop = asyncio.get_running_loop()
-    queue = _event_queue
+    queue = state.log
 
     def _put_event(event: dict[str, Any]) -> None:
         if queue is not None:
             asyncio.run_coroutine_threadsafe(queue.put(event), loop)
 
-    token = _active_cancel_token
+    token = state.token
     # The runner carries the stop into the trial in flight, and the sweep reads
     # it between trials (ADR-111).
     give_cancel_token(runner, token)
@@ -3127,7 +3403,7 @@ async def _execute_sweep(
             best_index=best["trial_index"] if best else None,
             report_name="sweep",
         )
-        _current_run = {
+        state.run = {
             "run_id": run_id,
             "status": "completed",
             "error": None,
@@ -3137,7 +3413,7 @@ async def _execute_sweep(
         logger.success("GUI: Sweep {} completed ({} trials).", run_id, len(trials))
     except Exception as e:
         logger.exception("GUI: Sweep {} failed", run_id)
-        _current_run = {
+        state.run = {
             "run_id": run_id,
             "status": "failed",
             "error": f"{type(e).__name__}: {e or tr('run.no_message')}",
@@ -3243,15 +3519,15 @@ async def _execute_task_cv(
     task_label: str,
 ) -> None:
     """Run a task's K-fold in a worker thread and store the fold report."""
-    global _current_run, _event_queue
+    state = _job_state(run_id)
     loop = asyncio.get_running_loop()
-    queue = _event_queue
+    queue = state.log
 
     def _put_event(event: dict[str, Any]) -> None:
         if queue is not None:
             asyncio.run_coroutine_threadsafe(queue.put(event), loop)
 
-    token = _active_cancel_token
+    token = state.token
 
     try:
         cv = await asyncio.to_thread(
@@ -3279,7 +3555,7 @@ async def _execute_task_cv(
         # The validated config: it names the task (config.task), which the
         # request's raw dict may leave to the default.
         _record_run_group("kfold", run_id, config.model_dump(mode="json"), report, "cv")
-        _current_run = {
+        state.run = {
             "run_id": run_id,
             "status": "completed",
             "error": None,
@@ -3291,7 +3567,7 @@ async def _execute_task_cv(
         )
     except Exception as e:
         logger.exception("GUI: {} CV {} failed", task_label, run_id)
-        _current_run = {
+        state.run = {
             "run_id": run_id,
             "status": "failed",
             "error": f"{type(e).__name__}: {e or tr('run.no_message')}",
@@ -3366,15 +3642,15 @@ async def _execute_replicated_comparison(
     run_id: str,
 ) -> None:
     """Run every variant over the shared seeds and store the paired report."""
-    global _current_run, _event_queue
+    state = _job_state(run_id)
     loop = asyncio.get_running_loop()
-    queue = _event_queue
+    queue = state.log
 
     def _put_event(event: dict[str, Any]) -> None:
         if queue is not None:
             asyncio.run_coroutine_threadsafe(queue.put(event), loop)
 
-    token = _active_cancel_token
+    token = state.token
     # The runner carries the stop into the replicate in flight, and the
     # comparison reads it between replicates and variants (ADR-111).
     give_cancel_token(runner, token)
@@ -3413,7 +3689,7 @@ async def _execute_replicated_comparison(
         _record_run_group(
             "replicated_comparison", run_id, base_config_dict, report, "comparison"
         )
-        _current_run = {
+        state.run = {
             "run_id": run_id,
             "status": "completed",
             "error": None,
@@ -3428,7 +3704,7 @@ async def _execute_replicated_comparison(
         )
     except Exception as e:
         logger.exception("GUI: Replicated comparison {} failed", run_id)
-        _current_run = {
+        state.run = {
             "run_id": run_id,
             "status": "failed",
             "error": f"{type(e).__name__}: {e or tr('run.no_message')}",
@@ -3495,15 +3771,15 @@ async def _execute_replicates(
     run_id: str,
 ) -> None:
     """Run the replicate set in a background thread and store the aggregate report."""
-    global _current_run, _event_queue
+    state = _job_state(run_id)
     loop = asyncio.get_running_loop()
-    queue = _event_queue
+    queue = state.log
 
     def _put_event(event: dict[str, Any]) -> None:
         if queue is not None:
             asyncio.run_coroutine_threadsafe(queue.put(event), loop)
 
-    token = _active_cancel_token
+    token = state.token
     # The runner carries the stop into the replicate in flight, and the set
     # reads it between replicates (ADR-111).
     give_cancel_token(runner, token)
@@ -3529,7 +3805,7 @@ async def _execute_replicates(
             base_config_dict, "replicates", report
         )
         _record_run_group("replicates", run_id, base_config_dict, report, "replicates")
-        _current_run = {
+        state.run = {
             "run_id": run_id,
             "status": "completed",
             "error": None,
@@ -3539,7 +3815,7 @@ async def _execute_replicates(
         logger.success("GUI: Replicates {} completed ({} seeds).", run_id, len(trials))
     except Exception as e:
         logger.exception("GUI: Replicates {} failed", run_id)
-        _current_run = {
+        state.run = {
             "run_id": run_id,
             "status": "failed",
             "error": f"{type(e).__name__}: {e or tr('run.no_message')}",

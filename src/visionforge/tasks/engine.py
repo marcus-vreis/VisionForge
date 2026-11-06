@@ -30,6 +30,11 @@ from visionforge.core.dataset_fingerprint import fingerprint_from_config
 from visionforge.core.plotter import MetricsPlotter
 from visionforge.core.tracking import TensorBoardLogger
 from visionforge.core.trainer import _seed_everything, resolve_device
+from visionforge.core.training_loop import (
+    current_lr,
+    set_progress_epoch,
+    with_batch_progress,
+)
 from visionforge.tasks.base import BaseTaskConfig
 from visionforge.tasks.registry import TaskInfo
 from visionforge.utils.environment import capture_environment
@@ -150,6 +155,7 @@ class GenericTaskEngine:
         """Run the Level 1 epoch loop with checkpoint and stop handling."""
         model = spec.build_model(cfg).to(self._device)
         train_loader, val_loader, test_loader = spec.build_loaders(cfg)
+        train_loader = with_batch_progress(train_loader, emit, cfg.training.epochs)
         optimizer = self._build_optimizer(model)
         scheduler = self._build_scheduler(optimizer)
 
@@ -184,6 +190,8 @@ class GenericTaskEngine:
                     )
                     stopped = True
                     break
+                set_progress_epoch(train_loader, epoch)
+                epoch_lr = current_lr(optimizer)
                 train_loss = self._train_epoch(
                     spec, model, train_loader, cfg, optimizer, scaler, use_amp
                 )
@@ -198,17 +206,15 @@ class GenericTaskEngine:
                     | {f"{k}/val": v for k, v in val_metrics.items()},
                 )
                 emit(
-                    {
-                        "event": "epoch_end",
-                        "epoch": epoch,
-                        "total_epochs": cfg.training.epochs,
-                        "train_loss": train_loss,
-                        # val_accuracy keeps the live monitor's chart populated
-                        # for any task (it plots this compat field).
-                        "val_accuracy": value,
-                        **{f"val_{k}": v for k, v in val_metrics.items()},
-                        "elapsed_s": round(time.monotonic() - t0, 3),
-                    }
+                    self._epoch_event(
+                        epoch,
+                        cfg.training.epochs,
+                        train_loss,
+                        value,
+                        val_metrics,
+                        epoch_lr,
+                        round(time.monotonic() - t0, 3),
+                    )
                 )
 
                 improved = value > best_value if higher_better else value < best_value
@@ -246,6 +252,30 @@ class GenericTaskEngine:
             best_epoch,
             stopped,
         )
+
+    @staticmethod
+    def _epoch_event(
+        epoch: int,
+        total_epochs: int,
+        train_loss: float,
+        value: float,
+        val_metrics: dict[str, float],
+        lr: float | None,
+        elapsed_s: float,
+    ) -> dict[str, Any]:
+        """The ``epoch_end`` event of one epoch."""
+        return {
+            "event": "epoch_end",
+            "epoch": epoch,
+            "total_epochs": total_epochs,
+            "train_loss": train_loss,
+            # val_accuracy keeps the live monitor's chart populated for any
+            # task (it plots this compat field).
+            "val_accuracy": value,
+            **{f"val_{k}": v for k, v in val_metrics.items()},
+            **({} if lr is None else {"lr": lr}),
+            "elapsed_s": elapsed_s,
+        }
 
     @staticmethod
     def _primary_metric_value(val_metrics: dict[str, float], primary: str) -> float:

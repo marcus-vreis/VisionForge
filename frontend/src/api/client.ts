@@ -407,8 +407,11 @@ export async function runCustomReplicates(
   });
 }
 
-export async function fetchStatus(): Promise<RunStatus> {
-  return request<RunStatus>("/experiment/status");
+/** A run's status; with no `runId`, the job started last. A local and a Colab
+ *  job run side by side (ADR-163, phase 4), so a page following one names it. */
+export async function fetchStatus(runId?: string | null): Promise<RunStatus> {
+  const query = runId ? `?run_id=${encodeURIComponent(runId)}` : "";
+  return request<RunStatus>(`/experiment/status${query}`);
 }
 
 /** The active run plus everything waiting behind it (ADR-075). */
@@ -1244,6 +1247,99 @@ export async function forgetCredential(
 ): Promise<CredentialsResponse> {
   return request<CredentialsResponse>(`/credentials/${provider}`, {
     method: "DELETE",
+  });
+}
+
+/** Where this profile's Colab connection stands (ADR-163). The token never
+ *  reaches the browser: `account` is the e-mail of the Google account. */
+export interface ColabStatus {
+  pinned_version: string;
+  installed_version: string | null;
+  install_state: "idle" | "installing" | "failed";
+  install_error: string | null;
+  logged_in: boolean;
+  account: string | null;
+  login_pending: boolean;
+}
+
+/** The account's compute units; `hours_left` is null while nothing runs. */
+export interface ColabUsage {
+  balance: number | null;
+  rate_per_hour: number | null;
+  active_assignments: number | null;
+  hours_left: number | null;
+}
+
+export async function fetchColabStatus(): Promise<ColabStatus> {
+  return request<ColabStatus>("/colab/status");
+}
+
+export async function installColabCli(): Promise<ColabStatus> {
+  return request<ColabStatus>("/colab/install", { method: "POST" });
+}
+
+export async function startColabLogin(): Promise<{ url: string }> {
+  return request<{ url: string }>("/colab/login/start", { method: "POST" });
+}
+
+export async function finishColabLogin(code: string): Promise<ColabStatus> {
+  return request<ColabStatus>("/colab/login/finish", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code }),
+  });
+}
+
+export async function cancelColabLogin(): Promise<ColabStatus> {
+  return request<ColabStatus>("/colab/login/cancel", { method: "POST" });
+}
+
+export async function logoutColab(): Promise<ColabStatus> {
+  return request<ColabStatus>("/colab/logout", { method: "POST" });
+}
+
+export async function fetchColabUsage(): Promise<ColabUsage> {
+  return request<ColabUsage>("/colab/usage");
+}
+
+/** Where the VM takes the dataset from (ADR-163, phase 2): a public zip, or a
+ *  public dataset it downloads itself. No credential leaves this machine. */
+export type ColabDatasetSource =
+  | { kind: "url"; url: string }
+  | { kind: "provider"; provider: "torchvision" | "huggingface"; dataset: string; limit?: number };
+
+export type ColabAccelerator = "T4" | "L4" | "A100" | "H100" | "G4";
+
+/** What a Colab run adds to the classification payload. */
+export interface ColabLaunch {
+  source: ColabDatasetSource;
+  accelerator: ColabAccelerator;
+}
+
+export async function runColabExperiment(body: Record<string, unknown>): Promise<RunResponse> {
+  return request<RunResponse>("/colab/experiment/run", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+/** A runtime alive on the account; `ours` when VisionForge started it. */
+export interface ColabSessionInfo {
+  name: string;
+  hardware: string;
+  ours: boolean;
+}
+
+export async function fetchColabSessions(): Promise<ColabSessionInfo[]> {
+  return request<ColabSessionInfo[]>("/colab/sessions");
+}
+
+export async function stopColabSession(name: string): Promise<ColabSessionInfo[]> {
+  return request<ColabSessionInfo[]>("/colab/sessions/stop", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
   });
 }
 

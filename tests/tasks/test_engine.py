@@ -8,6 +8,7 @@ import pytest
 import torch
 from torch import nn
 
+from visionforge.core import training_loop
 from visionforge.tasks import (
     BaseTaskConfig,
     TaskSpec,
@@ -94,6 +95,19 @@ def test_sgd_preserves_the_zero_momentum_optimization_recipe(tmp_path: Path) -> 
 
 
 class TestGenericTaskEngineLevel1:
+    def test_a_slow_epoch_streams_its_batches(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(training_loop, "BATCH_PROGRESS_INTERVAL_S", 0.0)
+        _register_toy()
+        events: list[dict[str, Any]] = []
+        GenericTaskEngine(get_task("toyreg"), _config(tmp_path)).run(events.append)
+
+        batches = [e for e in events if e["event"] == "batch"]
+        assert {e["epoch"] for e in batches} == {1, 2, 3}
+        assert all(e["batch"] < e["total_batches"] for e in batches)
+        assert all(e["total_epochs"] == 3 for e in batches)
+
     def test_trains_streams_and_writes_run_json(self, tmp_path: Path) -> None:
         _register_toy()
         events: list[dict[str, Any]] = []
@@ -106,6 +120,12 @@ class TestGenericTaskEngineLevel1:
         assert kinds[-1] == "end"
         assert kinds.count("epoch_end") == 3
         assert all("val_mae" in e for e in events if e["event"] == "epoch_end")
+        cfg_lr = _config(tmp_path).training.learning_rate
+        assert all(
+            e["lr"] == pytest.approx(cfg_lr)
+            for e in events
+            if e["event"] == "epoch_end"
+        )
 
         assert result.total_epochs == 3
         assert result.best_epoch >= 1

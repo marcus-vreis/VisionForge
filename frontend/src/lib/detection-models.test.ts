@@ -203,3 +203,23 @@ describe("detection-models · import keeps fields without a control", () => {
     expect(Object.keys(buildDetectionPayload(makeDefaultDetectionForm())).sort()).toEqual(["data", "model", "name", "training"]);
   });
 });
+
+describe("detection-models · import keeps data.preprocessing", () => {
+  it("rebuilds the steps from the schema-flat payload and sends them back", () => {
+    const form = detectionFormFromPayload({
+      data: {
+        base_dir: "x",
+        preprocessing: { steps: [{ kind: "clahe", clip_limit: 3 }] },
+      },
+    });
+    expect(form.data.preprocessing).toEqual([
+      { kind: "clahe", params: { clip_limit: 3 } },
+    ]);
+    const payload = buildDetectionPayload(form) as {
+      data: { preprocessing: unknown };
+    };
+    expect(payload.data.preprocessing).toEqual({
+      steps: [{ kind: "clahe", clip_limit: 3 }],
+    });
+  });
+});

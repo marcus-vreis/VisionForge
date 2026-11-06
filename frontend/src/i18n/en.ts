@@ -102,6 +102,54 @@ export const en: Dict = {
       `held fixed — not the variation between training runs, which multi-seed ` +
       `replicates measure.`,
   },
+  // The Colab corner of the header (ADR-163): CLI install, login per profile, balance.
+  colab: {
+    dialogLabel: "Google Colab",
+    chipRuntimes: (n: number) => (n === 1 ? "1 runtime alive" : `${n} runtimes alive`),
+    chip: {
+      not_installed: "colab · off",
+      installing: "colab · installing…",
+      install_failed: "colab · failed",
+      logged_out: "colab · sign in",
+      login_pending: "colab · waiting for code",
+      connected: "colab · connected",
+    },
+    intro:
+      "Training on Google Colab uses your Google account and whatever GPU it has. VisionForge talks to Colab through the official CLI, installed in an environment of its own.",
+    install: (version: string) => `install the Colab CLI (v${version})`,
+    installing: "Installing the Colab CLI… this takes a minute or two.",
+    installFailed: "The install failed:",
+    retry: "try again",
+    login: "sign in with Google",
+    loginStep1: "1. Open this page, sign in with your account and authorize.",
+    openPage: "open Google's page",
+    loginStep2: "2. Google shows a code. Paste it here:",
+    codePlaceholder: "authorization code",
+    badCode: "Paste the whole code, without spaces.",
+    confirm: "confirm",
+    cancel: "cancel",
+    account: (email: string) => `Account: ${email}`,
+    accountUnknown: "Account connected (no e-mail was reported).",
+    perProfile: "The sign-in applies to this profile only.",
+    switchAccount: "switch account",
+    balance: (units: string) => `Balance: ${units} compute units`,
+    hoursLeft: (hours: number, rate: string) => `≈ ${hours} h at the current rate (${rate}/h)`,
+    noRate: "No runtime is active now; the hours left depend on the GPU you pick.",
+    usageFailed: "Failed to read the balance.",
+    loadFailed: "Failed to reach the server.",
+    trainTitle: "Train this experiment on Colab",
+    trainSource: "Dataset on the VM: a zip URL, torchvision:cifar10 or hf:owner/name",
+    sourcePlaceholder: "https://…/dataset.zip",
+    badSource: "Use an http(s) URL of a zip, torchvision:<name> or hf:<owner/name>.",
+    accelerator: "GPU",
+    train: "train on Colab",
+    trainNote:
+      "It enters the same queue as local training. The live tab follows it; the trained files stay on the VM until the import of the next phase.",
+    sessionsTitle: "Runtimes alive on this account",
+    sessionsNone: "No runtime is alive.",
+    stopSession: "stop",
+    sessionNotOurs: "started elsewhere; stop it at colab.research.google.com",
+  },
   update: {
     available: (version: string) => `update available · v${version}`,
     apply: "update and reopen",
@@ -337,6 +385,8 @@ export const en: Dict = {
       "Mixed precision: computes in 16-bit where it can. Trains faster and uses less VRAM, with a low risk of instability.",
     mixed_precision:
       "Runs part of the math in 16-bit precision. Speeds up training and uses less VRAM on recent GPUs; on sensitive models it can cost numerical precision.",
+    live_gradcam_every:
+      "How often, in epochs, to show in the Results tab where the model looks on a few fixed validation images (Grad-CAM). Also shown on the last epoch and on every new best. 0 turns it off. It does not change the training: with the same seed, the numbers come out the same.",
     deterministic:
       "Makes the same config with the same seed return exactly the same numbers. On by default: we measured the cost, and it is zero, or even negative, on short runs.",
     base_dir:
@@ -393,6 +443,7 @@ export const en: Dict = {
       seed: "Seed",
       deterministic: "Deterministic",
       mixed_precision: "Mixed precision (AMP)",
+      live_gradcam_every: "Live Grad-CAM (every N epochs)",
       kind: "Type",
       step_size: "Step size",
       gamma: "Gamma",
@@ -961,6 +1012,8 @@ export const en: Dict = {
         `Stopped at epoch ${done} of ${total} — can be resumed`,
       resumeTitleNoTotal: "Stopped before the end — can be resumed",
       blockTitle: (block: string) => `Experiment block: ${block}`,
+      originColab: "Colab",
+      originColabTitle: "Trained on Google Colab and imported into this profile",
       epochs: (n: number) => `${n} epoch${n !== 1 ? "s" : ""}`,
       inProgress: "in progress",
     },
@@ -1770,10 +1823,15 @@ export const en: Dict = {
     kicker: "// queue",
     title: "Run queue",
     description:
-      "One GPU, one run at a time. Submit as many as you like — they run on their own, in the order they were submitted.",
+      "One run at a time in each queue: this machine's and each Colab account's, which run side by side. Submit as many as you like — they run on their own, in the order they were submitted.",
     emptyTitle: "The GPU is free and nothing is waiting.",
     emptyHint: "Runs you submit while another is training wait here.",
     position: (n: number) => ordinal(n),
+    laneLocal: "Local · this machine",
+    laneColab: (account: string) => `Colab · ${account}`,
+    laneEmpty: "nothing here",
+    originLocal: "local",
+    originColab: "Colab",
     running: "running",
     waiting: (waited: string) => `waiting ${waited}`,
     watch: "🔬 view training",
@@ -1808,6 +1866,8 @@ export const en: Dict = {
       `${position ? `waiting for the GPU — ${ordinal(position)} in line` : "waiting for the GPU"}${
         typeof queued === "number" && queued > 1 ? ` · ${queued} runs waiting` : ""
       }. The run starts automatically when its turn comes.`,
+    queuedColabNote: (account: string, position: number | undefined) =>
+      `${position ? `waiting for ${account}'s Colab — ${ordinal(position)} in line` : `waiting for ${account}'s Colab`}. The run starts automatically when that account's previous run ends.`,
     // The status poll is not reaching the server; the run goes on there (ADR-133).
     reconnecting: "reconnecting…",
     reconnectingNote: "The server did not answer. Trying again — the training goes on on the server.",
@@ -1843,6 +1903,7 @@ export const en: Dict = {
         "Stop the replicates? The replicate in progress finishes its current epoch and no other starts. The mean and interval use only the finished replicates; the cut replicate is left out. A stopped set cannot be resumed.",
       phase:
         "Stop PatchCore? During feature extraction nothing is kept. If it is already building the memory bank, that finishes and is saved, and scoring is skipped — you can score it later with “+ test” in the History.",
+      vm: "Stop the training on Colab? The VM is released right away: the epoch in progress is lost, and nothing trained there comes back to this machine yet.",
     },
     stopConfirmCustom: {
       epoch:
@@ -1889,6 +1950,32 @@ export const en: Dict = {
         ? "stopped · memory bank saved, not scored (score it later with “+ test”)"
         : "stopped during extraction · nothing was kept",
     stopTooLate: "> the stop cut nothing: the run finished normally",
+  },
+  liveResults: {
+    tab: "Results",
+    empty: "The curves appear once the first epoch ends.",
+    noEpochsPatchcore:
+      "PatchCore does not train in epochs: it builds its memory bank in a single pass. The result comes at the end.",
+    best: (epoch: number, metric: string, value: string) =>
+      `Best epoch: ${epoch} (${metric} ${value})`,
+    bestShort: (epoch: number, metric: string, value: string) =>
+      `epoch ${epoch} · ${metric} ${value}`,
+    bestNote: "the saved checkpoint is from this epoch",
+    lossChart: "Loss",
+    gradcamTitle: (epoch: number, best: boolean) =>
+      `Validation Grad-CAM · epoch ${epoch}${best ? " · best so far" : ""}`,
+    gradcamNote: "where the model looked to decide; the same images every time",
+    gradcamCaption: (actual: string, predicted: string) =>
+      actual === predicted ? `${actual} ✓` : `${actual} → read as ${predicted}`,
+    lrChart: "Learning rate",
+    confusionTitle: (epoch: number) => `Validation confusion matrix · epoch ${epoch}`,
+    confusionAxes: "rows: true class · columns: predicted class",
+    topTitle: (epoch: number) => `Most frequent validation confusions · epoch ${epoch}`,
+    topRow: (actual: string, predicted: string) => `${actual} read as ${predicted}`,
+    unitsTitle: "Finished trainings",
+    changesCol: "What changes",
+    epochsCol: "Epochs",
+    bestCol: "Best",
   },
   trainingStory: {
     tab: "How it works",

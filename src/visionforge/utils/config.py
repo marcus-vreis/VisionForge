@@ -181,6 +181,17 @@ class TrainingConfig(BaseModel):
         ),
     )
     scheduler: SchedulerConfig = Field(default_factory=lambda: SchedulerConfig())
+    # Off by default: it writes images every N epochs and costs a little time,
+    # and a default run should not change (ADR-162).
+    live_gradcam_every: int = Field(
+        default=0,
+        ge=0,
+        description=(
+            "A cada quantas épocas gerar o Grad-CAM de algumas imagens fixas da "
+            "validação, para a aba Resultados do treino. Também gera na última "
+            "época e em cada nova melhor. 0 (padrão) desliga."
+        ),
+    )
 
     @field_validator("batch_size")
     @classmethod

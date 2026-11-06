@@ -81,7 +81,7 @@ class TestDispatch:
         self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
     ) -> None:
         app, routes_mod = app_and_routes
-        routes_mod._current_run = None
+        routes_mod._JOB_STATES.clear()
 
         captured: dict[str, Any] = {}
 
@@ -146,13 +146,13 @@ class TestDispatch:
             assert (report_dir / "comparison_table.tex").exists()
         finally:
             routes_mod.run_replicated_comparison = orig
-            routes_mod._current_run = None
+            routes_mod._JOB_STATES.clear()
 
     def test_seeds_derived_from_the_config_when_omitted(
         self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
     ) -> None:
         app, routes_mod = app_and_routes
-        routes_mod._current_run = None
+        routes_mod._JOB_STATES.clear()
         captured: dict[str, Any] = {}
 
         def fake_comparison(  # type: ignore[no-untyped-def]
@@ -179,7 +179,7 @@ class TestDispatch:
             assert captured["seeds"] == [42, 43, 44]
         finally:
             routes_mod.run_replicated_comparison = orig
-            routes_mod._current_run = None
+            routes_mod._JOB_STATES.clear()
 
 
 class TestGuards:
@@ -187,7 +187,7 @@ class TestGuards:
         self, app_and_routes: tuple, tmp_path: Path
     ) -> None:
         app, routes_mod = app_and_routes
-        routes_mod._current_run = None
+        routes_mod._JOB_STATES.clear()
         client = TestClient(app, raise_server_exceptions=True)
         resp = client.post(
             "/api/regression/replicated-comparison",
@@ -200,13 +200,13 @@ class TestGuards:
         assert resp.status_code == 422
         assert "training.nope" in resp.text
         # nothing was started
-        assert routes_mod._current_run is None
+        assert routes_mod._JOB_STATES == {}
 
     def test_single_variant_rejected_by_schema(
         self, app_and_routes: tuple, tmp_path: Path
     ) -> None:
         app, routes_mod = app_and_routes
-        routes_mod._current_run = None
+        routes_mod._JOB_STATES.clear()
         client = TestClient(app, raise_server_exceptions=True)
         resp = client.post(
             "/api/regression/replicated-comparison",
@@ -218,7 +218,7 @@ class TestGuards:
         self, app_and_routes: tuple, tmp_path: Path
     ) -> None:
         app, routes_mod = app_and_routes
-        routes_mod._current_run = None
+        routes_mod._JOB_STATES.clear()
         client = TestClient(app, raise_server_exceptions=True)
         resp = client.post(
             "/api/regression/replicated-comparison",
@@ -250,7 +250,7 @@ class TestGuards:
         self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
     ) -> None:
         app, routes_mod = app_and_routes
-        routes_mod._current_run = None
+        routes_mod._JOB_STATES.clear()
 
         def fake_comparison(  # type: ignore[no-untyped-def]
             runner, base, variants, seeds, metric, *, alpha=0.05, progress_callback=None
@@ -276,4 +276,4 @@ class TestGuards:
             assert "baseline" in status["error"]
         finally:
             routes_mod.run_replicated_comparison = orig
-            routes_mod._current_run = None
+            routes_mod._JOB_STATES.clear()

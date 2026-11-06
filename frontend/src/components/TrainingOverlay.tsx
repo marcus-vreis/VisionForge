@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ApiError, cancelQueuedRun, fetchQueue } from "../api/client";
+import { findQueuedJob, isColabLane, laneAccount } from "../lib/queue-lanes";
 import type { Dict } from "../i18n/pt";
 import { useT } from "../i18n/useT";
 import {
@@ -16,9 +17,11 @@ import { stopLogLine } from "../lib/stop-log";
 import { logLinesFor, type LogLine } from "../lib/training-log";
 import { GENERIC_STORY, type StorySpec } from "../lib/story-family";
 import { phaseName } from "../lib/training-phase";
-import type { SheetTab } from "../lib/training-story";
+import { liveBatchFraction } from "../lib/training-progress";
+import { SHEET_TABS, type SheetTab } from "../lib/training-story";
 import { STOPPED_COLOR } from "../lib/unit-status";
 import type { QueuedJobInfo, RunStatus, TrainingEvent } from "../types/run";
+import { LiveResults } from "./LiveResults";
 import { TrainingStory } from "./training-story/TrainingStory";
 
 interface TrainingOverlayProps {
@@ -139,13 +142,16 @@ export function TrainingOverlay({
   // Don't double-count: the just-finished trial's epochs are already folded
   // into trialEndCount, so only add an in-flight fraction for a live trial.
   const currentTrialDone = trialEndCount > currentTrialIndex;
+  // Inside a long epoch: the latest batch report, when nothing newer came.
+  const batchFraction = liveBatchFraction(progressEvents);
   const epochFraction =
-    !currentTrialDone &&
+    batchFraction ??
+    (!currentTrialDone &&
     latestEpoch &&
     (latestEpoch.trial_index ?? 0) === currentTrialIndex &&
     totalEpochs > 0
       ? currentEpoch / totalEpochs
-      : 0;
+      : 0);
 
   // Trabalho longo que não é época. O PatchCore não tem épocas — ele extrai
   // features, monta um banco de memória e pontua, e o banco leva de minutos a
@@ -163,10 +169,15 @@ export function TrainingOverlay({
   // Fall back to synthetic crawl when SSE has not delivered an epoch yet.
   const [fakeProgress, setFakeProgress] = useState(0);
   const hasRealProgress =
-    currentEpoch > 0 || trialEndCount > 0 || latestPhase !== undefined;
+    currentEpoch > 0 ||
+    trialEndCount > 0 ||
+    latestPhase !== undefined ||
+    batchFraction !== null;
   const realProgress = isMultiTrial
     ? Math.min(1, (trialEndCount + epochFraction) / totalTrials)
-    : // Sem época ainda, mas com fase em andamento: a fase é o progresso real
+    : batchFraction !== null
+      ? batchFraction
+      : // Sem época ainda, mas com fase em andamento: a fase é o progresso real
       // que existe. `totalEpochs` já vale 1 aqui (veio do evento `start`), então
       // sem esta preferência a conta daria 0/1 o tempo todo.
       latestEpoch === undefined && latestPhase
@@ -227,7 +238,9 @@ export function TrainingOverlay({
     const read = () => {
       fetchQueue()
         .then((snap) => {
-          if (alive && snap.active?.run_id === runId) setActiveJob(snap.active);
+          // In whichever queue runs it: the local one or its Colab account's.
+          const found = findQueuedJob(snap, runId);
+          if (alive && found?.running) setActiveJob(found.job);
         })
         .catch(() => {
           // Unreadable queue: the mode falls back to what this sheet knows of
@@ -486,7 +499,12 @@ export function TrainingOverlay({
                   color: "var(--vf-text-muted)",
                 }}
               >
-                {t.trainingOverlay.queuedNote(status.position, status.queued)}
+                {status.lane !== undefined && isColabLane(status.lane)
+                  ? t.trainingOverlay.queuedColabNote(
+                      laneAccount(status.lane) ?? "",
+                      status.position,
+                    )
+                  : t.trainingOverlay.queuedNote(status.position, status.queued)}
               </div>
             )}
             {!isFinished && status.connection && (
@@ -654,7 +672,7 @@ export function TrainingOverlay({
           </div>
         )}
 
-        {/* Log and "Como funciona": the log is what the sheet opens on. */}
+        {/* Log, results and "Como funciona": the log is what the sheet opens on. */}
         <div
           role="tablist"
           aria-label={t.trainingStory.tabsLabel}
@@ -662,11 +680,13 @@ export function TrainingOverlay({
           onKeyDown={(e) => {
             if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
               e.preventDefault();
-              onTabChange(tab === "log" ? "story" : "log");
+              const step = e.key === "ArrowRight" ? 1 : -1;
+              const at = SHEET_TABS.indexOf(tab);
+              onTabChange(SHEET_TABS[(at + step + SHEET_TABS.length) % SHEET_TABS.length]);
             }
           }}
         >
-          {(["log", "story"] as const).map((name) => {
+          {SHEET_TABS.map((name) => {
             const selected = tab === name;
             return (
               <button
@@ -691,11 +711,26 @@ export function TrainingOverlay({
                   cursor: "pointer",
                 }}
               >
-                {name === "log" ? t.trainingStory.logTab : t.trainingStory.tab}
+                {name === "log"
+                  ? t.trainingStory.logTab
+                  : name === "results"
+                    ? t.liveResults.tab
+                    : t.trainingStory.tab}
               </button>
             );
           })}
         </div>
+
+        {tab === "results" && (
+          <div
+            role="tabpanel"
+            id="training-panel-results"
+            aria-labelledby="training-tab-results"
+            style={{ maxHeight: 420, overflowY: "auto" }}
+          >
+            <LiveResults events={progressEvents} spec={story} accent={taskAccent} />
+          </div>
+        )}
 
         {/* The story is mounted only while it is the open tab, so its animations
             stop with it; the log stays mounted (hidden), to keep what it holds. */}

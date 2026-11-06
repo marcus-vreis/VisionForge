@@ -6661,3 +6661,286 @@ follow the watched run only.
   wrong log or a lost result.
 - *Follow several runs in the hook.* More state for no gain: one GPU runs one job,
   and only that job has a log to read.
+
+## ADR-160 — A live "Results" tab on the training sheet
+
+**Date:** 2026-11-04
+**Status:** Accepted
+**Extends:** ADR-118 (the training sheet's tabs), ADR-119 (overfitting sign)
+
+**Context:** during a training the sheet showed the log and the illustrative
+story, so the only way to read the curves or know which epoch the saved model
+came from was to wait for the run to end and open its result. The numbers were
+already on the page: every `epoch_end` carries the losses and the task's metric.
+This is phase A of `docs/dev/design-resultados-ao-vivo-e-colab.md`.
+
+**Decision:**
+
+- A third tab, **Results**, between the log and "How it works". It draws the loss
+  curves and the task's headline metric of the training in flight, from the
+  `epoch_end` events the sheet already receives. Nothing changes on the server
+  and the training pays nothing.
+- A card names the **best epoch** with the rule the trainer applies when it saves
+  `best_model.pth`, so it is the epoch whose weights are kept: lowest `val_loss`
+  for classification and regression, highest `val_miou` for segmentation,
+  highest mAP@50-95 for Ultralytics and mAP@50 for torchvision (it measures no
+  mAP@50-95), lowest training loss for the anomaly autoencoder. A tie keeps the
+  earlier epoch, as the trainers save only on a strict gain. The rules live in
+  `lib/live-results.ts` beside the trainer each one comes from.
+- A researcher's own task gets no card: its metric's direction is declared in
+  its task info and is not in the stream, and a guessed direction would name the
+  wrong checkpoint. PatchCore has no epochs and says so.
+- In a multi-unit job (grid, comparison, cross-validation, replicates) the curves
+  are the running unit's, and a table lists the closed ones with what each
+  changed and its best epoch.
+- The overfitting sign of ADR-119 is repeated here, from the same function.
+
+**Consequence:** the card and the trainer's rule must change together. A new
+trainer, or a new checkpoint metric, needs its line in `bestRule`.
+
+**Alternatives considered:**
+
+- *Have the server send the best epoch in each `epoch_end`.* Exact by
+  construction, but it touches every trainer for a number the client can already
+  compute; left for phase B, which adds server fields anyway.
+- *Reuse the History comparison chart.* It plots finished runs read from
+  `run.json` with one colour per run; the live tab plots two series of one run
+  and grows by the epoch.
+
+## ADR-161 — Learning rate and validation confusion in the epoch event
+
+**Date:** 2026-11-04
+**Status:** Accepted
+**Extends:** ADR-160 (the live "Results" tab)
+
+**Context:** the live tab drew only what `epoch_end` already carried. Two more
+figures cost the training almost nothing: the learning rate, which tells a
+schedule apart from a stuck run, and, for classification, the validation
+confusion, whose predictions `_eval_epoch` already computes. This is phase B of
+`docs/dev/design-resultados-ao-vivo-e-colab.md`.
+
+**Decision:**
+
+- Every trainer adds `lr` to `epoch_end`: the rate the epoch trained with, read
+  before the scheduler steps (`training_loop.EpochLr`), from the parameter group
+  the config's `learning_rate` sets (the head when `backbone_lr_multiplier`
+  scales the backbone). Ultralytics reports its own `trainer.lr["lr/pg0"]`,
+  written at the end of the epoch before its scheduler steps.
+- Classification adds `confusion` (`core/live_confusion.py`): the full matrix up
+  to 30 classes, `matrix[true][predicted]`; above that, the 10 most frequent
+  mistakes as `[true, predicted, count]`, ties to the lower class pair. It is
+  `null` rather than wrong when a label falls outside the class list.
+- Neither goes into `run.json`. The history keeps its fields, and the test-set
+  confusion matrix in `metrics` stays the one a paper reports.
+- The key is `confusion`, not `val_confusion`: the client types `val_*` as the
+  numeric metrics of researcher-defined tasks (ADR-058).
+
+**Consequence:** a client that does not know the fields ignores them, so older
+GUIs keep working. The confusion of an epoch is gone once the run ends; the
+optional `live/epoch_metrics.jsonl` of the design was left out until something
+needs it.
+
+**Alternatives considered:**
+
+- *Add `lr` to each task's `EpochResult`.* It would enter `run.json` history and
+  every reader of it, for a number the schedule config already determines.
+- *Read the rate when the epoch is reported.* The scheduler has stepped by then,
+  so it is the next epoch's rate: a StepLR run would show every drop one epoch
+  early.
+
+## ADR-162 — Live Grad-CAM of fixed validation images
+
+**Date:** 2026-11-04
+**Status:** Accepted
+**Extends:** ADR-160 (the live "Results" tab), ADR-161 (live epoch fields)
+
+**Context:** the curves say how much a classifier learns, not what it looks at.
+`core/gradcam.py` already explains a finished checkpoint, but only after the run,
+and its `GradCAM` writes the parameters' `.grad` and leaves the model in `eval`,
+which is harmless after training and not during it. This is phase C of
+`docs/dev/design-resultados-ao-vivo-e-colab.md`.
+
+**Decision:**
+
+- `training.live_gradcam_every` (classification), **0 by default**: every N
+  epochs, on the last epoch and on each new best (lowest `val_loss`, the
+  checkpoint rule), `core/live_insights.py` explains 6 fixed validation images
+  and the stream sends `{"event": "insight", "kind": "gradcam", "epoch", "best",
+  "images": [{"path", "true_class", "predicted_class"}]}`. The Results tab shows
+  the unit's latest set.
+- The training must not notice it, and a test holds it to that: the same seed on
+  CPU with `deterministic` gives the same history and the same weights with the
+  option at 1 and at 0, with a shuffled training loader that would reorder its
+  batches if any generator moved. A mutant that draws one random number inside
+  the pass fails that test. The rules:
+  1. the samples are chosen once with a `torch.Generator` of their own, taking
+     the classes in turn, and read by index from `val_loader.dataset`, never by
+     iterating the loader; every pass runs inside a fork of the Python, NumPy and
+     torch generators (`preserved_rng`);
+  2. the gradient is `torch.autograd.grad(score, activation)`: no parameter's
+     `.grad` is written. The input requires grad, so a frozen backbone still
+     puts the activation in the graph;
+  3. the model runs in `eval` and goes back to the mode it was in;
+  4. a failure logs one warning and turns the insights off for the run.
+- Files: `insights/latest/` is rewritten each time and copied to
+  `insights/best/` on a new best. Nothing per epoch, nothing in `run.json`.
+  The images are served by the existing `/api/artifacts` route, so a run whose
+  `models_dir` is outside `outputs/` writes them but the tab cannot show them.
+- Overlays undo the run's own `normalize_mean`/`normalize_std`, not ImageNet's.
+
+**Consequence:** a run that turns it on spends K forward and backward passes per
+explained epoch (K = 6) and writes 6 small PNGs. Off by default, a run and its
+`run.json` are unchanged. Detection, segmentation, regression and anomaly need
+other pictures (boxes, masks, a scatter, the anomaly map) and are left for later.
+
+**Alternatives considered:**
+
+- *Reuse `GradCAM` from `core/gradcam.py`.* Its `.backward()` accumulates into
+  the parameters' `.grad`; the optimizer zeroes them before the next step, but a
+  run with gradient accumulation or a custom loop would not, and the rule is
+  simpler kept absolute.
+- *On by default with N = 5 on GPU.* The cost is small, but a default run would
+  start writing files and the setting would differ between machines.
+- *A "generate now" button.* Left out: it needs a channel from the GUI to the
+  running job, as the stop has (ADR-088), for a convenience.
+
+## ADR-163 — Training on Google Colab through the official CLI
+
+**Date:** 2026-11-05
+**Status:** Accepted — phases 1 (connection and login), 2 (remote training, classification), 3 (importing the result) and 4 (parallel queues) implemented
+**Extends:** ADR-075 (the run queue), ADR-114 (profiles), ADR-160 (the live Results tab)
+
+**Context:** many users have no local GPU, and Colab has one. The 2026-11-04
+plan in `docs/dev/design-resultados-ao-vivo-e-colab.md` was a hand-run notebook
+(F1), because Colab had no API. Google has since published `google-colab-cli`,
+which allocates a runtime, runs code with live output, moves files and
+releases the VM, all from the user's own account. A spike on 2026-11-05 (one
+run, one T4, a paid account) measured it on this machine:
+- the T4 was granted in 4.1 s;
+- 180 of 180 one-second ticks arrived, with gaps between 0.95 and 1.06 s and an
+  accumulated delay under 0.1 s;
+- `colab stop` left no session behind.
+
+The numbers and the code reading behind this ADR are in the design doc's
+2026-11-05 sections.
+
+**Decision:**
+
+- **Backend.** `google-colab-cli`, pinned to an exact version (0.7.5 today).
+  It is installed by VisionForge into a venv it manages, in
+  `~/.visionforge/colab-cli/venv`, and never into the project environment. A
+  CLI upgrade is a deliberate change: bump the pin, rerun the spike.
+- **Windows runs it natively.** No WSL is needed. The README says "Linux and
+  macOS only", but the only POSIX-only code is `colab console`, which
+  VisionForge does not use.
+- **Login per profile.** Every CLI call runs with `USERPROFILE` and `HOME`
+  pointing at `~/.visionforge/colab/<profile>/`, so the token, the session
+  list and the log stay in that folder.
+  - The login is Google's copy-and-paste OAuth flow. The GUI shows the URL and
+    passes the pasted code to the CLI's stdin.
+  - VisionForge only checks that `token.json` exists. It never reads the
+    token, logs it or sends it anywhere.
+  - The account is identified by the e-mail that `colab whoami` prints.
+- **Queues.** The local queue stays as ADR-075 made it: one job at a time on
+  this machine, on the GPU or the CPU, never both.
+  - Colab gets one queue per Google account, not per profile, because the
+    session quota and the compute units belong to the account.
+  - A local job and a Colab job may run at the same time.
+- **Events come from the `exec` stdout.** The remote runner prints the usual
+  training events, one JSON line each. The backend feeds them into the same SSE
+  stream the Results tab already reads.
+  - The job ends with a final event of its own (status `ok` or `error`),
+    distinct from the per-training `end`.
+  - The exit code of `colab exec` is not trusted: in 0.7.5 a failing script
+    exits 0, and a healthy one exits 1 once it outlives `--timeout`.
+  - `--timeout` is therefore set above the longest job the account allows.
+  - The remote runner never calls `sys.exit`, because that hangs `exec`.
+- **Balance.** The GUI shows the hours left: the balance divided by the chosen
+  accelerator's rate, both read from `colab usage`. It shows this only when the
+  account reports compute units.
+
+**Phases, one PR each:**
+
+1. **Connection and login.**
+   - The managed venv and its pinned install.
+   - The per-profile login from the GUI, with the account shown and a switch
+     to change it.
+   - The "Train on Colab" button stays disabled without a login.
+   - `colab usage` shown as hours left.
+2. **Remote training.**
+   - A remote runner that installs `visionforge-studio` at the local version
+     and gets the dataset from where it already is (URL, Drive, Hugging Face),
+     not through `colab upload`.
+   - It runs the job and prints the events.
+   - The backend relays them to the Results tab and stops the VM in a
+     `finally`.
+   - At startup, VisionForge lists leftover sessions and offers to stop them.
+3. **Importing the result.** `colab download` of the zipped run directory at
+   the end, imported as a local run with `device_used` and the remote
+   environment kept. This is the bundle import the F1 plan already needed.
+   - As built: the VM writes the run with `export_experiment_bundle`, the same
+     format a bundle exported by hand has. The bundle's VM path and size go out
+     in `job_end`, and the job downloads it before `colab stop`.
+   - The file is the proof that the download worked, as `job_end` is for
+     `exec`: the job checks that it exists and has the announced size.
+   - `import_experiment_bundle` verifies the manifest, refuses unsafe names
+     and anything over 2 GB, and builds the run in a staging folder outside
+     `models/`. One rename then puts it in `models/<experiment>/<run>`.
+   - run.json gets `origin: {kind: "colab", ...}`, and History marks the run.
+     The paths recorded on the VM are rewritten to the files that arrived.
+   - Plots are not part of the bundle format, so an imported run has its
+     run.json and checkpoint, but no PNGs.
+4. **Parallel queues.** One Colab queue per account next to the local queue.
+   This means decoupling the SSE stream and the result records from the single
+   active job of `RunQueue`.
+   - As built (backend): `RunLanes` holds the local `RunQueue` and one per
+     account, keyed `colab:<e-mail>` from `colab whoami`. A login with no e-mail
+     reported gets a lane of its own, `colab:profile:<slug>`, rather than one
+     shared by guess.
+   - Each started job has a `JobState` (event log, cancellation token, status)
+     by `run_id`, which its executor looks up; the three single-run globals of
+     `routes.py` are gone. The status and event endpoints take a `run_id` and
+     default to the job started last.
+   - `GET /api/queue` keeps the local lane's `active` and `pending` and adds
+     `lanes`, and every job carries its `lane`.
+   - As built (GUI): the queue sheet has one section per lane, this machine's
+     and the connected account's Colab one (shown empty before its first job),
+     and each row says where its job runs. Stop and watch act on their row's
+     job. The bottom bar's badge counts every lane, the training sheet reads its
+     run's stop point in whichever lane runs it, and a Colab job still waiting
+     says it waits for its account rather than for the GPU.
+
+**Consequence:**
+- A user without a GPU trains from the same GUI, with the same live tab, on
+  their own Google account. Nothing listens on the user's machine and no tunnel
+  is opened.
+- What VisionForge stores is a token file in a folder the user owns, like the
+  personal credentials in `~/.visionforge/`.
+- The cost is a dependency on a young CLI that talks to Colab's internal
+  endpoints (`/tun/m/...`) and changes often.
+
+**Risks:**
+- A CLI release can break the contract. The pin and the spike are the guard,
+  and `colab update` only announces releases; it never installs one.
+- `colab whoami` is hidden ("developer-only") and may change. Plan B is the
+  OpenID `userinfo` endpoint, which would mean reading the token.
+- Free accounts were not tested: whether they get a T4 at all, and what
+  `colab usage` shows for them. The GUI must say "no GPU on this account"
+  instead of failing quietly.
+- If Google restricts headless use, the hand-run notebook (F1) is still
+  there.
+
+**Alternatives considered:**
+
+- *A notebook the user runs by hand (F1).* No account access is needed, but
+  there is no live tab and no queue, and every run takes manual steps. It
+  stays as the fallback.
+- *Our own OAuth client against the Drive API, plus a tunnel.* VisionForge
+  would own an OAuth client, with Google's app verification and the support
+  that comes with it, and would expose a port on the user's machine. The
+  CLI's flow avoids both.
+- *Running the CLI in WSL.* It works, but it is an installation hurdle on
+  Windows that native support makes unnecessary.
+- *`colab run` instead of `new` + `exec` + `stop`.* Its exit code is
+  reliable, but it creates and releases a VM per call, which breaks a job
+  that uploads, trains and downloads on the same machine.

@@ -6,6 +6,10 @@ import { enter, findInHistory, prepareClassification, train } from "./helpers";
 // every test waits for its own training to end before the next one starts.
 test.describe.configure({ mode: "serial" });
 
+// The status poll names the run it follows (`?run_id=`, ADR-163 phase 4), so it
+// is matched by path: a glob or `endsWith` on the bare path misses it.
+const isStatus = (url: URL) => url.pathname === "/api/experiment/status";
+
 test.beforeEach(async ({ page }) => {
   await enter(page);
   await page.locator("[data-tour='tabs']").getByText("Classificação", { exact: true }).click();
@@ -42,13 +46,13 @@ test("rides out a few seconds without the server and still ends as completed", a
   // Install before submission: routing cannot break an EventSource that has
   // already connected. Both real requests must fail during this outage.
   const down = (route: { abort: () => Promise<void> }) => route.abort();
-  await page.route("**/api/experiment/status", down);
+  await page.route(isStatus, down);
   await page.route("**/api/experiment/events?*", down);
   const streamFailed = page.waitForEvent("requestfailed", {
     predicate: (request) => new URL(request.url()).pathname === "/api/experiment/events",
   });
   const pollFailed = page.waitForEvent("requestfailed", {
-    predicate: (request) => request.url().endsWith("/api/experiment/status"),
+    predicate: (request) => isStatus(new URL(request.url())),
   });
   const sheet = await train(page);
   await streamFailed;
@@ -58,7 +62,7 @@ test("rides out a few seconds without the server and still ends as completed", a
   await page.waitForTimeout(3_000);
   await expect(sheet.getByText("treino falhou", { exact: true })).toHaveCount(0);
 
-  await page.unroute("**/api/experiment/status", down);
+  await page.unroute(isStatus, down);
   await page.unroute("**/api/experiment/events?*", down);
 
   // The overlay picks the run up again and follows it to its end.
@@ -112,7 +116,7 @@ test("reconnects the live stream while status polling stays available", async ({
     predicate: (request) => new URL(request.url()).pathname === "/api/experiment/events",
   });
   const healthyPoll = page.waitForResponse((response) =>
-    response.url().endsWith("/api/experiment/status") && response.ok(),
+    isStatus(new URL(response.url())) && response.ok(),
   );
   const sheet = await train(page);
   await streamFailed;

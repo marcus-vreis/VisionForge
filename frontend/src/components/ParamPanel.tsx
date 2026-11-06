@@ -79,6 +79,7 @@ const TRAINING_FIELD_ORDER = [
   "early_stopping_patience",
   "deterministic",
   "mixed_precision",
+  "live_gradcam_every",
 ];
 
 function resolveSchema(

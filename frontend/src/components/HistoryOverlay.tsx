@@ -538,6 +538,25 @@ function RunCard({
             ⛓ {run.block}
           </span>
         )}
+        {run.origin === "colab" && (
+          <span
+            title={t.history.card.originColabTitle}
+            data-testid="history-origin-colab"
+            style={{
+              padding: "2px 8px",
+              background: "oklch(0.78 0.14 60 / 0.14)",
+              border: "1px solid oklch(0.78 0.14 60 / 0.45)",
+              borderRadius: 999,
+              fontFamily: "var(--font-mono)",
+              fontSize: 10,
+              color: "oklch(calc(0.88 - var(--lt-flip, 0) * 0.5) 0.14 60)",
+              letterSpacing: "0.10em",
+              textTransform: "uppercase",
+            }}
+          >
+            ☁ {t.history.card.originColab}
+          </span>
+        )}
         <span
           style={{
             marginLeft: "auto",

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import asdict, dataclass
 from datetime import datetime
@@ -56,7 +56,7 @@ class EpochState[Epoch]:
 class EpochRuntime:
     """Bind loaders and lifecycle boundaries for one epoch loop."""
 
-    train_loader: DataLoader[Any]
+    train_loader: DataLoader[Any] | BatchProgressLoader
     val_loader: DataLoader[Any]
     total_epochs: int
     resumed: ResumeState | None
@@ -90,6 +90,43 @@ class EpochCallbacks[Epoch]:
     compute: Callable[[int], Epoch]
     report: Callable[[Epoch], None]
     early_stop: Callable[[int], bool]
+
+
+def current_lr(optimizer: torch.optim.Optimizer | None) -> float | None:
+    """The learning rate the config's ``learning_rate`` sets, as it is now.
+
+    Fine-tuning with ``backbone_lr_multiplier`` puts the backbone first, at a
+    scaled rate, and the head last at ``learning_rate`` (``build_optimizer``), so
+    the last group is the one to read. Every other optimizer has a single group.
+    """
+    if optimizer is None or not optimizer.param_groups:
+        return None
+    lr = optimizer.param_groups[-1].get("lr")
+    return float(lr) if isinstance(lr, int | float) else None
+
+
+class EpochLr:
+    """The learning rate an epoch trained with.
+
+    The schedulers step at the end of the epoch, inside ``compute``, so the rate
+    read when the epoch is reported is already the next one. ``around`` reads it
+    before the epoch runs.
+    """
+
+    def __init__(self, optimizer: torch.optim.Optimizer | None) -> None:
+        self._optimizer = optimizer
+        self.value: float | None = None
+
+    def around[Epoch](self, compute: Callable[[int], Epoch]) -> Callable[[int], Epoch]:
+        def run(epoch: int) -> Epoch:
+            self.value = current_lr(self._optimizer)
+            return compute(epoch)
+
+        return run
+
+    def fields(self) -> dict[str, Any]:
+        """The ``lr`` field of the epoch event, or none before the first epoch."""
+        return {} if self.value is None else {"lr": self.value}
 
 
 @dataclass(frozen=True)
@@ -224,6 +261,114 @@ def restore_training_state[Epoch](
     )
 
 
+# How long an epoch may run before the stream says how far into it the run is.
+# An epoch that ends sooner reports only its epoch_end, so short runs keep the
+# stream they always had and a long epoch stops looking frozen.
+BATCH_PROGRESS_INTERVAL_S = 2.0
+
+
+class BatchProgressReporter:
+    """Says, now and then, how far into its epoch a training run is.
+
+    The overlay only moved at ``epoch_end``, so an epoch of minutes (a large
+    dataset, a slow device) held the progress still for that long. Shared by
+    the loops VisionForge owns (through ``BatchProgressLoader``) and by the one
+    Ultralytics owns (through its batch callbacks).
+    """
+
+    def __init__(
+        self,
+        callback: Callable[[dict[str, Any]], None],
+        total_epochs: int,
+        *,
+        interval_s: float | None = None,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
+        self._callback = callback
+        self._total_epochs = total_epochs
+        self._interval_s = (
+            BATCH_PROGRESS_INTERVAL_S if interval_s is None else interval_s
+        )
+        self._clock = clock
+        self._epoch = 1
+        self._last_report = clock()
+
+    def start_epoch(self, epoch: int) -> None:
+        """Begin timing ``epoch`` (1-based): a resumed run starts past 1."""
+        self._epoch = epoch
+        self._last_report = self._clock()
+
+    def batch_done(self, index: int, total: int) -> None:
+        """Report batch ``index`` (1-based) of ``total`` if enough time passed."""
+        now = self._clock()
+        # The last batch is left to epoch_end, which follows it.
+        if index >= total or now - self._last_report < self._interval_s:
+            return
+        self._last_report = now
+        self._callback(
+            {
+                "event": "batch",
+                "epoch": self._epoch,
+                "batch": index,
+                "total_batches": total,
+                "total_epochs": self._total_epochs,
+            }
+        )
+
+
+class BatchProgressLoader:
+    """A training loader whose iteration feeds a ``BatchProgressReporter``.
+
+    Everything but iteration is delegated, so resume (loader generators) and
+    worker bookkeeping still see the loader it wraps.
+    """
+
+    def __init__(self, loader: Any, reporter: BatchProgressReporter) -> None:
+        self._loader = loader
+        self._reporter = reporter
+        # Set before each epoch (see set_progress_epoch).
+        self.epoch = 1
+
+    def __len__(self) -> int:
+        return len(self._loader)
+
+    def __getattr__(self, name: str) -> Any:
+        if name == "_loader":
+            raise AttributeError(name)
+        return getattr(self._loader, name)
+
+    def __iter__(self) -> Any:
+        try:
+            total = len(self._loader)
+        except TypeError:
+            # A researcher's task may hand over a plain iterable: no total, no share.
+            yield from self._loader
+            return
+        self._reporter.start_epoch(self.epoch)
+        for index, batch in enumerate(self._loader, start=1):
+            yield batch
+            self._reporter.batch_done(index, total)
+
+
+def with_batch_progress(
+    loader: Any,
+    progress_callback: Callable[[dict[str, Any]], None] | None,
+    total_epochs: int,
+) -> Any:
+    """The loader itself without a stream, else one that reports its batches."""
+    if progress_callback is None:
+        return loader
+    return BatchProgressLoader(
+        loader, BatchProgressReporter(progress_callback, total_epochs)
+    )
+
+
+def set_progress_epoch(loader: Any, epoch: int) -> None:
+    """Tell a ``BatchProgressLoader`` which epoch its next pass is."""
+    if isinstance(loader, BatchProgressLoader):
+        loader.epoch = epoch
+
+
 def start_training(
     data_module: Any,
     progress_callback: Callable[[dict[str, Any]], None] | None,
@@ -237,6 +382,7 @@ def start_training(
         )
     train_loader = data_module.train_loader()
     val_loader = data_module.val_loader()
+    train_loader = with_batch_progress(train_loader, progress_callback, total_epochs)
     workers = {
         name: loader.num_workers
         for name, loader in (("train", train_loader), ("val", val_loader))
@@ -359,8 +505,13 @@ def report_epoch(
     event_fields: tuple[str, ...],
     log_format: str,
     log_fields: tuple[str, ...],
+    extra: Mapping[str, Any] | None = None,
 ) -> None:
-    """Report an epoch using the task's scalar names, event fields and log format."""
+    """Report an epoch using the task's scalar names, event fields and log format.
+
+    ``extra`` goes into the progress event only: live figures such as the
+    learning rate, which ``run.json`` does not keep.
+    """
     tb.log_scalars(
         result.epoch,
         {name: getattr(result, field) for name, field in scalar_fields.items()},
@@ -378,6 +529,7 @@ def report_epoch(
                 "epoch": result.epoch,
                 "total_epochs": total_epochs,
                 **{field: getattr(result, field) for field in event_fields},
+                **(extra or {}),
                 "elapsed_s": round(time.monotonic() - t0, 3),
             }
         )
@@ -518,6 +670,7 @@ def run_epochs[Epoch](
         if cancelled_at_epoch(runtime.cancel_token, epoch):
             stopped = True
             break
+        set_progress_epoch(runtime.train_loader, epoch)
         result = callbacks.compute(epoch)
         state.history.append(result)
         callbacks.report(result)
@@ -615,60 +768,84 @@ def fit_training[Result](
     model_path = run_dir / "best_model.pth"
     tb = services.tensorboard_factory(run_dir / "tensorboard")
 
-    history, best_val_loss, best_epoch, patience_counter, start_epoch = (
-        trainer._restore_training_state(resumed, model, optimizer, scheduler, run_dir)
-    )
-    t0 = time.monotonic()
-
-    train_loader, val_loader, trainer._loader_workers = start_training(
-        data_module, progress_callback, cfg.epochs, trainer._device_label
-    )
-    state = EpochState(
-        history, best_val_loss, best_epoch, patience_counter, start_epoch
-    )
-    writes, stopped = run_epochs(
-        state,
-        EpochRuntime(train_loader, val_loader, cfg.epochs, resumed, cancel_token),
-        CheckpointContext(
-            model,
-            model_path,
-            services.save_best,
-            lambda: checkpoint_components(model, optimizer, scheduler),
-        ),
-        EpochCallbacks(
-            compute=lambda epoch: trainer._compute_epoch_result(
-                epoch, model, train_loader, val_loader, optimizer, criterion, scheduler
-            ),
-            report=lambda result: trainer._report_epoch(
-                result, tb, progress_callback, t0, cfg.epochs
-            ),
-            early_stop=lambda counter: trainer._early_stopping_reached(
-                counter, cfg.early_stopping_patience
-            ),
-        ),
-        adapter.metric,
-    )
-    best_val_loss, best_epoch = state.best_metric, state.best_epoch
-
-    trainer._finish_checkpoint_writes(run_dir, cancel_token, writes.pool, writes.future)
-
-    health = trainer._training_warnings(history)
-
-    if adapter.ensure_checkpoint is not None:
-        best_epoch, best_val_loss = adapter.ensure_checkpoint(
-            model, model_path, history, best_epoch, best_val_loss
+    # A run that fails between here and the end still releases the writer: its
+    # thread and its open event file would otherwise outlive the run.
+    try:
+        history, best_val_loss, best_epoch, patience_counter, start_epoch = (
+            trainer._restore_training_state(
+                resumed, model, optimizer, scheduler, run_dir
+            )
         )
-    train_result = adapter.result_type(
-        stopped=stopped,
-        best_epoch=best_epoch,
-        **{adapter.best_field: best_val_loss},
-        total_epochs=len(history),
-        device_used=trainer._device_label,
-        history=history,
-        model_path=model_path,
-        warnings=health,
-    )
-    trainer._write_run_json(run_dir, train_result)
+        t0 = time.monotonic()
+        epoch_lr = EpochLr(optimizer)
+
+        train_loader, val_loader, trainer._loader_workers = start_training(
+            data_module, progress_callback, cfg.epochs, trainer._device_label
+        )
+        state = EpochState(
+            history, best_val_loss, best_epoch, patience_counter, start_epoch
+        )
+        writes, stopped = run_epochs(
+            state,
+            EpochRuntime(train_loader, val_loader, cfg.epochs, resumed, cancel_token),
+            CheckpointContext(
+                model,
+                model_path,
+                services.save_best,
+                lambda: checkpoint_components(model, optimizer, scheduler),
+            ),
+            EpochCallbacks(
+                compute=epoch_lr.around(
+                    lambda epoch: trainer._compute_epoch_result(
+                        epoch,
+                        model,
+                        train_loader,
+                        val_loader,
+                        optimizer,
+                        criterion,
+                        scheduler,
+                    )
+                ),
+                report=lambda result: trainer._report_epoch(
+                    result,
+                    tb,
+                    progress_callback,
+                    t0,
+                    cfg.epochs,
+                    extra=epoch_lr.fields(),
+                ),
+                early_stop=lambda counter: trainer._early_stopping_reached(
+                    counter, cfg.early_stopping_patience
+                ),
+            ),
+            adapter.metric,
+        )
+        best_val_loss, best_epoch = state.best_metric, state.best_epoch
+
+        trainer._finish_checkpoint_writes(
+            run_dir, cancel_token, writes.pool, writes.future
+        )
+
+        health = trainer._training_warnings(history)
+
+        if adapter.ensure_checkpoint is not None:
+            best_epoch, best_val_loss = adapter.ensure_checkpoint(
+                model, model_path, history, best_epoch, best_val_loss
+            )
+        train_result = adapter.result_type(
+            stopped=stopped,
+            best_epoch=best_epoch,
+            **{adapter.best_field: best_val_loss},
+            total_epochs=len(history),
+            device_used=trainer._device_label,
+            history=history,
+            model_path=model_path,
+            warnings=health,
+        )
+        trainer._write_run_json(run_dir, train_result)
+    except BaseException:
+        tb.close()
+        raise
     trainer._close_training(tb, progress_callback, len(history))
 
     return train_result

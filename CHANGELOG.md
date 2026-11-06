@@ -13,6 +13,85 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ## [Unreleased]
 
+## [0.21.0] — 2026-11-05
+
+### Added
+
+- **Filas paralelas** (fase 4 do ADR-163): um job local e um do
+  Colab rodam ao mesmo tempo.
+  - **Filas:** a fila local continua com um job por vez, em GPU ou CPU, e cada
+    conta Google ganha a sua fila. Dois perfis na mesma conta dividem a mesma.
+  - **Estado por job:** o stream, o status, o resultado e o cancelamento são
+    de cada job, por `run_id`. Parar um job não toca no outro.
+  - **API:** `/api/experiment/events` e `/api/experiment/status` aceitam
+    `run_id`, e `GET /api/queue` ganha `lanes`, com a fila de cada job.
+  - **Tela:** a folha da fila mostra a fila desta máquina e a do Colab da
+    conta conectada, e cada job diz a sua origem. Parar ou acompanhar agem só
+    no job escolhido; o badge da barra conta as duas filas.
+- **O run treinado no Colab volta para esta máquina** (fase 3 do ADR-163).
+  - **Download:** no fim do job, antes de liberar a VM, o run é empacotado
+    como bundle de experimento e baixado com `colab download`.
+  - **Import:** o run entra em `models/` do perfil como qualquer run local,
+    com o `device_used` e o ambiente da VM (GPU, torch, Python) preservados.
+    O History mostra a marca "Colab".
+  - **Falhas:** se o download ou o import falhar, o job termina com o motivo,
+    a VM é liberada e nada fica pela metade entre os runs. O run é montado
+    numa pasta temporária e movido com um único rename.
+  - **Segurança:** o import recusa membros fora da pasta do run (zip-slip),
+    confere os checksums do manifest e limita o tamanho a 2 GB.
+  - **Reuso:** a mesma função (`import_experiment_bundle`) importa um bundle
+    exportado em outra máquina e baixado à mão.
+  - **O que não vem:** os gráficos não fazem parte do formato do bundle. Um
+    run importado traz o run.json e o checkpoint.
+- **Treino de classificação no Google Colab** (fase 2 do ADR-163): com o
+  perfil conectado, o painel "colab" ganha "treinar no Colab".
+  - **Dataset:** a VM pega o dataset de onde ele já está: uma URL de zip, um
+    `torchvision:<nome>` ou um `hf:<dono/nome>` público. Nada sobe desta
+    máquina.
+  - **Fila e eventos:** o job entra na mesma fila dos treinos locais. Os
+    eventos de cada época chegam ao vivo na aba Resultados.
+  - **Stop:** "parar" libera a VM na hora, e a VM é liberada também quando o
+    job termina ou falha.
+  - **Runtimes que sobraram:** o painel lista os runtimes ativos da conta e
+    para os que o VisionForge abriu.
+  - **Resultado:** veja a fase 3, acima.
+- **Conexão com o Google Colab** (fase 1 do ADR-163): o canto "colab" do
+  cabeçalho instala a `google-colab-cli` 0.7.5 num ambiente próprio em
+  `~/.visionforge/colab-cli`. Ele também faz o login de copiar e colar com a
+  conta Google, um por perfil, e mostra a conta e o saldo de compute units, com
+  as horas restantes enquanto um runtime estiver ativo. "Trocar de conta"
+  apaga o login daquele perfil. O token fica no servidor; nada é alocado no
+  Colab. O treino remoto chega na fase 2.
+- **Grad-CAM ao vivo na aba Resultados** (classificação): com
+  `training.live_gradcam_every` acima de 0, a cada N épocas, na última e em cada
+  nova melhor, a aba mostra onde o modelo olha em 6 imagens fixas da validação.
+  Desligado por padrão; ligado, não muda o treino: com a mesma seed o histórico e
+  os pesos saem iguais (ADR-162).
+- **Learning rate e matriz de confusão na aba Resultados**: o evento de cada
+  época passa a trazer a taxa com que ela treinou, em todas as tarefas, e, na
+  classificação, a confusão da validação (a matriz até 30 classes; acima disso,
+  as 10 confusões mais frequentes). Nada disso entra no `run.json` (ADR-161).
+- **Aba Resultados na tela de treino**: curvas de loss e da métrica da tarefa
+  época a época, enquanto o treino roda, e um card com a melhor época pela mesma
+  regra que escolhe o checkpoint salvo. Em grid, comparação, validação cruzada e
+  réplicas, uma tabela lista os treinos já concluídos (ADR-160).
+
+### Fixed
+
+- **Testar o modelo em outra pasta**: a pasta escolhida é avaliada sozinha. Antes,
+  o teste procurava `train/` e `val/` ao lado dela e falhava com WinError 3 em
+  qualquer pasta fora desse layout. Escolher a pasta de uma classe só agora diz
+  qual pasta escolher (ADR-080).
+- **Progresso do treino parado**: numa época que passa de 2 s, o stream manda um
+  evento `batch` e a barra avança dentro da época, em todas as tarefas. Antes ela
+  só andava no fim de cada época e parecia travada em épocas longas.
+- **Botão Treinar em tela estreita**: até 640 px a barra inferior quebra linha e
+  o Treinar ocupa a linha de baixo inteira. O espaço sob a etapa acompanha a altura
+  real da barra, então o fim do formulário não fica escondido atrás dela.
+- **Importar YAML na detecção**: os passos de pré-processamento (`data.preprocessing`)
+  do arquivo importado chegam ao treino. Antes eram descartados sem aviso e o
+  treino saía com `steps: []`.
+
 ## [0.20.2] — 2026-11-03
 
 ### Changed

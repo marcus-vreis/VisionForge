@@ -3,8 +3,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 import torch
 
+from visionforge.core import training_loop
 from visionforge.core.anomaly_trainer import (
     AnomalyTrainer,
     AnomalyTrainResult,
@@ -117,6 +119,23 @@ class TestFitAutoencoder:
         assert kinds[-1] == "end"
         epoch_ev = next(e for e in events if e["event"] == "epoch_end")
         assert "val_auroc" in epoch_ev
+        assert epoch_ev["lr"] == pytest.approx(0.01)
+
+    def test_a_slow_epoch_streams_its_batches(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Interval 0 stands for an epoch slower than the reporting interval."""
+        monkeypatch.setattr(training_loop, "BATCH_PROGRESS_INTERVAL_S", 0.0)
+        events: list[dict] = []
+        AnomalyTrainer(_config(tmp_path)).fit(
+            ConvAutoencoder(latent_dim=8),
+            FakeAnomalyDataModule(n_batches=3),
+            progress_callback=events.append,
+        )
+        batches = [(e["epoch"], e["batch"]) for e in events if e["event"] == "batch"]
+        epochs = sorted({e["epoch"] for e in events if e["event"] == "epoch_end"})
+        # Batches 1 and 2 of 3 in every epoch; the 3rd is epoch_end's.
+        assert batches == [(ep, b) for ep in epochs for b in (1, 2)]
 
 
 class TestFitPatchCore:

@@ -17,6 +17,8 @@ from loguru import logger
 
 from visionforge.core import training_loop
 from visionforge.core.cancellation import CancellationToken, is_cancelled
+from visionforge.core.live_confusion import live_confusion
+from visionforge.core.live_insights import LiveGradCam
 from visionforge.core.resume import (
     ResumeState,
     clear_resume_state,
@@ -227,9 +229,14 @@ class Trainer:
             )
         )
         t0 = time.monotonic()
+        epoch_lr = training_loop.EpochLr(optimizer)
+        class_names = list(getattr(data_module, "class_names", None) or [])
 
         train_loader, val_loader, self._loader_workers = training_loop.start_training(
             data_module, progress_callback, cfg.epochs, self._device_label
+        )
+        insights = LiveGradCam.create(
+            self._config, val_loader, class_names, run_dir, self._device, best_val_loss
         )
         state = training_loop.EpochState(
             history, best_val_loss, best_epoch, patience_counter, start_epoch
@@ -248,18 +255,26 @@ class Trainer:
                 ),
             ),
             training_loop.EpochCallbacks(
-                compute=lambda epoch: self._compute_epoch_result(
-                    epoch,
-                    model,
-                    train_loader,
-                    val_loader,
-                    optimizer,
-                    criterion,
-                    scheduler,
-                    scaler=scaler,
+                compute=epoch_lr.around(
+                    lambda epoch: self._compute_epoch_result(
+                        epoch,
+                        model,
+                        train_loader,
+                        val_loader,
+                        optimizer,
+                        criterion,
+                        scheduler,
+                        scaler=scaler,
+                    )
                 ),
-                report=lambda result: self._report_epoch(
-                    result, tb, progress_callback, t0
+                report=lambda result: self._report_and_explain(
+                    result,
+                    tb,
+                    progress_callback,
+                    t0,
+                    self._live_fields(epoch_lr, class_names),
+                    model,
+                    insights,
                 ),
                 early_stop=self._early_stopping_reached,
             ),
@@ -356,12 +371,42 @@ class Trainer:
         """Advance the scheduler using validation loss for plateau mode."""
         training_loop.step_scheduler(scheduler, val_loss)
 
+    def _report_and_explain(
+        self,
+        result: EpochResult,
+        tb: TensorBoardLogger,
+        progress_callback: Callable[[dict[str, Any]], None] | None,
+        t0: float,
+        extra: dict[str, Any],
+        model: nn.Module,
+        insights: LiveGradCam | None,
+    ) -> None:
+        """Report the epoch, then its Grad-CAM when one is due (ADR-162)."""
+        self._report_epoch(result, tb, progress_callback, t0, extra)
+        if insights is not None:
+            insights.after_epoch(
+                model, result.epoch, result.val_loss, progress_callback
+            )
+
+    def _live_fields(
+        self, epoch_lr: training_loop.EpochLr, class_names: list[str]
+    ) -> dict[str, Any]:
+        """What the epoch event adds for the live "Results" tab (ADR-161)."""
+        fields = epoch_lr.fields()
+        confusion = live_confusion(
+            self._last_val_labels, self._last_val_preds, class_names
+        )
+        if confusion is not None:
+            fields["confusion"] = confusion
+        return fields
+
     def _report_epoch(
         self,
         result: EpochResult,
         tb: TensorBoardLogger,
         progress_callback: Callable[[dict[str, Any]], None] | None,
         t0: float,
+        extra: dict[str, Any] | None = None,
     ) -> None:
         """Report the task-specific epoch metrics and progress event."""
         training_loop.report_epoch(
@@ -379,6 +424,7 @@ class Trainer:
             ("train_loss", "train_accuracy", "val_loss", "val_accuracy"),
             "Epoch {}/{} | train_loss={:.4f} train_acc={:.4f} val_loss={:.4f} val_acc={:.4f}",
             ("train_loss", "train_accuracy", "val_loss", "val_accuracy"),
+            extra,
         )
 
     def _checkpoint_components(

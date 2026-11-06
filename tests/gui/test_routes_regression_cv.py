@@ -43,7 +43,7 @@ class TestRegressionCv:
         )
 
         app, routes_mod = app_and_routes
-        routes_mod._current_run = None
+        routes_mod._JOB_STATES.clear()
 
         captured: dict[str, object] = {}
 
@@ -107,7 +107,7 @@ class TestRegressionCv:
             assert group["aggregates"]["r2"]["mean"] == 0.85
         finally:
             routes_mod.run_regression_cross_validation = orig
-            routes_mod._current_run = None
+            routes_mod._JOB_STATES.clear()
 
     def test_queues_behind_a_running_job(
         self, app_and_routes: tuple, tmp_path: Path
@@ -129,7 +129,7 @@ class TestRegressionCv:
         self, app_and_routes: tuple, tmp_path: Path
     ) -> None:
         app, routes_mod = app_and_routes
-        routes_mod._current_run = None
+        routes_mod._JOB_STATES.clear()
         cfg = _payload(tmp_path)
         cfg["model"] = {"name": "resnet18", "num_targets": 2, "pretrained": False}
         client = TestClient(app, raise_server_exceptions=True)
@@ -138,7 +138,7 @@ class TestRegressionCv:
 
     def test_rejects_single_fold(self, app_and_routes: tuple, tmp_path: Path) -> None:
         app, routes_mod = app_and_routes
-        routes_mod._current_run = None
+        routes_mod._JOB_STATES.clear()
         client = TestClient(app, raise_server_exceptions=True)
         resp = client.post(
             "/api/regression/cv", json={"config": _payload(tmp_path), "n_folds": 1}

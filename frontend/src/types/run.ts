@@ -8,6 +8,8 @@ export interface RunStatus {
   queued?: number;
   /** 1-based place in the queue while this run is waiting. */
   position?: number;
+  /** Client-side only: the queue the waiting run is in (lib/queue-lanes.ts). */
+  lane?: string;
   /** Client-side only: the status poll is not reaching the server. The run's
    *  `status` stays what it last was, since the training goes on there (ADR-133). */
   connection?: "reconnecting" | "lost";
@@ -27,7 +29,9 @@ export type StopPoint =
   | "fold"
   | "model"
   | "replicate"
-  | "phase";
+  | "phase"
+  // A Colab job (ADR-163): stopping releases the VM at once.
+  | "vm";
 
 /** One entry in the run queue. */
 export interface QueuedJobInfo {
@@ -43,11 +47,25 @@ export interface QueuedJobInfo {
    *  layout. Absent from servers older than the profiles. */
   profile?: string;
   profile_name?: string;
+  /** The queue the job is in (ADR-163 phase 4): `local`, or `colab:<e-mail>`
+   *  per Google account. Absent from older servers, where it is `local`. */
+  lane?: string;
+}
+
+/** One queue of the server: a local job and a Colab one run at once, two of
+ *  one queue never (lib/queue-lanes.ts). */
+export interface QueueLane {
+  lane: string;
+  active: QueuedJobInfo | null;
+  pending: QueuedJobInfo[];
 }
 
 export interface QueueSnapshot {
+  /** The local queue, as before phase 4. */
   active: QueuedJobInfo | null;
   pending: QueuedJobInfo[];
+  /** Every queue, the local one included. Absent from older servers. */
+  lanes?: QueueLane[];
 }
 
 /** Bootstrap interval for one test metric (backend MetricCI, ADR-074). */
@@ -124,6 +142,9 @@ export interface RunSummary {
   group_id?: string | null;
   /** Set on the group itself, which History lists as one run (ADR-113). */
   group?: RunGroupBrief | null;
+  /** Where the run trained when not here: "colab" for a run a Colab job
+   *  brought back (ADR-163, phase 3). Absent or null for a local run. */
+  origin?: string | null;
 }
 
 /** How a group job is told apart: a set of seeds of one config, one set of
@@ -276,6 +297,22 @@ export interface DatasetInfo {
   note?: string | null;
 }
 
+/** The validation confusion of one epoch. Up to 30 classes the full matrix,
+ *  `matrix[true][predicted]`; above it the most frequent mistakes as
+ *  `[true, predicted, count]`, most frequent first. */
+/** One explained image of an `insight` event. `path` is served by `/api/artifacts`. */
+export interface LiveInsightImage {
+  path: string;
+  true_class: string;
+  predicted_class: string;
+}
+
+export interface LiveConfusion {
+  classes: string[];
+  matrix?: number[][];
+  top?: [number, number, number][];
+}
+
 /** Discriminated union of SSE events emitted by GET /api/experiment/events.
  *
  * Multi-trial blocks (grid_search, random_search) wrap each inner training in
@@ -303,6 +340,10 @@ export type TrainingEvent =
       val_loss?: number;
       val_accuracy: number;
       elapsed_s?: number;
+      // The rate the epoch trained with (ADR-161); absent on older servers.
+      lr?: number;
+      // Classification only: the epoch's validation confusion (ADR-161).
+      confusion?: LiveConfusion;
       // Custom tasks' declared metrics arrive as val_<name>.
       [customMetric: `val_${string}`]: number | null | undefined | string;
       trial_index?: number;
@@ -321,6 +362,17 @@ export type TrainingEvent =
       val_cls_loss?: number | null;
       val_dfl_loss?: number | null;
     }
+  // Progresso dentro de uma época longa: só chega quando a época passa de alguns
+  // segundos sem terminar. Sem ele o overlay ficava parado a época inteira.
+  | {
+      event: "batch";
+      epoch: number;
+      batch: number;
+      total_batches: number;
+      total_epochs: number;
+      trial_index?: number;
+      total_trials?: number;
+    }
   | {
       event: "trial_end";
       total_epochs: number;
@@ -336,5 +388,14 @@ export type TrainingEvent =
       done: number;
       total: number;
       elapsed_s?: number;
+    }
+  // Grad-CAM of fixed validation images, every N epochs when the run asked for it
+  // (`training.live_gradcam_every`, ADR-162). The images are files in the run dir.
+  | {
+      event: "insight";
+      kind: "gradcam";
+      epoch: number;
+      best: boolean;
+      images: LiveInsightImage[];
     }
   | { event: "end"; total_epochs: number; total_trials?: number };

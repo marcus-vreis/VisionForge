@@ -196,14 +196,17 @@ def _epoch_event(
     *,
     train_loss: float | None = None,
     val_loss: float | None = None,
+    lr: float | None = None,
 ) -> dict[str, Any]:
     """Build the SSE ``epoch_end`` payload for one detection epoch.
 
     Carries the detection-native metrics plus the generic
     train_loss/val_loss/val_accuracy the shared overlay reads, so the live
     monitor degrades cleanly when a field is absent (torchvision, early epochs).
+    ``lr`` is the rate the epoch trained with, for the live "Results" tab.
     """
     return {
+        **({} if lr is None else {"lr": lr}),
         "event": "epoch_end",
         "epoch": result.epoch,
         "total_epochs": total_epochs,
@@ -226,6 +229,19 @@ def _epoch_event(
     }
 
 
+def _ultralytics_lr(trainer: Any) -> float | None:
+    """The rate of the epoch that just ended.
+
+    Ultralytics writes ``trainer.lr`` (``{"lr/pg0": ...}``) at the end of each
+    training epoch, after warmup and before its scheduler steps at the start of
+    the next one, so it is this epoch's. The groups differ only in the bias
+    warmup; ``pg0`` holds the weights.
+    """
+    rates = getattr(trainer, "lr", None)
+    value = rates.get("lr/pg0") if isinstance(rates, dict) else None
+    return float(value) if isinstance(value, int | float) else None
+
+
 def _is_worker_spawn_crash(message: str) -> bool:
     """True when an exception message matches a DataLoader worker dying at
     startup — on Windows the near-certain cause is the page file being too
@@ -243,6 +259,31 @@ def _is_worker_spawn_crash(message: str) -> bool:
             "ran out of input",
         )
     )
+
+
+def _report_ultralytics_batches(
+    model: Any, reporter: training_loop.BatchProgressReporter
+) -> None:
+    """Feed Ultralytics' own batch loop into ``reporter``.
+
+    Ultralytics owns the loop and keeps no batch index on the trainer, so the
+    batches are counted here, restarting at each ``on_train_epoch_start``.
+    """
+    seen = 0
+
+    def _on_epoch_start(trainer: Any) -> None:
+        nonlocal seen
+        seen = 0
+        # trainer.epoch is 0-based.
+        reporter.start_epoch(int(trainer.epoch) + 1)
+
+    def _on_batch_end(trainer: Any) -> None:
+        nonlocal seen
+        seen += 1
+        reporter.batch_done(seen, len(trainer.train_loader))
+
+    model.add_callback("on_train_epoch_start", _on_epoch_start)
+    model.add_callback("on_train_batch_end", _on_batch_end)
 
 
 class DetectionTrainer:
@@ -404,6 +445,11 @@ class DetectionTrainer:
             )
 
         model.add_callback("on_fit_epoch_end", _on_epoch_end)
+        if progress_callback is not None:
+            _report_ultralytics_batches(
+                model,
+                training_loop.BatchProgressReporter(progress_callback, cfg.epochs),
+            )
         logger.info(
             "Detection training: {} ({} epochs) on {}",
             self._config.model.name,
@@ -484,7 +530,9 @@ class DetectionTrainer:
         history[:] = [h for h in history if h.epoch < epoch]
         history.append(result)
         if progress_callback is not None:
-            progress_callback(_epoch_event(result, total_epochs))
+            progress_callback(
+                _epoch_event(result, total_epochs, lr=_ultralytics_lr(trainer))
+            )
         return epoch
 
     def _history_from_run_json(self, run_dir: Path) -> list[DetectionEpochResult]:
@@ -556,6 +604,9 @@ class DetectionTrainer:
         model_path.parent.mkdir(parents=True, exist_ok=True)
 
         train_loader, val_loader = self._build_loaders(self._config.data.base_dir)
+        train_loader = training_loop.with_batch_progress(
+            train_loader, progress_callback, cfg.epochs
+        )
         self._loader_workers = {
             name: loader.num_workers
             for name, loader in (("train", train_loader), ("val", val_loader))
@@ -594,6 +645,8 @@ class DetectionTrainer:
                     )
                     stopped = True
                     break
+                training_loop.set_progress_epoch(train_loader, epoch)
+                epoch_lr = training_loop.current_lr(optimizer)
                 train_loss = self._run_torchvision_epoch(
                     model, train_loader, device, optimizer
                 )
@@ -630,6 +683,7 @@ class DetectionTrainer:
                             cfg.epochs,
                             train_loss=train_loss,
                             val_loss=val_loss,
+                            lr=epoch_lr,
                         )
                     )
 

@@ -13,6 +13,8 @@ from fastapi.testclient import TestClient
 from visionforge.gui.api.routes import _find_run_dir
 from visionforge.utils.cuda import CUDAInfo, GPUDevice
 
+from .conftest import fake_run
+
 _TS = "2026-05-22T10:00:00"
 
 
@@ -230,11 +232,14 @@ class TestDeleteRun:
         open, and removing them would race the trainer."""
         app, routes_mod = app_and_routes
         run_dir = _write_run(tmp_path)
-        routes_mod._current_run = {
-            "run_id": run_dir.name,
-            "status": "running",
-            "error": None,
-        }
+        fake_run(
+            routes_mod,
+            {
+                "run_id": run_dir.name,
+                "status": "running",
+                "error": None,
+            },
+        )
         try:
             with patch.object(routes_mod, "_MODELS_DIR", tmp_path):
                 client = TestClient(app, raise_server_exceptions=True)
@@ -242,7 +247,7 @@ class TestDeleteRun:
             assert resp.status_code == 409
             assert run_dir.exists()
         finally:
-            routes_mod._current_run = None
+            routes_mod._JOB_STATES.clear()
 
 
 class TestFindRunDir:

@@ -316,7 +316,15 @@ def parse_run_summary(run_dir: Path, data: dict[str, Any]) -> RunSummary:
         configured_epochs=configured_epochs,
         group_id=data.get("group_id"),
         group=_group_brief(group, task, final_metrics) if group else None,
+        origin=_origin_kind(data),
     )
+
+
+def _origin_kind(data: dict[str, Any]) -> str | None:
+    """The ``origin.kind`` an imported run carries; None for one trained here."""
+    origin = data.get("origin")
+    kind = origin.get("kind") if isinstance(origin, dict) else None
+    return kind if isinstance(kind, str) and kind else None
 
 
 def _preprocessing_count(config: dict[str, Any]) -> int:

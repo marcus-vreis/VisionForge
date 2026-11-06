@@ -233,7 +233,9 @@ class AnomalyTrainer(training_loop.TrainingOutput):
         cfg = self._config.training
         optimizer = optimizer or self._build_optimizer(model)
         criterion = nn.MSELoss()
-        train_loader = data_module.train_loader()
+        train_loader = training_loop.with_batch_progress(
+            data_module.train_loader(), progress_callback, cfg.epochs
+        )
         test_loader = data_module.test_loader()
         calibration_loader = _calibration_loader(data_module)
         self._loader_workers = {
@@ -291,6 +293,8 @@ class AnomalyTrainer(training_loop.TrainingOutput):
                 stopped = True
                 break
 
+            training_loop.set_progress_epoch(train_loader, epoch)
+            epoch_lr = training_loop.current_lr(optimizer)
             train_loss = self._train_autoencoder_epoch(
                 model, train_loader, optimizer, criterion
             )
@@ -301,7 +305,9 @@ class AnomalyTrainer(training_loop.TrainingOutput):
                 normal_scores, test_scores, test_labels
             )
             history.append(AnomalyEpochResult(epoch, train_loss, auroc, threshold, f1))
-            self._report_autoencoder_epoch(history[-1], tb, progress_callback, t0)
+            self._report_autoencoder_epoch(
+                history[-1], tb, progress_callback, t0, lr=epoch_lr
+            )
 
             if train_loss < best_loss:
                 best_loss = train_loss
@@ -350,6 +356,8 @@ class AnomalyTrainer(training_loop.TrainingOutput):
         tb: TensorBoardLogger,
         progress_callback: Callable[[dict[str, Any]], None] | None,
         t0: float,
+        *,
+        lr: float | None = None,
     ) -> None:
         """Log reconstruction metrics and emit the completed epoch event."""
         epoch = result.epoch
@@ -385,6 +393,7 @@ class AnomalyTrainer(training_loop.TrainingOutput):
                     "val_auroc": auroc,
                     "val_image_f1": f1,
                     "val_threshold": threshold,
+                    **({} if lr is None else {"lr": lr}),
                     "elapsed_s": round(time.monotonic() - t0, 3),
                 }
             )

@@ -26,7 +26,7 @@ from visionforge.core.training_health import collapsed_predictions
 from visionforge.gui.api.schemas import RunResponse
 from visionforge.utils.messages import current_lang, set_lang, using_lang
 
-from .conftest import occupy_queue, release_queue
+from .conftest import fake_run, occupy_queue, release_queue
 from .test_routes_replicates import _payload as _replicates_payload
 from .test_routes_resume import _classification_full
 from .test_routes_resume import _run as _stopped_run
@@ -44,7 +44,7 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):  # type: ignore[no-unt
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(routes_mod, "_MODELS_DIR", Path("outputs/models"))
     monkeypatch.setattr(routes_mod, "_PROFILES_DIR", Path("outputs/profiles"))
-    routes_mod._current_run = None
+    routes_mod._JOB_STATES.clear()
     yield app, routes_mod
     release_queue(routes_mod)
 
@@ -145,13 +145,16 @@ class TestRunsAndTheQueue:
 
     def test_a_result_that_is_not_ready(self, client: TestClient, env) -> None:
         _, routes_mod = env
-        routes_mod._current_run = {
-            "run_id": "r1",
-            "status": "running",
-            "error": None,
-            "report": None,
-            "run_dir": None,
-        }
+        fake_run(
+            routes_mod,
+            {
+                "run_id": "r1",
+                "status": "running",
+                "error": None,
+                "report": None,
+                "run_dir": None,
+            },
+        )
 
         en = client.get("/api/experiment/result/r1", headers=EN)
         pt = client.get("/api/experiment/result/r1")
@@ -164,13 +167,16 @@ class TestRunsAndTheQueue:
         self, client: TestClient, env
     ) -> None:
         _, routes_mod = env
-        routes_mod._current_run = {
-            "run_id": "r2",
-            "status": "failed",
-            "error": "OSError: disk full",
-            "report": None,
-            "run_dir": None,
-        }
+        fake_run(
+            routes_mod,
+            {
+                "run_id": "r2",
+                "status": "failed",
+                "error": "OSError: disk full",
+                "report": None,
+                "run_dir": None,
+            },
+        )
 
         en = client.get("/api/experiment/result/r2", headers=EN)
         pt = client.get("/api/experiment/result/r2")
@@ -186,7 +192,7 @@ class TestRunsAndTheQueue:
         run_dir = tmp_path / "outputs" / "models" / "e" / "20260522_100000_000000"
         run_dir.mkdir(parents=True)
         (run_dir / "run.json").write_text("{}", encoding="utf-8")
-        routes_mod._current_run = {"run_id": run_dir.name, "status": "running"}
+        fake_run(routes_mod, {"run_id": run_dir.name, "status": "running"})
 
         en = client.delete(f"/api/runs/{run_dir.name}", headers=EN)
         pt = client.delete(f"/api/runs/{run_dir.name}")

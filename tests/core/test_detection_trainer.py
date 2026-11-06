@@ -374,6 +374,28 @@ class TestTorchvisionPath:
         with pytest.raises(ValueError, match="base_dir"):
             trainer.fit()
 
+    def test_a_slow_epoch_streams_its_batches(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(
+            dt_mod, "build_torchvision_detector", lambda *a, **k: _FakeDetector()
+        )
+        monkeypatch.setattr(dt_mod.training_loop, "BATCH_PROGRESS_INTERVAL_S", 0.0)
+        cfg = _tv_config(tmp_path)
+        # A second training image: one batch alone is all epoch_end.
+        train_images = tmp_path / "ds" / "images" / "train"
+        Image.new("RGB", (32, 32), (90, 90, 90)).save(train_images / "b.jpg")
+        (tmp_path / "ds" / "labels" / "train" / "b.txt").write_text(
+            "0 0.5 0.5 0.4 0.4\n", encoding="utf-8"
+        )
+        events: list[dict[str, Any]] = []
+        DetectionTrainer(cfg).fit(progress_callback=events.append)
+
+        batches = [(e["epoch"], e["batch"]) for e in events if e["event"] == "batch"]
+        assert batches == [(1, 1), (2, 1)]
+        rates = [e["lr"] for e in events if e["event"] == "epoch_end"]
+        assert rates == pytest.approx([0.005, 0.005])
+
     def test_trains_streams_and_writes_run_json(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -782,3 +804,58 @@ class TestAugmentationToggle:
         from visionforge.utils.detection_config import DetectionAugmentationConfig
 
         assert DetectionAugmentationConfig().augment is True
+
+
+class _CallbackModel:
+    """Records callbacks the way ``YOLO.add_callback`` does."""
+
+    def __init__(self) -> None:
+        self.callbacks: dict[str, list[Any]] = {}
+
+    def add_callback(self, name: str, fn: Any) -> None:
+        self.callbacks.setdefault(name, []).append(fn)
+
+    def fire(self, name: str, trainer: Any) -> None:
+        for fn in self.callbacks.get(name, []):
+            fn(trainer)
+
+
+def test_ultralytics_batches_are_counted_per_epoch() -> None:
+    """Ultralytics keeps no batch index, so the hook counts them itself."""
+    events: list[dict[str, Any]] = []
+    model = _CallbackModel()
+    reporter = dt_mod.training_loop.BatchProgressReporter(
+        events.append, 5, interval_s=0.0
+    )
+    dt_mod._report_ultralytics_batches(model, reporter)
+    trainer = type("T", (), {"epoch": 0, "train_loader": [0, 0, 0]})()
+
+    for epoch in (0, 1):  # Ultralytics' epoch is 0-based
+        trainer.epoch = epoch
+        model.fire("on_train_epoch_start", trainer)
+        for _ in range(3):
+            model.fire("on_train_batch_end", trainer)
+
+    assert [(e["epoch"], e["batch"]) for e in events] == [
+        (1, 1),
+        (1, 2),
+        (2, 1),
+        (2, 2),
+    ]
+    assert all(e["total_batches"] == 3 and e["total_epochs"] == 5 for e in events)
+
+
+def test_ultralytics_rate_is_the_weights_group() -> None:
+    trainer = type(
+        "T", (), {"lr": {"lr/pg0": 0.002, "lr/pg1": 0.002, "lr/pg2": 0.09}}
+    )()
+    assert dt_mod._ultralytics_lr(trainer) == pytest.approx(0.002)
+    assert dt_mod._ultralytics_lr(type("T", (), {})()) is None
+
+
+def test_epoch_event_leaves_out_an_unknown_rate() -> None:
+    result = dt_mod.DetectionEpochResult(
+        epoch=1, map50=0.5, map50_95=None, box_loss=0.1
+    )
+    assert "lr" not in dt_mod._epoch_event(result, 3)
+    assert dt_mod._epoch_event(result, 3, lr=0.01)["lr"] == 0.01

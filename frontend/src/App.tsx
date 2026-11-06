@@ -10,6 +10,8 @@ import {
   runCompare,
   runSweep,
   runTaskCv,
+  runColabExperiment,
+  type ColabLaunch,
 } from "./api/client";
 import type { CvPayload } from "./components/CvCard";
 import type { PanelStrategy } from "./components/ExperimentHeader";
@@ -50,6 +52,7 @@ import { HistoryOverlay } from "./components/HistoryOverlay";
 import { CustomAccentsContext } from "./lib/custom-accents";
 import { customAccentMap } from "./lib/task-accent";
 import { QueueOverlay } from "./components/QueueOverlay";
+import { queueTotals } from "./lib/queue-lanes";
 import { ParamPanel } from "./components/ParamPanel";
 import { DetectionPanel } from "./components/DetectionPanel";
 import { RegressionPanel } from "./components/RegressionPanel";
@@ -125,9 +128,10 @@ async function readQueueDepth(
   setRunning: (running: boolean) => void,
 ): Promise<void> {
   try {
-    const snap = await fetchQueue();
-    setDepth(snap.pending.length);
-    setRunning(snap.active !== null);
+    // Every queue counts: a Colab job waiting for its account is in line too.
+    const totals = queueTotals(await fetchQueue());
+    setDepth(totals.pending);
+    setRunning(totals.running);
   } catch {
     // keep the last known depth
   }
@@ -549,7 +553,9 @@ export default function App() {
   const setActiveStrategy = (s: PanelStrategy) =>
     setStrategyByTask((prev) => ({ ...prev, [activeKey]: s }));
 
-  const handleTrain = async () => {
+  const handleTrain = async (colab?: ColabLaunch) => {
+    // A Colab run (ADR-163) is a classification payload sent to another route.
+    if (colab && (activeKey !== "classification" || isCustomTask(activeTask))) return;
     // Classification encodes its strategy in config.block, so its payload
     // already carries it; the standalone panels keep theirs in cards, which
     // this signal triggers.
@@ -690,7 +696,8 @@ export default function App() {
         queueSize: qSize,
         story: storySpecFor("classification", payload),
       },
-      payload,
+      colab ? { config: payload, ...colab } : payload,
+      colab ? { run: runColabExperiment } : undefined,
     );
   };
 
@@ -850,6 +857,12 @@ export default function App() {
           sharedServer && profile ? profileLabel(profile, t.profile.defaultShort) : undefined
         }
         onChangeProfile={() => setPickProfile(true)}
+        profileSlug={profile?.slug}
+        onTrainColab={
+          activeKey === "classification" && !isCustomTask(activeTask)
+            ? (launch) => void handleTrain(launch)
+            : undefined
+        }
         taskColor={
           isCustomTask(activeTask)
             ? {
@@ -873,7 +886,8 @@ export default function App() {
           zIndex: 2,
           maxWidth: 1280,
           margin: "0 auto",
-          padding: "34px 40px 140px",
+          padding: "34px 40px",
+          paddingBottom: "max(140px, var(--vf-bar-clearance, 0px))",
         }}
       >
         <TaskHero task={activeTask} />

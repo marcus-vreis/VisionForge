@@ -1,11 +1,19 @@
 import { useCallback, useEffect, useState } from "react";
 
-import { ApiError, cancelQueuedRun, fetchQueue } from "../api/client";
+import { ApiError, cancelQueuedRun, fetchColabStatus, fetchQueue } from "../api/client";
+import type { Dict } from "../i18n/pt";
 import { useT } from "../i18n/useT";
 import { strategyLabel, taskLabel, waitedFor } from "../lib/queue-format";
 import { jobProfileLabel, queueShowsProfiles } from "../lib/profile";
+import {
+  laneAccount,
+  LOCAL_LANE,
+  queueLanes,
+  queueTotals,
+  withAccountLane,
+} from "../lib/queue-lanes";
 import { stopMode } from "../lib/run-control";
-import type { QueuedJobInfo } from "../types/run";
+import type { QueuedJobInfo, QueueLane } from "../types/run";
 
 interface QueueOverlayProps {
   open: boolean;
@@ -26,6 +34,10 @@ interface QueueOverlayProps {
  * line, which is what you want after queueing an evening's work and coming back
  * to it. A pending job is removed at once; the running one is stopped at its
  * next epoch boundary and keeps what it has saved (ADR-088).
+ *
+ * One section per queue (ADR-163 phase 4): this machine's and the Colab one of
+ * each Google account, which run side by side. Every button acts on its own
+ * row's job only.
  */
 export function QueueOverlay({
   open,
@@ -35,18 +47,19 @@ export function QueueOverlay({
   onWatch,
 }: QueueOverlayProps) {
   const t = useT();
-  const [active, setActive] = useState<QueuedJobInfo | null>(null);
-  const [pending, setPending] = useState<QueuedJobInfo[]>([]);
+  const [lanes, setLanes] = useState<QueueLane[]>([]);
+  // The connected Colab account: its queue is shown even before it holds a job.
+  const [colabAccount, setColabAccount] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
       const snap = await fetchQueue();
-      setActive(snap.active);
-      setPending(snap.pending);
-      onCountChange?.(snap.pending.length);
-      onRunningChange?.(snap.active !== null);
+      const totals = queueTotals(snap);
+      setLanes(queueLanes(snap));
+      onCountChange?.(totals.pending);
+      onRunningChange?.(totals.running);
       setError(null);
     } catch (e) {
       setError(
@@ -54,6 +67,21 @@ export function QueueOverlay({
       );
     }
   }, [onCountChange, onRunningChange, t]);
+
+  useEffect(() => {
+    if (!open) return;
+    let alive = true;
+    fetchColabStatus()
+      .then((c) => {
+        if (alive) setColabAccount(c.logged_in ? c.account : null);
+      })
+      .catch(() => {
+        // No Colab connection to show: the queues the server reports stand alone.
+      });
+    return () => {
+      alive = false;
+    };
+  }, [open]);
 
   // Poll while open: the queue advances on its own as jobs finish.
   useEffect(() => {
@@ -85,8 +113,12 @@ export function QueueOverlay({
 
   if (!open) return null;
 
+  const shown = withAccountLane(lanes, colabAccount);
+  const jobs = shown.flatMap((l) => (l.active ? [l.active, ...l.pending] : l.pending));
   // Only a server with more than the default profile has anyone to tell apart.
-  const showProfile = queueShowsProfiles(active ? [active, ...pending] : pending);
+  const showProfile = queueShowsProfiles(jobs);
+  // A lone local queue reads as before; with a Colab one, each gets a heading.
+  const showLanes = shown.length > 1;
 
   return (
     <div
@@ -211,7 +243,7 @@ export function QueueOverlay({
             </div>
           )}
 
-          {active === null && pending.length === 0 && (
+          {jobs.length === 0 && !showLanes && (
             <div
               style={{
                 padding: "28px 12px",
@@ -228,31 +260,14 @@ export function QueueOverlay({
             </div>
           )}
 
-          {/* The running job can be stopped too (ADR-088): it finishes the epoch
-              it is in and keeps the best checkpoint, so the button is safe — for
-              the kinds of run that read the stop at all (lib/run-control.ts). */}
-          {active && (
-            <JobRow
-              job={active}
-              showProfile={showProfile}
-              running
-              stoppable={stopMode(active) !== "none"}
-              onWatch={onWatch ? () => onWatch(active) : undefined}
-              onCancel={() => void cancel(active.run_id)}
-              cancelling={busyId === active.run_id}
-            />
-          )}
-
-          {pending.map((job, index) => (
-            <JobRow
-              key={job.run_id}
-              job={job}
-              showProfile={showProfile}
-              position={index + 1}
-              onCancel={() => void cancel(job.run_id)}
-              cancelling={busyId === job.run_id}
-            />
-          ))}
+          <QueueLaneList
+            lanes={shown}
+            showLanes={showLanes}
+            showProfile={showProfile}
+            busyId={busyId}
+            onCancel={(runId) => void cancel(runId)}
+            onWatch={onWatch}
+          />
         </div>
       </div>
     </div>
@@ -336,7 +351,7 @@ export function JobRow({
             color: "var(--vf-text-muted)",
           }}
         >
-          {taskLabel(t, job.task)} · {strategyLabel(t, job.strategy)} ·{" "}
+          {jobOrigin(t, job)} · {taskLabel(t, job.task)} · {strategyLabel(t, job.strategy)} ·{" "}
           {showProfile && (
             <>{t.profile.queueOwner(jobProfileLabel(job, t.profile.defaultShort))} · </>
           )}
@@ -412,5 +427,99 @@ export function JobRow({
         {cancelling ? "…" : running ? t.queueOverlay.stop : t.queueOverlay.remove}
       </button>
     </div>
+  );
+}
+
+/** The heading of one queue: this machine, or the Colab of one account. */
+function laneTitle(t: Dict, lane: string): string {
+  const account = laneAccount(lane);
+  return account === null ? t.queueOverlay.laneLocal : t.queueOverlay.laneColab(account);
+}
+
+/** Where a job runs, at the head of its row. */
+function jobOrigin(t: Dict, job: QueuedJobInfo): string {
+  return (job.lane ?? LOCAL_LANE) === LOCAL_LANE
+    ? t.queueOverlay.originLocal
+    : t.queueOverlay.originColab;
+}
+
+/** The queues, one section each, with every button bound to its own row's job:
+ *  stopping the Colab job never touches the local one (ADR-163 phase 4). */
+export function QueueLaneList({
+  lanes,
+  showLanes,
+  showProfile,
+  busyId,
+  onCancel,
+  onWatch,
+}: {
+  lanes: QueueLane[];
+  /** Headings per queue; off when the local queue is the only one. */
+  showLanes: boolean;
+  showProfile: boolean;
+  busyId: string | null;
+  onCancel: (runId: string) => void;
+  onWatch?: (job: QueuedJobInfo) => void;
+}) {
+  const t = useT();
+  return (
+    <>
+      {lanes.map(({ lane, active, pending }) => (
+        <section
+          key={lane}
+          aria-label={laneTitle(t, lane)}
+          data-lane={lane}
+          style={{ display: "flex", flexDirection: "column", gap: 10 }}
+        >
+          {showLanes && (
+            <div
+              style={{
+                marginTop: 6,
+                display: "flex",
+                alignItems: "baseline",
+                justifyContent: "space-between",
+                gap: 12,
+                fontFamily: "var(--font-mono)",
+                fontSize: 10,
+                letterSpacing: "0.16em",
+                textTransform: "uppercase",
+                color: "var(--vf-text-muted)",
+              }}
+            >
+              <span>{laneTitle(t, lane)}</span>
+              {active === null && pending.length === 0 && (
+                <span style={{ letterSpacing: "0.06em" }}>{t.queueOverlay.laneEmpty}</span>
+              )}
+            </div>
+          )}
+
+          {/* The running job can be stopped too (ADR-088): it finishes the epoch
+              it is in and keeps the best checkpoint, so the button is safe — for
+              the kinds of run that read the stop at all (lib/run-control.ts). */}
+          {active && (
+            <JobRow
+              job={active}
+              showProfile={showProfile}
+              running
+              stoppable={stopMode(active) !== "none"}
+              onWatch={onWatch ? () => onWatch(active) : undefined}
+              onCancel={() => onCancel(active.run_id)}
+              cancelling={busyId === active.run_id}
+            />
+          )}
+
+          {pending.map((job, index) => (
+            <JobRow
+              key={job.run_id}
+              job={job}
+              showProfile={showProfile}
+              position={index + 1}
+              onCancel={() => onCancel(job.run_id)}
+              cancelling={busyId === job.run_id}
+            />
+          ))}
+        </section>
+      ))}
+    </>
   );
 }

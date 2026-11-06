@@ -71,7 +71,7 @@ const trialStart = (index: number, total: number): TrainingEvent => ({
   seed: 0,
 });
 
-const POINTS: StopPoint[] = ["epoch", "trial", "fold", "model", "replicate", "phase"];
+const POINTS: StopPoint[] = ["epoch", "trial", "fold", "model", "replicate", "phase", "vm"];
 
 describe("stopMode", () => {
   describe("with the queue snapshot", () => {

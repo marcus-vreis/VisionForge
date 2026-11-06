@@ -109,6 +109,54 @@ export const pt = {
       `Mede o ruído de amostragem do split com este modelo fixo — não a ` +
       `variação entre treinos, que réplicas com várias seeds medem.`,
   },
+  // The Colab corner of the header (ADR-163): CLI install, login per profile, balance.
+  colab: {
+    dialogLabel: "Google Colab",
+    chipRuntimes: (n: number) => (n === 1 ? "1 runtime ativo" : `${n} runtimes ativos`),
+    chip: {
+      not_installed: "colab · desligado",
+      installing: "colab · instalando…",
+      install_failed: "colab · falhou",
+      logged_out: "colab · entrar",
+      login_pending: "colab · aguardando código",
+      connected: "colab · conectado",
+    },
+    intro:
+      "Treinar no Google Colab usa a sua conta Google e a GPU que ela tiver. O VisionForge conversa com o Colab pela CLI oficial, instalada num ambiente só dela.",
+    install: (version: string) => `instalar a CLI do Colab (v${version})`,
+    installing: "Instalando a CLI do Colab… isso leva um ou dois minutos.",
+    installFailed: "A instalação falhou:",
+    retry: "tentar de novo",
+    login: "entrar com o Google",
+    loginStep1: "1. Abra esta página, entre com a sua conta e dê a permissão.",
+    openPage: "abrir a página do Google",
+    loginStep2: "2. O Google mostra um código. Cole aqui:",
+    codePlaceholder: "código de autorização",
+    badCode: "Cole o código inteiro, sem espaços.",
+    confirm: "confirmar",
+    cancel: "cancelar",
+    account: (email: string) => `Conta: ${email}`,
+    accountUnknown: "Conta conectada (o e-mail não veio).",
+    perProfile: "O login vale só para este perfil.",
+    switchAccount: "trocar de conta",
+    balance: (units: string) => `Saldo: ${units} compute units`,
+    hoursLeft: (hours: number, rate: string) => `≈ ${hours} h no ritmo atual (${rate}/h)`,
+    noRate: "Nenhum runtime ativo agora; as horas restantes dependem da GPU escolhida.",
+    usageFailed: "Não foi possível ler o saldo.",
+    loadFailed: "Não foi possível falar com o servidor.",
+    trainTitle: "Treinar este experimento no Colab",
+    trainSource: "Dataset na VM: URL de um zip, torchvision:cifar10 ou hf:dono/nome",
+    sourcePlaceholder: "https://…/dataset.zip",
+    badSource: "Use uma URL http(s) de um zip, torchvision:<nome> ou hf:<dono/nome>.",
+    accelerator: "GPU",
+    train: "treinar no Colab",
+    trainNote:
+      "Entra na mesma fila dos treinos locais. A aba ao vivo acompanha; os arquivos treinados ficam na VM até a importação da próxima fase.",
+    sessionsTitle: "Runtimes ativos nesta conta",
+    sessionsNone: "Nenhum runtime ativo.",
+    stopSession: "parar",
+    sessionNotOurs: "aberto fora do VisionForge; pare em colab.research.google.com",
+  },
   // The corner of the header that offers a newer release (ADR-120).
   update: {
     available: (version: string) => `atualização disponível · v${version}`,
@@ -367,6 +415,8 @@ export const pt = {
       "Precisão mista: usa 16 bits onde dá. Treina mais rápido e ocupa menos VRAM, com risco baixo de instabilidade.",
     mixed_precision:
       "Faz parte das contas em 16 bits. Acelera o treino e ocupa menos VRAM em GPUs recentes; em modelos sensíveis pode custar precisão numérica.",
+    live_gradcam_every:
+      "A cada quantas épocas mostrar, na aba Resultados, onde o modelo olha em algumas imagens fixas da validação (Grad-CAM). Também mostra na última época e em cada nova melhor. 0 desliga. Não muda o treino: com a mesma seed, os números saem iguais.",
     deterministic:
       "Faz o mesmo config com a mesma seed devolver exatamente os mesmos números. Ligado por padrão: medimos o custo e ele é nulo ou negativo em treinos curtos.",
     base_dir:
@@ -425,6 +475,7 @@ export const pt = {
       seed: "Seed",
       deterministic: "Determinístico",
       mixed_precision: "Precisão mista (AMP)",
+      live_gradcam_every: "Grad-CAM ao vivo (a cada N épocas)",
       kind: "Tipo",
       step_size: "Step size",
       gamma: "Gamma",
@@ -1042,6 +1093,8 @@ export const pt = {
         `Parou na época ${done} de ${total} — dá para continuar`,
       resumeTitleNoTotal: "Parou antes do fim — dá para continuar",
       blockTitle: (block: string) => `Bloco de experimento: ${block}`,
+      originColab: "Colab",
+      originColabTitle: "Treinado no Google Colab e importado para este perfil",
       epochs: (n: number) => `${n} epoch${n !== 1 ? "s" : ""}`,
       // Where a finished run shows `→ end date`, a running one shows `· this`.
       inProgress: "em andamento",
@@ -1964,10 +2017,17 @@ export const pt = {
     kicker: "// fila",
     title: "Treinos na fila",
     description:
-      "Uma GPU, um treino por vez. Submeta quantos quiser — eles rodam em ordem de envio, sozinhos.",
+      "Um treino por vez em cada fila: a desta máquina e a de cada conta do Colab, que rodam ao mesmo tempo. Submeta quantos quiser — eles rodam em ordem de envio, sozinhos.",
     emptyTitle: "A GPU está livre e nada está esperando.",
     emptyHint: "Envie um treino e, se enviar outro em seguida, ele aparece aqui.",
     position: (n: number) => `${n}º`,
+    // One section per queue (ADR-163): this machine's and one per Colab account.
+    laneLocal: "Local · esta máquina",
+    laneColab: (account: string) => `Colab · ${account}`,
+    laneEmpty: "nada aqui",
+    // A job's origin, in its row.
+    originLocal: "local",
+    originColab: "Colab",
     running: "em execução",
     waiting: (waited: string) => `esperando ${waited}`,
     watch: "🔬 ver treino",
@@ -2014,6 +2074,10 @@ export const pt = {
       `${position ? `aguardando a GPU — ${position}º na fila` : "aguardando a GPU"}${
         typeof queued === "number" && queued > 1 ? ` · ${queued} submissões esperando` : ""
       }. O treino começa sozinho quando chegar a vez.`,
+    // The same for a job in a Colab queue, which waits for its Google account's
+    // previous job and not for this machine's GPU (ADR-163).
+    queuedColabNote: (account: string, position: number | undefined) =>
+      `${position ? `aguardando o Colab de ${account} — ${position}º na fila` : `aguardando o Colab de ${account}`}. O treino começa sozinho quando o anterior dessa conta terminar.`,
     // The status poll is not reaching the server; the run goes on there (ADR-133).
     reconnecting: "reconectando…",
     reconnectingNote: "O servidor não respondeu. Tentando de novo — o treino continua no servidor.",
@@ -2056,6 +2120,7 @@ export const pt = {
         "Parar as réplicas? A réplica em andamento termina a época atual e nenhuma outra começa. A média e o intervalo usam só as réplicas concluídas; a réplica cortada fica de fora. Um conjunto interrompido não pode ser retomado.",
       phase:
         "Parar o PatchCore? Se ainda estiver na extração de features, nada é guardado. Se já estiver montando o banco de memória, ele termina, é salvo e a pontuação é pulada — dá para pontuar depois em “+ testar” no Histórico.",
+      vm: "Parar o treino no Colab? A VM é liberada na hora: a época em andamento se perde, e nada do que foi treinado lá volta para esta máquina por enquanto.",
     },
     // A researcher's own task. Never resumable from the History; and one that owns its
     // training loop (Level 2) has no epoch to stop at, so a trial or replicate in flight
@@ -2114,6 +2179,33 @@ export const pt = {
     // The server says the run was not cut (`stopped: false`): the stop arrived too late
     // to change anything, or the run had ended on its own.
     stopTooLate: "> a parada não cortou nada: o treino terminou normalmente",
+  },
+  // The "Resultados" tab of the training sheet (components/LiveResults.tsx, ADR-160).
+  liveResults: {
+    tab: "Resultados",
+    empty: "As curvas aparecem quando a primeira época terminar.",
+    noEpochsPatchcore:
+      "O PatchCore não treina por épocas: ele monta o banco de memória numa passada só. O resultado sai no fim.",
+    best: (epoch: number, metric: string, value: string) =>
+      `Melhor época: ${epoch} (${metric} ${value})`,
+    bestShort: (epoch: number, metric: string, value: string) =>
+      `época ${epoch} · ${metric} ${value}`,
+    bestNote: "o checkpoint salvo é desta época",
+    lossChart: "Loss",
+    gradcamTitle: (epoch: number, best: boolean) =>
+      `Grad-CAM da validação · época ${epoch}${best ? " · melhor até aqui" : ""}`,
+    gradcamNote: "onde o modelo olhou para decidir; as mesmas imagens a cada vez",
+    gradcamCaption: (actual: string, predicted: string) =>
+      actual === predicted ? `${actual} ✓` : `${actual} → lida como ${predicted}`,
+    lrChart: "Learning rate",
+    confusionTitle: (epoch: number) => `Matriz de confusão da validação · época ${epoch}`,
+    confusionAxes: "linhas: classe verdadeira · colunas: classe prevista",
+    topTitle: (epoch: number) => `Confusões mais frequentes na validação · época ${epoch}`,
+    topRow: (actual: string, predicted: string) => `${actual} lida como ${predicted}`,
+    unitsTitle: "Treinos concluídos",
+    changesCol: "O que muda",
+    epochsCol: "Épocas",
+    bestCol: "Melhor",
   },
   // The "Como funciona" tab of the training sheet (components/training-story/, ADR-118).
   // Only the stage and the numbers are real; the caption says the motion is not.

@@ -5,9 +5,11 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
 import stat
 import tempfile
 import zipfile
+from datetime import datetime
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import IO, Any
 
@@ -21,6 +23,9 @@ _MAX_MEMBERS = 4096
 _MAX_MANIFEST_BYTES = 4 * 1024 * 1024
 _MAX_RUN_BYTES = 16 * 1024 * 1024
 _MAX_TOTAL_BYTES = 16 * 1024**3
+# An imported run is a checkpoint and its records, not a dataset: well under
+# the export ceiling, both for the archive and for what it unpacks to.
+_MAX_IMPORT_BYTES = 2 * 1024**3
 _CHUNK_SIZE = 1024 * 1024
 _EXTENSIONS = {
     "model": {".pt", ".pth", ".onnx", SAFETENSORS_SUFFIX},
@@ -327,4 +332,162 @@ def _verify_bundle_records(bundle: zipfile.ZipFile, records: dict[str, Any]) -> 
             raise ValueError("bundle integrity check failed: SHA256")
 
 
-__all__ = ["export_experiment_bundle", "verify_experiment_bundle"]
+def import_experiment_bundle(
+    bundle_path: Path | str,
+    models_dir: Path | str,
+    origin: dict[str, Any] | None = None,
+) -> Path:
+    """Unpack a verified bundle as a run of ``models_dir`` and return its folder.
+
+    The same import serves a bundle a Colab job brought back (ADR-163, phase 3)
+    and one the researcher exported elsewhere and downloaded by hand. The run is
+    assembled in a staging folder next to ``models_dir``, out of the History
+    scan, and moved into ``models_dir/<experiment>/<run folder>`` in one rename:
+    a failure leaves nothing half-written among the runs. Paths that run.json
+    recorded on the other machine are rewritten to the files that arrived;
+    anything the bundle did not carry is dropped rather than left pointing at a
+    folder that does not exist here.
+
+    Raises:
+        FileExistsError: A run with that experiment and folder is already here.
+        ValueError: The bundle is invalid, too large or not a run record.
+        OSError: Reading, writing or the final rename fails.
+    """
+    bundle_path = Path(bundle_path)
+    if bundle_path.stat().st_size > _MAX_IMPORT_BYTES:
+        raise ValueError(BUNDLE_SIZE_LIMIT_ERROR)
+    manifest = verify_experiment_bundle(bundle_path)
+    root = Path(models_dir).resolve()
+    with zipfile.ZipFile(bundle_path) as bundle:
+        if sum(info.file_size for info in bundle.infolist()) > _MAX_IMPORT_BYTES:
+            raise ValueError(BUNDLE_SIZE_LIMIT_ERROR)
+        data = _imported_run_record(bundle.read(RUN_FILENAME))
+        experiment: str = data["experiment"]
+        target: Path = root / experiment / _run_folder_name(data)
+        if target.exists():
+            raise FileExistsError(target)
+        root.parent.mkdir(parents=True, exist_ok=True)
+        staging = Path(tempfile.mkdtemp(prefix=".visionforge-import-", dir=root.parent))
+        try:
+            arrived = _extract_members(bundle, set(manifest["files"]), staging)
+            _rebase_run_record(data, target, arrived)
+            if origin is not None:
+                data["origin"] = origin
+            (staging / RUN_FILENAME).write_text(
+                json.dumps(data, indent=2), encoding="utf-8"
+            )
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if target.exists():
+                raise FileExistsError(target)
+            os.rename(staging, target)
+        except BaseException:
+            shutil.rmtree(staging, ignore_errors=True)
+            raise
+    return target
+
+
+def _plain_name(value: Any) -> bool:
+    """One path component a run folder may use: no separator, no dot file."""
+    return (
+        isinstance(value, str)
+        and _safe_name(value)
+        and "/" not in value
+        and not value.startswith(".")
+        and len(value) <= 200
+    )
+
+
+def _imported_run_record(raw: bytes) -> dict[str, Any]:
+    """The bundle's run.json, checked for what History needs to list it."""
+    if len(raw) > _MAX_RUN_BYTES:
+        raise ValueError("run.json exceeds size limit")
+    data = json.loads(raw)
+    if not isinstance(data, dict):
+        raise ValueError("run.json must contain an object")
+    config = data.get("config")
+    metrics = data.get("metrics")
+    if not (
+        _plain_name(data.get("experiment"))
+        and isinstance(data.get("status"), str)
+        and isinstance(data.get("timestamp"), str)
+        and isinstance(config, dict)
+        and isinstance(metrics, dict)
+        and isinstance(metrics.get("total_epochs"), int)
+    ):
+        raise ValueError("run.json is not a complete run record")
+    version = config.get("schema_version", 1)
+    if not isinstance(version, int) or version < 1:
+        raise ValueError("run.json has an invalid schema_version")
+    # Lazy import: core.experiment_bundle stays usable without the config models.
+    from visionforge.utils.config import check_schema_version
+
+    check_schema_version(version)
+    return data
+
+
+def _run_folder_name(data: dict[str, Any]) -> str:
+    """The run's own folder name when it recorded a usable one, else a new stamp."""
+    recorded = data.get("run_dir")
+    if isinstance(recorded, str):
+        name = PurePosixPath(recorded.replace("\\", "/")).name
+        if _plain_name(name):
+            return name
+    return datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+
+
+def _extract_members(
+    bundle: zipfile.ZipFile, names: set[str], staging: Path
+) -> set[str]:
+    """Copy every member but run.json and the manifest; names were verified safe."""
+    arrived: set[str] = set()
+    total = 0
+    for name in sorted(names - {RUN_FILENAME}):
+        destination = staging.joinpath(*name.split("/"))
+        if not destination.resolve().is_relative_to(staging.resolve()):
+            raise ValueError("unsafe bundle member path")
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        with bundle.open(name) as source, destination.open("xb") as target:
+            while chunk := source.read(_CHUNK_SIZE):
+                total += len(chunk)
+                if total > _MAX_IMPORT_BYTES:
+                    raise ValueError(BUNDLE_SIZE_LIMIT_ERROR)
+                target.write(chunk)
+        arrived.add(name)
+    return arrived
+
+
+def _rebase_run_record(data: dict[str, Any], target: Path, arrived: set[str]) -> None:
+    """Point run.json at the files as they now are on this machine."""
+    # The run may come from a Linux VM or a Windows machine: compare as text with
+    # one separator, so a drive path is understood on any OS.
+    origin_dir = str(data.get("run_dir", "")).replace("\\", "/").rstrip("/")
+    data["run_dir"] = str(target)
+
+    def local(value: Any) -> str | None:
+        if not isinstance(value, str):
+            return None
+        text = value.replace("\\", "/")
+        if origin_dir and text.startswith(origin_dir + "/"):
+            text = text[len(origin_dir) + 1 :]
+        elif text.startswith("/") or PureWindowsPath(value).is_absolute():
+            return None
+        if not _safe_name(text) or text not in arrived:
+            return None
+        return str(target.joinpath(*text.split("/")))
+
+    artifacts = data.get("artifacts")
+    if not isinstance(artifacts, dict):
+        data["artifacts"] = {"model": None, "graphics": [], "report": None}
+        return
+    for category, value in artifacts.items():
+        if isinstance(value, list):
+            artifacts[category] = [p for p in map(local, value) if p is not None]
+        elif value is not None:
+            artifacts[category] = local(value)
+
+
+__all__ = [
+    "export_experiment_bundle",
+    "import_experiment_bundle",
+    "verify_experiment_bundle",
+]

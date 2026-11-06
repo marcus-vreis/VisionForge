@@ -43,12 +43,14 @@ class QueuedJobInfo(BaseModel):
     submitted_at: str
     # Where the job stops when asked (ADR-111); None means it cannot be stopped
     # once running, and DELETE answers 409 for it.
-    stop_at: Literal["epoch", "trial", "fold", "model", "replicate", "phase"] | None = (
-        None
-    )
+    stop_at: (
+        Literal["epoch", "trial", "fold", "model", "replicate", "phase", "vm"] | None
+    ) = None
     # Whose folders the job writes into (ADR-114); "default" is the legacy layout.
     profile: str = "default"
     profile_name: str = "default"
+    # The queue that runs it (ADR-163, phase 4): "local" or "colab:<e-mail>".
+    lane: str = "local"
 
 
 class ProfileInfo(BaseModel):
@@ -81,11 +83,28 @@ class ProfileUpdateRequest(BaseModel):
     pronoun: Pronoun | None = None
 
 
+class QueueLane(BaseModel):
+    """One queue that runs jobs one at a time (ADR-163, phase 4).
+
+    ``lane`` is ``"local"`` for this machine, or ``"colab:<e-mail>"`` for a
+    Google account: every profile logged into that account shares it.
+    """
+
+    lane: str
+    active: QueuedJobInfo | None = None
+    pending: list[QueuedJobInfo] = []
+
+
 class QueueSnapshot(BaseModel):
-    """The active job and everything waiting behind it, in submission order."""
+    """The local queue's active job and pending list, and every queue in ``lanes``.
+
+    ``active`` and ``pending`` are the local queue's, as before the Colab queues;
+    ``lanes`` holds the local queue first, then one per Google account.
+    """
 
     active: QueuedJobInfo | None = None
     pending: list[QueuedJobInfo] = []
+    lanes: list[QueueLane] = []
 
 
 class ComparisonRequest(BaseModel):
@@ -298,6 +317,9 @@ class RunSummary(BaseModel):
     group_id: str | None = None
     # Set on the group itself, which is listed as one run.
     group: RunGroupBrief | None = None
+    # Where the run trained when not on this machine: "colab" for a run a Colab
+    # job brought back (ADR-163, phase 3). None for a local run.
+    origin: str | None = None
 
 
 class DatasetDetectRequest(BaseModel):
@@ -1013,3 +1035,82 @@ class CustomTaskActionResponse(BaseModel):
     key: str
     action: Literal["hidden", "unhidden", "deleted"]
     detail: str
+
+
+class ColabStatus(BaseModel):
+    """Where the Colab connection of one profile stands (ADR-163).
+
+    ``account`` is the e-mail of the Google account; the token is never sent.
+    """
+
+    pinned_version: str
+    installed_version: str | None
+    install_state: Literal["idle", "installing", "failed"]
+    install_error: str | None
+    logged_in: bool
+    account: str | None
+    login_pending: bool
+
+
+class ColabLoginStart(BaseModel):
+    """The page to open in the browser; Google shows the code to paste back."""
+
+    url: str
+
+
+class ColabLoginFinishRequest(BaseModel):
+    code: str = Field(min_length=1, max_length=512)
+
+
+class ColabUrlSource(BaseModel):
+    """A zip at a public http(s) URL, with the config's train/val/test folders inside."""
+
+    kind: Literal["url"] = "url"
+    url: str = Field(pattern=r"^https?://\S+$", max_length=2048)
+
+
+class ColabProviderSource(BaseModel):
+    """A public dataset the VM downloads itself; no credential leaves this machine."""
+
+    kind: Literal["provider"] = "provider"
+    provider: Literal["torchvision", "huggingface"]
+    dataset: str = Field(min_length=1, max_length=200)
+    limit: int | None = Field(default=None, ge=1)
+
+
+class ColabRunRequest(BaseModel):
+    """A classification experiment to train on Colab (ADR-163, phase 2).
+
+    ``config`` is an ``ExperimentConfig`` as JSON. It stays a plain dict because
+    the model checks that ``data.base_dir`` exists on this machine, and for a
+    Colab run the dataset lives elsewhere; the route validates the rest.
+    """
+
+    config: dict[str, Any]
+    source: ColabUrlSource | ColabProviderSource = Field(discriminator="kind")
+    accelerator: Literal["T4", "L4", "A100", "H100", "G4"] = "T4"
+
+
+class ColabSessionInfo(BaseModel):
+    """A runtime alive on the account; ``ours`` when VisionForge started it."""
+
+    name: str
+    hardware: str
+    ours: bool
+
+
+class ColabStopSessionRequest(BaseModel):
+    name: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+
+
+class ColabUsage(BaseModel):
+    """The account's compute units, as ``colab usage`` reports them.
+
+    ``hours_left`` is the balance over the current rate, so it is None while no
+    runtime is allocated (the rate is then 0).
+    """
+
+    balance: float | None
+    rate_per_hour: float | None
+    active_assignments: int | None
+    hours_left: float | None
