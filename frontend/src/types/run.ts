@@ -8,6 +8,8 @@ export interface RunStatus {
   queued?: number;
   /** 1-based place in the queue while this run is waiting. */
   position?: number;
+  /** Client-side only: the queue the waiting run is in (lib/queue-lanes.ts). */
+  lane?: string;
   /** Client-side only: the status poll is not reaching the server. The run's
    *  `status` stays what it last was, since the training goes on there (ADR-133). */
   connection?: "reconnecting" | "lost";
@@ -45,11 +47,25 @@ export interface QueuedJobInfo {
    *  layout. Absent from servers older than the profiles. */
   profile?: string;
   profile_name?: string;
+  /** The queue the job is in (ADR-163 phase 4): `local`, or `colab:<e-mail>`
+   *  per Google account. Absent from older servers, where it is `local`. */
+  lane?: string;
+}
+
+/** One queue of the server: a local job and a Colab one run at once, two of
+ *  one queue never (lib/queue-lanes.ts). */
+export interface QueueLane {
+  lane: string;
+  active: QueuedJobInfo | null;
+  pending: QueuedJobInfo[];
 }
 
 export interface QueueSnapshot {
+  /** The local queue, as before phase 4. */
   active: QueuedJobInfo | null;
   pending: QueuedJobInfo[];
+  /** Every queue, the local one included. Absent from older servers. */
+  lanes?: QueueLane[];
 }
 
 /** Bootstrap interval for one test metric (backend MetricCI, ADR-074). */

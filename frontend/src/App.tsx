@@ -52,6 +52,7 @@ import { HistoryOverlay } from "./components/HistoryOverlay";
 import { CustomAccentsContext } from "./lib/custom-accents";
 import { customAccentMap } from "./lib/task-accent";
 import { QueueOverlay } from "./components/QueueOverlay";
+import { queueTotals } from "./lib/queue-lanes";
 import { ParamPanel } from "./components/ParamPanel";
 import { DetectionPanel } from "./components/DetectionPanel";
 import { RegressionPanel } from "./components/RegressionPanel";
@@ -127,9 +128,10 @@ async function readQueueDepth(
   setRunning: (running: boolean) => void,
 ): Promise<void> {
   try {
-    const snap = await fetchQueue();
-    setDepth(snap.pending.length);
-    setRunning(snap.active !== null);
+    // Every queue counts: a Colab job waiting for its account is in line too.
+    const totals = queueTotals(await fetchQueue());
+    setDepth(totals.pending);
+    setRunning(totals.running);
   } catch {
     // keep the last known depth
   }

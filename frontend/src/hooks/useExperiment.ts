@@ -11,6 +11,7 @@ import {
   runSegmentation,
 } from "../api/client";
 import { useT } from "../i18n/useT";
+import { findQueuedJob } from "../lib/queue-lanes";
 import type { Dict } from "../i18n/pt";
 import { PREPROCESS_KIND_LABELS } from "../lib/preprocess-kinds";
 import { startStatusPoll } from "../lib/status-poll";
@@ -134,9 +135,10 @@ export function useExperiment(): ExperimentState {
   const stopPollRef = useRef<(() => void) | null>(null);
   const esRef = useRef<EventSource | null>(null);
   // Which run this hook is following, and whether it has been seen executing.
-  // /experiment/status describes whatever is *active*, so with a queue (ADR-075)
-  // a submission that is still waiting would otherwise read another job's
-  // completion as its own and fetch the wrong result.
+  // The status poll names it (`?run_id=`): with a local and a Colab job running
+  // at once (ADR-163), the job started last is not necessarily this one. A
+  // submission still waiting reads as idle and must not take another job's
+  // completion for its own.
   const myRunRef = useRef<string | null>(null);
   const startedRef = useRef(false);
   // How many events of the followed run have arrived: a stream that reopens asks
@@ -217,16 +219,17 @@ export function useExperiment(): ExperimentState {
             await collectResult(mine);
             return;
           }
-          // Still waiting behind someone else — show where in line.
+          // Still waiting behind someone else — show where in line, in its own
+          // queue: a Colab job waits for its account, not for the local GPU.
           try {
-            const q = await fetchQueue();
-            const index = q.pending.findIndex((p) => p.run_id === mine);
+            const found = findQueuedJob(await fetchQueue(), mine);
             setStatus({
               status: "queued",
               run_id: mine,
               error: null,
-              queued: q.pending.length,
-              position: index >= 0 ? index + 1 : undefined,
+              queued: found?.waiting,
+              position: found?.position,
+              lane: found?.lane,
             });
           } catch {
             // Queue endpoint hiccup — keep waiting rather than failing the run.

@@ -1823,10 +1823,15 @@ export const en: Dict = {
     kicker: "// queue",
     title: "Run queue",
     description:
-      "One GPU, one run at a time. Submit as many as you like — they run on their own, in the order they were submitted.",
+      "One run at a time in each queue: this machine's and each Colab account's, which run side by side. Submit as many as you like — they run on their own, in the order they were submitted.",
     emptyTitle: "The GPU is free and nothing is waiting.",
     emptyHint: "Runs you submit while another is training wait here.",
     position: (n: number) => ordinal(n),
+    laneLocal: "Local · this machine",
+    laneColab: (account: string) => `Colab · ${account}`,
+    laneEmpty: "nothing here",
+    originLocal: "local",
+    originColab: "Colab",
     running: "running",
     waiting: (waited: string) => `waiting ${waited}`,
     watch: "🔬 view training",
@@ -1861,6 +1866,8 @@ export const en: Dict = {
       `${position ? `waiting for the GPU — ${ordinal(position)} in line` : "waiting for the GPU"}${
         typeof queued === "number" && queued > 1 ? ` · ${queued} runs waiting` : ""
       }. The run starts automatically when its turn comes.`,
+    queuedColabNote: (account: string, position: number | undefined) =>
+      `${position ? `waiting for ${account}'s Colab — ${ordinal(position)} in line` : `waiting for ${account}'s Colab`}. The run starts automatically when that account's previous run ends.`,
     // The status poll is not reaching the server; the run goes on there (ADR-133).
     reconnecting: "reconnecting…",
     reconnectingNote: "The server did not answer. Trying again — the training goes on on the server.",

@@ -2017,10 +2017,17 @@ export const pt = {
     kicker: "// fila",
     title: "Treinos na fila",
     description:
-      "Uma GPU, um treino por vez. Submeta quantos quiser — eles rodam em ordem de envio, sozinhos.",
+      "Um treino por vez em cada fila: a desta máquina e a de cada conta do Colab, que rodam ao mesmo tempo. Submeta quantos quiser — eles rodam em ordem de envio, sozinhos.",
     emptyTitle: "A GPU está livre e nada está esperando.",
     emptyHint: "Envie um treino e, se enviar outro em seguida, ele aparece aqui.",
     position: (n: number) => `${n}º`,
+    // One section per queue (ADR-163): this machine's and one per Colab account.
+    laneLocal: "Local · esta máquina",
+    laneColab: (account: string) => `Colab · ${account}`,
+    laneEmpty: "nada aqui",
+    // A job's origin, in its row.
+    originLocal: "local",
+    originColab: "Colab",
     running: "em execução",
     waiting: (waited: string) => `esperando ${waited}`,
     watch: "🔬 ver treino",
@@ -2067,6 +2074,10 @@ export const pt = {
       `${position ? `aguardando a GPU — ${position}º na fila` : "aguardando a GPU"}${
         typeof queued === "number" && queued > 1 ? ` · ${queued} submissões esperando` : ""
       }. O treino começa sozinho quando chegar a vez.`,
+    // The same for a job in a Colab queue, which waits for its Google account's
+    // previous job and not for this machine's GPU (ADR-163).
+    queuedColabNote: (account: string, position: number | undefined) =>
+      `${position ? `aguardando o Colab de ${account} — ${position}º na fila` : `aguardando o Colab de ${account}`}. O treino começa sozinho quando o anterior dessa conta terminar.`,
     // The status poll is not reaching the server; the run goes on there (ADR-133).
     reconnecting: "reconectando…",
     reconnectingNote: "O servidor não respondeu. Tentando de novo — o treino continua no servidor.",
