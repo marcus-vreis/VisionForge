@@ -26,6 +26,12 @@ import type {
   MergePreview,
   MergeResult,
 } from "../lib/dataset-merge";
+import type {
+  ResplitBody,
+  ResplitPlan,
+  ResplitPreview,
+  ResplitResult,
+} from "../lib/dataset-resplit";
 import {
   activeProfileSlug,
   profileHeaders,
@@ -1612,6 +1618,55 @@ export async function mergeApply(
 
 export async function mergeCancel(jobId: string): Promise<void> {
   await request<unknown>(`${MERGE}/${encodeURIComponent(jobId)}/cancel`, {
+    method: "POST",
+  });
+}
+
+// ── re-splitting a dataset into a new one (ADR-168) ─────────────────────────
+
+const RESPLIT = "/explorer/resplit";
+
+export async function resplitPreview(
+  form: ExplorerForm,
+  groupCsv: string,
+): Promise<IncorporateJob<ResplitPreview>> {
+  const csv = groupCsv.trim();
+  return request<IncorporateJob<ResplitPreview>>(`${RESPLIT}/preview`, {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ ...explorerBody(form), ...(csv ? { group_csv: csv } : {}) }),
+  });
+}
+
+export async function resplitStatus<R>(jobId: string): Promise<IncorporateJob<R>> {
+  return request<IncorporateJob<R>>(`${RESPLIT}/${encodeURIComponent(jobId)}`);
+}
+
+export async function resplitPlan(jobId: string, body: ResplitBody): Promise<ResplitPlan> {
+  return request<ResplitPlan>(`${RESPLIT}/${encodeURIComponent(jobId)}/plan`, {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(body),
+  });
+}
+
+export async function resplitApply(
+  jobId: string,
+  body: ResplitBody,
+  destName: string,
+): Promise<IncorporateJob<ResplitResult>> {
+  return request<IncorporateJob<ResplitResult>>(
+    `${RESPLIT}/${encodeURIComponent(jobId)}/apply`,
+    {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ ...body, dest_name: destName.trim() }),
+    },
+  );
+}
+
+export async function resplitCancel(jobId: string): Promise<void> {
+  await request<unknown>(`${RESPLIT}/${encodeURIComponent(jobId)}/cancel`, {
     method: "POST",
   });
 }

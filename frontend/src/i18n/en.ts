@@ -517,6 +517,87 @@ export const en: Dict = {
       `${linked} files hardlinked, ${copied} copied`,
     openResult: "Open in the explorer",
   },
+  datasetResplit: {
+    open: "Re-split",
+    close: "Close",
+    intro:
+      "Creates a new dataset next to the original, which does not change. The train and validation images are pooled and redistributed by the chosen ratio; the test split stays as it is, so results remain comparable with earlier ones.",
+    groupTitle: "1. Groups (optional)",
+    groupHelp:
+      "A CSV with the columns path,group, with path relative to the dataset folder. Images of the same group always go to the same split. Images the file does not list are a group each.",
+    groupFile: "Group file",
+    groupPlaceholder: "e.g. C:/data/groups.csv (empty: no groups)",
+    analyze: "Analyze",
+    analyzing: (done: number, total: number) => `Reading and computing: ${done} of ${total}`,
+    cancel: "Cancel",
+    cancelling: "Canceling…",
+    cancelled: "Canceled. No folder was created.",
+    failed: (reason: string) => `It did not work: ${reason}`,
+    previewTitle: "2. Options and preview",
+    found: (n: number) => `Images: ${n}`,
+    groupsInfo: (groups: number, ungrouped: number) =>
+      `${groups} ${groups === 1 ? "group" : "groups"}; ${ungrouped} ${ungrouped === 1 ? "image" : "images"} not in the file`,
+    unknownEntries: (n: number) =>
+      n === 1
+        ? "1 row of the file is not an image of the dataset (ignored)"
+        : `${n} rows of the file are not images of the dataset (ignored)`,
+    lockTest: "Keep the test split as it is",
+    lockNoTest: "The dataset has no test split",
+    lockOnHelp: "The test split does not change; only train and validation are redistributed.",
+    lockOffHelp:
+      "Every split is pooled and redistributed. Results will not be comparable with runs that used the current test split.",
+    byGroup: "Split by group",
+    ratioCustom: "Choose the ratio",
+    ratioSame: "Keeps the current proportion of the splits being redistributed.",
+    ratioPercent: (split: string) => `${split} (%)`,
+    ratioHelp:
+      "Zero removes the split from the result. A split the dataset lacks is only created if you give it a value above zero.",
+    ratioInvalid: "Use numbers greater than or equal to zero, with at least one above zero.",
+    seed: "Seed",
+    seedHint: "Same seed, same split. It is recorded in the new dataset.",
+    seedInvalid: "Use an integer greater than or equal to zero.",
+    keptLine: (n: number) => `In the result: ${n} ${n === 1 ? "image" : "images"}`,
+    movedLine: (n: number) => `Change split: ${n}`,
+    droppedLine: (n: number) => `Left out: ${n}`,
+    tableTitle: "Images per class and split (before → after)",
+    lockedMark: "(locked)",
+    ratiosTitle: "Requested and achieved ratio",
+    ratioLine: (split: string, requested: string, achieved: string) =>
+      `${split}: requested ${requested}%, achieved ${achieved}%`,
+    duplicatesLine: (sets: number, extras: number) =>
+      `Exact copies kept together: ${sets} ${sets === 1 ? "set" : "sets"} (${extras} extra ${extras === 1 ? "copy" : "copies"}).`,
+    duplicatesLeak: (n: number) =>
+      n === 1
+        ? "One of them sat in different splits: leakage avoided."
+        : `${n} of them sat in different splits: leakage avoided.`,
+    warnNewSplit: (split: string) => `${split} did not exist and will be created.`,
+    warnEmptySplit: (split: string) => `${split} would get no images.`,
+    warnSplitRemoved: (split: string) => `${split} no longer exists in the result.`,
+    warnSplitEmptyResult: (split: string) => `Warning: ${split} ends up with no images.`,
+    warnClassMissing: (cls: string, split: string) =>
+      `Class ${cls} has no images in ${split}.`,
+    droppedTitle: (n: number) => `Left out (${n})`,
+    droppedHelp:
+      "They would leak into training: they are copies of locked test images or belong to a group that has an image in the test split.",
+    reasons: {
+      duplicate_of_test: "exact copy of a test image",
+      group_in_test: "group with an image in the test split",
+    } as Record<string, string>,
+    reasonCount: (reason: string, n: number) => `${reason}: ${n}`,
+    moreNotShown: (n: number) => `${n} more not shown`,
+    destTitle: "3. Destination folder",
+    destName: "Name of the new folder",
+    destHint: "It is created next to the original dataset.",
+    destInvalid: "Invalid folder name.",
+    apply: "Create new dataset",
+    applying: (done: number, total: number) => `Writing: ${done} of ${total}`,
+    doneTitle: "Dataset created",
+    done: (n: number, moved: number, path: string) =>
+      `${n} ${n === 1 ? "image" : "images"} in ${path}; ${moved} changed split`,
+    linkedCopied: (linked: number, copied: number) =>
+      `${linked} ${linked === 1 ? "file" : "files"} hardlinked, ${copied} copied`,
+    openResult: "Open in the explorer",
+  },
   lightbox: {
     closeTitle: "Close (Esc)",
   },

@@ -37,6 +37,7 @@ import { Segmented, SelectField, TextField } from "./controls";
 import { button, card, ghostButton, mono, sectionLabel } from "./datasetExplorerStyles";
 import { IncorporatePanel } from "./IncorporatePanel";
 import { MergePanel } from "./MergePanel";
+import { ResplitPanel } from "./ResplitPanel";
 
 function BarList({ bars }: { bars: Bar[] }) {
   return (
@@ -590,6 +591,7 @@ export function DatasetExplorer() {
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-start" }}>
                 <IncorporatePanel form={opened} onOpenResult={openResult} />
                 <MergePanel form={opened} onOpenResult={openResult} />
+                <ResplitPanel form={opened} onOpenResult={openResult} />
               </div>
               <Gallery form={opened} summary={summary} />
               <ScanPanel form={opened} />
