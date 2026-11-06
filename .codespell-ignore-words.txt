@@ -69,3 +69,4 @@ comandos
 prefere
 foto
 afterall
+meu
