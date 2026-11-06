@@ -6807,7 +6807,7 @@ other pictures (boxes, masks, a scatter, the anomaly map) and are left for later
 ## ADR-163 — Training on Google Colab through the official CLI
 
 **Date:** 2026-11-05
-**Status:** Accepted — phases 1 (connection and login), 2 (remote training, classification) and 3 (importing the result) implemented; phase 4 (parallel queues) implemented in the backend, its GUI in the next PR
+**Status:** Accepted — phases 1 (connection and login), 2 (remote training, classification), 3 (importing the result) and 4 (parallel queues) implemented
 **Extends:** ADR-075 (the run queue), ADR-114 (profiles), ADR-160 (the live Results tab)
 
 **Context:** many users have no local GPU, and Colab has one. The 2026-11-04
@@ -6903,6 +6903,12 @@ The numbers and the code reading behind this ADR are in the design doc's
      default to the job started last.
    - `GET /api/queue` keeps the local lane's `active` and `pending` and adds
      `lanes`, and every job carries its `lane`.
+   - As built (GUI): the queue sheet has one section per lane, this machine's
+     and the connected account's Colab one (shown empty before its first job),
+     and each row says where its job runs. Stop and watch act on their row's
+     job. The bottom bar's badge counts every lane, the training sheet reads its
+     run's stop point in whichever lane runs it, and a Colab job still waiting
+     says it waits for its account rather than for the GPU.
 
 **Consequence:**
 - A user without a GPU trains from the same GUI, with the same live tab, on

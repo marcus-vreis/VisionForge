@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ApiError, cancelQueuedRun, fetchQueue } from "../api/client";
+import { findQueuedJob, isColabLane, laneAccount } from "../lib/queue-lanes";
 import type { Dict } from "../i18n/pt";
 import { useT } from "../i18n/useT";
 import {
@@ -237,7 +238,9 @@ export function TrainingOverlay({
     const read = () => {
       fetchQueue()
         .then((snap) => {
-          if (alive && snap.active?.run_id === runId) setActiveJob(snap.active);
+          // In whichever queue runs it: the local one or its Colab account's.
+          const found = findQueuedJob(snap, runId);
+          if (alive && found?.running) setActiveJob(found.job);
         })
         .catch(() => {
           // Unreadable queue: the mode falls back to what this sheet knows of
@@ -496,7 +499,12 @@ export function TrainingOverlay({
                   color: "var(--vf-text-muted)",
                 }}
               >
-                {t.trainingOverlay.queuedNote(status.position, status.queued)}
+                {status.lane !== undefined && isColabLane(status.lane)
+                  ? t.trainingOverlay.queuedColabNote(
+                      laneAccount(status.lane) ?? "",
+                      status.position,
+                    )
+                  : t.trainingOverlay.queuedNote(status.position, status.queued)}
               </div>
             )}
             {!isFinished && status.connection && (

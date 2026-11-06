@@ -434,4 +434,21 @@ ficou assim.
   - Os estados terminados ficam no máximo 50; os que estão rodando nunca saem.
 - `GET /api/queue` mantém `active` e `pending` da fila local e ganha `lanes`:
   a local primeiro, depois uma por conta. Cada job leva o campo `lane`.
-- A GUI das duas filas fica para o PR seguinte.
+- A GUI das duas filas veio no PR seguinte; com ela a fase 4 está concluída.
+
+**Fase 4, GUI das filas (2026-11-05):**
+- A folha da fila (`QueueOverlay`) tem uma seção por fila: "Local · esta
+  máquina" e "Colab · <e-mail>". A fila da conta conectada aparece vazia antes
+  do primeiro job, que é quando o servidor a cria. Com só a fila local, a
+  folha fica como antes, sem títulos.
+- Cada linha diz a origem do job (`local` ou `Colab`). Parar, remover e
+  acompanhar agem só no job da própria linha.
+- `lib/queue-lanes.ts` lê as filas, com fallback para servidor sem `lanes`. Com
+  ela, o badge da barra conta os jobs esperando em todas as filas, e o servidor
+  conta como ocupado quando qualquer fila roda. O hook mostra a posição do job
+  na fila dele. A folha de treino acha o `stop_at` do seu run em qualquer fila.
+- A folha de treino segue um `run_id` (status e stream por `run_id`, desde o
+  backend). Um job enviado com outro rodando e que já começa a rodar, como um
+  do Colab ao lado de um local, passa a ser o acompanhado. O outro se reabre
+  pela fila, em "ver treino".
+- Um job do Colab esperando diz que aguarda a conta, não a GPU.
