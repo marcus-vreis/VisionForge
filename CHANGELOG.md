@@ -13,6 +13,22 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ## [Unreleased]
 
+### Added
+
+- **Explorador de datasets** (fase 1 da issue #117, ADR-164): uma aba
+  "Explorar" no botão **Datasets**, só leitura, para classificação (pastas por
+  classe) e detecção (YOLO).
+  - **Distribuição:** imagens por classe e split; na detecção, caixas por
+    classe e imagens sem caixas.
+  - **Galeria:** paginada, com filtro por split e classe, e miniaturas
+    reduzidas no servidor (com as caixas desenhadas na detecção).
+  - **Varredura de integridade:** em segundo plano, com progresso e botão de
+    cancelar. Acha imagens que não abrem, cópias exatas (SHA-256), a mesma
+    imagem em splits diferentes e mede tamanhos e proporções. O limite padrão
+    é de 20.000 imagens; acima dele a varredura lê uma amostra e o relatório
+    diz isso.
+  - **API:** `/api/explorer/summary`, `/images`, `/thumb` e `/scan`.
+
 ## [0.21.0] — 2026-11-05
 
 ### Added
