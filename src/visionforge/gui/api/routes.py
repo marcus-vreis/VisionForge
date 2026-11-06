@@ -122,6 +122,7 @@ from visionforge.gui.api.profiles import (
     resolve_profile,
 )
 from visionforge.gui.api.profiles_routes import build_profiles_router
+from visionforge.gui.api.resplit_routes import router as resplit_router
 from visionforge.gui.api.run_events import RunEventLog
 from visionforge.gui.api.run_history import (
     CUSTOM_TASK_PREFIX,
@@ -505,6 +506,8 @@ router.include_router(explorer_router)
 router.include_router(incorporate_router)
 # Merging two datasets into a new one (ADR-167).
 router.include_router(merge_router)
+# Re-splitting a dataset into a new one (ADR-168).
+router.include_router(resplit_router)
 # History list, detail and delete live in runs_routes.py (ADR-132); the lookups
 # and the running job's state stay owned here and are read per request.
 router.include_router(

@@ -323,6 +323,23 @@
       }
     }
   },
+  "GET /api/explorer/resplit/{job_id}": {
+    "operationId": "resplit_status_api_explorer_resplit__job_id__get",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "path:job_id:required"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "404": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
   "GET /api/explorer/scan/{job_id}": {
     "operationId": "explorer_scan_status_api_explorer_scan__job_id__get",
     "parameters": [
@@ -1521,6 +1538,85 @@
     ],
     "requestBody": {
       "application/json": "MergePlanRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "400": {},
+      "404": {},
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/explorer/resplit/preview": {
+    "operationId": "resplit_preview_api_explorer_resplit_preview_post",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {
+      "application/json": "ResplitPreviewRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "400": {},
+      "403": {},
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/explorer/resplit/{job_id}/apply": {
+    "operationId": "resplit_apply_api_explorer_resplit__job_id__apply_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "path:job_id:required"
+    ],
+    "requestBody": {
+      "application/json": "ResplitApplyRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "400": {},
+      "404": {},
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/explorer/resplit/{job_id}/cancel": {
+    "operationId": "resplit_cancel_api_explorer_resplit__job_id__cancel_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "path:job_id:required"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "404": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/explorer/resplit/{job_id}/plan": {
+    "operationId": "resplit_plan_api_explorer_resplit__job_id__plan_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "path:job_id:required"
+    ],
+    "requestBody": {
+      "application/json": "ResplitPlanRequest"
     },
     "responses": {
       "200": {

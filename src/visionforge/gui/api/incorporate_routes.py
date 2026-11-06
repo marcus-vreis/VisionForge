@@ -24,10 +24,10 @@ from visionforge.core.dataset_incorporate import (
 from visionforge.gui.api.datasets_routes import _is_inside_allowed_root
 from visionforge.gui.api.explorer_routes import ExplorerRequest, _split_dirs
 from visionforge.gui.api.http_responses import (
-    BAD_REQUEST,
-    CONFLICT,
-    FORBIDDEN,
-    NOT_FOUND,
+    BAD_REQUEST_TEXT,
+    CONFLICT_TEXT,
+    FORBIDDEN_TEXT,
+    NOT_FOUND_TEXT,
 )
 from visionforge.gui.api.incorporate_jobs import (
     IncorporateJob,
@@ -81,7 +81,14 @@ def _ready_job(job_id: str) -> IncorporateJob:
     return job
 
 
-@router.post("/preview", responses={**BAD_REQUEST, **FORBIDDEN, **CONFLICT})
+@router.post(
+    "/preview",
+    responses={
+        400: {"description": BAD_REQUEST_TEXT},
+        403: {"description": FORBIDDEN_TEXT},
+        409: {"description": CONFLICT_TEXT},
+    },
+)
 async def incorporate_preview(req: PreviewRequest) -> dict[str, Any]:
     """Start reading the new folder; poll ``/{job_id}`` for the preview."""
     base = Path(req.base_dir)
@@ -107,7 +114,7 @@ async def incorporate_preview(req: PreviewRequest) -> dict[str, Any]:
     return job.snapshot()
 
 
-@router.get("/{job_id}", responses=NOT_FOUND)
+@router.get("/{job_id}", responses={404: {"description": NOT_FOUND_TEXT}})
 async def incorporate_status(job_id: str) -> dict[str, Any]:
     """Progress, and the preview or the result once the job has finished."""
     job = _JOBS.get(job_id)
@@ -116,7 +123,14 @@ async def incorporate_status(job_id: str) -> dict[str, Any]:
     return job.snapshot()
 
 
-@router.post("/{job_id}/plan", responses={**BAD_REQUEST, **NOT_FOUND, **CONFLICT})
+@router.post(
+    "/{job_id}/plan",
+    responses={
+        400: {"description": BAD_REQUEST_TEXT},
+        404: {"description": NOT_FOUND_TEXT},
+        409: {"description": CONFLICT_TEXT},
+    },
+)
 async def incorporate_plan(job_id: str, req: PlanRequest) -> dict[str, Any]:
     """Counts per class and split for the chosen classes, ratios and seed."""
     job = _ready_job(job_id)
@@ -133,7 +147,14 @@ async def incorporate_plan(job_id: str, req: PlanRequest) -> dict[str, Any]:
     return plan.summary()
 
 
-@router.post("/{job_id}/apply", responses={**BAD_REQUEST, **NOT_FOUND, **CONFLICT})
+@router.post(
+    "/{job_id}/apply",
+    responses={
+        400: {"description": BAD_REQUEST_TEXT},
+        404: {"description": NOT_FOUND_TEXT},
+        409: {"description": CONFLICT_TEXT},
+    },
+)
 async def incorporate_apply(job_id: str, req: ApplyRequest) -> dict[str, Any]:
     """Start writing the new dataset; poll ``/{job_id}`` of the returned job."""
     job = _ready_job(job_id)
@@ -160,7 +181,7 @@ async def incorporate_apply(job_id: str, req: ApplyRequest) -> dict[str, Any]:
     return started.snapshot()
 
 
-@router.post("/{job_id}/cancel", responses=NOT_FOUND)
+@router.post("/{job_id}/cancel", responses={404: {"description": NOT_FOUND_TEXT}})
 async def incorporate_cancel(job_id: str) -> dict[str, bool]:
     """Ask a running job to stop. An apply removes its temporary folder."""
     if not _JOBS.cancel(job_id):
