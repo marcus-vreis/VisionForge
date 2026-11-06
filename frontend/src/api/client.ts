@@ -8,6 +8,12 @@ import {
 import { pt, type Dict } from "../i18n/pt";
 import type { TaskDescriptor } from "../lib/custom-tasks";
 import {
+  explorerBody,
+  type ExplorerForm,
+  type ExplorerSummary,
+  type ScanJob,
+} from "../lib/dataset-explorer";
+import {
   activeProfileSlug,
   profileHeaders,
   type ProfileInfo,
@@ -1410,4 +1416,73 @@ export async function fetchServerVersion(): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+// ── dataset explorer (ADR-164) ───────────────────────────────────────────────
+
+const JSON_HEADERS = { "Content-Type": "application/json" };
+
+export async function explorerSummary(
+  form: ExplorerForm,
+): Promise<ExplorerSummary> {
+  return request<ExplorerSummary>("/explorer/summary", {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(explorerBody(form)),
+  });
+}
+
+export interface ExplorerImageItem {
+  split: string;
+  path: string;
+  label_path: string | null;
+  classes: string[];
+  boxes: number;
+}
+
+export interface ExplorerImagesPage {
+  total: number;
+  offset: number;
+  limit: number;
+  items: ExplorerImageItem[];
+}
+
+export async function explorerImages(
+  form: ExplorerForm,
+  filter: { split: string | null; className: string | null },
+  offset: number,
+  limit: number,
+): Promise<ExplorerImagesPage> {
+  return request<ExplorerImagesPage>("/explorer/images", {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify({
+      ...explorerBody(form),
+      split: filter.split,
+      class_name: filter.className,
+      offset,
+      limit,
+    }),
+  });
+}
+
+export async function explorerScanStart(
+  form: ExplorerForm,
+  maxImages: number,
+): Promise<ScanJob> {
+  return request<ScanJob>("/explorer/scan", {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ ...explorerBody(form), max_images: maxImages }),
+  });
+}
+
+export async function explorerScanStatus(jobId: string): Promise<ScanJob> {
+  return request<ScanJob>(`/explorer/scan/${encodeURIComponent(jobId)}`);
+}
+
+export async function explorerScanCancel(jobId: string): Promise<void> {
+  await request<unknown>(`/explorer/scan/${encodeURIComponent(jobId)}/cancel`, {
+    method: "POST",
+  });
 }
