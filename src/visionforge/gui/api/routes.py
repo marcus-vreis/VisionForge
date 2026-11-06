@@ -97,6 +97,7 @@ from visionforge.gui.api.datasets_routes import router as datasets_router
 from visionforge.gui.api.detection_export import export_detection_run
 from visionforge.gui.api.detection_testing import evaluate_detection_run
 from visionforge.gui.api.evidence_routes import EvidenceExports, build_evidence_router
+from visionforge.gui.api.explorer_routes import router as explorer_router
 from visionforge.gui.api.folder_opener import (
     FolderOpenError,
     is_loopback_host,
@@ -496,6 +497,8 @@ router.include_router(
 router.include_router(build_profiles_router(lambda: (_PROFILES_DIR, _MODELS_DIR)))
 # Dataset, picker and credential endpoints live in datasets_routes.py (ADR-132).
 router.include_router(datasets_router)
+# The read-only dataset explorer (ADR-165).
+router.include_router(explorer_router)
 # History list, detail and delete live in runs_routes.py (ADR-132); the lookups
 # and the running job's state stay owned here and are read per request.
 router.include_router(

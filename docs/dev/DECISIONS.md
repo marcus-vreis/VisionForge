@@ -7023,3 +7023,42 @@ opening another tab to allow the Drive is fine.
   reasons: app verification, support, and a token of our own.
 - *Showing the CLI in a terminal for the Enter.* It was the spike's setup, and
   Marcus ruled it out for users.
+
+## ADR-165 — A read-only dataset explorer in the Datasets surface
+
+**Date:** 2026-11-05
+**Status:** Accepted — phase 1 of issue #117 (classification and detection, read only) implemented
+**Extends:** ADR-132 (routes split by area), ADR-153 (dataset inspection)
+
+**Context:** the Datasets button of the bottom bar only downloaded data and kept credentials. Before a training run the researcher still had no way to look at a dataset: the stats probes (`/dataset/stats`, `/<task>/dataset/stats`) return counts and a few sample crops, and `audit_dataset` (ADR-153) is a CLI-shaped report over a whole tree with no progress and no way to stop it. Issue #117 proposes a data-tools surface in phases; this is phase 1, the explorer. Editing, merging and re-splitting are not part of it, and so the dataset fingerprint (ADR-129), the filtered datasets (ADR-130) and the group manifest (ADR-150) are not touched here: they matter once a tool creates a new dataset version, which is where the issue recommends a new folder or a manifest so that old `run.json` fingerprints stay valid.
+
+**Decision:**
+
+- **Where.** A second tab, "Explore", in the existing `DatasetsOverlay`, next to the download tab. It is not a new tab beside the tasks: a dataset is not owned by a task (ADR-132's reason for the overlay).
+- **Scope.** Classification (ImageFolder, with the same configurable `train`/`val`/`test` folder names the task panels use) and detection (YOLO, with the split resolution the trainer uses, `resolve_yolo_split`). Class names for YOLO come from `classes.txt`/`names.txt` and, new here, from the `names` of `data.yaml`. The explorer never writes inside the dataset.
+- **Two passes with different costs.**
+  - `core/dataset_explorer.build_index` only lists directories and reads label files. It feeds the per-class and per-split counts, the boxes per class and the gallery, and is cheap enough to rerun on every open or refresh.
+  - `scan_integrity` opens every image: it verifies it (Pillow `verify`), hashes the bytes (SHA-256, the same as `audit_dataset`, by reusing its `_verified_image_digest`), and reads the size. From that it reports images that do not open, exact copies, the same content in more than one split (leakage) and the size and aspect-ratio distributions. A copy whose copies carry different class labels is flagged as a label conflict.
+- **The scan cannot hang the server.** It runs in a worker thread (`gui/api/explorer_jobs.ScanJobs`) with progress and the existing `CancellationToken` (`core/cancellation.py`). One scan at a time (409 otherwise): it is disk-bound. A hard limit (`max_images`, 20,000 by default, 500,000 at most): above it the scan reads an evenly spaced sample, and the report says `sampled` and tells the user that a copy or leak found is real while finding none proves nothing. Cancelling returns the partial report, marked `cancelled`.
+- **No full-resolution image reaches the page.** `GET /api/explorer/thumb` resizes on the server (32–512 px, JPEG), and draws the YOLO boxes for detection. It takes the dataset root and a path relative to it; the root must be one the explorer already opened (the allow-list of `/dataset/file`), and the relative path may not contain `..` or leave the root through a link.
+- **The gallery is paginated** (48 per page, 200 at most) and filtered by split and class on the server from an in-memory index (last four datasets). A detection class filter matches the images that have a box of that class.
+- **Where the code lives.** Logic in `core/dataset_explorer.py` (no `gui` import); the thread registry in `gui/api/explorer_jobs.py`; the routes in `gui/api/explorer_routes.py` (`/api/explorer/{summary,images,thumb,scan}`); on the page, the pure helpers in `lib/dataset-explorer.ts` and the view in `components/DatasetExplorer.tsx`. All texts are in the dictionaries (pt-BR and English).
+
+**Consequences:**
+
+- The OpenAPI snapshot gains the six explorer operations; no existing endpoint changed.
+- The scan's hash is the same SHA-256 as the audit's, so the two reports agree on what an exact copy is. Visual near-duplicates are not detected (as in the audit).
+- The index of a big dataset is held in memory per opened dataset (a few hundred bytes per image). The cache keeps four.
+- `datasets_routes._read_yolo_class_names` still reads only the `.txt` files. The explorer's reader also understands `data.yaml`; folding the two into one is left for later so this change does not touch the stats probes.
+
+**Risks:**
+
+- A sampled scan can give the false impression of a clean dataset. The report and the page both say that a sample proves nothing about absence, and the default limit is high enough for the usual datasets to be scanned whole.
+- Thumbnails of very large images still decode them (JPEG is decoded at reduced scale, other formats are not). Pillow's decompression-bomb guard applies and a file that fails answers 422, shown as a broken tile.
+
+**Alternatives considered:**
+
+- *Reuse `audit_dataset` for the scan.* It walks the tree recursively with its own rules, has no progress, no cancel and no per-class view, and returns one big report at the end. Its digest function is reused; its walk is not.
+- *A scan inside the request.* Simple, but a dataset with tens of thousands of images would hold a worker for minutes and give the page nothing to show.
+- *Serving the original files for the gallery (`/dataset/file`).* No resizing, so a page of 48 photographs could move hundreds of megabytes.
+- *A new tab beside the tasks.* Rejected in issue #117's discussion: the explorer is not a task.
