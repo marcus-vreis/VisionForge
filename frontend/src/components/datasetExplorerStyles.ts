@@ -47,3 +47,5 @@ export const ghostButton: CSSProperties = {
   border: "1px solid var(--vf-panel-stroke)",
   color: "var(--vf-text-dim)",
 };
+
+export const danger: CSSProperties = { ...mono, color: "var(--vf-danger, #f87171)" };
