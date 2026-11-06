@@ -12,8 +12,8 @@ url: "https://github.com/marcus-vreis/VisionForge"
 license: MIT
 # Concept DOI: always resolves to the latest version archived on Zenodo.
 doi: 10.5281/zenodo.23425765
-version: 0.20.2
-date-released: 2026-11-03
+version: 0.21.0
+date-released: 2026-11-05
 keywords:
   - computer-vision
   - deep-learning

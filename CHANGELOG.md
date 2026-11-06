@@ -13,6 +13,8 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ## [Unreleased]
 
+## [0.21.0] — 2026-11-05
+
 ### Added
 
 - **Filas paralelas** (fase 4 do ADR-163): um job local e um do
@@ -83,6 +85,12 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 - **Progresso do treino parado**: numa época que passa de 2 s, o stream manda um
   evento `batch` e a barra avança dentro da época, em todas as tarefas. Antes ela
   só andava no fim de cada época e parecia travada em épocas longas.
+- **Botão Treinar em tela estreita**: até 640 px a barra inferior quebra linha e
+  o Treinar ocupa a linha de baixo inteira. O espaço sob a etapa acompanha a altura
+  real da barra, então o fim do formulário não fica escondido atrás dela.
+- **Importar YAML na detecção**: os passos de pré-processamento (`data.preprocessing`)
+  do arquivo importado chegam ao treino. Antes eram descartados sem aviso e o
+  treino saía com `steps: []`.
 
 ## [0.20.2] — 2026-11-03
 
