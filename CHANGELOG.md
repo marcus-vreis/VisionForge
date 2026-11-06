@@ -15,6 +15,33 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Added
 
+- **Refazer divisão** (ADR-168, fase 4a da issue #117): na aba Explorar, o botão
+  "Refazer divisão" cria um dataset novo, numa pasta irmã do aberto, com as
+  imagens de treino e validação redistribuídas. O original não é alterado.
+  - **Teste travado:** por padrão o teste fica exatamente como está (mesmos
+    caminhos e bytes), para os resultados continuarem comparáveis com runs
+    antigas. Desmarcar a opção junta todas as divisões.
+  - **Proporção e seed:** a atual das divisões redistribuídas ou a escolhida;
+    zero tira a divisão do resultado, e uma divisão que o dataset não tinha só
+    nasce se ganhar valor maior que zero. Estratificada por classe (detecção:
+    classe mais frequente da imagem, imagens sem caixas à parte) e semeada: o mesmo
+    resultado para qualquer ordem de arquivos.
+  - **Sem vazamento:** cópias exatas (SHA-256) ficam sempre na mesma divisão;
+    cópias de imagens do teste travado e grupos que tocam o teste são
+    descartados e listados com o motivo.
+  - **Grupos (opcional):** CSV `path,group` (formato da ADR-150, não precisa
+    cobrir todas as imagens); cada grupo vai inteiro para uma divisão.
+  - **Prévia:** tabela antes e depois por classe e divisão, proporção pedida e
+    obtida, quantas imagens mudam, avisos (divisão nova, vazia, que some,
+    classe ausente de uma divisão). Mudar proporção, seed ou opções recalcula na
+    hora, sem reler as imagens.
+  - **Escrita segura e registro:** como nas fases 2 e 3, pasta temporária e um
+    único rename; `visionforge_dataset.json` com `kind: "resplit"`. O apply é
+    recusado (409) se o dataset ou o arquivo de grupos mudou desde a prévia.
+- As rotas de incorporar, juntar e refazer divisão declaram `responses=` com
+  chaves literais (Sonar S8415). O painel de junção passou a usar o singular
+  correto em "Uma delas estava em divisões diferentes".
+
 - **Juntar com outro dataset** (ADR-167, fase 3 da issue #117): na aba Explorar,
   o botão "Juntar com outro dataset" cria um dataset novo, numa pasta irmã do
   aberto, a partir dele e de outro. Nenhum dos dois é alterado.
