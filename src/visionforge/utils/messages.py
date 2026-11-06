@@ -931,6 +931,87 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "pt": "A imagem '{path}' mudou desde a prévia. Refaça a prévia.",
         "en": "The image '{path}' changed since the preview. Run the preview again.",
     },
+    # ── merging two datasets (gui/api/merge_*.py, ADR-167) ─────────────────
+    "merge.busy": {
+        "pt": "Já existe uma junção em andamento. Espere ou interrompa a atual.",
+        "en": "A merge is already running. Wait for it or cancel it.",
+    },
+    "merge.job_missing": {
+        "pt": "Junção não encontrada. Refaça a prévia.",
+        "en": "Merge not found. Run the preview again.",
+    },
+    "merge.preview_not_ready": {
+        "pt": "A prévia ainda não terminou ou não deu certo.",
+        "en": "The preview has not finished or did not succeed.",
+    },
+    "merge.base_not_opened": {
+        "pt": "Abra o dataset no explorador antes de juntá-lo a outro.",
+        "en": "Open the dataset in the explorer before merging it with another.",
+    },
+    "merge.a_missing": {
+        "pt": "A pasta do dataset aberto não existe: {path}",
+        "en": "The folder of the opened dataset does not exist: {path}",
+    },
+    "merge.b_missing": {
+        "pt": "A pasta do outro dataset não existe: {path}",
+        "en": "The folder of the other dataset does not exist: {path}",
+    },
+    "merge.datasets_overlap": {
+        "pt": "Os dois datasets precisam ser pastas diferentes, e um não pode ficar dentro do outro.",
+        "en": "The two datasets must be different folders, and neither can be inside the other.",
+    },
+    "merge.empty": {
+        "pt": "O dataset {side} não tem imagens.",
+        "en": "Dataset {side} has no images.",
+    },
+    "merge.unreadable": {
+        "pt": "Não foi possível ler a imagem '{path}'.",
+        "en": "The image '{path}' could not be read.",
+    },
+    "merge.bad_mapping": {
+        "pt": "Mapeamento inválido: '{name}' não é um dos dois datasets.",
+        "en": "Invalid mapping: '{name}' is not one of the two datasets.",
+    },
+    "merge.unknown_class": {
+        "pt": "A classe '{name}' não existe no dataset {side}.",
+        "en": "The class '{name}' does not exist in dataset {side}.",
+    },
+    "merge.empty_target": {
+        "pt": "A classe '{name}' precisa de um nome de destino, ou ser descartada.",
+        "en": "The class '{name}' needs a target name, or to be discarded.",
+    },
+    "merge.bad_target": {
+        "pt": "'{name}' não serve como nome de classe (pasta inválida).",
+        "en": "'{name}' is not usable as a class name (invalid folder).",
+    },
+    "merge.targets_differ_by_case": {
+        "pt": "'{first}' e '{second}' só diferem por maiúsculas e minúsculas; no Windows seriam a mesma pasta. Use o mesmo nome nas duas classes para juntá-las.",
+        "en": "'{first}' and '{second}' differ only by letter case; on Windows they would be the same folder. Give both classes the same name to merge them.",
+    },
+    "merge.nothing_left": {
+        "pt": "Com este mapeamento não sobra nenhuma imagem.",
+        "en": "With this mapping no image is left.",
+    },
+    "merge.bad_dest_name": {
+        "pt": "Nome de pasta inválido para o dataset novo.",
+        "en": "Invalid folder name for the new dataset.",
+    },
+    "merge.dest_exists": {
+        "pt": "Já existe uma pasta chamada '{name}' ao lado do dataset. Escolha outro nome.",
+        "en": "A folder named '{name}' already exists next to the dataset. Pick another name.",
+    },
+    "merge.a_changed": {
+        "pt": "O dataset aberto mudou desde a prévia. Refaça a prévia.",
+        "en": "The opened dataset changed since the preview. Run the preview again.",
+    },
+    "merge.b_changed": {
+        "pt": "O outro dataset mudou desde a prévia. Refaça a prévia.",
+        "en": "The other dataset changed since the preview. Run the preview again.",
+    },
+    "merge.image_changed": {
+        "pt": "A imagem '{path}' mudou desde a prévia. Refaça a prévia.",
+        "en": "The image '{path}' changed since the preview. Run the preview again.",
+    },
     # ── updating the install from the page (gui/api/routes.py, ADR-120) ──────
     "update.foreign_origin": {
         "pt": "Atualização recusada: o pedido veio de uma página de outro site.",
