@@ -221,7 +221,7 @@ def _read_image(
         try:
             text = (root / label_rel).read_text(encoding=_UTF8)
             boxes = parse_yolo_label(text)
-        except (OSError, UnicodeDecodeError, ValueError) as exc:
+        except (OSError, ValueError) as exc:
             return None, Excluded(rel, split, MALFORMED_LABEL, str(exc))
     return ExportImage(split, rel, width, height, tuple(boxes)), None
 

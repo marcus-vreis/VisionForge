@@ -99,6 +99,8 @@ _PREVIEW_NOT_READY_PT = "A prévia ainda não terminou ou não deu certo."
 _PREVIEW_NOT_READY_EN = "The preview has not finished or did not succeed."
 _BAD_DEST_NAME_PT = "Nome de pasta inválido para o dataset novo."
 _BAD_DEST_NAME_EN = "Invalid folder name for the new dataset."
+_BASE_MISSING_PT = "A pasta do dataset não existe: {path}"
+_BASE_MISSING_EN = "The dataset folder does not exist: {path}"
 _DEST_EXISTS_PT = (
     "Já existe uma pasta chamada '{name}' ao lado do dataset. Escolha outro nome."
 )
@@ -900,8 +902,8 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "en": "Open the dataset in the explorer before adding images to it.",
     },
     "incorporate.base_missing": {
-        "pt": "A pasta do dataset não existe: {path}",
-        "en": "The dataset folder does not exist: {path}",
+        "pt": _BASE_MISSING_PT,
+        "en": _BASE_MISSING_EN,
     },
     "incorporate.source_missing": {
         "pt": "A pasta das imagens novas não existe: {path}",
@@ -1042,8 +1044,8 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "en": "Open the dataset in the explorer before re-splitting it.",
     },
     "resplit.base_missing": {
-        "pt": "A pasta do dataset não existe: {path}",
-        "en": "The dataset folder does not exist: {path}",
+        "pt": _BASE_MISSING_PT,
+        "en": _BASE_MISSING_EN,
     },
     "resplit.base_empty": {
         "pt": "O dataset não tem imagens para dividir.",
@@ -1111,8 +1113,8 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "en": "Open the dataset in the explorer before exporting it to COCO.",
     },
     "coco.base_missing": {
-        "pt": "A pasta do dataset não existe: {path}",
-        "en": "The dataset folder does not exist: {path}",
+        "pt": _BASE_MISSING_PT,
+        "en": _BASE_MISSING_EN,
     },
     "coco.source_missing": {
         "pt": "A pasta do COCO não existe: {path}",

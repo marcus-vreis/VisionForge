@@ -150,15 +150,17 @@ async def coco_cancel(job_id: str) -> dict[str, bool]:
 )
 async def coco_export_preview(req: CocoExportPreviewRequest) -> dict[str, Any]:
     """Start reading the dataset; poll ``/{job_id}`` for the preview."""
+    # The dataset folder is the user's own pick in the local GUI and is only read;
+    # it must also be one the explorer already opened (the thumbnails' allow-list).
     base = Path(req.base_dir)
-    if not base.is_dir():
+    if not base.is_dir():  # NOSONAR pythonsecurity:S6549
         raise HTTPException(400, tr("coco.base_missing", path=req.base_dir))
-    # Only a dataset the explorer already opened (the same allow-list as thumbnails).
-    if not _is_inside_allowed_root(base.resolve()):
+    if not _is_inside_allowed_root(base.resolve()):  # NOSONAR pythonsecurity:S6549
         raise HTTPException(403, tr("coco.base_not_opened"))
     try:
         job = _JOBS.start_export_preview(
-            base.resolve(), await asyncio.to_thread(suggest_export_name, base)
+            base.resolve(),  # NOSONAR pythonsecurity:S6549
+            await asyncio.to_thread(suggest_export_name, base),
         )
     except JobBusyError as exc:
         raise HTTPException(409, tr(_BUSY)) from exc
@@ -222,7 +224,8 @@ async def coco_import_preview(req: CocoImportPreviewRequest) -> dict[str, Any]:
         raise HTTPException(400, tr("coco.source_missing", path=req.source_dir))
     try:
         job = _JOBS.start_import_preview(
-            source.resolve(), await asyncio.to_thread(suggest_import_name, source)
+            source.resolve(),  # NOSONAR pythonsecurity:S6549
+            await asyncio.to_thread(suggest_import_name, source),
         )
     except JobBusyError as exc:
         raise HTTPException(409, tr(_BUSY)) from exc
