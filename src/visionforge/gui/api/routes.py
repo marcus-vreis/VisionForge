@@ -109,6 +109,7 @@ from visionforge.gui.api.http_responses import BAD_REQUEST as _BAD_REQUEST
 from visionforge.gui.api.http_responses import CONFLICT as _CONFLICT
 from visionforge.gui.api.http_responses import NOT_FOUND as _NOT_FOUND
 from visionforge.gui.api.http_responses import SERVER_ERROR as _SERVER_ERROR
+from visionforge.gui.api.incorporate_routes import router as incorporate_router
 from visionforge.gui.api.model_card import _stopped_extent as _stopped_extent
 from visionforge.gui.api.model_card import render_run_markdown as _render_run_markdown
 from visionforge.gui.api.profiles import (
@@ -499,6 +500,8 @@ router.include_router(build_profiles_router(lambda: (_PROFILES_DIR, _MODELS_DIR)
 router.include_router(datasets_router)
 # The read-only dataset explorer (ADR-165).
 router.include_router(explorer_router)
+# Adding new images to a dataset as a new dataset (ADR-166).
+router.include_router(incorporate_router)
 # History list, detail and delete live in runs_routes.py (ADR-132); the lookups
 # and the running job's state stay owned here and are read per request.
 router.include_router(

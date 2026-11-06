@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 BAD_REQUEST: dict[int | str, dict[str, Any]] = {400: {"description": "Invalid request"}}
+FORBIDDEN: dict[int | str, dict[str, Any]] = {403: {"description": "Access denied"}}
 NOT_FOUND: dict[int | str, dict[str, Any]] = {
     404: {"description": "Resource not found"}
 }

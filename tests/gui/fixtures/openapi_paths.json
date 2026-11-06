@@ -289,6 +289,23 @@
       }
     }
   },
+  "GET /api/explorer/incorporate/{job_id}": {
+    "operationId": "incorporate_status_api_explorer_incorporate__job_id__get",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "path:job_id:required"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "404": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
   "GET /api/explorer/scan/{job_id}": {
     "operationId": "explorer_scan_status_api_explorer_scan__job_id__get",
     "parameters": [
@@ -1337,6 +1354,85 @@
       "200": {
         "application/json": "object"
       },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/explorer/incorporate/preview": {
+    "operationId": "incorporate_preview_api_explorer_incorporate_preview_post",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {
+      "application/json": "PreviewRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "400": {},
+      "403": {},
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/explorer/incorporate/{job_id}/apply": {
+    "operationId": "incorporate_apply_api_explorer_incorporate__job_id__apply_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "path:job_id:required"
+    ],
+    "requestBody": {
+      "application/json": "ApplyRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "400": {},
+      "404": {},
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/explorer/incorporate/{job_id}/cancel": {
+    "operationId": "incorporate_cancel_api_explorer_incorporate__job_id__cancel_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "path:job_id:required"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "404": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "POST /api/explorer/incorporate/{job_id}/plan": {
+    "operationId": "incorporate_plan_api_explorer_incorporate__job_id__plan_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "path:job_id:required"
+    ],
+    "requestBody": {
+      "application/json": "PlanRequest"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "400": {},
+      "404": {},
+      "409": {},
       "422": {
         "application/json": "HTTPValidationError"
       }
