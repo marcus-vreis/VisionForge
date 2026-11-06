@@ -94,6 +94,18 @@ def using_lang(lang: Lang) -> Iterator[None]:
 # Templates are written once per language, never assembled from fragments: the
 # other language wants the parts in another order. Braces that are meant
 # literally are doubled.
+# Texts the derived-dataset tools (incorporate, merge, re-split, COCO) repeat.
+_PREVIEW_NOT_READY_PT = "A prévia ainda não terminou ou não deu certo."
+_PREVIEW_NOT_READY_EN = "The preview has not finished or did not succeed."
+_BAD_DEST_NAME_PT = "Nome de pasta inválido para o dataset novo."
+_BAD_DEST_NAME_EN = "Invalid folder name for the new dataset."
+_DEST_EXISTS_PT = (
+    "Já existe uma pasta chamada '{name}' ao lado do dataset. Escolha outro nome."
+)
+_DEST_EXISTS_EN = (
+    "A folder named '{name}' already exists next to the dataset. Pick another name."
+)
+
 CATALOG: dict[str, dict[Lang, str]] = {
     # ── class vocabulary (core/data.py) ─────────────────────────────────────
     "data.empty_split": {
@@ -880,8 +892,8 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "en": "Incorporation not found. Run the preview again.",
     },
     "incorporate.preview_not_ready": {
-        "pt": "A prévia ainda não terminou ou não deu certo.",
-        "en": "The preview has not finished or did not succeed.",
+        "pt": _PREVIEW_NOT_READY_PT,
+        "en": _PREVIEW_NOT_READY_EN,
     },
     "incorporate.base_not_opened": {
         "pt": "Abra o dataset no explorador antes de incorporar imagens a ele.",
@@ -916,12 +928,12 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "en": "'{name}' is not a new class of this preview.",
     },
     "incorporate.bad_dest_name": {
-        "pt": "Nome de pasta inválido para o dataset novo.",
-        "en": "Invalid folder name for the new dataset.",
+        "pt": _BAD_DEST_NAME_PT,
+        "en": _BAD_DEST_NAME_EN,
     },
     "incorporate.dest_exists": {
-        "pt": "Já existe uma pasta chamada '{name}' ao lado do dataset. Escolha outro nome.",
-        "en": "A folder named '{name}' already exists next to the dataset. Pick another name.",
+        "pt": _DEST_EXISTS_PT,
+        "en": _DEST_EXISTS_EN,
     },
     "incorporate.base_changed": {
         "pt": "O dataset mudou desde a prévia. Refaça a prévia.",
@@ -941,8 +953,8 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "en": "Merge not found. Run the preview again.",
     },
     "merge.preview_not_ready": {
-        "pt": "A prévia ainda não terminou ou não deu certo.",
-        "en": "The preview has not finished or did not succeed.",
+        "pt": _PREVIEW_NOT_READY_PT,
+        "en": _PREVIEW_NOT_READY_EN,
     },
     "merge.base_not_opened": {
         "pt": "Abra o dataset no explorador antes de juntá-lo a outro.",
@@ -993,12 +1005,12 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "en": "With this mapping no image is left.",
     },
     "merge.bad_dest_name": {
-        "pt": "Nome de pasta inválido para o dataset novo.",
-        "en": "Invalid folder name for the new dataset.",
+        "pt": _BAD_DEST_NAME_PT,
+        "en": _BAD_DEST_NAME_EN,
     },
     "merge.dest_exists": {
-        "pt": "Já existe uma pasta chamada '{name}' ao lado do dataset. Escolha outro nome.",
-        "en": "A folder named '{name}' already exists next to the dataset. Pick another name.",
+        "pt": _DEST_EXISTS_PT,
+        "en": _DEST_EXISTS_EN,
     },
     "merge.a_changed": {
         "pt": "O dataset aberto mudou desde a prévia. Refaça a prévia.",
@@ -1022,8 +1034,8 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "en": "Re-split not found. Run the preview again.",
     },
     "resplit.preview_not_ready": {
-        "pt": "A prévia ainda não terminou ou não deu certo.",
-        "en": "The preview has not finished or did not succeed.",
+        "pt": _PREVIEW_NOT_READY_PT,
+        "en": _PREVIEW_NOT_READY_EN,
     },
     "resplit.base_not_opened": {
         "pt": "Abra o dataset no explorador antes de refazer a divisão dele.",
@@ -1066,12 +1078,12 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "en": "There are no images to redistribute with these options.",
     },
     "resplit.bad_dest_name": {
-        "pt": "Nome de pasta inválido para o dataset novo.",
-        "en": "Invalid folder name for the new dataset.",
+        "pt": _BAD_DEST_NAME_PT,
+        "en": _BAD_DEST_NAME_EN,
     },
     "resplit.dest_exists": {
-        "pt": "Já existe uma pasta chamada '{name}' ao lado do dataset. Escolha outro nome.",
-        "en": "A folder named '{name}' already exists next to the dataset. Pick another name.",
+        "pt": _DEST_EXISTS_PT,
+        "en": _DEST_EXISTS_EN,
     },
     "resplit.base_changed": {
         "pt": "O dataset mudou desde a prévia. Refaça a prévia.",
