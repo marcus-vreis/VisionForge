@@ -13,6 +13,8 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ## [Unreleased]
 
+## [0.21.0] — 2026-11-05
+
 ### Added
 
 - **Filas paralelas** (fase 4 do ADR-163): um job local e um do
