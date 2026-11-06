@@ -27,7 +27,7 @@ import sys
 import threading
 import time
 from collections.abc import Callable, Iterable
-from pathlib import Path, PurePosixPath
+from pathlib import Path, PurePath, PurePosixPath, PureWindowsPath
 from typing import Literal
 
 # The VM's view of the Drive once mounted at /content/drive.
@@ -54,31 +54,42 @@ def _same(a: str, b: str) -> bool:
     return a.casefold() == b.casefold()
 
 
-def remote_path(local: Path, roots: Iterable[Path]) -> PurePosixPath | None:
-    """Where ``local`` is on the VM, or None when it is not inside the Drive.
+def _windows(path: str | PurePath) -> PureWindowsPath:
+    r"""Drive for desktop paths are Windows paths (``G:\Meu Drive``) whatever
+    the OS the server runs on, so they are read with Windows rules everywhere:
+    on Linux a plain ``Path`` would take ``G:\`` for a folder name."""
+    return PureWindowsPath(str(path))
+
+
+def _starts_with(parts: tuple[str, ...], prefix: tuple[str, ...]) -> bool:
+    return len(parts) >= len(prefix) and all(
+        _same(a, b) for a, b in zip(parts, prefix, strict=False)
+    )
+
+
+def remote_path(
+    local: str | PurePath, roots: Iterable[str | PurePath]
+) -> PurePosixPath | None:
+    r"""Where ``local`` is on the VM, or None when it is not inside the Drive.
 
     ``roots`` are "My Drive" folders known for sure (the manual one, the one the
     registry names). Without a match, a path component named like "My Drive"
-    right under a drive root (``G:\\Meu Drive``) or under the home folder
+    right under a drive letter (``G:\Meu Drive``) or under the home folder
     (mirror mode) counts as well.
     """
-    parts = Path(os.path.abspath(local)).parts
+    parts = _windows(local).parts
     for root in roots:
-        root_parts = Path(os.path.abspath(root)).parts
-        if len(parts) >= len(root_parts) and all(
-            _same(a, b) for a, b in zip(parts, root_parts, strict=False)
-        ):
+        root_parts = _windows(root).parts
+        if _starts_with(parts, root_parts):
             return REMOTE_MY_DRIVE.joinpath(*parts[len(root_parts) :])
-    home = Path(os.path.abspath(Path.home())).parts
+    home = _windows(Path.home()).parts
     for i, part in enumerate(parts):
         if not any(_same(part, name) for name in MY_DRIVE_NAMES):
             continue
         parent = parts[:i]
-        under_volume = len(parent) == 1
-        under_home = len(parent) == len(home) and all(
-            _same(a, b) for a, b in zip(parent, home, strict=False)
-        )
-        if under_volume or under_home:
+        under_letter = len(parent) == 1 and _windows(parent[0]).drive != ""
+        under_home = len(parent) == len(home) and _starts_with(parent, home)
+        if under_letter or under_home:
             return REMOTE_MY_DRIVE.joinpath(*parts[i + 1 :])
     return None
 
@@ -101,22 +112,22 @@ def registry_mount_point() -> str | None:
     return None
 
 
-def _mount_root(mount: str) -> Path:
+def _mount_root(mount: str) -> PureWindowsPath:
     # "G" or "G:" is a drive letter; anything else is a folder.
     letter = mount.rstrip(":\\/")
     if len(letter) == 1 and letter.upper() in string.ascii_uppercase:
-        return Path(f"{letter.upper()}:\\")
-    return Path(mount)
+        return PureWindowsPath(f"{letter.upper()}:\\")
+    return _windows(mount)
 
 
 def my_drive_roots(
     manual: str | None,
     mount_point: Callable[[], str | None] = registry_mount_point,
-) -> list[Path]:
+) -> list[PureWindowsPath]:
     """The "My Drive" folders a path is checked against, the manual one first."""
-    roots: list[Path] = []
+    roots: list[PureWindowsPath] = []
     if manual and manual.strip():
-        roots.append(Path(manual.strip()))
+        roots.append(_windows(manual.strip()))
     mount = mount_point()
     if mount:
         root = _mount_root(mount)

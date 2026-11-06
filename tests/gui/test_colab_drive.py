@@ -5,7 +5,7 @@ from __future__ import annotations
 import subprocess
 import threading
 import time
-from pathlib import Path, PurePosixPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 
 import pytest
@@ -297,9 +297,9 @@ def test_consent_url_finds_the_google_page_only() -> None:
 
 
 def test_a_path_under_a_drive_letter_my_drive_is_translated() -> None:
-    remote = cd.remote_path(Path("G:/Meu Drive/datasets/flores"), [])
+    remote = cd.remote_path(PureWindowsPath("G:/Meu Drive/datasets/flores"), [])
     assert remote == PurePosixPath("/content/drive/MyDrive/datasets/flores")
-    remote = cd.remote_path(Path("H:/my drive/x"), [])
+    remote = cd.remote_path(PureWindowsPath("H:/my drive/x"), [])
     assert remote == PurePosixPath("/content/drive/MyDrive/x")
 
 
@@ -310,7 +310,7 @@ def test_a_mirrored_my_drive_under_the_home_folder_is_translated() -> None:
 
 def test_a_my_drive_folder_elsewhere_is_not_guessed(tmp_path: Path) -> None:
     assert cd.remote_path(tmp_path / "Meu Drive" / "ds", []) is None
-    assert cd.remote_path(Path("D:/datasets/flores"), []) is None
+    assert cd.remote_path(PureWindowsPath("D:/datasets/flores"), []) is None
 
 
 def test_the_manual_root_wins(tmp_path: Path) -> None:
@@ -323,8 +323,8 @@ def test_the_manual_root_wins(tmp_path: Path) -> None:
 
 def test_the_registry_mount_point_gives_both_folder_names() -> None:
     roots = cd.my_drive_roots(None, lambda: "X")
-    assert roots == [Path("X:\\My Drive"), Path("X:\\Meu Drive")]
-    remote = cd.remote_path(Path("X:/Meu Drive/ds"), roots)
+    assert roots == [PureWindowsPath("X:\\My Drive"), PureWindowsPath("X:\\Meu Drive")]
+    remote = cd.remote_path(PureWindowsPath("X:/Meu Drive/ds"), roots)
     assert remote == PurePosixPath("/content/drive/MyDrive/ds")
 
 
