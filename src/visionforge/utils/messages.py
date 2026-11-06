@@ -1064,6 +1064,26 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "pt": "O treino não começou na VM: nenhum evento em {seconds} s, em {attempts} tentativas. A VM foi liberada.",
         "en": "The training never started on the VM: no event in {seconds} s, over {attempts} attempts. The VM was released.",
     },
+    "colab.drive_consent_failed": {
+        "pt": "O acesso ao Google Drive não foi permitido em {attempts} tentativas; a VM foi liberada.",
+        "en": "Access to Google Drive was not allowed in {attempts} attempts; the VM was released.",
+    },
+    "colab.drive_mount_failed": {
+        "pt": "O Google Drive não montou na VM: {detail}. A VM foi liberada.",
+        "en": "Google Drive did not mount on the VM: {detail}. The VM was released.",
+    },
+    "colab.drive_not_in_drive": {
+        "pt": 'A pasta do dataset ({path}) não está dentro do Google Drive para desktop. Informe a pasta "Meu Drive" deste computador ou escolha outra origem.',
+        "en": 'The dataset folder ({path}) is not inside Google Drive for desktop. Give this computer\'s "My Drive" folder or choose another source.',
+    },
+    "colab.drive_empty": {
+        "pt": "A pasta do dataset ({path}) não tem arquivos neste computador.",
+        "en": "The dataset folder ({path}) has no files on this computer.",
+    },
+    "colab.drive_not_waiting": {
+        "pt": "Esse job não está esperando a permissão do Google Drive.",
+        "en": "That job is not waiting for the Google Drive permission.",
+    },
     "colab.download_failed": {
         "pt": "O treino terminou, mas o run não veio da VM: {detail}. A VM foi liberada e nada foi gravado nos runs.",
         "en": "The training finished, but the run did not come back from the VM: {detail}. The VM was released and nothing was written to the runs.",

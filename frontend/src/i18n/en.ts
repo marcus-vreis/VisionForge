@@ -139,6 +139,11 @@ export const en: Dict = {
     loadFailed: "Failed to reach the server.",
     trainTitle: "Train this experiment on Colab",
     trainSource: "Dataset on the VM: a zip URL, torchvision:cifar10 or hf:owner/name",
+    driveSource: "Use the form's dataset folder, in Google Drive for desktop",
+    driveRoot: "This computer's \"My Drive\" folder (when it is not found by itself)",
+    driveRootPlaceholder: "G:\\My Drive",
+    driveExport: "Also save the run to Drive (MyDrive/VisionForge/runs)",
+    driveNote: "The VM mounts your Drive and copies the dataset before training; Google asks for permission on every runtime.",
     sourcePlaceholder: "https://…/dataset.zip",
     badSource: "Use an http(s) URL of a zip, torchvision:<name> or hf:<owner/name>.",
     accelerator: "GPU",
@@ -1868,6 +1873,13 @@ export const en: Dict = {
       }. The run starts automatically when its turn comes.`,
     queuedColabNote: (account: string, position: number | undefined) =>
       `${position ? `waiting for ${account}'s Colab — ${ordinal(position)} in line` : `waiting for ${account}'s Colab`}. The run starts automatically when that account's previous run ends.`,
+    driveConsentTitle: "Colab asks for access to your Google Drive",
+    driveConsentBody: (attempt: number, attempts: number) =>
+      `Allow it in a new tab and come back to this window; the run goes on by itself. Attempt ${attempt} of ${attempts}.`,
+    driveConsentOpen: "Allow Drive access",
+    driveConsentDone: "I already allowed",
+    driveConsentSending: "Checking the permission…",
+    driveConsentError: "The server did not get the answer. Try \"I already allowed\" again.",
     // The status poll is not reaching the server; the run goes on there (ADR-133).
     reconnecting: "reconnecting…",
     reconnectingNote: "The server did not answer. Trying again — the training goes on on the server.",

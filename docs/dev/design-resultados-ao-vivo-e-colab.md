@@ -526,3 +526,64 @@ redigida).
 menos uma vez por conta. Se ficar gravado, o custo é um passo na primeira vez,
 repassado pela GUI como no login. Se for a cada runtime, cada job do Colab com
 dataset no Drive para e pede um clique.
+
+### Spike 2 do Drive e o fluxo implementado (2026-11-06)
+
+Rodado com o Marcus, num runtime CPU por vez, `stop` no fim de cada um e
+`colab sessions` vazio no final (logs em
+`~/.visionforge/colab-cli/spike/drive/spike2a.log` e `spike2b.log`).
+
+- **2a, com consentimento:** o Marcus abriu a URL, aceitou e apertou Enter. A
+  CLI mostrou "Credentials propagated" e "Mounted at /content/drive", rc 0. A
+  sonda deu `exists: true`, `top_entries: 50`, `top_older_than_7d: 50`,
+  `list_s: 0.31`. O mount enxerga arquivos que já existiam: o escopo `drive`
+  da página vale, e o `drive.file` da CLI não limita.
+- **2b, persistência:** num runtime novo, sem TTY, a CLI pediu o consentimento
+  de novo. O Enter vazio deu "Error propagating: 400", o `timeout 75` estourou
+  (rc 124) e a sonda deu `exists: false`. O aceite **não** fica gravado: o
+  `redirect_uri` é `authorize-for-drive-credentials-ephem`, uma credencial
+  efêmera por VM. Cada runtime pede um consentimento.
+- **Decisão do Marcus:** "a ideia é o usuário não ter que mexer com terminal e
+  nem nada do tipo, apenas a interface, e que tudo bem abrir outra aba para
+  permitir o drive". O Enter fica automático.
+
+**Como ficou (ADR-164):**
+- `gui/api/colab_drive.py` acha a pasta "My Drive"/"Meu Drive" e traduz o
+  caminho. Vale, nesta ordem: a pasta informada no formulário, o
+  `DefaultMountPoint` do registro (`HKLM`/`HKCU`, com e sem `Policies`) e,
+  sem eles, um componente "My Drive"/"Meu Drive" logo abaixo de uma letra de
+  unidade (`G:\Meu Drive`) ou do perfil do usuário (modo espelhamento). Uma
+  pasta com esse nome em outro lugar não conta. O rótulo do volume não é
+  lido: não foi conferido numa máquina com o Drive instalado.
+- A rota troca a origem `drive` por `{path, files}`: o caminho na VM e a
+  contagem local de arquivos. Pasta fora do Drive ou vazia é 400 antes de
+  pagar uma VM.
+- `ColabJobs` roda `colab drivemount` depois do aquecimento do kernel e antes
+  do runner, quando a origem é `drive` ou o export está ligado:
+  - a linha com a URL de `accounts.google.com` vira o evento
+    `drive_consent_required` (URL, tentativa, total). A URL nunca vai para o
+    log, porque o `state` dela leva um token;
+  - o job espera em `DriveConsent` até `POST /api/colab/drive/continue`
+    (`run_id`), e então escreve um Enter (`\n`) no stdin da CLI;
+  - "Error propagating" encerra a CLI, que senão fica pendurada, e a próxima
+    tentativa mostra uma URL nova. São 3 tentativas;
+  - os prazos são separados: 600 s de espera pela pessoa em cada tentativa,
+    120 s de silêncio da CLI fora dessa espera, e o `STARTUP_TIMEOUT_S` da
+    fase 2 só começa no `exec` do runner;
+  - parar o job durante a espera libera a VM.
+- O runner copia a pasta do Drive montado para `/content/vf/dataset` e confere
+  a contagem. Menos arquivos que no computador é erro ("o Drive tem X dos Y"),
+  que pega uma pasta que o Drive para desktop ainda não terminou de subir. Ele
+  só lê dentro de `/content/drive/MyDrive`.
+- Com o export ligado, o bundle também vai para
+  `MyDrive/VisionForge/runs/<nome>_<data>.zip`. Uma falha ali não derruba o
+  run: o download da fase 3 continua.
+- Na GUI, o formulário do Colab ganha "usar a pasta do dataset do formulário",
+  o campo opcional da pasta "Meu Drive" (lembrado neste navegador) e o export.
+  A folha de treino mostra o cartão "Permitir acesso ao Drive": o botão abre a
+  URL numa aba nova, e o retorno à janela (`focus` ou `visibilitychange`)
+  responde ao servidor. Só conta um retorno depois de a janela ter perdido o
+  foco. "Já permiti" é o reserva para quando o foco não dispara.
+
+**Não verificado:** um job real com o fluxo pela GUI, e a detecção numa
+máquina com o Drive para desktop instalado (esta não tem).

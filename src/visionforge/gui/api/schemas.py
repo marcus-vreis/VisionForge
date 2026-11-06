@@ -1078,6 +1078,18 @@ class ColabProviderSource(BaseModel):
     limit: int | None = Field(default=None, ge=1)
 
 
+class ColabDriveSource(BaseModel):
+    """The form's own dataset folder, inside Google Drive for desktop (ADR-164).
+
+    The server translates ``data.base_dir`` to the VM's
+    ``/content/drive/MyDrive/...``; ``my_drive_root`` is this computer's "My
+    Drive" folder when the automatic detection does not find it.
+    """
+
+    kind: Literal["drive"] = "drive"
+    my_drive_root: str | None = Field(default=None, max_length=1024)
+
+
 class ColabRunRequest(BaseModel):
     """A classification experiment to train on Colab (ADR-163, phase 2).
 
@@ -1087,8 +1099,18 @@ class ColabRunRequest(BaseModel):
     """
 
     config: dict[str, Any]
-    source: ColabUrlSource | ColabProviderSource = Field(discriminator="kind")
+    source: ColabUrlSource | ColabProviderSource | ColabDriveSource = Field(
+        discriminator="kind"
+    )
     accelerator: Literal["T4", "L4", "A100", "H100", "G4"] = "T4"
+    # Also save the run's bundle to MyDrive/VisionForge/runs/ (ADR-164).
+    drive_export: bool = False
+
+
+class ColabDriveContinueRequest(BaseModel):
+    """The person says the Drive access was granted for this job's consent page."""
+
+    run_id: str = Field(min_length=1, max_length=256)
 
 
 class ColabSessionInfo(BaseModel):

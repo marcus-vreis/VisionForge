@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ApiError, cancelQueuedRun, fetchQueue } from "../api/client";
+import { driveConsentPrompt } from "../lib/drive-consent";
 import { findQueuedJob, isColabLane, laneAccount } from "../lib/queue-lanes";
 import type { Dict } from "../i18n/pt";
 import { useT } from "../i18n/useT";
@@ -21,6 +22,7 @@ import { liveBatchFraction } from "../lib/training-progress";
 import { SHEET_TABS, type SheetTab } from "../lib/training-story";
 import { STOPPED_COLOR } from "../lib/unit-status";
 import type { QueuedJobInfo, RunStatus, TrainingEvent } from "../types/run";
+import { DriveConsentPrompt } from "./DriveConsentPrompt";
 import { LiveResults } from "./LiveResults";
 import { TrainingStory } from "./training-story/TrainingStory";
 
@@ -230,6 +232,7 @@ export function TrainingOverlay({
   // does not: read it once the run starts executing, and again until it is read
   // (a custom task is not offered the stop before the queue says which level it is).
   const runId = status.run_id;
+  const drivePrompt = driveConsentPrompt(progressEvents);
   const [activeJob, setActiveJob] = useState<QueuedJobInfo | null>(null);
   const jobKnown = activeJob !== null && activeJob.run_id === runId;
   useEffect(() => {
@@ -506,6 +509,9 @@ export function TrainingOverlay({
                     )
                   : t.trainingOverlay.queuedNote(status.position, status.queued)}
               </div>
+            )}
+            {!isFinished && drivePrompt !== null && runId && (
+              <DriveConsentPrompt key={drivePrompt.url} prompt={drivePrompt} runId={runId} />
             )}
             {!isFinished && status.connection && (
               <div
