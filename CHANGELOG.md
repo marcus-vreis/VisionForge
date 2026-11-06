@@ -15,6 +15,29 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Added
 
+- **Juntar com outro dataset** (ADR-167, fase 3 da issue #117): na aba Explorar,
+  o botão "Juntar com outro dataset" cria um dataset novo, numa pasta irmã do
+  aberto, a partir dele e de outro. Nenhum dos dois é alterado.
+  - **Mapeamento de classes:** uma tabela com todas as classes dos dois
+    datasets. Cada uma mantém o próprio nome (classes de mesmo nome se juntam
+    sozinhas), pode ser renomeada, juntada a outra pelo mesmo destino ou
+    descartada. Nomes que só diferem por maiúsculas ou espaços viram uma dica,
+    nunca uma junção automática. A ordem final é a das classes de A e depois as
+    novas de B, com ids renumerados a partir de 0.
+  - **Divisões:** cada imagem fica na divisão em que estava; o resultado tem uma
+    divisão se algum dos dois a tem, e a prévia diz quais vêm de um só.
+  - **Cópias exatas:** por SHA-256 entre os dois. Fica a cópia de A, a de B sai
+    da lista e é contada, com aviso quando as duas estavam em divisões
+    diferentes (vazamento evitado).
+  - **Detecção:** caixas de classes descartadas somem e os ids são remapeados;
+    imagem que perdeu todas as caixas sai, imagem sem caixas desde o início
+    fica. Rótulos sem mudança de id seguem byte a byte.
+  - **Escrita segura:** como na incorporação, tudo vai para uma pasta temporária
+    e termina num único rename; cancelar não deixa nada. O código comum
+    (hardlink ou cópia, rename atômico, registro) agora está em
+    `core/dataset_derived.py`.
+  - **Registro:** `visionforge_dataset.json` com `kind: "merged"`, as duas
+    origens e seus fingerprints, o mapeamento, as classes finais e as contagens.
 - **Incorporar imagens a um dataset** (ADR-166, fase 2 da issue #117): na aba
   Explorar, o botão "Incorporar imagens" cria um dataset novo, numa pasta irmã,
   com as imagens de uma pasta nova. O original não é alterado.
