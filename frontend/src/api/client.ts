@@ -13,6 +13,13 @@ import {
   type ExplorerSummary,
   type ScanJob,
 } from "../lib/dataset-explorer";
+import type {
+  IncorporateJob,
+  IncorporatePlan,
+  IncorporatePreview,
+  IncorporateResult,
+  PlanBody,
+} from "../lib/dataset-incorporate";
 import {
   activeProfileSlug,
   profileHeaders,
@@ -1496,6 +1503,57 @@ export async function explorerScanStatus(jobId: string): Promise<ScanJob> {
 
 export async function explorerScanCancel(jobId: string): Promise<void> {
   await request<unknown>(`/explorer/scan/${encodeURIComponent(jobId)}/cancel`, {
+    method: "POST",
+  });
+}
+
+// ── incorporating images into a dataset (ADR-166) ────────────────────────────
+
+const INCORPORATE = "/explorer/incorporate";
+
+export async function incorporatePreview(
+  form: ExplorerForm,
+  sourceDir: string,
+): Promise<IncorporateJob<IncorporatePreview>> {
+  return request<IncorporateJob<IncorporatePreview>>(`${INCORPORATE}/preview`, {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ ...explorerBody(form), source_dir: sourceDir.trim() }),
+  });
+}
+
+export async function incorporateStatus<R>(jobId: string): Promise<IncorporateJob<R>> {
+  return request<IncorporateJob<R>>(`${INCORPORATE}/${encodeURIComponent(jobId)}`);
+}
+
+export async function incorporatePlan(
+  jobId: string,
+  body: PlanBody,
+): Promise<IncorporatePlan> {
+  return request<IncorporatePlan>(`${INCORPORATE}/${encodeURIComponent(jobId)}/plan`, {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(body),
+  });
+}
+
+export async function incorporateApply(
+  jobId: string,
+  body: PlanBody,
+  destName: string,
+): Promise<IncorporateJob<IncorporateResult>> {
+  return request<IncorporateJob<IncorporateResult>>(
+    `${INCORPORATE}/${encodeURIComponent(jobId)}/apply`,
+    {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ ...body, dest_name: destName.trim() }),
+    },
+  );
+}
+
+export async function incorporateCancel(jobId: string): Promise<void> {
+  await request<unknown>(`${INCORPORATE}/${encodeURIComponent(jobId)}/cancel`, {
     method: "POST",
   });
 }

@@ -29,56 +29,13 @@ import {
   type ScanJob,
   type ScanReport,
 } from "../lib/dataset-explorer";
+import { openResultForm } from "../lib/dataset-incorporate";
 import { runPicker } from "../lib/picker-feedback";
 import { useT } from "../i18n/useT";
 import { DatasetPicker } from "./DatasetPicker";
 import { Segmented, SelectField, TextField } from "./controls";
-
-const sectionLabel: React.CSSProperties = {
-  fontFamily: "var(--font-mono)",
-  fontSize: 10,
-  letterSpacing: "0.22em",
-  textTransform: "uppercase",
-  color: "var(--vf-text-muted)",
-};
-
-const card: React.CSSProperties = {
-  padding: 16,
-  background: "rgb(var(--lt-ink, 255 255 255) / 0.02)",
-  border: "1px solid var(--vf-panel-stroke)",
-  borderRadius: 12,
-  display: "flex",
-  flexDirection: "column",
-  gap: 12,
-};
-
-const mono: React.CSSProperties = {
-  fontFamily: "var(--font-mono)",
-  fontSize: 11,
-  color: "var(--vf-text-dim)",
-  lineHeight: 1.6,
-};
-
-const button: React.CSSProperties = {
-  padding: "8px 14px",
-  background: "var(--accent-soft)",
-  border: "1px solid var(--accent-vf)",
-  borderRadius: 10,
-  color: "var(--vf-text)",
-  fontFamily: "var(--font-mono)",
-  fontSize: 11,
-  letterSpacing: "0.10em",
-  textTransform: "uppercase",
-  cursor: "pointer",
-  whiteSpace: "nowrap",
-};
-
-const ghostButton: React.CSSProperties = {
-  ...button,
-  background: "transparent",
-  border: "1px solid var(--vf-panel-stroke)",
-  color: "var(--vf-text-dim)",
-};
+import { button, card, ghostButton, mono, sectionLabel } from "./datasetExplorerStyles";
+import { IncorporatePanel } from "./IncorporatePanel";
 
 function BarList({ bars }: { bars: Bar[] }) {
   return (
@@ -554,6 +511,12 @@ export function DatasetExplorer() {
   };
 
   const set = (patch: Partial<ExplorerForm>) => setForm((f) => ({ ...f, ...patch }));
+  // The incorporate panel hands over the new dataset: open it like any other.
+  const openResult = (path: string) => {
+    const next = openResultForm(opened ?? form, path);
+    setForm(next);
+    void load(next);
+  };
   const canOpen = form.base_dir.trim() !== "" && !loading;
 
   return (
@@ -623,6 +586,7 @@ export function DatasetExplorer() {
           ) : (
             <>
               <Distribution summary={summary} />
+              <IncorporatePanel form={opened} onOpenResult={openResult} />
               <Gallery form={opened} summary={summary} />
               <ScanPanel form={opened} />
             </>

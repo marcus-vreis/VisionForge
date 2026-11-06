@@ -7062,3 +7062,43 @@ opening another tab to allow the Drive is fine.
 - *A scan inside the request.* Simple, but a dataset with tens of thousands of images would hold a worker for minutes and give the page nothing to show.
 - *Serving the original files for the gallery (`/dataset/file`).* No resizing, so a page of 48 photographs could move hundreds of megabytes.
 - *A new tab beside the tasks.* Rejected in issue #117's discussion: the explorer is not a task.
+
+## ADR-166 — Incorporating new images writes a new dataset, never an edit
+
+**Date:** 2026-11-06
+**Status:** Accepted — phase 2 of issue #117 (classification and detection) implemented
+**Extends:** ADR-165 (explorer), ADR-129 (fingerprint), ADR-130 (materialized copies), ADR-136 (content audit), ADR-153 (dataset inspection)
+
+**Context:** a researcher collects more images after a first training and wants them in the dataset. Writing them into the folder would change its fingerprint (ADR-129), and every earlier `run.json` remembers the fingerprint of the folder as it was: the runs would then point at data they did not train on. Issue #117 recommends a new folder for any tool that creates a dataset version; this is that tool, for the two layouts of the explorer.
+
+**Decision:**
+
+- **Never in place.** The result is a sibling folder (`<name>-v2` by default, or the name the user types, validated by `validate_path_component`) with the same structure. The original is not opened for writing at any point. A test hashes the whole tree (paths and bytes) before and after.
+- **How it is written.** Under `.<name>.tmp-<id>` in the same parent, then one `os.rename`. Cancellation, an error, or a destination that appeared meanwhile removes the temporary folder, so nothing is left at the destination. Files of the original are hardlinked when the volume allows it and copied when it does not (`link_or_copy`: any `OSError` falls back to a copy; symbolic links are copied). `materialized_dataset.py` has no such mechanism (it re-encodes every image), so this is new, and small. New images are always copied: the folder of new images is the user's scratch space and must not share bytes with the dataset. The copy is hashed while it is written and must match the digest of the preview, so an image replaced between the preview and the write is refused.
+- **Existing images do not move.** The mirror is made first; only then new files are placed.
+- **Splits of the new images.** Stratified by class, by largest remainder, seeded (`random.Random(f"{seed}|{class}")` over images sorted by content hash, so the file order does not matter). The proportion is the dataset's own (images per split) or one the user types; a split the dataset does not have gets zero and a positive ratio for it is refused, so `test` is never created. The seed (default 0) is recorded. Detection stratifies by the most frequent class of the image; an image without boxes is its own stratum.
+- **Checks before applying** (all listed in a preview the user confirms). Classification: `<class>/<image>`, anything loose is out. Detection: the image with a `.txt` next to it or in a sibling `labels` tree, five numeric fields per row, integer id >= 0. Images that do not open (Pillow `verify`, the digest function of the audit) are out. Exact copies by SHA-256 against the dataset and among the new images (first kept) are out. Every exclusion keeps its reason and detail.
+- **New classes.** A folder name the dataset lacks (classification) or an id beyond its list (detection) is a new class and its images stay out unless the user ticks it. When the new folder has its own `classes.txt`/`data.yaml`, its labels are read through that list and matched by name, so a `0` there need not be a `0` here; the label files are rewritten only if an id moves. Without a list, ids are the dataset's own and an unknown id `N` is the class `class_N`. Accepted classes are appended; existing ids never change. Where a bare id leaves a gap, the gap is filled with `class_<i>` placeholders. The result's `classes.txt`/`names.txt` and `data.yaml` (`names`, `nc`, and an absolute `path` that pointed at the original) are written anew, never through a hardlink.
+- **Record.** No convention existed (the group manifest of ADR-150 is another thing), so the new dataset gets `visionforge_dataset.json` (`schema_version` 1): the origin path and manifest fingerprint of the base, the folder incorporated, seed, requested and effective ratios, split folder names, final classes, accepted new classes, counts (base, found, added, per split and class, excluded by reason) and how many files were linked or copied. The explorer opens the result unchanged; the extra file is just a file of the dataset.
+- **Jobs.** `gui/api/incorporate_jobs.py`, one at a time, thread plus `CancellationToken`, progress counter. The preview (read, verify, hash both sides) keeps its analysis in memory so changing a checkbox, the ratios or the seed re-plans through `POST .../plan` without hashing again, and the apply writes exactly what was shown. If the original changed (manifest fingerprint) or a new image changed since the preview, the apply is refused (409) and the user redoes the preview.
+- **API.** `POST /api/explorer/incorporate/preview` (the dataset must be one the explorer opened: 403 otherwise, the allow-list of thumbnails), `GET .../{job_id}`, `POST .../{job_id}/plan`, `.../apply`, `.../cancel`. The source folder may not be inside the dataset nor contain it. Errors are documented with `responses=` from `http_responses.py` (which gains `FORBIDDEN`) and job errors are translated when the job is read.
+- **Page.** A button "Incorporar imagens" inside the Explore tab, once a dataset is open: source folder (the existing picker), preview (counts per class and split, exclusions with reasons, ticks for new classes, ratio, seed), destination name, apply with progress and cancel, then "open in the explorer". Texts in both dictionaries; pure logic in `lib/dataset-incorporate.ts`.
+
+**Consequences:**
+
+- The OpenAPI snapshot gains five operations; no existing endpoint changed. `DatasetExplorer` shares its inline styles through `datasetExplorerStyles.ts`.
+- A hardlinked file is the same file: editing an image of the new dataset in place, with a tool that writes through the existing inode, also changes the original. Tools that save a new file and rename (most editors) are safe. The record says how many files were linked.
+- The preview hashes the whole dataset (SHA-256 of every existing image) to find copies; that is the cost of comparing by content, as in ADR-136.
+- Near-duplicates are not detected (as in the audit). Symbolic links to folders inside the original are not followed by the mirror, as the explorer does not follow them.
+
+**Risks:**
+
+- A crash (process killed) between the first write and the rename leaves a hidden `.<name>.tmp-*` folder next to the dataset; nothing sweeps it yet. It never has the real name, so no run can pick it up by mistake.
+- The ratio is respected per class, but not corrected across classes: many classes with few new images each can drift a little from the overall proportion.
+
+**Alternatives considered:**
+
+- *Edit in place with a backup.* Breaks the fingerprint of every old run before the user decides anything.
+- *A manifest layer over the original (no copy).* Cheap, but no trainer reads it and every consumer would have to learn it.
+- *Reusing `materialized_dataset`.* It re-encodes images and owns a cache with leases; copying a dataset byte for byte is a different job.
+- *Moving existing images to rebalance.* Out of scope (phase 4, re-splitting) and it would make results incomparable with old runs.

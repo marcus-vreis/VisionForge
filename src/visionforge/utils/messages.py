@@ -870,6 +870,67 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "pt": "Não foi possível abrir esta imagem.",
         "en": "This image could not be opened.",
     },
+    # ── incorporating images (gui/api/incorporate_*.py, ADR-166) ─────────────
+    "incorporate.busy": {
+        "pt": "Já existe uma incorporação em andamento. Espere ou interrompa a atual.",
+        "en": "An incorporation is already running. Wait for it or cancel it.",
+    },
+    "incorporate.job_missing": {
+        "pt": "Incorporação não encontrada. Refaça a prévia.",
+        "en": "Incorporation not found. Run the preview again.",
+    },
+    "incorporate.preview_not_ready": {
+        "pt": "A prévia ainda não terminou ou não deu certo.",
+        "en": "The preview has not finished or did not succeed.",
+    },
+    "incorporate.base_not_opened": {
+        "pt": "Abra o dataset no explorador antes de incorporar imagens a ele.",
+        "en": "Open the dataset in the explorer before adding images to it.",
+    },
+    "incorporate.base_missing": {
+        "pt": "A pasta do dataset não existe: {path}",
+        "en": "The dataset folder does not exist: {path}",
+    },
+    "incorporate.source_missing": {
+        "pt": "A pasta das imagens novas não existe: {path}",
+        "en": "The folder of new images does not exist: {path}",
+    },
+    "incorporate.source_overlaps_base": {
+        "pt": "A pasta das imagens novas não pode ficar dentro do dataset nem conter o dataset.",
+        "en": "The folder of new images cannot be inside the dataset or contain it.",
+    },
+    "incorporate.base_empty": {
+        "pt": "O dataset não tem imagens, então não há proporção a seguir.",
+        "en": "The dataset has no images, so there is no proportion to follow.",
+    },
+    "incorporate.bad_ratios": {
+        "pt": "Proporção inválida: use números não negativos com soma maior que zero.",
+        "en": "Invalid ratios: use non-negative numbers that sum to more than zero.",
+    },
+    "incorporate.ratio_split_absent": {
+        "pt": "O dataset não tem a divisão '{split}'; ela não será criada.",
+        "en": "The dataset has no '{split}' split; it will not be created.",
+    },
+    "incorporate.not_a_new_class": {
+        "pt": "'{name}' não é uma classe nova desta prévia.",
+        "en": "'{name}' is not a new class of this preview.",
+    },
+    "incorporate.bad_dest_name": {
+        "pt": "Nome de pasta inválido para o dataset novo.",
+        "en": "Invalid folder name for the new dataset.",
+    },
+    "incorporate.dest_exists": {
+        "pt": "Já existe uma pasta chamada '{name}' ao lado do dataset. Escolha outro nome.",
+        "en": "A folder named '{name}' already exists next to the dataset. Pick another name.",
+    },
+    "incorporate.base_changed": {
+        "pt": "O dataset mudou desde a prévia. Refaça a prévia.",
+        "en": "The dataset changed since the preview. Run the preview again.",
+    },
+    "incorporate.source_changed": {
+        "pt": "A imagem '{path}' mudou desde a prévia. Refaça a prévia.",
+        "en": "The image '{path}' changed since the preview. Run the preview again.",
+    },
     # ── updating the install from the page (gui/api/routes.py, ADR-120) ──────
     "update.foreign_origin": {
         "pt": "Atualização recusada: o pedido veio de uma página de outro site.",
