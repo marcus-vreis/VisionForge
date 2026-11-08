@@ -13,12 +13,15 @@ from datetime import datetime
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import IO, Any
 
+from visionforge.core.public_run_record import without_local_paths
+
 SAFETENSORS_SUFFIX = ".safetensors"
 JSON_SUFFIX = ".json"
 BUNDLE_SIZE_LIMIT_ERROR = "bundle exceeds size limit"
 RUN_FILENAME = "run.json"
 MANIFEST_FILENAME = "manifest.json"
 
+_PUBLIC_NOTE = "local paths reduced to their final name"
 _MAX_MEMBERS = 4096
 _MAX_MANIFEST_BYTES = 4 * 1024 * 1024
 _MAX_RUN_BYTES = 16 * 1024 * 1024
@@ -116,8 +119,14 @@ def _copy_and_hash(source: IO[bytes], target: IO[bytes]) -> dict[str, int | str]
     return {"size": size, "sha256": digest.hexdigest()}
 
 
-def export_experiment_bundle(run_dir: Path | str, destination: Path | str) -> Path:
+def export_experiment_bundle(
+    run_dir: Path | str, destination: Path | str, *, public: bool = False
+) -> Path:
     """Write a ZIP experiment record and refuse an existing destination.
+
+    ``public`` writes a run.json fit for a public archive (ADR-174): the
+    artifacts named as they sit in the bundle, ``run_dir`` as ``.``, and every
+    other local path reduced to its final name. The record on disk is untouched.
 
     Raises:
         FileExistsError: The destination already exists.
@@ -142,6 +151,9 @@ def export_experiment_bundle(run_dir: Path | str, destination: Path | str) -> Pa
             notes.append({"artifact": name, "reason": "outside run or linked file"})
     if len(files) + 1 > _MAX_MEMBERS:
         raise ValueError("bundle exceeds member limit")
+    if public:
+        raw = _public_run_record(root, data, files)
+        notes.append({"artifact": RUN_FILENAME, "reason": _PUBLIC_NOTE})
     descriptor, temporary = tempfile.mkstemp(
         prefix=".visionforge-bundle-", suffix=".zip", dir=destination.parent
     )
@@ -184,6 +196,36 @@ def verify_experiment_bundle(bundle_path: Path | str) -> dict[str, Any]:
         RuntimeError,
     ) as exc:
         raise ValueError("invalid experiment bundle") from exc
+
+
+def _public_run_record(
+    root: Path, data: dict[str, Any], files: dict[str, Path]
+) -> bytes:
+    """run.json as it goes into a public bundle, with no local path in it."""
+    record = without_local_paths(
+        {key: value for key, value in data.items() if key != "artifacts"}
+    )
+    record["run_dir"] = "."
+    artifacts: dict[str, Any] = {}
+    for category, values in data.get("artifacts", {}).items():
+        if isinstance(values, list):
+            names = (_bundled_name(root, value, files) for value in values)
+            artifacts[category] = [name for name in names if name is not None]
+        else:
+            artifacts[category] = _bundled_name(root, values, files)
+    record["artifacts"] = artifacts
+    return json.dumps(record, indent=2, ensure_ascii=False).encode()
+
+
+def _bundled_name(root: Path, value: Any, files: dict[str, Path]) -> str | None:
+    """The bundle member an artifact path became, or ``None`` if it was left out."""
+    if not isinstance(value, str):
+        return None
+    try:
+        name = _contained_file(root, value).relative_to(root).as_posix()
+    except (ValueError, OSError):
+        return None
+    return name if name in files else None
 
 
 def _read_run_record(root: Path) -> tuple[Path, bytes, dict[str, Any]]:
