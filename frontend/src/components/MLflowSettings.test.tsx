@@ -17,10 +17,16 @@ describe("MLflow profile controls", () => {
     const enabled = wrap(<ProfileTrackingSettings profile={{ ...profile, settings: { mlflow: { enabled: true } } }} onSaved={() => {}} />);
     expect(enabled).toContain('checked=""');
   });
-  it.each(["failed", "disabled"])("offers retry and diagnostics when %s", (state) => {
-    const html = wrap(<MLflowExportStatus runId="r1" tracking={{ state, error: "missing extra" }} onUpdated={() => {}} />);
+  it("offers retry and the error when the export failed", () => {
+    const html = wrap(<MLflowExportStatus runId="r1" tracking={{ state: "failed", error: "OSError" }} onUpdated={() => {}} />);
     expect(html).toContain(pt.mlflow.retry);
-    expect(html).toContain("missing extra");
+    expect(html).toContain(`${pt.mlflow.warning}: OSError`);
+  });
+  it("says how to install MLflow when the extra is missing", () => {
+    const html = wrap(<MLflowExportStatus runId="r1" tracking={{ state: "disabled", error: "ModuleNotFoundError" }} onUpdated={() => {}} />);
+    expect(html).toContain(pt.mlflow.retry);
+    expect(html).toContain(pt.mlflow.notInstalled);
+    expect(html).not.toContain("ModuleNotFoundError");
   });
   it("keeps old and successfully exported records free of warnings", () => {
     expect(wrap(<MLflowExportStatus runId="r1" onUpdated={() => {}} />)).toBe("");

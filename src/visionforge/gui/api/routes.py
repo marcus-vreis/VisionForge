@@ -108,6 +108,11 @@ from visionforge.gui.api.folder_opener import (
 from visionforge.gui.api.gpu_health import cuda_context_broken
 from visionforge.gui.api.http_responses import BAD_REQUEST as _BAD_REQUEST
 from visionforge.gui.api.http_responses import CONFLICT as _CONFLICT
+from visionforge.gui.api.http_responses import (
+    CONFLICT_TEXT,
+    NOT_FOUND_TEXT,
+    SERVER_ERROR_TEXT,
+)
 from visionforge.gui.api.http_responses import NOT_FOUND as _NOT_FOUND
 from visionforge.gui.api.http_responses import SERVER_ERROR as _SERVER_ERROR
 from visionforge.gui.api.incorporate_routes import router as incorporate_router
@@ -638,43 +643,55 @@ async def reveal_run_folder(
     return {"run_id": run_dir.name, "run_dir": str(run_dir.resolve())}
 
 
+_MLFLOW_UNAVAILABLE = "mlflow.retry_unavailable"
+
+
+def _mlflow_retry_record(run_dir: Path) -> dict[str, Any]:
+    """The run.json of a finished classification run, or 409/500."""
+    status = read_mlflow_status(run_dir)
+    if status is None or status.status == "RUNNING":
+        raise HTTPException(409, tr(_MLFLOW_UNAVAILABLE))
+    try:
+        data = json.loads((run_dir / RUN_FILENAME).read_bytes())
+    except (OSError, ValueError) as exc:
+        raise HTTPException(500, tr(RUN_BAD_JSON_KEY, error=exc)) from exc
+    if (
+        not isinstance(data, dict)
+        or not isinstance(data.get("config"), dict)
+        or _run_task(data) != "classification"
+    ):
+        raise HTTPException(409, tr(_MLFLOW_UNAVAILABLE))
+    return data
+
+
 @router.post(
     "/runs/{run_id}/mlflow/retry",
-    responses={**_NOT_FOUND, **_CONFLICT, **_SERVER_ERROR},
+    responses={
+        404: {"description": NOT_FOUND_TEXT},
+        409: {"description": CONFLICT_TEXT},
+        500: {"description": SERVER_ERROR_TEXT},
+    },
 )
 def retry_mlflow(run_id: str, profile: ProfileDep) -> MlflowStatus:
     """Reconcile a completed local classification run with its profile's MLflow store."""
     from visionforge.core.mlflow_tracking import MlflowTracker
 
     run_dir = _find_run_dir(run_id, profile)
-    if run_dir is None or not run_dir.resolve().is_relative_to(
-        profile.models_dir.resolve()
+    if (
+        run_dir is None
+        or not run_dir.resolve().is_relative_to(profile.models_dir.resolve())
+        or (run_dir / RUN_FILENAME).is_symlink()
     ):
         raise HTTPException(404, tr(RUN_NOT_FOUND_KEY, run_id=run_id))
-    record = run_dir / RUN_FILENAME
-    if record.is_symlink():
-        raise HTTPException(404, tr(RUN_NOT_FOUND_KEY, run_id=run_id))
     if not profile.settings.mlflow.enabled or not _EVIDENCE_EXPORTS.reserve(run_dir):
-        raise HTTPException(409, tr("mlflow.retry_unavailable"))
+        raise HTTPException(409, tr(_MLFLOW_UNAVAILABLE))
     try:
-        status = read_mlflow_status(run_dir)
-        if status is None or status.status == "RUNNING":
-            raise HTTPException(409, tr("mlflow.retry_unavailable"))
-        try:
-            data = json.loads(record.read_bytes())
-        except (OSError, ValueError) as exc:
-            raise HTTPException(500, tr(RUN_BAD_JSON_KEY, error=exc)) from exc
-        if (
-            not isinstance(data, dict)
-            or not isinstance(data.get("config"), dict)
-            or _run_task(data) != "classification"
-        ):
-            raise HTTPException(409, tr("mlflow.retry_unavailable"))
+        data = _mlflow_retry_record(run_dir)
         tracker = MlflowTracker(_PROFILES_DIR.parent / "mlflow", profile.slug, run_dir)
         tracker.retry(data)
         result = read_mlflow_status(run_dir)
         if result is None:
-            raise HTTPException(500, tr("mlflow.retry_unavailable"))
+            raise HTTPException(500, tr(_MLFLOW_UNAVAILABLE))
         return result
     finally:
         _EVIDENCE_EXPORTS.release(run_dir)
