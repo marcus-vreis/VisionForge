@@ -156,6 +156,20 @@ def test_parameters_reject_ambiguity_and_exclude_sensitive_keys() -> None:
     assert MlflowTracker._parameters({"long": "x" * 251}) == {}
 
 
+def test_parameters_exclude_folder_settings() -> None:
+    # A real run.json carries data.base_dir and output.*_dir with local paths.
+    config = {
+        "data": {"base_dir": "C:/Users/someone/datasets/x", "train_dir": "train"},
+        "output": {"models_dir": "outputs/models", "logs_dir": "outputs/logs"},
+        "training": {"epochs": 3},
+        "model": {"direction": "max"},
+    }
+    assert MlflowTracker._parameters(config) == {
+        "training.epochs": "3",
+        "model.direction": '"max"',
+    }
+
+
 @pytest.mark.parametrize("profile", ["../other", "", "A", "a" * 41])
 def test_invalid_profile_is_best_effort(tmp_path: Path, profile: str) -> None:
     run_dir = tmp_path / "run"

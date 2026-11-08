@@ -23,7 +23,11 @@ _METRICS = {
     "lr": "lr",
 }
 _STATUSES = {"FINISHED", "KILLED", "FAILED"}
-_PRIVATE = re.compile(r"token|password|secret|credential|path|uri|url", re.I)
+# Keys never exported: secrets, and anything holding a local path (*_dir too,
+# e.g. data.base_dir carries the user's folder and name).
+_PRIVATE = re.compile(
+    r"token|password|secret|credential|path|uri|url|(?:^|_)dirs?$", re.I
+)
 
 
 class MlflowTracker:
