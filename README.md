@@ -96,6 +96,9 @@ directory where the GUI started, run
 classification runs, epoch metrics and the final `run.json`. To follow them on
 Weights & Biases, install `visionforge-studio[wandb]`, turn W&B on in the
 profile picker and save an API key there; runs go to a private project.
+To cite a run by DOI, open it in History and create a Zenodo draft: the
+bundle goes up without this machine's paths, and you fill in authors and
+license and publish on Zenodo.
 
 </details>
 
@@ -335,7 +338,9 @@ os parâmetros, as métricas por época e o `run.json` final. Se a exportação
 falhar, abra a execução no Histórico para tentar novamente. Para acompanhar
 no Weights & Biases, instale `visionforge-studio[wandb]`, ligue o W&B no
 seletor de perfis e salve lá uma chave de API; os treinos vão para um projeto
-privado.
+privado. Para citar um treino por DOI, abra-o no Histórico e crie um rascunho
+no Zenodo: o bundle sobe sem os caminhos desta máquina, e você preenche
+autores e licença e publica no próprio Zenodo.
 
 </details>
 

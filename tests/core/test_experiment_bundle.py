@@ -348,3 +348,72 @@ def test_source_manifest_cannot_shadow_generated_manifest(tmp_path: Path) -> Non
     assert manifest["notes"] == [
         {"artifact": "config", "reason": "reserved bundle member name"}
     ]
+
+
+def _public_run(tmp_path: Path) -> Path:
+    run_dir = tmp_path / "run"
+    (run_dir / "weights").mkdir(parents=True)
+    (run_dir / "weights/best.pt").write_bytes(b"weights")
+    (run_dir / "curve.png").write_bytes(b"png")
+    dataset = r"C:\Users\ana\Documents\VisionForge\datasets\gatos"
+    record = {
+        "run_dir": str(run_dir),
+        "config": {"seed": 42, "data": {"base_dir": dataset}},
+        "dataset_fingerprint": {"root": dataset, "sha256": "abc"},
+        "history": [],
+        "experiment": "gatos_001",
+        "status": "completed",
+        "timestamp": "2026-11-08T10:00:00",
+        "metrics": {"total_epochs": 1, "accuracy": 0.9},
+        "artifacts": {
+            "model": str(run_dir / "weights/best.pt"),
+            "graphics": [str(run_dir / "curve.png"), str(tmp_path / "outside.png")],
+            "report": None,
+        },
+    }
+    (run_dir / "run.json").write_text(json.dumps(record), encoding="utf-8")
+    return run_dir
+
+
+def test_a_public_bundle_has_no_local_path_and_leaves_the_run_alone(
+    tmp_path: Path,
+) -> None:
+    run_dir = _public_run(tmp_path)
+    on_disk = (run_dir / "run.json").read_bytes()
+    destination = tmp_path / "public.zip"
+
+    export_experiment_bundle(run_dir, destination, public=True)
+
+    manifest = verify_experiment_bundle(destination)
+    with zipfile.ZipFile(destination) as bundle:
+        text = bundle.read("run.json").decode()
+    record = json.loads(text)
+    assert record["run_dir"] == "."
+    # Graphics are not bundle members (ADR-135), so the record lists none.
+    assert record["artifacts"] == {
+        "model": "weights/best.pt",
+        "graphics": [],
+        "report": None,
+    }
+    assert record["config"]["data"]["base_dir"] == "gatos"
+    assert record["dataset_fingerprint"] == {"root": "gatos", "sha256": "abc"}
+    assert "ana" not in text
+    assert str(tmp_path) not in text
+    assert {
+        "artifact": "run.json",
+        "reason": "local paths reduced to their final name",
+    } in manifest["notes"]
+    assert (run_dir / "run.json").read_bytes() == on_disk
+
+
+def test_a_public_bundle_imports_with_its_model(tmp_path: Path) -> None:
+    from visionforge.core.experiment_bundle import import_experiment_bundle
+
+    destination = tmp_path / "public.zip"
+    export_experiment_bundle(_public_run(tmp_path), destination, public=True)
+
+    imported = import_experiment_bundle(destination, tmp_path / "models")
+
+    record = json.loads((imported / "run.json").read_text(encoding="utf-8"))
+    assert Path(record["artifacts"]["model"]) == imported / "weights" / "best.pt"
+    assert (imported / "weights" / "best.pt").read_bytes() == b"weights"

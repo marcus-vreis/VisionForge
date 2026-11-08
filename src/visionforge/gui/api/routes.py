@@ -208,6 +208,7 @@ from visionforge.gui.api.torch_onnx_export import (
     export_segmentation_run,
 )
 from visionforge.gui.api.wandb_routes import build_wandb_router
+from visionforge.gui.api.zenodo_routes import build_zenodo_router
 from visionforge.models.factory import ModelFactory
 from visionforge.tasks.base import TaskSpec
 from visionforge.tasks.engine import GenericTaskEngine
@@ -531,6 +532,13 @@ router.include_router(
         ),
         lambda: _PROFILES_DIR.parent.resolve(),
         _EVIDENCE_EXPORTS,
+    )
+)
+# Unpublished Zenodo drafts of a run's bundle (ADR-174).
+router.include_router(
+    build_zenodo_router(
+        lambda header: current_profile(header),
+        lambda run_id, profile: _find_run_dir(run_id, profile),
     )
 )
 # The real training code behind the "Código" tab (ADR-173).

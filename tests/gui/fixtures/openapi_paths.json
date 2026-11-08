@@ -104,6 +104,38 @@
       }
     }
   },
+  "DELETE /api/zenodo/sandbox/token": {
+    "operationId": "forget_api_zenodo_sandbox_token_delete",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "DELETE /api/zenodo/token": {
+    "operationId": "forget_api_zenodo_token_delete",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
   "GET /api/anomaly/schema": {
     "operationId": "get_anomaly_schema_api_anomaly_schema_get",
     "parameters": [
@@ -708,6 +740,56 @@
   },
   "GET /api/wandb/token": {
     "operationId": "status_api_wandb_token_get",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "GET /api/zenodo/preview": {
+    "operationId": "preview_api_zenodo_preview_get",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional",
+      "query:run_id:required"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "404": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "GET /api/zenodo/sandbox/token": {
+    "operationId": "status_api_zenodo_sandbox_token_get",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "GET /api/zenodo/token": {
+    "operationId": "status_api_zenodo_token_get",
     "parameters": [
       "header:X-VF-Lang:optional",
       "header:X-VF-Profile:optional"
@@ -2545,6 +2627,27 @@
       "500": {}
     }
   },
+  "POST /api/zenodo/export": {
+    "operationId": "send_api_zenodo_export_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {
+      "application/json": "ZenodoExport"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "404": {},
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      },
+      "502": {}
+    }
+  },
   "PUT /api/hub/token": {
     "operationId": "save_api_hub_token_put",
     "parameters": [
@@ -2586,6 +2689,42 @@
   },
   "PUT /api/wandb/token": {
     "operationId": "save_api_wandb_token_put",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {
+      "application/json": "ProfileToken"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "PUT /api/zenodo/sandbox/token": {
+    "operationId": "save_api_zenodo_sandbox_token_put",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {
+      "application/json": "ProfileToken"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "PUT /api/zenodo/token": {
+    "operationId": "save_api_zenodo_token_put",
     "parameters": [
       "header:X-VF-Lang:optional",
       "header:X-VF-Profile:optional"

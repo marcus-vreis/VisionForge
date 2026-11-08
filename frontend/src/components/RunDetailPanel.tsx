@@ -38,6 +38,7 @@ import { DownloadBundleButton } from "./DownloadBundleButton";
 import { MLflowExportStatus } from "./MLflowExportStatus";
 import { WandbExportStatus } from "./WandbExportStatus";
 import { HubExportPanel } from "./HubExportPanel";
+import { ZenodoExportPanel } from "./ZenodoExportPanel";
 import { activeProfileSlug } from "../lib/profile";
 
 interface RunDetailPanelProps {
@@ -580,6 +581,7 @@ export function RunDetailPanel({ runId, onBack, onOpenRun, knownRunIds }: RunDet
       {detail && (
         <>
           {!detail.group && <HubExportPanel key={`${activeProfileSlug()}:${runId}`} runId={runId} />}
+          {!detail.group && <ZenodoExportPanel key={`zenodo:${activeProfileSlug()}:${runId}`} runId={runId} />}
           {/* A replicate group is a job, not a training: its numbers are the
               report's (mean ± CI95, paired tests) and its seeds are runs of
               their own (ADR-113). */}

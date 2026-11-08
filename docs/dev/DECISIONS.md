@@ -7390,3 +7390,58 @@ branches show as undecided.
 - *Line numbers in the notes.* Any edit above a note would move it silently.
 - *Notes in the frontend.* The anchors could not be checked against the Python
   source in one test.
+
+## ADR-174 — A run's bundle goes to Zenodo as an unpublished draft
+
+**Date:** 2026-11-08
+**Status:** Accepted
+**Extends:** ADR-135 (experiment bundle), ADR-171 (profile tokens)
+
+**Context:** phase 4 of #118. A paper cites an experiment by DOI, and Zenodo
+mints one when a record is published. Publishing is permanent: a published
+record and its files cannot be deleted, only versioned. The experiment bundle
+(ADR-135) already holds what a reader needs to check a run (run.json, the
+checkpoint, conventional records, a SHA-256 manifest), but its run.json names
+this machine's folders by absolute path, and a path under the home folder
+carries the account name.
+
+**Decision:**
+
+- History gets a "Create a Zenodo draft" panel beside the Hub one. The server
+  builds the bundle, the page shows its file name, size, members and what was
+  left out, and the upload must match the previewed manifest digest, as with the
+  Hub.
+- **Draft only.** The export creates an empty deposition
+  (`POST /api/deposit/depositions`) and puts the bundle in its file bucket. It
+  never sends metadata and never calls `actions/publish`. Title, authors,
+  license and publishing happen on Zenodo. The page recommends a token with
+  `deposit:write` only: without `deposit:actions` the token cannot publish.
+- **A public run.json.** `export_experiment_bundle(..., public=True)` writes the
+  record with `run_dir` as `.`, the artifacts named as bundle members, and every
+  other local path reduced to its final name (`core/public_run_record.py`):
+  whole-value paths, and drive, UNC and home-like POSIX paths inside text. The
+  manifest notes the rewrite; the run on disk is untouched, and the bundle still
+  verifies and imports (the model comes back).
+- **Two sites, two tokens.** zenodo.org and sandbox.zenodo.org have separate
+  accounts. The profile keeps one token for each (`zenodo`, `zenodo-sandbox`,
+  ADR-171's storage), and the page picks the site, so a test token never reaches
+  the real Zenodo.
+- The token travels only as a Bearer header over HTTPS, and only to links on the
+  chosen site's host: a bucket link on another host is refused before the
+  upload. Zenodo's answer body is never shown; a 401 or 403 becomes "Zenodo
+  refused the token" and anything else a generic failure.
+
+**Consequences:** an export creates a new draft every time; a researcher who
+sends twice has two drafts to keep or discard on Zenodo. The bundle carries what
+ADR-135 allows (graphics are not members), and a checkpoint goes as it was saved.
+A record that names a local path inside some other kind of text (not a drive,
+UNC or home-like path) keeps it; the preview is where it shows.
+
+**Alternatives considered:**
+
+- *Publishing from the GUI.* One click short of a permanent DOI, with nothing
+  to undo a wrong file or author list.
+- *Filling the draft metadata from the profile.* The profile name is a label,
+  not an author list (ADR-114), and a license is a decision the tool cannot
+  infer.
+- *The raw bundle.* It would put the account name into a permanent archive.

@@ -726,6 +726,42 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "pt": "O envio ao Hugging Face Hub falhou. Confira o token, a conexão e o nome do repositório.",
         "en": "The Hugging Face Hub upload failed. Check the token, the connection and the repository name.",
     },
+    "zenodo.request_invalid": {
+        "pt": "Pedido inválido para o Zenodo.",
+        "en": "Invalid Zenodo request.",
+    },
+    "zenodo.token_invalid": {
+        "pt": "Token inválido: cole o token inteiro, sem espaços.",
+        "en": "Invalid token: paste the whole token, without spaces.",
+    },
+    "zenodo.token_missing": {
+        "pt": "Salve um token do Zenodo neste perfil antes de enviar.",
+        "en": "Save a Zenodo token in this profile before uploading.",
+    },
+    "zenodo.token_rejected": {
+        "pt": "O Zenodo recusou o token. Confira se ele é deste site (Zenodo ou Sandbox) e se tem o escopo deposit:write.",
+        "en": "Zenodo refused the token. Check that it belongs to this site (Zenodo or Sandbox) and has the deposit:write scope.",
+    },
+    "zenodo.run_not_found": {
+        "pt": "Execução não encontrada.",
+        "en": "Run not found.",
+    },
+    "zenodo.artifact_missing": {
+        "pt": "O registro desta execução não foi encontrado.",
+        "en": "The record of this run was not found.",
+    },
+    "zenodo.package_invalid": {
+        "pt": "Esta execução não pode ser enviada: {reason}",
+        "en": "This run cannot be uploaded: {reason}",
+    },
+    "zenodo.preview_changed": {
+        "pt": "Os arquivos mudaram depois da prévia. Abra a prévia de novo e confira.",
+        "en": "The files changed after the preview. Open the preview again and review it.",
+    },
+    "zenodo.export_failed": {
+        "pt": "O envio ao Zenodo falhou. Confira a conexão e tente de novo.",
+        "en": "The Zenodo upload failed. Check the connection and try again.",
+    },
     "wandb.request_invalid": {
         "pt": "Pedido inválido para o Weights & Biases.",
         "en": "Invalid Weights & Biases request.",

@@ -1897,3 +1897,54 @@ export async function exportRunToHub(runId: string, repoId: string, digest: stri
     body: JSON.stringify({ run_id: runId, repo_id: repoId, digest }),
   });
 }
+
+/** Which Zenodo receives a draft: the real one or its test sandbox (ADR-174). */
+export type ZenodoSite = "zenodo" | "sandbox";
+
+export interface ZenodoPreview {
+  name: string;
+  size: number;
+  files: string[];
+  notes: { artifact: string; reason: string }[];
+  digest: string;
+}
+
+export interface ZenodoDraft {
+  id: number | null;
+  url: string;
+  sandbox: boolean;
+  name: string;
+}
+
+const zenodoToken = (site: ZenodoSite) => (site === "sandbox" ? "/zenodo/sandbox/token" : "/zenodo/token");
+
+/** Whether this profile has a token for `site`; the token never comes back. */
+export async function fetchZenodoToken(site: ZenodoSite): Promise<HubTokenStatus> {
+  return request<HubTokenStatus>(zenodoToken(site));
+}
+
+/** Save this profile's token for `site` on the server. */
+export async function saveZenodoToken(site: ZenodoSite, token: string): Promise<HubTokenStatus> {
+  return request<HubTokenStatus>(zenodoToken(site), {
+    method: "PUT", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token }),
+  });
+}
+
+/** Forget this profile's token for `site`. */
+export async function deleteZenodoToken(site: ZenodoSite): Promise<HubTokenStatus> {
+  return request<HubTokenStatus>(zenodoToken(site), { method: "DELETE" });
+}
+
+/** The bundle a draft would receive, built on the server without the network. */
+export async function fetchZenodoPreview(runId: string): Promise<ZenodoPreview> {
+  return request<ZenodoPreview>(`/zenodo/preview?run_id=${encodeURIComponent(runId)}`);
+}
+
+/** Create an unpublished draft holding the previewed bundle. */
+export async function createZenodoDraft(runId: string, digest: string, site: ZenodoSite): Promise<ZenodoDraft> {
+  return request<ZenodoDraft>("/zenodo/export", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ run_id: runId, digest, sandbox: site === "sandbox" }),
+  });
+}
