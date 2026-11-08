@@ -113,6 +113,8 @@ free. Walkthrough: [`docs/custom/TASKS.md`](custom/TASKS.md).
 
 ## Where to go next
 
+- [Export a checkpoint to a private Hugging Face repository](gui/hugging-face-hub.md)
+
 - [`README.md`](../README.md) — what VisionForge does, in English and Portuguese
 - [`docs/DATASETS.md`](DATASETS.md) — dataset layouts and the download providers
 - [`docs/custom/`](custom/) — your own architectures and whole task families

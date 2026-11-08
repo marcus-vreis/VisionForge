@@ -1770,3 +1770,46 @@ export async function cocoImportApply(
 export async function cocoImportCancel(jobId: string): Promise<void> {
   await cocoPost<unknown>(cocoJob("import", jobId, "/cancel"));
 }
+
+
+export interface HubTokenStatus {
+  configured: boolean;
+  shared: boolean;
+}
+
+export interface HubPreview {
+  files: string[];
+  digest: string;
+  card: string;
+}
+
+/** Read this profile's token availability without returning the secret. */
+export async function fetchHubToken(): Promise<HubTokenStatus> {
+  return request<HubTokenStatus>("/hub/token");
+}
+
+/** Save a Hub token for the active profile on the server. */
+export async function saveHubToken(token: string): Promise<HubTokenStatus> {
+  return request<HubTokenStatus>("/hub/token", {
+    method: "PUT", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token }),
+  });
+}
+
+/** Remove the active profile's saved Hub token. */
+export async function deleteHubToken(): Promise<HubTokenStatus> {
+  return request<HubTokenStatus>("/hub/token", { method: "DELETE" });
+}
+
+/** Preview the exact files and card before an explicit Hub upload. */
+export async function fetchHubPreview(runId: string): Promise<HubPreview> {
+  return request<HubPreview>(`/hub/preview?run_id=${encodeURIComponent(runId)}`);
+}
+
+/** Upload the previously reviewed snapshot to the requested Hub repository. */
+export async function exportRunToHub(runId: string, repoId: string, digest: string): Promise<{ url: string }> {
+  return request<{ url: string }>("/hub/export", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ run_id: runId, repo_id: repoId, digest }),
+  });
+}

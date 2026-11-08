@@ -36,6 +36,8 @@ import { RunGroupDetail } from "./RunGroupDetail";
 import { DownloadBundleButton } from "./DownloadBundleButton";
 
 import { MLflowExportStatus } from "./MLflowExportStatus";
+import { HubExportPanel } from "./HubExportPanel";
+import { activeProfileSlug } from "../lib/profile";
 
 interface RunDetailPanelProps {
   runId: string;
@@ -574,6 +576,7 @@ export function RunDetailPanel({ runId, onBack, onOpenRun, knownRunIds }: RunDet
 
       {detail && (
         <>
+          {!detail.group && <HubExportPanel key={`${activeProfileSlug()}:${runId}`} runId={runId} />}
           {/* A replicate group is a job, not a training: its numbers are the
               report's (mean ± CI95, paired tests) and its seeds are runs of
               their own (ADR-113). */}

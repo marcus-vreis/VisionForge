@@ -99,6 +99,7 @@ tensorboard = []
 roboflow = []
 kaggle = []
 huggingface = []
+hub = ["huggingface-hub>=1.16.1,<2"]
 
 dev = [
     "pytest>=8.0",
