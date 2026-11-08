@@ -4,7 +4,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from visionforge.gui.api import hub_routes, routes
+from visionforge.gui.api import profile_tokens, routes
 from visionforge.gui.server import app
 
 
@@ -15,7 +15,7 @@ def test_credentials_are_private_to_workspace_and_profile(tmp_path, monkeypatch)
     # The real bind host lives on app.state, which newer Starlette does not let
     # monkeypatch restore; the route only asks whether that host is loopback.
     loopback = {"value": False}
-    monkeypatch.setattr(hub_routes, "is_loopback_host", lambda _: loopback["value"])
+    monkeypatch.setattr(profile_tokens, "is_loopback_host", lambda _: loopback["value"])
     client = TestClient(app)
     assert client.post("/api/profiles", json={"name": "Lab"}).status_code == 201
     url = "/api/hub/token"

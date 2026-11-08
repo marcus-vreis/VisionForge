@@ -12,6 +12,7 @@ from visionforge.core.data import DataModule
 from visionforge.core.evaluator import EvalResult, Evaluator, bootstrap_eval_cis
 from visionforge.core.metric_ci import MetricCI
 from visionforge.core.plotter import MetricsPlotter
+from visionforge.core.run_trackers import TrackerFactory
 from visionforge.core.trainer import Trainer, TrainResult, seed_before_building
 from visionforge.models.factory import ModelFactory
 from visionforge.utils.config import ExperimentConfig
@@ -27,7 +28,7 @@ class ClassificationBlock(ExperimentBlock):
     """
 
     def setup(self, config: ExperimentConfig) -> None:
-        self.mlflow_context: tuple[Path, str] | None = None
+        self.tracker_factories: tuple[TrackerFactory, ...] = ()
         self._config = config
         self._train_result: TrainResult | None = None
         self._eval_result: EvalResult | None = None
@@ -87,7 +88,7 @@ class ClassificationBlock(ExperimentBlock):
         # `visionforge gui` the traceback keeps `data` alive, so without this the
         # processes outlive the run and each retry stacks more of them.
         trainer = Trainer(self._config)
-        trainer.mlflow_context = self.mlflow_context
+        trainer.tracker_factories = self.tracker_factories
         status = "FAILED"
         try:
             self._train_result = trainer.fit(
@@ -119,8 +120,8 @@ class ClassificationBlock(ExperimentBlock):
             self._update_run_json(run_dir, graphics)
             status = "KILLED" if self._train_result.stopped else "FINISHED"
         finally:
-            if self.mlflow_context is not None and trainer.mlflow_tracker is not None:
-                trainer.mlflow_tracker.finish(status)
+            for tracker in trainer.trackers:
+                tracker.finish(status)
             data.close()
 
     def _run_evaluate(self) -> None:

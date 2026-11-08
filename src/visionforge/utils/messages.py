@@ -726,6 +726,26 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "pt": "O envio ao Hugging Face Hub falhou. Confira o token, a conexão e o nome do repositório.",
         "en": "The Hugging Face Hub upload failed. Check the token, the connection and the repository name.",
     },
+    "wandb.request_invalid": {
+        "pt": "Pedido inválido para o Weights & Biases.",
+        "en": "Invalid Weights & Biases request.",
+    },
+    "wandb.token_invalid": {
+        "pt": "Chave inválida: cole a chave de API inteira, sem espaços.",
+        "en": "Invalid key: paste the whole API key, without spaces.",
+    },
+    "wandb.token_missing": {
+        "pt": "Salve uma chave de API do W&B neste perfil antes de enviar.",
+        "en": "Save a W&B API key in this profile before uploading.",
+    },
+    "wandb.name_invalid": {
+        "pt": "Use só letras, números, ponto, hífen e sublinhado (até 128).",
+        "en": "Use only letters, digits, dot, hyphen and underscore (up to 128).",
+    },
+    "wandb.retry_unavailable": {
+        "pt": "O envio ao W&B está indisponível para esta execução ou perfil.",
+        "en": "W&B export is unavailable for this run or profile.",
+    },
     "mlflow.retry_unavailable": {
         "pt": "A exportação para MLflow está indisponível para esta execução ou perfil.",
         "en": "MLflow export is unavailable for this run or profile.",

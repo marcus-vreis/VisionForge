@@ -7272,3 +7272,65 @@ can still change remotely after the final repository check.
 **Alternatives considered:** A process-wide Hub login would let profiles use
 one another's credentials. Sending the entire run directory would disclose
 configuration, dataset paths and unrelated outputs.
+
+## ADR-172 — Private Weights & Biases export of classification runs
+
+**Date:** 2026-11-08
+**Status:** Accepted
+**Extends:** ADR-170 (MLflow export), ADR-171 (profile tokens)
+
+**Context:** phase 3 of #118. MLflow (ADR-170) keeps a run on this machine; a
+research group that already follows its runs on Weights & Biases wants them
+there too, without the export deciding anything about the training and without
+anything private leaving the computer. `wandb.init` creates a missing project
+with the account's default visibility, which may be public, and the SDK sends
+the git remote, the code, the console, the package list, the host name and the
+command line unless told not to.
+
+**Decision:**
+
+- A profile setting `wandb: {enabled, project, entity}`, off by default; an
+  empty `entity` is the key owner's user. The API key is saved like the Hub
+  token (ADR-171), in `<config>/wandb-tokens/<hash of profile>`, and the page
+  only learns whether one exists. `gui/api/profile_tokens.py` now holds both.
+- Classification training only, as for MLflow. The trainer and the block take a
+  list of trackers (`core/run_trackers.py`) instead of the MLflow-only fields, so
+  both exporters ride on the same calls: start when the run folder exists, one
+  call per epoch, finish on every exit path. Every call is a best-effort
+  boundary; a failure is written to `wandb.json` beside the run.
+- **Private before the first upload.** Through W&B's GraphQL API, with only
+  the profile's key, the project is created with `access: "PRIVATE"`, or an
+  existing one is read. Any other visibility is refused and left as it is; the
+  run is not sent. The call goes over HTTPS with Basic auth and never through a
+  saved `wandb login`.
+- **What leaves:** the public parameters (the same projection as MLflow, now
+  shared in `core/tracking_privacy.py`), the epoch metrics at `step=epoch`, and
+  the final public metrics (the Hub's list) as the run summary. Not `run.json`,
+  which carries the dataset path. The settings turn off git, code, console,
+  system stats, host metadata and `requirements.txt`, and the mode is forced to
+  `online`, so an ambient `WANDB_MODE` cannot silently drop the export.
+- The W&B run id is the first 32 hex digits of the hash of profile and run
+  folder, with `resume="allow"`: the History's retry reopens the same run, and
+  W&B drops the steps it already has, so only missing epochs are added.
+- Optional extra `visionforge-studio[wandb]`, pinned like `mlflow`.
+
+**Consequences:** checked against the real `wandb` 0.31.0 in offline mode with
+a real one-epoch run: the record holds the chart keys, `test_*` metrics and
+`model.name`; no file of the run holds the user's home folder, the dataset path
+or `base_dir`; `files/` is empty; and `WANDB_MODE=disabled` did not stop it. The
+online path (the GraphQL calls, the private project and the upload) is covered
+only by fakes: it needs a real key. The W&B log `logs/debug.log` stays local and
+names the user's folder. A project made private here can still be made public
+on W&B later. A self-hosted W&B server is not supported: the address is the
+SDK's default.
+
+**Alternatives considered:**
+
+- *Let `wandb.init` create the project.* Its visibility would be the account's
+  default, which this code cannot see beforehand.
+- *Set an existing project to private.* It would change a project the user
+  configured on purpose; refusing says what is wrong without touching it.
+- *Read the visibility through the SDK.* Its public `Project` has no access
+  field in 0.31; the private GraphQL helpers it uses can change in any release.
+- *Upload `run.json` as a file, as MLflow does.* MLflow keeps it on this
+  machine; on W&B it would publish the dataset path and the config's folders.

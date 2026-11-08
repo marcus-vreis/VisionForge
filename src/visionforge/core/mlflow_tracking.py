@@ -14,21 +14,14 @@ from typing import Any
 
 from loguru import logger
 
+from visionforge.core.tracking_privacy import (
+    TRACKER_METRIC_KEYS,
+    public_parameters,
+)
+
 _LOCK = RLock()
-_METRICS = {
-    "train_loss": "loss/train",
-    "val_loss": "loss/val",
-    "train_accuracy": "accuracy/train",
-    "val_accuracy": "accuracy/val",
-    "lr": "lr",
-}
 _STATUSES = {"FINISHED", "KILLED", "FAILED"}
 _SIDECAR = "tracking.json"
-# Keys never exported: secrets, and anything holding a local path (*_dir too,
-# e.g. data.base_dir carries the user's folder and name).
-_PRIVATE = re.compile(
-    r"(?:token|password|secret|credential|path|uri|url)|(?:(?:^|_)dirs?$)", re.I
-)
 
 
 class MlflowTracker:
@@ -187,7 +180,7 @@ class MlflowTracker:
 
         pending = []
         for name, value in metrics.items():
-            key = _METRICS.get(name, name)
+            key = TRACKER_METRIC_KEYS.get(name, name)
             if self._is_new_value(key, value, epoch):
                 # Stable identity also covers a remote commit before local acknowledgement.
                 pending.append(Metric(key, float(value), epoch, epoch))
@@ -219,7 +212,10 @@ class MlflowTracker:
     @staticmethod
     def _parameters(config: dict[str, Any]) -> dict[str, str]:
         result: dict[str, str] = {}
-        _collect_parameters(config, "", result)
+        for key, value in public_parameters(config).items():
+            encoded = json.dumps(value, ensure_ascii=True, allow_nan=False)
+            if len(key) <= 250 and len(encoded) <= 250:
+                result[key] = encoded
         return result
 
     def _save(self) -> None:
@@ -253,21 +249,3 @@ class MlflowTracker:
         self._error = type(exc).__name__
         logger.warning("MLflow export unavailable ({})", self._error)
         self._save_safely()
-
-
-def _collect_parameters(
-    data: dict[str, Any], prefix: str, result: dict[str, str]
-) -> None:
-    """Flatten scalar config values into ``result``, skipping private keys."""
-    for name, value in sorted(data.items()):
-        if not isinstance(name, str) or _PRIVATE.search(name):
-            continue
-        if not re.fullmatch(r"[A-Za-z0-9_-]+", name):
-            raise ValueError("Ambiguous parameter name")
-        key = f"{prefix}.{name}" if prefix else name
-        if isinstance(value, dict):
-            _collect_parameters(value, key, result)
-        elif value is None or isinstance(value, (str, bool, int, float)):
-            encoded = json.dumps(value, ensure_ascii=True, allow_nan=False)
-            if len(key) <= 250 and len(encoded) <= 250:
-                result[key] = encoded

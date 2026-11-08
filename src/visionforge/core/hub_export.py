@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import hashlib
 import json
-import math
 import os
 import re
 import shutil
 import tempfile
 from pathlib import Path
 from typing import Any
+
+from visionforge.core.tracking_privacy import public_metrics
 
 _ENDPOINT = "https://huggingface.co"
 _MAX_RECORD = 16 * 1024 * 1024
@@ -21,36 +22,6 @@ _PRIVATE = re.compile(
     r"config|secret|credential|token|password|dataset|(?:^|[_-])(?:logs?|data|keys?)(?:$|[_-])",
     re.I,
 )
-_METRICS = {
-    "accuracy",
-    "precision",
-    "recall",
-    "f1",
-    "auc",
-    "auroc",
-    "auc_roc",
-    "loss",
-    "mse",
-    "rmse",
-    "mae",
-    "r2",
-    "miou",
-    "dice",
-    "pixel_acc",
-    "threshold",
-    "image_f1",
-    "map50",
-    "map50_95",
-    "best_val_loss",
-    "total_epochs",
-    "best_epoch",
-    "train_loss",
-    "val_loss",
-    "train_accuracy",
-    "val_accuracy",
-    "lr",
-    "epoch",
-}
 _TASKS = {"classification", "detection", "regression", "segmentation", "anomaly"}
 
 
@@ -173,32 +144,6 @@ def _safe_file(root: Path, value: str) -> Path:
     return candidate
 
 
-_SPLIT_PREFIXES = ("test_", "val_", "best_")
-
-
-def _is_metric_name(key: str) -> bool:
-    """A known metric, bare or with a split prefix (test_accuracy, val_f1)."""
-    if key in _METRICS:
-        return True
-    return any(
-        key.startswith(prefix) and key[len(prefix) :] in _METRICS
-        for prefix in _SPLIT_PREFIXES
-    )
-
-
-def _numeric(data: Any) -> dict[str, int | float]:
-    if not isinstance(data, dict):
-        return {}
-    return {
-        key: value
-        for key, value in sorted(data.items())
-        if _is_metric_name(key)
-        and isinstance(value, (int, float))
-        and not isinstance(value, bool)
-        and math.isfinite(value)
-    }
-
-
 def _prepare(run_dir: Path, staging: Path) -> dict[str, Any]:
     root = run_dir.resolve(strict=True)
     source = _safe_file(root, _RECORD)
@@ -248,13 +193,13 @@ def _prepare(run_dir: Path, staging: Path) -> dict[str, Any]:
         else "unknown"
     )
     history = data.get("history")
-    metrics = _numeric(data.get("metrics"))
+    metrics = public_metrics(data.get("metrics"))
     record = {
         "export_format": "visionforge-hub-1",
         "task": task,
         "status": status,
         "metrics": metrics,
-        "history": [_numeric(row) for row in history]
+        "history": [public_metrics(row) for row in history]
         if isinstance(history, list)
         else [],
     }
