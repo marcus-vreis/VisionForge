@@ -11,6 +11,7 @@ import uuid
 from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import asdict, dataclass
 from datetime import datetime
+from functools import partial
 from pathlib import Path
 from typing import Annotated, Any, Literal, NoReturn
 
@@ -64,6 +65,7 @@ from visionforge.core.replicates import (
     run_replicates,
 )
 from visionforge.core.run_groups import write_run_group
+from visionforge.core.run_trackers import TrackerFactory
 from visionforge.core.sweep import (
     SweepTrial,
     planned_trials,
@@ -120,6 +122,7 @@ from visionforge.gui.api.incorporate_routes import router as incorporate_router
 from visionforge.gui.api.merge_routes import router as merge_router
 from visionforge.gui.api.model_card import _stopped_extent as _stopped_extent
 from visionforge.gui.api.model_card import render_run_markdown as _render_run_markdown
+from visionforge.gui.api.profile_tokens import read_token
 from visionforge.gui.api.profiles import (
     PROFILE_HEADER,
     InvalidProfileError,
@@ -149,7 +152,11 @@ from visionforge.gui.api.run_queue import (
     StopPoint,
     colab_lane,
 )
-from visionforge.gui.api.runs_routes import build_runs_router, read_mlflow_status
+from visionforge.gui.api.runs_routes import (
+    build_runs_router,
+    read_mlflow_status,
+    read_wandb_status,
+)
 from visionforge.gui.api.sample_dataset import (
     SampleDatasetExistsError,
     SampleTaskError,
@@ -188,6 +195,7 @@ from visionforge.gui.api.schemas import (
     TaskCvRequest,
     TaskDescriptor,
     TaskListResponse,
+    WandbStatus,
 )
 from visionforge.gui.api.system_routes import build_system_router
 from visionforge.gui.api.torch_batch_predict import (
@@ -198,6 +206,7 @@ from visionforge.gui.api.torch_onnx_export import (
     export_regression_run,
     export_segmentation_run,
 )
+from visionforge.gui.api.wandb_routes import build_wandb_router
 from visionforge.models.factory import ModelFactory
 from visionforge.tasks.base import TaskSpec
 from visionforge.tasks.engine import GenericTaskEngine
@@ -512,6 +521,17 @@ router.include_router(
     )
 )
 router.include_router(build_profiles_router(lambda: (_PROFILES_DIR, _MODELS_DIR)))
+router.include_router(
+    build_wandb_router(
+        lambda header: current_profile(header),
+        lambda run_id, profile: _find_run_dir(run_id, profile),
+        lambda run_dir: _retry_record(
+            run_dir, read_wandb_status(run_dir), "wandb.retry_unavailable"
+        ),
+        lambda: _PROFILES_DIR.parent.resolve(),
+        _EVIDENCE_EXPORTS,
+    )
+)
 # Dataset, picker and credential endpoints live in datasets_routes.py (ADR-132).
 router.include_router(datasets_router)
 # The read-only dataset explorer (ADR-165).
@@ -653,11 +673,18 @@ async def reveal_run_folder(
 _MLFLOW_UNAVAILABLE = "mlflow.retry_unavailable"
 
 
-def _mlflow_retry_record(run_dir: Path) -> dict[str, Any]:
-    """The run.json of a finished classification run, or 409/500."""
-    status = read_mlflow_status(run_dir)
+def _retry_record(
+    run_dir: Path,
+    status: MlflowStatus | WandbStatus | None,
+    unavailable: str = _MLFLOW_UNAVAILABLE,
+) -> dict[str, Any]:
+    """The run.json of a finished classification run, or 409/500.
+
+    ``status`` is the exporter's sidecar: a retry needs one that is not still
+    running.
+    """
     if status is None or status.status == "RUNNING":
-        raise HTTPException(409, tr(_MLFLOW_UNAVAILABLE))
+        raise HTTPException(409, tr(unavailable))
     try:
         data = json.loads((run_dir / RUN_FILENAME).read_bytes())
     except (OSError, ValueError) as exc:
@@ -667,7 +694,7 @@ def _mlflow_retry_record(run_dir: Path) -> dict[str, Any]:
         or not isinstance(data.get("config"), dict)
         or _run_task(data) != "classification"
     ):
-        raise HTTPException(409, tr(_MLFLOW_UNAVAILABLE))
+        raise HTTPException(409, tr(unavailable))
     return data
 
 
@@ -693,7 +720,7 @@ def retry_mlflow(run_id: str, profile: ProfileDep) -> MlflowStatus:
     if not profile.settings.mlflow.enabled or not _EVIDENCE_EXPORTS.reserve(run_dir):
         raise HTTPException(409, tr(_MLFLOW_UNAVAILABLE))
     try:
-        data = _mlflow_retry_record(run_dir)
+        data = _retry_record(run_dir, read_mlflow_status(run_dir))
         tracker = MlflowTracker(_PROFILES_DIR.parent / "mlflow", profile.slug, run_dir)
         tracker.retry(data)
         result = read_mlflow_status(run_dir)
@@ -1051,6 +1078,28 @@ async def sample_dataset(
     )
 
 
+def _tracker_factories(
+    config: ExperimentConfig, profile: Profile
+) -> tuple[TrackerFactory, ...]:
+    """The exporters this profile turned on, for a classification training only."""
+    if config.block != "classification" or config.classification.mode != "train":
+        return ()
+    from visionforge.core.mlflow_tracking import MlflowTracker
+    from visionforge.core.wandb_tracking import WandbTarget, WandbTracker
+
+    outputs = _PROFILES_DIR.parent.resolve()
+    factories: list[TrackerFactory] = []
+    if profile.settings.mlflow.enabled:
+        factories.append(partial(MlflowTracker, outputs / "mlflow", profile.slug))
+    wandb = profile.settings.wandb
+    if wandb.enabled:
+        target = WandbTarget(wandb.project, wandb.entity, read_token("wandb", profile))
+        factories.append(
+            partial(WandbTracker, outputs / "wandb", profile.slug, target=target)
+        )
+    return tuple(factories)
+
+
 @router.post(
     "/experiment/run",
     responses={**_BAD_REQUEST, **_NOT_FOUND, **_UNPROCESSABLE, **_UNAVAILABLE},
@@ -1058,13 +1107,7 @@ async def sample_dataset(
 async def run_experiment(config: ExperimentConfig, profile: ProfileDep) -> RunResponse:
     """Start a training experiment, or queue it if one is already running."""
     config = profile.scope_model(config)
-    context = (
-        ((_PROFILES_DIR.parent / "mlflow").resolve(), profile.slug)
-        if config.block == "classification"
-        and config.classification.mode == "train"
-        and profile.settings.mlflow.enabled
-        else None
-    )
+    trackers = _tracker_factories(config, profile)
     await asyncio.to_thread(_check_classification_classes, config)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     run_id = f"{config.name}_{timestamp}"
@@ -1075,8 +1118,8 @@ async def run_experiment(config: ExperimentConfig, profile: ProfileDep) -> RunRe
         "classification",
         config.block,
         lambda: (
-            _execute_experiment(config, run_id, mlflow_context=context)
-            if context is not None
+            _execute_experiment(config, run_id, trackers=trackers)
+            if trackers
             else _execute_experiment(config, run_id)
         ),
         profile=profile,
@@ -2865,7 +2908,7 @@ async def _execute_experiment(
     run_id: str,
     resume_dir: Path | None = None,
     *,
-    mlflow_context: tuple[Path, str] | None = None,
+    trackers: tuple[TrackerFactory, ...] = (),
 ) -> None:
     """Run the experiment in a background thread."""
     state = _job_state(run_id)
@@ -2905,7 +2948,7 @@ async def _execute_experiment(
             block = ClassificationBlock()
         block.setup(config)
         if isinstance(block, ClassificationBlock):
-            block.mlflow_context = mlflow_context
+            block.tracker_factories = trackers
         # Blocks that stream live epoch progress over SSE get the event pump
         # wired here. Grid/random search and K-fold CV forward each inner
         # trial/fold's epochs (annotated with trial context) plus

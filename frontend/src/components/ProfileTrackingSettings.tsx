@@ -2,8 +2,9 @@ import { useState } from "react";
 import { updateProfile } from "../api/client";
 import { useT } from "../i18n/useT";
 import type { ProfileInfo } from "../lib/profile";
+import { WandbProfileSettings } from "./WandbProfileSettings";
 
-/** Edit one profile's local exporter preference. */
+/** Edit one profile's exporters: local MLflow and Weights & Biases. */
 export function ProfileTrackingSettings({ profile, onSaved }: {
   profile: ProfileInfo; onSaved: (profile: ProfileInfo) => void;
 }) {
@@ -21,5 +22,6 @@ export function ProfileTrackingSettings({ profile, onSaved }: {
       disabled={saving} onChange={(e) => void change(e.target.checked)} /> {t.mlflow.label}</label>
     <div>{t.mlflow.hint}</div>
     {error && <div role="alert">{t.mlflow.saveFailed}</div>}
+    <WandbProfileSettings profile={profile} onSaved={onSaved} />
   </div>;
 }

@@ -181,15 +181,18 @@ export function withLang(
   return { ...init, headers };
 }
 
-/** Every call carries the chosen profile and the language on screen. */
-function withContext(init?: RequestInit): RequestInit {
-  return withLang(withProfile(init));
+/**
+ * Every call carries the chosen profile and the language on screen. `profile`
+ * names another one, for a setting edited in a profile's own row.
+ */
+function withContext(init?: RequestInit, profile?: string): RequestInit {
+  return withLang(withProfile(init, profile));
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+async function request<T>(path: string, init?: RequestInit, profile?: string): Promise<T> {
   let res: Response;
   try {
-    res = await fetch(`${BASE}${path}`, withContext(init));
+    res = await fetch(`${BASE}${path}`, withContext(init, profile));
   } catch (e) {
     throw new ApiError(
       0,
@@ -492,7 +495,10 @@ export async function createProfile(name: string, pronoun?: Pronoun): Promise<Pr
 /** Novo nome e/ou pronome de um perfil, o padrão inclusive (ADR-126). */
 export async function updateProfile(
   slug: string,
-  change: { name?: string; pronoun?: Pronoun; settings?: { mlflow: { enabled: boolean } } },
+  change: {
+    name?: string; pronoun?: Pronoun;
+    settings?: { mlflow?: { enabled: boolean }; wandb?: Partial<WandbSettings> };
+  },
 ): Promise<ProfileInfo> {
   return request<ProfileInfo>(`/profiles/${encodeURIComponent(slug)}`, {
     method: "PUT",
@@ -1113,6 +1119,46 @@ export async function fetchSystemInfo(): Promise<SystemInfo> {
   return request<SystemInfo>("/system/info");
 }
 
+/** A profile's Weights & Biases destination (ADR-172); `entity` empty = the key's user. */
+export interface WandbSettings {
+  enabled: boolean;
+  project: string;
+  entity: string;
+}
+
+/** What the History knows about one run's W&B copy. `url` is always https. */
+export interface WandbExportStatus {
+  state: "running" | "finished" | "disabled" | "failed";
+  status: "RUNNING" | "FINISHED" | "KILLED" | "FAILED";
+  error?: string | null;
+  url?: string | null;
+  project?: string | null;
+  entity?: string | null;
+}
+
+/** Whether `profile` has a saved W&B key; the key itself never comes back. */
+export async function fetchWandbToken(profile: string): Promise<HubTokenStatus> {
+  return request<HubTokenStatus>("/wandb/token", undefined, profile);
+}
+
+/** Save the W&B API key of `profile` on the server. */
+export async function saveWandbToken(profile: string, token: string): Promise<HubTokenStatus> {
+  return request<HubTokenStatus>("/wandb/token", {
+    method: "PUT", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token }),
+  }, profile);
+}
+
+/** Forget the W&B API key of `profile`. */
+export async function deleteWandbToken(profile: string): Promise<HubTokenStatus> {
+  return request<HubTokenStatus>("/wandb/token", { method: "DELETE" }, profile);
+}
+
+/** Send a finished run to its W&B run again, with the active profile's key. */
+export async function retryWandbExport(runId: string): Promise<WandbExportStatus> {
+  return request<WandbExportStatus>(`/wandb/runs/${encodeURIComponent(runId)}/retry`, { method: "POST" });
+}
+
 export interface MLflowTrackingStatus {
   state: string;
   error?: string | null;
@@ -1127,6 +1173,7 @@ export async function retryMLflowExport(runId: string): Promise<MLflowTrackingSt
 
 export interface RunDetail {
   tracking?: MLflowTrackingStatus | null;
+  wandb?: WandbExportStatus | null;
   run_id: string;
   experiment_name: string;
   status: string;

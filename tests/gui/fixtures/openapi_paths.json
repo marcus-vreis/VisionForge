@@ -88,6 +88,22 @@
       }
     }
   },
+  "DELETE /api/wandb/token": {
+    "operationId": "forget_api_wandb_token_delete",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
   "GET /api/anomaly/schema": {
     "operationId": "get_anomaly_schema_api_anomaly_schema_get",
     "parameters": [
@@ -658,6 +674,22 @@
     "operationId": "get_update_api_update_get",
     "parameters": [
       "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "GET /api/wandb/token": {
+    "operationId": "status_api_wandb_token_get",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
     ],
     "requestBody": {},
     "responses": {
@@ -2472,6 +2504,26 @@
       "500": {}
     }
   },
+  "POST /api/wandb/runs/{run_id}/retry": {
+    "operationId": "retry_api_wandb_runs__run_id__retry_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional",
+      "path:run_id:required"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "WandbStatus"
+      },
+      "404": {},
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      },
+      "500": {}
+    }
+  },
   "PUT /api/hub/token": {
     "operationId": "save_api_hub_token_put",
     "parameters": [
@@ -2479,7 +2531,7 @@
       "header:X-VF-Profile:optional"
     ],
     "requestBody": {
-      "application/json": "HubToken"
+      "application/json": "ProfileToken"
     },
     "responses": {
       "200": {
@@ -2509,6 +2561,24 @@
         "application/json": "HTTPValidationError"
       },
       "500": {}
+    }
+  },
+  "PUT /api/wandb/token": {
+    "operationId": "save_api_wandb_token_put",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {
+      "application/json": "ProfileToken"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
     }
   }
 }

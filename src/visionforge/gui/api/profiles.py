@@ -35,9 +35,17 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal, TypeVar, cast, get_args
 
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, ValidationError
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StrictBool,
+    ValidationError,
+    field_validator,
+)
 
 from visionforge.utils.messages import tr
+from visionforge.utils.wandb_names import is_valid_wandb_name
 
 PROFILE_FILENAME = "profile.json"
 
@@ -80,26 +88,66 @@ class MLflowSettings(BaseModel):
     enabled: StrictBool = False
 
 
+class WandbSettings(BaseModel):
+    """Weights & Biases export preference for a profile (ADR-172).
+
+    ``entity`` empty means the saved token's own user. The token itself is
+    never here: it lives in a private file of the profile.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    enabled: StrictBool = False
+    project: str = "visionforge"
+    entity: str = ""
+
+    @field_validator("project", "entity")
+    @classmethod
+    def _wandb_name(cls, value: str, info: Any) -> str:
+        value = value.strip()
+        if (value or info.field_name == "project") and not is_valid_wandb_name(value):
+            raise ValueError(tr("wandb.name_invalid"))
+        return value
+
+
 class ProfileSettings(BaseModel):
     """Optional exporters enabled for future profile submissions."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
     mlflow: MLflowSettings = Field(default_factory=MLflowSettings)
+    wandb: WandbSettings = Field(default_factory=WandbSettings)
+
+
+class ProfileSettingsUpdate(BaseModel):
+    """The exporters a request changes; one left out keeps what was saved."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    mlflow: MLflowSettings | None = None
+    wandb: WandbSettings | None = None
+
+
+def _saved[M: BaseModel](settings: dict[str, Any], key: str, model: type[M]) -> M:
+    """The saved block ``key`` as ``model``; its defaults when missing or invalid."""
+    block = settings.get(key, {})
+    known = {
+        name: value
+        for name, value in (block.items() if isinstance(block, dict) else ())
+        # Keys a later version wrote stay in the file and are not read here.
+        if name in model.model_fields
+    }
+    try:
+        return model.model_validate(known)
+    except ValidationError:
+        return model()
 
 
 def _meta_settings(meta: dict[str, Any]) -> ProfileSettings:
-    try:
-        settings = meta.get("settings", {})
-        if not isinstance(settings, dict):
-            return ProfileSettings()
-        mlflow = settings.get("mlflow", {})
-        if not isinstance(mlflow, dict):
-            return ProfileSettings()
-        return ProfileSettings(
-            mlflow=MLflowSettings(enabled=mlflow.get("enabled", False))
-        )
-    except ValidationError:
+    settings = meta.get("settings", {})
+    if not isinstance(settings, dict):
         return ProfileSettings()
+    return ProfileSettings(
+        mlflow=_saved(settings, "mlflow", MLflowSettings),
+        wandb=_saved(settings, "wandb", WandbSettings),
+    )
 
 
 class ProfileError(Exception):
@@ -392,7 +440,7 @@ def update_profile(
     *,
     name: str | None = None,
     pronoun: Pronoun | None = None,
-    settings: ProfileSettings | None = None,
+    settings: ProfileSettingsUpdate | None = None,
 ) -> Profile:
     """Change a profile's display name and/or pronoun; its slug never changes.
 
@@ -414,11 +462,15 @@ def update_profile(
     if settings is not None:
         old = meta.get("settings")
         old_settings = dict(old) if isinstance(old, dict) else {}
-        old_mlflow = old_settings.get("mlflow")
-        old_settings["mlflow"] = {
-            **(old_mlflow if isinstance(old_mlflow, dict) else {}),
-            "enabled": settings.mlflow.enabled,
-        }
+        for key in ("mlflow", "wandb"):
+            new = getattr(settings, key)
+            if new is not None:
+                old_block = old_settings.get(key)
+                old_settings[key] = {
+                    **(old_block if isinstance(old_block, dict) else {}),
+                    # Only the fields the request named: the rest stay saved.
+                    **new.model_dump(exclude_unset=True),
+                }
         meta["settings"] = old_settings
     if name is not None:
         display = normalize_display_name(name)

@@ -7,7 +7,11 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from visionforge.gui.api.profiles import ProfileSettings, Pronoun
+from visionforge.gui.api.profiles import (
+    ProfileSettings,
+    ProfileSettingsUpdate,
+    Pronoun,
+)
 
 
 class RunStatus(BaseModel):
@@ -82,7 +86,7 @@ class ProfileUpdateRequest(BaseModel):
 
     name: str | None = Field(default=None, min_length=1, max_length=60)
     pronoun: Pronoun | None = None
-    settings: ProfileSettings | None = None
+    settings: ProfileSettingsUpdate | None = None
 
 
 class QueueLane(BaseModel):
@@ -391,6 +395,18 @@ class MlflowStatus(BaseModel):
     run_id: str | None = None
 
 
+class WandbStatus(BaseModel):
+    """Public Weights & Biases export diagnostics of one run (ADR-172)."""
+
+    state: Literal["running", "finished", "disabled", "failed"]
+    status: Literal["RUNNING", "FINISHED", "KILLED", "FAILED"]
+    error: str | None = None
+    # Only an https link reaches the page, never a scheme a click would run.
+    url: str | None = Field(default=None, pattern=r"^https://\S+$", max_length=2048)
+    project: str | None = None
+    entity: str | None = None
+
+
 class RunDetail(BaseModel):
     """Full run record served from /api/runs/{run_id}.
 
@@ -398,6 +414,7 @@ class RunDetail(BaseModel):
     """
 
     tracking: MlflowStatus | None = None
+    wandb: WandbStatus | None = None
 
     run_id: str
     experiment_name: str

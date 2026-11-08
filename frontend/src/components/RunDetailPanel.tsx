@@ -36,6 +36,7 @@ import { RunGroupDetail } from "./RunGroupDetail";
 import { DownloadBundleButton } from "./DownloadBundleButton";
 
 import { MLflowExportStatus } from "./MLflowExportStatus";
+import { WandbExportStatus } from "./WandbExportStatus";
 import { HubExportPanel } from "./HubExportPanel";
 import { activeProfileSlug } from "../lib/profile";
 
@@ -448,6 +449,8 @@ export function RunDetailPanel({ runId, onBack, onOpenRun, knownRunIds }: RunDet
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <MLflowExportStatus key={runId} runId={runId} tracking={detail?.tracking}
         onUpdated={(tracking) => setDetail((previous) => previous ? { ...previous, tracking } : previous)} />
+      <WandbExportStatus key={`wandb:${runId}`} runId={runId} status={detail?.wandb}
+        onUpdated={(wandb) => setDetail((previous) => previous ? { ...previous, wandb } : previous)} />
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
         <button
           type="button"

@@ -32,7 +32,13 @@ from visionforge.gui.api.run_history import (
     run_span,
     run_task,
 )
-from visionforge.gui.api.schemas import DatasetInfo, MlflowStatus, RunDetail, RunSummary
+from visionforge.gui.api.schemas import (
+    DatasetInfo,
+    MlflowStatus,
+    RunDetail,
+    RunSummary,
+    WandbStatus,
+)
 from visionforge.utils.messages import tr
 
 
@@ -131,6 +137,17 @@ def read_mlflow_status(run_dir: Path) -> MlflowStatus | None:
         return None
 
 
+def read_wandb_status(run_dir: Path) -> WandbStatus | None:
+    """Read the optional W&B diagnostics from a regular file inside the run."""
+    sidecar = run_dir / "wandb.json"
+    if sidecar.is_symlink():
+        return None
+    try:
+        return WandbStatus.model_validate_json(sidecar.read_bytes())
+    except (OSError, ValueError):
+        return None
+
+
 def _build_run_detail(
     run_dir: Path, data: dict[str, Any], host: str | None
 ) -> RunDetail:
@@ -143,6 +160,7 @@ def _build_run_detail(
     history: list[dict[str, Any]] = data.get("history", [])
     return RunDetail(
         tracking=read_mlflow_status(run_dir),
+        wandb=read_wandb_status(run_dir),
         run_id=run_dir.name,
         experiment_name=data.get("experiment", run_dir.parent.name),
         status=status,

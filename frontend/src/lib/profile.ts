@@ -38,7 +38,10 @@ export interface ProfileInfo {
   name: string;
   is_default: boolean;
   pronoun?: Pronoun | null;
-  settings?: { mlflow: { enabled: boolean } };
+  settings?: {
+    mlflow: { enabled: boolean };
+    wandb?: { enabled: boolean; project: string; entity: string };
+  };
 }
 
 /** O que o navegador lembra do perfil escolhido. */

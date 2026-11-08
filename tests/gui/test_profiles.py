@@ -56,6 +56,12 @@ from .test_routes_custom_orchestrators import _register_toy
 from .test_routes_resume import _classification_full
 from .test_routes_resume import _run as _stopped_run
 
+# What a profile with no saved settings reports: every export off.
+_DEFAULT_SETTINGS = {
+    "mlflow": {"enabled": False},
+    "wandb": {"enabled": False, "project": "visionforge", "entity": ""},
+}
+
 HEADER = "X-VF-Profile"
 _TS = "20260522_100000_000000"
 
@@ -470,7 +476,7 @@ class TestProfilesApi:
                 "name": "default",
                 "is_default": True,
                 "pronoun": None,
-                "settings": {"mlflow": {"enabled": False}},
+                "settings": _DEFAULT_SETTINGS,
             }
         ]
 
@@ -482,7 +488,7 @@ class TestProfilesApi:
             "name": "João Silva",
             "is_default": False,
             "pronoun": None,
-            "settings": {"mlflow": {"enabled": False}},
+            "settings": _DEFAULT_SETTINGS,
         }
         assert (tmp_path / "outputs" / "profiles" / "joao-silva" / "models").is_dir()
         slugs = [p["slug"] for p in client.get("/api/profiles").json()["profiles"]]
@@ -536,7 +542,7 @@ class TestIdentity:
             "name": "Marcus",
             "is_default": True,
             "pronoun": "ele",
-            "settings": {"mlflow": {"enabled": False}},
+            "settings": _DEFAULT_SETTINGS,
         }
         _make_profile(client, "Luana")
         listed = client.get("/api/profiles").json()["profiles"]
@@ -570,7 +576,7 @@ class TestIdentity:
             "name": "Ana Lima",
             "is_default": False,
             "pronoun": "neutro",
-            "settings": {"mlflow": {"enabled": False}},
+            "settings": _DEFAULT_SETTINGS,
         }
         data = json.loads(meta.read_text(encoding="utf-8"))
         assert data["created_at"] == created_at

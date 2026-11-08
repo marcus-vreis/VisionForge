@@ -19,11 +19,11 @@ from visionforge.core import training_loop
 from visionforge.core.cancellation import CancellationToken, is_cancelled
 from visionforge.core.live_confusion import live_confusion
 from visionforge.core.live_insights import LiveGradCam
-from visionforge.core.mlflow_tracking import MlflowTracker
 from visionforge.core.resume import (
     ResumeState,
     clear_resume_state,
 )
+from visionforge.core.run_trackers import RunTracker, TrackerFactory
 from visionforge.core.tracking import TensorBoardLogger
 from visionforge.core.training_health import (
     collapsed_predictions,
@@ -187,8 +187,9 @@ def _resolve_single_cuda(
 class Trainer:
     """Manages the full training loop for one classification experiment."""
 
-    mlflow_context: tuple[Path, str] | None = None
-    mlflow_tracker: MlflowTracker | None = None
+    # Optional exporters (ADR-170, ADR-172), built when the run folder exists.
+    tracker_factories: tuple[TrackerFactory, ...] = ()
+    trackers: tuple[RunTracker, ...] = ()
 
     def __init__(self, config: ExperimentConfig) -> None:
         self._config = config
@@ -225,9 +226,9 @@ class Trainer:
         model, optimizer, criterion, scheduler, scaler, run_dir, tb = (
             self._initialize_training(model, optimizer, resume_dir, resumed)
         )
-        if self.mlflow_context is not None:
-            self.mlflow_tracker = MlflowTracker(*self.mlflow_context, run_dir)
-            self.mlflow_tracker.start(self._config.model_dump(mode="json"))
+        self.trackers = tuple(build(run_dir) for build in self.tracker_factories)
+        for tracker in self.trackers:
+            tracker.start(self._config.model_dump(mode="json"))
         model_path = run_dir / "best_model.pth"
 
         history, best_val_loss, best_epoch, patience_counter, start_epoch = (
@@ -416,8 +417,8 @@ class Trainer:
         extra: dict[str, Any] | None = None,
     ) -> None:
         """Report the task-specific epoch metrics and progress event."""
-        if self.mlflow_tracker is not None:
-            self.mlflow_tracker.epoch(
+        for tracker in self.trackers:
+            tracker.epoch(
                 result.epoch,
                 {
                     "loss/train": result.train_loss,

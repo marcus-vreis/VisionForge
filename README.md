@@ -93,7 +93,9 @@ Choose the PyTorch build for your hardware. For local MLflow tracking, install
 `visionforge-studio[mlflow]` and enable MLflow in the profile picker. From the
 directory where the GUI started, run
 `mlflow ui --backend-store-uri sqlite:///outputs/mlflow/mlflow.db` to inspect
-classification runs, epoch metrics and the final `run.json`.
+classification runs, epoch metrics and the final `run.json`. To follow them on
+Weights & Biases, install `visionforge-studio[wandb]`, turn W&B on in the
+profile picker and save an API key there; runs go to a private project.
 
 </details>
 
@@ -330,7 +332,10 @@ treinos de classificação, instale `visionforge-studio[mlflow]` e ative
 MLflow no seletor de perfis. Na pasta em que abriu a GUI, execute
 `mlflow ui --backend-store-uri sqlite:///outputs/mlflow/mlflow.db` para ver
 os parâmetros, as métricas por época e o `run.json` final. Se a exportação
-falhar, abra a execução no Histórico para tentar novamente.
+falhar, abra a execução no Histórico para tentar novamente. Para acompanhar
+no Weights & Biases, instale `visionforge-studio[wandb]`, ligue o W&B no
+seletor de perfis e salve lá uma chave de API; os treinos vão para um projeto
+privado.
 
 </details>
 
