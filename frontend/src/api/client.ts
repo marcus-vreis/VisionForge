@@ -1948,3 +1948,48 @@ export async function createZenodoDraft(runId: string, digest: string, site: Zen
     body: JSON.stringify({ run_id: runId, digest, sandbox: site === "sandbox" }),
   });
 }
+
+export interface GitHubPreview {
+  folder: string;
+  files: { path: string; size: number }[];
+  readme: string;
+  digest: string;
+}
+
+export interface GitHubCommit {
+  url: string;
+  commit: string;
+  branch: string;
+  folder: string;
+}
+
+/** Whether this profile has a GitHub token; the token never comes back. */
+export async function fetchGitHubToken(): Promise<HubTokenStatus> {
+  return request<HubTokenStatus>("/github/token");
+}
+
+/** Save this profile's GitHub token on the server. */
+export async function saveGitHubToken(token: string): Promise<HubTokenStatus> {
+  return request<HubTokenStatus>("/github/token", {
+    method: "PUT", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token }),
+  });
+}
+
+/** Forget this profile's GitHub token. */
+export async function deleteGitHubToken(): Promise<HubTokenStatus> {
+  return request<HubTokenStatus>("/github/token", { method: "DELETE" });
+}
+
+/** The folder, files and README a commit would hold, built offline (ADR-175). */
+export async function fetchGitHubPreview(runId: string): Promise<GitHubPreview> {
+  return request<GitHubPreview>(`/github/preview?run_id=${encodeURIComponent(runId)}`);
+}
+
+/** Commit the previewed files to a private repository. */
+export async function commitRunToGitHub(runId: string, repo: string, digest: string): Promise<GitHubCommit> {
+  return request<GitHubCommit>("/github/export", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ run_id: runId, repo, digest }),
+  });
+}

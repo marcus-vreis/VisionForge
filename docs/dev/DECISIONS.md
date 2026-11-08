@@ -7445,3 +7445,53 @@ UNC or home-like path) keeps it; the preview is where it shows.
   not an author list (ADR-114), and a license is a decision the tool cannot
   infer.
 - *The raw bundle.* It would put the account name into a permanent archive.
+
+## ADR-175 — A run's record, without weights, committed to a private GitHub repository
+
+**Date:** 2026-11-08
+**Status:** Accepted
+**Extends:** ADR-171 (profile tokens, private destinations), ADR-174 (public run.json)
+
+**Context:** the last destination of #118. Code and configuration already live
+on GitHub; a group that keeps one repository of experiments wants each run there
+too, as text it can diff and review, next to its code. Git is a poor place for
+weights (Git LFS has a small free quota), and the Hub (ADR-171) and Zenodo
+(ADR-174) already take them.
+
+**Decision:**
+
+- History gets "Send the report to GitHub". A run becomes one folder,
+  `runs/<experiment>/<run>/`, holding a README report generated from run.json
+  (summary, final metrics, a table per epoch capped at 200 rows, the charts
+  embedded), the public run.json of ADR-174 (`artifacts.model` is `null`) and
+  the run's charts under `figures/` (PNG and JPEG, 5 MB each, at most 20).
+  No weights, ever.
+- **Preview, then one commit.** The page shows the folder, each file with its
+  size and the README; the commit must match the previewed digest. All files go
+  in one commit on the default branch through the Git Data API (blobs, a tree on
+  top of the branch's, a commit, a fast-forward of the ref, never forced). An
+  empty repository first gets the README through the contents API, which is the
+  only way to make a first commit.
+- **An existing, private repository only.** The export reads the repository
+  first and refuses one that is not private before writing anything. It never
+  creates a repository: that needs a token allowed to administer the account.
+  The page asks for a fine-grained token limited to the experiments repository
+  with Contents read and write.
+- The token is saved per profile like the others (ADR-171, service `github`)
+  and goes only to `https://api.github.com`, as a Bearer header. GitHub's answer
+  is never shown: 401, 403 and 404 each have their own message (404 also means
+  the token cannot see a private repository), the rest is a generic failure.
+
+**Consequences:** sending a run again replaces its folder's files in a new
+commit; files removed from a run stay in the repository until someone deletes
+them. A history longer than 200 epochs keeps every value in run.json but not in
+the README table. Only github.com: GitHub Enterprise hosts are not supported.
+
+**Alternatives considered:**
+
+- *One commit per file through the contents API.* Works on any repository, but
+  a run of six charts would leave eight commits.
+- *Creating the repository when missing.* Saves a step, but needs a token with
+  account administration, much more than writing one repository.
+- *Weights through Git LFS.* Small free quota, and the weights already have two
+  better homes.

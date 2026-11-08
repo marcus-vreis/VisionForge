@@ -726,6 +726,58 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "pt": "O envio ao Hugging Face Hub falhou. Confira o token, a conexão e o nome do repositório.",
         "en": "The Hugging Face Hub upload failed. Check the token, the connection and the repository name.",
     },
+    "github.request_invalid": {
+        "pt": "Pedido inválido para o GitHub.",
+        "en": "Invalid GitHub request.",
+    },
+    "github.token_invalid": {
+        "pt": "Token inválido: cole o token inteiro, sem espaços.",
+        "en": "Invalid token: paste the whole token, without spaces.",
+    },
+    "github.token_missing": {
+        "pt": "Salve um token do GitHub neste perfil antes de enviar.",
+        "en": "Save a GitHub token in this profile before uploading.",
+    },
+    "github.token_rejected": {
+        "pt": "O GitHub recusou o token. Confira se ele foi copiado inteiro e se não expirou.",
+        "en": "GitHub refused the token. Check that it was copied whole and has not expired.",
+    },
+    "github.token_forbidden": {
+        "pt": "O token não pode escrever neste repositório. Dê a ele a permissão Contents: leitura e escrita para este repositório.",
+        "en": "The token cannot write to this repository. Give it the Contents: read and write permission for this repository.",
+    },
+    "github.repo_not_found": {
+        "pt": "Repositório não encontrado, ou o token não tem acesso a ele. Crie o repositório privado no GitHub antes.",
+        "en": "Repository not found, or the token has no access to it. Create the private repository on GitHub first.",
+    },
+    "github.repo_invalid": {
+        "pt": "Informe o repositório no formato usuário/repositório.",
+        "en": "Enter the repository as user/repository.",
+    },
+    "github.private_required": {
+        "pt": "O repositório precisa ser privado. Torne-o privado no GitHub ou use outro.",
+        "en": "The repository must be private. Make it private on GitHub or use another one.",
+    },
+    "github.run_not_found": {
+        "pt": "Execução não encontrada.",
+        "en": "Run not found.",
+    },
+    "github.artifact_missing": {
+        "pt": "O registro desta execução não foi encontrado.",
+        "en": "The record of this run was not found.",
+    },
+    "github.package_invalid": {
+        "pt": "Esta execução não pode ser enviada: {reason}",
+        "en": "This run cannot be uploaded: {reason}",
+    },
+    "github.preview_changed": {
+        "pt": "Os arquivos mudaram depois da prévia. Abra a prévia de novo e confira.",
+        "en": "The files changed after the preview. Open the preview again and review it.",
+    },
+    "github.export_failed": {
+        "pt": "O envio ao GitHub falhou. Confira a conexão e tente de novo.",
+        "en": "The GitHub upload failed. Check the connection and try again.",
+    },
     "zenodo.request_invalid": {
         "pt": "Pedido inválido para o Zenodo.",
         "en": "Invalid Zenodo request.",

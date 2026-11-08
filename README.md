@@ -98,7 +98,8 @@ Weights & Biases, install `visionforge-studio[wandb]`, turn W&B on in the
 profile picker and save an API key there; runs go to a private project.
 To cite a run by DOI, open it in History and create a Zenodo draft: the
 bundle goes up without this machine's paths, and you fill in authors and
-license and publish on Zenodo.
+license and publish on Zenodo. To keep runs next to your code, send the
+report to a private GitHub repository: one folder per run, without weights.
 
 </details>
 
@@ -340,7 +341,9 @@ no Weights & Biases, instale `visionforge-studio[wandb]`, ligue o W&B no
 seletor de perfis e salve lá uma chave de API; os treinos vão para um projeto
 privado. Para citar um treino por DOI, abra-o no Histórico e crie um rascunho
 no Zenodo: o bundle sobe sem os caminhos desta máquina, e você preenche
-autores e licença e publica no próprio Zenodo.
+autores e licença e publica no próprio Zenodo. Para guardar os treinos junto
+do código, envie o relatório a um repositório privado do GitHub: uma pasta
+por treino, sem os pesos.
 
 </details>
 
