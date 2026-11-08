@@ -44,8 +44,8 @@ from pydantic import (
     field_validator,
 )
 
-from visionforge.core.wandb_tracking import is_valid_wandb_name
 from visionforge.utils.messages import tr
+from visionforge.utils.wandb_names import is_valid_wandb_name
 
 PROFILE_FILENAME = "profile.json"
 

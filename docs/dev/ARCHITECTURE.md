@@ -55,6 +55,7 @@ Foundational utilities. No module-level import of another VisionForge package; t
 | `doctor.py` | `visionforge doctor` — inspects the machine and prints the exact torch install line for it (torch is user-managed per ADR-005). |
 | `messages.py` | Server-written texts in the language of the request (`tr(key, **params)`, ADR-116). |
 | `workers.py` · `credentials.py` · `redact.py` | DataLoader worker budget; local store for dataset-provider API keys; masking of credentials before text is shown or logged. |
+| `wandb_names.py` | The W&B project and entity name check, kept out of `core/` so the profile settings validate names without importing torch (ADR-172). |
 | `selftest.py` · `selftest_data.py` | `visionforge selftest` (ADR-060) — builds tiny synthetic datasets in each task's real on-disk layout, starts the real API on an ephemeral socket, and trains every (task, strategy) pair through the same endpoints the browser uses, checking the report shape and the SSE contract. The answer to "does this install actually train?". |
 
 ### `models/`

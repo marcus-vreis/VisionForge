@@ -30,11 +30,11 @@ from visionforge.core.tracking_privacy import (
     public_metrics,
     public_parameters,
 )
+from visionforge.utils.wandb_names import is_valid_wandb_name
 
 _LOCK = RLock()
 _SIDECAR = "wandb.json"
 _STATUSES = {"FINISHED", "KILLED", "FAILED"}
-_NAME = re.compile(r"[\w.-]{1,128}", re.ASCII)
 _PRIVATE = "PRIVATE"
 _TIMEOUT_S = 30
 
@@ -70,11 +70,6 @@ class WandbTarget:
     project: str
     entity: str = ""
     token: str | None = None
-
-
-def is_valid_wandb_name(value: str) -> bool:
-    """True for a project or entity name W&B accepts in a URL path."""
-    return bool(_NAME.fullmatch(value)) and value not in {".", ".."}
 
 
 def ensure_private_project(graphql: GraphQL, entity: str, project: str) -> None:
