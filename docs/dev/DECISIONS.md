@@ -7247,3 +7247,28 @@ after evaluation. History exposes export failures and lets the operator retry.
 training record and TensorBoard remain available independently. Retrying a
 metric with a fresh timestamp can duplicate its history in SQLite. Re-export
 therefore reconciles the stored epoch values before writing missing metrics.
+
+## ADR-171 — Explicit private Hugging Face Hub export from History
+
+**Date:** 2026-11
+**Status:** Accepted
+**Extends:** ADR-114, ADR-135, ADR-170
+
+**Context:** A researcher sharing a VisionForge server may select any profile.
+The profile picker scopes files (ADR-114); it does not authenticate anyone.
+
+**Decision:** Store the Hub write credential separately for each workspace and
+profile under the server user's VisionForge configuration directory. Never use
+the dataset-download credential, ambient SDK login or a browser-stored token.
+Return only whether a credential exists. Warn when the bind address is external
+or unknown: anyone who can select that profile can use or replace its token.
+History previews a limited package; explicit submission identifies its digest
+and a private model repository. Training never publishes a run.
+
+**Consequences:** The server account can read the secret. Use a narrowly scoped
+Hub token. A change to a previewed file requires a fresh preview. Visibility
+can still change remotely after the final repository check.
+
+**Alternatives considered:** A process-wide Hub login would let profiles use
+one another's credentials. Sending the entire run directory would disclose
+configuration, dataset paths and unrelated outputs.

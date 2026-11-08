@@ -686,6 +686,46 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "pt": "O run '{run_id}' não tem mais nada a continuar.",
         "en": "Run '{run_id}' has nothing left to continue.",
     },
+    "hub.request_invalid": {
+        "pt": "Pedido inválido para o Hugging Face Hub.",
+        "en": "Invalid Hugging Face Hub request.",
+    },
+    "hub.token_invalid": {
+        "pt": "Token inválido: cole o token inteiro, sem espaços.",
+        "en": "Invalid token: paste the whole token, without spaces.",
+    },
+    "hub.token_missing": {
+        "pt": "Salve um token do Hugging Face neste perfil antes de enviar.",
+        "en": "Save a Hugging Face token in this profile before uploading.",
+    },
+    "hub.run_not_found": {
+        "pt": "Execução não encontrada.",
+        "en": "Run not found.",
+    },
+    "hub.artifact_missing": {
+        "pt": "O checkpoint ou o registro desta execução não foi encontrado.",
+        "en": "The checkpoint or the record of this run was not found.",
+    },
+    "hub.repo_invalid": {
+        "pt": "Informe o destino no formato usuário/modelo.",
+        "en": "Enter the destination as user/model.",
+    },
+    "hub.preview_changed": {
+        "pt": "Os arquivos mudaram depois da prévia. Abra a prévia de novo e confira.",
+        "en": "The files changed after the preview. Open the preview again and review it.",
+    },
+    "hub.private_required": {
+        "pt": "O repositório precisa ser privado. Use um destino novo ou torne-o privado no Hub.",
+        "en": "The repository must be private. Use a new destination or make it private on the Hub.",
+    },
+    "hub.package_invalid": {
+        "pt": "Esta execução não pode ser exportada: {reason}",
+        "en": "This run cannot be exported: {reason}",
+    },
+    "hub.export_failed": {
+        "pt": "O envio ao Hugging Face Hub falhou. Confira o token, a conexão e o nome do repositório.",
+        "en": "The Hugging Face Hub upload failed. Check the token, the connection and the repository name.",
+    },
     "mlflow.retry_unavailable": {
         "pt": "A exportação para MLflow está indisponível para esta execução ou perfil.",
         "en": "MLflow export is unavailable for this run or profile.",

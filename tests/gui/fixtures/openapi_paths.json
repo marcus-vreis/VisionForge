@@ -34,6 +34,22 @@
       }
     }
   },
+  "DELETE /api/hub/token": {
+    "operationId": "forget_api_hub_token_delete",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
   "DELETE /api/queue/{run_id}": {
     "operationId": "cancel_queued_run_api_queue__run_id__delete",
     "parameters": [
@@ -420,6 +436,40 @@
     "responses": {
       "200": {
         "application/json": "object"
+      }
+    }
+  },
+  "GET /api/hub/preview": {
+    "operationId": "preview_api_hub_preview_get",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional",
+      "query:run_id:required"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "404": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
+  "GET /api/hub/token": {
+    "operationId": "status_api_hub_token_get",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
       }
     }
   },
@@ -1873,6 +1923,27 @@
       }
     }
   },
+  "POST /api/hub/export": {
+    "operationId": "send_api_hub_export_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {
+      "application/json": "HubExport"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "404": {},
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      },
+      "502": {}
+    }
+  },
   "POST /api/model/defaults": {
     "operationId": "model_defaults_api_model_defaults_post",
     "parameters": [
@@ -2399,6 +2470,24 @@
         "application/json": "HTTPValidationError"
       },
       "500": {}
+    }
+  },
+  "PUT /api/hub/token": {
+    "operationId": "save_api_hub_token_put",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {
+      "application/json": "HubToken"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
     }
   },
   "PUT /api/profiles/{slug}": {

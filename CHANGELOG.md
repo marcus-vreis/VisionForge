@@ -16,6 +16,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 ### Added
 
 - Perfis podem ativar o MLflow local para acompanhar treinos de classificação. O Histórico permite repetir uma exportação que falhou (ADR-170).
+- O Histórico envia o checkpoint de uma execução, um model card e as métricas para um repositório privado do Hugging Face Hub, com prévia local antes do envio e token salvo por perfil (ADR-171).
 
 - **Converter YOLO e COCO** (ADR-169, fase 4b da issue #117): na aba Explorar,
   "Exportar para COCO" (com um dataset de detecção aberto) e "Importar COCO"

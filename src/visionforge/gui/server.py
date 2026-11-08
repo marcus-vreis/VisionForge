@@ -136,6 +136,7 @@ def start_server(
     import uvicorn
 
     global _SERVER
+    app.state.bind_host = host
     logger.info(
         "Starting VisionForge GUI at http://{}:{}", host, port
     )  # NOSONAR python:S5332 - local server URL

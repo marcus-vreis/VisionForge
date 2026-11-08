@@ -115,6 +115,7 @@ from visionforge.gui.api.http_responses import (
 )
 from visionforge.gui.api.http_responses import NOT_FOUND as _NOT_FOUND
 from visionforge.gui.api.http_responses import SERVER_ERROR as _SERVER_ERROR
+from visionforge.gui.api.hub_routes import build_hub_router
 from visionforge.gui.api.incorporate_routes import router as incorporate_router
 from visionforge.gui.api.merge_routes import router as merge_router
 from visionforge.gui.api.model_card import _stopped_extent as _stopped_extent
@@ -504,6 +505,12 @@ router.include_router(
 
 # Profile endpoints live in profiles_routes.py (ADR-132). The paths stay owned
 # here so tests that repoint routes._MODELS_DIR / _PROFILES_DIR still reach them.
+router.include_router(
+    build_hub_router(
+        lambda header: current_profile(header),
+        lambda run_id, profile: _find_run_dir(run_id, profile),
+    )
+)
 router.include_router(build_profiles_router(lambda: (_PROFILES_DIR, _MODELS_DIR)))
 # Dataset, picker and credential endpoints live in datasets_routes.py (ADR-132).
 router.include_router(datasets_router)
