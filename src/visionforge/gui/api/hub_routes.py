@@ -111,7 +111,9 @@ def build_hub_router(
         with NamedTemporaryFile(dir=target.parent, delete=False) as tmp:
             path = Path(tmp.name)
         try:
-            path.write_text(value, encoding="utf-8")
+            # The file name is a SHA-256 hex digest under a fixed folder, and the
+            # temporary file sits beside it: no request text reaches the path.
+            path.write_text(value, encoding="utf-8")  # NOSONAR pythonsecurity:S2083
             path.replace(target)
         finally:
             path.unlink(missing_ok=True)

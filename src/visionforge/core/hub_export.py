@@ -15,6 +15,8 @@ from typing import Any
 _ENDPOINT = "https://huggingface.co"
 _MAX_RECORD = 16 * 1024 * 1024
 _EXTENSIONS = {".pt", ".pth", ".onnx", ".safetensors"}
+_RECORD = "run.json"
+_MANIFEST = "manifest.json"
 _PRIVATE = re.compile(
     r"config|secret|credential|token|password|dataset|(?:^|[_-])(?:logs?|data|keys?)(?:$|[_-])",
     re.I,
@@ -199,7 +201,7 @@ def _numeric(data: Any) -> dict[str, int | float]:
 
 def _prepare(run_dir: Path, staging: Path) -> dict[str, Any]:
     root = run_dir.resolve(strict=True)
-    source = _safe_file(root, "run.json")
+    source = _safe_file(root, _RECORD)
     with source.open("rb") as stream:
         raw = stream.read(_MAX_RECORD + 1)
     if len(raw) > _MAX_RECORD:
@@ -256,7 +258,7 @@ def _prepare(run_dir: Path, staging: Path) -> dict[str, Any]:
         if isinstance(history, list)
         else [],
     }
-    _write_json(staging / "run.json", record)
+    _write_json(staging / _RECORD, record)
     card = (
         "---\ntags:\n- visionforge\n---\n# VisionForge model\n\n"
         f"Task: {task}. Run status: {status}.\n\n"
@@ -269,7 +271,7 @@ def _prepare(run_dir: Path, staging: Path) -> dict[str, Any]:
         "local paths are excluded. No license is inferred.\n"
     )
     (staging / "README.md").write_text(card, encoding="utf-8")
-    names = ["README.md", "run.json", checkpoint_name]
+    names = ["README.md", _RECORD, checkpoint_name]
     manifest = {
         name: {
             "size": (staging / name).stat().st_size,
@@ -277,9 +279,9 @@ def _prepare(run_dir: Path, staging: Path) -> dict[str, Any]:
         }
         for name in sorted(names)
     }
-    _write_json(staging / "manifest.json", manifest)
-    digest = _file_digest(staging / "manifest.json")
-    return {"files": sorted([*names, "manifest.json"]), "digest": digest, "card": card}
+    _write_json(staging / _MANIFEST, manifest)
+    digest = _file_digest(staging / _MANIFEST)
+    return {"files": sorted([*names, _MANIFEST]), "digest": digest, "card": card}
 
 
 def _architecture_line(config: Any) -> str:
