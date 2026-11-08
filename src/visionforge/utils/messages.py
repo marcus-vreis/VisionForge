@@ -746,6 +746,90 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "pt": "O envio ao W&B está indisponível para esta execução ou perfil.",
         "en": "W&B export is unavailable for this run or profile.",
     },
+    "code.tour_missing": {
+        "pt": "Ainda não há código comentado para esta tarefa.",
+        "en": "There is no annotated code for this task yet.",
+    },
+    "code.data.resize": {
+        "pt": "Toda imagem fica do mesmo tamanho (image_size × image_size): a rede recebe um tensor de forma fixa. O Resize ajusta o lado menor e o CenterCrop corta o centro.",
+        "en": "Every image gets the same size (image_size × image_size): the network takes a tensor of fixed shape. Resize scales the shorter side and CenterCrop cuts the centre.",
+    },
+    "code.data.augment": {
+        "pt": "Aumento de dados, só no treino: a cada época a mesma foto chega um pouco diferente (espelhada, girada, com outra cor). O modelo aprende a forma, não a foto exata.",
+        "en": "Data augmentation, training only: each epoch the same photo arrives slightly different (flipped, rotated, recoloured). The model learns the shape, not the exact photo.",
+    },
+    "code.data.tensor": {
+        "pt": "ToTensor transforma a imagem em números de 0 a 1, no formato [canais, altura, largura]. Normalize centraliza cada canal com a média e o desvio que a rede viu no pré-treino.",
+        "en": "ToTensor turns the image into numbers from 0 to 1, shaped [channels, height, width]. Normalize centres each channel with the mean and deviation the network saw in pre-training.",
+    },
+    "code.model.family": {
+        "pt": "Ramo da família {family}: a arquitetura termina numa camada linear com uma saída por classe do ImageNet (1000). Ela é trocada por uma nova, com uma saída por classe do seu dataset (uma só no binário). O resto da rede continua igual; com pesos pré-treinados, ele já sabe ver bordas e texturas.",
+        "en": "The {family} family branch: the architecture ends in a linear layer with one output per ImageNet class (1000). It is replaced by a new one with one output per class of your dataset (a single one for binary). The rest of the network stays the same; with pre-trained weights it already sees edges and textures.",
+    },
+    "code.loss.binary": {
+        "pt": "Binário: uma saída só e a BCEWithLogitsLoss, que aplica a sigmoide e mede o erro contra o rótulo 0 ou 1.",
+        "en": "Binary: a single output and BCEWithLogitsLoss, which applies the sigmoid and measures the error against the 0 or 1 label.",
+    },
+    "code.loss.multiclass": {
+        "pt": "Multiclasse: uma saída por classe e a CrossEntropyLoss, que aplica o softmax e pune pouca probabilidade na classe certa.",
+        "en": "Multiclass: one output per class and CrossEntropyLoss, which applies the softmax and penalises low probability on the right class.",
+    },
+    "code.train.mode": {
+        "pt": "Modo de treino: liga o dropout e faz o BatchNorm atualizar suas médias com cada lote.",
+        "en": "Training mode: turns dropout on and lets BatchNorm update its running averages with each batch.",
+    },
+    "code.train.batch": {
+        "pt": "Um lote por vez: as imagens e os rótulos vão para o dispositivo (GPU ou CPU). Uma época é uma volta por todos os lotes do treino.",
+        "en": "One batch at a time: the images and labels move to the device (GPU or CPU). An epoch is one pass over every training batch.",
+    },
+    "code.train.binary_target": {
+        "pt": "No binário, a loss quer o rótulo como número real e com a mesma forma da saída, [lote, 1].",
+        "en": "For binary, the loss wants the label as a real number with the output's shape, [batch, 1].",
+    },
+    "code.train.zero_grad": {
+        "pt": "Zera os gradientes do lote anterior. Sem isso, eles se somariam de um lote para o outro.",
+        "en": "Clears the previous batch's gradients. Without it they would add up from one batch to the next.",
+    },
+    "code.train.amp": {
+        "pt": "Precisão mista: as contas rodam em float16 onde é seguro, o que é mais rápido na GPU. O GradScaler aumenta a loss antes do backward para gradientes pequenos não virarem zero.",
+        "en": "Mixed precision: the maths runs in float16 where it is safe, which is faster on a GPU. GradScaler scales the loss up before backward so small gradients do not round to zero.",
+    },
+    "code.train.step": {
+        "pt": "O passo de aprendizado: forward (a rede prevê), loss (o erro em relação ao rótulo), backward (o gradiente de cada peso) e step (o otimizador mexe nos pesos na direção que diminui o erro).",
+        "en": "The learning step: forward (the network predicts), loss (the error against the label), backward (each weight's gradient) and step (the optimiser moves the weights in the direction that lowers the error).",
+    },
+    "code.train.count": {
+        "pt": "Conta acertos sem guardar gradientes: serve só para mostrar a acurácia de treino, não muda os pesos.",
+        "en": "Counts hits without keeping gradients: it only shows the training accuracy and does not change the weights.",
+    },
+    "code.predict.binary": {
+        "pt": "Binário: a sigmoide transforma a saída em probabilidade da classe positiva; acima de 0,5 a previsão é positiva.",
+        "en": "Binary: the sigmoid turns the output into the positive class probability; above 0.5 the prediction is positive.",
+    },
+    "code.predict.multiclass": {
+        "pt": "Multiclasse: a classe prevista é a de maior saída (argmax).",
+        "en": "Multiclass: the predicted class is the one with the largest output (argmax).",
+    },
+    "code.validate.mode": {
+        "pt": "Modo de avaliação: desliga o dropout, e o BatchNorm usa as médias aprendidas. Nada nesta função mexe nos pesos.",
+        "en": "Evaluation mode: dropout is off and BatchNorm uses the averages it learned. Nothing in this function changes the weights.",
+    },
+    "code.validate.no_grad": {
+        "pt": "Sem gradientes: a validação só mede. Gasta menos memória e roda mais rápido.",
+        "en": "No gradients: validation only measures. It uses less memory and runs faster.",
+    },
+    "code.validate.loss": {
+        "pt": "Esta é a val_loss. A época com a menor val_loss é a que fica salva em best_model.pth.",
+        "en": "This is the val_loss. The epoch with the lowest val_loss is the one saved in best_model.pth.",
+    },
+    "code.test.once": {
+        "pt": "O teste roda uma vez, no fim, com os pesos do best_model.pth. São imagens que não influenciaram nenhuma escolha do treino.",
+        "en": "The test runs once, at the end, with the weights of best_model.pth. These images influenced no choice made during training.",
+    },
+    "code.test.metrics": {
+        "pt": "As métricas comparam o previsto com o verdadeiro. Na multiclasse a média é macro: cada classe pesa igual, mesmo as que têm poucas imagens.",
+        "en": "The metrics compare predicted and true labels. For multiclass the average is macro: every class weighs the same, even those with few images.",
+    },
     "mlflow.retry_unavailable": {
         "pt": "A exportação para MLflow está indisponível para esta execução ou perfil.",
         "en": "MLflow export is unavailable for this run or profile.",

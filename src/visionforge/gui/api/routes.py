@@ -80,6 +80,7 @@ from visionforge.core.task_runner import (
     runner_metric_direction,
 )
 from visionforge.gui.api.coco_routes import router as coco_router
+from visionforge.gui.api.code_tour_routes import router as code_tour_router
 from visionforge.gui.api.colab_connection import PINNED_VERSION as _COLAB_PIN
 from visionforge.gui.api.colab_connection import ColabCli, LoginFlows
 from visionforge.gui.api.colab_drive import (
@@ -532,6 +533,8 @@ router.include_router(
         _EVIDENCE_EXPORTS,
     )
 )
+# The real training code behind the "Código" tab (ADR-173).
+router.include_router(code_tour_router)
 # Dataset, picker and credential endpoints live in datasets_routes.py (ADR-132).
 router.include_router(datasets_router)
 # The read-only dataset explorer (ADR-165).

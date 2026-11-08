@@ -7334,3 +7334,59 @@ SDK's default.
   field in 0.31; the private GraphQL helpers it uses can change in any release.
 - *Upload `run.json` as a file, as MLflow does.* MLflow keeps it on this
   machine; on W&B it would publish the dataset path and the config's folders.
+
+## ADR-173 — The "Code" tab: the real training code, annotated
+
+**Date:** 2026-11-08
+**Status:** Accepted
+**Extends:** ADR-118 (the training sheet's tabs and "it must never teach
+wrong"), ADR-160 (the Results tab)
+
+**Context:** the user wants people who do not program yet to see the code
+behind a training: the data pipeline, the model, the loop, validation and the
+test. "How it works" (ADR-118) draws the idea; it does not show code. A
+hand-written, simplified copy would drift from what trains and could teach
+something the tool does not do.
+
+**Decision:**
+
+- A fourth tab on the training sheet, **Code**, after "How it works". It shows
+  six functions of a classification training as they are in the installed
+  package: `_build_transforms` (data), `replace_final_layer` (model),
+  `Trainer._build_criterion` (loss), `Trainer._train_epoch`,
+  `Trainer._eval_epoch` and `Evaluator.evaluate`.
+- The server reads them with `inspect` on each request
+  (`GET /api/code-tour/{task}`, `core/code_tour.py`) and sends the source, the
+  first line number and the file path inside the package, never the absolute
+  path of the install.
+- **Notes point at lines by text, never by number.** Each note names the text
+  of its first line (and of the first line after it). A test resolves every
+  note against the real source, so changing the trainer in a way that loses a
+  commented line fails CI instead of pointing at the wrong place. The texts are
+  in the message catalog, in Portuguese and English.
+- **This run's path.** A note can depend on a setting: binary or multiclass,
+  mixed precision, augmentation, the model family. The page sends what the
+  submitted form decides and the server marks each such note as this run's
+  path, a branch it does not take, or undecided. A setting the form does not
+  decide is left out rather than guessed: mixed precision is marked on only
+  where the trainer would turn it on (`mixed_precision` and a real CUDA
+  device), so from the form it is only ever "off" (turned off, or CPU) or
+  undecided.
+- No line-by-line live tracking: the stream reports per epoch, so the tab says
+  which path the code takes, not which line runs now.
+- Classification only; other tasks say so. Detection runs inside Ultralytics,
+  whose loop is not this project's code.
+
+**Consequences:** renaming or rewriting a commented line means updating its
+note in the same change. The functions shown are private ones
+(`_build_transforms`, `_train_epoch`); the tab is a reason to keep them
+readable. A run reattached after a page reload has no form settings, so its
+branches show as undecided.
+
+**Alternatives considered:**
+
+- *A simplified, standalone PyTorch script.* Easier to read, but a second copy
+  of the training that can drift, and that never ran.
+- *Line numbers in the notes.* Any edit above a note would move it silently.
+- *Notes in the frontend.* The anchors could not be checked against the Python
+  source in one test.
