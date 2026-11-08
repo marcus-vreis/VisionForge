@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 from visionforge.core.github_export import (
     GitHubExportError,
+    InvalidRepositoryError,
     export_run,
     is_valid_github_repo,
     preview_run,
@@ -86,7 +87,7 @@ def build_github_router(
     def send(body: GitHubExport, header: ProfileHeader = None) -> dict[str, Any]:
         """Commit the confirmed files to the private repository."""
         if not is_valid_github_repo(body.repo):
-            raise HTTPException(422, tr("github.repo_invalid"))
+            raise _http_error(InvalidRepositoryError(body.repo))
         profile = resolve(header)
         directory = locate(body.run_id, profile)
         token = read_token("github", profile)
@@ -104,7 +105,9 @@ def _http_error(exc: Exception) -> HTTPException:
     """The answer for a preview or export failure, never GitHub's own text."""
     if isinstance(exc, FileNotFoundError):
         return HTTPException(404, tr("github.artifact_missing"))
-    # Both are ValueErrors: check them before the generic one.
+    # These are ValueErrors: check them before the generic one.
+    if isinstance(exc, InvalidRepositoryError):
+        return HTTPException(422, tr("github.repo_invalid"))
     if isinstance(exc, PreviewMismatchError):
         return HTTPException(409, tr("github.preview_changed"))
     if isinstance(exc, PrivateRepositoryRequiredError):

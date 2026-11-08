@@ -66,6 +66,10 @@ class GitHubExportError(RuntimeError):
         self.status = status
 
 
+class InvalidRepositoryError(ValueError):
+    """The repository is not an explicit ``owner/name``."""
+
+
 def is_valid_github_repo(value: str) -> bool:
     """True for an explicit ``owner/name`` GitHub accepts."""
     if not isinstance(value, str) or value.count("/") != 1:
@@ -110,7 +114,7 @@ def export_run(
     if not isinstance(token, str) or not token.strip():
         raise ValueError("An explicit GitHub token is required")
     if not is_valid_github_repo(repo):
-        raise ValueError("Repository must be an explicit owner/name")
+        raise InvalidRepositoryError("Repository must be an explicit owner/name")
     folder, files = _package(run_dir)
     if digest != _digest(files):
         raise PreviewMismatchError("Export changed; review and confirm a new preview")
