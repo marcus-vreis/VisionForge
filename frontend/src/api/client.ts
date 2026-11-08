@@ -1159,6 +1159,43 @@ export async function retryWandbExport(runId: string): Promise<WandbExportStatus
   return request<WandbExportStatus>(`/wandb/runs/${encodeURIComponent(runId)}/retry`, { method: "POST" });
 }
 
+/** The settings that pick a branch in a run's code (ADR-173); a missing one is undecided. */
+export interface CodeSettings {
+  kind?: "binary" | "multiclass";
+  amp?: boolean;
+  augment?: boolean;
+  model?: string;
+}
+
+/** Lines `first`..`last` (0-based) of a section and what they do. */
+export interface CodeNote {
+  first: number;
+  last: number;
+  text: string;
+  /** true: this run's path; false: a branch it does not take; null: unconditional or unknown. */
+  active: boolean | null;
+}
+
+/** One real function of the training, read from the installed package. */
+export interface CodeSection {
+  id: string;
+  name: string;
+  file: string;
+  first_line: number;
+  lines: string[];
+  notes: CodeNote[];
+}
+
+/** The annotated training code of `task`, with this run's branches marked. */
+export async function fetchCodeTour(task: string, settings: CodeSettings): Promise<CodeSection[]> {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(settings)) {
+    if (value !== undefined) query.set(key, String(value));
+  }
+  const suffix = query.size ? `?${query}` : "";
+  return request<CodeSection[]>(`/code-tour/${encodeURIComponent(task)}${suffix}`);
+}
+
 export interface MLflowTrackingStatus {
   state: string;
   error?: string | null;

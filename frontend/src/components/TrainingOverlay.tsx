@@ -25,6 +25,8 @@ import type { QueuedJobInfo, RunStatus, TrainingEvent } from "../types/run";
 import { DriveConsentPrompt } from "./DriveConsentPrompt";
 import { LiveResults } from "./LiveResults";
 import { TrainingStory } from "./training-story/TrainingStory";
+import { CodeTour } from "./CodeTour";
+import type { CodeSettings } from "../api/client";
 
 interface TrainingOverlayProps {
   status: RunStatus;
@@ -55,6 +57,8 @@ interface TrainingOverlayProps {
   /** Which drawing the "Como funciona" tab shows, recorded when the run was
    *  submitted: the sheet outlives the form it came from (ADR-118). */
   story?: StorySpec;
+  /** What picks the branches in the "Código" tab; null when the run's settings are unknown. */
+  codeSettings?: CodeSettings | null;
   /** The tab of the sheet that is open. The log is the default, and the guide can
    *  ask for the other one, so the choice lives in the page. */
   tab: SheetTab;
@@ -90,6 +94,7 @@ export function TrainingOverlay({
   stopped = null,
   customRun = false,
   story = GENERIC_STORY,
+  codeSettings = null,
   tab,
   onTabChange,
   onClose,
@@ -721,7 +726,9 @@ export function TrainingOverlay({
                   ? t.trainingStory.logTab
                   : name === "results"
                     ? t.liveResults.tab
-                    : t.trainingStory.tab}
+                    : name === "code"
+                      ? t.codeTour.tab
+                      : t.trainingStory.tab}
               </button>
             );
           })}
@@ -735,6 +742,17 @@ export function TrainingOverlay({
             style={{ maxHeight: 420, overflowY: "auto" }}
           >
             <LiveResults events={progressEvents} spec={story} accent={taskAccent} />
+          </div>
+        )}
+
+        {tab === "code" && (
+          <div
+            role="tabpanel"
+            id="training-panel-code"
+            aria-labelledby="training-tab-code"
+            style={{ maxHeight: 520, overflowY: "auto" }}
+          >
+            <CodeTour taskKey={taskKey} settings={codeSettings} accent={taskAccent} />
           </div>
         )}
 

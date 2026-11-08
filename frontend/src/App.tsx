@@ -21,6 +21,8 @@ import type { ComparePayload } from "./lib/compare-form";
 import { announce, requestPermission, resetTitle } from "./lib/run-notify";
 import { runIdentityFromJob, serverRunning } from "./lib/run-control";
 import { GENERIC_STORY, storySpecFor, type StorySpec } from "./lib/story-family";
+import { codeSettingsFor } from "./lib/code-settings";
+import type { CodeSettings } from "./api/client";
 import type { SheetTab } from "./lib/training-story";
 import { BottomBar } from "./components/BottomBar";
 import type { DeviceSelection } from "./components/DeviceSelector";
@@ -112,6 +114,8 @@ interface RunMeta {
   pipeline: string[];
   queueSize: number | undefined;
   story: StorySpec;
+  /** The branches of the "Código" tab (ADR-173); null when unknown. */
+  code?: CodeSettings | null;
 }
 
 /** Standalone tasks that expose the comparison/sweep advanced surface. */
@@ -208,6 +212,7 @@ export default function App() {
   // config when it is submitted (the sheet outlives the form), and which tab of the
   // sheet is open: the log, until a guide asks for the other one (ADR-118).
   const [storySpec, setStorySpec] = useState<StorySpec>(GENERIC_STORY);
+  const [codeSettings, setCodeSettings] = useState<CodeSettings | null>(null);
   const [sheetTab, setSheetTab] = useState<SheetTab>("log");
   const [overlayVisible, setOverlayVisible] = useState(false);
   // The task the followed run belongs to, which may not be the open tab.
@@ -466,6 +471,7 @@ export default function App() {
     setPipelineSummary(meta.pipeline);
     setQueueSize(meta.queueSize);
     setStorySpec(meta.story);
+    setCodeSettings(meta.code ?? null);
     // A run opens on its log.
     setSheetTab("log");
   };
@@ -695,6 +701,7 @@ export default function App() {
         pipeline,
         queueSize: qSize,
         story: storySpecFor("classification", payload),
+        code: codeSettingsFor(payload),
       },
       colab ? { config: payload, ...colab } : payload,
       colab ? { run: runColabExperiment } : undefined,
@@ -1105,6 +1112,7 @@ export default function App() {
           stopped={result?.stopped ?? null}
           customRun={customRun}
           story={storySpec}
+          codeSettings={codeSettings}
           tab={sheetTab}
           onTabChange={setSheetTab}
           onClose={() => setOverlayVisible(false)}

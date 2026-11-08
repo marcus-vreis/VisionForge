@@ -31,10 +31,10 @@ import { phaseKey, type PhaseKey } from "./training-phase";
 
 /** The tabs of the training sheet: the log (the default), the live results and
  *  the story. */
-export type SheetTab = "log" | "results" | "story";
+export type SheetTab = "log" | "results" | "story" | "code";
 
 /** The tabs in the order the sheet shows them. */
-export const SHEET_TABS: readonly SheetTab[] = ["log", "results", "story"];
+export const SHEET_TABS: readonly SheetTab[] = ["log", "results", "story", "code"];
 
 export type StoryStage =
   | "queued"

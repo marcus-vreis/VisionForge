@@ -316,6 +316,28 @@ export const pt = {
     retrying: "Enviando…",
     retryFailed: "Falha ao repetir o envio ao W&B.",
   },
+  // The "Código" tab of the training sheet (components/CodeTour.tsx, ADR-173).
+  codeTour: {
+    tab: "Código",
+    intro: "Este é o código real que treina o seu modelo, lido do VisionForge instalado: não é um resumo. Os trechos marcados são o caminho que as configurações deste treino seguem; os apagados são ramos que ele não usa.",
+    sectionsLabel: "Partes do treino",
+    sections: {
+      data: "Dados",
+      model: "Modelo",
+      loss: "Loss",
+      train: "Treino (uma época)",
+      validate: "Validação",
+      test: "Teste",
+    } as Record<string, string>,
+    where: (file: string, name: string, line: number) => `${file} · ${name} · linha ${line}`,
+    lines: (first: number, last: number) => (first === last ? `linha ${first}` : `linhas ${first}–${last}`),
+    active: "o caminho deste treino",
+    inactive: "não usado neste treino",
+    loading: "Carregando o código…",
+    failed: "Não foi possível carregar o código.",
+    onlyClassification: "Por enquanto, o código comentado existe só para a classificação.",
+    perEpoch: "O treino informa o progresso por época, não por linha: a marca mostra qual caminho o código segue, não a linha que está rodando agora.",
+  },
   hub: {
     checkpointWarning: "O checkpoint é enviado como foi gravado e pode conter metadados internos, caminhos e labels. Revise a origem do arquivo antes de enviar.",
     title: "Enviar ao Hugging Face Hub",
