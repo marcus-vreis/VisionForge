@@ -163,8 +163,10 @@ def test_the_token_never_follows_a_bucket_outside_zenodo(tmp_path: Path) -> None
     run_dir = _run(tmp_path)
     zenodo = FakeZenodo(PRODUCTION, bucket_host="https://files.example.org")
 
+    digest = preview_run(run_dir)["digest"]
+
     with pytest.raises(ZenodoExportError, match="outside Zenodo"):
-        export_run(run_dir, _TOKEN, preview_run(run_dir)["digest"], request=zenodo)
+        export_run(run_dir, _TOKEN, digest, request=zenodo)
     assert [method for method, _ in zenodo.calls] == ["POST"]
 
 
@@ -185,8 +187,9 @@ def test_a_link_must_be_https_on_the_same_host(links: Any) -> None:
 
 def test_an_empty_token_is_refused_before_any_call(tmp_path: Path) -> None:
     zenodo = FakeZenodo(PRODUCTION)
+    run_dir = _run(tmp_path)
     with pytest.raises(ValueError, match="token"):
-        export_run(_run(tmp_path), " ", "digest", request=zenodo)
+        export_run(run_dir, " ", "digest", request=zenodo)
     assert zenodo.calls == []
 
 
@@ -229,16 +232,19 @@ def test_a_refusal_keeps_the_status_and_drops_the_answer(
 
     monkeypatch.setattr(zenodo_export.urllib.request, "urlopen", refuse)
 
+    send = http_request(_TOKEN)
+
     with pytest.raises(ZenodoExportError) as caught:
-        http_request(_TOKEN)("POST", f"{PRODUCTION}/api", b"{}", {})
+        send("POST", f"{PRODUCTION}/api", b"{}", {})
     assert caught.value.status == 403
     assert _TOKEN not in str(caught.value)
     assert caught.value.__cause__ is None
 
 
 def test_the_http_caller_refuses_plain_http() -> None:
+    send = http_request(_TOKEN)
     with pytest.raises(ZenodoExportError, match="HTTPS"):
-        http_request(_TOKEN)("POST", "http://zenodo.org/api", b"{}", {})
+        send("POST", "http://zenodo.org/api", b"{}", {})
 
 
 def test_a_network_failure_names_only_its_kind(
@@ -249,6 +255,8 @@ def test_a_network_failure_names_only_its_kind(
 
     monkeypatch.setattr(zenodo_export.urllib.request, "urlopen", fail)
 
+    send = http_request(_TOKEN)
+
     with pytest.raises(ZenodoExportError, match="^URLError$") as caught:
-        http_request(_TOKEN)("POST", f"{PRODUCTION}/api", b"{}", {})
+        send("POST", f"{PRODUCTION}/api", b"{}", {})
     assert caught.value.status is None

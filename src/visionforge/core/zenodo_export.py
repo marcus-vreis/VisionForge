@@ -151,7 +151,8 @@ def http_request(token: str) -> Request:
         except urllib.error.HTTPError as exc:
             # The answer body can echo the request; only the status leaves.
             raise ZenodoExportError(f"Zenodo answered {exc.code}", exc.code) from None
-        except (urllib.error.URLError, OSError, ValueError) as exc:
+        except (OSError, ValueError) as exc:
+            # OSError covers URLError: no route, refused, timed out.
             raise ZenodoExportError(type(exc).__name__) from None
 
     return call

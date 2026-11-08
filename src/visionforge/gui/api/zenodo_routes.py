@@ -72,10 +72,8 @@ def build_zenodo_router(
         directory = locate(run_id, resolve(header))
         try:
             return preview_run(directory)
-        except FileNotFoundError as exc:
-            raise HTTPException(404, tr(_ARTIFACT_MISSING)) from exc
-        except ValueError as exc:
-            raise HTTPException(422, tr(_PACKAGE_INVALID, reason=str(exc))) from exc
+        except (FileNotFoundError, ValueError) as exc:
+            raise _http_error(exc) from exc
 
     @router.post(
         "/export",
@@ -94,18 +92,21 @@ def build_zenodo_router(
             raise HTTPException(409, tr("zenodo.token_missing"))
         try:
             return export_run(directory, token, body.digest, sandbox=body.sandbox)
-        except FileNotFoundError as exc:
-            raise HTTPException(404, tr(_ARTIFACT_MISSING)) from exc
-        except PreviewMismatchError as exc:
-            raise HTTPException(409, tr("zenodo.preview_changed")) from exc
-        except ValueError as exc:
-            raise HTTPException(422, tr(_PACKAGE_INVALID, reason=str(exc))) from exc
-        except ZenodoExportError as exc:
-            key = (
-                "zenodo.token_rejected"
-                if exc.status in _REJECTED
-                else "zenodo.export_failed"
-            )
-            raise HTTPException(502, tr(key)) from exc
+        except (FileNotFoundError, ValueError, ZenodoExportError) as exc:
+            raise _http_error(exc) from exc
 
     return router
+
+
+def _http_error(exc: Exception) -> HTTPException:
+    """The answer for a preview or export failure, never Zenodo's own text."""
+    if isinstance(exc, FileNotFoundError):
+        return HTTPException(404, tr(_ARTIFACT_MISSING))
+    # Before ValueError: a stale preview is a ValueError too.
+    if isinstance(exc, PreviewMismatchError):
+        return HTTPException(409, tr("zenodo.preview_changed"))
+    if isinstance(exc, ValueError):
+        return HTTPException(422, tr(_PACKAGE_INVALID, reason=str(exc)))
+    if isinstance(exc, ZenodoExportError) and exc.status in _REJECTED:
+        return HTTPException(502, tr("zenodo.token_rejected"))
+    return HTTPException(502, tr("zenodo.export_failed"))
