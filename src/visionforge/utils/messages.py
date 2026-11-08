@@ -686,6 +686,10 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "pt": "O run '{run_id}' não tem mais nada a continuar.",
         "en": "Run '{run_id}' has nothing left to continue.",
     },
+    "mlflow.retry_unavailable": {
+        "pt": "A exportação para MLflow está indisponível para esta execução ou perfil.",
+        "en": "MLflow export is unavailable for this run or profile.",
+    },
     "run.cannot_delete_active": {
         "pt": "Não é possível excluir um run que está em execução.",
         "en": "Cannot delete a run that is currently executing.",

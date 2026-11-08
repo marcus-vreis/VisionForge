@@ -7,7 +7,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from visionforge.gui.api.profiles import Pronoun
+from visionforge.gui.api.profiles import ProfileSettings, Pronoun
 
 
 class RunStatus(BaseModel):
@@ -61,6 +61,7 @@ class ProfileInfo(BaseModel):
     is_default: bool = False
     # "ele" / "ela" / "neutro": how the welcome greets (ADR-126); None when unset.
     pronoun: Pronoun | None = None
+    settings: ProfileSettings = Field(default_factory=ProfileSettings)
 
 
 class ProfileListResponse(BaseModel):
@@ -81,6 +82,7 @@ class ProfileUpdateRequest(BaseModel):
 
     name: str | None = Field(default=None, min_length=1, max_length=60)
     pronoun: Pronoun | None = None
+    settings: ProfileSettings | None = None
 
 
 class QueueLane(BaseModel):
@@ -380,11 +382,22 @@ class DeviceInfoResponse(BaseModel):
     gpus: list[GPUInfo] = []
 
 
+class MlflowStatus(BaseModel):
+    """Public export diagnostics from a local classification run."""
+
+    state: Literal["running", "finished", "disabled", "failed"]
+    status: Literal["RUNNING", "FINISHED", "KILLED", "FAILED"]
+    error: str | None = None
+    run_id: str | None = None
+
+
 class RunDetail(BaseModel):
     """Full run record served from /api/runs/{run_id}.
 
     Mirrors run.json on disk plus a few computed convenience fields.
     """
+
+    tracking: MlflowStatus | None = None
 
     run_id: str
     experiment_name: str

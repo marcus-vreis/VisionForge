@@ -15,6 +15,8 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Added
 
+- Perfis podem ativar o MLflow local para acompanhar treinos de classificação. O Histórico permite repetir uma exportação que falhou (ADR-170).
+
 - **Converter YOLO e COCO** (ADR-169, fase 4b da issue #117): na aba Explorar,
   "Exportar para COCO" (com um dataset de detecção aberto) e "Importar COCO"
   (sempre visível) escrevem sempre um dataset novo, numa pasta irmã

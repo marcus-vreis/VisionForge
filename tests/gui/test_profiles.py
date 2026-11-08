@@ -465,7 +465,13 @@ class TestProfilesApi:
         body = client.get("/api/profiles").json()
 
         assert body["profiles"] == [
-            {"slug": "default", "name": "default", "is_default": True, "pronoun": None}
+            {
+                "slug": "default",
+                "name": "default",
+                "is_default": True,
+                "pronoun": None,
+                "settings": {"mlflow": {"enabled": False}},
+            }
         ]
 
     def test_creating_then_listing(self, client: TestClient, tmp_path: Path) -> None:
@@ -476,6 +482,7 @@ class TestProfilesApi:
             "name": "João Silva",
             "is_default": False,
             "pronoun": None,
+            "settings": {"mlflow": {"enabled": False}},
         }
         assert (tmp_path / "outputs" / "profiles" / "joao-silva" / "models").is_dir()
         slugs = [p["slug"] for p in client.get("/api/profiles").json()["profiles"]]
@@ -529,6 +536,7 @@ class TestIdentity:
             "name": "Marcus",
             "is_default": True,
             "pronoun": "ele",
+            "settings": {"mlflow": {"enabled": False}},
         }
         _make_profile(client, "Luana")
         listed = client.get("/api/profiles").json()["profiles"]
@@ -562,6 +570,7 @@ class TestIdentity:
             "name": "Ana Lima",
             "is_default": False,
             "pronoun": "neutro",
+            "settings": {"mlflow": {"enabled": False}},
         }
         data = json.loads(meta.read_text(encoding="utf-8"))
         assert data["created_at"] == created_at
@@ -1350,3 +1359,61 @@ class TestEverySubmissionIsScoped:
 
         assert resp.status_code == 422, resp.text
         assert not jobs
+
+
+class TestMLflowProfileSettings:
+    @pytest.mark.parametrize("slug", ["default", "ana"])
+    def test_settings_are_independent_and_preserve_metadata(
+        self, client: TestClient, tmp_path: Path, slug: str
+    ) -> None:
+        _make_profile(client, "Ana")
+        root = tmp_path / "outputs" / "profiles"
+        path = (
+            root / "default.json" if slug == "default" else root / slug / "profile.json"
+        )
+        meta = json.loads(path.read_text()) if path.exists() else {}
+        meta["custom"] = {"keep": 1}
+        meta["settings"] = {"future": 5, "mlflow": {"future": 6}}
+        path.write_text(json.dumps(meta), encoding="utf-8")
+        response = client.put(
+            f"/api/profiles/{slug}", json={"settings": {"mlflow": {"enabled": True}}}
+        )
+        assert response.status_code == 200
+        assert response.json()["settings"]["mlflow"]["enabled"] is True
+        saved = json.loads(path.read_text())
+        assert saved["custom"] == {"keep": 1}
+        assert saved["settings"] == {
+            "future": 5,
+            "mlflow": {"future": 6, "enabled": True},
+        }
+        listed = client.get("/api/profiles").json()["profiles"]
+        assert {p["slug"]: p["settings"]["mlflow"]["enabled"] for p in listed} == {
+            "default": slug == "default",
+            "ana": slug == "ana",
+        }
+        renamed = client.put(f"/api/profiles/{slug}", json={"name": "Renamed"})
+        assert renamed.json()["settings"]["mlflow"]["enabled"] is True
+
+    @pytest.mark.parametrize("enabled", ["true", 1, None, [], {}])
+    def test_explicit_invalid_settings_are_rejected(
+        self, client: TestClient, enabled: Any
+    ) -> None:
+        response = client.put(
+            "/api/profiles/default", json={"settings": {"mlflow": {"enabled": enabled}}}
+        )
+        assert response.status_code == 422
+
+    @pytest.mark.parametrize(
+        "settings", [None, [], {"mlflow": None}, {"mlflow": {"enabled": "invalid"}}]
+    )
+    def test_malformed_legacy_settings_disable_export(
+        self, client: TestClient, tmp_path: Path, settings: Any
+    ) -> None:
+        path = tmp_path / "outputs" / "profiles" / "default.json"
+        path.parent.mkdir(parents=True)
+        path.write_text(
+            json.dumps({"name": "Legacy", "settings": settings}), encoding="utf-8"
+        )
+        profile = client.get("/api/profiles").json()["profiles"][0]
+        assert profile["name"] == "Legacy"
+        assert profile["settings"]["mlflow"]["enabled"] is False

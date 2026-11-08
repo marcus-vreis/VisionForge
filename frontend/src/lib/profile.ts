@@ -38,6 +38,7 @@ export interface ProfileInfo {
   name: string;
   is_default: boolean;
   pronoun?: Pronoun | null;
+  settings?: { mlflow: { enabled: boolean } };
 }
 
 /** O que o navegador lembra do perfil escolhido. */

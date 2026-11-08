@@ -265,6 +265,16 @@ export const en: Dict = {
     pronounNames: { ele: "he/him", ela: "she/her", neutro: "they/them" },
   },
   // Profiles on a shared server (ADR-114): one output folder per person.
+  mlflow: {
+    label: "Export classification to local MLflow",
+    hint: "Local storage only; requires the mlflow extra. Applies to future runs.",
+    saveFailed: "Failed to save MLflow setting.",
+    warning: "MLflow export incomplete",
+    notInstalled: "MLflow is not installed on this computer. Install the VisionForge mlflow extra and retry the export.",
+    retry: "Retry export",
+    retrying: "Exporting…",
+    retryFailed: "Failed to retry export.",
+  },
   profile: {
     who: "Who are you?",
     defaultName: "Default (no profile)",

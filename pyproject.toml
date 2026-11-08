@@ -91,6 +91,7 @@ cu128 = ["torch>=2.3", "torchvision>=0.18"]
 # These extras are now empty: everything they used to install ships with the
 # package (ADR-106). The names stay so an install line saved in a requirements
 # file or a README elsewhere keeps resolving instead of failing.
+mlflow = ["mlflow==3.18.0"]
 detection = []
 timm = []
 optuna = []

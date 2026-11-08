@@ -27,6 +27,7 @@ class ClassificationBlock(ExperimentBlock):
     """
 
     def setup(self, config: ExperimentConfig) -> None:
+        self.mlflow_context: tuple[Path, str] | None = None
         self._config = config
         self._train_result: TrainResult | None = None
         self._eval_result: EvalResult | None = None
@@ -85,8 +86,11 @@ class ClassificationBlock(ExperimentBlock):
         # The worker pools have to be stopped even when the run raises: inside
         # `visionforge gui` the traceback keeps `data` alive, so without this the
         # processes outlive the run and each retry stacks more of them.
+        trainer = Trainer(self._config)
+        trainer.mlflow_context = self.mlflow_context
+        status = "FAILED"
         try:
-            self._train_result = Trainer(self._config).fit(
+            self._train_result = trainer.fit(
                 model,
                 data,
                 progress_callback=self._progress_callback,
@@ -97,6 +101,7 @@ class ClassificationBlock(ExperimentBlock):
             # Stopped before its first epoch (ADR-111): no checkpoint exists,
             # and the run.json the trainer wrote already says 0 epochs.
             if self._train_result.total_epochs == 0:
+                status = "KILLED"
                 return
 
             # Reload best checkpoint for test-set evaluation.
@@ -112,7 +117,10 @@ class ClassificationBlock(ExperimentBlock):
             run_dir = self._train_result.model_path.parent
             graphics = self._render_plots(run_dir, data.class_names)
             self._update_run_json(run_dir, graphics)
+            status = "KILLED" if self._train_result.stopped else "FINISHED"
         finally:
+            if self.mlflow_context is not None and trainer.mlflow_tracker is not None:
+                trainer.mlflow_tracker.finish(status)
             data.close()
 
     def _run_evaluate(self) -> None:

@@ -7230,3 +7230,20 @@ opening another tab to allow the Drive is fine.
 - *`pycocotools`.* A new dependency for a format that is plain JSON, and the tool's own readers do more than this needs.
 - *Converting at the apply.* The preview could not then show what is left out and why.
 - *Importing crowd boxes and polygons.* YOLO detection has no crowd flag, and a polygon's bounding box is a different annotation from the one the author drew.
+
+## ADR-170 — Classification runs can export to local MLflow by profile
+
+**Date:** 2026-11
+**Status:** Accepted
+**Extends:** ADR-013, ADR-054, ADR-114, ADR-135
+
+**Decision:** A profile can enable MLflow for locally submitted classification
+training. Submission captures that choice and the profile slug. The optional
+MLflow client writes epoch metrics to a local SQLite store under
+`outputs/mlflow`, groups runs by profile and exports the final `run.json`
+after evaluation. History exposes export failures and lets the operator retry.
+
+**Reason:** Researchers can compare their runs in the MLflow UI while the
+training record and TensorBoard remain available independently. Retrying a
+metric with a fresh timestamp can duplicate its history in SQLite. Re-export
+therefore reconciles the stored epoch values before writing missing metrics.

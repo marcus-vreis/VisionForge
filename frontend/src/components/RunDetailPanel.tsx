@@ -35,6 +35,8 @@ import { Lightbox } from "./Lightbox";
 import { RunGroupDetail } from "./RunGroupDetail";
 import { DownloadBundleButton } from "./DownloadBundleButton";
 
+import { MLflowExportStatus } from "./MLflowExportStatus";
+
 interface RunDetailPanelProps {
   runId: string;
   onBack: () => void;
@@ -442,6 +444,8 @@ export function RunDetailPanel({ runId, onBack, onOpenRun, knownRunIds }: RunDet
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <MLflowExportStatus key={runId} runId={runId} tracking={detail?.tracking}
+        onUpdated={(tracking) => setDetail((previous) => previous ? { ...previous, tracking } : previous)} />
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
         <button
           type="button"

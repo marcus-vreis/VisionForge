@@ -143,7 +143,7 @@ from visionforge.gui.api.run_queue import (
     StopPoint,
     colab_lane,
 )
-from visionforge.gui.api.runs_routes import build_runs_router
+from visionforge.gui.api.runs_routes import build_runs_router, read_mlflow_status
 from visionforge.gui.api.sample_dataset import (
     SampleDatasetExistsError,
     SampleTaskError,
@@ -162,6 +162,7 @@ from visionforge.gui.api.schemas import (
     GradCamItem,
     GradCamRequest,
     GradCamResponse,
+    MlflowStatus,
     PreprocessPreviewRequest,
     PreprocessPreviewResponse,
     PreprocessPreviewStep,
@@ -638,6 +639,48 @@ async def reveal_run_folder(
 
 
 @router.post(
+    "/runs/{run_id}/mlflow/retry",
+    responses={**_NOT_FOUND, **_CONFLICT, **_SERVER_ERROR},
+)
+def retry_mlflow(run_id: str, profile: ProfileDep) -> MlflowStatus:
+    """Reconcile a completed local classification run with its profile's MLflow store."""
+    from visionforge.core.mlflow_tracking import MlflowTracker
+
+    run_dir = _find_run_dir(run_id, profile)
+    if run_dir is None or not run_dir.resolve().is_relative_to(
+        profile.models_dir.resolve()
+    ):
+        raise HTTPException(404, tr(RUN_NOT_FOUND_KEY, run_id=run_id))
+    record = run_dir / RUN_FILENAME
+    if record.is_symlink():
+        raise HTTPException(404, tr(RUN_NOT_FOUND_KEY, run_id=run_id))
+    if not profile.settings.mlflow.enabled or not _EVIDENCE_EXPORTS.reserve(run_dir):
+        raise HTTPException(409, tr("mlflow.retry_unavailable"))
+    try:
+        status = read_mlflow_status(run_dir)
+        if status is None or status.status == "RUNNING":
+            raise HTTPException(409, tr("mlflow.retry_unavailable"))
+        try:
+            data = json.loads(record.read_bytes())
+        except (OSError, ValueError) as exc:
+            raise HTTPException(500, tr(RUN_BAD_JSON_KEY, error=exc)) from exc
+        if (
+            not isinstance(data, dict)
+            or not isinstance(data.get("config"), dict)
+            or _run_task(data) != "classification"
+        ):
+            raise HTTPException(409, tr("mlflow.retry_unavailable"))
+        tracker = MlflowTracker(_PROFILES_DIR.parent / "mlflow", profile.slug, run_dir)
+        tracker.retry(data)
+        result = read_mlflow_status(run_dir)
+        if result is None:
+            raise HTTPException(500, tr("mlflow.retry_unavailable"))
+        return result
+    finally:
+        _EVIDENCE_EXPORTS.release(run_dir)
+
+
+@router.post(
     "/runs/{run_id}/resume",
     responses={
         **_BAD_REQUEST,
@@ -991,6 +1034,13 @@ async def sample_dataset(
 async def run_experiment(config: ExperimentConfig, profile: ProfileDep) -> RunResponse:
     """Start a training experiment, or queue it if one is already running."""
     config = profile.scope_model(config)
+    context = (
+        ((_PROFILES_DIR.parent / "mlflow").resolve(), profile.slug)
+        if config.block == "classification"
+        and config.classification.mode == "train"
+        and profile.settings.mlflow.enabled
+        else None
+    )
     await asyncio.to_thread(_check_classification_classes, config)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     run_id = f"{config.name}_{timestamp}"
@@ -1000,7 +1050,11 @@ async def run_experiment(config: ExperimentConfig, profile: ProfileDep) -> RunRe
         config.name,
         "classification",
         config.block,
-        lambda: _execute_experiment(config, run_id),
+        lambda: (
+            _execute_experiment(config, run_id, mlflow_context=context)
+            if context is not None
+            else _execute_experiment(config, run_id)
+        ),
         profile=profile,
     )
 
@@ -2783,7 +2837,11 @@ def _execute_run_gradcam(run_dir: Path, req: GradCamRequest) -> GradCamResponse:
 
 
 async def _execute_experiment(
-    config: ExperimentConfig, run_id: str, resume_dir: Path | None = None
+    config: ExperimentConfig,
+    run_id: str,
+    resume_dir: Path | None = None,
+    *,
+    mlflow_context: tuple[Path, str] | None = None,
 ) -> None:
     """Run the experiment in a background thread."""
     state = _job_state(run_id)
@@ -2822,6 +2880,8 @@ async def _execute_experiment(
         else:
             block = ClassificationBlock()
         block.setup(config)
+        if isinstance(block, ClassificationBlock):
+            block.mlflow_context = mlflow_context
         # Blocks that stream live epoch progress over SSE get the event pump
         # wired here. Grid/random search and K-fold CV forward each inner
         # trial/fold's epochs (annotated with trial context) plus
