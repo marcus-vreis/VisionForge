@@ -4,7 +4,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from visionforge.gui.api import routes
+from visionforge.gui.api import hub_routes, routes
 from visionforge.gui.server import app
 
 
@@ -12,7 +12,10 @@ def test_credentials_are_private_to_workspace_and_profile(tmp_path, monkeypatch)
     monkeypatch.setenv("VISIONFORGE_HOME", str(tmp_path / "home"))
     monkeypatch.setattr(routes, "_PROFILES_DIR", tmp_path / "profiles")
     monkeypatch.setattr(routes, "_MODELS_DIR", tmp_path / "models")
-    monkeypatch.setattr(app.state, "bind_host", "0.0.0.0", raising=False)
+    # The real bind host lives on app.state, which newer Starlette does not let
+    # monkeypatch restore; the route only asks whether that host is loopback.
+    loopback = {"value": False}
+    monkeypatch.setattr(hub_routes, "is_loopback_host", lambda _: loopback["value"])
     client = TestClient(app)
     assert client.post("/api/profiles", json={"name": "Lab"}).status_code == 201
     url = "/api/hub/token"
@@ -22,7 +25,7 @@ def test_credentials_are_private_to_workspace_and_profile(tmp_path, monkeypatch)
     assert client.get(url).json() == {"configured": False, "shared": True}
     assert client.delete(url).status_code == 200
     assert client.get(url, headers=headers).json()["configured"]
-    monkeypatch.setattr(app.state, "bind_host", "127.0.0.1")
+    loopback["value"] = True
     assert client.delete(url, headers=headers).json() == {
         "configured": False,
         "shared": False,

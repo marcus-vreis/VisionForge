@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import sys
 import types
 from pathlib import Path
@@ -263,7 +262,7 @@ def test_linked_checkpoint_directory_is_refused(run_dir: Path, tmp_path: Path) -
     target.mkdir()
     (target / "best.pt").write_bytes(b"external")
     link = run_dir / "linked"
-    if os.name == "nt":
+    if sys.platform == "win32":
         import _winapi
 
         _winapi.CreateJunction(str(target), str(link))
