@@ -492,7 +492,7 @@ export async function createProfile(name: string, pronoun?: Pronoun): Promise<Pr
 /** Novo nome e/ou pronome de um perfil, o padrão inclusive (ADR-126). */
 export async function updateProfile(
   slug: string,
-  change: { name?: string; pronoun?: Pronoun },
+  change: { name?: string; pronoun?: Pronoun; settings?: { mlflow: { enabled: boolean } } },
 ): Promise<ProfileInfo> {
   return request<ProfileInfo>(`/profiles/${encodeURIComponent(slug)}`, {
     method: "PUT",
@@ -1113,7 +1113,20 @@ export async function fetchSystemInfo(): Promise<SystemInfo> {
   return request<SystemInfo>("/system/info");
 }
 
+export interface MLflowTrackingStatus {
+  state: string;
+  error?: string | null;
+  run_id?: string | null;
+  status?: string | null;
+}
+
+/** Replay the local record into its original MLflow run. */
+export async function retryMLflowExport(runId: string): Promise<MLflowTrackingStatus> {
+  return request<MLflowTrackingStatus>(`/runs/${encodeURIComponent(runId)}/mlflow/retry`, { method: "POST" });
+}
+
 export interface RunDetail {
+  tracking?: MLflowTrackingStatus | null;
   run_id: string;
   experiment_name: string;
   status: string;

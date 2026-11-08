@@ -89,8 +89,11 @@ TensorBoard scalars, and the Roboflow / Kaggle / Hugging Face dataset
 downloaders. They used to be optional extras; the split cost more than it
 saved, and they add about 83 MB against the gigabytes PyTorch already pulls.
 
-The only thing chosen separately is PyTorch itself, because its build has to
-match your hardware.
+Choose the PyTorch build for your hardware. For local MLflow tracking, install
+`visionforge-studio[mlflow]` and enable MLflow in the profile picker. From the
+directory where the GUI started, run
+`mlflow ui --backend-store-uri sqlite:///outputs/mlflow/mlflow.db` to inspect
+classification runs, epoch metrics and the final `run.json`.
 
 </details>
 
@@ -322,8 +325,12 @@ Optuna, os escalares do TensorBoard e os downloaders de dataset do Roboflow,
 Kaggle e Hugging Face. Eram extras opcionais; a separação custava mais do que
 economizava, e eles somam uns 83 MB contra os gigabytes que o PyTorch já baixa.
 
-A única coisa escolhida à parte é o próprio PyTorch, porque a build dele
-precisa combinar com o seu hardware.
+Escolha a versão do PyTorch compatível com o seu hardware. Para acompanhar
+treinos de classificação, instale `visionforge-studio[mlflow]` e ative
+MLflow no seletor de perfis. Na pasta em que abriu a GUI, execute
+`mlflow ui --backend-store-uri sqlite:///outputs/mlflow/mlflow.db` para ver
+os parâmetros, as métricas por época e o `run.json` final. Se a exportação
+falhar, abra a execução no Histórico para tentar novamente.
 
 </details>
 

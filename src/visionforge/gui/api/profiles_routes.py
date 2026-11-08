@@ -62,6 +62,7 @@ def _profile_info(profile: Profile) -> ProfileInfo:
         name=profile.name,
         is_default=profile.is_default,
         pronoun=profile.pronoun,
+        settings=profile.settings,
     )
 
 
@@ -122,7 +123,12 @@ def build_profiles_router(dirs: ProfileDirs) -> APIRouter:
         profiles_dir, models_dir = dirs()
         try:
             profile = update_profile(
-                slug, profiles_dir, models_dir, name=req.name, pronoun=req.pronoun
+                slug,
+                profiles_dir,
+                models_dir,
+                name=req.name,
+                pronoun=req.pronoun,
+                settings=req.settings,
             )
         except InvalidProfileError as exc:
             raise HTTPException(400, str(exc)) from exc

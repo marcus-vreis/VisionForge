@@ -282,6 +282,16 @@ export const pt = {
     pronounLabel: "Como você prefere a saudação?",
     pronounNames: { ele: "Bem-vindo (ele)", ela: "Bem-vinda (ela)", neutro: "Boas-vindas (neutro)" },
   },
+  mlflow: {
+    label: "Exportar classificação para MLflow local",
+    hint: "Somente armazenamento local; requer o extra mlflow. Vale para próximos treinos.",
+    saveFailed: "Falha ao salvar configuração MLflow.",
+    warning: "Exportação MLflow não concluída",
+    notInstalled: "O MLflow não está instalado neste computador. Instale o extra mlflow do VisionForge e repita a exportação.",
+    retry: "Repetir exportação",
+    retrying: "Exportando…",
+    retryFailed: "Falha ao repetir exportação.",
+  },
   // Perfis de um servidor compartilhado (ADR-114): uma pasta de saída por pessoa.
   profile: {
     who: "Quem é você?",

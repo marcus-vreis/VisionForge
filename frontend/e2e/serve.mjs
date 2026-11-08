@@ -18,7 +18,10 @@ if (!exe || !port) {
 rmSync(work, { recursive: true, force: true });
 mkdirSync(work, { recursive: true });
 
-const child = spawn(exe, ["gui", "--port", port, "--no-browser"], {
+// An explicit interpreter also supports worktrees that share the original venv.
+const python = process.env.VF_E2E_PYTHON;
+const args = ["gui", "--port", port, "--no-browser"];
+const child = spawn(python ?? exe, python ? ["-m", "visionforge", ...args] : args, {
   cwd: work,
   stdio: "inherit",
   env: {

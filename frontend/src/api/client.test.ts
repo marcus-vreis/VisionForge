@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   createProfile,
+  updateProfile,
+  retryMLflowExport,
   deleteRun,
   downloadRunMarkdown,
   fetchProfiles,
@@ -255,5 +257,30 @@ describe("fetchStatus", () => {
       "/api/experiment/status?run_id=a%20b",
       "/api/experiment/status",
     ]);
+  });
+});
+
+
+describe("MLflow requests", () => {
+  it("updates the explicitly named profile with nested settings", async () => {
+    const fetchMock = stubFetch({ slug: "ana", settings: { mlflow: { enabled: true } } });
+    await updateProfile("ana", { settings: { mlflow: { enabled: true } } });
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("/api/profiles/ana");
+    expect(init.method).toBe("PUT");
+    expect(JSON.parse(init.body as string)).toEqual({ settings: { mlflow: { enabled: true } } });
+  });
+  it("retries the encoded history ID in the active profile", async () => {
+    stubStorage({ "vf.profile": "ana" });
+    const fetchMock = stubFetch({ state: "completed", run_id: "external" });
+    expect(await retryMLflowExport("exp/run")).toEqual({ state: "completed", run_id: "external" });
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("/api/runs/exp%2Frun/mlflow/retry");
+    expect(init.method).toBe("POST");
+    expect(sentHeader(fetchMock, "X-VF-Profile")).toBe("ana");
+  });
+  it("reports a disabled-profile conflict to the caller", async () => {
+    stubFetch({ detail: "MLflow disabled" }, 409);
+    await expect(retryMLflowExport("r1")).rejects.toMatchObject({ status: 409, message: "MLflow disabled" });
   });
 });

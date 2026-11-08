@@ -30,12 +30,12 @@ import json
 import re
 import shutil
 import unicodedata
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal, TypeVar, cast, get_args
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, ValidationError
 
 from visionforge.utils.messages import tr
 
@@ -71,6 +71,35 @@ _RESERVED = frozenset(
 )
 
 _M = TypeVar("_M", bound=BaseModel)
+
+
+class MLflowSettings(BaseModel):
+    """Local MLflow export preference for a profile."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    enabled: StrictBool = False
+
+
+class ProfileSettings(BaseModel):
+    """Optional exporters enabled for future profile submissions."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    mlflow: MLflowSettings = Field(default_factory=MLflowSettings)
+
+
+def _meta_settings(meta: dict[str, Any]) -> ProfileSettings:
+    try:
+        settings = meta.get("settings", {})
+        if not isinstance(settings, dict):
+            return ProfileSettings()
+        mlflow = settings.get("mlflow", {})
+        if not isinstance(mlflow, dict):
+            return ProfileSettings()
+        return ProfileSettings(
+            mlflow=MLflowSettings(enabled=mlflow.get("enabled", False))
+        )
+    except ValidationError:
+        return ProfileSettings()
 
 
 class ProfileError(Exception):
@@ -117,6 +146,7 @@ class Profile:
     models_dir: Path
     root: Path | None = None
     pronoun: Pronoun | None = None
+    settings: ProfileSettings = field(default_factory=ProfileSettings)
 
     @property
     def is_default(self) -> bool:
@@ -164,6 +194,7 @@ def default_profile(models_dir: Path, profiles_dir: Path | None = None) -> Profi
         name=_meta_name(meta) or DEFAULT_SLUG,
         models_dir=models_dir,
         pronoun=_meta_pronoun(meta),
+        settings=_meta_settings(meta),
     )
 
 
@@ -252,6 +283,7 @@ def _build(slug: str, folder: Path, profiles_dir: Path) -> Profile:
         models_dir=relative_root / "models",
         root=relative_root,
         pronoun=_meta_pronoun(meta),
+        settings=_meta_settings(meta),
     )
 
 
@@ -360,6 +392,7 @@ def update_profile(
     *,
     name: str | None = None,
     pronoun: Pronoun | None = None,
+    settings: ProfileSettings | None = None,
 ) -> Profile:
     """Change a profile's display name and/or pronoun; its slug never changes.
 
@@ -378,6 +411,15 @@ def update_profile(
         else profiles_dir / profile.slug / PROFILE_FILENAME
     )
     meta = _read_meta(path)
+    if settings is not None:
+        old = meta.get("settings")
+        old_settings = dict(old) if isinstance(old, dict) else {}
+        old_mlflow = old_settings.get("mlflow")
+        old_settings["mlflow"] = {
+            **(old_mlflow if isinstance(old_mlflow, dict) else {}),
+            "enabled": settings.mlflow.enabled,
+        }
+        meta["settings"] = old_settings
     if name is not None:
         display = normalize_display_name(name)
         if not display:

@@ -19,6 +19,7 @@ from visionforge.core import training_loop
 from visionforge.core.cancellation import CancellationToken, is_cancelled
 from visionforge.core.live_confusion import live_confusion
 from visionforge.core.live_insights import LiveGradCam
+from visionforge.core.mlflow_tracking import MlflowTracker
 from visionforge.core.resume import (
     ResumeState,
     clear_resume_state,
@@ -186,6 +187,9 @@ def _resolve_single_cuda(
 class Trainer:
     """Manages the full training loop for one classification experiment."""
 
+    mlflow_context: tuple[Path, str] | None = None
+    mlflow_tracker: MlflowTracker | None = None
+
     def __init__(self, config: ExperimentConfig) -> None:
         self._config = config
         self._loader_workers: dict[str, int] = {}
@@ -221,6 +225,9 @@ class Trainer:
         model, optimizer, criterion, scheduler, scaler, run_dir, tb = (
             self._initialize_training(model, optimizer, resume_dir, resumed)
         )
+        if self.mlflow_context is not None:
+            self.mlflow_tracker = MlflowTracker(*self.mlflow_context, run_dir)
+            self.mlflow_tracker.start(self._config.model_dump(mode="json"))
         model_path = run_dir / "best_model.pth"
 
         history, best_val_loss, best_epoch, patience_counter, start_epoch = (
@@ -409,6 +416,16 @@ class Trainer:
         extra: dict[str, Any] | None = None,
     ) -> None:
         """Report the task-specific epoch metrics and progress event."""
+        if self.mlflow_tracker is not None:
+            self.mlflow_tracker.epoch(
+                result.epoch,
+                {
+                    "loss/train": result.train_loss,
+                    "loss/val": result.val_loss,
+                    "accuracy/train": result.train_accuracy,
+                    "accuracy/val": result.val_accuracy,
+                },
+            )
         training_loop.report_epoch(
             result,
             tb,

@@ -30,6 +30,8 @@ import {
   saveUserPronoun,
 } from "../lib/user-name";
 
+import { ProfileTrackingSettings } from "./ProfileTrackingSettings";
+
 type Phase = "boot" | "hello" | "ask" | "who" | "create" | "exit" | "done";
 
 interface WelcomeOverlayProps {
@@ -241,6 +243,12 @@ export function WelcomeOverlay({
     const id = window.setTimeout(() => target.current?.focus(), 450);
     return () => clearTimeout(id);
   }, [phase]);
+
+  const trackingSaved = (profile: ProfileInfo) => {
+    listRef.current = listRef.current.map((p) => p.slug === profile.slug ? profile : p);
+    setProfiles(listRef.current);
+    if (chosenRef.current.slug === profile.slug) chosenRef.current = profile;
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -502,6 +510,7 @@ export function WelcomeOverlay({
           </div>
 
           <PronounPicker value={pronoun} onChange={setPronoun} />
+          {profilesOk && <ProfileTrackingSettings profile={chosenRef.current} onSaved={trackingSaved} />}
 
           <button
             type="submit"
@@ -556,37 +565,39 @@ export function WelcomeOverlay({
           {profiles.map((profile, index) => {
             const isLast = lastSlug === null ? index === 0 : profile.slug === lastSlug;
             return (
-              <button
-                key={profile.slug}
-                ref={isLast ? firstOptionRef : undefined}
-                type="button"
-                className="vf-profile-option"
-                aria-current={profile.slug === lastSlug ? "true" : undefined}
-                onClick={() => choose(profile)}
-                style={{
-                  padding: "13px 18px",
-                  background:
-                    profile.slug === lastSlug
-                      ? "var(--accent-soft)"
-                      : "rgb(var(--lt-ink, 255 255 255) / 0.025)",
-                  border: `1px solid ${
-                    profile.slug === lastSlug ? "var(--accent-vf)" : "var(--vf-panel-stroke)"
-                  }`,
-                  borderRadius: 12,
-                  color: "var(--vf-text)",
-                  fontFamily: "var(--font-display)",
-                  fontSize: 19,
-                  letterSpacing: "-0.01em",
-                  textAlign: "left",
-                  cursor: "pointer",
-                }}
-              >
-                {profile.is_default
-                  ? defaultHasName(profile)
-                    ? t.profile.defaultNamed(profile.name)
-                    : t.profile.defaultName
-                  : profile.name}
-              </button>
+              <div key={profile.slug}>
+                <button
+                  ref={isLast ? firstOptionRef : undefined}
+                  type="button"
+                  className="vf-profile-option"
+                  aria-current={profile.slug === lastSlug ? "true" : undefined}
+                  onClick={() => choose(profile)}
+                  style={{
+                    padding: "13px 18px",
+                    background:
+                      profile.slug === lastSlug
+                        ? "var(--accent-soft)"
+                        : "rgb(var(--lt-ink, 255 255 255) / 0.025)",
+                    border: `1px solid ${
+                      profile.slug === lastSlug ? "var(--accent-vf)" : "var(--vf-panel-stroke)"
+                    }`,
+                    borderRadius: 12,
+                    color: "var(--vf-text)",
+                    fontFamily: "var(--font-display)",
+                    fontSize: 19,
+                    letterSpacing: "-0.01em",
+                    textAlign: "left",
+                    cursor: "pointer",
+                  }}
+                >
+                  {profile.is_default
+                    ? defaultHasName(profile)
+                      ? t.profile.defaultNamed(profile.name)
+                      : t.profile.defaultName
+                    : profile.name}
+                </button>
+                <ProfileTrackingSettings profile={profile} onSaved={trackingSaved} />
+              </div>
             );
           })}
         </div>

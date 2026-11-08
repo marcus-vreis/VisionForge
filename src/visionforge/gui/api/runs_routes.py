@@ -32,7 +32,7 @@ from visionforge.gui.api.run_history import (
     run_span,
     run_task,
 )
-from visionforge.gui.api.schemas import DatasetInfo, RunDetail, RunSummary
+from visionforge.gui.api.schemas import DatasetInfo, MlflowStatus, RunDetail, RunSummary
 from visionforge.utils.messages import tr
 
 
@@ -120,6 +120,17 @@ def _run_dataset(data: dict[str, Any]) -> DatasetInfo | None:
     )
 
 
+def read_mlflow_status(run_dir: Path) -> MlflowStatus | None:
+    """Read optional tracking diagnostics from a regular file inside the run."""
+    sidecar = run_dir / "tracking.json"
+    if sidecar.is_symlink():
+        return None
+    try:
+        return MlflowStatus.model_validate_json(sidecar.read_bytes())
+    except (OSError, ValueError):
+        return None
+
+
 def _build_run_detail(
     run_dir: Path, data: dict[str, Any], host: str | None
 ) -> RunDetail:
@@ -131,6 +142,7 @@ def _build_run_detail(
     metrics: dict[str, Any] = data.get("metrics", {})
     history: list[dict[str, Any]] = data.get("history", [])
     return RunDetail(
+        tracking=read_mlflow_status(run_dir),
         run_id=run_dir.name,
         experiment_name=data.get("experiment", run_dir.parent.name),
         status=status,
