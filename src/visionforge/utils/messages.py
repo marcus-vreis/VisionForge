@@ -1621,6 +1621,10 @@ CATALOG: dict[str, dict[Lang, str]] = {
         ),
     },
     # ── stored provider keys (utils/credentials.py) ──────────────────────────
+    "credentials.invalid": {
+        "pt": "Pedido de credencial inválido.",
+        "en": "Invalid credential request.",
+    },
     "credentials.empty": {
         "pt": "O valor da credencial não pode ficar vazio.",
         "en": "Credential value cannot be empty.",
