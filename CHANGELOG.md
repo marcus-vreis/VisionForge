@@ -140,6 +140,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Fixed
 
+- `POST /api/credentials` deixa de devolver a chave no corpo do 422 quando o pedido vem malformado; a resposta é uma mensagem fixa em português e inglês (#155).
 - Segmentação respeita `transforms.augment: false`: o treino ficava com flip, rotação e jitter mesmo desligado, e o `run.json` dizia o contrário (ADR-177).
 - O K-fold de classificação usa as mesmas transformações de um treino simples: respeita `augment` e roda o pré-processamento configurado, que antes era ignorado nos folds. As estatísticas de cada fold são medidas na imagem redimensionada que o modelo vê, e datasets com imagens de tamanhos diferentes deixam de quebrar o K-fold (ADR-177).
 - Fine-tuning põe em taxa cheia só a última camada linear: em VGG e AlexNet o classificador inteiro de 119M e 54M parâmetros recebia a taxa da cabeça, e no ViT o token de classe ficava fora do otimizador (ADR-177).
