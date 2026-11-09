@@ -1023,6 +1023,23 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "pt": "Nenhum run na fila com esse id — talvez ele já tenha começado.",
         "en": "No queued run with that id — it may have already started.",
     },
+    # ── Host and Origin guard (gui/security.py) ──────────────────────────────
+    "guard.foreign_host": {
+        "pt": (
+            "Pedido recusado: o endereço usado não é um dos nomes deste servidor. "
+            "Abra o VisionForge por localhost ou, num servidor de laboratório, "
+            "inicie-o com --allowed-host <nome>."
+        ),
+        "en": (
+            "Request refused: the address used is not one of this server's names. "
+            "Open VisionForge through localhost or, on a lab server, start it "
+            "with --allowed-host <name>."
+        ),
+    },
+    "guard.foreign_origin": {
+        "pt": "Pedido recusado: ele veio de uma página que não é do VisionForge.",
+        "en": "Request refused: it came from a page that is not VisionForge's.",
+    },
     # ── "Open folder" ────────────────────────────────────────────────────────
     "reveal.foreign_origin": {
         "pt": "A pasta só pode ser aberta pela página do próprio VisionForge.",

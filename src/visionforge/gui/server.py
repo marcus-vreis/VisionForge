@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -13,6 +14,7 @@ from loguru import logger
 
 from visionforge import __version__
 from visionforge.gui.api.routes import router as api_router
+from visionforge.gui.security import HostOriginGuard, HostPolicy, is_wildcard
 
 INDEX_FILENAME = "index.html"
 NOT_FOUND_DETAIL = "Not Found"
@@ -84,6 +86,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# Added last so it runs first: a request for another name, or a state change
+# from another site's page, never reaches CORS or a route (DNS rebinding, CSRF).
+app.add_middleware(HostOriginGuard)
 
 app.include_router(api_router)
 
@@ -124,12 +129,18 @@ _SERVER: Any = None
 
 
 def start_server(
-    *, host: str = "127.0.0.1", port: int = 8000, open_browser: bool = True
+    *,
+    host: str = "127.0.0.1",
+    port: int = 8000,
+    open_browser: bool = True,
+    allowed_hosts: Sequence[str] = (),
 ) -> None:
     """Start the VisionForge GUI server.
 
     ``open_browser`` is False when the updater restarts the server: the page the
     researcher had open reloads itself, and a second tab would only confuse.
+    ``allowed_hosts`` are the extra names the server answers to (``--allowed-host``):
+    a lab server's DNS alias, or a reverse proxy's public name.
     """
     import webbrowser
 
@@ -137,12 +148,21 @@ def start_server(
 
     global _SERVER
     app.state.bind_host = host
+    policy = HostPolicy.for_bind(host, allowed_hosts)
+    app.state.host_policy = policy
     logger.info(
         "Starting VisionForge GUI at http://{}:{}", host, port
     )  # NOSONAR python:S5332 - local server URL
+    if policy.extra:
+        logger.info(
+            "Accepting requests for localhost and: {}", ", ".join(sorted(policy.extra))
+        )
     if open_browser:
+        # A wildcard is where the server listens, not a page a browser can open
+        # (nor a Host the guard accepts); this machine is reached via loopback.
+        page_host = "127.0.0.1" if is_wildcard(host) else host
         webbrowser.open(
-            f"http://{host}:{port}"
+            f"http://{page_host}:{port}"
         )  # NOSONAR python:S5332 - local server URL
     _SERVER = uvicorn.Server(
         uvicorn.Config(app, host=host, port=port, log_level="warning")

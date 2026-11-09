@@ -253,6 +253,16 @@ def main() -> None:
         "--port", type=int, default=8000, help="bind port (default 8000)"
     )
     gui_parser.add_argument(
+        "--allowed-host",
+        action="append",
+        default=[],
+        metavar="NAME",
+        help=(
+            "extra host name the server answers to, besides localhost (and, with "
+            "a non-loopback --host, this machine's names and addresses); repeatable"
+        ),
+    )
+    gui_parser.add_argument(
         "--no-browser",
         action="store_true",
         help="do not open a browser tab (used when an update restarts the GUI)",
@@ -395,7 +405,12 @@ def main() -> None:
         # the relaunch runs the *new* version, and an environment variable it does
         # not know is ignored where an unknown flag would stop it (ADR-120).
         quiet = args.no_browser or bool(os.environ.get("VISIONFORGE_NO_BROWSER"))
-        start_server(host=args.host, port=args.port, open_browser=not quiet)
+        start_server(
+            host=args.host,
+            port=args.port,
+            open_browser=not quiet,
+            allowed_hosts=args.allowed_host,
+        )
         return
 
     if args.command == "run":
