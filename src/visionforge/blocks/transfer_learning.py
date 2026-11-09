@@ -271,19 +271,16 @@ class TransferLearningBlock(ExperimentBlock):
                 weight_decay=cfg.weight_decay,
             )
 
-        # fine_tuning: split into backbone (non-head) and head param groups.
-        children = list(model.named_children())
-        head_name = children[-1][0] if children else None
-
-        backbone_params: list[nn.Parameter] = []
-        head_params: list[nn.Parameter] = []
-
-        for name, child in children:
-            params = [p for p in child.parameters() if p.requires_grad]
-            if name == head_name:
-                head_params.extend(params)
-            else:
-                backbone_params.extend(params)
+        # fine_tuning: the head is the final Linear that replace_final_layer
+        # made (ADR-101), not the last named child: on VGG and AlexNet that child
+        # is a three-Linear classifier of 119M and 54M parameters. Everything
+        # else is backbone, including parameters held directly by the model
+        # (ViT's class token belongs to no child).
+        head = final_linear(model)
+        head_ids = {id(p) for p in head.parameters()} if head is not None else set()
+        trainable = [p for p in model.parameters() if p.requires_grad]
+        head_params = [p for p in trainable if id(p) in head_ids]
+        backbone_params = [p for p in trainable if id(p) not in head_ids]
 
         backbone_lr = cfg.learning_rate * tl.backbone_lr_multiplier
 

@@ -138,6 +138,13 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
     diz isso.
   - **API:** `/api/explorer/summary`, `/images`, `/thumb` e `/scan`.
 
+### Fixed
+
+- Segmentação respeita `transforms.augment: false`: o treino ficava com flip, rotação e jitter mesmo desligado, e o `run.json` dizia o contrário (ADR-177).
+- O K-fold de classificação usa as mesmas transformações de um treino simples: respeita `augment` e roda o pré-processamento configurado, que antes era ignorado nos folds. As estatísticas de cada fold são medidas na imagem redimensionada que o modelo vê, e datasets com imagens de tamanhos diferentes deixam de quebrar o K-fold (ADR-177).
+- Fine-tuning põe em taxa cheia só a última camada linear: em VGG e AlexNet o classificador inteiro de 119M e 54M parâmetros recebia a taxa da cabeça, e no ViT o token de classe ficava fora do otimizador (ADR-177).
+- A comparação pareada com Wilcoxon calcula o menor p possível sem os pares empatados, que o teste descarta: seis seeds com três empates agora aparecem como sem poder para α = 0,05 (ADR-177).
+
 ## [0.21.0] — 2026-11-05
 
 ### Added

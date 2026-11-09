@@ -7560,3 +7560,50 @@ repository until someone deletes them, as in ADR-175.
   the result, not a pipeline to rerun.
 - *Configuring the remote from the page.* Each storage has its own credentials
   and login; DVC already does that well.
+
+---
+
+## ADR-177 — Four places where a result did not match its config
+
+**Date:** 2026-11-09
+**Status:** Accepted
+**Fixes:** ADR-083 (`transforms.augment`), ADR-101 (the head is the final Linear), ADR-061 (paired tests and their power floor)
+
+**Context:** the 2026-11-09 audit (`docs/dev/AUDIT-2026-11-09.md`, R1–R5) reran
+the statistics and the data pipelines against real tensors. The formulas were
+right; four places around them made a run differ from what its `run.json`
+records, which is the one thing the project promises not to do.
+
+**Decision:**
+
+- **Segmentation honours `augment`.** `SegmentationDataset` read the flip,
+  rotation and jitter fields and never the flag, so the baseline arm of an
+  augmentation ablation trained augmented. The flag now gates all three, the
+  same rule as `core/data._build_transforms`.
+- **A fold trains with the single-run pipeline.** `_FoldDataModule` rebuilt the
+  transforms by hand, without `augment` and without `data.preprocessing`. It now
+  calls `_build_transforms` with the fold's own normalisation. The fold
+  statistics are measured on `_statistics_view`: preprocessing, resize and
+  centre crop, as the model is fed. Reading the pool with `ToTensor` alone
+  measured pixels the model never sees and could not batch images of different
+  sizes.
+- **Fine-tuning's full-rate group is the final Linear.** ADR-101 moved feature
+  extraction to `final_linear`, but fine-tuning still took the last named child:
+  119M parameters on VGG and 54M on AlexNet trained at the head's rate. The
+  same loop over named children also missed parameters the model holds
+  directly, so ViT's class token was never optimised (its position embedding
+  belongs to the `encoder` child and was).
+  The groups are now the final Linear and every other trainable parameter.
+- **The Wilcoxon floor counts the pairs the test uses.** scipy drops zero
+  differences (`zero_method="wilcox"`), so six seeds with three ties is a
+  three-pair test whose smallest p is 0.25; the floor said 0.031 and the result
+  was not flagged as underpowered.
+
+**Consequences:** runs made before this change keep their numbers; a
+segmentation run with `augment: false`, a K-fold with augmentation off or with
+preprocessing, or a fine-tuning on VGG, AlexNet, ViT or ConvNeXt trains
+differently now. Each fix has a test that failed before it
+(`TestAugmentFlag`, `TestFoldTransformsFollowTheConfig`,
+`TestFoldStatisticsOnMixedSizes`, `test_the_full_rate_group_is_exactly_the_final_linear`,
+`TestFloorWithTiedPairs`).
+
