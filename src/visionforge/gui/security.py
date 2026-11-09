@@ -18,20 +18,28 @@ Bound to loopback (the default), the names are ``localhost``, the loopback
 addresses (``127.0.0.1``, ``[::1]``) and each ``--allowed-host``. Bound to
 another address for a lab (ADR-114), the machine's own names and addresses are
 added, so the people who already reach it by name or IP keep doing so.
+
+:class:`SecurityHeaders` adds the Content-Security-Policy and the fixed
+security headers to every response (SEC-2): what a page this server delivered
+may load, and that no other site may frame it.
 """
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import ipaddress
+import re
 import socket
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
-from starlette.datastructures import Headers
+from starlette.datastructures import Headers, MutableHeaders
 from starlette.responses import JSONResponse
-from starlette.types import ASGIApp, Receive, Scope, Send
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from starlette.websockets import WebSocketClose
 
 from visionforge.gui.api.folder_opener import is_loopback_host, is_loopback_origin
@@ -219,11 +227,177 @@ async def _refuse(
     await response(scope, receive, send)
 
 
+# --- Response headers (SEC-2) ---------------------------------------
+#
+# The policy names this server and nothing else. The SPA is one module script
+# and one stylesheet from /assets, plus the inline script in index.html that
+# paints the theme before the bundle loads (ADR-125); that one is allowed by its
+# hash. React writes the ``style`` prop through the CSSOM (``el.style.x = y``),
+# which CSP does not govern, and the bundle injects no <style>, so ``style-src``
+# needs no 'unsafe-inline'. Dataset crops arrive as ``data:`` images and
+# downloads are built as ``blob:`` URLs.
+
+_INLINE_SCRIPT = re.compile(
+    r"<script\b(?P<attrs>[^>]*)>(?P<body>.*?)</script\s*>", re.IGNORECASE | re.DOTALL
+)
+_SRC_ATTRIBUTE = re.compile(r"\bsrc\s*=", re.IGNORECASE)
+
+
+def inline_script_hashes(html: str) -> list[str]:
+    """CSP source expressions (``'sha256-…'``) for each inline ``<script>``.
+
+    Line endings are normalised first, as the browser's HTML parser does before
+    it hashes: a Windows checkout may write ``index.html`` with CRLF.
+    """
+    html = html.replace("\r\n", "\n").replace("\r", "\n")
+    hashes = []
+    for match in _INLINE_SCRIPT.finditer(html):
+        if _SRC_ATTRIBUTE.search(match["attrs"]):
+            continue
+        digest = hashlib.sha256(match["body"].encode("utf-8")).digest()
+        hashes.append(f"'sha256-{base64.b64encode(digest).decode('ascii')}'")
+    return hashes
+
+
+# CSP keywords keep their single quotes inside the header value.
+_SELF = "'self'"
+_NONE = "'none'"
+
+
+def _policy(directives: dict[str, str]) -> str:
+    return "; ".join(f"{name} {value}" for name, value in directives.items())
+
+
+def content_security_policy(script_hashes: Iterable[str]) -> str:
+    """The SPA's policy: this server only, inline scripts only by hash."""
+    script_src = " ".join([_SELF, *script_hashes])
+    return _policy(
+        {
+            "default-src": _SELF,
+            "script-src": script_src,
+            "style-src": _SELF,
+            "img-src": "'self' data: blob:",
+            "font-src": _SELF,
+            "connect-src": _SELF,
+            "object-src": _NONE,
+            "base-uri": _SELF,
+            "form-action": _SELF,
+            "frame-ancestors": _NONE,
+        }
+    )
+
+
+# FastAPI's Swagger UI and ReDoc pages load their code from cdn.jsdelivr.net,
+# run an inline bootstrap script and (ReDoc) Google Fonts and blob: workers. They
+# exist only with VISIONFORGE_DOCS=1, and only their own responses get this.
+DOCS_CONTENT_SECURITY_POLICY = _policy(
+    {
+        "default-src": _SELF,
+        "script-src": "'self' 'unsafe-inline' https://cdn.jsdelivr.net",
+        "style-src": (
+            "'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com"
+        ),
+        "font-src": "'self' https://fonts.gstatic.com",
+        "img-src": "'self' data: blob: https://fastapi.tiangolo.com https://cdn.redoc.ly",
+        "worker-src": "'self' blob:",
+        "connect-src": _SELF,
+        "object-src": _NONE,
+        "base-uri": _SELF,
+        "form-action": _SELF,
+        "frame-ancestors": _NONE,
+    }
+)
+
+
+class SpaContentSecurityPolicy:
+    """The SPA's policy, following the ``index.html`` on disk.
+
+    Static files are read per request, so a rebuild reaches the browser at once;
+    the hash of its inline script must follow, or the theme script is blocked.
+    The file is hashed again only when its size or modification time changes.
+    """
+
+    def __init__(self, index: Path) -> None:
+        self.index = index
+        self._key: tuple[int, int] | None = None
+        self._policy = content_security_policy([])
+
+    def __call__(self) -> str:
+        try:
+            stat = self.index.stat()
+        except OSError:
+            return content_security_policy([])
+        key = (stat.st_mtime_ns, stat.st_size)
+        if key != self._key:
+            html = self.index.read_text(encoding="utf-8")
+            self._policy = content_security_policy(inline_script_hashes(html))
+            self._key = key
+        return self._policy
+
+
+# ``same-origin``, not ``no-referrer``: both send nothing to any other site, but
+# under ``no-referrer`` the Fetch standard ("serializing a request origin") has a
+# POST carry ``Origin: null``, which HostOriginGuard refuses as foreign. Chromium
+# sends the real origin on same-origin fetches anyway (checked in the e2e suite);
+# other engines were not checked, and ``same-origin`` does not depend on it.
+STATIC_HEADERS: tuple[tuple[str, str], ...] = (
+    ("x-frame-options", "DENY"),
+    ("x-content-type-options", "nosniff"),
+    ("referrer-policy", "same-origin"),
+)
+
+
+class SecurityHeaders:
+    """ASGI middleware adding the CSP and the fixed security headers to every
+    HTTP response, refusals of :class:`HostOriginGuard` included.
+
+    ``spa_policy`` gives the policy at response time; ``docs_paths`` (empty
+    unless the API docs are on) get :data:`DOCS_CONTENT_SECURITY_POLICY`.
+    """
+
+    def __init__(
+        self,
+        app: ASGIApp,
+        *,
+        spa_policy: Callable[[], str],
+        docs_paths: Iterable[str] = (),
+    ) -> None:
+        self.app = app
+        self.spa_policy = spa_policy
+        self.docs_paths = frozenset(docs_paths)
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        csp = (
+            DOCS_CONTENT_SECURITY_POLICY
+            if scope["path"] in self.docs_paths
+            else self.spa_policy()
+        )
+
+        async def send_with_headers(message: Message) -> None:
+            if message["type"] == "http.response.start":
+                headers = MutableHeaders(scope=message)
+                headers["content-security-policy"] = csp
+                for name, value in STATIC_HEADERS:
+                    headers[name] = value
+            await send(message)
+
+        await self.app(scope, receive, send_with_headers)
+
+
 __all__ = [
     "DEFAULT_POLICY",
+    "DOCS_CONTENT_SECURITY_POLICY",
     "SAFE_METHODS",
+    "STATIC_HEADERS",
     "HostOriginGuard",
     "HostPolicy",
+    "SecurityHeaders",
+    "SpaContentSecurityPolicy",
+    "content_security_policy",
+    "inline_script_hashes",
     "is_wildcard",
     "machine_names",
     "normalize_host",

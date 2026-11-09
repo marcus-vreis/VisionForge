@@ -7635,3 +7635,23 @@ differently now. Each fix has a test that failed before it
 - *Accepting any Host in lab mode.* That leaves every lab user exposed to rebinding through their own browser.
 - *Requiring `--allowed-host` for every non-loopback bind.* Safer, but it breaks every lab already reaching the server by hostname or IP.
 - *A per-route Origin dependency.* Each new route would have to remember it. The middleware covers routes that do not exist yet.
+## ADR-179 — Security headers on every response, API docs only on request
+
+**Date:** 2026-11-09
+**Status:** Accepted
+**Builds on:** ADR-125 (inline theme script), the Host/Origin guard of SEC-1
+
+**Context:** the 2026-11-09 audit (`docs/dev/AUDIT-2026-11-09.md`, finding 6, R8) found that no response set a Content-Security-Policy, `X-Frame-Options`, `X-Content-Type-Options` or `Referrer-Policy`. A script that reached the page could load and send anything, and another site could frame the GUI. `index.html` also preconnected to `fonts.googleapis.com` and `fonts.gstatic.com`, which it never used because the fonts come from `@fontsource`, so every visit told Google the GUI was opened. `/docs` and `/redoc` were public, and their pages load JavaScript from `cdn.jsdelivr.net`.
+
+**Decision:**
+
+- **One middleware, outermost.** `gui/security.py:SecurityHeaders` adds the headers to every HTTP response, including the 400/403 refusals of `HostOriginGuard`.
+- **SPA policy:** `default-src 'self'; script-src 'self' 'sha256-…'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'`.
+  - The hash is that of the inline theme script. It is computed from the `index.html` on disk, with line endings normalised as the HTML parser does. It is computed again when the file's size or mtime changes, so a rebuild under a running server keeps the theme script allowed.
+  - `style-src` has no `'unsafe-inline'`. Evidence: React sets the `style` prop through the CSSOM (`el.style[x] = …`, `style.setProperty`), which CSP does not govern. The bundle's only `createElement("style")` is React's `<style precedence>` hoisting, which the app does not use. The e2e test sees no violation.
+  - `data:` images are needed because dataset crops arrive as data URIs, and the CSS noise texture is one. `blob:` covers downloads.
+- **Fixed headers:** `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: same-origin`. `same-origin` was chosen over `no-referrer`. Both send nothing to other sites. Under `no-referrer`, though, the Fetch standard has a POST carry `Origin: null`, which the guard refuses. Chromium was checked and sends the real origin on same-origin fetches anyway. Other engines were not checked, and `same-origin` does not depend on that behaviour.
+- **No preconnect** in `frontend/index.html`. A test fails if either `index.html` names `googleapis`, `gstatic` or any absolute `src`/`href`.
+- **API docs off by default.** `FastAPI(docs_url=None, redoc_url=None)`. `/docs`, `/docs/oauth2-redirect` and `/redoc` answer 404, not the SPA. `VISIONFORGE_DOCS=1` (or `true`/`yes`/`on`) brings them back with a policy of their own, sent only on those paths: `'unsafe-inline'` and `https://cdn.jsdelivr.net` for scripts and styles, Google Fonts for ReDoc, `blob:` workers, and `frame-ancestors 'none'`. `/openapi.json` stays: it is the API contract that tests and clients read.
+
+**Consequences:** a third-party script or style cannot be added to the SPA without changing this policy, and the e2e test `frontend/e2e/csp.e2e.ts` fails on any violation or on any request to another host. A change to the inline theme script needs no manual hash update. Anyone who used `/docs` now sets `VISIONFORGE_DOCS=1`. Tests: `tests/gui/test_security_headers.py`, `frontend/e2e/csp.e2e.ts`.
