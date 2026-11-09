@@ -290,3 +290,43 @@ class TestMinAchievableP:
             {s: 0.8 + s * 0.001 for s in range(8)},
         )
         assert many.underpowered is False
+
+
+class TestFloorWithTiedPairs:
+    """Wilcoxon drops zero differences, so the floor counts only the rest.
+
+    Six seeds with three ties is a three-pair test: its smallest two-sided p is
+    0.25, and calling it adequately powered because six seeds would reach
+    0.03125 tells the researcher the opposite of the truth.
+    """
+
+    def test_the_floor_uses_the_non_zero_differences(self) -> None:
+        a = {s: 0.80 + 0.01 * s for s in range(6)}
+        b = dict(a)
+        b[0] -= 0.02
+        b[1] -= 0.03
+        b[2] -= 0.01
+
+        result = paired_comparison("accuracy", a, b, test="wilcoxon")
+
+        assert result.n_pairs == 6
+        assert result.min_achievable_p == pytest.approx(0.25)
+        assert result.underpowered is True
+        assert result.p_value >= result.min_achievable_p
+
+    def test_without_ties_the_floor_is_unchanged(self) -> None:
+        a = {s: 0.9 + s * 0.001 for s in range(6)}
+        b = {s: 0.8 + s * 0.002 for s in range(6)}
+
+        result = paired_comparison("accuracy", a, b, test="wilcoxon")
+
+        assert result.min_achievable_p == pytest.approx(0.03125)
+
+    def test_the_t_test_keeps_no_floor_with_ties(self) -> None:
+        a = {s: 0.80 + 0.01 * s for s in range(6)}
+        b = dict(a)
+        b[0] -= 0.02
+
+        result = paired_comparison("accuracy", a, b, test="paired_t")
+
+        assert result.min_achievable_p == 0.0

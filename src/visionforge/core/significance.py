@@ -251,7 +251,12 @@ def paired_comparison(
 
     dz = cohens_dz(differences)
     ci = bootstrap_ci(differences, seed=seed)
-    floor = min_achievable_p(kind, len(shared))
+    # scipy's Wilcoxon drops zero differences (zero_method="wilcox"), so a tied
+    # pair adds nothing to the test and the floor is set by the others.
+    tested = (
+        len(shared) if kind == "paired_t" else sum(1 for d in differences if d != 0)
+    )
+    floor = min_achievable_p(kind, tested)
     return PairedComparison(
         label_a=label_a,
         label_b=label_b,

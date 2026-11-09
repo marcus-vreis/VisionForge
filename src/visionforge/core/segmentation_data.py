@@ -69,13 +69,16 @@ class SegmentationDataset(Dataset):  # type: ignore[type-arg]
         self._ignore_index = ignore_index
         self._is_train = is_train
 
-        self._hflip = transform_cfg.horizontal_flip and is_train
-        self._rotation = transform_cfg.rotation_degrees if is_train else 0
+        # `augment` switches every random step off at once (ADR-083), the same
+        # rule as classification; the individual fields keep their values.
+        augment = is_train and transform_cfg.augment
+        self._hflip = transform_cfg.horizontal_flip and augment
+        self._rotation = transform_cfg.rotation_degrees if augment else 0
         self._normalize_mean = list(transform_cfg.normalize_mean)
         self._normalize_std = list(transform_cfg.normalize_std)
         self._jitter: T.ColorJitter | None = (
             T.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2)
-            if (transform_cfg.color_jitter and is_train)
+            if (transform_cfg.color_jitter and augment)
             else None
         )
         self._preprocess = _PreprocessingTransform(
