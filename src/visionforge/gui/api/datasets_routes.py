@@ -19,6 +19,7 @@ from loguru import logger
 
 from visionforge.core.detection_data import resolve_yolo_split
 from visionforge.gui.api.dataset_download import credentials_in_play, download_dataset
+from visionforge.gui.api.profile_tokens import quiet_validation_route
 from visionforge.gui.api.schemas import (
     AnomalyDatasetStatsRequest,
     AnomalyDatasetStatsResponse,
@@ -55,6 +56,11 @@ from visionforge.utils.messages import tr
 from visionforge.utils.redact import redact_secrets
 
 router = APIRouter()
+# Its own router so a malformed body 422s without FastAPI's echo of the input,
+# which here would be the key.
+credentials_router = APIRouter(
+    route_class=quiet_validation_route("credentials.invalid")
+)
 
 _BAD_REQUEST: dict[int | str, dict[str, Any]] = {
     400: {"description": "Invalid request"}
@@ -304,7 +310,7 @@ async def regression_dataset_stats(
     return await asyncio.to_thread(_collect_regression_dataset_stats, req)
 
 
-@router.get("/credentials")
+@credentials_router.get("/credentials")
 async def get_credentials() -> CredentialsResponse:
     """Which dataset providers have a key stored, masked."""
     from visionforge.utils.credentials import config_dir, credential_status
@@ -315,14 +321,14 @@ async def get_credentials() -> CredentialsResponse:
     )
 
 
-@router.post("/credentials", responses=_BAD_REQUEST)
+@credentials_router.post("/credentials", responses=_BAD_REQUEST)
 async def save_credential_route(req: CredentialSaveRequest) -> CredentialsResponse:
     """Store (or replace) one provider's key, then return the masked status."""
     from visionforge.utils.credentials import config_dir, credential_status
     from visionforge.utils.credentials import save_credential as _save
 
     try:
-        _save(req.provider, req.value)
+        _save(req.provider, req.value.get_secret_value())
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     return CredentialsResponse(
@@ -331,7 +337,7 @@ async def save_credential_route(req: CredentialSaveRequest) -> CredentialsRespon
     )
 
 
-@router.delete("/credentials/{provider}")
+@credentials_router.delete("/credentials/{provider}")
 async def forget_credential_route(provider: str) -> CredentialsResponse:
     """Remove one provider's stored key."""
     from visionforge.utils.credentials import config_dir, credential_status
@@ -1367,3 +1373,6 @@ def _missing_split_roles(
     if not test_dir:
         missing.append(tr("detect.role_test"))
     return missing
+
+
+router.include_router(credentials_router)

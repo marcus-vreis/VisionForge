@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
 from visionforge.gui.api.profiles import (
     ProfileSettings,
@@ -1037,7 +1037,7 @@ class CredentialSaveRequest(BaseModel):
     """One provider's API key, on its way to the local store."""
 
     provider: Literal["roboflow", "kaggle", "huggingface"]
-    value: str = Field(min_length=1)
+    value: SecretStr = Field(min_length=1)
 
 
 class CredentialEntry(BaseModel):
