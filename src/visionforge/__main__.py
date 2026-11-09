@@ -231,6 +231,10 @@ def _run_selftest_command(args: argparse.Namespace) -> None:
 def main() -> None:
     """Run a VisionForge experiment or start the GUI from the command line."""
     from visionforge.utils.logger import setup_logger
+    from visionforge.utils.third_party_privacy import apply_opt_outs
+
+    # Before any SDK is imported: they read their switches at import time.
+    apply_opt_outs()
 
     parser = argparse.ArgumentParser(
         prog="visionforge",

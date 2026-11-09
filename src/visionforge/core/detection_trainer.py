@@ -44,7 +44,10 @@ from visionforge.core.training_health import no_detections, summarize
 from visionforge.models.detection_factory import build_torchvision_detector
 from visionforge.utils.detection_config import DetectionConfig
 from visionforge.utils.messages import tr
+from visionforge.utils.third_party_privacy import apply_opt_outs
 from visionforge.utils.workers import suggested_workers
+
+apply_opt_outs()  # importing the module is enough to reach ultralytics
 
 try:  # ultralytics ships with the package (ADR-106); still bound lazily.
     from ultralytics import YOLO as _YOLO  # type: ignore[import-not-found]

@@ -113,6 +113,9 @@ class MlflowTracker:
         if not self._run_dir.is_dir() or self._run_dir.is_symlink():
             raise ValueError("Invalid run directory")
         saved_run_id = self._load_sidecar()
+        from visionforge.utils.third_party_privacy import apply_opt_outs
+
+        apply_opt_outs()  # MLflow reads its telemetry switch on import
         from mlflow import MlflowClient
 
         self._store.parent.mkdir(parents=True, exist_ok=True)
