@@ -25,6 +25,22 @@ from visionforge.utils.messages import tr
 _FAMILIES = frozenset({"resnet", "efficientnet", "vit", "swin", "convnext", "vgg"})
 _ON_OFF = frozenset({"on", "off"})
 
+# Lines the tours anchor on, and the note keys, that more than one tour uses.
+_TRAIN_MODE = "model.train()"
+_EVAL_MODE = "model.eval()"
+_ZERO_GRAD = "optimizer.zero_grad(set_to_none=True)"
+_ZERO_GRAD_CALL = "optimizer.zero_grad"
+_NO_GRAD = "with torch.no_grad():"
+_FORWARD = "outputs = model(inputs)"
+_ADD_LOSS = "total_loss += loss.item()"
+_RAISE = "raise ValueError"
+_IF_PRETRAINED = "if pretrained:"
+_KEY_TRAIN_MODE = "code.train.mode"
+_KEY_ZERO_GRAD = "code.train.zero_grad"
+_KEY_VALIDATE_MODE = "code.validate.mode"
+_KEY_VALIDATE_NO_GRAD = "code.validate.no_grad"
+_KEY_DETECTION_WEIGHTS = "code.detection.weights"
+
 
 @dataclass(frozen=True)
 class Note:
@@ -142,7 +158,7 @@ CLASSIFICATION: tuple[Section, ...] = (
         "train",
         _train_epoch,
         (
-            Note("model.train()", "code.train.mode"),
+            Note(_TRAIN_MODE, _KEY_TRAIN_MODE),
             Note(
                 "for inputs, labels in loader:",
                 "code.train.batch",
@@ -153,16 +169,16 @@ CLASSIFICATION: tuple[Section, ...] = (
                 "code.train.binary_target",
                 when=_BINARY,
             ),
-            Note("optimizer.zero_grad(set_to_none=True)", "code.train.zero_grad"),
+            Note(_ZERO_GRAD, _KEY_ZERO_GRAD),
             Note("if use_amp:", "code.train.amp", end="else:", when=(("amp", "on"),)),
             Note(
-                "outputs = model(inputs)",
+                _FORWARD,
                 "code.train.step",
-                end="total_loss += loss.item()",
+                end=_ADD_LOSS,
                 nth=2,
                 when=(("amp", "off"),),
             ),
-            Note("with torch.no_grad():", "code.train.count", end="n = len(loader)"),
+            Note(_NO_GRAD, "code.train.count", end="n = len(loader)"),
             Note(
                 "preds = (outputs.sigmoid() > 0.5).squeeze(1).long()",
                 "code.predict.binary",
@@ -179,16 +195,16 @@ CLASSIFICATION: tuple[Section, ...] = (
         "validate",
         _eval_epoch,
         (
-            Note("model.eval()", "code.validate.mode"),
-            Note("with torch.no_grad():", "code.validate.no_grad"),
-            Note("total_loss += loss.item()", "code.validate.loss"),
+            Note(_EVAL_MODE, _KEY_VALIDATE_MODE),
+            Note(_NO_GRAD, _KEY_VALIDATE_NO_GRAD),
+            Note(_ADD_LOSS, "code.validate.loss"),
         ),
     ),
     Section(
         "test",
         _evaluate,
         (
-            Note("model.eval()", "code.test.once"),
+            Note(_EVAL_MODE, "code.test.once"),
             Note(
                 "pos = outputs.sigmoid().squeeze(1)",
                 "code.predict.binary",
@@ -307,7 +323,7 @@ REGRESSION: tuple[Section, ...] = (
         "train",
         _shared_train_epoch,
         (
-            Note("model.train()", "code.train.mode"),
+            Note(_TRAIN_MODE, _KEY_TRAIN_MODE),
             Note(
                 "if validate_targets is not None:",
                 "code.regression.train.hooks",
@@ -316,13 +332,13 @@ REGRESSION: tuple[Section, ...] = (
             Note(
                 "inputs = inputs.to(device, non_blocking=True)",
                 "code.regression.train.batch",
-                end="optimizer.zero_grad",
+                end=_ZERO_GRAD_CALL,
             ),
-            Note("optimizer.zero_grad(set_to_none=True)", "code.train.zero_grad"),
+            Note(_ZERO_GRAD, _KEY_ZERO_GRAD),
             Note(
-                "outputs = model(inputs)",
+                _FORWARD,
                 "code.regression.train.step",
-                end="total_loss += loss.item()",
+                end=_ADD_LOSS,
             ),
             Note(
                 "return total_loss / n if n > 0 else 0.0",
@@ -334,9 +350,9 @@ REGRESSION: tuple[Section, ...] = (
         "validate",
         _regression_eval_epoch,
         (
-            Note("model.eval()", "code.validate.mode"),
-            Note("with torch.no_grad():", "code.validate.no_grad"),
-            Note("total_loss += loss.item()", "code.validate.loss"),
+            Note(_EVAL_MODE, _KEY_VALIDATE_MODE),
+            Note(_NO_GRAD, _KEY_VALIDATE_NO_GRAD),
+            Note(_ADD_LOSS, "code.validate.loss"),
             Note(
                 "metrics.update(outputs, targets)", "code.regression.validate.metrics"
             ),
@@ -346,7 +362,7 @@ REGRESSION: tuple[Section, ...] = (
         "test",
         _regression_test,
         (
-            Note("model.eval()", "code.test.once"),
+            Note(_EVAL_MODE, "code.test.once"),
             Note(
                 "metrics.update(outputs, targets)",
                 "code.regression.test.collect",
@@ -452,7 +468,7 @@ SEGMENTATION: tuple[Section, ...] = (
             Note(
                 "if name in _TORCHVISION_SEG:",
                 "code.segmentation.model.torchvision",
-                end="raise ValueError",
+                end=_RAISE,
                 when=_TORCHVISION_SEGMENTER,
             ),
         ),
@@ -510,7 +526,7 @@ SEGMENTATION: tuple[Section, ...] = (
         "train",
         _shared_train_epoch,
         (
-            Note("model.train()", "code.train.mode"),
+            Note(_TRAIN_MODE, _KEY_TRAIN_MODE),
             Note(
                 "if validate_targets is not None:",
                 "code.segmentation.train.check_ids",
@@ -519,18 +535,18 @@ SEGMENTATION: tuple[Section, ...] = (
             Note(
                 "inputs = inputs.to(device, non_blocking=True)",
                 "code.segmentation.train.batch",
-                end="optimizer.zero_grad",
+                end=_ZERO_GRAD_CALL,
             ),
-            Note("optimizer.zero_grad(set_to_none=True)", "code.train.zero_grad"),
+            Note(_ZERO_GRAD, _KEY_ZERO_GRAD),
             Note(
-                "outputs = model(inputs)",
+                _FORWARD,
                 "code.segmentation.train.logits",
                 end="loss = criterion(outputs, targets)",
             ),
             Note(
                 "loss = criterion(outputs, targets)",
                 "code.segmentation.train.step",
-                end="total_loss += loss.item()",
+                end=_ADD_LOSS,
             ),
         ),
     ),
@@ -538,8 +554,8 @@ SEGMENTATION: tuple[Section, ...] = (
         "validate",
         _segmentation_eval_epoch,
         (
-            Note("model.eval()", "code.validate.mode"),
-            Note("with torch.no_grad():", "code.validate.no_grad"),
+            Note(_EVAL_MODE, _KEY_VALIDATE_MODE),
+            Note(_NO_GRAD, _KEY_VALIDATE_NO_GRAD),
             Note(
                 "check_mask_ids(targets, self._num_classes, self._ignore_index)",
                 "code.segmentation.validate.check_ids",
@@ -562,7 +578,7 @@ SEGMENTATION: tuple[Section, ...] = (
         "test",
         _segmentation_test,
         (
-            Note("model.eval()", "code.segmentation.test.once"),
+            Note(_EVAL_MODE, "code.segmentation.test.once"),
             Note(
                 "per_image.append(",
                 "code.segmentation.test.per_image",
@@ -699,7 +715,7 @@ ANOMALY: tuple[Section, ...] = (
             Note(
                 'if config.name == "patchcore":',
                 "code.anomaly.model.patchcore",
-                end="raise ValueError",
+                end=_RAISE,
                 when=_PATCHCORE,
             ),
         ),
@@ -708,11 +724,11 @@ ANOMALY: tuple[Section, ...] = (
         "train",
         _autoencoder_epoch,
         (
-            Note("model.train()", "code.train.mode", when=_AUTOENCODER),
+            Note(_TRAIN_MODE, _KEY_TRAIN_MODE, when=_AUTOENCODER),
             Note(
                 "for inputs, _ in train_loader:",
                 "code.anomaly.train.batch",
-                end="optimizer.zero_grad",
+                end=_ZERO_GRAD_CALL,
                 when=_AUTOENCODER,
             ),
             Note(
@@ -818,7 +834,7 @@ ANOMALY: tuple[Section, ...] = (
         "test",
         _anomaly_test,
         (
-            Note("model.eval()", "code.anomaly.test.once"),
+            Note(_EVAL_MODE, "code.anomaly.test.once"),
             Note(
                 "normal_scores = self._collect_scores(model, calibration_loader)[0]",
                 "code.anomaly.test.calibration",
@@ -992,7 +1008,7 @@ DETECTION: tuple[Section, ...] = (
             Note(
                 'if name == "retinanet_resnet50_fpn":',
                 "code.detection.model.retinanet",
-                end="raise ValueError",
+                end=_RAISE,
                 when=_RETINANET,
             ),
         ),
@@ -1002,8 +1018,8 @@ DETECTION: tuple[Section, ...] = (
         _faster_rcnn,
         (
             Note(
-                "if pretrained:",
-                "code.detection.weights",
+                _IF_PRETRAINED,
+                _KEY_DETECTION_WEIGHTS,
                 end="in_features =",
                 when=_FASTER_RCNN,
             ),
@@ -1015,8 +1031,8 @@ DETECTION: tuple[Section, ...] = (
         _ssd,
         (
             Note(
-                "if pretrained:",
-                "code.detection.weights",
+                _IF_PRETRAINED,
+                _KEY_DETECTION_WEIGHTS,
                 end="in_channels =",
                 when=_SSD,
             ),
@@ -1028,8 +1044,8 @@ DETECTION: tuple[Section, ...] = (
         _retinanet,
         (
             Note(
-                "if pretrained:",
-                "code.detection.weights",
+                _IF_PRETRAINED,
+                _KEY_DETECTION_WEIGHTS,
                 end="num_anchors =",
                 when=_RETINANET,
             ),
@@ -1040,7 +1056,7 @@ DETECTION: tuple[Section, ...] = (
         "train",
         _detection_epoch,
         (
-            Note("model.train()", "code.train.mode"),
+            Note(_TRAIN_MODE, _KEY_TRAIN_MODE),
             Note(
                 "images = [img.to(device) for img in images]",
                 "code.detection.train.batch",
@@ -1049,10 +1065,10 @@ DETECTION: tuple[Section, ...] = (
             Note(
                 "loss_dict = model(images, targets)",
                 "code.detection.train.losses",
-                end="optimizer.zero_grad",
+                end=_ZERO_GRAD_CALL,
             ),
             Note(
-                "optimizer.zero_grad(set_to_none=True)",
+                _ZERO_GRAD,
                 "code.detection.train.step",
                 end="total += float(loss.item())",
             ),
@@ -1062,8 +1078,8 @@ DETECTION: tuple[Section, ...] = (
         "validate",
         _detection_val_loss,
         (
-            Note("model.train()", "code.detection.validate.train_mode"),
-            Note("with torch.no_grad():", "code.validate.no_grad"),
+            Note(_TRAIN_MODE, "code.detection.validate.train_mode"),
+            Note(_NO_GRAD, _KEY_VALIDATE_NO_GRAD),
             Note(
                 "total += float(sum(loss_dict.values()).item())",
                 "code.detection.validate.loss",
@@ -1074,8 +1090,8 @@ DETECTION: tuple[Section, ...] = (
         "map",
         _detection_val_map,
         (
-            # The first "model.eval()" is in the docstring.
-            Note("model.eval()", "code.detection.map.eval", nth=2),
+            # The first _EVAL_MODE is in the docstring.
+            Note(_EVAL_MODE, "code.detection.map.eval", nth=2),
             Note(
                 "outputs = model([img.to(device) for img in images])",
                 "code.detection.map.predict",
