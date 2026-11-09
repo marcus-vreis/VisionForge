@@ -61,3 +61,27 @@ def test_a_task_without_a_tour_is_404() -> None:
     response = TestClient(app).get("/api/code-tour/detection")
     assert response.status_code == 404
     assert response.json()["detail"]
+
+
+def test_the_regression_tour_marks_the_loss_of_the_query() -> None:
+    response = TestClient(app).get("/api/code-tour/regression?loss=mae")
+    assert response.status_code == 200
+    loss = next(s for s in response.json() if s["id"] == "loss")
+    actives = {loss["lines"][n["first"]].strip(): n["active"] for n in loss["notes"]}
+    assert actives["return nn.L1Loss()"] is True
+    assert actives["return nn.MSELoss()"] is False
+
+
+def test_the_list_names_the_tasks_with_a_tour_and_their_settings() -> None:
+    response = TestClient(app).get("/api/code-tour")
+    assert response.status_code == 200
+    tours = {item["task"]: item["settings"] for item in response.json()}
+    assert {"classification", "regression"} <= set(tours)
+    assert tours["regression"] == {"loss": ["huber", "mae", "mse"]}
+    assert tours["classification"]["kind"] == ["binary", "multiclass"]
+
+
+def test_an_unknown_task_is_404() -> None:
+    response = TestClient(app).get("/api/code-tour/foo")
+    assert response.status_code == 404
+    assert response.json()["detail"]

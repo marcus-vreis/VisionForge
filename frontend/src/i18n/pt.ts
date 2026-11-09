@@ -335,7 +335,7 @@ export const pt = {
     inactive: "não usado neste treino",
     loading: "Carregando o código…",
     failed: "Não foi possível carregar o código.",
-    onlyClassification: "Por enquanto, o código comentado existe só para a classificação.",
+    missing: "Ainda não há código comentado para esta tarefa.",
     perEpoch: "O treino informa o progresso por época, não por linha: a marca mostra qual caminho o código segue, não a linha que está rodando agora.",
   },
   // Rascunho do bundle de uma execução no Zenodo (ZenodoExportPanel, ADR-174).

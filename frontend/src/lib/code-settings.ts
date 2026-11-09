@@ -1,16 +1,23 @@
 import type { CodeSettings } from "../api/client";
 
 /**
- * The settings of a classification run that choose a branch in its code
- * (ADR-173), read from the submitted payload.
+ * The settings of a run that choose a branch in its code (ADR-173), read from
+ * the submitted payload of `taskKey`.
  *
  * A setting is left out when the payload does not decide it, so its notes
  * stay undecided instead of naming a path the run may not take. Mixed
  * precision is the case: the trainer turns it on only when the device really
  * is CUDA (`use_amp = mixed_precision and device.type == "cuda"`), and an
- * `auto` or `cuda` choice can still fall back to the CPU.
+ * `auto` or `cuda` choice can still fall back to the CPU. The server drops a
+ * value the task does not take.
  */
-export function codeSettingsFor(payload: Record<string, unknown>): CodeSettings {
+export function codeSettingsFor(taskKey: string, payload: Record<string, unknown>): CodeSettings {
+  if (taskKey === "classification") return classificationSettings(payload);
+  if (taskKey === "regression") return lossSettings(payload);
+  return {};
+}
+
+function classificationSettings(payload: Record<string, unknown>): CodeSettings {
   const settings: CodeSettings = {};
   const task = payload["task"];
   if (task === "binary" || task === "multiclass") settings.kind = task;
@@ -25,6 +32,12 @@ export function codeSettingsFor(payload: Record<string, unknown>): CodeSettings 
   const name = record(payload["model"])["name"];
   if (typeof name === "string" && name) settings.model = name;
   return settings;
+}
+
+/** `training.loss`, the criterion of a regression or segmentation run. */
+function lossSettings(payload: Record<string, unknown>): CodeSettings {
+  const loss = record(payload["training"])["loss"];
+  return typeof loss === "string" && loss ? { loss } : {};
 }
 
 function record(value: unknown): Record<string, unknown> {

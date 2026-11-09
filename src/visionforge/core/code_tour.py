@@ -5,6 +5,10 @@ the run calls, read with ``inspect`` when asked, so it cannot drift from what
 trains. A note points at lines by their text, never by number; a test fails
 when a change to the code leaves a note without its line. A note with
 conditions marks the branch this run's settings take.
+
+Each task has its own tour and its own settings (``TOURS``, ``TOUR_SETTINGS``);
+``tour_settings`` reads them from a request's query, keeping only the values
+the task knows.
 """
 
 from __future__ import annotations
@@ -18,13 +22,8 @@ from typing import Any
 
 from visionforge.utils.messages import tr
 
-# Settings a note can depend on, and their values.
-SETTINGS: dict[str, frozenset[str]] = {
-    "kind": frozenset({"binary", "multiclass"}),
-    "amp": frozenset({"on", "off"}),
-    "augment": frozenset({"on", "off"}),
-    "family": frozenset({"resnet", "efficientnet", "vit", "swin", "convnext", "vgg"}),
-}
+_FAMILIES = frozenset({"resnet", "efficientnet", "vit", "swin", "convnext", "vgg"})
+_ON_OFF = frozenset({"on", "off"})
 
 
 @dataclass(frozen=True)
@@ -211,32 +210,228 @@ CLASSIFICATION: tuple[Section, ...] = (
     ),
 )
 
-TOURS: dict[str, tuple[Section, ...]] = {"classification": CLASSIFICATION}
+
+def _regression_item() -> Callable[..., Any]:
+    from visionforge.core.regression_data import RegressionCsvDataset
+
+    return RegressionCsvDataset.__getitem__
+
+
+def _regression_model() -> Callable[..., Any]:
+    from visionforge.models.regression_factory import RegressionModelFactory
+
+    return RegressionModelFactory.create
+
+
+def _regression_criterion() -> Callable[..., Any]:
+    from visionforge.core.regression_trainer import RegressionTrainer
+
+    return RegressionTrainer._build_criterion
+
+
+def _shared_train_epoch() -> Callable[..., Any]:
+    from visionforge.core.training_loop import train_epoch
+
+    return train_epoch
+
+
+def _regression_eval_epoch() -> Callable[..., Any]:
+    from visionforge.core.regression_trainer import RegressionTrainer
+
+    return RegressionTrainer._eval_epoch
+
+
+def _regression_test() -> Callable[..., Any]:
+    from visionforge.core.regression_trainer import RegressionTrainer
+
+    return RegressionTrainer.evaluate_with_predictions
+
+
+REGRESSION: tuple[Section, ...] = (
+    Section(
+        "data",
+        _regression_item,
+        (
+            Note(
+                "with Image.open(image_path) as img:",
+                "code.regression.data.image",
+                end="target = torch.tensor",
+            ),
+            Note(
+                "target = torch.tensor(targets, dtype=torch.float32)",
+                "code.regression.data.target",
+            ),
+        ),
+    ),
+    Section(
+        "model",
+        _regression_model,
+        (
+            Note(
+                "if config.custom_model is not None:",
+                "code.regression.model.custom",
+                end="use_imagenet = config.pretrained",
+            ),
+            Note(
+                "model = build_backbone(config.name, use_imagenet=use_imagenet)",
+                "code.regression.model.backbone",
+            ),
+            Note(
+                "replace_final_layer(model, config.name, config.num_targets)",
+                "code.regression.model.head",
+            ),
+        ),
+    ),
+    Section(
+        "loss",
+        _regression_criterion,
+        (
+            Note(
+                "return nn.L1Loss()",
+                "code.regression.loss.mae",
+                when=(("loss", "mae"),),
+            ),
+            Note(
+                "return nn.HuberLoss(delta=cfg.huber_delta)",
+                "code.regression.loss.huber",
+                when=(("loss", "huber"),),
+            ),
+            Note(
+                "return nn.MSELoss()",
+                "code.regression.loss.mse",
+                when=(("loss", "mse"),),
+            ),
+        ),
+    ),
+    Section(
+        "train",
+        _shared_train_epoch,
+        (
+            Note("model.train()", "code.train.mode"),
+            Note(
+                "if validate_targets is not None:",
+                "code.regression.train.hooks",
+                end="inputs = inputs.to(device",
+            ),
+            Note(
+                "inputs = inputs.to(device, non_blocking=True)",
+                "code.regression.train.batch",
+                end="optimizer.zero_grad",
+            ),
+            Note("optimizer.zero_grad(set_to_none=True)", "code.train.zero_grad"),
+            Note(
+                "outputs = model(inputs)",
+                "code.regression.train.step",
+                end="total_loss += loss.item()",
+            ),
+            Note(
+                "return total_loss / n if n > 0 else 0.0",
+                "code.regression.train.mean",
+            ),
+        ),
+    ),
+    Section(
+        "validate",
+        _regression_eval_epoch,
+        (
+            Note("model.eval()", "code.validate.mode"),
+            Note("with torch.no_grad():", "code.validate.no_grad"),
+            Note("total_loss += loss.item()", "code.validate.loss"),
+            Note(
+                "metrics.update(outputs, targets)", "code.regression.validate.metrics"
+            ),
+        ),
+    ),
+    Section(
+        "test",
+        _regression_test,
+        (
+            Note("model.eval()", "code.test.once"),
+            Note(
+                "metrics.update(outputs, targets)",
+                "code.regression.test.collect",
+                end="empty = np.zeros",
+            ),
+            Note("metrics.compute(),", "code.regression.test.metrics"),
+        ),
+    ),
+)
+
+TOURS: dict[str, tuple[Section, ...]] = {
+    "classification": CLASSIFICATION,
+    "regression": REGRESSION,
+}
+
+# Settings a note can depend on, per task, and their values.
+TOUR_SETTINGS: dict[str, dict[str, frozenset[str]]] = {
+    "classification": {
+        "kind": frozenset({"binary", "multiclass"}),
+        "amp": _ON_OFF,
+        "augment": _ON_OFF,
+        "family": _FAMILIES,
+    },
+    "regression": {"loss": frozenset({"mse", "mae", "huber"})},
+}
+
+# Query flags as the page sends them, turned into the settings' on/off.
+_FLAGS = {"true": "on", "false": "off"}
 
 
 def model_family(model_name: str) -> str | None:
     """The branch of ``replace_final_layer`` a model name takes, if any."""
     if model_name == "alexnet":
         return "vgg"
-    for family in sorted(SETTINGS["family"]):
+    for family in sorted(_FAMILIES):
         if model_name.startswith(family):
             return family
     return None
 
 
-def code_tour(task: str, settings: Mapping[str, str]) -> list[dict[str, Any]]:
-    """The sections of ``task`` with their source and notes, in the request's language.
+# The setting a task reads from the model name, and how.
+_FROM_MODEL: dict[str, tuple[str, Callable[[str], str | None]]] = {
+    "classification": ("family", model_family),
+}
 
-    ``settings`` are what the run uses (``kind``, ``amp``, ``augment``,
-    ``family``); one missing or unknown leaves its notes undecided.
+
+def tour_settings(task: str, query: Mapping[str, str]) -> dict[str, str]:
+    """The settings of ``task`` a request's query decides.
+
+    A key the task does not know, or a value it does not take, is dropped, so
+    its notes stay undecided. ``true``/``false`` read as ``on``/``off``;
+    ``model`` is a model name, turned into the setting it decides (the
+    classification family).
 
     Raises:
         KeyError: a task without a tour.
     """
+    known = TOUR_SETTINGS[task]
+    settings: dict[str, str] = {}
+    for key, raw in query.items():
+        value: str | None
+        if key == "model" and task in _FROM_MODEL:
+            key, read = _FROM_MODEL[task]
+            value = read(raw)
+        else:
+            value = _FLAGS.get(raw, raw)
+        if value is not None and value in known.get(key, frozenset()):
+            settings[key] = value
+    return settings
+
+
+def code_tour(task: str, settings: Mapping[str, str]) -> list[dict[str, Any]]:
+    """The sections of ``task`` with their source and notes, in the request's language.
+
+    ``settings`` are what the run uses (``TOUR_SETTINGS[task]``); one missing
+    or unknown leaves its notes undecided.
+
+    Raises:
+        KeyError: a task without a tour.
+    """
+    allowed = TOUR_SETTINGS[task]
     known = {
         key: value
         for key, value in settings.items()
-        if key in SETTINGS and value in SETTINGS[key]
+        if key in allowed and value in allowed[key]
     }
     return [_section(section, known) for section in TOURS[task]]
 

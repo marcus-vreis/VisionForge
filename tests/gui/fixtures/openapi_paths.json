@@ -185,15 +185,26 @@
       }
     }
   },
+  "GET /api/code-tour": {
+    "operationId": "list_code_tours_api_code_tour_get",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "array[CodeTourTask]"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    }
+  },
   "GET /api/code-tour/{task}": {
     "operationId": "get_code_tour_api_code_tour__task__get",
     "parameters": [
       "header:X-VF-Lang:optional",
-      "path:task:required",
-      "query:amp:optional",
-      "query:augment:optional",
-      "query:kind:optional",
-      "query:model:optional"
+      "path:task:required"
     ],
     "requestBody": {},
     "responses": {

@@ -317,7 +317,7 @@ export const en: Dict = {
     inactive: "not used in this run",
     loading: "Loading the code…",
     failed: "Failed to load the code.",
-    onlyClassification: "For now, the annotated code exists for classification only.",
+    missing: "There is no annotated code for this task yet.",
     perEpoch: "The training reports progress per epoch, not per line: the mark shows which path the code takes, not the line running right now.",
   },
   zenodo: {

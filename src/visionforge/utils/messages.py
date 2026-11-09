@@ -989,6 +989,66 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "pt": "As métricas comparam o previsto com o verdadeiro. Na multiclasse a média é macro: cada classe pesa igual, mesmo as que têm poucas imagens.",
         "en": "The metrics compare predicted and true labels. For multiclass the average is macro: every class weighs the same, even those with few images.",
     },
+    "code.regression.data.image": {
+        "pt": "Abre a imagem da linha do CSV e aplica as mesmas transformações da classificação (_build_transforms): mesmo tamanho, aumento de dados só no treino, ToTensor e Normalize.",
+        "en": "Opens the image of the CSV row and applies the same transforms as classification (_build_transforms): same size, augmentation in training only, ToTensor and Normalize.",
+    },
+    "code.regression.data.target": {
+        "pt": "O alvo não é uma classe: é o número (ou os números) das colunas de alvo do CSV, como float32. É o valor que a rede deve aprender a prever.",
+        "en": "The target is not a class: it is the number (or numbers) in the CSV's target columns, as float32. It is the value the network must learn to predict.",
+    },
+    "code.regression.model.custom": {
+        "pt": "Um modelo próprio registrado ou um modelo do timm, quando escolhidos, entram por estes ramos já com uma saída por alvo.",
+        "en": "A registered custom model or a timm model, when chosen, comes in through these branches already with one output per target.",
+    },
+    "code.regression.model.backbone": {
+        "pt": "A mesma rede da classificação (torchvision), com pesos do ImageNet se pré-treinada.",
+        "en": "The same network as in classification (torchvision), with ImageNet weights when pre-trained.",
+    },
+    "code.regression.model.head": {
+        "pt": "A última camada vira uma linear com uma saída por coluna de alvo, sem ativação: o número que sai é a previsão.",
+        "en": "The last layer becomes a linear one with one output per target column, without activation: the number that comes out is the prediction.",
+    },
+    "code.regression.loss.mae": {
+        "pt": "MAE (L1Loss): a média do erro absoluto. Todo erro pesa na proporção do seu tamanho, e valores fora da curva puxam menos.",
+        "en": "MAE (L1Loss): the mean absolute error. Every error weighs in proportion to its size, and outliers pull less.",
+    },
+    "code.regression.loss.huber": {
+        "pt": "Huber: quadrática para erros menores que delta e linear acima dele. Fica entre o MSE e o MAE.",
+        "en": "Huber: quadratic for errors below delta and linear above it. It sits between MSE and MAE.",
+    },
+    "code.regression.loss.mse": {
+        "pt": "MSE (MSELoss), o padrão: a média do erro ao quadrado. Erros grandes pesam muito mais que os pequenos.",
+        "en": "MSE (MSELoss), the default: the mean squared error. Large errors weigh much more than small ones.",
+    },
+    "code.regression.train.hooks": {
+        "pt": "Este laço é compartilhado com outras tarefas. A regressão não passa validate_targets: esta checagem é pulada.",
+        "en": "This loop is shared with other tasks. Regression passes no validate_targets: this check is skipped.",
+    },
+    "code.regression.train.batch": {
+        "pt": "Um lote por vez: as imagens e os alvos vão para o dispositivo (GPU ou CPU). Uma época é uma volta por todos os lotes do treino.",
+        "en": "One batch at a time: the images and targets move to the device (GPU or CPU). An epoch is one pass over every training batch.",
+    },
+    "code.regression.train.step": {
+        "pt": "O passo de aprendizado: forward (a rede prevê os números), loss (o erro em relação ao alvo), backward (o gradiente de cada peso) e step (o otimizador mexe nos pesos). Na regressão não há outputs_transform: a saída já é a previsão.",
+        "en": "The learning step: forward (the network predicts the numbers), loss (the error against the target), backward (each weight's gradient) and step (the optimiser moves the weights). Regression has no outputs_transform: the output already is the prediction.",
+    },
+    "code.regression.train.mean": {
+        "pt": "A train_loss da época é a média da loss dos lotes.",
+        "en": "The epoch's train_loss is the mean loss over the batches.",
+    },
+    "code.regression.validate.metrics": {
+        "pt": "Acumula o erro de cada amostra para calcular MSE, RMSE, MAE e R² da validação no fim da época.",
+        "en": "Accumulates each sample's error to compute the validation MSE, RMSE, MAE and R² at the end of the epoch.",
+    },
+    "code.regression.test.collect": {
+        "pt": "Guarda cada alvo e cada previsão do teste: deles saem as métricas, o gráfico de previsto contra real e os intervalos de confiança.",
+        "en": "Keeps every test target and prediction: the metrics, the predicted-versus-true plot and the confidence intervals come from them.",
+    },
+    "code.regression.test.metrics": {
+        "pt": "MSE, RMSE, MAE e R² do teste. Um R² perto de 1 explica quase toda a variação do alvo; abaixo de 0, o modelo erra mais do que prever a média.",
+        "en": "Test MSE, RMSE, MAE and R². An R² near 1 explains almost all of the target's variation; below 0, the model does worse than predicting the mean.",
+    },
     "mlflow.retry_unavailable": {
         "pt": "A exportação para MLflow está indisponível para esta execução ou perfil.",
         "en": "MLflow export is unavailable for this run or profile.",

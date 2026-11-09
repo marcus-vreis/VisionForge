@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { fetchCodeTour, type CodeNote, type CodeSection, type CodeSettings } from "../api/client";
 import { useT } from "../i18n/useT";
+import { loadTourTasks, tourStatus, unavailableReason } from "../lib/code-tour";
 
 const CODE: CSSProperties = {
   margin: 0, padding: "10px 0", overflowX: "auto", maxHeight: 360, overflowY: "auto",
@@ -8,35 +9,62 @@ const CODE: CSSProperties = {
   fontFamily: "var(--font-mono)", fontSize: 12, lineHeight: 1.55,
 };
 
+/** What came back for one request: its sections, the server's reason it has none, or a failure. */
+interface Loaded {
+  request: string;
+  sections?: CodeSection[];
+  unavailable?: string;
+  failed?: boolean;
+}
+
 /**
  * The "Código" tab (ADR-173): the real functions the training runs, with notes.
  *
- * Only classification has a tour for now. The code is read from the installed
- * package by the server, so it is the code that trains; the marked notes are
- * the branch this run's settings take.
+ * The server says which tasks have a tour and reads the code from the
+ * installed package, so it is the code that trains; the marked notes are the
+ * branch this run's settings take. A run whose code is not this project's
+ * gets the server's reason instead.
  */
 export function CodeTour({ taskKey, settings, accent }: {
   taskKey: string; settings: CodeSettings | null; accent: string;
 }) {
   const t = useT();
-  const supported = taskKey === "classification";
-  const [sections, setSections] = useState<CodeSection[] | null>(null);
-  const [failed, setFailed] = useState(false);
+  const [tasks, setTasks] = useState<string[] | null>(null);
+  const [listFailed, setListFailed] = useState(false);
+  const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [open, setOpen] = useState("train");
   const [focus, setFocus] = useState<number | null>(null);
   const query = useMemo(() => JSON.stringify(settings ?? {}), [settings]);
+  const status = tourStatus(taskKey, tasks);
+  const request = `${taskKey}?${query}`;
 
   useEffect(() => {
-    if (!supported) return;
     let alive = true;
-    fetchCodeTour(taskKey, JSON.parse(query) as CodeSettings)
-      .then((result) => { if (alive) setSections(result); })
-      .catch(() => { if (alive) setFailed(true); });
+    loadTourTasks()
+      .then((list) => { if (alive) setTasks(list); })
+      .catch(() => { if (alive) setListFailed(true); });
     return () => { alive = false; };
-  }, [supported, taskKey, query]);
+  }, []);
 
-  if (!supported) return <p style={{ fontSize: 13 }}>{t.codeTour.onlyClassification}</p>;
-  if (failed) return <p role="alert" style={{ fontSize: 13 }}>{t.codeTour.failed}</p>;
+  useEffect(() => {
+    if (status !== "supported") return;
+    let alive = true;
+    const key = `${taskKey}?${query}`;
+    fetchCodeTour(taskKey, JSON.parse(query) as CodeSettings)
+      .then((result) => { if (alive) setLoaded({ request: key, sections: result }); })
+      .catch((error: unknown) => {
+        if (!alive) return;
+        const reason = unavailableReason(error);
+        setLoaded(reason ? { request: key, unavailable: reason } : { request: key, failed: true });
+      });
+    return () => { alive = false; };
+  }, [status, taskKey, query]);
+
+  const current = loaded?.request === request ? loaded : null;
+  if (listFailed || current?.failed) return <p role="alert" style={{ fontSize: 13 }}>{t.codeTour.failed}</p>;
+  if (status === "missing") return <p style={{ fontSize: 13 }}>{t.codeTour.missing}</p>;
+  if (current?.unavailable) return <p style={{ fontSize: 13 }}>{current.unavailable}</p>;
+  const sections = current?.sections;
   if (!sections) return <p role="status" style={{ fontSize: 13 }}>{t.codeTour.loading}</p>;
   const section = sections.find((s) => s.id === open) ?? sections[0];
 

@@ -5,11 +5,13 @@ from __future__ import annotations
 import pytest
 
 from visionforge.core.code_tour import (
+    TOUR_SETTINGS,
     TOURS,
     Note,
     code_tour,
     model_family,
     note_span,
+    tour_settings,
 )
 from visionforge.utils.messages import message
 
@@ -123,3 +125,68 @@ def test_note_span_counts_occurrences_and_ends_before_the_end_text() -> None:
 def test_note_span_refuses_a_note_that_lost_its_line(note: Note) -> None:
     with pytest.raises(ValueError):
         note_span(note, _LINES)
+
+
+def test_the_regression_tour_has_its_sections_and_every_note_resolves() -> None:
+    sections = code_tour("regression", {})
+    assert [s["id"] for s in sections] == [
+        "data",
+        "model",
+        "loss",
+        "train",
+        "validate",
+        "test",
+    ]
+    for section in sections:
+        for note in section["notes"]:
+            assert 0 <= note["first"] <= note["last"] < len(section["lines"])
+            assert note["text"]
+
+
+def test_the_regression_tour_is_the_code_the_regression_run_calls() -> None:
+    from visionforge.core.regression_trainer import RegressionTrainer
+    from visionforge.core.training_loop import train_epoch
+
+    sections = {s["id"]: s for s in code_tour("regression", {})}
+    assert sections["loss"]["name"] == "RegressionTrainer._build_criterion"
+    assert sections["train"]["name"] == "train_epoch"
+    assert sections["train"]["first_line"] == train_epoch.__code__.co_firstlineno
+    assert (
+        sections["validate"]["first_line"]
+        == RegressionTrainer._eval_epoch.__code__.co_firstlineno
+    )
+    assert sections["model"]["file"] == "visionforge/models/regression_factory.py"
+
+
+def _loss_actives(task: str, settings: dict[str, str]) -> dict[str, bool | None]:
+    loss = next(s for s in code_tour(task, settings) if s["id"] == "loss")
+    return {loss["lines"][n["first"]].strip(): n["active"] for n in loss["notes"]}
+
+
+def test_the_regression_loss_marks_the_criterion_of_this_run() -> None:
+    assert _loss_actives("regression", {"loss": "huber"}) == {
+        "return nn.L1Loss()": False,
+        "return nn.HuberLoss(delta=cfg.huber_delta)": True,
+        "return nn.MSELoss()": False,
+    }
+    assert set(_loss_actives("regression", {"loss": "quantile"}).values()) == {None}
+
+
+def test_tour_settings_keep_only_what_the_task_takes() -> None:
+    query = {"kind": "binary", "amp": "false", "model": "resnet18", "loss": "mae"}
+    assert tour_settings("classification", query) == {
+        "kind": "binary",
+        "amp": "off",
+        "family": "resnet",
+    }
+    assert tour_settings("regression", query) == {"loss": "mae"}
+    assert tour_settings("regression", {"loss": "quantile"}) == {}
+
+
+def test_every_tour_declares_its_settings() -> None:
+    assert set(TOUR_SETTINGS) == set(TOURS)
+    for task, sections in TOURS.items():
+        for section in sections:
+            for note in section.notes:
+                for key, value in note.when:
+                    assert value in TOUR_SETTINGS[task][key], (task, note.key)
