@@ -30,6 +30,7 @@ USK-Coffee_Binary/
 
 # Local workspace / IDE / Agent configs
 .claude/
+.codex/
 documentation/CLAUDE.md
 STOP_TEAM
 outputs/LOOP_STATUS.md

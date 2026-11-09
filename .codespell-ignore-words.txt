@@ -70,3 +70,5 @@ prefere
 foto
 afterall
 meu
+acidental
+vetor
