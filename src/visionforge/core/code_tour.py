@@ -357,9 +357,256 @@ REGRESSION: tuple[Section, ...] = (
     ),
 )
 
+
+def _segmentation_item() -> Callable[..., Any]:
+    from visionforge.core.segmentation_data import SegmentationDataset
+
+    return SegmentationDataset.__getitem__
+
+
+def _segmentation_model() -> Callable[..., Any]:
+    from visionforge.models.segmentation_factory import SegmentationModelFactory
+
+    return SegmentationModelFactory._build
+
+
+def _unet_forward() -> Callable[..., Any]:
+    from visionforge.models.segmentation_factory import UNet
+
+    return UNet.forward
+
+
+def _segmentation_criterion() -> Callable[..., Any]:
+    from visionforge.core.segmentation_trainer import SegmentationTrainer
+
+    return SegmentationTrainer._build_criterion
+
+
+def _segmentation_eval_epoch() -> Callable[..., Any]:
+    from visionforge.core.segmentation_trainer import SegmentationTrainer
+
+    return SegmentationTrainer._eval_epoch
+
+
+def _segmentation_test() -> Callable[..., Any]:
+    from visionforge.core.segmentation_trainer import SegmentationTrainer
+
+    return SegmentationTrainer.evaluate_with_confusion
+
+
+def _segmentation_metrics() -> Callable[..., Any]:
+    from visionforge.core.segmentation_trainer import SegmentationMetricAccumulator
+
+    return SegmentationMetricAccumulator.compute
+
+
+_UNET = (("arch", "unet"),)
+_TORCHVISION_SEGMENTER = (("arch", "torchvision"),)
+
+SEGMENTATION: tuple[Section, ...] = (
+    Section(
+        "data",
+        _segmentation_item,
+        (
+            Note(
+                'image = self._preprocess(im.convert("RGB"))',
+                "code.segmentation.data.image",
+            ),
+            Note(
+                'if mask.mode in ("RGB", "RGBA"):',
+                "code.segmentation.data.mask",
+                end="size = [self._image_size, self._image_size]",
+            ),
+            Note(
+                "image = TF.resize(image, size,",
+                "code.segmentation.data.resize",
+                end="if self._hflip",
+            ),
+            Note(
+                "if self._hflip and random.random() < 0.5:",
+                "code.segmentation.data.joint",
+                end="if self._jitter is not None:",
+            ),
+            Note(
+                "if self._jitter is not None:",
+                "code.segmentation.data.jitter",
+                end="image_t = TF.to_tensor(image)",
+            ),
+            Note(
+                "image_t = TF.to_tensor(image)",
+                "code.segmentation.data.tensor",
+                end="return image_t, mask_t",
+            ),
+        ),
+    ),
+    Section(
+        "model",
+        _segmentation_model,
+        (
+            Note(
+                'if name == "unet":',
+                "code.segmentation.model.unet",
+                end="if name in _TORCHVISION_SEG:",
+                when=_UNET,
+            ),
+            Note(
+                "if name in _TORCHVISION_SEG:",
+                "code.segmentation.model.torchvision",
+                end="raise ValueError",
+                when=_TORCHVISION_SEGMENTER,
+            ),
+        ),
+    ),
+    Section(
+        "unet",
+        _unet_forward,
+        (
+            Note(
+                "c0 = self.inc(x)",
+                "code.segmentation.unet.encoder",
+                end="b = self.bottleneck",
+                when=_UNET,
+            ),
+            Note(
+                "b = self.bottleneck(self.pool(c3))",
+                "code.segmentation.unet.bottleneck",
+                when=_UNET,
+            ),
+            Note(
+                "d3 = self.up3(self._up_cat(b, c3))",
+                "code.segmentation.unet.decoder",
+                end="logits: torch.Tensor",
+                when=_UNET,
+            ),
+            Note(
+                "logits: torch.Tensor = self.outc(d0)",
+                "code.segmentation.unet.head",
+                when=_UNET,
+            ),
+        ),
+    ),
+    Section(
+        "loss",
+        _segmentation_criterion,
+        (
+            Note(
+                "return _DiceCriterion(self._ignore_index)",
+                "code.segmentation.loss.dice",
+                when=(("loss", "dice"),),
+            ),
+            Note(
+                "return _CombinedLoss(self._ignore_index)",
+                "code.segmentation.loss.combined",
+                when=(("loss", "combined"),),
+            ),
+            Note(
+                "return nn.CrossEntropyLoss(ignore_index=self._ignore_index)",
+                "code.segmentation.loss.cross_entropy",
+                when=(("loss", "cross_entropy"),),
+            ),
+        ),
+    ),
+    Section(
+        "train",
+        _shared_train_epoch,
+        (
+            Note("model.train()", "code.train.mode"),
+            Note(
+                "if validate_targets is not None:",
+                "code.segmentation.train.check_ids",
+                end="inputs = inputs.to(device",
+            ),
+            Note(
+                "inputs = inputs.to(device, non_blocking=True)",
+                "code.segmentation.train.batch",
+                end="optimizer.zero_grad",
+            ),
+            Note("optimizer.zero_grad(set_to_none=True)", "code.train.zero_grad"),
+            Note(
+                "outputs = model(inputs)",
+                "code.segmentation.train.logits",
+                end="loss = criterion(outputs, targets)",
+            ),
+            Note(
+                "loss = criterion(outputs, targets)",
+                "code.segmentation.train.step",
+                end="total_loss += loss.item()",
+            ),
+        ),
+    ),
+    Section(
+        "validate",
+        _segmentation_eval_epoch,
+        (
+            Note("model.eval()", "code.validate.mode"),
+            Note("with torch.no_grad():", "code.validate.no_grad"),
+            Note(
+                "check_mask_ids(targets, self._num_classes, self._ignore_index)",
+                "code.segmentation.validate.check_ids",
+            ),
+            Note(
+                "logits = segmentation_logits(model(inputs))",
+                "code.segmentation.validate.logits",
+            ),
+            Note(
+                "total_loss += criterion(logits, targets).item()",
+                "code.segmentation.validate.loss",
+            ),
+            Note(
+                "miou, dice, pixel_acc = metrics.compute()",
+                "code.segmentation.validate.best",
+            ),
+        ),
+    ),
+    Section(
+        "test",
+        _segmentation_test,
+        (
+            Note("model.eval()", "code.segmentation.test.once"),
+            Note(
+                "per_image.append(",
+                "code.segmentation.test.per_image",
+                end="stacked = (",
+            ),
+            Note(
+                "return metrics.compute(), stacked",
+                "code.segmentation.test.metrics",
+            ),
+        ),
+    ),
+    Section(
+        "metrics",
+        _segmentation_metrics,
+        (
+            Note(
+                "diag = cm.diag()",
+                "code.segmentation.metrics.confusion",
+                end="present = (row + col) > 0",
+            ),
+            Note(
+                "present = (row + col) > 0",
+                "code.segmentation.metrics.present",
+            ),
+            Note(
+                "iou = diag[present] / union[present]",
+                "code.segmentation.metrics.iou",
+            ),
+            Note(
+                "dice = (2.0 * diag[present])",
+                "code.segmentation.metrics.dice",
+            ),
+            Note(
+                "pixel_acc = float(diag.sum().item() / total)",
+                "code.segmentation.metrics.pixel_acc",
+            ),
+        ),
+    ),
+)
+
 TOURS: dict[str, tuple[Section, ...]] = {
     "classification": CLASSIFICATION,
     "regression": REGRESSION,
+    "segmentation": SEGMENTATION,
 }
 
 # Settings a note can depend on, per task, and their values.
@@ -371,6 +618,10 @@ TOUR_SETTINGS: dict[str, dict[str, frozenset[str]]] = {
         "family": _FAMILIES,
     },
     "regression": {"loss": frozenset({"mse", "mae", "huber"})},
+    "segmentation": {
+        "loss": frozenset({"cross_entropy", "dice", "combined"}),
+        "arch": frozenset({"unet", "torchvision"}),
+    },
 }
 
 # Query flags as the page sends them, turned into the settings' on/off.
@@ -387,9 +638,19 @@ def model_family(model_name: str) -> str | None:
     return None
 
 
+def segmentation_arch(model_name: str) -> str | None:
+    """The branch of ``SegmentationModelFactory._build`` a model name takes, if any."""
+    from visionforge.models.segmentation_factory import _TORCHVISION_SEG
+
+    if model_name == "unet":
+        return "unet"
+    return "torchvision" if model_name in _TORCHVISION_SEG else None
+
+
 # The setting a task reads from the model name, and how.
 _FROM_MODEL: dict[str, tuple[str, Callable[[str], str | None]]] = {
     "classification": ("family", model_family),
+    "segmentation": ("arch", segmentation_arch),
 }
 
 
@@ -399,7 +660,7 @@ def tour_settings(task: str, query: Mapping[str, str]) -> dict[str, str]:
     A key the task does not know, or a value it does not take, is dropped, so
     its notes stay undecided. ``true``/``false`` read as ``on``/``off``;
     ``model`` is a model name, turned into the setting it decides (the
-    classification family).
+    classification family, the segmentation architecture).
 
     Raises:
         KeyError: a task without a tour.

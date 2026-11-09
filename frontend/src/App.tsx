@@ -629,6 +629,7 @@ export default function App() {
           pipeline: [],
           queueSize: undefined,
           story: storySpecFor("segmentation", payload),
+          code: codeSettingsFor("segmentation", payload),
         },
         payload,
         { segmentation: true },

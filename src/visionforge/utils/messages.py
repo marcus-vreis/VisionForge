@@ -1049,6 +1049,130 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "pt": "MSE, RMSE, MAE e R² do teste. Um R² perto de 1 explica quase toda a variação do alvo; abaixo de 0, o modelo erra mais do que prever a média.",
         "en": "Test MSE, RMSE, MAE and R². An R² near 1 explains almost all of the target's variation; below 0, the model does worse than predicting the mean.",
     },
+    "code.segmentation.data.image": {
+        "pt": "Abre a imagem e roda o pipeline de filtros de pré-processamento, só nela: a máscara não passa por filtros.",
+        "en": "Opens the image and runs the preprocessing filter pipeline on it alone: the mask goes through no filter.",
+    },
+    "code.segmentation.data.mask": {
+        "pt": "A máscara é uma imagem de um canal em que o valor de cada pixel é o id da classe. Uma máscara colorida (RGB) é recusada: não há mapa de cor para id.",
+        "en": "The mask is a single-channel image where each pixel's value is its class id. A colour (RGB) mask is refused: there is no colour-to-id map.",
+    },
+    "code.segmentation.data.resize": {
+        "pt": "Imagem e máscara vão para o mesmo tamanho. A imagem usa interpolação bilinear; a máscara usa o vizinho mais próximo, para nenhum pixel virar a média de dois ids, que seria uma classe que não existe.",
+        "en": "Image and mask go to the same size. The image uses bilinear interpolation; the mask uses nearest neighbour, so no pixel becomes the mean of two ids, which would be a class that does not exist.",
+    },
+    "code.segmentation.data.joint": {
+        "pt": "Aumento de dados geométrico, só no treino e com augment ligado: o mesmo sorteio espelha ou gira a imagem e a máscara juntas, para cada pixel continuar com o seu rótulo. A borda criada pela rotação recebe ignore_index e fica fora da loss.",
+        "en": "Geometric augmentation, in training only and with augment on: the same draw flips or rotates image and mask together, so every pixel keeps its label. The border the rotation creates gets ignore_index and stays out of the loss.",
+    },
+    "code.segmentation.data.jitter": {
+        "pt": "Variação de cor (brilho, contraste, saturação) só na imagem: a cor não muda a classe de um pixel.",
+        "en": "Colour jitter (brightness, contrast, saturation) on the image only: colour does not change a pixel's class.",
+    },
+    "code.segmentation.data.tensor": {
+        "pt": "A imagem vira tensor normalizado [3, H, W]. A máscara vira um tensor de inteiros (long) [H, W] com um id de classe por pixel: é o rótulo de cada pixel.",
+        "en": "The image becomes a normalised [3, H, W] tensor. The mask becomes an integer (long) [H, W] tensor with one class id per pixel: it is every pixel's label.",
+    },
+    "code.segmentation.model.unet": {
+        "pt": "U-Net: a rede escrita neste projeto (a aba U-Net mostra o forward dela), com uma saída por classe em cada pixel.",
+        "en": "U-Net: the network written in this project (the U-Net tab shows its forward), with one output per class at every pixel.",
+    },
+    "code.segmentation.model.torchvision": {
+        "pt": "DeepLabV3, FCN ou LR-ASPP do torchvision: a cabeça é criada com num_classes saídas e só o backbone recebe pesos do ImageNet, se pré-treinado. Elas devolvem um dicionário; segmentation_logits tira dele o tensor da chave out.",
+        "en": "torchvision's DeepLabV3, FCN or LR-ASPP: the head is built with num_classes outputs and only the backbone gets ImageNet weights, when pre-trained. They return a dictionary; segmentation_logits takes the tensor under the out key.",
+    },
+    "code.segmentation.unet.encoder": {
+        "pt": "Codificador: cada nível dobra os canais e o pooling corta a resolução pela metade. A rede vê regiões cada vez maiores da imagem.",
+        "en": "Encoder: each level doubles the channels and pooling halves the resolution. The network sees ever larger regions of the image.",
+    },
+    "code.segmentation.unet.bottleneck": {
+        "pt": "O gargalo: a menor resolução e o maior número de canais, onde a rede resume o que há na imagem.",
+        "en": "The bottleneck: the lowest resolution and the most channels, where the network sums up what is in the image.",
+    },
+    "code.segmentation.unet.decoder": {
+        "pt": "Decodificador: cada passo volta ao tamanho do nível de cima e concatena o mapa guardado no codificador (a conexão de atalho). É isso que devolve as bordas finas que o pooling apagou.",
+        "en": "Decoder: each step goes back up to the size of the level above and concatenates the map kept by the encoder (the skip connection). That is what restores the fine edges pooling erased.",
+    },
+    "code.segmentation.unet.head": {
+        "pt": "Uma convolução 1×1 dá num_classes valores por pixel: os logits [lote, classes, H, W].",
+        "en": "A 1×1 convolution gives num_classes values per pixel: the logits [batch, classes, H, W].",
+    },
+    "code.segmentation.loss.dice": {
+        "pt": "Dice: mede a sobreposição entre a máscara prevista (probabilidades) e a verdadeira, por classe. Não depende de quantos pixels cada classe tem, o que ajuda quando o fundo domina a imagem.",
+        "en": "Dice: measures the overlap between the predicted (probabilities) and the true mask, per class. It does not depend on how many pixels each class has, which helps when the background fills most of the image.",
+    },
+    "code.segmentation.loss.combined": {
+        "pt": "Combinada: cross-entropy mais Dice. A cross-entropy dá gradiente estável pixel a pixel; o Dice puxa a sobreposição das regiões.",
+        "en": "Combined: cross-entropy plus Dice. Cross-entropy gives a steady per-pixel gradient; Dice pulls on region overlap.",
+    },
+    "code.segmentation.loss.cross_entropy": {
+        "pt": "Cross-entropy, o padrão: a classificação de cada pixel, como na classificação multiclasse. Pixels com ignore_index ficam fora.",
+        "en": "Cross-entropy, the default: each pixel is classified, as in multiclass classification. Pixels with ignore_index are left out.",
+    },
+    "code.segmentation.train.check_ids": {
+        "pt": "A segmentação passa check_mask_ids aqui: um id de máscara fora de [0, num_classes) é recusado na CPU com uma mensagem clara, antes de virar um erro obscuro na GPU.",
+        "en": "Segmentation passes check_mask_ids here: a mask id outside [0, num_classes) is refused on the CPU with a clear message, before it turns into an obscure GPU error.",
+    },
+    "code.segmentation.train.batch": {
+        "pt": "Um lote por vez: as imagens e as máscaras vão para o dispositivo (GPU ou CPU).",
+        "en": "One batch at a time: the images and masks move to the device (GPU or CPU).",
+    },
+    "code.segmentation.train.logits": {
+        "pt": "Forward. A segmentação passa segmentation_logits como outputs_transform: o mesmo tensor [lote, classes, H, W] sai da U-Net e dos modelos do torchvision.",
+        "en": "Forward. Segmentation passes segmentation_logits as outputs_transform: the same [batch, classes, H, W] tensor comes out of the U-Net and of the torchvision models.",
+    },
+    "code.segmentation.train.step": {
+        "pt": "A loss compara os logits com a máscara pixel a pixel; backward calcula o gradiente de cada peso e step mexe nos pesos.",
+        "en": "The loss compares the logits with the mask pixel by pixel; backward computes each weight's gradient and step moves the weights.",
+    },
+    "code.segmentation.validate.check_ids": {
+        "pt": "A mesma checagem de ids da máscara do treino, na validação.",
+        "en": "The same mask-id check as in training, for validation.",
+    },
+    "code.segmentation.validate.logits": {
+        "pt": "Os logits de cada pixel; a classe prevista é a de maior valor (argmax), calculada no acumulador de métricas.",
+        "en": "The logits of every pixel; the predicted class is the largest one (argmax), taken in the metric accumulator.",
+    },
+    "code.segmentation.validate.loss": {
+        "pt": "A val_loss usa o mesmo critério do treino.",
+        "en": "val_loss uses the same criterion as training.",
+    },
+    "code.segmentation.validate.best": {
+        "pt": "mIoU, Dice e acurácia de pixel da validação. A época com o maior mIoU de validação é a que fica salva em best_model.pth, não a de menor val_loss.",
+        "en": "Validation mIoU, Dice and pixel accuracy. The epoch with the highest validation mIoU is the one saved in best_model.pth, not the one with the lowest val_loss.",
+    },
+    "code.segmentation.test.once": {
+        "pt": "O teste roda uma vez, no fim, com os pesos do best_model.pth (o de maior mIoU de validação). São imagens que não influenciaram nenhuma escolha do treino.",
+        "en": "The test runs once, at the end, with the weights of best_model.pth (the highest validation mIoU). These images influenced no choice made during training.",
+    },
+    "code.segmentation.test.per_image": {
+        "pt": "Guarda uma matriz de confusão por imagem: delas saem os intervalos de confiança por bootstrap das métricas do teste.",
+        "en": "Keeps one confusion matrix per image: the bootstrap confidence intervals of the test metrics come from them.",
+    },
+    "code.segmentation.test.metrics": {
+        "pt": "mIoU, Dice e acurácia de pixel do teste, sobre todos os pixels das imagens de teste.",
+        "en": "Test mIoU, Dice and pixel accuracy, over every pixel of the test images.",
+    },
+    "code.segmentation.metrics.confusion": {
+        "pt": "A matriz de confusão conta pixels: linha é a classe verdadeira, coluna a prevista. A diagonal são os acertos; somando linha e coluna e tirando a diagonal sai a união de cada classe.",
+        "en": "The confusion matrix counts pixels: the row is the true class, the column the predicted one. The diagonal holds the hits; adding row and column and removing the diagonal gives each class's union.",
+    },
+    "code.segmentation.metrics.present": {
+        "pt": "Só entram na média as classes que aparecem na verdade ou na previsão: uma classe ausente não puxa a média para zero.",
+        "en": "Only classes that appear in the truth or in the prediction enter the mean: an absent class does not drag the mean to zero.",
+    },
+    "code.segmentation.metrics.iou": {
+        "pt": "IoU de cada classe: acertos divididos pela união (o que era a classe ou foi previsto como ela). O mIoU é a média entre as classes.",
+        "en": "Each class's IoU: hits divided by the union (what was the class or was predicted as it). mIoU is the mean over the classes.",
+    },
+    "code.segmentation.metrics.dice": {
+        "pt": "Dice de cada classe: o dobro dos acertos dividido pela soma dos pixels verdadeiros e previstos. Sobe junto com o IoU, mas pune menos os erros.",
+        "en": "Each class's Dice: twice the hits divided by the sum of true and predicted pixels. It rises with IoU but penalises errors less.",
+    },
+    "code.segmentation.metrics.pixel_acc": {
+        "pt": "Acurácia de pixel: a fração de pixels certos. Engana quando o fundo domina; por isso o mIoU é a métrica principal.",
+        "en": "Pixel accuracy: the fraction of correct pixels. It misleads when the background dominates; that is why mIoU is the main metric.",
+    },
     "mlflow.retry_unavailable": {
         "pt": "A exportação para MLflow está indisponível para esta execução ou perfil.",
         "en": "MLflow export is unavailable for this run or profile.",

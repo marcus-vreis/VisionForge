@@ -85,3 +85,17 @@ def test_an_unknown_task_is_404() -> None:
     response = TestClient(app).get("/api/code-tour/foo")
     assert response.status_code == 404
     assert response.json()["detail"]
+
+
+def test_the_segmentation_tour_marks_the_loss_and_is_listed() -> None:
+    client = TestClient(app)
+    response = client.get("/api/code-tour/segmentation?loss=dice&model=unet")
+    assert response.status_code == 200
+    sections = {s["id"]: s for s in response.json()}
+    loss = sections["loss"]
+    actives = {loss["lines"][n["first"]].strip(): n["active"] for n in loss["notes"]}
+    assert actives["return _DiceCriterion(self._ignore_index)"] is True
+    assert actives["return _CombinedLoss(self._ignore_index)"] is False
+    assert all(n["active"] is True for n in sections["unet"]["notes"])
+    tasks = [item["task"] for item in client.get("/api/code-tour").json()]
+    assert "segmentation" in tasks

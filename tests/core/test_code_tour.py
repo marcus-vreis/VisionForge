@@ -190,3 +190,51 @@ def test_every_tour_declares_its_settings() -> None:
             for note in section.notes:
                 for key, value in note.when:
                     assert value in TOUR_SETTINGS[task][key], (task, note.key)
+
+
+def test_the_segmentation_tour_resolves_every_note() -> None:
+    sections = code_tour("segmentation", {})
+    assert [s["id"] for s in sections] == [
+        "data",
+        "model",
+        "unet",
+        "loss",
+        "train",
+        "validate",
+        "test",
+        "metrics",
+    ]
+    for section in sections:
+        for note in section["notes"]:
+            assert 0 <= note["first"] <= note["last"] < len(section["lines"])
+            assert note["text"]
+
+
+def test_the_segmentation_loss_marks_the_criterion_of_this_run() -> None:
+    assert _loss_actives("segmentation", {"loss": "combined"}) == {
+        "return _DiceCriterion(self._ignore_index)": False,
+        "return _CombinedLoss(self._ignore_index)": True,
+        "return nn.CrossEntropyLoss(ignore_index=self._ignore_index)": False,
+    }
+
+
+@pytest.mark.parametrize(
+    ("name", "arch"),
+    [
+        ("unet", "unet"),
+        ("deeplabv3_resnet50", "torchvision"),
+        ("lraspp_mobilenet_v3_large", "torchvision"),
+        ("resnet18", None),
+    ],
+)
+def test_the_segmentation_model_name_picks_the_architecture(
+    name: str, arch: str | None
+) -> None:
+    expected = {"arch": arch} if arch else {}
+    assert tour_settings("segmentation", {"model": name}) == expected
+
+
+def test_a_torchvision_segmenter_leaves_the_unet_code_off_its_path() -> None:
+    sections = {s["id"]: s for s in code_tour("segmentation", {"arch": "torchvision"})}
+    assert [n["active"] for n in sections["model"]["notes"]] == [False, True]
+    assert all(n["active"] is False for n in sections["unet"]["notes"])

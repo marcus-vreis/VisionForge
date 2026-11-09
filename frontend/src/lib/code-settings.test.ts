@@ -36,3 +36,19 @@ describe("codeSettingsFor", () => {
     expect(codeSettingsFor("custom", { training: { loss: "mse" } })).toEqual({});
   });
 });
+
+describe("codeSettingsFor segmentation", () => {
+  it("reads the loss and the model the factory builds", () => {
+    expect(codeSettingsFor("segmentation", {
+      model: { name: "unet", num_classes: 3 },
+      training: { loss: "combined" },
+    })).toEqual({ loss: "combined", model: "unet" });
+  });
+
+  it("leaves the architecture undecided for a model of the researcher's own", () => {
+    expect(codeSettingsFor("segmentation", {
+      model: { name: "unet", custom_model: "my_net" },
+      training: { loss: "dice" },
+    })).toEqual({ loss: "dice" });
+  });
+});

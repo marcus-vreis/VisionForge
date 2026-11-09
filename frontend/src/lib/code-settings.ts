@@ -14,7 +14,18 @@ import type { CodeSettings } from "../api/client";
 export function codeSettingsFor(taskKey: string, payload: Record<string, unknown>): CodeSettings {
   if (taskKey === "classification") return classificationSettings(payload);
   if (taskKey === "regression") return lossSettings(payload);
+  if (taskKey === "segmentation") return { ...lossSettings(payload), ...builtModel(payload) };
   return {};
+}
+
+/** The model name the factory builds from; a model of the researcher's own
+ *  (`custom_model`) skips that code, so it decides nothing. */
+function builtModel(payload: Record<string, unknown>): CodeSettings {
+  const model = record(payload["model"]);
+  const custom = model["custom_model"];
+  if (typeof custom === "string" && custom) return {};
+  const name = model["name"];
+  return typeof name === "string" && name ? { model: name } : {};
 }
 
 function classificationSettings(payload: Record<string, unknown>): CodeSettings {
