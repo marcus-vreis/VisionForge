@@ -117,6 +117,22 @@ def live_client() -> Iterator[TestClient]:
 
 
 @pytest.fixture(autouse=True)
+def _testclient_host_is_this_server(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Let ``TestClient``'s default ``Host: testserver`` through the Host guard.
+
+    The guard (``gui/security.py``) answers only to loopback names unless
+    ``start_server`` installs another policy; ``testserver`` is what every client
+    here sends. Only the fallback policy changes: ``test_host_origin_guard`` sets
+    its own on the app and checks the real loopback-only default.
+    """
+    from visionforge.gui import security
+
+    monkeypatch.setattr(
+        security, "DEFAULT_POLICY", security.HostPolicy(extra=frozenset({"testserver"}))
+    )
+
+
+@pytest.fixture(autouse=True)
 def _drop_queue_leftovers() -> Iterator[None]:
     """Clear the shared run queue after every test.
 

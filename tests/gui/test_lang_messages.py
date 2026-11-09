@@ -228,10 +228,25 @@ class TestRevealRefusals:
         (run_dir / "run.json").write_text("{}", encoding="utf-8")
         return run_dir.name
 
-    def test_a_page_from_another_site(self, client: TestClient, tmp_path: Path) -> None:
+    def test_a_page_from_another_site(
+        self, client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The route's own refusal, for an origin the Host/Origin guard lets by.
+
+        A foreign site is refused by the guard before any route runs; what still
+        reaches this route is a lab server's own page (``--host 0.0.0.0``), whose
+        origin is the machine's name: not loopback, so not "this machine".
+        """
+        from visionforge.gui import security
+
+        monkeypatch.setattr(
+            security,
+            "DEFAULT_POLICY",
+            security.HostPolicy(extra=frozenset({"testserver", "labbox"})),
+        )
         run_id = self._run(tmp_path)
         url = f"/api/runs/{run_id}/reveal"
-        evil = {"Origin": "https://evil.example"}
+        evil = {"Origin": "http://labbox:8000"}
 
         en = client.post(url, headers={**evil, **EN})
         pt = client.post(url, headers=evil)
