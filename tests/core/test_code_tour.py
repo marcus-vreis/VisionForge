@@ -5,11 +5,15 @@ from __future__ import annotations
 import pytest
 
 from visionforge.core.code_tour import (
+    TOUR_SETTINGS,
     TOURS,
     Note,
     code_tour,
+    detection_arch,
     model_family,
     note_span,
+    tour_settings,
+    unavailable_reason,
 )
 from visionforge.utils.messages import message
 
@@ -123,3 +127,211 @@ def test_note_span_counts_occurrences_and_ends_before_the_end_text() -> None:
 def test_note_span_refuses_a_note_that_lost_its_line(note: Note) -> None:
     with pytest.raises(ValueError):
         note_span(note, _LINES)
+
+
+def test_the_regression_tour_has_its_sections_and_every_note_resolves() -> None:
+    sections = code_tour("regression", {})
+    assert [s["id"] for s in sections] == [
+        "data",
+        "model",
+        "loss",
+        "train",
+        "validate",
+        "test",
+    ]
+    for section in sections:
+        for note in section["notes"]:
+            assert 0 <= note["first"] <= note["last"] < len(section["lines"])
+            assert note["text"]
+
+
+def test_the_regression_tour_is_the_code_the_regression_run_calls() -> None:
+    from visionforge.core.regression_trainer import RegressionTrainer
+    from visionforge.core.training_loop import train_epoch
+
+    sections = {s["id"]: s for s in code_tour("regression", {})}
+    assert sections["loss"]["name"] == "RegressionTrainer._build_criterion"
+    assert sections["train"]["name"] == "train_epoch"
+    assert sections["train"]["first_line"] == train_epoch.__code__.co_firstlineno
+    assert (
+        sections["validate"]["first_line"]
+        == RegressionTrainer._eval_epoch.__code__.co_firstlineno
+    )
+    assert sections["model"]["file"] == "visionforge/models/regression_factory.py"
+
+
+def _loss_actives(task: str, settings: dict[str, str]) -> dict[str, bool | None]:
+    loss = next(s for s in code_tour(task, settings) if s["id"] == "loss")
+    return {loss["lines"][n["first"]].strip(): n["active"] for n in loss["notes"]}
+
+
+def test_the_regression_loss_marks_the_criterion_of_this_run() -> None:
+    assert _loss_actives("regression", {"loss": "huber"}) == {
+        "return nn.L1Loss()": False,
+        "return nn.HuberLoss(delta=cfg.huber_delta)": True,
+        "return nn.MSELoss()": False,
+    }
+    assert set(_loss_actives("regression", {"loss": "quantile"}).values()) == {None}
+
+
+def test_tour_settings_keep_only_what_the_task_takes() -> None:
+    query = {"kind": "binary", "amp": "false", "model": "resnet18", "loss": "mae"}
+    assert tour_settings("classification", query) == {
+        "kind": "binary",
+        "amp": "off",
+        "family": "resnet",
+    }
+    assert tour_settings("regression", query) == {"loss": "mae"}
+    assert tour_settings("regression", {"loss": "quantile"}) == {}
+
+
+def test_every_tour_declares_its_settings() -> None:
+    assert set(TOUR_SETTINGS) == set(TOURS)
+    for task, sections in TOURS.items():
+        for section in sections:
+            for note in section.notes:
+                for key, value in note.when:
+                    assert value in TOUR_SETTINGS[task][key], (task, note.key)
+
+
+def test_the_segmentation_tour_resolves_every_note() -> None:
+    sections = code_tour("segmentation", {})
+    assert [s["id"] for s in sections] == [
+        "data",
+        "model",
+        "unet",
+        "loss",
+        "train",
+        "validate",
+        "test",
+        "metrics",
+    ]
+    for section in sections:
+        for note in section["notes"]:
+            assert 0 <= note["first"] <= note["last"] < len(section["lines"])
+            assert note["text"]
+
+
+def test_the_segmentation_loss_marks_the_criterion_of_this_run() -> None:
+    assert _loss_actives("segmentation", {"loss": "combined"}) == {
+        "return _DiceCriterion(self._ignore_index)": False,
+        "return _CombinedLoss(self._ignore_index)": True,
+        "return nn.CrossEntropyLoss(ignore_index=self._ignore_index)": False,
+    }
+
+
+@pytest.mark.parametrize(
+    ("name", "arch"),
+    [
+        ("unet", "unet"),
+        ("deeplabv3_resnet50", "torchvision"),
+        ("lraspp_mobilenet_v3_large", "torchvision"),
+        ("resnet18", None),
+    ],
+)
+def test_the_segmentation_model_name_picks_the_architecture(
+    name: str, arch: str | None
+) -> None:
+    expected = {"arch": arch} if arch else {}
+    assert tour_settings("segmentation", {"model": name}) == expected
+
+
+def test_a_torchvision_segmenter_leaves_the_unet_code_off_its_path() -> None:
+    sections = {s["id"]: s for s in code_tour("segmentation", {"arch": "torchvision"})}
+    assert [n["active"] for n in sections["model"]["notes"]] == [False, True]
+    assert all(n["active"] is False for n in sections["unet"]["notes"])
+
+
+def test_the_anomaly_tour_resolves_every_note() -> None:
+    sections = code_tour("anomaly", {})
+    assert [s["id"] for s in sections] == [
+        "data",
+        "model",
+        "train",
+        "coreset",
+        "score",
+        "patch_score",
+        "threshold",
+        "test",
+        "metrics",
+    ]
+    for section in sections:
+        for note in section["notes"]:
+            assert 0 <= note["first"] <= note["last"] < len(section["lines"])
+            assert note["text"]
+
+
+def _method_actives(method: str) -> dict[str, set[bool | None]]:
+    return {
+        s["id"]: {n["active"] for n in s["notes"]}
+        for s in code_tour("anomaly", {"method": method})
+    }
+
+
+def test_patchcore_marks_its_own_code_and_leaves_the_autoencoder_off() -> None:
+    actives = _method_actives("patchcore")
+    assert actives["coreset"] == {True}
+    assert actives["patch_score"] == {True}
+    assert actives["train"] == {False}
+    assert actives["model"] == {True, False}
+    assert actives["threshold"] == {None}
+
+
+def test_the_autoencoder_marks_its_own_code_and_leaves_patchcore_off() -> None:
+    actives = _method_actives("autoencoder")
+    assert actives["train"] == {True}
+    assert actives["coreset"] == {False}
+    assert actives["patch_score"] == {False}
+    score = next(
+        s for s in code_tour("anomaly", {"method": "autoencoder"}) if s["id"] == "score"
+    )
+    lines = score["lines"]
+    by_line = {lines[n["first"]].strip(): n["active"] for n in score["notes"]}
+    assert by_line == {
+        "if isinstance(model, ConvAutoencoder):": True,
+        "if isinstance(model, PatchCore):": False,
+    }
+
+
+def test_the_torchvision_detection_tour_resolves_every_note() -> None:
+    sections = code_tour("detection", {"backend": "torchvision"})
+    assert [s["id"] for s in sections][:4] == ["data", "labels", "collate", "model"]
+    assert {"train", "validate", "map", "metric"} <= {s["id"] for s in sections}
+    for section in sections:
+        for note in section["notes"]:
+            assert 0 <= note["first"] <= note["last"] < len(section["lines"])
+            assert note["text"]
+
+
+def test_the_detector_of_the_run_is_the_active_builder() -> None:
+    settings = tour_settings(
+        "detection", {"backend": "torchvision", "model": "ssd300_vgg16"}
+    )
+    assert settings == {"backend": "torchvision", "arch": "ssd"}
+    sections = {s["id"]: s for s in code_tour("detection", settings)}
+    assert {n["active"] for n in sections["ssd"]["notes"]} == {True}
+    assert {n["active"] for n in sections["faster_rcnn"]["notes"]} == {False}
+    assert {n["active"] for n in sections["retinanet"]["notes"]} == {False}
+    assert [n["active"] for n in sections["model"]["notes"]] == [False, True, False]
+
+
+@pytest.mark.parametrize(
+    ("name", "arch"),
+    [
+        ("fasterrcnn_resnet50_fpn", "faster_rcnn"),
+        ("fasterrcnn_mobilenet_v3_large_fpn", "faster_rcnn"),
+        ("ssdlite320_mobilenet_v3_large", "ssd"),
+        ("retinanet_resnet50_fpn", "retinanet"),
+        ("yolo11n", None),
+    ],
+)
+def test_detection_arch(name: str, arch: str | None) -> None:
+    assert detection_arch(name) == arch
+
+
+def test_only_the_torchvision_backend_has_a_detection_tour() -> None:
+    assert unavailable_reason("detection", {"backend": "torchvision"}) is None
+    assert unavailable_reason("detection", {"backend": "ultralytics"})
+    # Ultralytics is the default backend, so an undecided one says why too.
+    assert unavailable_reason("detection", {})
+    assert unavailable_reason("regression", {}) is None

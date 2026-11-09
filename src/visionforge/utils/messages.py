@@ -989,6 +989,398 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "pt": "As métricas comparam o previsto com o verdadeiro. Na multiclasse a média é macro: cada classe pesa igual, mesmo as que têm poucas imagens.",
         "en": "The metrics compare predicted and true labels. For multiclass the average is macro: every class weighs the same, even those with few images.",
     },
+    "code.regression.data.image": {
+        "pt": "Abre a imagem da linha do CSV e aplica as mesmas transformações da classificação (_build_transforms): mesmo tamanho, aumento de dados só no treino, ToTensor e Normalize.",
+        "en": "Opens the image of the CSV row and applies the same transforms as classification (_build_transforms): same size, augmentation in training only, ToTensor and Normalize.",
+    },
+    "code.regression.data.target": {
+        "pt": "O alvo não é uma classe: é o número (ou os números) das colunas de alvo do CSV, como float32. É o valor que a rede deve aprender a prever.",
+        "en": "The target is not a class: it is the number (or numbers) in the CSV's target columns, as float32. It is the value the network must learn to predict.",
+    },
+    "code.regression.model.custom": {
+        "pt": "Um modelo próprio registrado ou um modelo do timm, quando escolhidos, entram por estes ramos já com uma saída por alvo.",
+        "en": "A registered custom model or a timm model, when chosen, comes in through these branches already with one output per target.",
+    },
+    "code.regression.model.backbone": {
+        "pt": "A mesma rede da classificação (torchvision), com pesos do ImageNet se pré-treinada.",
+        "en": "The same network as in classification (torchvision), with ImageNet weights when pre-trained.",
+    },
+    "code.regression.model.head": {
+        "pt": "A última camada vira uma linear com uma saída por coluna de alvo, sem ativação: o número que sai é a previsão.",
+        "en": "The last layer becomes a linear one with one output per target column, without activation: the number that comes out is the prediction.",
+    },
+    "code.regression.loss.mae": {
+        "pt": "MAE (L1Loss): a média do erro absoluto. Todo erro pesa na proporção do seu tamanho, e valores fora da curva puxam menos.",
+        "en": "MAE (L1Loss): the mean absolute error. Every error weighs in proportion to its size, and outliers pull less.",
+    },
+    "code.regression.loss.huber": {
+        "pt": "Huber: quadrática para erros menores que delta e linear acima dele. Fica entre o MSE e o MAE.",
+        "en": "Huber: quadratic for errors below delta and linear above it. It sits between MSE and MAE.",
+    },
+    "code.regression.loss.mse": {
+        "pt": "MSE (MSELoss), o padrão: a média do erro ao quadrado. Erros grandes pesam muito mais que os pequenos.",
+        "en": "MSE (MSELoss), the default: the mean squared error. Large errors weigh much more than small ones.",
+    },
+    "code.regression.train.hooks": {
+        "pt": "Este laço é compartilhado com outras tarefas. A regressão não passa validate_targets: esta checagem é pulada.",
+        "en": "This loop is shared with other tasks. Regression passes no validate_targets: this check is skipped.",
+    },
+    "code.regression.train.batch": {
+        "pt": "Um lote por vez: as imagens e os alvos vão para o dispositivo (GPU ou CPU). Uma época é uma volta por todos os lotes do treino.",
+        "en": "One batch at a time: the images and targets move to the device (GPU or CPU). An epoch is one pass over every training batch.",
+    },
+    "code.regression.train.step": {
+        "pt": "O passo de aprendizado: forward (a rede prevê os números), loss (o erro em relação ao alvo), backward (o gradiente de cada peso) e step (o otimizador mexe nos pesos). Na regressão não há outputs_transform: a saída já é a previsão.",
+        "en": "The learning step: forward (the network predicts the numbers), loss (the error against the target), backward (each weight's gradient) and step (the optimiser moves the weights). Regression has no outputs_transform: the output already is the prediction.",
+    },
+    "code.regression.train.mean": {
+        "pt": "A train_loss da época é a média da loss dos lotes.",
+        "en": "The epoch's train_loss is the mean loss over the batches.",
+    },
+    "code.regression.validate.metrics": {
+        "pt": "Acumula o erro de cada amostra para calcular MSE, RMSE, MAE e R² da validação no fim da época.",
+        "en": "Accumulates each sample's error to compute the validation MSE, RMSE, MAE and R² at the end of the epoch.",
+    },
+    "code.regression.test.collect": {
+        "pt": "Guarda cada alvo e cada previsão do teste: deles saem as métricas, o gráfico de previsto contra real e os intervalos de confiança.",
+        "en": "Keeps every test target and prediction: the metrics, the predicted-versus-true plot and the confidence intervals come from them.",
+    },
+    "code.regression.test.metrics": {
+        "pt": "MSE, RMSE, MAE e R² do teste. Um R² perto de 1 explica quase toda a variação do alvo; abaixo de 0, o modelo erra mais do que prever a média.",
+        "en": "Test MSE, RMSE, MAE and R². An R² near 1 explains almost all of the target's variation; below 0, the model does worse than predicting the mean.",
+    },
+    "code.segmentation.data.image": {
+        "pt": "Abre a imagem e roda o pipeline de filtros de pré-processamento, só nela: a máscara não passa por filtros.",
+        "en": "Opens the image and runs the preprocessing filter pipeline on it alone: the mask goes through no filter.",
+    },
+    "code.segmentation.data.mask": {
+        "pt": "A máscara é uma imagem de um canal em que o valor de cada pixel é o id da classe. Uma máscara colorida (RGB) é recusada: não há mapa de cor para id.",
+        "en": "The mask is a single-channel image where each pixel's value is its class id. A colour (RGB) mask is refused: there is no colour-to-id map.",
+    },
+    "code.segmentation.data.resize": {
+        "pt": "Imagem e máscara vão para o mesmo tamanho. A imagem usa interpolação bilinear; a máscara usa o vizinho mais próximo, para nenhum pixel virar a média de dois ids, que seria uma classe que não existe.",
+        "en": "Image and mask go to the same size. The image uses bilinear interpolation; the mask uses nearest neighbour, so no pixel becomes the mean of two ids, which would be a class that does not exist.",
+    },
+    "code.segmentation.data.joint": {
+        "pt": "Aumento de dados geométrico, só no treino e com augment ligado: o mesmo sorteio espelha ou gira a imagem e a máscara juntas, para cada pixel continuar com o seu rótulo. A borda criada pela rotação recebe ignore_index e fica fora da loss.",
+        "en": "Geometric augmentation, in training only and with augment on: the same draw flips or rotates image and mask together, so every pixel keeps its label. The border the rotation creates gets ignore_index and stays out of the loss.",
+    },
+    "code.segmentation.data.jitter": {
+        "pt": "Variação de cor (brilho, contraste, saturação) só na imagem: a cor não muda a classe de um pixel.",
+        "en": "Colour jitter (brightness, contrast, saturation) on the image only: colour does not change a pixel's class.",
+    },
+    "code.segmentation.data.tensor": {
+        "pt": "A imagem vira tensor normalizado [3, H, W]. A máscara vira um tensor de inteiros (long) [H, W] com um id de classe por pixel: é o rótulo de cada pixel.",
+        "en": "The image becomes a normalised [3, H, W] tensor. The mask becomes an integer (long) [H, W] tensor with one class id per pixel: it is every pixel's label.",
+    },
+    "code.segmentation.model.unet": {
+        "pt": "U-Net: a rede escrita neste projeto (a aba U-Net mostra o forward dela), com uma saída por classe em cada pixel.",
+        "en": "U-Net: the network written in this project (the U-Net tab shows its forward), with one output per class at every pixel.",
+    },
+    "code.segmentation.model.torchvision": {
+        "pt": "DeepLabV3, FCN ou LR-ASPP do torchvision: a cabeça é criada com num_classes saídas e só o backbone recebe pesos do ImageNet, se pré-treinado. Elas devolvem um dicionário; segmentation_logits tira dele o tensor da chave out.",
+        "en": "torchvision's DeepLabV3, FCN or LR-ASPP: the head is built with num_classes outputs and only the backbone gets ImageNet weights, when pre-trained. They return a dictionary; segmentation_logits takes the tensor under the out key.",
+    },
+    "code.segmentation.unet.encoder": {
+        "pt": "Codificador: cada nível dobra os canais e o pooling corta a resolução pela metade. A rede vê regiões cada vez maiores da imagem.",
+        "en": "Encoder: each level doubles the channels and pooling halves the resolution. The network sees ever larger regions of the image.",
+    },
+    "code.segmentation.unet.bottleneck": {
+        "pt": "O gargalo: a menor resolução e o maior número de canais, onde a rede resume o que há na imagem.",
+        "en": "The bottleneck: the lowest resolution and the most channels, where the network sums up what is in the image.",
+    },
+    "code.segmentation.unet.decoder": {
+        "pt": "Decodificador: cada passo volta ao tamanho do nível de cima e concatena o mapa guardado no codificador (a conexão de atalho). É isso que devolve as bordas finas que o pooling apagou.",
+        "en": "Decoder: each step goes back up to the size of the level above and concatenates the map kept by the encoder (the skip connection). That is what restores the fine edges pooling erased.",
+    },
+    "code.segmentation.unet.head": {
+        "pt": "Uma convolução 1×1 dá num_classes valores por pixel: os logits [lote, classes, H, W].",
+        "en": "A 1×1 convolution gives num_classes values per pixel: the logits [batch, classes, H, W].",
+    },
+    "code.segmentation.loss.dice": {
+        "pt": "Dice: mede a sobreposição entre a máscara prevista (probabilidades) e a verdadeira, por classe. Não depende de quantos pixels cada classe tem, o que ajuda quando o fundo domina a imagem.",
+        "en": "Dice: measures the overlap between the predicted (probabilities) and the true mask, per class. It does not depend on how many pixels each class has, which helps when the background fills most of the image.",
+    },
+    "code.segmentation.loss.combined": {
+        "pt": "Combinada: cross-entropy mais Dice. A cross-entropy dá gradiente estável pixel a pixel; o Dice puxa a sobreposição das regiões.",
+        "en": "Combined: cross-entropy plus Dice. Cross-entropy gives a steady per-pixel gradient; Dice pulls on region overlap.",
+    },
+    "code.segmentation.loss.cross_entropy": {
+        "pt": "Cross-entropy, o padrão: a classificação de cada pixel, como na classificação multiclasse. Pixels com ignore_index ficam fora.",
+        "en": "Cross-entropy, the default: each pixel is classified, as in multiclass classification. Pixels with ignore_index are left out.",
+    },
+    "code.segmentation.train.check_ids": {
+        "pt": "A segmentação passa check_mask_ids aqui: um id de máscara fora de [0, num_classes) é recusado na CPU com uma mensagem clara, antes de virar um erro obscuro na GPU.",
+        "en": "Segmentation passes check_mask_ids here: a mask id outside [0, num_classes) is refused on the CPU with a clear message, before it turns into an obscure GPU error.",
+    },
+    "code.segmentation.train.batch": {
+        "pt": "Um lote por vez: as imagens e as máscaras vão para o dispositivo (GPU ou CPU).",
+        "en": "One batch at a time: the images and masks move to the device (GPU or CPU).",
+    },
+    "code.segmentation.train.logits": {
+        "pt": "Forward. A segmentação passa segmentation_logits como outputs_transform: o mesmo tensor [lote, classes, H, W] sai da U-Net e dos modelos do torchvision.",
+        "en": "Forward. Segmentation passes segmentation_logits as outputs_transform: the same [batch, classes, H, W] tensor comes out of the U-Net and of the torchvision models.",
+    },
+    "code.segmentation.train.step": {
+        "pt": "A loss compara os logits com a máscara pixel a pixel; backward calcula o gradiente de cada peso e step mexe nos pesos.",
+        "en": "The loss compares the logits with the mask pixel by pixel; backward computes each weight's gradient and step moves the weights.",
+    },
+    "code.segmentation.validate.check_ids": {
+        "pt": "A mesma checagem de ids da máscara do treino, na validação.",
+        "en": "The same mask-id check as in training, for validation.",
+    },
+    "code.segmentation.validate.logits": {
+        "pt": "Os logits de cada pixel; a classe prevista é a de maior valor (argmax), calculada no acumulador de métricas.",
+        "en": "The logits of every pixel; the predicted class is the largest one (argmax), taken in the metric accumulator.",
+    },
+    "code.segmentation.validate.loss": {
+        "pt": "A val_loss usa o mesmo critério do treino.",
+        "en": "val_loss uses the same criterion as training.",
+    },
+    "code.segmentation.validate.best": {
+        "pt": "mIoU, Dice e acurácia de pixel da validação. A época com o maior mIoU de validação é a que fica salva em best_model.pth, não a de menor val_loss.",
+        "en": "Validation mIoU, Dice and pixel accuracy. The epoch with the highest validation mIoU is the one saved in best_model.pth, not the one with the lowest val_loss.",
+    },
+    "code.segmentation.test.once": {
+        "pt": "O teste roda uma vez, no fim, com os pesos do best_model.pth (o de maior mIoU de validação). São imagens que não influenciaram nenhuma escolha do treino.",
+        "en": "The test runs once, at the end, with the weights of best_model.pth (the highest validation mIoU). These images influenced no choice made during training.",
+    },
+    "code.segmentation.test.per_image": {
+        "pt": "Guarda uma matriz de confusão por imagem: delas saem os intervalos de confiança por bootstrap das métricas do teste.",
+        "en": "Keeps one confusion matrix per image: the bootstrap confidence intervals of the test metrics come from them.",
+    },
+    "code.segmentation.test.metrics": {
+        "pt": "mIoU, Dice e acurácia de pixel do teste, sobre todos os pixels das imagens de teste.",
+        "en": "Test mIoU, Dice and pixel accuracy, over every pixel of the test images.",
+    },
+    "code.segmentation.metrics.confusion": {
+        "pt": "A matriz de confusão conta pixels: linha é a classe verdadeira, coluna a prevista. A diagonal são os acertos; somando linha e coluna e tirando a diagonal sai a união de cada classe.",
+        "en": "The confusion matrix counts pixels: the row is the true class, the column the predicted one. The diagonal holds the hits; adding row and column and removing the diagonal gives each class's union.",
+    },
+    "code.segmentation.metrics.present": {
+        "pt": "Só entram na média as classes que aparecem na verdade ou na previsão: uma classe ausente não puxa a média para zero.",
+        "en": "Only classes that appear in the truth or in the prediction enter the mean: an absent class does not drag the mean to zero.",
+    },
+    "code.segmentation.metrics.iou": {
+        "pt": "IoU de cada classe: acertos divididos pela união (o que era a classe ou foi previsto como ela). O mIoU é a média entre as classes.",
+        "en": "Each class's IoU: hits divided by the union (what was the class or was predicted as it). mIoU is the mean over the classes.",
+    },
+    "code.segmentation.metrics.dice": {
+        "pt": "Dice de cada classe: o dobro dos acertos dividido pela soma dos pixels verdadeiros e previstos. Sobe junto com o IoU, mas pune menos os erros.",
+        "en": "Each class's Dice: twice the hits divided by the sum of true and predicted pixels. It rises with IoU but penalises errors less.",
+    },
+    "code.segmentation.metrics.pixel_acc": {
+        "pt": "Acurácia de pixel: a fração de pixels certos. Engana quando o fundo domina; por isso o mIoU é a métrica principal.",
+        "en": "Pixel accuracy: the fraction of correct pixels. It misleads when the background dominates; that is why mIoU is the main metric.",
+    },
+    "code.anomaly.data.normal_only": {
+        "pt": "O treino só tem imagens normais (rótulo 0). O modelo aprende como é o normal; não vê nenhum defeito antes do teste.",
+        "en": "Training holds normal images only (label 0). The model learns what normal looks like; it sees no defect before the test.",
+    },
+    "code.anomaly.data.test_labels": {
+        "pt": "No teste, a pasta das normais tem rótulo 0 e qualquer outra pasta (cada tipo de defeito) tem rótulo 1.",
+        "en": "In the test, the normal folder gets label 0 and every other folder (each kind of defect) gets label 1.",
+    },
+    "code.anomaly.data.train": {
+        "pt": "As imagens de treino passam pelas mesmas transformações da classificação (_build_transforms), com aumento de dados se ligado.",
+        "en": "Training images go through the same transforms as classification (_build_transforms), with augmentation when it is on.",
+    },
+    "code.anomaly.data.calibration": {
+        "pt": "As mesmas normais do treino, sem aumento de dados: é sobre elas que o limiar é calibrado, porque o modelo nunca é aplicado a cópias espelhadas ou giradas.",
+        "en": "The same normals as training, without augmentation: the threshold is calibrated on them, because the model is never applied to flipped or rotated copies.",
+    },
+    "code.anomaly.model.autoencoder": {
+        "pt": "Autoencoder convolucional: comprime a imagem num código pequeno (latent_dim) e tenta reconstruí-la. Treinado só com normais, ele reconstrói mal o que nunca viu.",
+        "en": "Convolutional autoencoder: it squeezes the image into a small code (latent_dim) and tries to rebuild it. Trained on normals only, it rebuilds poorly what it never saw.",
+    },
+    "code.anomaly.model.patchcore": {
+        "pt": "PatchCore: um backbone (com pesos do ImageNet, se pretrained) que não é treinado aqui, mais um banco de memória de pedaços (patches) das imagens normais. coreset_ratio diz quanto do banco fica guardado.",
+        "en": "PatchCore: a backbone (with ImageNet weights, when pretrained) that is not trained here, plus a memory bank of patches from the normal images. coreset_ratio says how much of the bank is kept.",
+    },
+    "code.anomaly.train.batch": {
+        "pt": "Um lote de normais por vez. O rótulo é descartado (o _): todas são normais e o alvo é a própria imagem.",
+        "en": "One batch of normals at a time. The label is dropped (the _): they are all normal and the target is the image itself.",
+    },
+    "code.anomaly.train.reconstruct": {
+        "pt": "A rede reconstrói a imagem e a loss (MSE) compara a reconstrução com a entrada, pixel a pixel. Não há rótulo: a imagem é o seu próprio alvo.",
+        "en": "The network rebuilds the image and the loss (MSE) compares the rebuild with the input, pixel by pixel. There is no label: the image is its own target.",
+    },
+    "code.anomaly.train.step": {
+        "pt": "backward calcula o gradiente de cada peso e step mexe nos pesos para reconstruir melhor.",
+        "en": "backward computes each weight's gradient and step moves the weights to rebuild better.",
+    },
+    "code.anomaly.train.best": {
+        "pt": "A loss média da época. O checkpoint salvo é o da época com a menor loss de reconstrução no treino; a AUROC de teste mostrada a cada época é só acompanhamento e não escolhe o checkpoint.",
+        "en": "The epoch's mean loss. The checkpoint kept is the epoch with the lowest training reconstruction loss; the test AUROC shown each epoch is monitoring only and does not pick the checkpoint.",
+    },
+    "code.anomaly.coreset.small": {
+        "pt": "O PatchCore não tem épocas nem gradiente: o seu treino é uma passada pelas normais extraindo patches das camadas 2 e 3 do backbone. Se o banco pedido couber inteiro, todos os patches ficam.",
+        "en": "PatchCore has no epochs and no gradient: its training is one pass over the normals, extracting patches from layers 2 and 3 of the backbone. When the requested bank holds them all, every patch is kept.",
+    },
+    "code.anomaly.coreset.start": {
+        "pt": "Coreset guloso (k-center): começa pelo primeiro patch e guarda, para cada patch, a distância até o mais próximo já escolhido.",
+        "en": "Greedy coreset (k-center): it starts with the first patch and keeps, for every patch, the distance to the nearest one already picked.",
+    },
+    "code.anomaly.coreset.farthest": {
+        "pt": "A cada passo escolhe o patch mais distante de tudo o que já foi escolhido e atualiza as distâncias. Assim o banco cobre a variedade das normais com uma fração dos patches.",
+        "en": "Each step picks the patch farthest from everything already picked and updates the distances. That way the bank covers the variety of the normals with a fraction of the patches.",
+    },
+    "code.anomaly.coreset.bank": {
+        "pt": "Os patches escolhidos são o banco de memória: é ele que o checkpoint guarda.",
+        "en": "The picked patches are the memory bank: it is what the checkpoint stores.",
+    },
+    "code.anomaly.score.autoencoder": {
+        "pt": "Autoencoder: a nota de anomalia de cada imagem é o erro médio de reconstrução. Quanto pior a reconstrução, mais anômala a imagem.",
+        "en": "Autoencoder: each image's anomaly score is its mean reconstruction error. The worse the rebuild, the more anomalous the image.",
+    },
+    "code.anomaly.score.patchcore": {
+        "pt": "PatchCore: a nota vem de PatchCore.score (aba seguinte), a distância dos patches da imagem até o banco de normais.",
+        "en": "PatchCore: the score comes from PatchCore.score (next tab), the distance from the image's patches to the bank of normals.",
+    },
+    "code.anomaly.patch_score.features": {
+        "pt": "Extrai os patches da imagem com o mesmo backbone usado para montar o banco.",
+        "en": "Extracts the image's patches with the same backbone used to build the bank.",
+    },
+    "code.anomaly.patch_score.nearest": {
+        "pt": "Para cada patch, a distância até o vizinho mais próximo no banco de normais. Um patch parecido com algum normal fica perto; um defeito fica longe de todos.",
+        "en": "For every patch, the distance to its nearest neighbour in the bank of normals. A patch like some normal one sits close; a defect sits far from all of them.",
+    },
+    "code.anomaly.patch_score.image": {
+        "pt": "A nota da imagem é a do seu patch mais estranho (o máximo): basta um pedaço defeituoso para a imagem ser suspeita.",
+        "en": "The image's score is that of its strangest patch (the maximum): one defective piece is enough to make the image suspect.",
+    },
+    "code.anomaly.threshold.percentile": {
+        "pt": "O limiar de decisão é um percentil (threshold_percentile, 95 por padrão) das notas das imagens normais: acima dele, a imagem é anômala. Com 95, cerca de 5% das normais de calibração ficariam acima do limiar.",
+        "en": "The decision threshold is a percentile (threshold_percentile, 95 by default) of the normal images' scores: above it, the image is anomalous. With 95, about 5% of the calibration normals would sit above the threshold.",
+    },
+    "code.anomaly.test.once": {
+        "pt": "O teste final roda uma vez, no fim, com o checkpoint salvo (o banco do PatchCore ou o autoencoder de menor loss de treino).",
+        "en": "The final test runs once, at the end, with the saved checkpoint (the PatchCore bank or the autoencoder with the lowest training loss).",
+    },
+    "code.anomaly.test.calibration": {
+        "pt": "As notas das normais de treino, sem aumento de dados: delas sai o limiar.",
+        "en": "The scores of the training normals, without augmentation: the threshold comes from them.",
+    },
+    "code.anomaly.test.scores": {
+        "pt": "As notas e os rótulos das imagens de teste, normais e com defeito.",
+        "en": "The scores and labels of the test images, normal and defective.",
+    },
+    "code.anomaly.metrics.auroc": {
+        "pt": "AUROC: a chance de uma imagem com defeito ter nota maior que uma normal. Não depende do limiar; 0,5 é sorteio e 1 separa tudo.",
+        "en": "AUROC: the chance that a defective image scores higher than a normal one. It does not depend on the threshold; 0.5 is a coin flip and 1 separates everything.",
+    },
+    "code.anomaly.metrics.threshold": {
+        "pt": "O limiar calibrado nas normais de treino, sem olhar nenhuma imagem de teste.",
+        "en": "The threshold calibrated on the training normals, without looking at any test image.",
+    },
+    "code.anomaly.metrics.f1": {
+        "pt": "Com o limiar, cada imagem de teste vira normal ou anômala, e o F1 mede esse acerto na classe anômala. Ao contrário da AUROC, ele depende do limiar escolhido.",
+        "en": "With the threshold, every test image becomes normal or anomalous, and F1 measures that call on the anomalous class. Unlike AUROC, it depends on the chosen threshold.",
+    },
+    "code.detection.only_torchvision": {
+        "pt": "A detecção com o backend Ultralytics treina dentro da biblioteca Ultralytics, não no código do VisionForge, por isso não há código comentado para ela. Escolha o backend torchvision (Faster R-CNN, SSD ou RetinaNet) para ver o código real do treino.",
+        "en": "Detection with the Ultralytics backend trains inside the Ultralytics library, not in VisionForge's code, so there is no annotated code for it. Pick the torchvision backend (Faster R-CNN, SSD or RetinaNet) to see the real training code.",
+    },
+    "code.detection.data.tensor": {
+        "pt": "A imagem vira tensor no tamanho original, sem redimensionar aqui: os detectores do torchvision redimensionam e normalizam por dentro.",
+        "en": "The image becomes a tensor at its original size, without resizing here: torchvision detectors resize and normalise internally.",
+    },
+    "code.detection.data.target": {
+        "pt": "O alvo de cada imagem é um dicionário: as caixas (boxes) em pixels no formato x1, y1, x2, y2 e o rótulo de cada caixa. Uma imagem pode ter qualquer número de caixas, inclusive nenhuma.",
+        "en": "Each image's target is a dictionary: the boxes in pixels as x1, y1, x2, y2 and each box's label. An image may hold any number of boxes, none included.",
+    },
+    "code.detection.labels.yolo": {
+        "pt": "O rótulo YOLO guarda classe, centro (cx, cy) e tamanho (w, h) relativos à imagem, de 0 a 1. Aqui viram os cantos da caixa em pixels.",
+        "en": "The YOLO label holds class, centre (cx, cy) and size (w, h) relative to the image, from 0 to 1. Here they become the box corners in pixels.",
+    },
+    "code.detection.labels.clamp": {
+        "pt": "A caixa é cortada nos limites da imagem, e uma caixa sem área é descartada.",
+        "en": "The box is clipped to the image bounds, and a box with no area is dropped.",
+    },
+    "code.detection.labels.background": {
+        "pt": "Os detectores do torchvision reservam o rótulo 0 para o fundo, então a classe YOLO c vira c + 1.",
+        "en": "torchvision detectors reserve label 0 for the background, so YOLO class c becomes c + 1.",
+    },
+    "code.detection.collate.tuples": {
+        "pt": "As imagens têm tamanhos diferentes e cada uma tem seu número de caixas, então o lote não vira um tensor só: são tuplas de imagens e de alvos, como os detectores do torchvision recebem.",
+        "en": "Images differ in size and each has its own number of boxes, so the batch is not stacked into one tensor: it is tuples of images and targets, as torchvision detectors take them.",
+    },
+    "code.detection.model.faster_rcnn": {
+        "pt": "Faster R-CNN: detector em dois estágios. Uma rede propõe regiões e uma cabeça classifica cada uma e ajusta a caixa.",
+        "en": "Faster R-CNN: a two-stage detector. A network proposes regions and a head classifies each one and refines its box.",
+    },
+    "code.detection.model.ssd": {
+        "pt": "SSD: detector de um estágio. Prevê classe e caixa direto sobre âncoras em vários mapas de features.",
+        "en": "SSD: a single-stage detector. It predicts class and box straight from anchors over several feature maps.",
+    },
+    "code.detection.model.retinanet": {
+        "pt": "RetinaNet: detector de um estágio com focal loss, que dá menos peso às âncoras fáceis de fundo.",
+        "en": "RetinaNet: a single-stage detector with focal loss, which gives less weight to easy background anchors.",
+    },
+    "code.detection.weights": {
+        "pt": "Com pretrained, o detector começa dos pesos treinados no COCO; sem ele, começa do zero, sem baixar nada.",
+        "en": "With pretrained, the detector starts from weights trained on COCO; without it, it starts from scratch and downloads nothing.",
+    },
+    "code.detection.faster_rcnn.head": {
+        "pt": "A cabeça de classificação do COCO é trocada por uma nova com uma saída por classe do seu dataset mais o fundo (num_classes + 1).",
+        "en": "The COCO classification head is replaced by a new one with one output per class of your dataset plus the background (num_classes + 1).",
+    },
+    "code.detection.ssd.head": {
+        "pt": "A cabeça de classificação do SSD é trocada por uma nova, com num_classes + 1 saídas por âncora (o + 1 é o fundo). A cabeça das caixas continua a do COCO.",
+        "en": "SSD's classification head is replaced by a new one with num_classes + 1 outputs per anchor (the + 1 is the background). The box head stays COCO's.",
+    },
+    "code.detection.retinanet.head": {
+        "pt": "A cabeça de classificação da RetinaNet é trocada por uma nova, com num_classes + 1 saídas por âncora e GroupNorm. A cabeça das caixas continua a do COCO.",
+        "en": "RetinaNet's classification head is replaced by a new one with num_classes + 1 outputs per anchor and GroupNorm. The box head stays COCO's.",
+    },
+    "code.detection.train.batch": {
+        "pt": "As imagens e os alvos do lote vão para o dispositivo (GPU ou CPU), um a um, porque cada imagem tem seu tamanho.",
+        "en": "The batch's images and targets move to the device (GPU or CPU) one by one, since each image has its own size.",
+    },
+    "code.detection.train.losses": {
+        "pt": "Em modo de treino, o detector recebe imagens e alvos e devolve um dicionário de losses (classificação, caixa e, no Faster R-CNN, as da rede de propostas). A loss do lote é a soma delas.",
+        "en": "In training mode the detector takes images and targets and returns a dictionary of losses (classification, box and, in Faster R-CNN, those of the proposal network). The batch loss is their sum.",
+    },
+    "code.detection.train.step": {
+        "pt": "Zera os gradientes, backward calcula o gradiente de cada peso e step mexe nos pesos.",
+        "en": "Clears the gradients, backward computes each weight's gradient and step moves the weights.",
+    },
+    "code.detection.validate.train_mode": {
+        "pt": "Os detectores do torchvision só devolvem losses em modo de treino. A val_loss usa esse modo dentro de no_grad e sem passo do otimizador: os pesos não mudam.",
+        "en": "torchvision detectors only return losses in training mode. val_loss uses that mode inside no_grad and with no optimiser step: the weights do not change.",
+    },
+    "code.detection.validate.loss": {
+        "pt": "A val_loss é a soma das losses do detector, na média dos lotes. Ela é mostrada, mas não escolhe o checkpoint: quem escolhe é o mAP@0.5 (aba mAP).",
+        "en": "val_loss is the sum of the detector's losses, averaged over batches. It is shown, but it does not pick the checkpoint: mAP@0.5 does (mAP tab).",
+    },
+    "code.detection.map.eval": {
+        "pt": "Em modo de avaliação o detector devolve previsões: caixas, rótulos e confiança de cada detecção.",
+        "en": "In evaluation mode the detector returns predictions: boxes, labels and the confidence of each detection.",
+    },
+    "code.detection.map.predict": {
+        "pt": "Guarda as previsões e as caixas verdadeiras de cada imagem de validação para comparar no fim.",
+        "en": "Keeps the predictions and the true boxes of every validation image to compare at the end.",
+    },
+    "code.detection.map.best": {
+        "pt": "O mAP@0.5 da validação. A época com o maior mAP@0.5 é a que fica salva em best_model.pth.",
+        "en": "The validation mAP@0.5. The epoch with the highest mAP@0.5 is the one saved in best_model.pth.",
+    },
+    "code.detection.metric.sort": {
+        "pt": "AP de uma classe: as detecções dela são ordenadas da mais confiante para a menos confiante.",
+        "en": "AP of one class: its detections are sorted from most to least confident.",
+    },
+    "code.detection.metric.match": {
+        "pt": "Cada detecção procura a caixa verdadeira de maior IoU (sobreposição) na sua imagem. Com IoU de pelo menos 0,5 e caixa ainda livre, é um acerto (TP); senão, um falso positivo (FP). Uma caixa verdadeira só vale para uma detecção.",
+        "en": "Each detection looks for the true box with the highest IoU (overlap) in its image. With IoU of at least 0.5 and the box still free, it is a hit (TP); otherwise a false positive (FP). A true box counts for one detection only.",
+    },
+    "code.detection.metric.curve": {
+        "pt": "Descendo a lista, a revocação (quantas caixas verdadeiras já foram achadas) e a precisão (quantas detecções estavam certas) formam a curva precisão-revocação.",
+        "en": "Going down the list, recall (how many true boxes were found so far) and precision (how many detections were right) form the precision-recall curve.",
+    },
+    "code.detection.metric.ap": {
+        "pt": "O AP é a área sob essa curva (todos os pontos, como no VOC). O mAP@0.5 é a média do AP entre as classes que têm caixas verdadeiras.",
+        "en": "AP is the area under that curve (all points, as in VOC). mAP@0.5 is the mean AP over the classes that have true boxes.",
+    },
     "mlflow.retry_unavailable": {
         "pt": "A exportação para MLflow está indisponível para esta execução ou perfil.",
         "en": "MLflow export is unavailable for this run or profile.",

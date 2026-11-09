@@ -1159,12 +1159,23 @@ export async function retryWandbExport(runId: string): Promise<WandbExportStatus
   return request<WandbExportStatus>(`/wandb/runs/${encodeURIComponent(runId)}/retry`, { method: "POST" });
 }
 
-/** The settings that pick a branch in a run's code (ADR-173); a missing one is undecided. */
+/** The settings that pick a branch in a run's code (ADR-173); a missing one is undecided.
+ *  Each task reads its own (`GET /api/code-tour` lists them); `model` is a model
+ *  name the server turns into the setting it decides. */
 export interface CodeSettings {
   kind?: "binary" | "multiclass";
   amp?: boolean;
   augment?: boolean;
   model?: string;
+  loss?: string;
+  method?: "autoencoder" | "patchcore";
+  backend?: "torchvision" | "ultralytics";
+}
+
+/** A task the "Código" tab has a tour for, and the values of each setting it reads. */
+export interface CodeTourTask {
+  task: string;
+  settings: Record<string, string[]>;
 }
 
 /** Lines `first`..`last` (0-based) of a section and what they do. */
@@ -1194,6 +1205,11 @@ export async function fetchCodeTour(task: string, settings: CodeSettings): Promi
   }
   const suffix = query.size ? `?${query}` : "";
   return request<CodeSection[]>(`/code-tour/${encodeURIComponent(task)}${suffix}`);
+}
+
+/** The tasks whose training code the "Código" tab can show. */
+export async function fetchCodeTourTasks(): Promise<CodeTourTask[]> {
+  return request<CodeTourTask[]>("/code-tour");
 }
 
 export interface MLflowTrackingStatus {
