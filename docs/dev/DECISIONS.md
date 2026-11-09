@@ -7666,3 +7666,26 @@ differently now. Each fix has a test that failed before it
 **Decision:** `visionforge/utils/third_party_privacy.py` exposes an idempotent `apply_opt_outs()`. It sets `HF_HUB_DISABLE_TELEMETRY`, `DO_NOT_TRACK`, `MLFLOW_DISABLE_TELEMETRY` and `DVC_NO_ANALYTICS` with `os.environ.setdefault`, so a value the user already set is kept. It also sets `enabled = False` on ultralytics' process-wide `events` instance (`ultralytics.utils.events.events`), inside try/except so a missing or broken SDK never stops the app. `settings.update({'sync': False})` was rejected: it writes the user's global ultralytics settings file and would silence every other project on the machine (it did, during development, and was restored). It runs in `main()` before any SDK is imported, on import of `detection_trainer`, and before the MLflow import in `MlflowTracker._start`. `YOLO_OFFLINE` is not used because it would also block the weights download the user asks for. `NETWORK_SDKS` documents how each network-capable dependency is covered, and a guard test fails when `pyproject.toml` gains a known network SDK with no entry there.
 
 **Consequences:** a new network SDK has to be added to `NETWORK_SDKS` (and opted out if it reports). The environment variables are process-wide, so they also reach subprocesses. The guard only knows the SDKs on its own list of known network names, so a new SDK outside that list is not caught.
+## ADR-181 — The "Code" tab for every task (amends ADR-173)
+
+**Date:** 2026-11-09
+**Status:** Accepted
+**Amends:** ADR-173 (the "Code" tab: the real training code, annotated)
+
+**Context:** ADR-173 showed the annotated training code for classification only: one global set of settings, a route with fixed query parameters (`kind`, `amp`, `augment`, `model`) and a page that decided support with `taskKey === "classification"`. The user asked for the real code of what runs in the other tasks too. Regression, segmentation, anomaly detection and torchvision detection all train with this project's code; only detection on the Ultralytics backend runs inside the library.
+
+**Decision:**
+
+- **One tour per task, same contract.** `core/code_tour.py` keeps `Section` and `Note` (anchors by text, never by line number; source read with `inspect` on each request) and adds `TOURS[task]` with `TOUR_SETTINGS[task]`: the settings each task's notes depend on and the values they take. Tours now exist for classification, regression (loss mse/mae/huber), segmentation (loss cross_entropy/dice/combined; architecture unet/torchvision), anomaly (method autoencoder/patchcore) and detection (backend; detector faster_rcnn/ssd/retinanet).
+- **Generic, validated settings.** `GET /api/code-tour/{task}` reads its query through `tour_settings(task, query)`: a key the task does not know, or a value it does not take, is dropped and its notes stay undecided. `true`/`false` read as `on`/`off`; `model` is a model name turned into the setting it decides (classification family, segmentation architecture, detector). A section may be shown whole while its notes are all off this run's path (the PatchCore coreset in an autoencoder run): the page fades them instead of hiding code.
+- **The list comes from the server.** `GET /api/code-tour` lists the tasks with a tour and each one's settings; the page decides support from it, so a new tour needs no frontend change beyond its section titles. `codeSettingsFor(taskKey, payload)` reads each task's settings from the submitted form.
+- **Unavailable tour.** A task without a tour, or a run whose training is not this project's code, is a 404 whose `detail` says why, in the request's language; the page shows that text rather than "failed". Detection has a tour only when the run says `backend=torchvision`; a run without a backend gets the reason too, because Ultralytics is the default backend.
+- Shared code is shown once per tour where it runs: regression and segmentation show `training_loop.train_epoch`, with notes that say which hooks (`validate_targets`, `outputs_transform`) each task passes.
+
+**Consequences:** each task's commented lines are now under the same test (every note resolves against the installed source, every key has pt and en text, every `when` value is declared in `TOUR_SETTINGS`), so renaming one in the regression, segmentation, anomaly or detection trainers means updating its note in the same change. The route's OpenAPI contract changed: the explicit query parameters were replaced by the generic query. Notes teach what each task does differently (best checkpoint by val mIoU in segmentation, by train reconstruction loss for the autoencoder, by val mAP@0.5 in torchvision detection), so a change to those rules must update the note.
+
+**Alternatives considered:**
+
+- *Explicit query parameters per setting on the route.* Typed in OpenAPI, but the route would grow with every task and could not reject a value that belongs to another task.
+- *Sections chosen by setting (show only the active builder).* Less noise, but undecided runs would need a fallback and a run's page would hide code it could take; faded notes keep one rule for every tour.
+- *A tour for Ultralytics detection.* Its loop is the library's code, not this project's; tracked separately (GUI-8).
