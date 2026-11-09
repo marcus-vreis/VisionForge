@@ -145,6 +145,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 - A GUI manda Content-Security-Policy, X-Frame-Options, X-Content-Type-Options e Referrer-Policy em toda resposta e não faz mais preconnect ao Google Fonts. `/docs` e `/redoc` ficam desligados, a menos que `VISIONFORGE_DOCS=1`; `/openapi.json` continua (ADR-179).
 - A telemetria de terceiros fica desligada: ultralytics (só dentro do processo, sem gravar nas configurações globais dele), Hugging Face, MLflow e DVC. Um valor que a pessoa já definiu é mantido (ADR-180).
 - Exportar ONNX de detecção não deixa mais o ultralytics instalar pacotes no ambiente da pessoa: o export roda com `simplify=False` (#159).
+- O `npm audit --omit=dev` do frontend passa de 25 vulnerabilidades (1 crítica) para 0: as ferramentas de build vão para `devDependencies` e três fontes sem uso saem (#161).
 - Segmentação respeita `transforms.augment: false`: o treino ficava com flip, rotação e jitter mesmo desligado, e o `run.json` dizia o contrário (ADR-177).
 - O K-fold de classificação usa as mesmas transformações de um treino simples: respeita `augment` e roda o pré-processamento configurado, que antes era ignorado nos folds. As estatísticas de cada fold são medidas na imagem redimensionada que o modelo vê, e datasets com imagens de tamanhos diferentes deixam de quebrar o K-fold (ADR-177).
 - Fine-tuning põe em taxa cheia só a última camada linear: em VGG e AlexNet o classificador inteiro de 119M e 54M parâmetros recebia a taxa da cabeça, e no ViT o token de classe ficava fora do otimizador (ADR-177).
