@@ -78,7 +78,9 @@ async def health() -> dict[str, str]:
     return {"version": __version__, "spa_bundle": _BOOT_SPA_BUNDLE}
 
 
-app.add_middleware(
+# CORS sits inside HostOriginGuard on purpose (Sonar S8414 wants it outermost):
+# a foreign Host or Origin is refused before any CORS header is added (ADR-178).
+app.add_middleware(  # NOSONAR python:S8414
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173"
@@ -161,9 +163,10 @@ def start_server(
         # A wildcard is where the server listens, not a page a browser can open
         # (nor a Host the guard accepts); this machine is reached via loopback.
         page_host = "127.0.0.1" if is_wildcard(host) else host
-        webbrowser.open(
-            f"http://{page_host}:{port}"
-        )  # NOSONAR python:S5332 - local server URL
+        page_url = (
+            f"http://{page_host}:{port}"  # NOSONAR python:S5332 - local server URL
+        )
+        webbrowser.open(page_url)
     _SERVER = uvicorn.Server(
         uvicorn.Config(app, host=host, port=port, log_level="warning")
     )

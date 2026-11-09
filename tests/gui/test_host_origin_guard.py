@@ -243,11 +243,14 @@ class TestWebSocket:
         guarded = HostOriginGuard(self._app())
         client = TestClient(guarded, base_url="http://127.0.0.1:8000")
 
-        with pytest.raises(WebSocketDisconnect):
+        def handshake() -> None:
             with client.websocket_connect(
                 "/ws", headers={"Origin": "http://evil.example"}
             ) as ws:
                 ws.receive_text()
+
+        with pytest.raises(WebSocketDisconnect):
+            handshake()
 
     def test_a_loopback_handshake_is_served(self) -> None:
         guarded = HostOriginGuard(self._app())
