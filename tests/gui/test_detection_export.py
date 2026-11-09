@@ -52,6 +52,30 @@ class TestDetectionOnnxExport:
         on_disk = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
         assert Path(on_disk["artifacts"]["onnx"]) == onnx.resolve()
 
+    def test_export_does_not_let_ultralytics_install_packages(
+        self, tmp_path: Path
+    ) -> None:
+        """simplify=True makes ultralytics pip-install onnxslim into the user's venv."""
+        run_dir = tmp_path / "models" / "det" / "run_nosimplify"
+        ckpt = tmp_path / "best.pt"
+        ckpt.write_bytes(b"fake")
+        onnx = tmp_path / "best.onnx"
+        onnx.write_bytes(b"x")
+        data = _make_run(run_dir, checkpoint=str(ckpt))
+
+        fake_model = MagicMock()
+        fake_model.export.return_value = str(onnx)
+
+        with patch(
+            "visionforge.core.detection_trainer.YOLO",
+            MagicMock(return_value=fake_model),
+        ):
+            export_detection_run(run_dir, ExportOnnxRequest(), data)
+
+        kwargs = fake_model.export.call_args.kwargs
+        assert kwargs["format"] == "onnx"
+        assert kwargs["simplify"] is False
+
     def test_torchvision_export_unsupported(self, tmp_path: Path) -> None:
         run_dir = tmp_path / "models" / "det" / "run1"
         ckpt = tmp_path / "best.pt"
