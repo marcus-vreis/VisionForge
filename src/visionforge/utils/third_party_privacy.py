@@ -27,7 +27,7 @@ _ENV_OPT_OUTS: dict[str, str] = {
 # Dependency name -> how it is covered. Not YOLO_OFFLINE: that would also stop
 # the weights download the user asks for.
 NETWORK_SDKS: dict[str, str] = {
-    "ultralytics": "settings sync=False (events for train/val/export)",
+    "ultralytics": "events.enabled=False in-process (events for train/val/export)",
     "huggingface-hub": "HF_HUB_DISABLE_TELEMETRY",
     "datasets": "HF_HUB_DISABLE_TELEMETRY (uses huggingface_hub)",
     "mlflow": "MLFLOW_DISABLE_TELEMETRY",
@@ -46,10 +46,17 @@ def apply_opt_outs() -> None:
 
 
 def _disable_ultralytics_sync() -> None:
-    try:
-        from ultralytics import settings
+    """Stop ultralytics' usage events in this process only.
 
-        if settings.get("sync") is not False:
-            settings.update({"sync": False})
+    Its ``settings.update({"sync": False})`` would write the user's global
+    ultralytics settings file and switch the events off for every other project
+    on the machine too. The events go through one ``Events`` instance whose
+    ``enabled`` flag is read on each call, so turning that off here keeps the
+    choice inside VisionForge.
+    """
+    try:
+        from ultralytics.utils.events import events
+
+        events.enabled = False
     except Exception:  # noqa: BLE001 - absent or broken SDK must not stop the app
         return

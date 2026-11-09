@@ -30,32 +30,58 @@ def clean_env(monkeypatch: pytest.MonkeyPatch) -> pytest.MonkeyPatch:
     return monkeypatch
 
 
-def _fake_ultralytics(
-    monkeypatch: pytest.MonkeyPatch, sync: bool = True
-) -> dict[str, object]:
-    store: dict[str, object] = {"sync": sync}
-
-    class Settings(dict):  # type: ignore[type-arg]
-        def update(self, *a: object, **k: object) -> None:  # type: ignore[override]
-            super().update(*a, **k)
-
-    settings = Settings(store)
-    mod = types.ModuleType("ultralytics")
-    mod.settings = settings  # type: ignore[attr-defined]
-    monkeypatch.setitem(sys.modules, "ultralytics", mod)
-    return settings
+class _Events:
+    def __init__(self) -> None:
+        self.enabled = True
 
 
-def test_sets_env_and_disables_ultralytics_sync(
+class _Settings(dict):  # type: ignore[type-arg]
+    """Records writes: the global settings file must never be touched."""
+
+    writes = 0
+
+    def update(self, *a: object, **k: object) -> None:  # type: ignore[override]
+        type(self).writes += 1
+        super().update(*a, **k)
+
+
+def _fake_ultralytics(monkeypatch: pytest.MonkeyPatch) -> tuple[_Events, _Settings]:
+    events = _Events()
+    settings = _Settings(sync=True)
+    _Settings.writes = 0
+    root = types.ModuleType("ultralytics")
+    root.settings = settings  # type: ignore[attr-defined]
+    utils = types.ModuleType("ultralytics.utils")
+    events_mod = types.ModuleType("ultralytics.utils.events")
+    events_mod.events = events  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "ultralytics", root)
+    monkeypatch.setitem(sys.modules, "ultralytics.utils", utils)
+    monkeypatch.setitem(sys.modules, "ultralytics.utils.events", events_mod)
+    return events, settings
+
+
+def test_sets_env_and_disables_ultralytics_events(
     clean_env: pytest.MonkeyPatch,
 ) -> None:
-    settings = _fake_ultralytics(clean_env)
+    events, _settings = _fake_ultralytics(clean_env)
     tpp.apply_opt_outs()
     import os
 
     for name in _ENV:
         assert os.environ[name]
-    assert settings["sync"] is False
+    assert events.enabled is False
+
+
+def test_the_global_ultralytics_settings_are_not_written(
+    clean_env: pytest.MonkeyPatch,
+) -> None:
+    # settings.update would persist sync=False in the user's ultralytics settings
+    # file and silence every other project on the machine.
+    _events, settings = _fake_ultralytics(clean_env)
+    tpp.apply_opt_outs()
+
+    assert _Settings.writes == 0
+    assert settings["sync"] is True
 
 
 def test_user_value_is_not_overwritten(clean_env: pytest.MonkeyPatch) -> None:
@@ -68,10 +94,10 @@ def test_user_value_is_not_overwritten(clean_env: pytest.MonkeyPatch) -> None:
 
 
 def test_idempotent(clean_env: pytest.MonkeyPatch) -> None:
-    settings = _fake_ultralytics(clean_env)
+    events, _settings = _fake_ultralytics(clean_env)
     tpp.apply_opt_outs()
     tpp.apply_opt_outs()
-    assert settings["sync"] is False
+    assert events.enabled is False
 
 
 def test_without_ultralytics_does_not_raise(clean_env: pytest.MonkeyPatch) -> None:
@@ -79,13 +105,26 @@ def test_without_ultralytics_does_not_raise(clean_env: pytest.MonkeyPatch) -> No
     tpp.apply_opt_outs()
 
 
-def test_broken_ultralytics_settings_do_not_raise(
+def test_broken_ultralytics_events_do_not_raise(
     clean_env: pytest.MonkeyPatch,
 ) -> None:
-    mod = types.ModuleType("ultralytics")
-    mod.settings = object()  # type: ignore[attr-defined]  # no .get/.update
-    clean_env.setitem(sys.modules, "ultralytics", mod)
+    mod = types.ModuleType("ultralytics.utils.events")  # no `events` attribute
+    clean_env.setitem(sys.modules, "ultralytics", types.ModuleType("ultralytics"))
+    clean_env.setitem(sys.modules, "ultralytics.utils", types.ModuleType("u"))
+    clean_env.setitem(sys.modules, "ultralytics.utils.events", mod)
     tpp.apply_opt_outs()
+
+
+def test_the_real_ultralytics_events_are_switched_off(
+    clean_env: pytest.MonkeyPatch,
+) -> None:
+    pytest.importorskip("ultralytics")
+    from ultralytics.utils.events import events
+
+    clean_env.setattr(events, "enabled", True)
+    tpp.apply_opt_outs()
+
+    assert events.enabled is False
 
 
 def _dependency_names() -> set[str]:

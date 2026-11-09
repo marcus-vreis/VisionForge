@@ -7655,3 +7655,14 @@ differently now. Each fix has a test that failed before it
 - **API docs off by default.** `FastAPI(docs_url=None, redoc_url=None)`. `/docs`, `/docs/oauth2-redirect` and `/redoc` answer 404, not the SPA. `VISIONFORGE_DOCS=1` (or `true`/`yes`/`on`) brings them back with a policy of their own, sent only on those paths: `'unsafe-inline'` and `https://cdn.jsdelivr.net` for scripts and styles, Google Fonts for ReDoc, `blob:` workers, and `frame-ancestors 'none'`. `/openapi.json` stays: it is the API contract that tests and clients read.
 
 **Consequences:** a third-party script or style cannot be added to the SPA without changing this policy, and the e2e test `frontend/e2e/csp.e2e.ts` fails on any violation or on any request to another host. A change to the inline theme script needs no manual hash update. Anyone who used `/docs` now sets `VISIONFORGE_DOCS=1`. Tests: `tests/gui/test_security_headers.py`, `frontend/e2e/csp.e2e.ts`.
+## ADR-180 — Third-party telemetry is switched off in one module
+
+**Date:** 2026-11-09
+**Status:** Accepted
+**Extends:** ADR-120, ADR-170
+
+**Context:** the README promises that nothing leaves this computer unless the user asks for it. The audit of 2026-11-09 (finding 9) found that only the DVC export disabled analytics (`DVC_NO_ANALYTICS` in `dvc_export.py`). ultralytics ships with `settings['sync']=True` and reports train/val/export events. huggingface_hub reports download telemetry. MLflow has collected usage data since 3.2.
+
+**Decision:** `visionforge/utils/third_party_privacy.py` exposes an idempotent `apply_opt_outs()`. It sets `HF_HUB_DISABLE_TELEMETRY`, `DO_NOT_TRACK`, `MLFLOW_DISABLE_TELEMETRY` and `DVC_NO_ANALYTICS` with `os.environ.setdefault`, so a value the user already set is kept. It also sets `enabled = False` on ultralytics' process-wide `events` instance (`ultralytics.utils.events.events`), inside try/except so a missing or broken SDK never stops the app. `settings.update({'sync': False})` was rejected: it writes the user's global ultralytics settings file and would silence every other project on the machine (it did, during development, and was restored). It runs in `main()` before any SDK is imported, on import of `detection_trainer`, and before the MLflow import in `MlflowTracker._start`. `YOLO_OFFLINE` is not used because it would also block the weights download the user asks for. `NETWORK_SDKS` documents how each network-capable dependency is covered, and a guard test fails when `pyproject.toml` gains a known network SDK with no entry there.
+
+**Consequences:** a new network SDK has to be added to `NETWORK_SDKS` (and opted out if it reports). The environment variables are process-wide, so they also reach subprocesses. The guard only knows the SDKs on its own list of known network names, so a new SDK outside that list is not caught.
