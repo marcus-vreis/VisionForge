@@ -46,6 +46,7 @@ _FAILURES: dict[int | str, dict[str, Any]] = {
 }
 _MISSING = {"git": "dvc.git_missing", "dvc": "dvc.dvc_missing"}
 _FAILED = {"git": "dvc.git_failed", "dvc": "dvc.dvc_failed"}
+_EXPORT_FAILURES = (FileNotFoundError, ValueError, ToolMissingError, DvcExportError)
 
 
 class DvcRepository(BaseModel):
@@ -73,18 +74,10 @@ def build_dvc_router(
     ``tools`` finds git and DVC per request; by default, ``find_tools``.
     """
     current_tools = tools or (lambda: find_tools())
-
-    def local_only(request: Request) -> None:
-        origin = request.headers.get("origin")
-        if origin is not None and not is_loopback_origin(origin):
-            raise HTTPException(403, tr("dvc.foreign_origin"))
-        if not is_loopback_host(client_host(request)):
-            raise HTTPException(403, tr("dvc.remote_client"))
-
     router = APIRouter(
         prefix="/dvc",
         route_class=quiet_validation_route("dvc.request_invalid"),
-        dependencies=[Depends(local_only)],
+        dependencies=[Depends(_local_only(client_host))],
     )
 
     def locate(run_id: str, header: str | None) -> Path:
@@ -118,15 +111,25 @@ def build_dvc_router(
         directory = locate(body.run_id, header)
         try:
             return export_run(directory, body.repo, body.digest, current_tools())
-        except (
-            FileNotFoundError,
-            ValueError,
-            ToolMissingError,
-            DvcExportError,
-        ) as exc:
+        except _EXPORT_FAILURES as exc:
             raise _http_error(exc) from exc
 
     return router
+
+
+def _local_only(
+    client_host: Callable[[Request], str | None],
+) -> Callable[[Request], None]:
+    """A dependency that refuses another machine and a page of another site."""
+
+    def check(request: Request) -> None:
+        origin = request.headers.get("origin")
+        if origin is not None and not is_loopback_origin(origin):
+            raise HTTPException(403, tr("dvc.foreign_origin"))
+        if not is_loopback_host(client_host(request)):
+            raise HTTPException(403, tr("dvc.remote_client"))
+
+    return check
 
 
 def _http_error(exc: Exception) -> HTTPException:

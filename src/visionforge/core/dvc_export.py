@@ -79,6 +79,7 @@ _GIT_LOCAL_ENV = frozenset(
         "GIT_COMMON_DIR",
     }
 )
+_ABSOLUTE_REQUIRED = "An absolute folder path is required"
 # What `dvc init` writes; `prepare_repository` commits exactly these.
 _INIT_FILES = (".dvc/.gitignore", ".dvc/config", ".dvcignore")
 
@@ -124,7 +125,8 @@ def run_command(
     }
     env.update(GIT_TERMINAL_PROMPT="0", DVC_NO_ANALYTICS="1")
     flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
-    return subprocess.run(  # noqa: S603 - fixed tools, arguments built here
+    # The tools are git and DVC and every argument is built in this module.
+    return subprocess.run(
         args,
         cwd=cwd,
         env=env,
@@ -162,12 +164,12 @@ def find_tools() -> Tools:
 def checked_repository(value: str) -> Path:
     """``value`` as an absolute folder path that is not a drive's root."""
     if not isinstance(value, str) or not value.strip() or len(value) > _MAX_PATH:
-        raise InvalidRepositoryPathError("An absolute folder path is required")
+        raise InvalidRepositoryPathError(_ABSOLUTE_REQUIRED)
     if "\0" in value:
-        raise InvalidRepositoryPathError("An absolute folder path is required")
+        raise InvalidRepositoryPathError(_ABSOLUTE_REQUIRED)
     path = Path(value.strip())
     if not path.is_absolute() or path == Path(path.anchor):
-        raise InvalidRepositoryPathError("An absolute folder path is required")
+        raise InvalidRepositoryPathError(_ABSOLUTE_REQUIRED)
     return path.resolve()
 
 
