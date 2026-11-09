@@ -649,6 +649,7 @@ export default function App() {
           pipeline: [],
           queueSize: undefined,
           story: storySpecFor("anomaly", payload),
+          code: codeSettingsFor("anomaly", payload),
         },
         payload,
         { anomaly: true },

@@ -1173,6 +1173,110 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "pt": "Acurácia de pixel: a fração de pixels certos. Engana quando o fundo domina; por isso o mIoU é a métrica principal.",
         "en": "Pixel accuracy: the fraction of correct pixels. It misleads when the background dominates; that is why mIoU is the main metric.",
     },
+    "code.anomaly.data.normal_only": {
+        "pt": "O treino só tem imagens normais (rótulo 0). O modelo aprende como é o normal; não vê nenhum defeito antes do teste.",
+        "en": "Training holds normal images only (label 0). The model learns what normal looks like; it sees no defect before the test.",
+    },
+    "code.anomaly.data.test_labels": {
+        "pt": "No teste, a pasta das normais tem rótulo 0 e qualquer outra pasta (cada tipo de defeito) tem rótulo 1.",
+        "en": "In the test, the normal folder gets label 0 and every other folder (each kind of defect) gets label 1.",
+    },
+    "code.anomaly.data.train": {
+        "pt": "As imagens de treino passam pelas mesmas transformações da classificação (_build_transforms), com aumento de dados se ligado.",
+        "en": "Training images go through the same transforms as classification (_build_transforms), with augmentation when it is on.",
+    },
+    "code.anomaly.data.calibration": {
+        "pt": "As mesmas normais do treino, sem aumento de dados: é sobre elas que o limiar é calibrado, porque o modelo nunca é aplicado a cópias espelhadas ou giradas.",
+        "en": "The same normals as training, without augmentation: the threshold is calibrated on them, because the model is never applied to flipped or rotated copies.",
+    },
+    "code.anomaly.model.autoencoder": {
+        "pt": "Autoencoder convolucional: comprime a imagem num código pequeno (latent_dim) e tenta reconstruí-la. Treinado só com normais, ele reconstrói mal o que nunca viu.",
+        "en": "Convolutional autoencoder: it squeezes the image into a small code (latent_dim) and tries to rebuild it. Trained on normals only, it rebuilds poorly what it never saw.",
+    },
+    "code.anomaly.model.patchcore": {
+        "pt": "PatchCore: um backbone (com pesos do ImageNet, se pretrained) que não é treinado aqui, mais um banco de memória de pedaços (patches) das imagens normais. coreset_ratio diz quanto do banco fica guardado.",
+        "en": "PatchCore: a backbone (with ImageNet weights, when pretrained) that is not trained here, plus a memory bank of patches from the normal images. coreset_ratio says how much of the bank is kept.",
+    },
+    "code.anomaly.train.batch": {
+        "pt": "Um lote de normais por vez. O rótulo é descartado (o _): todas são normais e o alvo é a própria imagem.",
+        "en": "One batch of normals at a time. The label is dropped (the _): they are all normal and the target is the image itself.",
+    },
+    "code.anomaly.train.reconstruct": {
+        "pt": "A rede reconstrói a imagem e a loss (MSE) compara a reconstrução com a entrada, pixel a pixel. Não há rótulo: a imagem é o seu próprio alvo.",
+        "en": "The network rebuilds the image and the loss (MSE) compares the rebuild with the input, pixel by pixel. There is no label: the image is its own target.",
+    },
+    "code.anomaly.train.step": {
+        "pt": "backward calcula o gradiente de cada peso e step mexe nos pesos para reconstruir melhor.",
+        "en": "backward computes each weight's gradient and step moves the weights to rebuild better.",
+    },
+    "code.anomaly.train.best": {
+        "pt": "A loss média da época. O checkpoint salvo é o da época com a menor loss de reconstrução no treino; a AUROC de teste mostrada a cada época é só acompanhamento e não escolhe o checkpoint.",
+        "en": "The epoch's mean loss. The checkpoint kept is the epoch with the lowest training reconstruction loss; the test AUROC shown each epoch is monitoring only and does not pick the checkpoint.",
+    },
+    "code.anomaly.coreset.small": {
+        "pt": "O PatchCore não tem épocas nem gradiente: o seu treino é uma passada pelas normais extraindo patches das camadas 2 e 3 do backbone. Se o banco pedido couber inteiro, todos os patches ficam.",
+        "en": "PatchCore has no epochs and no gradient: its training is one pass over the normals, extracting patches from layers 2 and 3 of the backbone. When the requested bank holds them all, every patch is kept.",
+    },
+    "code.anomaly.coreset.start": {
+        "pt": "Coreset guloso (k-center): começa pelo primeiro patch e guarda, para cada patch, a distância até o mais próximo já escolhido.",
+        "en": "Greedy coreset (k-center): it starts with the first patch and keeps, for every patch, the distance to the nearest one already picked.",
+    },
+    "code.anomaly.coreset.farthest": {
+        "pt": "A cada passo escolhe o patch mais distante de tudo o que já foi escolhido e atualiza as distâncias. Assim o banco cobre a variedade das normais com uma fração dos patches.",
+        "en": "Each step picks the patch farthest from everything already picked and updates the distances. That way the bank covers the variety of the normals with a fraction of the patches.",
+    },
+    "code.anomaly.coreset.bank": {
+        "pt": "Os patches escolhidos são o banco de memória: é ele que o checkpoint guarda.",
+        "en": "The picked patches are the memory bank: it is what the checkpoint stores.",
+    },
+    "code.anomaly.score.autoencoder": {
+        "pt": "Autoencoder: a nota de anomalia de cada imagem é o erro médio de reconstrução. Quanto pior a reconstrução, mais anômala a imagem.",
+        "en": "Autoencoder: each image's anomaly score is its mean reconstruction error. The worse the rebuild, the more anomalous the image.",
+    },
+    "code.anomaly.score.patchcore": {
+        "pt": "PatchCore: a nota vem de PatchCore.score (aba seguinte), a distância dos patches da imagem até o banco de normais.",
+        "en": "PatchCore: the score comes from PatchCore.score (next tab), the distance from the image's patches to the bank of normals.",
+    },
+    "code.anomaly.patch_score.features": {
+        "pt": "Extrai os patches da imagem com o mesmo backbone usado para montar o banco.",
+        "en": "Extracts the image's patches with the same backbone used to build the bank.",
+    },
+    "code.anomaly.patch_score.nearest": {
+        "pt": "Para cada patch, a distância até o vizinho mais próximo no banco de normais. Um patch parecido com algum normal fica perto; um defeito fica longe de todos.",
+        "en": "For every patch, the distance to its nearest neighbour in the bank of normals. A patch like some normal one sits close; a defect sits far from all of them.",
+    },
+    "code.anomaly.patch_score.image": {
+        "pt": "A nota da imagem é a do seu patch mais estranho (o máximo): basta um pedaço defeituoso para a imagem ser suspeita.",
+        "en": "The image's score is that of its strangest patch (the maximum): one defective piece is enough to make the image suspect.",
+    },
+    "code.anomaly.threshold.percentile": {
+        "pt": "O limiar de decisão é um percentil (threshold_percentile, 95 por padrão) das notas das imagens normais: acima dele, a imagem é anômala. Com 95, cerca de 5% das normais de calibração ficariam acima do limiar.",
+        "en": "The decision threshold is a percentile (threshold_percentile, 95 by default) of the normal images' scores: above it, the image is anomalous. With 95, about 5% of the calibration normals would sit above the threshold.",
+    },
+    "code.anomaly.test.once": {
+        "pt": "O teste final roda uma vez, no fim, com o checkpoint salvo (o banco do PatchCore ou o autoencoder de menor loss de treino).",
+        "en": "The final test runs once, at the end, with the saved checkpoint (the PatchCore bank or the autoencoder with the lowest training loss).",
+    },
+    "code.anomaly.test.calibration": {
+        "pt": "As notas das normais de treino, sem aumento de dados: delas sai o limiar.",
+        "en": "The scores of the training normals, without augmentation: the threshold comes from them.",
+    },
+    "code.anomaly.test.scores": {
+        "pt": "As notas e os rótulos das imagens de teste, normais e com defeito.",
+        "en": "The scores and labels of the test images, normal and defective.",
+    },
+    "code.anomaly.metrics.auroc": {
+        "pt": "AUROC: a chance de uma imagem com defeito ter nota maior que uma normal. Não depende do limiar; 0,5 é sorteio e 1 separa tudo.",
+        "en": "AUROC: the chance that a defective image scores higher than a normal one. It does not depend on the threshold; 0.5 is a coin flip and 1 separates everything.",
+    },
+    "code.anomaly.metrics.threshold": {
+        "pt": "O limiar calibrado nas normais de treino, sem olhar nenhuma imagem de teste.",
+        "en": "The threshold calibrated on the training normals, without looking at any test image.",
+    },
+    "code.anomaly.metrics.f1": {
+        "pt": "Com o limiar, cada imagem de teste vira normal ou anômala, e o F1 mede esse acerto na classe anômala. Ao contrário da AUROC, ele depende do limiar escolhido.",
+        "en": "With the threshold, every test image becomes normal or anomalous, and F1 measures that call on the anomalous class. Unlike AUROC, it depends on the chosen threshold.",
+    },
     "mlflow.retry_unavailable": {
         "pt": "A exportação para MLflow está indisponível para esta execução ou perfil.",
         "en": "MLflow export is unavailable for this run or profile.",

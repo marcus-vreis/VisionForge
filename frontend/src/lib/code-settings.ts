@@ -15,7 +15,14 @@ export function codeSettingsFor(taskKey: string, payload: Record<string, unknown
   if (taskKey === "classification") return classificationSettings(payload);
   if (taskKey === "regression") return lossSettings(payload);
   if (taskKey === "segmentation") return { ...lossSettings(payload), ...builtModel(payload) };
+  if (taskKey === "anomaly") return anomalySettings(payload);
   return {};
+}
+
+/** `model.name` of an anomaly run is its method: the autoencoder or PatchCore. */
+function anomalySettings(payload: Record<string, unknown>): CodeSettings {
+  const name = record(payload["model"])["name"];
+  return name === "autoencoder" || name === "patchcore" ? { method: name } : {};
 }
 
 /** The model name the factory builds from; a model of the researcher's own

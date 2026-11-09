@@ -603,10 +603,258 @@ SEGMENTATION: tuple[Section, ...] = (
     ),
 )
 
+
+def _anomaly_data() -> Callable[..., Any]:
+    from visionforge.core.anomaly_data import AnomalyDataModule
+
+    return AnomalyDataModule.__init__
+
+
+def _anomaly_model() -> Callable[..., Any]:
+    from visionforge.models.anomaly_factory import AnomalyModelFactory
+
+    return AnomalyModelFactory.create
+
+
+def _autoencoder_epoch() -> Callable[..., Any]:
+    from visionforge.core.anomaly_trainer import AnomalyTrainer
+
+    return AnomalyTrainer._train_autoencoder_epoch
+
+
+def _coreset() -> Callable[..., Any]:
+    from visionforge.models.anomaly_factory import PatchCore
+
+    return PatchCore._greedy_coreset
+
+
+def _score_images() -> Callable[..., Any]:
+    from visionforge.core.anomaly_trainer import score_images
+
+    return score_images
+
+
+def _patch_score() -> Callable[..., Any]:
+    from visionforge.models.anomaly_factory import PatchCore
+
+    return PatchCore.score
+
+
+def _threshold() -> Callable[..., Any]:
+    from visionforge.core.anomaly_trainer import compute_threshold
+
+    return compute_threshold
+
+
+def _anomaly_test() -> Callable[..., Any]:
+    from visionforge.core.anomaly_trainer import AnomalyTrainer
+
+    return AnomalyTrainer.evaluate_with_scores
+
+
+def _anomaly_metrics() -> Callable[..., Any]:
+    from visionforge.core.anomaly_trainer import AnomalyTrainer
+
+    return AnomalyTrainer._metrics
+
+
+_AUTOENCODER = (("method", "autoencoder"),)
+_PATCHCORE = (("method", "patchcore"),)
+
+ANOMALY: tuple[Section, ...] = (
+    Section(
+        "data",
+        _anomaly_data,
+        (
+            Note(
+                "train_items = [(p, 0) for p in _list_images(train_normal)]",
+                "code.anomaly.data.normal_only",
+            ),
+            Note(
+                "label = 0 if sub.name == cfg.normal_dir else 1",
+                "code.anomaly.data.test_labels",
+            ),
+            Note(
+                "self._train = AnomalyImageDataset(",
+                "code.anomaly.data.train",
+                end="self._test = AnomalyImageDataset(",
+            ),
+            Note(
+                "self._calibration = AnomalyImageDataset(",
+                "code.anomaly.data.calibration",
+                end="self._num_workers = resolve_num_workers(",
+            ),
+        ),
+    ),
+    Section(
+        "model",
+        _anomaly_model,
+        (
+            Note(
+                'if config.name == "autoencoder":',
+                "code.anomaly.model.autoencoder",
+                end='if config.name == "patchcore":',
+                when=_AUTOENCODER,
+            ),
+            Note(
+                'if config.name == "patchcore":',
+                "code.anomaly.model.patchcore",
+                end="raise ValueError",
+                when=_PATCHCORE,
+            ),
+        ),
+    ),
+    Section(
+        "train",
+        _autoencoder_epoch,
+        (
+            Note("model.train()", "code.train.mode", when=_AUTOENCODER),
+            Note(
+                "for inputs, _ in train_loader:",
+                "code.anomaly.train.batch",
+                end="optimizer.zero_grad",
+                when=_AUTOENCODER,
+            ),
+            Note(
+                "recon = model(inputs)",
+                "code.anomaly.train.reconstruct",
+                end="loss.backward()",
+                when=_AUTOENCODER,
+            ),
+            Note(
+                "loss.backward()",
+                "code.anomaly.train.step",
+                end="total += loss.item()",
+                when=_AUTOENCODER,
+            ),
+            Note(
+                "return total / n if n > 0 else 0.0",
+                "code.anomaly.train.best",
+                when=_AUTOENCODER,
+            ),
+        ),
+    ),
+    Section(
+        "coreset",
+        _coreset,
+        (
+            Note(
+                "if k >= m:",
+                "code.anomaly.coreset.small",
+                end="selected = [0]",
+                when=_PATCHCORE,
+            ),
+            Note(
+                "selected = [0]",
+                "code.anomaly.coreset.start",
+                end="step = max(1, k // 100)",
+                when=_PATCHCORE,
+            ),
+            Note(
+                "idx = int(torch.argmax(min_dist).item())",
+                "code.anomaly.coreset.farthest",
+                end="if progress is not None and i % step == 0:",
+                when=_PATCHCORE,
+            ),
+            Note(
+                "return features[selected].clone()",
+                "code.anomaly.coreset.bank",
+                when=_PATCHCORE,
+            ),
+        ),
+    ),
+    Section(
+        "score",
+        _score_images,
+        (
+            Note(
+                "if isinstance(model, ConvAutoencoder):",
+                "code.anomaly.score.autoencoder",
+                end="if isinstance(model, PatchCore):",
+                when=_AUTOENCODER,
+            ),
+            Note(
+                "if isinstance(model, PatchCore):",
+                "code.anomaly.score.patchcore",
+                end="raise TypeError",
+                when=_PATCHCORE,
+            ),
+        ),
+    ),
+    Section(
+        "patch_score",
+        _patch_score,
+        (
+            Note(
+                "feats = self._forward_features(x)",
+                "code.anomaly.patch_score.features",
+                end="dists = torch.cdist",
+                when=_PATCHCORE,
+            ),
+            Note(
+                "dists = torch.cdist(flat, self._memory)",
+                "code.anomaly.patch_score.nearest",
+                end="return nn_dist.max",
+                when=_PATCHCORE,
+            ),
+            Note(
+                "return nn_dist.max(dim=1).values",
+                "code.anomaly.patch_score.image",
+                when=_PATCHCORE,
+            ),
+        ),
+    ),
+    Section(
+        "threshold",
+        _threshold,
+        (
+            Note(
+                "return float(np.percentile(",
+                "code.anomaly.threshold.percentile",
+            ),
+        ),
+    ),
+    Section(
+        "test",
+        _anomaly_test,
+        (
+            Note("model.eval()", "code.anomaly.test.once"),
+            Note(
+                "normal_scores = self._collect_scores(model, calibration_loader)[0]",
+                "code.anomaly.test.calibration",
+            ),
+            Note(
+                "test_scores, test_labels = self._collect_scores(model, test_loader)",
+                "code.anomaly.test.scores",
+            ),
+        ),
+    ),
+    Section(
+        "metrics",
+        _anomaly_metrics,
+        (
+            Note(
+                "auroc = compute_auroc(test_scores, test_labels)",
+                "code.anomaly.metrics.auroc",
+            ),
+            Note(
+                "threshold = compute_threshold(normal_scores, self._percentile)",
+                "code.anomaly.metrics.threshold",
+            ),
+            Note(
+                "preds = (test_scores >= threshold).long().cpu().numpy()",
+                "code.anomaly.metrics.f1",
+                end="return auroc, threshold, f1",
+            ),
+        ),
+    ),
+)
+
 TOURS: dict[str, tuple[Section, ...]] = {
     "classification": CLASSIFICATION,
     "regression": REGRESSION,
     "segmentation": SEGMENTATION,
+    "anomaly": ANOMALY,
 }
 
 # Settings a note can depend on, per task, and their values.
@@ -622,6 +870,7 @@ TOUR_SETTINGS: dict[str, dict[str, frozenset[str]]] = {
         "loss": frozenset({"cross_entropy", "dice", "combined"}),
         "arch": frozenset({"unet", "torchvision"}),
     },
+    "anomaly": {"method": frozenset({"autoencoder", "patchcore"})},
 }
 
 # Query flags as the page sends them, turned into the settings' on/off.

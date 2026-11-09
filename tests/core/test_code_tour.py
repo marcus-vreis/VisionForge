@@ -238,3 +238,54 @@ def test_a_torchvision_segmenter_leaves_the_unet_code_off_its_path() -> None:
     sections = {s["id"]: s for s in code_tour("segmentation", {"arch": "torchvision"})}
     assert [n["active"] for n in sections["model"]["notes"]] == [False, True]
     assert all(n["active"] is False for n in sections["unet"]["notes"])
+
+
+def test_the_anomaly_tour_resolves_every_note() -> None:
+    sections = code_tour("anomaly", {})
+    assert [s["id"] for s in sections] == [
+        "data",
+        "model",
+        "train",
+        "coreset",
+        "score",
+        "patch_score",
+        "threshold",
+        "test",
+        "metrics",
+    ]
+    for section in sections:
+        for note in section["notes"]:
+            assert 0 <= note["first"] <= note["last"] < len(section["lines"])
+            assert note["text"]
+
+
+def _method_actives(method: str) -> dict[str, set[bool | None]]:
+    return {
+        s["id"]: {n["active"] for n in s["notes"]}
+        for s in code_tour("anomaly", {"method": method})
+    }
+
+
+def test_patchcore_marks_its_own_code_and_leaves_the_autoencoder_off() -> None:
+    actives = _method_actives("patchcore")
+    assert actives["coreset"] == {True}
+    assert actives["patch_score"] == {True}
+    assert actives["train"] == {False}
+    assert actives["model"] == {True, False}
+    assert actives["threshold"] == {None}
+
+
+def test_the_autoencoder_marks_its_own_code_and_leaves_patchcore_off() -> None:
+    actives = _method_actives("autoencoder")
+    assert actives["train"] == {True}
+    assert actives["coreset"] == {False}
+    assert actives["patch_score"] == {False}
+    score = next(
+        s for s in code_tour("anomaly", {"method": "autoencoder"}) if s["id"] == "score"
+    )
+    lines = score["lines"]
+    by_line = {lines[n["first"]].strip(): n["active"] for n in score["notes"]}
+    assert by_line == {
+        "if isinstance(model, ConvAutoencoder):": True,
+        "if isinstance(model, PatchCore):": False,
+    }

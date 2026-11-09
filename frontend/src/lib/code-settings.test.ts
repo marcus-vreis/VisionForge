@@ -52,3 +52,11 @@ describe("codeSettingsFor segmentation", () => {
     })).toEqual({ loss: "dice" });
   });
 });
+
+describe("codeSettingsFor anomaly", () => {
+  it("reads the method from model.name", () => {
+    expect(codeSettingsFor("anomaly", { model: { name: "patchcore", backbone: "resnet18" } })).toEqual({ method: "patchcore" });
+    expect(codeSettingsFor("anomaly", { model: { name: "autoencoder" } })).toEqual({ method: "autoencoder" });
+    expect(codeSettingsFor("anomaly", { model: { name: "padim" } })).toEqual({});
+  });
+});

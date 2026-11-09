@@ -1168,6 +1168,7 @@ export interface CodeSettings {
   augment?: boolean;
   model?: string;
   loss?: string;
+  method?: "autoencoder" | "patchcore";
 }
 
 /** A task the "Código" tab has a tour for, and the values of each setting it reads. */

@@ -99,3 +99,11 @@ def test_the_segmentation_tour_marks_the_loss_and_is_listed() -> None:
     assert all(n["active"] is True for n in sections["unet"]["notes"])
     tasks = [item["task"] for item in client.get("/api/code-tour").json()]
     assert "segmentation" in tasks
+
+
+def test_the_anomaly_tour_follows_the_method_of_the_query() -> None:
+    response = TestClient(app).get("/api/code-tour/anomaly?method=patchcore")
+    assert response.status_code == 200
+    sections = {s["id"]: s for s in response.json()}
+    assert all(n["active"] is True for n in sections["coreset"]["notes"])
+    assert all(n["active"] is False for n in sections["train"]["notes"])
