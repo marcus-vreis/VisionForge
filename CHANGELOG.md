@@ -21,6 +21,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 - A tela de treino ganha a aba **Código**: as funções reais que treinam uma classificação (dados, modelo, loss, treino, validação e teste), lidas do pacote instalado, com notas em português e inglês e o caminho que as configurações do treino seguem marcado (ADR-173).
 - O Histórico cria no Zenodo um rascunho com o bundle de uma execução, para publicar com DOI quando a pessoa quiser: prévia dos arquivos antes do envio, `run.json` sem caminhos da máquina, token salvo por perfil e Sandbox de teste separado. Nada é publicado pela GUI (ADR-174).
 - O Histórico envia o relatório de uma execução a um repositório privado do GitHub, numa pasta própria e num commit só: README com métricas, tabela por época e gráficos, mais o `run.json` sem caminhos da máquina. Pesos não vão; o repositório precisa existir e ser privado (ADR-175).
+- O Histórico versiona uma execução com DVC num repositório git deste computador: a pasta da execução vai para o git com README, `run.json`, gráficos e os arquivos que o DVC compara (`params.yaml`, `metrics.json`, `history.csv`, `dvc.yaml`), e os pesos vão para o DVC, com `dvc push` quando há remoto padrão. "Preparar pasta" roda `git init` e `dvc init`. Só funciona na máquina do servidor (ADR-176).
 
 - **Converter YOLO e COCO** (ADR-169, fase 4b da issue #117): na aba Explorar,
   "Exportar para COCO" (com um dataset de detecção aberto) e "Importar COCO"

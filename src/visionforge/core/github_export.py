@@ -18,36 +18,27 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
-import math
 import re
 import urllib.error
 import urllib.request
 from collections.abc import Callable
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import Any
 from urllib.parse import quote, urlsplit
 
-from visionforge.core.experiment_bundle import contained_run_file, read_run_record
+from visionforge.core.experiment_bundle import read_run_record
 from visionforge.core.hub_export import (
     PreviewMismatchError,
     PrivateRepositoryRequiredError,
 )
-from visionforge.core.public_run_record import without_local_paths
+from visionforge.core.run_report import README, report_files, run_folder
 
 API = "https://api.github.com"
 _SITE = "github.com"
 _API_VERSION = "2026-03-10"
 _TIMEOUT_S = 60
-_FIGURES = {".png", ".jpg", ".jpeg"}
-_MAX_FIGURE = 5 * 1024 * 1024
-_MAX_FIGURES = 20
-_MAX_EPOCH_ROWS = 200
-_MAX_COLUMNS = 8
-_SEGMENT = re.compile(r"[^A-Za-z0-9_.-]+")
 _OWNER = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?")
 _REPO = re.compile(r"[A-Za-z0-9_.-]{1,100}")
-_README = "README.md"
-_RECORD = "run.json"
 # GitHub's answer to an empty repository on the Git Data API.
 _EMPTY = {404, 409}
 
@@ -89,7 +80,7 @@ def preview_run(run_dir: Path) -> dict[str, Any]:
     return {
         "folder": folder,
         "files": [{"path": path, "size": len(data)} for path, data in files.items()],
-        "readme": files[_README].decode("utf-8"),
+        "readme": files[README].decode("utf-8"),
         "digest": _digest(files),
     }
 
@@ -188,11 +179,11 @@ def _commit(
         if exc.status not in _EMPTY:
             raise
         # An empty repository: the contents API makes the first commit.
-        readme = f"{folder}/{_README}"
+        readme = f"{folder}/{README}"
         send(
             "PUT",
             f"{base}/contents/{quote(readme)}",
-            {"message": message, "content": _base64(files[_README])},
+            {"message": message, "content": _base64(files[README])},
         )
         head = _sha(send("GET", ref, None), "object")
     tree = _sha(send("GET", f"{base}/git/commits/{head}", None), "tree")
@@ -257,139 +248,4 @@ def _digest(files: dict[str, bytes]) -> str:
 def _package(run_dir: Path) -> tuple[str, dict[str, bytes]]:
     """The run's folder in the repository and its files, README first."""
     root, data = read_run_record(run_dir)
-    experiment = data.get("experiment")
-    folder = "runs/" + "/".join(
-        _segment(name) for name in (experiment, root.name) if _segment(name)
-    )
-    figures = _figures(root, data.get("artifacts", {}).get("graphics"))
-    record = without_local_paths(
-        {key: value for key, value in data.items() if key != "artifacts"}
-    )
-    record["run_dir"] = "."
-    record["artifacts"] = {"model": None, "graphics": list(figures), "report": _README}
-    files = {
-        _README: _readme(data, folder, list(figures)).encode("utf-8"),
-        _RECORD: json.dumps(record, indent=2, ensure_ascii=False).encode("utf-8"),
-        **figures,
-    }
-    return folder, files
-
-
-def _segment(name: Any) -> str:
-    """A path segment made of safe characters, or '' for nothing usable."""
-    if not isinstance(name, str):
-        return ""
-    return _SEGMENT.sub("-", name).strip("-.")[:100]
-
-
-def _figures(root: Path, graphics: Any) -> dict[str, bytes]:
-    """The run's charts as ``figures/<name>``: images only, bounded in size."""
-    figures: dict[str, bytes] = {}
-    values = graphics if isinstance(graphics, list) else []
-    for value in values[:_MAX_FIGURES]:
-        if not isinstance(value, str):
-            continue
-        try:
-            path = contained_run_file(root, value)
-        except (OSError, ValueError):
-            continue
-        if path.suffix.lower() not in _FIGURES or path.stat().st_size > _MAX_FIGURE:
-            continue
-        figures[f"figures/{_segment(path.name)}"] = path.read_bytes()
-    return figures
-
-
-def _readme(data: dict[str, Any], folder: str, figures: list[str]) -> str:
-    """A Markdown report of the run, from run.json alone."""
-    lines = [f"# {PurePosixPath(folder).name}", "", *_summary(data), ""]
-    lines += ["## Final metrics", "", *_table([_numbers(data.get("metrics"))])]
-    lines += _epochs(data.get("history"))
-    if figures:
-        lines += ["## Charts", ""]
-        lines += [f"![{PurePosixPath(path).stem}]({path})" for path in figures]
-        lines.append("")
-    lines += [
-        "## Files",
-        "",
-        "- `run.json`: the run record, with this computer's paths reduced to their "
-        "final name.",
-        "- The weights are not in this repository.",
-        "",
-        "Exported by VisionForge.",
-        "",
-    ]
-    return "\n".join(lines)
-
-
-def _summary(data: dict[str, Any]) -> list[str]:
-    """``- **Label:** value`` lines for the run's plain descriptive fields."""
-    config = _mapping(data.get("config"))
-    fields = (
-        ("Experiment", data.get("experiment")),
-        ("Task", config.get("task")),
-        ("Model", _mapping(config.get("model")).get("name")),
-        ("Status", data.get("status")),
-        ("Date", data.get("timestamp")),
-    )
-    return [
-        f"- **{label}:** {_cell(value)}"
-        for label, value in fields
-        if isinstance(value, str) and value
-    ]
-
-
-def _epochs(history: Any) -> list[str]:
-    """The per-epoch table, bounded; nothing when no epoch has numbers."""
-    epochs = history if isinstance(history, list) else []
-    rows = [_numbers(row) for row in epochs[:_MAX_EPOCH_ROWS]]
-    if not any(rows):
-        return []
-    lines = ["## Per epoch", "", *_table(rows)]
-    if len(epochs) > _MAX_EPOCH_ROWS:
-        lines += [f"First {_MAX_EPOCH_ROWS} of {len(epochs)} epochs.", ""]
-    return lines
-
-
-def _mapping(value: Any) -> dict[str, Any]:
-    return value if isinstance(value, dict) else {}
-
-
-def _numbers(row: Any) -> dict[str, float]:
-    """The finite numeric values of a mapping, keyed by plain names."""
-    if not isinstance(row, dict):
-        return {}
-    return {
-        str(key): float(value)
-        for key, value in row.items()
-        if isinstance(value, (int, float))
-        and not isinstance(value, bool)
-        and math.isfinite(value)
-        and re.fullmatch(r"[A-Za-z0-9_./-]{1,60}", str(key))
-    }
-
-
-def _table(rows: list[dict[str, float]]) -> list[str]:
-    """A Markdown table of the first ``_MAX_COLUMNS`` names; nothing if empty."""
-    columns = list(dict.fromkeys(key for row in rows for key in row))[:_MAX_COLUMNS]
-    if not columns:
-        return ["No numeric values were recorded.", ""]
-    header = "| " + " | ".join(columns) + " |"
-    rule = "|" + "---|" * len(columns)
-    body = [
-        "| " + " | ".join(_number(row.get(key)) for key in columns) + " |"
-        for row in rows
-    ]
-    return [header, rule, *body, ""]
-
-
-def _number(value: float | None) -> str:
-    if value is None:
-        return ""
-    return (
-        str(int(value)) if value.is_integer() and abs(value) < 1e15 else f"{value:.4g}"
-    )
-
-
-def _cell(text: str) -> str:
-    """Text safe inside one Markdown line: no newline, pipe or HTML."""
-    return re.sub(r"[\r\n|<>`]+", " ", text)[:120]
+    return run_folder(root, data), report_files(root, data)

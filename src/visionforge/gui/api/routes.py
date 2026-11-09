@@ -100,6 +100,7 @@ from visionforge.gui.api.datasets_routes import (
 from visionforge.gui.api.datasets_routes import router as datasets_router
 from visionforge.gui.api.detection_export import export_detection_run
 from visionforge.gui.api.detection_testing import evaluate_detection_run
+from visionforge.gui.api.dvc_routes import build_dvc_router
 from visionforge.gui.api.evidence_routes import EvidenceExports, build_evidence_router
 from visionforge.gui.api.explorer_routes import router as explorer_router
 from visionforge.gui.api.folder_opener import (
@@ -540,6 +541,14 @@ router.include_router(
     build_github_router(
         lambda header: current_profile(header),
         lambda run_id, profile: _find_run_dir(run_id, profile),
+    )
+)
+# A run versioned with DVC in a local repository of experiments (ADR-176).
+router.include_router(
+    build_dvc_router(
+        lambda header: current_profile(header),
+        lambda run_id, profile: _find_run_dir(run_id, profile),
+        lambda request: _client_host(request),
     )
 )
 # Unpublished Zenodo drafts of a run's bundle (ADR-174).

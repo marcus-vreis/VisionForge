@@ -37,6 +37,7 @@ import { DownloadBundleButton } from "./DownloadBundleButton";
 
 import { MLflowExportStatus } from "./MLflowExportStatus";
 import { WandbExportStatus } from "./WandbExportStatus";
+import { DvcExportPanel } from "./DvcExportPanel";
 import { GitHubExportPanel } from "./GitHubExportPanel";
 import { HubExportPanel } from "./HubExportPanel";
 import { ZenodoExportPanel } from "./ZenodoExportPanel";
@@ -584,6 +585,7 @@ export function RunDetailPanel({ runId, onBack, onOpenRun, knownRunIds }: RunDet
           {!detail.group && <HubExportPanel key={`${activeProfileSlug()}:${runId}`} runId={runId} />}
           {!detail.group && <ZenodoExportPanel key={`zenodo:${activeProfileSlug()}:${runId}`} runId={runId} />}
           {!detail.group && <GitHubExportPanel key={`github:${activeProfileSlug()}:${runId}`} runId={runId} />}
+          {!detail.group && <DvcExportPanel key={`dvc:${activeProfileSlug()}:${runId}`} runId={runId} />}
           {/* A replicate group is a job, not a training: its numbers are the
               report's (mean ± CI95, paired tests) and its seeds are runs of
               their own (ADR-113). */}
