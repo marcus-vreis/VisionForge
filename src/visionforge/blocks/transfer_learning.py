@@ -275,7 +275,7 @@ class TransferLearningBlock(ExperimentBlock):
         # made (ADR-101), not the last named child: on VGG and AlexNet that child
         # is a three-Linear classifier of 119M and 54M parameters. Everything
         # else is backbone, including parameters held directly by the model
-        # (ViT's class token and position embedding belong to no child).
+        # (ViT's class token belongs to no child).
         head = final_linear(model)
         head_ids = {id(p) for p in head.parameters()} if head is not None else set()
         trainable = [p for p in model.parameters() if p.requires_grad]

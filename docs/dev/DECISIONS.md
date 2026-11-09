@@ -7591,7 +7591,8 @@ records, which is the one thing the project promises not to do.
   extraction to `final_linear`, but fine-tuning still took the last named child:
   119M parameters on VGG and 54M on AlexNet trained at the head's rate. The
   same loop over named children also missed parameters the model holds
-  directly, so ViT's class token and position embedding were never optimised.
+  directly, so ViT's class token was never optimised (its position embedding
+  belongs to the `encoder` child and was).
   The groups are now the final Linear and every other trainable parameter.
 - **The Wilcoxon floor counts the pairs the test uses.** scipy drops zero
   differences (`zero_method="wilcox"`), so six seeds with three ties is a
