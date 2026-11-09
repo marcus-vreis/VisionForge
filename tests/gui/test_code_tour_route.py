@@ -107,3 +107,30 @@ def test_the_anomaly_tour_follows_the_method_of_the_query() -> None:
     sections = {s["id"]: s for s in response.json()}
     assert all(n["active"] is True for n in sections["coreset"]["notes"])
     assert all(n["active"] is False for n in sections["train"]["notes"])
+
+
+def test_the_torchvision_detection_tour_marks_the_detector() -> None:
+    response = TestClient(app).get(
+        "/api/code-tour/detection?backend=torchvision&arch=retinanet"
+    )
+    assert response.status_code == 200
+    sections = {s["id"]: s for s in response.json()}
+    assert all(n["active"] is True for n in sections["retinanet"]["notes"])
+    assert all(n["active"] is False for n in sections["ssd"]["notes"])
+
+
+def test_ultralytics_detection_says_why_there_is_no_tour() -> None:
+    client = TestClient(app)
+    pt = client.get(
+        "/api/code-tour/detection?backend=ultralytics&model=yolo11n",
+        headers={"X-VF-Lang": "pt"},
+    )
+    en = client.get(
+        "/api/code-tour/detection?backend=ultralytics",
+        headers={"X-VF-Lang": "en"},
+    )
+    assert pt.status_code == en.status_code == 404
+    assert "Ultralytics" in en.json()["detail"]
+    assert pt.json()["detail"] != en.json()["detail"]
+    tasks = [item["task"] for item in client.get("/api/code-tour").json()]
+    assert "detection" in tasks

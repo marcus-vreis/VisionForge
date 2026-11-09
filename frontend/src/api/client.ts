@@ -1169,6 +1169,7 @@ export interface CodeSettings {
   model?: string;
   loss?: string;
   method?: "autoencoder" | "patchcore";
+  backend?: "torchvision" | "ultralytics";
 }
 
 /** A task the "Código" tab has a tour for, and the values of each setting it reads. */

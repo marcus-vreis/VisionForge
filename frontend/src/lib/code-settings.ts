@@ -16,7 +16,20 @@ export function codeSettingsFor(taskKey: string, payload: Record<string, unknown
   if (taskKey === "regression") return lossSettings(payload);
   if (taskKey === "segmentation") return { ...lossSettings(payload), ...builtModel(payload) };
   if (taskKey === "anomaly") return anomalySettings(payload);
+  if (taskKey === "detection") return detectionSettings(payload);
   return {};
+}
+
+/** `model.backend` and `model.name` of a detection run: only the torchvision
+ *  backend trains with this project's code, and the name picks its builder. */
+function detectionSettings(payload: Record<string, unknown>): CodeSettings {
+  const model = record(payload["model"]);
+  const settings: CodeSettings = {};
+  const backend = model["backend"];
+  if (backend === "torchvision" || backend === "ultralytics") settings.backend = backend;
+  const name = model["name"];
+  if (typeof name === "string" && name) settings.model = name;
+  return settings;
 }
 
 /** `model.name` of an anomaly run is its method: the autoencoder or PatchCore. */

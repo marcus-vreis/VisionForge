@@ -9,7 +9,13 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
-from visionforge.core.code_tour import TOUR_SETTINGS, TOURS, code_tour, tour_settings
+from visionforge.core.code_tour import (
+    TOUR_SETTINGS,
+    TOURS,
+    code_tour,
+    tour_settings,
+    unavailable_reason,
+)
 from visionforge.gui.api.http_responses import NOT_FOUND_TEXT
 from visionforge.utils.messages import tr
 
@@ -69,8 +75,14 @@ def get_code_tour(task: str, request: Request) -> list[CodeSection]:
     task's); ``model`` is a model name, read as the setting it decides. Every
     setting is optional: one left out, or with a value the task does not take,
     leaves its notes undecided instead of guessing which branch the run takes.
+
+    A run whose training is not this project's code (detection on the
+    Ultralytics backend) is a 404 whose detail says why, for the page to show.
     """
     if task not in TOURS:
         raise HTTPException(404, tr("code.tour_missing"))
     settings = tour_settings(task, request.query_params)
+    reason = unavailable_reason(task, settings)
+    if reason is not None:
+        raise HTTPException(404, reason)
     return [CodeSection.model_validate(item) for item in code_tour(task, settings)]

@@ -590,6 +590,7 @@ export default function App() {
           pipeline: [],
           queueSize: undefined,
           story: storySpecFor("detection", payload),
+          code: codeSettingsFor("detection", payload),
         },
         payload,
         { detection: true },

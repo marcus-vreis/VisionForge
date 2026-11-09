@@ -60,3 +60,14 @@ describe("codeSettingsFor anomaly", () => {
     expect(codeSettingsFor("anomaly", { model: { name: "padim" } })).toEqual({});
   });
 });
+
+describe("codeSettingsFor detection", () => {
+  it("reads model.backend and model.name", () => {
+    expect(codeSettingsFor("detection", {
+      model: { backend: "torchvision", name: "retinanet_resnet50_fpn" },
+    })).toEqual({ backend: "torchvision", model: "retinanet_resnet50_fpn" });
+    expect(codeSettingsFor("detection", { model: { backend: "ultralytics", name: "yolo11n" } }))
+      .toEqual({ backend: "ultralytics", model: "yolo11n" });
+    expect(codeSettingsFor("detection", { model: { backend: "mmdet" } })).toEqual({});
+  });
+});

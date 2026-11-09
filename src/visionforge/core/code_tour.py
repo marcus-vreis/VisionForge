@@ -850,11 +850,275 @@ ANOMALY: tuple[Section, ...] = (
     ),
 )
 
+
+def _detection_item() -> Callable[..., Any]:
+    from visionforge.core.detection_dataset import DetectionDataset
+
+    return DetectionDataset.__getitem__
+
+
+def _detection_labels() -> Callable[..., Any]:
+    from visionforge.core.detection_dataset import DetectionDataset
+
+    return DetectionDataset._read_labels
+
+
+def _detection_collate() -> Callable[..., Any]:
+    from visionforge.core.detection_dataset import detection_collate
+
+    return detection_collate
+
+
+def _detector() -> Callable[..., Any]:
+    from visionforge.models.detection_factory import build_torchvision_detector
+
+    return build_torchvision_detector
+
+
+def _faster_rcnn() -> Callable[..., Any]:
+    from visionforge.models.detection_factory import _build_faster_rcnn
+
+    return _build_faster_rcnn
+
+
+def _ssd() -> Callable[..., Any]:
+    from visionforge.models.detection_factory import _build_ssd
+
+    return _build_ssd
+
+
+def _retinanet() -> Callable[..., Any]:
+    from visionforge.models.detection_factory import _build_retinanet
+
+    return _build_retinanet
+
+
+def _detection_epoch() -> Callable[..., Any]:
+    from visionforge.core.detection_trainer import DetectionTrainer
+
+    return DetectionTrainer._run_torchvision_epoch
+
+
+def _detection_val_loss() -> Callable[..., Any]:
+    from visionforge.core.detection_trainer import DetectionTrainer
+
+    return DetectionTrainer._eval_torchvision_loss
+
+
+def _detection_val_map() -> Callable[..., Any]:
+    from visionforge.core.detection_trainer import DetectionTrainer
+
+    return DetectionTrainer._eval_torchvision_map
+
+
+def _average_precision() -> Callable[..., Any]:
+    from visionforge.core.detection_metrics import _ap_for_class
+
+    return _ap_for_class
+
+
+_FASTER_RCNN = (("arch", "faster_rcnn"),)
+_SSD = (("arch", "ssd"),)
+_RETINANET = (("arch", "retinanet"),)
+
+
+def _head(key: str, start: str, when: tuple[tuple[str, str], ...]) -> Note:
+    return Note(start, key, end="detector: nn.Module", when=when)
+
+
+DETECTION: tuple[Section, ...] = (
+    Section(
+        "data",
+        _detection_item,
+        (
+            Note(
+                "tensor = to_tensor(image)",
+                "code.detection.data.tensor",
+            ),
+            Note(
+                "boxes, labels = self._read_labels(img_path, width, height)",
+                "code.detection.data.target",
+                end="return tensor, target",
+            ),
+        ),
+    ),
+    Section(
+        "labels",
+        _detection_labels,
+        (
+            Note(
+                "cls, cx, cy, w, h = (float(p) for p in parts)",
+                "code.detection.labels.yolo",
+                end="# Clamp to the image",
+            ),
+            Note(
+                "x1, x2 = max(0.0, x1), min(float(width), x2)",
+                "code.detection.labels.clamp",
+                end="boxes.append(",
+            ),
+            Note(
+                "labels.append(int(cls) + 1)",
+                "code.detection.labels.background",
+            ),
+        ),
+    ),
+    Section(
+        "collate",
+        _detection_collate,
+        (
+            Note(
+                "images, targets = zip(*batch, strict=True)",
+                "code.detection.collate.tuples",
+                end="return images, targets",
+            ),
+        ),
+    ),
+    Section(
+        "model",
+        _detector,
+        (
+            Note(
+                "if name in _FRCNN_BUILDERS:",
+                "code.detection.model.faster_rcnn",
+                end="if name in _SSD_BUILDERS:",
+                when=_FASTER_RCNN,
+            ),
+            Note(
+                "if name in _SSD_BUILDERS:",
+                "code.detection.model.ssd",
+                end='if name == "retinanet_resnet50_fpn":',
+                when=_SSD,
+            ),
+            Note(
+                'if name == "retinanet_resnet50_fpn":',
+                "code.detection.model.retinanet",
+                end="raise ValueError",
+                when=_RETINANET,
+            ),
+        ),
+    ),
+    Section(
+        "faster_rcnn",
+        _faster_rcnn,
+        (
+            Note(
+                "if pretrained:",
+                "code.detection.weights",
+                end="in_features =",
+                when=_FASTER_RCNN,
+            ),
+            _head("code.detection.faster_rcnn.head", "in_features =", _FASTER_RCNN),
+        ),
+    ),
+    Section(
+        "ssd",
+        _ssd,
+        (
+            Note(
+                "if pretrained:",
+                "code.detection.weights",
+                end="in_channels =",
+                when=_SSD,
+            ),
+            _head("code.detection.ssd.head", "in_channels =", _SSD),
+        ),
+    ),
+    Section(
+        "retinanet",
+        _retinanet,
+        (
+            Note(
+                "if pretrained:",
+                "code.detection.weights",
+                end="num_anchors =",
+                when=_RETINANET,
+            ),
+            _head("code.detection.retinanet.head", "num_anchors =", _RETINANET),
+        ),
+    ),
+    Section(
+        "train",
+        _detection_epoch,
+        (
+            Note("model.train()", "code.train.mode"),
+            Note(
+                "images = [img.to(device) for img in images]",
+                "code.detection.train.batch",
+                end="loss_dict = model(images, targets)",
+            ),
+            Note(
+                "loss_dict = model(images, targets)",
+                "code.detection.train.losses",
+                end="optimizer.zero_grad",
+            ),
+            Note(
+                "optimizer.zero_grad(set_to_none=True)",
+                "code.detection.train.step",
+                end="total += float(loss.item())",
+            ),
+        ),
+    ),
+    Section(
+        "validate",
+        _detection_val_loss,
+        (
+            Note("model.train()", "code.detection.validate.train_mode"),
+            Note("with torch.no_grad():", "code.validate.no_grad"),
+            Note(
+                "total += float(sum(loss_dict.values()).item())",
+                "code.detection.validate.loss",
+            ),
+        ),
+    ),
+    Section(
+        "map",
+        _detection_val_map,
+        (
+            # The first "model.eval()" is in the docstring.
+            Note("model.eval()", "code.detection.map.eval", nth=2),
+            Note(
+                "outputs = model([img.to(device) for img in images])",
+                "code.detection.map.predict",
+                end="for t in targets:",
+            ),
+            Note(
+                "return mean_average_precision_50(preds, gts).map50",
+                "code.detection.map.best",
+            ),
+        ),
+    ),
+    Section(
+        "metric",
+        _average_precision,
+        (
+            Note(
+                "entries.sort(key=lambda e: e[0], reverse=True)",
+                "code.detection.metric.sort",
+            ),
+            Note(
+                "ious = box_iou(box.unsqueeze(0), gt_boxes)[0]",
+                "code.detection.metric.match",
+                end="tp_cum = np.cumsum(tp)",
+            ),
+            Note(
+                "recalls = tp_cum / n_gt",
+                "code.detection.metric.curve",
+                end="return _ap_all_points",
+            ),
+            Note(
+                "return _ap_all_points(recalls, precisions)",
+                "code.detection.metric.ap",
+            ),
+        ),
+    ),
+)
+
 TOURS: dict[str, tuple[Section, ...]] = {
     "classification": CLASSIFICATION,
     "regression": REGRESSION,
     "segmentation": SEGMENTATION,
     "anomaly": ANOMALY,
+    "detection": DETECTION,
 }
 
 # Settings a note can depend on, per task, and their values.
@@ -871,6 +1135,10 @@ TOUR_SETTINGS: dict[str, dict[str, frozenset[str]]] = {
         "arch": frozenset({"unet", "torchvision"}),
     },
     "anomaly": {"method": frozenset({"autoencoder", "patchcore"})},
+    "detection": {
+        "backend": frozenset({"torchvision", "ultralytics"}),
+        "arch": frozenset({"faster_rcnn", "ssd", "retinanet"}),
+    },
 }
 
 # Query flags as the page sends them, turned into the settings' on/off.
@@ -896,11 +1164,43 @@ def segmentation_arch(model_name: str) -> str | None:
     return "torchvision" if model_name in _TORCHVISION_SEG else None
 
 
+def detection_arch(model_name: str) -> str | None:
+    """The builder ``build_torchvision_detector`` picks for a model name, if any."""
+    from visionforge.models.detection_factory import _FRCNN_BUILDERS, _SSD_BUILDERS
+
+    if model_name in _FRCNN_BUILDERS:
+        return "faster_rcnn"
+    if model_name in _SSD_BUILDERS:
+        return "ssd"
+    return "retinanet" if model_name == "retinanet_resnet50_fpn" else None
+
+
 # The setting a task reads from the model name, and how.
 _FROM_MODEL: dict[str, tuple[str, Callable[[str], str | None]]] = {
     "classification": ("family", model_family),
     "segmentation": ("arch", segmentation_arch),
+    "detection": ("arch", detection_arch),
 }
+
+# A tour that shows the project's code only on one path: the setting and value
+# it needs, and the message that says why there is nothing to show otherwise.
+_REQUIRES: dict[str, tuple[str, str, str]] = {
+    "detection": ("backend", "torchvision", "code.detection.only_torchvision"),
+}
+
+
+def unavailable_reason(task: str, settings: Mapping[str, str]) -> str | None:
+    """Why ``task`` has no tour for these settings, or None when it has one.
+
+    Detection trains with the project's code only on the torchvision backend;
+    the Ultralytics loop is the library's. A run that does not say torchvision
+    gets the reason too, since Ultralytics is the default backend.
+    """
+    required = _REQUIRES.get(task)
+    if required is None:
+        return None
+    key, value, message = required
+    return None if settings.get(key) == value else tr(message)
 
 
 def tour_settings(task: str, query: Mapping[str, str]) -> dict[str, str]:
@@ -909,7 +1209,7 @@ def tour_settings(task: str, query: Mapping[str, str]) -> dict[str, str]:
     A key the task does not know, or a value it does not take, is dropped, so
     its notes stay undecided. ``true``/``false`` read as ``on``/``off``;
     ``model`` is a model name, turned into the setting it decides (the
-    classification family, the segmentation architecture).
+    classification family, the segmentation architecture, the detector).
 
     Raises:
         KeyError: a task without a tour.

@@ -1277,6 +1277,110 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "pt": "Com o limiar, cada imagem de teste vira normal ou anômala, e o F1 mede esse acerto na classe anômala. Ao contrário da AUROC, ele depende do limiar escolhido.",
         "en": "With the threshold, every test image becomes normal or anomalous, and F1 measures that call on the anomalous class. Unlike AUROC, it depends on the chosen threshold.",
     },
+    "code.detection.only_torchvision": {
+        "pt": "A detecção com o backend Ultralytics treina dentro da biblioteca Ultralytics, não no código do VisionForge, por isso não há código comentado para ela. Escolha o backend torchvision (Faster R-CNN, SSD ou RetinaNet) para ver o código real do treino.",
+        "en": "Detection with the Ultralytics backend trains inside the Ultralytics library, not in VisionForge's code, so there is no annotated code for it. Pick the torchvision backend (Faster R-CNN, SSD or RetinaNet) to see the real training code.",
+    },
+    "code.detection.data.tensor": {
+        "pt": "A imagem vira tensor no tamanho original, sem redimensionar aqui: os detectores do torchvision redimensionam e normalizam por dentro.",
+        "en": "The image becomes a tensor at its original size, without resizing here: torchvision detectors resize and normalise internally.",
+    },
+    "code.detection.data.target": {
+        "pt": "O alvo de cada imagem é um dicionário: as caixas (boxes) em pixels no formato x1, y1, x2, y2 e o rótulo de cada caixa. Uma imagem pode ter qualquer número de caixas, inclusive nenhuma.",
+        "en": "Each image's target is a dictionary: the boxes in pixels as x1, y1, x2, y2 and each box's label. An image may hold any number of boxes, none included.",
+    },
+    "code.detection.labels.yolo": {
+        "pt": "O rótulo YOLO guarda classe, centro (cx, cy) e tamanho (w, h) relativos à imagem, de 0 a 1. Aqui viram os cantos da caixa em pixels.",
+        "en": "The YOLO label holds class, centre (cx, cy) and size (w, h) relative to the image, from 0 to 1. Here they become the box corners in pixels.",
+    },
+    "code.detection.labels.clamp": {
+        "pt": "A caixa é cortada nos limites da imagem, e uma caixa sem área é descartada.",
+        "en": "The box is clipped to the image bounds, and a box with no area is dropped.",
+    },
+    "code.detection.labels.background": {
+        "pt": "Os detectores do torchvision reservam o rótulo 0 para o fundo, então a classe YOLO c vira c + 1.",
+        "en": "torchvision detectors reserve label 0 for the background, so YOLO class c becomes c + 1.",
+    },
+    "code.detection.collate.tuples": {
+        "pt": "As imagens têm tamanhos diferentes e cada uma tem seu número de caixas, então o lote não vira um tensor só: são tuplas de imagens e de alvos, como os detectores do torchvision recebem.",
+        "en": "Images differ in size and each has its own number of boxes, so the batch is not stacked into one tensor: it is tuples of images and targets, as torchvision detectors take them.",
+    },
+    "code.detection.model.faster_rcnn": {
+        "pt": "Faster R-CNN: detector em dois estágios. Uma rede propõe regiões e uma cabeça classifica cada uma e ajusta a caixa.",
+        "en": "Faster R-CNN: a two-stage detector. A network proposes regions and a head classifies each one and refines its box.",
+    },
+    "code.detection.model.ssd": {
+        "pt": "SSD: detector de um estágio. Prevê classe e caixa direto sobre âncoras em vários mapas de features.",
+        "en": "SSD: a single-stage detector. It predicts class and box straight from anchors over several feature maps.",
+    },
+    "code.detection.model.retinanet": {
+        "pt": "RetinaNet: detector de um estágio com focal loss, que dá menos peso às âncoras fáceis de fundo.",
+        "en": "RetinaNet: a single-stage detector with focal loss, which gives less weight to easy background anchors.",
+    },
+    "code.detection.weights": {
+        "pt": "Com pretrained, o detector começa dos pesos treinados no COCO; sem ele, começa do zero, sem baixar nada.",
+        "en": "With pretrained, the detector starts from weights trained on COCO; without it, it starts from scratch and downloads nothing.",
+    },
+    "code.detection.faster_rcnn.head": {
+        "pt": "A cabeça de classificação do COCO é trocada por uma nova com uma saída por classe do seu dataset mais o fundo (num_classes + 1).",
+        "en": "The COCO classification head is replaced by a new one with one output per class of your dataset plus the background (num_classes + 1).",
+    },
+    "code.detection.ssd.head": {
+        "pt": "A cabeça de classificação do SSD é trocada por uma nova, com num_classes + 1 saídas por âncora (o + 1 é o fundo). A cabeça das caixas continua a do COCO.",
+        "en": "SSD's classification head is replaced by a new one with num_classes + 1 outputs per anchor (the + 1 is the background). The box head stays COCO's.",
+    },
+    "code.detection.retinanet.head": {
+        "pt": "A cabeça de classificação da RetinaNet é trocada por uma nova, com num_classes + 1 saídas por âncora e GroupNorm. A cabeça das caixas continua a do COCO.",
+        "en": "RetinaNet's classification head is replaced by a new one with num_classes + 1 outputs per anchor and GroupNorm. The box head stays COCO's.",
+    },
+    "code.detection.train.batch": {
+        "pt": "As imagens e os alvos do lote vão para o dispositivo (GPU ou CPU), um a um, porque cada imagem tem seu tamanho.",
+        "en": "The batch's images and targets move to the device (GPU or CPU) one by one, since each image has its own size.",
+    },
+    "code.detection.train.losses": {
+        "pt": "Em modo de treino, o detector recebe imagens e alvos e devolve um dicionário de losses (classificação, caixa e, no Faster R-CNN, as da rede de propostas). A loss do lote é a soma delas.",
+        "en": "In training mode the detector takes images and targets and returns a dictionary of losses (classification, box and, in Faster R-CNN, those of the proposal network). The batch loss is their sum.",
+    },
+    "code.detection.train.step": {
+        "pt": "Zera os gradientes, backward calcula o gradiente de cada peso e step mexe nos pesos.",
+        "en": "Clears the gradients, backward computes each weight's gradient and step moves the weights.",
+    },
+    "code.detection.validate.train_mode": {
+        "pt": "Os detectores do torchvision só devolvem losses em modo de treino. A val_loss usa esse modo dentro de no_grad e sem passo do otimizador: os pesos não mudam.",
+        "en": "torchvision detectors only return losses in training mode. val_loss uses that mode inside no_grad and with no optimiser step: the weights do not change.",
+    },
+    "code.detection.validate.loss": {
+        "pt": "A val_loss é a soma das losses do detector, na média dos lotes. Ela é mostrada, mas não escolhe o checkpoint: quem escolhe é o mAP@0.5 (aba mAP).",
+        "en": "val_loss is the sum of the detector's losses, averaged over batches. It is shown, but it does not pick the checkpoint: mAP@0.5 does (mAP tab).",
+    },
+    "code.detection.map.eval": {
+        "pt": "Em modo de avaliação o detector devolve previsões: caixas, rótulos e confiança de cada detecção.",
+        "en": "In evaluation mode the detector returns predictions: boxes, labels and the confidence of each detection.",
+    },
+    "code.detection.map.predict": {
+        "pt": "Guarda as previsões e as caixas verdadeiras de cada imagem de validação para comparar no fim.",
+        "en": "Keeps the predictions and the true boxes of every validation image to compare at the end.",
+    },
+    "code.detection.map.best": {
+        "pt": "O mAP@0.5 da validação. A época com o maior mAP@0.5 é a que fica salva em best_model.pth.",
+        "en": "The validation mAP@0.5. The epoch with the highest mAP@0.5 is the one saved in best_model.pth.",
+    },
+    "code.detection.metric.sort": {
+        "pt": "AP de uma classe: as detecções dela são ordenadas da mais confiante para a menos confiante.",
+        "en": "AP of one class: its detections are sorted from most to least confident.",
+    },
+    "code.detection.metric.match": {
+        "pt": "Cada detecção procura a caixa verdadeira de maior IoU (sobreposição) na sua imagem. Com IoU de pelo menos 0,5 e caixa ainda livre, é um acerto (TP); senão, um falso positivo (FP). Uma caixa verdadeira só vale para uma detecção.",
+        "en": "Each detection looks for the true box with the highest IoU (overlap) in its image. With IoU of at least 0.5 and the box still free, it is a hit (TP); otherwise a false positive (FP). A true box counts for one detection only.",
+    },
+    "code.detection.metric.curve": {
+        "pt": "Descendo a lista, a revocação (quantas caixas verdadeiras já foram achadas) e a precisão (quantas detecções estavam certas) formam a curva precisão-revocação.",
+        "en": "Going down the list, recall (how many true boxes were found so far) and precision (how many detections were right) form the precision-recall curve.",
+    },
+    "code.detection.metric.ap": {
+        "pt": "O AP é a área sob essa curva (todos os pontos, como no VOC). O mAP@0.5 é a média do AP entre as classes que têm caixas verdadeiras.",
+        "en": "AP is the area under that curve (all points, as in VOC). mAP@0.5 is the mean AP over the classes that have true boxes.",
+    },
     "mlflow.retry_unavailable": {
         "pt": "A exportação para MLflow está indisponível para esta execução ou perfil.",
         "en": "MLflow export is unavailable for this run or profile.",

@@ -9,9 +9,11 @@ from visionforge.core.code_tour import (
     TOURS,
     Note,
     code_tour,
+    detection_arch,
     model_family,
     note_span,
     tour_settings,
+    unavailable_reason,
 )
 from visionforge.utils.messages import message
 
@@ -289,3 +291,47 @@ def test_the_autoencoder_marks_its_own_code_and_leaves_patchcore_off() -> None:
         "if isinstance(model, ConvAutoencoder):": True,
         "if isinstance(model, PatchCore):": False,
     }
+
+
+def test_the_torchvision_detection_tour_resolves_every_note() -> None:
+    sections = code_tour("detection", {"backend": "torchvision"})
+    assert [s["id"] for s in sections][:4] == ["data", "labels", "collate", "model"]
+    assert {"train", "validate", "map", "metric"} <= {s["id"] for s in sections}
+    for section in sections:
+        for note in section["notes"]:
+            assert 0 <= note["first"] <= note["last"] < len(section["lines"])
+            assert note["text"]
+
+
+def test_the_detector_of_the_run_is_the_active_builder() -> None:
+    settings = tour_settings(
+        "detection", {"backend": "torchvision", "model": "ssd300_vgg16"}
+    )
+    assert settings == {"backend": "torchvision", "arch": "ssd"}
+    sections = {s["id"]: s for s in code_tour("detection", settings)}
+    assert {n["active"] for n in sections["ssd"]["notes"]} == {True}
+    assert {n["active"] for n in sections["faster_rcnn"]["notes"]} == {False}
+    assert {n["active"] for n in sections["retinanet"]["notes"]} == {False}
+    assert [n["active"] for n in sections["model"]["notes"]] == [False, True, False]
+
+
+@pytest.mark.parametrize(
+    ("name", "arch"),
+    [
+        ("fasterrcnn_resnet50_fpn", "faster_rcnn"),
+        ("fasterrcnn_mobilenet_v3_large_fpn", "faster_rcnn"),
+        ("ssdlite320_mobilenet_v3_large", "ssd"),
+        ("retinanet_resnet50_fpn", "retinanet"),
+        ("yolo11n", None),
+    ],
+)
+def test_detection_arch(name: str, arch: str | None) -> None:
+    assert detection_arch(name) == arch
+
+
+def test_only_the_torchvision_backend_has_a_detection_tour() -> None:
+    assert unavailable_reason("detection", {"backend": "torchvision"}) is None
+    assert unavailable_reason("detection", {"backend": "ultralytics"})
+    # Ultralytics is the default backend, so an undecided one says why too.
+    assert unavailable_reason("detection", {})
+    assert unavailable_reason("regression", {}) is None
