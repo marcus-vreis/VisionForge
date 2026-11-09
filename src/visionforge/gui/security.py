@@ -259,25 +259,30 @@ def inline_script_hashes(html: str) -> list[str]:
     return hashes
 
 
+# CSP keywords keep their single quotes inside the header value.
+_SELF = "'self'"
+_NONE = "'none'"
+
+
 def _policy(directives: dict[str, str]) -> str:
     return "; ".join(f"{name} {value}" for name, value in directives.items())
 
 
 def content_security_policy(script_hashes: Iterable[str]) -> str:
     """The SPA's policy: this server only, inline scripts only by hash."""
-    script_src = " ".join(["'self'", *script_hashes])
+    script_src = " ".join([_SELF, *script_hashes])
     return _policy(
         {
-            "default-src": "'self'",
+            "default-src": _SELF,
             "script-src": script_src,
-            "style-src": "'self'",
+            "style-src": _SELF,
             "img-src": "'self' data: blob:",
-            "font-src": "'self'",
-            "connect-src": "'self'",
-            "object-src": "'none'",
-            "base-uri": "'self'",
-            "form-action": "'self'",
-            "frame-ancestors": "'none'",
+            "font-src": _SELF,
+            "connect-src": _SELF,
+            "object-src": _NONE,
+            "base-uri": _SELF,
+            "form-action": _SELF,
+            "frame-ancestors": _NONE,
         }
     )
 
@@ -287,7 +292,7 @@ def content_security_policy(script_hashes: Iterable[str]) -> str:
 # exist only with VISIONFORGE_DOCS=1, and only their own responses get this.
 DOCS_CONTENT_SECURITY_POLICY = _policy(
     {
-        "default-src": "'self'",
+        "default-src": _SELF,
         "script-src": "'self' 'unsafe-inline' https://cdn.jsdelivr.net",
         "style-src": (
             "'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com"
@@ -295,11 +300,11 @@ DOCS_CONTENT_SECURITY_POLICY = _policy(
         "font-src": "'self' https://fonts.gstatic.com",
         "img-src": "'self' data: blob: https://fastapi.tiangolo.com https://cdn.redoc.ly",
         "worker-src": "'self' blob:",
-        "connect-src": "'self'",
-        "object-src": "'none'",
-        "base-uri": "'self'",
-        "form-action": "'self'",
-        "frame-ancestors": "'none'",
+        "connect-src": _SELF,
+        "object-src": _NONE,
+        "base-uri": _SELF,
+        "form-action": _SELF,
+        "frame-ancestors": _NONE,
     }
 )
 
