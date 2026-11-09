@@ -7607,3 +7607,31 @@ differently now. Each fix has a test that failed before it
 `TestFoldStatisticsOnMixedSizes`, `test_the_full_rate_group_is_exactly_the_final_linear`,
 `TestFloorWithTiedPairs`).
 
+---
+
+## ADR-178 — The GUI answers only to its own names (Host and Origin guard)
+
+**Date:** 2026-11-09
+**Status:** Accepted
+**Extends:** ADR-114 (lab server via `--host`), ADR-120 (open folder / update refuse a foreign Origin)
+
+**Context:** the server answered any `Host`. Its only middleware was CORS for the Vite dev server, which hides an answer from another site's page but does not stop the request. Two attacks follow from a page the user merely visits. *DNS rebinding:* the attacker's name resolves first to their machine, then to 127.0.0.1, so the browser treats the local server as the attacker's site and reads every answer (reproduced: `Host: evil.example` got 200 on `/api/health`). *Cross-site requests:* a page posts to localhost. Only four routes checked `Origin` (reveal, update/apply, DVC); the other ~62 state-changing routes did not.
+
+**Decision:**
+
+- An ASGI middleware, `gui/security.py` (`HostOriginGuard`), runs before CORS and every route.
+- **Host:** a request whose `Host` (port removed, brackets around IPv6 removed, case and trailing dot ignored) is not an accepted name is refused with 400 and a pt/en message. A missing or malformed `Host` is refused too.
+- **Origin:** a request whose method is not GET/HEAD/OPTIONS/TRACE, and every WebSocket handshake, is refused (403, or close code 1008) when it carries an `Origin` that is neither loopback nor an accepted name. `null` and unparsable origins are refused. A missing `Origin` stays allowed: that is a same-origin navigation or a client that is not a browser.
+- **Accepted names.** Bound to loopback (the default): `localhost` and the loopback addresses (`127.0.0.1`, `[::1]`, reusing `is_loopback_host`). Bound to any other address (lab server, ADR-114): also the machine's hostname, its FQDN, the addresses they resolve to, and the bind address unless it is a wildcard. Behind a DNS alias or a reverse proxy's public name, the person starting the server adds names with `--allowed-host NAME` (repeatable), which works in both modes.
+- With `--host 0.0.0.0` the browser tab opens `http://127.0.0.1:<port>`. The wildcard is neither reachable nor an accepted Host.
+- The route-level checks in reveal, update/apply and DVC stay. They are stricter (loopback only) and still apply on a lab server, where the page's own origin is the machine's name.
+- The policy lives on `app.state.host_policy`, set by `start_server`. Without it (`uvicorn ...:app`, tests), the default is loopback only.
+
+**Consequences:** reaching a lab server by a name the machine does not resolve for itself (a DNS alias, a proxy) needs `--allowed-host`. Until then the page gets a 400 that names the flag. The updater's relaunch (ADR-120) passes only `--host/--port`, taken from the socket that served the request, so `--allowed-host` values are not carried across an update.
+
+**Alternatives considered:**
+
+- *Starlette's TrustedHostMiddleware.* It checks Host only, not Origin, and has no notion of "this machine's names when bound to 0.0.0.0".
+- *Accepting any Host in lab mode.* That leaves every lab user exposed to rebinding through their own browser.
+- *Requiring `--allowed-host` for every non-loopback bind.* Safer, but it breaks every lab already reaching the server by hostname or IP.
+- *A per-route Origin dependency.* Each new route would have to remember it. The middleware covers routes that do not exist yet.
