@@ -108,6 +108,7 @@ from visionforge.gui.api.folder_opener import (
     is_loopback_origin,
     open_folder,
 )
+from visionforge.gui.api.github_routes import build_github_router
 from visionforge.gui.api.gpu_health import cuda_context_broken
 from visionforge.gui.api.http_responses import BAD_REQUEST as _BAD_REQUEST
 from visionforge.gui.api.http_responses import CONFLICT as _CONFLICT
@@ -532,6 +533,13 @@ router.include_router(
         ),
         lambda: _PROFILES_DIR.parent.resolve(),
         _EVIDENCE_EXPORTS,
+    )
+)
+# A run's record, without weights, committed to a private GitHub repository (ADR-175).
+router.include_router(
+    build_github_router(
+        lambda header: current_profile(header),
+        lambda run_id, profile: _find_run_dir(run_id, profile),
     )
 )
 # Unpublished Zenodo drafts of a run's bundle (ADR-174).

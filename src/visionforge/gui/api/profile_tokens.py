@@ -1,7 +1,7 @@
 """One private token per profile and service, saved where only the server reads it.
 
-The Hugging Face Hub (ADR-171), Weights & Biases (ADR-172) and Zenodo (ADR-174)
-keep their tokens the same way: a file named by a hash of the profile, never sent back to the
+The Hugging Face Hub (ADR-171), Weights & Biases (ADR-172), Zenodo (ADR-174) and
+GitHub (ADR-175) keep their tokens the same way: a file named by a hash of the profile, never sent back to the
 page. The API only says whether one exists, and whether the server listens
 beyond this machine, where whoever picks the profile can use it.
 """
@@ -27,13 +27,14 @@ from visionforge.utils.credentials import config_dir
 from visionforge.utils.messages import tr
 
 ProfileHeader = Annotated[str | None, Header(alias=PROFILE_HEADER)]
-Service = Literal["hub", "wandb", "zenodo", "zenodo-sandbox"]
+Service = Literal["hub", "wandb", "zenodo", "zenodo-sandbox", "github"]
 _MAX_TOKEN = 4096
 _INVALID: dict[Service, str] = {
     "hub": "hub.token_invalid",
     "wandb": "wandb.token_invalid",
     "zenodo": "zenodo.token_invalid",
     "zenodo-sandbox": "zenodo.token_invalid",
+    "github": "github.token_invalid",
 }
 
 

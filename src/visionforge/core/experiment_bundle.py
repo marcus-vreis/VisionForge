@@ -228,6 +228,27 @@ def _bundled_name(root: Path, value: Any, files: dict[str, Path]) -> str | None:
     return name if name in files else None
 
 
+def read_run_record(run_dir: Path | str) -> tuple[Path, dict[str, Any]]:
+    """The resolved run folder and its bounded, validated run.json.
+
+    Raises:
+        FileNotFoundError: the run or its run.json is missing.
+        ValueError: run.json is too large, linked, or not a record.
+    """
+    root = Path(run_dir).resolve(strict=True)
+    return root, _read_run_record(root)[2]
+
+
+def contained_run_file(root: Path, value: str) -> Path:
+    """``value`` as a regular, unlinked, non-private file inside ``root``.
+
+    Raises:
+        FileNotFoundError: the file is missing.
+        ValueError: it is outside the run, linked, hidden or private.
+    """
+    return _contained_file(root, value)
+
+
 def _read_run_record(root: Path) -> tuple[Path, bytes, dict[str, Any]]:
     """Read and validate the bounded run record before collecting artifacts."""
     run_path = _contained_file(root, RUN_FILENAME)
@@ -529,7 +550,9 @@ def _rebase_run_record(data: dict[str, Any], target: Path, arrived: set[str]) ->
 
 
 __all__ = [
+    "contained_run_file",
     "export_experiment_bundle",
     "import_experiment_bundle",
+    "read_run_record",
     "verify_experiment_bundle",
 ]
