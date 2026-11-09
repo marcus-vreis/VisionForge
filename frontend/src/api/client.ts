@@ -1993,3 +1993,50 @@ export async function commitRunToGitHub(runId: string, repo: string, digest: str
     body: JSON.stringify({ run_id: runId, repo, digest }),
   });
 }
+
+export type DvcRepositoryStateName = "ready" | "missing" | "not_dir" | "not_git" | "no_dvc";
+
+export interface DvcRepositoryState {
+  path: string;
+  state: DvcRepositoryStateName;
+  remote: string | null;
+  tools: { git: boolean; dvc: boolean };
+}
+
+export interface DvcPreview {
+  folder: string;
+  files: { path: string; size: number; storage: "git" | "dvc" }[];
+  readme: string;
+  digest: string;
+  repository: DvcRepositoryState;
+}
+
+export interface DvcExportResult {
+  folder: string;
+  path: string;
+  commit: string | null;
+  remote: string | null;
+  pushed: boolean | null;
+}
+
+/** The folder, its files (git or DVC) and the repository's state (ADR-176). */
+export async function fetchDvcPreview(runId: string, repo: string): Promise<DvcPreview> {
+  const query = `run_id=${encodeURIComponent(runId)}&repo=${encodeURIComponent(repo)}`;
+  return request<DvcPreview>(`/dvc/preview?${query}`);
+}
+
+/** Make the folder a git repository with DVC (git init, dvc init). */
+export async function prepareDvcRepository(repo: string): Promise<DvcRepositoryState> {
+  return request<DvcRepositoryState>("/dvc/prepare", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ repo }),
+  });
+}
+
+/** Write the previewed folder, dvc add the weights, commit it and push them. */
+export async function versionRunWithDvc(runId: string, repo: string, digest: string): Promise<DvcExportResult> {
+  return request<DvcExportResult>("/dvc/export", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ run_id: runId, repo, digest }),
+  });
+}

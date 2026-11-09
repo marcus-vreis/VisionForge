@@ -100,6 +100,9 @@ To cite a run by DOI, open it in History and create a Zenodo draft: the
 bundle goes up without this machine's paths, and you fill in authors and
 license and publish on Zenodo. To keep runs next to your code, send the
 report to a private GitHub repository: one folder per run, without weights.
+To version the weights with git, open the run in History and version it
+with DVC in a repository on this computer (`visionforge-studio[dvc]`):
+`dvc metrics show` and `dvc plots show` then compare the runs.
 
 </details>
 
@@ -343,7 +346,10 @@ privado. Para citar um treino por DOI, abra-o no Histórico e crie um rascunho
 no Zenodo: o bundle sobe sem os caminhos desta máquina, e você preenche
 autores e licença e publica no próprio Zenodo. Para guardar os treinos junto
 do código, envie o relatório a um repositório privado do GitHub: uma pasta
-por treino, sem os pesos.
+por treino, sem os pesos. Para versionar os pesos junto do git, abra o
+treino no Histórico e versione com DVC num repositório deste computador
+(`visionforge-studio[dvc]`); depois, `dvc metrics show` e `dvc plots show`
+comparam os treinos.
 
 </details>
 

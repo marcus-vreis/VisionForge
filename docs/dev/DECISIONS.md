@@ -7495,3 +7495,68 @@ the README table. Only github.com: GitHub Enterprise hosts are not supported.
   account administration, much more than writing one repository.
 - *Weights through Git LFS.* Small free quota, and the weights already have two
   better homes.
+
+
+## ADR-176 — A run versioned with DVC in a local repository of experiments
+
+**Date:** 2026-11-08
+**Status:** Accepted
+**Extends:** ADR-174 (public run.json), ADR-175 (one folder per run, README report)
+
+**Context:** the DVC item of #118, deferred until the other destinations were
+done. DVC keeps data and weights next to git: git holds small pointer files,
+DVC keeps the content in its cache and in a remote (S3, Google Drive, a shared
+folder). A group that already versions its code with git wants each run's
+weights versioned the same way, and wants to compare runs with
+`dvc metrics show`, `dvc params diff` and `dvc plots show`.
+
+**Decision:**
+
+- History gets "Version with DVC". The researcher names a folder on this
+  computer that is a git repository with DVC initialized at its root. "Prepare
+  folder" makes one: it creates the folder when its parent exists, runs
+  `git init` when needed and `dvc init`, and commits only the three files
+  `dvc init` writes.
+- A run becomes `runs/<experiment>/<run>/`, the same folder as ADR-175. Git
+  gets the README report, the public run.json (`artifacts.model` names the
+  weights), the charts, and the files DVC compares: `params.yaml` (the run's
+  config, local paths reduced), `metrics.json` (final numeric metrics),
+  `history.csv` (every epoch, every numeric column) and a `dvc.yaml` that
+  declares them at the top level, with no stages. DVC gets the weights,
+  `model.<ext>`, through `dvc add`; git gets `model.<ext>.dvc`.
+- **Preview, then one commit.** The page lists every file and whether git or
+  DVC keeps it, plus the repository's state and default remote. The export must
+  match the previewed digest, which covers the repository path and the weights'
+  SHA-256. The commit is `git commit -- <folder>`: whatever the researcher had
+  staged elsewhere stays staged. A run exported again with no change makes no
+  commit.
+- `dvc push` of that run's pointer runs when the repository has a default
+  remote. A failed push keeps the commit and the page says so; exporting again
+  retries the push. `git push` never runs: publishing the repository stays with
+  the researcher.
+- The real tools run, not a reimplementation of DVC's formats: DVC from the
+  `[dvc]` extra (`python -m dvc`, pinned to 3.67.1) or from the PATH, git from
+  the PATH. They run without a terminal or prompt, with `DVC_NO_ANALYTICS=1`.
+  Their output goes to the server log only; the page names the tool and the
+  step that failed.
+- **This machine only.** Every route takes a server folder from the request and
+  runs git and DVC there, including the repository's own hooks, so it answers
+  only a loopback client and refuses a page of another site, like "open
+  folder". The folder is remembered in the browser, not in the profile.
+- The dataset does not go: run.json already carries its fingerprint and origin.
+
+**Consequences:** the weights are copied into the repository's folder and into
+DVC's cache, so a run takes its checkpoint's size twice on disk until DVC's
+cache link type is changed. A remote is configured with DVC itself (`dvc remote
+add`); the page only uses the default one. Files removed from a run stay in the
+repository until someone deletes them, as in ADR-175.
+
+**Alternatives considered:**
+
+- *Writing `.dvc` files and the cache without DVC.* No dependency, but it
+  copies a format DVC owns and can change, and a push still needs DVC.
+- *A `dvc.yaml` stage per run.* `dvc repro` would need the dataset and the
+  training command on the machine, and a run already happened: the record is
+  the result, not a pipeline to rerun.
+- *Configuring the remote from the page.* Each storage has its own credentials
+  and login; DVC already does that well.

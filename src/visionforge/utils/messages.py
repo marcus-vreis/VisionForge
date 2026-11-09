@@ -793,6 +793,62 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "pt": "O envio ao GitHub falhou. Confira a conexão e tente de novo.",
         "en": "The GitHub upload failed. Check the connection and try again.",
     },
+    "dvc.request_invalid": {
+        "pt": "Pedido inválido para o DVC.",
+        "en": "Invalid DVC request.",
+    },
+    "dvc.remote_client": {
+        "pt": "O DVC só funciona no computador onde o VisionForge roda: ele grava numa pasta e roda git e DVC nesta máquina.",
+        "en": "DVC only works on the computer running VisionForge: it writes to a folder and runs git and DVC on this machine.",
+    },
+    "dvc.foreign_origin": {
+        "pt": "Pedido recusado: ele veio de outra página.",
+        "en": "Request refused: it came from another page.",
+    },
+    "dvc.repo_invalid": {
+        "pt": "Informe o caminho completo da pasta do repositório.",
+        "en": "Enter the full path of the repository folder.",
+    },
+    "dvc.repo_not_ready": {
+        "pt": "A pasta não é um repositório git com DVC. Use Preparar pasta antes.",
+        "en": "The folder is not a git repository with DVC. Use Prepare folder first.",
+    },
+    "dvc.prepare_refused": {
+        "pt": "Não dá para preparar este caminho: ele é um arquivo, ou a pasta de cima não existe.",
+        "en": "This path cannot be prepared: it is a file, or its parent folder does not exist.",
+    },
+    "dvc.git_missing": {
+        "pt": "O git não foi encontrado neste computador. Instale o Git e reabra o VisionForge.",
+        "en": "git was not found on this computer. Install Git and reopen VisionForge.",
+    },
+    "dvc.dvc_missing": {
+        "pt": "O DVC não foi encontrado. Instale o extra visionforge-studio[dvc], ou o DVC no PATH, e reabra o VisionForge.",
+        "en": "DVC was not found. Install the visionforge-studio[dvc] extra, or DVC on the PATH, and reopen VisionForge.",
+    },
+    "dvc.git_failed": {
+        "pt": "O git falhou em {step}. Confira se o git tem nome e e-mail configurados e se um hook do repositório não bloqueou o commit. O log do servidor tem a saída.",
+        "en": "git failed at {step}. Check that git has a name and e-mail configured and that no repository hook blocked the commit. The server log has the output.",
+    },
+    "dvc.dvc_failed": {
+        "pt": "O DVC falhou em {step}. O log do servidor tem a saída.",
+        "en": "DVC failed at {step}. The server log has the output.",
+    },
+    "dvc.run_not_found": {
+        "pt": _RUN_NOT_FOUND_PT,
+        "en": _RUN_NOT_FOUND_EN,
+    },
+    "dvc.artifact_missing": {
+        "pt": _RECORD_MISSING_PT,
+        "en": _RECORD_MISSING_EN,
+    },
+    "dvc.package_invalid": {
+        "pt": _UPLOAD_REFUSED_PT,
+        "en": _UPLOAD_REFUSED_EN,
+    },
+    "dvc.preview_changed": {
+        "pt": _PREVIEW_CHANGED_PT,
+        "en": _PREVIEW_CHANGED_EN,
+    },
     "zenodo.request_invalid": {
         "pt": "Pedido inválido para o Zenodo.",
         "en": "Invalid Zenodo request.",

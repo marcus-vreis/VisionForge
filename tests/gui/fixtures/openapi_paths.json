@@ -338,6 +338,28 @@
       }
     }
   },
+  "GET /api/dvc/preview": {
+    "operationId": "preview_api_dvc_preview_get",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional",
+      "query:repo:required",
+      "query:run_id:required"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "403": {},
+      "404": {},
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      },
+      "500": {}
+    }
+  },
   "GET /api/experiment/events": {
     "operationId": "experiment_events_api_experiment_events_get",
     "parameters": [
@@ -1622,6 +1644,49 @@
         "application/json": "HTTPValidationError"
       },
       "503": {}
+    }
+  },
+  "POST /api/dvc/export": {
+    "operationId": "send_api_dvc_export_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {
+      "application/json": "DvcExport"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "403": {},
+      "404": {},
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      },
+      "500": {}
+    }
+  },
+  "POST /api/dvc/prepare": {
+    "operationId": "prepare_api_dvc_prepare_post",
+    "parameters": [
+      "header:X-VF-Lang:optional"
+    ],
+    "requestBody": {
+      "application/json": "DvcRepository"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "403": {},
+      "404": {},
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      },
+      "500": {}
     }
   },
   "POST /api/experiment/run": {
