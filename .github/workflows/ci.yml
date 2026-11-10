@@ -149,7 +149,7 @@ jobs:
             --cov-report=xml \
             --cov-report=html \
             --cov-report=term-missing \
-            --cov-fail-under=70
+            --cov-fail-under=93
 
       # Coverage is reported once: every leg measures the same code, and
       # SonarCloud takes a single report.
