@@ -1378,8 +1378,8 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "en": "Clears the gradients, backward computes each weight's gradient and step moves the weights.",
     },
     "code.detection.validate.train_mode": {
-        "pt": "Os detectores do torchvision só devolvem losses em modo de treino. A val_loss usa esse modo dentro de no_grad e sem passo do otimizador: os pesos não mudam.",
-        "en": "torchvision detectors only return losses in training mode. val_loss uses that mode inside no_grad and with no optimiser step: the weights do not change.",
+        "pt": "Os detectores do torchvision só devolvem losses em modo de treino. A val_loss usa esse modo dentro de no_grad e sem passo do otimizador, mas com as camadas de BatchNorm em eval: assim os pesos e as estatísticas de média e variância não mudam.",
+        "en": "torchvision detectors only return losses in training mode. val_loss uses that mode inside no_grad and with no optimiser step, but with the BatchNorm layers in eval: so the weights and the running mean and variance do not change.",
     },
     "code.detection.validate.loss": {
         "pt": "A val_loss é a soma das losses do detector, na média dos lotes. Ela é mostrada, mas não escolhe o checkpoint: quem escolhe é o mAP@0.5 (aba mAP).",

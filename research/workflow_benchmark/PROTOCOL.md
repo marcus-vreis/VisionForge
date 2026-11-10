@@ -250,7 +250,7 @@ in their manifest; absent class metadata defaults to the 20 VOC classes.
 Both paths construct/load/place the model before seeding. A scoped monkeypatch
 of `detection_trainer.build_torchvision_detector` returns the prebuilt model
 without consuming RNG after the Trainer seeds, and is restored even on failure.
-Training, validation loss in train mode (including BatchNorm updates), and
+Training, validation loss in train mode with BatchNorm in eval, and
 validation mAP each create a separate loader iterator in that order. Train and
 validation batches must have at least two images for SSDLite BatchNorm. Strict
 validation mAP improvement selects the first best checkpoint; absent test uses

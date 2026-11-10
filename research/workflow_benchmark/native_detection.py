@@ -39,7 +39,7 @@ NATIVE_INCLUDES = {
     "training": [
         "seeding and deterministic algorithms",
         "SGD construction after device placement",
-        "train, validation loss in train mode (including BatchNorm updates), validation mAP in eval mode",
+        "train, validation loss in train mode with BatchNorm in eval, validation mAP in eval mode",
         "best checkpoint CPU state writes",
     ],
     "evaluation": [
@@ -260,6 +260,12 @@ def evaluate_detector(model, loader, device):
 def _loss_pass(model, loader, device, optimizer=None):
     device = "cuda:0" if device == "cuda" else device
     model.train()
+    if optimizer is None:
+        # Validation: the loss dict needs train mode, but BatchNorm stays in eval
+        # so validation never moves its running statistics (as in VisionForge).
+        for module in model.modules():
+            if isinstance(module, nn.modules.batchnorm._BatchNorm):
+                module.eval()
     total, count = 0.0, 0
     with torch.set_grad_enabled(optimizer is not None):
         for images, targets in loader:
