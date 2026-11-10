@@ -480,10 +480,46 @@ class TestKaggleDownload:
         assert os.environ["KAGGLE_API_TOKEN"] == "KGAT_do_ambiente"
 
 
-def _install_fake_datasets(
-    monkeypatch: pytest.MonkeyPatch, with_label: bool = True
+# A made-up value: every test here uses it, none uses a real credential.
+SECRET = "SECRET123"
+HF_SHA = "0123456789abcdef0123456789abcdef01234567"
+
+
+def _install_fake_hub(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    sha: str | None = HF_SHA,
+    error: Exception | None = None,
+    calls: list[Any] | None = None,
 ) -> None:
-    """Inject a fake `datasets` module: load_dataset → DatasetDict of image+label."""
+    """Inject a fake `huggingface_hub` whose `HfApi().dataset_info` needs no network."""
+
+    class HfApi:
+        def dataset_info(
+            self, repo_id: str, *, token: str | None = None, **_: Any
+        ) -> Any:
+            if calls is not None:
+                calls.append((repo_id, token))
+            if error is not None:
+                raise error
+            return types.SimpleNamespace(sha=sha)
+
+    fake_hub = types.ModuleType("huggingface_hub")
+    fake_hub.HfApi = HfApi  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "huggingface_hub", fake_hub)
+
+
+def _install_fake_datasets(
+    monkeypatch: pytest.MonkeyPatch,
+    with_label: bool = True,
+    loads: list[Any] | None = None,
+) -> None:
+    """Inject fake `datasets` and `huggingface_hub` modules, no network.
+
+    `load_dataset` returns a DatasetDict of image+label; each call is appended to
+    `loads` as `(name, revision, token)`.
+    """
+    _install_fake_hub(monkeypatch)
     from PIL import Image as PilImage
 
     class Image:  # class name is what the feature introspection matches on
@@ -508,7 +544,11 @@ def _install_fake_datasets(
                     "label": i % 2,
                 }
 
-    def load_dataset(name: str, token: str | None = None) -> dict[str, Any]:
+    def load_dataset(
+        name: str, revision: str | None = None, token: str | None = None
+    ) -> dict[str, Any]:
+        if loads is not None:
+            loads.append((name, revision, token))
         return {"train": FakeSplit(4), "test": FakeSplit(2)}
 
     fake_mod = types.ModuleType("datasets")
@@ -546,6 +586,127 @@ class TestHuggingFaceDownload:
             download_huggingface("owner/text-ds", tmp_path)
 
 
+class TestHuggingFaceRevisionIsPinned:
+    """`load_dataset(id)` follows `main`, so the same id yields different data later."""
+
+    def test_load_dataset_gets_the_resolved_sha(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        loads: list[Any] = []
+        _install_fake_datasets(monkeypatch, loads=loads)
+
+        download_huggingface("owner/ds", tmp_path / "ds", token="tok")
+
+        assert loads == [("owner/ds", HF_SHA, "tok")]
+
+    def test_the_sha_is_resolved_with_the_same_token(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        _install_fake_datasets(monkeypatch)
+        calls: list[Any] = []
+        _install_fake_hub(monkeypatch, calls=calls)
+
+        download_huggingface("owner/ds", tmp_path / "ds", token="tok")
+
+        assert calls == [("owner/ds", "tok")]
+
+    def test_the_result_carries_the_revision(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        _install_fake_datasets(monkeypatch)
+
+        result = download_huggingface("owner/ds", tmp_path / "ds")
+
+        assert result.revision == HF_SHA
+
+    def test_the_sidecar_records_the_source(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        import json
+
+        _install_fake_datasets(monkeypatch)
+
+        download_huggingface("owner/ds", tmp_path / "ds", token="tok")
+
+        sidecar = json.loads(
+            (tmp_path / "ds" / ".visionforge-source.json").read_text(encoding="utf-8")
+        )
+        assert sidecar == {
+            "provider": "huggingface",
+            "dataset": "owner/ds",
+            "revision": HF_SHA,
+        }
+        assert "tok" not in json.dumps(sidecar)
+
+    @pytest.mark.parametrize(
+        ("sha", "error"),
+        [
+            (None, RuntimeError(f"401 Unauthorized for url: https://x?token={SECRET}")),
+            (None, None),
+            ("", None),
+        ],
+        ids=["lookup-fails", "no-sha", "empty-sha"],
+    )
+    def test_an_unresolved_revision_is_a_translated_error_and_never_loads(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+        sha: str | None,
+        error: Exception | None,
+    ) -> None:
+        loads: list[Any] = []
+        _install_fake_datasets(monkeypatch, loads=loads)
+        _install_fake_hub(monkeypatch, sha=sha, error=error)
+
+        with pytest.raises(ValueError, match="owner/ds") as caught:
+            download_huggingface("owner/ds", tmp_path / "ds", token=SECRET)
+
+        assert "revisão" in str(caught.value)
+        assert SECRET not in str(caught.value)
+        assert loads == []
+        assert not (tmp_path / "ds" / ".visionforge-source.json").exists()
+
+    def test_the_route_answers_400_when_the_revision_cannot_be_resolved(
+        self,
+        client: TestClient,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        _install_fake_datasets(monkeypatch)
+        _install_fake_hub(monkeypatch, error=RuntimeError("offline"))
+
+        resp = _post_download(
+            client, tmp_path, provider="huggingface", dataset="owner/ds"
+        )
+
+        assert resp.status_code == 400
+        assert "revisão" in resp.json()["detail"]
+
+    def test_the_route_returns_the_revision(
+        self,
+        client: TestClient,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        _install_fake_datasets(monkeypatch)
+
+        resp = _post_download(
+            client, tmp_path, provider="huggingface", dataset="owner/ds"
+        )
+
+        assert resp.status_code == 200
+        assert resp.json()["revision"] == HF_SHA
+
+    def test_other_providers_have_no_revision(
+        self, _fake_cifar: None, tmp_path: Path
+    ) -> None:
+        result = download_dataset(
+            "torchvision", dataset="cifar10", out_dir=str(tmp_path / "ds")
+        )
+
+        assert result.revision is None
+
+
 class TestExecuteRoute:
     def test_execute_builds_response(self, _fake_cifar: None, tmp_path: Path) -> None:
         from visionforge.gui.api.datasets_routes import _execute_dataset_download
@@ -566,9 +727,6 @@ class TestExecuteRoute:
 
 
 # --- credentials never leave in an error ------------------------------------
-
-# A made-up value: every test here uses it, none uses a real credential.
-SECRET = "SECRET123"
 
 
 class _HTTPError(Exception):
@@ -817,7 +975,11 @@ class TestADownloadErrorDoesNotLeakTheCredential:
         tmp_path: Path,
         source: str,
     ) -> None:
-        def load_dataset(name: str, token: str | None = None) -> Any:
+        _install_fake_hub(monkeypatch)
+
+        def load_dataset(
+            name: str, revision: str | None = None, token: str | None = None
+        ) -> Any:
             raise _HTTPError(
                 f"401 Client Error: Unauthorized for url: https://huggingface.co/api/x?token={token}"
             )
@@ -854,7 +1016,11 @@ class TestADownloadErrorDoesNotLeakTheCredential:
         monkeypatch.delenv("HUGGING_FACE_HUB_TOKEN", raising=False)
         monkeypatch.setenv(variable, SECRET)
 
-        def load_dataset(name: str, token: str | None = None) -> Any:
+        _install_fake_hub(monkeypatch)
+
+        def load_dataset(
+            name: str, revision: str | None = None, token: str | None = None
+        ) -> Any:
             raise _HTTPError(f"401 Unauthorized: {os.environ[variable]} is not valid")
 
         fake = types.ModuleType("datasets")

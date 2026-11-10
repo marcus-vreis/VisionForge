@@ -2029,6 +2029,16 @@ CATALOG: dict[str, dict[Lang, str]] = {
             "materialize into an ImageFolder."
         ),
     },
+    "download.hf_revision_failed": {
+        "pt": (
+            "Não foi possível fixar a revisão do dataset '{dataset}' no Hugging "
+            "Face. Confira o nome, o token e a conexão. Nada foi baixado."
+        ),
+        "en": (
+            "Could not pin the revision of Hugging Face dataset '{dataset}'. "
+            "Check the name, the token and the connection. Nothing was downloaded."
+        ),
+    },
     # ── stored provider keys (utils/credentials.py) ──────────────────────────
     "credentials.invalid": {
         "pt": "Pedido de credencial inválido.",

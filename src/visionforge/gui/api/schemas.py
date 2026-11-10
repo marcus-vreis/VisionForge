@@ -966,6 +966,7 @@ class DatasetDownloadResponse(BaseModel):
     total_images: int
     splits: dict[str, int] = {}
     classes: list[str] = []
+    revision: str | None = None  # commit SHA a Hugging Face download was pinned to
 
 
 class SampleDatasetRequest(BaseModel):
