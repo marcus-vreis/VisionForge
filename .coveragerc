@@ -5,9 +5,6 @@ omit =
     src/visionforge/*/__init__.py
 
 [report]
-# Single source of the coverage gate (CI and local runs). Measured 95%
-# (94.98%) on the full fast suite; keep ~2 points of headroom.
-fail_under = 93
 exclude_lines =
     pragma: no cover
     if __name__ == .__main__.:

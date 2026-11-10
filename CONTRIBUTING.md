@@ -150,9 +150,11 @@ Hooks that run on every `git commit`:
 
 `pytest` here runs the fast suite: cases marked `slow` (real trainings behind
 a live server, ADR-060) are deselected by `addopts` so committing stays quick.
-The coverage gate is `fail_under` in `.coveragerc` (93%, the only place it is
-set; CI and local runs both read it). It is meant for the full fast suite: a
-partial run (`pytest tests/x`) reports low coverage and trips it, so ignore it there.
+The coverage gate is `--cov-fail-under=93` in the `tests` job of
+`.github/workflows/ci.yml`, the only place it is set (measured 95% on the full
+fast suite). It lives there and not in `.coveragerc` on purpose: `pytest` always
+runs with `--cov`, so a gate in the config would fail every partial run
+(`pytest tests/x`).
 Before opening a PR that touches a trainer, a block, the API or the SSE
 contract, also run the end-to-end matrix:
 
