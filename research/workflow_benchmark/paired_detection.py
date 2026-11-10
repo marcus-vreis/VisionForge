@@ -19,7 +19,7 @@ VISIONFORGE_INCLUDES = {
     ],
     "training": [
         "DetectionTrainer.fit: seeding, injected prebuilt model, SGD and YOLO loaders",
-        "train, validation loss (train mode including BatchNorm updates), validation mAP",
+        "train, validation loss (train mode with BatchNorm in eval), validation mAP",
         "best checkpoint, resume state, TensorBoard, plots, health checks and run.json",
         "public epoch_end callback captures train and validation losses",
     ],

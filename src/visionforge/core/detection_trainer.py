@@ -563,8 +563,8 @@ class DetectionTrainer:
 
         Each epoch trains on the loss dict and selects the best checkpoint by
         validation mAP@50 (`_eval_torchvision_map`); validation loss is also
-        logged (frozen-BN detectors are safe to forward in train mode under
-        no_grad). See ADR-035.
+        logged, from a train-mode pass under no_grad with the BatchNorm layers
+        in eval so validation never moves their running statistics. See ADR-035.
 
         Raises:
             ValueError: if data.base_dir is not set (YOLO layout is required).
@@ -831,18 +831,33 @@ class DetectionTrainer:
         loader: DataLoader,
         device: torch.device,
     ) -> float:
-        # torchvision detectors only return losses in train mode with targets;
-        # their default BN is frozen, so a no_grad train-mode pass is safe.
+        # torchvision detectors only return losses in train mode with targets.
+        # Their BN is only frozen (FrozenBatchNorm2d) with pretrained weights;
+        # SSDLite and any pretrained=False detector use plain BatchNorm, whose
+        # running stats a train-mode pass would update with validation data.
+        # So the BatchNorm layers go to eval for the pass and get their previous
+        # mode back afterwards; FrozenBatchNorm2d is not a _BatchNorm, untouched.
+        batch_norms = [
+            (m, m.training)
+            for m in model.modules()
+            if isinstance(m, torch.nn.modules.batchnorm._BatchNorm)
+        ]
         model.train()
         total = 0.0
         n = 0
-        with torch.no_grad():
-            for images, targets in loader:
-                images = [img.to(device) for img in images]
-                targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
-                loss_dict = model(images, targets)
-                total += float(sum(loss_dict.values()).item())
-                n += 1
+        try:
+            for m, _ in batch_norms:
+                m.eval()
+            with torch.no_grad():
+                for images, targets in loader:
+                    images = [img.to(device) for img in images]
+                    targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
+                    loss_dict = model(images, targets)
+                    total += float(sum(loss_dict.values()).item())
+                    n += 1
+        finally:
+            for m, was_training in batch_norms:
+                m.train(was_training)
         return total / n if n else 0.0
 
     def _eval_torchvision_map(

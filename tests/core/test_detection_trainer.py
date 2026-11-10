@@ -859,3 +859,89 @@ def test_epoch_event_leaves_out_an_unknown_rate() -> None:
     )
     assert "lr" not in dt_mod._epoch_event(result, 3)
     assert dt_mod._epoch_event(result, 3, lr=0.01)["lr"] == 0.01
+
+
+# ── validation loss must not touch BatchNorm statistics (STAT-8) ──────────────
+
+_BN_BUILDERS = ["ssdlite320_mobilenet_v3_large", "fasterrcnn_resnet50_fpn"]
+
+
+def _bn_state(model: nn.Module) -> dict[str, torch.Tensor]:
+    return {
+        f"{name}.{key}": buf.clone()
+        for name, module in model.named_modules()
+        if isinstance(module, nn.modules.batchnorm._BatchNorm)
+        for key, buf in (
+            ("running_mean", module.running_mean),
+            ("running_var", module.running_var),
+            ("num_batches_tracked", module.num_batches_tracked),
+        )
+    }
+
+
+def _tiny_loader() -> list[tuple[list[torch.Tensor], list[dict[str, torch.Tensor]]]]:
+    gen = torch.Generator().manual_seed(0)
+    images = [torch.rand(3, 64, 64, generator=gen) for _ in range(2)]
+    targets = [
+        {
+            "boxes": torch.tensor([[8.0, 8.0, 40.0, 40.0]]),
+            "labels": torch.tensor([1]),
+        }
+        for _ in images
+    ]
+    return [(images, targets)]
+
+
+@pytest.mark.parametrize("name", _BN_BUILDERS)
+def test_val_loss_leaves_batchnorm_statistics_untouched(
+    tmp_path: Path, name: str
+) -> None:
+    from visionforge.models.detection_factory import build_torchvision_detector
+
+    torch.manual_seed(0)
+    model = build_torchvision_detector(name, num_classes=2, pretrained=False)
+    model.train()
+    modes_before = {n: m.training for n, m in model.named_modules()}
+    before = _bn_state(model)
+    assert before  # the model really has BatchNorm layers
+
+    trainer = DetectionTrainer(_tv_config(tmp_path))
+    val_loss = trainer._eval_torchvision_loss(
+        model,
+        _tiny_loader(),  # type: ignore[arg-type]
+        torch.device("cpu"),
+    )
+
+    after = _bn_state(model)
+    assert after.keys() == before.keys()
+    for key, tensor in before.items():
+        assert torch.equal(tensor, after[key]), key
+    assert val_loss == val_loss and abs(val_loss) != float("inf")
+    assert {n: m.training for n, m in model.named_modules()} == modes_before
+
+
+def test_val_loss_restores_each_modules_previous_mode(tmp_path: Path) -> None:
+    model = nn.Sequential(nn.BatchNorm2d(2), nn.BatchNorm2d(2))
+    model[1].eval()  # a layer the caller had already frozen stays in eval
+
+    class _Det(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.body = model
+            self.seen: list[bool] = []
+
+        def forward(self, images: Any, targets: Any = None) -> Any:
+            self.seen = [m.training for m in self.body]
+            return {"loss": self.body[0].weight.sum()}
+
+    det = _Det()
+    det.train()
+    model[1].eval()
+    DetectionTrainer(_tv_config(tmp_path))._eval_torchvision_loss(
+        det,
+        _tiny_loader(),  # type: ignore[arg-type]
+        torch.device("cpu"),
+    )
+    assert det.seen == [False, False]  # BN in eval during the pass
+    assert det.training is True
+    assert [m.training for m in model] == [True, False]
