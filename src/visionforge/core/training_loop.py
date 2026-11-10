@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import time
 from collections.abc import Callable, Mapping
 from concurrent.futures import Future, ThreadPoolExecutor
@@ -28,6 +29,7 @@ from visionforge.core.resume import (
 )
 from visionforge.core.resume_provenance import validate_resume_dataset
 from visionforge.core.tracking import TensorBoardLogger
+from visionforge.core.training_health import HealthWarning, non_finite_metric
 from visionforge.utils.environment import capture_environment
 
 type ParameterGroups = tuple[list[nn.Parameter], list[nn.Parameter]]
@@ -39,6 +41,40 @@ class MetricPolicy:
 
     name: str
     higher_is_better: bool = False
+
+
+VAL_LOSS = "val_loss"
+
+
+class NonFiniteMetricError(RuntimeError):
+    """The epoch metric that ranks checkpoints came out NaN or infinite (ADR-182).
+
+    A NaN never compares as an improvement, so without this the run trained to
+    the last epoch with no best checkpoint and then failed on a missing file,
+    naming neither the epoch nor the metric.
+    """
+
+    def __init__(
+        self, name: str, epoch: int, value: float, best_epoch: int = 0
+    ) -> None:
+        self.name = name
+        self.epoch = epoch
+        self.value = value
+        self.best_epoch = best_epoch
+        kept = (
+            f"the checkpoint from epoch {best_epoch} was kept"
+            if best_epoch > 0
+            else "no checkpoint was saved"
+        )
+        super().__init__(
+            f"non-finite validation metric {name}={value} at epoch {epoch}; "
+            f"training stopped and {kept} "
+            "(the loss diverged or the model output NaN)."
+        )
+
+    def health_warning(self) -> HealthWarning:
+        """The run.json warning for this failure, in the current language."""
+        return non_finite_metric(self.name, self.epoch, self.value, self.best_epoch)
 
 
 @dataclass
@@ -441,6 +477,8 @@ def save_epoch_checkpoint(
     policy: MetricPolicy,
 ) -> None:
     """Save an improved checkpoint and snapshot every completed epoch for resume."""
+    if not math.isfinite(metric):
+        raise NonFiniteMetricError(policy.name, epoch, metric, state.best_epoch)
     improved = (
         metric > state.best_metric
         if policy.higher_is_better
@@ -465,6 +503,30 @@ def save_epoch_checkpoint(
             rng_state=capture_rng_state(runtime.train_loader, runtime.val_loader),
         ),
     )
+
+
+def record_non_finite_failure(run_dir: Path, error: NonFiniteMetricError) -> None:
+    """Rewrite the run.json of a run that stopped on a non-finite metric.
+
+    The task's own writer produced it; this marks it failed and turns the NaN
+    and infinity left in the history and the sentinel best into null, which is
+    all a JSON reader accepts.
+    """
+    path = run_dir / "run.json"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["status"] = "failed"
+    data["error"] = str(error)
+    path.write_text(json.dumps(_without_non_finite(data), indent=2), encoding="utf-8")
+
+
+def _without_non_finite(value: Any) -> Any:
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    if isinstance(value, dict):
+        return {k: _without_non_finite(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_without_non_finite(v) for v in value]
+    return value
 
 
 def finish_checkpoint_writes(
@@ -663,29 +725,46 @@ def run_epochs[Epoch](
         checkpoint_pool(runtime.resumed, runtime.train_loader, runtime.val_loader)
     )
     stopped = False
-    for epoch in range(state.start_epoch, runtime.total_epochs + 1):
-        # Resuming at a stopping boundary must not train an extra epoch.
-        if callbacks.early_stop(state.patience_counter):
-            break
-        if cancelled_at_epoch(runtime.cancel_token, epoch):
-            stopped = True
-            break
-        set_progress_epoch(runtime.train_loader, epoch)
-        result = callbacks.compute(epoch)
-        state.history.append(result)
-        callbacks.report(result)
-        save_epoch_checkpoint(
-            getattr(result, metric.name),
-            epoch,
-            state,
-            checkpoint,
-            writes,
-            runtime,
-            metric,
-        )
-        if callbacks.early_stop(state.patience_counter):
-            logger.info("Early stopping at epoch {}.", epoch)
-            break
+    try:
+        for epoch in range(state.start_epoch, runtime.total_epochs + 1):
+            # Resuming at a stopping boundary must not train an extra epoch.
+            if callbacks.early_stop(state.patience_counter):
+                break
+            if cancelled_at_epoch(runtime.cancel_token, epoch):
+                stopped = True
+                break
+            set_progress_epoch(runtime.train_loader, epoch)
+            result = callbacks.compute(epoch)
+            state.history.append(result)
+            callbacks.report(result)
+            # Segmentation ranks by mIoU, and an argmax over NaN logits is still
+            # a valid class map: the score looks fine while the loss is NaN.
+            val_loss = getattr(result, VAL_LOSS, None)
+            if (
+                metric.name != VAL_LOSS
+                and val_loss is not None
+                and not math.isfinite(val_loss)
+            ):
+                raise NonFiniteMetricError(VAL_LOSS, epoch, val_loss, state.best_epoch)
+            save_epoch_checkpoint(
+                getattr(result, metric.name),
+                epoch,
+                state,
+                checkpoint,
+                writes,
+                runtime,
+                metric,
+            )
+            if callbacks.early_stop(state.patience_counter):
+                logger.info("Early stopping at epoch {}.", epoch)
+                break
+    except NonFiniteMetricError:
+        # An earlier epoch may still be writing its best checkpoint; let it
+        # land before the caller records the failure.
+        if writes.future is not None:
+            writes.future.result()
+        writes.pool.shutdown(wait=False)
+        raise
     return writes, stopped
 
 
@@ -843,6 +922,23 @@ def fit_training[Result](
             warnings=health,
         )
         trainer._write_run_json(run_dir, train_result)
+    except NonFiniteMetricError as error:
+        try:
+            failed = adapter.result_type(
+                stopped=False,
+                best_epoch=state.best_epoch,
+                **{adapter.best_field: state.best_metric},
+                total_epochs=len(history),
+                device_used=trainer._device_label,
+                history=history,
+                model_path=model_path,
+                warnings=[error.health_warning().to_dict()],
+            )
+            trainer._write_run_json(run_dir, failed)
+            record_non_finite_failure(run_dir, error)
+        finally:
+            tb.close()
+        raise
     except BaseException:
         tb.close()
         raise

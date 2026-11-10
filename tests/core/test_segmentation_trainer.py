@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 import torch
 import torch.nn as nn
 
@@ -11,6 +12,7 @@ from visionforge.core.segmentation_trainer import (
     SegmentationTrainer,
     dice_loss,
 )
+from visionforge.core.training_loop import NonFiniteMetricError
 from visionforge.utils.segmentation_config import SegmentationConfig
 
 
@@ -260,3 +262,25 @@ class TestMaskIdsOutsideTheModel:
 
         masks = torch.tensor([[0, 2, 255]])
         check_mask_ids(masks, num_classes=3, ignore_index=255)  # no error
+
+
+class NaNSegModel(TinySegModel):
+    """Forward pass that only ever produces NaN."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return super().forward(x) * float("nan")
+
+
+def test_non_finite_val_miou_stops_and_saves_no_nan_weights(tmp_path: Path) -> None:
+    """ensure_checkpoint used to write the NaN weights as if they were the best."""
+    trainer = SegmentationTrainer(_config(tmp_path))
+    with pytest.raises(NonFiniteMetricError, match="non-finite") as caught:
+        trainer.fit(NaNSegModel(3), FakeSegDataModule())
+    assert "val_loss=nan" in str(caught.value)
+    assert caught.value.epoch == 1
+    run_dir = next((tmp_path / "models" / "seg_run").iterdir())
+    assert not (run_dir / "best_model.pth").exists()
+    data = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+    assert data["status"] == "failed"
+    assert data["metrics"]["total_epochs"] == 1
+    assert [w["code"] for w in data["warnings"]] == ["non_finite_metric"]

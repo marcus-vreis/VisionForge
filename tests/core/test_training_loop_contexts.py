@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import random
+import threading
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -298,3 +300,165 @@ def test_resumed_contexts_preserve_full_checkpoint_trajectory(
         torch.load(tmp_path / "resumed" / "best_model.pth", weights_only=True),
         torch.load(tmp_path / "continuous" / "best_model.pth", weights_only=True),
     )
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), -float("inf")])
+def test_non_finite_metric_stops_instead_of_counting_as_no_improvement(
+    tmp_path: Path, bad: float
+) -> None:
+    """A NaN/inf score used to add patience and save nothing; now it raises."""
+    model = nn.Linear(1, 1, bias=False)
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.05)
+    runtime = loop.EpochRuntime(_loader(), _loader(), 8, None, None)
+    state = loop.EpochState[ScoredEpoch]([], float("inf"), 0, 0, 1)
+    checkpoint = loop.CheckpointContext(
+        model,
+        tmp_path / "best_model.pth",
+        save_best_checkpoint,
+        lambda: loop.checkpoint_components(model, optimizer, None),
+    )
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        writes = loop.CheckpointWrites(pool)
+        with pytest.raises(loop.NonFiniteMetricError, match="non-finite") as caught:
+            loop.save_epoch_checkpoint(
+                bad, 3, state, checkpoint, writes, runtime, loop.MetricPolicy("score")
+            )
+    assert caught.value.epoch == 3
+    assert caught.value.name == "score"
+    assert str(bad) in str(caught.value)
+    assert state.patience_counter == 0
+    assert writes.future is None
+    assert not checkpoint.model_path.exists()
+
+
+def test_run_epochs_waits_for_pending_write_before_raising_non_finite(
+    tmp_path: Path,
+) -> None:
+    """The epoch that improved is written to disk before the later NaN aborts."""
+    model = nn.Linear(1, 1, bias=False)
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.05)
+    runtime = loop.EpochRuntime(_loader(), _loader(), 5, None, None)
+    state = loop.EpochState[ScoredEpoch]([], float("inf"), 0, 0, 1)
+    release = threading.Event()
+    threading.Timer(0.3, release.set).start()
+    finished: list[bool] = []
+
+    def slow_save(
+        pool: ThreadPoolExecutor,
+        pending: Future[None] | None,
+        net: nn.Module,
+        path: Path,
+    ) -> Future[None]:
+        def write() -> None:
+            release.wait(5)
+            torch.save(net.state_dict(), path)
+            finished.append(True)
+
+        return pool.submit(write)
+
+    checkpoint = loop.CheckpointContext(
+        model,
+        tmp_path / "best_model.pth",
+        slow_save,
+        lambda: loop.checkpoint_components(model, optimizer, None),
+    )
+    scores = {1: 2.0, 2: float("nan")}
+    callbacks = loop.EpochCallbacks[ScoredEpoch](
+        compute=lambda epoch: ScoredEpoch(epoch, scores[epoch]),
+        report=lambda result: None,
+        early_stop=lambda counter: False,
+    )
+    with pytest.raises(loop.NonFiniteMetricError) as caught:
+        loop.run_epochs(
+            state, runtime, checkpoint, callbacks, loop.MetricPolicy("score")
+        )
+    assert caught.value.epoch == 2
+    assert [h.epoch for h in state.history] == [1, 2]
+    # The write was still blocked when epoch 2 raised: only a wait on its
+    # future can make it done by the time the exception arrives.
+    assert finished == [True]
+    assert checkpoint.model_path.is_file()
+    assert caught.value.best_epoch == 1
+    assert "checkpoint from epoch 1 was kept" in str(caught.value)
+
+
+def test_non_finite_error_says_whether_a_checkpoint_exists() -> None:
+    first = loop.NonFiniteMetricError("val_loss", 1, float("nan"))
+    later = loop.NonFiniteMetricError("val_loss", 4, float("nan"), best_epoch=3)
+    assert "no checkpoint was saved" in str(first)
+    assert "was kept" not in str(first)
+    assert "checkpoint from epoch 3 was kept" in str(later)
+    assert "no checkpoint" not in str(later)
+    assert later.health_warning().code == "non_finite_metric"
+    assert "3" in later.health_warning().message
+    assert "sem salvar" in first.health_warning().message or (
+        "without saving" in first.health_warning().message
+    )
+    assert "sem salvar" not in later.health_warning().message
+    assert "without saving" not in later.health_warning().message
+
+
+def test_record_non_finite_failure_marks_run_json_failed(tmp_path: Path) -> None:
+    """run.json keeps the history, says it failed and stays valid JSON."""
+    (tmp_path / "run.json").write_text(
+        json.dumps(
+            {
+                "status": "completed",
+                "metrics": {"best_val_loss": float("inf")},
+                "history": [{"epoch": 1, "val_loss": float("nan")}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    error = loop.NonFiniteMetricError("val_loss", 1, float("nan"))
+    loop.record_non_finite_failure(tmp_path, error)
+    text = (tmp_path / "run.json").read_text(encoding="utf-8")
+    data = json.loads(text, parse_constant=lambda c: pytest.fail(c))
+    assert data["status"] == "failed"
+    assert "non-finite" in data["error"]
+    assert data["metrics"]["best_val_loss"] is None
+    assert data["history"][0]["val_loss"] is None
+
+
+def test_non_finite_metric_health_warning_names_epoch_and_metric() -> None:
+    from visionforge.core.training_health import non_finite_metric
+
+    warning = non_finite_metric("val_loss", 4, float("nan"))
+    assert warning.code == "non_finite_metric"
+    assert "val_loss" in warning.message and "4" in warning.message
+
+
+def test_run_epochs_rejects_nan_loss_even_when_the_ranking_metric_is_finite(
+    tmp_path: Path,
+) -> None:
+    """mIoU of NaN logits is a number; the NaN loss still has to stop the run."""
+
+    @dataclass
+    class LossAndScore:
+        epoch: int
+        val_loss: float
+        score: float
+
+    model = nn.Linear(1, 1, bias=False)
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.05)
+    state = loop.EpochState[LossAndScore]([], -1.0, 0, 0, 1)
+    checkpoint = loop.CheckpointContext(
+        model,
+        tmp_path / "best_model.pth",
+        save_best_checkpoint,
+        lambda: loop.checkpoint_components(model, optimizer, None),
+    )
+    callbacks = loop.EpochCallbacks[LossAndScore](
+        compute=lambda epoch: LossAndScore(epoch, float("nan"), 0.1),
+        report=lambda result: None,
+        early_stop=lambda counter: False,
+    )
+    with pytest.raises(loop.NonFiniteMetricError, match="val_loss=nan"):
+        loop.run_epochs(
+            state,
+            loop.EpochRuntime(_loader(), _loader(), 3, None, None),
+            checkpoint,
+            callbacks,
+            loop.MetricPolicy("score", higher_is_better=True),
+        )
+    assert not checkpoint.model_path.exists()

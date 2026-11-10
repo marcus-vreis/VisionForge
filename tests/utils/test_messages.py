@@ -24,6 +24,7 @@ from visionforge.core.training_health import (
     constant_predictions,
     frozen_random_backbone,
     no_detections,
+    non_finite_metric,
     stagnant_loss,
 )
 from visionforge.utils.messages import (
@@ -520,3 +521,14 @@ class TestConfigValidationMessages:
         assert pt in self._message(case, tmp_path)
         with using_lang("en"):
             assert en in self._message(case, tmp_path)
+
+
+@pytest.mark.parametrize("lang", ["pt", "en"])
+def test_non_finite_metric_says_if_a_checkpoint_was_kept(lang: Lang) -> None:
+    with using_lang(lang):
+        none = non_finite_metric("val_loss", 1, float("nan")).message
+        kept = non_finite_metric("val_loss", 5, float("nan"), best_epoch=3).message
+    no_ckpt = "sem salvar" if lang == "pt" else "without saving"
+    assert no_ckpt in none
+    assert no_ckpt not in kept
+    assert "3" in kept and "5" in kept

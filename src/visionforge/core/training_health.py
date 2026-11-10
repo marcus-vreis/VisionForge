@@ -171,6 +171,24 @@ def no_detections(map50: float | None, epochs_done: int) -> HealthWarning | None
     )
 
 
+def non_finite_metric(
+    name: str, epoch: int, value: float, best_epoch: int = 0
+) -> HealthWarning:
+    """Warn that the metric ranking checkpoints was NaN or infinite (ADR-182).
+
+    ``best_epoch`` > 0 means an earlier epoch's best checkpoint was kept.
+    """
+    key = (
+        "health.non_finite_metric_kept"
+        if best_epoch > 0
+        else "health.non_finite_metric"
+    )
+    return HealthWarning(
+        code="non_finite_metric",
+        message=tr(key, metric=name, epoch=epoch, value=value, best_epoch=best_epoch),
+    )
+
+
 def summarize(warnings: Sequence[HealthWarning | None]) -> list[dict[str, str]]:
     """Drop the Nones and hand back what run.json should carry."""
     return [w.to_dict() for w in warnings if w is not None]
@@ -182,6 +200,7 @@ __all__ = [
     "collapsed_segmentation",
     "frozen_random_backbone",
     "no_detections",
+    "non_finite_metric",
     "constant_predictions",
     "stagnant_loss",
     "summarize",

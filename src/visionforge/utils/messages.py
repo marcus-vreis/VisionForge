@@ -287,6 +287,38 @@ CATALOG: dict[str, dict[Lang, str]] = {
             "that, the learning rate."
         ),
     },
+    "health.non_finite_metric": {
+        "pt": (
+            "A métrica {metric} ficou não finita ({value}) na época {epoch}, e o "
+            "treino parou ali sem salvar checkpoint: com NaN nenhum modelo "
+            "melhora o anterior. Causa mais comum: learning rate alto demais, "
+            "que faz a loss divergir. Reduza o learning rate ou confira se os "
+            "dados têm NaN."
+        ),
+        "en": (
+            "The metric {metric} became non-finite ({value}) at epoch {epoch}, "
+            "and training stopped there without saving a checkpoint: with NaN no "
+            "model beats the previous one. Most common cause: a learning rate "
+            "too high, which makes the loss diverge. Lower the learning rate or check the "
+            "data for NaN."
+        ),
+    },
+    "health.non_finite_metric_kept": {
+        "pt": (
+            "A métrica {metric} ficou não finita ({value}) na época {epoch}, e o "
+            "treino parou ali. O checkpoint da época {best_epoch} foi mantido, "
+            "mas as épocas seguintes divergiram. Causa mais comum: learning "
+            "rate alto demais. Reduza o learning rate ou confira se os dados "
+            "têm NaN."
+        ),
+        "en": (
+            "The metric {metric} became non-finite ({value}) at epoch {epoch}, "
+            "and training stopped there. The checkpoint from epoch {best_epoch} "
+            "was kept, but the later epochs diverged. Most common cause: a "
+            "learning rate too high. Lower the learning rate or check the data "
+            "for NaN."
+        ),
+    },
     # ── Windows paging file (WinError 1455) ──────────────────────────────────
     "winerror.paging_file": {
         "pt": (

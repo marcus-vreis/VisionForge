@@ -12,6 +12,7 @@ from visionforge.core.regression_trainer import (
     RegressionTrainResult,
     _MetricAccumulator,
 )
+from visionforge.core.training_loop import NonFiniteMetricError
 from visionforge.utils.regression_config import RegressionConfig
 
 
@@ -178,3 +179,24 @@ class TestRegressionTrainer:
     def test_device_label_cpu(self, tmp_path: Path) -> None:
         trainer = RegressionTrainer(_config(tmp_path))
         assert "cpu" in trainer.device_label.lower()
+
+
+class NaNRegressor(DummyRegressor):
+    """Forward pass that only ever produces NaN."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return super().forward(x) * float("nan")
+
+
+def test_non_finite_val_loss_stops_in_epoch_one(tmp_path: Path) -> None:
+    trainer = RegressionTrainer(_config(tmp_path))
+    with pytest.raises(NonFiniteMetricError, match="non-finite") as caught:
+        trainer.fit(NaNRegressor(), FakeRegressionDataModule())
+    assert "val_loss=nan" in str(caught.value)
+    assert caught.value.epoch == 1
+    run_dir = next((tmp_path / "models" / "reg_run").iterdir())
+    assert not (run_dir / "best_model.pth").exists()
+    data = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+    assert data["status"] == "failed"
+    assert data["metrics"]["total_epochs"] == 1
+    assert [w["code"] for w in data["warnings"]] == ["non_finite_metric"]
