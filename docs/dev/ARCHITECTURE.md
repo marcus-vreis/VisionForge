@@ -55,6 +55,7 @@ Foundational utilities. No module-level import of another VisionForge package; t
 | `<task>_config.py` | One standalone Pydantic config tree per non-classification task (`detection_config.py`, `regression_config.py`, `segmentation_config.py`, `anomaly_config.py`) per ADR-033/036/037/038, reusing the shared `OutputConfig`/`DeviceConfig`/`TransformConfig` blocks from `config.py`. |
 | `environment.py` | The `run.json` environment block (ADR-057/135): library versions, CUDA/cuDNN, GPU model and the imported source checkout's Git revision/dirty flag. Unavailable source identity is explicit. |
 | `doctor.py` | `visionforge doctor` — inspects the machine and prints the exact torch install line for it (torch is user-managed per ADR-005). |
+| `cli_strategies.py` | `visionforge run` with a `strategy:` envelope — replicates, paired comparison, sweep and K-fold through the same `core/` orchestrators and `core/run_groups.py` as the GUI (ADR-184). |
 | `messages.py` | Server-written texts in the language of the request (`tr(key, **params)`, ADR-116). |
 | `workers.py` · `credentials.py` · `redact.py` | DataLoader worker budget; local store for dataset-provider API keys; masking of credentials before text is shown or logged. |
 | `third_party_privacy.py` | Switches off the usage telemetry of the bundled third-party SDKs once, before any of them is imported; never overrides a value the user already set (ADR-120, ADR-170). |
