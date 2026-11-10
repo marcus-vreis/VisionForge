@@ -1,7 +1,15 @@
-import { useState } from "react";
+import { lazy, useState } from "react";
 import { useT } from "../i18n/useT";
-import { DatasetDownloadCard } from "./DatasetDownloadCard";
-import { DatasetExplorer } from "./DatasetExplorer";
+import { LazySurface } from "./ErrorBoundary";
+
+// The sheet itself stays in the entry, so its tab survives closing it; what it
+// holds is fetched the first time it opens (GUI-12).
+const DatasetDownloadCard = lazy(() =>
+  import("./DatasetDownloadCard").then((m) => ({ default: m.DatasetDownloadCard })),
+);
+const DatasetExplorer = lazy(() =>
+  import("./DatasetExplorer").then((m) => ({ default: m.DatasetExplorer })),
+);
 
 type Tab = "get" | "explore";
 
@@ -156,7 +164,9 @@ export function DatasetsOverlay({ open, onClose }: DatasetsOverlayProps) {
         </div>
 
         <div style={{ flex: 1, overflowY: "auto", padding: "16px 24px 24px" }}>
-          {tab === "get" ? <DatasetDownloadCard collapsible={false} /> : <DatasetExplorer />}
+          <LazySurface>
+            {tab === "get" ? <DatasetDownloadCard collapsible={false} /> : <DatasetExplorer />}
+          </LazySurface>
         </div>
       </div>
     </div>

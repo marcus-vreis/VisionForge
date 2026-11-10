@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { lazy, useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import {
   ApiError,
   artifactUrl,
@@ -37,11 +37,23 @@ import { DownloadBundleButton } from "./DownloadBundleButton";
 
 import { MLflowExportStatus } from "./MLflowExportStatus";
 import { WandbExportStatus } from "./WandbExportStatus";
-import { DvcExportPanel } from "./DvcExportPanel";
-import { GitHubExportPanel } from "./GitHubExportPanel";
-import { HubExportPanel } from "./HubExportPanel";
-import { ZenodoExportPanel } from "./ZenodoExportPanel";
+import { LazySurface } from "./ErrorBoundary";
 import { activeProfileSlug } from "../lib/profile";
+
+// The export panels are fetched with the first run detail that offers them
+// (GUI-12): a run group, or a history only browsed, never needs them.
+const HubExportPanel = lazy(() =>
+  import("./HubExportPanel").then((m) => ({ default: m.HubExportPanel })),
+);
+const ZenodoExportPanel = lazy(() =>
+  import("./ZenodoExportPanel").then((m) => ({ default: m.ZenodoExportPanel })),
+);
+const GitHubExportPanel = lazy(() =>
+  import("./GitHubExportPanel").then((m) => ({ default: m.GitHubExportPanel })),
+);
+const DvcExportPanel = lazy(() =>
+  import("./DvcExportPanel").then((m) => ({ default: m.DvcExportPanel })),
+);
 
 interface RunDetailPanelProps {
   runId: string;
@@ -582,10 +594,14 @@ export function RunDetailPanel({ runId, onBack, onOpenRun, knownRunIds }: RunDet
 
       {detail && (
         <>
-          {!detail.group && <HubExportPanel key={`${activeProfileSlug()}:${runId}`} runId={runId} />}
-          {!detail.group && <ZenodoExportPanel key={`zenodo:${activeProfileSlug()}:${runId}`} runId={runId} />}
-          {!detail.group && <GitHubExportPanel key={`github:${activeProfileSlug()}:${runId}`} runId={runId} />}
-          {!detail.group && <DvcExportPanel key={`dvc:${activeProfileSlug()}:${runId}`} runId={runId} />}
+          {!detail.group && (
+            <LazySurface>
+              <HubExportPanel key={`${activeProfileSlug()}:${runId}`} runId={runId} />
+              <ZenodoExportPanel key={`zenodo:${activeProfileSlug()}:${runId}`} runId={runId} />
+              <GitHubExportPanel key={`github:${activeProfileSlug()}:${runId}`} runId={runId} />
+              <DvcExportPanel key={`dvc:${activeProfileSlug()}:${runId}`} runId={runId} />
+            </LazySurface>
+          )}
           {/* A replicate group is a job, not a training: its numbers are the
               report's (mean ± CI95, paired tests) and its seeds are runs of
               their own (ADR-113). */}

@@ -84,6 +84,7 @@ export const pt = {
     skip: "Pular",
     close: "Fechar",
     cancel: "Cancelar",
+    loading: "Carregando…",
   },
   // The five task families by name: the history tabs and the queue rows.
   taskNames: {

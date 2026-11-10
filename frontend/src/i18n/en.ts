@@ -77,6 +77,7 @@ export const en: Dict = {
     skip: "Skip",
     close: "Close",
     cancel: "Cancel",
+    loading: "Loading…",
   },
   // The five task families by name: the history tabs and the queue rows.
   taskNames: {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   fetchQueue,
   fetchSchema,
@@ -51,7 +51,6 @@ import {
 } from "./lib/profile";
 import { useT } from "./i18n/useT";
 import { DatasetsOverlay } from "./components/DatasetsOverlay";
-import { HistoryOverlay } from "./components/HistoryOverlay";
 import { CustomAccentsContext } from "./lib/custom-accents";
 import { customAccentMap } from "./lib/task-accent";
 import { QueueOverlay } from "./components/QueueOverlay";
@@ -95,7 +94,7 @@ import {
   withTaskColors,
 } from "./lib/task-color";
 import { CustomTaskPanel } from "./components/CustomTaskPanel";
-import { ContentBoundary } from "./components/ErrorBoundary";
+import { ContentBoundary, LazySurface } from "./components/ErrorBoundary";
 import { ResultsView } from "./components/ResultsView";
 import { TabBar } from "./components/TabBar";
 import { TaskHero } from "./components/TaskHero";
@@ -105,6 +104,12 @@ import { useRunMotionPause } from "./hooks/useRunMotionPause";
 import type { QueuedJobInfo, RunResponse } from "./types/run";
 import type { JsonSchema } from "./types/schema";
 import { taskDefinitions } from "./types/tasks";
+
+// The History (and the run detail, comparisons and exports under it) is its own
+// chunk, fetched the first time it opens (GUI-12).
+const HistoryOverlay = lazy(() =>
+  import("./components/HistoryOverlay").then((m) => ({ default: m.HistoryOverlay })),
+);
 
 /** What the training sheet shows about a run, fixed when it is submitted: the
  *  forms go on changing while it trains or waits (ADR-159). */
@@ -1079,6 +1084,7 @@ export default function App() {
 
       {showHistory && (
       <CustomAccentsContext.Provider value={customAccents}>
+      <LazySurface>
       <HistoryOverlay
         onClose={() => setShowHistory(false)}
         onCountChange={setHistoryCount}
@@ -1089,6 +1095,7 @@ export default function App() {
           isCustomTask(activeTask) ? `custom:${activeKey}` : activeKey
         }
       />
+      </LazySurface>
       </CustomAccentsContext.Provider>
       )}
 
