@@ -7689,3 +7689,22 @@ differently now. Each fix has a test that failed before it
 - *Explicit query parameters per setting on the route.* Typed in OpenAPI, but the route would grow with every task and could not reject a value that belongs to another task.
 - *Sections chosen by setting (show only the active builder).* Less noise, but undecided runs would need a fallback and a run's page would hide code it could take; faded notes keep one rule for every tour.
 - *A tour for Ultralytics detection.* Its loop is the library's code, not this project's; tracked separately (GUI-8).
+
+## ADR-182 — A non-finite validation metric stops the run
+
+**Date:** 2026-11-09
+**Status:** Accepted
+**Amends:** ADR-099 (training health warnings); extends the `run.json` contract of ADR-013 with `status: "failed"` and an `error` field
+
+**Context:** `save_epoch_checkpoint` compared `metric < best`. NaN never compares as an improvement, so a run whose validation loss became NaN saved no `best_model.pth`, counted every epoch against patience, trained to the end, and then the block failed with a `FileNotFoundError` that named neither the epoch nor the metric. Segmentation was worse: it ranks by mIoU, which stays a finite number for NaN logits (argmax picks class 0), so epoch 1 was saved as the "best" with NaN weights.
+
+**Scope:** classification, regression and segmentation. Detection, the anomaly autoencoder and `GenericTaskEngine` do not have the guard yet; that is left for later.
+
+**Decision:** `save_epoch_checkpoint` raises `NonFiniteMetricError(name, epoch, value)` when the ranking metric is not finite, and `run_epochs` raises it for a non-finite `val_loss` when the ranking metric is another one. `run_epochs` first lets a pending best-checkpoint write finish. The fit of each task (`Trainer.fit` and `fit_training`, which serves regression and segmentation) writes the run's `run.json` with the epochs done and a `non_finite_metric` health warning (pt/en), then `record_non_finite_failure` sets `status: "failed"` and `error`, and replaces NaN/inf by null so the file stays valid JSON. The exception message always contains "non-finite", the metric and the epoch, and says whether a checkpoint exists: when an earlier epoch improved, `best_model.pth` of that epoch (`best_epoch`) is kept and the message and warning say so (`health.non_finite_metric_kept`); otherwise no checkpoint was saved. `ensure_checkpoint` is never reached, so it writes no weights. Both fits close the TensorBoard writer in a `finally`, even if writing `run.json` fails.
+
+**Consequences:** a diverged run stops in the epoch it diverged instead of spending the remaining epochs. The last resume state is the previous epoch's. The block needs no change: the exception reaches it with its own message.
+
+**Alternatives considered:**
+
+- *Keep training and warn at the end.* Wastes the remaining epochs and still leaves no checkpoint.
+- *Treat NaN as the worst possible score.* Keeps the run alive but would pick whatever finite epoch came before, hiding that the later epochs diverged.

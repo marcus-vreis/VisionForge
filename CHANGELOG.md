@@ -153,6 +153,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 - A comparação pareada com Wilcoxon calcula o menor p possível sem os pares empatados, que o teste descarta: seis seeds com três empates agora aparecem como sem poder para α = 0,05 (ADR-177).
 - O download de dataset do Hugging Face fixa a revisão: resolve o SHA do commit, passa `revision` ao `load_dataset`, devolve `revision` na resposta e grava `.visionforge-source.json` na pasta; se o SHA não for resolvido, o erro é traduzido e nada é baixado (#165).
 - `POST /api/dataset/download` deixa de devolver `api_key` e `token` no corpo do 422 quando o pedido vem malformado; a resposta é uma mensagem fixa em português e inglês (#234).
+- Uma métrica de validação NaN ou infinita (loss que diverge) para o treino na própria época, com um erro que cita `non-finite`, a métrica e a época, e deixa um `run.json` com `status: failed` e o aviso `non_finite_metric`; antes o treino seguia até o fim sem checkpoint e falhava com `FileNotFoundError`, e a segmentação salvava pesos NaN como melhores (ADR-182).
 
 ## [0.21.0] — 2026-11-05
 

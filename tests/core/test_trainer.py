@@ -13,6 +13,7 @@ from visionforge.core.trainer import (
     TrainResult,
     _seed_everything,
 )
+from visionforge.core.training_loop import EpochState, NonFiniteMetricError
 from visionforge.utils.config import ExperimentConfig
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -438,3 +439,59 @@ class TestTrainerOptimizers:
         trainer = Trainer(config)
         result = trainer.fit(DummyBinaryModel(), FakeDataModule())
         assert isinstance(result, TrainResult)
+
+
+class NaNBinaryModel(DummyBinaryModel):
+    """Forward pass that only ever produces NaN."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return super().forward(x) * float("nan")
+
+
+class TestNonFiniteValidationMetric:
+    def test_fit_stops_in_epoch_one_and_says_why(
+        self, minimal_config: ExperimentConfig
+    ) -> None:
+        """A NaN val_loss used to run every epoch, then fail on a missing checkpoint."""
+        trainer = Trainer(minimal_config)
+        model, data_module = NaNBinaryModel(), FakeDataModule()
+        with pytest.raises(NonFiniteMetricError, match="non-finite") as caught:
+            trainer.fit(model, data_module)
+        assert "val_loss" in str(caught.value)
+        assert "nan" in str(caught.value)
+        assert caught.value.epoch == 1
+
+        run_dir = next(
+            (minimal_config.output.models_dir / minimal_config.name).iterdir()
+        )
+        assert not (run_dir / "best_model.pth").exists()
+        data = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+        assert data["status"] == "failed"
+        assert data["metrics"]["total_epochs"] == 1
+        assert [w["code"] for w in data["warnings"]] == ["non_finite_metric"]
+
+    def test_closes_tensorboard_even_when_writing_run_json_fails(
+        self, minimal_config: ExperimentConfig, tmp_path: Path
+    ) -> None:
+        class FakeWriter:
+            closed = False
+
+            def close(self) -> None:
+                self.closed = True
+
+        not_a_dir = tmp_path / "file"
+        not_a_dir.write_text("x", encoding="utf-8")
+        writer = FakeWriter()
+        state = EpochState[Any]([], float("inf"), 0, 0, 1)
+        trainer = Trainer(minimal_config)
+        error = NonFiniteMetricError("val_loss", 1, float("nan"))
+        with pytest.raises(OSError):
+            trainer._record_non_finite(
+                error,
+                state,
+                not_a_dir,
+                not_a_dir / "best_model.pth",
+                None,
+                writer,  # type: ignore[arg-type]
+            )
+        assert writer.closed

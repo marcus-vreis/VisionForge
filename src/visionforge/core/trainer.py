@@ -249,45 +249,49 @@ class Trainer:
         state = training_loop.EpochState(
             history, best_val_loss, best_epoch, patience_counter, start_epoch
         )
-        writes, stopped = training_loop.run_epochs(
-            state,
-            training_loop.EpochRuntime(
-                train_loader, val_loader, cfg.epochs, resumed, cancel_token
-            ),
-            training_loop.CheckpointContext(
-                model,
-                model_path,
-                save_best_checkpoint,
-                lambda: self._checkpoint_components(
-                    model, optimizer, scheduler, scaler
+        try:
+            writes, stopped = training_loop.run_epochs(
+                state,
+                training_loop.EpochRuntime(
+                    train_loader, val_loader, cfg.epochs, resumed, cancel_token
                 ),
-            ),
-            training_loop.EpochCallbacks(
-                compute=epoch_lr.around(
-                    lambda epoch: self._compute_epoch_result(
-                        epoch,
-                        model,
-                        train_loader,
-                        val_loader,
-                        optimizer,
-                        criterion,
-                        scheduler,
-                        scaler=scaler,
-                    )
-                ),
-                report=lambda result: self._report_and_explain(
-                    result,
-                    tb,
-                    progress_callback,
-                    t0,
-                    self._live_fields(epoch_lr, class_names),
+                training_loop.CheckpointContext(
                     model,
-                    insights,
+                    model_path,
+                    save_best_checkpoint,
+                    lambda: self._checkpoint_components(
+                        model, optimizer, scheduler, scaler
+                    ),
                 ),
-                early_stop=self._early_stopping_reached,
-            ),
-            training_loop.MetricPolicy("val_loss"),
-        )
+                training_loop.EpochCallbacks(
+                    compute=epoch_lr.around(
+                        lambda epoch: self._compute_epoch_result(
+                            epoch,
+                            model,
+                            train_loader,
+                            val_loader,
+                            optimizer,
+                            criterion,
+                            scheduler,
+                            scaler=scaler,
+                        )
+                    ),
+                    report=lambda result: self._report_and_explain(
+                        result,
+                        tb,
+                        progress_callback,
+                        t0,
+                        self._live_fields(epoch_lr, class_names),
+                        model,
+                        insights,
+                    ),
+                    early_stop=self._early_stopping_reached,
+                ),
+                training_loop.MetricPolicy("val_loss"),
+            )
+        except training_loop.NonFiniteMetricError as error:
+            self._record_non_finite(error, state, run_dir, model_path, data_module, tb)
+            raise
         best_val_loss, best_epoch = state.best_metric, state.best_epoch
 
         if not is_cancelled(cancel_token):
@@ -311,6 +315,34 @@ class Trainer:
             writes.future,
             progress_callback,
         )
+
+    def _record_non_finite(
+        self,
+        error: training_loop.NonFiniteMetricError,
+        state: training_loop.EpochState[EpochResult],
+        run_dir: Path,
+        model_path: Path,
+        data_module: Any,
+        tb: TensorBoardLogger,
+    ) -> None:
+        """Leave a failed run.json that names the epoch and the metric (ADR-182)."""
+        try:
+            failed = TrainResult(
+                stopped=False,
+                best_epoch=state.best_epoch,
+                best_val_loss=state.best_metric,
+                total_epochs=len(state.history),
+                device_used=self._device_label,
+                history=state.history,
+                model_path=model_path,
+                warnings=[error.health_warning().to_dict()],
+            )
+            self._write_run_json(
+                run_dir, failed, getattr(data_module, "class_names", None)
+            )
+            training_loop.record_non_finite_failure(run_dir, error)
+        finally:
+            tb.close()
 
     # ── private helpers ────────────────────────────────────────────────────────
 
