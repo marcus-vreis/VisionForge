@@ -7725,3 +7725,19 @@ differently now. Each fix has a test that failed before it
 
 - *Bump `schema_version`.* No shape changes for old files, so a migration step would be empty.
 - *Keep 150 dpi by default.* Preserves file size but misses the paper-ready goal of the issue.
+## ADR-184 — `visionforge run` runs the GUI's multi-run strategies
+
+**Date:** 2026-11-10
+**Status:** Accepted
+**Relates to:** ADR-056 (replicates), ADR-061 (replicated comparison), ADR-045/052 (sweeps), ADR-050 (task K-fold), ADR-113/123/124 (run groups)
+
+**Context:** `visionforge run` trained one config. Replicates, the paired comparison, the standalone sweeps and the regression/segmentation K-fold existed only behind the GUI's HTTP routes, so the number a paper cites (mean ± CI, Holm-corrected paired tests) and its `.tex` table could not be produced from a script. The steps after the orchestrator (stopped/failed decision, report shape, summary files, History group) lived in private functions of `gui/api/routes.py`.
+
+**Decision:** a YAML whose top level is `strategy:` + `config:` is a strategy envelope. `strategy.kind` is `replicates`, `replicated_comparison`, `sweep` or `cv`; its other keys are validated by the same request model the matching route uses (`ReplicatesRequest`, `ReplicatedComparisonRequest`, `SweepRequest`, `TaskCvRequest`), and `config` is the task config unchanged. `cli_strategies.py` picks the task's `TaskRunner` (or K-fold function) and calls the orchestrator in `core`. The post-orchestrator step moved from the routes to `core/run_groups.py` (`finish_replicates`, `finish_replicated_comparison`, `finish_sweep`, `finish_kfold`, `resolve_seeds`, `write_group_summary`); the routes and the CLI both call it, and the routes keep their behaviour. A YAML without `strategy` takes the old path. Sweeps cover the tasks the GUI sweeps through a runner (detection, regression, segmentation, anomaly) and K-fold covers regression and segmentation; any other task fails before training with a message that names the alternative (the classification blocks). An invalid envelope or option exits with status 2, a job with no result with 1.
+
+**Consequences:** the CLI has no statistics of its own, so it cannot drift from the GUI. The CLI has no stop button and no profile: the token is `None` and the config's own `output` paths are used, with `outputs/models` for the group when the config names none. Custom tasks are not covered yet.
+
+**Alternatives considered:**
+
+- *A `strategy` key inside the task config.* Every task config loader would have to ignore it, and the options would mix with the task's fields.
+- *New subcommands (`visionforge replicates ...`).* Options on the command line instead of in the versioned YAML, and four parsers to keep in sync with the request models.
