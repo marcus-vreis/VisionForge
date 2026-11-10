@@ -3678,6 +3678,7 @@ implying the backbone is untouched — the distinction matters in a paper, where
 **Date:** 2026-08-28
 **Status:** Accepted
 **Supersedes:** the per-feature extras of ADR-005 (the hardware extras stay)
+**Amended by:** ADR-170/171/172/176 (`mlflow`, `hub`, `wandb` and `dvc` are optional extras that install something; the seven extras named here stay empty)
 
 **Context:** seven capabilities were optional extras — `detection`, `timm`,
 `optuna`, `tensorboard`, `roboflow`, `kaggle`, `huggingface`. The reasoning was

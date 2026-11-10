@@ -40,6 +40,8 @@ VisionForge is a Python package (`src/visionforge/`) plus a React SPA served by 
 
 ## Modules
 
+`__main__.py` is the `visionforge` command line entry point (`python -m visionforge`): argument parsing and dispatch to the commands described below.
+
 ### `utils/`
 
 Foundational utilities. No module-level import of another VisionForge package; the lazy inward imports are listed under [Boundaries](#boundaries).
@@ -55,6 +57,7 @@ Foundational utilities. No module-level import of another VisionForge package; t
 | `doctor.py` | `visionforge doctor` — inspects the machine and prints the exact torch install line for it (torch is user-managed per ADR-005). |
 | `messages.py` | Server-written texts in the language of the request (`tr(key, **params)`, ADR-116). |
 | `workers.py` · `credentials.py` · `redact.py` | DataLoader worker budget; local store for dataset-provider API keys; masking of credentials before text is shown or logged. |
+| `third_party_privacy.py` | Switches off the usage telemetry of the bundled third-party SDKs once, before any of them is imported; never overrides a value the user already set (ADR-120, ADR-170). |
 | `wandb_names.py` | The W&B project and entity name check, kept out of `core/` so the profile settings validate names without importing torch (ADR-172). |
 | `selftest.py` · `selftest_data.py` | `visionforge selftest` (ADR-060) — builds tiny synthetic datasets in each task's real on-disk layout, starts the real API on an ephemeral socket, and trains every (task, strategy) pair through the same endpoints the browser uses, checking the report shape and the SSE contract. The answer to "does this install actually train?". |
 
@@ -104,8 +107,10 @@ Imports `utils/`, plus `models/` from the four non-classification trainers (see 
 | `resume_provenance.py` | Compare a resumed run's recorded dataset fingerprint before native training; reject confirmed changes and warn when legacy identity cannot be verified (ADR-134). |
 | `preprocessing.py` | The filter pipeline (blur, edges, wavelet, CLAHE…) shared by every task, applied before augmentation and normalization. |
 | `gradcam.py` · `onnx_export.py` · `batch_predict.py` | Post-training tooling: explainability heatmaps, ONNX export with a latency benchmark, and batch inference to CSV. |
-| `<task>_data.py` · `<task>_trainer.py` | One pair per standalone task per ADR-033/036/037/038: `regression_*`, `segmentation_*`, `anomaly_*`, and for detection `detection_data.py` (Ultralytics `data.yaml`), `detection_dataset.py` (YOLO-format adapter for torchvision), `detection_metrics.py` (mAP@0.5) and `detection_trainer.py`. A new task adds files here and never edits existing ones. |
+| `<task>_data.py` · `<task>_trainer.py` | One pair per standalone task per ADR-033/036/037/038: `regression_data.py`, `segmentation_data.py` and `segmentation_trainer.py`, `anomaly_data.py` and `anomaly_trainer.py`, and for detection `detection_data.py` (Ultralytics `data.yaml`), `detection_dataset.py` (YOLO-format adapter for torchvision), `detection_metrics.py` (mAP@0.5) and `detection_trainer.py`. A new task adds files here and never edits existing ones. |
 | `run_groups.py` | Replicate sets, K-folds, sweeps and comparisons as History groups (ADR-113, ADR-123, ADR-124): one group `run.json` per job in `<models_dir>/<name>_<suffix>/<group_id>/`, children tagged with `group_id`. |
+| `training_loop.py` · `trial_name.py` | Shared training lifecycle helpers with explicit task-specific inputs; per-trial experiment names for sweeps that carry the value each trial varies (for example `_lr0.002`). |
+| `live_confusion.py` · `live_insights.py` | Live "Results" tab while a classifier trains: the validation confusion of each epoch (ADR-161) and Grad-CAM of a few fixed validation images that leaves the training history unchanged (ADR-162). |
 | `cancellation.py` · `resume.py` · `loader_lifecycle.py` | Cooperative stop signal; epoch-boundary resume including RNG and loader generators (ADR-134). Explicit resume rejects unusable state before training setup (ADR-138); optional capability probes return `None`. Deterministic shutdown of DataLoader worker pools. Native runs record effective worker counts in `run.json.runtime`. |
 | `training_health.py` · `metric_ci.py` · `image_size.py` · `learning_rate.py` · `materialized_dataset.py` | Warnings for runs that produced a number instead of a result; bootstrap CIs for one run's test metrics (ADR-074/076); suggested resolution and learning rate; filtered on-disk dataset copies for backends that own their pipeline (ADR-084, ADR-130). |
 
@@ -155,7 +160,7 @@ Blocks that run N sub-trainings (`grid_search`, `random_search`, `model_comparis
 
 **Standalone task blocks** (ADR-033/036/037/038) mirror `setup`/`run`/`report` over their own config tree and do **not** subclass `ExperimentBlock`: `DetectionBlock`, `RegressionBlock`, `SegmentationBlock`, `AnomalyBlock`. Each is dispatched by its `/api/<task>/run` endpoint.
 
-**Runners and K-fold helpers** (ADR-041): `classification_runner.py`, `detection_runner.py`, `regression_runner.py`, `segmentation_runner.py` and `anomaly_runner.py` each hold a `*Runner` that satisfies the `TaskRunner` Protocol (`core/task_runner.py`). Their `primary_metric()` is `accuracy`, `map50_95`, `r2`, `miou` and `auroc`. `regression_cv.py` and `segmentation_cv.py` provide `run_regression_cross_validation` and `run_segmentation_cross_validation` (`/api/regression/cv`, `/api/segmentation/cv`); `_search_utils.py` is shared by the two search blocks.
+**Runners and K-fold helpers** (ADR-041): `classification_runner.py`, `detection_runner.py`, `regression_runner.py`, `segmentation_runner.py` and `anomaly_runner.py` each hold a `*Runner` that satisfies the `TaskRunner` Protocol (`core/task_runner.py`). Their `primary_metric()` is `accuracy`, `map50_95`, `r2`, `miou` and `auroc`. `regression_cv.py` and `segmentation_cv.py` provide `run_regression_cross_validation` and `run_segmentation_cross_validation` (`/api/regression/cv`, `/api/segmentation/cv`); `_search_utils.py` is shared by the two search blocks and `_cv_common.py` holds the fold loaders, reporting and execution shared by the standalone task CV.
 
 ### Task support matrix
 
@@ -174,10 +179,19 @@ Imports `blocks/`, `tasks/`, `core/`, `models/` and `utils/`. React + shadcn/ui 
 
 | Module | Responsibility |
 |---|---|
-| `server.py` | FastAPI application. Mounts `api/routes.py` and serves the pre-built SPA from `static/`, confined to the resolved SPA root (ADR-127). Entry point behind `visionforge gui`. |
-| `api/routes.py` | REST router, prefix `/api`. Groups: schema + lifecycle (`GET /api/schema`, `POST /api/experiment/run`, `GET /api/experiment/{status,events,result/{id}}`); per-task (`/api/{detection,regression,segmentation,anomaly}/{schema,run,sweep,compare,replicates,replicated-comparison,dataset/*}`, `/api/{regression,segmentation}/cv`, `/api/classification/{replicates,replicated-comparison}`); researcher tasks (`/api/tasks`, `/api/custom/{key}/*`); runs (`/api/runs`, `/api/runs/{id}` and `/export_md`, `/test`, `/batch_predict`, `/export_onnx`, `/gradcam`, `/resume`, `/reveal`); datasets (`/api/dataset/{detect,pick,stats,samples,preview_preprocess,preview_augment,file,download}`, `/api/sample-dataset`); system (`/api/system/info`, `/api/device/info`, `/api/checkpoint/pick`, `/api/health`, `/api/queue`, `/api/profiles`, `/api/credentials`, `/api/update`); `GET /api/artifacts/{file_path}`. |
+| `server.py` | FastAPI application. Mounts `api/routes.py` and serves the pre-built SPA from `static/`, confined to the resolved SPA root (ADR-127). Also serves `GET /api/health` and applies `security.py`. Entry point behind `visionforge gui`. |
+| `api/routes.py` | REST router, prefix `/api`, which includes the routers split out of it (ADR-132). Still defines: schema + lifecycle (`GET /api/schema`, `POST /api/experiment/run`, `GET /api/experiment/{status,events,result/{id}}`); per-task schema, run, sweep, compare, replicates and K-fold (`/api/{detection,regression,segmentation,anomaly}/*`, `/api/classification/{replicates,replicated-comparison}`); researcher tasks (`/api/tasks`, `/api/custom/{key}/*`); per-run actions (`/api/runs/{id}` and `/export_md`, `/test`, `/batch_predict`, `/export_onnx`, `/gradcam`, `/resume`, `/reveal`); `/api/sample-dataset`, `/api/queue`, `/api/update`, `GET /api/artifacts/{file_path}`. |
 | `api/schemas.py` | Pydantic request/response models for the routes above. |
 | `api/profiles_routes.py` | Profile endpoints mounted by the shared router, with output directories resolved per request (ADR-132). |
+| `security.py` | Refuses requests whose `Host` or `Origin` does not name this server (DNS rebinding and cross-site requests to the local server). |
+| `api/datasets_routes.py` | Dataset, picker and credential endpoints split out of `routes.py` (`/api/dataset/*`, `/api/<task>/dataset/*`, `/api/checkpoint/pick`, `/api/credentials`) (ADR-132). |
+| `api/runs_routes.py` · `api/run_history.py` | Run list and delete endpoints; pure parsing of `run.json` for the list, the detail and the resume rules, with no FastAPI import (ADR-132). |
+| `api/run_events.py` | The events of one run kept for its whole life so any reader, including a reloaded page, walks them from the start (ADR-159). |
+| `api/http_responses.py` | OpenAPI text of the error status codes shared by the routers (ADR-132). |
+| `api/model_card.py` | Pure localized model-card sections read from the `run.json` contract. |
+| `api/code_tour_routes.py` | `GET /api/code-tour` and `/api/code-tour/{task}`: the real code of a training for the "Código" tab (ADR-173). |
+| `api/profile_tokens.py` | One private token per profile and service (Hugging Face Hub, Weights & Biases, Zenodo, GitHub), stored where only the server reads it and never sent back to the page. |
+| `api/hub_routes.py` · `api/wandb_routes.py` · `api/zenodo_routes.py` · `api/github_routes.py` · `api/dvc_routes.py` | History export endpoints for the selected profile: private Hugging Face Hub (ADR-171), Weights & Biases (ADR-172), Zenodo drafts (ADR-174), GitHub without weights (ADR-175) and a local DVC repository (ADR-176). |
 | `api/evidence_routes.py` | Read-only dataset audits and profile-confined run bundle downloads (ADR-140). A source reservation excludes active/queued training and concurrent resume; cancellation waits for the archive writer before deleting temporary files. |
 | `api/system_routes.py` · `api/system_service.py` | Host/device information and model defaults; thin HTTP handlers delegate to a service with injected runtime probes (ADR-132). |
 | `api/run_queue.py` · `api/profiles.py` · `api/gpu_health.py` | FIFO training queue (ADR-075), and `RunLanes`: the local queue plus one per Google account, running side by side (ADR-163, phase 4); profiles as output folders (ADR-114); whether the CUDA context still works (ADR-122). |
@@ -191,6 +205,7 @@ Imports `blocks/`, `tasks/`, `core/`, `models/` and `utils/`. React + shadcn/ui 
 | `api/updates.py` · `updater.py` | Newer-release notice and install (ADR-120). |
 | `api/colab_connection.py` · `api/colab_routes.py` | Google Colab through the pinned `google-colab-cli`, in a venv of its own: install, login per profile (`USERPROFILE`/`HOME` confined to `~/.visionforge/colab/<profile>/`), account and compute-unit balance (ADR-163). |
 | `api/colab_jobs.py` · `api/colab_remote_runner.py` | One classification job on a Colab VM: `colab new`, `colab exec` of the runner (prefixed JSON events on stdout, a final `job_end`), `colab stop` in a `finally`; sessions left alive on the account (ADR-163, phase 2). Before the stop, `colab download` of the run's experiment bundle, which `core/experiment_bundle.import_experiment_bundle` unpacks into the profile's `models/` (phase 3). |
+| `api/colab_drive.py` | Datasets in the user's Google Drive for Colab runs: the local Drive path is translated to the VM's `/content/drive/MyDrive/...`; none of it talks to Google (ADR-164). |
 | `api/model_notes.py` | The sentence explaining why a model's default is flagged. |
 | `static/` | Pre-built React SPA. Generated by `npm run build` in `frontend/`. Users never need Node.js. |
 
@@ -228,7 +243,7 @@ multi_cuda  → torch.nn.DataParallel over gpu_ids (classification, regression, 
 
 ## Dependency policy
 
-`pyproject.toml` is canonical. Base dependencies include `ultralytics`, `timm`, `optuna`, `tensorboard`, `roboflow`, `kaggle` and `datasets` (ADR-106). The extras `detection`, `timm`, `optuna`, `tensorboard`, `roboflow`, `kaggle` and `huggingface` are empty and exist only so saved install lines keep resolving. The extras that install something are the hardware extras and `dev`.
+`pyproject.toml` is canonical. Base dependencies include `ultralytics`, `timm`, `optuna`, `tensorboard`, `roboflow`, `kaggle` and `datasets` (ADR-106). The extras `detection`, `timm`, `optuna`, `tensorboard`, `roboflow`, `kaggle` and `huggingface` are empty and exist only so saved install lines keep resolving. The extras that install something are the hardware extras (`cpu`, `cu118`, `cu121`, `cu124`, `cu126`, `cu128`), the optional exporters `mlflow`, `wandb`, `dvc` and `hub` (ADR-170, ADR-171, ADR-172, ADR-176), and `dev`.
 
 ## Task expansion model
 
