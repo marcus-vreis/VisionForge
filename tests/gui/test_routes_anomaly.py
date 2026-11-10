@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import time
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
+from tests.helpers import wait_experiment_done, wait_until
 from visionforge.utils.messages import using_lang
 
 from .conftest import occupy_queue, release_queue
@@ -80,11 +80,9 @@ class TestAnomalyRun:
 
             # Wait for run(), not setup(): has_callback is written in run, and
             # waiting on setup's key raced the assert below.
-            deadline = time.monotonic() + 30.0
-            while time.monotonic() < deadline:
-                if "has_callback" in captured:
-                    break
-                time.sleep(0.05)
+            wait_until(
+                lambda: "has_callback" in captured, message='"has_callback" in captured'
+            )
             assert captured.get("class") == "AnomalyBlock"
             assert captured.get("model") == "autoencoder"
             assert captured.get("has_callback") is True
@@ -149,12 +147,7 @@ class TestAnomalyCompareSweep:
             assert resp.status_code == 200, resp.text
             run_id = resp.json()["run_id"]
 
-            status = {"status": "running"}
-            for _ in range(50):
-                status = client.get("/api/experiment/status").json()
-                if status["status"] in ("completed", "failed"):
-                    break
-                time.sleep(0.05)
+            status = wait_experiment_done(client)
             assert status["status"] == "completed", status
 
             report = client.get(f"/api/experiment/result/{run_id}").json()["report"]

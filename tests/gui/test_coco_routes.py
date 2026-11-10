@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import time
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -12,6 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
 
+from tests.helpers import wait_until
 from visionforge.gui.api import coco_routes
 from visionforge.gui.server import app
 
@@ -77,12 +77,16 @@ def _idle_jobs() -> Iterator[None]:
 
 
 def _wait(client: TestClient, url: str, job_id: str) -> Json:
-    for _ in range(200):
-        body: Json = client.get(f"{url}/{job_id}").json()
-        if body["state"] != "running":
-            return body
-        time.sleep(0.05)
-    raise AssertionError("job did not finish")
+    body: Json = {}
+
+    def _finished() -> bool:
+        nonlocal body
+        body = client.get(f"{url}/{job_id}").json()
+        state: str = body["state"]
+        return state != "running"
+
+    wait_until(_finished, message="the job to finish")
+    return body
 
 
 def _preview(client: TestClient, url: str, **body: str) -> Json:

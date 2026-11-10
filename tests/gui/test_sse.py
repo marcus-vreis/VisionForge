@@ -259,7 +259,6 @@ class TestSSEEventQueue:
     def test_stream_event_order_via_fake_run(self, tmp_path: Path) -> None:
         """A complete fake run must produce start → epoch_end × N → end via SSE."""
         import threading
-        import time
 
         loop = asyncio.new_event_loop()
         queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
@@ -271,7 +270,6 @@ class TestSSEEventQueue:
             async def _put(item: dict[str, Any] | None) -> None:
                 await queue.put(item)
 
-            time.sleep(0.02)  # slight delay to let the consumer start
             asyncio.run_coroutine_threadsafe(
                 _put({"event": "start", "total_epochs": n_epochs}), loop
             ).result()

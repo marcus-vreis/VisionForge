@@ -8,12 +8,13 @@ for N x M trainings, and the stored report carries the paired matrix.
 
 from __future__ import annotations
 
-import time
 from pathlib import Path
 from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
+
+from tests.helpers import wait_experiment_done
 
 from .conftest import occupy_queue, release_queue
 
@@ -46,13 +47,7 @@ def _variants() -> dict[str, dict[str, Any]]:
 
 
 def _wait(client: TestClient) -> dict:
-    status: dict = {"status": "running"}
-    for _ in range(80):
-        status = client.get("/api/experiment/status").json()
-        if status["status"] in ("completed", "failed"):
-            return status
-        time.sleep(0.05)
-    return status
+    return wait_experiment_done(client)
 
 
 class TestRoutesExist:

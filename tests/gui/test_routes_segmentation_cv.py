@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-import time
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+
+from tests.helpers import wait_experiment_done
 
 from .conftest import occupy_queue, release_queue
 
@@ -73,12 +74,7 @@ class TestSegmentationCv:
             assert resp.status_code == 200, resp.text
             run_id = resp.json()["run_id"]
 
-            status = {"status": "running"}
-            for _ in range(50):
-                status = client.get("/api/experiment/status").json()
-                if status["status"] in ("completed", "failed"):
-                    break
-                time.sleep(0.05)
+            status = wait_experiment_done(client)
             assert status["status"] == "completed", status
 
             assert captured["n_folds"] == 2

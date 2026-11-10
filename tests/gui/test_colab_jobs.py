@@ -63,6 +63,7 @@ class FakeExec:
         for line in self._lines:
             if self.killed.is_set():
                 return
+            # Simulates the Colab CLI emitting lines over time; not polling.
             time.sleep(self._delay)
             yield line
 

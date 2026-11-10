@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import time
 from pathlib import Path
 from typing import Any
 
@@ -10,6 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
 
+from tests.helpers import wait_until
 from visionforge.gui.server import app
 
 API = "/api/explorer/resplit"
@@ -51,12 +51,16 @@ def dataset(tmp_path: Path, client: TestClient) -> Path:
 
 
 def _wait(client: TestClient, job_id: str) -> dict[str, Any]:
-    for _ in range(200):
-        body: dict[str, Any] = client.get(f"{API}/{job_id}").json()
-        if body["state"] != "running":
-            return body
-        time.sleep(0.05)
-    raise AssertionError("job did not finish")
+    body: dict[str, Any] = {}
+
+    def _finished() -> bool:
+        nonlocal body
+        body = client.get(f"{API}/{job_id}").json()
+        state: str = body["state"]
+        return state != "running"
+
+    wait_until(_finished, message="the job to finish")
+    return body
 
 
 def _preview(client: TestClient, base: Path, **extra: Any) -> dict[str, Any]:
