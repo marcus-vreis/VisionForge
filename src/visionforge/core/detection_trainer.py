@@ -193,6 +193,15 @@ def _train_loss_metrics(trainer: Any) -> dict[str, Any]:
     return labelled if isinstance(labelled, dict) else {}
 
 
+def _report_epoch(
+    progress_callback: Callable[[dict[str, Any]], None] | None,
+    event: dict[str, Any],
+) -> None:
+    """Hand one epoch event to the GUI, when someone is listening."""
+    if progress_callback is not None:
+        progress_callback(event)
+
+
 def _epoch_event(
     result: DetectionEpochResult,
     total_epochs: int,
@@ -685,16 +694,16 @@ class DetectionTrainer:
                     best_epoch = epoch
                     torch.save(model.state_dict(), model_path)
 
-                if progress_callback is not None:
-                    progress_callback(
-                        _epoch_event(
-                            epoch_result,
-                            cfg.epochs,
-                            train_loss=train_loss,
-                            val_loss=val_loss,
-                            lr=epoch_lr,
-                        )
-                    )
+                _report_epoch(
+                    progress_callback,
+                    _epoch_event(
+                        epoch_result,
+                        cfg.epochs,
+                        train_loss=train_loss,
+                        val_loss=val_loss,
+                        lr=epoch_lr,
+                    ),
+                )
 
                 # Every epoch, not only on improvement: a run dies on its
                 # worst epochs too, and stale state resumes into a past already
