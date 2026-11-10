@@ -27,12 +27,10 @@ VISIONFORGE_INCLUDES = {
     "evaluation": ["best-checkpoint reload", "test pass with predictions"],
     "evidence": ["best-checkpoint SHA-256", "result assembly"],
 }
-EXECUTION_ORDER = ["native_pytorch", "visionforge_trainer"]
+EXECUTION_ORDER = list(phase_contract.EXECUTION_ORDER)
 
 
-def execution_order(seed: int) -> list[str]:
-    """Counterbalance the pair: even seeds run native first, odd seeds last."""
-    return list(EXECUTION_ORDER) if seed % 2 == 0 else EXECUTION_ORDER[::-1]
+execution_order = phase_contract.execution_order
 
 
 def run_visionforge(

@@ -10,12 +10,10 @@ from pathlib import Path
 from . import phase_contract
 
 METRIC_ABS_TOLERANCE = 1e-12
-EXECUTION_ORDER = ["native_pytorch", "visionforge_trainer"]
+EXECUTION_ORDER = list(phase_contract.EXECUTION_ORDER)
 
 
-def execution_order(seed: int) -> list[str]:
-    """Counterbalance the pair: even seeds run native first, odd seeds last."""
-    return list(EXECUTION_ORDER) if seed % 2 == 0 else EXECUTION_ORDER[::-1]
+execution_order = phase_contract.execution_order
 
 
 VISIONFORGE_INCLUDES = {
