@@ -20,7 +20,8 @@ Ao lado de cada campo de credencial há um botão **💾 Salvar**. Salvando, a
 chave fica guardada em `~/.visionforge/credentials.json` e nas próximas vezes o
 campo já aparece marcado como *salva*, mostrando só os últimos caracteres
 (`salva: •••••••1234`) — o suficiente para você saber qual é, sem a chave
-aparecer na tela.
+aparecer na tela. Onde o arquivo fica, como apagar e o que pedir ao criar
+cada chave: [Tokens e chaves](gui/tokens.md).
 
 - deixe o campo **em branco** para usar a salva
 - digite outra e **↻ Substituir** para trocar

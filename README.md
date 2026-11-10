@@ -208,6 +208,7 @@ epoch on synthetic data says nothing about accuracy.
 - [`docs/INSTALL.md`](https://github.com/marcus-vreis/VisionForge/blob/main/docs/INSTALL.md) — install, step by step, per system (Portuguese)
 - [`docs/QUICKSTART.md`](https://github.com/marcus-vreis/VisionForge/blob/main/docs/QUICKSTART.md) — first run, start to finish
 - [`docs/DATASETS.md`](https://github.com/marcus-vreis/VisionForge/blob/main/docs/DATASETS.md) — dataset layouts and the download providers
+- [`docs/gui/tokens.md`](https://github.com/marcus-vreis/VisionForge/blob/main/docs/gui/tokens.md) — where tokens and keys are stored and how to remove them (Portuguese)
 - [`docs/REPRODUCIBILITY.md`](docs/REPRODUCIBILITY.md) — data audits, grouped CV, resume guarantees and experiment bundles (Portuguese)
 - [`docs/custom/`](https://github.com/marcus-vreis/VisionForge/tree/main/docs/custom) — your own models and task families
 - [`CHANGELOG.md`](https://github.com/marcus-vreis/VisionForge/blob/main/CHANGELOG.md) — what shipped in each release
@@ -455,6 +456,7 @@ navegador usa. Ele confere que o caminho funciona, não que o modelo é bom — 
 - [`docs/INSTALL.md`](https://github.com/marcus-vreis/VisionForge/blob/main/docs/INSTALL.md) — instalação passo a passo, por sistema
 - [`docs/QUICKSTART.md`](https://github.com/marcus-vreis/VisionForge/blob/main/docs/QUICKSTART.md) — o primeiro treino, do início ao fim
 - [`docs/DATASETS.md`](https://github.com/marcus-vreis/VisionForge/blob/main/docs/DATASETS.md) — formatos de dataset e os provedores de download
+- [`docs/gui/tokens.md`](https://github.com/marcus-vreis/VisionForge/blob/main/docs/gui/tokens.md) — onde ficam os tokens e chaves e como removê-los
 - [`docs/REPRODUCIBILITY.md`](docs/REPRODUCIBILITY.md) — auditoria dos dados, CV por grupos, limites da retomada e exportação de registros
 - [`docs/custom/`](https://github.com/marcus-vreis/VisionForge/tree/main/docs/custom) — seus próprios modelos e tarefas
 - [`CHANGELOG.md`](https://github.com/marcus-vreis/VisionForge/blob/main/CHANGELOG.md) — o que entrou em cada versão

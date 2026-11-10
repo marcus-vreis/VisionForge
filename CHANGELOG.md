@@ -139,6 +139,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
     diz isso.
   - **API:** `/api/explorer/summary`, `/images`, `/thumb` e `/scan`.
 - Teste de paridade de `transforms.augment`: classificação, K-fold, regressão, segmentação, anomalia e detecção leem a mesma amostra sob seeds diferentes e devem dar tensores idênticos com `augment=false` e variar com `augment=true` (#163).
+- Novo guia `docs/gui/tokens.md`: onde ficam as chaves de datasets e os tokens por perfil, texto puro e permissões no Windows, variáveis de ambiente, como remover e revogar, escopo mínimo por serviço e o aviso de servidor exposto (#187).
 
 ### Fixed
 
