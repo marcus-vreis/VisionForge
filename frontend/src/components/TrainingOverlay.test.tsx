@@ -3,7 +3,9 @@
  * DOM, so what is read is which tab is open and what each one puts on the page.
  * Clicking is the browser check's.
  */
+import type { ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { prerenderToNodeStream } from "react-dom/static";
 import { describe, expect, it } from "vitest";
 
 import { LanguageContext } from "../i18n/context";
@@ -27,8 +29,8 @@ const events: TrainingEvent[] = [
   },
 ];
 
-function sheet(lang: "pt" | "en", tab: SheetTab, visible = true, status = running) {
-  return renderToStaticMarkup(
+function sheetElement(lang: "pt" | "en", tab: SheetTab, visible = true, status = running) {
+  return (
     <LanguageContext.Provider
       value={{
         lang,
@@ -49,8 +51,25 @@ function sheet(lang: "pt" | "en", tab: SheetTab, visible = true, status = runnin
         onTabChange={() => {}}
         onClose={() => {}}
       />
-    </LanguageContext.Provider>,
+    </LanguageContext.Provider>
   );
+}
+
+function sheet(lang: "pt" | "en", tab: SheetTab, visible = true, status = running) {
+  return renderToStaticMarkup(sheetElement(lang, tab, visible, status));
+}
+
+/** The markup once every lazy tab has loaded (GUI-12): the story is its own
+ *  chunk, so a one-pass render would only hold its loading status. */
+async function settled(element: ReactElement): Promise<string> {
+  const { prelude } = await prerenderToNodeStream(element);
+  let html = "";
+  for await (const chunk of prelude) html += String(chunk);
+  return html;
+}
+
+function storySheet(lang: "pt" | "en", visible = true) {
+  return settled(sheetElement(lang, "story", visible));
 }
 
 describe("the training sheet's tabs", () => {
@@ -90,8 +109,8 @@ describe("the training sheet's tabs", () => {
     expect(html).not.toMatch(/id="training-panel-log"[^>]*hidden/);
   });
 
-  it("shows the story when it is the open tab, and keeps the log in the page, hidden", () => {
-    const html = sheet("en", "story");
+  it("shows the story when it is the open tab, and keeps the log in the page, hidden", async () => {
+    const html = await storySheet("en");
     expect(html).toMatch(/id="training-tab-story"[^>]*aria-selected="true"/s);
     expect(html).toContain('data-story-stage="training"');
     expect(html).toContain(en.trainingStory.stages.training);
@@ -101,9 +120,9 @@ describe("the training sheet's tabs", () => {
     expect(html).toContain("$ visionforge train --task classification");
   });
 
-  it("lets a minimized sheet's drawing stand still", () => {
-    expect(sheet("pt", "story", true)).toContain("animateMotion");
-    expect(sheet("pt", "story", false)).not.toContain("animateMotion");
+  it("lets a minimized sheet's drawing stand still", async () => {
+    expect(await storySheet("pt", true)).toContain("animateMotion");
+    expect(await storySheet("pt", false)).not.toContain("animateMotion");
   });
 });
 

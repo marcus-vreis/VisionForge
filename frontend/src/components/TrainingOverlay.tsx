@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, useEffect, useRef, useState } from "react";
 import { ApiError, cancelQueuedRun, fetchQueue } from "../api/client";
 import { driveConsentPrompt } from "../lib/drive-consent";
 import { findQueuedJob, isColabLane, laneAccount } from "../lib/queue-lanes";
@@ -24,9 +24,15 @@ import { STOPPED_COLOR } from "../lib/unit-status";
 import type { QueuedJobInfo, RunStatus, TrainingEvent } from "../types/run";
 import { DriveConsentPrompt } from "./DriveConsentPrompt";
 import { LiveResults } from "./LiveResults";
-import { TrainingStory } from "./training-story/TrainingStory";
-import { CodeTour } from "./CodeTour";
+import { LazySurface } from "./ErrorBoundary";
 import type { CodeSettings } from "../api/client";
+
+// The drawing and the code tour are tabs the log does not need: each is its own
+// chunk, fetched the first time its tab opens (GUI-12).
+const TrainingStory = lazy(() =>
+  import("./training-story/TrainingStory").then((m) => ({ default: m.TrainingStory })),
+);
+const CodeTour = lazy(() => import("./CodeTour").then((m) => ({ default: m.CodeTour })));
 
 interface TrainingOverlayProps {
   status: RunStatus;
@@ -752,7 +758,9 @@ export function TrainingOverlay({
             aria-labelledby="training-tab-code"
             style={{ maxHeight: 520, overflowY: "auto" }}
           >
-            <CodeTour taskKey={taskKey} settings={codeSettings} accent={taskAccent} />
+            <LazySurface>
+              <CodeTour taskKey={taskKey} settings={codeSettings} accent={taskAccent} />
+            </LazySurface>
           </div>
         )}
 
@@ -764,19 +772,21 @@ export function TrainingOverlay({
             id="training-panel-story"
             aria-labelledby="training-tab-story"
           >
-            <TrainingStory
-              events={progressEvents}
-              status={status.status}
-              stopped={stopOutcomeNow === "stopped"}
-              unitKind={
-                mode === "trial" || mode === "fold" || mode === "model" || mode === "replicate"
-                  ? mode
-                  : null
-              }
-              spec={story}
-              tabAccent={taskAccent}
-              sheetVisible={visible}
-            />
+            <LazySurface>
+              <TrainingStory
+                events={progressEvents}
+                status={status.status}
+                stopped={stopOutcomeNow === "stopped"}
+                unitKind={
+                  mode === "trial" || mode === "fold" || mode === "model" || mode === "replicate"
+                    ? mode
+                    : null
+                }
+                spec={story}
+                tabAccent={taskAccent}
+                sheetVisible={visible}
+              />
+            </LazySurface>
           </div>
         )}
 
