@@ -11,6 +11,13 @@ from . import phase_contract
 
 METRIC_ABS_TOLERANCE = 1e-12
 EXECUTION_ORDER = ["native_pytorch", "visionforge_trainer"]
+
+
+def execution_order(seed: int) -> list[str]:
+    """Counterbalance the pair: even seeds run native first, odd seeds last."""
+    return list(EXECUTION_ORDER) if seed % 2 == 0 else EXECUTION_ORDER[::-1]
+
+
 VISIONFORGE_INCLUDES = {
     "setup": [
         "DetectionConfig validation (torchvision, SSDLite, pretrained=False)",
@@ -314,7 +321,7 @@ def run_pair(
     device="cpu",
     parity_atol=None,
 ):
-    """Run native first and retain paired evidence even when a phase fails."""
+    """Run both paths, order set by seed parity; keep evidence on failure."""
     from visionforge.utils.environment import capture_environment
 
     from .native_detection import preflight, run_native
@@ -347,13 +354,14 @@ def run_pair(
     )
     fingerprint = fingerprint_dataset(dataset)
     output.mkdir(parents=True)
+    order = execution_order(seed)
     report = {
         "purpose": "engineering_parity_only",
         "task": "detection",
         "status": "running",
         "failed_phase": None,
         "phase_contract": phase_contract.contract_header(),
-        "execution_order": EXECUTION_ORDER,
+        "execution_order": order,
         **options,
         "tolerances": {
             "losses": {"atol": parity_atol, "rtol": 0},
@@ -365,7 +373,12 @@ def run_pair(
         "environment": capture_environment(),
     }
     try:
-        for key, runner in (("native", run_native), ("visionforge", run_visionforge)):
+        runners = {
+            "native_pytorch": ("native", run_native),
+            "visionforge_trainer": ("visionforge", run_visionforge),
+        }
+        for workflow in order:
+            key, runner = runners[workflow]
             try:
                 report[key] = runner(dataset, initial_weights, output / key, **options)
             except phase_contract.PhaseFailure as failure:

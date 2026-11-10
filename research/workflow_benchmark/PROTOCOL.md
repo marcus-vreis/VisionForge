@@ -114,8 +114,12 @@ logs and `run.json`; the native path writes only the best checkpoint.
 Each report records `conditions`: cache (local pre-staged data and weights, no
 downloads, OS file cache not controlled), library versions, CPU threads,
 `CUDA_VISIBLE_DEVICES`, process priority and the declared concurrent workload.
-The pair always runs native first, so the second path may read warm OS file
-caches; the order is recorded as `execution_order`. Phase times are machine
+The pair order is counterbalanced by seed: even seeds run native first and odd
+seeds run VisionForge first. The second path may still read warm OS file caches,
+so a timing ratio is only comparable across an even and an odd seed; the order of
+each pair is recorded as `execution_order`. Any timing ratio must therefore pool at
+least one even and one odd seed: run each command below with `--seed 36` and
+again with `--seed 37` (the examples show 37 only to stay short). Phase times are machine
 wall-clock time (`timing_kind`); human effort is not measured by this harness.
 
 A failure in any phase writes the partial report with `status: failed`,
