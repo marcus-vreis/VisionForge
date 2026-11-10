@@ -228,8 +228,25 @@ def _run_selftest_command(args: argparse.Namespace) -> None:
     _sys.exit(0 if all(o.status == "passed" for o in outcomes) else 1)
 
 
+def _use_utf8_console() -> None:
+    """Make stdout and stderr UTF-8, before anything prints (``--help`` included).
+
+    Windows consoles default to a legacy codepage (cp1252), which cannot encode
+    the arrows and box characters the reports use. Without this,
+    `visionforge selftest` crashed with a UnicodeEncodeError while printing a
+    failure — the diagnostic command dying exactly when it found something. It
+    runs before the parser is built: argparse prints ``--help`` and exits inside
+    ``parse_args``, so a later call never reached it.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            reconfigure(encoding="utf-8", errors="replace")
+
+
 def main() -> None:
     """Run a VisionForge experiment or start the GUI from the command line."""
+    _use_utf8_console()
     from visionforge.utils.logger import setup_logger
     from visionforge.utils.third_party_privacy import apply_opt_outs
 
@@ -355,15 +372,6 @@ def main() -> None:
 
     args = parser.parse_args()
     _bind_language_from_env()
-
-    # Windows consoles default to a legacy codepage (cp1252), which cannot
-    # encode the arrows and box characters the reports use. Without this,
-    # `visionforge selftest` crashed with a UnicodeEncodeError while printing a
-    # failure — the diagnostic command dying exactly when it found something.
-    for stream in (sys.stdout, sys.stderr):
-        reconfigure = getattr(stream, "reconfigure", None)
-        if reconfigure is not None:
-            reconfigure(encoding="utf-8", errors="replace")
 
     if args.command in {"audit-data", "bundle", "verify-bundle"}:
         _run_evidence_command(args, parser)

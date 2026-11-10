@@ -684,3 +684,35 @@ class TestCheckoutVersion:
         expected = checkout_version()
         if expected is not None:
             assert visionforge.__version__ == expected
+
+
+class TestDoctorNamesHiddenGpu:
+    """A CUDA_VISIBLE_DEVICES that hides the card must be named in the GPU line."""
+
+    @staticmethod
+    def _run(capsys: pytest.CaptureFixture[str]) -> str:
+        with (
+            patch("subprocess.run", side_effect=FileNotFoundError),
+            patch("importlib.util.find_spec", return_value=None),
+        ):
+            run_doctor(fix=False, confirm_fn=MagicMock())
+        out: str = capsys.readouterr().out
+        return out
+
+    def test_minus_one_is_named(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "-1")
+        assert "CUDA_VISIBLE_DEVICES" in self._run(capsys)
+
+    def test_empty_is_named(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "")
+        assert "CUDA_VISIBLE_DEVICES" in self._run(capsys)
+
+    def test_unset_is_not_mentioned(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        monkeypatch.delenv("CUDA_VISIBLE_DEVICES", raising=False)
+        assert "CUDA_VISIBLE_DEVICES" not in self._run(capsys)
