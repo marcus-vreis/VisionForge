@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 import statistics
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -11,6 +12,7 @@ from visionforge.core.replicates import (
     aggregate_replicates,
     metric_domain,
     run_replicates,
+    write_replicates_strip,
 )
 from visionforge.core.task_runner import RunResult
 
@@ -297,3 +299,31 @@ class TestMetricDomain:
 
     def test_scores_in_the_unit_interval(self) -> None:
         assert metric_domain("val_accuracy") == (0.0, 1.0)
+
+
+class TestReplicatesStrip:
+    def test_run_replicates_writes_the_strip(self, tmp_path: Path) -> None:
+        run_replicates(
+            _FakeRunner(), _base(), [42, 43, 44], metric="score", figure_dir=tmp_path
+        )
+        assert (tmp_path / "replicates_strip.png").read_bytes().startswith(b"\x89PNG")
+
+    def test_no_figure_dir_writes_nothing(self, tmp_path: Path) -> None:
+        run_replicates(_FakeRunner(), _base(), [42, 43], metric="score")
+        assert list(tmp_path.iterdir()) == []
+
+    def test_formats_come_from_the_output_section(self, tmp_path: Path) -> None:
+        base = {**_base(), "output": {"figure_formats": ["pdf", "svg"]}}
+        run_replicates(
+            _FakeRunner(), base, [42, 43], metric="score", figure_dir=tmp_path
+        )
+        assert (tmp_path / "replicates_strip.pdf").read_bytes().startswith(b"%PDF")
+        assert b"<svg" in (tmp_path / "replicates_strip.svg").read_bytes()
+        assert not (tmp_path / "replicates_strip.png").exists()
+
+    def test_failed_seeds_have_no_point_and_all_failed_writes_nothing(
+        self, tmp_path: Path
+    ) -> None:
+        rows = [{"seed": 1, "status": "failed", "metrics": {}}]
+        assert write_replicates_strip(rows, "score", tmp_path) == []
+        assert list(tmp_path.iterdir()) == []

@@ -1,6 +1,8 @@
 from pathlib import Path
 
-from visionforge.core.plotter import MetricsPlotter
+from PIL import Image
+
+from visionforge.core.plotter import MetricsPlotter, figure_graphic, figure_paths
 from visionforge.core.trainer import EpochResult
 
 
@@ -334,3 +336,51 @@ class TestTaskDiagnostics:
         MetricsPlotter.score_histogram([0, 0, 0], [0.1, 0.2, 0.3], save_path)
 
         assert save_path.exists()
+
+
+class TestFigureFormats:
+    def test_png_pdf_svg_are_all_written(self, tmp_path: Path) -> None:
+        base = tmp_path / "loss.png"
+        MetricsPlotter.loss_curve(
+            make_history(), base, formats=["png", "pdf", "svg"], dpi=100
+        )
+        assert base.read_bytes().startswith(b"\x89PNG")
+        assert (tmp_path / "loss.pdf").read_bytes().startswith(b"%PDF")
+        assert b"<svg" in (tmp_path / "loss.svg").read_bytes()
+
+    def test_png_defaults_to_300_dpi(self, tmp_path: Path) -> None:
+        base = tmp_path / "loss.png"
+        MetricsPlotter.loss_curve(make_history(), base)
+        with Image.open(base) as img:
+            dpi = img.info["dpi"]
+        assert round(dpi[0]) == 300
+        assert round(dpi[1]) == 300
+        assert not (tmp_path / "loss.pdf").exists()
+
+    def test_png_dpi_follows_the_argument(self, tmp_path: Path) -> None:
+        base = tmp_path / "loss.png"
+        MetricsPlotter.loss_curve(make_history(), base, dpi=96)
+        with Image.open(base) as img:
+            assert round(img.info["dpi"][0]) == 96
+
+    def test_pdf_only_does_not_write_a_png(self, tmp_path: Path) -> None:
+        base = tmp_path / "acc.png"
+        MetricsPlotter.accuracy_curve(make_history(), base, formats=["pdf"])
+        assert (tmp_path / "acc.pdf").is_file()
+        assert not base.exists()
+
+    def test_repeated_formats_are_written_once(self) -> None:
+        paths = figure_paths(Path("x/a.png"), ["svg", "SVG", ".svg"])
+        assert paths == [Path("x/a.svg")]
+
+    def test_listed_figure_is_the_png_else_the_first_format(self) -> None:
+        base = Path("x/a.png")
+        assert figure_graphic(base, ["pdf", "png"]) == base
+        assert figure_graphic(base, ["svg", "pdf"]) == Path("x/a.svg")
+
+    def test_replicates_strip_writes_every_format(self, tmp_path: Path) -> None:
+        base = tmp_path / "replicates_strip.png"
+        MetricsPlotter.replicates_strip(
+            [1, 2, 3], [0.8, 0.82, 0.79], base, metric="accuracy", formats=["pdf"]
+        )
+        assert (tmp_path / "replicates_strip.pdf").read_bytes().startswith(b"%PDF")

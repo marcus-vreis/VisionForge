@@ -23,6 +23,8 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 - O Histórico cria no Zenodo um rascunho com o bundle de uma execução, para publicar com DOI quando a pessoa quiser: prévia dos arquivos antes do envio, `run.json` sem caminhos da máquina, token salvo por perfil e Sandbox de teste separado. Nada é publicado pela GUI (ADR-174).
 - O Histórico envia o relatório de uma execução a um repositório privado do GitHub, numa pasta própria e num commit só: README com métricas, tabela por época e gráficos, mais o `run.json` sem caminhos da máquina. Pesos não vão; o repositório precisa existir e ser privado (ADR-175).
 - O Histórico versiona uma execução com DVC num repositório git deste computador: a pasta da execução vai para o git com README, `run.json`, gráficos e os arquivos que o DVC compara (`params.yaml`, `metrics.json`, `history.csv`, `dvc.yaml`), e os pesos vão para o DVC, com `dvc push` quando há remoto padrão. "Preparar pasta" roda `git init` e `dvc init`. Só funciona na máquina do servidor (ADR-176).
+- As figuras de uma execução podem sair também em PDF e SVG, vetoriais, com `output.figure_formats` (padrão `[png]`) e `output.figure_dpi` (padrão 300, antes 150). Réplicas ganham `replicates_strip` ao lado da tabela `.tex`. A GUI ainda não oferece o seletor (ADR-183, #198).
+- Uma página curta por exportador em `docs/gui/` (MLflow, Weights & Biases, Zenodo, GitHub e DVC): o que é enviado e o que não é, token e escopo mínimo, o que acontece se falhar e repetir, e o que não foi verificado com conta real (#213).
 
 - **Converter YOLO e COCO** (ADR-169, fase 4b da issue #117): na aba Explorar,
   "Exportar para COCO" (com um dataset de detecção aberto) e "Importar COCO"
@@ -140,6 +142,8 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
   - **API:** `/api/explorer/summary`, `/images`, `/thumb` e `/scan`.
 - Teste de paridade de `transforms.augment`: classificação, K-fold, regressão, segmentação, anomalia e detecção leem a mesma amostra sob seeds diferentes e devem dar tensores idênticos com `augment=false` e variar com `augment=true` (#163).
 - Novo guia `docs/gui/tokens.md`: onde ficam as chaves de datasets e os tokens por perfil, texto puro e permissões no Windows, variáveis de ambiente, como remover e revogar, escopo mínimo por serviço e o aviso de servidor exposto (#187).
+- `paper/check_submission.py` lista placeholders (`<...>`, `TODO`) e `\todo{}` pendentes no paper; com `--strict` falha apontando arquivo:linha. O workflow Draft PDF o roda só em branches `submission/**`; o desenvolvimento normal não é bloqueado (#228).
+- `visionforge run` aceita um YAML com `strategy:` + `config:` e roda réplicas, comparação pareada, sweep e K-fold como a GUI, gravando o relatório com a tabela `.tex` e a entrada no Histórico; sem `strategy` nada muda (ADR-184) (#199).
 
 ### Fixed
 
@@ -168,6 +172,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 - Os testes que esperam trabalho em segundo plano usam `wait_until` (`tests/helpers.py`) em vez de `time.sleep` em laço: no timeout falham com `AssertionError` em vez de ler um estado velho (#210)
 - Importar o servidor da GUI deixa de carregar torch, torchvision, ultralytics e matplotlib: `import visionforge.gui.server` cai de ~5,1 s para ~1,9 s (4336 → 1351 módulos). `visionforge.core` e `visionforge.blocks` resolvem os nomes públicos sob demanda e cada endpoint importa o bloco ou runner que roda; o servidor continua desligando a telemetria das SDKs ao ser importado (#202).
 - Os smells de teste do Sonar (S5778, S9073, S1515, S6353) saem: uma única chamada dentro de `pytest.raises`, um `assert` por condição, o `key` de `max` do reparticionamento sem lambda em laço e a regex do `repo_id` do Hub em `\w` com `re.ASCII`; sem mudança de comportamento (#206).
+- O mapa de módulos e a política de extras do `docs/dev/ARCHITECTURE.md` voltam a bater com o código (27 módulos sem menção, `routes.py` com grupos que migraram, extras `mlflow`/`wandb`/`dvc`/`hub` que instalam algo), e `tests/docs/test_architecture_map.py` falha quando um módulo novo fica fora do mapa (#186)
 
 ## [0.21.0] — 2026-11-05
 

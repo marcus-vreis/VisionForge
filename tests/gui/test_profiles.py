@@ -1195,7 +1195,10 @@ class TestEverySubmissionIsScoped:
 
         def paths(output: Any) -> dict[str, str]:
             raw = output if isinstance(output, dict) else output.model_dump()
-            return {k: Path(str(v)).as_posix() for k, v in raw.items()}
+            # Only the folders: OutputConfig also carries the figure settings.
+            return {
+                k: Path(str(v)).as_posix() for k, v in raw.items() if k.endswith("_dir")
+            }
 
         def fake_submit(
             run_id, label, task, strategy, start, stop_at="auto", profile=None

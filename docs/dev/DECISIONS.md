@@ -3678,6 +3678,7 @@ implying the backbone is untouched — the distinction matters in a paper, where
 **Date:** 2026-08-28
 **Status:** Accepted
 **Supersedes:** the per-feature extras of ADR-005 (the hardware extras stay)
+**Amended by:** ADR-170/171/172/176 (`mlflow`, `hub`, `wandb` and `dvc` are optional extras that install something; the seven extras named here stay empty)
 
 **Context:** seven capabilities were optional extras — `detection`, `timm`,
 `optuna`, `tensorboard`, `roboflow`, `kaggle`, `huggingface`. The reasoning was
@@ -7708,3 +7709,36 @@ differently now. Each fix has a test that failed before it
 
 - *Keep training and warn at the end.* Wastes the remaining epochs and still leaves no checkpoint.
 - *Treat NaN as the worst possible score.* Keeps the run alive but would pick whatever finite epoch came before, hiding that the later epochs diverged.
+
+## ADR-183 — Figures in PDF/SVG and PNG at 300 dpi
+
+**Date:** 2026-11-10
+**Status:** Accepted
+**Amends:** ADR-116 (figure language); extends `OutputConfig`
+
+**Context:** `core/plotter.py` saved every figure as a 150 dpi PNG, which a journal rejects for line art, and replicate sets drew no figure at all although they already wrote a `.tex` table.
+
+**Decision:** `OutputConfig` gains `figure_formats` (subset of `png`, `pdf`, `svg`, deduplicated, never empty, default `["png"]`) and `figure_dpi` (72 to 1200, default 300). Every `MetricsPlotter` method takes keyword-only `formats` and `dpi` and saves through `save_figure`, which writes one file per format next to the given path (suffix replaced); dpi only affects PNG. The classification, regression, segmentation and anomaly blocks pass the config values; the `graphics` list of `run.json` names one file per figure (the PNG, else the first format asked). `MetricsPlotter.replicates_strip` draws one point per finished seed with the mean, and `write_replicates_strip` writes it beside the replicates `.tex` and from `run_replicates(figure_dir=...)`. No `schema_version` bump: both fields have defaults and a config without them loads as before.
+
+**Consequences:** the default PNG is now 300 dpi (larger files). Detection, the generic engine and the GUI test endpoint use the plotter defaults (PNG, 300 dpi) and do not read the new fields yet; the GUI has no selector or download for PDF/SVG. The heatmap of adjusted p-values for the paired matrix is left out.
+
+**Alternatives considered:**
+
+- *Bump `schema_version`.* No shape changes for old files, so a migration step would be empty.
+- *Keep 150 dpi by default.* Preserves file size but misses the paper-ready goal of the issue.
+## ADR-184 — `visionforge run` runs the GUI's multi-run strategies
+
+**Date:** 2026-11-10
+**Status:** Accepted
+**Relates to:** ADR-056 (replicates), ADR-061 (replicated comparison), ADR-045/052 (sweeps), ADR-050 (task K-fold), ADR-113/123/124 (run groups)
+
+**Context:** `visionforge run` trained one config. Replicates, the paired comparison, the standalone sweeps and the regression/segmentation K-fold existed only behind the GUI's HTTP routes, so the number a paper cites (mean ± CI, Holm-corrected paired tests) and its `.tex` table could not be produced from a script. The steps after the orchestrator (stopped/failed decision, report shape, summary files, History group) lived in private functions of `gui/api/routes.py`.
+
+**Decision:** a YAML whose top level is `strategy:` + `config:` is a strategy envelope. `strategy.kind` is `replicates`, `replicated_comparison`, `sweep` or `cv`; its other keys are validated by the same request model the matching route uses (`ReplicatesRequest`, `ReplicatedComparisonRequest`, `SweepRequest`, `TaskCvRequest`), and `config` is the task config unchanged. `cli_strategies.py` picks the task's `TaskRunner` (or K-fold function) and calls the orchestrator in `core`. The post-orchestrator step moved from the routes to `core/run_groups.py` (`finish_replicates`, `finish_replicated_comparison`, `finish_sweep`, `finish_kfold`, `resolve_seeds`, `write_group_summary`); the routes and the CLI both call it, and the routes keep their behaviour. A YAML without `strategy` takes the old path. Sweeps cover the tasks the GUI sweeps through a runner (detection, regression, segmentation, anomaly) and K-fold covers regression and segmentation; any other task fails before training with a message that names the alternative (the classification blocks). An invalid envelope or option exits with status 2, a job with no result with 1.
+
+**Consequences:** the CLI has no statistics of its own, so it cannot drift from the GUI. The CLI has no stop button and no profile: the token is `None` and the config's own `output` paths are used, with `outputs/models` for the group when the config names none. Custom tasks are not covered yet.
+
+**Alternatives considered:**
+
+- *A `strategy` key inside the task config.* Every task config loader would have to ignore it, and the options would mix with the task's fields.
+- *New subcommands (`visionforge replicates ...`).* Options on the command line instead of in the versioned YAML, and four parsers to keep in sync with the request models.
