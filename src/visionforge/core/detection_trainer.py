@@ -654,7 +654,13 @@ class DetectionTrainer:
                     model, train_loader, device, optimizer
                 )
                 val_loss = self._eval_torchvision_loss(model, val_loader, device)
+                # Before the mAP pass: the detections of NaN weights are not
+                # worth scoring, and a mAP of 0 hides the NaN loss (ADR-182).
+                training_loop.require_finite(
+                    training_loop.VAL_LOSS, epoch, val_loss, best_epoch
+                )
                 map50 = self._eval_torchvision_map(model, val_loader, device)
+                training_loop.require_finite("map50", epoch, map50, best_epoch)
 
                 epoch_result = DetectionEpochResult(
                     epoch=epoch,
@@ -712,6 +718,11 @@ class DetectionTrainer:
                     ),
                 )
 
+        except training_loop.NonFiniteMetricError as error:
+            self._record_torchvision_non_finite(
+                error, run_dir, model_path, history, best_epoch
+            )
+            raise
         finally:
             tb.close()
 
@@ -731,6 +742,29 @@ class DetectionTrainer:
         return self._finish_torchvision_training(
             model, result, train_losses, best_map, progress_callback
         )
+
+    def _record_torchvision_non_finite(
+        self,
+        error: training_loop.NonFiniteMetricError,
+        run_dir: Path,
+        model_path: Path,
+        history: list[DetectionEpochResult],
+        best_epoch: int,
+    ) -> None:
+        """Leave a failed run.json that names the epoch and the metric (ADR-182)."""
+        failed = DetectionTrainResult(
+            stopped=False,
+            best_epoch=best_epoch,
+            best_map50_95=None,
+            total_epochs=len(history),
+            device_used=self._device_label,
+            history=history,
+            model_path=model_path,
+            run_dir=run_dir,
+            warnings=[error.health_warning().to_dict()],
+        )
+        self._write_run_json(run_dir, failed)
+        training_loop.record_non_finite_failure(run_dir, error)
 
     def _restore_torchvision_training(
         self,

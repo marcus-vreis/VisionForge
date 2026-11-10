@@ -279,69 +279,80 @@ class AnomalyTrainer(training_loop.TrainingOutput):
             )
 
         stopped = False
-        for epoch in range(start_epoch, cfg.epochs + 1):
-            # A crash or cancellation may coincide with the stopping boundary.
-            if self._autoencoder_early_stopping_reached(patience):
-                break
-            # The safe point: the previous epoch's checkpoint is written and its
-            # metrics emitted, so stopping here leaves the run directory whole.
-            if is_cancelled(cancel_token):
-                logger.info(
-                    "Run cancelled at epoch {}; keeping the best checkpoint so far.",
-                    epoch,
+        try:
+            for epoch in range(start_epoch, cfg.epochs + 1):
+                # A crash or cancellation may coincide with the stopping boundary.
+                if self._autoencoder_early_stopping_reached(patience):
+                    break
+                # The safe point: the previous epoch's checkpoint is written and its
+                # metrics emitted, so stopping here leaves the run directory whole.
+                if is_cancelled(cancel_token):
+                    logger.info(
+                        "Run cancelled at epoch {}; keeping the best checkpoint so far.",
+                        epoch,
+                    )
+                    stopped = True
+                    break
+
+                training_loop.set_progress_epoch(train_loader, epoch)
+                epoch_lr = training_loop.current_lr(optimizer)
+                train_loss = self._train_autoencoder_epoch(
+                    model, train_loader, optimizer, criterion
                 )
-                stopped = True
-                break
+                # Before the scoring pass: NaN reconstructions make the scores
+                # unusable, and a NaN loss never beats best_loss (ADR-182).
+                training_loop.require_finite(
+                    "train_loss", epoch, train_loss, best_epoch
+                )
 
-            training_loop.set_progress_epoch(train_loader, epoch)
-            epoch_lr = training_loop.current_lr(optimizer)
-            train_loss = self._train_autoencoder_epoch(
-                model, train_loader, optimizer, criterion
-            )
+                normal_scores = self._collect_scores(model, calibration_loader)[0]
+                test_scores, test_labels = self._collect_scores(model, test_loader)
+                auroc, threshold, f1 = self._metrics(
+                    normal_scores, test_scores, test_labels
+                )
+                history.append(
+                    AnomalyEpochResult(epoch, train_loss, auroc, threshold, f1)
+                )
+                self._report_autoencoder_epoch(
+                    history[-1], tb, progress_callback, t0, lr=epoch_lr
+                )
 
-            normal_scores = self._collect_scores(model, calibration_loader)[0]
-            test_scores, test_labels = self._collect_scores(model, test_loader)
-            auroc, threshold, f1 = self._metrics(
-                normal_scores, test_scores, test_labels
-            )
-            history.append(AnomalyEpochResult(epoch, train_loss, auroc, threshold, f1))
-            self._report_autoencoder_epoch(
-                history[-1], tb, progress_callback, t0, lr=epoch_lr
-            )
+                if train_loss < best_loss:
+                    best_loss = train_loss
+                    best_epoch = epoch
+                    patience = 0
+                    torch.save(model.state_dict(), model_path)
+                else:
+                    patience += 1
 
-            if train_loss < best_loss:
-                best_loss = train_loss
-                best_epoch = epoch
-                patience = 0
-                torch.save(model.state_dict(), model_path)
-            else:
-                patience += 1
-
-            # Snapshot the completed epoch, including best metric and patience.
-            resume.save_resume_state(
-                run_dir,
-                resume.ResumeState(
-                    epoch=epoch,
-                    model=model.state_dict(),
-                    optimizer=optimizer.state_dict(),
-                    scheduler=None,
-                    scaler=None,
-                    best_metric=best_loss,
-                    best_epoch=best_epoch,
-                    patience_counter=patience,
-                    history=[asdict(h) for h in history],
-                    rng_state=resume.capture_rng_state(
-                        train_loader, test_loader, calibration_loader
+                # Snapshot the completed epoch, including best metric and patience.
+                resume.save_resume_state(
+                    run_dir,
+                    resume.ResumeState(
+                        epoch=epoch,
+                        model=model.state_dict(),
+                        optimizer=optimizer.state_dict(),
+                        scheduler=None,
+                        scaler=None,
+                        best_metric=best_loss,
+                        best_epoch=best_epoch,
+                        patience_counter=patience,
+                        history=[asdict(h) for h in history],
+                        rng_state=resume.capture_rng_state(
+                            train_loader, test_loader, calibration_loader
+                        ),
                     ),
-                ),
-            )
+                )
 
-            # 0 disables early stopping outright. Without this guard it
-            # would mean the opposite -- the very first epoch without an
-            # improvement satisfies `1 >= 0` and ends the run.
-            if self._autoencoder_early_stopping_reached(patience):
-                logger.info("Early stopping at epoch {}.", epoch)
-                break
+                # 0 disables early stopping outright. Without this guard it
+                # would mean the opposite -- the very first epoch without an
+                # improvement satisfies `1 >= 0` and ends the run.
+                if self._autoencoder_early_stopping_reached(patience):
+                    logger.info("Early stopping at epoch {}.", epoch)
+                    break
+        except training_loop.NonFiniteMetricError as error:
+            self._record_non_finite(error, model_path, history, best_epoch)
+            raise
 
         if not is_cancelled(cancel_token):
             resume.clear_resume_state(run_dir)
@@ -423,6 +434,27 @@ class AnomalyTrainer(training_loop.TrainingOutput):
             total += loss.item()
         n = len(train_loader)
         return total / n if n > 0 else 0.0
+
+    def _record_non_finite(
+        self,
+        error: training_loop.NonFiniteMetricError,
+        model_path: Path,
+        history: list[AnomalyEpochResult],
+        best_epoch: int,
+    ) -> None:
+        """Leave a failed run.json that names the epoch and the metric (ADR-182)."""
+        best = next((r for r in history if r.epoch == best_epoch), None)
+        failed = AnomalyTrainResult(
+            best_epoch=best_epoch,
+            best_auroc=best.val_auroc if best else None,
+            total_epochs=len(history),
+            device_used=self._device_label,
+            history=history,
+            model_path=model_path,
+            warnings=[error.health_warning().to_dict()],
+        )
+        self._write_run_json(model_path.parent, failed)
+        training_loop.record_non_finite_failure(model_path.parent, error)
 
     def _build_autoencoder_result(
         self,

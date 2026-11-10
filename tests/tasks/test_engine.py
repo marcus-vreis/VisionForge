@@ -257,6 +257,38 @@ class TestGenericTaskEngineLevel1:
         assert result.best_epoch == 2  # err=1.0 was the minimum
 
 
+class TestGenericTaskEngineNonFinite:
+    def test_nan_loss_stops_in_epoch_one_and_marks_the_run_failed(
+        self, tmp_path: Path
+    ) -> None:
+        """A NaN primary metric never improved: every epoch ran, no best checkpoint."""
+        task = _register_toy()
+        task.compute_metrics = lambda self, model, loader, cfg: {"mae": float("nan")}
+        engine = GenericTaskEngine(get_task("toyreg"), _config(tmp_path))
+        with pytest.raises(training_loop.NonFiniteMetricError, match="non-finite") as c:
+            engine.run()
+        assert "mae" in str(c.value)
+        assert c.value.epoch == 1
+
+        run_dir = next((tmp_path / "models").iterdir())
+        assert not (run_dir / "best_model.pth").exists()
+        data = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+        assert data["status"] == "failed"
+        assert "non-finite" in data["error"]
+        assert [w["code"] for w in data["warnings"]] == ["non_finite_metric"]
+
+    def test_nan_train_loss_is_caught_even_when_the_metric_is_finite(
+        self, tmp_path: Path
+    ) -> None:
+        task = _register_toy()
+        task.compute_loss = lambda self, model, batch, cfg: (
+            nn.functional.mse_loss(model(batch[0]), batch[1]) * float("nan")
+        )
+        engine = GenericTaskEngine(get_task("toyreg"), _config(tmp_path))
+        with pytest.raises(training_loop.NonFiniteMetricError, match="train_loss"):
+            engine.run()
+
+
 class TestGenericTaskEngineStop:
     """The engine owns a Level 1 loop, so it reads the stop like a trainer (ADR-111)."""
 

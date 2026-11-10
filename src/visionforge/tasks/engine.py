@@ -31,7 +31,10 @@ from visionforge.core.plotter import MetricsPlotter
 from visionforge.core.tracking import TensorBoardLogger
 from visionforge.core.trainer import _seed_everything, resolve_device
 from visionforge.core.training_loop import (
+    NonFiniteMetricError,
     current_lr,
+    record_non_finite_failure,
+    require_finite,
     set_progress_epoch,
     with_batch_progress,
 )
@@ -67,6 +70,8 @@ class TaskRunResult:
     # True only when the Level 1 loop broke on the stop token (ADR-111). A
     # Level 2 run owns its loop, so it is never cut.
     stopped: bool = False
+    # Health warnings for the researcher, as in the built-in trainers (ADR-099).
+    warnings: list[dict[str, str]] = field(default_factory=list)
 
 
 @dataclass
@@ -195,10 +200,13 @@ class GenericTaskEngine:
                 train_loss = self._train_epoch(
                     spec, model, train_loader, cfg, optimizer, scaler, use_amp
                 )
+                # A NaN loss poisons the weights; stop before scoring them (ADR-182).
+                require_finite("train_loss", epoch, train_loss, best_epoch)
 
                 model.eval()
                 val_metrics = spec.compute_metrics(model, val_loader, cfg)
                 value = self._primary_metric_value(val_metrics, primary)
+                require_finite(primary, epoch, value, best_epoch)
                 history.append(TaskEpochResult(epoch, train_loss, dict(val_metrics)))
                 tb.log_scalars(
                     epoch,
@@ -236,6 +244,9 @@ class GenericTaskEngine:
                         break
 
                 self._step_scheduler(scheduler, value)
+        except NonFiniteMetricError as error:
+            self._record_non_finite(error, run_dir, model_path, history, best_epoch)
+            raise
         finally:
             tb.close()
 
@@ -252,6 +263,28 @@ class GenericTaskEngine:
             best_epoch,
             stopped,
         )
+
+    def _record_non_finite(
+        self,
+        error: NonFiniteMetricError,
+        run_dir: Path,
+        model_path: Path,
+        history: list[TaskEpochResult],
+        best_epoch: int,
+    ) -> None:
+        """Leave a failed run.json that names the epoch and the metric (ADR-182)."""
+        failed = TaskRunResult(
+            metrics={},
+            best_epoch=best_epoch,
+            total_epochs=len(history),
+            device_used=self._device_label,
+            run_dir=run_dir,
+            model_path=model_path if model_path.is_file() else None,
+            history=history,
+            warnings=[error.health_warning().to_dict()],
+        )
+        self._write_run_json(failed)
+        record_non_finite_failure(run_dir, error)
 
     @staticmethod
     def _epoch_event(
@@ -516,6 +549,7 @@ class GenericTaskEngine:
                 "report": None,
             },
             "tests": [],
+            "warnings": result.warnings,
         }
         (result.run_dir / "run.json").write_text(
             json.dumps(run_json, indent=2), encoding="utf-8"
