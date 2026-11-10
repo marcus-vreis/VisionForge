@@ -124,6 +124,17 @@ _DEST_EXISTS_EN = (
 )
 
 CATALOG: dict[str, dict[Lang, str]] = {
+    # ── doctor (utils/doctor.py) ────────────────────────────────────────────
+    "doctor.gpu_hidden": {
+        "pt": (
+            "A variável CUDA_VISIBLE_DEVICES está definida como '{value}' e "
+            "esconde a GPU do torch. Remova-a para usar a placa."
+        ),
+        "en": (
+            "CUDA_VISIBLE_DEVICES is set to '{value}' and hides the GPU from "
+            "torch. Unset it to use the card."
+        ),
+    },
     # ── class vocabulary (core/data.py) ─────────────────────────────────────
     "data.empty_split": {
         "pt": "O split {split} ({root}) não tem imagens em nenhuma pasta de classe.",

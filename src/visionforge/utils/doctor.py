@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -310,6 +311,19 @@ def _run_install(tag: str) -> int:
     return subprocess.run(install, check=False).returncode
 
 
+def _report_hidden_gpu() -> None:
+    """Name CUDA_VISIBLE_DEVICES when it is set to nothing or to -1.
+
+    Either value hides every card from torch, so doctor would otherwise report a
+    missing GPU without saying that the variable, not the machine, is the cause.
+    """
+    from visionforge.utils.messages import tr
+
+    value = os.environ.get("CUDA_VISIBLE_DEVICES")
+    if value is not None and value.strip() in {"", "-1"}:
+        print(f"[WARN] {tr('doctor.gpu_hidden', value=value)}")
+
+
 def _report_torch_issues(
     torch_info: TorchProbe, driver_cuda: str | None, steps: str, issues: list[str]
 ) -> None:
@@ -426,6 +440,7 @@ def run_doctor(
         )
     else:
         print("[INFO] No CUDA-capable GPU detected (nvidia-smi not found or failed)")
+    _report_hidden_gpu()
 
     # --- Wheel recommendation (always shown — this is doctor's primary value) ---
     tag = select_wheel_tag(driver_cuda)
