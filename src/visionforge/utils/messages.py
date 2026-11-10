@@ -1609,6 +1609,54 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "pt": "As seeds das réplicas precisam ser distintas.",
         "en": "Replicate seeds must be unique.",
     },
+    # ── visionforge run with a strategy envelope (ADR-184) ───────────────────
+    "cli.strategy_shape": {
+        "pt": (
+            "Um YAML com 'strategy' tem só duas chaves no topo: 'strategy' "
+            "(um mapa com 'kind' e as opções) e 'config' (a config da tarefa)."
+        ),
+        "en": (
+            "A YAML with 'strategy' has exactly two top-level keys: 'strategy' "
+            "(a mapping with 'kind' and its options) and 'config' (the task config)."
+        ),
+    },
+    "cli.strategy_kind": {
+        "pt": "Estratégia '{kind}' desconhecida. Use uma de: {kinds}.",
+        "en": "Unknown strategy '{kind}'. Use one of: {kinds}.",
+    },
+    "cli.strategy_task": {
+        "pt": (
+            "A tarefa '{task}' não tem estratégias na linha de comando. "
+            "Tarefas aceitas: {tasks}."
+        ),
+        "en": (
+            "Task '{task}' has no strategies on the command line. "
+            "Supported tasks: {tasks}."
+        ),
+    },
+    "cli.sweep_classification": {
+        "pt": (
+            "Na classificação, a busca de hiperparâmetros é um bloco: use "
+            "'block: grid_search' ou 'block: random_search' numa config comum, "
+            "sem 'strategy'."
+        ),
+        "en": (
+            "Classification sweeps are blocks: use 'block: grid_search' or "
+            "'block: random_search' in a plain config, without 'strategy'."
+        ),
+    },
+    "cli.cv_unavailable": {
+        "pt": (
+            "Validação cruzada K-fold não existe para a tarefa '{task}'. Ela "
+            "existe para: {tasks}; na classificação, use 'block: "
+            "cross_validation' numa config comum, sem 'strategy'."
+        ),
+        "en": (
+            "K-fold cross-validation is not available for task '{task}'. It "
+            "is available for: {tasks}; for classification, use 'block: "
+            "cross_validation' in a plain config, without 'strategy'."
+        ),
+    },
     # ── files served to the page (image preview, artifacts) ──────────────────
     "file.traversal": {
         "pt": "O caminho contém segmentos de navegação ('..').",

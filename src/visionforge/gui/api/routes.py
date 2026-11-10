@@ -31,28 +31,26 @@ from visionforge.core.cancellation import (
 from visionforge.core.comparison import ComparisonTrial, run_model_comparison
 from visionforge.core.detection_data import resolve_yolo_split
 from visionforge.core.experiment_bundle import import_experiment_bundle
-from visionforge.core.latex_export import report_to_latex
 from visionforge.core.loader_lifecycle import describe_worker_spawn_failure
 from visionforge.core.replicated_comparison import (
     run_replicated_comparison,
     validate_variants,
 )
-from visionforge.core.replicates import (
-    ReplicateTrial,
-    aggregate_replicates,
-    run_replicates,
-    write_replicates_strip,
+from visionforge.core.replicates import run_replicates
+from visionforge.core.run_groups import (
+    finish_kfold,
+    finish_replicated_comparison,
+    finish_replicates,
+    finish_sweep,
+    record_run_group,
+    record_sweep_group,
+    resolve_seeds,
+    sweep_report,
+    write_group_summary,
 )
-from visionforge.core.run_groups import write_run_group
 from visionforge.core.run_trackers import TrackerFactory
-from visionforge.core.sweep import (
-    SweepTrial,
-    planned_trials,
-    run_sweep,
-    validate_sweep_space,
-)
+from visionforge.core.sweep import run_sweep, validate_sweep_space
 from visionforge.core.task_runner import (
-    SELECTION_SPLIT,
     TaskRunner,
     give_cancel_token,
     require_validation_selection,
@@ -3680,34 +3678,17 @@ async def _execute_sweep(
             seed=req.seed,
             progress_callback=_put_event,
         )
-        planned = planned_trials(req.search_space, mode=req.mode, n_trials=req.n_trials)
-        stopped = job_was_stopped([t.status for t in trials], planned, token)
-        finished = any(t.status == "success" for t in trials)
-        if not finished and not stopped:
-            raise RuntimeError("All sweep trials failed — no ranking available.")
-        if finished:
-            _require_reported_metric(metric, [t.metrics for t in trials], "sweep")
-        report = _sweep_report(
-            trials, req.mode, metric, runner_metric_direction(runner, metric)
-        )
-        report["stopped"] = stopped
-        # total_trials counts the trials that ran; the table and the GUI need
-        # to say of how many (ADR-111).
-        report["planned_trials"] = planned
-        report["report_dir"] = _write_advanced_summary(
-            base_config_dict, "sweep", report
-        )
-        best = report["best_trial"]
-        _record_sweep_group(
-            run_id,
-            runner,
-            base_config_dict,
-            report,
+        report = finish_sweep(
+            trials,
+            runner=runner,
+            config=base_config_dict,
+            search_space=req.search_space,
             mode=req.mode,
-            planned=planned,
-            trials=report["trials"],
-            best_index=best["trial_index"] if best else None,
-            report_name="sweep",
+            n_trials=req.n_trials,
+            metric=metric,
+            run_id=run_id,
+            token=token,
+            models_dir=_MODELS_DIR,
         )
         state.run = {
             "run_id": run_id,
@@ -3731,54 +3712,10 @@ async def _execute_sweep(
             await queue.put(None)
 
 
-def _require_reported_metric(
-    metric: str, per_trial_metrics: list[dict[str, float]], kind: str
-) -> None:
-    """Fail loudly when no trial reported the metric the run is ranked/aggregated by.
-
-    Without this the failure is silent and misleading: a sweep ranks every
-    trial as 0.0 and calls an arbitrary one "best", and a replicate set returns
-    ``headline: None`` that renders as an empty card. The metric is chosen
-    before any training, so the earliest honest place to catch a typo (or a
-    name the runner never projects, e.g. ``test_accuracy`` vs ``accuracy``) is
-    here, once results exist.
-
-    Raises:
-        RuntimeError: naming the metric and what the trials actually reported.
-    """
-    if any(metric in m for m in per_trial_metrics):
-        return
-    available = sorted({key for m in per_trial_metrics for key in m})
-    raise RuntimeError(
-        f"No {kind} reported the metric '{metric}' — "
-        f"available: {available or 'none'}. Pick one of those."
-    )
-
-
-def _sweep_report(
-    trials: list[SweepTrial],
-    mode: str,
-    metric: str,
-    direction: Literal["higher", "lower"],
-) -> dict[str, Any]:
-    """Shape ranked sweep trials into a GUI-friendly report dict."""
-    rows = [asdict(t) for t in trials]
-    successful = [t for t in rows if t["status"] == "success"]
-    return {
-        "mode": mode,
-        "metric": metric,
-        # Which way the trials were ranked; best_trial is the lowest for "lower".
-        "metric_direction": direction,
-        # Each trial's `metrics` are measured on this split and rank it; its
-        # `evaluation_metrics` are the final (test) numbers, not used (ADR-131).
-        "selection_split": SELECTION_SPLIT,
-        "trials": rows,
-        "best_trial": successful[0] if successful else None,
-        "total_trials": len(rows),
-        "successful_trials": len(successful),
-        "failed_count": sum(1 for t in rows if t["status"] == "failed"),
-        "stopped_count": sum(1 for t in rows if t["status"] == STOPPED),
-    }
+# Moved to core.run_groups so `visionforge run` shares them (ADR-184); the
+# old names stay for the model comparison and the tests that use them.
+_sweep_report = sweep_report
+_write_advanced_summary = write_group_summary
 
 
 def _start_task_cv(
@@ -3845,22 +3782,17 @@ async def _execute_task_cv(
             progress_callback=_put_event,
             cancel_token=token,
         )
-        stopped = job_was_stopped([f.status for f in cv.folds], req.n_folds, token)
-        if not any(f.status == "success" for f in cv.folds) and not stopped:
-            raise RuntimeError("All folds failed — no aggregate available.")
-        report: dict[str, Any] = {
-            "n_folds": cv.n_folds,
-            "metric": cv.metric,
-            "fold_results": [asdict(f) for f in cv.folds],
-            "aggregate": cv.aggregate,
-            "successful_folds": sum(1 for f in cv.folds if f.status == "success"),
-            "stopped": stopped,
-        }
-        report["report_dir"] = _write_advanced_summary(req.config, "cv", report)
-        # One History entry for the job, its folds under it (ADR-123).
-        # The validated config: it names the task (config.task), which the
+        # The validated config names the task (config.task), which the
         # request's raw dict may leave to the default.
-        _record_run_group("kfold", run_id, config.model_dump(mode="json"), report, "cv")
+        report = finish_kfold(
+            cv,
+            n_folds=req.n_folds,
+            config=req.config,
+            validated_config=config.model_dump(mode="json"),
+            run_id=run_id,
+            token=token,
+            models_dir=_MODELS_DIR,
+        )
         state.run = {
             "run_id": run_id,
             "status": "completed",
@@ -3907,13 +3839,10 @@ def _start_replicated_comparison(
     except ValidationError as exc:
         raise RequestValidationError(exc.errors()) from exc
 
-    if req.seeds is not None:
-        if len(set(req.seeds)) != len(req.seeds):
-            raise HTTPException(422, tr("compare.seeds_unique"))
-        seeds = list(req.seeds)
-    else:
-        base_seed = int(complete.get("training", {}).get("seed", 42))
-        seeds = [base_seed + i for i in range(req.n_replicates)]
+    try:
+        seeds = resolve_seeds(complete, req.seeds, req.n_replicates)
+    except ValueError as exc:
+        raise HTTPException(422, tr("compare.seeds_unique")) from exc
 
     # Fail on a bad override path before spending len(variants)*len(seeds)
     # trainings on it.
@@ -3972,28 +3901,13 @@ async def _execute_replicated_comparison(
             alpha=req.alpha,
             progress_callback=_put_event,
         )
-        # A stopped comparison reports the variants that did run, even with no
-        # pair left to test: the researcher asked for the stop (ADR-111).
-        stopped = job_was_stopped(
-            [
-                t["status"]
-                for v in report.get("variants", {}).values()
-                for t in v.get("trials", [])
-            ],
-            len(req.variants) * len(seeds),
-            token,
-        )
-        report["stopped"] = stopped
-        if not report["comparisons"] and not stopped:
-            raise RuntimeError(
-                "No variant produced enough successful replicates to compare "
-                f"(skipped: {report['skipped_variants']})."
-            )
-        report["report_dir"] = _write_advanced_summary(
-            base_config_dict, "comparison", report
-        )
-        _record_run_group(
-            "replicated_comparison", run_id, base_config_dict, report, "comparison"
+        report = finish_replicated_comparison(
+            report,
+            n_planned=len(req.variants) * len(seeds),
+            config=base_config_dict,
+            run_id=run_id,
+            token=token,
+            models_dir=_MODELS_DIR,
         )
         state.run = {
             "run_id": run_id,
@@ -4046,13 +3960,10 @@ def _start_replicates(
     except ValidationError as exc:
         raise RequestValidationError(exc.errors()) from exc
 
-    if req.seeds is not None:
-        if len(set(req.seeds)) != len(req.seeds):
-            raise HTTPException(422, tr("replicates.seeds_unique"))
-        seeds = list(req.seeds)
-    else:
-        base_seed = int(complete.get("training", {}).get("seed", 42))
-        seeds = [base_seed + i for i in range(req.n_replicates)]
+    try:
+        seeds = resolve_seeds(complete, req.seeds, req.n_replicates)
+    except ValueError as exc:
+        raise HTTPException(422, tr("replicates.seeds_unique")) from exc
 
     metric = req.metric or runner.primary_metric()
     name = str(req.config.get("name", "replicates"))
@@ -4099,18 +4010,15 @@ async def _execute_replicates(
             metric,
             progress_callback=_put_event,
         )
-        stopped = job_was_stopped([t.status for t in trials], len(seeds), token)
-        finished = any(t.status == "success" for t in trials)
-        if not finished and not stopped:
-            raise RuntimeError("All replicates failed — no aggregate available.")
-        if finished:
-            _require_reported_metric(metric, [t.metrics for t in trials], "replicate")
-        report = _replicates_report(trials, seeds, metric)
-        report["stopped"] = stopped
-        report["report_dir"] = _write_advanced_summary(
-            base_config_dict, "replicates", report
+        report = finish_replicates(
+            trials,
+            seeds=seeds,
+            metric=metric,
+            config=base_config_dict,
+            run_id=run_id,
+            token=token,
+            models_dir=_MODELS_DIR,
         )
-        _record_run_group("replicates", run_id, base_config_dict, report, "replicates")
         state.run = {
             "run_id": run_id,
             "status": "completed",
@@ -4133,37 +4041,6 @@ async def _execute_replicates(
             await queue.put(None)
 
 
-def _record_run_group(
-    kind: Literal["replicates", "replicated_comparison", "kfold", "sweep"],
-    run_id: str,
-    config: dict[str, Any],
-    report: dict[str, Any],
-    report_name: str,
-) -> None:
-    """Give a finished replicate job or K-fold its own entry in History (ADR-113, ADR-123).
-
-    The job's trainings are ordinary runs and its numbers sit in the report
-    just written; this writes the ``run.json`` that ties them together, copied
-    from that report. It is the last step of a job whose training and report
-    are already done, so a failure here is logged rather than turned into a
-    failed job: the researcher keeps a report and loses only the grouped entry.
-    """
-    models_dir = Path((config.get("output") or {}).get("models_dir") or _MODELS_DIR)
-    try:
-        write_run_group(
-            kind=kind,
-            group_id=run_id,
-            name=str(config.get("name", report_name)),
-            config=config,
-            report=report,
-            report_json=Path(report["report_dir"]) / f"{report_name}_summary.json",
-            models_dir=models_dir,
-        )
-    # the report is on disk; do not fail the job
-    except Exception:  # noqa: BLE001
-        logger.exception("GUI: could not write the History entry of group {}", run_id)
-
-
 def _record_sweep_group(
     run_id: str,
     runner: TaskRunner,
@@ -4176,104 +4053,30 @@ def _record_sweep_group(
     best_index: int | None,
     report_name: str,
 ) -> None:
-    """Give a finished sweep or model comparison its History entry (ADR-124)."""
-    # The validated config names the task (config.task); the raw dict may not.
-    try:
-        config = runner.config_type.model_validate(config_dict).model_dump(mode="json")
-    # the entry still stands on the raw config
-    except Exception:  # noqa: BLE001
-        config = config_dict
-    group_report = {
-        "metric": report.get("metric"),
-        "metric_direction": report.get("metric_direction"),
-        "mode": mode,
-        "n_planned": planned,
-        "trials": trials,
-        "best_index": best_index,
-        "stopped": report.get("stopped", False),
-        "report_dir": report.get("report_dir"),
-    }
-    _record_run_group("sweep", run_id, config, group_report, report_name)
-
-
-def _replicates_report(
-    trials: list[ReplicateTrial], seeds: list[int], metric: str
-) -> dict[str, Any]:
-    """Shape replicate trials + per-metric aggregates into a GUI-friendly report."""
-    rows = [asdict(t) for t in trials]
-    aggregates = aggregate_replicates(trials)
-    return {
-        "metric": metric,
-        "seeds": seeds,
-        "trials": rows,
-        "aggregates": aggregates,
-        "headline": aggregates.get(metric),
-        "total_replicates": len(rows),
-        "successful_replicates": sum(1 for r in rows if r["status"] == "success"),
-    }
-
-
-def _flatten_trial(row: dict[str, Any]) -> dict[str, Any]:
-    """Flatten a comparison/sweep trial row (nested metrics/overrides) for CSV."""
-    flat: dict[str, Any] = {}
-    for key, value in row.items():
-        if key in ("metrics", "overrides") and isinstance(value, dict):
-            flat.update(value)
-        else:
-            flat[key] = value
-    return flat
-
-
-def _write_advanced_summary(
-    config_dict: dict[str, Any], kind: str, report: dict[str, Any]
-) -> str:
-    """Persist a comparison/sweep report (JSON + ranking CSV + LaTeX) to outputs/reports.
-
-    Mirrors the classification ModelComparisonBlock artifact layout so a
-    standalone-task comparison/sweep leaves the same durable record on disk
-    instead of vanishing when the result view closes. The ``.tex`` table
-    (ADR-061) is the paper-ready form: retyping numbers into a manuscript is
-    where transcription errors enter, and nothing downstream catches them.
-    """
-    name = str(config_dict.get("name", kind))
-    reports_dir = config_dict.get("output", {}).get("reports_dir") or "outputs/reports"
-    out_dir = Path(reports_dir) / name / datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-    out_dir.mkdir(parents=True, exist_ok=True)
-
-    (out_dir / f"{kind}_summary.json").write_text(
-        json.dumps(report, indent=2), encoding="utf-8"
+    """Give a finished model comparison its History entry (ADR-124)."""
+    record_sweep_group(
+        run_id,
+        runner,
+        config_dict,
+        report,
+        mode=mode,
+        planned=planned,
+        trials=trials,
+        best_index=best_index,
+        report_name=report_name,
+        models_dir=_MODELS_DIR,
     )
 
-    rows = report.get("trials") or report.get("fold_results") or []
-    # Like the classification comparison's ranking.csv: only units that ran to
-    # the end, so a cut unit's half-trained numbers never sit among finished
-    # ones (ADR-111). The JSON summary above keeps every unit with its status.
-    finished = [r for r in rows if r.get("status", "success") == "success"]
-    flat = [_flatten_trial(r) for r in finished]
-    if kind in ("comparison", "sweep"):
-        # Already sorted by the metric, best first.
-        flat = [{"rank": i, **row} for i, row in enumerate(flat, start=1)]
-    if flat:
-        fieldnames = list(dict.fromkeys(k for row in flat for k in row))
-        with (out_dir / f"{kind}_ranking.csv").open(
-            "w", newline="", encoding="utf-8"
-        ) as f:
-            writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
-            writer.writeheader()
-            writer.writerows(flat)
 
-    latex = report_to_latex(report, experiment=name)
-    if latex:
-        (out_dir / f"{kind}_table.tex").write_text(latex, encoding="utf-8")
-
-    # The strip sits beside the table, so the figure and the numbers of a
-    # paper come from the same finished seeds (GUI-9).
-    if kind == "replicates" and report.get("metric"):
-        write_replicates_strip(
-            report.get("trials") or [], str(report["metric"]), out_dir, config_dict
-        )
-
-    return str(out_dir)
+def _record_run_group(
+    kind: Literal["replicates", "replicated_comparison", "kfold", "sweep"],
+    run_id: str,
+    config: dict[str, Any],
+    report: dict[str, Any],
+    report_name: str,
+) -> None:
+    """Give a finished group job its History entry under the GUI's models dir."""
+    record_run_group(kind, run_id, config, report, report_name, models_dir=_MODELS_DIR)
 
 
 __all__ = ["router", "_load_runs", "_sse_generator"]

@@ -99,6 +99,71 @@ visionforge run experiment_my_test_2026-07-02.yaml
 
 Import the same file back through **↑ Import YAML** to restore the form.
 
+### Replicates, comparisons, sweeps and K-fold from the command line
+
+The strategies of section 4 run without the GUI too. Wrap the task config under
+`config:` and say what to do with it under `strategy:`; the options are the
+ones the GUI sends, and `visionforge run --help` lists them. The job writes the
+same report as the GUI (`*_summary.json`, `*_ranking.csv` and a `*_table.tex`
+under `output.reports_dir`) and one History entry under `output.models_dir`.
+A YAML without `strategy:` trains once, as before.
+
+Replicates (mean ± 95% CI per metric, any task):
+
+```yaml
+strategy:
+  kind: replicates
+  seeds: [0, 1, 2, 3, 4]      # or n_replicates: 5, counted from training.seed
+config:
+  task: regression
+  name: reg_resnet18
+  # ... the rest of the exported task config
+```
+
+Paired comparison (every variant trains on the same seeds, then paired tests
+with Holm correction; any task):
+
+```yaml
+strategy:
+  kind: replicated_comparison
+  seeds: [0, 1, 2, 3, 4]
+  variants:
+    baseline: {}
+    low_lr: {training.learning_rate: 0.0001}
+  alpha: 0.05
+config:
+  task: regression
+  # ...
+```
+
+Sweep (ranked on the validation split; detection, regression, segmentation,
+anomaly; classification uses `block: grid_search` or `random_search`):
+
+```yaml
+strategy:
+  kind: sweep
+  mode: grid                  # or random / optuna, with n_trials
+  search_space:
+    training.learning_rate: [0.001, 0.0003]
+    training.batch_size: [16, 32]
+config:
+  task: segmentation
+  # ...
+```
+
+K-fold (regression and segmentation; classification uses
+`block: cross_validation`):
+
+```yaml
+strategy:
+  kind: cv
+  n_folds: 5
+  fold_seed: 42
+config:
+  task: regression
+  # ...
+```
+
 ## 6. Define your own task (optional)
 
 If your problem isn't classification/detection/regression/segmentation/anomaly:
