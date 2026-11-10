@@ -89,9 +89,11 @@ cu121 = ["torch>=2.3", "torchvision>=0.18"]
 cu124 = ["torch>=2.3", "torchvision>=0.18"]
 cu126 = ["torch>=2.3", "torchvision>=0.18"]
 cu128 = ["torch>=2.3", "torchvision>=0.18"]
-# These extras are now empty: everything they used to install ships with the
-# package (ADR-106). The names stay so an install line saved in a requirements
-# file or a README elsewhere keeps resolving instead of failing.
+# mlflow, wandb, dvc and hub are optional exporters (ADR-170, ADR-171, ADR-172,
+# ADR-176): they install something. detection, timm, optuna, tensorboard,
+# roboflow, kaggle and huggingface are empty: everything they used to install
+# ships with the package (ADR-106). Those names stay so an install line saved
+# in a requirements file or a README elsewhere keeps resolving instead of failing.
 mlflow = ["mlflow==3.18.0"]
 wandb = ["wandb==0.31.0"]
 dvc = ["dvc==3.67.1"]
