@@ -179,6 +179,11 @@ free. Walkthrough: [`docs/custom/TASKS.md`](custom/TASKS.md).
 ## Where to go next
 
 - [Export a checkpoint to a private Hugging Face repository](gui/hugging-face-hub.md)
+- [Track training in local MLflow (Portuguese)](gui/mlflow.md)
+- [Send training to Weights & Biases (Portuguese)](gui/wandb.md)
+- [Create a Zenodo draft (Portuguese)](gui/zenodo.md)
+- [Send a run report to GitHub (Portuguese)](gui/github.md)
+- [Version a run with DVC (Portuguese)](gui/dvc.md)
 
 - [`README.md`](../README.md) — what VisionForge does, in English and Portuguese
 - [`docs/DATASETS.md`](DATASETS.md) — dataset layouts and the download providers
