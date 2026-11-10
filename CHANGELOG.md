@@ -172,6 +172,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 - Os testes que esperam trabalho em segundo plano usam `wait_until` (`tests/helpers.py`) em vez de `time.sleep` em laço: no timeout falham com `AssertionError` em vez de ler um estado velho (#210)
 - Importar o servidor da GUI deixa de carregar torch, torchvision, ultralytics e matplotlib: `import visionforge.gui.server` cai de ~5,1 s para ~1,9 s (4336 → 1351 módulos). `visionforge.core` e `visionforge.blocks` resolvem os nomes públicos sob demanda e cada endpoint importa o bloco ou runner que roda; o servidor continua desligando a telemetria das SDKs ao ser importado (#202).
 - O mapa de módulos e a política de extras do `docs/dev/ARCHITECTURE.md` voltam a bater com o código (27 módulos sem menção, `routes.py` com grupos que migraram, extras `mlflow`/`wandb`/`dvc`/`hub` que instalam algo), e `tests/docs/test_architecture_map.py` falha quando um módulo novo fica fora do mapa (#186)
+- O primeiro treino de cada processo deixa de travar a GUI por ~3 s: torch, torchvision e o plotter são importados numa thread antes do bloco ou runner (fila e endpoints de comparação, sweep e réplicas), e a checagem do contexto CUDA não importa mais o torch; a maior pausa do event loop no primeiro treino cai de ~2–3 s para <0,1 s. `visionforge gui` deixa de carregar o ultralytics (inicialização 3,0 s → 1,7 s, 2140 → 1354 módulos): só as variáveis de telemetria são definidas na largada, e cada import do ultralytics desliga os eventos antes (ADR-180) (#258).
 
 ## [0.21.0] — 2026-11-05
 

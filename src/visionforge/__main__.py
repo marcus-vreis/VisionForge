@@ -307,10 +307,13 @@ def main() -> None:
     """Run a VisionForge experiment or start the GUI from the command line."""
     _use_utf8_console()
     from visionforge.utils.logger import setup_logger
-    from visionforge.utils.third_party_privacy import apply_opt_outs
+    from visionforge.utils.third_party_privacy import (
+        apply_env_opt_outs,
+        apply_opt_outs,
+    )
 
     # Before any SDK is imported: they read their switches at import time.
-    apply_opt_outs()
+    apply_env_opt_outs()
 
     parser = argparse.ArgumentParser(
         prog="visionforge",
@@ -443,6 +446,11 @@ def main() -> None:
 
     args = parser.parse_args()
     _bind_language_from_env()
+    if args.command != "gui":
+        # Imports ultralytics (~1.7 s) to switch its events off. The GUI imports
+        # it only when a run needs it, and each of those imports does this first
+        # (ADR-180, #258).
+        apply_opt_outs()
 
     if args.command in {"audit-data", "bundle", "verify-bundle"}:
         _run_evidence_command(args, parser)
