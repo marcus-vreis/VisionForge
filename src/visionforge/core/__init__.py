@@ -16,14 +16,17 @@ if TYPE_CHECKING:
     from visionforge.core.plotter import MetricsPlotter
     from visionforge.core.trainer import EpochResult, Trainer, TrainResult
 
+_EVALUATOR = "visionforge.core.evaluator"
+_TRAINER = "visionforge.core.trainer"
+
 _LAZY: dict[str, str] = {
     "DataModule": "visionforge.core.data",
-    "Evaluator": "visionforge.core.evaluator",
-    "EvalResult": "visionforge.core.evaluator",
+    "Evaluator": _EVALUATOR,
+    "EvalResult": _EVALUATOR,
     "MetricsPlotter": "visionforge.core.plotter",
-    "Trainer": "visionforge.core.trainer",
-    "TrainResult": "visionforge.core.trainer",
-    "EpochResult": "visionforge.core.trainer",
+    "Trainer": _TRAINER,
+    "TrainResult": _TRAINER,
+    "EpochResult": _TRAINER,
 }
 
 __all__ = [
