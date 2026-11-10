@@ -28,12 +28,6 @@ from typing import Any
 from loguru import logger
 
 from visionforge.core.cancellation import STOPPED, STOPPED_NOTE, is_cancelled
-from visionforge.core.plotter import (
-    DEFAULT_DPI,
-    DEFAULT_FORMATS,
-    MetricsPlotter,
-    figure_paths,
-)
 from visionforge.core.significance import bootstrap_ci, infer_direction
 from visionforge.core.task_runner import (
     RunResult,
@@ -313,6 +307,15 @@ def write_replicates_strip(
     PNG at 300 dpi by default. Returns the files written, none when no seed
     reported the metric.
     """
+    # Imported here: the plotter pulls matplotlib, seaborn and sklearn, which
+    # the GUI must not load at startup (GUI-11, #202).
+    from visionforge.core.plotter import (
+        DEFAULT_DPI,
+        DEFAULT_FORMATS,
+        MetricsPlotter,
+        figure_paths,
+    )
+
     points = [
         (int(r["seed"]), float(r["metrics"][metric]))
         for r in rows
