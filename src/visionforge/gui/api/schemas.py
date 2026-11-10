@@ -951,8 +951,8 @@ class DatasetDownloadRequest(BaseModel):
     out_dir: str
     splits: list[str] = ["train", "test"]
     limit: int | None = Field(default=None, ge=1)
-    api_key: str | None = None
-    token: str | None = None
+    api_key: SecretStr | None = None
+    token: SecretStr | None = None
     version: int | None = Field(default=None, ge=1)  # Roboflow dataset version
     dataset_format: str | None = None  # Roboflow export format (e.g. folder, yolov8)
 

@@ -1074,3 +1074,86 @@ class TestCredentialsInPlay:
 
     def test_nothing_in_play_is_an_empty_list(self) -> None:
         assert credentials_in_play(None, None) == []
+
+
+class TestInvalidDownloadRequestsDoNotEchoTheKey:
+    """FastAPI's default 422 repeats the input; here the input holds a key."""
+
+    @pytest.mark.parametrize("field", ["api_key", "token"])
+    def test_an_invalid_body_does_not_echo_the_key(
+        self, client: TestClient, tmp_path: Path, field: str
+    ) -> None:
+        resp = _post_download(client, tmp_path, limit=0, **{field: SECRET})
+
+        assert resp.status_code == 422
+        assert SECRET not in resp.text
+
+    def test_an_unknown_provider_does_not_echo_the_key(
+        self, client: TestClient, tmp_path: Path
+    ) -> None:
+        resp = _post_download(client, tmp_path, provider="dropbox", api_key=SECRET)
+
+        assert resp.status_code == 422
+        assert SECRET not in resp.text
+
+    @pytest.mark.parametrize("field", ["api_key", "token"])
+    def test_a_body_missing_a_field_does_not_echo_the_key(
+        self, client: TestClient, field: str
+    ) -> None:
+        """Without `dataset` the error's input is the whole body, key included."""
+        resp = client.post("/api/dataset/download", json={field: SECRET})
+
+        assert resp.status_code == 422
+        assert SECRET not in resp.text
+
+    def test_a_key_of_the_wrong_type_does_not_echo_it(
+        self, client: TestClient, tmp_path: Path
+    ) -> None:
+        resp = _post_download(client, tmp_path, token=[SECRET])
+
+        assert resp.status_code == 422
+        assert SECRET not in resp.text
+
+    def test_the_422_says_so_in_the_requested_language(
+        self, client: TestClient, tmp_path: Path
+    ) -> None:
+        resp = client.post(
+            "/api/dataset/download",
+            json={"dataset": "x", "limit": 0, "api_key": SECRET},
+            headers={"X-VF-Lang": "en"},
+        )
+
+        assert resp.json()["detail"] == "Invalid dataset download request."
+
+    def test_the_typed_key_still_reaches_the_provider(
+        self,
+        client: TestClient,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        seen: dict[str, Any] = {}
+
+        def fake_download(provider: str, **kwargs: Any) -> Any:
+            seen.update(kwargs)
+            return types.SimpleNamespace(
+                provider=provider,
+                dataset=kwargs["dataset"],
+                out_dir=kwargs["out_dir"],
+                total_images=0,
+                splits={},
+                classes=[],
+                revision=None,
+            )
+
+        monkeypatch.setattr(
+            "visionforge.gui.api.datasets_routes.download_dataset", fake_download
+        )
+
+        resp = _post_download(
+            client, tmp_path, provider="roboflow", api_key=SECRET, token=SECRET + "2"
+        )
+
+        assert resp.status_code == 200
+        assert seen["api_key"] == SECRET
+        assert seen["token"] == SECRET + "2"
+        assert SECRET not in resp.text
