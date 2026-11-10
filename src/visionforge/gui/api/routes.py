@@ -13,7 +13,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from functools import partial
 from pathlib import Path
-from typing import Annotated, Any, Literal, NoReturn
+from typing import TYPE_CHECKING, Annotated, Any, Literal, NoReturn
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
@@ -22,25 +22,6 @@ from loguru import logger
 from pydantic import ValidationError
 
 from visionforge import __version__ as _VF_VERSION
-from visionforge.blocks.anomaly import AnomalyBlock
-from visionforge.blocks.anomaly_runner import AnomalyRunner
-from visionforge.blocks.batch_prediction import BatchPredictionBlock
-from visionforge.blocks.classification import ClassificationBlock
-from visionforge.blocks.classification_runner import ClassificationRunner
-from visionforge.blocks.cross_validation import CrossValidationBlock
-from visionforge.blocks.detection import DetectionBlock
-from visionforge.blocks.detection_runner import DetectionRunner
-from visionforge.blocks.export_onnx import ExportONNXBlock
-from visionforge.blocks.grid_search import GridSearchBlock
-from visionforge.blocks.model_comparison import ModelComparisonBlock
-from visionforge.blocks.random_search import RandomSearchBlock
-from visionforge.blocks.regression import RegressionBlock
-from visionforge.blocks.regression_cv import run_regression_cross_validation
-from visionforge.blocks.regression_runner import RegressionRunner
-from visionforge.blocks.segmentation import SegmentationBlock
-from visionforge.blocks.segmentation_cv import run_segmentation_cross_validation
-from visionforge.blocks.segmentation_runner import SegmentationRunner
-from visionforge.blocks.transfer_learning import TransferLearningBlock
 from visionforge.core.cancellation import (
     STOPPED,
     CancellationToken,
@@ -48,13 +29,10 @@ from visionforge.core.cancellation import (
     job_was_stopped,
 )
 from visionforge.core.comparison import ComparisonTrial, run_model_comparison
-from visionforge.core.data import class_folder_test_loader
 from visionforge.core.detection_data import resolve_yolo_split
-from visionforge.core.evaluator import Evaluator
 from visionforge.core.experiment_bundle import import_experiment_bundle
 from visionforge.core.latex_export import report_to_latex
 from visionforge.core.loader_lifecycle import describe_worker_spawn_failure
-from visionforge.core.plotter import MetricsPlotter
 from visionforge.core.replicated_comparison import (
     run_replicated_comparison,
     validate_variants,
@@ -201,21 +179,10 @@ from visionforge.gui.api.schemas import (
     WandbStatus,
 )
 from visionforge.gui.api.system_routes import build_system_router
-from visionforge.gui.api.torch_batch_predict import (
-    batch_predict_anomaly_run,
-    batch_predict_regression_run,
-)
-from visionforge.gui.api.torch_onnx_export import (
-    export_regression_run,
-    export_segmentation_run,
-)
 from visionforge.gui.api.wandb_routes import build_wandb_router
 from visionforge.gui.api.zenodo_routes import build_zenodo_router
-from visionforge.models.factory import ModelFactory
 from visionforge.tasks.base import TaskSpec
-from visionforge.tasks.engine import GenericTaskEngine
 from visionforge.tasks.registry import get_task, registered_tasks
-from visionforge.tasks.runner import CustomTaskRunner
 from visionforge.utils.anomaly_config import AnomalyConfig
 from visionforge.utils.config import ExperimentConfig
 from visionforge.utils.cuda import check_cuda
@@ -232,6 +199,48 @@ from visionforge.utils.messages import (
 from visionforge.utils.regression_config import RegressionConfig
 from visionforge.utils.segmentation_config import SegmentationConfig
 from visionforge.utils.workers import suggested_workers as worker_budget
+
+if TYPE_CHECKING:
+    from visionforge.blocks.regression_cv import CrossValidationReport
+    from visionforge.tasks.engine import GenericTaskEngine as _GenericTaskEngine
+
+# The blocks, runners and trainers import torch, torchvision, ultralytics and
+# matplotlib. Each endpoint imports the one it runs, so starting the GUI loads
+# none of them (GUI-11, #202). The three names below stay module attributes so a
+# test can still replace them here.
+
+# Resolved on first use by _generic_task_engine().
+GenericTaskEngine: type[_GenericTaskEngine] | None = None
+
+
+def _generic_task_engine() -> type[_GenericTaskEngine]:
+    """The custom-task engine class: a test's replacement, or the real one."""
+    if GenericTaskEngine is not None:
+        return GenericTaskEngine
+    from visionforge.tasks.engine import GenericTaskEngine as engine
+
+    return engine
+
+
+def run_regression_cross_validation(
+    config: RegressionConfig, **kwargs: Any
+) -> CrossValidationReport:
+    """K-fold CV for regression, importing its trainer only when a run starts."""
+    from visionforge.blocks.regression_cv import run_regression_cross_validation as run
+
+    return run(config, **kwargs)
+
+
+def run_segmentation_cross_validation(
+    config: SegmentationConfig, **kwargs: Any
+) -> CrossValidationReport:
+    """K-fold CV for segmentation, importing its trainer only when a run starts."""
+    from visionforge.blocks.segmentation_cv import (
+        run_segmentation_cross_validation as run,
+    )
+
+    return run(config, **kwargs)
+
 
 RUN_NO_MESSAGE_KEY = "run.no_message"
 
@@ -1388,6 +1397,8 @@ async def compare_regression(
     req: ComparisonRequest, profile: ProfileDep
 ) -> RunResponse:
     """Train N regression backbones on the same dataset and rank them (ADR-044)."""
+    from visionforge.blocks.regression_runner import RegressionRunner
+
     return _start_comparison(req, RegressionConfig, RegressionRunner(), profile)
 
 
@@ -1398,6 +1409,8 @@ async def compare_segmentation(
     req: ComparisonRequest, profile: ProfileDep
 ) -> RunResponse:
     """Train N segmentation backbones on the same dataset and rank them (ADR-044)."""
+    from visionforge.blocks.segmentation_runner import SegmentationRunner
+
     return _start_comparison(req, SegmentationConfig, SegmentationRunner(), profile)
 
 
@@ -1407,6 +1420,8 @@ async def compare_segmentation(
 )
 async def sweep_regression(req: SweepRequest, profile: ProfileDep) -> RunResponse:
     """Run a grid/random hyperparameter sweep for regression (ADR-045)."""
+    from visionforge.blocks.regression_runner import RegressionRunner
+
     return _start_sweep(req, RegressionConfig, RegressionRunner(), profile)
 
 
@@ -1416,6 +1431,8 @@ async def sweep_regression(req: SweepRequest, profile: ProfileDep) -> RunRespons
 )
 async def sweep_segmentation(req: SweepRequest, profile: ProfileDep) -> RunResponse:
     """Run a grid/random hyperparameter sweep for segmentation (ADR-045)."""
+    from visionforge.blocks.segmentation_runner import SegmentationRunner
+
     return _start_sweep(req, SegmentationConfig, SegmentationRunner(), profile)
 
 
@@ -1424,6 +1441,8 @@ async def sweep_segmentation(req: SweepRequest, profile: ProfileDep) -> RunRespo
 )
 async def compare_detection(req: ComparisonRequest, profile: ProfileDep) -> RunResponse:
     """Train N detectors on the same dataset and rank them (ADR-044)."""
+    from visionforge.blocks.detection_runner import DetectionRunner
+
     return _start_comparison(req, DetectionConfig, DetectionRunner(), profile)
 
 
@@ -1433,6 +1452,8 @@ async def compare_detection(req: ComparisonRequest, profile: ProfileDep) -> RunR
 )
 async def sweep_detection(req: SweepRequest, profile: ProfileDep) -> RunResponse:
     """Run a grid/random hyperparameter sweep for detection (ADR-045)."""
+    from visionforge.blocks.detection_runner import DetectionRunner
+
     return _start_sweep(req, DetectionConfig, DetectionRunner(), profile)
 
 
@@ -1441,6 +1462,8 @@ async def sweep_detection(req: SweepRequest, profile: ProfileDep) -> RunResponse
 )
 async def compare_anomaly(req: ComparisonRequest, profile: ProfileDep) -> RunResponse:
     """Train N anomaly models on the same dataset and rank them (ADR-044)."""
+    from visionforge.blocks.anomaly_runner import AnomalyRunner
+
     return _start_comparison(req, AnomalyConfig, AnomalyRunner(), profile)
 
 
@@ -1450,6 +1473,8 @@ async def compare_anomaly(req: ComparisonRequest, profile: ProfileDep) -> RunRes
 )
 async def sweep_anomaly(req: SweepRequest, profile: ProfileDep) -> RunResponse:
     """Run a grid/random hyperparameter sweep for anomaly detection (ADR-045)."""
+    from visionforge.blocks.anomaly_runner import AnomalyRunner
+
     return _start_sweep(req, AnomalyConfig, AnomalyRunner(), profile)
 
 
@@ -1656,7 +1681,7 @@ async def _execute_custom_task(info: Any, cfg: Any, run_id: str) -> None:
             asyncio.run_coroutine_threadsafe(queue.put(event), loop)
 
     try:
-        engine = GenericTaskEngine(info, cfg)
+        engine = _generic_task_engine()(info, cfg)
         logger.info("GUI: Starting custom task '{}' run {}", info.key, run_id)
         result = await asyncio.to_thread(engine.run, _put_event, state.token)
 
@@ -1707,6 +1732,8 @@ async def sweep_custom_task(
     ``model.name``, which ``BaseTaskConfig`` does not guarantee — a one-axis
     sweep over whichever field the task declares covers that use case.
     """
+    from visionforge.tasks.runner import CustomTaskRunner
+
     info = _get_custom_task_or_404(key)
     return _start_sweep(req, info.spec_cls.Config, CustomTaskRunner(info), profile)
 
@@ -1719,6 +1746,8 @@ async def replicates_custom_task(
     key: str, req: ReplicatesRequest, profile: ProfileDep
 ) -> RunResponse:
     """Train one custom-task config N times under different seeds (ADR-056/058)."""
+    from visionforge.tasks.runner import CustomTaskRunner
+
     info = _get_custom_task_or_404(key)
     return _start_replicates(req, info.spec_cls.Config, CustomTaskRunner(info), profile)
 
@@ -1753,6 +1782,8 @@ async def replicates_classification(
     req: ReplicatesRequest, profile: ProfileDep
 ) -> RunResponse:
     """Train one classification config N times under different seeds (ADR-056)."""
+    from visionforge.blocks.classification_runner import ClassificationRunner
+
     return _start_replicates(req, ExperimentConfig, ClassificationRunner(), profile)
 
 
@@ -1764,6 +1795,8 @@ async def replicates_regression(
     req: ReplicatesRequest, profile: ProfileDep
 ) -> RunResponse:
     """Train one regression config N times under different seeds (ADR-056)."""
+    from visionforge.blocks.regression_runner import RegressionRunner
+
     return _start_replicates(req, RegressionConfig, RegressionRunner(), profile)
 
 
@@ -1775,6 +1808,8 @@ async def replicates_segmentation(
     req: ReplicatesRequest, profile: ProfileDep
 ) -> RunResponse:
     """Train one segmentation config N times under different seeds (ADR-056)."""
+    from visionforge.blocks.segmentation_runner import SegmentationRunner
+
     return _start_replicates(req, SegmentationConfig, SegmentationRunner(), profile)
 
 
@@ -1786,6 +1821,8 @@ async def replicates_detection(
     req: ReplicatesRequest, profile: ProfileDep
 ) -> RunResponse:
     """Train one detection config N times under different seeds (ADR-056)."""
+    from visionforge.blocks.detection_runner import DetectionRunner
+
     return _start_replicates(req, DetectionConfig, DetectionRunner(), profile)
 
 
@@ -1797,6 +1834,8 @@ async def replicates_anomaly(
     req: ReplicatesRequest, profile: ProfileDep
 ) -> RunResponse:
     """Train one anomaly config N times under different seeds (ADR-056)."""
+    from visionforge.blocks.anomaly_runner import AnomalyRunner
+
     return _start_replicates(req, AnomalyConfig, AnomalyRunner(), profile)
 
 
@@ -1808,6 +1847,8 @@ async def replicated_comparison_classification(
     req: ReplicatedComparisonRequest, profile: ProfileDep
 ) -> RunResponse:
     """Compare classification variants over shared seeds with a paired test."""
+    from visionforge.blocks.classification_runner import ClassificationRunner
+
     return _start_replicated_comparison(
         req, ExperimentConfig, ClassificationRunner(), profile
     )
@@ -1821,6 +1862,8 @@ async def replicated_comparison_regression(
     req: ReplicatedComparisonRequest, profile: ProfileDep
 ) -> RunResponse:
     """Compare regression variants over shared seeds with a paired test."""
+    from visionforge.blocks.regression_runner import RegressionRunner
+
     return _start_replicated_comparison(
         req, RegressionConfig, RegressionRunner(), profile
     )
@@ -1834,6 +1877,8 @@ async def replicated_comparison_segmentation(
     req: ReplicatedComparisonRequest, profile: ProfileDep
 ) -> RunResponse:
     """Compare segmentation variants over shared seeds with a paired test."""
+    from visionforge.blocks.segmentation_runner import SegmentationRunner
+
     return _start_replicated_comparison(
         req, SegmentationConfig, SegmentationRunner(), profile
     )
@@ -1847,6 +1892,8 @@ async def replicated_comparison_detection(
     req: ReplicatedComparisonRequest, profile: ProfileDep
 ) -> RunResponse:
     """Compare detection variants over shared seeds with a paired test."""
+    from visionforge.blocks.detection_runner import DetectionRunner
+
     return _start_replicated_comparison(
         req, DetectionConfig, DetectionRunner(), profile
     )
@@ -1860,6 +1907,8 @@ async def replicated_comparison_anomaly(
     req: ReplicatedComparisonRequest, profile: ProfileDep
 ) -> RunResponse:
     """Compare anomaly variants over shared seeds with a paired test."""
+    from visionforge.blocks.anomaly_runner import AnomalyRunner
+
     return _start_replicated_comparison(req, AnomalyConfig, AnomalyRunner(), profile)
 
 
@@ -1871,6 +1920,8 @@ async def replicated_comparison_custom(
     key: str, req: ReplicatedComparisonRequest, profile: ProfileDep
 ) -> RunResponse:
     """Compare a custom task's variants over shared seeds (ADR-058 + ADR-061)."""
+    from visionforge.tasks.runner import CustomTaskRunner
+
     info = _get_custom_task_or_404(key)
     return _start_replicated_comparison(
         req, info.spec_cls.Config, CustomTaskRunner(info), profile
@@ -2363,6 +2414,12 @@ def _execute_batch_predict(
     supplies ``input_dir``, ``output_csv`` (default: timestamped under
     ``run_dir/predictions/``) and the recursive flag.
     """
+    from visionforge.blocks.batch_prediction import BatchPredictionBlock
+    from visionforge.gui.api.torch_batch_predict import (
+        batch_predict_anomaly_run,
+        batch_predict_regression_run,
+    )
+
     run_json_path = run_dir / RUN_FILENAME
     data: dict[str, Any] = json.loads(run_json_path.read_text(encoding="utf-8"))
     task = str(data.get("config", {}).get("task", ""))
@@ -2445,6 +2502,12 @@ def _execute_onnx_export(run_dir: Path, req: ExportOnnxRequest) -> ExportOnnxRes
     request supplies the export-specific knobs. The exported file defaults
     to ``<run_dir>/best_model.onnx`` next to the checkpoint.
     """
+    from visionforge.blocks.export_onnx import ExportONNXBlock
+    from visionforge.gui.api.torch_onnx_export import (
+        export_regression_run,
+        export_segmentation_run,
+    )
+
     run_json_path = run_dir / RUN_FILENAME
     data: dict[str, Any] = json.loads(run_json_path.read_text(encoding="utf-8"))
     # Detection exports via Ultralytics; regression/segmentation via the shared
@@ -2678,6 +2741,11 @@ def _execute_run_test(run_dir: Path, req: RunTestRequest) -> RunTestResponse:
 
     Updates run.json so each model accumulates its own test history.
     """
+    from visionforge.core.data import class_folder_test_loader
+    from visionforge.core.evaluator import Evaluator
+    from visionforge.core.plotter import MetricsPlotter
+    from visionforge.models.factory import ModelFactory
+
     run_json_path = run_dir / RUN_FILENAME
     data: dict[str, Any] = json.loads(run_json_path.read_text(encoding="utf-8"))
     task = _run_task(data)
@@ -2939,6 +3007,13 @@ async def _execute_experiment(
     trackers: tuple[TrackerFactory, ...] = (),
 ) -> None:
     """Run the experiment in a background thread."""
+    from visionforge.blocks.classification import ClassificationBlock
+    from visionforge.blocks.cross_validation import CrossValidationBlock
+    from visionforge.blocks.grid_search import GridSearchBlock
+    from visionforge.blocks.model_comparison import ModelComparisonBlock
+    from visionforge.blocks.random_search import RandomSearchBlock
+    from visionforge.blocks.transfer_learning import TransferLearningBlock
+
     state = _job_state(run_id)
 
     loop = asyncio.get_running_loop()
@@ -3159,6 +3234,8 @@ async def _execute_detection(
     config: DetectionConfig, run_id: str, resume_dir: Path | None = None
 ) -> None:
     """Run an Ultralytics detection training in a background thread."""
+    from visionforge.blocks.detection import DetectionBlock
+
     state = _job_state(run_id)
 
     loop = asyncio.get_running_loop()
@@ -3210,6 +3287,8 @@ async def _execute_regression(
     config: RegressionConfig, run_id: str, resume_dir: Path | None = None
 ) -> None:
     """Run an image-regression training in a background thread."""
+    from visionforge.blocks.regression import RegressionBlock
+
     state = _job_state(run_id)
 
     loop = asyncio.get_running_loop()
@@ -3261,6 +3340,8 @@ async def _execute_segmentation(
     config: SegmentationConfig, run_id: str, resume_dir: Path | None = None
 ) -> None:
     """Run a semantic-segmentation training in a background thread."""
+    from visionforge.blocks.segmentation import SegmentationBlock
+
     state = _job_state(run_id)
 
     loop = asyncio.get_running_loop()
@@ -3312,6 +3393,8 @@ async def _execute_anomaly(
     config: AnomalyConfig, run_id: str, resume_dir: Path | None = None
 ) -> None:
     """Run an anomaly-detection training in a background thread."""
+    from visionforge.blocks.anomaly import AnomalyBlock
+
     state = _job_state(run_id)
 
     loop = asyncio.get_running_loop()

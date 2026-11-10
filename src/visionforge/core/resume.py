@@ -22,11 +22,16 @@ import os
 import random
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
-import torch
 from loguru import logger
+
+if TYPE_CHECKING:
+    import torch
+
+# torch is imported inside the functions that touch tensors, so the GUI can read
+# can_resume() for its run history without loading torch (GUI-11, #202).
 
 RESUME_FILENAME = "resume.pt"
 
@@ -51,6 +56,8 @@ class ResumeState:
 
 
 def _loader_generators(loaders: tuple[Any, ...]) -> dict[str, torch.Generator]:
+    import torch
+
     generators = {}
     for index, loader in enumerate(loaders):
         for name, owner in (
@@ -69,6 +76,8 @@ def _loader_generators(loaders: tuple[Any, ...]) -> dict[str, torch.Generator]:
 
 def capture_rng_state(*loaders: Any) -> dict[str, Any]:
     """Capture global RNGs and explicit loader generators without initializing CUDA."""
+    import torch
+
     numpy_state = cast(tuple[Any, ...], np.random.get_state())
     return {
         "python": random.getstate(),
@@ -89,6 +98,8 @@ def capture_rng_state(*loaders: Any) -> dict[str, Any]:
 
 
 def _validate_rng_state(state: dict[str, Any]) -> None:
+    import torch
+
     # Validate with isolated generators so a corrupt checkpoint cannot partly
     # reset the process RNGs before loading is refused.
     random.Random().setstate(state["python"])
@@ -107,6 +118,8 @@ def _validate_rng_state(state: dict[str, Any]) -> None:
 
 def restore_rng_state(state: dict[str, Any] | None, *loaders: Any) -> None:
     """Restore an epoch boundary after model, optimizer and loader setup."""
+    import torch
+
     if state is None:
         return
     _validate_rng_state(state)
@@ -146,6 +159,8 @@ def save_resume_state(run_dir: Path, state: ResumeState) -> None:
     would be found on the next attempt, refuse to load, and leave the researcher
     believing resume is broken rather than that the run died.
     """
+    import torch
+
     target = resume_path(run_dir)
     tmp = target.with_suffix(".pt.tmp")
     payload = {
@@ -198,6 +213,8 @@ def _validate_resume_payload(payload: dict[str, Any]) -> None:
 
 def require_resume_state(run_dir: Path) -> ResumeState:
     """Read a requested continuation or fail without starting a new run."""
+    import torch
+
     target = resume_path(run_dir)
     if not target.is_file():
         raise ResumeStateError(target, "checkpoint missing")

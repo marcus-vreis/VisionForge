@@ -22,6 +22,12 @@ from visionforge.gui.security import (
     SpaContentSecurityPolicy,
     is_wildcard,
 )
+from visionforge.utils.third_party_privacy import apply_env_opt_outs
+
+# The trainers are imported only when a run starts (GUI-11, #202), and importing
+# them used to set these switches as a side effect. Set them here, before any
+# handler imports an SDK that reads them on import (ADR-180).
+apply_env_opt_outs()
 
 INDEX_FILENAME = "index.html"
 NOT_FOUND_DETAIL = "Not Found"
