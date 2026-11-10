@@ -164,6 +164,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 - `visionforge --help` sai em UTF-8 também no console cp1252 (a reconfiguração vinha depois do `parse_args`) e o `doctor` cita `CUDA_VISIBLE_DEVICES` quando ele está vazio ou em `-1` e esconde a GPU (#209).
 - A mesma parada por métrica NaN ou infinita vale agora para a detecção com torchvision, o autoencoder de anomalia e as tarefas customizadas: o treino termina na época do problema, o `run.json` sai com `status: failed`, `error` e o aviso `non_finite_metric` (#248).
 - Os testes que rodam git partem de uma fixture `clean_git_env` que tira as variáveis locais do git (`GIT_DIR`, `GIT_WORK_TREE`…) herdadas de um hook, e um teste garante que um `GIT_DIR` herdado não leva `git init` ao repositório real (#211).
+- A GUI ganha o link "Pular para o conteúdo" (primeiro foco da página), alvos de toque de 44 px no cabeçalho e nas abas em telas pequenas, e as metas `description`, `theme-color` e `color-scheme` no `index.html` (#207)
 
 ## [0.21.0] — 2026-11-05
 

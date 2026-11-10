@@ -27,6 +27,7 @@ import type { SheetTab } from "./lib/training-story";
 import { BottomBar } from "./components/BottomBar";
 import type { DeviceSelection } from "./components/DeviceSelector";
 import { Header } from "./components/Header";
+import { SkipLink } from "./components/SkipLink";
 import { WelcomeOverlay } from "./components/WelcomeOverlay";
 import { GuidedTour } from "./components/GuidedTour";
 import { readTourSeen } from "./lib/tour";
@@ -857,6 +858,8 @@ export default function App() {
         color: "var(--vf-text)",
       }}
     >
+      <SkipLink />
+
       <Header
         userName={
           sharedServer && profileIsTheName(profile, userName) ? undefined : userName
@@ -891,6 +894,8 @@ export default function App() {
       <TabBar tasks={tasks} activeKey={activeKey} setActiveKey={setActiveKey} />
 
       <main
+        id="vf-main"
+        tabIndex={-1}
         className="vf-app-main"
         style={{
           position: "relative",

@@ -121,6 +121,7 @@ export function Header({
 
   return (
     <header
+      className="vf-app-header"
       style={{
         position: "relative",
         zIndex: 4,
