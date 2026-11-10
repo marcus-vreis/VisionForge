@@ -199,6 +199,30 @@ def aggregate_replicates(
     return aggregates
 
 
+def _record_result(
+    trial: ReplicateTrial, result: RunResult, runner: TaskRunner, metric: str
+) -> None:
+    """Copy a replicate's run result into ``trial``; a cut run becomes ``stopped``."""
+    trial.status = result.status
+    trial.metrics = runner.metrics(result)
+    trial.training_time_s = result.training_time_s
+    trial.error = result.error
+    trial.run_dir = str(result.run_dir) if result.run_dir else ""
+    if result.stopped and result.status == "success":
+        trial.status = STOPPED
+        trial.error = STOPPED_NOTE
+        discard_cut_unit_resume(result)
+    elif result.status == "success":
+        logger.info(
+            "Replicate seed={} ok — {}={}",
+            trial.seed,
+            metric,
+            trial.metrics.get(metric),
+        )
+    else:
+        logger.warning("Replicate seed={} failed — {}", trial.seed, result.error)
+
+
 def run_replicates(
     runner: TaskRunner,
     base_config_dict: dict[str, Any],
@@ -253,24 +277,7 @@ def run_replicates(
             }
             cfg = runner.config_type.model_validate(trial_dict)
             result: RunResult = runner.run(cfg)
-            trial.status = result.status
-            trial.metrics = runner.metrics(result)
-            trial.training_time_s = result.training_time_s
-            trial.error = result.error
-            trial.run_dir = str(result.run_dir) if result.run_dir else ""
-            if result.stopped and result.status == "success":
-                trial.status = STOPPED
-                trial.error = STOPPED_NOTE
-                discard_cut_unit_resume(result)
-            elif result.status == "success":
-                logger.info(
-                    "Replicate seed={} ok — {}={}",
-                    seed,
-                    metric,
-                    trial.metrics.get(metric),
-                )
-            else:
-                logger.warning("Replicate seed={} failed — {}", seed, result.error)
+            _record_result(trial, result, runner, metric)
         except Exception as exc:  # noqa: BLE001
             trial.error = str(exc)
             logger.warning("Replicate seed={} failed — {}", seed, exc)
