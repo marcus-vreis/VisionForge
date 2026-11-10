@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 
 import numpy as np
@@ -16,6 +17,40 @@ PLOT_TRAIN_KEY = "plot.train"
 PLOT_VAL_KEY = "plot.val"
 PLOT_EPOCH_KEY = "plot.epoch"
 
+FIGURE_FORMATS = ("png", "pdf", "svg")
+DEFAULT_FORMATS: tuple[str, ...] = ("png",)
+# 300 dpi is what a journal asks of a raster figure; 150 was screen quality.
+DEFAULT_DPI = 300
+
+
+def figure_paths(path: Path, formats: Sequence[str] = DEFAULT_FORMATS) -> list[Path]:
+    """The files ``save_figure`` writes for ``path``: one per format, no repeats."""
+    seen = dict.fromkeys(f.lower().lstrip(".") for f in formats)
+    return [path.with_suffix(f".{fmt}") for fmt in seen]
+
+
+def figure_graphic(path: Path, formats: Sequence[str] = DEFAULT_FORMATS) -> Path:
+    """The file a run lists as the figure: the PNG, else the first format asked."""
+    paths = figure_paths(path, formats)
+    return next((p for p in paths if p.suffix == ".png"), paths[0])
+
+
+def save_figure(
+    fig: Figure,
+    path: Path,
+    formats: Sequence[str] = DEFAULT_FORMATS,
+    dpi: int = DEFAULT_DPI,
+) -> list[Path]:
+    """Write ``fig`` next to ``path`` in every format (png, pdf, svg).
+
+    ``path``'s suffix is replaced by each format's. ``dpi`` only affects the
+    raster output; PDF and SVG are vector. Returns the files written.
+    """
+    written = figure_paths(path, formats)
+    for target in written:
+        fig.savefig(target, format=target.suffix[1:], dpi=dpi, bbox_inches="tight")
+    return written
+
 
 class MetricsPlotter:
     """Generates and saves metric plots for a training run.
@@ -29,7 +64,13 @@ class MetricsPlotter:
     """
 
     @staticmethod
-    def loss_curve(history: list[EpochResult], save_path: Path) -> None:
+    def loss_curve(
+        history: list[EpochResult],
+        save_path: Path,
+        *,
+        formats: Sequence[str] = DEFAULT_FORMATS,
+        dpi: int = DEFAULT_DPI,
+    ) -> None:
         """Save a train/val loss curve to save_path."""
         epochs = [r.epoch for r in history]
         train_losses = [r.train_loss for r in history]
@@ -63,7 +104,7 @@ class MetricsPlotter:
         ax.grid(True, alpha=0.3)
 
         save_path.parent.mkdir(parents=True, exist_ok=True)
-        fig.savefig(save_path, dpi=150, bbox_inches="tight")
+        save_figure(fig, save_path, formats, dpi)
 
     @staticmethod
     def metric_curve(
@@ -71,6 +112,8 @@ class MetricsPlotter:
         values: list[float],
         save_path: Path,
         *,
+        formats: Sequence[str] = DEFAULT_FORMATS,
+        dpi: int = DEFAULT_DPI,
         label: str = "metric",
         ylabel: str | None = None,
         title: str | None = None,
@@ -93,7 +136,7 @@ class MetricsPlotter:
         ax.grid(True, alpha=0.3)
 
         save_path.parent.mkdir(parents=True, exist_ok=True)
-        fig.savefig(save_path, dpi=150, bbox_inches="tight")
+        save_figure(fig, save_path, formats, dpi)
 
     @staticmethod
     def regression_scatter(
@@ -101,6 +144,8 @@ class MetricsPlotter:
         y_pred: list[float] | np.ndarray,
         save_path: Path,
         *,
+        formats: Sequence[str] = DEFAULT_FORMATS,
+        dpi: int = DEFAULT_DPI,
         target_name: str = "target",
     ) -> None:
         """Predicted vs actual, against the identity line (ADR-077).
@@ -141,13 +186,16 @@ class MetricsPlotter:
         ax.set_aspect("equal", adjustable="box")
 
         save_path.parent.mkdir(parents=True, exist_ok=True)
-        fig.savefig(save_path, dpi=150, bbox_inches="tight")
+        save_figure(fig, save_path, formats, dpi)
 
     @staticmethod
     def residual_histogram(
         y_true: list[float] | np.ndarray,
         y_pred: list[float] | np.ndarray,
         save_path: Path,
+        *,
+        formats: Sequence[str] = DEFAULT_FORMATS,
+        dpi: int = DEFAULT_DPI,
     ) -> None:
         """Distribution of ``pred - true`` (ADR-077).
 
@@ -185,7 +233,7 @@ class MetricsPlotter:
         ax.grid(True, alpha=0.3)
 
         save_path.parent.mkdir(parents=True, exist_ok=True)
-        fig.savefig(save_path, dpi=150, bbox_inches="tight")
+        save_figure(fig, save_path, formats, dpi)
 
     @staticmethod
     def per_class_bars(
@@ -193,6 +241,8 @@ class MetricsPlotter:
         class_names: list[str],
         save_path: Path,
         *,
+        formats: Sequence[str] = DEFAULT_FORMATS,
+        dpi: int = DEFAULT_DPI,
         metric_label: str = "IoU",
         title: str | None = None,
     ) -> None:
@@ -227,7 +277,7 @@ class MetricsPlotter:
             tick.set_horizontalalignment("right")
 
         save_path.parent.mkdir(parents=True, exist_ok=True)
-        fig.savefig(save_path, dpi=150, bbox_inches="tight")
+        save_figure(fig, save_path, formats, dpi)
 
     @staticmethod
     def score_histogram(
@@ -235,6 +285,8 @@ class MetricsPlotter:
         scores: list[float] | np.ndarray,
         save_path: Path,
         *,
+        formats: Sequence[str] = DEFAULT_FORMATS,
+        dpi: int = DEFAULT_DPI,
         threshold: float | None = None,
     ) -> None:
         """Anomaly scores for normal vs defective images, with the threshold (ADR-077).
@@ -277,7 +329,7 @@ class MetricsPlotter:
         ax.grid(True, alpha=0.3)
 
         save_path.parent.mkdir(parents=True, exist_ok=True)
-        fig.savefig(save_path, dpi=150, bbox_inches="tight")
+        save_figure(fig, save_path, formats, dpi)
 
     @staticmethod
     def detection_results(
@@ -286,6 +338,9 @@ class MetricsPlotter:
         val_losses: list[float | None],
         map50s: list[float | None],
         save_path: Path,
+        *,
+        formats: Sequence[str] = DEFAULT_FORMATS,
+        dpi: int = DEFAULT_DPI,
     ) -> None:
         """Save a detection history figure: train/val loss + mAP@50 over epochs.
 
@@ -333,10 +388,52 @@ class MetricsPlotter:
         ax_map.grid(True, alpha=0.3)
 
         save_path.parent.mkdir(parents=True, exist_ok=True)
-        fig.savefig(save_path, dpi=150, bbox_inches="tight")
+        save_figure(fig, save_path, formats, dpi)
 
     @staticmethod
-    def accuracy_curve(history: list[EpochResult], save_path: Path) -> None:
+    def replicates_strip(
+        seeds: Sequence[int],
+        values: Sequence[float],
+        save_path: Path,
+        *,
+        metric: str,
+        formats: Sequence[str] = DEFAULT_FORMATS,
+        dpi: int = DEFAULT_DPI,
+    ) -> None:
+        """Save one point per seed for ``metric`` with the mean as a dashed line."""
+        fig = Figure(figsize=(max(5.0, 0.9 * len(values) + 2.5), 5))
+        FigureCanvasAgg(fig)
+        ax = fig.subplots()
+        positions = list(range(len(values)))
+        ax.scatter(positions, list(values), s=60, color="#3b82f6", zorder=3)
+        if values:
+            mean = float(np.mean(values))
+            ax.axhline(
+                mean,
+                linestyle="--",
+                linewidth=1.5,
+                color="#f59e0b",
+                label=f"{tr_artifact('plot.replicates_mean')} = {mean:.4g}",
+            )
+            ax.legend()
+        ax.set_xticks(positions)
+        ax.set_xticklabels([str(s) for s in seeds])
+        ax.set_xlabel(tr_artifact("plot.axis_seed"))
+        ax.set_ylabel(metric)
+        ax.set_title(tr_artifact("plot.title_replicates", metric=metric))
+        ax.grid(True, alpha=0.3)
+
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+        save_figure(fig, save_path, formats, dpi)
+
+    @staticmethod
+    def accuracy_curve(
+        history: list[EpochResult],
+        save_path: Path,
+        *,
+        formats: Sequence[str] = DEFAULT_FORMATS,
+        dpi: int = DEFAULT_DPI,
+    ) -> None:
         """Save a train/val accuracy curve to save_path."""
         epochs = [r.epoch for r in history]
         train_accs = [r.train_accuracy for r in history]
@@ -368,13 +465,16 @@ class MetricsPlotter:
         ax.grid(True, alpha=0.3)
 
         save_path.parent.mkdir(parents=True, exist_ok=True)
-        fig.savefig(save_path, dpi=150, bbox_inches="tight")
+        save_figure(fig, save_path, formats, dpi)
 
     @staticmethod
     def confusion_matrix_plot(
         cm: list[list[int]],
         class_names: list[str],
         save_path: Path,
+        *,
+        formats: Sequence[str] = DEFAULT_FORMATS,
+        dpi: int = DEFAULT_DPI,
     ) -> None:
         """Save a seaborn confusion matrix heatmap to save_path."""
         cm_arr = np.array(cm)
@@ -397,13 +497,16 @@ class MetricsPlotter:
         ax.set_title(tr_artifact("plot.title_confusion"))
 
         save_path.parent.mkdir(parents=True, exist_ok=True)
-        fig.savefig(save_path, dpi=150, bbox_inches="tight")
+        save_figure(fig, save_path, formats, dpi)
 
     @staticmethod
     def confusion_matrix_normalized(
         cm: list[list[int]],
         class_names: list[str],
         save_path: Path,
+        *,
+        formats: Sequence[str] = DEFAULT_FORMATS,
+        dpi: int = DEFAULT_DPI,
     ) -> None:
         """Save a row-normalized confusion matrix (per-class recall) heatmap."""
         cm_arr = np.array(cm, dtype=float)
@@ -433,7 +536,7 @@ class MetricsPlotter:
         ax.set_title(tr_artifact("plot.title_confusion_normalized"))
 
         save_path.parent.mkdir(parents=True, exist_ok=True)
-        fig.savefig(save_path, dpi=150, bbox_inches="tight")
+        save_figure(fig, save_path, formats, dpi)
 
     @staticmethod
     def roc_curve_plot(
@@ -441,6 +544,9 @@ class MetricsPlotter:
         y_proba_full: list[list[float]],
         class_names: list[str],
         save_path: Path,
+        *,
+        formats: Sequence[str] = DEFAULT_FORMATS,
+        dpi: int = DEFAULT_DPI,
     ) -> bool:
         """Save a ROC curve plot. Returns False (without saving) when undefined.
 
@@ -511,7 +617,7 @@ class MetricsPlotter:
         ax.grid(True, alpha=0.3)
 
         save_path.parent.mkdir(parents=True, exist_ok=True)
-        fig.savefig(save_path, dpi=150, bbox_inches="tight")
+        save_figure(fig, save_path, formats, dpi)
         return True
 
     @staticmethod
@@ -520,6 +626,9 @@ class MetricsPlotter:
         y_proba_full: list[list[float]],
         class_names: list[str],
         save_path: Path,
+        *,
+        formats: Sequence[str] = DEFAULT_FORMATS,
+        dpi: int = DEFAULT_DPI,
     ) -> bool:
         """Save a precision-recall curve. Returns False if undefined."""
         y = np.array(y_true)
@@ -566,7 +675,7 @@ class MetricsPlotter:
         ax.grid(True, alpha=0.3)
 
         save_path.parent.mkdir(parents=True, exist_ok=True)
-        fig.savefig(save_path, dpi=150, bbox_inches="tight")
+        save_figure(fig, save_path, formats, dpi)
         return True
 
 

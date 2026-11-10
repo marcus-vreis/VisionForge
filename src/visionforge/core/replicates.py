@@ -20,13 +20,20 @@ import gc
 import math
 import re
 import statistics
-from collections.abc import Callable
-from dataclasses import dataclass, field
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import asdict, dataclass, field
+from pathlib import Path
 from typing import Any
 
 from loguru import logger
 
 from visionforge.core.cancellation import STOPPED, STOPPED_NOTE, is_cancelled
+from visionforge.core.plotter import (
+    DEFAULT_DPI,
+    DEFAULT_FORMATS,
+    MetricsPlotter,
+    figure_paths,
+)
 from visionforge.core.significance import bootstrap_ci, infer_direction
 from visionforge.core.task_runner import (
     RunResult,
@@ -208,6 +215,7 @@ def run_replicates(
     progress: UnitProgress | None = None,
     unit_offset: int = 0,
     unit_overrides: dict[str, Any] | None = None,
+    figure_dir: Path | None = None,
 ) -> list[ReplicateTrial]:
     """Train ``base_config_dict`` once per seed and return the trials in seed order.
 
@@ -228,6 +236,9 @@ def run_replicates(
     starts no further seed. A replicate the runner reports as cut is recorded
     as ``stopped``, outside the aggregate, whose ``n`` then counts only the
     replicates that ran to the end.
+
+    With ``figure_dir`` the set also leaves ``replicates_strip`` there, in the
+    formats and dpi of the config's ``output`` section (``write_replicates_strip``).
     """
     token = runner_cancel_token(runner)
     trials: list[ReplicateTrial] = []
@@ -281,7 +292,47 @@ def run_replicates(
     if owns_stream:
         stream.end(len(trials))
 
+    if figure_dir is not None:
+        write_replicates_strip(
+            [asdict(t) for t in trials], metric, figure_dir, base_config_dict
+        )
     return trials
+
+
+def write_replicates_strip(
+    rows: Sequence[Mapping[str, Any]],
+    metric: str,
+    out_dir: Path,
+    config_dict: Mapping[str, Any] | None = None,
+) -> list[Path]:
+    """Draw ``replicates_strip`` (one point per finished seed) into ``out_dir``.
+
+    ``rows`` are the trials as dicts (``seed``, ``status``, ``metrics``); a seed
+    that did not finish or did not report ``metric`` has no point. Formats and
+    dpi come from ``config_dict["output"]`` (``figure_formats``/``figure_dpi``),
+    PNG at 300 dpi by default. Returns the files written, none when no seed
+    reported the metric.
+    """
+    points = [
+        (int(r["seed"]), float(r["metrics"][metric]))
+        for r in rows
+        if r.get("status") == "success" and metric in (r.get("metrics") or {})
+    ]
+    if not points:
+        return []
+    output = (config_dict or {}).get("output") or {}
+    formats = output.get("figure_formats") or DEFAULT_FORMATS
+    dpi = int(output.get("figure_dpi") or DEFAULT_DPI)
+    base = out_dir / "replicates_strip.png"
+    MetricsPlotter.replicates_strip(
+        [p[0] for p in points],
+        [p[1] for p in points],
+        base,
+        metric=metric,
+        formats=formats,
+        dpi=dpi,
+    )
+    return figure_paths(base, formats)
 
 
 def _release_replicate_memory() -> None:
@@ -302,4 +353,5 @@ __all__ = [
     "metric_domain",
     "run_replicates",
     "sample_std",
+    "write_replicates_strip",
 ]

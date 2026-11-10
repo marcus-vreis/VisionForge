@@ -7708,3 +7708,20 @@ differently now. Each fix has a test that failed before it
 
 - *Keep training and warn at the end.* Wastes the remaining epochs and still leaves no checkpoint.
 - *Treat NaN as the worst possible score.* Keeps the run alive but would pick whatever finite epoch came before, hiding that the later epochs diverged.
+
+## ADR-183 — Figures in PDF/SVG and PNG at 300 dpi
+
+**Date:** 2026-11-10
+**Status:** Accepted
+**Amends:** ADR-116 (figure language); extends `OutputConfig`
+
+**Context:** `core/plotter.py` saved every figure as a 150 dpi PNG, which a journal rejects for line art, and replicate sets drew no figure at all although they already wrote a `.tex` table.
+
+**Decision:** `OutputConfig` gains `figure_formats` (subset of `png`, `pdf`, `svg`, deduplicated, never empty, default `["png"]`) and `figure_dpi` (72 to 1200, default 300). Every `MetricsPlotter` method takes keyword-only `formats` and `dpi` and saves through `save_figure`, which writes one file per format next to the given path (suffix replaced); dpi only affects PNG. The classification, regression, segmentation and anomaly blocks pass the config values; the `graphics` list of `run.json` names one file per figure (the PNG, else the first format asked). `MetricsPlotter.replicates_strip` draws one point per finished seed with the mean, and `write_replicates_strip` writes it beside the replicates `.tex` and from `run_replicates(figure_dir=...)`. No `schema_version` bump: both fields have defaults and a config without them loads as before.
+
+**Consequences:** the default PNG is now 300 dpi (larger files). Detection, the generic engine and the GUI test endpoint use the plotter defaults (PNG, 300 dpi) and do not read the new fields yet; the GUI has no selector or download for PDF/SVG. The heatmap of adjusted p-values for the paired matrix is left out.
+
+**Alternatives considered:**
+
+- *Bump `schema_version`.* No shape changes for old files, so a migration step would be empty.
+- *Keep 150 dpi by default.* Preserves file size but misses the paper-ready goal of the issue.

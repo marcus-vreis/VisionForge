@@ -151,3 +151,21 @@ class TestWorkerPoolTeardown:
                 block.run()
 
         assert module.closed
+
+
+class TestRegressionFigureFormats:
+    def test_pdf_and_png_are_written_and_png_is_listed(self, tmp_path: Path) -> None:
+        config = _config(tmp_path).model_copy(
+            update={
+                "output": _config(tmp_path).output.model_copy(
+                    update={"figure_formats": ["png", "pdf"], "figure_dpi": 100}
+                )
+            }
+        )
+        block = _run_block(config)
+        run_dir = Path(block.report()["train"]["run_dir"])
+        data = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+        listed = [Path(p).name for p in data["artifacts"]["graphics"]]
+        assert listed == ["loss.png", "pred_vs_true.png", "residuals.png"]
+        assert (run_dir / "loss.pdf").read_bytes().startswith(b"%PDF")
+        assert (run_dir / "residuals.pdf").is_file()
