@@ -157,6 +157,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 - Uma métrica de validação NaN ou infinita (loss que diverge) para o treino na própria época, com um erro que cita `non-finite`, a métrica e a época, e deixa um `run.json` com `status: failed` e o aviso `non_finite_metric`; antes o treino seguia até o fim sem checkpoint e falhava com `FileNotFoundError`, e a segmentação salvava pesos NaN como melhores (ADR-182).
 - A `val_loss` da detecção com torchvision deixa de atualizar `running_mean` e `running_var` do BatchNorm (SSDLite e detectores `pretrained=False`): só essas camadas ficam em `eval()` durante a passada (#233).
 - O benchmark de workflow alterna a ordem nativo/VisionForge por seed (par começa pelo nativo, ímpar pelo VisionForge) em classificação, segmentação e detecção, e registra a ordem de cada par em `execution_order`: o cache quente do segundo caminho deixa de favorecer sempre o mesmo lado (#167).
+- `uv.lock` atualizado: pillow 13.0.0, onnx 1.23.2, starlette 1.10.0, aiohttp 3.14.5, filelock 3.32.7 e urllib3 2.8.0, que corrigem avisos de segurança conhecidos, mais as dependências que o lock ainda não tinha (ele estava na 0.12.0). `pyproject.toml` ganha os pisos `onnx>=1.21` e `pillow>=12.2`. torch e torchvision não mudam (#160).
 
 ## [0.21.0] — 2026-11-05
 
