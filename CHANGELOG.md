@@ -138,6 +138,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
     é de 20.000 imagens; acima dele a varredura lê uma amostra e o relatório
     diz isso.
   - **API:** `/api/explorer/summary`, `/images`, `/thumb` e `/scan`.
+- Teste de paridade de `transforms.augment`: classificação, K-fold, regressão, segmentação, anomalia e detecção leem a mesma amostra sob seeds diferentes e devem dar tensores idênticos com `augment=false` e variar com `augment=true` (#163).
 
 ### Fixed
 
