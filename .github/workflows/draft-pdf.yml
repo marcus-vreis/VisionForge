@@ -12,6 +12,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.1
+      - name: Block placeholders on submission branches
+        if: startsWith(github.ref_name, 'submission/')
+        run: python3 paper/check_submission.py --strict
       - name: Build draft PDF
         uses: openjournals/openjournals-draft-action@master
         with:

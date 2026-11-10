@@ -41,6 +41,7 @@ from visionforge.core.replicates import (
     ReplicateTrial,
     aggregate_replicates,
     run_replicates,
+    write_replicates_strip,
 )
 from visionforge.core.run_groups import write_run_group
 from visionforge.core.run_trackers import TrackerFactory
@@ -4264,6 +4265,13 @@ def _write_advanced_summary(
     latex = report_to_latex(report, experiment=name)
     if latex:
         (out_dir / f"{kind}_table.tex").write_text(latex, encoding="utf-8")
+
+    # The strip sits beside the table, so the figure and the numbers of a
+    # paper come from the same finished seeds (GUI-9).
+    if kind == "replicates" and report.get("metric"):
+        write_replicates_strip(
+            report.get("trials") or [], str(report["metric"]), out_dir, config_dict
+        )
 
     return str(out_dir)
 

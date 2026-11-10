@@ -277,6 +277,13 @@ class DataConfig(BaseModel):
         return v
 
 
+FigureFormat = Literal["png", "pdf", "svg"]
+
+
+def _default_figure_formats() -> list[FigureFormat]:
+    return ["png"]
+
+
 class OutputConfig(BaseModel):
     """Output directory paths for models, logs, graphics, and reports."""
 
@@ -294,6 +301,24 @@ class OutputConfig(BaseModel):
         default=Path("outputs/reports"),
         json_schema_extra={"default": "outputs/reports"},
     )
+    figure_formats: list[FigureFormat] = Field(
+        default_factory=_default_figure_formats,
+        description="Formatos em que cada figura é gravada. PDF e SVG são vetoriais, para artigo.",
+        json_schema_extra={"default": ["png"]},
+    )
+    figure_dpi: int = Field(
+        default=300,
+        ge=72,
+        le=1200,
+        description="Resolução dos PNG. PDF e SVG são vetoriais e ignoram.",
+    )
+
+    @field_validator("figure_formats")
+    @classmethod
+    def figure_formats_not_empty(cls, v: list[str]) -> list[str]:
+        if not v:
+            raise ValueError(tr("config.figure_formats_empty"))
+        return list(dict.fromkeys(v))
 
 
 class ClassificationConfig(BaseModel):

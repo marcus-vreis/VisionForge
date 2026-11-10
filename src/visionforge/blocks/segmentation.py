@@ -18,7 +18,7 @@ import torch
 
 from visionforge.core.cancellation import CancellationToken
 from visionforge.core.metric_ci import MetricCI, bootstrap_segmentation_cis
-from visionforge.core.plotter import MetricsPlotter
+from visionforge.core.plotter import MetricsPlotter, figure_graphic
 from visionforge.core.segmentation_data import SegmentationDataModule
 from visionforge.core.segmentation_trainer import (
     SegmentationTrainer,
@@ -123,11 +123,14 @@ class SegmentationBlock:
     def _render_plots(self, run_dir: Path) -> list[Path]:
         """Render the train/val loss curve (reuses the classification plotter)."""
         assert self._train_result is not None
+        fmts = self._config.output.figure_formats
+        dpi = self._config.output.figure_dpi
         loss_path = run_dir / "loss.png"
         # SegmentationEpochResult exposes epoch/train_loss/val_loss, which is all
         # loss_curve reads — duck-typed reuse of the classification plotter.
-        MetricsPlotter.loss_curve(self._train_result.history, loss_path)  # type: ignore[arg-type]
-        graphics = [loss_path]
+        history: Any = self._train_result.history
+        MetricsPlotter.loss_curve(history, loss_path, formats=fmts, dpi=dpi)
+        graphics = [figure_graphic(loss_path, fmts)]
 
         # Test-set diagnostics (ADR-077): the mean hides which class the model
         # never finds, and the confusion matrix says which one it confuses it with.
@@ -141,12 +144,19 @@ class SegmentationBlock:
                 for i in range(confusion.shape[0])
             ]
             iou_path = run_dir / "iou_per_class.png"
-            MetricsPlotter.per_class_bars(iou, names, iou_path, metric_label="IoU")
+            MetricsPlotter.per_class_bars(
+                iou,
+                names,
+                iou_path,
+                metric_label="IoU",
+                formats=fmts,
+                dpi=dpi,
+            )
             cm_path = run_dir / "confusion_matrix.png"
             MetricsPlotter.confusion_matrix_plot(
-                confusion.astype(int).tolist(), names, cm_path
+                confusion.astype(int).tolist(), names, cm_path, formats=fmts, dpi=dpi
             )
-            graphics += [iou_path, cm_path]
+            graphics += [figure_graphic(iou_path, fmts), figure_graphic(cm_path, fmts)]
         return graphics
 
     def _update_run_json(self, run_dir: Path, graphics: list[Path]) -> None:
