@@ -55,7 +55,10 @@ def read_envelope(config_path: Path) -> tuple[dict[str, Any], dict[str, Any]] | 
             (no ``kind`` among :data:`STRATEGY_KINDS`, no ``config`` mapping, or
             other top-level keys beside the two).
     """
-    with config_path.open(encoding="utf-8") as f:
+    # The path is the one the user typed on their own command line, the same
+    # file `visionforge run` has always opened: there is no other user to
+    # traverse into (S8707 false positive).
+    with config_path.open(encoding="utf-8") as f:  # NOSONAR
         raw: Any = yaml.safe_load(f)
     if not isinstance(raw, dict) or "strategy" not in raw:
         return None

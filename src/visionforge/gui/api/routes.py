@@ -3842,7 +3842,8 @@ def _start_replicated_comparison(
     try:
         seeds = resolve_seeds(complete, req.seeds, req.n_replicates)
     except ValueError as exc:
-        raise HTTPException(422, tr("compare.seeds_unique")) from exc
+        # 422 is in the `responses` of every route that calls this helper.
+        raise HTTPException(422, tr("compare.seeds_unique")) from exc  # NOSONAR
 
     # Fail on a bad override path before spending len(variants)*len(seeds)
     # trainings on it.
@@ -3963,7 +3964,8 @@ def _start_replicates(
     try:
         seeds = resolve_seeds(complete, req.seeds, req.n_replicates)
     except ValueError as exc:
-        raise HTTPException(422, tr("replicates.seeds_unique")) from exc
+        # 422 is in the `responses` of every route that calls this helper.
+        raise HTTPException(422, tr("replicates.seeds_unique")) from exc  # NOSONAR
 
     metric = req.metric or runner.primary_metric()
     name = str(req.config.get("name", "replicates"))

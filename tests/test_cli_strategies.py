@@ -443,8 +443,9 @@ def test_help_documents_every_strategy(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     monkeypatch.setattr(sys, "argv", ["visionforge", "run", "--help"])
+    ctx = contextvars.copy_context()
     with pytest.raises(SystemExit):
-        contextvars.copy_context().run(main_mod.main)
+        ctx.run(main_mod.main)
     out = capsys.readouterr().out
     for kind in cli.STRATEGY_KINDS:
         assert f"  {kind} " in out
