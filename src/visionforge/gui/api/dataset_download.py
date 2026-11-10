@@ -13,6 +13,7 @@ credentials are missing.
 
 from __future__ import annotations
 
+import json
 import os
 import tempfile
 from collections import defaultdict
@@ -51,6 +52,13 @@ class DatasetDownloadResult:
     total_images: int
     splits: dict[str, int] = field(default_factory=dict)
     classes: list[str] = field(default_factory=list)
+    # Commit SHA the data was fetched at (Hugging Face); None where the provider
+    # has no such notion.
+    revision: str | None = None
+
+
+# Where a download records what it came from, next to the data it wrote.
+SOURCE_SIDECAR = ".visionforge-source.json"
 
 
 def torchvision_datasets() -> list[str]:
@@ -409,6 +417,40 @@ def _materialize_hf(
     return written
 
 
+def _resolve_hf_revision(dataset: str, token: str | None) -> str:
+    """The commit SHA the dataset's default branch points at right now.
+
+    ``load_dataset(id)`` follows ``main``, so the same id can yield different data
+    next month. Pinning the SHA makes the download reproducible.
+
+    Raises:
+        ValueError: if the Hub does not answer or gives no SHA. The Hub's own
+            message is dropped: it can carry the token, and falling back to
+            ``main`` would defeat the pin.
+    """
+    from huggingface_hub import HfApi
+
+    try:
+        sha = HfApi().dataset_info(dataset, token=token).sha
+    except Exception:  # noqa: BLE001 - any Hub failure means "not resolved"
+        sha = None
+    if not sha:
+        raise ValueError(tr("download.hf_revision_failed", dataset=dataset))
+    return str(sha)
+
+
+def _write_source_sidecar(out: Path, result: DatasetDownloadResult) -> None:
+    """Record provider, dataset and revision beside the data (never a credential)."""
+    payload = {
+        "provider": result.provider,
+        "dataset": result.dataset,
+        "revision": result.revision,
+    }
+    (out / SOURCE_SIDECAR).write_text(
+        json.dumps(payload, indent=2) + "\n", encoding="utf-8"
+    )
+
+
 def download_huggingface(
     dataset: str, out_dir: str | Path, *, token: str | None = None
 ) -> DatasetDownloadResult:
@@ -428,9 +470,11 @@ def download_huggingface(
             f"{missing_package_hint('datasets')}"
         ) from exc
 
+    # Before anything is created: a dataset that cannot be pinned is not fetched.
+    revision = _resolve_hf_revision(dataset, token)
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
-    loaded = load_dataset(dataset, token=token)
+    loaded = load_dataset(dataset, revision=revision, token=token)
     # DatasetDict is a dict of split->Dataset; a bare Dataset has no .items().
     split_map = dict(loaded.items()) if hasattr(loaded, "items") else {"train": loaded}
 
@@ -449,14 +493,17 @@ def download_huggingface(
         total += count
         logger.info("huggingface {} {}: {} images", dataset, split, count)
 
-    return DatasetDownloadResult(
+    result = DatasetDownloadResult(
         provider="huggingface",
         dataset=dataset,
         out_dir=str(out.resolve()),
         total_images=total,
         splits=split_counts,
         classes=class_names,
+        revision=revision,
     )
+    _write_source_sidecar(out, result)
+    return result
 
 
 # Variables a provider's client reads a token from when none is passed.

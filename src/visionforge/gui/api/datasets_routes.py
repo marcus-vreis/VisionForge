@@ -240,6 +240,7 @@ def _execute_dataset_download(req: DatasetDownloadRequest) -> DatasetDownloadRes
         total_images=result.total_images,
         splits=result.splits,
         classes=result.classes,
+        revision=result.revision,
     )
 
 
