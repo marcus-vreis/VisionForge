@@ -38,10 +38,19 @@ NETWORK_SDKS: dict[str, str] = {
 }
 
 
-def apply_opt_outs() -> None:
-    """Turn off third-party telemetry; keep any value the user already set."""
+def apply_env_opt_outs() -> None:
+    """Set only the environment switches; imports no SDK.
+
+    The GUI server calls this on import: it no longer imports the trainers, so
+    it must not pay for ultralytics (and torch) just to switch telemetry off.
+    """
     for name, value in _ENV_OPT_OUTS.items():
         os.environ.setdefault(name, value)
+
+
+def apply_opt_outs() -> None:
+    """Turn off third-party telemetry; keep any value the user already set."""
+    apply_env_opt_outs()
     _disable_ultralytics_sync()
 
 

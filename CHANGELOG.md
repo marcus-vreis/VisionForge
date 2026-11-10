@@ -166,6 +166,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 - Os testes que rodam git partem de uma fixture `clean_git_env` que tira as variáveis locais do git (`GIT_DIR`, `GIT_WORK_TREE`…) herdadas de um hook, e um teste garante que um `GIT_DIR` herdado não leva `git init` ao repositório real (#211).
 - A GUI ganha o link "Pular para o conteúdo" (primeiro foco da página), alvos de toque de 44 px no cabeçalho e nas abas em telas pequenas, e as metas `description`, `theme-color` e `color-scheme` no `index.html` (#207)
 - Os testes que esperam trabalho em segundo plano usam `wait_until` (`tests/helpers.py`) em vez de `time.sleep` em laço: no timeout falham com `AssertionError` em vez de ler um estado velho (#210)
+- Importar o servidor da GUI deixa de carregar torch, torchvision, ultralytics e matplotlib: `import visionforge.gui.server` cai de ~5,1 s para ~1,9 s (4336 → 1351 módulos). `visionforge.core` e `visionforge.blocks` resolvem os nomes públicos sob demanda e cada endpoint importa o bloco ou runner que roda; o servidor continua desligando a telemetria das SDKs ao ser importado (#202).
 
 ## [0.21.0] — 2026-11-05
 

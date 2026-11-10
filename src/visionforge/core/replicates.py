@@ -36,11 +36,6 @@ from visionforge.core.task_runner import (
     runner_cancel_token,
 )
 
-try:  # torch is the heavy hardware extra; the cache flush is best-effort.
-    import torch
-except ImportError:  # pragma: no cover - torch is always present in practice
-    torch = None  # type: ignore[assignment]
-
 
 @dataclass
 class ReplicateTrial:
@@ -292,7 +287,12 @@ def run_replicates(
 def _release_replicate_memory() -> None:
     """Release unused CPU and available CUDA memory between seeds."""
     gc.collect()
-    if torch is not None and torch.cuda.is_available():
+    # torch is imported here, not at module load, so the GUI starts without it (#202).
+    try:  # torch is the heavy hardware extra; the cache flush is best-effort.
+        import torch
+    except ImportError:  # pragma: no cover - torch is always present in practice
+        return
+    if torch.cuda.is_available():
         torch.cuda.empty_cache()
 
 

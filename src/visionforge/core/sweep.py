@@ -41,11 +41,6 @@ from visionforge.core.task_runner import (
 from visionforge.core.trial_name import trial_name
 from visionforge.utils.messages import tr
 
-try:  # torch is the heavy hardware extra; the cache flush is best-effort.
-    import torch
-except ImportError:  # pragma: no cover - torch is always present in practice
-    torch = None  # type: ignore[assignment]
-
 
 @dataclass
 class SweepTrial:
@@ -203,9 +198,19 @@ def _execute_trial(
     finally:
         progress.finish(runner, index, trial.status)
         gc.collect()
-        if torch is not None and torch.cuda.is_available():
-            torch.cuda.empty_cache()
+        _empty_cuda_cache()
     return trial
+
+
+def _empty_cuda_cache() -> None:
+    """Return CUDA's cached memory between trials, when torch has a GPU."""
+    # torch is imported here, not at module load, so the GUI starts without it (#202).
+    try:  # torch is the heavy hardware extra; the cache flush is best-effort.
+        import torch
+    except ImportError:  # pragma: no cover - torch is always present in practice
+        return
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
 
 
 def _suggest_one(trial: Any, name: str, spec: dict[str, Any]) -> Any:
