@@ -208,6 +208,9 @@ export const pt = {
     other: "Outra cor",
     reset: "Voltar à cor original",
   },
+  a11y: {
+    skipToContent: "Pular para o conteúdo",
+  },
   theme: {
     label: "Tema",
     names: { system: "Automático (segue o sistema)", light: "Claro", dark: "Escuro" },

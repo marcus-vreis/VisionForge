@@ -1,5 +1,6 @@
 """Static requests cannot escape the SPA directory."""
 
+import re
 from pathlib import Path
 
 import pytest
@@ -39,3 +40,11 @@ def test_internal_asset_and_deep_link_still_work(
 
     assert client.get("/app.js").text == "ASSET"
     assert client.get("/history/run-1").text == "INDEX"
+
+
+@pytest.mark.parametrize("meta", ["description", "theme-color", "color-scheme"])
+def test_built_index_declares_its_metas(meta: str) -> None:
+    """The index.html the server delivers carries a description, theme-color and color-scheme."""
+    html = server.STATIC_DIR.joinpath("index.html").read_text(encoding="utf-8")
+
+    assert re.search(rf'<meta\s+name="{meta}"\s+content="[^"]+"', html)

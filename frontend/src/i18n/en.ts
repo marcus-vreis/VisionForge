@@ -196,6 +196,9 @@ export const en: Dict = {
     other: "Other color",
     reset: "Back to the original color",
   },
+  a11y: {
+    skipToContent: "Skip to content",
+  },
   theme: {
     label: "Theme",
     names: { system: "Automatic (follows the system)", light: "Light", dark: "Dark" },

@@ -11,6 +11,7 @@ export function TabBar({ tasks, activeKey, setActiveKey }: TabBarProps) {
   return (
     <nav
       data-tour="tabs"
+      className="vf-tabbar"
       style={{
         position: "relative",
         zIndex: 3,
