@@ -30,6 +30,30 @@ _BLOCK_ALIASES: dict[str, str] = {
 }
 
 
+_RUN_EPILOG = """\
+strategies (strategy.kind):
+  replicates             train config once per seed; mean, 95% CI per metric
+                         options: seeds [..] | n_replicates, metric
+  replicated_comparison  train each variant on the same seeds; paired tests
+                         options: variants {label: {dot.path: value}},
+                         seeds | n_replicates, metric, alpha
+  sweep                  grid/random/optuna search ranked on validation
+                         (detection, regression, segmentation, anomaly)
+                         options: search_space, mode, n_trials, seed, metric
+  cv                     K-fold cross-validation (regression, segmentation)
+                         options: n_folds, shuffle, fold_seed
+
+example:
+  strategy:
+    kind: replicates
+    seeds: [0, 1, 2]
+  config:
+    task: regression
+    name: reg_resnet18
+    ...
+"""
+
+
 def _peek_task(config_path: Path) -> str:
     """Read just the ``task`` field from a YAML config (defaults to multiclass)."""
     import yaml
@@ -228,6 +252,41 @@ def _run_selftest_command(args: argparse.Namespace) -> None:
     _sys.exit(0 if all(o.status == "passed" for o in outcomes) else 1)
 
 
+def _run_strategy_command(config_path: Path, parser: argparse.ArgumentParser) -> bool:
+    """Run a strategy envelope (ADR-184); False when the YAML is a plain config.
+
+    An invalid envelope, task or option exits with status 2 before any
+    training; a job none of whose units produced a result exits with 1. A file
+    that cannot be read is left to the plain path, which reports it as it
+    always has.
+    """
+    from visionforge.cli_strategies import read_envelope, run_strategy
+    from visionforge.utils.logger import logger
+
+    try:
+        envelope = read_envelope(config_path)
+    except OSError:
+        return False
+    except ValueError as exc:
+        parser.exit(2, f"visionforge: {exc}\n")
+    if envelope is None:
+        return False
+    strategy, config = envelope
+    try:
+        logger.info(
+            "Strategy: {} | task: {}",
+            strategy["kind"],
+            config.get("task", "multiclass"),
+        )
+        report = run_strategy(strategy, config)
+    except ValueError as exc:
+        parser.exit(2, f"visionforge: {exc}\n")
+    except RuntimeError as exc:
+        parser.exit(1, f"visionforge: {exc}\n")
+    logger.success("Done. Report: {}", report["report_dir"])
+    return True
+
+
 def _use_utf8_console() -> None:
     """Make stdout and stderr UTF-8, before anything prints (``--help`` included).
 
@@ -263,7 +322,19 @@ def main() -> None:
     )
     subparsers = parser.add_subparsers(dest="command")
 
-    run_parser = subparsers.add_parser("run", help="Run an experiment from YAML.")
+    run_parser = subparsers.add_parser(
+        "run",
+        help="Run an experiment from YAML.",
+        description=(
+            "Run an experiment from YAML.\n\n"
+            "A plain task config trains once (or runs its classification block).\n"
+            "A YAML whose top level is 'strategy:' + 'config:' runs the same\n"
+            "multi-run jobs as the GUI and writes their report (JSON, CSV,\n"
+            "LaTeX table) and History entry. 'config' is the task config as is."
+        ),
+        epilog=_RUN_EPILOG,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     run_parser.add_argument("config", type=Path, help="path to .yaml config")
 
     gui_parser = subparsers.add_parser("gui", help="Start the VisionForge web GUI.")
@@ -429,6 +500,8 @@ def main() -> None:
         from visionforge.utils.logger import logger
 
         logger.info("Loading config: {}", args.config)
+        if _run_strategy_command(args.config, parser):
+            return
         config, block = build_task_block(args.config)
 
         logger.info(
