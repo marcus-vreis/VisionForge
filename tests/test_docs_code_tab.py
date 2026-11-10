@@ -6,6 +6,7 @@ import textwrap
 from pathlib import Path
 
 import pytest
+from fastapi import FastAPI
 
 from visionforge.core import code_tour
 from visionforge.core.code_tour import TOURS
@@ -23,13 +24,18 @@ _PYTHON_BLOCK = re.compile(r"```python\n(.*?)```", re.DOTALL)
 
 
 def _colab_routes() -> list[tuple[str, str]]:
-    found: list[tuple[str, str]] = []
-    for route in router.routes:
-        path = getattr(route, "path", "")
-        methods = getattr(route, "methods", None) or set()
-        if "/colab/" in path:
-            found.extend((method, path) for method in methods)
-    return sorted(found)
+    # Read from the OpenAPI schema of a mounted app, not ``router.routes``:
+    # newer FastAPI releases no longer copy an included router's routes into
+    # the parent's list, and CI installs the newest one.
+    app = FastAPI()
+    app.include_router(router)
+    paths: dict[str, dict[str, object]] = app.openapi()["paths"]
+    return sorted(
+        (method.upper(), path)
+        for path, operations in paths.items()
+        if "/colab/" in path
+        for method in operations
+    )
 
 
 def _task_part(guide: str, task: str) -> str:
