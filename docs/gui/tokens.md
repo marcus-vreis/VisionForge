@@ -78,7 +78,7 @@ repositório pedem.
 
 | Serviço | O que pedir | Fonte |
 |---|---|---|
-| **Zenodo / Zenodo Sandbox** | Personal access token só com o escopo `deposit:write`. Sem `deposit:actions` o token não consegue publicar | dica da GUI |
+| **Zenodo / Zenodo Sandbox** | Personal access token só com o escopo `deposit:write`. Deixe `deposit:actions` de fora de propósito: o VisionForge só cria o rascunho (`core/zenodo_export.py` nunca publica), e sem esse escopo o token não consegue publicar, então a publicação fica com você, no site | dica da GUI |
 | **GitHub** | Fine-grained token, só para o repositório de experimentos, com a permissão **Contents: leitura e escrita** | dica da GUI |
 | **Hugging Face (exportar modelo)** | Token de escrita com o menor escopo possível, no perfil selecionado | [`hugging-face-hub.md`](hugging-face-hub.md) |
 | **Hugging Face (baixar dataset)** | Opcional, só para datasets privados. *Não verificado:* o código não define o escopo mínimo | dica da GUI |
