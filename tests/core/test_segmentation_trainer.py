@@ -274,8 +274,9 @@ class NaNSegModel(TinySegModel):
 def test_non_finite_val_miou_stops_and_saves_no_nan_weights(tmp_path: Path) -> None:
     """ensure_checkpoint used to write the NaN weights as if they were the best."""
     trainer = SegmentationTrainer(_config(tmp_path))
+    model, data_module = NaNSegModel(3), FakeSegDataModule()
     with pytest.raises(NonFiniteMetricError, match="non-finite") as caught:
-        trainer.fit(NaNSegModel(3), FakeSegDataModule())
+        trainer.fit(model, data_module)
     assert "val_loss=nan" in str(caught.value)
     assert caught.value.epoch == 1
     run_dir = next((tmp_path / "models" / "seg_run").iterdir())

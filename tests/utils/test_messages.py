@@ -271,7 +271,8 @@ class TestCurrentLang:
             set_lang("en")
 
         async def second() -> str:
-            return current_lang()
+            lang: str = current_lang()
+            return lang
 
         async def scenario() -> str:
             await asyncio.create_task(first())
@@ -531,4 +532,5 @@ def test_non_finite_metric_says_if_a_checkpoint_was_kept(lang: Lang) -> None:
     no_ckpt = "sem salvar" if lang == "pt" else "without saving"
     assert no_ckpt in none
     assert no_ckpt not in kept
-    assert "3" in kept and "5" in kept
+    assert "3" in kept
+    assert "5" in kept

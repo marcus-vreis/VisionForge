@@ -454,8 +454,9 @@ class TestNonFiniteValidationMetric:
     ) -> None:
         """A NaN val_loss used to run every epoch, then fail on a missing checkpoint."""
         trainer = Trainer(minimal_config)
+        model, data_module = NaNBinaryModel(), FakeDataModule()
         with pytest.raises(NonFiniteMetricError, match="non-finite") as caught:
-            trainer.fit(NaNBinaryModel(), FakeDataModule())
+            trainer.fit(model, data_module)
         assert "val_loss" in str(caught.value)
         assert "nan" in str(caught.value)
         assert caught.value.epoch == 1
@@ -482,9 +483,11 @@ class TestNonFiniteValidationMetric:
         not_a_dir.write_text("x", encoding="utf-8")
         writer = FakeWriter()
         state = EpochState[Any]([], float("inf"), 0, 0, 1)
+        trainer = Trainer(minimal_config)
+        error = NonFiniteMetricError("val_loss", 1, float("nan"))
         with pytest.raises(OSError):
-            Trainer(minimal_config)._record_non_finite(
-                NonFiniteMetricError("val_loss", 1, float("nan")),
+            trainer._record_non_finite(
+                error,
                 state,
                 not_a_dir,
                 not_a_dir / "best_model.pth",

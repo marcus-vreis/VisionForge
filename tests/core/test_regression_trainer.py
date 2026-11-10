@@ -190,8 +190,9 @@ class NaNRegressor(DummyRegressor):
 
 def test_non_finite_val_loss_stops_in_epoch_one(tmp_path: Path) -> None:
     trainer = RegressionTrainer(_config(tmp_path))
+    model, data_module = NaNRegressor(), FakeRegressionDataModule()
     with pytest.raises(NonFiniteMetricError, match="non-finite") as caught:
-        trainer.fit(NaNRegressor(), FakeRegressionDataModule())
+        trainer.fit(model, data_module)
     assert "val_loss=nan" in str(caught.value)
     assert caught.value.epoch == 1
     run_dir = next((tmp_path / "models" / "reg_run").iterdir())

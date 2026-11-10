@@ -173,7 +173,10 @@ def test_checkpoint_writer_failure_is_propagated(tmp_path: Path) -> None:
         model: nn.Module,
         path: Path,
     ) -> Future[None]:
-        return save_best_checkpoint(pool, pending, model, missing_parent)
+        written: Future[None] = save_best_checkpoint(
+            pool, pending, model, missing_parent
+        )
+        return written
 
     state = loop.EpochState[ScoredEpoch]([], float("inf"), 0, 0, 1)
     writes, _ = loop.run_epochs(
@@ -425,7 +428,8 @@ def test_non_finite_metric_health_warning_names_epoch_and_metric() -> None:
 
     warning = non_finite_metric("val_loss", 4, float("nan"))
     assert warning.code == "non_finite_metric"
-    assert "val_loss" in warning.message and "4" in warning.message
+    assert "val_loss" in warning.message
+    assert "4" in warning.message
 
 
 def test_run_epochs_rejects_nan_loss_even_when_the_ranking_metric_is_finite(
@@ -453,12 +457,8 @@ def test_run_epochs_rejects_nan_loss_even_when_the_ranking_metric_is_finite(
         report=lambda result: None,
         early_stop=lambda counter: False,
     )
+    runtime = loop.EpochRuntime(_loader(), _loader(), 3, None, None)
+    policy = loop.MetricPolicy("score", higher_is_better=True)
     with pytest.raises(loop.NonFiniteMetricError, match="val_loss=nan"):
-        loop.run_epochs(
-            state,
-            loop.EpochRuntime(_loader(), _loader(), 3, None, None),
-            checkpoint,
-            callbacks,
-            loop.MetricPolicy("score", higher_is_better=True),
-        )
+        loop.run_epochs(state, runtime, checkpoint, callbacks, policy)
     assert not checkpoint.model_path.exists()
