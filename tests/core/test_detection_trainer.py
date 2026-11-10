@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 from typing import Any
 
@@ -916,7 +917,7 @@ def test_val_loss_leaves_batchnorm_statistics_untouched(
     assert after.keys() == before.keys()
     for key, tensor in before.items():
         assert torch.equal(tensor, after[key]), key
-    assert val_loss == val_loss and abs(val_loss) != float("inf")
+    assert math.isfinite(val_loss)
     assert {n: m.training for n, m in model.named_modules()} == modes_before
 
 
