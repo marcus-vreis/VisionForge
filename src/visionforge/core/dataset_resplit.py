@@ -512,15 +512,16 @@ def _assign(
         short = {s: dom[s] - given[unit.stratum][s] for s in active}
         total_short = {s: overall_target[s] - overall[s] for s in active}
         use_class = max(short.values()) > 0
-        split = max(
-            active,
-            key=lambda s: (
+        rank = {
+            s: (
                 short[s] if use_class else 0,
                 total_short[s],
                 ratios[s],
                 -SPLIT_NAMES.index(s),
-            ),
-        )
+            )
+            for s in active
+        }
+        split = max(active, key=rank.__getitem__)
         for item in unit.items:
             given[item.stratum][split] += 1
             overall[split] += 1

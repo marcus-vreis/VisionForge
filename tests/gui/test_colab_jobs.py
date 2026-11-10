@@ -224,7 +224,8 @@ def test_exec_runs_with_a_deadline_longer_than_any_session() -> None:
 def test_the_script_is_written_for_exec_and_removed_after(vf_home: Path) -> None:
     cli = FakeCli([event_line({"event": "job_end", "status": "ok"})])
     run(cli)
-    assert cli.script_seen is not None and "PAYLOAD" in cli.script_seen
+    assert cli.script_seen is not None
+    assert "PAYLOAD" in cli.script_seen
     assert list((vf_home / "colab" / "ana" / "jobs").glob("*.py")) == []
 
 
@@ -281,7 +282,8 @@ def test_stopping_kills_exec_and_releases_the_vm(
     # The stop comes while the runner streams, after the warm-up answered.
     result = jobs.run_job("ana", "T4", PAYLOAD, events.append, lambda: len(events) > 5)
     assert result.outcome == "stopped"
-    assert cli.exec is not None and cli.exec.killed.is_set()
+    assert cli.exec is not None
+    assert cli.exec.killed.is_set()
     assert len(events) < 500
     assert cli.commands()[-1] == "stop"
 

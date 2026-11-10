@@ -18,7 +18,8 @@ if __name__ == "__main__" and not TYPE_CHECKING:
         Path(__file__).resolve().parents[2] / "src/visionforge/core/mlflow_tracking.py"
     )
     spec = importlib.util.spec_from_file_location("vf_mlflow_spike", source)
-    assert spec is not None and spec.loader is not None
+    assert spec is not None
+    assert spec.loader is not None
     adapter = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(adapter)
     MlflowTracker = adapter.MlflowTracker

@@ -110,7 +110,8 @@ class TestIndexDetection:
     def test_transposed_layout(self, tmp_path: Path) -> None:
         _png(tmp_path / "train/images/a.png", (1, 1, 1))
         index = build_index(tmp_path, "detection")
-        assert index.present["train"] and not index.present["val"]
+        assert index.present["train"]
+        assert not index.present["val"]
 
 
 class TestGallery:
@@ -158,7 +159,9 @@ class TestThumbnail:
             pixel = drawn.convert("RGB").getpixel((25, 50))
         assert isinstance(pixel, tuple)
         red, green, blue = pixel
-        assert red > 150 and green < 100 and blue < 100  # the box edge
+        assert red > 150  # the box edge
+        assert green < 100
+        assert blue < 100
 
     def test_contained_path_refuses_escapes(self, tmp_path: Path) -> None:
         root = tmp_path / "root"

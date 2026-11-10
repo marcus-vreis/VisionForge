@@ -253,8 +253,10 @@ class TestMaskIdsOutsideTheModel:
 
         monkeypatch.setattr(segmentation_trainer, "TensorBoardLogger", Recording)
         trainer = SegmentationTrainer(_config(tmp_path))
+        model = TinySegModel(3)
+        data = FakeSegDataModule(num_classes=5)
         with using_lang("en"), pytest.raises(ValueError, match="num_classes"):
-            trainer.fit(TinySegModel(3), FakeSegDataModule(num_classes=5))
+            trainer.fit(model, data)
         assert closed == [True]
 
     def test_the_ignore_index_is_not_an_out_of_range_id(self) -> None:

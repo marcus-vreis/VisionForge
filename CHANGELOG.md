@@ -167,6 +167,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 - A GUI ganha o link "Pular para o conteúdo" (primeiro foco da página), alvos de toque de 44 px no cabeçalho e nas abas em telas pequenas, e as metas `description`, `theme-color` e `color-scheme` no `index.html` (#207)
 - Os testes que esperam trabalho em segundo plano usam `wait_until` (`tests/helpers.py`) em vez de `time.sleep` em laço: no timeout falham com `AssertionError` em vez de ler um estado velho (#210)
 - Importar o servidor da GUI deixa de carregar torch, torchvision, ultralytics e matplotlib: `import visionforge.gui.server` cai de ~5,1 s para ~1,9 s (4336 → 1351 módulos). `visionforge.core` e `visionforge.blocks` resolvem os nomes públicos sob demanda e cada endpoint importa o bloco ou runner que roda; o servidor continua desligando a telemetria das SDKs ao ser importado (#202).
+- Os smells de teste do Sonar (S5778, S9073, S1515, S6353) saem: uma única chamada dentro de `pytest.raises`, um `assert` por condição, o `key` de `max` do reparticionamento sem lambda em laço e a regex do `repo_id` do Hub em `\w` com `re.ASCII`; sem mudança de comportamento (#206).
 
 ## [0.21.0] — 2026-11-05
 

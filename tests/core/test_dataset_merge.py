@@ -201,8 +201,9 @@ class TestClassification:
             "a": {"cat": None, "dog": None},
             "b": {"cat": None, "bird": None},
         }
+        analysis = _analyze(ds_a, ds_b)
         with pytest.raises(MergeError) as empty:
-            plan_merge(_analyze(ds_a, ds_b), mapping)
+            plan_merge(analysis, mapping)
         assert empty.value.code == "merge.nothing_left"
 
     def test_names_that_differ_by_case_or_spacing_are_hinted_not_merged(
@@ -527,7 +528,8 @@ class TestDetection:
             "apple\npear\nkiwi\n"
         )
         labels = _labels(merged, "train")
-        assert labels["a1"] == [0] and labels["a3"] == [0, 1]
+        assert labels["a1"] == [0]
+        assert labels["a3"] == [0, 1]
         assert labels["b1"] == [1]  # B's pear -> A's pear
         assert labels["b2"] == [2]  # B's kiwi -> new id 2
         assert labels["b3"] == [2, 1]
