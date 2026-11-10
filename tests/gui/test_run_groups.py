@@ -9,13 +9,13 @@ endpoints serve it as one entry.
 from __future__ import annotations
 
 import json
-import time
 from pathlib import Path
 from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
 
+from tests.helpers import wait_experiment_done
 from visionforge.utils.selftest_data import build_regression_dataset
 
 
@@ -54,13 +54,7 @@ def _config(tmp_path: Path) -> dict[str, Any]:
 
 
 def _finish(client: TestClient) -> dict[str, Any]:
-    status: dict[str, Any] = {"status": "running"}
-    for _ in range(900):
-        status = client.get("/api/experiment/status").json()
-        if status["status"] in ("completed", "failed"):
-            return status
-        time.sleep(0.1)
-    return status
+    return wait_experiment_done(client, timeout=90.0)
 
 
 def _group_json(models: Path, run_id: str) -> dict[str, Any]:

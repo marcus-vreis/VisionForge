@@ -7,7 +7,6 @@ orchestrators are mocked and only the route semantics are asserted
 
 from __future__ import annotations
 
-import time
 from pathlib import Path
 from typing import Any
 
@@ -17,6 +16,7 @@ from fastapi.testclient import TestClient
 from pydantic import Field
 from torch import nn
 
+from tests.helpers import wait_experiment_done
 from visionforge.tasks import (
     BaseTaskConfig,
     TaskSpec,
@@ -136,12 +136,7 @@ class TestCustomReplicates:
             assert resp.status_code == 200, resp.text
             run_id = resp.json()["run_id"]
 
-            status = {"status": "running"}
-            for _ in range(50):
-                status = client.get("/api/experiment/status").json()
-                if status["status"] in ("completed", "failed"):
-                    break
-                time.sleep(0.05)
+            status = wait_experiment_done(client)
             assert status["status"] == "completed", status
 
             assert captured["seeds"] == [7, 8]
@@ -236,12 +231,7 @@ class TestCustomSweep:
             assert resp.status_code == 200, resp.text
             run_id = resp.json()["run_id"]
 
-            status = {"status": "running"}
-            for _ in range(50):
-                status = client.get("/api/experiment/status").json()
-                if status["status"] in ("completed", "failed"):
-                    break
-                time.sleep(0.05)
+            status = wait_experiment_done(client)
             assert status["status"] == "completed", status
 
             assert captured["space"] == {"scale": [1.0, 2.0]}
@@ -308,12 +298,7 @@ def _real_payload(tmp_path: Path) -> dict:
 
 
 def _finish(client: TestClient) -> dict:
-    status: dict = {"status": "running"}
-    for _ in range(600):
-        status = client.get("/api/experiment/status").json()
-        if status["status"] in ("completed", "failed"):
-            break
-        time.sleep(0.1)
+    status = wait_experiment_done(client, timeout=60.0)
     return status
 
 

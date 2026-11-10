@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import io
-import time
 from pathlib import Path
 from typing import Any
 
@@ -11,6 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
 
+from tests.helpers import wait_until
 from visionforge.gui.server import app
 
 
@@ -34,12 +34,16 @@ def dataset(tmp_path: Path) -> Path:
 
 
 def _wait(client: TestClient, job_id: str) -> dict[str, Any]:
-    for _ in range(200):
-        body: dict[str, Any] = client.get(f"/api/explorer/scan/{job_id}").json()
-        if body["state"] != "running":
-            return body
-        time.sleep(0.05)
-    raise AssertionError("scan did not finish")
+    body: dict[str, Any] = {}
+
+    def _finished() -> bool:
+        nonlocal body
+        body = client.get(f"/api/explorer/scan/{job_id}").json()
+        state: str = body["state"]
+        return state != "running"
+
+    wait_until(_finished, message="the scan to finish")
+    return body
 
 
 def test_summary_counts(client: TestClient, dataset: Path) -> None:

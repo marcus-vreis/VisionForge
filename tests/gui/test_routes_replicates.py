@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-import time
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+
+from tests.helpers import wait_experiment_done, wait_until
 
 from .conftest import occupy_queue, release_queue
 
@@ -85,12 +86,7 @@ class TestRegressionReplicates:
             assert resp.status_code == 200, resp.text
             run_id = resp.json()["run_id"]
 
-            status = {"status": "running"}
-            for _ in range(50):
-                status = client.get("/api/experiment/status").json()
-                if status["status"] in ("completed", "failed"):
-                    break
-                time.sleep(0.05)
+            status = wait_experiment_done(client)
             assert status["status"] == "completed", status
 
             assert captured["seeds"] == [7, 8, 9]
@@ -136,10 +132,7 @@ class TestRegressionReplicates:
             resp = client.post("/api/regression/replicates", json=payload)
             assert resp.status_code == 200, resp.text
 
-            for _ in range(50):
-                if "seeds" in captured:
-                    break
-                time.sleep(0.05)
+            wait_until(lambda: "seeds" in captured, message='"seeds" in captured')
             # RegressionConfig defaults training.seed to 42 → 42, 43, 44
             assert captured["seeds"] == [42, 43, 44]
         finally:
@@ -236,12 +229,7 @@ class TestUnknownMetricGuard:
             )
             assert resp.status_code == 200, resp.text
 
-            status = {"status": "running"}
-            for _ in range(50):
-                status = client.get("/api/experiment/status").json()
-                if status["status"] in ("completed", "failed"):
-                    break
-                time.sleep(0.05)
+            status = wait_experiment_done(client)
             assert status["status"] == "failed"
             assert "test_accuracy" in status["error"]
             assert "r2" in status["error"]  # names what IS available

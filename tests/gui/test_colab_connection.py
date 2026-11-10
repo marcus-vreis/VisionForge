@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import io
 import subprocess
-import time
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +11,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from tests.helpers import wait_until
 from visionforge.gui.api import colab_connection as cc
 from visionforge.gui.api.colab_jobs import ColabJobs
 from visionforge.gui.api.colab_routes import build_colab_router
@@ -343,9 +343,12 @@ def test_install_route_runs_in_the_background_until_installed() -> None:
     cli = cc.ColabCli(run=FakeColabCli(), python="p")
     client = _client(cli, cc.LoginFlows(popen=FakePopen()))
     assert client.post("/api/colab/install").status_code == 200
-    deadline = time.monotonic() + 5
-    while cli.install_state == "installing" and time.monotonic() < deadline:
-        time.sleep(0.01)
+    wait_until(
+        lambda: cli.install_state != "installing",
+        timeout=5,
+        interval=0.01,
+        message="the background install to leave 'installing'",
+    )
     assert (
         client.get("/api/colab/status").json()["installed_version"] == cc.PINNED_VERSION
     )

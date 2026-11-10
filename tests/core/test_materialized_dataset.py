@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import subprocess
 import sys
-import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -12,6 +11,7 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
+from tests.helpers import wait_until
 from visionforge.core.materialized_dataset import (
     MaterializedDataset,
     materialize_dataset,
@@ -42,13 +42,13 @@ with materialize_dataset(source, [{"kind": "grayscale"}], cache_root=cache) as o
         text=True,
     )
     try:
-        deadline = time.monotonic() + 30
-        while not ready.exists():
+
+        def _ready() -> bool:
             if process.poll() is not None:
                 pytest.fail(f"Dataset owner exited: {process.communicate()[1]}")
-            if time.monotonic() >= deadline:
-                pytest.fail("Dataset owner did not become ready within 30 seconds")
-            time.sleep(0.02)
+            return ready.exists()
+
+        wait_until(_ready, interval=0.02, message="the dataset owner to become ready")
         yield process, Path(ready.read_text(encoding="utf-8"))
     finally:
         try:

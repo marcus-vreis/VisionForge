@@ -10,6 +10,7 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
+from tests.helpers import wait_until
 from visionforge.gui.api.datasets_routes import _detect_dataset_layout
 from visionforge.gui.api.routes import _load_runs
 from visionforge.gui.api.schemas import RunSummary
@@ -707,12 +708,10 @@ class TestApiRunsEndpoint:
 
             assert resp.status_code == 200
             # Let the background task pick up so fake_setup runs.
-            import time
 
-            for _ in range(50):
-                if "class" in captured_block:
-                    break
-                time.sleep(0.05)
+            wait_until(
+                lambda: "class" in captured_block, message='"class" in captured_block'
+            )
             assert captured_block.get("class") == "CrossValidationBlock"
             assert captured_block.get("config_block") == "cross_validation"
         finally:
@@ -773,12 +772,7 @@ class TestApiRunsEndpoint:
             resp = client.post("/api/experiment/run", json=payload)
             assert resp.status_code == 200, resp.text
 
-            import time
-
-            for _ in range(50):
-                if "class" in captured:
-                    break
-                time.sleep(0.05)
+            wait_until(lambda: "class" in captured, message='"class" in captured')
             assert captured.get("class") == "TransferLearningBlock"
             assert captured.get("mode") == "feature_extraction"
         finally:
@@ -839,12 +833,7 @@ class TestApiRunsEndpoint:
             resp = client.post("/api/experiment/run", json=payload)
             assert resp.status_code == 200, resp.text
 
-            import time
-
-            for _ in range(50):
-                if "class" in captured:
-                    break
-                time.sleep(0.05)
+            wait_until(lambda: "class" in captured, message='"class" in captured')
             assert captured.get("class") == "ModelComparisonBlock"
             assert captured.get("model_names") == ["resnet18", "resnet50"]
             assert captured.get("metric") == "f1"
@@ -913,14 +902,11 @@ class TestApiRunsEndpoint:
             resp = client.post("/api/experiment/run", json=payload)
             assert resp.status_code == 200, resp.text
 
-            import time
-
             # Wait for run(), not setup(): has_callback is written in run, which
             # executes on a pool thread after setup has already been recorded.
-            for _ in range(50):
-                if "has_callback" in captured:
-                    break
-                time.sleep(0.05)
+            wait_until(
+                lambda: "has_callback" in captured, message='"has_callback" in captured'
+            )
             assert captured.get("class") == "GridSearchBlock"
             assert captured.get("hp") == {
                 "training.learning_rate": [0.001, 0.0005, 0.0001]
@@ -996,12 +982,7 @@ class TestApiRunsEndpoint:
             resp = client.post("/api/experiment/run", json=payload)
             assert resp.status_code == 200, resp.text
 
-            import time
-
-            for _ in range(50):
-                if "class" in captured:
-                    break
-                time.sleep(0.05)
+            wait_until(lambda: "class" in captured, message='"class" in captured')
             assert captured.get("class") == "RandomSearchBlock"
             assert captured.get("n_trials") == 5
             assert captured.get("space") == {

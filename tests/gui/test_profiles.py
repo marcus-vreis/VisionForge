@@ -18,7 +18,6 @@ import asyncio
 import json
 import os
 import subprocess
-import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -27,6 +26,7 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import BaseModel
 
+from tests.helpers import wait_experiment_done
 from visionforge.gui.api.profiles import (
     OUTPUT_SUBDIRS,
     InvalidProfileError,
@@ -958,13 +958,7 @@ class TestHistoryIsPerProfile:
 
 
 def _finish(client: TestClient) -> dict[str, Any]:
-    status: dict[str, Any] = {"status": "running"}
-    for _ in range(600):
-        status = client.get("/api/experiment/status").json()
-        if status["status"] in ("completed", "failed"):
-            break
-        time.sleep(0.1)
-    return status
+    return wait_experiment_done(client, timeout=60.0)
 
 
 class TestARealRunLandsInItsProfile:

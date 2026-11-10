@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import asyncio
 import threading
-import time
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
@@ -22,6 +21,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from tests.helpers import wait_until
 from visionforge.utils.selftest_data import build_regression_dataset
 
 from .conftest import release_queue
@@ -119,7 +119,8 @@ def test_run_reaches_the_block_when_its_thread_starts_late(
     assert gated_regression.captured.get("setup") is True
     gated_regression.gate.set()
 
-    deadline = time.monotonic() + 30.0
-    while "run" not in gated_regression.captured and time.monotonic() < deadline:
-        time.sleep(0.05)
+    wait_until(
+        lambda: "run" in gated_regression.captured,
+        message="run() to be captured",
+    )
     assert gated_regression.captured.get("run") is True

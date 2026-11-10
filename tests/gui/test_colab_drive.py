@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import subprocess
 import threading
-import time
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
 
+from tests.helpers import wait_until
 from visionforge.gui.api import colab_connection as cc
 from visionforge.gui.api import colab_drive as cd
 from visionforge.gui.api import colab_jobs as cj
@@ -146,9 +146,12 @@ def run_drive(
 
 
 def _grant_when_waiting(consent: cd.DriveConsent) -> None:
-    deadline = time.monotonic() + 5
-    while not consent.grant() and time.monotonic() < deadline:
-        time.sleep(0.01)
+    wait_until(
+        consent.grant,
+        timeout=5,
+        interval=0.01,
+        message="the consent gate to be waiting",
+    )
 
 
 def consent_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -414,9 +417,12 @@ def test_continue_reaches_only_a_job_that_waits() -> None:
     )
     try:
         waiter.start()
-        deadline = time.monotonic() + 5
-        while not consent.waiting and time.monotonic() < deadline:
-            time.sleep(0.01)
+        wait_until(
+            lambda: consent.waiting,
+            timeout=5,
+            interval=0.01,
+            message="the consent gate to be waiting",
+        )
         response = client.post("/api/colab/drive/continue", json={"run_id": "r-drive"})
         assert response.status_code == 200
         waiter.join(5)
