@@ -98,11 +98,11 @@ def is_valid_repo_id(value: str) -> bool:
     if not isinstance(value, str) or len(value) > 193 or value.count("/") != 1:
         return False
     return all(
-        re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,94}[A-Za-z0-9_]", part) is not None
+        re.fullmatch(r"\w[\w.-]{0,94}\w", part, re.ASCII) is not None
         and "--" not in part
         and ".." not in part
         and not part.endswith(".git")
-        or re.fullmatch(r"[A-Za-z0-9_]", part) is not None
+        or re.fullmatch(r"\w", part, re.ASCII) is not None
         for part in value.split("/")
     )
 

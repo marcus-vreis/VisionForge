@@ -198,7 +198,8 @@ def test_three_refusals_give_up_and_release_the_vm() -> None:
     result, events = run_drive(cli)
 
     assert result.outcome == "failed"
-    assert result.error is not None and "3" in result.error
+    assert result.error is not None
+    assert "3" in result.error
     assert [e["attempt"] for e in consent_events(events)] == [1, 2, 3]
     assert cli.commands() == [
         "new",
@@ -237,7 +238,8 @@ def test_a_mount_that_fails_otherwise_says_why() -> None:
     cli = DriveCli([["ValueError: mountpoint must not already contain files\n"]])
     result, _ = run_drive(cli)
     assert result.outcome == "failed"
-    assert result.error is not None and "mountpoint" in result.error
+    assert result.error is not None
+    assert "mountpoint" in result.error
 
 
 def test_the_consent_url_is_not_logged(caplog: pytest.LogCaptureFixture) -> None:
@@ -488,6 +490,7 @@ def test_export_to_drive_keeps_a_copy_of_the_bundle(
     bundle = tmp_path / "run-bundle.zip"
     bundle.write_bytes(b"zip")
     saved = runner.export_to_drive({"path": str(bundle), "size": 3}, "exp")
-    assert saved is not None and Path(saved).read_bytes() == b"zip"
+    assert saved is not None
+    assert Path(saved).read_bytes() == b"zip"
     assert Path(saved).parent == tmp_path / "MyDrive" / "VisionForge" / "runs"
     assert runner.export_to_drive(None, "exp") is None

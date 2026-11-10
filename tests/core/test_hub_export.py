@@ -170,7 +170,8 @@ def test_private_export_sends_exact_confirmed_files(
             "exist_ok": True,
         },
     )
-    assert calls[2][0] == "info" and calls[3][0] == "upload"
+    assert calls[2][0] == "info"
+    assert calls[3][0] == "upload"
     assert calls[3][1]["allow_patterns"] == preview["files"]
     assert files["weights/model.pt"] == b"opaque-checkpoint"
     record = json.loads(files["run.json"])
@@ -191,7 +192,8 @@ def test_private_export_sends_exact_confirmed_files(
     assert hashlib.sha256(files["manifest.json"]).hexdigest() == preview["digest"]
     for name, content in files.items():
         if name != "weights/model.pt":
-            assert b"private-" not in content and b"C:/" not in content
+            assert b"private-" not in content
+            assert b"C:/" not in content
 
 
 @pytest.mark.parametrize("private", [False, None, "true", 1])
@@ -199,8 +201,9 @@ def test_unverified_privacy_stops_before_upload(
     run_dir: Path, monkeypatch: pytest.MonkeyPatch, private: Any
 ) -> None:
     calls, uploaded = _transport(monkeypatch, private=private)
+    digest = preview_run(run_dir)["digest"]
     with pytest.raises(PrivateRepositoryRequiredError):
-        export_run(run_dir, "owner/model", "explicit", preview_run(run_dir)["digest"])
+        export_run(run_dir, "owner/model", "explicit", digest)
     assert [call[0] for call in calls] == ["init", "create", "info"]
     assert uploaded == {}
 
@@ -220,13 +223,9 @@ def test_sdk_error_never_exposes_token_or_local_path(
     run_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _transport(monkeypatch, failure=True)
+    digest = preview_run(run_dir)["digest"]
     with pytest.raises(HubExportError) as error:
-        export_run(
-            run_dir,
-            "owner/model",
-            "private-auth-canary",
-            preview_run(run_dir)["digest"],
-        )
+        export_run(run_dir, "owner/model", "private-auth-canary", digest)
     assert str(error.value) == "Hugging Face Hub export failed"
     assert error.value.__suppress_context__
 
@@ -235,8 +234,9 @@ def test_missing_extra_has_a_sanitised_error(
     run_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setitem(sys.modules, "huggingface_hub", None)
+    digest = preview_run(run_dir)["digest"]
     with pytest.raises(HubExportError, match="optional"):
-        export_run(run_dir, "owner/model", "explicit", preview_run(run_dir)["digest"])
+        export_run(run_dir, "owner/model", "explicit", digest)
 
 
 @pytest.mark.parametrize(
@@ -290,8 +290,9 @@ def test_invalid_destination_never_constructs_client(
     run_dir: Path, monkeypatch: pytest.MonkeyPatch, repo_id: str
 ) -> None:
     calls, _ = _transport(monkeypatch)
+    digest = preview_run(run_dir)["digest"]
     with pytest.raises(ValueError, match="owner/name"):
-        export_run(run_dir, repo_id, "explicit", preview_run(run_dir)["digest"])
+        export_run(run_dir, repo_id, "explicit", digest)
     assert calls == []
 
 
@@ -299,8 +300,9 @@ def test_explicit_token_required(
     run_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     calls, _ = _transport(monkeypatch)
+    digest = preview_run(run_dir)["digest"]
     with pytest.raises(ValueError, match="explicit"):
-        export_run(run_dir, "owner/model", " ", preview_run(run_dir)["digest"])
+        export_run(run_dir, "owner/model", " ", digest)
     assert calls == []
 
 

@@ -332,7 +332,8 @@ def test_graphql_errors_never_carry_the_token(
 
     monkeypatch.setattr(wandb_tracking.urllib.request, "urlopen", urlopen)
 
+    graphql = http_graphql("https://api.example", _TOKEN)
     with pytest.raises(WandbRequestError) as caught:
-        http_graphql("https://api.example", _TOKEN)("query { viewer { entity } }", {})
+        graphql("query { viewer { entity } }", {})
     assert _TOKEN not in str(caught.value)
     assert caught.value.__cause__ is None
