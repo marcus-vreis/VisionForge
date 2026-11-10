@@ -28,12 +28,10 @@ TOLERANCES = {
     "metrics_abs": METRIC_ABS_TOLERANCE,
 }
 _METRIC_KEYS = ("val_miou", "val_dice", "val_pixel_acc")
-EXECUTION_ORDER = ["native_pytorch", "visionforge_trainer"]
+EXECUTION_ORDER = list(phase_contract.EXECUTION_ORDER)
 
 
-def execution_order(seed: int) -> list[str]:
-    """Counterbalance the pair: even seeds run native first, odd seeds last."""
-    return list(EXECUTION_ORDER) if seed % 2 == 0 else EXECUTION_ORDER[::-1]
+execution_order = phase_contract.execution_order
 
 
 VISIONFORGE_INCLUDES = {
