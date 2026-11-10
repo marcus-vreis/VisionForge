@@ -155,6 +155,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 - `POST /api/dataset/download` deixa de devolver `api_key` e `token` no corpo do 422 quando o pedido vem malformado; a resposta é uma mensagem fixa em português e inglês (#234).
 - Uma métrica de validação NaN ou infinita (loss que diverge) para o treino na própria época, com um erro que cita `non-finite`, a métrica e a época, e deixa um `run.json` com `status: failed` e o aviso `non_finite_metric`; antes o treino seguia até o fim sem checkpoint e falhava com `FileNotFoundError`, e a segmentação salvava pesos NaN como melhores (ADR-182).
 - A `val_loss` da detecção com torchvision deixa de atualizar `running_mean` e `running_var` do BatchNorm (SSDLite e detectores `pretrained=False`): só essas camadas ficam em `eval()` durante a passada (#233).
+- O benchmark de workflow alterna a ordem nativo/VisionForge por seed (par começa pelo nativo, ímpar pelo VisionForge) em classificação, segmentação e detecção, e registra a ordem de cada par em `execution_order`: o cache quente do segundo caminho deixa de favorecer sempre o mesmo lado (#167).
 
 ## [0.21.0] — 2026-11-05
 

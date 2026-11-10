@@ -65,7 +65,10 @@ def test_native_and_platform_match_on_trimap_derived_masks(
     assert report["failed_phase"] is None
     assert report["purpose"] == "engineering_parity_only"
     assert report["task"] == "segmentation"
-    assert report["execution_order"] == ["native_pytorch", "visionforge_trainer"]
+    assert report["execution_order"] == [
+        "visionforge_trainer",
+        "native_pytorch",
+    ]  # odd seed: VisionForge first
     assert report["tolerances"]["metrics_abs"] == 1e-12
     assert report["tolerances"]["losses"] == "exact"
     assert report["label_mapping"]["oxford_trimap"] == {
@@ -225,10 +228,53 @@ def test_pair_failure_names_path_and_phase(tmp_path: Path) -> None:
     output = tmp_path / "pair"
 
     with pytest.raises(PhaseFailure):
-        paired.run_pair(dataset, initial, output, seed=37, epochs=1, batch_size=2)
+        paired.run_pair(dataset, initial, output, seed=36, epochs=1, batch_size=2)
 
     report = json.loads((output / "paired_result.json").read_text(encoding="utf-8"))
     assert report["status"] == "failed"
     assert report["failed_phase"] == "native.training"
     assert report["native"]["failed_phase"] == "training"
     assert "visionforge" not in report
+
+
+@pytest.mark.parametrize(
+    ("seed", "expected"),
+    [
+        (0, ["native_pytorch", "visionforge_trainer"]),
+        (1, ["visionforge_trainer", "native_pytorch"]),
+        (36, ["native_pytorch", "visionforge_trainer"]),
+        (37, ["visionforge_trainer", "native_pytorch"]),
+    ],
+)
+def test_execution_order_alternates_with_seed_parity(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, seed: int, expected: list[str]
+) -> None:
+    """Even seeds run native first and odd seeds VisionForge first, per pair."""
+    dataset, initial = make_segmentation_fixture(tmp_path)
+    calls: list[str] = []
+    monkeypatch.setattr(
+        native_segmentation,
+        "run_native",
+        _recorder(calls, "native_pytorch"),
+    )
+    monkeypatch.setattr(
+        paired,
+        "run_visionforge",
+        _recorder(calls, "visionforge_trainer"),
+    )
+    output = tmp_path / "pair"
+    with pytest.raises(KeyError):  # empty stub reports fail at the comparison
+        paired.run_pair(dataset, initial, output, seed=seed, epochs=1, batch_size=2)
+    report = json.loads((output / "paired_result.json").read_text(encoding="utf-8"))
+    assert calls == expected
+    assert report["execution_order"] == expected
+
+
+def _recorder(calls: list[str], name: str) -> Any:
+    """A stand-in that records its name and returns an empty report."""
+
+    def record(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+        calls.append(name)
+        return {}
+
+    return record

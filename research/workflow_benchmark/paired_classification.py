@@ -30,6 +30,11 @@ VISIONFORGE_INCLUDES = {
 EXECUTION_ORDER = ["native_pytorch", "visionforge_trainer"]
 
 
+def execution_order(seed: int) -> list[str]:
+    """Counterbalance the pair: even seeds run native first, odd seeds last."""
+    return list(EXECUTION_ORDER) if seed % 2 == 0 else EXECUTION_ORDER[::-1]
+
+
 def run_visionforge(
     dataset: Path,
     initial_weights: Path,
@@ -269,12 +274,13 @@ def run_pair(
         raise ValueError("Dataset image audit has findings; inspect before pairing")
     fingerprint = fingerprint_dataset(dataset, method="content").to_dict()
     output.mkdir(parents=True)
+    order = execution_order(seed)
     report: dict[str, Any] = {
         "purpose": "engineering_parity_only",
         "status": "running",
         "failed_phase": None,
         "phase_contract": phase_contract.contract_header(),
-        "execution_order": EXECUTION_ORDER,
+        "execution_order": order,
         "seed": seed,
         "epochs": epochs,
         "batch_size": batch_size,
@@ -301,7 +307,7 @@ def run_pair(
         "visionforge_trainer": ("visionforge", run_visionforge),
     }
     try:
-        for workflow in EXECUTION_ORDER:
+        for workflow in order:
             key, runner = runners[workflow]
             try:
                 report[key] = runner(dataset, initial_weights, output / key, **options)
