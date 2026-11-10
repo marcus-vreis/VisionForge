@@ -165,6 +165,9 @@ without touching the package.
   dataset fingerprint, so "same data" is a checkable claim.
 - **Paper-ready output** — every report is also written as a `booktabs` LaTeX
   table, with notes stating what each interval covers.
+  Figures are written as PNG at 300 dpi by default; set
+  `output.figure_formats: [png, pdf, svg]` for vector files, and replicate sets
+  also leave a `replicates_strip` figure beside the table.
 
 - **Learning rate per model** (classification) — with
   `model_comparison.lr_policy: suggested` each architecture trains at its own

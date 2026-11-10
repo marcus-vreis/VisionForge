@@ -24,7 +24,7 @@ from visionforge.core.anomaly_trainer import (
 )
 from visionforge.core.cancellation import CancellationToken
 from visionforge.core.metric_ci import MetricCI, bootstrap_anomaly_cis
-from visionforge.core.plotter import MetricsPlotter
+from visionforge.core.plotter import MetricsPlotter, figure_graphic
 from visionforge.core.trainer import seed_before_building
 from visionforge.models.anomaly_factory import AnomalyModelFactory
 from visionforge.utils.anomaly_config import AnomalyConfig
@@ -129,6 +129,8 @@ class AnomalyBlock:
     def _render_plots(self, run_dir: Path) -> list[Path]:
         """Render the AUROC-over-epochs curve (reuses the generic plotter curve)."""
         assert self._train_result is not None
+        fmts = self._config.output.figure_formats
+        dpi = self._config.output.figure_dpi
         auroc_path = run_dir / "auroc.png"
         epochs = [r.epoch for r in self._train_result.history]
         values = [r.val_auroc for r in self._train_result.history]
@@ -139,8 +141,10 @@ class AnomalyBlock:
             label="AUROC",
             ylabel="Image AUROC",
             title="Image-level AUROC over epochs",
+            formats=fmts,
+            dpi=dpi,
         )
-        graphics = [auroc_path]
+        graphics = [figure_graphic(auroc_path, fmts)]
 
         # Test-set diagnostic (ADR-077): AUROC says how separable the two
         # populations are, this says where they sit and what the chosen cut keeps.
@@ -148,9 +152,14 @@ class AnomalyBlock:
             labels, scores = self._test_scores
             hist_path = run_dir / "score_histogram.png"
             MetricsPlotter.score_histogram(
-                labels, scores, hist_path, threshold=self._test_metrics[1]
+                labels,
+                scores,
+                hist_path,
+                threshold=self._test_metrics[1],
+                formats=fmts,
+                dpi=dpi,
             )
-            graphics.append(hist_path)
+            graphics.append(figure_graphic(hist_path, fmts))
         return graphics
 
     def _update_run_json(self, run_dir: Path, graphics: list[Path]) -> None:

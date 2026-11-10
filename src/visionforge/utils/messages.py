@@ -2282,6 +2282,10 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "pt": "gpu_ids não podem se repetir, recebido {ids}",
         "en": "gpu_ids must be unique, got {ids}",
     },
+    "config.figure_formats_empty": {
+        "pt": "figure_formats precisa de pelo menos um formato (png, pdf ou svg)",
+        "en": "figure_formats needs at least one format (png, pdf or svg)",
+    },
     "config.multi_cuda_gpus": {
         "pt": "multi_cuda precisa de pelo menos 2 gpu_ids, recebido {ids}",
         "en": "multi_cuda requires at least 2 gpu_ids, got {ids}",
@@ -2507,6 +2511,12 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "pt": "Taxa de verdadeiros positivos",
         "en": "True Positive Rate",
     },
+    "plot.title_replicates": {
+        "pt": "Réplicas por semente: {metric}",
+        "en": "Replicates by seed: {metric}",
+    },
+    "plot.axis_seed": {"pt": "Semente", "en": "Seed"},
+    "plot.replicates_mean": {"pt": "média", "en": "mean"},
     "plot.title_roc": {"pt": "Curva ROC", "en": "ROC Curve"},
     "plot.axis_recall": {"pt": "Revocação", "en": "Recall"},
     "plot.axis_precision": {"pt": "Precisão", "en": "Precision"},
