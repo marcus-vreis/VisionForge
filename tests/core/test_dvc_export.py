@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -56,7 +57,8 @@ class FakeDvc:
         self, args: list[str], cwd: Path, timeout: float
     ) -> subprocess.CompletedProcess[str]:
         if args[0] != _DVC:
-            return run_command(args, cwd, timeout)
+            real: subprocess.CompletedProcess[str] = run_command(args, cwd, timeout)
+            return real
         command = args[1:]
         self.calls.append(command)
         if command[:1] == ["init"]:
@@ -92,8 +94,10 @@ def _done(code: int, out: str = "") -> subprocess.CompletedProcess[str]:
 
 
 @pytest.fixture(autouse=True)
-def _hermetic_git(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    """No global or system git config (signing, hooks path), a fixed identity."""
+def _hermetic_git(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, clean_git_env: dict[str, str]
+) -> None:
+    """No inherited repository, global or system git config, a fixed identity."""
     empty = tmp_path / "gitconfig"
     empty.write_text("", encoding="utf-8")
     monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(empty))
@@ -110,7 +114,8 @@ def _tools(fake: FakeDvc) -> Tools:
 def _git(repo: Path, *args: str) -> str:
     done = run_command(["git", *args], repo, 60)
     assert done.returncode == 0, done.stderr
-    return done.stdout.strip()
+    out: str = done.stdout.strip()
+    return out
 
 
 def _run(tmp_path: Path, *, model: str | None = "best_model.pth") -> Path:
@@ -450,6 +455,40 @@ def test_another_repositorys_git_variables_do_not_leak_in(
     assert result["commit"] == _git(repo, "rev-parse", "HEAD")
     assert _git(repo, "rev-list", "--count", "HEAD") == "2"
     assert run_command(["git", "rev-parse", "HEAD"], other, 60).returncode != 0
+
+
+def test_an_inherited_bare_repository_is_never_touched(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The 2026-11-08 incident: a hook's GIT_DIR sent `git init` into the real repo.
+    bare = tmp_path / "foreign.git"
+    _git(tmp_path, "init", "--bare", "-q", str(bare))
+    config = (bare / "config").read_bytes()
+    head = (bare / "HEAD").read_bytes()
+    work = tmp_path / "work"
+    work.mkdir()
+    monkeypatch.setenv("GIT_DIR", str(bare))
+    monkeypatch.setenv("GIT_WORK_TREE", str(tmp_path))
+
+    init = run_command(["git", "init", "-q"], work, 60)
+    where = run_command(["git", "rev-parse", "--git-dir"], work, 60)
+
+    assert init.returncode == 0, init.stderr
+    assert where.stdout.strip() == ".git"
+    assert (work / ".git").is_dir()
+    assert (bare / "config").read_bytes() == config
+    assert (bare / "HEAD").read_bytes() == head
+
+
+def test_the_fixture_leaves_none_of_the_local_git_variables(
+    clean_git_env: dict[str, str],
+) -> None:
+    left = {name for name in os.environ if name.upper() in dvc_export._GIT_LOCAL_ENV}
+    assert left == set()
+    leaked = {
+        name for name in clean_git_env if name.upper() in dvc_export._GIT_LOCAL_ENV
+    }
+    assert leaked == set()
 
 
 def test_a_linked_runs_folder_cannot_lead_outside(tmp_path: Path) -> None:

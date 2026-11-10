@@ -28,7 +28,10 @@ def fake() -> FakeDvc:
 
 @pytest.fixture
 def client(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fake: FakeDvc
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    fake: FakeDvc,
+    clean_git_env: dict[str, str],
 ) -> TestClient:
     monkeypatch.setenv("VISIONFORGE_HOME", str(tmp_path / "home"))
     monkeypatch.setattr(routes, "_PROFILES_DIR", tmp_path / "profiles")

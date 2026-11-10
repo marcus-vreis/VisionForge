@@ -161,6 +161,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 - `execution_order` do benchmark pareado tem uma só definição, em `phase_contract.py`; classificação, segmentação e detecção a importam (#249).
 - `visionforge --help` sai em UTF-8 também no console cp1252 (a reconfiguração vinha depois do `parse_args`) e o `doctor` cita `CUDA_VISIBLE_DEVICES` quando ele está vazio ou em `-1` e esconde a GPU (#209).
 - A mesma parada por métrica NaN ou infinita vale agora para a detecção com torchvision, o autoencoder de anomalia e as tarefas customizadas: o treino termina na época do problema, o `run.json` sai com `status: failed`, `error` e o aviso `non_finite_metric` (#248).
+- Os testes que rodam git partem de uma fixture `clean_git_env` que tira as variáveis locais do git (`GIT_DIR`, `GIT_WORK_TREE`…) herdadas de um hook, e um teste garante que um `GIT_DIR` herdado não leva `git init` ao repositório real (#211).
 
 ## [0.21.0] — 2026-11-05
 
