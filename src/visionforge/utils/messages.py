@@ -2039,6 +2039,10 @@ CATALOG: dict[str, dict[Lang, str]] = {
             "Check the name, the token and the connection. Nothing was downloaded."
         ),
     },
+    "download.request_invalid": {
+        "pt": "Pedido de download de dataset inválido.",
+        "en": "Invalid dataset download request.",
+    },
     # ── stored provider keys (utils/credentials.py) ──────────────────────────
     "credentials.invalid": {
         "pt": "Pedido de credencial inválido.",

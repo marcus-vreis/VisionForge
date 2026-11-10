@@ -152,6 +152,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 - Fine-tuning põe em taxa cheia só a última camada linear: em VGG e AlexNet o classificador inteiro de 119M e 54M parâmetros recebia a taxa da cabeça, e no ViT o token de classe ficava fora do otimizador (ADR-177).
 - A comparação pareada com Wilcoxon calcula o menor p possível sem os pares empatados, que o teste descarta: seis seeds com três empates agora aparecem como sem poder para α = 0,05 (ADR-177).
 - O download de dataset do Hugging Face fixa a revisão: resolve o SHA do commit, passa `revision` ao `load_dataset`, devolve `revision` na resposta e grava `.visionforge-source.json` na pasta; se o SHA não for resolvido, o erro é traduzido e nada é baixado (#165).
+- `POST /api/dataset/download` deixa de devolver `api_key` e `token` no corpo do 422 quando o pedido vem malformado; a resposta é uma mensagem fixa em português e inglês (#234).
 
 ## [0.21.0] — 2026-11-05
 

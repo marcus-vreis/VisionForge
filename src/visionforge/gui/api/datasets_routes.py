@@ -16,6 +16,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 from loguru import logger
+from pydantic import SecretStr
 
 from visionforge.core.detection_data import resolve_yolo_split
 from visionforge.gui.api.dataset_download import credentials_in_play, download_dataset
@@ -60,6 +61,11 @@ router = APIRouter()
 # which here would be the key.
 credentials_router = APIRouter(
     route_class=quiet_validation_route("credentials.invalid")
+)
+
+# Same for the download: its body can hold an api_key or token.
+download_router = APIRouter(
+    route_class=quiet_validation_route("download.request_invalid")
 )
 
 _BAD_REQUEST: dict[int | str, dict[str, Any]] = {
@@ -187,7 +193,7 @@ async def pick_dataset_folder() -> DatasetPickResponse:
     return await asyncio.to_thread(_open_native_folder_dialog)
 
 
-@router.post("/dataset/download", responses={**_BAD_REQUEST, **_SERVER_ERROR})
+@download_router.post("/dataset/download", responses={**_BAD_REQUEST, **_SERVER_ERROR})
 async def dataset_download(req: DatasetDownloadRequest) -> DatasetDownloadResponse:
     """One-shot download of a dataset to a local folder (ADR-055).
 
@@ -202,21 +208,27 @@ async def dataset_download(req: DatasetDownloadRequest) -> DatasetDownloadRespon
     have used, and the exception itself is never handed to the logger: its
     traceback repeats the message, and ``diagnose`` would add the variables.
     """
+    api_key, token = _reveal(req.api_key), _reveal(req.token)
     try:
         return await asyncio.to_thread(_execute_dataset_download, req)
     except (ValueError, FileNotFoundError, ImportError) as exc:
-        secrets = credentials_in_play(req.api_key, req.token)
+        secrets = credentials_in_play(api_key, token)
         # `from None`: whoever formats this HTTPException must not walk back to
         # the original exception and its unredacted message.
         raise HTTPException(400, redact_secrets(str(exc), *secrets)) from None
     except Exception as exc:  # noqa: BLE001
-        secrets = credentials_in_play(req.api_key, req.token)
+        secrets = credentials_in_play(api_key, token)
         detail = redact_secrets(f"{type(exc).__name__}: {exc}", *secrets)
         trace = redact_secrets("".join(traceback.format_exception(exc)), *secrets)
         logger.error(
             "Dataset download ({}) failed: {}\n{}", req.provider, detail, trace
         )
         raise HTTPException(500, detail) from None
+
+
+def _reveal(secret: SecretStr | None) -> str | None:
+    """The plain value of an optional request secret (None stays None)."""
+    return secret.get_secret_value() if secret is not None else None
 
 
 def _execute_dataset_download(req: DatasetDownloadRequest) -> DatasetDownloadResponse:
@@ -227,8 +239,8 @@ def _execute_dataset_download(req: DatasetDownloadRequest) -> DatasetDownloadRes
         out_dir=req.out_dir,
         splits=tuple(req.splits),
         limit=req.limit,
-        api_key=req.api_key,
-        token=req.token,
+        api_key=_reveal(req.api_key),
+        token=_reveal(req.token),
         version=req.version,
         dataset_format=req.dataset_format,
     )
@@ -1377,3 +1389,4 @@ def _missing_split_roles(
 
 
 router.include_router(credentials_router)
+router.include_router(download_router)
