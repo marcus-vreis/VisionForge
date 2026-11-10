@@ -17,6 +17,7 @@ from visionforge.core.detection_trainer import (
     _is_worker_spawn_crash,
 )
 from visionforge.core.resume import RESUME_FILENAME, ResumeStateError
+from visionforge.core.training_loop import NonFiniteMetricError
 from visionforge.utils.detection_config import DetectionConfig
 
 
@@ -549,6 +550,38 @@ class TestStoppedBeforeTheFirstEpoch:
         run_json = json.loads((result.run_dir / "run.json").read_text("utf-8"))
         assert run_json["metrics"]["total_epochs"] == 0
         assert run_json["artifacts"]["model"] is None
+
+
+class _NaNDetector(_FakeDetector):
+    """A detector whose loss is NaN from the first forward pass."""
+
+    def forward(self, images: Any, targets: Any = None) -> Any:
+        out = super().forward(images, targets)
+        if self.training:
+            return {"loss_box_reg": out["loss_box_reg"] * float("nan")}
+        return out
+
+
+class TestTorchvisionNonFinite:
+    def test_nan_loss_stops_in_epoch_one_and_marks_the_run_failed(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A NaN loss used to train every epoch and finish as a completed run."""
+        monkeypatch.setattr(
+            dt_mod, "build_torchvision_detector", lambda *a, **k: _NaNDetector()
+        )
+        trainer = DetectionTrainer(_tv_config(tmp_path))
+        with pytest.raises(NonFiniteMetricError, match="non-finite") as caught:
+            trainer.fit()
+        assert "val_loss" in str(caught.value)
+        assert caught.value.epoch == 1
+
+        run_dir = next((tmp_path / "models" / "det_tv").iterdir())
+        assert not (run_dir / "weights" / "best.pt").exists()
+        data = json.loads((run_dir / "run.json").read_text("utf-8"))
+        assert data["status"] == "failed"
+        assert "non-finite" in data["error"]
+        assert [w["code"] for w in data["warnings"]] == ["non_finite_metric"]
 
 
 class TestUltralyticsResume:

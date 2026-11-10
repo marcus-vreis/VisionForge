@@ -160,6 +160,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 - `uv.lock` atualizado: pillow 13.0.0, onnx 1.23.2, starlette 1.10.0, aiohttp 3.14.5, filelock 3.32.7 e urllib3 2.8.0, que corrigem avisos de segurança conhecidos, mais as dependências que o lock ainda não tinha (ele estava na 0.12.0). `pyproject.toml` ganha os pisos `onnx>=1.21` e `pillow>=12.2`. torch e torchvision não mudam (#160).
 - `execution_order` do benchmark pareado tem uma só definição, em `phase_contract.py`; classificação, segmentação e detecção a importam (#249).
 - `visionforge --help` sai em UTF-8 também no console cp1252 (a reconfiguração vinha depois do `parse_args`) e o `doctor` cita `CUDA_VISIBLE_DEVICES` quando ele está vazio ou em `-1` e esconde a GPU (#209).
+- A mesma parada por métrica NaN ou infinita vale agora para a detecção com torchvision, o autoencoder de anomalia e as tarefas customizadas: o treino termina na época do problema, o `run.json` sai com `status: failed`, `error` e o aviso `non_finite_metric` (#248).
 
 ## [0.21.0] — 2026-11-05
 

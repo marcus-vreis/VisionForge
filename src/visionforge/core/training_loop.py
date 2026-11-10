@@ -77,6 +77,12 @@ class NonFiniteMetricError(RuntimeError):
         return non_finite_metric(self.name, self.epoch, self.value, self.best_epoch)
 
 
+def require_finite(name: str, epoch: int, value: float, best_epoch: int = 0) -> None:
+    """Raise :class:`NonFiniteMetricError` unless ``value`` is a finite number."""
+    if not math.isfinite(value):
+        raise NonFiniteMetricError(name, epoch, value, best_epoch)
+
+
 @dataclass
 class EpochState[Epoch]:
     """Carry completed history and stopping bookkeeping between epochs."""
@@ -477,8 +483,7 @@ def save_epoch_checkpoint(
     policy: MetricPolicy,
 ) -> None:
     """Save an improved checkpoint and snapshot every completed epoch for resume."""
-    if not math.isfinite(metric):
-        raise NonFiniteMetricError(policy.name, epoch, metric, state.best_epoch)
+    require_finite(policy.name, epoch, metric, state.best_epoch)
     improved = (
         metric > state.best_metric
         if policy.higher_is_better
@@ -740,12 +745,8 @@ def run_epochs[Epoch](
             # Segmentation ranks by mIoU, and an argmax over NaN logits is still
             # a valid class map: the score looks fine while the loss is NaN.
             val_loss = getattr(result, VAL_LOSS, None)
-            if (
-                metric.name != VAL_LOSS
-                and val_loss is not None
-                and not math.isfinite(val_loss)
-            ):
-                raise NonFiniteMetricError(VAL_LOSS, epoch, val_loss, state.best_epoch)
+            if metric.name != VAL_LOSS and val_loss is not None:
+                require_finite(VAL_LOSS, epoch, val_loss, state.best_epoch)
             save_epoch_checkpoint(
                 getattr(result, metric.name),
                 epoch,

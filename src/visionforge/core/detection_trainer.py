@@ -193,6 +193,15 @@ def _train_loss_metrics(trainer: Any) -> dict[str, Any]:
     return labelled if isinstance(labelled, dict) else {}
 
 
+def _report_epoch(
+    progress_callback: Callable[[dict[str, Any]], None] | None,
+    event: dict[str, Any],
+) -> None:
+    """Hand one epoch event to the GUI, when someone is listening."""
+    if progress_callback is not None:
+        progress_callback(event)
+
+
 def _epoch_event(
     result: DetectionEpochResult,
     total_epochs: int,
@@ -654,7 +663,13 @@ class DetectionTrainer:
                     model, train_loader, device, optimizer
                 )
                 val_loss = self._eval_torchvision_loss(model, val_loader, device)
+                # Before the mAP pass: the detections of NaN weights are not
+                # worth scoring, and a mAP of 0 hides the NaN loss (ADR-182).
+                training_loop.require_finite(
+                    training_loop.VAL_LOSS, epoch, val_loss, best_epoch
+                )
                 map50 = self._eval_torchvision_map(model, val_loader, device)
+                training_loop.require_finite("map50", epoch, map50, best_epoch)
 
                 epoch_result = DetectionEpochResult(
                     epoch=epoch,
@@ -679,16 +694,16 @@ class DetectionTrainer:
                     best_epoch = epoch
                     torch.save(model.state_dict(), model_path)
 
-                if progress_callback is not None:
-                    progress_callback(
-                        _epoch_event(
-                            epoch_result,
-                            cfg.epochs,
-                            train_loss=train_loss,
-                            val_loss=val_loss,
-                            lr=epoch_lr,
-                        )
-                    )
+                _report_epoch(
+                    progress_callback,
+                    _epoch_event(
+                        epoch_result,
+                        cfg.epochs,
+                        train_loss=train_loss,
+                        val_loss=val_loss,
+                        lr=epoch_lr,
+                    ),
+                )
 
                 # Every epoch, not only on improvement: a run dies on its
                 # worst epochs too, and stale state resumes into a past already
@@ -712,6 +727,11 @@ class DetectionTrainer:
                     ),
                 )
 
+        except training_loop.NonFiniteMetricError as error:
+            self._record_torchvision_non_finite(
+                error, run_dir, model_path, history, best_epoch
+            )
+            raise
         finally:
             tb.close()
 
@@ -731,6 +751,29 @@ class DetectionTrainer:
         return self._finish_torchvision_training(
             model, result, train_losses, best_map, progress_callback
         )
+
+    def _record_torchvision_non_finite(
+        self,
+        error: training_loop.NonFiniteMetricError,
+        run_dir: Path,
+        model_path: Path,
+        history: list[DetectionEpochResult],
+        best_epoch: int,
+    ) -> None:
+        """Leave a failed run.json that names the epoch and the metric (ADR-182)."""
+        failed = DetectionTrainResult(
+            stopped=False,
+            best_epoch=best_epoch,
+            best_map50_95=None,
+            total_epochs=len(history),
+            device_used=self._device_label,
+            history=history,
+            model_path=model_path,
+            run_dir=run_dir,
+            warnings=[error.health_warning().to_dict()],
+        )
+        self._write_run_json(run_dir, failed)
+        training_loop.record_non_finite_failure(run_dir, error)
 
     def _restore_torchvision_training(
         self,

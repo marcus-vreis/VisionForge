@@ -14,6 +14,7 @@ from visionforge.core.anomaly_trainer import (
     compute_threshold,
 )
 from visionforge.core.cancellation import CancellationToken
+from visionforge.core.training_loop import NonFiniteMetricError
 from visionforge.models.anomaly_factory import ConvAutoencoder, PatchCore
 from visionforge.utils.anomaly_config import AnomalyConfig
 
@@ -136,6 +137,34 @@ class TestFitAutoencoder:
         epochs = sorted({e["epoch"] for e in events if e["event"] == "epoch_end"})
         # Batches 1 and 2 of 3 in every epoch; the 3rd is epoch_end's.
         assert batches == [(ep, b) for ep in epochs for b in (1, 2)]
+
+
+class NaNAutoencoder(ConvAutoencoder):
+    """Reconstruction that only ever produces NaN."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return super().forward(x) * float("nan")
+
+
+class TestAutoencoderNonFinite:
+    def test_nan_loss_stops_in_epoch_one_and_marks_the_run_failed(
+        self, tmp_path: Path
+    ) -> None:
+        """A NaN train_loss never beat best_loss: it ran every epoch, saved nothing."""
+        config = _config(tmp_path)
+        trainer = AnomalyTrainer(config)
+        model, data_module = NaNAutoencoder(latent_dim=8), FakeAnomalyDataModule()
+        with pytest.raises(NonFiniteMetricError, match="non-finite") as caught:
+            trainer.fit(model, data_module)
+        assert "train_loss" in str(caught.value)
+        assert caught.value.epoch == 1
+
+        run_dir = next((config.output.models_dir / config.name).iterdir())
+        assert not (run_dir / "best_model.pth").exists()
+        data = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+        assert data["status"] == "failed"
+        assert "non-finite" in data["error"]
+        assert [w["code"] for w in data["warnings"]] == ["non_finite_metric"]
 
 
 class TestFitPatchCore:
