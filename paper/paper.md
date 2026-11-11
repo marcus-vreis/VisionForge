@@ -18,11 +18,10 @@ bibliography: paper.bib
 ---
 
 <!-- Draft. Every <...> must be filled before submission (Task D4 of the plan).
-     Numbers cite research/seed_variance/results/summary.json; the training
-     comparison cites results/real_summary.md, the browser series cite
-     results/gui_summary.md, results/diag_summary.md and results/gui_v2_summary.md
-     in the private research repository, whose recipes and per-run results must be
-     public before submission. -->
+     Numbers cite research/seed_variance/results/summary.json; the workflow
+     benchmark cites research/workflow_benchmark/results/, and
+     research/workflow_benchmark/make_paper_numbers.py recomputes each of its
+     numbers from the per-run records there. -->
 
 # Summary
 
@@ -159,7 +158,9 @@ leaves it. In the slowest classification run (ratio 1.074) other processes on th
 machine used about 1.5 times the CPU of the other two browser runs; we did not identify
 them or repeat the run, so we cannot attribute the excess to that load. Training
 through the interface left the results unchanged, and its time cost, once large, is
-now small but not shown to be within 5% for every recipe.
+now small but not shown to be within 5% for every recipe. The recipes, protocols,
+per-run records and logs of these four series, and a script that recomputes every
+number in this section from them, are in `research/workflow_benchmark/results/`.
 
 <Usability study: number of participants, mean SUS
 and task completion rate, from `research/usability/`.> Each release is
