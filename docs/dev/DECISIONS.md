@@ -7787,3 +7787,20 @@ differently now. Each fix has a test that failed before it
 
 - *Keep re-exports in `routes.py`.* `routes._JOB_STATES.clear()` would still work, but `monkeypatch.setattr(routes, "_JOB_STATES", {})` would silently patch a name nobody reads.
 - *A class holding the state.* A cleaner interface, but a behaviour-bearing rewrite inside what should be a move; the module boundary already gives the single owner.
+
+## ADR-187 — The interval of a paired difference inverts the test beside it
+
+**Date:** 2026-11-11
+**Status:** Accepted
+**Amends:** ADR-061 (item 1: "a bootstrap CI of the difference")
+
+**Context:** `paired_comparison` reported a percentile bootstrap interval of the paired differences next to a paired t or Wilcoxon p-value. With few seeds the percentile bootstrap under-covers (it can only resample the values it has), so the two disagreed: in `research/seed_variance/results/summary.json` four cells have an interval excluding zero beside p between 0.06 and 0.09 (n = 10). The GUI report, `run.json` and the LaTeX comparison table showed both (#162).
+
+**Decision:** the interval is the dual of the test that produced the p-value, at 95% (the comparison's alpha = 0.05). `paired_t`: the Student-t interval of the mean difference, `mean ± t(0.975, n-1)·sd/√n`. `wilcoxon`: the Hodges-Lehmann interval, `[W(k), W(M+1-k)]` over the `M = n(n+1)/2` sorted Walsh averages, with `k` the largest integer such that `P(T+ ≤ k-1) ≤ 0.025` under the exact null distribution of the signed-rank statistic (built by convolution, no ties). `PairedComparison` gains `ci_method` (`"t"` or `"hodges_lehmann"`), `ci_estimate` (the mean, or the Hodges-Lehmann pseudo-median the interval brackets) and `ci_confidence` (the coverage actually attained: the exact distribution is discrete, so it is at least 95%). Below 6 pairs no Hodges-Lehmann interval reaches 95% (`2/2^n > 0.05`), so `ci_low`/`ci_high` are `null`, the same reason the test is flagged underpowered. The LaTeX caption names the method of each interval; a report written before this ADR has no `ci_method` and is labelled percentile bootstrap. `bootstrap_ci` stays for the replicate aggregates (ADR-061 item 2), and the seed-variance study keeps its pre-registered percentile interval.
+
+**Consequences:** the interval excludes zero exactly when p < 0.05 for the paired t, and for the Wilcoxon when there are no ties or zero differences (scipy's p is then exact). With ties or zero differences scipy's p uses the normal approximation while the interval keeps the exact critical value; the test suite accepts disagreement in at most 5% of tied samples (measured: 1.7% with differences rounded to one decimal). Numbers already shown for a comparison change when it is recomputed. `paired_comparison` and `comparison_matrix` no longer take a `seed`.
+
+**Alternatives considered:**
+
+- *BCa or bootstrap-t for every test.* Better coverage than the percentile bootstrap, but still not the dual of the test: the disagreement shrinks without disappearing, and it remains stochastic.
+- *Keep the bootstrap with an under-coverage warning below 20 pairs.* Leaves the contradiction on screen for every realistic seed count.

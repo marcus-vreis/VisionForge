@@ -153,10 +153,13 @@ without touching the package.
 - **Replicates** — the same config over N seeds, reported as
   `mean ± 95% CI` instead of one lucky number.
 - **K-fold cross-validation** — per-fold metrics plus mean ± std, with
-  fold-safe transforms.
+  fold-safe transforms. Each fold keeps the epoch that did best on its own fold,
+  and that same fold scores it: the mean is optimistic (there is no nested
+  split), and the LaTeX caption says so.
 - **Sweeps** — grid, random or Optuna over any config field.
 - **Paired significance tests** — compare configurations over the *same* seeds,
-  with bootstrap CIs, a paired t or Wilcoxon test, Cohen's `d_z` and
+  with a paired t or Wilcoxon test and the interval of the difference that
+  inverts it (t or Hodges-Lehmann), Cohen's `d_z` and
   Holm-Bonferroni correction. It refuses to compare runs whose seeds do not
   line up, and says when the seed count makes significance unreachable — so
   "not significant" is never mistaken for "no effect".
@@ -402,10 +405,13 @@ sem tocar no pacote.
 - **Réplicas** — o mesmo config em N sementes, reportado como
   `média ± IC 95%` em vez de um número de sorte.
 - **Validação cruzada K-fold** — métrica por fold mais média ± desvio, com
-  transformações que não vazam entre folds.
+  transformações que não vazam entre folds. Cada fold guarda a época que foi
+  melhor no próprio fold, e esse mesmo fold a avalia: a média é otimista (não há
+  divisão aninhada), e a legenda do LaTeX diz isso.
 - **Buscas** — grid, aleatória ou Optuna sobre qualquer campo do config.
 - **Testes de significância pareados** — compare configurações nas *mesmas*
-  sementes, com IC por bootstrap, teste t pareado ou Wilcoxon, `d_z` de Cohen e
+  sementes, com teste t pareado ou Wilcoxon e o IC da diferença que inverte
+  esse teste (t ou Hodges-Lehmann), `d_z` de Cohen e
   correção de Holm-Bonferroni. Ele se recusa a comparar execuções cujas
   sementes não batem, e avisa quando o número de sementes torna a significância
   inalcançável — para que "não significativo" nunca seja lido como "sem
