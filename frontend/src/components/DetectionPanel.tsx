@@ -29,7 +29,8 @@ import {
   type DetectionForm,
   type DetectionOptimizer,
 } from "../lib/detection-models";
-import { checkImportedConfig, exportConfigToYaml } from "../lib/yaml-config";
+import { exportConfigToYaml, importIntoForm } from "../lib/yaml-config";
+import { usePendingImport, type PendingImportProps } from "../hooks/usePendingImport";
 import type { ValidationError } from "../hooks/useExperiment";
 import {
   NumberField,
@@ -59,7 +60,7 @@ const SWEEP_PATH_HINTS = [
   "model.name",
 ];
 
-interface DetectionPanelProps {
+interface DetectionPanelProps extends PendingImportProps {
   formData: DetectionForm;
   setFormData: (updater: (prev: DetectionForm) => DetectionForm) => void;
   accent: string;
@@ -99,11 +100,35 @@ export function DetectionPanel({
   onReplicates,
   onStrategyChange,
   runSignal,
+  pendingImport,
+  onImportApplied,
 }: DetectionPanelProps) {
   const t = useT();
   const [picking, setPicking] = useState(false);
   const [pickNote, setPickNote] = useState<string | null>(null);
   const [strategy, setStrategy] = useState<PanelStrategy>("simple");
+  const chooseStrategy = (s: PanelStrategy) => {
+    setStrategy(s);
+    onStrategyChange?.(s);
+  };
+  // The YAML button's import; a run sent from History goes through it too (#200).
+  const importConfig = async (data: Record<string, unknown>): Promise<string | null> => {
+    // Schema unavailable → import tolerantly; the submit's 422 covers it.
+    const schema = await fetchTaskSchema("detection").catch(() => null);
+    const imported = importIntoForm(t, data, schema, detectionFormFromPayload);
+    if ("problem" in imported) return imported.problem;
+    setFormData(() => imported.form);
+    return null;
+  };
+  const { notice, replicatesPreset } = usePendingImport({
+    taskKey: "detection",
+    pendingImport,
+    onImportApplied,
+    ready: true,
+    importConfig,
+    refusesOnProblem: true,
+    onStrategy: chooseStrategy,
+  });
 
   const setModel = (patch: Partial<DetectionForm["model"]>) =>
     setFormData((p) => ({ ...p, model: { ...p.model, ...patch } }));
@@ -350,10 +375,7 @@ export function DetectionPanel({
         <>
           <StrategyCard
             strategy={strategy}
-            onStrategyChange={(s) => {
-              setStrategy(s);
-              onStrategyChange?.(s);
-            }}
+            onStrategyChange={chooseStrategy}
 
           />
           {strategy === "sweep" && onSweep && (
@@ -374,6 +396,7 @@ export function DetectionPanel({
               disabled={busy}
               onReplicates={onReplicates}
               runSignal={runSignal}
+              preset={replicatesPreset}
             />
           )}
 
@@ -958,19 +981,8 @@ export function DetectionPanel({
                 formData.name,
               )
             }
-            onImportConfig={async (data) => {
-              let payload = data;
-              try {
-                const schema = await fetchTaskSchema("detection");
-                const checked = checkImportedConfig(t, data, schema, schema.$defs ?? {});
-                if("problem" in checked) return checked.problem;
-                payload = checked.data;
-              } catch {
-                // schema unavailable → import tolerantly; o 422 do submit cobre.
-              }
-              setFormData(() => detectionFormFromPayload(payload));
-              return null;
-            }}
+            onImportConfig={importConfig}
+            importNotice={notice}
           />
         </>
       )

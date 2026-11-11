@@ -15,7 +15,8 @@ import {
   makeDefaultAnomalyForm,
   type AnomalyForm,
 } from "../lib/anomaly-models";
-import { checkImportedConfig, exportConfigToYaml } from "../lib/yaml-config";
+import { exportConfigToYaml, importIntoForm } from "../lib/yaml-config";
+import { usePendingImport, type PendingImportProps } from "../hooks/usePendingImport";
 import type { ValidationError } from "../hooks/useExperiment";
 import { NumberField, SelectField, Segmented, TextField, Toggle } from "./controls";
 import { AdvancedFields } from "./AdvancedFields";
@@ -32,7 +33,7 @@ import { countChanged, errorsUnder } from "../lib/steps";
 import type { ReplicatesPayload } from "../lib/replicates-form";
 import type { ComparePayload } from "../lib/compare-form";
 
-interface AnomalyPanelProps {
+interface AnomalyPanelProps extends PendingImportProps {
   formData: AnomalyForm;
   setFormData: (updater: (prev: AnomalyForm) => AnomalyForm) => void;
   accent: string;
@@ -78,6 +79,8 @@ export function AnomalyPanel({
   onCompare,
   onStrategyChange,
   runSignal,
+  pendingImport,
+  onImportApplied,
 }: AnomalyPanelProps) {
   const t = useT();
   const compareMetrics = [
@@ -87,6 +90,28 @@ export function AnomalyPanel({
   const [picking, setPicking] = useState(false);
   const [pickNote, setPickNote] = useState<string | null>(null);
   const [strategy, setStrategy] = useState<PanelStrategy>("simple");
+  const chooseStrategy = (s: PanelStrategy) => {
+    setStrategy(s);
+    onStrategyChange?.(s);
+  };
+  // The YAML button's import; a run sent from History goes through it too (#200).
+  const importConfig = async (data: Record<string, unknown>): Promise<string | null> => {
+    // Schema unavailable → import tolerantly; the submit's 422 covers it.
+    const schema = await fetchTaskSchema("anomaly").catch(() => null);
+    const imported = importIntoForm(t, data, schema, anomalyFormFromPayload);
+    if ("problem" in imported) return imported.problem;
+    setFormData(() => imported.form);
+    return null;
+  };
+  const { notice, replicatesPreset } = usePendingImport({
+    taskKey: "anomaly",
+    pendingImport,
+    onImportApplied,
+    ready: true,
+    importConfig,
+    refusesOnProblem: true,
+    onStrategy: chooseStrategy,
+  });
 
   const setModel = (patch: Partial<AnomalyForm["model"]>) =>
     setFormData((p) => ({ ...p, model: { ...p.model, ...patch } }));
@@ -242,10 +267,7 @@ export function AnomalyPanel({
     <div style={stack}>
       <StrategyCard
         strategy={strategy}
-        onStrategyChange={(s) => {
-          setStrategy(s);
-          onStrategyChange?.(s);
-        }}
+        onStrategyChange={chooseStrategy}
         strategies={strategies}
       />
       {strategy === "compare" && onCompare && (
@@ -266,6 +288,7 @@ export function AnomalyPanel({
           disabled={busy}
           onReplicates={onReplicates}
           runSignal={runSignal}
+          preset={replicatesPreset}
         />
       )}
     </div>
@@ -443,19 +466,8 @@ export function AnomalyPanel({
       onNameChange={(name) => setFormData((p) => ({ ...p, name }))}
       suggestion={suggestion}
       onExportYaml={() => exportConfigToYaml(buildAnomalyPayload(formData), formData.name)}
-      onImportConfig={async (data) => {
-        let payload = data;
-        try {
-          const schema = await fetchTaskSchema("anomaly");
-          const checked = checkImportedConfig(t, data, schema, schema.$defs ?? {});
-          if ("problem" in checked) return checked.problem;
-          payload = checked.data;
-        } catch {
-          // schema unavailable → import tolerantly; o 422 do submit cobre.
-        }
-        setFormData(() => anomalyFormFromPayload(payload));
-        return null;
-      }}
+      onImportConfig={importConfig}
+      importNotice={notice}
       sections={[
         {
           step: "data",

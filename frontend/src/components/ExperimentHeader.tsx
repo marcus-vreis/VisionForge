@@ -3,6 +3,7 @@ import { useT } from "../i18n/useT";
 import { Segmented, TextField } from "./controls";
 import { importConfigFromYaml } from "../lib/yaml-config";
 import type { Dict } from "../i18n/pt";
+import type { ImportNotice } from "../hooks/usePendingImport";
 
 /** Which experiment strategy the standalone-task panel is set to. The strategy
  *  cards (SweepCard / ReplicatesCard / CV / CompareModelsCard) render only for
@@ -83,6 +84,9 @@ interface ExperimentNameCardProps {
   extraAction?: React.ReactNode;
   onExportYaml: () => void;
   onImportConfig: ExperimentHeaderProps["onImportConfig"];
+  /** An import made elsewhere (a run loaded from History, #200), shown the way
+   *  this card shows its own file's. */
+  importNotice?: ImportNotice | null;
   /** Title of the card; the experiment kicker when absent. */
   title?: string;
 }
@@ -97,6 +101,7 @@ export function ExperimentNameCard({
   extraAction,
   onExportYaml,
   onImportConfig,
+  importNotice,
   title,
 }: ExperimentNameCardProps) {
   const t = useT();
@@ -104,6 +109,13 @@ export function ExperimentNameCard({
   const [importError, setImportError] = useState<string | null>(null);
   // The file name, not the sentence: the sentence follows the language.
   const [importedFile, setImportedFile] = useState<string | null>(null);
+  // A new notice replaces whatever the last import left, as a new file would.
+  const [seenNotice, setSeenNotice] = useState<number | null>(null);
+  if (importNotice && importNotice.id !== seenNotice) {
+    setSeenNotice(importNotice.id);
+    setImportError(importNotice.problem);
+    setImportedFile(importNotice.problem ? null : importNotice.source);
+  }
 
   const handleFile = async (file: File) => {
     setImportError(null);

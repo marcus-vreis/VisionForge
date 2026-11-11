@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { RunSummary } from "./RunSummary";
 import { useT } from "../i18n/useT";
+import type { ReplicatesPreset } from "../hooks/usePendingImport";
 import { NumberField, SelectField, Segmented, TextField } from "./controls";
 import {
   buildReplicatesPayload,
   parseSeeds,
+  seedFieldsFor,
   seedsProblem,
   type ReplicatesPayload,
   type ReplicatesSeedMode,
@@ -24,6 +26,8 @@ interface ReplicatesCardProps {
   /** Incremented by the main "Treinar" button so it runs the selected
    *  strategy instead of silently starting a plain single run. */
   runSignal?: number;
+  /** Seeds to open on: a run repeated from History (#200). */
+  preset?: ReplicatesPreset | null;
 }
 
 const card: React.CSSProperties = {
@@ -52,12 +56,22 @@ export function ReplicatesCard({
   disabled,
   onReplicates,
   runSignal,
+  preset,
 }: ReplicatesCardProps) {
   const t = useT();
   const [seedMode, setSeedMode] = useState<ReplicatesSeedMode>("auto");
   const [nReplicates, setNReplicates] = useState(5);
   const [rawSeeds, setRawSeeds] = useState("42, 43, 44, 45, 46");
   const [metric, setMetric] = useState(metrics[0]?.value ?? "");
+  // A new preset fills the seeds once; the researcher edits from there.
+  const [seenPreset, setSeenPreset] = useState<number | null>(null);
+  if (preset && preset.id !== seenPreset) {
+    const fields = seedFieldsFor(preset.seeds);
+    setSeenPreset(preset.id);
+    setSeedMode(fields.mode);
+    setNReplicates(fields.nReplicates);
+    setRawSeeds(fields.rawSeeds);
+  }
 
   const seeds = parseSeeds(rawSeeds);
   const problem = seedMode === "explicit" ? seedsProblem(t, seeds) : null;

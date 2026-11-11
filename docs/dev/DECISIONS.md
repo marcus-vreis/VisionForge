@@ -6547,6 +6547,20 @@ locked until the last step, and a suggested experiment name on that step.
 - *Treinar enabled from step one when the data is set.* The user asked for the
   review to be the gate, so a run is never started from a half-checked screen.
 
+**Update (2026-11-11, amendment, #200):** a run comes back to the form from
+History. The run and group details offer *Carregar no formulário* and *Repetir
+com 3 seeds*. App keeps one pending import per task, switches to the run's tab
+and the panel applies it through the handler its YAML button calls
+(`reviewImportedConfig` in classification, the schema check in the standalone
+panels, the plain load in a researcher's task), so the warnings and refusals
+are the YAML import's, shown on the Revisão name card. Loading lands on
+Revisão as a single run; repeating selects Réplicas with explicit seeds after
+the largest one the run or its replicate set used, and lands on Estratégia
+unless the import reported something. A sweep, K-fold or comparison group only
+loads: it has no one config to repeat. A researcher's task that no longer has
+a tab keeps both actions on screen, off, with the reason beside them. The
+decisions live in `lib/history-rerun.ts` so they are tested without a DOM.
+
 ## ADR-157 — Looping animations end while a job runs
 
 **Date:** 2026-11-01

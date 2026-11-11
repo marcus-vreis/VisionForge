@@ -1,10 +1,15 @@
 import { createContext, useContext, useMemo, useState } from "react";
 import { pickCheckpointFile } from "../api/client";
 import { humanizeFieldPath, type ValidationError } from "../hooks/useExperiment";
+import { usePendingImport, type PendingImportProps } from "../hooks/usePendingImport";
 import { useT } from "../i18n/useT";
 import type { JsonSchema } from "../types/schema";
 import type { TaskDefinition } from "../types/tasks";
-import { exportConfigToYaml, reviewImportedConfig } from "../lib/yaml-config";
+import {
+  exportConfigToYaml,
+  importReviewMessage,
+  reviewImportedConfig,
+} from "../lib/yaml-config";
 import {
   datasetLabel,
   suggestExperimentName,
@@ -52,7 +57,7 @@ import {
   WorkersField,
 } from "./controls";
 
-interface ParamPanelProps {
+interface ParamPanelProps extends PendingImportProps {
   task: TaskDefinition;
   schema: JsonSchema | null;
   formData: Record<string, unknown>;
@@ -1895,6 +1900,8 @@ export function ParamPanel({
   onStrategyChange,
   onReplicates,
   runSignal,
+  pendingImport,
+  onImportApplied,
 }: ParamPanelProps) {
   const t = useT();
   const isClassification = task.key === "classification";
@@ -1969,33 +1976,23 @@ export function ParamPanel({
     // the wrong type: the panels call string methods on these fields, and one
     // number in `data.base_dir` blanks the whole page. A flagged value is
     // left out (as if the YAML had not set it) and reported below.
-    const { data, issues, ignored, missing } = reviewImportedConfig(
-      t,
-      raw,
-      schema,
-      schema.$defs ?? {},
-    );
-    setFormData(data);
+    const review = reviewImportedConfig(t, raw, schema, schema.$defs ?? {});
+    setFormData(review.data);
     // The file's `block` is its strategy; Réplicas is not one it can name.
     if (replicatesOn) onStrategyChange?.("simple");
-    if (issues.length === 0) return null;
-    const summary = issues
-      .slice(0, 5)
-      .map((iss) => `· ${humanizeFieldPath(t, iss.field)} — ${iss.message}`)
-      .join("\n");
-    // The list says what was found; the lines after it say what that
-    // leaves to do, each only when it is so.
-    const lines = [
-      t.paramPanel.importWarnings(
-        issues.length,
-        summary,
-        Math.max(0, issues.length - 5),
-      ),
-    ];
-    if (ignored > 0) lines.push(t.paramPanel.importDropped(ignored));
-    if (missing > 0) lines.push(t.paramPanel.importMissing(missing));
-    return lines.join("\n\n");
+    return importReviewMessage(t, review);
   };
+  // A run sent from History goes through the same import (#200); this form
+  // loads what it can and warns, so a warning does not stop Réplicas.
+  const { notice, replicatesPreset } = usePendingImport({
+    taskKey: task.key,
+    pendingImport,
+    onImportApplied,
+    ready: isClassification && schema !== null,
+    importConfig: handleImportConfig,
+    refusesOnProblem: false,
+    onStrategy: (s) => onStrategyChange?.(s),
+  });
 
   if (!isClassification) {
     return (
@@ -2388,6 +2385,7 @@ export function ParamPanel({
               disabled={busy}
               onReplicates={onReplicates}
               runSignal={runSignal}
+              preset={replicatesPreset}
             />
           )}
 
@@ -2760,6 +2758,7 @@ export function ParamPanel({
           sweepKeys={sweepKeys}
           onExportYaml={handleExport}
           onImportConfig={handleImportConfig}
+          importNotice={notice}
           sections={reviewSections}
           learningRatePlan={learningRatePlanRequest(formData)}
           errors={validationErrors.map(
