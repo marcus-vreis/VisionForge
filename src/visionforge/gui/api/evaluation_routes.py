@@ -86,25 +86,11 @@ def build_evaluation_router(
         The test result is appended to run.json under the 'tests' array so each
         saved model accumulates its own per-dataset history.
         """
-        run_dir = find_run_dir(run_id, profile)
-        if run_dir is None:
-            raise HTTPException(404, tr(RUN_NOT_FOUND_KEY, run_id=run_id))
-
-        _reject_group_action(run_dir)
-        _reject_custom_task_action(run_dir, "test")
-
+        run_dir = _checkpoint_run_dir(find_run_dir, run_id, profile, "test")
         # Run the actual evaluation in a worker thread (PyTorch + disk I/O).
-        try:
-            result = await asyncio.to_thread(_execute_run_test, run_dir, req)
-        except FileNotFoundError as exc:
-            raise HTTPException(400, str(exc)) from exc
-        except ValueError as exc:
-            raise HTTPException(400, str(exc)) from exc
-        except Exception as exc:  # noqa: BLE001
-            logger.exception("Test on run {} failed", run_id)
-            raise HTTPException(500, f"{type(exc).__name__}: {exc}") from exc
-
-        return result
+        return await _run_off_loop(
+            _execute_run_test, run_dir, req, run_id, "Test on run {} failed"
+        )
 
     @router.post(
         "/runs/{run_id}/gradcam",
@@ -122,18 +108,10 @@ def build_evaluation_router(
         Classification-only (detection/regression/segmentation/anomaly have no
         softmax-classifier CAM path). Overlays are written to ``<run_dir>/gradcam/``.
         """
-        run_dir = find_run_dir(run_id, profile)
-        if run_dir is None:
-            raise HTTPException(404, tr(RUN_NOT_FOUND_KEY, run_id=run_id))
-        _reject_group_action(run_dir)
-        _reject_custom_task_action(run_dir, "gradcam")
-        try:
-            return await asyncio.to_thread(_execute_run_gradcam, run_dir, req)
-        except (FileNotFoundError, ValueError) as exc:
-            raise HTTPException(400, str(exc)) from exc
-        except Exception as exc:  # noqa: BLE001
-            logger.exception("Grad-CAM on run {} failed", run_id)
-            raise HTTPException(500, f"{type(exc).__name__}: {exc}") from exc
+        run_dir = _checkpoint_run_dir(find_run_dir, run_id, profile, "gradcam")
+        return await _run_off_loop(
+            _execute_run_gradcam, run_dir, req, run_id, "Grad-CAM on run {} failed"
+        )
 
     @router.post(
         "/runs/{run_id}/batch_predict",
@@ -152,23 +130,14 @@ def build_evaluation_router(
         timestamped file in ``<run_dir>/predictions/`` so consecutive batch runs
         don't overwrite each other.
         """
-        run_dir = find_run_dir(run_id, profile)
-        if run_dir is None:
-            raise HTTPException(404, tr(RUN_NOT_FOUND_KEY, run_id=run_id))
-
-        _reject_group_action(run_dir)
-        _reject_custom_task_action(run_dir, "batch_predict")
-        try:
-            result = await asyncio.to_thread(_execute_batch_predict, run_dir, req)
-        except FileNotFoundError as exc:
-            raise HTTPException(400, str(exc)) from exc
-        except ValueError as exc:
-            raise HTTPException(400, str(exc)) from exc
-        except Exception as exc:  # noqa: BLE001
-            logger.exception("Batch prediction on run {} failed", run_id)
-            raise HTTPException(500, f"{type(exc).__name__}: {exc}") from exc
-
-        return result
+        run_dir = _checkpoint_run_dir(find_run_dir, run_id, profile, "batch_predict")
+        return await _run_off_loop(
+            _execute_batch_predict,
+            run_dir,
+            req,
+            run_id,
+            "Batch prediction on run {} failed",
+        )
 
     @router.post(
         "/runs/{run_id}/export_onnx",
@@ -186,25 +155,57 @@ def build_evaluation_router(
         Reuses the run's stored ``config.data.transforms.image_size`` and
         ``config.model`` to build the dummy input and the architecture for export.
         """
-        run_dir = find_run_dir(run_id, profile)
-        if run_dir is None:
-            raise HTTPException(404, tr(RUN_NOT_FOUND_KEY, run_id=run_id))
-
-        _reject_group_action(run_dir)
-        _reject_custom_task_action(run_dir, "export_onnx")
-        try:
-            result = await asyncio.to_thread(_execute_onnx_export, run_dir, req)
-        except FileNotFoundError as exc:
-            raise HTTPException(400, str(exc)) from exc
-        except ValueError as exc:
-            raise HTTPException(400, str(exc)) from exc
-        except Exception as exc:  # noqa: BLE001
-            logger.exception("ONNX export on run {} failed", run_id)
-            raise HTTPException(500, f"{type(exc).__name__}: {exc}") from exc
-
-        return result
+        run_dir = _checkpoint_run_dir(find_run_dir, run_id, profile, "export_onnx")
+        return await _run_off_loop(
+            _execute_onnx_export, run_dir, req, run_id, "ONNX export on run {} failed"
+        )
 
     return router
+
+
+def _checkpoint_run_dir(
+    find_run_dir: Callable[[str, Profile], Path | None],
+    run_id: str,
+    profile: Profile,
+    action: str,
+) -> Path:
+    """Find the run a checkpoint action targets, refusing what has none.
+
+    Raises:
+        HTTPException: 404 for an unknown run; 400 for a replicate group or a
+            researcher-defined task's run.
+    """
+    run_dir = find_run_dir(run_id, profile)
+    if run_dir is None:
+        raise HTTPException(404, tr(RUN_NOT_FOUND_KEY, run_id=run_id))
+    _reject_group_action(run_dir)
+    _reject_custom_task_action(run_dir, action)
+    return run_dir
+
+
+async def _run_off_loop[Req, Resp](
+    execute: Callable[[Path, Req], Resp],
+    run_dir: Path,
+    req: Req,
+    run_id: str,
+    failure_log: str,
+) -> Resp:
+    """Run an executor in a worker thread and map its failures to HTTP errors.
+
+    ``execute`` is looked up by the caller per request, so tests that patch the
+    module's ``_execute_*`` functions still reach it.
+
+    Raises:
+        HTTPException: 400 for a missing file or a bad value; 500, logged with
+            ``failure_log``, for anything else.
+    """
+    try:
+        return await asyncio.to_thread(execute, run_dir, req)
+    except (FileNotFoundError, ValueError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        logger.exception(failure_log, run_id)
+        raise HTTPException(500, f"{type(exc).__name__}: {exc}") from exc
 
 
 def _reject_group_action(run_dir: Path) -> None:
@@ -429,8 +430,6 @@ def _evaluate_standalone_run(
         ValueError: the chosen path does not exist, or an anomaly run has no
             normal training split to calibrate its threshold on.
     """
-    import torch
-
     # What the researcher just chose is validated first: a complaint about the
     # run's checkpoint is confusing when the actual problem is the path they
     # typed a second ago.
@@ -455,102 +454,11 @@ def _evaluate_standalone_run(
     config_dict["data"] = data_dict
 
     if task == "regression":
-        from visionforge.core.regression_data import RegressionDataModule
-        from visionforge.core.regression_trainer import RegressionTrainer
-        from visionforge.models.regression_factory import RegressionModelFactory
-        from visionforge.utils.regression_config import RegressionConfig
-
-        reg_config = RegressionConfig.model_validate(config_dict)
-        reg_model = RegressionModelFactory.create(reg_config.model)
-        reg_model.load_state_dict(
-            torch.load(checkpoint, map_location="cpu", weights_only=True)
-        )
-        # The chosen manifest is the only split: a held-out set rarely has
-        # train.csv / val.csv beside it.
-        reg_loader = RegressionDataModule(
-            reg_config, evaluation_only=True
-        ).test_loader()
-        if reg_loader is None:
-            raise ValueError(tr("testrun.no_rows", path=chosen))
-        mse, rmse, mae, r2 = RegressionTrainer(reg_config).evaluate(
-            reg_model, reg_loader
-        )
-        metrics: dict[str, Any] = {"mse": mse, "rmse": rmse, "mae": mae, "r2": r2}
-
+        metrics = _evaluate_regression_checkpoint(config_dict, checkpoint, chosen)
     elif task == "segmentation":
-        from visionforge.core.segmentation_data import SegmentationDataModule
-        from visionforge.core.segmentation_trainer import SegmentationTrainer
-        from visionforge.models.segmentation_factory import SegmentationModelFactory
-        from visionforge.utils.segmentation_config import SegmentationConfig
-
-        seg_config = SegmentationConfig.model_validate(config_dict)
-        # Without this the pairing step walks into the missing folder and the
-        # operating system's own message (in its own language) reaches the screen.
-        test_split = seg_config.data.base_dir / seg_config.data.test_dir
-        masks_dir = test_split / seg_config.data.masks_subdir
-        if (test_split / seg_config.data.images_subdir).is_dir() and (
-            not masks_dir.is_dir()
-        ):
-            raise ValueError(
-                tr(
-                    "testrun.masks_missing",
-                    split=test_split,
-                    images=seg_config.data.images_subdir,
-                    masks=seg_config.data.masks_subdir,
-                    masks_path=masks_dir,
-                )
-            )
-        seg_model = SegmentationModelFactory.create(seg_config.model)
-        seg_model.load_state_dict(
-            torch.load(checkpoint, map_location="cpu", weights_only=True)
-        )
-        seg_loader = SegmentationDataModule(
-            seg_config, evaluation_only=True
-        ).test_loader()
-        if seg_loader is None:
-            raise ValueError(tr("testrun.no_pairs", path=chosen))
-        miou, dice, pixel_acc = SegmentationTrainer(seg_config).evaluate(
-            seg_model, seg_loader
-        )
-        metrics = {"miou": miou, "dice": dice, "pixel_acc": pixel_acc}
-
+        metrics = _evaluate_segmentation_checkpoint(config_dict, checkpoint, chosen)
     else:  # anomaly
-        from visionforge.core.anomaly_data import AnomalyDataModule
-        from visionforge.core.anomaly_trainer import AnomalyTrainer
-        from visionforge.models.anomaly_factory import AnomalyModelFactory
-        from visionforge.utils.anomaly_config import AnomalyConfig
-
-        anom_config = AnomalyConfig.model_validate(config_dict)
-        # Checked before the checkpoint is loaded: the data module's own message
-        # ("no normal training images") does not tell someone who just picked a
-        # test folder why a training folder is being asked for.
-        train_normal = (
-            anom_config.data.base_dir
-            / anom_config.data.train_dir
-            / anom_config.data.normal_dir
-        )
-        if not train_normal.is_dir():
-            raise ValueError(
-                tr(
-                    "testrun.anomaly_train_missing",
-                    path=train_normal,
-                    train_dir=anom_config.data.train_dir,
-                    normal_dir=anom_config.data.normal_dir,
-                )
-            )
-        anom_model = AnomalyModelFactory.create(anom_config.model)
-        anom_model.load_state_dict(
-            torch.load(checkpoint, map_location="cpu", weights_only=True)
-        )
-        modules = AnomalyDataModule(anom_config)
-        # The threshold comes from the *normal training* distribution, so that
-        # split is still needed even though only the chosen folder is being
-        # scored (ADR-076) — read without augmentation, which is the
-        # distribution the model is applied to (ADR-098).
-        auroc, threshold, image_f1 = AnomalyTrainer(anom_config).evaluate(
-            anom_model, modules.calibration_loader(), modules.test_loader()
-        )
-        metrics = {"auroc": auroc, "threshold": threshold, "image_f1": image_f1}
+        metrics = _evaluate_anomaly_checkpoint(config_dict, checkpoint)
 
     timestamp = datetime.now()
     test_id = f"test_{timestamp.strftime('%Y%m%d_%H%M%S_%f')}"
@@ -576,6 +484,129 @@ def _evaluate_standalone_run(
         metrics=metrics,
         artifacts={},
     )
+
+
+def _evaluate_regression_checkpoint(
+    config_dict: dict[str, Any], checkpoint: str, chosen: Path
+) -> dict[str, Any]:
+    """Score a regression checkpoint on the chosen manifest; return its metrics.
+
+    Raises:
+        ValueError: the manifest yields no rows.
+    """
+    import torch
+
+    from visionforge.core.regression_data import RegressionDataModule
+    from visionforge.core.regression_trainer import RegressionTrainer
+    from visionforge.models.regression_factory import RegressionModelFactory
+    from visionforge.utils.regression_config import RegressionConfig
+
+    reg_config = RegressionConfig.model_validate(config_dict)
+    reg_model = RegressionModelFactory.create(reg_config.model)
+    reg_model.load_state_dict(
+        torch.load(checkpoint, map_location="cpu", weights_only=True)
+    )
+    # The chosen manifest is the only split: a held-out set rarely has
+    # train.csv / val.csv beside it.
+    reg_loader = RegressionDataModule(reg_config, evaluation_only=True).test_loader()
+    if reg_loader is None:
+        raise ValueError(tr("testrun.no_rows", path=chosen))
+    mse, rmse, mae, r2 = RegressionTrainer(reg_config).evaluate(reg_model, reg_loader)
+    return {"mse": mse, "rmse": rmse, "mae": mae, "r2": r2}
+
+
+def _evaluate_segmentation_checkpoint(
+    config_dict: dict[str, Any], checkpoint: str, chosen: Path
+) -> dict[str, Any]:
+    """Score a segmentation checkpoint on the chosen folder; return its metrics.
+
+    Raises:
+        ValueError: the split has images but no masks folder, or no pairs.
+    """
+    import torch
+
+    from visionforge.core.segmentation_data import SegmentationDataModule
+    from visionforge.core.segmentation_trainer import SegmentationTrainer
+    from visionforge.models.segmentation_factory import SegmentationModelFactory
+    from visionforge.utils.segmentation_config import SegmentationConfig
+
+    seg_config = SegmentationConfig.model_validate(config_dict)
+    # Without this the pairing step walks into the missing folder and the
+    # operating system's own message (in its own language) reaches the screen.
+    test_split = seg_config.data.base_dir / seg_config.data.test_dir
+    masks_dir = test_split / seg_config.data.masks_subdir
+    if (test_split / seg_config.data.images_subdir).is_dir() and (
+        not masks_dir.is_dir()
+    ):
+        raise ValueError(
+            tr(
+                "testrun.masks_missing",
+                split=test_split,
+                images=seg_config.data.images_subdir,
+                masks=seg_config.data.masks_subdir,
+                masks_path=masks_dir,
+            )
+        )
+    seg_model = SegmentationModelFactory.create(seg_config.model)
+    seg_model.load_state_dict(
+        torch.load(checkpoint, map_location="cpu", weights_only=True)
+    )
+    seg_loader = SegmentationDataModule(seg_config, evaluation_only=True).test_loader()
+    if seg_loader is None:
+        raise ValueError(tr("testrun.no_pairs", path=chosen))
+    miou, dice, pixel_acc = SegmentationTrainer(seg_config).evaluate(
+        seg_model, seg_loader
+    )
+    return {"miou": miou, "dice": dice, "pixel_acc": pixel_acc}
+
+
+def _evaluate_anomaly_checkpoint(
+    config_dict: dict[str, Any], checkpoint: str
+) -> dict[str, Any]:
+    """Score an anomaly checkpoint on the chosen folder; return its metrics.
+
+    Raises:
+        ValueError: the run's normal training split is missing, so there is
+            nothing to calibrate the threshold on.
+    """
+    import torch
+
+    from visionforge.core.anomaly_data import AnomalyDataModule
+    from visionforge.core.anomaly_trainer import AnomalyTrainer
+    from visionforge.models.anomaly_factory import AnomalyModelFactory
+    from visionforge.utils.anomaly_config import AnomalyConfig
+
+    anom_config = AnomalyConfig.model_validate(config_dict)
+    # Checked before the checkpoint is loaded: the data module's own message
+    # ("no normal training images") does not tell someone who just picked a
+    # test folder why a training folder is being asked for.
+    train_normal = (
+        anom_config.data.base_dir
+        / anom_config.data.train_dir
+        / anom_config.data.normal_dir
+    )
+    if not train_normal.is_dir():
+        raise ValueError(
+            tr(
+                "testrun.anomaly_train_missing",
+                path=train_normal,
+                train_dir=anom_config.data.train_dir,
+                normal_dir=anom_config.data.normal_dir,
+            )
+        )
+    anom_model = AnomalyModelFactory.create(anom_config.model)
+    anom_model.load_state_dict(
+        torch.load(checkpoint, map_location="cpu", weights_only=True)
+    )
+    modules = AnomalyDataModule(anom_config)
+    # The threshold comes from the *normal training* distribution, so that
+    # split is still needed even though only the chosen folder is being
+    # scored (ADR-076) — read without augmentation, which is the
+    # distribution the model is applied to (ADR-098).
+    auroc, threshold, image_f1 = AnomalyTrainer(anom_config).evaluate(
+        anom_model, modules.calibration_loader(), modules.test_loader()
+    )
+    return {"auroc": auroc, "threshold": threshold, "image_f1": image_f1}
 
 
 def _class_root_or_raise(folder: Path) -> Path:
