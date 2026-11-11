@@ -148,6 +148,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 - `visionforge run` aceita um YAML com `strategy:` + `config:` e roda réplicas, comparação pareada, sweep e K-fold como a GUI, gravando o relatório com a tabela `.tex` e a entrada no Histórico; sem `strategy` nada muda (ADR-184) (#199).
 - A aba **Classificação** ganha **Réplicas** na estratégia: a mesma config com N seeds pela rota de réplicas que já existia, média ± IC 95% com acurácia como métrica destaque e `block` mantido em `classification`. Transfer learning fica travado enquanto Réplicas está escolhida, e o botão do Colab fica desligado com o motivo (ADR-056) (#190).
 - No **Histórico**, o detalhe de um run e o de um grupo ganham **Carregar no formulário** e **Repetir com 3 seeds**: a config do `run.json` vai para a aba da tarefa pelo mesmo import do botão de YAML, com os mesmos avisos, e Repetir abre **Réplicas** com três seeds que o run não usou. Tarefa própria removida deixa as duas ações desligadas com o motivo escrito ao lado (ADR-156) (#200).
+- Modo offline garantido: `--offline` em `visionforge gui` e `visionforge run`, ou `VISIONFORGE_OFFLINE=1`, liga `HF_HUB_OFFLINE`, `YOLO_OFFLINE` e `VISIONFORGE_NO_UPDATE_CHECK` e recusa no processo toda conexão e consulta de nome para fora do loopback; um teste treina 1 época de classificação em CPU com a trava ligada (ADR-189) (#226)
 
 ### Fixed
 
@@ -193,6 +194,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 - O `README.md` passa a usar URLs absolutas do GitHub em todos os links (para não quebrar na página do PyPI), mostra o fluxo de `visionforge run` a partir de um YAML exportado ou ajustado, atualiza os limites de fila paralela com o Colab e de download pelo Roboflow, e inclui `configs/baseline.yaml` em `tests/test_example_configs.py`, com `tests/test_readme_pypi.py` (#184).
 - O `README.md` (em inglês e português espelhados, com `## Como citar` e o parágrafo para contribuidores em PT) e o `docs/INSTALL.md` passam a descrever o treino no Colab, o exportador para o Hugging Face Hub, as abas Resultados e Código, o explorador e as operações de datasets, os subcomandos `new-task`, `audit-data`, `bundle` e `verify-bundle`, e a execução via Docker, marcando o que está só em `development` como próxima release, com `tests/test_readme_parity.py` (#196).
 - Novo `docs/ROADMAP.md` (sem prazos, com o que está em `development`, próximos passos e critérios para a 1.0) linkado no `README.md`, e cabeçalho de `docs/archive/ROADMAP.md` atualizado para apontar para `ROADMAP.md` e `CHANGELOG.md` em vez de `TASKS.md` e `RELEASE_NOTES.md` (#218).
+- O bundle público (rascunho do Zenodo) deixa de levar o nome da conta: os checkpoints `weights/*.pt` ficam fora, porque o ultralytics grava neles os `train_args` com caminhos absolutos, e `config.json`/`config.yaml` saem com cada caminho local reduzido ao nome final; o manifesto anota o que ficou fora ou foi reescrito (ADR-188) (#164)
 
 ## [0.21.0] — 2026-11-05
 

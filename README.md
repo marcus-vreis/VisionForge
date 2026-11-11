@@ -279,6 +279,10 @@ directory or `--force` to overwrite):
 visionforge new-task my_task
 ```
 
+To keep everything on this computer, start with `visionforge gui --offline`
+(or set `VISIONFORGE_OFFLINE=1`): any connection to another host fails, weight
+downloads and the update check included.
+
 ## Checking the install
 
 ```bash
@@ -621,6 +625,10 @@ pacote ou `--force` para sobrescrever):
 ```bash
 visionforge new-task minha_tarefa
 ```
+
+Para manter tudo neste computador, use `visionforge gui --offline` (ou
+`VISIONFORGE_OFFLINE=1`): qualquer conexão com outro host falha, inclusive o
+download de pesos e a busca por atualização.
 
 ## Conferindo a instalação
 
