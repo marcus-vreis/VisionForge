@@ -5108,7 +5108,6 @@ dependencies = [
     { name = "seaborn" },
     { name = "tensorboard" },
     { name = "timm" },
-    { name = "ultralytics" },
     { name = "uvicorn" },
 ]
 
@@ -5136,6 +5135,9 @@ cu126 = [
 cu128 = [
     { name = "torch" },
     { name = "torchvision" },
+]
+detection = [
+    { name = "ultralytics" },
 ]
 dev = [
     { name = "bump-my-version" },
@@ -5233,7 +5235,7 @@ requires-dist = [
     { name = "torchvision", marker = "extra == 'cu118' and extra == 'cu126'", specifier = ">=0.18", index = "https://download.pytorch.org/whl/cu118" },
     { name = "torchvision", marker = "extra == 'cu118' and extra == 'cu128'", specifier = ">=0.18", index = "https://download.pytorch.org/whl/cu118" },
     { name = "types-pyyaml", marker = "extra == 'dev'", specifier = ">=6.0" },
-    { name = "ultralytics", specifier = ">=8.3" },
+    { name = "ultralytics", marker = "extra == 'detection'", specifier = ">=8.3" },
     { name = "uvicorn", specifier = ">=0.30" },
     { name = "wandb", marker = "extra == 'wandb'", specifier = "==0.31.0" },
 ]
