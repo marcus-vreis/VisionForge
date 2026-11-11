@@ -14,6 +14,8 @@ from importlib.metadata import distribution
 from pathlib import Path
 from typing import TypedDict
 
+from visionforge.utils.cuda import mps_available
+
 # The PyPI distribution name, which is NOT the import name: plain `visionforge`
 # on PyPI belongs to an unrelated project.
 _DIST_NAME = "visionforge-studio"
@@ -325,7 +327,12 @@ def _report_hidden_gpu() -> None:
 
 
 def _report_torch_issues(
-    torch_info: TorchProbe, driver_cuda: str | None, steps: str, issues: list[str]
+    torch_info: TorchProbe,
+    driver_cuda: str | None,
+    steps: str,
+    issues: list[str],
+    *,
+    mps: bool = False,
 ) -> None:
     """Print torch diagnostics and collect missing or mismatched installs."""
     if not torch_info["importable"]:
@@ -341,9 +348,11 @@ def _report_torch_issues(
         issues.append("torch-missing")
     else:
         cuda_ok = torch_info["cuda_available"]
-        torch_marker = "OK" if cuda_ok else "WARN"
+        torch_marker = "OK" if cuda_ok or mps else "WARN"
+        mps_note = "  mps_available=True" if mps else ""
         print(
-            f"[{torch_marker}] torch {torch_info['version']}  cuda_available={cuda_ok}"
+            f"[{torch_marker}] torch {torch_info['version']}  "
+            f"cuda_available={cuda_ok}{mps_note}"
         )
 
         # Flag the silent-failure case: GPU driver present but CPU-only torch wheel.
@@ -430,6 +439,9 @@ def run_doctor(
     torch_info = probe_torch()
     driver_cuda = detect_driver_cuda()
     torch_says_cuda = torch_info["importable"] and torch_info["cuda_available"]
+    # Apple Silicon: PyPI's macOS torch drives the GPU through Metal, with no
+    # CUDA and no nvidia-smi, so nothing above would ever say "GPU" (ADR-192).
+    torch_says_mps = torch_info["importable"] and mps_available()
 
     if driver_cuda:
         print(f"[OK] CUDA driver version: {driver_cuda}")
@@ -438,6 +450,8 @@ def run_doctor(
             "[OK] GPU usable via torch "
             f"(CUDA build {torch_info['cuda_build']}); nvidia-smi not on PATH"
         )
+    elif torch_says_mps:
+        print("[OK] Apple GPU usable via torch (MPS, experimental)")
     else:
         print("[INFO] No CUDA-capable GPU detected (nvidia-smi not found or failed)")
     _report_hidden_gpu()
@@ -449,7 +463,7 @@ def run_doctor(
     # settles it is the build — as new as the one this driver calls for, keep it.
     # This matters more since ADR-107, because the fix now *uninstalls* torch;
     # printing that to someone whose setup is already right would be sabotage.
-    already_working = _keep_installed_torch(
+    already_working = torch_says_mps or _keep_installed_torch(
         torch_info, driver_cuda, tag, torch_says_cuda
     )
     commands, _index_url = build_install_command(tag)
@@ -457,7 +471,12 @@ def run_doctor(
     print()
     if already_working:
         print("  Recommended wheel: keep the current install")
-        print(f"  Reason           : torch {torch_info['version']} already runs on GPU")
+        where = (
+            "the Apple GPU (MPS)" if torch_says_mps and not torch_says_cuda else "GPU"
+        )
+        print(
+            f"  Reason           : torch {torch_info['version']} already runs on {where}"
+        )
     else:
         print(f"  Recommended wheel: {tag}")
         print("  Install commands :")
@@ -465,7 +484,7 @@ def run_doctor(
             print(f"    {line}")
     print()
 
-    _report_torch_issues(torch_info, driver_cuda, steps, issues)
+    _report_torch_issues(torch_info, driver_cuda, steps, issues, mps=torch_says_mps)
 
     # --- Workspace ---
     # Custom models and tasks are picked up from folders *relative to the
@@ -485,7 +504,11 @@ def run_doctor(
         exit_code = 0
 
     # --- Optional install ---
-    if fix:
+    # Never offer to swap a torch that already drives the GPU: on a Mac the
+    # "recommended" wheel would be the CPU one.
+    if fix and already_working:
+        print("\nNothing to fix: torch already runs on the GPU.")
+    elif fix:
         prompt = (
             f"\nReplace torch with the {tag} build now? This runs:\n"
             + "\n".join(f"  {line}" for line in commands)

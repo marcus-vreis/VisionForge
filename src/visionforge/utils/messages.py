@@ -230,6 +230,18 @@ CATALOG: dict[str, dict[Lang, str]] = {
             "switching the optimizer to SGD."
         ),
     },
+    "health.mps_not_deterministic": {
+        "pt": (
+            "Esta execução rodou na GPU da Apple (MPS), suporte experimental. "
+            "'deterministic' só vale para o cuDNN: no MPS a mesma config e a "
+            "mesma seed podem não reproduzir os mesmos números."
+        ),
+        "en": (
+            "This run used Apple's GPU (MPS), which is experimental. "
+            "'deterministic' only applies to cuDNN: on MPS the same config and "
+            "seed may not reproduce the same numbers."
+        ),
+    },
     "health.stagnant_loss": {
         "pt": (
             "A loss de treino praticamente não caiu ({first:.4f} → {last:.4f} em "

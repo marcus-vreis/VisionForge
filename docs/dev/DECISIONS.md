@@ -7806,3 +7806,22 @@ differently now. Each fix has a test that failed before it
 
 - *Translate every Pydantic error type.* Around a hundred, most of which no form in the page can produce; an untranslated `msg` is still correct English and its `type` is stable.
 - *Let the page word the 422 from `type` and `ctx`.* Every client of the API would need its own table; the catalog already exists on the server.
+
+## ADR-192 — Apple's GPU (MPS) is an experimental device
+
+**Date:** 2026-11-11
+**Status:** Accepted (experimental, not announced)
+**Relates to:** ADR-098 (determinism cost), ADR-099 (training-health warnings), ADR-107 (doctor never swaps a working torch)
+
+**Context:** on a Mac with Apple Silicon, PyPI's torch drives the GPU through Metal (MPS), but `DeviceConfig.kind` only knew `cpu`, `cuda` and `multi_cuda`: every Mac run trained on the CPU, and `visionforge doctor` recommended the CPU build of torch. Nobody on the project has a Mac to validate a run end to end.
+
+**Decision:** `DeviceConfig.kind` gains `"mps"`, probed by `utils.cuda.mps_available()` (never raises; only a real `True` counts, so a mocked torch never reads as a Mac). `resolve_device` honours it (`mps (Apple GPU)`, or `cpu (fallback: MPS unavailable)`), and `cuda`/`multi_cuda` on a machine without CUDA now fall back to MPS before the CPU, with the label `mps (fallback: CUDA unavailable)`. Detection uses the same order through one `DetectionTrainer._effective_kind()` for both backends; this also fixes `kind: cuda` on a CPU-only machine reaching Ultralytics as GPU `0`. `deterministic: true` on MPS adds the `mps_not_deterministic` warning to `run.json`, because the switch configures cuDNN and MPS kernels have no deterministic mode. `/api/device/info` reports `mps_available` (a flag, not an entry in `gpus`: no index or memory to show), the device selector offers "Apple GPU (MPS)" marked experimental, and the doctor counts MPS as a working GPU; its `--fix` no longer offers to replace a torch that already runs on the GPU (CUDA or MPS).
+
+Not done, on purpose: AMP stays CUDA-only; `pin_memory` stays as configured (MPS ignores it with a warning); `PYTORCH_ENABLE_MPS_FALLBACK` is not set, so an operator without an MPS kernel raises instead of running silently on the CPU; no MPS cache release between sweep runs. Regression, segmentation and anomaly runs pick the device through `resolve_device` but do not carry the determinism warning yet.
+
+**Consequences:** verified only with mocks (`torch.backends.mps.is_available`, `mps_available`, `torch.cuda.is_available`) on Windows; CI has no Mac. The feature is experimental and stays out of the README and the site until a run on a real Apple Silicon Mac is recorded here. A config that asked for `cuda` on a Mac now trains on the GPU instead of the CPU, and its numbers may differ between runs.
+
+**Alternatives considered:**
+
+- *Map `cuda` to `mps` silently.* The label would claim a device the run did not get; the `fallback` wording keeps `run.json` honest.
+- *Wait for a tester before merging.* The code paths are testable without a Mac, and keeping the feature unannounced costs nothing to people without one.

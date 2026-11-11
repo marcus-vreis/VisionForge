@@ -148,7 +148,7 @@ class TestLogCudaStatus:
 
 class TestCudaExports:
     def test_all_exports(self) -> None:
-        """__all__ must list exactly four public names."""
+        """__all__ must list exactly five public names."""
         from visionforge.utils import cuda
 
         assert set(cuda.__all__) == {
@@ -156,6 +156,7 @@ class TestCudaExports:
             "GPUDevice",
             "check_cuda",
             "log_cuda_status",
+            "mps_available",
         }
 
     def test_check_cuda_is_callable(self) -> None:

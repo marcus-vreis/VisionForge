@@ -40,8 +40,14 @@ from visionforge.core.resume import (
 from visionforge.core.resume_provenance import validate_resume_dataset
 from visionforge.core.tracking import TensorBoardLogger
 from visionforge.core.trainer import _seed_everything
-from visionforge.core.training_health import no_detections, summarize
+from visionforge.core.training_health import (
+    HealthWarning,
+    mps_not_deterministic,
+    no_detections,
+    summarize,
+)
 from visionforge.models.detection_factory import build_torchvision_detector
+from visionforge.utils.cuda import mps_available
 from visionforge.utils.detection_config import DetectionConfig
 from visionforge.utils.messages import tr
 from visionforge.utils.third_party_privacy import apply_opt_outs
@@ -836,7 +842,10 @@ class DetectionTrainer:
         self._render_torchvision_plot(run_dir, history, train_losses)
 
         tv_health = summarize(
-            [no_detections(best_map if best_map >= 0 else None, len(history))]
+            [
+                no_detections(best_map if best_map >= 0 else None, len(history)),
+                self._mps_warning(),
+            ]
         )
         for warning in tv_health:
             logger.warning("{}", warning["message"])
@@ -976,10 +985,32 @@ class DetectionTrainer:
             )
         return resolved
 
+    def _effective_kind(self) -> str:
+        """The device kind that will actually run, after the fallbacks.
+
+        The order of ``resolve_device`` (ADR-192): what was asked for if it
+        exists, else the Apple GPU, else the CPU.
+        """
+        kind = self._config.device.kind
+        if kind == "cpu":
+            return "cpu"
+        if kind == "mps":
+            return "mps" if mps_available() else "cpu"
+        if torch.cuda.is_available():
+            return kind
+        return "mps" if mps_available() else "cpu"
+
+    def _mps_warning(self) -> HealthWarning | None:
+        """The run.json warning that ``deterministic`` does not hold on MPS."""
+        return mps_not_deterministic(
+            self._effective_kind(), self._config.training.deterministic
+        )
+
     def _resolve_torch_device(self) -> torch.device:
+        kind = self._effective_kind()
+        if kind in ("cpu", "mps"):
+            return torch.device(kind)
         d = self._config.device
-        if d.kind == "cpu" or not torch.cuda.is_available():
-            return torch.device("cpu")
         idx = d.gpu_ids[0] if d.gpu_ids else 0
         return torch.device(f"cuda:{idx}")
 
@@ -994,7 +1025,7 @@ class DetectionTrainer:
         scored = [h for h in history if h.map50_95 is not None]
         best = max(scored, key=lambda h: h.map50_95 or 0.0, default=None)
         map50 = best.map50 if best else None
-        health = summarize([no_detections(map50, len(history))])
+        health = summarize([no_detections(map50, len(history)), self._mps_warning()])
         for warning in health:
             logger.warning("{}", warning["message"])
         return DetectionTrainResult(
@@ -1094,18 +1125,20 @@ class DetectionTrainer:
         return f"{m.name}{'.pt' if m.pretrained else '.yaml'}"
 
     def _device_arg(self) -> Any:
+        kind = self._effective_kind()
+        if kind in ("cpu", "mps"):
+            return kind
         d = self._config.device
-        if d.kind == "cpu":
-            return "cpu"
-        if d.kind == "multi_cuda":
+        if kind == "multi_cuda":
             return d.gpu_ids if d.gpu_ids else 0
         return d.gpu_ids[0] if d.gpu_ids else 0
 
     def _resolve_device_label(self) -> str:
+        kind = self._effective_kind()
+        if kind in ("cpu", "mps"):
+            return kind
         d = self._config.device
-        if d.kind == "cpu":
-            return "cpu"
-        if d.kind == "multi_cuda":
+        if kind == "multi_cuda":
             return f"multi_cuda:{d.gpu_ids or 'all'}"
         return f"cuda:{d.gpu_ids[0] if d.gpu_ids else 0}"
 

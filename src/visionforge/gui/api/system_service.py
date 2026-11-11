@@ -19,7 +19,7 @@ from visionforge.gui.api.schemas import (
     SystemInfo,
     TrialLearningRateResponse,
 )
-from visionforge.utils.cuda import CUDAInfo
+from visionforge.utils.cuda import CUDAInfo, mps_available
 from visionforge.utils.messages import tr
 
 
@@ -38,6 +38,7 @@ def device_info(info: CUDAInfo) -> DeviceInfoResponse:
     return DeviceInfoResponse(
         cuda_available=info.available,
         cuda_version=info.cuda_version,
+        mps_available=mps_available(),
         cpu_name=platform.processor() or platform.machine() or "CPU",
         gpus=[
             GPUInfo(

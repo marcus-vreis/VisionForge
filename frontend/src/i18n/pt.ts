@@ -278,6 +278,11 @@ export const pt = {
     errorPrefix: (message: string) => `erro: ${message}`,
     cudaNotDetected: "cuda não detectado",
     cpuSubtitle: "Treinar usando processador",
+    // Apple's GPU is experimental until it is checked on a real Mac (ADR-192).
+    mpsTitle: "GPU da Apple (MPS) · experimental",
+    mpsSummary: "gpu da apple (mps)",
+    mpsOption: "GPU da Apple (MPS)",
+    mpsSubtitle: "Treinar usando a GPU do Mac · experimental",
   },
   welcome: {
     askName: "Qual é o seu nome?",

@@ -189,6 +189,21 @@ def non_finite_metric(
     )
 
 
+def mps_not_deterministic(
+    device_type: str, deterministic: bool
+) -> HealthWarning | None:
+    """Warn that ``deterministic`` does not pin the numbers on Apple's GPU (ADR-192).
+
+    The switch configures cuDNN; MPS kernels have no deterministic mode, so the
+    same config and seed may not reproduce the same metrics there.
+    """
+    if not deterministic or device_type != "mps":
+        return None
+    return HealthWarning(
+        code="mps_not_deterministic", message=tr("health.mps_not_deterministic")
+    )
+
+
 def summarize(warnings: Sequence[HealthWarning | None]) -> list[dict[str, str]]:
     """Drop the Nones and hand back what run.json should carry."""
     return [w.to_dict() for w in warnings if w is not None]
@@ -199,6 +214,7 @@ __all__ = [
     "collapsed_predictions",
     "collapsed_segmentation",
     "frozen_random_backbone",
+    "mps_not_deterministic",
     "no_detections",
     "non_finite_metric",
     "constant_predictions",

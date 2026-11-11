@@ -79,6 +79,22 @@ def check_cuda() -> CUDAInfo:
         return CUDAInfo(available=False)
 
 
+def mps_available() -> bool:
+    """Whether PyTorch can use Apple's Metal GPU (MPS). Never raises (ADR-192).
+
+    Separate from :func:`check_cuda` because it answers a different question
+    with a different shape: there is one MPS device or none, with no index,
+    memory figure or driver version to report. Only a real ``True`` counts, so
+    a mocked ``torch`` (a ``MagicMock`` is truthy) never reads as a Mac.
+    """
+    try:
+        import torch
+
+        return torch.backends.mps.is_available() is True
+    except Exception:
+        return False
+
+
 def log_cuda_status() -> None:
     """
     Log a one-line CUDA diagnostic.
@@ -99,4 +115,4 @@ def log_cuda_status() -> None:
         logger.warning("CUDA not available — training will fall back to CPU")
 
 
-__all__ = ["CUDAInfo", "GPUDevice", "check_cuda", "log_cuda_status"]
+__all__ = ["CUDAInfo", "GPUDevice", "check_cuda", "log_cuda_status", "mps_available"]
