@@ -1562,6 +1562,8 @@ export const pt = {
   // section prefix read the same in every language.
   resultsView: {
     title: "// resultados",
+    // The replicated comparison's group, opened in History (ADR-193).
+    openGroupInHistory: "abrir o grupo no Histórico",
     // Keys are the backend's metric names.
     metricLabels: {
       best_val_loss: "Best Val Loss",

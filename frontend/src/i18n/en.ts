@@ -1492,6 +1492,7 @@ export const en: Dict = {
   },
   resultsView: {
     title: "// results",
+    openGroupInHistory: "open the group in History",
     metricLabels: {
       best_val_loss: "Best val loss",
       best_epoch: "Best epoch",

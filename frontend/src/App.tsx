@@ -185,6 +185,8 @@ export default function App() {
   const profileSlugRef = useRef<string | null>(null);
   const profileRef = useRef<ProfileInfo | null>(null);
   const [showHistory, setShowHistory] = useState(false);
+  // The run History opens on, when the results view sent it there (ADR-193).
+  const [historyRunId, setHistoryRunId] = useState<string | null>(null);
   const [showDatasets, setShowDatasets] = useState(false);
   const [showQueue, setShowQueue] = useState(false);
   const [historyCount, setHistoryCount] = useState(0);
@@ -1009,6 +1011,10 @@ export default function App() {
             // Only a stopped run lists fewer units than it planned; for any other
             // the report's own count is the one to trust.
             submittedUnits={result.stopped === true ? (queueSize ?? null) : null}
+            onOpenInHistory={(runId) => {
+              setHistoryRunId(runId);
+              setShowHistory(true);
+            }}
             onClose={() => {
               setResultsVisible(false);
               reset();
@@ -1190,7 +1196,11 @@ export default function App() {
       </main>
 
       <BottomBar
-        onHistory={() => setShowHistory(true)}
+        onHistory={() => {
+          // The header opens the list, never a run a results view asked for.
+          setHistoryRunId(null);
+          setShowHistory(true);
+        }}
         onDatasets={() => setShowDatasets(true)}
         onQueue={() => setShowQueue(true)}
         onTrain={() => void handleTrain()}
@@ -1211,7 +1221,11 @@ export default function App() {
       <CustomAccentsContext.Provider value={customAccents}>
       <LazySurface>
       <HistoryOverlay
-        onClose={() => setShowHistory(false)}
+        onClose={() => {
+          setShowHistory(false);
+          setHistoryRunId(null);
+        }}
+        initialRunId={historyRunId}
         onCountChange={setHistoryCount}
         // `activeKey` is already the family the history groups by: the task
         // tabs are classification/detection/... and custom tasks carry their
