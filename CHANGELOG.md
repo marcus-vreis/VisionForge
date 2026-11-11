@@ -153,6 +153,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 - `.github/dependabot.yml`: atualizações mensais e agrupadas de github-actions, npm (`/frontend`) e pip, no máximo 3 PRs por ecossistema, contra `development`, com prefixo `chore(deps)` e torch/torchvision ignorados (#175).
 - `docs/dev/DECISIONS.md` abre com o processo de ADR (quando é obrigatória, campos e os status válidos), com `docs/dev/ADR-TEMPLATE.md` e um teste que confere o título e o prefixo do status de cada entrada; o CONTRIBUTING linka o template (#214).
 - `frontend/README.md` descreve pré-requisitos, `visionforge gui --no-browser` + `npm run dev`, e2e e o rebuild do SPA; `package.json` declara `engines.node`, e o proxy do Vite lê `VF_API_URL` (#215).
+- `scripts/sync_site_release.py --dry-run` consulta PyPI, GitHub Release e Zenodo e imprime a versão que falta no site, no `CITATION.cff` e no `docs/INSTALL.md`, sem escrever nada; o RELEASING.md ganha a checklist pós-release com um comando por item e o `cd.yml` o passo não bloqueante `site-version-check`, que só emite `::warning::` (#189).
 
 ### Fixed
 

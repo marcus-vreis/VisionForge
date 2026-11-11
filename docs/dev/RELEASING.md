@@ -80,15 +80,33 @@ python -c "import zipfile,glob; z=zipfile.ZipFile(glob.glob('dist/*.whl')[0]); p
 
 ## After publishing
 
-```bash
-pip install "visionforge-studio[cpu]" --force-reinstall
-visionforge --version
-visionforge selftest --quick
-```
-
 Install the published artifact in a throwaway environment and run it. The
 package index is the only place a packaging mistake shows up, and it shows up
-to users first otherwise.
+to users first otherwise. Then walk the checklist: after 0.21.0 the site kept
+saying 0.20.2 because nothing here asked for it. Replace `X.Y.Z` with the version.
+
+| Item | Command or where | Done when |
+|---|---|---|
+| PyPI | `pip install "visionforge-studio[cpu]==X.Y.Z" --force-reinstall && visionforge --version && visionforge selftest --quick` | the version prints and the selftest passes |
+| GitHub Release | `gh release view vX.Y.Z -R marcus-vreis/VisionForge` | notes are the CHANGELOG section, wheel and sdist attached |
+| Zenodo | `curl -s https://zenodo.org/api/records/23425765/versions/latest` | the record lists X.Y.Z; copy its version DOI |
+| CITATION.cff | `grep -n -e "^version" -e "^date-released" -e "^doi" CITATION.cff` | version and date match the release; `doi` stays the concept DOI |
+| INSTALL | `grep -n "0\.[0-9]*\.[0-9]*" docs/INSTALL.md` | no older version literal is left |
+| Screenshots | `gh issue list -R marcus-vreis/VisionForge -l documentation` and the README and site images | they show the released GUI, or an issue says why not |
+| Site | `python scripts/sync_site_release.py --dry-run` | the site home shows X.Y.Z (open a PR in `visionforge-site` otherwise) |
+| Milestone | `gh api repos/marcus-vreis/VisionForge/milestones` | the milestone is closed, open issues moved to the next one |
+
+`scripts/sync_site_release.py --dry-run` reads PyPI, the latest GitHub Release
+and the Zenodo concept record, counts the `0.x.y` literals in `CITATION.cff`,
+`docs/INSTALL.md` and the site home, and prints which ones should become the new
+version. It writes nothing and calls nothing in the site's repository; `--version
+X.Y.Z` overrides the PyPI lookup and the exit status is 1 while something lags.
+
+`cd.yml` ends with the `site-version-check` job, which runs the script with
+`--warn` after the GitHub Release exists: if the site does not show the tag's
+version it prints a `::warning::` annotation and still succeeds, so a release is
+never blocked by the site. Dispatching a deploy to the site repository from
+`cd.yml` is not set up: it needs a token with write access to that repository.
 
 ## Branch protection and repository settings
 
