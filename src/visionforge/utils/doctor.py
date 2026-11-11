@@ -413,6 +413,61 @@ def _report_workspace() -> None:
             print(f"  {label:17}: {path.resolve()}  (create it to add your own)")
 
 
+def _report_gpu(
+    torch_info: TorchProbe, driver_cuda: str | None, on_cuda: bool, on_mps: bool
+) -> None:
+    """Say which GPU, if any, this machine can train on."""
+    if driver_cuda:
+        print(f"[OK] CUDA driver version: {driver_cuda}")
+    elif on_cuda:
+        print(
+            "[OK] GPU usable via torch "
+            f"(CUDA build {torch_info['cuda_build']}); nvidia-smi not on PATH"
+        )
+    elif on_mps:
+        print("[OK] Apple GPU usable via torch (MPS, experimental)")
+    else:
+        print("[INFO] No CUDA-capable GPU detected (nvidia-smi not found or failed)")
+    _report_hidden_gpu()
+
+
+def _print_keep_install(version: str, on_mps_only: bool) -> None:
+    """Tell the user the installed torch already drives the GPU."""
+    where = "the Apple GPU (MPS)" if on_mps_only else "GPU"
+    print("  Recommended wheel: keep the current install")
+    print(f"  Reason           : torch {version} already runs on {where}")
+
+
+def _print_install_commands(tag: str, commands: list[str]) -> None:
+    """Show the wheel this machine should run and how to install it."""
+    print(f"  Recommended wheel: {tag}")
+    print("  Install commands :")
+    for line in commands:
+        print(f"    {line}")
+
+
+def _offer_fix(
+    tag: str,
+    commands: list[str],
+    already_working: bool,
+    confirm_fn: Callable[[str], bool],
+) -> None:
+    """Offer the install, never over a torch that already drives the GPU.
+
+    On a Mac the "recommended" wheel would be the CPU one.
+    """
+    if already_working:
+        print("\nNothing to fix: torch already runs on the GPU.")
+        return
+    prompt = (
+        f"\nReplace torch with the {tag} build now? This runs:\n"
+        + "\n".join(f"  {line}" for line in commands)
+        + "\n[y/N] "
+    )
+    if confirm_fn(prompt):
+        _run_install(tag)
+
+
 def run_doctor(
     fix: bool = False,
     confirm_fn: Callable[[str], bool] = _default_confirm,
@@ -443,18 +498,7 @@ def run_doctor(
     # CUDA and no nvidia-smi, so nothing above would ever say "GPU" (ADR-192).
     torch_says_mps = torch_info["importable"] and mps_available()
 
-    if driver_cuda:
-        print(f"[OK] CUDA driver version: {driver_cuda}")
-    elif torch_says_cuda:
-        print(
-            "[OK] GPU usable via torch "
-            f"(CUDA build {torch_info['cuda_build']}); nvidia-smi not on PATH"
-        )
-    elif torch_says_mps:
-        print("[OK] Apple GPU usable via torch (MPS, experimental)")
-    else:
-        print("[INFO] No CUDA-capable GPU detected (nvidia-smi not found or failed)")
-    _report_hidden_gpu()
+    _report_gpu(torch_info, driver_cuda, torch_says_cuda, torch_says_mps)
 
     # --- Wheel recommendation (always shown — this is doctor's primary value) ---
     tag = select_wheel_tag(driver_cuda)
@@ -470,18 +514,10 @@ def run_doctor(
     steps = "\n".join(f"         {line}" for line in commands)
     print()
     if already_working:
-        print("  Recommended wheel: keep the current install")
-        where = (
-            "the Apple GPU (MPS)" if torch_says_mps and not torch_says_cuda else "GPU"
-        )
-        print(
-            f"  Reason           : torch {torch_info['version']} already runs on {where}"
-        )
+        on_mps_only = torch_says_mps and not torch_says_cuda
+        _print_keep_install(torch_info["version"], on_mps_only)
     else:
-        print(f"  Recommended wheel: {tag}")
-        print("  Install commands :")
-        for line in commands:
-            print(f"    {line}")
+        _print_install_commands(tag, commands)
     print()
 
     _report_torch_issues(torch_info, driver_cuda, steps, issues, mps=torch_says_mps)
@@ -504,17 +540,7 @@ def run_doctor(
         exit_code = 0
 
     # --- Optional install ---
-    # Never offer to swap a torch that already drives the GPU: on a Mac the
-    # "recommended" wheel would be the CPU one.
-    if fix and already_working:
-        print("\nNothing to fix: torch already runs on the GPU.")
-    elif fix:
-        prompt = (
-            f"\nReplace torch with the {tag} build now? This runs:\n"
-            + "\n".join(f"  {line}" for line in commands)
-            + "\n[y/N] "
-        )
-        if confirm_fn(prompt):
-            _run_install(tag)
+    if fix:
+        _offer_fix(tag, commands, already_working, confirm_fn)
 
     return exit_code

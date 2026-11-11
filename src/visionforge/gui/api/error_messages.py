@@ -78,13 +78,14 @@ def translate_validation_errors(
     return translated
 
 
-async def validation_error_handler(request: Request, exc: Exception) -> JSONResponse:
+def validation_error_handler(request: Request, exc: Exception) -> JSONResponse:
     """FastAPI's 422 body, with each message in the language of the request.
 
     The header is read here rather than from the bound language: a body that
     fails validation may never reach the dependency that binds it. ``exc`` is
     typed as Starlette's handler signature wants; the app registers this for
-    ``RequestValidationError`` only.
+    ``RequestValidationError`` only. Plain ``def``: it awaits nothing, and
+    Starlette runs a sync handler in its thread pool.
     """
     validation = cast("RequestValidationError", exc)
     lang = resolve_lang(request.headers.get(LANG_HEADER))
