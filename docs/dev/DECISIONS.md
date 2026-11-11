@@ -7750,6 +7750,8 @@ differently now. Each fix has a test that failed before it
 
 **Consequences:** the CLI has no statistics of its own, so it cannot drift from the GUI. The CLI has no stop button and no profile: the token is `None` and the config's own `output` paths are used, with `outputs/models` for the group when the config names none. Custom tasks are not covered yet.
 
+**Update (#264):** a variant of the paired comparison or a sweep space that overrides `output.*` is refused by the CLI with status 2 and the GUI's message, through `core.run_groups.refuse_output_paths`, the check the routes now call too (ADR-114).
+
 **Alternatives considered:**
 
 - *A `strategy` key inside the task config.* Every task config loader would have to ignore it, and the options would mix with the task's fields.
