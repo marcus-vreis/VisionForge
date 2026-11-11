@@ -33,6 +33,7 @@ import { useCustomAccents } from "../lib/custom-accents";
 import { useResolvedTheme } from "./training-story/use-viewing";
 import { Lightbox } from "./Lightbox";
 import { RunGroupDetail } from "./RunGroupDetail";
+import { RerunActions, type RerunHandle } from "./RerunActions";
 import { DownloadBundleButton } from "./DownloadBundleButton";
 
 import { MLflowExportStatus } from "./MLflowExportStatus";
@@ -64,6 +65,8 @@ interface RunDetailPanelProps {
   /** The run ids History lists, so a seed deleted since its group was written
    *  is named instead of linked. */
   knownRunIds?: ReadonlySet<string>;
+  /** Sends the run back to its task's form (#200); absent, no such actions. */
+  rerun?: RerunHandle;
 }
 
 /** Metric names read the same in every language; only the words around them are translated. */
@@ -124,7 +127,13 @@ function getConfigRecord(
   return value as Record<string, unknown>;
 }
 
-export function RunDetailPanel({ runId, onBack, onOpenRun, knownRunIds }: RunDetailPanelProps) {
+export function RunDetailPanel({
+  runId,
+  onBack,
+  onOpenRun,
+  knownRunIds,
+  rerun,
+}: RunDetailPanelProps) {
   const { t, locale } = useI18n();
   const theme = useResolvedTheme();
   const customAccents = useCustomAccents();
@@ -548,6 +557,9 @@ export function RunDetailPanel({ runId, onBack, onOpenRun, knownRunIds }: RunDet
         )}
       </div>
 
+      {/* A group shows these with its own summary, below. */}
+      {detail && !detail.group && rerun && <RerunActions source={detail} handle={rerun} />}
+
       {resumeMsg && (
         <div
           style={{
@@ -611,6 +623,7 @@ export function RunDetailPanel({ runId, onBack, onOpenRun, knownRunIds }: RunDet
               accent={accentForTask(task, theme, customAccents)}
               knownRunIds={knownRunIds}
               onOpenRun={onOpenRun}
+              actions={rerun ? <RerunActions source={detail} handle={rerun} /> : undefined}
             />
           )}
 

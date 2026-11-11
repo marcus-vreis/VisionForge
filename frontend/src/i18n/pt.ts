@@ -1235,6 +1235,20 @@ export const pt = {
       queued: "Na fila: começa quando o treino atual terminar.",
       failed: "Falha ao retomar.",
     },
+    // Back to the form from History (#200): the config goes through the same
+    // import as the YAML button, so its warnings are the same.
+    rerun: {
+      load: "↺ carregar no formulário",
+      loadTitle:
+        "Abre a aba da tarefa com a configuração deste run, pelo mesmo caminho do Importar YAML",
+      replicates: (n: number) => `⟳ repetir com ${n} seeds`,
+      replicatesTitle: (seeds: string) =>
+        `Abre a estratégia Réplicas com as seeds ${seeds}, diferentes das que este run usou`,
+      customRemoved: (key: string) =>
+        `A tarefa "${key}" não está mais registrada: registre-a de novo para carregar este run no formulário.`,
+      noTab: (task: string) => `Esta versão não tem a aba de ${task}.`,
+      noConfig: "O run.json deste run não guardou a configuração.",
+    },
     // The native folder picker the three forms below share.
     picker: {
       opening: "Abrindo seletor…",

@@ -147,6 +147,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 - A SPA sai dividida em chunks: Histórico (com detalhe e exportações), conteúdo de Datasets, aba **Código** e "Como funciona" carregam na primeira abertura, e React e js-yaml ficam em chunks próprios; o entry cai de 1 074 390 para 378 062 bytes e nenhum chunk passa de 500 kB (#203)
 - `visionforge run` aceita um YAML com `strategy:` + `config:` e roda réplicas, comparação pareada, sweep e K-fold como a GUI, gravando o relatório com a tabela `.tex` e a entrada no Histórico; sem `strategy` nada muda (ADR-184) (#199).
 - A aba **Classificação** ganha **Réplicas** na estratégia: a mesma config com N seeds pela rota de réplicas que já existia, média ± IC 95% com acurácia como métrica destaque e `block` mantido em `classification`. Transfer learning fica travado enquanto Réplicas está escolhida, e o botão do Colab fica desligado com o motivo (ADR-056) (#190).
+- No **Histórico**, o detalhe de um run e o de um grupo ganham **Carregar no formulário** e **Repetir com 3 seeds**: a config do `run.json` vai para a aba da tarefa pelo mesmo import do botão de YAML, com os mesmos avisos, e Repetir abre **Réplicas** com três seeds que o run não usou. Tarefa própria removida deixa as duas ações desligadas com o motivo escrito ao lado (ADR-156) (#200).
 
 ### Fixed
 
@@ -180,6 +181,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 - O OpenAPI da GUI agrupa as 157 operações em tags por domínio (`openapi_tags` no app) e cada rota declara em `responses=`, com chave literal, todo status de `HTTPException` que ela ou seus helpers levantam: 2 status que faltavam (503 do treino no Colab, 400 de `/api/explorer/images`) entram no contrato; é o que o Sonar python:S8415 lê (#205).
 - Os guias `QUICKSTART`, `custom/MODELS`, `custom/TASKS`, `DATASETS` e `INSTALL` voltam a dizer o que o produto faz: `resnet18` e 20 épocas por padrão, as seis etapas da configuração, `custom_model` só pelo YAML, `replicated-comparison` e ocultar/apagar tarefas próprias, os 160/40/200 imagens de `limit=20` no MNIST e a verificação de instalação sem versão fixa; `tests/test_docs_pinned_facts.py` prende esses fatos ao código (#197).
 - As rotas de avaliação de uma execução (testar em outro dataset, Grad-CAM, predição em lote e exportar ONNX) saem de `routes.py` para `evaluation_routes.py`, sem mudar o contrato HTTP; `routes.py` cai de 4410 para 3620 linhas e `tests/test_module_size.py` impede que volte a crescer (#204).
+- `visionforge run` com `strategy:` recusa, com código 2 e a mensagem da GUI, uma variante da comparação pareada ou um espaço de varredura que altere `output.*`; antes o treino começava e escrevia fora da pasta do perfil (#264).
 
 ## [0.21.0] — 2026-11-05
 

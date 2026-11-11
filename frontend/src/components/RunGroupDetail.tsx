@@ -23,6 +23,8 @@ interface RunGroupDetailProps {
    *  named but not linked. */
   knownRunIds?: ReadonlySet<string>;
   onOpenRun?: (runId: string) => void;
+  /** Back to the form: load the group's config, or repeat it with new seeds (#200). */
+  actions?: ReactNode;
 }
 
 const OK_COLOR = "oklch(calc(0.85 - var(--lt-flip, 0) * 0.4) 0.16 150)";
@@ -640,6 +642,7 @@ export function RunGroupDetail(props: RunGroupDetailProps) {
         {group.stopped && (
           <div style={{ ...noteStyle, color: STOPPED_COLOR }}>■ {t.runGroup.detail.stopped}</div>
         )}
+        {props.actions}
       </GroupSection>
       {group.kind === "replicated_comparison" ? (
         <ComparisonBody {...props} />

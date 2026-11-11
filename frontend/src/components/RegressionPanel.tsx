@@ -17,7 +17,8 @@ import {
   regressionFormFromPayload,
   type RegressionForm,
 } from "../lib/regression-models";
-import { checkImportedConfig, exportConfigToYaml } from "../lib/yaml-config";
+import { exportConfigToYaml, importIntoForm } from "../lib/yaml-config";
+import { usePendingImport, type PendingImportProps } from "../hooks/usePendingImport";
 import type { ValidationError } from "../hooks/useExperiment";
 import { FieldLabel, NumberField, SelectField, Segmented, TextField, Toggle } from "./controls";
 import { CvCard, type CvPayload } from "./CvCard";
@@ -46,7 +47,7 @@ const SWEEP_PATH_HINTS = [
   "model.name",
 ];
 
-interface RegressionPanelProps {
+interface RegressionPanelProps extends PendingImportProps {
   formData: RegressionForm;
   setFormData: (updater: (prev: RegressionForm) => RegressionForm) => void;
   accent: string;
@@ -94,11 +95,35 @@ export function RegressionPanel({
   onStrategyChange,
   runSignal,
   onCv,
+  pendingImport,
+  onImportApplied,
 }: RegressionPanelProps) {
   const t = useT();
   const [picking, setPicking] = useState(false);
   const [pickNote, setPickNote] = useState<string | null>(null);
   const [strategy, setStrategy] = useState<PanelStrategy>("simple");
+  const chooseStrategy = (s: PanelStrategy) => {
+    setStrategy(s);
+    onStrategyChange?.(s);
+  };
+  // The YAML button's import; a run sent from History goes through it too (#200).
+  const importConfig = async (data: Record<string, unknown>): Promise<string | null> => {
+    // Schema unavailable → import tolerantly; the submit's 422 covers it.
+    const schema = await fetchTaskSchema("regression").catch(() => null);
+    const imported = importIntoForm(t, data, schema, regressionFormFromPayload);
+    if ("problem" in imported) return imported.problem;
+    setFormData(() => imported.form);
+    return null;
+  };
+  const { notice, replicatesPreset } = usePendingImport({
+    taskKey: "regression",
+    pendingImport,
+    onImportApplied,
+    ready: true,
+    importConfig,
+    refusesOnProblem: true,
+    onStrategy: chooseStrategy,
+  });
 
   const setModel = (patch: Partial<RegressionForm["model"]>) =>
     setFormData((p) => ({ ...p, model: { ...p.model, ...patch } }));
@@ -272,10 +297,7 @@ export function RegressionPanel({
     <div style={stack}>
       <StrategyCard
         strategy={strategy}
-        onStrategyChange={(s) => {
-          setStrategy(s);
-          onStrategyChange?.(s);
-        }}
+        onStrategyChange={chooseStrategy}
         strategies={strategies}
       />
       {strategy === "sweep" && onSweep && (
@@ -296,6 +318,7 @@ export function RegressionPanel({
           disabled={busy}
           onReplicates={onReplicates}
           runSignal={runSignal}
+          preset={replicatesPreset}
         />
       )}
       {strategy === "cv" && onCv && (
@@ -511,19 +534,8 @@ export function RegressionPanel({
       onNameChange={(name) => setFormData((p) => ({ ...p, name }))}
       suggestion={suggestion}
       onExportYaml={() => exportConfigToYaml(buildRegressionPayload(formData), formData.name)}
-      onImportConfig={async (data) => {
-        let payload = data;
-        try {
-          const schema = await fetchTaskSchema("regression");
-          const checked = checkImportedConfig(t, data, schema, schema.$defs ?? {});
-          if ("problem" in checked) return checked.problem;
-          payload = checked.data;
-        } catch {
-          // schema unavailable → import tolerantly; o 422 do submit cobre.
-        }
-        setFormData(() => regressionFormFromPayload(payload));
-        return null;
-      }}
+      onImportConfig={importConfig}
+      importNotice={notice}
       sections={[
         {
           step: "data",

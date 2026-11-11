@@ -6547,6 +6547,20 @@ locked until the last step, and a suggested experiment name on that step.
 - *Treinar enabled from step one when the data is set.* The user asked for the
   review to be the gate, so a run is never started from a half-checked screen.
 
+**Update (2026-11-11, amendment, #200):** a run comes back to the form from
+History. The run and group details offer *Carregar no formulário* and *Repetir
+com 3 seeds*. App keeps one pending import per task, switches to the run's tab
+and the panel applies it through the handler its YAML button calls
+(`reviewImportedConfig` in classification, the schema check in the standalone
+panels, the plain load in a researcher's task), so the warnings and refusals
+are the YAML import's, shown on the Revisão name card. Loading lands on
+Revisão as a single run; repeating selects Réplicas with explicit seeds after
+the largest one the run or its replicate set used, and lands on Estratégia
+unless the import reported something. A sweep, K-fold or comparison group only
+loads: it has no one config to repeat. A researcher's task that no longer has
+a tab keeps both actions on screen, off, with the reason beside them. The
+decisions live in `lib/history-rerun.ts` so they are tested without a DOM.
+
 ## ADR-157 — Looping animations end while a job runs
 
 **Date:** 2026-11-01
@@ -7749,6 +7763,8 @@ differently now. Each fix has a test that failed before it
 **Decision:** a YAML whose top level is `strategy:` + `config:` is a strategy envelope. `strategy.kind` is `replicates`, `replicated_comparison`, `sweep` or `cv`; its other keys are validated by the same request model the matching route uses (`ReplicatesRequest`, `ReplicatedComparisonRequest`, `SweepRequest`, `TaskCvRequest`), and `config` is the task config unchanged. `cli_strategies.py` picks the task's `TaskRunner` (or K-fold function) and calls the orchestrator in `core`. The post-orchestrator step moved from the routes to `core/run_groups.py` (`finish_replicates`, `finish_replicated_comparison`, `finish_sweep`, `finish_kfold`, `resolve_seeds`, `write_group_summary`); the routes and the CLI both call it, and the routes keep their behaviour. A YAML without `strategy` takes the old path. Sweeps cover the tasks the GUI sweeps through a runner (detection, regression, segmentation, anomaly) and K-fold covers regression and segmentation; any other task fails before training with a message that names the alternative (the classification blocks). An invalid envelope or option exits with status 2, a job with no result with 1.
 
 **Consequences:** the CLI has no statistics of its own, so it cannot drift from the GUI. The CLI has no stop button and no profile: the token is `None` and the config's own `output` paths are used, with `outputs/models` for the group when the config names none. Custom tasks are not covered yet.
+
+**Update (#264):** a variant of the paired comparison or a sweep space that overrides `output.*` is refused by the CLI with status 2 and the GUI's message, through `core.run_groups.refuse_output_paths`, the check the routes now call too (ADR-114).
 
 **Alternatives considered:**
 
