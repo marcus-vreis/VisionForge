@@ -150,6 +150,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 - No **Histórico**, o detalhe de um run e o de um grupo ganham **Carregar no formulário** e **Repetir com 3 seeds**: a config do `run.json` vai para a aba da tarefa pelo mesmo import do botão de YAML, com os mesmos avisos, e Repetir abre **Réplicas** com três seeds que o run não usou. Tarefa própria removida deixa as duas ações desligadas com o motivo escrito ao lado (ADR-156) (#200).
 - Arquivos de comunidade do repositório: `SECURITY.md` (denúncia privada pelo GitHub), `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1), `.github/CODEOWNERS`, modelo de pull request com a checklist e `ISSUE_TEMPLATE/config.yml` apontando para Discussions; o CONTRIBUTING linka a política e o código de conduta (#183).
 - CONTRIBUTING sem afirmações falsas e com a seção Branch
+- `.github/dependabot.yml`: atualizações mensais e agrupadas de github-actions, npm (`/frontend`) e pip, no máximo 3 PRs por ecossistema, contra `development`, com prefixo `chore(deps)` e torch/torchvision ignorados (#175).
 
 ### Fixed
 
