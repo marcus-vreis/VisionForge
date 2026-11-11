@@ -64,12 +64,31 @@ Every custom task `<key>` gets these endpoints with no extra code:
 | `POST /api/custom/<key>/run` | one training run, live monitor included |
 | `POST /api/custom/<key>/sweep` | grid/random/Optuna over **any** Config field, including the ones you declared (ADR-045) |
 | `POST /api/custom/<key>/replicates` | N seeds → mean ± std ± 95% CI, never ranked (ADR-056) |
+| `POST /api/custom/<key>/replicated-comparison` | variants over shared seeds, paired tests (ADR-061) |
 
 There is deliberately no `/compare` for custom tasks: comparing alternatives is
-a one-axis sweep over whichever field your task declares.
+a one-axis sweep over whichever field your task declares, or a replicated
+comparison when you want paired significance tests.
 
 Não existe `/compare` para tarefas customizadas, de propósito: comparar
-alternativas é uma busca de um eixo sobre o campo que a sua tarefa declarar.
+alternativas é uma busca de um eixo sobre o campo que a sua tarefa declarar, ou
+uma comparação replicada quando você quer testes pareados de significância.
+
+## Hide or delete a task · Ocultar ou apagar uma tarefa
+
+The task's tab has an **⚙ options** card with two actions that mean different
+things. · A aba da tarefa tem um cartão **⚙ opções** com duas ações que
+significam coisas diferentes.
+
+| Endpoint | What it does · O que faz |
+|---|---|
+| `POST /api/custom/<key>/hide` | hides the tab; the file in `user_tasks/` stays, reversible |
+| `POST /api/custom/<key>/unhide` | brings a hidden tab back |
+| `DELETE /api/custom/<key>` | deletes the `.py` file from disk; `confirm` must repeat the key, and there is no undo |
+
+In the interface, **🗑 Delete from disk** asks you to type the task key before the
+button works. · Na interface, **🗑 Excluir do disco** pede que você digite a chave
+da tarefa antes de liberar o botão.
 
 ## Level 2 — training that is not epoch-shaped
 
