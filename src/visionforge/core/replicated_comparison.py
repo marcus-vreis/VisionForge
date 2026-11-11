@@ -56,7 +56,7 @@ class VariantResult:
         return {
             t.seed: float(t.metrics[metric])
             for t in self.successful
-            if metric in t.metrics
+            if t.metrics.get(metric) is not None
         }
 
 

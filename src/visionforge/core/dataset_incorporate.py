@@ -620,9 +620,34 @@ def _write(
     rewritten = _rewritten_files(analysis, plan)
     files = list_files(base)
     progress = ProgressCounter(len(files) + len(plan.assignments), on_progress)
-    methods: Counter[str] = Counter()
 
     tmp.mkdir()
+    methods = _link_base_files(base, files, rewritten, tmp, token, progress, link)
+    if methods is None:
+        return None
+    placed = _place_new_images(analysis, plan, tmp, token, progress)
+    if placed is None:
+        return None
+
+    _write_class_files(analysis, plan, tmp, dest)
+    registry = _registry(analysis, plan, methods, placed)
+    write_registry(tmp, registry)
+    if is_cancelled(token):
+        return None
+    return {"registry": registry, "added": placed, "link_methods": dict(methods)}
+
+
+def _link_base_files(
+    base: Path,
+    files: list[str],
+    rewritten: set[str],
+    tmp: Path,
+    token: CancellationToken | None,
+    progress: ProgressCounter,
+    link: Callable[[Path, Path], None],
+) -> Counter[str] | None:
+    """Link (or copy) the base files kept as they are. ``None`` if cancelled."""
+    methods: Counter[str] = Counter()
     for rel in files:
         if is_cancelled(token):
             return None
@@ -631,7 +656,17 @@ def _write(
             target.parent.mkdir(parents=True, exist_ok=True)
             methods[link_or_copy(base / rel, target, link=link)] += 1
         progress.tick()
+    return methods
 
+
+def _place_new_images(
+    analysis: Analysis,
+    plan: Plan,
+    tmp: Path,
+    token: CancellationToken | None,
+    progress: ProgressCounter,
+) -> int | None:
+    """Copy each assigned image (and label) into its split. ``None`` if cancelled."""
     final_ids = {name: i for i, name in enumerate(plan.classes)}
     layout = _layout(analysis)
     taken: dict[Path, set[str]] = {}
@@ -640,32 +675,35 @@ def _write(
     for cand, split in plan.assignments:
         if is_cancelled(token):
             return None
-        images_dir, labels_dir = layout[split]
-        folder = images_dir if detection else images_dir / cand.names[0]
-        (tmp / folder).mkdir(parents=True, exist_ok=True)
-        if folder not in taken:
-            taken[folder] = occupied_names(
-                tmp, folder, labels_dir if detection else None
-            )
-        name = claim_name(
-            taken[folder], Path(cand.rel).name, cand.sha256, with_label=detection
-        )
-        _copy_verified(
-            cand.path, tmp / folder / name, cand.sha256, cand.size, cand.mtime_ns
-        )
-        if detection:
-            assert labels_dir is not None and cand.label_path is not None
-            (tmp / labels_dir).mkdir(parents=True, exist_ok=True)
-            _write_label(cand, final_ids, tmp / labels_dir / f"{Path(name).stem}.txt")
+        _place_image(cand, layout[split], detection, final_ids, tmp, taken)
         placed += 1
         progress.tick()
+    return placed
 
-    _write_class_files(analysis, plan, tmp, dest)
-    registry = _registry(analysis, plan, methods, placed)
-    write_registry(tmp, registry)
-    if is_cancelled(token):
-        return None
-    return {"registry": registry, "added": placed, "link_methods": dict(methods)}
+
+def _place_image(
+    cand: Candidate,
+    dirs: tuple[Path, Path | None],
+    detection: bool,
+    final_ids: Mapping[str, int],
+    tmp: Path,
+    taken: dict[Path, set[str]],
+) -> None:
+    images_dir, labels_dir = dirs
+    folder = images_dir if detection else images_dir / cand.names[0]
+    (tmp / folder).mkdir(parents=True, exist_ok=True)
+    if folder not in taken:
+        taken[folder] = occupied_names(tmp, folder, labels_dir if detection else None)
+    name = claim_name(
+        taken[folder], Path(cand.rel).name, cand.sha256, with_label=detection
+    )
+    _copy_verified(
+        cand.path, tmp / folder / name, cand.sha256, cand.size, cand.mtime_ns
+    )
+    if detection:
+        assert labels_dir is not None and cand.label_path is not None
+        (tmp / labels_dir).mkdir(parents=True, exist_ok=True)
+        _write_label(cand, final_ids, tmp / labels_dir / f"{Path(name).stem}.txt")
 
 
 def _layout(analysis: Analysis) -> dict[str, tuple[Path, Path | None]]:

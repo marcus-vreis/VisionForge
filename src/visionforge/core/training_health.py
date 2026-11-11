@@ -204,6 +204,29 @@ def mps_not_deterministic(
     )
 
 
+def single_class_test_split(labels: Sequence[int]) -> HealthWarning | None:
+    """Warn when an anomaly test split holds only one class (#170).
+
+    AUROC needs both normal and anomalous images to rank; with one class it is
+    undefined and the run reports it as null rather than a fake 0.5.
+    """
+    present = {int(label) for label in labels}
+    if len(present) >= 2:
+        return None
+    return HealthWarning(
+        code="single_class_test_split",
+        message=tr(
+            "health.single_class_test_split",
+            n=len(labels),
+            kind=tr(
+                "health.single_class_anomalous"
+                if present == {1}
+                else "health.single_class_normal"
+            ),
+        ),
+    )
+
+
 def summarize(warnings: Sequence[HealthWarning | None]) -> list[dict[str, str]]:
     """Drop the Nones and hand back what run.json should carry."""
     return [w.to_dict() for w in warnings if w is not None]
@@ -211,6 +234,7 @@ def summarize(warnings: Sequence[HealthWarning | None]) -> list[dict[str, str]]:
 
 __all__ = [
     "HealthWarning",
+    "single_class_test_split",
     "collapsed_predictions",
     "collapsed_segmentation",
     "frozen_random_backbone",

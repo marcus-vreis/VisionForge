@@ -45,6 +45,46 @@ class HubExport(BaseModel):
     digest: str
 
 
+def _locate(
+    find: Callable[[str, Profile], Path | None], run_id: str, profile: Profile
+) -> Path:
+    directory = find(run_id, profile)
+    if directory is None:
+        raise HTTPException(404, tr("hub.run_not_found"))
+    return directory
+
+
+def _preview(directory: Path) -> dict[str, Any]:
+    try:
+        return preview_run(directory)
+    except FileNotFoundError as exc:
+        raise HTTPException(404, tr(_ARTIFACT_MISSING)) from exc
+    except ValueError as exc:
+        raise HTTPException(422, tr(_PACKAGE_INVALID, reason=str(exc))) from exc
+
+
+def _profile_token(profile: Profile) -> str:
+    token = read_token("hub", profile)
+    if token is None:
+        raise HTTPException(409, tr("hub.token_missing"))
+    return token
+
+
+def _export(directory: Path, body: HubExport, token: str) -> dict[str, Any]:
+    try:
+        return export_run(directory, body.repo_id, token, body.digest)
+    except FileNotFoundError as exc:
+        raise HTTPException(404, tr(_ARTIFACT_MISSING)) from exc
+    except PreviewMismatchError as exc:
+        raise HTTPException(409, tr("hub.preview_changed")) from exc
+    except PrivateRepositoryRequiredError as exc:
+        raise HTTPException(409, tr("hub.private_required")) from exc
+    except ValueError as exc:
+        raise HTTPException(422, tr(_PACKAGE_INVALID, reason=str(exc))) from exc
+    except RuntimeError as exc:
+        raise HTTPException(502, tr("hub.export_failed")) from exc
+
+
 def build_hub_router(
     resolve: Callable[[str | None], Profile],
     find: Callable[[str, Profile], Path | None],
@@ -55,12 +95,6 @@ def build_hub_router(
         tags=[TAG_INTEGRATIONS],
         route_class=quiet_validation_route("hub.request_invalid"),
     )
-
-    def locate(run_id: str, profile: Profile) -> Path:
-        directory = find(run_id, profile)
-        if directory is None:
-            raise HTTPException(404, tr("hub.run_not_found"))
-        return directory
 
     add_token_routes(router, "hub", resolve)
 
@@ -76,13 +110,7 @@ def build_hub_router(
     )
     def preview(run_id: str, header: ProfileHeader = None) -> dict[str, Any]:
         """Inspect the selected package without contacting the Hub."""
-        directory = locate(run_id, resolve(header))
-        try:
-            return preview_run(directory)
-        except FileNotFoundError as exc:
-            raise HTTPException(404, tr(_ARTIFACT_MISSING)) from exc
-        except ValueError as exc:
-            raise HTTPException(422, tr(_PACKAGE_INVALID, reason=str(exc))) from exc
+        return _preview(_locate(find, run_id, resolve(header)))
 
     @router.post(
         "/export",
@@ -101,21 +129,7 @@ def build_hub_router(
         if not is_valid_repo_id(body.repo_id):
             raise HTTPException(422, tr("hub.repo_invalid"))
         profile = resolve(header)
-        directory = locate(body.run_id, profile)
-        token = read_token("hub", profile)
-        if token is None:
-            raise HTTPException(409, tr("hub.token_missing"))
-        try:
-            return export_run(directory, body.repo_id, token, body.digest)
-        except FileNotFoundError as exc:
-            raise HTTPException(404, tr(_ARTIFACT_MISSING)) from exc
-        except PreviewMismatchError as exc:
-            raise HTTPException(409, tr("hub.preview_changed")) from exc
-        except PrivateRepositoryRequiredError as exc:
-            raise HTTPException(409, tr("hub.private_required")) from exc
-        except ValueError as exc:
-            raise HTTPException(422, tr(_PACKAGE_INVALID, reason=str(exc))) from exc
-        except RuntimeError as exc:
-            raise HTTPException(502, tr("hub.export_failed")) from exc
+        directory = _locate(find, body.run_id, profile)
+        return _export(directory, body, _profile_token(profile))
 
     return router
