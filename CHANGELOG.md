@@ -149,6 +149,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 - A aba **Classificação** ganha **Réplicas** na estratégia: a mesma config com N seeds pela rota de réplicas que já existia, média ± IC 95% com acurácia como métrica destaque e `block` mantido em `classification`. Transfer learning fica travado enquanto Réplicas está escolhida, e o botão do Colab fica desligado com o motivo (ADR-056) (#190).
 - No **Histórico**, o detalhe de um run e o de um grupo ganham **Carregar no formulário** e **Repetir com 3 seeds**: a config do `run.json` vai para a aba da tarefa pelo mesmo import do botão de YAML, com os mesmos avisos, e Repetir abre **Réplicas** com três seeds que o run não usou. Tarefa própria removida deixa as duas ações desligadas com o motivo escrito ao lado (ADR-156) (#200).
 - Modo offline garantido: `--offline` em `visionforge gui` e `visionforge run`, ou `VISIONFORGE_OFFLINE=1`, liga `HF_HUB_OFFLINE`, `YOLO_OFFLINE` e `VISIONFORGE_NO_UPDATE_CHECK` e recusa no processo toda conexão e consulta de nome para fora do loopback; um teste treina 1 época de classificação em CPU com a trava ligada (ADR-189) (#226)
+- As imagens do README saem de `scripts/capture_docs_images.py`: a GUI deste checkout num workspace isolado, `--offline` e sem GPU, com a versão do cabeçalho oculta (checado no DOM), capturando classificação, Réplicas, a aba **Código** e o canto do Colab; `docs/images/README.md` registra commit, versão, data e dimensões, e `--check` falha se faltar imagem (#221).
 
 ### Fixed
 
