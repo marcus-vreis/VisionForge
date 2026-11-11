@@ -297,6 +297,7 @@ epoch on synthetic data says nothing about accuracy.
 - [`docs/gui/tokens.md`](https://github.com/marcus-vreis/VisionForge/blob/main/docs/gui/tokens.md) — where tokens and keys are stored and how to remove them (Portuguese)
 - [`docs/REPRODUCIBILITY.md`](https://github.com/marcus-vreis/VisionForge/blob/main/docs/REPRODUCIBILITY.md) — data audits, grouped CV, resume guarantees and experiment bundles (Portuguese)
 - [`docs/custom/`](https://github.com/marcus-vreis/VisionForge/tree/main/docs/custom) — your own models and task families
+- [`docs/ROADMAP.md`](https://github.com/marcus-vreis/VisionForge/blob/main/docs/ROADMAP.md) — what is on `development`, what is planned next and criteria for 1.0
 - [`CHANGELOG.md`](https://github.com/marcus-vreis/VisionForge/blob/main/CHANGELOG.md) — what shipped in each release
 
 Working on VisionForge itself?
@@ -636,6 +637,7 @@ navegador usa. Ele confere que o caminho funciona, não que o modelo é bom — 
 - [`docs/gui/tokens.md`](https://github.com/marcus-vreis/VisionForge/blob/main/docs/gui/tokens.md) — onde ficam os tokens e chaves e como removê-los
 - [`docs/REPRODUCIBILITY.md`](https://github.com/marcus-vreis/VisionForge/blob/main/docs/REPRODUCIBILITY.md) — auditoria dos dados, CV por grupos, limites da retomada e exportação de registros
 - [`docs/custom/`](https://github.com/marcus-vreis/VisionForge/tree/main/docs/custom) — seus próprios modelos e tarefas
+- [`docs/ROADMAP.md`](https://github.com/marcus-vreis/VisionForge/blob/main/docs/ROADMAP.md) — o que está em `development`, próximos passos e critérios para a 1.0
 - [`CHANGELOG.md`](https://github.com/marcus-vreis/VisionForge/blob/main/CHANGELOG.md) — o que entrou em cada versão
 
 Trabalhando no próprio VisionForge? O

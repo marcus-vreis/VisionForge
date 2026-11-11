@@ -186,6 +186,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 - O `README.md` e o `docs/INSTALL.md` deixam de prometer "no cloud" / "sem nuvem" e declaram a fronteira real de rede: a plataforma é local-first, roda na máquina da pessoa e nada sai dela sem ela pedir (downloads de dataset, treino no Colab e exportadores são opt-in, com prévia local), com `tests/test_public_claims.py` (#171).
 - O `README.md` passa a usar URLs absolutas do GitHub em todos os links (para não quebrar na página do PyPI), mostra o fluxo de `visionforge run` a partir de um YAML exportado ou ajustado, atualiza os limites de fila paralela com o Colab e de download pelo Roboflow, e inclui `configs/baseline.yaml` em `tests/test_example_configs.py`, com `tests/test_readme_pypi.py` (#184).
 - O `README.md` (em inglês e português espelhados, com `## Como citar` e o parágrafo para contribuidores em PT) e o `docs/INSTALL.md` passam a descrever o treino no Colab, o exportador para o Hugging Face Hub, as abas Resultados e Código, o explorador e as operações de datasets, os subcomandos `new-task`, `audit-data`, `bundle` e `verify-bundle`, e a execução via Docker, marcando o que está só em `development` como próxima release, com `tests/test_readme_parity.py` (#196).
+- Novo `docs/ROADMAP.md` (sem prazos, com o que está em `development`, próximos passos e critérios para a 1.0) linkado no `README.md`, e cabeçalho de `docs/archive/ROADMAP.md` atualizado para apontar para `ROADMAP.md` e `CHANGELOG.md` em vez de `TASKS.md` e `RELEASE_NOTES.md` (#218).
 
 ## [0.21.0] — 2026-11-05
 
