@@ -9,11 +9,13 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from loguru import logger
 
 from visionforge import __version__
+from visionforge.gui.api.error_messages import validation_error_handler
 from visionforge.gui.api.http_responses import (
     NOT_FOUND_TEXT,
     OPENAPI_TAGS,
@@ -87,6 +89,9 @@ app = FastAPI(
     docs_url=_DOCS_URL if DOCS_ENABLED else None,
     redoc_url=_REDOC_URL if DOCS_ENABLED else None,
 )
+
+# A 422 speaks the page's language like every other message (#208, ADR-191).
+app.add_exception_handler(RequestValidationError, validation_error_handler)
 
 
 @app.on_event("startup")

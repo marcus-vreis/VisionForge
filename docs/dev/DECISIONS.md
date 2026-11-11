@@ -7787,3 +7787,22 @@ differently now. Each fix has a test that failed before it
 
 - *Keep re-exports in `routes.py`.* `routes._JOB_STATES.clear()` would still work, but `monkeypatch.setattr(routes, "_JOB_STATES", {})` would silently patch a name nobody reads.
 - *A class holding the state.* A cleaner interface, but a behaviour-bearing rewrite inside what should be a move; the module boundary already gives the single owner.
+
+## ADR-191 — Unexpected 500s and validation 422s carry the page's language; what stays English on purpose
+
+**Date:** 2026-11-11
+**Status:** Accepted
+**Amends:** ADR-116 ("Still as written, on purpose or not yet")
+
+**Context:** after the four slices of ADR-116, two kinds of error still reached the page in a language nobody chose: the `500` of an action that failed unexpectedly (testing a run, Grad-CAM, batch prediction, ONNX export, a dataset download) was the bare `RuntimeError: x`, and every `422` carried Pydantic's English sentence. ADR-116 also left a list whose items were a mix of "on purpose" and "not yet".
+
+**Decision:** `gui/api/error_messages.py` owns both frames. `unexpected_error(exc, detail=None)` words a `500` as `errors.unexpected` (a sentence in the page's language ending in `Type: message`, or in the caller's already-redacted detail); the two remaining `HTTPException(500, f"...")` sites use it. An app-level handler for `RequestValidationError` reads `X-VF-Lang` from the request itself (a body that fails validation may never reach the router dependency that binds the language) and, for Portuguese, replaces the `msg` of 14 common Pydantic error types with a catalog sentence (`validation.<type>`) filled from the error's `ctx`; `type`, `loc` and `input` are unchanged, and a type not listed, or a `ctx` missing a value the sentence needs, keeps Pydantic's text. English keeps Pydantic's text as is. The response shape is FastAPI's, so the OpenAPI document does not change.
+
+**Closes the ADR-116 list.** Stay in English on purpose, with no further slice planned: the trainers' `logger.*` lines, the epoch and trial lines of the sheet, `STOPPED_NOTE`, the `description` of the schema fields, and the text of an exception raised by a library (it is the technical part of the `500` frame and of a failed run's `error`). Pydantic's messages outside the 14 types stay English too. The LaTeX captions and the Markdown export already follow `tr_artifact` (fourth slice).
+
+**Consequences:** a test that compared a `500` detail to `Type: message` now compares it to the framed sentence. A script without the header reads the Portuguese frame and Portuguese 422 messages; one that parses `msg` should send `X-VF-Lang: en` or read `type`.
+
+**Alternatives considered:**
+
+- *Translate every Pydantic error type.* Around a hundred, most of which no form in the page can produce; an untranslated `msg` is still correct English and its `type` is stable.
+- *Let the page word the 422 from `type` and `ctx`.* Every client of the API would need its own table; the catalog already exists on the server.

@@ -499,5 +499,7 @@ class TestRunTestRoute:
         resp = client.post(f"/api/runs/{run_dir.name}/test", json={"data_dir": "x"})
 
         assert resp.status_code == 500
-        assert resp.json()["detail"].startswith("KeyError")
+        assert resp.json()["detail"] == (
+            "Algo deu errado no servidor. Detalhe técnico: KeyError: 'model'"
+        )
         assert calls == [run_dir]

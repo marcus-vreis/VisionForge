@@ -25,6 +25,7 @@ from loguru import logger
 from visionforge.gui.api.datasets_routes import _remember_dataset_root
 from visionforge.gui.api.detection_export import export_detection_run
 from visionforge.gui.api.detection_testing import evaluate_detection_run
+from visionforge.gui.api.error_messages import unexpected_error
 from visionforge.gui.api.http_responses import (
     BAD_REQUEST_TEXT,
     NOT_FOUND_TEXT,
@@ -205,7 +206,7 @@ async def _run_off_loop[Req, Resp](
         raise HTTPException(400, str(exc)) from exc
     except Exception as exc:  # noqa: BLE001
         logger.exception(failure_log, run_id)
-        raise HTTPException(500, f"{type(exc).__name__}: {exc}") from exc
+        raise HTTPException(500, unexpected_error(exc)) from exc
 
 
 def _reject_group_action(run_dir: Path) -> None:
