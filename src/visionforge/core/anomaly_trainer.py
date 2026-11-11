@@ -40,13 +40,23 @@ from visionforge.models.anomaly_factory import ConvAutoencoder, PatchCore
 from visionforge.utils.anomaly_config import AnomalyConfig
 
 
-def compute_auroc(scores: torch.Tensor, labels: torch.Tensor) -> float:
-    """Image-level AUROC; returns 0.5 when only one class is present."""
+def compute_auroc(scores: torch.Tensor, labels: torch.Tensor) -> float | None:
+    """Image-level AUROC; ``None`` when the labels hold fewer than two classes.
+
+    With only normal (or only anomalous) images there is no pair to rank, so
+    the AUROC is undefined. It used to come back as 0.5, which reads as a
+    measured chance-level detector and entered replicate means as one (#170).
+    """
     y = labels.detach().cpu().numpy()
     s = scores.detach().cpu().numpy()
     if len(np.unique(y)) < 2:
-        return 0.5
+        return None
     return float(roc_auc_score(y, s))
+
+
+def _fmt(value: float | None) -> str:
+    """A metric for the log line: four decimals, or "n/a" when undefined."""
+    return "n/a" if value is None else f"{value:.4f}"
 
 
 def compute_threshold(normal_scores: torch.Tensor, percentile: float) -> float:
@@ -74,9 +84,11 @@ class AnomalyEpochResult:
     epoch: int
     # None for PatchCore: it fits a memory bank, with no gradient loss to report.
     train_loss: float | None
-    val_auroc: float
+    # None when the test split holds a single class: nothing to rank (#170).
+    val_auroc: float | None
     val_threshold: float
-    val_image_f1: float
+    # None when the test split has no anomalous image: recall is 0/0.
+    val_image_f1: float | None
 
 
 @dataclass
@@ -198,13 +210,13 @@ class AnomalyTrainer(training_loop.TrainingOutput):
 
     def evaluate(
         self, model: nn.Module, calibration_loader: Any, test_loader: Any
-    ) -> tuple[float, float, float]:
+    ) -> tuple[float | None, float, float | None]:
         """Return test AUROC, calibrated threshold and image-level F1."""
         return self.evaluate_with_scores(model, calibration_loader, test_loader)[0]
 
     def evaluate_with_scores(
         self, model: nn.Module, calibration_loader: Any, test_loader: Any
-    ) -> tuple[tuple[float, float, float], np.ndarray, np.ndarray]:
+    ) -> tuple[tuple[float | None, float, float | None], np.ndarray, np.ndarray]:
         """Return anomaly metrics, per-image test labels and anomaly scores."""
         model = model.to(self._device)
         model.eval()
@@ -387,12 +399,12 @@ class AnomalyTrainer(training_loop.TrainingOutput):
         )
 
         logger.info(
-            "Epoch {}/{} | recon_loss={:.4f} auroc={:.4f} f1={:.4f}",
+            "Epoch {}/{} | recon_loss={:.4f} auroc={} f1={}",
             epoch,
             self._config.training.epochs,
             train_loss,
-            auroc,
-            f1,
+            _fmt(auroc),
+            _fmt(f1),
         )
         if progress_callback is not None:
             progress_callback(
@@ -591,7 +603,7 @@ class AnomalyTrainer(training_loop.TrainingOutput):
             {"auroc/val": auroc, "image_f1/val": f1, "threshold/val": threshold},
         )
 
-        logger.info("PatchCore fit | auroc={:.4f} f1={:.4f}", auroc, f1)
+        logger.info("PatchCore fit | auroc={} f1={}", _fmt(auroc), _fmt(f1))
         if progress_callback is not None:
             progress_callback(
                 {
@@ -641,12 +653,14 @@ class AnomalyTrainer(training_loop.TrainingOutput):
         normal_scores: torch.Tensor,
         test_scores: torch.Tensor,
         test_labels: torch.Tensor,
-    ) -> tuple[float, float, float]:
+    ) -> tuple[float | None, float, float | None]:
         auroc = compute_auroc(test_scores, test_labels)
         threshold = compute_threshold(normal_scores, self._percentile)
         preds = (test_scores >= threshold).long().cpu().numpy()
         y = test_labels.long().cpu().numpy()
-        f1 = float(f1_score(y, preds, zero_division=0))
+        # Without an anomalous image recall is 0/0 and F1 undefined; sklearn's
+        # zero_division=0 would report a measured 0.0 instead.
+        f1 = float(f1_score(y, preds, zero_division=0)) if y.any() else None
         return auroc, threshold, f1
 
     def _build_optimizer(self, model: nn.Module) -> torch.optim.Optimizer:

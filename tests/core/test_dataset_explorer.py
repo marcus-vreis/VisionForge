@@ -5,11 +5,13 @@ Every dataset is a few tiny images built in ``tmp_path``.
 
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 
 import pytest
 from PIL import Image
 
+from visionforge.core import dataset_explorer
 from visionforge.core.cancellation import CancellationToken
 from visionforge.core.dataset_explorer import (
     build_index,
@@ -242,6 +244,21 @@ class TestScan:
         assert sum(b["count"] for b in sizes["side_bins"]) == 5
         # 8x8 -> aspect 1.0, 16x8 -> aspect 2.0
         assert sum(b["count"] for b in sizes["aspect_bins"]) == 5
+
+    def test_image_that_cannot_be_reopened_is_left_out_of_sizes(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _folder_dataset(tmp_path)  # five images that open
+        (tmp_path / "train/cat/broken.png").write_bytes(b"not an image")
+
+        def trusting_digest(root: Path, path: Path, record: object) -> str:
+            return hashlib.sha256(path.read_bytes()).hexdigest()
+
+        monkeypatch.setattr(dataset_explorer, "_verified_image_digest", trusting_digest)
+        report = scan_integrity(build_index(tmp_path, "classification"))
+        assert report["scanned"] == 6
+        assert report["corrupted_count"] == 0
+        assert report["sizes"]["count"] == 5
 
     def test_limit_samples_evenly_and_says_so(self, tmp_path: Path) -> None:
         for i in range(10):

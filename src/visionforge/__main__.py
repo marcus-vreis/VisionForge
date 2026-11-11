@@ -303,6 +303,17 @@ def _use_utf8_console() -> None:
             reconfigure(encoding="utf-8", errors="replace")
 
 
+def _add_offline_flag(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--offline",
+        action="store_true",
+        help=(
+            "refuse every connection outside this computer and keep the SDKs "
+            "offline (same as VISIONFORGE_OFFLINE=1)"
+        ),
+    )
+
+
 def main() -> None:
     """Run a VisionForge experiment or start the GUI from the command line."""
     _use_utf8_console()
@@ -310,6 +321,8 @@ def main() -> None:
     from visionforge.utils.third_party_privacy import (
         apply_env_opt_outs,
         apply_opt_outs,
+        enable_offline_mode,
+        offline_requested,
     )
 
     # Before any SDK is imported: they read their switches at import time.
@@ -339,6 +352,7 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     run_parser.add_argument("config", type=Path, help="path to .yaml config")
+    _add_offline_flag(run_parser)
 
     gui_parser = subparsers.add_parser("gui", help="Start the VisionForge web GUI.")
     gui_parser.add_argument(
@@ -362,6 +376,7 @@ def main() -> None:
         action="store_true",
         help="do not open a browser tab (used when an update restarts the GUI)",
     )
+    _add_offline_flag(gui_parser)
 
     doctor_parser = subparsers.add_parser(
         "doctor", help="Check the environment and recommend the correct torch wheel."
@@ -446,6 +461,9 @@ def main() -> None:
 
     args = parser.parse_args()
     _bind_language_from_env()
+    if getattr(args, "offline", False) or offline_requested():
+        # Before apply_opt_outs imports ultralytics, which reads YOLO_OFFLINE.
+        enable_offline_mode()
     if args.command != "gui":
         # Imports ultralytics (~1.7 s) to switch its events off. The GUI imports
         # it only when a run needs it, and each of those imports does this first

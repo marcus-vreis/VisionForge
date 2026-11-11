@@ -28,6 +28,7 @@ from typing import Any
 from loguru import logger
 
 from visionforge.core.cancellation import STOPPED, STOPPED_NOTE, is_cancelled
+from visionforge.core.metric_vocabulary import is_absolute_error, metric_words
 from visionforge.core.significance import bootstrap_ci, infer_direction
 from visionforge.core.task_runner import (
     RunResult,
@@ -85,26 +86,14 @@ def metric_domain(metric: str) -> tuple[float | None, float | None]:
     better" yet can be negative, so the floor is kept for names that are
     absolute by construction, not for every "lower" metric.
     """
-    words = re.split(r"[^a-z0-9]+", metric.lower())
-    if infer_direction(metric) == "lower" and _is_absolute_error(words):
+    words = metric_words(metric)
+    if infer_direction(metric) == "lower" and is_absolute_error(metric):
         return 0.0, None
     if any(_UNIT_INTERVAL_WORD.match(w) for w in words):
         return 0.0, 1.0
     if "r2" in words or ("r" in words and "squared" in words):
         return None, 1.0
     return None, None
-
-
-_ABSOLUTE_ERROR_WORDS = frozenset(
-    {"mae", "mse", "rmse", "msle", "rmsle", "mape", "smape", "loss"}
-)
-
-
-def _is_absolute_error(words: list[str]) -> bool:
-    """A name whose values are non-negative by construction (MAE, MSE, a loss)."""
-    if _ABSOLUTE_ERROR_WORDS.intersection(words):
-        return True
-    return "error" in words and ("absolute" in words or "squared" in words)
 
 
 def _clip_to_domain(
@@ -160,7 +149,11 @@ def aggregate_replicates(
 
     aggregates: dict[str, dict[str, float | int | bool | None]] = {}
     for key in keys:
-        values = [t.metrics[key] for t in successful if key in t.metrics]
+        # An undefined metric (an anomaly AUROC on a one-class test split,
+        # #170) is null: it stays out of the mean and the interval.
+        values = [t.metrics[key] for t in successful if t.metrics.get(key) is not None]
+        if not values:
+            continue
         n = len(values)
         mean = statistics.fmean(values)
         boot_low: float | None = None

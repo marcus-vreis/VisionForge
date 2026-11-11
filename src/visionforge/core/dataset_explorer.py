@@ -360,6 +360,33 @@ def _edge_label(lo: float, hi: float) -> dict[str, float | None]:
     return {"lo": lo, "hi": None if math.isinf(hi) else hi}
 
 
+@dataclass
+class _SizeTally:
+    """Width, height and shape counts of the images that open."""
+
+    widths: list[int] = field(default_factory=list)
+    heights: list[int] = field(default_factory=list)
+    sizes: Counter[tuple[int, int]] = field(default_factory=Counter)
+    side_hist: list[int] = field(default_factory=lambda: [0] * (len(_SIDE_EDGES) - 1))
+    aspect_hist: list[int] = field(
+        default_factory=lambda: [0] * (len(_ASPECT_EDGES) - 1)
+    )
+
+    def add(self, path: Path) -> None:
+        """Count the size of ``path``; an image that cannot be opened is skipped."""
+        try:
+            with Image.open(path) as im:
+                w, h = im.size
+        except (OSError, ValueError, Image.DecompressionBombError):
+            w = h = 0
+        if w > 0 and h > 0:
+            self.widths.append(w)
+            self.heights.append(h)
+            self.sizes[(w, h)] += 1
+            self.side_hist[_bucket(max(w, h), _SIDE_EDGES)] += 1
+            self.aspect_hist[_bucket(w / h, _ASPECT_EDGES)] += 1
+
+
 def scan_integrity(
     index: DatasetIndex,
     *,
@@ -386,11 +413,7 @@ def scan_integrity(
     corrupted: list[dict[str, str]] = []
     corrupted_count = 0
     by_hash: dict[str, list[ExplorerImage]] = defaultdict(list)
-    widths: list[int] = []
-    heights: list[int] = []
-    sizes: Counter[tuple[int, int]] = Counter()
-    side_hist = [0] * (len(_SIDE_EDGES) - 1)
-    aspect_hist = [0] * (len(_ASPECT_EDGES) - 1)
+    tally = _SizeTally()
     scanned = 0
     cancelled = False
     current: list[ExplorerImage] = []
@@ -417,17 +440,7 @@ def scan_integrity(
         scanned += 1
         if digest is not None:
             by_hash[digest].append(item)
-            try:
-                with Image.open(root / item.rel) as im:
-                    w, h = im.size
-            except (OSError, ValueError, Image.DecompressionBombError):
-                w = h = 0
-            if w > 0 and h > 0:
-                widths.append(w)
-                heights.append(h)
-                sizes[(w, h)] += 1
-                side_hist[_bucket(max(w, h), _SIDE_EDGES)] += 1
-                aspect_hist[_bucket(w / h, _ASPECT_EDGES)] += 1
+            tally.add(root / item.rel)
         if on_progress:
             on_progress(scanned, len(chosen))
 
@@ -450,7 +463,13 @@ def scan_integrity(
         "duplicate_groups": duplicate_groups[:MAX_REPORTED],
         "leakage_group_count": len(leakage_groups),
         "leakage_groups": leakage_groups[:MAX_REPORTED],
-        "sizes": _size_report(widths, heights, sizes, side_hist, aspect_hist),
+        "sizes": _size_report(
+            tally.widths,
+            tally.heights,
+            tally.sizes,
+            tally.side_hist,
+            tally.aspect_hist,
+        ),
     }
 
 

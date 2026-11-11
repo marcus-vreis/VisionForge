@@ -1,9 +1,9 @@
 # VisionForge — Roadmap & improvement plan
 
 > **Historical (superseded).** Every item below shipped — ADR-041 through
-> ADR-047 are Accepted in `DECISIONS.md`. Kept for the reasoning trail that
-> produced them. For what is planned *now*, see `TASKS.md` (current phases and
-> open follow-ups) and `RELEASE_NOTES.md` (what shipped recently).
+> ADR-047 are Accepted in [`../dev/DECISIONS.md`](../dev/DECISIONS.md). Kept for the reasoning trail that
+> produced them. For what is planned *now*, see [`../ROADMAP.md`](../ROADMAP.md)
+> and [`../../CHANGELOG.md`](../../CHANGELOG.md) (what shipped in each release).
 
 > Live planning doc owned by Cowork (judgment/decisions/docs). Each item below was
 > grounded in the actual code, given a recommendation, and — where it's a real
@@ -248,13 +248,13 @@ numa regra, ou pq trocou a parte" não fazem sentido ali.
 **What I found:** `docs/` carries four per-task plans
 (`PHASE6/7/8/9_*_PLAN.md`) plus `GRADCAM_PLAN.md`. They were implementation
 scaffolds; their *decisions* now live in `DECISIONS.md` (ADRs) and their *status*
-in `TASKS.md`. They're redundant with the canonical set. In code, there are ~35
+in `VALIDATION.md`. They're redundant with the canonical set. In code, there are ~35
 comments referencing ADRs or narrating change history.
 
 **Decision (ADR-046), two parts:**
 
 - **Docs:** the live, canonical set is `CONTRIBUTING.md` (root), `ARCHITECTURE.md`,
-  `DECISIONS.md`, `TASKS.md`, `ROADMAP.md` (this file), plus the active specs
+  `DECISIONS.md`, `VALIDATION.md`, `ROADMAP.md` (this file), plus the active specs
   (`CROSS_TASK_PARITY_PLAN.md`, `DOCKER_PLAN.md`). The `PHASE*_PLAN.md` and
   `GRADCAM_PLAN.md` move to `documentation/archive/` (history, not deleted — they
   show how a task was built). `PROJECT_CONTEXT.md` is also archive-tier (it lags
