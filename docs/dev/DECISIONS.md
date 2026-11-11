@@ -7840,3 +7840,51 @@ differently now. Each fix has a test that failed before it
 
 - *Keep the hook on commit but filter by changed files.* A change to any `src/` file still runs everything, and the filter has to track which paths affect which tests.
 - *Remove the hook and rely on CI.* The suite would then run first on GitHub, after a push, which is a slower loop than a local one.
+## ADR-187 — The interval of a paired difference inverts the test beside it
+
+**Date:** 2026-11-11
+**Status:** Accepted
+**Amends:** ADR-061 (item 1: "a bootstrap CI of the difference")
+
+**Context:** `paired_comparison` reported a percentile bootstrap interval of the paired differences next to a paired t or Wilcoxon p-value. With few seeds the percentile bootstrap under-covers (it can only resample the values it has), so the two disagreed: in `research/seed_variance/results/summary.json` four cells have an interval excluding zero beside p between 0.06 and 0.09 (n = 10). The GUI report, `run.json` and the LaTeX comparison table showed both (#162).
+
+**Decision:** the interval is the dual of the test that produced the p-value, at 95% (the comparison's alpha = 0.05). `paired_t`: the Student-t interval of the mean difference, `mean ± t(0.975, n-1)·sd/√n`. `wilcoxon`: the Hodges-Lehmann interval, `[W(k), W(M+1-k)]` over the `M = n(n+1)/2` sorted Walsh averages, with `k` the largest integer such that `P(T+ ≤ k-1) ≤ 0.025` under the exact null distribution of the signed-rank statistic (built by convolution, no ties). `PairedComparison` gains `ci_method` (`"t"` or `"hodges_lehmann"`), `ci_estimate` (the mean, or the Hodges-Lehmann pseudo-median the interval brackets) and `ci_confidence` (the coverage actually attained: the exact distribution is discrete, so it is at least 95%). Below 6 pairs no Hodges-Lehmann interval reaches 95% (`2/2^n > 0.05`), so `ci_low`/`ci_high` are `null`, the same reason the test is flagged underpowered. The LaTeX caption names the method of each interval; a report written before this ADR has no `ci_method` and is labelled percentile bootstrap. `bootstrap_ci` stays for the replicate aggregates (ADR-061 item 2), and the seed-variance study keeps its pre-registered percentile interval.
+
+**Consequences:** the interval excludes zero exactly when p < 0.05 for the paired t, and for the Wilcoxon when there are no ties or zero differences (scipy's p is then exact). With ties or zero differences scipy's p uses the normal approximation while the interval keeps the exact critical value; the test suite accepts disagreement in at most 5% of tied samples (measured: 1.7% with differences rounded to one decimal). Numbers already shown for a comparison change when it is recomputed. `paired_comparison` and `comparison_matrix` no longer take a `seed`.
+
+**Alternatives considered:**
+
+- *BCa or bootstrap-t for every test.* Better coverage than the percentile bootstrap, but still not the dual of the test: the disagreement shrinks without disappearing, and it remains stochastic.
+- *Keep the bootstrap with an under-coverage warning below 20 pairs.* Leaves the contradiction on screen for every realistic seed count.
+## ADR-188 — A public bundle leaves out `weights/*.pt` and rewrites `config.*`
+
+**Date:** 2026-11-11
+**Status:** Accepted
+**Amends:** ADR-174 (public run.json), ADR-175 (no local path leaves the computer)
+
+**Context:** ADR-174 cleaned only run.json in a public bundle. Ultralytics pickles its `train_args` (`data`, `project`, absolute paths) into `weights/best.pt` and `weights/last.pt`, and `config.json`/`config.yaml` went in as written, so a Zenodo draft could still carry the account name (#164).
+
+**Decision:** `export_experiment_bundle(..., public=True)` leaves out every `.pt` under a `weights/` folder and notes each one in the manifest ("checkpoint left out of a public bundle: it may embed local paths"); run.json then names the model as `null`. A member named `config.json`, `config.yaml` or `config.yml` is parsed and written back through `without_local_paths`, with a manifest note; one that does not parse or exceeds 16 MB is left out with its own note. The files on disk are untouched, the private bundle is unchanged, and the manifest keeps `format_version` 1, so earlier bundles still verify. A test exports a run whose checkpoints and configs name the home folder and greps every member of the zip for it.
+
+**Consequences:** a public bundle of a detection run carries no checkpoint; whoever needs the weights shares the private bundle or the Hub export. State-dict checkpoints (`best_model.pth`, the other tasks) still go: they hold tensors only. History, predictions and other members are not rewritten.
+
+**Alternatives considered:**
+
+- *Rewriting `train_args` and keeping the checkpoint.* Needs unpickling a checkpoint to edit it, and any other path ultralytics adds later would leak again.
+
+## ADR-189 — Offline mode refuses every non-loopback socket
+
+**Date:** 2026-11-11
+**Status:** Accepted
+**Extends:** ADR-120 (update check), ADR-180 (third-party telemetry in one module)
+
+**Context:** the README promises that nothing leaves the computer unless the researcher asks, but that held only by reading the code: no switch made it a guarantee and no test trained a model with the network cut off (#226).
+
+**Decision:** `visionforge gui --offline`, `visionforge run --offline` or `VISIONFORGE_OFFLINE=1` (any value but empty or `0`) call `third_party_privacy.enable_offline_mode()` right after parsing, before `apply_opt_outs` imports ultralytics. It sets `HF_HUB_OFFLINE`, `YOLO_OFFLINE` and `VISIONFORGE_NO_UPDATE_CHECK` to `1`, overriding the user (a guarantee, not a default), sets `VISIONFORGE_OFFLINE=1` for child processes, and installs a socket guard: `socket.socket.connect`, `connect_ex` and `sendto` refuse an `AF_INET`/`AF_INET6` destination that is not a loopback address or `localhost`, and `getaddrinfo`, `gethostbyname` and `gethostbyname_ex` refuse a name other than an IP literal, `localhost` or this machine's own name, so no DNS query leaves either. A refusal raises `NetworkBlockedError`, a `ConnectionRefusedError`, so network clients handle it as any failed connection. `tests/integration/test_offline_guard.py` trains one epoch of classification on CPU (resnet18 without pretrained weights, a synthetic dataset) under the guard, checks that external connections fail and loopback works, and starts `visionforge gui --offline` and reads `/api/health`.
+
+**Consequences:** with offline mode on, downloads of weights or datasets fail at once with a connection error instead of hanging. The guard covers this Python process; a child process inherits the environment switches and, if it is VisionForge's CLI, turns the guard on itself, but a native library that opens its own sockets, or asyncio's Windows proactor connecting to an IP literal, is not intercepted.
+
+**Alternatives considered:**
+
+- *Only the environment switches.* Each SDK honours its own, and a new dependency would reach the network unnoticed; the guard makes the promise checkable.
+- *A firewall rule.* Stronger, but needs administrator rights and differs per OS.

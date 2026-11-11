@@ -548,6 +548,29 @@ class TestBuild:
         assert sorted(p.name for p in tmp_path.iterdir()) == ["ds", "new"]
         assert _tree_hash(base) == before
 
+    def test_cancelling_while_placing_new_images_leaves_nothing(
+        self, tmp_path: Path
+    ) -> None:
+        base = _classification(tmp_path / "ds")
+        analysis = _analyze(base, _new_folder(tmp_path / "new", {"cat": 20}))
+        plan = plan_incorporation(analysis)
+        token = CancellationToken()
+        linked = len(_files(base))
+        seen: list[tuple[int, int]] = []
+
+        def stop_once_placing(done: int, total: int) -> None:
+            seen.append((done, total))
+            if done > linked:  # some new images are already in place
+                token.cancel()
+
+        result = build_incorporated_dataset(
+            analysis, plan, "ds-v2", token=token, on_progress=stop_once_placing
+        )
+        assert result is None
+        done, total = seen[-1]
+        assert linked < done < total
+        assert sorted(p.name for p in tmp_path.iterdir()) == ["ds", "new"]
+
     def test_cancelling_the_analysis_returns_nothing(self, tmp_path: Path) -> None:
         base = _classification(tmp_path / "ds")
         source = _new_folder(tmp_path / "new", {"cat": 5})

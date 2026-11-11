@@ -32,6 +32,49 @@ _NOT_READY = "The CLI is not installed or the profile is not logged in"
 _CLI_FAILED = "The Colab CLI failed"
 
 
+def _status(cli: ColabCli, logins: LoginFlows, slug: str) -> ColabStatus:
+    installed = cli.installed_version()
+    return ColabStatus(
+        pinned_version=PINNED_VERSION,
+        installed_version=installed,
+        install_state=cli.install_state,
+        install_error=cli.install_error,
+        logged_in=cli.logged_in(slug),
+        account=cli.account(slug) if installed else None,
+        login_pending=logins.pending(slug),
+    )
+
+
+def _installed(cli: ColabCli) -> bool:
+    return cli.installed_version() == PINNED_VERSION
+
+
+def _require_installed(cli: ColabCli) -> None:
+    if not _installed(cli):
+        raise HTTPException(409, tr("colab.not_installed"))
+
+
+def _require_login(cli: ColabCli, slug: str) -> None:
+    if not _installed(cli) or not cli.logged_in(slug):
+        raise HTTPException(409, tr("colab.not_logged_in"))
+
+
+def _cli_call[T](call: Callable[[], T]) -> T:
+    """Run one CLI call; its failure is a 502 with the CLI's message."""
+    try:
+        return call()
+    except ColabError as exc:
+        # `from None`: a login code must not travel in a chained traceback.
+        raise HTTPException(502, str(exc)) from None
+
+
+def _session_infos(jobs: ColabJobs, slug: str) -> list[ColabSessionInfo]:
+    return [
+        ColabSessionInfo(name=s.name, hardware=s.hardware, ours=s.ours)
+        for s in jobs.sessions(slug)
+    ]
+
+
 def build_colab_router(
     resolve_profile: Callable[[str | None], Profile],
     cli: ColabCli,
@@ -49,19 +92,7 @@ def build_colab_router(
     ProfileDep = Annotated[Profile, Depends(profile_dep)]
 
     def status(slug: str) -> ColabStatus:
-        installed = cli.installed_version()
-        return ColabStatus(
-            pinned_version=PINNED_VERSION,
-            installed_version=installed,
-            install_state=cli.install_state,
-            install_error=cli.install_error,
-            logged_in=cli.logged_in(slug),
-            account=cli.account(slug) if installed else None,
-            login_pending=logins.pending(slug),
-        )
-
-    def installed() -> bool:
-        return cli.installed_version() == PINNED_VERSION
+        return _status(cli, logins, slug)
 
     @router.get("/colab/status")
     def colab_status(profile: ProfileDep) -> ColabStatus:
@@ -80,23 +111,15 @@ def build_colab_router(
     )
     def colab_login_start(profile: ProfileDep) -> ColabLoginStart:
         """Start Google's login; nothing is allocated on Colab."""
-        if not installed():
-            raise HTTPException(409, tr("colab.not_installed"))
-        try:
-            return ColabLoginStart(url=logins.start(profile.slug))
-        except ColabError as exc:
-            raise HTTPException(502, str(exc)) from None
+        _require_installed(cli)
+        return ColabLoginStart(url=_cli_call(lambda: logins.start(profile.slug)))
 
     @router.post("/colab/login/finish", responses={502: {"description": _CLI_FAILED}})
     def colab_login_finish(
         req: ColabLoginFinishRequest, profile: ProfileDep
     ) -> ColabStatus:
         """Hand the code Google showed to the waiting CLI."""
-        try:
-            logins.finish(profile.slug, req.code)
-        except ColabError as exc:
-            # `from None`: the code must not travel in a chained traceback.
-            raise HTTPException(502, str(exc)) from None
+        _cli_call(lambda: logins.finish(profile.slug, req.code))
         return status(profile.slug)
 
     @router.post("/colab/login/cancel")
@@ -117,14 +140,10 @@ def build_colab_router(
     )
     def colab_usage(profile: ProfileDep) -> ColabUsage:
         """Balance and rate of the profile's Google account."""
-        if not installed():
-            raise HTTPException(409, tr("colab.not_installed"))
+        _require_installed(cli)
         if not cli.logged_in(profile.slug):
             raise HTTPException(409, tr("colab.not_logged_in"))
-        try:
-            usage = cli.usage(profile.slug)
-        except ColabError as exc:
-            raise HTTPException(502, str(exc)) from None
+        usage = _cli_call(lambda: cli.usage(profile.slug))
         return ColabUsage(
             balance=usage.balance,
             rate_per_hour=usage.rate_per_hour,
@@ -135,12 +154,8 @@ def build_colab_router(
     @router.get("/colab/sessions", responses={409: {"description": _NOT_READY}})
     def colab_sessions(profile: ProfileDep) -> list[ColabSessionInfo]:
         """Runtimes alive on the account, so a job cut short is not left running."""
-        if not installed() or not cli.logged_in(profile.slug):
-            raise HTTPException(409, tr("colab.not_logged_in"))
-        return [
-            ColabSessionInfo(name=s.name, hardware=s.hardware, ours=s.ours)
-            for s in jobs.sessions(profile.slug)
-        ]
+        _require_login(cli, profile.slug)
+        return _session_infos(jobs, profile.slug)
 
     @router.post(
         "/colab/sessions/stop",
@@ -150,15 +165,11 @@ def build_colab_router(
         req: ColabStopSessionRequest, profile: ProfileDep
     ) -> list[ColabSessionInfo]:
         """Release one runtime by name and return what is still alive."""
-        if not installed() or not cli.logged_in(profile.slug):
-            raise HTTPException(409, tr("colab.not_logged_in"))
+        _require_login(cli, profile.slug)
         if not jobs.stop_session(profile.slug, req.name):
             raise HTTPException(
                 502, tr("colab.cli_failed", command="stop", detail=req.name)
             )
-        return [
-            ColabSessionInfo(name=s.name, hardware=s.hardware, ours=s.ours)
-            for s in jobs.sessions(profile.slug)
-        ]
+        return _session_infos(jobs, profile.slug)
 
     return router

@@ -9,12 +9,13 @@ bundle da prévia: se algo mudou, o servidor recusa e pede outra prévia.
 ## O que é enviado
 
 - Um bundle zip com o `run.json`, a config, o histórico e as predições
-  selecionadas, o checkpoint e um manifesto com SHA-256 e tamanho de cada
-  arquivo.
+  selecionadas e um manifesto com SHA-256 e tamanho de cada arquivo.
 - O `run.json` do bundle é público: `run_dir` vira `.`, os artefatos viram
   nomes de membros do bundle e os caminhos locais ficam só com o nome final.
   A execução no disco não muda.
-- O checkpoint vai como foi gravado, com o que ele traz de metadados internos.
+- Os checkpoints `weights/*.pt` ficam fora: podem trazer caminhos locais
+  dentro deles. O manifesto lista cada um que ficou fora e o motivo (ADR-188).
+  A config vai reescrita, sem caminhos locais.
 
 ## O que não é enviado
 
