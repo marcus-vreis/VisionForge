@@ -35,8 +35,9 @@ model:
   # weights_path: path/to/checkpoint.pth   # optional, loaded non-strictly
 ```
 
-In the interface the same field appears under **Modelo** — pick your model by
-name and the built-in architecture selector steps aside.
+The interface has no selector for it: `custom_model` is set in the YAML config
+file, and the run that reads that file is the one that uses your builder
+(`visionforge run <file>.yaml`).
 
 VisionForge imports every `.py` file in the folder on demand to discover the
 registered builders, so a new file is picked up without restarting the server.
@@ -80,8 +81,8 @@ O passo a passo é o mesmo dos três blocos acima, e vale repetir o essencial:
 1. Um arquivo `.py` em `user_models/`, com nome que não comece por `_`.
 2. Uma função registrada com `@register_model("seu_nome")` que recebe um `int`
    — quantos números o modelo precisa emitir — e devolve um `nn.Module`.
-3. No config (ou no campo **Modelo** da interface), `model.custom_model:
-   seu_nome`. Os campos `name` e `pretrained` do modelo embutido passam a ser
+3. No config (YAML), `model.custom_model: seu_nome`; a interface não tem campo
+   para isso. Os campos `name` e `pretrained` do modelo embutido passam a ser
    ignorados.
 
 O mesmo modelo serve para classificação, segmentação e regressão, porque o

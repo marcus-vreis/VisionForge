@@ -56,15 +56,20 @@ classification task consumes.
 
 ## 3. First training run
 
-On the **Classification** tab:
+The task tabs configure a run in six steps — **Data**, **Strategy**,
+**Model**, **Training**, **Image & augmentation** and **Review** — and the
+**▶ Train** button on the bar below stays locked until a dataset is chosen in
+the first one. On the **Classification** tab:
 
-1. Point the dataset picker at the folder you just downloaded — split
+1. **Data**: point the dataset picker at the folder you just downloaded — split
    auto-detection and per-class stats render immediately; click
    **🎯 apply 10 classes** (the count it detected for CIFAR10) to inject the
    class count.
-2. Keep the defaults (ResNet-50 pretrained, 10 epochs is plenty for a smoke
-   run — lower it to 3 if you're on CPU).
-3. Press **▶ Train**. The overlay streams per-epoch loss/accuracy live.
+2. Leave **Strategy**, **Model** and **Image & augmentation** on their defaults:
+   a single run of `resnet18` with pretrained weights. **Training** defaults
+   to 20 epochs; lower it to 3 for a smoke run on CPU.
+3. **Review**: check the summary, give the run a name, and press **▶ Train**.
+   The overlay streams per-epoch loss/accuracy live.
 
 When it finishes you get metric tiles, confusion matrices, ROC/PR curves, and
 a markdown model card. Everything is also on disk under
