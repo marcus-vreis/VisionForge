@@ -148,6 +148,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 - `visionforge run` aceita um YAML com `strategy:` + `config:` e roda réplicas, comparação pareada, sweep e K-fold como a GUI, gravando o relatório com a tabela `.tex` e a entrada no Histórico; sem `strategy` nada muda (ADR-184) (#199).
 - A aba **Classificação** ganha **Réplicas** na estratégia: a mesma config com N seeds pela rota de réplicas que já existia, média ± IC 95% com acurácia como métrica destaque e `block` mantido em `classification`. Transfer learning fica travado enquanto Réplicas está escolhida, e o botão do Colab fica desligado com o motivo (ADR-056) (#190).
 - No **Histórico**, o detalhe de um run e o de um grupo ganham **Carregar no formulário** e **Repetir com 3 seeds**: a config do `run.json` vai para a aba da tarefa pelo mesmo import do botão de YAML, com os mesmos avisos, e Repetir abre **Réplicas** com três seeds que o run não usou. Tarefa própria removida deixa as duas ações desligadas com o motivo escrito ao lado (ADR-156) (#200).
+- Arquivos de comunidade do repositório: `SECURITY.md` (denúncia privada pelo GitHub), `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1), `.github/CODEOWNERS`, modelo de pull request com a checklist e `ISSUE_TEMPLATE/config.yml` apontando para Discussions; o CONTRIBUTING linka a política e o código de conduta (#183).
 
 ### Fixed
 

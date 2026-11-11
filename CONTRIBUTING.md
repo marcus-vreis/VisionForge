@@ -1,5 +1,9 @@
 # Contributing
 
+Everyone taking part in the project follows the
+[Code of Conduct](CODE_OF_CONDUCT.md). Report security vulnerabilities privately
+as described in [SECURITY.md](SECURITY.md), never in a public issue.
+
 ## Getting set up
 
 ```bash
