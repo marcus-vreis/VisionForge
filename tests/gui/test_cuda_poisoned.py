@@ -15,6 +15,7 @@ from pathlib import Path
 import pytest
 from fastapi import HTTPException
 
+import visionforge.gui.api.execution as execution_mod
 from visionforge.gui.api import routes
 from visionforge.utils.messages import using_lang
 
@@ -33,7 +34,7 @@ def test_a_broken_cuda_context_refuses_new_jobs(
 ) -> None:
     monkeypatch.setattr(routes, "cuda_context_broken", lambda: True)
     submitted: list[object] = []
-    monkeypatch.setattr(routes._RUN_QUEUE, "submit", submitted.append)
+    monkeypatch.setattr(execution_mod._RUN_QUEUE, "submit", submitted.append)
 
     with using_lang("en"), pytest.raises(HTTPException) as raised:
         _submit()
@@ -45,7 +46,7 @@ def test_a_broken_cuda_context_refuses_new_jobs(
 
 def test_a_healthy_server_queues_as_before(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(routes, "cuda_context_broken", lambda: False)
-    monkeypatch.setattr(routes._RUN_QUEUE, "submit", lambda job: "running")
+    monkeypatch.setattr(execution_mod._RUN_QUEUE, "submit", lambda job: "running")
 
     assert _submit().status == "running"  # type: ignore[attr-defined]
 

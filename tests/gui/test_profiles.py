@@ -26,6 +26,7 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import BaseModel
 
+import visionforge.gui.api.execution as execution_mod
 from tests.helpers import wait_experiment_done
 from visionforge.gui.api.profiles import (
     OUTPUT_SUBDIRS,
@@ -75,9 +76,9 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):  # type: ignore[no-unt
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(routes_mod, "_MODELS_DIR", Path("outputs/models"))
     monkeypatch.setattr(routes_mod, "_PROFILES_DIR", Path("outputs/profiles"))
-    routes_mod._JOB_STATES.clear()
+    execution_mod._JOB_STATES.clear()
     yield app, routes_mod
-    release_queue(routes_mod)
+    release_queue(execution_mod)
 
 
 @pytest.fixture
@@ -803,7 +804,7 @@ class TestHistoryIsPerProfile:
             seen.update(config=config, resume_dir=resume_dir)
 
         monkeypatch.setattr(routes_mod, "_submit_job", fake_submit)
-        monkeypatch.setattr(routes_mod, "_execute_experiment", fake_execute)
+        monkeypatch.setattr(execution_mod, "_execute_experiment", fake_execute)
 
         assert (
             client.post(
@@ -979,9 +980,9 @@ class TestARealRunLandsInItsProfile:
                 _make_profile(client, "Bob")
                 yield client
         finally:
-            routes_mod._RUN_QUEUE.reset()
-            routes_mod._JOB_STATES.clear()
-            routes_mod._JOB_STATES.clear()
+            execution_mod._RUN_QUEUE.reset()
+            execution_mod._JOB_STATES.clear()
+            execution_mod._JOB_STATES.clear()
             clear_task_registry()
 
     @staticmethod
@@ -1051,7 +1052,7 @@ class TestQueueShowsTheProfile:
         _, routes_mod = env
         _make_profile(client, "João Silva")
         base = build_regression_dataset(tmp_path / "ds")
-        occupy_queue(routes_mod)
+        occupy_queue(execution_mod)
         body = {
             "name": "reg",
             "model": {"name": "resnet18", "num_targets": 1, "pretrained": False},
@@ -1222,8 +1223,8 @@ class TestEverySubmissionIsScoped:
             outputs.append(paths(req.config["output"]))
 
         monkeypatch.setattr(routes_mod, "_submit_job", fake_submit)
+        monkeypatch.setattr(execution_mod, "_execute_experiment", single(0))
         for name in (
-            "_execute_experiment",
             "_execute_detection",
             "_execute_regression",
             "_execute_segmentation",

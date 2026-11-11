@@ -38,10 +38,10 @@ async def _never_runs() -> None:  # pragma: no cover - never awaited
 
 
 def occupy_queue(
-    routes_mod: Any, run_id: str = "busy_run", lane: str = "local"
+    execution_mod: Any, run_id: str = "busy_run", lane: str = "local"
 ) -> None:
     """Make a queue (the local one by default) look mid-run, running nothing."""
-    queue = routes_mod._LANES.lane(lane)
+    queue = execution_mod._LANES.lane(lane)
     queue._active = QueuedJob(
         run_id=run_id,
         label=run_id,
@@ -52,15 +52,15 @@ def occupy_queue(
     queue._worker = _StuckWorker()
 
 
-def release_queue(routes_mod: Any) -> None:
+def release_queue(execution_mod: Any) -> None:
     """Clear every queue and every job's state between tests (ADR-163, phase 4)."""
-    routes_mod._LANES.reset()
-    routes_mod._JOB_STATES.clear()
-    routes_mod._latest_run_id = None
+    execution_mod._LANES.reset()
+    execution_mod._JOB_STATES.clear()
+    execution_mod._latest_run_id = None
 
 
 def start_job(
-    routes_mod: Any,
+    execution_mod: Any,
     run_id: str,
     log: Any = None,
     lane: str = "local",
@@ -81,23 +81,23 @@ def start_job(
     job.lane = lane
     if cancel_token is not None:
         job.cancel_token = cancel_token
-    routes_mod._begin_job(job)
-    state = routes_mod._JOB_STATES[run_id]
+    execution_mod._begin_job(job)
+    state = execution_mod._JOB_STATES[run_id]
     if log is not None:
         state.log = log
     return state
 
 
-def fake_run(routes_mod: Any, run: dict[str, Any]) -> Any:
+def fake_run(execution_mod: Any, run: dict[str, Any]) -> Any:
     """A started job whose state is ``run``, as if its executor had written it."""
-    state = start_job(routes_mod, run["run_id"])
+    state = start_job(execution_mod, run["run_id"])
     state.run = dict(run)
     return state
 
 
-def job_run(routes_mod: Any, run_id: str | None = None) -> Any:
+def job_run(execution_mod: Any, run_id: str | None = None) -> Any:
     """The run dict of a started job: the one named, or the latest."""
-    return routes_mod._run_state(run_id)
+    return execution_mod._run_state(run_id)
 
 
 @pytest.fixture
@@ -141,6 +141,6 @@ def _drop_queue_leftovers() -> Iterator[None]:
     the real executor its fakes no longer cover.
     """
     yield
-    routes_mod = sys.modules.get("visionforge.gui.api.routes")
-    if routes_mod is not None:
-        release_queue(routes_mod)
+    execution_mod = sys.modules.get("visionforge.gui.api.execution")
+    if execution_mod is not None:
+        release_queue(execution_mod)

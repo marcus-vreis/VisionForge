@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+import visionforge.gui.api.execution as execution_mod
 from tests.helpers import wait_experiment_done, wait_until
 from visionforge.utils.selftest_data import build_segmentation_dataset
 
@@ -51,7 +52,7 @@ class TestSegmentationRun:
         from visionforge.blocks.segmentation import SegmentationBlock
 
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
 
         captured: dict[str, object] = {}
         orig_setup = SegmentationBlock.setup
@@ -90,26 +91,26 @@ class TestSegmentationRun:
             SegmentationBlock.setup = orig_setup  # type: ignore[method-assign]
             SegmentationBlock.run = orig_run  # type: ignore[method-assign]
             SegmentationBlock.report = orig_report  # type: ignore[method-assign]
-            routes_mod._JOB_STATES.clear()
+            execution_mod._JOB_STATES.clear()
 
     def test_queues_behind_a_running_job(
         self, app_and_routes: tuple, tmp_path: Path
     ) -> None:
         app, routes_mod = app_and_routes
-        occupy_queue(routes_mod)
+        occupy_queue(execution_mod)
         try:
             client = TestClient(app, raise_server_exceptions=True)
             resp = client.post("/api/segmentation/run", json=_payload(tmp_path))
             assert resp.status_code == 200
             assert resp.json()["status"] == "queued"
         finally:
-            release_queue(routes_mod)
+            release_queue(execution_mod)
 
     def test_run_rejects_invalid_config(
         self, app_and_routes: tuple, tmp_path: Path
     ) -> None:
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
         payload = _payload(tmp_path)
         # ignore_index (1) collides with a class id when num_classes=3 -> 422
         payload["data"] = {"base_dir": payload["data"]["base_dir"], "ignore_index": 1}
@@ -125,7 +126,7 @@ class TestSegmentationCompare:
         from visionforge.core.comparison import ComparisonTrial
 
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
 
         def fake_compare(
             runner, config_dict, model_names, metric, progress_callback=None
@@ -157,13 +158,13 @@ class TestSegmentationCompare:
             assert report["top_3"][0]["model_arch"] == "unet"
         finally:
             routes_mod.run_model_comparison = orig
-            routes_mod._JOB_STATES.clear()
+            execution_mod._JOB_STATES.clear()
 
     def test_compare_requires_two_models(
         self, app_and_routes: tuple, tmp_path: Path
     ) -> None:
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
         client = TestClient(app, raise_server_exceptions=True)
         resp = client.post(
             "/api/segmentation/compare",
@@ -179,7 +180,7 @@ class TestSegmentationSweep:
         from visionforge.core.sweep import SweepTrial
 
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
 
         def fake_sweep(
             runner, base, space, *, mode, metric, n_trials, seed, progress_callback=None
@@ -219,4 +220,4 @@ class TestSegmentationSweep:
             assert report["successful_trials"] == 1
         finally:
             routes_mod.run_sweep = orig
-            routes_mod._JOB_STATES.clear()
+            execution_mod._JOB_STATES.clear()

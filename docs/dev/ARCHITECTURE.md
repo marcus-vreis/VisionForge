@@ -144,7 +144,7 @@ class ExperimentBlock(ABC):
     def report(self) -> dict: ...
 ```
 
-`BlockRegistry.discover()` lists the concrete `ExperimentBlock` subclasses. Dispatch is not by registry: `_execute_experiment` in `gui/api/routes.py` reads `config.block` (ADR-026).
+`BlockRegistry.discover()` lists the concrete `ExperimentBlock` subclasses. Dispatch is not by registry: `_execute_experiment` in `gui/api/execution.py` reads `config.block` (ADR-026).
 
 | Block | `config.block` | Dispatched by | Description |
 |---|---|---|---|
@@ -181,9 +181,11 @@ Imports `blocks/`, `tasks/`, `core/`, `models/` and `utils/`. React + shadcn/ui 
 | Module | Responsibility |
 |---|---|
 | `server.py` | FastAPI application. Mounts `api/routes.py` and serves the pre-built SPA from `static/`, confined to the resolved SPA root (ADR-127). Also serves `GET /api/health` and applies `security.py`. Entry point behind `visionforge gui`. |
-| `api/routes.py` | REST router, prefix `/api`, which includes the routers split out of it (ADR-132). Still defines: schema + lifecycle (`GET /api/schema`, `POST /api/experiment/run`, `GET /api/experiment/{status,events,result/{id}}`); per-task schema, run, sweep, compare, replicates and K-fold (`/api/{detection,regression,segmentation,anomaly}/*`, `/api/classification/{replicates,replicated-comparison}`); researcher tasks (`/api/tasks`, `/api/custom/{key}/*`); per-run actions (`/api/runs/{id}` and `/export_md`, `/resume`, `/reveal`); `/api/sample-dataset`, `/api/queue`, `/api/update`, `GET /api/artifacts/{file_path}`. |
+| `api/routes.py` | REST router, prefix `/api`, which includes the routers split out of it (ADR-132). Still defines: schema + submission (`GET /api/schema`, `POST /api/experiment/run`); per-task schema, run, sweep, compare, replicates and K-fold (`/api/{detection,regression,segmentation,anomaly}/*`, `/api/classification/{replicates,replicated-comparison}`); researcher tasks (`/api/tasks`, `/api/custom/{key}/*`); per-run actions (`/api/runs/{id}` and `/export_md`, `/resume`, `/reveal`); `/api/sample-dataset`, `/api/update`, `GET /api/artifacts/{file_path}`. |
 | `api/schemas.py` | Pydantic request/response models for the routes above. |
 | `api/evaluation_routes.py` | Per-run evaluation split out of `routes.py`: `POST /api/runs/{id}/test`, `/gradcam`, `/batch_predict`, `/export_onnx`, with the run lookup and profile injected (#204). |
+| `api/execution.py` | Sole owner of the run queue's lanes and of every started job's state (event log, stop token, run dict), and the classification executor `_execute_experiment`; no FastAPI import (ADR-185). |
+| `api/execution_routes.py` | Reads that state and commands the lanes: `GET /api/experiment/{status,events,result/{id}}`, `GET /api/queue`, `DELETE /api/queue/{id}` (ADR-185). |
 | `api/profiles_routes.py` | Profile endpoints mounted by the shared router, with output directories resolved per request (ADR-132). |
 | `security.py` | Refuses requests whose `Host` or `Origin` does not name this server (DNS rebinding and cross-site requests to the local server). |
 | `api/datasets_routes.py` | Dataset, picker and credential endpoints split out of `routes.py` (`/api/dataset/*`, `/api/<task>/dataset/*`, `/api/checkpoint/pick`, `/api/credentials`) (ADR-132). |

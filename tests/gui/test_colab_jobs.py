@@ -17,6 +17,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
+import visionforge.gui.api.execution as execution_mod
 from visionforge.gui.api import colab_connection as cc
 from visionforge.gui.api import colab_jobs as cj
 from visionforge.gui.api import colab_remote_runner as runner
@@ -443,7 +444,7 @@ def test_colab_run_is_queued_with_a_vm_stop(monkeypatch: pytest.MonkeyPatch) -> 
         routes_mod._COLAB_CLI, "account", lambda slug: "Ana@Example.com"
     )
     # The account's queue is the busy one: the job waits there, not locally.
-    occupy_queue(routes_mod, lane="colab:ana@example.com")
+    occupy_queue(execution_mod, lane="colab:ana@example.com")
     try:
         client = TestClient(app)
         body = {
@@ -466,7 +467,7 @@ def test_colab_run_is_queued_with_a_vm_stop(monkeypatch: pytest.MonkeyPatch) -> 
         assert pending["stop_at"] == "vm"
         assert pending["lane"] == "colab:ana@example.com"
     finally:
-        release_queue(routes_mod)
+        release_queue(execution_mod)
 
 
 def test_two_profiles_on_one_account_share_its_queue(
@@ -498,19 +499,19 @@ def test_execute_colab_records_the_report_and_closes_the_stream(
     monkeypatch.setattr(routes_mod, "_COLAB_JOBS", Jobs())
 
     async def go() -> list[dict[str, Any]]:
-        start_job(routes_mod, "r1", log=RunEventLog("r1"))
+        start_job(execution_mod, "r1", log=RunEventLog("r1"))
         await routes_mod._execute_colab("r1", "default", "T4", PAYLOAD, UNUSED_MODELS)
         await asyncio.sleep(0)
-        return [e async for e in routes_mod._job_state("r1").log.read()]
+        return [e async for e in execution_mod._job_state("r1").log.read()]
 
     try:
         events = asyncio.run(go())
         assert events == [{"event": "epoch_end", "epoch": 1}]
-        assert job_run(routes_mod, "r1") is not None
-        assert job_run(routes_mod, "r1")["status"] == "completed"
-        assert job_run(routes_mod, "r1")["report"] == {"accuracy": 0.8}
+        assert job_run(execution_mod, "r1") is not None
+        assert job_run(execution_mod, "r1")["status"] == "completed"
+        assert job_run(execution_mod, "r1")["report"] == {"accuracy": 0.8}
     finally:
-        release_queue(routes_mod)
+        release_queue(execution_mod)
 
 
 def test_colab_run_still_rejects_a_bad_config_before_paying_for_a_vm(
@@ -731,14 +732,14 @@ def test_execute_colab_delivers_every_event_before_closing_the_stream(
     monkeypatch.setattr(routes_mod, "_COLAB_JOBS", Jobs())
 
     async def go() -> list[dict[str, Any]]:
-        start_job(routes_mod, "r1", log=SlowDeliveryLog("r1"))
+        start_job(execution_mod, "r1", log=SlowDeliveryLog("r1"))
         await routes_mod._execute_colab("r1", "default", "T4", PAYLOAD, UNUSED_MODELS)
-        return [e async for e in routes_mod._job_state("r1").log.read()]
+        return [e async for e in execution_mod._job_state("r1").log.read()]
 
     try:
         assert asyncio.run(go()) == sent
     finally:
-        release_queue(routes_mod)
+        release_queue(execution_mod)
 
 
 class RecordingLog(SlowDeliveryLog):
@@ -775,7 +776,7 @@ def test_execute_colab_has_each_event_in_the_log_when_on_event_returns(
     monkeypatch.setattr(routes_mod, "_COLAB_JOBS", Jobs())
 
     async def go() -> None:
-        start_job(routes_mod, "r1", log=log)
+        start_job(execution_mod, "r1", log=log)
         await routes_mod._execute_colab("r1", "default", "T4", PAYLOAD, UNUSED_MODELS)
 
     try:
@@ -783,7 +784,7 @@ def test_execute_colab_has_each_event_in_the_log_when_on_event_returns(
         assert landed_after_each == [sent[: i + 1] for i in range(len(sent))]
         assert log.landed == [*sent, None]
     finally:
-        release_queue(routes_mod)
+        release_queue(execution_mod)
 
 
 class StalledLog(RunEventLog):
@@ -811,13 +812,13 @@ def test_execute_colab_drops_an_event_the_loop_never_takes_and_finishes(
     monkeypatch.setattr(routes_mod, "_COLAB_EVENT_TIMEOUT_S", 0.05)
 
     async def go() -> list[dict[str, Any]]:
-        start_job(routes_mod, "r1", log=StalledLog("r1"))
+        start_job(execution_mod, "r1", log=StalledLog("r1"))
         await routes_mod._execute_colab("r1", "default", "T4", PAYLOAD, UNUSED_MODELS)
-        return [e async for e in routes_mod._job_state("r1").log.read()]
+        return [e async for e in execution_mod._job_state("r1").log.read()]
 
     try:
         assert asyncio.run(go()) == []
-        assert job_run(routes_mod, "r1") is not None
-        assert job_run(routes_mod, "r1")["status"] == "completed"
+        assert job_run(execution_mod, "r1") is not None
+        assert job_run(execution_mod, "r1")["status"] == "completed"
     finally:
-        release_queue(routes_mod)
+        release_queue(execution_mod)

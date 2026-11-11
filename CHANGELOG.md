@@ -182,6 +182,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 - Os guias `QUICKSTART`, `custom/MODELS`, `custom/TASKS`, `DATASETS` e `INSTALL` voltam a dizer o que o produto faz: `resnet18` e 20 épocas por padrão, as seis etapas da configuração, `custom_model` só pelo YAML, `replicated-comparison` e ocultar/apagar tarefas próprias, os 160/40/200 imagens de `limit=20` no MNIST e a verificação de instalação sem versão fixa; `tests/test_docs_pinned_facts.py` prende esses fatos ao código (#197).
 - As rotas de avaliação de uma execução (testar em outro dataset, Grad-CAM, predição em lote e exportar ONNX) saem de `routes.py` para `evaluation_routes.py`, sem mudar o contrato HTTP; `routes.py` cai de 4410 para 3620 linhas e `tests/test_module_size.py` impede que volte a crescer (#204).
 - `visionforge run` com `strategy:` recusa, com código 2 e a mensagem da GUI, uma variante da comparação pareada ou um espaço de varredura que altere `output.*`; antes o treino começava e escrevia fora da pasta do perfil (#264).
+- A fila de execução e o estado de cada job iniciado (log de eventos, token de parada, resultado) saem de `routes.py` para `execution.py`, seu único dono, junto com `_execute_experiment` (complexidade cognitiva abaixo de 15); as rotas de status, eventos, resultado e fila vão para `execution_routes.py`, sem mudar o contrato HTTP; `routes.py` cai de 3612 para 3202 linhas (ADR-185) (#204).
 
 ## [0.21.0] — 2026-11-05
 

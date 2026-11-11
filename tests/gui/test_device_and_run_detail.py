@@ -10,6 +10,7 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
+import visionforge.gui.api.execution as execution_mod
 from visionforge.gui.api.routes import _find_run_dir
 from visionforge.utils.cuda import CUDAInfo, GPUDevice
 
@@ -233,7 +234,7 @@ class TestDeleteRun:
         app, routes_mod = app_and_routes
         run_dir = _write_run(tmp_path)
         fake_run(
-            routes_mod,
+            execution_mod,
             {
                 "run_id": run_dir.name,
                 "status": "running",
@@ -247,7 +248,7 @@ class TestDeleteRun:
             assert resp.status_code == 409
             assert run_dir.exists()
         finally:
-            routes_mod._JOB_STATES.clear()
+            execution_mod._JOB_STATES.clear()
 
 
 class TestFindRunDir:

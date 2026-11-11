@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+import visionforge.gui.api.execution as execution_mod
 from tests.helpers import wait_experiment_done, wait_until
 from visionforge.utils.selftest_data import build_regression_dataset
 
@@ -51,7 +52,7 @@ class TestRegressionRun:
         from visionforge.blocks.regression import RegressionBlock
 
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
 
         captured: dict[str, object] = {}
         orig_setup = RegressionBlock.setup
@@ -89,26 +90,26 @@ class TestRegressionRun:
             RegressionBlock.setup = orig_setup  # type: ignore[method-assign]
             RegressionBlock.run = orig_run  # type: ignore[method-assign]
             RegressionBlock.report = orig_report  # type: ignore[method-assign]
-            routes_mod._JOB_STATES.clear()
+            execution_mod._JOB_STATES.clear()
 
     def test_queues_behind_a_running_job(
         self, app_and_routes: tuple, tmp_path: Path
     ) -> None:
         app, routes_mod = app_and_routes
-        occupy_queue(routes_mod)
+        occupy_queue(execution_mod)
         try:
             client = TestClient(app, raise_server_exceptions=True)
             resp = client.post("/api/regression/run", json=_payload(tmp_path))
             assert resp.status_code == 200
             assert resp.json()["status"] == "queued"
         finally:
-            release_queue(routes_mod)
+            release_queue(execution_mod)
 
     def test_run_rejects_invalid_config(
         self, app_and_routes: tuple, tmp_path: Path
     ) -> None:
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
         payload = _payload(tmp_path)
         # num_targets (2) must equal len(target_columns) (1) -> 422
         payload["model"] = {"name": "resnet18", "num_targets": 2, "pretrained": False}
@@ -124,7 +125,7 @@ class TestRegressionCompare:
         from visionforge.core.comparison import ComparisonTrial
 
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
 
         def fake_compare(
             runner, config_dict, model_names, metric, progress_callback=None
@@ -164,13 +165,13 @@ class TestRegressionCompare:
             assert (Path(report["report_dir"]) / "comparison_ranking.csv").exists()
         finally:
             routes_mod.run_model_comparison = orig
-            routes_mod._JOB_STATES.clear()
+            execution_mod._JOB_STATES.clear()
 
     def test_queues_behind_a_running_job(
         self, app_and_routes: tuple, tmp_path: Path
     ) -> None:
         app, routes_mod = app_and_routes
-        occupy_queue(routes_mod)
+        occupy_queue(execution_mod)
         try:
             client = TestClient(app, raise_server_exceptions=True)
             resp = client.post(
@@ -180,13 +181,13 @@ class TestRegressionCompare:
             assert resp.status_code == 200
             assert resp.json()["status"] == "queued"
         finally:
-            release_queue(routes_mod)
+            release_queue(execution_mod)
 
     def test_compare_rejects_invalid_config(
         self, app_and_routes: tuple, tmp_path: Path
     ) -> None:
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
         cfg = _payload(tmp_path)
         cfg["model"] = {"name": "resnet18", "num_targets": 2, "pretrained": False}
         client = TestClient(app, raise_server_exceptions=True)
@@ -200,7 +201,7 @@ class TestRegressionCompare:
         self, app_and_routes: tuple, tmp_path: Path
     ) -> None:
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
         client = TestClient(app, raise_server_exceptions=True)
         resp = client.post(
             "/api/regression/compare",
@@ -216,7 +217,7 @@ class TestRegressionSweep:
         from visionforge.core.sweep import SweepTrial
 
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
 
         def fake_sweep(
             runner, base, space, *, mode, metric, n_trials, seed, progress_callback=None
@@ -255,13 +256,13 @@ class TestRegressionSweep:
             assert (Path(report["report_dir"]) / "sweep_summary.json").exists()
         finally:
             routes_mod.run_sweep = orig
-            routes_mod._JOB_STATES.clear()
+            execution_mod._JOB_STATES.clear()
 
     def test_sweep_rejects_unknown_path(
         self, app_and_routes: tuple, tmp_path: Path
     ) -> None:
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
         client = TestClient(app, raise_server_exceptions=True)
         resp = client.post(
             "/api/regression/sweep",
@@ -277,7 +278,7 @@ class TestRegressionSweep:
         self, app_and_routes: tuple, tmp_path: Path
     ) -> None:
         app, routes_mod = app_and_routes
-        occupy_queue(routes_mod)
+        occupy_queue(execution_mod)
         try:
             client = TestClient(app, raise_server_exceptions=True)
             resp = client.post(
@@ -290,4 +291,4 @@ class TestRegressionSweep:
             assert resp.status_code == 200
             assert resp.json()["status"] == "queued"
         finally:
-            release_queue(routes_mod)
+            release_queue(execution_mod)

@@ -10,6 +10,7 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
+import visionforge.gui.api.execution as execution_mod
 from tests.helpers import wait_until
 from visionforge.gui.api.datasets_routes import _detect_dataset_layout
 from visionforge.gui.api.routes import _load_runs
@@ -444,7 +445,7 @@ class TestApiRunsEndpoint:
         """GET /api/experiment/status with no active run must return idle."""
         app, routes_mod = app_and_routes
         # Reset global state to ensure idle.
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
         client = TestClient(app, raise_server_exceptions=True)
         resp = client.get("/api/experiment/status")
         assert resp.status_code == 200
@@ -453,7 +454,7 @@ class TestApiRunsEndpoint:
     def test_get_result_unknown_run(self, app_and_routes: tuple) -> None:
         """GET /api/experiment/result/<unknown> must return 404."""
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
         client = TestClient(app, raise_server_exceptions=True)
         resp = client.get("/api/experiment/result/nonexistent-run-id")
         assert resp.status_code == 404
@@ -491,7 +492,7 @@ class TestApiRunsEndpoint:
     ) -> None:
         """POST /experiment/run must return 200 with a run_id."""
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
 
         minimal_config = {
             "name": "test_exp",
@@ -516,7 +517,7 @@ class TestApiRunsEndpoint:
         # Mock _execute_experiment so the background task doesn't actually train.
         async def fake_execute(config: object, run_id: str) -> None:
             fake_run(
-                routes_mod,
+                execution_mod,
                 {
                     "run_id": run_id,
                     "status": "completed",
@@ -526,7 +527,7 @@ class TestApiRunsEndpoint:
                 },
             )
 
-        with patch.object(routes_mod, "_execute_experiment", fake_execute):
+        with patch.object(execution_mod, "_execute_experiment", fake_execute):
             client = TestClient(app, raise_server_exceptions=True)
             resp = client.post("/api/experiment/run", json=minimal_config)
 
@@ -534,7 +535,7 @@ class TestApiRunsEndpoint:
         body = resp.json()
         assert "run_id" in body
         assert body["status"] == "running"
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
 
     def test_post_experiment_run_accepts_preprocessing_steps(
         self, app_and_routes: tuple, tmp_path: Path
@@ -546,14 +547,14 @@ class TestApiRunsEndpoint:
         reached the backend. This test pins down that the round-trip works.
         """
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
 
         captured: dict[str, object] = {}
 
         async def fake_execute(config: object, run_id: str) -> None:
             captured["config"] = config
             fake_run(
-                routes_mod,
+                execution_mod,
                 {
                     "run_id": run_id,
                     "status": "completed",
@@ -586,7 +587,7 @@ class TestApiRunsEndpoint:
             },
         }
 
-        with patch.object(routes_mod, "_execute_experiment", fake_execute):
+        with patch.object(execution_mod, "_execute_experiment", fake_execute):
             client = TestClient(app, raise_server_exceptions=True)
             resp = client.post("/api/experiment/run", json=payload)
 
@@ -604,7 +605,7 @@ class TestApiRunsEndpoint:
         assert steps[2].kind == "wavelet"
         assert steps[2].band == "LL"  # type: ignore[attr-defined]
 
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
 
     def test_checkpoint_pick_handles_cancelled_dialog(
         self, app_and_routes: tuple
@@ -658,7 +659,7 @@ class TestApiRunsEndpoint:
         from visionforge.blocks.cross_validation import CrossValidationBlock
 
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
 
         captured_block: dict[str, object] = {}
 
@@ -718,7 +719,7 @@ class TestApiRunsEndpoint:
             CrossValidationBlock.setup = original_setup  # type: ignore[method-assign]
             CrossValidationBlock.run = original_run  # type: ignore[method-assign]
             CrossValidationBlock.report = original_report  # type: ignore[method-assign]
-            routes_mod._JOB_STATES.clear()
+            execution_mod._JOB_STATES.clear()
 
     def test_post_experiment_run_dispatches_transfer_learning_block(
         self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
@@ -727,7 +728,7 @@ class TestApiRunsEndpoint:
         from visionforge.blocks.transfer_learning import TransferLearningBlock
 
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
 
         captured: dict[str, object] = {}
         original_setup = TransferLearningBlock.setup
@@ -779,7 +780,7 @@ class TestApiRunsEndpoint:
             TransferLearningBlock.setup = original_setup  # type: ignore[method-assign]
             TransferLearningBlock.run = original_run  # type: ignore[method-assign]
             TransferLearningBlock.report = original_report  # type: ignore[method-assign]
-            routes_mod._JOB_STATES.clear()
+            execution_mod._JOB_STATES.clear()
 
     def test_post_experiment_run_dispatches_model_comparison_block(
         self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
@@ -788,7 +789,7 @@ class TestApiRunsEndpoint:
         from visionforge.blocks.model_comparison import ModelComparisonBlock
 
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
 
         captured: dict[str, object] = {}
         original_setup = ModelComparisonBlock.setup
@@ -841,7 +842,7 @@ class TestApiRunsEndpoint:
             ModelComparisonBlock.setup = original_setup  # type: ignore[method-assign]
             ModelComparisonBlock.run = original_run  # type: ignore[method-assign]
             ModelComparisonBlock.report = original_report  # type: ignore[method-assign]
-            routes_mod._JOB_STATES.clear()
+            execution_mod._JOB_STATES.clear()
 
     def test_post_experiment_run_dispatches_grid_search_block(
         self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
@@ -851,7 +852,7 @@ class TestApiRunsEndpoint:
         from visionforge.blocks.grid_search import GridSearchBlock
 
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
 
         captured: dict[str, object] = {}
         original_setup = GridSearchBlock.setup
@@ -916,7 +917,7 @@ class TestApiRunsEndpoint:
             GridSearchBlock.setup = original_setup  # type: ignore[method-assign]
             GridSearchBlock.run = original_run  # type: ignore[method-assign]
             GridSearchBlock.report = original_report  # type: ignore[method-assign]
-            routes_mod._JOB_STATES.clear()
+            execution_mod._JOB_STATES.clear()
 
     def test_post_experiment_run_dispatches_random_search_block(
         self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
@@ -926,7 +927,7 @@ class TestApiRunsEndpoint:
         from visionforge.blocks.random_search import RandomSearchBlock
 
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
 
         captured: dict[str, object] = {}
         original_setup = RandomSearchBlock.setup
@@ -996,14 +997,14 @@ class TestApiRunsEndpoint:
             RandomSearchBlock.setup = original_setup  # type: ignore[method-assign]
             RandomSearchBlock.run = original_run  # type: ignore[method-assign]
             RandomSearchBlock.report = original_report  # type: ignore[method-assign]
-            routes_mod._JOB_STATES.clear()
+            execution_mod._JOB_STATES.clear()
 
     def test_queues_behind_a_running_job(
         self, app_and_routes: tuple, tmp_path: Path
     ) -> None:
         """A submission that arrives while the GPU is busy waits its turn."""
         app, routes_mod = app_and_routes
-        occupy_queue(routes_mod)
+        occupy_queue(execution_mod)
         try:
             minimal_config = {
                 "name": "test_exp",
@@ -1023,13 +1024,13 @@ class TestApiRunsEndpoint:
             assert resp.status_code == 200
             assert resp.json()["status"] == "queued"
         finally:
-            release_queue(routes_mod)
+            release_queue(execution_mod)
 
     def test_get_status_with_active_run(self, app_and_routes: tuple) -> None:
         """GET /api/experiment/status must return run_id and status when a run exists."""
         app, routes_mod = app_and_routes
         fake_run(
-            routes_mod,
+            execution_mod,
             {
                 "run_id": "test-run-123",
                 "status": "running",
@@ -1044,13 +1045,13 @@ class TestApiRunsEndpoint:
             assert body["run_id"] == "test-run-123"
             assert body["status"] == "running"
         finally:
-            routes_mod._JOB_STATES.clear()
+            execution_mod._JOB_STATES.clear()
 
     def test_get_result_still_running(self, app_and_routes: tuple) -> None:
         """GET /api/experiment/result returns 409 when experiment is still running."""
         app, routes_mod = app_and_routes
         fake_run(
-            routes_mod,
+            execution_mod,
             {
                 "run_id": "run-abc",
                 "status": "running",
@@ -1062,13 +1063,13 @@ class TestApiRunsEndpoint:
             resp = client.get("/api/experiment/result/run-abc")
             assert resp.status_code == 409
         finally:
-            routes_mod._JOB_STATES.clear()
+            execution_mod._JOB_STATES.clear()
 
     def test_get_result_failed_run(self, app_and_routes: tuple) -> None:
         """GET /api/experiment/result returns 500 when experiment failed."""
         app, routes_mod = app_and_routes
         fake_run(
-            routes_mod,
+            execution_mod,
             {
                 "run_id": "run-xyz",
                 "status": "failed",
@@ -1080,13 +1081,13 @@ class TestApiRunsEndpoint:
             resp = client.get("/api/experiment/result/run-xyz")
             assert resp.status_code == 500
         finally:
-            routes_mod._JOB_STATES.clear()
+            execution_mod._JOB_STATES.clear()
 
     def test_get_result_completed_no_run_dir(self, app_and_routes: tuple) -> None:
         """GET /api/experiment/result returns empty metrics when run_dir is None."""
         app, routes_mod = app_and_routes
         fake_run(
-            routes_mod,
+            execution_mod,
             {
                 "run_id": "run-done",
                 "status": "completed",
@@ -1103,7 +1104,7 @@ class TestApiRunsEndpoint:
             assert body["run_id"] == "run-done"
             assert body["metrics"] == {}
         finally:
-            routes_mod._JOB_STATES.clear()
+            execution_mod._JOB_STATES.clear()
 
     def test_get_result_completed_with_run_json(
         self, app_and_routes: tuple, tmp_path: Path
@@ -1112,7 +1113,7 @@ class TestApiRunsEndpoint:
         app, routes_mod = app_and_routes
         run_dir = _make_run_json(tmp_path)
         fake_run(
-            routes_mod,
+            execution_mod,
             {
                 "run_id": "run-with-file",
                 "status": "completed",
@@ -1128,7 +1129,7 @@ class TestApiRunsEndpoint:
             body = resp.json()
             assert "best_val_loss" in body["metrics"]
         finally:
-            routes_mod._JOB_STATES.clear()
+            execution_mod._JOB_STATES.clear()
 
 
 class TestServerSpaFallback:

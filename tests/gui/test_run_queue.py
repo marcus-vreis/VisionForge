@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 
+import visionforge.gui.api.execution as execution_mod
 from visionforge.gui.api.run_queue import QueuedJob, RunQueue
 
 
@@ -309,7 +310,7 @@ class TestQueueEndpoints:
         from .conftest import release_queue
 
         client, routes_mod = self._client_and_routes()
-        release_queue(routes_mod)
+        release_queue(execution_mod)
 
         body = client.get("/api/queue").json()
 
@@ -323,7 +324,7 @@ class TestQueueEndpoints:
         from .conftest import occupy_queue, release_queue
 
         client, routes_mod = self._client_and_routes()
-        occupy_queue(routes_mod, run_id="holding")
+        occupy_queue(execution_mod, run_id="holding")
         try:
             submitted = client.post(
                 "/api/regression/run", json=_regression_payload(tmp_path)
@@ -337,26 +338,26 @@ class TestQueueEndpoints:
             assert body["pending"][0]["task"] == "regression"
             assert body["pending"][0]["strategy"] == "simple"
         finally:
-            release_queue(routes_mod)
+            release_queue(execution_mod)
 
     def test_status_reports_how_many_are_waiting(self, tmp_path) -> None:
         from .conftest import occupy_queue, release_queue
 
         client, routes_mod = self._client_and_routes()
-        occupy_queue(routes_mod)
+        occupy_queue(execution_mod)
         try:
             client.post("/api/regression/run", json=_regression_payload(tmp_path))
             client.post("/api/regression/run", json=_regression_payload(tmp_path))
 
             assert client.get("/api/experiment/status").json()["queued"] == 2
         finally:
-            release_queue(routes_mod)
+            release_queue(execution_mod)
 
     def test_cancelling_a_pending_job_removes_it(self, tmp_path) -> None:
         from .conftest import occupy_queue, release_queue
 
         client, routes_mod = self._client_and_routes()
-        occupy_queue(routes_mod)
+        occupy_queue(execution_mod)
         try:
             run_id = client.post(
                 "/api/regression/run", json=_regression_payload(tmp_path)
@@ -368,21 +369,23 @@ class TestQueueEndpoints:
             assert cancelled.json()["status"] == "cancelled"
             assert client.get("/api/queue").json()["pending"] == []
         finally:
-            release_queue(routes_mod)
+            release_queue(execution_mod)
 
     def test_cancelling_the_running_job_asks_it_to_stop(self) -> None:
         """ADR-088: a running job is now stoppable at its epoch boundary."""
         from .conftest import occupy_queue, release_queue
 
         client, routes_mod = self._client_and_routes()
-        occupy_queue(routes_mod, run_id="holding")
+        occupy_queue(execution_mod, run_id="holding")
         try:
             resp = client.delete("/api/queue/holding")
 
             assert resp.status_code == 200
-            assert routes_mod._RUN_QUEUE._active.cancel_token.cancelled is True
+            active = execution_mod._RUN_QUEUE._active
+            assert active is not None
+            assert active.cancel_token.cancelled is True
         finally:
-            release_queue(routes_mod)
+            release_queue(execution_mod)
 
     def test_the_running_jobs_token_is_published_for_its_executor(self) -> None:
         """Cancelling only works if the executor can find the token.
@@ -394,23 +397,24 @@ class TestQueueEndpoints:
         from .conftest import occupy_queue, release_queue
 
         client, routes_mod = self._client_and_routes()
-        occupy_queue(routes_mod, run_id="holding")
+        occupy_queue(execution_mod, run_id="holding")
         try:
-            job = routes_mod._RUN_QUEUE._active
-            routes_mod._begin_job(job)
+            job = execution_mod._RUN_QUEUE._active
+            assert job is not None
+            execution_mod._begin_job(job)
 
-            assert routes_mod._job_state("holding").token is job.cancel_token
+            assert execution_mod._job_state("holding").token is job.cancel_token
 
             client.delete("/api/queue/holding")
-            assert routes_mod._job_state("holding").token.cancelled is True
+            assert execution_mod._job_state("holding").token.cancelled is True
         finally:
-            release_queue(routes_mod)
+            release_queue(execution_mod)
 
     def test_cancelling_an_unknown_id_is_a_404(self) -> None:
         from .conftest import release_queue
 
         client, routes_mod = self._client_and_routes()
-        release_queue(routes_mod)
+        release_queue(execution_mod)
 
         assert client.delete("/api/queue/never-existed").status_code == 404
 

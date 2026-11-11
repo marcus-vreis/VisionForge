@@ -7770,3 +7770,20 @@ differently now. Each fix has a test that failed before it
 
 - *A `strategy` key inside the task config.* Every task config loader would have to ignore it, and the options would mix with the task's fields.
 - *New subcommands (`visionforge replicates ...`).* Options on the command line instead of in the versioned YAML, and four parsers to keep in sync with the request models.
+
+## ADR-185 — The run queue and the started jobs' state have one owner: `gui/api/execution.py`
+
+**Date:** 2026-11-11
+**Status:** Accepted
+**Relates to:** ADR-132 (splitting `routes.py`), ADR-075 (run queue), ADR-163 phase 4 (lanes and per-job state), ADR-159 (event log)
+
+**Context:** ADR-132 asked for the queue and the running job's state to get "one explicit owner that routers command through methods". They still lived in `gui/api/routes.py`, next to 150 endpoints: `_JOB_STATES`, `_latest_run_id`, the lanes (`_RUN_QUEUE`, `_LANES`), the queue callbacks, the stop points, the SSE reader and the classification executor. Any handler in the file could assign them, and tests replaced them on `routes` (#204).
+
+**Decision:** `gui/api/execution.py` owns that state and has no FastAPI import. Only the queue adds or drops a job's state, through `_begin_job` and `_finish_job` (the lanes' `on_start`/`on_finish`); an executor writes only its own job's `run` and log, reached through `_job_state(run_id)`; everything else reads through `_run_state`, `_sse_generator` and `_LANES`, and commands the lanes through their methods. `_execute_experiment` moves with it and is split into `_block_types`, `_wire_block`, `_run_dir_of` and `_failed_run` (Sonar S3776), with the block imports still before the `try`. The routes that only read that state or command the lanes (`GET /api/experiment/{status,events,result/{id}}`, `GET /api/queue`, `DELETE /api/queue/{id}`) move to `gui/api/execution_routes.py`, included by `routes.py` where they used to be defined, so the OpenAPI document and the route order are unchanged. `routes.py` keeps submission (`_submit_job`, which reads `_MODELS_DIR`) and the other executors, which import `_job_state` from `execution.py`.
+
+**Consequences:** `routes.py` no longer defines or assigns the queue or a job's state; `routes.py` drops from 3612 to 3202 lines. A test that replaces `_JOB_STATES`, `_latest_run_id`, `_MAX_FINISHED_STATES` or `_execute_experiment` patches `execution`, and the `tests/gui/conftest.py` helpers take that module. `run_experiment` and `resume_run` look `execution._execute_experiment` up when the job starts, so a patch there reaches them. The other executors (detection, regression, segmentation, anomaly, groups, Colab, custom tasks) stay in `routes.py` for a later step.
+
+**Alternatives considered:**
+
+- *Keep re-exports in `routes.py`.* `routes._JOB_STATES.clear()` would still work, but `monkeypatch.setattr(routes, "_JOB_STATES", {})` would silently patch a name nobody reads.
+- *A class holding the state.* A cleaner interface, but a behaviour-bearing rewrite inside what should be a move; the module boundary already gives the single owner.

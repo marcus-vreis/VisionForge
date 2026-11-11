@@ -21,6 +21,7 @@ import pytest
 from fastapi.testclient import TestClient
 from matplotlib.figure import Figure
 
+import visionforge.gui.api.execution as execution_mod
 from visionforge.core.plotter import MetricsPlotter
 from visionforge.core.training_health import collapsed_predictions
 from visionforge.gui.api.schemas import RunResponse
@@ -44,9 +45,9 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):  # type: ignore[no-unt
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(routes_mod, "_MODELS_DIR", Path("outputs/models"))
     monkeypatch.setattr(routes_mod, "_PROFILES_DIR", Path("outputs/profiles"))
-    routes_mod._JOB_STATES.clear()
+    execution_mod._JOB_STATES.clear()
     yield app, routes_mod
-    release_queue(routes_mod)
+    release_queue(execution_mod)
 
 
 @pytest.fixture
@@ -131,8 +132,10 @@ class TestRunsAndTheQueue:
         self, client: TestClient, env
     ) -> None:
         _, routes_mod = env
-        occupy_queue(routes_mod, "busy_run")
-        routes_mod._RUN_QUEUE._active.stop_at = None
+        occupy_queue(execution_mod, "busy_run")
+        active = execution_mod._RUN_QUEUE._active
+        assert active is not None
+        active.stop_at = None
 
         en = client.delete("/api/queue/busy_run", headers=EN)
         pt = client.delete("/api/queue/busy_run")
@@ -146,7 +149,7 @@ class TestRunsAndTheQueue:
     def test_a_result_that_is_not_ready(self, client: TestClient, env) -> None:
         _, routes_mod = env
         fake_run(
-            routes_mod,
+            execution_mod,
             {
                 "run_id": "r1",
                 "status": "running",
@@ -168,7 +171,7 @@ class TestRunsAndTheQueue:
     ) -> None:
         _, routes_mod = env
         fake_run(
-            routes_mod,
+            execution_mod,
             {
                 "run_id": "r2",
                 "status": "failed",
@@ -192,7 +195,7 @@ class TestRunsAndTheQueue:
         run_dir = tmp_path / "outputs" / "models" / "e" / "20260522_100000_000000"
         run_dir.mkdir(parents=True)
         (run_dir / "run.json").write_text("{}", encoding="utf-8")
-        fake_run(routes_mod, {"run_id": run_dir.name, "status": "running"})
+        fake_run(execution_mod, {"run_id": run_dir.name, "status": "running"})
 
         en = client.delete(f"/api/runs/{run_dir.name}", headers=EN)
         pt = client.delete(f"/api/runs/{run_dir.name}")
@@ -918,7 +921,7 @@ class TestMessagesWrittenAfterTheRequestIsOver:
             routes_mod._submit_job(
                 "job-pt", "pt", "classification", "simple", make_start("pt")
             )
-            queue = routes_mod._RUN_QUEUE
+            queue = execution_mod._RUN_QUEUE
             while queue.is_busy() or queue.pending_count():
                 await asyncio.sleep(0.01)
 
@@ -960,7 +963,7 @@ class TestMessagesWrittenAfterTheRequestIsOver:
             routes_mod._submit_job(
                 "fig-pt", "pt", "classification", "simple", make_start("pt")
             )
-            queue = routes_mod._RUN_QUEUE
+            queue = execution_mod._RUN_QUEUE
             while queue.is_busy() or queue.pending_count():
                 await asyncio.sleep(0.01)
 

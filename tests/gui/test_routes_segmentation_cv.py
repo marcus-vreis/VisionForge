@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+import visionforge.gui.api.execution as execution_mod
 from tests.helpers import wait_experiment_done
 
 from .conftest import occupy_queue, release_queue
@@ -43,7 +44,7 @@ class TestSegmentationCv:
         )
 
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
 
         captured: dict[str, object] = {}
 
@@ -87,13 +88,13 @@ class TestSegmentationCv:
             assert (Path(report["report_dir"]) / "cv_summary.json").exists()
         finally:
             routes_mod.run_segmentation_cross_validation = orig
-            routes_mod._JOB_STATES.clear()
+            execution_mod._JOB_STATES.clear()
 
     def test_queues_behind_a_running_job(
         self, app_and_routes: tuple, tmp_path: Path
     ) -> None:
         app, routes_mod = app_and_routes
-        occupy_queue(routes_mod)
+        occupy_queue(execution_mod)
         try:
             client = TestClient(app, raise_server_exceptions=True)
             resp = client.post(
@@ -103,13 +104,13 @@ class TestSegmentationCv:
             assert resp.status_code == 200
             assert resp.json()["status"] == "queued"
         finally:
-            release_queue(routes_mod)
+            release_queue(execution_mod)
 
     def test_rejects_invalid_config(
         self, app_and_routes: tuple, tmp_path: Path
     ) -> None:
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
         cfg = _payload(tmp_path)
         # ignore_index colliding with a class id → invalid SegmentationConfig
         cfg["data"]["ignore_index"] = 1

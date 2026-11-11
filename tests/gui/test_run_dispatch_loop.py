@@ -21,6 +21,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+import visionforge.gui.api.execution as execution_mod
 from tests.helpers import wait_until
 from visionforge.utils.selftest_data import build_regression_dataset
 
@@ -51,7 +52,6 @@ class _Gated:
 @pytest.fixture
 def gated_regression() -> Iterator[_Gated]:
     """Fake RegressionBlock whose ``run`` waits behind a busy pool thread."""
-    import visionforge.gui.api.routes as routes_mod
     from visionforge.blocks.regression import RegressionBlock
 
     gated = _Gated(captured={}, gate=threading.Event(), queued=threading.Event())
@@ -89,7 +89,7 @@ def gated_regression() -> Iterator[_Gated]:
         (RegressionBlock.setup, RegressionBlock.run, RegressionBlock.report) = (  # type: ignore[method-assign]
             originals
         )
-        release_queue(routes_mod)
+        release_queue(execution_mod)
 
 
 def _payload(tmp_path: Path) -> dict[str, object]:
