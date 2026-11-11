@@ -345,6 +345,22 @@ def test_copy_detects_source_mutation(
         preview_run(run_dir)
 
 
+def test_swapped_checkpoint_is_refused_before_copying(
+    run_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import os
+    import shutil
+
+    copied: list[Any] = []
+    monkeypatch.setattr(
+        os, "fstat", lambda _fd: types.SimpleNamespace(st_dev=-1, st_ino=-1)
+    )
+    monkeypatch.setattr(shutil, "copyfileobj", lambda *args: copied.append(args))
+    with pytest.raises(ValueError, match="changed"):
+        preview_run(run_dir)
+    assert copied == []
+
+
 def test_workspace_relative_checkpoint_remains_contained(
     run_dir: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
