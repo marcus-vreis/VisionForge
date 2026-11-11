@@ -340,6 +340,11 @@ jobs:
     # Every runtime dependency's declared license, as installed: a copyleft
     # package missing from scripts/license_allowlist.toml, or a table in
     # THIRD_PARTY_NOTICES.md that no longer matches it, fails here (#225).
+    # The install is deliberately unpinned (newest PyPI releases, not uv.lock):
+    # the notices describe what `pip install "visionforge-studio[detection]"`
+    # brings today, so a new copyleft dependency upstream (ultralytics 8.4.x
+    # added ultralytics-platform, AGPL) must turn this job red even when no
+    # VisionForge file changed. Read the package's license, then allowlist it.
     steps:
       - uses: actions/checkout@v7.0.1
 

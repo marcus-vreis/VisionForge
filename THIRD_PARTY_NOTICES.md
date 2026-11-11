@@ -12,14 +12,16 @@ legal advice; the license each package ships with is the one that applies.
 `pip` installs these from PyPI as dependencies; VisionForge's wheel does not
 contain their code. The license column is what each package declares in its
 own metadata; `scripts/check_licenses.py` checks this table against the
-installed packages in CI. `ultralytics` and `ultralytics-thop` come only with
-the optional `detection` extra (`pip install "visionforge-studio[detection]"`).
+installed packages in CI. `ultralytics`, `ultralytics-thop` and
+`ultralytics-platform` come only with the optional `detection` extra
+(`pip install "visionforge-studio[detection]"`).
 
 <!-- license-table:start (scripts/check_licenses.py --write) -->
 | Package | License | Why it is installed |
 |---|---|---|
 | `ultralytics` | AGPL-3.0 | YOLO / RT-DETR detection backend (`detection` extra) |
 | `ultralytics-thop` | AGPL-3.0 | required by `ultralytics` |
+| `ultralytics-platform` | AGPL-3.0-only | required by `ultralytics` (8.4.x and later, Python 3.11+) |
 | `pi-heif` | BSD-3-Clause; its binary wheels bundle libheif and libde265 (LGPL-3.0) | required by `roboflow` |
 | `text-unidecode` | Artistic License or GPL-2.0-or-later, at your choice | required by `python-slugify` (via `kaggle`) |
 | `certifi` | MPL-2.0 | CA certificates for `requests` |
@@ -28,8 +30,9 @@ the optional `detection` extra (`pip install "visionforge-studio[detection]"`).
 
 ### Ultralytics (AGPL-3.0)
 
-`ultralytics` and `ultralytics-thop` are licensed under the GNU Affero General
-Public License v3.0. A plain `pip install visionforge-studio` does not install
+`ultralytics`, `ultralytics-thop` and `ultralytics-platform` (pulled in by
+recent `ultralytics` releases) are licensed under the GNU Affero General Public
+License v3.0. A plain `pip install visionforge-studio` does not install
 them; the `detection` extra does. VisionForge then imports `ultralytics` in its
 own process when you train, test or export a detection model with the
 `ultralytics` backend (YOLO, RT-DETR). The AGPL-3.0 requires that whoever

@@ -33,6 +33,7 @@ def test_notices_name_ultralytics_as_agpl() -> None:
     notices = _NOTICES.read_text(encoding="utf-8")
     assert re.search(r"\| `ultralytics` \| AGPL-3\.0 \|", notices)
     assert re.search(r"\| `ultralytics-thop` \| AGPL-3\.0 \|", notices)
+    assert re.search(r"\| `ultralytics-platform` \| AGPL-3\.0-only \|", notices)
 
 
 def test_every_bundled_font_is_covered_by_the_notices() -> None:

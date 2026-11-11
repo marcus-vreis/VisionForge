@@ -27,6 +27,11 @@ families = ["AGPL"]
 license = "AGPL-3.0"
 why = "required by `ultralytics`"
 
+[packages.ultralytics-platform]
+families = ["AGPL"]
+license = "AGPL-3.0-only"
+why = "required by `ultralytics` (8.4.x and later, Python 3.11+)"
+
 [packages.pi-heif]
 families = ["LGPL"]
 license = "BSD-3-Clause; its binary wheels bundle libheif and libde265 (LGPL-3.0)"

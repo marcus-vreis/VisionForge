@@ -199,6 +199,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 - O `README.md` (em inglês e português espelhados, com `## Como citar` e o parágrafo para contribuidores em PT) e o `docs/INSTALL.md` passam a descrever o treino no Colab, o exportador para o Hugging Face Hub, as abas Resultados e Código, o explorador e as operações de datasets, os subcomandos `new-task`, `audit-data`, `bundle` e `verify-bundle`, e a execução via Docker, marcando o que está só em `development` como próxima release, com `tests/test_readme_parity.py` (#196).
 - Novo `docs/ROADMAP.md` (sem prazos, com o que está em `development`, próximos passos e critérios para a 1.0) linkado no `README.md`, e cabeçalho de `docs/archive/ROADMAP.md` atualizado para apontar para `ROADMAP.md` e `CHANGELOG.md` em vez de `TASKS.md` e `RELEASE_NOTES.md` (#218).
 - O bundle público (rascunho do Zenodo) deixa de levar o nome da conta: os checkpoints `weights/*.pt` ficam fora, porque o ultralytics grava neles os `train_args` com caminhos absolutos, e `config.json`/`config.yaml` saem com cada caminho local reduzido ao nome final; o manifesto anota o que ficou fora ou foi reescrito (ADR-188) (#164)
+- O `ultralytics-platform` (AGPL-3.0-only), que as versões novas do ultralytics passaram a instalar, entra na allowlist de licenças e no THIRD_PARTY_NOTICES.md; os testes do tour de código contam as notas toleradas do ultralytics contra as declaradas, sem número fixo que mudava com a versão instalada (ADR-194) (#294).
 
 ## [0.21.0] — 2026-11-05
 
