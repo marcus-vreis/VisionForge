@@ -227,9 +227,9 @@ The frontend lives in `frontend/` and is built with React + TypeScript + Vite + 
 **Prerequisites:** Node.js >= 22.12 (or 20.19, the range Vite 8 requires; dev-time only — users never need Node.js).
 
 **Development workflow:**
-1. Start the API server: `python -m visionforge gui`
+1. Start the API server without opening a browser tab: `python -m visionforge gui --no-browser`
 2. In another terminal: `cd frontend && npm run dev` (Vite dev server with hot-reload)
-3. Vite proxies `/api` requests to the FastAPI server automatically
+3. Vite proxies `/api` requests to `http://localhost:8000`; if the server runs elsewhere, set `VF_API_URL` (for example `VF_API_URL=http://127.0.0.1:9000 npm run dev`). See `frontend/README.md`.
 
 **Building for production:**
 ```bash

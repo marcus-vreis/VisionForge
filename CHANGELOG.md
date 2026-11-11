@@ -152,6 +152,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 - CONTRIBUTING sem afirmações falsas e com a seção Branch
 - `.github/dependabot.yml`: atualizações mensais e agrupadas de github-actions, npm (`/frontend`) e pip, no máximo 3 PRs por ecossistema, contra `development`, com prefixo `chore(deps)` e torch/torchvision ignorados (#175).
 - `docs/dev/DECISIONS.md` abre com o processo de ADR (quando é obrigatória, campos e os status válidos), com `docs/dev/ADR-TEMPLATE.md` e um teste que confere o título e o prefixo do status de cada entrada; o CONTRIBUTING linka o template (#214).
+- `frontend/README.md` descreve pré-requisitos, `visionforge gui --no-browser` + `npm run dev`, e2e e o rebuild do SPA; `package.json` declara `engines.node`, e o proxy do Vite lê `VF_API_URL` (#215).
 
 ### Fixed
 
