@@ -32,18 +32,12 @@ from visionforge.gui.api.http_responses import (
     FORBIDDEN_TEXT,
     NOT_FOUND_TEXT,
     SERVER_ERROR_TEXT,
+    TAG_INTEGRATIONS,
 )
 from visionforge.gui.api.profile_tokens import ProfileHeader, quiet_validation_route
 from visionforge.gui.api.profiles import Profile
 from visionforge.utils.messages import tr
 
-_LOCAL_ONLY: dict[int | str, dict[str, Any]] = {403: {"description": FORBIDDEN_TEXT}}
-_FAILURES: dict[int | str, dict[str, Any]] = {
-    **_LOCAL_ONLY,
-    404: {"description": NOT_FOUND_TEXT},
-    409: {"description": CONFLICT_TEXT},
-    500: {"description": SERVER_ERROR_TEXT},
-}
 _MISSING = {"git": "dvc.git_missing", "dvc": "dvc.dvc_missing"}
 _FAILED = {"git": "dvc.git_failed", "dvc": "dvc.dvc_failed"}
 _EXPORT_FAILURES = (FileNotFoundError, ValueError, ToolMissingError, DvcExportError)
@@ -76,6 +70,7 @@ def build_dvc_router(
     current_tools = tools or (lambda: find_tools())
     router = APIRouter(
         prefix="/dvc",
+        tags=[TAG_INTEGRATIONS],
         route_class=quiet_validation_route("dvc.request_invalid"),
         dependencies=[Depends(_local_only(client_host))],
     )
@@ -86,7 +81,15 @@ def build_dvc_router(
             raise HTTPException(404, tr("dvc.run_not_found"))
         return directory
 
-    @router.get("/preview", responses=_FAILURES)
+    @router.get(
+        "/preview",
+        responses={
+            403: {"description": FORBIDDEN_TEXT},
+            404: {"description": NOT_FOUND_TEXT},
+            409: {"description": CONFLICT_TEXT},
+            500: {"description": SERVER_ERROR_TEXT},
+        },
+    )
     def preview(run_id: str, repo: str, header: ProfileHeader = None) -> dict[str, Any]:
         """The folder, its files (git or DVC) and the repository's state."""
         directory = locate(run_id, header)
@@ -95,7 +98,15 @@ def build_dvc_router(
         except (FileNotFoundError, ValueError) as exc:
             raise _http_error(exc) from exc
 
-    @router.post("/prepare", responses=_FAILURES)
+    @router.post(
+        "/prepare",
+        responses={
+            403: {"description": FORBIDDEN_TEXT},
+            404: {"description": NOT_FOUND_TEXT},
+            409: {"description": CONFLICT_TEXT},
+            500: {"description": SERVER_ERROR_TEXT},
+        },
+    )
     def prepare(body: DvcRepository) -> dict[str, Any]:
         """Make the folder a git repository with DVC (git init, dvc init)."""
         try:
@@ -105,7 +116,15 @@ def build_dvc_router(
         except (ValueError, ToolMissingError, DvcExportError) as exc:
             raise _http_error(exc) from exc
 
-    @router.post("/export", responses=_FAILURES)
+    @router.post(
+        "/export",
+        responses={
+            403: {"description": FORBIDDEN_TEXT},
+            404: {"description": NOT_FOUND_TEXT},
+            409: {"description": CONFLICT_TEXT},
+            500: {"description": SERVER_ERROR_TEXT},
+        },
+    )
     def send(body: DvcExport, header: ProfileHeader = None) -> dict[str, Any]:
         """Write the folder, dvc add the weights, commit it and push them."""
         directory = locate(body.run_id, header)

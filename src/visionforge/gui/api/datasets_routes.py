@@ -20,6 +20,13 @@ from pydantic import SecretStr
 
 from visionforge.core.detection_data import resolve_yolo_split
 from visionforge.gui.api.dataset_download import credentials_in_play, download_dataset
+from visionforge.gui.api.http_responses import (
+    BAD_REQUEST_TEXT,
+    FORBIDDEN_TEXT,
+    NOT_FOUND_TEXT,
+    SERVER_ERROR_TEXT,
+    TAG_DATASETS,
+)
 from visionforge.gui.api.profile_tokens import quiet_validation_route
 from visionforge.gui.api.schemas import (
     AnomalyDatasetStatsRequest,
@@ -56,7 +63,7 @@ from visionforge.gui.api.schemas import (
 from visionforge.utils.messages import tr
 from visionforge.utils.redact import redact_secrets
 
-router = APIRouter()
+router = APIRouter(tags=[TAG_DATASETS])
 # Its own router so a malformed body 422s without FastAPI's echo of the input,
 # which here would be the key.
 credentials_router = APIRouter(
@@ -68,16 +75,6 @@ download_router = APIRouter(
     route_class=quiet_validation_route("download.request_invalid")
 )
 
-_BAD_REQUEST: dict[int | str, dict[str, Any]] = {
-    400: {"description": "Invalid request"}
-}
-_FORBIDDEN: dict[int | str, dict[str, Any]] = {403: {"description": "Access denied"}}
-_NOT_FOUND: dict[int | str, dict[str, Any]] = {
-    404: {"description": "Resource not found"}
-}
-_SERVER_ERROR: dict[int | str, dict[str, Any]] = {
-    500: {"description": "Operation failed"}
-}
 
 SCAN_BASE_MISSING_KEY = "scan.base_missing"
 PICK_NO_TKINTER_KEY = "pick.no_tkinter"
@@ -193,7 +190,13 @@ async def pick_dataset_folder() -> DatasetPickResponse:
     return await asyncio.to_thread(_open_native_folder_dialog)
 
 
-@download_router.post("/dataset/download", responses={**_BAD_REQUEST, **_SERVER_ERROR})
+@download_router.post(
+    "/dataset/download",
+    responses={
+        400: {"description": BAD_REQUEST_TEXT},
+        500: {"description": SERVER_ERROR_TEXT},
+    },
+)
 async def dataset_download(req: DatasetDownloadRequest) -> DatasetDownloadResponse:
     """One-shot download of a dataset to a local folder (ADR-055).
 
@@ -334,7 +337,9 @@ async def get_credentials() -> CredentialsResponse:
     )
 
 
-@credentials_router.post("/credentials", responses=_BAD_REQUEST)
+@credentials_router.post(
+    "/credentials", responses={400: {"description": BAD_REQUEST_TEXT}}
+)
 async def save_credential_route(req: CredentialSaveRequest) -> CredentialsResponse:
     """Store (or replace) one provider's key, then return the masked status."""
     from visionforge.utils.credentials import config_dir, credential_status
@@ -363,7 +368,14 @@ async def forget_credential_route(provider: str) -> CredentialsResponse:
     )
 
 
-@router.get("/dataset/file", responses={**_BAD_REQUEST, **_FORBIDDEN, **_NOT_FOUND})
+@router.get(
+    "/dataset/file",
+    responses={
+        400: {"description": BAD_REQUEST_TEXT},
+        403: {"description": FORBIDDEN_TEXT},
+        404: {"description": NOT_FOUND_TEXT},
+    },
+)
 async def serve_dataset_file(path: str) -> FileResponse:
     """Serve a local image file for dataset preview thumbnails.
 

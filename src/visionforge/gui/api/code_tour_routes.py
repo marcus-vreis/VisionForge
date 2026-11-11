@@ -16,10 +16,10 @@ from visionforge.core.code_tour import (
     tour_settings,
     unavailable_reason,
 )
-from visionforge.gui.api.http_responses import NOT_FOUND_TEXT
+from visionforge.gui.api.http_responses import NOT_FOUND_TEXT, TAG_SYSTEM
 from visionforge.utils.messages import tr
 
-router = APIRouter(prefix="/code-tour")
+router = APIRouter(prefix="/code-tour", tags=[TAG_SYSTEM])
 
 
 class CodeNote(BaseModel):

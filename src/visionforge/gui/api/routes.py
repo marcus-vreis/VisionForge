@@ -90,15 +90,25 @@ from visionforge.gui.api.folder_opener import (
 )
 from visionforge.gui.api.github_routes import build_github_router
 from visionforge.gui.api.gpu_health import cuda_context_broken
-from visionforge.gui.api.http_responses import BAD_REQUEST as _BAD_REQUEST
-from visionforge.gui.api.http_responses import CONFLICT as _CONFLICT
 from visionforge.gui.api.http_responses import (
+    BAD_REQUEST_TEXT,
     CONFLICT_TEXT,
+    FORBIDDEN_TEXT,
     NOT_FOUND_TEXT,
     SERVER_ERROR_TEXT,
+    TAG_ANOMALY,
+    TAG_COLAB,
+    TAG_CUSTOM_TASKS,
+    TAG_DATASETS,
+    TAG_DETECTION,
+    TAG_EXPERIMENTS,
+    TAG_REGRESSION,
+    TAG_RUNS,
+    TAG_SEGMENTATION,
+    TAG_SYSTEM,
+    UNPROCESSABLE_TEXT,
+    VALIDATION_ERROR_CONTENT,
 )
-from visionforge.gui.api.http_responses import NOT_FOUND as _NOT_FOUND
-from visionforge.gui.api.http_responses import SERVER_ERROR as _SERVER_ERROR
 from visionforge.gui.api.hub_routes import build_hub_router
 from visionforge.gui.api.incorporate_routes import router as incorporate_router
 from visionforge.gui.api.merge_routes import router as merge_router
@@ -284,21 +294,7 @@ def run_segmentation_cross_validation(
 
 RUN_NO_MESSAGE_KEY = "run.no_message"
 
-_FORBIDDEN: dict[int | str, dict[str, Any]] = {403: {"description": "Access denied"}}
-_UNPROCESSABLE: dict[int | str, dict[str, Any]] = {
-    422: {
-        "description": "Invalid request",
-        # Keeps FastAPI's validation-error schema that a description-only entry would drop.
-        "content": {
-            "application/json": {
-                "schema": {"$ref": "#/components/schemas/HTTPValidationError"}
-            }
-        },
-    }
-}
-_UNAVAILABLE: dict[int | str, dict[str, Any]] = {
-    503: {"description": "GPU context unavailable"}
-}
+_GPU_UNAVAILABLE_TEXT = "GPU context unavailable"
 
 
 async def request_lang(
@@ -556,7 +552,7 @@ def _submit_job(
 _background_tasks: set[asyncio.Task[None]] = set()
 
 
-@router.get("/schema")
+@router.get("/schema", tags=[TAG_EXPERIMENTS])
 async def get_schema() -> dict[str, Any]:
     """Return the JSON Schema for ExperimentConfig."""
     return ExperimentConfig.model_json_schema()
@@ -665,7 +661,7 @@ _UPDATE_BLOCKED = {
 }
 
 
-@router.get("/update")
+@router.get("/update", tags=[TAG_SYSTEM])
 async def get_update(request: Request) -> dict[str, Any]:
     """Whether a newer release exists, and whether this page may install it (ADR-120).
 
@@ -681,7 +677,15 @@ async def get_update(request: Request) -> dict[str, Any]:
     )
 
 
-@router.post("/update/apply", responses={**_FORBIDDEN, **_CONFLICT, **_SERVER_ERROR})
+@router.post(
+    "/update/apply",
+    responses={
+        403: {"description": FORBIDDEN_TEXT},
+        409: {"description": CONFLICT_TEXT},
+        500: {"description": SERVER_ERROR_TEXT},
+    },
+    tags=[TAG_SYSTEM],
+)
 async def apply_update(request: Request) -> dict[str, str]:
     """Install the announced release and restart the GUI (ADR-120).
 
@@ -718,7 +722,13 @@ async def apply_update(request: Request) -> dict[str, str]:
 
 @router.post(
     "/runs/{run_id}/reveal",
-    responses={**_BAD_REQUEST, **_FORBIDDEN, **_NOT_FOUND, **_SERVER_ERROR},
+    responses={
+        400: {"description": BAD_REQUEST_TEXT},
+        403: {"description": FORBIDDEN_TEXT},
+        404: {"description": NOT_FOUND_TEXT},
+        500: {"description": SERVER_ERROR_TEXT},
+    },
+    tags=[TAG_RUNS],
 )
 async def reveal_run_folder(
     run_id: str, request: Request, profile: ProfileDep
@@ -786,6 +796,7 @@ def _retry_record(
         409: {"description": CONFLICT_TEXT},
         500: {"description": SERVER_ERROR_TEXT},
     },
+    tags=[TAG_RUNS],
 )
 def retry_mlflow(run_id: str, profile: ProfileDep) -> MlflowStatus:
     """Reconcile a completed local classification run with its profile's MLflow store."""
@@ -815,12 +826,13 @@ def retry_mlflow(run_id: str, profile: ProfileDep) -> MlflowStatus:
 @router.post(
     "/runs/{run_id}/resume",
     responses={
-        **_BAD_REQUEST,
-        **_UNAVAILABLE,
+        400: {"description": BAD_REQUEST_TEXT},
         404: {"description": "Run not found"},
         409: {"description": "Run is busy or cannot continue"},
         500: {"description": "Run metadata is unreadable"},
+        503: {"description": _GPU_UNAVAILABLE_TEXT},
     },
+    tags=[TAG_RUNS],
 )
 async def resume_run(run_id: str, profile: ProfileDep) -> RunResponse:
     """Continue a stopped run in its own directory (ADR-092/093).
@@ -885,7 +897,12 @@ async def resume_run(run_id: str, profile: ProfileDep) -> RunResponse:
 
 @router.get(
     "/runs/{run_id}/export_md",
-    responses={**_BAD_REQUEST, **_NOT_FOUND, **_SERVER_ERROR},
+    responses={
+        400: {"description": BAD_REQUEST_TEXT},
+        404: {"description": NOT_FOUND_TEXT},
+        500: {"description": SERVER_ERROR_TEXT},
+    },
+    tags=[TAG_RUNS],
 )
 async def export_run_markdown(
     run_id: str,
@@ -967,7 +984,13 @@ def _reject_custom_task_action(run_dir: Path, action: str) -> None:
 
 
 @router.post(
-    "/runs/{run_id}/test", responses={**_BAD_REQUEST, **_NOT_FOUND, **_SERVER_ERROR}
+    "/runs/{run_id}/test",
+    responses={
+        400: {"description": BAD_REQUEST_TEXT},
+        404: {"description": NOT_FOUND_TEXT},
+        500: {"description": SERVER_ERROR_TEXT},
+    },
+    tags=[TAG_RUNS],
 )
 async def test_run_on_dataset(
     run_id: str, req: RunTestRequest, profile: ProfileDep
@@ -1000,7 +1023,12 @@ async def test_run_on_dataset(
 
 @router.post(
     "/runs/{run_id}/gradcam",
-    responses={**_BAD_REQUEST, **_NOT_FOUND, **_SERVER_ERROR},
+    responses={
+        400: {"description": BAD_REQUEST_TEXT},
+        404: {"description": NOT_FOUND_TEXT},
+        500: {"description": SERVER_ERROR_TEXT},
+    },
+    tags=[TAG_RUNS],
 )
 async def gradcam_run(
     run_id: str, req: GradCamRequest, profile: ProfileDep
@@ -1026,7 +1054,12 @@ async def gradcam_run(
 
 @router.post(
     "/runs/{run_id}/batch_predict",
-    responses={**_BAD_REQUEST, **_NOT_FOUND, **_SERVER_ERROR},
+    responses={
+        400: {"description": BAD_REQUEST_TEXT},
+        404: {"description": NOT_FOUND_TEXT},
+        500: {"description": SERVER_ERROR_TEXT},
+    },
+    tags=[TAG_RUNS],
 )
 async def batch_predict_run(
     run_id: str, req: BatchPredictRequest, profile: ProfileDep
@@ -1058,7 +1091,12 @@ async def batch_predict_run(
 
 @router.post(
     "/runs/{run_id}/export_onnx",
-    responses={**_BAD_REQUEST, **_NOT_FOUND, **_SERVER_ERROR},
+    responses={
+        400: {"description": BAD_REQUEST_TEXT},
+        404: {"description": NOT_FOUND_TEXT},
+        500: {"description": SERVER_ERROR_TEXT},
+    },
+    tags=[TAG_RUNS],
 )
 async def export_run_to_onnx(
     run_id: str, req: ExportOnnxRequest, profile: ProfileDep
@@ -1088,7 +1126,12 @@ async def export_run_to_onnx(
 
 
 @router.post(
-    "/dataset/preview_preprocess", responses={**_BAD_REQUEST, **_UNPROCESSABLE}
+    "/dataset/preview_preprocess",
+    responses={
+        400: {"description": BAD_REQUEST_TEXT},
+        422: {"description": UNPROCESSABLE_TEXT, "content": VALIDATION_ERROR_CONTENT},
+    },
+    tags=[TAG_DATASETS],
 )
 async def preview_preprocess(
     req: PreprocessPreviewRequest,
@@ -1117,7 +1160,12 @@ async def preview_preprocess(
     "/sample-dataset",
     status_code=201,
     response_model=SampleDatasetResponse,
-    responses={**_BAD_REQUEST, **_CONFLICT, **_SERVER_ERROR},
+    responses={
+        400: {"description": BAD_REQUEST_TEXT},
+        409: {"description": CONFLICT_TEXT},
+        500: {"description": SERVER_ERROR_TEXT},
+    },
+    tags=[TAG_DATASETS],
 )
 async def sample_dataset(
     req: SampleDatasetRequest,
@@ -1183,7 +1231,13 @@ def _tracker_factories(
 
 @router.post(
     "/experiment/run",
-    responses={**_BAD_REQUEST, **_NOT_FOUND, **_UNPROCESSABLE, **_UNAVAILABLE},
+    responses={
+        400: {"description": BAD_REQUEST_TEXT},
+        404: {"description": NOT_FOUND_TEXT},
+        422: {"description": UNPROCESSABLE_TEXT, "content": VALIDATION_ERROR_CONTENT},
+        503: {"description": _GPU_UNAVAILABLE_TEXT},
+    },
+    tags=[TAG_EXPERIMENTS],
 )
 async def run_experiment(config: ExperimentConfig, profile: ProfileDep) -> RunResponse:
     """Start a training experiment, or queue it if one is already running."""
@@ -1210,13 +1264,15 @@ async def run_experiment(config: ExperimentConfig, profile: ProfileDep) -> RunRe
 @router.post(
     "/colab/experiment/run",
     responses={
-        **_BAD_REQUEST,
-        **_NOT_FOUND,
-        **_UNPROCESSABLE,
+        400: {"description": BAD_REQUEST_TEXT},
+        404: {"description": NOT_FOUND_TEXT},
         409: {
             "description": "The Colab CLI is not installed or the profile is not logged in"
         },
+        422: {"description": UNPROCESSABLE_TEXT, "content": VALIDATION_ERROR_CONTENT},
+        503: {"description": _GPU_UNAVAILABLE_TEXT},
     },
+    tags=[TAG_COLAB],
 )
 async def run_colab_experiment(
     req: ColabRunRequest, profile: ProfileDep
@@ -1263,6 +1319,7 @@ async def run_colab_experiment(
 @router.post(
     "/colab/drive/continue",
     responses={404: {"description": "No job is waiting for the Drive consent"}},
+    tags=[TAG_COLAB],
 )
 async def continue_drive_consent(req: ColabDriveContinueRequest) -> dict[str, bool]:
     """Answer the Drive consent prompt of a Colab job (ADR-164).
@@ -1306,7 +1363,7 @@ def _colab_lane_of(slug: str) -> str:
     return colab_lane(account.lower() if account else f"profile:{slug}")
 
 
-@router.get("/detection/schema")
+@router.get("/detection/schema", tags=[TAG_DETECTION])
 async def get_detection_schema() -> dict[str, Any]:
     """Return the JSON Schema for DetectionConfig (drives the detection form)."""
     return DetectionConfig.model_json_schema()
@@ -1314,7 +1371,13 @@ async def get_detection_schema() -> dict[str, Any]:
 
 @router.post(
     "/detection/run",
-    responses={**_BAD_REQUEST, **_NOT_FOUND, **_UNPROCESSABLE, **_UNAVAILABLE},
+    responses={
+        400: {"description": BAD_REQUEST_TEXT},
+        404: {"description": NOT_FOUND_TEXT},
+        422: {"description": UNPROCESSABLE_TEXT, "content": VALIDATION_ERROR_CONTENT},
+        503: {"description": _GPU_UNAVAILABLE_TEXT},
+    },
+    tags=[TAG_DETECTION],
 )
 async def run_detection(config: DetectionConfig, profile: ProfileDep) -> RunResponse:
     """Start an object-detection training run in the background.
@@ -1338,7 +1401,7 @@ async def run_detection(config: DetectionConfig, profile: ProfileDep) -> RunResp
     )
 
 
-@router.get("/regression/schema")
+@router.get("/regression/schema", tags=[TAG_REGRESSION])
 async def get_regression_schema() -> dict[str, Any]:
     """Return the JSON Schema for RegressionConfig (drives the regression form)."""
     return RegressionConfig.model_json_schema()
@@ -1346,7 +1409,13 @@ async def get_regression_schema() -> dict[str, Any]:
 
 @router.post(
     "/regression/run",
-    responses={**_BAD_REQUEST, **_NOT_FOUND, **_UNPROCESSABLE, **_UNAVAILABLE},
+    responses={
+        400: {"description": BAD_REQUEST_TEXT},
+        404: {"description": NOT_FOUND_TEXT},
+        422: {"description": UNPROCESSABLE_TEXT, "content": VALIDATION_ERROR_CONTENT},
+        503: {"description": _GPU_UNAVAILABLE_TEXT},
+    },
+    tags=[TAG_REGRESSION],
 )
 async def run_regression(config: RegressionConfig, profile: ProfileDep) -> RunResponse:
     """Start an image-regression training run in the background.
@@ -1370,7 +1439,7 @@ async def run_regression(config: RegressionConfig, profile: ProfileDep) -> RunRe
     )
 
 
-@router.get("/segmentation/schema")
+@router.get("/segmentation/schema", tags=[TAG_SEGMENTATION])
 async def get_segmentation_schema() -> dict[str, Any]:
     """Return the JSON Schema for SegmentationConfig (drives the segmentation form)."""
     return SegmentationConfig.model_json_schema()
@@ -1378,7 +1447,13 @@ async def get_segmentation_schema() -> dict[str, Any]:
 
 @router.post(
     "/segmentation/run",
-    responses={**_BAD_REQUEST, **_NOT_FOUND, **_UNPROCESSABLE, **_UNAVAILABLE},
+    responses={
+        400: {"description": BAD_REQUEST_TEXT},
+        404: {"description": NOT_FOUND_TEXT},
+        422: {"description": UNPROCESSABLE_TEXT, "content": VALIDATION_ERROR_CONTENT},
+        503: {"description": _GPU_UNAVAILABLE_TEXT},
+    },
+    tags=[TAG_SEGMENTATION],
 )
 async def run_segmentation(
     config: SegmentationConfig, profile: ProfileDep
@@ -1404,13 +1479,21 @@ async def run_segmentation(
     )
 
 
-@router.get("/anomaly/schema")
+@router.get("/anomaly/schema", tags=[TAG_ANOMALY])
 async def get_anomaly_schema() -> dict[str, Any]:
     """Return the JSON Schema for AnomalyConfig (drives the anomaly form)."""
     return AnomalyConfig.model_json_schema()
 
 
-@router.post("/anomaly/run", responses={**_BAD_REQUEST, **_NOT_FOUND, **_UNAVAILABLE})
+@router.post(
+    "/anomaly/run",
+    responses={
+        400: {"description": BAD_REQUEST_TEXT},
+        404: {"description": NOT_FOUND_TEXT},
+        503: {"description": _GPU_UNAVAILABLE_TEXT},
+    },
+    tags=[TAG_ANOMALY],
+)
 async def run_anomaly(config: AnomalyConfig, profile: ProfileDep) -> RunResponse:
     """Start an anomaly-detection training run in the background.
 
@@ -1435,7 +1518,13 @@ async def run_anomaly(config: AnomalyConfig, profile: ProfileDep) -> RunResponse
 
 
 @router.post(
-    "/regression/compare", responses={**_BAD_REQUEST, **_NOT_FOUND, **_UNAVAILABLE}
+    "/regression/compare",
+    responses={
+        400: {"description": BAD_REQUEST_TEXT},
+        404: {"description": NOT_FOUND_TEXT},
+        503: {"description": _GPU_UNAVAILABLE_TEXT},
+    },
+    tags=[TAG_REGRESSION],
 )
 async def compare_regression(
     req: ComparisonRequest, profile: ProfileDep
@@ -1448,7 +1537,13 @@ async def compare_regression(
 
 
 @router.post(
-    "/segmentation/compare", responses={**_BAD_REQUEST, **_NOT_FOUND, **_UNAVAILABLE}
+    "/segmentation/compare",
+    responses={
+        400: {"description": BAD_REQUEST_TEXT},
+        404: {"description": NOT_FOUND_TEXT},
+        503: {"description": _GPU_UNAVAILABLE_TEXT},
+    },
+    tags=[TAG_SEGMENTATION],
 )
 async def compare_segmentation(
     req: ComparisonRequest, profile: ProfileDep
@@ -1462,7 +1557,13 @@ async def compare_segmentation(
 
 @router.post(
     "/regression/sweep",
-    responses={**_BAD_REQUEST, **_NOT_FOUND, **_UNPROCESSABLE, **_UNAVAILABLE},
+    responses={
+        400: {"description": BAD_REQUEST_TEXT},
+        404: {"description": NOT_FOUND_TEXT},
+        422: {"description": UNPROCESSABLE_TEXT, "content": VALIDATION_ERROR_CONTENT},
+        503: {"description": _GPU_UNAVAILABLE_TEXT},
+    },
+    tags=[TAG_REGRESSION],
 )
 async def sweep_regression(req: SweepRequest, profile: ProfileDep) -> RunResponse:
     """Run a grid/random hyperparameter sweep for regression (ADR-045)."""
@@ -1474,7 +1575,13 @@ async def sweep_regression(req: SweepRequest, profile: ProfileDep) -> RunRespons
 
 @router.post(
     "/segmentation/sweep",
-    responses={**_BAD_REQUEST, **_NOT_FOUND, **_UNPROCESSABLE, **_UNAVAILABLE},
+    responses={
+        400: {"description": BAD_REQUEST_TEXT},
+        404: {"description": NOT_FOUND_TEXT},
+        422: {"description": UNPROCESSABLE_TEXT, "content": VALIDATION_ERROR_CONTENT},
+        503: {"description": _GPU_UNAVAILABLE_TEXT},
+    },
+    tags=[TAG_SEGMENTATION],
 )
 async def sweep_segmentation(req: SweepRequest, profile: ProfileDep) -> RunResponse:
     """Run a grid/random hyperparameter sweep for segmentation (ADR-045)."""
@@ -1485,7 +1592,13 @@ async def sweep_segmentation(req: SweepRequest, profile: ProfileDep) -> RunRespo
 
 
 @router.post(
-    "/detection/compare", responses={**_BAD_REQUEST, **_NOT_FOUND, **_UNAVAILABLE}
+    "/detection/compare",
+    responses={
+        400: {"description": BAD_REQUEST_TEXT},
+        404: {"description": NOT_FOUND_TEXT},
+        503: {"description": _GPU_UNAVAILABLE_TEXT},
+    },
+    tags=[TAG_DETECTION],
 )
 async def compare_detection(req: ComparisonRequest, profile: ProfileDep) -> RunResponse:
     """Train N detectors on the same dataset and rank them (ADR-044)."""
@@ -1497,7 +1610,13 @@ async def compare_detection(req: ComparisonRequest, profile: ProfileDep) -> RunR
 
 @router.post(
     "/detection/sweep",
-    responses={**_BAD_REQUEST, **_NOT_FOUND, **_UNPROCESSABLE, **_UNAVAILABLE},
+    responses={
+        400: {"description": BAD_REQUEST_TEXT},
+        404: {"description": NOT_FOUND_TEXT},
+        422: {"description": UNPROCESSABLE_TEXT, "content": VALIDATION_ERROR_CONTENT},
+        503: {"description": _GPU_UNAVAILABLE_TEXT},
+    },
+    tags=[TAG_DETECTION],
 )
 async def sweep_detection(req: SweepRequest, profile: ProfileDep) -> RunResponse:
     """Run a grid/random hyperparameter sweep for detection (ADR-045)."""
@@ -1508,7 +1627,13 @@ async def sweep_detection(req: SweepRequest, profile: ProfileDep) -> RunResponse
 
 
 @router.post(
-    "/anomaly/compare", responses={**_BAD_REQUEST, **_NOT_FOUND, **_UNAVAILABLE}
+    "/anomaly/compare",
+    responses={
+        400: {"description": BAD_REQUEST_TEXT},
+        404: {"description": NOT_FOUND_TEXT},
+        503: {"description": _GPU_UNAVAILABLE_TEXT},
+    },
+    tags=[TAG_ANOMALY],
 )
 async def compare_anomaly(req: ComparisonRequest, profile: ProfileDep) -> RunResponse:
     """Train N anomaly models on the same dataset and rank them (ADR-044)."""
@@ -1520,7 +1645,13 @@ async def compare_anomaly(req: ComparisonRequest, profile: ProfileDep) -> RunRes
 
 @router.post(
     "/anomaly/sweep",
-    responses={**_BAD_REQUEST, **_NOT_FOUND, **_UNPROCESSABLE, **_UNAVAILABLE},
+    responses={
+        400: {"description": BAD_REQUEST_TEXT},
+        404: {"description": NOT_FOUND_TEXT},
+        422: {"description": UNPROCESSABLE_TEXT, "content": VALIDATION_ERROR_CONTENT},
+        503: {"description": _GPU_UNAVAILABLE_TEXT},
+    },
+    tags=[TAG_ANOMALY],
 )
 async def sweep_anomaly(req: SweepRequest, profile: ProfileDep) -> RunResponse:
     """Run a grid/random hyperparameter sweep for anomaly detection (ADR-045)."""
@@ -1570,7 +1701,7 @@ _BUILTIN_TASK_DESCRIPTORS = [
 ]
 
 
-@router.get("/tasks")
+@router.get("/tasks", tags=[TAG_EXPERIMENTS])
 async def list_tasks() -> TaskListResponse:
     """Every renderable task: the five built-ins + registered custom tasks.
 
@@ -1600,7 +1731,11 @@ async def list_tasks() -> TaskListResponse:
     return TaskListResponse(tasks=[*_BUILTIN_TASK_DESCRIPTORS, *custom])
 
 
-@router.post("/custom/{key}/hide", responses=_NOT_FOUND)
+@router.post(
+    "/custom/{key}/hide",
+    responses={404: {"description": NOT_FOUND_TEXT}},
+    tags=[TAG_CUSTOM_TASKS],
+)
 async def hide_custom_task(key: str) -> CustomTaskActionResponse:
     """Stop rendering a custom task's tab, keeping its file untouched."""
     from visionforge.tasks.manage import set_hidden
@@ -1614,7 +1749,7 @@ async def hide_custom_task(key: str) -> CustomTaskActionResponse:
     )
 
 
-@router.post("/custom/{key}/unhide")
+@router.post("/custom/{key}/unhide", tags=[TAG_CUSTOM_TASKS])
 async def unhide_custom_task(key: str) -> CustomTaskActionResponse:
     """Bring a hidden custom task's tab back."""
     from visionforge.tasks.manage import set_hidden
@@ -1625,7 +1760,14 @@ async def unhide_custom_task(key: str) -> CustomTaskActionResponse:
     )
 
 
-@router.delete("/custom/{key}", responses={**_BAD_REQUEST, **_NOT_FOUND})
+@router.delete(
+    "/custom/{key}",
+    responses={
+        400: {"description": BAD_REQUEST_TEXT},
+        404: {"description": NOT_FOUND_TEXT},
+    },
+    tags=[TAG_CUSTOM_TASKS],
+)
 async def delete_custom_task(key: str, confirm: str = "") -> CustomTaskActionResponse:
     """Delete a custom task's source file. ``confirm`` must repeat the key.
 
@@ -1653,7 +1795,11 @@ def _get_custom_task_or_404(key: str) -> Any:
         raise HTTPException(404, exc.args[0] if exc.args else str(exc)) from exc
 
 
-@router.get("/custom/{key}/schema", responses=_NOT_FOUND)
+@router.get(
+    "/custom/{key}/schema",
+    responses={404: {"description": NOT_FOUND_TEXT}},
+    tags=[TAG_CUSTOM_TASKS],
+)
 async def custom_task_schema(key: str) -> dict[str, Any]:
     """JSON Schema of a custom task's Config — drives the generic form."""
     info = _get_custom_task_or_404(key)
@@ -1681,7 +1827,13 @@ def _localize_task_schema(schema: dict[str, Any]) -> dict[str, Any]:
 
 
 @router.post(
-    "/custom/{key}/run", responses={**_BAD_REQUEST, **_NOT_FOUND, **_UNAVAILABLE}
+    "/custom/{key}/run",
+    responses={
+        400: {"description": BAD_REQUEST_TEXT},
+        404: {"description": NOT_FOUND_TEXT},
+        503: {"description": _GPU_UNAVAILABLE_TEXT},
+    },
+    tags=[TAG_CUSTOM_TASKS],
 )
 async def run_custom_task(
     key: str, config: dict[str, Any], profile: ProfileDep
@@ -1771,7 +1923,13 @@ async def _execute_custom_task(info: Any, cfg: Any, run_id: str) -> None:
 
 @router.post(
     "/custom/{key}/sweep",
-    responses={**_BAD_REQUEST, **_NOT_FOUND, **_UNPROCESSABLE, **_UNAVAILABLE},
+    responses={
+        400: {"description": BAD_REQUEST_TEXT},
+        404: {"description": NOT_FOUND_TEXT},
+        422: {"description": UNPROCESSABLE_TEXT, "content": VALIDATION_ERROR_CONTENT},
+        503: {"description": _GPU_UNAVAILABLE_TEXT},
+    },
+    tags=[TAG_CUSTOM_TASKS],
 )
 async def sweep_custom_task(
     key: str, req: SweepRequest, profile: ProfileDep
@@ -1793,7 +1951,13 @@ async def sweep_custom_task(
 
 @router.post(
     "/custom/{key}/replicates",
-    responses={**_BAD_REQUEST, **_NOT_FOUND, **_UNPROCESSABLE, **_UNAVAILABLE},
+    responses={
+        400: {"description": BAD_REQUEST_TEXT},
+        404: {"description": NOT_FOUND_TEXT},
+        422: {"description": UNPROCESSABLE_TEXT, "content": VALIDATION_ERROR_CONTENT},
+        503: {"description": _GPU_UNAVAILABLE_TEXT},
+    },
+    tags=[TAG_CUSTOM_TASKS],
 )
 async def replicates_custom_task(
     key: str, req: ReplicatesRequest, profile: ProfileDep
@@ -1806,7 +1970,15 @@ async def replicates_custom_task(
     return _start_replicates(req, info.spec_cls.Config, CustomTaskRunner(info), profile)
 
 
-@router.post("/regression/cv", responses={**_BAD_REQUEST, **_NOT_FOUND, **_UNAVAILABLE})
+@router.post(
+    "/regression/cv",
+    responses={
+        400: {"description": BAD_REQUEST_TEXT},
+        404: {"description": NOT_FOUND_TEXT},
+        503: {"description": _GPU_UNAVAILABLE_TEXT},
+    },
+    tags=[TAG_REGRESSION],
+)
 async def cv_regression(req: TaskCvRequest, profile: ProfileDep) -> RunResponse:
     """Run K-fold cross-validation for regression (ADR-050) in the background."""
     return _start_task_cv(
@@ -1815,7 +1987,13 @@ async def cv_regression(req: TaskCvRequest, profile: ProfileDep) -> RunResponse:
 
 
 @router.post(
-    "/segmentation/cv", responses={**_BAD_REQUEST, **_NOT_FOUND, **_UNAVAILABLE}
+    "/segmentation/cv",
+    responses={
+        400: {"description": BAD_REQUEST_TEXT},
+        404: {"description": NOT_FOUND_TEXT},
+        503: {"description": _GPU_UNAVAILABLE_TEXT},
+    },
+    tags=[TAG_SEGMENTATION],
 )
 async def cv_segmentation(req: TaskCvRequest, profile: ProfileDep) -> RunResponse:
     """Run K-fold cross-validation for segmentation in the background."""
@@ -1830,7 +2008,13 @@ async def cv_segmentation(req: TaskCvRequest, profile: ProfileDep) -> RunRespons
 
 @router.post(
     "/classification/replicates",
-    responses={**_BAD_REQUEST, **_NOT_FOUND, **_UNPROCESSABLE, **_UNAVAILABLE},
+    responses={
+        400: {"description": BAD_REQUEST_TEXT},
+        404: {"description": NOT_FOUND_TEXT},
+        422: {"description": UNPROCESSABLE_TEXT, "content": VALIDATION_ERROR_CONTENT},
+        503: {"description": _GPU_UNAVAILABLE_TEXT},
+    },
+    tags=[TAG_EXPERIMENTS],
 )
 async def replicates_classification(
     req: ReplicatesRequest, profile: ProfileDep
@@ -1844,7 +2028,13 @@ async def replicates_classification(
 
 @router.post(
     "/regression/replicates",
-    responses={**_BAD_REQUEST, **_NOT_FOUND, **_UNPROCESSABLE, **_UNAVAILABLE},
+    responses={
+        400: {"description": BAD_REQUEST_TEXT},
+        404: {"description": NOT_FOUND_TEXT},
+        422: {"description": UNPROCESSABLE_TEXT, "content": VALIDATION_ERROR_CONTENT},
+        503: {"description": _GPU_UNAVAILABLE_TEXT},
+    },
+    tags=[TAG_REGRESSION],
 )
 async def replicates_regression(
     req: ReplicatesRequest, profile: ProfileDep
@@ -1858,7 +2048,13 @@ async def replicates_regression(
 
 @router.post(
     "/segmentation/replicates",
-    responses={**_BAD_REQUEST, **_NOT_FOUND, **_UNPROCESSABLE, **_UNAVAILABLE},
+    responses={
+        400: {"description": BAD_REQUEST_TEXT},
+        404: {"description": NOT_FOUND_TEXT},
+        422: {"description": UNPROCESSABLE_TEXT, "content": VALIDATION_ERROR_CONTENT},
+        503: {"description": _GPU_UNAVAILABLE_TEXT},
+    },
+    tags=[TAG_SEGMENTATION],
 )
 async def replicates_segmentation(
     req: ReplicatesRequest, profile: ProfileDep
@@ -1872,7 +2068,13 @@ async def replicates_segmentation(
 
 @router.post(
     "/detection/replicates",
-    responses={**_BAD_REQUEST, **_NOT_FOUND, **_UNPROCESSABLE, **_UNAVAILABLE},
+    responses={
+        400: {"description": BAD_REQUEST_TEXT},
+        404: {"description": NOT_FOUND_TEXT},
+        422: {"description": UNPROCESSABLE_TEXT, "content": VALIDATION_ERROR_CONTENT},
+        503: {"description": _GPU_UNAVAILABLE_TEXT},
+    },
+    tags=[TAG_DETECTION],
 )
 async def replicates_detection(
     req: ReplicatesRequest, profile: ProfileDep
@@ -1886,7 +2088,13 @@ async def replicates_detection(
 
 @router.post(
     "/anomaly/replicates",
-    responses={**_BAD_REQUEST, **_NOT_FOUND, **_UNPROCESSABLE, **_UNAVAILABLE},
+    responses={
+        400: {"description": BAD_REQUEST_TEXT},
+        404: {"description": NOT_FOUND_TEXT},
+        422: {"description": UNPROCESSABLE_TEXT, "content": VALIDATION_ERROR_CONTENT},
+        503: {"description": _GPU_UNAVAILABLE_TEXT},
+    },
+    tags=[TAG_ANOMALY],
 )
 async def replicates_anomaly(
     req: ReplicatesRequest, profile: ProfileDep
@@ -1900,7 +2108,13 @@ async def replicates_anomaly(
 
 @router.post(
     "/classification/replicated-comparison",
-    responses={**_BAD_REQUEST, **_NOT_FOUND, **_UNPROCESSABLE, **_UNAVAILABLE},
+    responses={
+        400: {"description": BAD_REQUEST_TEXT},
+        404: {"description": NOT_FOUND_TEXT},
+        422: {"description": UNPROCESSABLE_TEXT, "content": VALIDATION_ERROR_CONTENT},
+        503: {"description": _GPU_UNAVAILABLE_TEXT},
+    },
+    tags=[TAG_EXPERIMENTS],
 )
 async def replicated_comparison_classification(
     req: ReplicatedComparisonRequest, profile: ProfileDep
@@ -1916,7 +2130,13 @@ async def replicated_comparison_classification(
 
 @router.post(
     "/regression/replicated-comparison",
-    responses={**_BAD_REQUEST, **_NOT_FOUND, **_UNPROCESSABLE, **_UNAVAILABLE},
+    responses={
+        400: {"description": BAD_REQUEST_TEXT},
+        404: {"description": NOT_FOUND_TEXT},
+        422: {"description": UNPROCESSABLE_TEXT, "content": VALIDATION_ERROR_CONTENT},
+        503: {"description": _GPU_UNAVAILABLE_TEXT},
+    },
+    tags=[TAG_REGRESSION],
 )
 async def replicated_comparison_regression(
     req: ReplicatedComparisonRequest, profile: ProfileDep
@@ -1932,7 +2152,13 @@ async def replicated_comparison_regression(
 
 @router.post(
     "/segmentation/replicated-comparison",
-    responses={**_BAD_REQUEST, **_NOT_FOUND, **_UNPROCESSABLE, **_UNAVAILABLE},
+    responses={
+        400: {"description": BAD_REQUEST_TEXT},
+        404: {"description": NOT_FOUND_TEXT},
+        422: {"description": UNPROCESSABLE_TEXT, "content": VALIDATION_ERROR_CONTENT},
+        503: {"description": _GPU_UNAVAILABLE_TEXT},
+    },
+    tags=[TAG_SEGMENTATION],
 )
 async def replicated_comparison_segmentation(
     req: ReplicatedComparisonRequest, profile: ProfileDep
@@ -1948,7 +2174,13 @@ async def replicated_comparison_segmentation(
 
 @router.post(
     "/detection/replicated-comparison",
-    responses={**_BAD_REQUEST, **_NOT_FOUND, **_UNPROCESSABLE, **_UNAVAILABLE},
+    responses={
+        400: {"description": BAD_REQUEST_TEXT},
+        404: {"description": NOT_FOUND_TEXT},
+        422: {"description": UNPROCESSABLE_TEXT, "content": VALIDATION_ERROR_CONTENT},
+        503: {"description": _GPU_UNAVAILABLE_TEXT},
+    },
+    tags=[TAG_DETECTION],
 )
 async def replicated_comparison_detection(
     req: ReplicatedComparisonRequest, profile: ProfileDep
@@ -1964,7 +2196,13 @@ async def replicated_comparison_detection(
 
 @router.post(
     "/anomaly/replicated-comparison",
-    responses={**_BAD_REQUEST, **_NOT_FOUND, **_UNPROCESSABLE, **_UNAVAILABLE},
+    responses={
+        400: {"description": BAD_REQUEST_TEXT},
+        404: {"description": NOT_FOUND_TEXT},
+        422: {"description": UNPROCESSABLE_TEXT, "content": VALIDATION_ERROR_CONTENT},
+        503: {"description": _GPU_UNAVAILABLE_TEXT},
+    },
+    tags=[TAG_ANOMALY],
 )
 async def replicated_comparison_anomaly(
     req: ReplicatedComparisonRequest, profile: ProfileDep
@@ -1978,7 +2216,13 @@ async def replicated_comparison_anomaly(
 
 @router.post(
     "/custom/{key}/replicated-comparison",
-    responses={**_BAD_REQUEST, **_NOT_FOUND, **_UNPROCESSABLE, **_UNAVAILABLE},
+    responses={
+        400: {"description": BAD_REQUEST_TEXT},
+        404: {"description": NOT_FOUND_TEXT},
+        422: {"description": UNPROCESSABLE_TEXT, "content": VALIDATION_ERROR_CONTENT},
+        503: {"description": _GPU_UNAVAILABLE_TEXT},
+    },
+    tags=[TAG_CUSTOM_TASKS],
 )
 async def replicated_comparison_custom(
     key: str, req: ReplicatedComparisonRequest, profile: ProfileDep
@@ -1993,7 +2237,7 @@ async def replicated_comparison_custom(
     )
 
 
-@router.get("/experiment/events")
+@router.get("/experiment/events", tags=[TAG_EXPERIMENTS])
 async def experiment_events(
     run_id: str | None = None, after: Annotated[int, Query(ge=0)] = 0
 ) -> StreamingResponse:
@@ -2030,7 +2274,7 @@ async def _sse_generator(  # type: ignore[return]
         yield f"data: {json.dumps(item)}\n\n"
 
 
-@router.get("/experiment/status")
+@router.get("/experiment/status", tags=[TAG_EXPERIMENTS])
 async def get_status(run_id: str | None = None) -> RunStatus:
     """Poll a run's status, plus how many jobs wait over all queues.
 
@@ -2051,7 +2295,7 @@ async def get_status(run_id: str | None = None) -> RunStatus:
     )
 
 
-@router.get("/queue")
+@router.get("/queue", tags=[TAG_EXPERIMENTS])
 async def get_queue() -> QueueSnapshot:
     """Every queue: its running job and what waits behind it, in submission order.
 
@@ -2069,7 +2313,14 @@ async def get_queue() -> QueueSnapshot:
     return QueueSnapshot(active=lanes[0].active, pending=lanes[0].pending, lanes=lanes)
 
 
-@router.delete("/queue/{run_id}", responses={**_NOT_FOUND, **_CONFLICT})
+@router.delete(
+    "/queue/{run_id}",
+    responses={
+        404: {"description": NOT_FOUND_TEXT},
+        409: {"description": CONFLICT_TEXT},
+    },
+    tags=[TAG_EXPERIMENTS],
+)
 async def cancel_queued_run(run_id: str) -> dict[str, str]:
     """Stop a job, whether it is waiting or already training.
 
@@ -2094,7 +2345,12 @@ async def cancel_queued_run(run_id: str) -> dict[str, str]:
 
 @router.get(
     "/experiment/result/{run_id}",
-    responses={**_NOT_FOUND, **_CONFLICT, **_SERVER_ERROR},
+    responses={
+        404: {"description": NOT_FOUND_TEXT},
+        409: {"description": CONFLICT_TEXT},
+        500: {"description": SERVER_ERROR_TEXT},
+    },
+    tags=[TAG_EXPERIMENTS],
 )
 async def get_result(run_id: str) -> RunResult:
     """Fetch the result of a completed experiment.
@@ -2161,6 +2417,7 @@ def _report_stopped(report: dict[str, Any]) -> bool:
         403: {"description": "Path outside outputs"},
         404: {"description": "File not found"},
     },
+    tags=[TAG_RUNS],
 )
 async def serve_artifact(file_path: str) -> FileResponse:
     """Serve output files (plots, models) with path traversal protection."""

@@ -30,12 +30,13 @@ from visionforge.gui.api.http_responses import (
     CONFLICT_TEXT,
     FORBIDDEN_TEXT,
     NOT_FOUND_TEXT,
+    TAG_EXPLORER,
 )
 from visionforge.gui.api.merge_jobs import MergeJobs
 from visionforge.utils.messages import tr
 from visionforge.utils.paths import validate_path_component
 
-router = APIRouter(prefix="/explorer/merge")
+router = APIRouter(prefix="/explorer/merge", tags=[TAG_EXPLORER])
 
 _JOBS = MergeJobs()
 _JOB_MISSING = "merge.job_missing"

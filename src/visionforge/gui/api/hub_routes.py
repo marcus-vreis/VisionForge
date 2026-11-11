@@ -20,6 +20,9 @@ from visionforge.gui.api.http_responses import (
     CONFLICT_TEXT,
     NOT_FOUND_TEXT,
     SERVER_ERROR_TEXT,
+    TAG_INTEGRATIONS,
+    UNPROCESSABLE_TEXT,
+    VALIDATION_ERROR_CONTENT,
 )
 from visionforge.gui.api.profile_tokens import (
     ProfileHeader,
@@ -48,7 +51,9 @@ def build_hub_router(
 ) -> APIRouter:
     """Mount profile-scoped credentials and explicit private upload routes."""
     router = APIRouter(
-        prefix="/hub", route_class=quiet_validation_route("hub.request_invalid")
+        prefix="/hub",
+        tags=[TAG_INTEGRATIONS],
+        route_class=quiet_validation_route("hub.request_invalid"),
     )
 
     def locate(run_id: str, profile: Profile) -> Path:
@@ -63,6 +68,10 @@ def build_hub_router(
         "/preview",
         responses={
             404: {"description": NOT_FOUND_TEXT},
+            422: {
+                "description": UNPROCESSABLE_TEXT,
+                "content": VALIDATION_ERROR_CONTENT,
+            },
         },
     )
     def preview(run_id: str, header: ProfileHeader = None) -> dict[str, Any]:
@@ -80,6 +89,10 @@ def build_hub_router(
         responses={
             404: {"description": NOT_FOUND_TEXT},
             409: {"description": CONFLICT_TEXT},
+            422: {
+                "description": UNPROCESSABLE_TEXT,
+                "content": VALIDATION_ERROR_CONTENT,
+            },
             502: {"description": SERVER_ERROR_TEXT},
         },
     )

@@ -17,9 +17,12 @@ from visionforge.core.dataset_fingerprint import dataset_identity
 from visionforge.gui.api.folder_opener import can_reveal
 from visionforge.gui.api.http_responses import (
     BAD_REQUEST,
-    CONFLICT,
+    BAD_REQUEST_TEXT,
+    CONFLICT_TEXT,
     NOT_FOUND,
-    SERVER_ERROR,
+    NOT_FOUND_TEXT,
+    SERVER_ERROR_TEXT,
+    TAG_RUNS,
 )
 from visionforge.gui.api.profiles import PROFILE_HEADER, Profile
 from visionforge.gui.api.run_history import (
@@ -53,7 +56,7 @@ def build_runs_router(
     ``run_state`` returns the state of the job with that run id, if one started,
     so a delete can refuse a running one without this module holding a copy.
     """
-    router = APIRouter()
+    router = APIRouter(tags=[TAG_RUNS])
 
     def profile_dep(
         x_vf_profile: Annotated[str | None, Header(alias=PROFILE_HEADER)] = None,
@@ -68,7 +71,12 @@ def build_runs_router(
         return load_runs(profile.models_dir.resolve())
 
     @router.get(
-        "/runs/{run_id}", responses={**BAD_REQUEST, **NOT_FOUND, **SERVER_ERROR}
+        "/runs/{run_id}",
+        responses={
+            400: {"description": BAD_REQUEST_TEXT},
+            404: {"description": NOT_FOUND_TEXT},
+            500: {"description": SERVER_ERROR_TEXT},
+        },
     )
     async def get_run_detail(
         run_id: str, request: Request, profile: ProfileDep
@@ -79,7 +87,14 @@ def build_runs_router(
             raise HTTPException(404, tr(RUN_NOT_FOUND_KEY, run_id=run_id))
         return _build_run_detail(run_dir, _read_run_json(run_dir), client_host(request))
 
-    @router.delete("/runs/{run_id}", responses={**BAD_REQUEST, **NOT_FOUND, **CONFLICT})
+    @router.delete(
+        "/runs/{run_id}",
+        responses={
+            400: {"description": BAD_REQUEST_TEXT},
+            404: {"description": NOT_FOUND_TEXT},
+            409: {"description": CONFLICT_TEXT},
+        },
+    )
     async def delete_run(run_id: str, profile: ProfileDep) -> dict[str, str]:
         """Permanently remove a run directory and all its artifacts.
 

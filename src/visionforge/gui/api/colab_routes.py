@@ -16,6 +16,7 @@ from visionforge.gui.api.colab_connection import (
     LoginFlows,
 )
 from visionforge.gui.api.colab_jobs import ColabJobs
+from visionforge.gui.api.http_responses import TAG_COLAB
 from visionforge.gui.api.profiles import PROFILE_HEADER, Profile
 from visionforge.gui.api.schemas import (
     ColabLoginFinishRequest,
@@ -38,7 +39,7 @@ def build_colab_router(
     jobs: ColabJobs,
 ) -> APIRouter:
     """Build the Colab endpoints. Handlers are sync: each one may wait on the CLI."""
-    router = APIRouter()
+    router = APIRouter(tags=[TAG_COLAB])
 
     def profile_dep(
         x_vf_profile: Annotated[str | None, Header(alias=PROFILE_HEADER)] = None,

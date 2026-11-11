@@ -14,6 +14,12 @@ from fastapi.responses import FileResponse
 from loguru import logger
 
 from visionforge import __version__
+from visionforge.gui.api.http_responses import (
+    NOT_FOUND_TEXT,
+    OPENAPI_TAGS,
+    TAG_SPA,
+    TAG_SYSTEM,
+)
 from visionforge.gui.api.routes import router as api_router
 from visionforge.gui.security import (
     HostOriginGuard,
@@ -32,9 +38,6 @@ apply_env_opt_outs()
 INDEX_FILENAME = "index.html"
 NOT_FOUND_DETAIL = "Not Found"
 
-_NOT_FOUND: dict[int | str, dict[str, Any]] = {
-    404: {"description": "Resource not found"}
-}
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -79,6 +82,7 @@ DOCS_ENABLED = _docs_enabled()
 
 app = FastAPI(
     title="VisionForge",
+    openapi_tags=OPENAPI_TAGS,
     version=__version__,
     docs_url=_DOCS_URL if DOCS_ENABLED else None,
     redoc_url=_REDOC_URL if DOCS_ENABLED else None,
@@ -102,7 +106,7 @@ async def _sweep_filtered_datasets() -> None:
         sweep_orphans(cache)
 
 
-@app.get("/api/health")
+@app.get("/api/health", tags=[TAG_SYSTEM])
 async def health() -> dict[str, str]:
     """Version and the SPA build this process booted against.
 
@@ -145,7 +149,9 @@ app.include_router(api_router)
 _INDEX_HEADERS = {"Cache-Control": "no-cache, must-revalidate"}
 
 
-@app.get("/{path:path}", responses=_NOT_FOUND)
+@app.get(
+    "/{path:path}", responses={404: {"description": NOT_FOUND_TEXT}}, tags=[TAG_SPA]
+)
 async def spa_fallback(path: str) -> FileResponse:
     """Serve the React SPA — static files or index.html fallback."""
     # An unknown /api/... is a client error, not a deep link: answering 200 with

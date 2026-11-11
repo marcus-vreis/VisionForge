@@ -36,10 +36,18 @@ from visionforge.gui.api.datasets_routes import (
     _remember_dataset_root,
 )
 from visionforge.gui.api.explorer_jobs import ScanBusyError, ScanJobs
-from visionforge.gui.api.http_responses import BAD_REQUEST, CONFLICT, NOT_FOUND
+from visionforge.gui.api.http_responses import (
+    BAD_REQUEST_TEXT,
+    CONFLICT_TEXT,
+    FORBIDDEN_TEXT,
+    NOT_FOUND_TEXT,
+    TAG_EXPLORER,
+    UNPROCESSABLE_TEXT,
+    VALIDATION_ERROR_CONTENT,
+)
 from visionforge.utils.messages import tr
 
-router = APIRouter(prefix="/explorer")
+router = APIRouter(prefix="/explorer", tags=[TAG_EXPLORER])
 
 _INDEXES = IndexCache()
 _SCANS = ScanJobs()
@@ -105,7 +113,7 @@ async def explorer_summary(req: ExplorerRequest) -> dict[str, Any]:
     return {"base_dir": str(index.root.resolve()), **summarize(index)}
 
 
-@router.post("/images")
+@router.post("/images", responses={400: {"description": BAD_REQUEST_TEXT}})
 async def explorer_images(req: ExplorerImagesRequest) -> dict[str, Any]:
     """One page of the gallery, filtered by split and class."""
 
@@ -137,10 +145,15 @@ async def explorer_images(req: ExplorerImagesRequest) -> dict[str, Any]:
     return await asyncio.to_thread(work)
 
 
-_FORBIDDEN: dict[int | str, dict[str, Any]] = {403: {"description": "Access denied"}}
-
-
-@router.get("/thumb", responses={**BAD_REQUEST, **_FORBIDDEN, **NOT_FOUND})
+@router.get(
+    "/thumb",
+    responses={
+        400: {"description": BAD_REQUEST_TEXT},
+        403: {"description": FORBIDDEN_TEXT},
+        404: {"description": NOT_FOUND_TEXT},
+        422: {"description": UNPROCESSABLE_TEXT, "content": VALIDATION_ERROR_CONTENT},
+    },
+)
 def explorer_thumb(
     root: str, path: str, size: int = 160, label_path: str | None = None
 ) -> Response:
@@ -178,7 +191,7 @@ def explorer_thumb(
     )
 
 
-@router.post("/scan", responses=CONFLICT)
+@router.post("/scan", responses={409: {"description": CONFLICT_TEXT}})
 async def explorer_scan_start(req: ExplorerScanRequest) -> dict[str, Any]:
     """Start the integrity scan in the background; poll ``/scan/{job_id}``."""
     index = await asyncio.to_thread(_load_index, req, refresh=False)
@@ -189,7 +202,7 @@ async def explorer_scan_start(req: ExplorerScanRequest) -> dict[str, Any]:
     return job.snapshot()
 
 
-@router.get("/scan/{job_id}", responses=NOT_FOUND)
+@router.get("/scan/{job_id}", responses={404: {"description": NOT_FOUND_TEXT}})
 async def explorer_scan_status(job_id: str) -> dict[str, Any]:
     """Progress, and the report once the scan has finished or been cancelled."""
     job = _SCANS.get(job_id)
@@ -198,7 +211,7 @@ async def explorer_scan_status(job_id: str) -> dict[str, Any]:
     return job.snapshot()
 
 
-@router.post("/scan/{job_id}/cancel", responses=NOT_FOUND)
+@router.post("/scan/{job_id}/cancel", responses={404: {"description": NOT_FOUND_TEXT}})
 async def explorer_scan_cancel(job_id: str) -> dict[str, bool]:
     """Ask a running scan to stop; it keeps the partial report."""
     if not _SCANS.cancel(job_id):
