@@ -275,3 +275,28 @@ A atualização mantém o PyTorch que você já tem. Para desinstalar, apague a 
 | Download de dataset falha com `SSL: CERTIFICATE_VERIFY_FAILED` (Mac) | certificados do Python.org não instalados | rode "Install Certificates.command" (passo 1 do macOS) |
 | O botão de escolher pasta não faz nada | falta o Tk (Linux) ou o diálogo nativo falhou (Mac) | Linux: `sudo apt install python3-tk`; em qualquer sistema, cole o caminho no campo |
 | A porta 8000 já está em uso | outro programa (ou outro `visionforge gui`) nela | feche o outro terminal ou use `visionforge gui --port 8001` |
+
+## Licenças de terceiros
+
+O VisionForge é MIT, mas o `pip install` também traz pacotes com outras licenças,
+listados em [`THIRD_PARTY_NOTICES.md`](https://github.com/marcus-vreis/VisionForge/blob/main/THIRD_PARTY_NOTICES.md). O principal é o **Ultralytics, sob
+AGPL-3.0**, o backend de detecção YOLO / RT-DETR: quem distribui um programa feito
+sobre ele, ou deixa usuários acessarem uma versão modificada pela rede, precisa
+publicar o código desse programa sob a mesma licença. O backend de detecção
+`torchvision` não usa o Ultralytics.
+
+## Rede e privacidade
+
+Depois de instalado, o VisionForge não tem telemetria própria e só acessa a internet
+quando você pede (baixar dataset ou pesos pré-treinados, exportar um run, conectar o
+Colab, `visionforge doctor --fix`) e numa checagem de atualização no `pypi.org` quando
+a interface abre. Para desligar essa checagem:
+
+```bash
+export VISIONFORGE_NO_UPDATE_CHECK=1      # Linux / macOS
+$env:VISIONFORGE_NO_UPDATE_CHECK = "1"    # Windows (PowerShell)
+```
+
+A lista completa de conexões e das variáveis que desligam a telemetria dos SDKs
+embutidos está na seção
+[Rede e privacidade do README](https://github.com/marcus-vreis/VisionForge/blob/main/README.md#rede-e-privacidade).

@@ -360,7 +360,7 @@ jobs:
         run: |
           cp scripts/verify_distribution.py "$RUNNER_TEMP/verify_distribution.py"
           cd "$RUNNER_TEMP"
-          env -u PYTHONPATH "$RUNNER_TEMP/visionforge-wheel/bin/python" verify_distribution.py --checkout "$GITHUB_WORKSPACE" --workspace "$RUNNER_TEMP/wheel-smoke"
+          env -u PYTHONPATH "$RUNNER_TEMP/visionforge-wheel/bin/python" verify_distribution.py --checkout "$GITHUB_WORKSPACE" --workspace "$RUNNER_TEMP/wheel-smoke" --wheel "$(ls "$GITHUB_WORKSPACE"/dist/*.whl)"
 
   coverage:
     name: coverage

@@ -8,6 +8,7 @@ import os
 import re
 import subprocess
 import sys
+import zipfile
 from pathlib import Path
 from typing import Any
 
@@ -34,6 +35,28 @@ def validate_static_assets(package: Path) -> list[str]:
         if not asset.is_relative_to(static.resolve()) or not asset.is_file():
             raise ValueError(f"Invalid installed asset: {name}")
     return assets
+
+
+REQUIRED_LICENSE_FILES = ("LICENSE", "THIRD_PARTY_NOTICES.md")
+
+
+def validate_wheel_licenses(wheel: Path) -> list[str]:
+    """Check the wheel carries the license and third-party notices (PEP 639)."""
+    with zipfile.ZipFile(wheel) as archive:
+        members = archive.namelist()
+    found = sorted(
+        name
+        for name in members
+        if re.fullmatch(r"[^/]+\.dist-info/licenses/[^/]+", name)
+    )
+    missing = [
+        required
+        for required in REQUIRED_LICENSE_FILES
+        if not any(name.endswith(f"/licenses/{required}") for name in found)
+    ]
+    if missing:
+        raise ValueError(f"Wheel is missing license files: {', '.join(missing)}")
+    return found
 
 
 def _cli(workspace: Path, *arguments: str) -> str:
@@ -129,7 +152,9 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--checkout", required=True, type=Path)
     parser.add_argument("--workspace", required=True, type=Path)
+    parser.add_argument("--wheel", type=Path, help="built wheel to inspect first")
     arguments = parser.parse_args()
+    licenses = validate_wheel_licenses(arguments.wheel) if arguments.wheel else []
     if os.environ.get("PYTHONPATH"):
         raise ValueError("Unset PYTHONPATH before testing the installed wheel")
     if Path.cwd().resolve().is_relative_to(arguments.checkout.resolve()):
@@ -147,6 +172,7 @@ def main() -> None:
                 "version": visionforge.__version__,
                 "package": str(package),
                 "assets": assets,
+                "license_files": licenses,
                 **result,
             },
             indent=2,

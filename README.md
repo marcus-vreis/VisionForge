@@ -254,6 +254,40 @@ always points to the latest version; each version also has its own DOI there.
 
 [MIT](https://github.com/marcus-vreis/VisionForge/blob/main/LICENSE)
 
+## Third-party licenses
+
+VisionForge is MIT, but some of what it installs is not.
+[`THIRD_PARTY_NOTICES.md`](https://github.com/marcus-vreis/VisionForge/blob/main/THIRD_PARTY_NOTICES.md) lists them; the main one:
+
+- **Ultralytics (AGPL-3.0)** is the YOLO / RT-DETR detection backend. If you
+  distribute a program built on it, or let users reach a modified version over
+  a network, the AGPL-3.0 asks you to publish that program's source under the
+  same license; Ultralytics offers an Enterprise License otherwise. The
+  `torchvision` detection backend does not use it.
+- Smaller cases: `pi-heif` (bundles LGPL-3.0 libraries), `text-unidecode`
+  (Artistic or GPL-2.0+), `certifi` and `tqdm` (MPL-2.0).
+- The GUI bundles three fonts under the SIL Open Font License 1.1.
+
+## Network and privacy
+
+VisionForge has no telemetry of its own. It goes online only for:
+
+| When | Where | Turn it off |
+|---|---|---|
+| The GUI opens: update check | `pypi.org` (short timeout, cached, silent offline) | `VISIONFORGE_NO_UPDATE_CHECK=1` |
+| A model with pretrained weights, first use | `download.pytorch.org`, `huggingface.co` (timm), GitHub releases (Ultralytics) | turn `pretrained` off |
+| You download a dataset | Roboflow, Kaggle, Hugging Face | don't use the download |
+| You export a run | MLflow server you set, Weights & Biases, DVC remote, Hugging Face Hub, GitHub, Zenodo | don't export |
+| You connect Google Colab | PyPI (`google-colab-cli`), Google | don't connect |
+| `visionforge doctor --fix` | `download.pytorch.org` | run `doctor` without `--fix` |
+| `VISIONFORGE_DOCS=1` (API docs pages) | `cdn.jsdelivr.net`, Google Fonts | leave it unset |
+
+Some bundled SDKs report usage on their own. Before importing them,
+VisionForge sets `HF_HUB_DISABLE_TELEMETRY=1`, `DO_NOT_TRACK=1`,
+`MLFLOW_DISABLE_TELEMETRY=true` and `DVC_NO_ANALYTICS=1` (only when you have
+not set them) and switches off Ultralytics' usage events inside its own
+process, without touching your Ultralytics settings file.
+
 ---
 
 # Português (pt-BR)
@@ -488,3 +522,37 @@ Achou algum problema?
 ## Licença
 
 [MIT](https://github.com/marcus-vreis/VisionForge/blob/main/LICENSE)
+
+## Licenças de terceiros
+
+O VisionForge é MIT, mas parte do que ele instala não é.
+[`THIRD_PARTY_NOTICES.md`](https://github.com/marcus-vreis/VisionForge/blob/main/THIRD_PARTY_NOTICES.md) lista esses pacotes; o principal:
+
+- **Ultralytics (AGPL-3.0)** é o backend de detecção YOLO / RT-DETR. Quem
+  distribui um programa feito sobre ele, ou deixa usuários acessarem uma versão
+  modificada pela rede, precisa publicar o código desse programa sob a mesma
+  licença; fora disso, a Ultralytics oferece uma Enterprise License. O backend
+  de detecção `torchvision` não usa o Ultralytics.
+- Casos menores: `pi-heif` (traz bibliotecas LGPL-3.0), `text-unidecode`
+  (Artistic ou GPL-2.0+), `certifi` e `tqdm` (MPL-2.0).
+- A interface traz três fontes sob a SIL Open Font License 1.1.
+
+## Rede e privacidade
+
+O VisionForge não tem telemetria própria. Ele só acessa a internet em:
+
+| Quando | Para onde | Como desligar |
+|---|---|---|
+| A interface abre: checagem de atualização | `pypi.org` (timeout curto, cache, silenciosa offline) | `VISIONFORGE_NO_UPDATE_CHECK=1` |
+| Modelo com pesos pré-treinados, primeiro uso | `download.pytorch.org`, `huggingface.co` (timm), releases do GitHub (Ultralytics) | desligue `pretrained` |
+| Você baixa um dataset | Roboflow, Kaggle, Hugging Face | não use o download |
+| Você exporta um run | servidor MLflow que você configurou, Weights & Biases, remoto do DVC, Hugging Face Hub, GitHub, Zenodo | não exporte |
+| Você conecta o Google Colab | PyPI (`google-colab-cli`), Google | não conecte |
+| `visionforge doctor --fix` | `download.pytorch.org` | rode o `doctor` sem `--fix` |
+| `VISIONFORGE_DOCS=1` (páginas da documentação da API) | `cdn.jsdelivr.net`, Google Fonts | deixe sem definir |
+
+Alguns SDKs embutidos reportam uso por conta própria. Antes de importá-los, o
+VisionForge define `HF_HUB_DISABLE_TELEMETRY=1`, `DO_NOT_TRACK=1`,
+`MLFLOW_DISABLE_TELEMETRY=true` e `DVC_NO_ANALYTICS=1` (só quando você não
+definiu) e desliga os eventos de uso do Ultralytics dentro do próprio processo,
+sem mexer no arquivo de configurações do Ultralytics.

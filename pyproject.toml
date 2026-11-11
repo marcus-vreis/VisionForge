@@ -5,7 +5,10 @@ version = "0.21.0"
 dynamic = []
 description = "Local-first computer-vision experimentation platform: five task families, multi-seed replicates with confidence intervals, K-fold CV, sweeps and full run provenance — on your own GPU."
 readme = "README.md"
-license = { file = "LICENSE" }
+license = "MIT"
+# PEP 639: both files land in the wheel's .dist-info/licenses/. The notices list
+# the copyleft dependencies and the OFL fonts the GUI bundles (#176).
+license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md"]
 requires-python = ">=3.12"
 keywords = [
     "computer-vision", "deep-learning", "pytorch", "experiment-tracking",
@@ -20,7 +23,6 @@ classifiers = [
     "Environment :: GPU :: NVIDIA CUDA",
     "Environment :: Web Environment",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: Microsoft :: Windows",
     "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3",
@@ -125,7 +127,7 @@ dev = [
 #   visionforge-gui = "visionforge.gui.app:launch"
 
 [build-system]
-requires      = ["setuptools>=72"]
+requires      = ["setuptools>=77"]  # 77: SPDX `license` + `license-files`
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
