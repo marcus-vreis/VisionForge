@@ -991,6 +991,16 @@ new. Replicates are deliberately not ranked: they are samples of one
 distribution, and sorting them would invite exactly the cherry-picking the
 feature exists to prevent.
 
+**Update (2026-11-10, amendment, #190):** the Classification tab now offers
+**Replicates** on its strategy step, launched through the existing
+`POST /api/classification/replicates`; the backend did not change. It is a state
+of the GUI, not a block: `config.block` stays `"classification"` (the replicate
+runner trains each seed with the plain `ClassificationBlock`), so transfer
+learning is locked while it is picked, as with the multi-run blocks. The card is
+the shared `ReplicatesCard`, headline metric `accuracy`. Colab (ADR-163) trains
+one `config.block`, so its train button is off, with the reason shown, while
+Replicates is picked.
+
 ## ADR-057 — CUDA/cuDNN/GPU recorded in run.json environment
 
 **Date:** 2026-07

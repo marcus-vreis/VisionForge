@@ -27,6 +27,9 @@ import { pickerCancelText } from "../lib/picker-feedback";
 import { AdvancedFields } from "./AdvancedFields";
 import { ModelAdvice } from "./ModelAdvice";
 import { ReviewStep, type ReviewRow, type ReviewSection } from "./ReviewStep";
+import { ReplicatesCard } from "./ReplicatesCard";
+import type { PanelStrategy } from "./ExperimentHeader";
+import type { ReplicatesPayload } from "../lib/replicates-form";
 import { Rich } from "./Rich";
 import { StepShell, type StepDef } from "./StepShell";
 import {
@@ -55,6 +58,16 @@ interface ParamPanelProps {
   formData: Record<string, unknown>;
   setFormData: React.Dispatch<React.SetStateAction<Record<string, unknown>>>;
   validationErrors: ValidationError[];
+  /** A run is being submitted: the replicates card waits. */
+  busy?: boolean;
+  /** The strategy App mirrors for Treinar. Only "replicates" is read here:
+   *  every other strategy is `config.block` (ADR-056 amendment). */
+  strategy?: PanelStrategy;
+  onStrategyChange?: (strategy: PanelStrategy) => void;
+  /** Launches a replicate set; without it, Réplicas is not offered. */
+  onReplicates?: (payload: ReplicatesPayload) => void;
+  /** Incremented by Treinar so the replicates card runs. */
+  runSignal?: number;
 }
 
 /** Section labels for config sub-models. */
@@ -426,9 +439,12 @@ function WeightsPathField({
 function BlockSelector({
   value,
   onChange,
+  replicates,
 }: {
   value: string;
   onChange: (v: string) => void;
+  /** Offers Réplicas, a strategy of the GUI and not a block (ADR-056). */
+  replicates?: boolean;
 }) {
   // "Comparar modelos" saiu do seletor (ADR-059): comparar arquiteturas
   // é um grid de um eixo só sobre "Arquitetura" (+ valor ao grid) — um conceito,
@@ -440,6 +456,9 @@ function BlockSelector({
     { value: "cross_validation", label: t.paramPanel.blocks.crossValidation },
     { value: "grid_search", label: t.paramPanel.blocks.gridSearch },
     { value: "random_search", label: t.paramPanel.blocks.randomSearch },
+    ...(replicates
+      ? [{ value: REPLICATES, label: t.taskPanel.replicates }]
+      : []),
   ];
   return (
     <div
@@ -1787,6 +1806,9 @@ const STRATEGY_BLOCKS = [
   "model_comparison",
 ];
 
+// Réplicas on the strategy step: a value of the selector, never of `block`.
+const REPLICATES = "replicates";
+
 const NAME_STRATEGY: Record<string, NameStrategy> = {
   classification: "simple",
   cross_validation: "cv",
@@ -1868,11 +1890,18 @@ export function ParamPanel({
   formData,
   setFormData,
   validationErrors,
+  busy,
+  strategy,
+  onStrategyChange,
+  onReplicates,
+  runSignal,
 }: ParamPanelProps) {
   const t = useT();
   const isClassification = task.key === "classification";
 
   const block = String(formData["block"] ?? "classification");
+  // The replicate set trains `block: "classification"` once per seed.
+  const replicatesOn = strategy === REPLICATES && onReplicates !== undefined;
   const modelData = (formData["model"] ?? {}) as Record<string, unknown>;
   const trainingData = (formData["training"] ?? {}) as Record<string, unknown>;
   const dataData = (formData["data"] ?? {}) as Record<string, unknown>;
@@ -1899,7 +1928,7 @@ export function ParamPanel({
     model: String(modelData["name"] ?? "") || undefined,
     epochs: asNumber(trainingData["epochs"]),
     learningRate: asNumber(trainingData["learning_rate"]),
-    strategy: NAME_STRATEGY[block] ?? "simple",
+    strategy: replicatesOn ? REPLICATES : (NAME_STRATEGY[block] ?? "simple"),
     sweepKeys,
     folds:
       block === "cross_validation" ? asNumber(cvData["n_folds"]) : undefined,
@@ -1947,6 +1976,8 @@ export function ParamPanel({
       schema.$defs ?? {},
     );
     setFormData(data);
+    // The file's `block` is its strategy; Réplicas is not one it can name.
+    if (replicatesOn) onStrategyChange?.("simple");
     if (issues.length === 0) return null;
     const summary = issues
       .slice(0, 5)
@@ -2091,7 +2122,9 @@ export function ParamPanel({
   };
 
   const tlOn = block === "transfer_learning";
-  const tlLocked = STRATEGY_BLOCKS.includes(block);
+  // The replicate runner trains each seed with the plain classification
+  // block, which has no frozen backbone: transfer learning waits too.
+  const tlLocked = replicatesOn || STRATEGY_BLOCKS.includes(block);
 
   const changed = (paths: readonly string[]) =>
     countChanged(formData, defaults, paths);
@@ -2116,8 +2149,9 @@ export function ParamPanel({
     "data.pin_memory",
   ];
 
-  const strategyLabel =
-    block === "cross_validation"
+  const strategyLabel = replicatesOn
+    ? t.taskPanel.replicates
+    : block === "cross_validation"
       ? t.paramPanel.blocks.crossValidation
       : block === "grid_search"
         ? t.paramPanel.blocks.gridSearch
@@ -2160,7 +2194,10 @@ export function ParamPanel({
     {
       step: "strategy",
       rows: [
-        row(t.experimentHeader.strategyTitle, strategyLabel, tlLocked ? "block" : undefined),
+        {
+          ...row(t.experimentHeader.strategyTitle, strategyLabel, tlLocked ? "block" : undefined),
+          ...(replicatesOn ? { changed: true } : {}),
+        },
         ...(block === "cross_validation"
           ? [row(labels.n_folds, cvData["n_folds"], "cross_validation.n_folds")]
           : []),
@@ -2320,23 +2357,39 @@ export function ParamPanel({
     {
       id: "strategy",
       summary: strategyLabel,
-      changes: tlLocked ? changed(["block", block]) : 0,
+      changes: replicatesOn ? 1 : tlLocked ? changed(["block", block]) : 0,
       errors: errorsIn(["block", ...STRATEGY_BLOCKS]),
       content: (
         <div style={stepStack}>
           <BlockSelector
             // Transfer learning is a single run switched on in Modelo.
-            value={tlOn ? "classification" : block}
-            onChange={(v) =>
+            value={replicatesOn ? REPLICATES : tlOn ? "classification" : block}
+            replicates={onReplicates !== undefined}
+            onChange={(v) => {
+              onStrategyChange?.(v === REPLICATES ? "replicates" : "simple");
               setFormData((prev) =>
-                // "Treino simples" already shows as active with transfer
-                // learning on; picking it again must not switch that off.
-                v === "classification" && prev["block"] === "transfer_learning"
-                  ? prev
-                  : withBlock(prev, v),
-              )
-            }
+                v === REPLICATES
+                  ? withBlock(prev, "classification")
+                  : // "Treino simples" already shows as active with transfer
+                    // learning on; picking it again must not switch that off.
+                    v === "classification" && prev["block"] === "transfer_learning"
+                    ? prev
+                    : withBlock(prev, v),
+              );
+            }}
           />
+
+          {replicatesOn && onReplicates && (
+            <ReplicatesCard
+              metrics={[
+                { value: "accuracy", label: t.runDetail.metrics.labels.accuracy },
+              ]}
+              accent={task.accent}
+              disabled={busy}
+              onReplicates={onReplicates}
+              runSignal={runSignal}
+            />
+          )}
 
           {/* Cross-validation fields — only when the block is K-Fold */}
           {block === "cross_validation" &&

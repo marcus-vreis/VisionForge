@@ -158,6 +158,9 @@ export const pt = {
     train: "treinar no Colab",
     trainNote:
       "Entra na mesma fila dos treinos locais. A aba ao vivo acompanha; os arquivos treinados ficam na VM até a importação da próxima fase.",
+    // The strategy step has Réplicas on (ADR-056): Colab trains one run.
+    replicatesBlocked:
+      "Réplicas roda só neste computador: o Colab treina uma execução por vez. Volte a estratégia para Treino simples para treinar no Colab.",
     sessionsTitle: "Runtimes ativos nesta conta",
     sessionsNone: "Nenhum runtime ativo.",
     stopSession: "parar",
@@ -3117,7 +3120,7 @@ export const pt = {
       resultWaiting: "Aguardando o treino terminar…",
       history: {
         title: "Tudo ficou salvo",
-        body: "O treino já está no Histórico, em outputs/models/<nome>/<data> (na pasta do seu perfil, se você usa um). O run.json guarda a configuração e as métricas de cada época; para ver o efeito do acaso, rode de novo com outra seed e compare as duas execuções ali.",
+        body: "O treino já está no Histórico, em outputs/models/<nome>/<data> (na pasta do seu perfil, se você usa um). O run.json guarda a configuração e as métricas de cada época; para ver o efeito do acaso, escolha Réplicas na estratégia: a mesma configuração treina com várias seeds e o relatório dá a média ± IC 95% de cada métrica.",
       },
       // O roteiro de cada tarefa (ADR-117): o que são os dados, os parâmetros que
       // importam, o que olhar durante o treino e a métrica do resultado.

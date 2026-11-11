@@ -163,6 +163,23 @@ describe("ColabPanel when connected", () => {
     expect(html).toContain('<option value="T4" selected="">T4</option>');
   });
 
+  it("turns training off with the reason while the strategy is Réplicas", () => {
+    const html = panel({
+      status: connected,
+      onTrain: noop,
+      trainBlocked: pt.colab.replicatesBlocked,
+    });
+    expect(html).toContain("data-colab-train-blocked");
+    expect(html).toContain(pt.colab.replicatesBlocked);
+    expect(html).toMatch(new RegExp(`<button[^>]*disabled=""[^>]*>${pt.colab.train}</button>`));
+  });
+
+  it("keeps training on without a reason", () => {
+    const html = panel({ status: connected, onTrain: noop });
+    expect(html).not.toContain("data-colab-train-blocked");
+    expect(html).not.toMatch(new RegExp(`<button[^>]*disabled=""[^>]*>${pt.colab.train}</button>`));
+  });
+
   it("lists the runtimes alive and stops only the ones VisionForge started", () => {
     const html = panel({
       status: connected,
