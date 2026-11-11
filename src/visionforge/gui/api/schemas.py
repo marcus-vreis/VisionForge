@@ -382,6 +382,9 @@ class DeviceInfoResponse(BaseModel):
 
     cuda_available: bool
     cuda_version: str | None = None
+    # Apple's Metal GPU, experimental (ADR-192). A flag rather than an entry in
+    # ``gpus``: it has no index, memory figure or compute capability to show.
+    mps_available: bool = False
     cpu_name: str
     gpus: list[GPUInfo] = []
 

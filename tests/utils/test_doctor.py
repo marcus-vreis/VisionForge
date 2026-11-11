@@ -716,3 +716,71 @@ class TestDoctorNamesHiddenGpu:
     ) -> None:
         monkeypatch.delenv("CUDA_VISIBLE_DEVICES", raising=False)
         assert "CUDA_VISIBLE_DEVICES" not in self._run(capsys)
+
+
+# ---------------------------------------------------------------------------
+# Apple GPU (MPS, ADR-192)
+# ---------------------------------------------------------------------------
+
+
+class TestAppleGpu:
+    """A Mac's torch from PyPI already drives the GPU through MPS.
+
+    Recommending the CPU wheel there is the mistake ADR-107 fixed for CUDA
+    machines without nvidia-smi: telling someone whose GPU works to replace the
+    build that makes it work.
+    """
+
+    @staticmethod
+    def _mac(monkeypatch: pytest.MonkeyPatch, *, mps: bool = True) -> None:
+        monkeypatch.setattr("visionforge.utils.doctor.detect_driver_cuda", lambda: None)
+        monkeypatch.setattr(
+            "visionforge.utils.doctor.probe_torch",
+            lambda: {
+                "importable": True,
+                "version": "2.11.0",
+                "cuda_available": False,
+                "cuda_build": None,
+            },
+        )
+        monkeypatch.setattr("visionforge.utils.doctor.mps_available", lambda: mps)
+
+    def test_reports_the_apple_gpu_and_keeps_the_install(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        self._mac(monkeypatch)
+
+        run_doctor(fix=False)
+
+        out = capsys.readouterr().out
+        assert "Apple GPU usable via torch (MPS, experimental)" in out
+        assert "keep the current install" in out
+        assert "already runs on the Apple GPU (MPS)" in out
+        assert "mps_available=True" in out
+        assert "Recommended wheel: cpu" not in out
+        assert "[WARN] torch" not in out
+
+    def test_fix_offers_nothing_when_the_gpu_already_works(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        self._mac(monkeypatch)
+        confirm = MagicMock(return_value=True)
+
+        with patch("visionforge.utils.doctor._run_install") as mock_install:
+            run_doctor(fix=True, confirm_fn=confirm)
+
+        confirm.assert_not_called()
+        mock_install.assert_not_called()
+        assert "Nothing to fix" in capsys.readouterr().out
+
+    def test_a_cpu_only_torch_without_mps_still_gets_the_cpu_wheel(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        self._mac(monkeypatch, mps=False)
+
+        run_doctor(fix=False)
+
+        out = capsys.readouterr().out
+        assert "No CUDA-capable GPU detected" in out
+        assert "Recommended wheel: cpu" in out
+        assert "mps_available" not in out

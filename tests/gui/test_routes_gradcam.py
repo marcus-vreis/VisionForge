@@ -304,5 +304,7 @@ class TestGradCamRoute:
         resp = client.post(f"/api/runs/{run_dir.name}/gradcam", json={"input_dir": "x"})
 
         assert resp.status_code == 500
-        assert resp.json()["detail"] == "RuntimeError: cuda oom"
+        assert resp.json()["detail"] == (
+            "Algo deu errado no servidor. Detalhe técnico: RuntimeError: cuda oom"
+        )
         assert calls == [run_dir]

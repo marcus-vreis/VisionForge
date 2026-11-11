@@ -230,6 +230,18 @@ CATALOG: dict[str, dict[Lang, str]] = {
             "switching the optimizer to SGD."
         ),
     },
+    "health.mps_not_deterministic": {
+        "pt": (
+            "Esta execução rodou na GPU da Apple (MPS), suporte experimental. "
+            "'deterministic' só vale para o cuDNN: no MPS a mesma config e a "
+            "mesma seed podem não reproduzir os mesmos números."
+        ),
+        "en": (
+            "This run used Apple's GPU (MPS), which is experimental. "
+            "'deterministic' only applies to cuDNN: on MPS the same config and "
+            "seed may not reproduce the same numbers."
+        ),
+    },
     "health.stagnant_loss": {
         "pt": (
             "A loss de treino praticamente não caiu ({first:.4f} → {last:.4f} em "
@@ -2951,6 +2963,69 @@ CATALOG: dict[str, dict[Lang, str]] = {
     "card.stopped_epochs": {
         "pt": "{done} de {planned} épocas",
         "en": "{done} of {planned} epochs",
+    },
+    # ── unexpected failures and request validation (gui/api/error_messages.py,
+    # ADR-191). The English of ``validation.*`` mirrors Pydantic's own text,
+    # which an English page keeps; the placeholders are the names of its ctx.
+    "errors.unexpected": {
+        "pt": "Algo deu errado no servidor. Detalhe técnico: {error}",
+        "en": "Something went wrong on the server. Technical detail: {error}",
+    },
+    "validation.missing": {
+        "pt": "Campo obrigatório",
+        "en": "Field required",
+    },
+    "validation.extra_forbidden": {
+        "pt": "Campo não permitido",
+        "en": "Extra inputs are not permitted",
+    },
+    "validation.greater_than": {
+        "pt": "Deve ser maior que {gt}",
+        "en": "Input should be greater than {gt}",
+    },
+    "validation.greater_than_equal": {
+        "pt": "Deve ser maior ou igual a {ge}",
+        "en": "Input should be greater than or equal to {ge}",
+    },
+    "validation.less_than": {
+        "pt": "Deve ser menor que {lt}",
+        "en": "Input should be less than {lt}",
+    },
+    "validation.less_than_equal": {
+        "pt": "Deve ser menor ou igual a {le}",
+        "en": "Input should be less than or equal to {le}",
+    },
+    "validation.string_too_short": {
+        "pt": "Deve ter pelo menos {min_length} caractere(s)",
+        "en": "String should have at least {min_length} character(s)",
+    },
+    "validation.string_too_long": {
+        "pt": "Deve ter no máximo {max_length} caractere(s)",
+        "en": "String should have at most {max_length} character(s)",
+    },
+    "validation.too_short": {
+        "pt": "Deve ter pelo menos {min_length} item(ns)",
+        "en": "Value should have at least {min_length} item(s)",
+    },
+    "validation.too_long": {
+        "pt": "Deve ter no máximo {max_length} item(ns)",
+        "en": "Value should have at most {max_length} item(s)",
+    },
+    "validation.int_parsing": {
+        "pt": "Deve ser um número inteiro",
+        "en": "Input should be a valid integer",
+    },
+    "validation.float_parsing": {
+        "pt": "Deve ser um número",
+        "en": "Input should be a valid number",
+    },
+    "validation.bool_parsing": {
+        "pt": "Deve ser verdadeiro ou falso",
+        "en": "Input should be a valid boolean",
+    },
+    "validation.literal_error": {
+        "pt": "Deve ser um destes valores: {expected}",
+        "en": "Input should be {expected}",
     },
 }
 
