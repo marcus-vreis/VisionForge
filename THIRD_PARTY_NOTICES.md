@@ -11,9 +11,11 @@ legal advice; the license each package ships with is the one that applies.
 
 `pip` installs these from PyPI as dependencies; VisionForge's wheel does not
 contain their code. The license column is what each package declares in its
-own metadata. `ultralytics` and `ultralytics-thop` come only with the optional
-`detection` extra (`pip install "visionforge-studio[detection]"`).
+own metadata; `scripts/check_licenses.py` checks this table against the
+installed packages in CI. `ultralytics` and `ultralytics-thop` come only with
+the optional `detection` extra (`pip install "visionforge-studio[detection]"`).
 
+<!-- license-table:start (scripts/check_licenses.py --write) -->
 | Package | License | Why it is installed |
 |---|---|---|
 | `ultralytics` | AGPL-3.0 | YOLO / RT-DETR detection backend (`detection` extra) |
@@ -22,6 +24,7 @@ own metadata. `ultralytics` and `ultralytics-thop` come only with the optional
 | `text-unidecode` | Artistic License or GPL-2.0-or-later, at your choice | required by `python-slugify` (via `kaggle`) |
 | `certifi` | MPL-2.0 | CA certificates for `requests` |
 | `tqdm` | MPL-2.0 AND MIT | progress bars in several dependencies |
+<!-- license-table:end -->
 
 ### Ultralytics (AGPL-3.0)
 

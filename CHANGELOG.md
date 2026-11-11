@@ -150,6 +150,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 - No **Histórico**, o detalhe de um run e o de um grupo ganham **Carregar no formulário** e **Repetir com 3 seeds**: a config do `run.json` vai para a aba da tarefa pelo mesmo import do botão de YAML, com os mesmos avisos, e Repetir abre **Réplicas** com três seeds que o run não usou. Tarefa própria removida deixa as duas ações desligadas com o motivo escrito ao lado (ADR-156) (#200).
 - `THIRD_PARTY_NOTICES.md` lista as dependências copyleft (Ultralytics AGPL-3.0, pi-heif, text-unidecode, certifi, tqdm) e as fontes OFL da interface, e vai no wheel; README e `docs/INSTALL.md` ganham as seções de licenças de terceiros e de rede e privacidade, com cada conexão de saída e `VISIONFORGE_NO_UPDATE_CHECK` (#176).
 - O Ultralytics (AGPL-3.0) sai da instalação padrão e vira o extra `detection` (`pip install "visionforge-studio[detection]"`): sem ele, treinar, testar ou exportar YOLO/RT-DETR e o submit com backend `ultralytics` param com a linha de instalação, o formulário de detecção mostra essa linha e o backend torchvision ganha o selo "sem AGPL"; o install-smoke instala as duas variantes (ADR-195) (#223).
+- `scripts/check_licenses.py` e o job `licenses` do CI falham quando uma dependência de runtime declara licença copyleft fora de `scripts/license_allowlist.toml`, quando a licença de uma delas ganha outra família, ou quando a tabela de `THIRD_PARTY_NOTICES.md` não bate com a lista (`--write` a refaz) (#225).
 
 ### Fixed
 

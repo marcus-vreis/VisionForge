@@ -332,6 +332,35 @@ jobs:
             frontend/test-results/
           retention-days: 7
 
+  licenses:
+    name: licenses (copyleft gate)
+    runs-on: ubuntu-latest
+    needs: main
+
+    # Every runtime dependency's declared license, as installed: a copyleft
+    # package missing from scripts/license_allowlist.toml, or a table in
+    # THIRD_PARTY_NOTICES.md that no longer matches it, fails here (#225).
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: actions/setup-python@v7.0.0
+        with:
+          python-version: "3.13"
+
+      - uses: astral-sh/setup-uv@v10.3.1
+
+      - name: Install the package with the detection extra
+        run: |
+          uv venv
+          source .venv/bin/activate
+          uv pip install -e ".[detection]"
+          uv pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Check the licenses
+        run: |
+          source .venv/bin/activate
+          python scripts/check_licenses.py
+
   distribution:
     name: distribution (installed wheel, CPU)
     runs-on: ubuntu-latest
