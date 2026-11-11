@@ -1,0 +1,29 @@
+{
+ "frames_5s": 1201,
+ "raf": {
+  "    at eval (eval at evaluate (:370:30), <anonymous>:3:66) <     at new Promise (<anonymous>)": 1,
+  "    at t (eval at evaluate (:370:30), <anonymous>:3:37)": 1201
+ },
+ "anims": [],
+ "blur": [
+  {
+   "tag": "DIV",
+   "cls": "",
+   "b": "blur(14px)",
+   "f": "none"
+  },
+  {
+   "tag": "DIV",
+   "cls": "",
+   "b": "blur(10px)",
+   "f": "none"
+  },
+  {
+   "tag": "DIV",
+   "cls": "",
+   "b": "blur(14px)",
+   "f": "none"
+  }
+ ],
+ "canvases": 0
+}

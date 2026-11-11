@@ -1,3 +1,7 @@
+# Published benchmark artifacts (#181): recipe scripts and records kept
+# verbatim as they ran, so no hook rewrites or lints them.
+exclude: ^research/workflow_benchmark/results/
+
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.15.10
