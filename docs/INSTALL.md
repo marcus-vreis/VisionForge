@@ -14,12 +14,13 @@ só os comandos mudam:
 Leva de 5 a 15 minutos, quase tudo de download: o PyTorch tem de 200 MB (CPU) a uns
 3 GB (CUDA).
 
-**O que já foi conferido:** em 19/10/2026, a 0.17.0 do PyPI foi instalada seguindo os
-passos 2, 3 e 5 deste guia no Windows, no Ubuntu e no macOS (Apple Silicon), com Python
-3.12 e 3.13; nos seis casos o `doctor` terminou em `environment looks good` e o
-`selftest --quick` em `5/5 cases passed` (workflow
-[Install from PyPI](https://github.com/marcus-vreis/VisionForge/actions/workflows/install-smoke.yml),
-que roda de novo a cada release). Essas máquinas não têm GPU nem tela: o passo 4 com placa
+**O que já foi conferido:** depois de cada release, o workflow
+[Install from PyPI](https://github.com/marcus-vreis/VisionForge/actions/workflows/install-smoke.yml)
+instala o pacote publicado seguindo os passos 2 e 3 deste guia no Windows, no Ubuntu e no
+macOS (Apple Silicon), com Python 3.12 e 3.13, e roda `visionforge doctor` e
+`visionforge selftest --quick` (passo 5); qualquer falha deixa o workflow vermelho. O
+resultado da última execução está na página do workflow; este guia não repete a versão.
+Essas máquinas não têm GPU nem tela: o passo 4 com placa
 NVIDIA e a interface no navegador foram usados no Windows (a partir do código-fonte), mas
 ainda não no Linux nem no Mac.
 
