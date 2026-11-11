@@ -8,7 +8,7 @@ import pytest
 import torch
 from PIL import Image
 
-from visionforge.gui.api.routes import _execute_run_gradcam
+from visionforge.gui.api.evaluation_routes import _execute_run_gradcam
 from visionforge.gui.api.schemas import GradCamRequest
 
 
@@ -204,7 +204,7 @@ class TestClassNamesSurviveARename:
     """Recovering them from the training folder breaks when a dataset moves."""
 
     def test_recorded_names_are_used_even_with_the_folder_gone(self) -> None:
-        from visionforge.gui.api.routes import _gradcam_class_names
+        from visionforge.gui.api.evaluation_routes import _gradcam_class_names
 
         data = {
             "class_names": ["defect", "longberry", "peaberry", "premium"],
@@ -226,7 +226,7 @@ class TestClassNamesSurviveARename:
         for cls in ("b_class", "a_class"):
             (base / "train" / cls).mkdir(parents=True)
 
-        from visionforge.gui.api.routes import _gradcam_class_names
+        from visionforge.gui.api.evaluation_routes import _gradcam_class_names
 
         data = {"config": {"task": "multiclass", "data": {"base_dir": str(base)}}}
 
@@ -237,7 +237,7 @@ class TestClassNamesSurviveARename:
         base = tmp_path / "ds"
         (base / "train" / "only").mkdir(parents=True)
 
-        from visionforge.gui.api.routes import _gradcam_class_names
+        from visionforge.gui.api.evaluation_routes import _gradcam_class_names
 
         data = {
             "class_names": [],
@@ -254,6 +254,7 @@ class TestGradCamRoute:
 
         from fastapi.testclient import TestClient
 
+        from visionforge.gui.api import evaluation_routes
         from visionforge.gui.api import routes as routes_mod
         from visionforge.gui.server import app
 
@@ -271,7 +272,7 @@ class TestGradCamRoute:
             calls.append(got_run_dir)
             raise raises
 
-        monkeypatch.setattr(routes_mod, "_execute_run_gradcam", boom)
+        monkeypatch.setattr(evaluation_routes, "_execute_run_gradcam", boom)
         return TestClient(app), run_dir, calls
 
     def test_an_unknown_run_is_a_404(self, tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]

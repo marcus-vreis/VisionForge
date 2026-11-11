@@ -17,7 +17,7 @@ from typing import Any
 import pytest
 import torch
 
-from visionforge.gui.api.routes import _execute_run_test
+from visionforge.gui.api.evaluation_routes import _execute_run_test
 from visionforge.gui.api.schemas import RunTestRequest
 from visionforge.utils.selftest_data import (
     build_anomaly_dataset,

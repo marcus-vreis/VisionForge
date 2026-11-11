@@ -59,7 +59,7 @@ def _make_regression_run(tmp_path: Path) -> Path:
 
 class TestRegressionBatchPredict:
     def test_writes_target_columns_csv(self, tmp_path: Path) -> None:
-        from visionforge.gui.api.routes import _execute_batch_predict
+        from visionforge.gui.api.evaluation_routes import _execute_batch_predict
         from visionforge.gui.api.schemas import BatchPredictRequest
 
         run_dir = _make_regression_run(tmp_path)
@@ -101,7 +101,7 @@ class TestBatchPredictUnsupportedTasks:
 
     @pytest.mark.parametrize("task", ["segmentation", "detection"])
     def test_unsupported_task_is_rejected(self, tmp_path: Path, task: str) -> None:
-        from visionforge.gui.api.routes import _execute_batch_predict
+        from visionforge.gui.api.evaluation_routes import _execute_batch_predict
         from visionforge.gui.api.schemas import BatchPredictRequest
 
         run_dir = self._make_run(tmp_path, task)

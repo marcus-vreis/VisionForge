@@ -14,11 +14,11 @@ from pathlib import Path
 import pytest
 from fastapi import HTTPException
 
-from visionforge.gui.api.routes import (
+from visionforge.gui.api.evaluation_routes import (
     _gradcam_class_names,
     _reject_custom_task_action,
-    _render_run_markdown,
 )
+from visionforge.gui.api.routes import _render_run_markdown
 
 
 def _run_json(tmp_path: Path, payload: dict) -> Path:
@@ -213,7 +213,7 @@ class TestOneFolderTestDispatch:
     def test_missing_folder_is_rejected_before_loading_a_model(
         self, tmp_path: Path
     ) -> None:
-        from visionforge.gui.api.routes import _evaluate_standalone_run
+        from visionforge.gui.api.evaluation_routes import _evaluate_standalone_run
         from visionforge.gui.api.schemas import RunTestRequest
 
         run_dir = _run_json(tmp_path, {"config": {"task": "segmentation"}})
@@ -229,7 +229,7 @@ class TestOneFolderTestDispatch:
 
     def test_regression_refuses_a_folder(self, tmp_path: Path) -> None:
         """Its data model is a manifest, so the chosen path must be the .csv."""
-        from visionforge.gui.api.routes import _evaluate_standalone_run
+        from visionforge.gui.api.evaluation_routes import _evaluate_standalone_run
         from visionforge.gui.api.schemas import RunTestRequest
 
         folder = tmp_path / "some_split"
@@ -246,7 +246,7 @@ class TestOneFolderTestDispatch:
             )
 
     def test_a_run_without_a_checkpoint_says_so(self, tmp_path: Path) -> None:
-        from visionforge.gui.api.routes import _evaluate_standalone_run
+        from visionforge.gui.api.evaluation_routes import _evaluate_standalone_run
         from visionforge.gui.api.schemas import RunTestRequest
 
         folder = tmp_path / "split"

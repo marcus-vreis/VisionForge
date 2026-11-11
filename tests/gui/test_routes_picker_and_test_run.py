@@ -20,7 +20,7 @@ from fastapi.testclient import TestClient
 from PIL import Image
 
 from visionforge.gui.api.datasets_routes import _open_native_folder_dialog
-from visionforge.gui.api.routes import (
+from visionforge.gui.api.evaluation_routes import (
     _execute_batch_predict,
     _execute_onnx_export,
     _execute_run_test,
@@ -458,6 +458,7 @@ class TestRunTestRoute:
 
         from fastapi.testclient import TestClient
 
+        from visionforge.gui.api import evaluation_routes
         from visionforge.gui.api import routes as routes_mod
         from visionforge.gui.server import app
 
@@ -475,7 +476,7 @@ class TestRunTestRoute:
             calls.append(got_run_dir)
             raise raises
 
-        monkeypatch.setattr(routes_mod, "_execute_run_test", boom)
+        monkeypatch.setattr(evaluation_routes, "_execute_run_test", boom)
         return TestClient(app), run_dir, calls
 
     @pytest.mark.parametrize(
