@@ -245,22 +245,28 @@ def _figures(cells: list[dict[str, Any]]) -> None:
     plt.close(fig)
 
 
+def study_wall_hours() -> float:
+    """The grid's total training wall time, in hours, from the per-cell reports."""
+    seconds = sum(
+        json.loads(p.read_text(encoding="utf-8"))["study"]["wall_time_s"]
+        for p in RESULTS.glob("*__*.json")
+    )
+    return float(seconds) / 3600
+
+
 def main() -> None:
     summary = json.loads(SUMMARY.read_text(encoding="utf-8"))
     cells = summary["cells"]
     PAPER.mkdir(exist_ok=True)
     h = headline(cells)
-    wall_hours = (
-        sum(
-            json.loads(p.read_text(encoding="utf-8"))["study"]["wall_time_s"]
-            for p in RESULTS.glob("*__*.json")
-        )
-        / 3600
-    )
     (PAPER / "numbers.tex").write_text(
-        macros(h, summary["hypotheses"], wall_hours), encoding="utf-8"
+        macros(h, summary["hypotheses"], study_wall_hours()),
+        encoding="utf-8",
+        newline="\n",
     )
-    (PAPER / "table_cells.tex").write_text(table_rows(cells), encoding="utf-8")
+    (PAPER / "table_cells.tex").write_text(
+        table_rows(cells), encoding="utf-8", newline="\n"
+    )
     _figures(cells)
     print(json.dumps(h, indent=2))
 

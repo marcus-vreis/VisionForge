@@ -1,0 +1,266 @@
+{
+ "id": "seedvar_usk_10pct_swin_t_baseline_s2_20261016_110207_145532",
+ "experiment": "seedvar_usk_10pct_swin_t_baseline_s2",
+ "timestamp": "2026-10-16T11:04:00.689259",
+ "status": "completed",
+ "stopped": false,
+ "device_used": "cuda:0 (NVIDIA GeForce RTX 5060 Ti)",
+ "environment": {
+  "python": "3.13.16",
+  "platform": "Windows-11-10.0.26300-SP0",
+  "torch": "2.7.1+cu128",
+  "torchvision": "0.22.1+cu128",
+  "numpy": "2.4.3",
+  "visionforge": "unknown",
+  "cuda": "12.8",
+  "cudnn": "90701",
+  "gpu": "NVIDIA GeForce RTX 5060 Ti"
+ },
+ "dataset_fingerprint": {
+  "digest": "d4e142ee991a30495cc7ee55217b2251c957b9b19a63270ad81c0e88e74cefe7",
+  "method": "manifest",
+  "n_files": 3681,
+  "total_bytes": 30298994,
+  "root": "Classification - USK-COFFEE-10pct",
+  "note": "paths+sizes only: a modification that preserves file size is not detected"
+ },
+ "run_dir": ".",
+ "class_names": [
+  "defect",
+  "longberry",
+  "peaberry",
+  "premium"
+ ],
+ "config": {
+  "name": "seedvar_usk_10pct_swin_t_baseline_s2",
+  "schema_version": 1,
+  "task": "multiclass",
+  "block": "classification",
+  "model": {
+   "name": "swin_t",
+   "num_classes": 4,
+   "pretrained": true,
+   "weights_path": null,
+   "custom_model": null,
+   "timm_model": null
+  },
+  "training": {
+   "learning_rate": 0.0001,
+   "epochs": 20,
+   "batch_size": 32,
+   "early_stopping_patience": 5,
+   "optimizer": "adamw",
+   "weight_decay": 0.0,
+   "seed": 2,
+   "deterministic": true,
+   "mixed_precision": false,
+   "scheduler": {
+    "kind": "none",
+    "step_size": 10,
+    "gamma": 0.1,
+    "patience": 5,
+    "factor": 0.5,
+    "min_lr": 1e-06
+   }
+  },
+  "data": {
+   "base_dir": "Classification - USK-COFFEE-10pct",
+   "train_dir": "train",
+   "val_dir": "val",
+   "test_dir": "test",
+   "num_workers": 0,
+   "pin_memory": true,
+   "transforms": {
+    "image_size": 224,
+    "augment": true,
+    "horizontal_flip": true,
+    "rotation_degrees": 10,
+    "color_jitter": false,
+    "normalize_mean": [
+     0.485,
+     0.456,
+     0.406
+    ],
+    "normalize_std": [
+     0.229,
+     0.224,
+     0.225
+    ]
+   },
+   "preprocessing": {
+    "steps": []
+   }
+  },
+  "output": {
+   "models_dir": "outputs\\models",
+   "graphics_dir": "outputs\\graphics",
+   "logs_dir": "outputs\\logs",
+   "reports_dir": "outputs\\reports"
+  },
+  "device": {
+   "kind": "cuda",
+   "gpu_ids": null
+  },
+  "classification": {
+   "mode": "train",
+   "checkpoint_path": null
+  },
+  "grid_search": null,
+  "random_search": null,
+  "cross_validation": null,
+  "transfer_learning": null,
+  "model_comparison": null,
+  "batch_prediction": null,
+  "export_onnx": null
+ },
+ "metrics": {
+  "best_val_loss": 0.4648873261362314,
+  "best_epoch": 6,
+  "total_epochs": 11,
+  "test_accuracy": 0.854375,
+  "test_f1": 0.8547118803655201,
+  "test_precision": 0.8609937687980843,
+  "test_recall": 0.854375,
+  "test_auc_roc": 0.9712703125
+ },
+ "history": [
+  {
+   "epoch": 1,
+   "train_loss": 1.3237820227940877,
+   "train_accuracy": 0.36875,
+   "val_loss": 1.1659044921398163,
+   "val_accuracy": 0.50875
+  },
+  {
+   "epoch": 2,
+   "train_loss": 0.8853392958641052,
+   "train_accuracy": 0.6625,
+   "val_loss": 0.8457052789628505,
+   "val_accuracy": 0.62375
+  },
+  {
+   "epoch": 3,
+   "train_loss": 0.5076054175694783,
+   "train_accuracy": 0.8145833333333333,
+   "val_loss": 0.5959674561023712,
+   "val_accuracy": 0.779375
+  },
+  {
+   "epoch": 4,
+   "train_loss": 0.5050626834233601,
+   "train_accuracy": 0.80625,
+   "val_loss": 0.6095807546377182,
+   "val_accuracy": 0.793125
+  },
+  {
+   "epoch": 5,
+   "train_loss": 0.3215698391199112,
+   "train_accuracy": 0.89375,
+   "val_loss": 0.5488671826571226,
+   "val_accuracy": 0.83625
+  },
+  {
+   "epoch": 6,
+   "train_loss": 0.23776869873205822,
+   "train_accuracy": 0.9291666666666667,
+   "val_loss": 0.4648873261362314,
+   "val_accuracy": 0.838125
+  },
+  {
+   "epoch": 7,
+   "train_loss": 0.1764216403166453,
+   "train_accuracy": 0.9333333333333333,
+   "val_loss": 0.7847131949733012,
+   "val_accuracy": 0.755
+  },
+  {
+   "epoch": 8,
+   "train_loss": 0.24922804534435272,
+   "train_accuracy": 0.9,
+   "val_loss": 0.722781356612686,
+   "val_accuracy": 0.80625
+  },
+  {
+   "epoch": 9,
+   "train_loss": 0.142991279065609,
+   "train_accuracy": 0.9395833333333333,
+   "val_loss": 0.6486268957564607,
+   "val_accuracy": 0.83625
+  },
+  {
+   "epoch": 10,
+   "train_loss": 0.09365436770021915,
+   "train_accuracy": 0.9708333333333333,
+   "val_loss": 0.8201674026550608,
+   "val_accuracy": 0.824375
+  },
+  {
+   "epoch": 11,
+   "train_loss": 0.05464471305410067,
+   "train_accuracy": 0.9854166666666667,
+   "val_loss": 0.4939791057864204,
+   "val_accuracy": 0.88125
+  }
+ ],
+ "tests": [],
+ "warnings": [],
+ "metric_cis": {
+  "accuracy": {
+   "metric": "accuracy",
+   "value": 0.854375,
+   "ci_low": 0.8375,
+   "ci_high": 0.8718906249999999,
+   "confidence": 0.95,
+   "n_resamples": 1000,
+   "n_samples": 1600
+  },
+  "f1": {
+   "metric": "f1",
+   "value": 0.85471188036552,
+   "ci_low": 0.8373764167195954,
+   "ci_high": 0.8721911598788689,
+   "confidence": 0.95,
+   "n_resamples": 1000,
+   "n_samples": 1600
+  },
+  "precision": {
+   "metric": "precision",
+   "value": 0.8609937687980843,
+   "ci_low": 0.8439240395006143,
+   "ci_high": 0.8773438197161046,
+   "confidence": 0.95,
+   "n_resamples": 1000,
+   "n_samples": 1600
+  },
+  "recall": {
+   "metric": "recall",
+   "value": 0.854375,
+   "ci_low": 0.8373808947089355,
+   "ci_high": 0.8714844038961322,
+   "confidence": 0.95,
+   "n_resamples": 1000,
+   "n_samples": 1600
+  },
+  "auc_roc": {
+   "metric": "auc_roc",
+   "value": 0.9712703125,
+   "ci_low": 0.9650135745214036,
+   "ci_high": 0.9769602312483717,
+   "confidence": 0.95,
+   "n_resamples": 1000,
+   "n_samples": 1600
+  }
+ },
+ "artifacts": {
+  "model": "best_model.pth",
+  "graphics": [
+   "loss.png",
+   "accuracy.png",
+   "confusion_matrix.png",
+   "confusion_matrix_normalized.png",
+   "roc_curve.png",
+   "precision_recall_curve.png"
+  ],
+  "report": null
+ }
+}

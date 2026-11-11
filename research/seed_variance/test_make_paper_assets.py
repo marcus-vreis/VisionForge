@@ -1,8 +1,16 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
-from make_paper_assets import headline, macros, table_rows
+from make_paper_assets import (
+    PAPER,
+    SUMMARY,
+    headline,
+    macros,
+    study_wall_hours,
+    table_rows,
+)
 
 
 def _cell(
@@ -95,3 +103,22 @@ class TestTableRows:
     def test_signed_effect_with_interval(self) -> None:
         first = table_rows(CELLS).splitlines()[1]
         assert "-0.005 [-0.010, +0.010]" in first
+
+
+class TestCommittedAssets:
+    """numbers.tex and table_cells.tex are what summary.json generates today."""
+
+    def _summary(self) -> dict[str, Any]:
+        summary: dict[str, Any] = json.loads(SUMMARY.read_text(encoding="utf-8"))
+        return summary
+
+    def test_numbers_tex_regenerates(self) -> None:
+        summary = self._summary()
+        text = macros(
+            headline(summary["cells"]), summary["hypotheses"], study_wall_hours()
+        )
+        assert text == (PAPER / "numbers.tex").read_text(encoding="utf-8")
+
+    def test_table_cells_tex_regenerates(self) -> None:
+        text = table_rows(self._summary()["cells"])
+        assert text == (PAPER / "table_cells.tex").read_text(encoding="utf-8")
