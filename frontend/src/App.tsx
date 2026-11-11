@@ -4,6 +4,7 @@ import {
   fetchSchema,
   fetchTasks,
   runCustomReplicates,
+  runCustomReplicatedComparison,
   runCustomSweep,
   runCustomTask,
   runCompare,
@@ -17,6 +18,11 @@ import type { PanelStrategy } from "./components/ExperimentHeader";
 import type { SweepPayload } from "./components/SweepCard";
 import type { ReplicatesPayload } from "./lib/replicates-form";
 import { replicatesLaunch } from "./lib/replicates-launch";
+import type { ReplicatedComparisonPayload } from "./lib/replicated-comparison-form";
+import {
+  comparisonUnits,
+  replicatedComparisonLaunch,
+} from "./lib/replicated-comparison-launch";
 import type { ComparePayload } from "./lib/compare-form";
 import { announce, requestPermission, resetTitle } from "./lib/run-notify";
 import { runIdentityFromJob, serverRunning } from "./lib/run-control";
@@ -179,6 +185,8 @@ export default function App() {
   const profileSlugRef = useRef<string | null>(null);
   const profileRef = useRef<ProfileInfo | null>(null);
   const [showHistory, setShowHistory] = useState(false);
+  // The run History opens on, when the results view sent it there (ADR-193).
+  const [historyRunId, setHistoryRunId] = useState<string | null>(null);
   const [showDatasets, setShowDatasets] = useState(false);
   const [showQueue, setShowQueue] = useState(false);
   const [historyCount, setHistoryCount] = useState(0);
@@ -597,8 +605,11 @@ export default function App() {
   const handleTrain = async (colab?: ColabLaunch) => {
     // A Colab run (ADR-163) is a classification payload sent to another route.
     if (colab && (activeKey !== "classification" || isCustomTask(activeTask))) return;
-    // Colab trains one config.block; a replicate set is not one (ADR-056).
-    if (colab && activeStrategy === "replicates") return;
+    // Colab trains one config.block; a replicate set is not one (ADR-056),
+    // nor is a replicated comparison (ADR-193).
+    if (colab && (activeStrategy === "replicates" || activeStrategy === "replicatedComparison")) {
+      return;
+    }
     // Classification encodes most strategies in config.block, so its payload
     // already carries them, and its panel only reports "replicates", which is
     // not a block. That one, like the standalone panels' strategies, lives in
@@ -812,6 +823,32 @@ export default function App() {
     );
   };
 
+  // Replicated comparison (ADR-061, ADR-193): the form is the baseline, each
+  // variant overrides one field, and all train on the same seeds so the
+  // backend can pair them. Classification goes as `block: "classification"`.
+  const handleReplicatedComparison = async (
+    task: AdvancedTask | "classification",
+    payload: ReplicatedComparisonPayload,
+  ) => {
+    const config = {
+      ...(task === "classification" ? formData : buildTaskBase(task)),
+      device: { kind: device.kind, gpu_ids: device.gpu_ids },
+    };
+    const { body, run, units } = replicatedComparisonLaunch(task, config, payload);
+    await launch(
+      {
+        custom: false,
+        taskKey: task,
+        blockKind: "replicated-comparison",
+        pipeline: [],
+        queueSize: units,
+        story: storySpecFor(task, config),
+      },
+      body,
+      { run },
+    );
+  };
+
   // Hyperparameter sweep (ADR-045) for the standalone tasks: grid/random search
   // over dot-paths, ranked by the chosen metric. Same overlay/results flow.
   const handleSweep = async (
@@ -918,9 +955,13 @@ export default function App() {
             : undefined
         }
         colabTrainBlocked={
-          activeKey === "classification" && activeStrategy === "replicates"
-            ? t.colab.replicatesBlocked
-            : undefined
+          activeKey !== "classification"
+            ? undefined
+            : activeStrategy === "replicates"
+              ? t.colab.replicatesBlocked
+              : activeStrategy === "replicatedComparison"
+                ? t.colab.comparisonBlocked
+                : undefined
         }
         taskColor={
           isCustomTask(activeTask)
@@ -970,6 +1011,10 @@ export default function App() {
             // Only a stopped run lists fewer units than it planned; for any other
             // the report's own count is the one to trust.
             submittedUnits={result.stopped === true ? (queueSize ?? null) : null}
+            onOpenInHistory={(runId) => {
+              setHistoryRunId(runId);
+              setShowHistory(true);
+            }}
             onClose={() => {
               setResultsVisible(false);
               reset();
@@ -1006,6 +1051,18 @@ export default function App() {
                 (p) => runCustomReplicates(activeTask.key, p),
               )
             }
+            onReplicatedComparison={(payload) =>
+              void startCustom(
+                activeTask.key,
+                {
+                  config: buildCustomPayload(activeCustomForm, device),
+                  ...payload,
+                },
+                "replicated-comparison",
+                comparisonUnits(payload),
+                (p) => runCustomReplicatedComparison(activeTask.key, p),
+              )
+            }
             onStrategyChange={setActiveStrategy}
             runSignal={runSignal}
             pendingImport={pendingImports[activeKey]}
@@ -1023,6 +1080,9 @@ export default function App() {
             onReplicates={(payload) =>
               void handleReplicates("detection", payload)
             }
+            onReplicatedComparison={(payload) =>
+              void handleReplicatedComparison("detection", payload)
+            }
             onStrategyChange={setActiveStrategy}
             runSignal={runSignal}
             pendingImport={pendingImports[activeKey]}
@@ -1038,6 +1098,9 @@ export default function App() {
             onSweep={(payload) => void handleSweep("regression", payload)}
             onReplicates={(payload) =>
               void handleReplicates("regression", payload)
+            }
+            onReplicatedComparison={(payload) =>
+              void handleReplicatedComparison("regression", payload)
             }
             onCv={(payload) => void handleTaskCv("regression", payload)}
             onStrategyChange={setActiveStrategy}
@@ -1056,6 +1119,9 @@ export default function App() {
             onReplicates={(payload) =>
               void handleReplicates("segmentation", payload)
             }
+            onReplicatedComparison={(payload) =>
+              void handleReplicatedComparison("segmentation", payload)
+            }
             onCv={(payload) => void handleTaskCv("segmentation", payload)}
             onStrategyChange={setActiveStrategy}
             runSignal={runSignal}
@@ -1071,6 +1137,9 @@ export default function App() {
             busy={submitting}
             onReplicates={(payload) =>
               void handleReplicates("anomaly", payload)
+            }
+            onReplicatedComparison={(payload) =>
+              void handleReplicatedComparison("anomaly", payload)
             }
             onCompare={(payload) => void handleCompare("anomaly", payload)}
             onStrategyChange={setActiveStrategy}
@@ -1090,6 +1159,9 @@ export default function App() {
             onStrategyChange={setActiveStrategy}
             onReplicates={(payload) =>
               void handleReplicates("classification", payload)
+            }
+            onReplicatedComparison={(payload) =>
+              void handleReplicatedComparison("classification", payload)
             }
             runSignal={runSignal}
             pendingImport={pendingImports[activeKey]}
@@ -1124,7 +1196,11 @@ export default function App() {
       </main>
 
       <BottomBar
-        onHistory={() => setShowHistory(true)}
+        onHistory={() => {
+          // The header opens the list, never a run a results view asked for.
+          setHistoryRunId(null);
+          setShowHistory(true);
+        }}
         onDatasets={() => setShowDatasets(true)}
         onQueue={() => setShowQueue(true)}
         onTrain={() => void handleTrain()}
@@ -1145,7 +1221,11 @@ export default function App() {
       <CustomAccentsContext.Provider value={customAccents}>
       <LazySurface>
       <HistoryOverlay
-        onClose={() => setShowHistory(false)}
+        onClose={() => {
+          setShowHistory(false);
+          setHistoryRunId(null);
+        }}
+        initialRunId={historyRunId}
         onCountChange={setHistoryCount}
         // `activeKey` is already the family the history groups by: the task
         // tabs are classification/detection/... and custom tasks carry their

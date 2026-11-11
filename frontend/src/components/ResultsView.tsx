@@ -3,11 +3,16 @@ import { artifactUrl, downloadRunMarkdown } from "../api/client";
 import { useT } from "../i18n/useT";
 import { metricCi } from "../lib/metric-ci";
 import { isCrossValidationReport } from "../lib/report-shape";
+import {
+  comparisonGroupFromReport,
+  isReplicatedComparisonReport,
+} from "../lib/replicated-comparison-report";
 import { plannedUnits, unitPlan } from "../lib/unit-plan";
 import { STOPPED_COLOR, countUnits, unitState } from "../lib/unit-status";
 import type { MetricCI, RunResult } from "../types/run";
 import { Lightbox } from "./Lightbox";
 import { Rich } from "./Rich";
+import { RunGroupDetail } from "./RunGroupDetail";
 
 interface ResultsViewProps {
   result: RunResult;
@@ -19,6 +24,9 @@ interface ResultsViewProps {
   submittedUnits?: number | null;
   /** Shown under a standalone-task comparison, e.g. which split it ranked on. */
   comparisonNote?: string;
+  /** Opens a run in History: the replicated comparison's group (its id is
+   *  the job's run id) or one of its seeds (ADR-193). */
+  onOpenInHistory?: (runId: string) => void;
 }
 
 /** Format metric values for display. */
@@ -128,6 +136,7 @@ export function ResultsView({
   taskAccent,
   submittedUnits = null,
   comparisonNote,
+  onOpenInHistory,
 }: ResultsViewProps) {
   const t = useT();
   const metricLabels: Record<string, string> = t.resultsView.metricLabels;
@@ -341,6 +350,39 @@ export function ResultsView({
             accent={taskAccent}
             submitted={submittedUnits}
           />
+        ) : isReplicatedComparisonReport(result.report) ? (
+          // The group History will list, drawn by the same component (ADR-193).
+          <div style={{ marginTop: 22, display: "flex", flexDirection: "column", gap: 12 }}>
+            <RunGroupDetail
+              group={comparisonGroupFromReport(result.report)}
+              accent={taskAccent}
+              onOpenRun={onOpenInHistory}
+              actions={
+                onOpenInHistory ? (
+                  <button
+                    type="button"
+                    onClick={() => onOpenInHistory(result.run_id)}
+                    style={{
+                      alignSelf: "flex-start",
+                      minHeight: 44,
+                      padding: "8px 14px",
+                      background: "var(--accent-soft)",
+                      border: `1px solid ${taskAccent}`,
+                      borderRadius: 10,
+                      color: "var(--vf-text)",
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 11,
+                      letterSpacing: "0.10em",
+                      textTransform: "uppercase",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {t.resultsView.openGroupInHistory}
+                  </button>
+                ) : undefined
+              }
+            />
+          </div>
         ) : isReplicatesReport(result.report) ? (
           <ReplicatesReport
             report={result.report}

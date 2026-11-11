@@ -6,9 +6,17 @@ import type { Dict } from "../i18n/pt";
 import type { ImportNotice } from "../hooks/usePendingImport";
 
 /** Which experiment strategy the standalone-task panel is set to. The strategy
- *  cards (SweepCard / ReplicatesCard / CV / CompareModelsCard) render only for
+ *  cards (SweepCard / ReplicatesCard / ReplicatedComparisonCard / CV /
+ *  CompareModelsCard) render only for
  *  the selected mode. */
-export type PanelStrategy = "simple" | "cv" | "sweep" | "replicates" | "compare";
+export type PanelStrategy =
+  | "simple"
+  | "cv"
+  | "sweep"
+  | "replicates"
+  | "compare"
+  // The paired comparison over shared seeds (ADR-061, ADR-193).
+  | "replicatedComparison";
 
 function defaultStrategies(t: Dict): { value: PanelStrategy; label: string }[] {
   return [
