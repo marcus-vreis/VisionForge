@@ -1,5 +1,24 @@
 # Architecture Decision Records
 
+How to read and write this file.
+
+**When an ADR is required.** Write one when a change picks between real alternatives that a later reader would otherwise re-debate: a new dependency or a removed one, a public contract (CLI, `run.json`, task or model extension point), a module boundary, a statistical or reproducibility rule, or a change to the repo's own process. A bug fix, a refactor that keeps the boundaries, and a doc edit do not need one.
+
+**Fields.** Copy `docs/dev/ADR-TEMPLATE.md`. Each entry is `## ADR-NNN — Title`, then `**Date:**`, `**Status:**`, optionally `**Relates to:**`, then Context, Decision, Consequences and Alternatives considered (the older entries use Decision and Reason). Numbers are sequential; take the next free one and append at the end of the file.
+
+**Status.** The line after `**Status:**` starts with exactly one of these:
+
+- `Proposed`: written, not yet agreed.
+- `Accepted`: in force. A note after a dash is allowed (`Accepted — shipped 2026-08-05`).
+- `Superseded by ADR-NNN`: replaced as a whole by a later ADR.
+- `Superseded in part by ADR-NNN`: still in force except for the part the later ADR replaces; say which part.
+- `Amended by ADR-NNN`: still in force, with a change recorded in the later ADR.
+- `Rejected`: considered and not adopted; kept so the question is not reopened.
+
+An accepted ADR is not rewritten. To change a decision, add a new ADR and move the old one's status to one of the `Superseded` or `Amended` forms. Older entries are not rewritten to this layout; `tests/test_decisions_format.py` checks the heading and the status prefix of every entry.
+
+---
+
 ## ADR-001 — src/ layout
 
 **Date:** 2026-03  
@@ -7841,6 +7860,39 @@ Not done, on purpose: AMP stays CUDA-only; `pin_memory` stays as configured (MPS
 
 - *Free variants, several fields each.* More general, but a table of variants × fields is a second editor to validate, and one axis covers the paper's ablations one factor at a time.
 - *Expose alpha.* The report records the alpha used, but a GUI knob invites tuning it after seeing the p-values; 0.05 stays the default of the route.
+## ADR-190 — The user-task and user-model extension API is stable within a minor release, and a test pins its signatures
+
+**Date:** 2026-11-11
+**Status:** Accepted
+**Relates to:** ADR-058 (custom tasks), ADR-048/049 (custom models), ADR-039 (config schema versions)
+
+**Context:** `TaskSpec`, `register_task`, `register_model` and the Level 2 `ctx` are the extension points a researcher writes code against (ADR-058, ADR-048). The built-in tests exercise them only through the toy specs in `tests/tasks`, so renaming `compute_loss`'s `model` parameter, or dropping a hook, would keep every built-in test green and break every custom task in the wild. The guides in `docs/custom/` said nothing about how long these names hold.
+
+**Decision:** Before 1.0 the listed names, parameters and defaults may change only in a minor release, with a "Changed" entry in the CHANGELOG, never in a patch. `docs/custom/TASKS.md` and `MODELS.md` get a Stability section that lists them. `tests/tasks/test_task_api_contract.py` locks them with `inspect.signature`, `TaskSpec.__abstractmethods__`, the dataclass fields of `TaskInfo` and `TaskRunContext`, and `BaseTaskConfig.model_fields`; annotations are not locked. Changing the API means editing that test and the guides in the same commit. No `TASK_API_VERSION` constant is added: with one maintainer and a CHANGELOG entry per change, a number would be a second place to forget; it can be added with 1.0 if third-party task packages appear.
+
+**Consequences:** A rename fails CI with the old and new signature side by side. Adding an optional parameter with a default or a new optional hook is still a change to the test, so it is a visible decision. The engine's internals and any name not listed stay free to change.
+
+**Alternatives considered:**
+
+- *A `TASK_API_VERSION` integer checked at load time.* Useful once packages are installed by others; today it only adds a number to bump.
+- *Only the prose promise.* Nothing would fail when the prose and the code drift.
+
+## ADR-186 — The pytest hook runs on `git push`, not on every commit
+
+**Date:** 2026-11-11
+**Status:** Accepted
+**Relates to:** ADR-060 (the `slow` marker and the fast suite kept "seconds-fast" for the pre-commit hook)
+
+**Context:** The local `pytest` hook in `.pre-commit-config.yaml` has `always_run: true` and no `stages`, so every `git commit`, including a docs-only one, ran the whole fast suite: 329 s in the 2026-11-09 audit, 5 to 8 minutes in practice. ADR-060 assumed that suite stayed seconds-fast. The cost pushes contributors to `--no-verify`, which skips ruff, codespell and mypy as well. CI already skips the hook (`SKIP: pytest`) and runs the suite in its own job.
+
+**Decision:** The `pytest` hook gets `stages: [pre-push]`. ruff, ruff-format, codespell and mypy stay on `pre-commit`. This supersedes in part ADR-060: the fast suite is still the one the hook runs, but it runs on push, not on commit. CONTRIBUTING documents `pre-commit install --hook-type pre-commit --hook-type pre-push`, to be run in every clone and worktree, because hooks are installed per checkout.
+
+**Consequences:** A commit takes seconds and a push takes the suite's time. A clone that ran only `pre-commit install` never runs the tests locally; CI still does. The release bump (`bump-my-version`) commits through the commit stage only, so it no longer waits for the suite.
+
+**Alternatives considered:**
+
+- *Keep the hook on commit but filter by changed files.* A change to any `src/` file still runs everything, and the filter has to track which paths affect which tests.
+- *Remove the hook and rely on CI.* The suite would then run first on GitHub, after a push, which is a slower loop than a local one.
 ## ADR-187 — The interval of a paired difference inverts the test beside it
 
 **Date:** 2026-11-11
