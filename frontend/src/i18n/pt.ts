@@ -161,6 +161,9 @@ export const pt = {
     // The strategy step has Réplicas on (ADR-056): Colab trains one run.
     replicatesBlocked:
       "Réplicas roda só neste computador: o Colab treina uma execução por vez. Volte a estratégia para Treino simples para treinar no Colab.",
+    // The same for the replicated comparison (ADR-193).
+    comparisonBlocked:
+      "A comparação replicada roda só neste computador: o Colab treina uma execução por vez. Volte a estratégia para Treino simples para treinar no Colab.",
     sessionsTitle: "Runtimes ativos nesta conta",
     sessionsNone: "Nenhum runtime ativo.",
     stopSession: "parar",
@@ -240,6 +243,7 @@ export const pt = {
       sweep: "▶ Rodar sweep",
       replicates: "▶ Rodar réplicas",
       compare: "▶ Comparar arquiteturas",
+      replicatedComparison: "▶ Rodar comparação",
     },
     error: "Erro",
     // Names a run in the tab title when the server sent no run id.
@@ -1939,6 +1943,7 @@ export const pt = {
     sweep: "Sweep",
     replicates: "Réplicas",
     pretrained: "Pesos pré-treinados",
+    replicatedComparison: "Comparação replicada",
     backbone: "Backbone",
     imageNet: "ImageNet",
     // The hint under "pretrained weights" in the segmentation and regression forms.
@@ -2390,6 +2395,15 @@ export const pt = {
     needTwoSeeds: "informe pelo menos 2 seeds",
     duplicateSeeds: "seeds duplicadas",
   },
+  // Why the replicated comparison cannot run yet (lib/replicated-comparison-form.ts).
+  replicatedComparisonForm: {
+    needPath: "informe o campo que as variantes mudam",
+    outputPath: "campos de output.* não podem variar: todas as variantes gravariam no mesmo lugar",
+    needValue: "informe pelo menos 1 valor além do formulário (2 variantes)",
+    tooManyValues: "no máximo 3 valores além do formulário (4 variantes)",
+    duplicateValues: "valores repetidos",
+    tooManySeeds: (max: number) => `no máximo ${max} seeds`,
+  },
   // The run hook's messages and the breadcrumb that names a field in a validation
   // error, "Treinamento › Learning Rate" (hooks/useExperiment.ts). Filter names in
   // the breadcrumb are technical and stay in the code.
@@ -2506,6 +2520,7 @@ export const pt = {
       sweep: "grid / random / optuna sobre a config abaixo",
       replicates: "mesma config, N seeds → média ± IC 95%",
       compare: "uma run por arquitetura, mesma config → tabela comparativa",
+      replicatedComparison: "2 a 4 variantes de um campo, mesmas seeds → teste pareado",
     },
   },
   // The K-fold launcher (components/CvCard.tsx).
@@ -2545,6 +2560,25 @@ export const pt = {
     summary: (seeds: number) =>
       `${seeds} seed${seeds === 1 ? "" : "s"} · roda pelo botão abaixo`,
     blocked: "Precisa de pelo menos 2 seeds válidas para rodar.",
+  },
+  // The paired comparison launcher (components/ReplicatedComparisonCard.tsx,
+  // ADR-193). Wilcoxon, Holm and alpha are the statistics' own names.
+  replicatedComparisonCard: {
+    title: "Comparação replicada · teste pareado",
+    // `paths` is the task's suggested dot-paths, joined with commas.
+    description: (paths: string) =>
+      `O formulário é a baseline. Escolha um campo (ex.: ${paths}) e de 1 a 3 outros valores para ele: cada variante treina nas mesmas seeds e cada par passa por um teste pareado (t ou Wilcoxon) com correção de Holm. A mesma seed nas duas variantes separa o efeito da mudança do ruído da seed.`,
+    parameter: "Campo (dot-path)",
+    values: "Outros valores (vírgula)",
+    valuesPlaceholder: "0.0001, 0.01",
+    valuesHint: "de 1 a 3",
+    count: "Seeds por variante",
+    cost: (variants: number, seeds: number, trainings: number) =>
+      `Custo: ${variants} variante${variants === 1 ? "" : "s"} × ${seeds} seed${seeds === 1 ? "" : "s"} = ${trainings} treino${trainings === 1 ? "" : "s"}`,
+    power: (seeds: number, floor: string, alpha: string) =>
+      `Com ${seeds} seeds o Wilcoxon não retorna p abaixo de ${floor}, acima de alfa = ${alpha}: nenhuma diferença, por maior e mais consistente, sairá significativa. Use 6 seeds ou mais.`,
+    summary: (trainings: number) =>
+      `${trainings} treino${trainings === 1 ? "" : "s"} · roda pelo botão abaixo`,
   },
   // The hyperparameter sweep editor (components/SweepCard.tsx). Grid, Random and
   // Optuna are algorithm names; dot-paths and the model names in the placeholders
@@ -2667,6 +2701,7 @@ export const pt = {
       modelComparison: "Comparação de modelos",
       crossValidation: "K-Fold CV",
       replicates: "Réplicas multi-seed",
+      replicatedComparison: "Comparação replicada",
     },
     // The three phases PatchCore reports, which the server labels in Portuguese
     // (lib/training-phase.ts maps them).

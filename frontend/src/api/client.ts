@@ -394,6 +394,19 @@ export async function runReplicates(
   });
 }
 
+/** Compare variants of one config over the same seeds, with paired tests and
+ *  Holm correction (ADR-061); the GUI form is ADR-193. */
+export async function runReplicatedComparison(
+  task: string,
+  payload: Record<string, unknown>,
+): Promise<RunResponse> {
+  return request<RunResponse>(`/${task}/replicated-comparison`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
 /** Every renderable task: the five built-ins + registered custom tasks
  *  (ADR-058). The backend rescans user_tasks/ per call, so a freshly dropped
  *  file appears on reload without restarting the server. */
@@ -436,6 +449,18 @@ export async function runCustomReplicates(
   payload: Record<string, unknown>,
 ): Promise<RunResponse> {
   return request<RunResponse>(`/custom/${key}/replicates`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+/** The paired comparison for a custom task (ADR-061, ADR-193). */
+export async function runCustomReplicatedComparison(
+  key: string,
+  payload: Record<string, unknown>,
+): Promise<RunResponse> {
+  return request<RunResponse>(`/custom/${key}/replicated-comparison`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),

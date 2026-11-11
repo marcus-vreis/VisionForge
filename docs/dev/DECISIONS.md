@@ -7787,3 +7787,20 @@ differently now. Each fix has a test that failed before it
 
 - *Keep re-exports in `routes.py`.* `routes._JOB_STATES.clear()` would still work, but `monkeypatch.setattr(routes, "_JOB_STATES", {})` would silently patch a name nobody reads.
 - *A class holding the state.* A cleaner interface, but a behaviour-bearing rewrite inside what should be a move; the module boundary already gives the single owner.
+
+## ADR-193 — The replicated comparison in the GUI: one axis, the form as baseline
+
+**Date:** 2026-11-11
+**Status:** Accepted
+**Relates to:** ADR-061 (replicated comparison), ADR-056 (replicates), ADR-044 (single-seed model comparison), ADR-114 (output paths), ADR-156 (strategy step), ADR-184 (CLI strategies)
+
+**Context:** every task had `POST /api/{task}/replicated-comparison` (and `/api/custom/{key}/replicated-comparison`), and `visionforge run` reached it from YAML, but no panel had a form for it and `frontend/src/api/client.ts` had no function for the route. The Holm-corrected paired matrix could only be started over HTTP or from the CLI. The panels' "compare" strategy is the single-seed model comparison of ADR-044.
+
+**Decision:** the strategy step of the six task panels (classification, detection, regression, segmentation, anomaly and custom tasks) offers **Comparação replicada** (`PanelStrategy` `"replicatedComparison"`), drawn by the reusable `ReplicatedComparisonCard`. The variants lie on one axis: one dot-path and 1 to 3 values besides the form's own, so 2 to 4 variants. The form as it stands is the variant `baseline`, with no overrides; each other variant is named `<last path segment>=<value>`, with characters outside `[A-Za-z0-9._-]` turned into `-`, because the backend suffixes the label to the run name and it becomes a folder. A value that parses as a number is sent as one, otherwise as text (the sweep editor's rule). Seeds are a count (2 to 20) or an explicit list (2 to 20, no repeats); 20 is the backend's `n_replicates` cap, held for the explicit list too since the cost is variants × seeds. The card shows that cost and, when Wilcoxon's floor `2 / 2**n` is above alpha 0.05 (fewer than 6 seeds), says no difference could come out significant: the condition `significance.min_achievable_p` and the report's `underpowered` use. Alpha stays the backend default and the metric list is the one Réplicas offers (accuracy for classification). `buildReplicatedComparisonPayload` validates and shapes the request, mirroring the backend's 422s (fewer than 2 variants, repeated seeds, an `output.*` path); `runReplicatedComparison` and `runCustomReplicatedComparison` post it, and App queues it with `blockKind: "replicated-comparison"`, the strategy name the queue reports. Classification sends `block: "classification"`, as Réplicas does, and Colab stays off with the reason while the comparison is picked. The backend is unchanged.
+
+**Consequences:** when the job ends, the results view shows the report as plain JSON, since it has no renderer for this kind; the paired matrix with Holm and the power flags is read in History, in the group's detail. A value equal to the form's own is not caught: it trains a copy of the baseline. A path the config lacks is caught only by the backend's 422. Variants that change several fields at once are left to the YAML of `visionforge run` and to HTTP.
+
+**Alternatives considered:**
+
+- *Free variants, several fields each.* More general, but a table of variants × fields is a second editor to validate, and one axis covers the paper's ablations one factor at a time.
+- *Expose alpha.* The report records the alpha used, but a GUI knob invites tuning it after seeing the p-values; 0.05 stays the default of the route.

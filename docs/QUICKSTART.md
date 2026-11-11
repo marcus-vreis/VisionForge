@@ -94,6 +94,15 @@ stays off, with the reason, while Replicates is picked. **K-fold (CV)** and
 **Grid search** (add values to the *Architecture* field with “+ add to grid”)
 sit on the same step, and the **History** overlay compares the runs.
 
+To ask whether a change beats your configuration, pick **Replicated
+comparison** on the same step. The form is the baseline: name one field
+(`training.learning_rate`, `model.name`…) and 1 to 3 other values for it.
+Every variant trains on the same seeds (2 to 20), so the cost is variants ×
+seeds, which the card shows before you start. Each pair then gets a paired test
+(t or Wilcoxon) with Holm correction, and History shows the matrix. Use 6 seeds
+or more: with 5 or fewer, Wilcoxon cannot return a p below 0.05, and the card
+warns you of it.
+
 ## 5. Reproduce it anywhere
 
 Every panel's header has **↓ Export YAML** — the exported file is the exact

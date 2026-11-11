@@ -154,6 +154,8 @@ export const en: Dict = {
     // The strategy step has Replicates on (ADR-056): Colab trains one run.
     replicatesBlocked:
       "Replicates run on this computer only: Colab trains one run at a time. Set the strategy back to Single run to train on Colab.",
+    comparisonBlocked:
+      "The replicated comparison runs on this computer only: Colab trains one run at a time. Set the strategy back to Single run to train on Colab.",
     sessionsTitle: "Runtimes alive on this account",
     sessionsNone: "No runtime is alive.",
     stopSession: "stop",
@@ -225,6 +227,7 @@ export const en: Dict = {
       sweep: "▶ Run sweep",
       replicates: "▶ Run replicates",
       compare: "▶ Compare architectures",
+      replicatedComparison: "▶ Run comparison",
     },
     error: "Error",
     unnamedRun: "unnamed run",
@@ -1820,6 +1823,7 @@ export const en: Dict = {
     sweep: "Sweep",
     replicates: "Replicates",
     pretrained: "Pretrained weights",
+    replicatedComparison: "Replicated comparison",
     backbone: "Backbone",
     imageNet: "ImageNet",
     // The hint under "pretrained weights" in the segmentation and regression forms.
@@ -2221,6 +2225,14 @@ export const en: Dict = {
     needTwoSeeds: "enter at least 2 seeds",
     duplicateSeeds: "duplicate seeds",
   },
+  replicatedComparisonForm: {
+    needPath: "enter the field the variants change",
+    outputPath: "output.* fields cannot vary: every variant would write to the same place",
+    needValue: "enter at least 1 value besides the form (2 variants)",
+    tooManyValues: "at most 3 values besides the form (4 variants)",
+    duplicateValues: "repeated values",
+    tooManySeeds: (max: number) => `at most ${max} seeds`,
+  },
   experiment: {
     resultFetchFailed: "Failed to fetch the experiment results.",
     failedNoDetail: "The experiment failed without an error message.",
@@ -2323,6 +2335,7 @@ export const en: Dict = {
       sweep: "grid / random / optuna over the config below",
       replicates: "same config, N seeds → mean ± 95% CI",
       compare: "one run per architecture, same config → comparison table",
+      replicatedComparison: "2 to 4 variants of one field, same seeds → paired test",
     },
   },
   cvCard: {
@@ -2341,6 +2354,22 @@ export const en: Dict = {
     summary: (n: number) =>
       `${n} architecture${n === 1 ? "" : "s"} · run it with the button below`,
     blocked: "Select at least 2 architectures to compare.",
+  },
+  replicatedComparisonCard: {
+    title: "Replicated comparison · paired test",
+    description: (paths: string) =>
+      `The form is the baseline. Pick a field (e.g. ${paths}) and 1 to 3 other values for it: every variant trains on the same seeds and each pair goes through a paired test (t or Wilcoxon) with Holm correction. The same seed on both variants separates the effect of the change from seed noise.`,
+    parameter: "Field (dot-path)",
+    values: "Other values (comma-separated)",
+    valuesPlaceholder: "0.0001, 0.01",
+    valuesHint: "1 to 3",
+    count: "Seeds per variant",
+    cost: (variants: number, seeds: number, trainings: number) =>
+      `Cost: ${variants} variant${variants === 1 ? "" : "s"} × ${seeds} seed${seeds === 1 ? "" : "s"} = ${trainings} training run${trainings === 1 ? "" : "s"}`,
+    power: (seeds: number, floor: string, alpha: string) =>
+      `With ${seeds} seeds Wilcoxon cannot return a p below ${floor}, above alpha = ${alpha}: no difference, however large and consistent, will come out significant. Use 6 seeds or more.`,
+    summary: (trainings: number) =>
+      `${trainings} training run${trainings === 1 ? "" : "s"} · run it with the button below`,
   },
   replicatesCard: {
     title: "Multi-seed replicates · statistical rigor",
@@ -2455,6 +2484,7 @@ export const en: Dict = {
       modelComparison: "Model comparison",
       crossValidation: "K-fold CV",
       replicates: "Multi-seed replicates",
+      replicatedComparison: "Replicated comparison",
     },
     phases: {
       extractingFeatures: "extracting features",

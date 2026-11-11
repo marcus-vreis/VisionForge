@@ -148,6 +148,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 - `visionforge run` aceita um YAML com `strategy:` + `config:` e roda réplicas, comparação pareada, sweep e K-fold como a GUI, gravando o relatório com a tabela `.tex` e a entrada no Histórico; sem `strategy` nada muda (ADR-184) (#199).
 - A aba **Classificação** ganha **Réplicas** na estratégia: a mesma config com N seeds pela rota de réplicas que já existia, média ± IC 95% com acurácia como métrica destaque e `block` mantido em `classification`. Transfer learning fica travado enquanto Réplicas está escolhida, e o botão do Colab fica desligado com o motivo (ADR-056) (#190).
 - No **Histórico**, o detalhe de um run e o de um grupo ganham **Carregar no formulário** e **Repetir com 3 seeds**: a config do `run.json` vai para a aba da tarefa pelo mesmo import do botão de YAML, com os mesmos avisos, e Repetir abre **Réplicas** com três seeds que o run não usou. Tarefa própria removida deixa as duas ações desligadas com o motivo escrito ao lado (ADR-156) (#200).
+- Todas as abas de tarefa ganham **Comparação replicada** na estratégia: o formulário é a baseline, um campo recebe de 1 a 3 outros valores e cada variante treina nas mesmas seeds (até 20), com teste pareado e correção de Holm. O card mostra o custo (variantes × seeds) e avisa quando, com menos de 6 seeds, o Wilcoxon não pode dar p abaixo de 0,05 (ADR-193) (#201).
 
 ### Fixed
 

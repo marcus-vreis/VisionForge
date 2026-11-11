@@ -24,6 +24,8 @@ import { FieldLabel, NumberField, SelectField, Segmented, TextField, Toggle } fr
 import { CvCard, type CvPayload } from "./CvCard";
 import { StrategyCard, type PanelStrategy } from "./ExperimentHeader";
 import { ReplicatesCard } from "./ReplicatesCard";
+import { ReplicatedComparisonCard } from "./ReplicatedComparisonCard";
+import type { ReplicatedComparisonPayload } from "../lib/replicated-comparison-form";
 import { ReviewStep } from "./ReviewStep";
 import { StepShell } from "./StepShell";
 import { RegressionDatasetStats } from "./TaskDatasetStats";
@@ -55,6 +57,8 @@ interface RegressionPanelProps extends PendingImportProps {
   busy?: boolean;
   onSweep?: (payload: SweepPayload) => void;
   onReplicates?: (payload: ReplicatesPayload) => void;
+  /** Launches the paired comparison (ADR-193); without it, no card. */
+  onReplicatedComparison?: (payload: ReplicatedComparisonPayload) => void;
   /** Lets App label and route the main Treinar button by the active strategy. */
   onStrategyChange?: (strategy: PanelStrategy) => void;
   /** Incremented by Treinar so the selected strategy's card runs. */
@@ -93,6 +97,7 @@ export function RegressionPanel({
   onSweep,
   onReplicates,
   onStrategyChange,
+  onReplicatedComparison,
   runSignal,
   onCv,
   pendingImport,
@@ -159,6 +164,7 @@ export function RegressionPanel({
     { value: "cv", label: t.paramPanel.blocks.crossValidation },
     { value: "sweep", label: t.taskPanel.sweep },
     { value: "replicates", label: t.taskPanel.replicates },
+    { value: "replicatedComparison", label: t.taskPanel.replicatedComparison },
   ];
   const strategyLabel = strategies.find((s) => s.value === strategy)?.label ?? "";
 
@@ -319,6 +325,16 @@ export function RegressionPanel({
           onReplicates={onReplicates}
           runSignal={runSignal}
           preset={replicatesPreset}
+        />
+      )}
+      {strategy === "replicatedComparison" && onReplicatedComparison && (
+        <ReplicatedComparisonCard
+          metrics={COMPARE_METRICS}
+          pathHints={SWEEP_PATH_HINTS}
+          accent={accent}
+          disabled={busy}
+          onReplicatedComparison={onReplicatedComparison}
+          runSignal={runSignal}
         />
       )}
       {strategy === "cv" && onCv && (
