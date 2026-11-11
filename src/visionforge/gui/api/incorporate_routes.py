@@ -28,6 +28,7 @@ from visionforge.gui.api.http_responses import (
     CONFLICT_TEXT,
     FORBIDDEN_TEXT,
     NOT_FOUND_TEXT,
+    TAG_EXPLORER,
 )
 from visionforge.gui.api.incorporate_jobs import (
     IncorporateJob,
@@ -37,7 +38,7 @@ from visionforge.gui.api.incorporate_jobs import (
 from visionforge.utils.messages import tr
 from visionforge.utils.paths import validate_path_component
 
-router = APIRouter(prefix="/explorer/incorporate")
+router = APIRouter(prefix="/explorer/incorporate", tags=[TAG_EXPLORER])
 
 _JOBS = IncorporateJobs()
 _JOB_MISSING = "incorporate.job_missing"

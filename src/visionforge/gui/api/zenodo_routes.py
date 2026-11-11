@@ -20,6 +20,7 @@ from visionforge.gui.api.http_responses import (
     CONFLICT_TEXT,
     NOT_FOUND_TEXT,
     SERVER_ERROR_TEXT,
+    TAG_INTEGRATIONS,
 )
 from visionforge.gui.api.profile_tokens import (
     ProfileHeader,
@@ -51,7 +52,9 @@ def build_zenodo_router(
 ) -> APIRouter:
     """Mount the profile tokens, the preview and the draft upload."""
     router = APIRouter(
-        prefix="/zenodo", route_class=quiet_validation_route(_REQUEST_INVALID)
+        prefix="/zenodo",
+        tags=[TAG_INTEGRATIONS],
+        route_class=quiet_validation_route(_REQUEST_INVALID),
     )
     sandbox = APIRouter(
         prefix="/sandbox", route_class=quiet_validation_route(_REQUEST_INVALID)

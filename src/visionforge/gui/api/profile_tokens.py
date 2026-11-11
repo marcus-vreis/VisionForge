@@ -22,6 +22,10 @@ from fastapi.routing import APIRoute
 from pydantic import BaseModel, SecretStr
 
 from visionforge.gui.api.folder_opener import is_loopback_host
+from visionforge.gui.api.http_responses import (
+    UNPROCESSABLE_TEXT,
+    VALIDATION_ERROR_CONTENT,
+)
 from visionforge.gui.api.profiles import PROFILE_HEADER, Profile
 from visionforge.utils.credentials import config_dir
 from visionforge.utils.messages import tr
@@ -103,7 +107,15 @@ def add_token_routes(
         """Report credential presence and whether other clients may use it."""
         return token_state(request, header)
 
-    @router.put("/token")
+    @router.put(
+        "/token",
+        responses={
+            422: {
+                "description": UNPROCESSABLE_TEXT,
+                "content": VALIDATION_ERROR_CONTENT,
+            }
+        },
+    )
     def save(
         body: ProfileToken, request: Request, header: ProfileHeader = None
     ) -> dict[str, bool]:

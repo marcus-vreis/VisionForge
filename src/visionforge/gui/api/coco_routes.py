@@ -38,11 +38,12 @@ from visionforge.gui.api.http_responses import (
     CONFLICT_TEXT,
     FORBIDDEN_TEXT,
     NOT_FOUND_TEXT,
+    TAG_EXPLORER,
 )
 from visionforge.utils.messages import tr
 from visionforge.utils.paths import validate_path_component
 
-router = APIRouter(prefix="/explorer/coco")
+router = APIRouter(prefix="/explorer/coco", tags=[TAG_EXPLORER])
 export_router = APIRouter(prefix="/export")
 import_router = APIRouter(prefix="/import")
 

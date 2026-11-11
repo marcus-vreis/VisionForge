@@ -7,6 +7,7 @@ from collections.abc import Callable
 from fastapi import APIRouter
 
 from visionforge.gui.api import system_service
+from visionforge.gui.api.http_responses import TAG_EXPERIMENTS, TAG_SYSTEM
 from visionforge.gui.api.schemas import (
     DeviceInfoResponse,
     LearningRatePlanRequest,
@@ -24,22 +25,22 @@ def build_system_router(
     """Build system endpoints under the parent router's language dependency."""
     router = APIRouter()
 
-    @router.get("/system/info")
+    @router.get("/system/info", tags=[TAG_SYSTEM])
     async def get_system_info() -> SystemInfo:
         """Return host information and the memory-aware worker budget (ADR-098)."""
         return system_service.system_info(worker_budget())
 
-    @router.get("/device/info")
+    @router.get("/device/info", tags=[TAG_SYSTEM])
     async def get_device_info() -> DeviceInfoResponse:
         """Probe the runtime and return the real list of selectable devices."""
         return system_service.device_info(cuda_probe())
 
-    @router.post("/model/defaults")
+    @router.post("/model/defaults", tags=[TAG_EXPERIMENTS])
     async def model_defaults(req: ModelDefaultsRequest) -> ModelDefaultsResponse:
         """Suggested settings for this architecture (ADR-099/100)."""
         return system_service.model_defaults(req)
 
-    @router.post("/model/learning-rate-plan")
+    @router.post("/model/learning-rate-plan", tags=[TAG_EXPERIMENTS])
     async def learning_rate_plan(
         req: LearningRatePlanRequest,
     ) -> LearningRatePlanResponse:

@@ -24,6 +24,7 @@ from visionforge.gui.api.http_responses import (
     CONFLICT_TEXT,
     NOT_FOUND_TEXT,
     SERVER_ERROR_TEXT,
+    TAG_INTEGRATIONS,
 )
 from visionforge.gui.api.profile_tokens import (
     ProfileHeader,
@@ -57,7 +58,9 @@ def build_github_router(
 ) -> APIRouter:
     """Mount the profile token, the preview and the commit."""
     router = APIRouter(
-        prefix="/github", route_class=quiet_validation_route("github.request_invalid")
+        prefix="/github",
+        tags=[TAG_INTEGRATIONS],
+        route_class=quiet_validation_route("github.request_invalid"),
     )
     add_token_routes(router, "github", resolve)
 
