@@ -27,8 +27,8 @@ from loguru import logger
 
 from visionforge.core.tracking_privacy import (
     TRACKER_METRIC_KEYS,
-    public_metrics,
     public_parameters,
+    tracker_metrics,
 )
 from visionforge.utils.wandb_names import is_valid_wandb_name
 
@@ -287,10 +287,7 @@ class WandbTracker:
         path = self._run_dir / "run.json"
         if path.is_symlink() or not path.is_file():
             return {}
-        record = json.loads(path.read_text("utf-8"))
-        return public_metrics(
-            record.get("metrics") if isinstance(record, dict) else None
-        )
+        return tracker_metrics(json.loads(path.read_text("utf-8")))
 
     def _close(self) -> None:
         run, self._run = self._run, None

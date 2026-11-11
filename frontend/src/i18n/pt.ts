@@ -295,7 +295,7 @@ export const pt = {
     pronounNames: { ele: "Bem-vindo (ele)", ela: "Bem-vinda (ela)", neutro: "Boas-vindas (neutro)" },
   },
   mlflow: {
-    label: "Exportar classificação para MLflow local",
+    label: "Exportar treinos para MLflow local",
     hint: "Somente armazenamento local; requer o extra mlflow. Vale para próximos treinos.",
     saveFailed: "Falha ao salvar configuração MLflow.",
     warning: "Exportação MLflow não concluída",
@@ -305,7 +305,7 @@ export const pt = {
     retryFailed: "Falha ao repetir exportação.",
   },
   wandb: {
-    label: "Enviar treinos de classificação ao Weights & Biases",
+    label: "Enviar treinos ao Weights & Biases",
     hint: "Vai para um projeto privado da sua conta W&B: a config pública e as métricas de cada época. Dataset, caminhos, código, git e dados da máquina não saem daqui. Vale para os próximos treinos.",
     project: "Projeto",
     entity: "Usuário ou equipe (opcional)",

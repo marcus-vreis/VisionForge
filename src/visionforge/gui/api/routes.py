@@ -12,7 +12,6 @@ import uuid
 from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import asdict
 from datetime import datetime
-from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any, Literal, NoReturn
 
@@ -123,7 +122,6 @@ from visionforge.gui.api.incorporate_routes import router as incorporate_router
 from visionforge.gui.api.merge_routes import router as merge_router
 from visionforge.gui.api.model_card import _stopped_extent as _stopped_extent
 from visionforge.gui.api.model_card import render_run_markdown as _render_run_markdown
-from visionforge.gui.api.profile_tokens import read_token
 from visionforge.gui.api.profiles import (
     PROFILE_HEADER,
     InvalidProfileError,
@@ -180,6 +178,7 @@ from visionforge.gui.api.schemas import (
     WandbStatus,
 )
 from visionforge.gui.api.system_routes import build_system_router
+from visionforge.gui.api.tracker_exports import exported, profile_trackers
 from visionforge.gui.api.wandb_routes import build_wandb_router
 from visionforge.gui.api.zenodo_routes import build_zenodo_router
 from visionforge.tasks.base import TaskSpec
@@ -641,7 +640,7 @@ def _retry_record(
     status: MlflowStatus | WandbStatus | None,
     unavailable: str = _MLFLOW_UNAVAILABLE,
 ) -> dict[str, Any]:
-    """The run.json of a finished classification run, or 409/500.
+    """The run.json of a finished, exported run, or 409/500.
 
     ``status`` is the exporter's sidecar: a retry needs one that is not still
     running.
@@ -652,11 +651,8 @@ def _retry_record(
         data = json.loads((run_dir / RUN_FILENAME).read_bytes())
     except (OSError, ValueError) as exc:
         raise HTTPException(500, tr(RUN_BAD_JSON_KEY, error=exc)) from exc
-    if (
-        not isinstance(data, dict)
-        or not isinstance(data.get("config"), dict)
-        or _run_task(data) != "classification"
-    ):
+    # Any task: the sidecar above proves the run was exported (ADR-197).
+    if not isinstance(data, dict) or not isinstance(data.get("config"), dict):
         raise HTTPException(409, tr(unavailable))
     return data
 
@@ -671,7 +667,7 @@ def _retry_record(
     tags=[TAG_RUNS],
 )
 def retry_mlflow(run_id: str, profile: ProfileDep) -> MlflowStatus:
-    """Reconcile a completed local classification run with its profile's MLflow store."""
+    """Reconcile a completed local run with its profile's MLflow store."""
     from visionforge.core.mlflow_tracking import MlflowTracker
 
     run_dir = _find_run_dir(run_id, profile)
@@ -893,20 +889,7 @@ def _tracker_factories(
     """The exporters this profile turned on, for a classification training only."""
     if config.block != "classification" or config.classification.mode != "train":
         return ()
-    from visionforge.core.mlflow_tracking import MlflowTracker
-    from visionforge.core.wandb_tracking import WandbTarget, WandbTracker
-
-    outputs = _PROFILES_DIR.parent.resolve()
-    factories: list[TrackerFactory] = []
-    if profile.settings.mlflow.enabled:
-        factories.append(partial(MlflowTracker, outputs / "mlflow", profile.slug))
-    wandb = profile.settings.wandb
-    if wandb.enabled:
-        target = WandbTarget(wandb.project, wandb.entity, read_token("wandb", profile))
-        factories.append(
-            partial(WandbTracker, outputs / "wandb", profile.slug, target=target)
-        )
-    return tuple(factories)
+    return profile_trackers(profile, _PROFILES_DIR.parent.resolve())
 
 
 @router.post(
@@ -1067,6 +1050,7 @@ async def run_detection(config: DetectionConfig, profile: ProfileDep) -> RunResp
     DetectionBlock (ADR-033) rather than the ExperimentConfig path.
     """
     config = profile.scope_model(config)
+    trackers = profile_trackers(profile, _PROFILES_DIR.parent.resolve())
     await asyncio.to_thread(_check_detection_dataset, config)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     run_id = f"{config.name}_{timestamp}"
@@ -1076,7 +1060,7 @@ async def run_detection(config: DetectionConfig, profile: ProfileDep) -> RunResp
         config.name,
         "detection",
         "simple",
-        lambda: _execute_detection(config, run_id),
+        lambda: exported(_execute_detection(config, run_id), run_id, trackers),
         profile=profile,
     )
 
@@ -1105,6 +1089,7 @@ async def run_regression(config: RegressionConfig, profile: ProfileDep) -> RunRe
     RegressionBlock (ADR-036) rather than the ExperimentConfig path.
     """
     config = profile.scope_model(config)
+    trackers = profile_trackers(profile, _PROFILES_DIR.parent.resolve())
     await asyncio.to_thread(_check_regression_dataset, config)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     run_id = f"{config.name}_{timestamp}"
@@ -1114,7 +1099,7 @@ async def run_regression(config: RegressionConfig, profile: ProfileDep) -> RunRe
         config.name,
         "regression",
         "simple",
-        lambda: _execute_regression(config, run_id),
+        lambda: exported(_execute_regression(config, run_id), run_id, trackers),
         profile=profile,
     )
 
@@ -1145,6 +1130,7 @@ async def run_segmentation(
     SegmentationBlock (ADR-037) rather than the ExperimentConfig path.
     """
     config = profile.scope_model(config)
+    trackers = profile_trackers(profile, _PROFILES_DIR.parent.resolve())
     await asyncio.to_thread(_check_segmentation_dataset, config)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     run_id = f"{config.name}_{timestamp}"
@@ -1154,7 +1140,7 @@ async def run_segmentation(
         config.name,
         "segmentation",
         "simple",
-        lambda: _execute_segmentation(config, run_id),
+        lambda: exported(_execute_segmentation(config, run_id), run_id, trackers),
         profile=profile,
     )
 
@@ -1182,6 +1168,7 @@ async def run_anomaly(config: AnomalyConfig, profile: ProfileDep) -> RunResponse
     AnomalyBlock (ADR-038) rather than the ExperimentConfig path.
     """
     config = profile.scope_model(config)
+    trackers = profile_trackers(profile, _PROFILES_DIR.parent.resolve())
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     run_id = f"{config.name}_{timestamp}"
 
@@ -1190,7 +1177,7 @@ async def run_anomaly(config: AnomalyConfig, profile: ProfileDep) -> RunResponse
         config.name,
         "anomaly",
         "simple",
-        lambda: _execute_anomaly(config, run_id),
+        lambda: exported(_execute_anomaly(config, run_id), run_id, trackers),
         # PatchCore has no epochs; it stops between its phases (ADR-111).
         stop_at="phase" if config.model.name == "patchcore" else "epoch",
         profile=profile,
@@ -1534,6 +1521,7 @@ async def run_custom_task(
     except ValidationError as exc:
         raise RequestValidationError(exc.errors()) from exc
 
+    trackers = profile_trackers(profile, _PROFILES_DIR.parent.resolve())
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     run_id = f"{cfg.name}_{timestamp}"
 
@@ -1542,7 +1530,7 @@ async def run_custom_task(
         str(cfg.name),
         f"custom:{info.key}",
         "simple",
-        lambda: _execute_custom_task(info, cfg, run_id),
+        lambda: exported(_execute_custom_task(info, cfg, run_id), run_id, trackers),
         stop_at=None if _owns_its_loop(info) else "epoch",
         profile=profile,
     )
