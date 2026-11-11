@@ -352,9 +352,17 @@ def test_swapped_checkpoint_is_refused_before_copying(
     import shutil
 
     copied: list[Any] = []
-    monkeypatch.setattr(
-        os, "fstat", lambda _fd: types.SimpleNamespace(st_dev=-1, st_ino=-1)
-    )
+    checkpoint = os.stat(run_dir / "weights/best.pt")
+    real_fstat = os.fstat
+
+    def swapped_fstat(fd: int) -> Any:
+        # Only the checkpoint looks swapped: rmtree and open() also call fstat.
+        result = real_fstat(fd)
+        if (result.st_dev, result.st_ino) == (checkpoint.st_dev, checkpoint.st_ino):
+            return types.SimpleNamespace(st_dev=-1, st_ino=-1)
+        return result
+
+    monkeypatch.setattr(os, "fstat", swapped_fstat)
     monkeypatch.setattr(shutil, "copyfileobj", lambda *args: copied.append(args))
     with pytest.raises(ValueError, match="changed"):
         preview_run(run_dir)
