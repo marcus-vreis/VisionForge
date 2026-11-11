@@ -362,14 +362,37 @@ def test_the_library_section_names_its_version_and_license() -> None:
     }
     assert loop["name"] == "BaseTrainer._do_train"
     assert loop["file"] == "ultralytics/engine/trainer.py"
-    # With the installed version every note of the library finds its line.
-    assert loop["notes_resolved"] == loop["notes_total"] == len(loop["notes"])
+
+
+def _anchors_found(notes: tuple[Note, ...], lines: list[str]) -> int:
+    """How many notes find their lines; the rest are tolerated (ADR-194)."""
+    found = 0
+    for note in notes:
+        try:
+            note_span(note, lines)
+        except ValueError:
+            continue
+        found += 1
+    return found
+
+
+def test_the_library_notes_are_the_ones_this_version_still_anchors() -> None:
+    # How many resolve depends on the installed ultralytics: count against the
+    # declared notes, never against a fixed number.
+    declared = ULTRALYTICS_DETECTION[-1].notes
+    loop = _ultralytics_sections()["yolo_loop"]
+    assert loop["notes_total"] == len(declared)
+    assert len(loop["notes"]) == loop["notes_resolved"]
+    assert loop["notes_resolved"] == _anchors_found(declared, loop["lines"])
+    for note in loop["notes"]:
+        assert 0 <= note["first"] <= note["last"] < len(loop["lines"])
 
 
 def test_a_broken_library_anchor_drops_the_note_not_the_section(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     *layer, loop = ULTRALYTICS_DETECTION
+    before = _ultralytics_sections()["yolo_loop"]["notes_resolved"]
     broken = dataclasses.replace(
         loop,
         notes=(*loop.notes, Note("a line no version has", "code.yolo.loop.epochs")),
@@ -377,7 +400,7 @@ def test_a_broken_library_anchor_drops_the_note_not_the_section(
     monkeypatch.setattr(tour_mod, "ULTRALYTICS_DETECTION", (*layer, broken))
     section = _ultralytics_sections()["yolo_loop"]
     assert section["notes_total"] == len(loop.notes) + 1
-    assert section["notes_resolved"] == len(loop.notes)
+    assert section["notes_resolved"] == before
 
 
 def test_a_broken_visionforge_anchor_still_fails(

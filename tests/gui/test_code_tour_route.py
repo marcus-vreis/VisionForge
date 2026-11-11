@@ -140,4 +140,6 @@ def test_ultralytics_detection_shows_the_layer_and_the_library() -> None:
     loop = sections[-1]
     assert loop["library"]["version"] == ultralytics.__version__
     assert loop["library"]["license"] == "AGPL-3.0"
-    assert loop["notes_resolved"] == loop["notes_total"]
+    # Tolerant notes (ADR-194): how many resolve depends on the installed version.
+    assert len(loop["notes"]) == loop["notes_resolved"]
+    assert loop["notes_resolved"] <= loop["notes_total"]
