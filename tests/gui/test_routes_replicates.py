@@ -60,7 +60,11 @@ class TestReplicatesEndpoints:
 
 class TestRegressionReplicates:
     def test_replicates_dispatch_and_aggregate_report(
-        self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
+        self,
+        app_and_routes: tuple,
+        live_client: TestClient,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         from visionforge.core.replicates import ReplicateTrial
 
@@ -78,8 +82,7 @@ class TestRegressionReplicates:
                 ReplicateTrial(seeds[2], "success", {"r2": 1.00}, 0.1),
             ]
 
-        orig = strategies_mod.run_replicates
-        strategies_mod.run_replicates = fake_replicates
+        monkeypatch.setattr(strategies_mod, "run_replicates", fake_replicates)
         try:
             client = live_client
             payload = {
@@ -112,11 +115,14 @@ class TestRegressionReplicates:
             assert (Path(report["report_dir"]) / "replicates_summary.json").exists()
             assert (Path(report["report_dir"]) / "replicates_ranking.csv").exists()
         finally:
-            strategies_mod.run_replicates = orig
             execution_mod._JOB_STATES.clear()
 
     def test_seeds_derived_from_config_seed_when_omitted(
-        self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
+        self,
+        app_and_routes: tuple,
+        live_client: TestClient,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         from visionforge.core.replicates import ReplicateTrial
 
@@ -129,8 +135,7 @@ class TestRegressionReplicates:
             captured["seeds"] = seeds
             return [ReplicateTrial(s, "success", {"r2": 0.9}, 0.1) for s in seeds]
 
-        orig = strategies_mod.run_replicates
-        strategies_mod.run_replicates = fake_replicates
+        monkeypatch.setattr(strategies_mod, "run_replicates", fake_replicates)
         try:
             client = live_client
             payload = {"config": _payload(tmp_path), "n_replicates": 3}
@@ -141,7 +146,6 @@ class TestRegressionReplicates:
             # RegressionConfig defaults training.seed to 42 → 42, 43, 44
             assert captured["seeds"] == [42, 43, 44]
         finally:
-            strategies_mod.run_replicates = orig
             execution_mod._JOB_STATES.clear()
 
     def test_duplicate_seeds_rejected(
@@ -209,7 +213,11 @@ class TestUnknownMetricGuard:
     """
 
     def test_replicates_reject_metric_nobody_reported(
-        self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
+        self,
+        app_and_routes: tuple,
+        live_client: TestClient,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         from visionforge.core.replicates import ReplicateTrial
 
@@ -220,8 +228,7 @@ class TestUnknownMetricGuard:
             # Trials succeed but report r2 — not the requested metric.
             return [ReplicateTrial(s, "success", {"r2": 0.9}, 0.1) for s in seeds]
 
-        orig = strategies_mod.run_replicates
-        strategies_mod.run_replicates = fake_replicates
+        monkeypatch.setattr(strategies_mod, "run_replicates", fake_replicates)
         try:
             client = live_client
             resp = client.post(
@@ -239,5 +246,4 @@ class TestUnknownMetricGuard:
             assert "test_accuracy" in status["error"]
             assert "r2" in status["error"]  # names what IS available
         finally:
-            strategies_mod.run_replicates = orig
             execution_mod._JOB_STATES.clear()

@@ -41,7 +41,11 @@ def _payload(tmp_path: Path) -> dict:
 
 class TestSegmentationCv:
     def test_cv_dispatches_and_reports_fold_table(
-        self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
+        self,
+        app_and_routes: tuple,
+        live_client: TestClient,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         from visionforge.blocks.regression_cv import (
             CrossValidationReport,
@@ -69,8 +73,9 @@ class TestSegmentationCv:
                 aggregate={"miou": {"mean": 0.7, "std": 0.1}},
             )
 
-        orig = strategies_mod.run_segmentation_cross_validation
-        strategies_mod.run_segmentation_cross_validation = fake_cv
+        monkeypatch.setattr(
+            strategies_mod, "run_segmentation_cross_validation", fake_cv
+        )
         try:
             client = live_client
             resp = client.post(
@@ -92,7 +97,6 @@ class TestSegmentationCv:
             assert report["aggregate"]["miou"]["mean"] == 0.7
             assert (Path(report["report_dir"]) / "cv_summary.json").exists()
         finally:
-            strategies_mod.run_segmentation_cross_validation = orig
             execution_mod._JOB_STATES.clear()
 
     def test_queues_behind_a_running_job(

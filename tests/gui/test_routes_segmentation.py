@@ -126,7 +126,11 @@ class TestSegmentationRun:
 
 class TestSegmentationCompare:
     def test_compare_dispatches_and_reports(
-        self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
+        self,
+        app_and_routes: tuple,
+        live_client: TestClient,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         from visionforge.core.comparison import ComparisonTrial
 
@@ -141,8 +145,7 @@ class TestSegmentationCompare:
                 ComparisonTrial("deeplabv3_resnet50", "failed", {}, error="boom"),
             ]
 
-        orig = strategies_mod.run_model_comparison
-        strategies_mod.run_model_comparison = fake_compare
+        monkeypatch.setattr(strategies_mod, "run_model_comparison", fake_compare)
         try:
             client = live_client
             payload = {
@@ -162,7 +165,6 @@ class TestSegmentationCompare:
             assert report["failed_count"] == 1
             assert report["top_3"][0]["model_arch"] == "unet"
         finally:
-            strategies_mod.run_model_comparison = orig
             execution_mod._JOB_STATES.clear()
 
     def test_compare_requires_two_models(
@@ -180,7 +182,11 @@ class TestSegmentationCompare:
 
 class TestSegmentationSweep:
     def test_random_sweep_dispatches_and_reports(
-        self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
+        self,
+        app_and_routes: tuple,
+        live_client: TestClient,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         from visionforge.core.sweep import SweepTrial
 
@@ -196,8 +202,7 @@ class TestSegmentationSweep:
                 )
             ]
 
-        orig = strategies_mod.run_sweep
-        strategies_mod.run_sweep = fake_sweep
+        monkeypatch.setattr(strategies_mod, "run_sweep", fake_sweep)
         try:
             client = live_client
             payload = {
@@ -224,5 +229,4 @@ class TestSegmentationSweep:
             assert report["metric"] == "miou"  # defaulted from primary_metric
             assert report["successful_trials"] == 1
         finally:
-            strategies_mod.run_sweep = orig
             execution_mod._JOB_STATES.clear()

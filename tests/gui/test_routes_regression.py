@@ -125,7 +125,11 @@ class TestRegressionRun:
 
 class TestRegressionCompare:
     def test_compare_dispatches_and_reports(
-        self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
+        self,
+        app_and_routes: tuple,
+        live_client: TestClient,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         from visionforge.core.comparison import ComparisonTrial
 
@@ -144,8 +148,7 @@ class TestRegressionCompare:
                 ),
             ]
 
-        orig = strategies_mod.run_model_comparison
-        strategies_mod.run_model_comparison = fake_compare
+        monkeypatch.setattr(strategies_mod, "run_model_comparison", fake_compare)
         try:
             client = live_client
             payload = {
@@ -169,7 +172,6 @@ class TestRegressionCompare:
             assert (Path(report["report_dir"]) / "comparison_summary.json").exists()
             assert (Path(report["report_dir"]) / "comparison_ranking.csv").exists()
         finally:
-            strategies_mod.run_model_comparison = orig
             execution_mod._JOB_STATES.clear()
 
     def test_queues_behind_a_running_job(
@@ -217,7 +219,11 @@ class TestRegressionCompare:
 
 class TestRegressionSweep:
     def test_grid_sweep_dispatches_and_reports(
-        self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
+        self,
+        app_and_routes: tuple,
+        live_client: TestClient,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         from visionforge.core.sweep import SweepTrial
 
@@ -232,8 +238,7 @@ class TestRegressionSweep:
                 SweepTrial(1, {"training.learning_rate": 0.1}, "success", {"r2": 0.6}),
             ]
 
-        orig = strategies_mod.run_sweep
-        strategies_mod.run_sweep = fake_sweep
+        monkeypatch.setattr(strategies_mod, "run_sweep", fake_sweep)
         try:
             client = live_client
             payload = {
@@ -260,7 +265,6 @@ class TestRegressionSweep:
             assert report["best_trial"]["overrides"]["training.learning_rate"] == 0.05
             assert (Path(report["report_dir"]) / "sweep_summary.json").exists()
         finally:
-            strategies_mod.run_sweep = orig
             execution_mod._JOB_STATES.clear()
 
     def test_sweep_rejects_unknown_path(

@@ -110,7 +110,11 @@ class TestRoutesExist:
 
 class TestCustomReplicates:
     def test_dispatch_uses_declared_primary_metric(
-        self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
+        self,
+        app_and_routes: tuple,
+        live_client: TestClient,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         from visionforge.core.replicates import ReplicateTrial
 
@@ -129,8 +133,7 @@ class TestCustomReplicates:
                 ReplicateTrial(seeds[1], "success", {"mae": 0.6}, 0.1),
             ]
 
-        orig = strategies_mod.run_replicates
-        strategies_mod.run_replicates = fake_replicates
+        monkeypatch.setattr(strategies_mod, "run_replicates", fake_replicates)
         try:
             client = live_client
             resp = client.post(
@@ -151,7 +154,6 @@ class TestCustomReplicates:
             assert report["metric"] == "mae"
             assert report["total_replicates"] == 2
         finally:
-            strategies_mod.run_replicates = orig
             execution_mod._JOB_STATES.clear()
 
     def test_unknown_key_404(self, app_and_routes: tuple, tmp_path: Path) -> None:
@@ -197,7 +199,11 @@ class TestCustomReplicates:
 
 class TestCustomSweep:
     def test_grid_sweep_over_the_tasks_own_field(
-        self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
+        self,
+        app_and_routes: tuple,
+        live_client: TestClient,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         from visionforge.core.sweep import SweepTrial
 
@@ -218,8 +224,7 @@ class TestCustomSweep:
                 SweepTrial(1, {"scale": 2.0}, "success", {"mae": 0.8}),
             ]
 
-        orig = strategies_mod.run_sweep
-        strategies_mod.run_sweep = fake_sweep
+        monkeypatch.setattr(strategies_mod, "run_sweep", fake_sweep)
         try:
             client = live_client
             resp = client.post(
@@ -246,7 +251,6 @@ class TestCustomSweep:
             assert report["mode"] == "grid"
             assert report["total_trials"] == 2
         finally:
-            strategies_mod.run_sweep = orig
             execution_mod._JOB_STATES.clear()
 
     def test_sweep_rejects_path_unknown_to_the_task(

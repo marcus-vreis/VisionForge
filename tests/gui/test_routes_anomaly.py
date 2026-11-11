@@ -126,7 +126,11 @@ class TestAnomalyRun:
 
 class TestAnomalyCompareSweep:
     def test_compare_dispatches_and_reports(
-        self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
+        self,
+        app_and_routes: tuple,
+        live_client: TestClient,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         from visionforge.core.comparison import ComparisonTrial
 
@@ -141,8 +145,7 @@ class TestAnomalyCompareSweep:
                 ComparisonTrial("autoencoder", "success", {"auroc": 0.88}),
             ]
 
-        orig = strategies_mod.run_model_comparison
-        strategies_mod.run_model_comparison = fake_compare
+        monkeypatch.setattr(strategies_mod, "run_model_comparison", fake_compare)
         try:
             client = live_client
             payload = {
@@ -160,11 +163,13 @@ class TestAnomalyCompareSweep:
             assert report["metric"] == "auroc"  # defaulted from primary_metric
             assert report["top_3"][0]["model_arch"] == "patchcore"
         finally:
-            strategies_mod.run_model_comparison = orig
             execution_mod._JOB_STATES.clear()
 
     def test_sweep_is_refused_before_queueing(
-        self, app_and_routes: tuple, tmp_path: Path
+        self,
+        app_and_routes: tuple,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         # Anomaly's only labelled split is test, so a sweep would tune on it
         # (ADR-131): the route answers 422 and never starts the job.
@@ -176,8 +181,7 @@ class TestAnomalyCompareSweep:
             called.append(args)
             return []
 
-        orig = strategies_mod.run_sweep
-        strategies_mod.run_sweep = fake_sweep
+        monkeypatch.setattr(strategies_mod, "run_sweep", fake_sweep)
         try:
             client = TestClient(app, raise_server_exceptions=True)
             payload = {
@@ -194,5 +198,4 @@ class TestAnomalyCompareSweep:
             assert called == []
             assert execution_mod._JOB_STATES == {}
         finally:
-            strategies_mod.run_sweep = orig
             execution_mod._JOB_STATES.clear()

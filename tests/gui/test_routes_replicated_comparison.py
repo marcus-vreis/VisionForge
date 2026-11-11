@@ -77,7 +77,11 @@ class TestRoutesExist:
 
 class TestDispatch:
     def test_report_carries_the_paired_matrix(
-        self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
+        self,
+        app_and_routes: tuple,
+        live_client: TestClient,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         app, routes_mod = app_and_routes
         execution_mod._JOB_STATES.clear()
@@ -114,8 +118,9 @@ class TestDispatch:
                 "power_note": "",
             }
 
-        orig = strategies_mod.run_replicated_comparison
-        strategies_mod.run_replicated_comparison = fake_comparison
+        monkeypatch.setattr(
+            strategies_mod, "run_replicated_comparison", fake_comparison
+        )
         try:
             client = live_client
             resp = client.post(
@@ -144,11 +149,14 @@ class TestDispatch:
             assert (report_dir / "comparison_summary.json").exists()
             assert (report_dir / "comparison_table.tex").exists()
         finally:
-            strategies_mod.run_replicated_comparison = orig
             execution_mod._JOB_STATES.clear()
 
     def test_seeds_derived_from_the_config_when_omitted(
-        self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
+        self,
+        app_and_routes: tuple,
+        live_client: TestClient,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         app, routes_mod = app_and_routes
         execution_mod._JOB_STATES.clear()
@@ -160,8 +168,9 @@ class TestDispatch:
             captured["seeds"] = seeds
             return {"comparisons": [{"x": 1}], "skipped_variants": []}
 
-        orig = strategies_mod.run_replicated_comparison
-        strategies_mod.run_replicated_comparison = fake_comparison
+        monkeypatch.setattr(
+            strategies_mod, "run_replicated_comparison", fake_comparison
+        )
         try:
             client = live_client
             resp = client.post(
@@ -177,7 +186,6 @@ class TestDispatch:
             # RegressionConfig defaults training.seed to 42 -> 42, 43, 44
             assert captured["seeds"] == [42, 43, 44]
         finally:
-            strategies_mod.run_replicated_comparison = orig
             execution_mod._JOB_STATES.clear()
 
 
@@ -246,7 +254,11 @@ class TestGuards:
             release_queue(execution_mod)
 
     def test_all_variants_failing_marks_the_run_failed(
-        self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
+        self,
+        app_and_routes: tuple,
+        live_client: TestClient,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         app, routes_mod = app_and_routes
         execution_mod._JOB_STATES.clear()
@@ -256,8 +268,9 @@ class TestGuards:
         ):
             return {"comparisons": [], "skipped_variants": list(variants)}
 
-        orig = strategies_mod.run_replicated_comparison
-        strategies_mod.run_replicated_comparison = fake_comparison
+        monkeypatch.setattr(
+            strategies_mod, "run_replicated_comparison", fake_comparison
+        )
         try:
             client = live_client
             resp = client.post(
@@ -274,5 +287,4 @@ class TestGuards:
             # The error names what was skipped instead of a bare traceback.
             assert "baseline" in status["error"]
         finally:
-            strategies_mod.run_replicated_comparison = orig
             execution_mod._JOB_STATES.clear()
