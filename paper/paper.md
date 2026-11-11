@@ -95,9 +95,9 @@ The code is layered one way, `utils` ← `core` ← `blocks` ← `gui`: the stat
 and the trainers know nothing about the interface, so the same experiment runs
 from the browser, the command line or a script. Every task family implements
 one runner contract, and the experiment strategies (replicates, paired
-comparison, K-fold, sweep) are written once against that contract, which is how
-a task a researcher adds in a single Python file gets them all without further
-code.
+comparison, sweep) are written once against that contract, which is how a task
+a researcher adds in a single Python file gets them without further code.
+K-fold cross-validation covers classification, regression and segmentation.
 
 Results are the report's numbers, copied, never recomputed for display: the
 mean on screen is the one in the report a paper table is built from. The
@@ -109,11 +109,14 @@ classifier head was once initialised before the seed was set). Confidence
 intervals are clipped to each metric's domain and flagged when clipped.
 
 Every behaviour change is recorded as an architecture decision record in
-`docs/dev/DECISIONS.md` (more than 150 so far). The project has about 5,200
-backend and 1,050 frontend tests, a `visionforge selftest` command that trains every task
-and strategy through the real API, and continuous integration on each push.
-Everything runs locally; nothing leaves the machine unless the user downloads a
-public dataset.
+`docs/dev/DECISIONS.md` (more than 150 so far). On 11 November 2026 the project
+had more than 7,900 Python and 1,400 frontend tests, a `visionforge selftest`
+command that trains every task and strategy through the real API, and continuous integration on each push.
+VisionForge is local by default: data leaves the machine only when the user
+opts in, by training on Google Colab or by sending a run to Weights & Biases,
+the Hugging Face Hub, Zenodo, GitHub or a DVC remote; pretrained weights and
+public datasets are downloaded on request. The YOLO and RT-DETR backends come
+from Ultralytics, licensed under AGPL-3.0; VisionForge's own code is MIT.
 
 # Research impact statement
 

@@ -186,6 +186,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 - O estudo de variância de seeds publica os 270 `run.json` em `research/seed_variance/runs/` (sem caminhos da máquina, 1,7 MB), e `summarize.py` lê dali: num clone limpo o `summary.json` sai idêntico, com o ruído de avaliação que antes vinha vazio (#166).
 - As quatro séries do benchmark de fluxo citadas no artigo (linha de comando, navegador, diagnóstico e navegador após a correção) saem do repositório privado para `research/workflow_benchmark/results/`, sem caminhos da máquina, e `make_paper_numbers.py` recalcula dos registros por execução cada número da seção, conferido por teste (#181).
 - O artigo relata a H3 rejeitada, define a reversão e cita o único contraste Holm-significativo (160 px contra sem aumento, USK-Coffee/ResNet-18, p = 0,0072) como exploratório; `summarize.py` grava esses contrastes em `summary.json`, `numbers.tex` ganha as macros e a legenda da tabela declara o IC percentil (#179).
+- O Software design do artigo restringe o K-fold a classificação, regressão e segmentação, troca "nada sai da máquina" por "local por padrão" com os envios opcionais listados, cita a AGPL-3.0 do Ultralytics e atualiza as contagens de testes (7.937 Python e 1.427 frontend em 2026-11-11) (#178).
 
 ## [0.21.0] — 2026-11-05
 
