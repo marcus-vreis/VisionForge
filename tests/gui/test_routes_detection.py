@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+import visionforge.gui.api.execution as execution_mod
 from tests.helpers import wait_experiment_done, wait_until
 from visionforge.utils.selftest_data import build_detection_dataset
 
@@ -51,7 +52,7 @@ class TestDetectionRun:
         from visionforge.blocks.detection import DetectionBlock
 
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
 
         captured: dict[str, object] = {}
         orig_setup = DetectionBlock.setup
@@ -90,26 +91,26 @@ class TestDetectionRun:
             DetectionBlock.setup = orig_setup  # type: ignore[method-assign]
             DetectionBlock.run = orig_run  # type: ignore[method-assign]
             DetectionBlock.report = orig_report  # type: ignore[method-assign]
-            routes_mod._JOB_STATES.clear()
+            execution_mod._JOB_STATES.clear()
 
     def test_queues_behind_a_running_job(
         self, app_and_routes: tuple, tmp_path: Path
     ) -> None:
         app, routes_mod = app_and_routes
-        occupy_queue(routes_mod)
+        occupy_queue(execution_mod)
         try:
             client = TestClient(app, raise_server_exceptions=True)
             resp = client.post("/api/detection/run", json=_payload(tmp_path))
             assert resp.status_code == 200
             assert resp.json()["status"] == "queued"
         finally:
-            release_queue(routes_mod)
+            release_queue(execution_mod)
 
     def test_run_rejects_invalid_config(
         self, app_and_routes: tuple, tmp_path: Path
     ) -> None:
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
         payload = _payload(tmp_path)
         payload["model"] = {"backend": "ultralytics", "name": "not_a_model"}
         client = TestClient(app, raise_server_exceptions=True)
@@ -124,7 +125,7 @@ class TestDetectionCompareSweep:
         from visionforge.core.comparison import ComparisonTrial
 
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
 
         def fake_compare(
             runner, config_dict, model_names, metric, progress_callback=None
@@ -154,7 +155,7 @@ class TestDetectionCompareSweep:
             assert report["top_3"][0]["model_arch"] == "yolo11s"
         finally:
             routes_mod.run_model_comparison = orig
-            routes_mod._JOB_STATES.clear()
+            execution_mod._JOB_STATES.clear()
 
     def test_sweep_dispatches_and_reports(
         self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
@@ -162,7 +163,7 @@ class TestDetectionCompareSweep:
         from visionforge.core.sweep import SweepTrial
 
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
 
         def fake_sweep(
             runner, base, space, *, mode, metric, n_trials, seed, progress_callback=None
@@ -194,4 +195,4 @@ class TestDetectionCompareSweep:
             assert report["metric"] == "map50_95"
         finally:
             routes_mod.run_sweep = orig
-            routes_mod._JOB_STATES.clear()
+            execution_mod._JOB_STATES.clear()

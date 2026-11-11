@@ -12,6 +12,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
+import visionforge.gui.api.execution as execution_mod
 from visionforge.utils.selftest_data import (
     build_classification_dataset,
     build_detection_dataset,
@@ -27,7 +28,7 @@ def client_and_routes():  # type: ignore[no-untyped-def]
     import visionforge.gui.api.routes as routes_mod
     from visionforge.gui.server import app
 
-    routes_mod._JOB_STATES.clear()
+    execution_mod._JOB_STATES.clear()
     return TestClient(app, raise_server_exceptions=True), routes_mod
 
 
@@ -87,9 +88,9 @@ def _classification(
 def busy_queue(client_and_routes: tuple):  # type: ignore[no-untyped-def]
     """Accepted jobs stay queued, so a 200 here never trains anything."""
     _, routes_mod = client_and_routes
-    occupy_queue(routes_mod)
+    occupy_queue(execution_mod)
     yield
-    release_queue(routes_mod)
+    release_queue(execution_mod)
 
 
 @pytest.mark.usefixtures("busy_queue")

@@ -16,6 +16,7 @@ from fastapi.testclient import TestClient
 from pydantic import Field
 from torch import nn
 
+import visionforge.gui.api.execution as execution_mod
 from tests.helpers import wait_experiment_done
 from visionforge.tasks import (
     BaseTaskConfig,
@@ -112,7 +113,7 @@ class TestCustomReplicates:
 
         _register_toy()
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
 
         captured: dict[str, object] = {}
 
@@ -148,11 +149,11 @@ class TestCustomReplicates:
             assert report["total_replicates"] == 2
         finally:
             routes_mod.run_replicates = orig
-            routes_mod._JOB_STATES.clear()
+            execution_mod._JOB_STATES.clear()
 
     def test_unknown_key_404(self, app_and_routes: tuple, tmp_path: Path) -> None:
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
         client = TestClient(app, raise_server_exceptions=True)
         resp = client.post(
             "/api/custom/ghost/replicates",
@@ -165,7 +166,7 @@ class TestCustomReplicates:
     ) -> None:
         _register_toy()
         app, routes_mod = app_and_routes
-        occupy_queue(routes_mod)
+        occupy_queue(execution_mod)
         try:
             client = TestClient(app, raise_server_exceptions=True)
             resp = client.post(
@@ -175,12 +176,12 @@ class TestCustomReplicates:
             assert resp.status_code == 200
             assert resp.json()["status"] == "queued"
         finally:
-            release_queue(routes_mod)
+            release_queue(execution_mod)
 
     def test_invalid_config_422(self, app_and_routes: tuple, tmp_path: Path) -> None:
         _register_toy()
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
         cfg = _payload(tmp_path)
         cfg["scale"] = -1  # violates gt=0 on the task's own Config
         client = TestClient(app, raise_server_exceptions=True)
@@ -199,7 +200,7 @@ class TestCustomSweep:
 
         _register_toy()
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
 
         captured: dict[str, object] = {}
 
@@ -243,14 +244,14 @@ class TestCustomSweep:
             assert report["total_trials"] == 2
         finally:
             routes_mod.run_sweep = orig
-            routes_mod._JOB_STATES.clear()
+            execution_mod._JOB_STATES.clear()
 
     def test_sweep_rejects_path_unknown_to_the_task(
         self, app_and_routes: tuple, tmp_path: Path
     ) -> None:
         _register_toy()
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
         client = TestClient(app, raise_server_exceptions=True)
         resp = client.post(
             "/api/custom/toyorch/sweep",
@@ -264,7 +265,7 @@ class TestCustomSweep:
 
     def test_unknown_key_404(self, app_and_routes: tuple, tmp_path: Path) -> None:
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
         client = TestClient(app, raise_server_exceptions=True)
         resp = client.post(
             "/api/custom/ghost/sweep",
@@ -279,16 +280,16 @@ def real_client(app_and_routes: tuple, tmp_path: Path, monkeypatch):  # type: ig
     _register_toy()
     app, routes_mod = app_and_routes
     monkeypatch.setattr(routes_mod, "_MODELS_DIR", tmp_path / "models")
-    routes_mod._JOB_STATES.clear()
+    execution_mod._JOB_STATES.clear()
     try:
         # One event loop for the whole test: the job is a background task of
         # the request that queued it.
         with TestClient(app, raise_server_exceptions=True) as client:
             yield client
     finally:
-        routes_mod._RUN_QUEUE.reset()
-        routes_mod._JOB_STATES.clear()
-        routes_mod._JOB_STATES.clear()
+        execution_mod._RUN_QUEUE.reset()
+        execution_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
 
 
 def _real_payload(tmp_path: Path) -> dict:

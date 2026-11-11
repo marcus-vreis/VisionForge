@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+import visionforge.gui.api.execution as execution_mod
 from tests.helpers import wait_experiment_done, wait_until
 
 from .conftest import occupy_queue, release_queue
@@ -60,7 +61,7 @@ class TestRegressionReplicates:
         from visionforge.core.replicates import ReplicateTrial
 
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
 
         captured: dict[str, object] = {}
 
@@ -108,7 +109,7 @@ class TestRegressionReplicates:
             assert (Path(report["report_dir"]) / "replicates_ranking.csv").exists()
         finally:
             routes_mod.run_replicates = orig
-            routes_mod._JOB_STATES.clear()
+            execution_mod._JOB_STATES.clear()
 
     def test_seeds_derived_from_config_seed_when_omitted(
         self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
@@ -116,7 +117,7 @@ class TestRegressionReplicates:
         from visionforge.core.replicates import ReplicateTrial
 
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
 
         captured: dict[str, object] = {}
 
@@ -137,13 +138,13 @@ class TestRegressionReplicates:
             assert captured["seeds"] == [42, 43, 44]
         finally:
             routes_mod.run_replicates = orig
-            routes_mod._JOB_STATES.clear()
+            execution_mod._JOB_STATES.clear()
 
     def test_duplicate_seeds_rejected(
         self, app_and_routes: tuple, tmp_path: Path
     ) -> None:
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
         client = TestClient(app, raise_server_exceptions=True)
         resp = client.post(
             "/api/regression/replicates",
@@ -155,7 +156,7 @@ class TestRegressionReplicates:
         self, app_and_routes: tuple, tmp_path: Path
     ) -> None:
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
         client = TestClient(app, raise_server_exceptions=True)
         resp = client.post(
             "/api/regression/replicates",
@@ -167,7 +168,7 @@ class TestRegressionReplicates:
         self, app_and_routes: tuple, tmp_path: Path
     ) -> None:
         app, routes_mod = app_and_routes
-        occupy_queue(routes_mod)
+        occupy_queue(execution_mod)
         try:
             client = TestClient(app, raise_server_exceptions=True)
             resp = client.post(
@@ -177,13 +178,13 @@ class TestRegressionReplicates:
             assert resp.status_code == 200
             assert resp.json()["status"] == "queued"
         finally:
-            release_queue(routes_mod)
+            release_queue(execution_mod)
 
     def test_rejects_invalid_config(
         self, app_and_routes: tuple, tmp_path: Path
     ) -> None:
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
         cfg = _payload(tmp_path)
         # num_targets=2 with a single target column → invalid RegressionConfig
         cfg["model"] = {"name": "resnet18", "num_targets": 2, "pretrained": False}
@@ -209,7 +210,7 @@ class TestUnknownMetricGuard:
         from visionforge.core.replicates import ReplicateTrial
 
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
 
         def fake_replicates(runner, base, seeds, metric, progress_callback=None):  # type: ignore[no-untyped-def]
             # Trials succeed but report r2 — not the requested metric.
@@ -235,4 +236,4 @@ class TestUnknownMetricGuard:
             assert "r2" in status["error"]  # names what IS available
         finally:
             routes_mod.run_replicates = orig
-            routes_mod._JOB_STATES.clear()
+            execution_mod._JOB_STATES.clear()

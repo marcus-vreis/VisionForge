@@ -15,6 +15,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
+import visionforge.gui.api.execution as execution_mod
 from tests.helpers import wait_experiment_done
 from visionforge.utils.selftest_data import build_regression_dataset
 
@@ -25,16 +26,16 @@ def client_and_routes(tmp_path: Path, monkeypatch):  # type: ignore[no-untyped-d
     from visionforge.gui.server import app
 
     monkeypatch.setattr(routes_mod, "_MODELS_DIR", tmp_path / "models")
-    routes_mod._JOB_STATES.clear()
+    execution_mod._JOB_STATES.clear()
     try:
         # A context manager keeps one event loop alive, which the training
         # job (a background task of the request that queued it) needs.
         with TestClient(app, raise_server_exceptions=True) as client:
             yield client, routes_mod
     finally:
-        routes_mod._RUN_QUEUE.reset()
-        routes_mod._JOB_STATES.clear()
-        routes_mod._JOB_STATES.clear()
+        execution_mod._RUN_QUEUE.reset()
+        execution_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
 
 
 def _config(tmp_path: Path) -> dict[str, Any]:
@@ -174,7 +175,7 @@ class TestReplicates:
 
         def stop_first(runner, base, seeds, metric, progress_callback=None):  # type: ignore[no-untyped-def]
             # The stop pressed while the first seed is still loading its data.
-            routes_mod._job_state(routes_mod._latest_run_id).token.cancel()
+            execution_mod._job_state(execution_mod._latest_run_id).token.cancel()
             return real(runner, base, seeds, metric, progress_callback)
 
         monkeypatch.setattr(routes_mod, "run_replicates", stop_first)

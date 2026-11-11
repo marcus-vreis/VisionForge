@@ -818,13 +818,13 @@ class TestProgressStreaming:
         assert "epoch_end" in kinds, f"no epoch_end streamed, got {kinds}"
 
     def test_the_gui_wires_the_block_to_the_event_pump(self) -> None:
-        """The block accepting a callback is only half of it — routes.py has to
-        be the one attaching it, which an isinstance check used to exclude."""
+        """The block accepting a callback is only half of it — the GUI's executor
+        has to be the one attaching it, which an isinstance check used to exclude."""
         import inspect
 
-        from visionforge.gui.api import routes
+        from visionforge.gui.api import execution
 
-        source = inspect.getsource(routes._execute_experiment)
+        source = inspect.getsource(execution._wire_block)
         assert "TransferLearningBlock" in source
 
 

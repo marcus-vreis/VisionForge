@@ -76,7 +76,7 @@ Blocks are composable and interchangeable. The same config can be passed to any 
 
 The active block is selected by the `block` field in `ExperimentConfig`
 (classification only). `POST /api/experiment/run` (`_execute_experiment` in
-`gui/api/routes.py`, ADR-026) instantiates the class for `classification`,
+`gui/api/execution.py`, ADR-026) instantiates the class for `classification`,
 `cross_validation`, `transfer_learning`, `model_comparison`, `grid_search` or
 `random_search`. `batch_prediction` and `export_onnx` are also valid `block` values
 (YAML) but the GUI runs them through `POST /api/runs/{id}/batch_predict` and

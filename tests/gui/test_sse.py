@@ -11,7 +11,7 @@ import torch
 import torch.nn as nn
 from fastapi.testclient import TestClient
 
-import visionforge.gui.api.routes as routes_mod
+import visionforge.gui.api.execution as execution_mod
 from visionforge.core.trainer import Trainer, TrainResult
 from visionforge.gui.server import app
 from visionforge.utils.config import ExperimentConfig
@@ -192,8 +192,8 @@ class TestSSEEventQueue:
         self, client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """GET /api/experiment/events must use content-type text/event-stream."""
-        monkeypatch.setattr(routes_mod, "_JOB_STATES", {})
-        monkeypatch.setattr(routes_mod, "_latest_run_id", None)
+        monkeypatch.setattr(execution_mod, "_JOB_STATES", {})
+        monkeypatch.setattr(execution_mod, "_latest_run_id", None)
         with client.stream("GET", "/api/experiment/events") as resp:
             assert "text/event-stream" in resp.headers["content-type"]
 
@@ -201,8 +201,8 @@ class TestSSEEventQueue:
         self, client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """With no active run the stream must yield a sentinel and close cleanly."""
-        monkeypatch.setattr(routes_mod, "_JOB_STATES", {})
-        monkeypatch.setattr(routes_mod, "_latest_run_id", None)
+        monkeypatch.setattr(execution_mod, "_JOB_STATES", {})
+        monkeypatch.setattr(execution_mod, "_latest_run_id", None)
         chunks: list[str] = []
         with client.stream("GET", "/api/experiment/events") as resp:
             for line in resp.iter_lines():
@@ -313,7 +313,7 @@ class TestSSEEventQueue:
         self, client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """GET /api/experiment/events must not return 404 or 405."""
-        monkeypatch.setattr(routes_mod, "_JOB_STATES", {})
-        monkeypatch.setattr(routes_mod, "_latest_run_id", None)
+        monkeypatch.setattr(execution_mod, "_JOB_STATES", {})
+        monkeypatch.setattr(execution_mod, "_latest_run_id", None)
         with client.stream("GET", "/api/experiment/events") as resp:
             assert resp.status_code not in (404, 405)

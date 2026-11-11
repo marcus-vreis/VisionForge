@@ -23,6 +23,7 @@ from typing import Any
 
 import pytest
 
+import visionforge.gui.api.execution as execution_mod
 from visionforge.gui.api.run_queue import colab_lane
 
 from .conftest import release_queue
@@ -51,9 +52,9 @@ def routes_mod(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]
     monkeypatch.chdir(work)
     monkeypatch.setattr(routes, "_MODELS_DIR", Path("outputs/models"))
     monkeypatch.setattr(routes, "_PROFILES_DIR", Path("outputs/profiles"))
-    release_queue(routes)
+    release_queue(execution_mod)
     yield routes
-    release_queue(routes)
+    release_queue(execution_mod)
 
 
 @pytest.fixture
@@ -91,7 +92,7 @@ def _use_stack(monkeypatch: pytest.MonkeyPatch, routes: Any, *names: str) -> Non
 
 async def _wait_until_idle(routes: Any) -> None:
     for _ in range(1000):
-        if not routes._LANES.is_busy():
+        if not execution_mod._LANES.is_busy():
             return
         await asyncio.sleep(0.01)
     raise AssertionError("the queue never drained")

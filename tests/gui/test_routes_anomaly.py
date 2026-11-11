@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+import visionforge.gui.api.execution as execution_mod
 from tests.helpers import wait_experiment_done, wait_until
 from visionforge.utils.messages import using_lang
 
@@ -52,7 +53,7 @@ class TestAnomalyRun:
         from visionforge.blocks.anomaly import AnomalyBlock
 
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
 
         captured: dict[str, object] = {}
         orig_setup = AnomalyBlock.setup
@@ -90,26 +91,26 @@ class TestAnomalyRun:
             AnomalyBlock.setup = orig_setup  # type: ignore[method-assign]
             AnomalyBlock.run = orig_run  # type: ignore[method-assign]
             AnomalyBlock.report = orig_report  # type: ignore[method-assign]
-            routes_mod._JOB_STATES.clear()
+            execution_mod._JOB_STATES.clear()
 
     def test_queues_behind_a_running_job(
         self, app_and_routes: tuple, tmp_path: Path
     ) -> None:
         app, routes_mod = app_and_routes
-        occupy_queue(routes_mod)
+        occupy_queue(execution_mod)
         try:
             client = TestClient(app, raise_server_exceptions=True)
             resp = client.post("/api/anomaly/run", json=_payload(tmp_path))
             assert resp.status_code == 200
             assert resp.json()["status"] == "queued"
         finally:
-            release_queue(routes_mod)
+            release_queue(execution_mod)
 
     def test_run_rejects_invalid_config(
         self, app_and_routes: tuple, tmp_path: Path
     ) -> None:
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
         payload = _payload(tmp_path)
         # coreset_ratio out of (0, 1] -> 422
         payload["model"] = {"name": "patchcore", "coreset_ratio": 2.0}
@@ -125,7 +126,7 @@ class TestAnomalyCompareSweep:
         from visionforge.core.comparison import ComparisonTrial
 
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
 
         def fake_compare(
             runner, config_dict, model_names, metric, progress_callback=None
@@ -155,7 +156,7 @@ class TestAnomalyCompareSweep:
             assert report["top_3"][0]["model_arch"] == "patchcore"
         finally:
             routes_mod.run_model_comparison = orig
-            routes_mod._JOB_STATES.clear()
+            execution_mod._JOB_STATES.clear()
 
     def test_sweep_is_refused_before_queueing(
         self, app_and_routes: tuple, tmp_path: Path
@@ -163,7 +164,7 @@ class TestAnomalyCompareSweep:
         # Anomaly's only labelled split is test, so a sweep would tune on it
         # (ADR-131): the route answers 422 and never starts the job.
         app, routes_mod = app_and_routes
-        routes_mod._JOB_STATES.clear()
+        execution_mod._JOB_STATES.clear()
         called: list[object] = []
 
         def fake_sweep(*args, **kwargs):  # type: ignore[no-untyped-def]
@@ -186,7 +187,7 @@ class TestAnomalyCompareSweep:
             assert resp.status_code == 422, resp.text
             assert "validation" in resp.json()["detail"].lower()
             assert called == []
-            assert routes_mod._JOB_STATES == {}
+            assert execution_mod._JOB_STATES == {}
         finally:
             routes_mod.run_sweep = orig
-            routes_mod._JOB_STATES.clear()
+            execution_mod._JOB_STATES.clear()

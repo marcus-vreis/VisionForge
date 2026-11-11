@@ -71,7 +71,7 @@ com um comentário que declarava a lacuna como se fosse decisão.
 O selftest sintético não pegava porque transfer learning é um *block* de
 classificação, não uma das estratégias que ele enumera. Corrigido em ADR-065,
 com dois testes de regressão: um garante que `epoch_end` chega ao callback, o
-outro garante que `routes._execute_experiment` continua citando o block — um
+outro garante que `execution._wire_block` continua citando o block — um
 block que aceita um callback que ninguém liga tem o mesmo defeito.
 
 ## Três falhas que eram do harness, não do produto

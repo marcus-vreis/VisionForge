@@ -4,36 +4,33 @@ from __future__ import annotations
 
 import asyncio
 import csv
-import dataclasses
 import importlib
 import json
 import os
 import sys
 import uuid
 from collections.abc import Awaitable, Callable, Iterable
-from dataclasses import asdict, dataclass
+from dataclasses import asdict
 from datetime import datetime
 from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any, Literal, NoReturn
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from loguru import logger
 from pydantic import ValidationError
 
 from visionforge import __version__ as _VF_VERSION
 from visionforge.core.cancellation import (
     STOPPED,
-    CancellationToken,
     is_cancelled,
     job_was_stopped,
 )
 from visionforge.core.comparison import ComparisonTrial, run_model_comparison
 from visionforge.core.detection_data import resolve_yolo_split
 from visionforge.core.experiment_bundle import import_experiment_bundle
-from visionforge.core.loader_lifecycle import describe_worker_spawn_failure
 from visionforge.core.replicated_comparison import (
     run_replicated_comparison,
     validate_variants,
@@ -59,6 +56,7 @@ from visionforge.core.task_runner import (
     require_validation_selection,
     runner_metric_direction,
 )
+from visionforge.gui.api import execution
 from visionforge.gui.api.coco_routes import router as coco_router
 from visionforge.gui.api.code_tour_routes import router as code_tour_router
 from visionforge.gui.api.colab_connection import PINNED_VERSION as _COLAB_PIN
@@ -84,6 +82,14 @@ from visionforge.gui.api.evaluation_routes import (
     build_evaluation_router,
 )
 from visionforge.gui.api.evidence_routes import EvidenceExports, build_evidence_router
+from visionforge.gui.api.execution import (
+    _LANES,
+    RUN_NO_MESSAGE_KEY,
+    _job_state,
+    _run_state,
+    _stop_point,
+)
+from visionforge.gui.api.execution_routes import router as execution_router
 from visionforge.gui.api.explorer_routes import router as explorer_router
 from visionforge.gui.api.folder_opener import (
     FolderOpenError,
@@ -128,7 +134,6 @@ from visionforge.gui.api.profiles import (
 )
 from visionforge.gui.api.profiles_routes import build_profiles_router
 from visionforge.gui.api.resplit_routes import router as resplit_router
-from visionforge.gui.api.run_events import RunEventLog
 from visionforge.gui.api.run_history import (
     RUN_BAD_JSON_KEY,
     RUN_FILENAME,
@@ -139,10 +144,7 @@ from visionforge.gui.api.run_history import resume_status as _resume_status
 from visionforge.gui.api.run_history import run_task as _run_task
 from visionforge.gui.api.run_queue import (
     LOCAL_LANE,
-    NotStoppableError,
     QueuedJob,
-    RunLanes,
-    RunQueue,
     StopPoint,
     colab_lane,
 )
@@ -166,14 +168,9 @@ from visionforge.gui.api.schemas import (
     PreprocessPreviewRequest,
     PreprocessPreviewResponse,
     PreprocessPreviewStep,
-    QueuedJobInfo,
-    QueueLane,
-    QueueSnapshot,
     ReplicatedComparisonRequest,
     ReplicatesRequest,
     RunResponse,
-    RunResult,
-    RunStatus,
     SampleDatasetRequest,
     SampleDatasetResponse,
     SweepRequest,
@@ -285,8 +282,6 @@ def run_segmentation_cross_validation(
     return run(config, **kwargs)
 
 
-RUN_NO_MESSAGE_KEY = "run.no_message"
-
 _GPU_UNAVAILABLE_TEXT = "GPU context unavailable"
 
 
@@ -305,55 +300,6 @@ async def request_lang(
 # Router-level, so every endpoint and every dependency below it (the profile
 # lookup among them) writes its messages in the language of the page.
 router = APIRouter(prefix="/api", dependencies=[Depends(request_lang)])
-
-
-@dataclass
-class JobState:
-    """What one started job owns (ADR-163, phase 4).
-
-    A local job and a Colab job run at the same time, so the state that used to
-    be a single "current run" lives here, one per ``run_id``:
-
-    - ``log``: the run's event log (ADR-159). The trainer thread puts events on
-      it; each SSE reader walks it from where its client stands, and ``None``
-      ends the stream.
-    - ``token``: the job's cancellation token, handed to the block so
-      ``DELETE /api/queue/{id}`` reaches that job's stop boundary (ADR-088).
-    - ``run``: the status, error, report and run folder that
-      ``/experiment/status`` and ``/experiment/result`` read.
-    """
-
-    run_id: str
-    log: RunEventLog
-    token: CancellationToken
-    lane: str = LOCAL_LANE
-    run: dict[str, Any] = dataclasses.field(default_factory=dict)
-
-
-# Started jobs by run_id, oldest first. A finished job stays a while so its
-# stream can be replayed and its result fetched; running ones are never dropped.
-_JOB_STATES: dict[str, JobState] = {}
-_MAX_FINISHED_STATES = 50
-# The job started last: what a client that names no run_id follows.
-_latest_run_id: str | None = None
-
-
-def _job_state(run_id: str) -> JobState:
-    """The state of a started job; the executors read their own through this."""
-    return _JOB_STATES[run_id]
-
-
-def _run_state(run_id: str | None = None) -> dict[str, Any] | None:
-    """A started job's run dict: the one named, or the latest when none is."""
-    key = run_id if run_id is not None else _latest_run_id
-    state = _JOB_STATES.get(key) if key is not None else None
-    return state.run if state is not None else None
-
-
-def _drop_finished_states() -> None:
-    finished = [k for k, s in _JOB_STATES.items() if s.run.get("status") != "running"]
-    for key in finished[: max(0, len(finished) - _MAX_FINISHED_STATES)]:
-        del _JOB_STATES[key]
 
 
 # Default location where Trainer writes run directories. Since ADR-114 this is
@@ -391,50 +337,6 @@ def current_profile(
 ProfileDep = Annotated[Profile, Depends(current_profile)]
 
 
-def _begin_job(job: QueuedJob) -> None:
-    """Prepare per-run state the moment a queued job actually starts (ADR-075).
-
-    The fresh SSE queue is created here rather than at submission time: doing it
-    in the request handler was safe only while a second submit was refused, and
-    with queueing it would replace the live queue of the job still running.
-
-    The job's cancellation token is stashed for the same reason: the executor
-    coroutine is built at submission time and cannot close over a job that does
-    not exist yet, so it reads the token here — the queue calls this immediately
-    before it awaits ``job.start()``.
-    """
-    global _latest_run_id
-
-    _JOB_STATES[job.run_id] = JobState(
-        run_id=job.run_id,
-        log=RunEventLog(job.run_id),
-        token=job.cancel_token,
-        lane=job.lane,
-        run={
-            "run_id": job.run_id,
-            "status": "running",
-            "error": None,
-            "report": None,
-            "run_dir": None,
-        },
-    )
-    _latest_run_id = job.run_id
-    _drop_finished_states()
-
-
-def _finish_job(job: QueuedJob) -> dict[str, Any] | None:
-    """Hand the finished run's terminal state to its lane to keep by run_id."""
-    state = _JOB_STATES.get(job.run_id)
-    return dict(state.run) if state is not None else None
-
-
-def _new_lane() -> RunQueue:
-    return RunQueue(on_start=_begin_job, on_finish=_finish_job)
-
-
-# The local lane keeps its name: it is the queue ADR-075 introduced.
-_RUN_QUEUE = _new_lane()
-_LANES = RunLanes(_RUN_QUEUE, _new_lane)
 _EVIDENCE_EXPORTS = EvidenceExports()
 # The Colab CLI and the logins waiting for a code live as long as the server (ADR-163).
 _COLAB_CLI = ColabCli()
@@ -457,36 +359,6 @@ def _task_label_from_config(config_type: type[Any]) -> str:
     if config_type is ExperimentConfig:
         return "classification"
     return config_type.__name__.removesuffix("Config").lower() or "experiment"
-
-
-# Where each kind of job stops when asked (ADR-111), by the strategy it is
-# queued under. A strategy missing here is reported as not stoppable: claiming a
-# stop that the executor never checks for is the ADR-094 failure mode.
-_STOP_POINTS: dict[str, StopPoint] = {
-    "simple": "epoch",
-    # Classification queues under `config.block`; these four all train through
-    # ClassificationBlock or TransferLearningBlock in _execute_experiment.
-    "classification": "epoch",
-    "transfer_learning": "epoch",
-    "batch_prediction": "epoch",
-    "export_onnx": "epoch",
-    "grid_search": "trial",
-    "random_search": "trial",
-    "sweep": "trial",
-    "cross_validation": "fold",
-    "cv": "fold",
-    "model_comparison": "model",
-    "comparison": "model",
-    "replicates": "replicate",
-    "replicated-comparison": "replicate",
-    # A Colab job (ADR-163): the stop releases the VM, mid-epoch.
-    "colab": "vm",
-}
-
-
-def _stop_point(strategy: str) -> StopPoint | None:
-    """Where a job queued under ``strategy`` stops; ``sweep:grid`` reads as ``sweep``."""
-    return _STOP_POINTS.get(strategy.split(":", 1)[0])
 
 
 def _submit_job(
@@ -621,7 +493,7 @@ router.include_router(merge_router)
 router.include_router(resplit_router)
 router.include_router(coco_router)
 # History list, detail and delete live in runs_routes.py (ADR-132); the lookups
-# and the running job's state stay owned here and are read per request.
+# stay here, the job state in execution.py (ADR-185); both read per request.
 router.include_router(
     build_runs_router(
         lambda run_id, profile: _find_run_dir(run_id, profile),
@@ -864,7 +736,7 @@ async def resume_run(run_id: str, profile: ProfileDep) -> RunResponse:
     # down this file and do not exist yet while it is being imported.
     task = _run_task(data)
     executors: dict[str, tuple[Any, Any]] = {
-        "classification": (ExperimentConfig, _execute_experiment),
+        "classification": (ExperimentConfig, execution._execute_experiment),
         "detection": (DetectionConfig, _execute_detection),
         "regression": (RegressionConfig, _execute_regression),
         "segmentation": (SegmentationConfig, _execute_segmentation),
@@ -1061,9 +933,9 @@ async def run_experiment(config: ExperimentConfig, profile: ProfileDep) -> RunRe
         "classification",
         config.block,
         lambda: (
-            _execute_experiment(config, run_id, trackers=trackers)
+            execution._execute_experiment(config, run_id, trackers=trackers)
             if trackers
-            else _execute_experiment(config, run_id)
+            else execution._execute_experiment(config, run_id)
         ),
         profile=profile,
     )
@@ -2045,178 +1917,8 @@ async def replicated_comparison_custom(
     )
 
 
-@router.get("/experiment/events", tags=[TAG_EXPERIMENTS])
-async def experiment_events(
-    run_id: str | None = None, after: Annotated[int, Query(ge=0)] = 0
-) -> StreamingResponse:
-    """Stream a run's progress as Server-Sent Events, from its start (ADR-159).
-
-    ``after`` skips the events the client already has, for a stream that dropped.
-    ``run_id`` names the run the client follows. Each job has its own log
-    (ADR-163, phase 4), so a local run and a Colab run stream side by side; with
-    no ``run_id`` the stream is the job started last. An id with no log here
-    closes at once rather than serving another job's events as its own.
-    """
-    return StreamingResponse(
-        _sse_generator(run_id, after),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",
-        },
-    )
-
-
-async def _sse_generator(  # type: ignore[return]
-    run_id: str | None = None, after: int = 0
-):
-    """Read the run's event log and yield SSE-formatted lines."""
-    key = run_id if run_id is not None else _latest_run_id
-    state = _JOB_STATES.get(key) if key is not None else None
-    if state is None:
-        yield "data: {}\n\n"
-        return
-    log = state.log
-
-    async for item in log.read(after):
-        yield f"data: {json.dumps(item)}\n\n"
-
-
-@router.get("/experiment/status", tags=[TAG_EXPERIMENTS])
-async def get_status(run_id: str | None = None) -> RunStatus:
-    """Poll a run's status, plus how many jobs wait over all queues.
-
-    ``run_id`` names the run; without it, the job started last (ADR-163, phase 4).
-    """
-    queued = _LANES.pending_count()
-    run = _run_state(run_id)
-    if run is None and run_id is not None:
-        run = _LANES.record(run_id)
-    if run is None:
-        return RunStatus(status="idle", queued=queued)
-
-    return RunStatus(
-        status=run["status"],
-        run_id=run["run_id"],
-        error=run.get("error"),
-        queued=queued,
-    )
-
-
-@router.get("/queue", tags=[TAG_EXPERIMENTS])
-async def get_queue() -> QueueSnapshot:
-    """Every queue: its running job and what waits behind it, in submission order.
-
-    ``active`` and ``pending`` stay the local queue's, as before ADR-163 phase 4;
-    ``lanes`` lists the local queue first and then one per Google account.
-    """
-    lanes = [
-        QueueLane(
-            lane=snap["lane"],
-            active=QueuedJobInfo(**snap["active"]) if snap["active"] else None,
-            pending=[QueuedJobInfo(**job) for job in snap["pending"]],
-        )
-        for snap in _LANES.snapshots()
-    ]
-    return QueueSnapshot(active=lanes[0].active, pending=lanes[0].pending, lanes=lanes)
-
-
-@router.delete(
-    "/queue/{run_id}",
-    responses={
-        404: {"description": NOT_FOUND_TEXT},
-        409: {"description": CONFLICT_TEXT},
-    },
-    tags=[TAG_EXPERIMENTS],
-)
-async def cancel_queued_run(run_id: str) -> dict[str, str]:
-    """Stop a job, whether it is waiting or already training.
-
-    A pending job is dropped. A running one is asked to stop at the boundary its
-    ``stop_at`` names and keeps the best checkpoint it has earned (ADR-088,
-    ADR-111), so a 200 here means the request was delivered, not that training
-    has already ended.
-
-    Raises:
-        HTTPException: 404 if no job carries that id — already finished, or
-            never submitted. 409 if the job is running and cannot be stopped
-            (``stop_at`` is null); nothing is asked of it.
-    """
-    try:
-        found = _LANES.cancel(run_id)
-    except NotStoppableError:
-        raise HTTPException(409, tr("queue.not_stoppable")) from None
-    if not found:
-        raise HTTPException(404, tr("queue.unknown_id"))
-    return {"run_id": run_id, "status": "cancelled"}
-
-
-@router.get(
-    "/experiment/result/{run_id}",
-    responses={
-        404: {"description": NOT_FOUND_TEXT},
-        409: {"description": CONFLICT_TEXT},
-        500: {"description": SERVER_ERROR_TEXT},
-    },
-    tags=[TAG_EXPERIMENTS],
-)
-async def get_result(run_id: str) -> RunResult:
-    """Fetch the result of a completed experiment.
-
-    Reads the job's live state while it is kept, and otherwise its queue's
-    per-run record: with jobs queued back to back, the next one is already
-    running by the time the browser asks for the previous one's report.
-    """
-    state = _run_state(run_id) or _LANES.record(run_id)
-    if state is None:
-        raise HTTPException(404, tr(RUN_NOT_FOUND_KEY, run_id=run_id))
-
-    if state["status"] == "running":
-        raise HTTPException(409, tr("run.still_running"))
-
-    if state["status"] == "failed":
-        raise HTTPException(
-            500, tr("run.failed", error=state.get("error", "unknown error"))
-        )
-
-    run_dir = state.get("run_dir")
-    run_json_path = Path(run_dir) / RUN_FILENAME if run_dir else None
-
-    report = state.get("report") or {}
-    stopped = _report_stopped(report)
-    if run_json_path and run_json_path.exists():
-        data = json.loads(run_json_path.read_text(encoding="utf-8"))
-        return RunResult(
-            run_id=run_id,
-            metrics=data.get("metrics", {}),
-            metric_cis=data.get("metric_cis", {}),
-            report=report,
-            artifacts=data.get("artifacts", {}),
-            stopped=stopped,
-        )
-
-    return RunResult(
-        run_id=run_id,
-        metrics={},
-        report=report,
-        artifacts={},
-        stopped=stopped,
-    )
-
-
-def _report_stopped(report: dict[str, Any]) -> bool:
-    """Whether a stop cut this run, read from wherever its report keeps it.
-
-    Multi-unit reports carry ``stopped`` at the top; single runs carry it in
-    their training section (``train``, or ``detection`` for detection).
-    """
-    if "stopped" in report:
-        return bool(report["stopped"])
-    for section in ("train", "detection"):
-        part = report.get(section)
-        if isinstance(part, dict) and "stopped" in part:
-            return bool(part["stopped"])
-    return False
+# A started job's status, event stream and result, and the queue (ADR-185).
+router.include_router(execution_router)
 
 
 @router.get(
@@ -2533,118 +2235,6 @@ def _check_classification_classes(config: ExperimentConfig) -> None:
                 names=shown,
             )
         )
-
-
-async def _execute_experiment(
-    config: ExperimentConfig,
-    run_id: str,
-    resume_dir: Path | None = None,
-    *,
-    trackers: tuple[TrackerFactory, ...] = (),
-) -> None:
-    """Run the experiment in a background thread."""
-    from visionforge.blocks.classification import ClassificationBlock
-    from visionforge.blocks.cross_validation import CrossValidationBlock
-    from visionforge.blocks.grid_search import GridSearchBlock
-    from visionforge.blocks.model_comparison import ModelComparisonBlock
-    from visionforge.blocks.random_search import RandomSearchBlock
-    from visionforge.blocks.transfer_learning import TransferLearningBlock
-
-    state = _job_state(run_id)
-
-    loop = asyncio.get_running_loop()
-    queue = state.log
-
-    def _put_event(event: dict[str, Any]) -> None:
-        if queue is not None:
-            asyncio.run_coroutine_threadsafe(queue.put(event), loop)
-
-    try:
-        # Dispatch to the right block based on config.block. The classification
-        # path stays default; cross_validation reuses the same /experiment/run
-        # endpoint so the frontend doesn't need a separate route. Adding more
-        # blocks here is a one-liner — keep them limited to ones whose GUI
-        # surface is actually wired up.
-        block: (
-            ClassificationBlock
-            | CrossValidationBlock
-            | TransferLearningBlock
-            | ModelComparisonBlock
-            | GridSearchBlock
-            | RandomSearchBlock
-        )
-        if config.block == "cross_validation":
-            block = CrossValidationBlock()
-        elif config.block == "transfer_learning":
-            block = TransferLearningBlock()
-        elif config.block == "model_comparison":
-            block = ModelComparisonBlock()
-        elif config.block == "grid_search":
-            block = GridSearchBlock()
-        elif config.block == "random_search":
-            block = RandomSearchBlock()
-        else:
-            block = ClassificationBlock()
-        block.setup(config)
-        if isinstance(block, ClassificationBlock):
-            block.tracker_factories = trackers
-        # Blocks that stream live epoch progress over SSE get the event pump
-        # wired here. Grid/random search and K-fold CV forward each inner
-        # trial/fold's epochs (annotated with trial context) plus
-        # trial_start/trial_end banners.
-        if isinstance(
-            block,
-            ClassificationBlock
-            | GridSearchBlock
-            | RandomSearchBlock
-            | CrossValidationBlock
-            | TransferLearningBlock
-            | ModelComparisonBlock,
-        ):
-            block._progress_callback = _put_event
-        block._cancel_token = state.token
-        block._resume_dir = resume_dir
-
-        logger.info("GUI: Starting experiment {} (block={})", run_id, config.block)
-        await asyncio.to_thread(block.run)
-
-        report = block.report()
-
-        # Classification and TransferLearning produce a TrainResult with a
-        # model_path so the run_dir is the checkpoint's parent folder. CV
-        # writes per-fold run.jsons in subdirs and has no single run_dir.
-        run_dir: str | None = None
-        if isinstance(block, ClassificationBlock | TransferLearningBlock):
-            if block._train_result and block._train_result.model_path:
-                run_dir = str(block._train_result.model_path.parent)
-
-        state.run = {
-            "run_id": run_id,
-            "status": "completed",
-            "error": None,
-            "report": report,
-            "run_dir": run_dir,
-        }
-        logger.success("GUI: Experiment {} completed.", run_id)
-
-    except Exception as e:
-        logger.exception("GUI: Experiment {} failed", run_id)
-        cls = type(e).__name__
-        msg = str(e) or tr(RUN_NO_MESSAGE_KEY)
-        # A worker-spawn failure surfaces as a torch DLL error, which sends the
-        # reader after the wrong thing entirely.
-        spawn_hint = describe_worker_spawn_failure(e)
-        state.run = {
-            "run_id": run_id,
-            "status": "failed",
-            "error": spawn_hint or f"{cls}: {msg}",
-            "report": None,
-            "run_dir": None,
-        }
-
-    finally:
-        if queue is not None:
-            await queue.put(None)
 
 
 def _validate_colab_config(raw: dict[str, Any]) -> ExperimentConfig:
@@ -3609,4 +3199,4 @@ def _record_run_group(
     record_run_group(kind, run_id, config, report, report_name, models_dir=_MODELS_DIR)
 
 
-__all__ = ["router", "_load_runs", "_sse_generator"]
+__all__ = ["router", "_load_runs"]

@@ -18,6 +18,7 @@ import torch
 from fastapi.testclient import TestClient
 from torch import nn
 
+import visionforge.gui.api.execution as execution_mod
 from visionforge.core.cancellation import STOPPED, CancellationToken
 from visionforge.core.comparison import ComparisonTrial
 from visionforge.core.replicates import ReplicateTrial
@@ -45,12 +46,12 @@ def client_and_routes():  # type: ignore[no-untyped-def]
     import visionforge.gui.api.routes as routes_mod
     from visionforge.gui.server import app
 
-    occupy_queue(routes_mod, run_id="holding")
+    occupy_queue(execution_mod, run_id="holding")
     try:
         yield TestClient(app, raise_server_exceptions=True), routes_mod
     finally:
-        release_queue(routes_mod)
-        routes_mod._JOB_STATES.clear()
+        release_queue(execution_mod)
+        execution_mod._JOB_STATES.clear()
 
 
 @pytest.fixture(autouse=True)
@@ -320,7 +321,9 @@ class TestStopAtInTheSnapshot:
 
     def test_the_active_job_carries_it_too(self, client_and_routes: tuple) -> None:
         client, routes_mod = client_and_routes
-        routes_mod._RUN_QUEUE._active.stop_at = "fold"
+        active = execution_mod._RUN_QUEUE._active
+        assert active is not None
+        active.stop_at = "fold"
 
         assert client.get("/api/queue").json()["active"]["stop_at"] == "fold"
 
@@ -333,7 +336,8 @@ class TestCancellingAJobThatCannotStop:
         self, client_and_routes: tuple
     ) -> None:
         client, routes_mod = client_and_routes
-        active = routes_mod._RUN_QUEUE._active
+        active = execution_mod._RUN_QUEUE._active
+        assert active is not None
         active.stop_at = None
 
         resp = client.delete("/api/queue/holding")
@@ -362,10 +366,12 @@ class TestCancellingAJobThatCannotStop:
         self, client_and_routes: tuple
     ) -> None:
         client, routes_mod = client_and_routes
-        routes_mod._RUN_QUEUE._active.stop_at = "replicate"
+        active = execution_mod._RUN_QUEUE._active
+        assert active is not None
+        active.stop_at = "replicate"
 
         assert client.delete("/api/queue/holding").status_code == 200
-        assert routes_mod._RUN_QUEUE._active.cancel_token.cancelled is True
+        assert active.cancel_token.cancelled is True
 
 
 class TestQueueUnit:
@@ -405,9 +411,9 @@ class TestQueueUnit:
 def _run_executor(
     routes_mod: Any, coro: Any, token: CancellationToken, run_id: str = "r"
 ) -> dict:
-    start_job(routes_mod, run_id, cancel_token=token)
+    start_job(execution_mod, run_id, cancel_token=token)
     asyncio.run(coro)
-    return dict(job_run(routes_mod, run_id))
+    return dict(job_run(execution_mod, run_id))
 
 
 class _Runner:
@@ -626,7 +632,7 @@ class TestExecutorsHandTheTokenOn:
     ) -> None:
         client, routes_mod = client_and_routes
         fake_run(
-            routes_mod,
+            execution_mod,
             {
                 "run_id": "single",
                 "status": "completed",
