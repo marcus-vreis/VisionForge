@@ -25,6 +25,8 @@ from typing import Any, Literal
 import numpy as np
 from scipy import stats
 
+from visionforge.core.metric_vocabulary import is_lower_is_better
+
 TestKind = Literal["paired_t", "wilcoxon"]
 
 # Below this many pairs a normality check is meaningless, so the rank-based
@@ -134,22 +136,17 @@ def cohens_dz(differences: list[float]) -> float:
     return statistics.fmean(differences) / sd
 
 
-# Substrings that mark a metric as lower-is-better. Ranking without this gets
-# the winner exactly backwards for error metrics — a mistake that reads as
-# authoritative because it comes with a p-value attached.
-_LOWER_IS_BETTER = ("loss", "mae", "mse", "rmse", "error", "err", "distance")
-
-
 def infer_direction(metric: str) -> Literal["higher", "lower"]:
     """Guess whether a metric is better when higher or lower.
 
     A heuristic, and named as one: task-declared directions
-    (``@register_task(metrics=...)``) should win where they exist. It covers
-    the built-in vocabulary — accuracy/f1/auc/r2/miou/dice/map/auroc are
-    higher-better; mae/mse/rmse/loss are lower-better.
+    (``@register_task(metrics=...)``) should win where they exist. The
+    vocabulary lives in ``core/metric_vocabulary.py`` (shared with the GUI):
+    accuracy/f1/auc/r2/miou/dice/map/auroc are higher-better; losses and errors
+    (mae/mse/mape/nll/wer/fid/ece...) are lower-better. Ranking an error metric
+    the wrong way crowns the worst variant, next to an authoritative p-value.
     """
-    lowered = metric.lower()
-    return "lower" if any(token in lowered for token in _LOWER_IS_BETTER) else "higher"
+    return "lower" if is_lower_is_better(metric) else "higher"
 
 
 def min_achievable_p(test: TestKind, n_pairs: int) -> float:
