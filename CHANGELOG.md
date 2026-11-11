@@ -185,6 +185,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 - A fila de execução e o estado de cada job iniciado (log de eventos, token de parada, resultado) saem de `routes.py` para `execution.py`, seu único dono, junto com `_execute_experiment` (complexidade cognitiva abaixo de 15); as rotas de status, eventos, resultado e fila vão para `execution_routes.py`, sem mudar o contrato HTTP; `routes.py` cai de 3612 para 3202 linhas (ADR-185) (#204).
 - O estudo de variância de seeds publica os 270 `run.json` em `research/seed_variance/runs/` (sem caminhos da máquina, 1,7 MB), e `summarize.py` lê dali: num clone limpo o `summary.json` sai idêntico, com o ruído de avaliação que antes vinha vazio (#166).
 - As quatro séries do benchmark de fluxo citadas no artigo (linha de comando, navegador, diagnóstico e navegador após a correção) saem do repositório privado para `research/workflow_benchmark/results/`, sem caminhos da máquina, e `make_paper_numbers.py` recalcula dos registros por execução cada número da seção, conferido por teste (#181).
+- O artigo relata a H3 rejeitada, define a reversão e cita o único contraste Holm-significativo (160 px contra sem aumento, USK-Coffee/ResNet-18, p = 0,0072) como exploratório; `summarize.py` grava esses contrastes em `summary.json`, `numbers.tex` ganha as macros e a legenda da tabela declara o IC percentil (#179).
 
 ## [0.21.0] — 2026-11-05
 

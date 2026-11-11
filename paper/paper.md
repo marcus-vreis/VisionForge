@@ -53,10 +53,14 @@ itself, in a pre-registered study (`research/seed_variance/`): three datasets,
 three architectures, two common ablations, ten paired seeds each, 270 training
 runs. In all 18 cells the seed standard deviation was at least half the ablation
 effect, and in 15 it exceeded the effect. Concluding from one seed would have
-pointed the wrong way in 20% to 60% of the possible single-seed experiments,
-depending on the cell (median 40%). No ablation effect survived Holm correction
-with ten seeds, and in 11 of the 18 cells even five seeds left more than a 10%
-chance of the wrong sign.
+pointed the wrong way (a difference of opposite sign to the ten-seed mean, or
+zero) in 20% to 60% of the possible single-seed experiments, depending on the
+cell (median 40%). No ablation effect survived Holm correction with ten seeds,
+and in 11 of the 18 cells even five seeds left more than a 10% chance of the
+wrong sign. The only Holm-significant contrast, 160 px against no augmentation
+on USK-Coffee with ResNet-18 (p = 0.0072), was not pre-registered and is
+exploratory. The third hypothesis, that seed variance grows on a 10% training
+subset, was rejected: the seed SD fell for ConvNeXt-T (0.021 to 0.012).
 
 VisionForge exists so that a researcher without a statistics or MLOps
 background runs the comparison that holds up, rather than the one that is easy:

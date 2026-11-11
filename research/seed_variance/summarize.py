@@ -45,6 +45,27 @@ def _comparison(report: dict[str, Any], ablation: str) -> dict[str, Any]:
     raise KeyError(f"no baseline-vs-{ablation} comparison in the report")
 
 
+def exploratory_contrasts(report: dict[str, Any]) -> list[dict[str, Any]]:
+    """The report's comparisons between two ablations, which no hypothesis covers.
+
+    The replicated comparison tests every pair of variants and applies Holm to
+    the whole family, so these are in the report; they were not pre-registered
+    and are kept apart from the per-cell rows as exploratory.
+    """
+    return [
+        {
+            "label_a": row["label_a"],
+            "label_b": row["label_b"],
+            "b_minus_a": row["mean_b"] - row["mean_a"],
+            "test": row["test"],
+            "p_value": row["p_value"],
+            "significant_holm": bool(row["significant"]),
+        }
+        for row in report["comparisons"]
+        if "baseline" not in (row["label_a"], row["label_b"])
+    ]
+
+
 def smallest_stable_k(diffs: list[float]) -> int | None:
     """The smallest k of 1, 3, 5, 10 whose reversal rate is at most 10% (item 5a)."""
     for k in SMALLEST_K_CANDIDATES:
@@ -187,6 +208,7 @@ def print_tables(rows: list[dict[str, Any]], verdicts: dict[str, Any]) -> None:
 def build_summary() -> tuple[dict[str, Any], list[str]]:
     """The summary of every report in ``results/`` and the reports missing from it."""
     rows: list[dict[str, Any]] = []
+    exploratory: list[dict[str, Any]] = []
     sd: dict[tuple[str, str], float] = {}
     missing = []
     for dataset in DATASETS:
@@ -206,11 +228,21 @@ def build_summary() -> tuple[dict[str, Any], list[str]]:
                         "evaluation_half_width": half_width,
                     }
                 )
+            exploratory += [
+                {"dataset": dataset, "architecture": arch, **row}
+                for row in exploratory_contrasts(report)
+            ]
             sd[(dataset, arch)] = statistics.stdev(
                 per_seed(report, "baseline").values()
             )
     verdicts = {"H1": judge_h1(rows), "H2": judge_h2(rows), "H3": judge_h3(sd)}
-    return {"cells": rows, "hypotheses": verdicts, "missing": missing}, missing
+    summary = {
+        "cells": rows,
+        "hypotheses": verdicts,
+        "exploratory_contrasts": exploratory,
+        "missing": missing,
+    }
+    return summary, missing
 
 
 def main() -> int:

@@ -9,6 +9,7 @@ import summarize
 from summarize import (
     build_summary,
     evaluation_half_width,
+    exploratory_contrasts,
     judge_h1,
     judge_h2,
     judge_h3,
@@ -119,3 +120,39 @@ class TestRunRecordPath:
         monkeypatch.setattr(summarize, "RUNS", tmp_path / "runs")
         monkeypatch.setattr(summarize, "REPO", tmp_path)
         assert run_record_path("outputs\\models\\exp_s0\\1") is None
+
+
+class TestExploratoryContrasts:
+    def test_only_the_ablation_pairs_are_kept(self) -> None:
+        def comparison(a: str, b: str, p: float) -> dict[str, Any]:
+            return {
+                "label_a": a,
+                "label_b": b,
+                "mean_a": 0.80,
+                "mean_b": 0.83,
+                "test": "paired_t",
+                "p_value": p,
+                "significant": p < 0.01,
+            }
+
+        report = {
+            "comparisons": [
+                comparison("baseline", "no_aug", 0.5),
+                comparison("baseline", "res160", 0.2),
+                comparison("no_aug", "res160", 0.007),
+            ]
+        }
+        [row] = exploratory_contrasts(report)
+        assert (row["label_a"], row["label_b"]) == ("no_aug", "res160")
+        assert row["b_minus_a"] == pytest.approx(0.03)
+        assert row["significant_holm"] is True
+
+    def test_summary_json_records_the_holm_significant_contrast(self) -> None:
+        summary = json.loads((RESULTS / "summary.json").read_text(encoding="utf-8"))
+        holm = [c for c in summary["exploratory_contrasts"] if c["significant_holm"]]
+        assert len(summary["exploratory_contrasts"]) == 9
+        assert [(c["dataset"], c["architecture"]) for c in holm] == [
+            ("usk_full", "resnet18")
+        ]
+        assert holm[0]["p_value"] == pytest.approx(0.0072, abs=1e-4)
+        assert holm[0]["b_minus_a"] == pytest.approx(0.030, abs=1e-6)
