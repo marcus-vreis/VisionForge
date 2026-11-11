@@ -26,7 +26,10 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import BaseModel
 
+import visionforge.gui.api.custom_task_routes as custom_tasks_mod
 import visionforge.gui.api.execution as execution_mod
+import visionforge.gui.api.submission as submission_mod
+import visionforge.gui.api.training_routes as training_mod
 from tests.helpers import wait_experiment_done
 from visionforge.gui.api.profiles import (
     OUTPUT_SUBDIRS,
@@ -803,7 +806,7 @@ class TestHistoryIsPerProfile:
         async def fake_execute(config, job_id, *, resume_dir):  # type: ignore[no-untyped-def]
             seen.update(config=config, resume_dir=resume_dir)
 
-        monkeypatch.setattr(routes_mod, "_submit_job", fake_submit)
+        monkeypatch.setattr(submission_mod, "_submit_job", fake_submit)
         monkeypatch.setattr(execution_mod, "_execute_experiment", fake_execute)
 
         assert (
@@ -1222,7 +1225,7 @@ class TestEverySubmissionIsScoped:
             outputs.append(paths(config.output))
             outputs.append(paths(req.config["output"]))
 
-        monkeypatch.setattr(routes_mod, "_submit_job", fake_submit)
+        monkeypatch.setattr(submission_mod, "_submit_job", fake_submit)
         monkeypatch.setattr(execution_mod, "_execute_experiment", single(0))
         for name in (
             "_execute_detection",
@@ -1230,8 +1233,8 @@ class TestEverySubmissionIsScoped:
             "_execute_segmentation",
             "_execute_anomaly",
         ):
-            monkeypatch.setattr(routes_mod, name, single(0))
-        monkeypatch.setattr(routes_mod, "_execute_custom_task", single(1))
+            monkeypatch.setattr(training_mod, name, single(0))
+        monkeypatch.setattr(custom_tasks_mod, "_execute_custom_task", single(1))
         monkeypatch.setattr(routes_mod, "_execute_comparison", single(1))
         monkeypatch.setattr(routes_mod, "_execute_sweep", single(1))
         monkeypatch.setattr(routes_mod, "_execute_replicated_comparison", single(1))

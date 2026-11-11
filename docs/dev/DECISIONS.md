@@ -7787,3 +7787,21 @@ differently now. Each fix has a test that failed before it
 
 - *Keep re-exports in `routes.py`.* `routes._JOB_STATES.clear()` would still work, but `monkeypatch.setattr(routes, "_JOB_STATES", {})` would silently patch a name nobody reads.
 - *A class holding the state.* A cleaner interface, but a behaviour-bearing rewrite inside what should be a move; the module boundary already gives the single owner.
+
+
+## ADR-196 — Starting a run leaves `routes.py`: submission, the single-run endpoints and the Colab objects
+
+**Date:** 2026-11-11
+**Status:** Accepted
+**Relates to:** ADR-132 (splitting `routes.py`), ADR-185 (queue and job state in `execution.py`), ADR-163 (Colab), ADR-164 (Drive consent), ADR-058 (custom tasks)
+
+**Context:** After ADR-185, `gui/api/routes.py` still held everything that starts one run: `_submit_job` and the training-stack preload, `POST /api/experiment/run`, the standalone tasks' schema and `run` endpoints with their submit-time dataset checks and executors, the Colab run with its executor, and the custom-task endpoints. It also created and owned the Colab objects (`_COLAB_CLI`, `_COLAB_LOGINS`, `_COLAB_JOBS`, `_DRIVE_CONSENTS`). The file was 3202 lines (#204).
+
+**Decision:** `gui/api/submission.py` holds `_submit_job`, `_task_label_from_config`, the training stack (`_TRAINING_STACK`, `_DETECTION_STACK`, `_TASK_STACK`, `load_training_stack`) and `profile_dependency`, which turns the resolver `routes.py` owns into the `X-VF-Profile` dependency of a split-out router; it holds no state. A job submitted without a profile is labelled with the default profile's slug, which is all `default_profile(_MODELS_DIR)` gave it, so `_submit_job` no longer reads `_MODELS_DIR`. `gui/api/training_routes.py` holds `POST /api/experiment/run`, `/api/{detection,regression,segmentation,anomaly}/{schema,run}`, the `_check_*` dataset checks and the four executors, which now share `_execute_block`. `gui/api/colab_run_routes.py` holds `POST /api/colab/experiment/run`, `/api/colab/drive/continue`, `_execute_colab` and becomes the owner of the Colab objects; `routes.py` passes three of them to `build_colab_router`. `gui/api/custom_task_routes.py` holds `GET /api/tasks`, `/api/custom/{key}` (hide, unhide, delete, schema, run), `GenericTaskEngine` and `_execute_custom_task`. `routes.py` includes these routers where the routes used to be defined, so the OpenAPI document and the route order are unchanged; it keeps the profile resolution and `_tracker_factories` (both read `_PROFILES_DIR`/`_MODELS_DIR`) and passes them in.
+
+**Consequences:** `routes.py` drops from 3202 to 2066 lines and keeps the strategies (sweep, compare, K-fold, replicates, replicated comparison) and the per-run actions. Every caller, `routes.py` included, looks `submission._submit_job` up at call time, and `resume_run` looks the executors up in `training_routes`, so a test patches the module that defines a name: `submission` for `_submit_job`, `cuda_context_broken` and the stack; `training_routes` for the executors; `colab_run_routes` for the Colab objects, `_execute_colab`, `_drive_source` and `_colab_lane_of`; `custom_task_routes` for `GenericTaskEngine`, `_execute_custom_task` and `_get_custom_task_or_404`. `routes.py` re-exports none of them. The check that no route imports training code before `load_training_stack` now reads the three new route modules too.
+
+**Alternatives considered:**
+
+- *Keep the Colab run in `routes.py`.* No state would change owner, but `run_experiment` and the task runs sit on both sides of it, so the split would need one more include and the Colab executor would stay behind; the Colab objects belong with the code that drives them.
+- *Keep re-exports in `routes.py`.* As in ADR-185: `monkeypatch.setattr(routes, "_submit_job", ...)` would silently patch a name nobody reads.

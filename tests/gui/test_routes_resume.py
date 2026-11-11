@@ -16,6 +16,7 @@ from typing import Any
 import pytest
 
 import visionforge.gui.api.execution as execution_mod
+import visionforge.gui.api.submission as submission_mod
 from visionforge.core.resume import ResumeState, save_resume_state
 from visionforge.gui.api.routes import _resume_status
 from visionforge.utils.config import ExperimentConfig
@@ -211,7 +212,7 @@ class TestResumeEndpoint:
             )
             return RunResponse(run_id=job_id)
 
-        monkeypatch.setattr(routes_mod, "_submit_job", fake_submit)
+        monkeypatch.setattr(submission_mod, "_submit_job", fake_submit)
         seen: dict[str, Any] = {}
 
         async def fake_execute(config, job_id, *, resume_dir):  # type: ignore[no-untyped-def]

@@ -34,7 +34,7 @@ The task name is the URL segment (`/api/<task>/*`). In YAML, the `task` field is
 on it (`__main__.py`). The primary metric is what each `*Runner`
 returns from `primary_metric()` (`blocks/<task>_runner.py`).
 
-Strategies available per task (each is a route in `gui/api/routes.py`):
+Strategies available per task (the Run column is in `gui/api/training_routes.py`, the others in `gui/api/routes.py`):
 
 | Task | Run | K-fold | Sweep | Model comparison | Replicates | Replicated comparison |
 |---|---|---|---|---|---|---|

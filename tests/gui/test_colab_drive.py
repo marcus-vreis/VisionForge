@@ -10,6 +10,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
+import visionforge.gui.api.colab_run_routes as colab_run_mod
 from tests.helpers import wait_until
 from visionforge.gui.api import colab_connection as cc
 from visionforge.gui.api import colab_drive as cd
@@ -355,10 +356,8 @@ def _dataset(root: Path) -> Path:
 
 
 def test_drive_source_translates_the_form_folder(tmp_path: Path) -> None:
-    import visionforge.gui.api.routes as routes_mod
-
     folder = _dataset(tmp_path)
-    source = routes_mod._drive_source(
+    source = colab_run_mod._drive_source(
         {"data": {"base_dir": str(folder)}}, str(tmp_path / "Meu Drive")
     )
     assert source == {
@@ -371,14 +370,13 @@ def test_drive_source_translates_the_form_folder(tmp_path: Path) -> None:
 def test_colab_run_refuses_a_folder_outside_the_drive(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import visionforge.gui.api.routes as routes_mod
     from visionforge.gui.server import app
 
     monkeypatch.setattr(
-        routes_mod._COLAB_CLI, "installed_version", lambda: cc.PINNED_VERSION
+        colab_run_mod._COLAB_CLI, "installed_version", lambda: cc.PINNED_VERSION
     )
-    monkeypatch.setattr(routes_mod._COLAB_CLI, "logged_in", lambda slug: True)
-    monkeypatch.setattr(routes_mod, "my_drive_roots", lambda manual: [])
+    monkeypatch.setattr(colab_run_mod._COLAB_CLI, "logged_in", lambda slug: True)
+    monkeypatch.setattr(colab_run_mod, "my_drive_roots", lambda manual: [])
     body = {
         "config": {"name": "exp", "data": {"base_dir": str(tmp_path / "ds")}},
         "source": {"kind": "drive"},
@@ -391,19 +389,16 @@ def test_colab_run_refuses_a_folder_outside_the_drive(
 def test_colab_run_refuses_an_empty_drive_folder(tmp_path: Path) -> None:
     from fastapi import HTTPException
 
-    import visionforge.gui.api.routes as routes_mod
-
     empty = tmp_path / "Meu Drive" / "vazio"
     empty.mkdir(parents=True)
     with pytest.raises(HTTPException) as caught:
-        routes_mod._drive_source(
+        colab_run_mod._drive_source(
             {"data": {"base_dir": str(empty)}}, str(tmp_path / "Meu Drive")
         )
     assert caught.value.status_code == 400
 
 
 def test_continue_reaches_only_a_job_that_waits() -> None:
-    import visionforge.gui.api.routes as routes_mod
     from visionforge.gui.server import app
 
     client = TestClient(app)
@@ -412,7 +407,7 @@ def test_continue_reaches_only_a_job_that_waits() -> None:
         == 404
     )
     consent = cd.DriveConsent()
-    routes_mod._DRIVE_CONSENTS["r-drive"] = consent
+    colab_run_mod._DRIVE_CONSENTS["r-drive"] = consent
     answers: list[str] = []
     waiter = threading.Thread(
         target=lambda: answers.append(consent.wait(5, lambda: False))
@@ -433,7 +428,7 @@ def test_continue_reaches_only_a_job_that_waits() -> None:
         again = client.post("/api/colab/drive/continue", json={"run_id": "r-drive"})
         assert again.status_code == 404
     finally:
-        routes_mod._DRIVE_CONSENTS.pop("r-drive", None)
+        colab_run_mod._DRIVE_CONSENTS.pop("r-drive", None)
 
 
 # ── the runner on the VM ──────────────────────────────────────────────────────

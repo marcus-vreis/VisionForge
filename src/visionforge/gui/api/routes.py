@@ -3,18 +3,15 @@
 from __future__ import annotations
 
 import asyncio
-import csv
-import importlib
 import json
 import os
-import sys
 import uuid
-from collections.abc import Awaitable, Callable, Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import asdict
 from datetime import datetime
 from functools import partial
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Any, Literal, NoReturn
+from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
@@ -22,15 +19,12 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from loguru import logger
 from pydantic import ValidationError
 
-from visionforge import __version__ as _VF_VERSION
 from visionforge.core.cancellation import (
     STOPPED,
-    is_cancelled,
     job_was_stopped,
 )
 from visionforge.core.comparison import ComparisonTrial, run_model_comparison
 from visionforge.core.detection_data import resolve_yolo_split
-from visionforge.core.experiment_bundle import import_experiment_bundle
 from visionforge.core.replicated_comparison import (
     run_replicated_comparison,
     validate_variants,
@@ -56,23 +50,23 @@ from visionforge.core.task_runner import (
     require_validation_selection,
     runner_metric_direction,
 )
-from visionforge.gui.api import execution
+from visionforge.gui.api import execution, submission, training_routes
 from visionforge.gui.api.coco_routes import router as coco_router
 from visionforge.gui.api.code_tour_routes import router as code_tour_router
-from visionforge.gui.api.colab_connection import PINNED_VERSION as _COLAB_PIN
-from visionforge.gui.api.colab_connection import ColabCli, LoginFlows
-from visionforge.gui.api.colab_drive import (
-    DriveConsent,
-    count_files,
-    my_drive_roots,
-    remote_path,
-)
-from visionforge.gui.api.colab_jobs import ColabJobs
 from visionforge.gui.api.colab_routes import build_colab_router
+from visionforge.gui.api.colab_run_routes import (
+    _COLAB_CLI,
+    _COLAB_JOBS,
+    _COLAB_LOGINS,
+    build_colab_run_router,
+)
+from visionforge.gui.api.custom_task_routes import (
+    _get_custom_task_or_404,
+    build_custom_task_run_router,
+)
+from visionforge.gui.api.custom_task_routes import router as custom_tasks_router
 from visionforge.gui.api.datasets_routes import (
     _IMAGE_EXTS,
-    SCAN_BASE_MISSING_KEY,
-    _image_stems,
     _remember_dataset_root,
 )
 from visionforge.gui.api.datasets_routes import router as datasets_router
@@ -84,10 +78,8 @@ from visionforge.gui.api.evaluation_routes import (
 from visionforge.gui.api.evidence_routes import EvidenceExports, build_evidence_router
 from visionforge.gui.api.execution import (
     _LANES,
-    RUN_NO_MESSAGE_KEY,
     _job_state,
     _run_state,
-    _stop_point,
 )
 from visionforge.gui.api.execution_routes import router as execution_router
 from visionforge.gui.api.explorer_routes import router as explorer_router
@@ -98,7 +90,6 @@ from visionforge.gui.api.folder_opener import (
     open_folder,
 )
 from visionforge.gui.api.github_routes import build_github_router
-from visionforge.gui.api.gpu_health import cuda_context_broken
 from visionforge.gui.api.http_responses import (
     BAD_REQUEST_TEXT,
     CONFLICT_TEXT,
@@ -106,7 +97,6 @@ from visionforge.gui.api.http_responses import (
     NOT_FOUND_TEXT,
     SERVER_ERROR_TEXT,
     TAG_ANOMALY,
-    TAG_COLAB,
     TAG_CUSTOM_TASKS,
     TAG_DATASETS,
     TAG_DETECTION,
@@ -142,12 +132,6 @@ from visionforge.gui.api.run_history import (
 from visionforge.gui.api.run_history import load_runs as _load_runs
 from visionforge.gui.api.run_history import resume_status as _resume_status
 from visionforge.gui.api.run_history import run_task as _run_task
-from visionforge.gui.api.run_queue import (
-    LOCAL_LANE,
-    QueuedJob,
-    StopPoint,
-    colab_lane,
-)
 from visionforge.gui.api.runs_routes import (
     build_runs_router,
     read_mlflow_status,
@@ -159,11 +143,7 @@ from visionforge.gui.api.sample_dataset import (
     create_sample_dataset,
 )
 from visionforge.gui.api.schemas import (
-    ColabDriveContinueRequest,
-    ColabDriveSource,
-    ColabRunRequest,
     ComparisonRequest,
-    CustomTaskActionResponse,
     MlflowStatus,
     PreprocessPreviewRequest,
     PreprocessPreviewResponse,
@@ -175,22 +155,27 @@ from visionforge.gui.api.schemas import (
     SampleDatasetResponse,
     SweepRequest,
     TaskCvRequest,
-    TaskDescriptor,
-    TaskListResponse,
     WandbStatus,
 )
+from visionforge.gui.api.submission import (
+    _DETECTION_STACK,
+    _GPU_UNAVAILABLE_TEXT,
+    _task_label_from_config,
+    load_training_stack,
+)
 from visionforge.gui.api.system_routes import build_system_router
+from visionforge.gui.api.training_routes import (
+    build_experiment_run_router,
+    build_task_run_router,
+)
 from visionforge.gui.api.wandb_routes import build_wandb_router
 from visionforge.gui.api.zenodo_routes import build_zenodo_router
-from visionforge.tasks.base import TaskSpec
-from visionforge.tasks.registry import get_task, registered_tasks
 from visionforge.utils.anomaly_config import AnomalyConfig
 from visionforge.utils.config import ExperimentConfig
 from visionforge.utils.cuda import check_cuda
 from visionforge.utils.detection_config import DetectionConfig
 from visionforge.utils.messages import (
     LANG_HEADER,
-    current_lang,
     parse_lang,
     resolve_lang,
     set_lang,
@@ -203,63 +188,11 @@ from visionforge.utils.workers import suggested_workers as worker_budget
 
 if TYPE_CHECKING:
     from visionforge.blocks.regression_cv import CrossValidationReport
-    from visionforge.tasks.engine import GenericTaskEngine as _GenericTaskEngine
 
 # The blocks, runners and trainers import torch, torchvision, ultralytics and
 # matplotlib. Each endpoint imports the one it runs, so starting the GUI loads
-# none of them (GUI-11, #202). The three names below stay module attributes so a
+# none of them (GUI-11, #202). The two names below stay module attributes so a
 # test can still replace them here.
-
-# Resolved on first use by _generic_task_engine().
-GenericTaskEngine: type[_GenericTaskEngine] | None = None
-
-
-def _generic_task_engine() -> type[_GenericTaskEngine]:
-    """The custom-task engine class: a test's replacement, or the real one."""
-    if GenericTaskEngine is not None:
-        return GenericTaskEngine
-    from visionforge.tasks.engine import GenericTaskEngine as engine
-
-    return engine
-
-
-# What every trainer imports first: torch, torchvision and the plotter (with
-# matplotlib, scipy and sklearn), ~3 s in a fresh process. Imported in the
-# event loop, it froze every open SSE stream for that long, once per process
-# (#258). Detection also loads Ultralytics through its trainer, which switches
-# Ultralytics' events off on import (ADR-180).
-_TRAINING_STACK: tuple[str, ...] = ("torch", "torchvision", "visionforge.core.plotter")
-_DETECTION_STACK: tuple[str, ...] = ("visionforge.core.detection_trainer",)
-_TASK_STACK: dict[str, tuple[str, ...]] = {"detection": _DETECTION_STACK}
-
-
-def _missing_training_stack(*extra: str) -> tuple[str, ...]:
-    """The modules of the training stack (plus ``extra``) not imported yet."""
-    return tuple(name for name in (*_TRAINING_STACK, *extra) if name not in sys.modules)
-
-
-def _import_modules(names: tuple[str, ...]) -> None:
-    """Import ``names`` in order; stop quietly at the first that fails.
-
-    The run that needs it imports it again and reports the error as its own.
-    """
-    for name in names:
-        try:
-            importlib.import_module(name)
-        except Exception as exc:  # noqa: BLE001 - the run reports it
-            logger.warning("GUI: could not preload {}: {}", name, exc)
-            return
-
-
-async def load_training_stack(*extra: str) -> None:
-    """Import the training stack in a worker thread, so the event loop never waits.
-
-    Call it before importing a block, runner or trainer from a handler: once the
-    stack is in ``sys.modules`` that import takes milliseconds.
-    """
-    missing = _missing_training_stack(*extra)
-    if missing:
-        await asyncio.to_thread(_import_modules, missing)
 
 
 def run_regression_cross_validation(
@@ -280,9 +213,6 @@ def run_segmentation_cross_validation(
     )
 
     return run(config, **kwargs)
-
-
-_GPU_UNAVAILABLE_TEXT = "GPU context unavailable"
 
 
 async def request_lang(
@@ -338,80 +268,6 @@ ProfileDep = Annotated[Profile, Depends(current_profile)]
 
 
 _EVIDENCE_EXPORTS = EvidenceExports()
-# The Colab CLI and the logins waiting for a code live as long as the server (ADR-163).
-_COLAB_CLI = ColabCli()
-_COLAB_LOGINS = LoginFlows()
-_COLAB_JOBS = ColabJobs()
-# The Colab jobs waiting for (or able to wait for) the Drive consent, by run_id.
-_DRIVE_CONSENTS: dict[str, DriveConsent] = {}
-# How long the Colab job thread waits for the loop to take one event.
-_COLAB_EVENT_TIMEOUT_S = 10.0
-
-
-def _task_label_from_config(config_type: type[Any]) -> str:
-    """Queue display label for a shared starter, derived from its config class.
-
-    The shared orchestrators take a config type rather than a task name — and
-    for a researcher-defined task they never see its real key. Every task's
-    config is named ``<Task>Config``, so the class name is the honest source
-    here. This is a label for the queue panel, never a dispatch key.
-    """
-    if config_type is ExperimentConfig:
-        return "classification"
-    return config_type.__name__.removesuffix("Config").lower() or "experiment"
-
-
-def _submit_job(
-    run_id: str,
-    label: str,
-    task: str,
-    strategy: str,
-    start: Callable[[], Awaitable[None]],
-    stop_at: StopPoint | None | Literal["auto"] = "auto",
-    profile: Profile | None = None,
-    resume_dir: Path | None = None,
-    lane: str = LOCAL_LANE,
-) -> RunResponse:
-    """Queue a training job and report whether it started or is waiting.
-
-    ``stop_at`` defaults to what the strategy implies; the starters whose stop
-    depends on the config (PatchCore, a custom task that owns its loop) pass it.
-    ``profile`` is only the queue's label for whose folders the job writes into;
-    the config handed to ``start`` was already scoped to it by the caller.
-    """
-    if cuda_context_broken():
-        # Every job would fail within a second, CPU ones included; say so now.
-        raise HTTPException(503, tr("gpu.context_broken"))
-    owner = profile or default_profile(_MODELS_DIR)
-    lang = current_lang()
-
-    async def start_in_lang() -> None:
-        if lane == LOCAL_LANE:
-            # The executor imports its block on the loop; load what that pulls
-            # in first, off the loop (#258). A Colab job trains elsewhere.
-            await load_training_stack(*_TASK_STACK.get(task, ()))
-        # The queue starts the job from its own task, long after this request's
-        # language is gone; the messages the trainer writes (health warnings, the
-        # paging-file hint) are for the person who pressed the button.
-        with using_lang(lang):
-            await start()
-
-    status = _LANES.submit(
-        QueuedJob(
-            run_id=run_id,
-            label=label,
-            task=task,
-            strategy=strategy,
-            start=start_in_lang,
-            stop_at=_stop_point(strategy) if stop_at == "auto" else stop_at,
-            profile=owner.slug,
-            resume_dir=resume_dir,
-            profile_name=owner.name,
-        ),
-        lane,
-    )
-    return RunResponse(run_id=run_id, status=status)  # type: ignore[arg-type]
-
 
 # Strong references to background tasks to prevent premature GC (asyncio doc).
 _background_tasks: set[asyncio.Task[None]] = set()
@@ -732,15 +588,15 @@ async def resume_run(run_id: str, profile: ProfileDep) -> RunResponse:
     if not resumable:
         raise HTTPException(409, tr("run.nothing_to_continue", run_id=run_id))
 
-    # Built here rather than at module level: the executors are defined further
-    # down this file and do not exist yet while it is being imported.
+    # Built per request rather than at module level: the executors are looked up
+    # in their modules when the run resumes, so a test that replaces one reaches it.
     task = _run_task(data)
     executors: dict[str, tuple[Any, Any]] = {
         "classification": (ExperimentConfig, execution._execute_experiment),
-        "detection": (DetectionConfig, _execute_detection),
-        "regression": (RegressionConfig, _execute_regression),
-        "segmentation": (SegmentationConfig, _execute_segmentation),
-        "anomaly": (AnomalyConfig, _execute_anomaly),
+        "detection": (DetectionConfig, training_routes._execute_detection),
+        "regression": (RegressionConfig, training_routes._execute_regression),
+        "segmentation": (SegmentationConfig, training_routes._execute_segmentation),
+        "anomaly": (AnomalyConfig, training_routes._execute_anomaly),
     }
     if task not in executors:
         raise HTTPException(400, tr("run.cannot_resume_task", task=task))
@@ -756,7 +612,7 @@ async def resume_run(run_id: str, profile: ProfileDep) -> RunResponse:
     config = profile.scope_model(config)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     job_id = f"{config.name}_{timestamp}"
-    return _submit_job(
+    return submission._submit_job(
         job_id,
         tr("run.resuming_label", name=config.name),
         task,
@@ -909,292 +765,17 @@ def _tracker_factories(
     return tuple(factories)
 
 
-@router.post(
-    "/experiment/run",
-    responses={
-        400: {"description": BAD_REQUEST_TEXT},
-        404: {"description": NOT_FOUND_TEXT},
-        422: {"description": UNPROCESSABLE_TEXT, "content": VALIDATION_ERROR_CONTENT},
-        503: {"description": _GPU_UNAVAILABLE_TEXT},
-    },
-    tags=[TAG_EXPERIMENTS],
-)
-async def run_experiment(config: ExperimentConfig, profile: ProfileDep) -> RunResponse:
-    """Start a training experiment, or queue it if one is already running."""
-    config = profile.scope_model(config)
-    trackers = _tracker_factories(config, profile)
-    await asyncio.to_thread(_check_classification_classes, config)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-    run_id = f"{config.name}_{timestamp}"
-
-    return _submit_job(
-        run_id,
-        config.name,
-        "classification",
-        config.block,
-        lambda: (
-            execution._execute_experiment(config, run_id, trackers=trackers)
-            if trackers
-            else execution._execute_experiment(config, run_id)
-        ),
-        profile=profile,
+# Starting one run: classification here and on Colab, then each standalone
+# task's schema and run endpoint (#204, ADR-196). Included where they used to be
+# defined, so the OpenAPI document and the route order do not change.
+router.include_router(
+    build_experiment_run_router(
+        lambda header: current_profile(header),
+        lambda config, profile: _tracker_factories(config, profile),
     )
-
-
-@router.post(
-    "/colab/experiment/run",
-    responses={
-        400: {"description": BAD_REQUEST_TEXT},
-        404: {"description": NOT_FOUND_TEXT},
-        409: {
-            "description": "The Colab CLI is not installed or the profile is not logged in"
-        },
-        422: {"description": UNPROCESSABLE_TEXT, "content": VALIDATION_ERROR_CONTENT},
-        503: {"description": _GPU_UNAVAILABLE_TEXT},
-    },
-    tags=[TAG_COLAB],
 )
-async def run_colab_experiment(
-    req: ColabRunRequest, profile: ProfileDep
-) -> RunResponse:
-    """Train a classification experiment on a Colab VM (ADR-163, phase 2).
-
-    It goes through the same queue and the same /experiment/{status,events,result}
-    endpoints as a local run. The dataset comes from ``req.source`` on the VM; the
-    local ``data.base_dir`` is not read.
-    """
-    if _COLAB_CLI.installed_version() != _COLAB_PIN:
-        raise HTTPException(409, tr("colab.not_installed"))
-    if not _COLAB_CLI.logged_in(profile.slug):
-        raise HTTPException(409, tr("colab.not_logged_in"))
-    config = _validate_colab_config(req.config)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-    run_id = f"{config.name}_colab_{timestamp}"
-    payload = {
-        "version": _VF_VERSION,
-        # The validated form, so the VM gets the defaults this version fills in;
-        # the runner points data and outputs at the VM.
-        "config": config.model_dump(mode="json"),
-        "source": req.source.model_dump(mode="json"),
-        "drive_export": req.drive_export,
-    }
-    if isinstance(req.source, ColabDriveSource):
-        payload["source"] = await asyncio.to_thread(
-            _drive_source, req.config, req.source.my_drive_root
-        )
-    return _submit_job(
-        run_id,
-        f"{config.name} · Colab {req.accelerator}",
-        "classification",
-        "colab",
-        lambda: _execute_colab(
-            run_id, profile.slug, req.accelerator, payload, profile.models_dir
-        ),
-        stop_at="vm",
-        profile=profile,
-        lane=await asyncio.to_thread(_colab_lane_of, profile.slug),
-    )
-
-
-@router.post(
-    "/colab/drive/continue",
-    responses={404: {"description": "No job is waiting for the Drive consent"}},
-    tags=[TAG_COLAB],
-)
-async def continue_drive_consent(req: ColabDriveContinueRequest) -> dict[str, bool]:
-    """Answer the Drive consent prompt of a Colab job (ADR-164).
-
-    The GUI calls it when the person comes back from the consent page, or
-    presses "I already allowed". The server then sends the Enter the CLI waits
-    for; nobody touches a terminal.
-    """
-    consent = _DRIVE_CONSENTS.get(req.run_id)
-    if consent is None or not consent.grant():
-        raise HTTPException(404, tr("colab.drive_not_waiting"))
-    return {"sent": True}
-
-
-def _drive_source(config: dict[str, Any], my_drive_root: str | None) -> dict[str, Any]:
-    """The form's dataset folder as a path on the VM's mounted Drive (ADR-164).
-
-    The local file count goes along: the VM compares it after copying, which
-    catches a folder Drive for desktop has not finished uploading.
-    """
-    data = config.get("data")
-    base_dir = data.get("base_dir") if isinstance(data, dict) else None
-    local = Path(str(base_dir or ""))
-    remote = remote_path(local, my_drive_roots(my_drive_root)) if base_dir else None
-    if remote is None:
-        raise HTTPException(400, tr("colab.drive_not_in_drive", path=str(local)))
-    files = count_files(local)
-    if files == 0:
-        raise HTTPException(400, tr("colab.drive_empty", path=str(local)))
-    return {"kind": "drive", "path": remote.as_posix(), "files": files}
-
-
-def _colab_lane_of(slug: str) -> str:
-    """The queue of the Google account the profile is logged into (ADR-163, phase 4).
-
-    The session quota and the compute units are the account's, so two profiles
-    on the same account share one queue. A login whose e-mail ``colab whoami``
-    did not report gets a queue of its own rather than one shared by guess.
-    """
-    account = _COLAB_CLI.account(slug)
-    return colab_lane(account.lower() if account else f"profile:{slug}")
-
-
-@router.get("/detection/schema", tags=[TAG_DETECTION])
-async def get_detection_schema() -> dict[str, Any]:
-    """Return the JSON Schema for DetectionConfig (drives the detection form)."""
-    return DetectionConfig.model_json_schema()
-
-
-@router.post(
-    "/detection/run",
-    responses={
-        400: {"description": BAD_REQUEST_TEXT},
-        404: {"description": NOT_FOUND_TEXT},
-        422: {"description": UNPROCESSABLE_TEXT, "content": VALIDATION_ERROR_CONTENT},
-        503: {"description": _GPU_UNAVAILABLE_TEXT},
-    },
-    tags=[TAG_DETECTION],
-)
-async def run_detection(config: DetectionConfig, profile: ProfileDep) -> RunResponse:
-    """Start an object-detection training run in the background.
-
-    Detection shares the run queue and the /experiment/{status,events,result}
-    endpoints (one run at a time, one GPU) but dispatches its own standalone
-    DetectionBlock (ADR-033) rather than the ExperimentConfig path.
-    """
-    config = profile.scope_model(config)
-    await asyncio.to_thread(_check_detection_dataset, config)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-    run_id = f"{config.name}_{timestamp}"
-
-    return _submit_job(
-        run_id,
-        config.name,
-        "detection",
-        "simple",
-        lambda: _execute_detection(config, run_id),
-        profile=profile,
-    )
-
-
-@router.get("/regression/schema", tags=[TAG_REGRESSION])
-async def get_regression_schema() -> dict[str, Any]:
-    """Return the JSON Schema for RegressionConfig (drives the regression form)."""
-    return RegressionConfig.model_json_schema()
-
-
-@router.post(
-    "/regression/run",
-    responses={
-        400: {"description": BAD_REQUEST_TEXT},
-        404: {"description": NOT_FOUND_TEXT},
-        422: {"description": UNPROCESSABLE_TEXT, "content": VALIDATION_ERROR_CONTENT},
-        503: {"description": _GPU_UNAVAILABLE_TEXT},
-    },
-    tags=[TAG_REGRESSION],
-)
-async def run_regression(config: RegressionConfig, profile: ProfileDep) -> RunResponse:
-    """Start an image-regression training run in the background.
-
-    Regression shares the run queue and the /experiment/{status,events,result}
-    endpoints (one run at a time, one GPU) but dispatches its own standalone
-    RegressionBlock (ADR-036) rather than the ExperimentConfig path.
-    """
-    config = profile.scope_model(config)
-    await asyncio.to_thread(_check_regression_dataset, config)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-    run_id = f"{config.name}_{timestamp}"
-
-    return _submit_job(
-        run_id,
-        config.name,
-        "regression",
-        "simple",
-        lambda: _execute_regression(config, run_id),
-        profile=profile,
-    )
-
-
-@router.get("/segmentation/schema", tags=[TAG_SEGMENTATION])
-async def get_segmentation_schema() -> dict[str, Any]:
-    """Return the JSON Schema for SegmentationConfig (drives the segmentation form)."""
-    return SegmentationConfig.model_json_schema()
-
-
-@router.post(
-    "/segmentation/run",
-    responses={
-        400: {"description": BAD_REQUEST_TEXT},
-        404: {"description": NOT_FOUND_TEXT},
-        422: {"description": UNPROCESSABLE_TEXT, "content": VALIDATION_ERROR_CONTENT},
-        503: {"description": _GPU_UNAVAILABLE_TEXT},
-    },
-    tags=[TAG_SEGMENTATION],
-)
-async def run_segmentation(
-    config: SegmentationConfig, profile: ProfileDep
-) -> RunResponse:
-    """Start a semantic-segmentation training run in the background.
-
-    Segmentation shares the run queue and the /experiment/{status,events,result}
-    endpoints (one run at a time, one GPU) but dispatches its own standalone
-    SegmentationBlock (ADR-037) rather than the ExperimentConfig path.
-    """
-    config = profile.scope_model(config)
-    await asyncio.to_thread(_check_segmentation_dataset, config)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-    run_id = f"{config.name}_{timestamp}"
-
-    return _submit_job(
-        run_id,
-        config.name,
-        "segmentation",
-        "simple",
-        lambda: _execute_segmentation(config, run_id),
-        profile=profile,
-    )
-
-
-@router.get("/anomaly/schema", tags=[TAG_ANOMALY])
-async def get_anomaly_schema() -> dict[str, Any]:
-    """Return the JSON Schema for AnomalyConfig (drives the anomaly form)."""
-    return AnomalyConfig.model_json_schema()
-
-
-@router.post(
-    "/anomaly/run",
-    responses={
-        400: {"description": BAD_REQUEST_TEXT},
-        404: {"description": NOT_FOUND_TEXT},
-        503: {"description": _GPU_UNAVAILABLE_TEXT},
-    },
-    tags=[TAG_ANOMALY],
-)
-async def run_anomaly(config: AnomalyConfig, profile: ProfileDep) -> RunResponse:
-    """Start an anomaly-detection training run in the background.
-
-    Anomaly shares the run queue and the /experiment/{status,events,result}
-    endpoints (one run at a time, one GPU) but dispatches its own standalone
-    AnomalyBlock (ADR-038) rather than the ExperimentConfig path.
-    """
-    config = profile.scope_model(config)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-    run_id = f"{config.name}_{timestamp}"
-
-    return _submit_job(
-        run_id,
-        config.name,
-        "anomaly",
-        "simple",
-        lambda: _execute_anomaly(config, run_id),
-        # PatchCore has no epochs; it stops between its phases (ADR-111).
-        stop_at="phase" if config.model.name == "patchcore" else "epoch",
-        profile=profile,
-    )
+router.include_router(build_colab_run_router(lambda header: current_profile(header)))
+router.include_router(build_task_run_router(lambda header: current_profile(header)))
 
 
 @router.post(
@@ -1341,264 +922,11 @@ async def sweep_anomaly(req: SweepRequest, profile: ProfileDep) -> RunResponse:
     return _start_sweep(req, AnomalyConfig, AnomalyRunner(), profile)
 
 
-# Built-in task descriptors — accents mirror frontend/src/types/tasks.ts.
-_BUILTIN_TASK_DESCRIPTORS = [
-    TaskDescriptor(
-        key="classification",
-        label="Classificação",
-        accent="#f16363",
-        description="Categorize imagens em rótulos discretos",
-        primary_metric="accuracy",
-    ),
-    TaskDescriptor(
-        key="detection",
-        label="Detecção de Objeto",
-        accent="#48cf8e",
-        description="Localize objetos com caixas delimitadoras",
-        primary_metric="map50_95",
-    ),
-    TaskDescriptor(
-        key="regression",
-        label="Regressão",
-        accent="#5b9fff",
-        description="Estime valores contínuos a partir das entradas",
-        primary_metric="r2",
-    ),
-    TaskDescriptor(
-        key="segmentation",
-        label="Segmentação",
-        accent="#b079ff",
-        description="Classifique cada pixel da imagem",
-        primary_metric="miou",
-    ),
-    TaskDescriptor(
-        key="anomaly",
-        label="Anomalia",
-        accent="#f5a524",
-        description="Detecte defeitos treinando só com imagens normais",
-        primary_metric="auroc",
-    ),
-]
-
-
-@router.get("/tasks", tags=[TAG_EXPERIMENTS])
-async def list_tasks() -> TaskListResponse:
-    """Every renderable task: the five built-ins + registered custom tasks.
-
-    Scans ``user_tasks/`` so a freshly dropped task file appears without a
-    server restart (ADR-058).
-    """
-    from visionforge.tasks.manage import hidden_tasks
-    from visionforge.tasks.registry import load_user_tasks
-
-    load_user_tasks()
-    # A hidden task stays registered — it can still be re-run from a YAML and
-    # its past runs still resolve — it just does not claim a tab.
-    hidden = hidden_tasks()
-    custom = [
-        TaskDescriptor(
-            key=t.key,
-            label=t.label,
-            accent=t.accent,
-            description=t.description,
-            custom=True,
-            metrics=t.metrics,
-            primary_metric=t.primary_metric,
-        )
-        for t in registered_tasks()
-        if t.key not in hidden
-    ]
-    return TaskListResponse(tasks=[*_BUILTIN_TASK_DESCRIPTORS, *custom])
-
-
-@router.post(
-    "/custom/{key}/hide",
-    responses={404: {"description": NOT_FOUND_TEXT}},
-    tags=[TAG_CUSTOM_TASKS],
+# The task list and the researcher's own tasks (#204, ADR-196).
+router.include_router(custom_tasks_router)
+router.include_router(
+    build_custom_task_run_router(lambda header: current_profile(header))
 )
-async def hide_custom_task(key: str) -> CustomTaskActionResponse:
-    """Stop rendering a custom task's tab, keeping its file untouched."""
-    from visionforge.tasks.manage import set_hidden
-
-    _get_custom_task_or_404(key)
-    changed = set_hidden(key, True)
-    return CustomTaskActionResponse(
-        key=key,
-        action="hidden",
-        detail=tr("custom.hidden") if changed else tr("custom.already_hidden"),
-    )
-
-
-@router.post("/custom/{key}/unhide", tags=[TAG_CUSTOM_TASKS])
-async def unhide_custom_task(key: str) -> CustomTaskActionResponse:
-    """Bring a hidden custom task's tab back."""
-    from visionforge.tasks.manage import set_hidden
-
-    set_hidden(key, False)
-    return CustomTaskActionResponse(
-        key=key, action="unhidden", detail=tr("custom.unhidden")
-    )
-
-
-@router.delete(
-    "/custom/{key}",
-    responses={
-        400: {"description": BAD_REQUEST_TEXT},
-        404: {"description": NOT_FOUND_TEXT},
-    },
-    tags=[TAG_CUSTOM_TASKS],
-)
-async def delete_custom_task(key: str, confirm: str = "") -> CustomTaskActionResponse:
-    """Delete a custom task's source file. ``confirm`` must repeat the key.
-
-    Typing the name is deliberately more work than clicking: this removes code
-    the researcher wrote, and there is no undo.
-    """
-    from visionforge.tasks.manage import delete_task
-
-    try:
-        removed = delete_task(key, confirm)
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
-    except FileNotFoundError as exc:
-        raise HTTPException(404, str(exc)) from exc
-    return CustomTaskActionResponse(
-        key=key, action="deleted", detail=tr("custom.deleted", removed=removed)
-    )
-
-
-def _get_custom_task_or_404(key: str) -> Any:
-    try:
-        return get_task(key)
-    except KeyError as exc:
-        # str() of a KeyError is the repr of its argument, quotes included.
-        raise HTTPException(404, exc.args[0] if exc.args else str(exc)) from exc
-
-
-@router.get(
-    "/custom/{key}/schema",
-    responses={404: {"description": NOT_FOUND_TEXT}},
-    tags=[TAG_CUSTOM_TASKS],
-)
-async def custom_task_schema(key: str) -> dict[str, Any]:
-    """JSON Schema of a custom task's Config — drives the generic form."""
-    info = _get_custom_task_or_404(key)
-    schema: dict[str, Any] = info.spec_cls.Config.model_json_schema()
-    return _localize_task_schema(schema)
-
-
-# The hints the generic form shows (SchemaForm renders each `description`) that
-# VisionForge writes itself, in the shared training block every researcher task
-# inherits. The researcher's own descriptions are theirs and stay as written.
-_TASK_SCHEMA_HINTS = {
-    ("TaskTrainingConfig", "early_stopping_patience"): "schema.early_stopping_patience",
-    ("TaskTrainingConfig", "deterministic"): "schema.deterministic",
-}
-
-
-def _localize_task_schema(schema: dict[str, Any]) -> dict[str, Any]:
-    """The schema with VisionForge's own field hints in the page's language (ADR-116)."""
-    defs = schema.get("$defs") or {}
-    for (model, field), key in _TASK_SCHEMA_HINTS.items():
-        prop = (defs.get(model) or {}).get("properties", {}).get(field)
-        if isinstance(prop, dict) and "description" in prop:
-            prop["description"] = tr(key)
-    return schema
-
-
-@router.post(
-    "/custom/{key}/run",
-    responses={
-        400: {"description": BAD_REQUEST_TEXT},
-        404: {"description": NOT_FOUND_TEXT},
-        503: {"description": _GPU_UNAVAILABLE_TEXT},
-    },
-    tags=[TAG_CUSTOM_TASKS],
-)
-async def run_custom_task(
-    key: str, config: dict[str, Any], profile: ProfileDep
-) -> RunResponse:
-    """Start a custom-task training run in the background (ADR-058).
-
-    Validates against the task's own Config; reuses the shared run queue and the
-    /experiment/{status,events,result} endpoints.
-
-    Raises:
-        HTTPException: 404 unknown key.
-        RequestValidationError: 422 if the config is invalid for the task.
-    """
-    info = _get_custom_task_or_404(key)
-
-    try:
-        cfg = info.spec_cls.Config.model_validate(profile.scope_dict(config))
-    except ValidationError as exc:
-        raise RequestValidationError(exc.errors()) from exc
-
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-    run_id = f"{cfg.name}_{timestamp}"
-
-    return _submit_job(
-        run_id,
-        str(cfg.name),
-        f"custom:{info.key}",
-        "simple",
-        lambda: _execute_custom_task(info, cfg, run_id),
-        stop_at=None if _owns_its_loop(info) else "epoch",
-        profile=profile,
-    )
-
-
-def _owns_its_loop(info: Any) -> bool:
-    """True for a Level 2 custom task, whose own ``run`` never reads a stop request."""
-    return info.spec_cls is not None and info.spec_cls.run is not TaskSpec.run
-
-
-async def _execute_custom_task(info: Any, cfg: Any, run_id: str) -> None:
-    """Run a custom task's engine in a worker thread and store the report."""
-    state = _job_state(run_id)
-
-    loop = asyncio.get_running_loop()
-    queue = state.log
-
-    def _put_event(event: dict[str, Any]) -> None:
-        if queue is not None:
-            asyncio.run_coroutine_threadsafe(queue.put(event), loop)
-
-    try:
-        engine = _generic_task_engine()(info, cfg)
-        logger.info("GUI: Starting custom task '{}' run {}", info.key, run_id)
-        result = await asyncio.to_thread(engine.run, _put_event, state.token)
-
-        report = {
-            "task": f"custom:{info.key}",
-            "metrics": result.metrics,
-            "best_epoch": result.best_epoch,
-            "total_epochs": result.total_epochs,
-            "device_used": result.device_used,
-            "run_dir": str(result.run_dir),
-            # True only when the stop cut the training (ADR-111).
-            "stopped": result.stopped,
-        }
-        state.run = {
-            "run_id": run_id,
-            "status": "completed",
-            "error": None,
-            "report": report,
-            "run_dir": str(result.run_dir),
-        }
-        logger.success("GUI: Custom task {} completed.", run_id)
-    except Exception as e:
-        logger.exception("GUI: Custom task {} failed", run_id)
-        state.run = {
-            "run_id": run_id,
-            "status": "failed",
-            "error": f"{type(e).__name__}: {e or tr('run.no_message')}",
-            "report": None,
-            "run_dir": None,
-        }
-    finally:
-        if queue is not None:
-            await queue.put(None)
 
 
 @router.post(
@@ -2104,470 +1432,6 @@ def _render_preprocess_preview(
     )
 
 
-# ── dataset checks at submit time ───────────────────────────────────────────
-# The run queue accepts any config that validates, so an empty or mismatched
-# dataset used to enter the queue and die on the first batch with a raw English
-# exception. These checks list directories and read one CSV row at most (the
-# /dataset/stats walks count every file); they reuse the stats probes' split
-# resolution and messages so the form and the submit agree on what is usable.
-
-
-def _refuse(message: str) -> NoReturn:
-    raise HTTPException(422, message)
-
-
-def _check_detection_dataset(config: DetectionConfig) -> None:
-    """Refuse a YOLO ``base_dir`` with no split or no train images."""
-    data = config.data
-    if data.data_yaml is not None or data.base_dir is None:
-        return  # an explicit data.yaml names its own splits; Ultralytics owns them
-    base = Path(data.base_dir)
-    if not base.is_dir():
-        _refuse(tr(SCAN_BASE_MISSING_KEY, path=base))
-    splits = {s: resolve_yolo_split(base, s) for s in ("train", "val", "test")}
-    if all(resolved is None for resolved in splits.values()):
-        _refuse(tr("scan.no_yolo_split"))
-    train = splits["train"]
-    if train is None or not _has_detection_image(train[0]):
-        _refuse(tr("submit.detection_empty_train"))
-
-
-def _has_detection_image(directory: Path) -> bool:
-    """Any image Ultralytics would read under ``directory``, subfolders included.
-
-    Stricter than this would refuse datasets the trainer accepts: Ultralytics
-    walks subfolders and reads formats (``.tif``, ``.avif``...) the stats probe
-    does not count.
-    """
-    from visionforge.utils.third_party_privacy import apply_opt_outs
-
-    apply_opt_outs()  # before ultralytics' first import in a `visionforge gui`
-    from ultralytics.data.utils import IMG_FORMATS
-
-    return any(
-        p.is_file() and p.suffix.lower().lstrip(".") in IMG_FORMATS
-        for p in directory.rglob("*")
-    )
-
-
-def _check_segmentation_dataset(config: SegmentationConfig) -> None:
-    """Refuse a base_dir with no split or no image-mask pair in train."""
-    data = config.data
-    base = Path(data.base_dir)
-    split_dirs = (data.train_dir, data.val_dir, data.test_dir)
-    if not any((base / d).is_dir() for d in split_dirs):
-        _refuse(tr("scan.no_seg_split"))
-    train = base / data.train_dir
-    if not train.is_dir():
-        _refuse(tr("submit.segmentation_no_train_dir", path=train))
-    # The dataset's own extension lists: the trainer pairs .tif images and masks.
-    from visionforge.core.segmentation_data import IMAGE_EXTS, MASK_EXTS
-
-    images = _image_stems(train / data.images_subdir, IMAGE_EXTS)
-    masks = _image_stems(train / data.masks_subdir, MASK_EXTS)
-    if not images & masks:
-        _refuse(
-            tr(
-                "submit.segmentation_no_pairs",
-                images=len(images),
-                masks=len(masks),
-            )
-        )
-
-
-def _check_regression_dataset(config: RegressionConfig) -> None:
-    """Refuse a missing train CSV, absent columns or a manifest with no rows."""
-    data = config.data
-    base = Path(data.base_dir)
-    expected = [data.image_column, *data.target_columns]
-    train_csv = base / data.train_csv
-    if not train_csv.is_file():
-        _refuse(tr("submit.regression_no_train_csv", path=train_csv))
-    for name in (data.train_csv, data.val_csv, data.test_csv):
-        path = base / name
-        if not path.is_file():
-            continue  # val/test are optional here; the trainer reports what it needs
-        try:
-            with path.open(encoding="utf-8", newline="") as f:
-                reader = csv.DictReader(f)
-                header = reader.fieldnames or []
-                has_rows = next(reader, None) is not None
-        except (OSError, UnicodeDecodeError, csv.Error):
-            continue  # an unreadable file fails with its own message at load time
-        missing = [c for c in expected if c not in header]
-        if missing:
-            _refuse(
-                tr(
-                    "submit.regression_missing_columns",
-                    csv=name,
-                    missing=", ".join(missing),
-                    found=", ".join(header) or "-",
-                )
-            )
-        if path == train_csv and not has_rows:
-            _refuse(tr("submit.regression_empty_manifest", csv=name))
-
-
-def _check_classification_classes(config: ExperimentConfig) -> None:
-    """Refuse ``num_classes`` that disagrees with the train class folders.
-
-    ``binary`` has one output for two folders (ADR on binary heads), so it is
-    checked against 2 folders, not against ``num_classes``.
-    """
-    train = Path(config.data.base_dir) / config.data.train_dir
-    if not train.is_dir():
-        return
-    # ImageFolder counts every sub-directory as a class, empty or hidden included.
-    names = sorted(p.name for p in train.iterdir() if p.is_dir())
-    if not names:
-        return
-    shown = ", ".join(names[:10]) + (", ..." if len(names) > 10 else "")
-    if config.task == "binary":
-        if len(names) != 2:
-            _refuse(tr("submit.binary_folders", found=len(names), names=shown))
-        return
-    if len(names) != config.model.num_classes:
-        _refuse(
-            tr(
-                "submit.num_classes_mismatch",
-                num_classes=config.model.num_classes,
-                found=len(names),
-                names=shown,
-            )
-        )
-
-
-def _validate_colab_config(raw: dict[str, Any]) -> ExperimentConfig:
-    """Validate a config whose dataset is not on this machine.
-
-    ``base_dir`` is swapped for a folder that exists only for the check; the VM
-    sets the real one. Any other mistake is still a 422 here, before a runtime
-    is paid for.
-    """
-    data = raw.get("data")
-    probe = {
-        **raw,
-        "data": {**(data if isinstance(data, dict) else {}), "base_dir": "."},
-    }
-    try:
-        return ExperimentConfig.model_validate(probe)
-    except ValidationError as exc:
-        raise RequestValidationError(
-            [{**err, "loc": ("body", "config", *err["loc"])} for err in exc.errors()]
-        ) from None
-
-
-def _import_colab_run(
-    bundle: Path, models_dir: Path, accelerator: str
-) -> tuple[str | None, str | None]:
-    """Import the run a Colab job brought back; (run_dir, None) or (None, error).
-
-    The downloaded zip is removed either way: the imported run is the copy kept.
-    """
-    origin = {
-        "kind": "colab",
-        "accelerator": accelerator,
-        "imported_at": datetime.now().isoformat(),
-    }
-    try:
-        run_dir = import_experiment_bundle(bundle, models_dir, origin=origin)
-    except (ValueError, OSError) as exc:
-        logger.warning("GUI: Colab run in {} not imported: {}", bundle, exc)
-        return None, tr("colab.import_failed", detail=f"{type(exc).__name__}: {exc}")
-    finally:
-        bundle.unlink(missing_ok=True)
-    logger.info("GUI: Colab run imported into {}", run_dir)
-    return str(run_dir), None
-
-
-async def _execute_colab(
-    run_id: str,
-    slug: str,
-    accelerator: str,
-    payload: dict[str, Any],
-    models_dir: Path,
-) -> None:
-    """Run one job on Colab off the event loop, import its run and record how it ended."""
-    state = _job_state(run_id)
-
-    loop = asyncio.get_running_loop()
-    queue = state.log
-    token = state.token
-
-    def _put_event(event: dict[str, Any]) -> None:
-        # The job thread waits until the event is in the log, so by the time
-        # run_job returns every event is there and the `None` below cannot
-        # overtake one. Callbacks merely scheduled from the thread did lose the
-        # race on the Linux py3.13 CI: the stream closed with the event missing.
-        if queue is None:
-            return
-        delivered = asyncio.run_coroutine_threadsafe(queue.put(event), loop)
-        try:
-            delivered.result(timeout=_COLAB_EVENT_TIMEOUT_S)
-        except TimeoutError:
-            # A stalled loop must not stall the VM; the job keeps going.
-            delivered.cancel()
-            logger.warning(
-                "GUI: Colab job {} dropped an event after {}s: {}",
-                run_id,
-                _COLAB_EVENT_TIMEOUT_S,
-                event.get("event"),
-            )
-
-    try:
-        logger.info("GUI: Starting Colab job {} ({})", run_id, accelerator)
-        consent = _DRIVE_CONSENTS.setdefault(run_id, DriveConsent())
-        result = await asyncio.to_thread(
-            _COLAB_JOBS.run_job,
-            slug,
-            accelerator,
-            payload,
-            _put_event,
-            lambda: is_cancelled(token),
-            consent=consent,
-        )
-        run_dir, error = None, result.error
-        if result.bundle is not None:
-            run_dir, error = await asyncio.to_thread(
-                _import_colab_run, result.bundle, models_dir, accelerator
-            )
-        state.run = {
-            "run_id": run_id,
-            "status": "completed"
-            if result.outcome == "completed" and error is None
-            else "failed",
-            "error": error,
-            "report": result.report,
-            "run_dir": run_dir,
-        }
-    except Exception as e:
-        logger.exception("GUI: Colab job {} failed", run_id)
-        state.run = {
-            "run_id": run_id,
-            "status": "failed",
-            "error": f"{type(e).__name__}: {e}",
-            "report": None,
-            "run_dir": None,
-        }
-    finally:
-        _DRIVE_CONSENTS.pop(run_id, None)
-        # The thread has returned, and each event it sent is already in the log.
-        if queue is not None:
-            await queue.put(None)
-
-
-async def _execute_detection(
-    config: DetectionConfig, run_id: str, resume_dir: Path | None = None
-) -> None:
-    """Run an Ultralytics detection training in a background thread."""
-    from visionforge.blocks.detection import DetectionBlock
-
-    state = _job_state(run_id)
-
-    loop = asyncio.get_running_loop()
-    queue = state.log
-
-    def _put_event(event: dict[str, Any]) -> None:
-        if queue is not None:
-            asyncio.run_coroutine_threadsafe(queue.put(event), loop)
-
-    try:
-        block = DetectionBlock()
-        block.setup(config)
-        block._progress_callback = _put_event
-        block._cancel_token = state.token
-        block._resume_dir = resume_dir
-
-        logger.info("GUI: Starting detection {} ({})", run_id, config.model.name)
-        await asyncio.to_thread(block.run)
-
-        report = block.report()
-        run_dir = report.get("detection", {}).get("run_dir")
-        state.run = {
-            "run_id": run_id,
-            "status": "completed",
-            "error": None,
-            "report": report,
-            "run_dir": run_dir,
-        }
-        logger.success("GUI: Detection {} completed.", run_id)
-
-    except Exception as e:
-        logger.exception("GUI: Detection {} failed", run_id)
-        cls = type(e).__name__
-        msg = str(e) or tr(RUN_NO_MESSAGE_KEY)
-        state.run = {
-            "run_id": run_id,
-            "status": "failed",
-            "error": f"{cls}: {msg}",
-            "report": None,
-            "run_dir": None,
-        }
-
-    finally:
-        if queue is not None:
-            await queue.put(None)
-
-
-async def _execute_regression(
-    config: RegressionConfig, run_id: str, resume_dir: Path | None = None
-) -> None:
-    """Run an image-regression training in a background thread."""
-    from visionforge.blocks.regression import RegressionBlock
-
-    state = _job_state(run_id)
-
-    loop = asyncio.get_running_loop()
-    queue = state.log
-
-    def _put_event(event: dict[str, Any]) -> None:
-        if queue is not None:
-            asyncio.run_coroutine_threadsafe(queue.put(event), loop)
-
-    try:
-        block = RegressionBlock()
-        block.setup(config)
-        block._progress_callback = _put_event
-        block._cancel_token = state.token
-        block._resume_dir = resume_dir
-
-        logger.info("GUI: Starting regression {} ({})", run_id, config.model.name)
-        await asyncio.to_thread(block.run)
-
-        report = block.report()
-        run_dir = report.get("train", {}).get("run_dir")
-        state.run = {
-            "run_id": run_id,
-            "status": "completed",
-            "error": None,
-            "report": report,
-            "run_dir": run_dir,
-        }
-        logger.success("GUI: Regression {} completed.", run_id)
-
-    except Exception as e:
-        logger.exception("GUI: Regression {} failed", run_id)
-        cls = type(e).__name__
-        msg = str(e) or tr(RUN_NO_MESSAGE_KEY)
-        state.run = {
-            "run_id": run_id,
-            "status": "failed",
-            "error": f"{cls}: {msg}",
-            "report": None,
-            "run_dir": None,
-        }
-
-    finally:
-        if queue is not None:
-            await queue.put(None)
-
-
-async def _execute_segmentation(
-    config: SegmentationConfig, run_id: str, resume_dir: Path | None = None
-) -> None:
-    """Run a semantic-segmentation training in a background thread."""
-    from visionforge.blocks.segmentation import SegmentationBlock
-
-    state = _job_state(run_id)
-
-    loop = asyncio.get_running_loop()
-    queue = state.log
-
-    def _put_event(event: dict[str, Any]) -> None:
-        if queue is not None:
-            asyncio.run_coroutine_threadsafe(queue.put(event), loop)
-
-    try:
-        block = SegmentationBlock()
-        block.setup(config)
-        block._progress_callback = _put_event
-        block._cancel_token = state.token
-        block._resume_dir = resume_dir
-
-        logger.info("GUI: Starting segmentation {} ({})", run_id, config.model.name)
-        await asyncio.to_thread(block.run)
-
-        report = block.report()
-        run_dir = report.get("train", {}).get("run_dir")
-        state.run = {
-            "run_id": run_id,
-            "status": "completed",
-            "error": None,
-            "report": report,
-            "run_dir": run_dir,
-        }
-        logger.success("GUI: Segmentation {} completed.", run_id)
-
-    except Exception as e:
-        logger.exception("GUI: Segmentation {} failed", run_id)
-        cls = type(e).__name__
-        msg = str(e) or tr(RUN_NO_MESSAGE_KEY)
-        state.run = {
-            "run_id": run_id,
-            "status": "failed",
-            "error": f"{cls}: {msg}",
-            "report": None,
-            "run_dir": None,
-        }
-
-    finally:
-        if queue is not None:
-            await queue.put(None)
-
-
-async def _execute_anomaly(
-    config: AnomalyConfig, run_id: str, resume_dir: Path | None = None
-) -> None:
-    """Run an anomaly-detection training in a background thread."""
-    from visionforge.blocks.anomaly import AnomalyBlock
-
-    state = _job_state(run_id)
-
-    loop = asyncio.get_running_loop()
-    queue = state.log
-
-    def _put_event(event: dict[str, Any]) -> None:
-        if queue is not None:
-            asyncio.run_coroutine_threadsafe(queue.put(event), loop)
-
-    try:
-        block = AnomalyBlock()
-        block.setup(config)
-        block._progress_callback = _put_event
-        block._cancel_token = state.token
-        block._resume_dir = resume_dir
-
-        logger.info("GUI: Starting anomaly {} ({})", run_id, config.model.name)
-        await asyncio.to_thread(block.run)
-
-        report = block.report()
-        run_dir = report.get("train", {}).get("run_dir")
-        state.run = {
-            "run_id": run_id,
-            "status": "completed",
-            "error": None,
-            "report": report,
-            "run_dir": run_dir,
-        }
-        logger.success("GUI: Anomaly {} completed.", run_id)
-
-    except Exception as e:
-        logger.exception("GUI: Anomaly {} failed", run_id)
-        cls = type(e).__name__
-        msg = str(e) or tr(RUN_NO_MESSAGE_KEY)
-        state.run = {
-            "run_id": run_id,
-            "status": "failed",
-            "error": f"{cls}: {msg}",
-            "report": None,
-            "run_dir": None,
-        }
-
-    finally:
-        if queue is not None:
-            await queue.put(None)
-
-
 def _start_comparison(
     req: ComparisonRequest,
     config_type: type[Any],
@@ -2593,7 +1457,7 @@ def _start_comparison(
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     run_id = f"{name}_{timestamp}"
 
-    return _submit_job(
+    return submission._submit_job(
         run_id,
         name,
         _task_label_from_config(config_type),
@@ -2753,7 +1617,7 @@ def _start_sweep(
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     run_id = f"{name}_{timestamp}"
 
-    return _submit_job(
+    return submission._submit_job(
         run_id,
         name,
         _task_label_from_config(config_type),
@@ -2862,7 +1726,7 @@ def _start_task_cv(
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     run_id = f"{config.name}_cv_{timestamp}"
 
-    return _submit_job(
+    return submission._submit_job(
         run_id,
         str(config.name),
         _task_label_from_config(config_type),
@@ -2975,7 +1839,7 @@ def _start_replicated_comparison(
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     run_id = f"{name}_{timestamp}"
 
-    return _submit_job(
+    return submission._submit_job(
         run_id,
         name,
         _task_label_from_config(config_type),
@@ -3090,7 +1954,7 @@ def _start_replicates(
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     run_id = f"{name}_{timestamp}"
 
-    return _submit_job(
+    return submission._submit_job(
         run_id,
         name,
         _task_label_from_config(config_type),

@@ -10,8 +10,10 @@ from typing import Any
 
 import pytest
 
+import visionforge.gui.api.colab_run_routes as colab_run_mod
 import visionforge.gui.api.execution as execution_mod
 import visionforge.gui.api.execution_routes as execution_routes
+import visionforge.gui.api.submission as submission_mod
 from visionforge.gui.api import colab_jobs as cj
 from visionforge.gui.api.run_queue import (
     LOCAL_LANE,
@@ -165,7 +167,6 @@ def test_a_local_job_and_a_colab_job_run_at_once_each_with_its_own_stream(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """The phase-4 promise end to end: two jobs, two lanes, two streams, two states."""
-    import visionforge.gui.api.routes as routes_mod
 
     colab_started = threading.Event()
     colab_may_end = threading.Event()
@@ -180,7 +181,7 @@ def test_a_local_job_and_a_colab_job_run_at_once_each_with_its_own_stream(
             on_event({"event": "epoch_end", "epoch": 1, "where": "colab"})
             return cj.RemoteResult("completed", report={"where": "colab"})
 
-    monkeypatch.setattr(routes_mod, "_COLAB_JOBS", Jobs())
+    monkeypatch.setattr(colab_run_mod, "_COLAB_JOBS", Jobs())
 
     async def local_executor(run_id: str, gate: asyncio.Event) -> None:
         # The same shape as the real executors: its own state, found by run_id.
@@ -202,25 +203,27 @@ def test_a_local_job_and_a_colab_job_run_at_once_each_with_its_own_stream(
 
     async def scenario() -> dict[str, Any]:
         local_gate = asyncio.Event()
-        local = routes_mod._submit_job(
+        local = submission_mod._submit_job(
             "local-run",
             "local",
             "classification",
             "simple",
             lambda: local_executor("local-run", local_gate),
         )
-        colab = routes_mod._submit_job(
+        colab = submission_mod._submit_job(
             "colab-run",
             "colab",
             "classification",
             "colab",
-            lambda: routes_mod._execute_colab("colab-run", "ana", "T4", {}, tmp_path),
+            lambda: colab_run_mod._execute_colab(
+                "colab-run", "ana", "T4", {}, tmp_path
+            ),
             stop_at="vm",
             lane=COLAB,
         )
         await asyncio.to_thread(colab_started.wait, 5)
         await asyncio.sleep(0.01)
-        during = {
+        during: dict[str, Any] = {
             "submitted": (local.status, colab.status),
             "lanes": [
                 (s["lane"], (s["active"] or {}).get("run_id"))

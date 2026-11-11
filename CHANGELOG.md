@@ -183,6 +183,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 - As rotas de avaliação de uma execução (testar em outro dataset, Grad-CAM, predição em lote e exportar ONNX) saem de `routes.py` para `evaluation_routes.py`, sem mudar o contrato HTTP; `routes.py` cai de 4410 para 3620 linhas e `tests/test_module_size.py` impede que volte a crescer (#204).
 - `visionforge run` com `strategy:` recusa, com código 2 e a mensagem da GUI, uma variante da comparação pareada ou um espaço de varredura que altere `output.*`; antes o treino começava e escrevia fora da pasta do perfil (#264).
 - A fila de execução e o estado de cada job iniciado (log de eventos, token de parada, resultado) saem de `routes.py` para `execution.py`, seu único dono, junto com `_execute_experiment` (complexidade cognitiva abaixo de 15); as rotas de status, eventos, resultado e fila vão para `execution_routes.py`, sem mudar o contrato HTTP; `routes.py` cai de 3612 para 3202 linhas (ADR-185) (#204).
+- O início de uma execução sai de `routes.py`: `_submit_job` e a carga da pilha de treino vão para `submission.py`; `POST /api/experiment/run`, o esquema e o `run` de cada tarefa standalone, as checagens do dataset no envio e os executores para `training_routes.py`; a execução no Colab e os objetos do Colab para `colab_run_routes.py`; a lista de tarefas e `/api/custom/{key}` para `custom_task_routes.py`, sem mudar o contrato HTTP nem a ordem das rotas; `routes.py` cai de 3202 para 2066 linhas (ADR-196) (#204).
 
 ## [0.21.0] — 2026-11-05
 

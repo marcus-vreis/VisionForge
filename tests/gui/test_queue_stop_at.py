@@ -18,6 +18,7 @@ import torch
 from fastapi.testclient import TestClient
 from torch import nn
 
+import visionforge.gui.api.custom_task_routes as custom_tasks_mod
 import visionforge.gui.api.execution as execution_mod
 from visionforge.core.cancellation import STOPPED, CancellationToken
 from visionforge.core.comparison import ComparisonTrial
@@ -749,11 +750,11 @@ class TestExecutorsHandTheTokenOn:
                     stopped=True,
                 )
 
-        monkeypatch.setattr(routes_mod, "GenericTaskEngine", _FakeEngine)
+        monkeypatch.setattr(custom_tasks_mod, "GenericTaskEngine", _FakeEngine)
         info = SimpleNamespace(key="toy")
         state = _run_executor(
             routes_mod,
-            routes_mod._execute_custom_task(info, BaseTaskConfig, "r"),
+            custom_tasks_mod._execute_custom_task(info, BaseTaskConfig, "r"),
             token,
         )
 
