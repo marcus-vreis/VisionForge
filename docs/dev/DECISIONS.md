@@ -1,5 +1,24 @@
 # Architecture Decision Records
 
+How to read and write this file.
+
+**When an ADR is required.** Write one when a change picks between real alternatives that a later reader would otherwise re-debate: a new dependency or a removed one, a public contract (CLI, `run.json`, task or model extension point), a module boundary, a statistical or reproducibility rule, or a change to the repo's own process. A bug fix, a refactor that keeps the boundaries, and a doc edit do not need one.
+
+**Fields.** Copy `docs/dev/ADR-TEMPLATE.md`. Each entry is `## ADR-NNN — Title`, then `**Date:**`, `**Status:**`, optionally `**Relates to:**`, then Context, Decision, Consequences and Alternatives considered (the older entries use Decision and Reason). Numbers are sequential; take the next free one and append at the end of the file.
+
+**Status.** The line after `**Status:**` starts with exactly one of these:
+
+- `Proposed`: written, not yet agreed.
+- `Accepted`: in force. A note after a dash is allowed (`Accepted — shipped 2026-08-05`).
+- `Superseded by ADR-NNN`: replaced as a whole by a later ADR.
+- `Superseded in part by ADR-NNN`: still in force except for the part the later ADR replaces; say which part.
+- `Amended by ADR-NNN`: still in force, with a change recorded in the later ADR.
+- `Rejected`: considered and not adopted; kept so the question is not reopened.
+
+An accepted ADR is not rewritten. To change a decision, add a new ADR and move the old one's status to one of the `Superseded` or `Amended` forms. Older entries are not rewritten to this layout; `tests/test_decisions_format.py` checks the heading and the status prefix of every entry.
+
+---
+
 ## ADR-001 — src/ layout
 
 **Date:** 2026-03  

@@ -146,6 +146,8 @@ chore/<description>             # tooling / config
 
 When a decision is made (framework, library, pattern), document the decision — not a comparison of alternatives. If the decision changes, update the doc to reflect the new reality. Documentation and code must always agree.
 
+Decisions are recorded as ADRs in `docs/dev/DECISIONS.md`. The rules at the top of that file say when an ADR is required and which status values are valid; copy `docs/dev/ADR-TEMPLATE.md` for a new one and append it at the end of the file.
+
 Docs and comments describe the **current state and its rationale**, never the edit history. Write "X uses Y because Z", not "changed X from W to Y" or "swapped W for Y". Change history lives in git and the commit message; a doc that narrates its own diffs rots fast and adds no signal to the reader.
 
 ## Pre-commit hooks

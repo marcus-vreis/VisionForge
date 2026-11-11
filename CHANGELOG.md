@@ -151,6 +151,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 - Arquivos de comunidade do repositório: `SECURITY.md` (denúncia privada pelo GitHub), `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1), `.github/CODEOWNERS`, modelo de pull request com a checklist e `ISSUE_TEMPLATE/config.yml` apontando para Discussions; o CONTRIBUTING linka a política e o código de conduta (#183).
 - CONTRIBUTING sem afirmações falsas e com a seção Branch
 - `.github/dependabot.yml`: atualizações mensais e agrupadas de github-actions, npm (`/frontend`) e pip, no máximo 3 PRs por ecossistema, contra `development`, com prefixo `chore(deps)` e torch/torchvision ignorados (#175).
+- `docs/dev/DECISIONS.md` abre com o processo de ADR (quando é obrigatória, campos e os status válidos), com `docs/dev/ADR-TEMPLATE.md` e um teste que confere o título e o prefixo do status de cada entrada; o CONTRIBUTING linka o template (#214).
 
 ### Fixed
 
