@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import subprocess
 import threading
+import time
+from collections.abc import Callable
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 
@@ -271,6 +273,57 @@ def test_exporting_to_drive_mounts_it_even_for_another_source() -> None:
     result, _ = run_drive(cli, payload=payload)
     assert result.outcome == "completed"
     assert "drivemount" in cli.commands()
+
+
+def _mount_once(
+    cli: DriveCli,
+    cancelled: Callable[[], bool] = lambda: False,
+    consent: cd.DriveConsent | None = None,
+) -> tuple[str, str]:
+    jobs = cj.ColabJobs(run=cli.run, popen=cli.popen)
+    events: list[dict[str, Any]] = []
+    outcome: tuple[str, str] = jobs._drivemount(
+        "ana", "vf-x", 1, events.append, cancelled, consent or cd.DriveConsent()
+    )
+    return outcome
+
+
+def test_a_silent_mount_is_killed_and_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(cj, "CANCEL_POLL_S", 0.01)
+    monkeypatch.setattr(cj, "DRIVE_SILENCE_TIMEOUT_S", 0.05)
+    cli = DriveCli([[HANG]])
+    assert _mount_once(cli) == ("failed", "no output in 0s")
+    assert cli.mounts[0].killed.is_set()
+
+
+def test_stopping_during_a_hung_mount_kills_it(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(cj, "CANCEL_POLL_S", 0.01)
+    cli = DriveCli([[HANG]])
+    assert _mount_once(cli, cancelled=lambda: True) == ("cancelled", "")
+    assert cli.mounts[0].killed.is_set()
+
+
+def test_the_silence_watchdog_waits_while_the_consent_is_pending(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(cj, "CANCEL_POLL_S", 0.01)
+    monkeypatch.setattr(cj, "DRIVE_SILENCE_TIMEOUT_S", 0.1)
+    consent = cd.DriveConsent()
+
+    def grant_late() -> None:
+        wait_until(
+            lambda: consent.waiting,
+            timeout=5,
+            interval=0.01,
+            message="the consent gate to be waiting",
+        )
+        time.sleep(0.3)  # longer than the silence timeout
+        consent.grant()
+
+    threading.Thread(target=grant_late).start()
+    cli = DriveCli([[*ASK, ENTER, *OK]])
+    assert _mount_once(cli, consent=consent) == ("mounted", "")
+    assert not cli.mounts[0].killed.is_set()
 
 
 # ── DriveConsent ──────────────────────────────────────────────────────────────

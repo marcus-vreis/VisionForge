@@ -184,6 +184,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 - `visionforge run` com `strategy:` recusa, com código 2 e a mensagem da GUI, uma variante da comparação pareada ou um espaço de varredura que altere `output.*`; antes o treino começava e escrevia fora da pasta do perfil (#264).
 - A fila de execução e o estado de cada job iniciado (log de eventos, token de parada, resultado) saem de `routes.py` para `execution.py`, seu único dono, junto com `_execute_experiment` (complexidade cognitiva abaixo de 15); as rotas de status, eventos, resultado e fila vão para `execution_routes.py`, sem mudar o contrato HTTP; `routes.py` cai de 3612 para 3202 linhas (ADR-185) (#204).
 - `_write` (incorporar ao dataset), `scan_integrity` (Explorar) e `_prepare` (exportação ao Hub) ficam com complexidade cognitiva abaixo de 15: os laços de link e de cópia, a contagem de tamanhos e a cópia verificada do checkpoint viram helpers no mesmo arquivo, sem mudar saída, mensagens nem ordem de escrita (#86).
+- Seis funções da API da GUI voltam a ter complexidade cognitiva até 15 (Sonar python:S3776): `_drivemount` e `_exec` do Colab (vigias e desfecho em funções próprias), `build_colab_router`, `build_hub_router`, `update_profile` e a tabela de métricas do model card, sem mudar mensagens, ordem dos efeitos nem o contrato OpenAPI; testes novos cobrem os ramos reorganizados (#86).
 
 ## [0.21.0] — 2026-11-05
 
