@@ -184,6 +184,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 - `visionforge run` com `strategy:` recusa, com código 2 e a mensagem da GUI, uma variante da comparação pareada ou um espaço de varredura que altere `output.*`; antes o treino começava e escrevia fora da pasta do perfil (#264).
 - A fila de execução e o estado de cada job iniciado (log de eventos, token de parada, resultado) saem de `routes.py` para `execution.py`, seu único dono, junto com `_execute_experiment` (complexidade cognitiva abaixo de 15); as rotas de status, eventos, resultado e fila vão para `execution_routes.py`, sem mudar o contrato HTTP; `routes.py` cai de 3612 para 3202 linhas (ADR-185) (#204).
 - O `README.md` e o `docs/INSTALL.md` deixam de prometer "no cloud" / "sem nuvem" e declaram a fronteira real de rede: a plataforma é local-first, roda na máquina da pessoa e nada sai dela sem ela pedir (downloads de dataset, treino no Colab e exportadores são opt-in, com prévia local), com `tests/test_public_claims.py` (#171).
+- O `README.md` passa a usar URLs absolutas do GitHub em todos os links (para não quebrar na página do PyPI), mostra o fluxo de `visionforge run` a partir de um YAML exportado ou ajustado, atualiza os limites de fila paralela com o Colab e de download pelo Roboflow, e inclui `configs/baseline.yaml` em `tests/test_example_configs.py`, com `tests/test_readme_pypi.py` (#184).
 
 ## [0.21.0] — 2026-11-05
 

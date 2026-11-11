@@ -123,10 +123,13 @@ The step-by-step walkthrough — dataset download, first run, confidence
 intervals, re-running from YAML — is in
 [`docs/QUICKSTART.md`](https://github.com/marcus-vreis/VisionForge/blob/main/docs/QUICKSTART.md).
 
-For automation, the CLI runs the same configs the GUI exports:
+For automation, export the configuration as YAML from the Review step (or copy
+one of the templates in
+[`configs/`](https://github.com/marcus-vreis/VisionForge/tree/main/configs) and
+point `data.base_dir` at your dataset) and run it from the CLI:
 
 ```bash
-visionforge run configs/baseline.yaml
+visionforge run experiment.yaml
 ```
 
 ## The five tasks
@@ -212,7 +215,7 @@ epoch on synthetic data says nothing about accuracy.
 - [`docs/QUICKSTART.md`](https://github.com/marcus-vreis/VisionForge/blob/main/docs/QUICKSTART.md) — first run, start to finish
 - [`docs/DATASETS.md`](https://github.com/marcus-vreis/VisionForge/blob/main/docs/DATASETS.md) — dataset layouts and the download providers
 - [`docs/gui/tokens.md`](https://github.com/marcus-vreis/VisionForge/blob/main/docs/gui/tokens.md) — where tokens and keys are stored and how to remove them (Portuguese)
-- [`docs/REPRODUCIBILITY.md`](docs/REPRODUCIBILITY.md) — data audits, grouped CV, resume guarantees and experiment bundles (Portuguese)
+- [`docs/REPRODUCIBILITY.md`](https://github.com/marcus-vreis/VisionForge/blob/main/docs/REPRODUCIBILITY.md) — data audits, grouped CV, resume guarantees and experiment bundles (Portuguese)
 - [`docs/custom/`](https://github.com/marcus-vreis/VisionForge/tree/main/docs/custom) — your own models and task families
 - [`CHANGELOG.md`](https://github.com/marcus-vreis/VisionForge/blob/main/CHANGELOG.md) — what shipped in each release
 
@@ -230,12 +233,16 @@ and the HTTP API may change between minor releases — configs carry a
 
 Worth knowing before you start:
 
-- **One training at a time**, but submissions queue and start on their own. A
-  job already training can be stopped from the training screen (■ Stop): it
-  ends at its next stop point (the epoch, in a single run) and keeps what it
-  saved. A custom task that owns its loop cannot be stopped.
-- **One-click dataset download covers classification only.** The other tasks
-  need a dataset already in their layout.
+- **One local training at a time** (a Colab job can run alongside it in its own
+  queue), and submissions queue and start on their own. A job already training
+  can be stopped from the training screen (■ Stop): it ends at its next stop
+  point (the epoch, in a single run) and keeps what it saved. A custom task
+  that owns its loop cannot be stopped.
+- **Built-in dataset download formats classification and detection.**
+  `torchvision` and Hugging Face deliver classification (`ImageFolder`),
+  Roboflow delivers detection (YOLO layout) and classification, and Kaggle
+  downloads any archive as published; regression, segmentation and anomaly need
+  a dataset already in their layout.
 - **No K-fold for detection or anomaly**, by design: Ultralytics owns its
   training loop, and an unsupervised fold without anomalies measures nothing.
 
@@ -374,10 +381,13 @@ O passo a passo completo — baixar dataset, primeiro treino, intervalos de
 confiança, repetir a partir do YAML — está em
 [`docs/QUICKSTART.md`](https://github.com/marcus-vreis/VisionForge/blob/main/docs/QUICKSTART.md).
 
-Para automação, o CLI roda os mesmos configs que a interface exporta:
+Para automação, exporte a configuração como YAML na etapa de Revisão (ou copie
+um dos modelos em
+[`configs/`](https://github.com/marcus-vreis/VisionForge/tree/main/configs) e
+aponte `data.base_dir` para o seu dataset) e rode pelo CLI:
 
 ```bash
-visionforge run configs/baseline.yaml
+visionforge run experiment.yaml
 ```
 
 ## As cinco tarefas
@@ -460,7 +470,7 @@ navegador usa. Ele confere que o caminho funciona, não que o modelo é bom — 
 - [`docs/QUICKSTART.md`](https://github.com/marcus-vreis/VisionForge/blob/main/docs/QUICKSTART.md) — o primeiro treino, do início ao fim
 - [`docs/DATASETS.md`](https://github.com/marcus-vreis/VisionForge/blob/main/docs/DATASETS.md) — formatos de dataset e os provedores de download
 - [`docs/gui/tokens.md`](https://github.com/marcus-vreis/VisionForge/blob/main/docs/gui/tokens.md) — onde ficam os tokens e chaves e como removê-los
-- [`docs/REPRODUCIBILITY.md`](docs/REPRODUCIBILITY.md) — auditoria dos dados, CV por grupos, limites da retomada e exportação de registros
+- [`docs/REPRODUCIBILITY.md`](https://github.com/marcus-vreis/VisionForge/blob/main/docs/REPRODUCIBILITY.md) — auditoria dos dados, CV por grupos, limites da retomada e exportação de registros
 - [`docs/custom/`](https://github.com/marcus-vreis/VisionForge/tree/main/docs/custom) — seus próprios modelos e tarefas
 - [`CHANGELOG.md`](https://github.com/marcus-vreis/VisionForge/blob/main/CHANGELOG.md) — o que entrou em cada versão
 
@@ -473,12 +483,16 @@ exportado antes continua funcionando.
 
 Vale saber antes de começar:
 
-- **Um treino por vez**, mas os envios entram numa fila e começam sozinhos. Um
+- **Um treino local por vez** (um treino no Colab pode rodar em paralelo, na
+  fila da própria conta), e os envios entram numa fila e começam sozinhos. Um
   treino já em andamento pode ser parado pela tela de treino (■ Parar): ele
   encerra no próximo ponto de parada (a época, num treino simples) e mantém o que
   salvou. Uma tarefa custom com laço próprio não pode ser parada.
-- **O download em um clique cobre só classificação.** As outras tarefas
-  precisam de um dataset já no formato delas.
+- **O download integrado formata classificação e detecção.** `torchvision` e
+  Hugging Face entregam classificação (`ImageFolder`), o Roboflow entrega
+  detecção (layout YOLO) e classificação, e o Kaggle baixa o arquivo como o
+  autor publicou; regressão, segmentação e anomalia precisam de um dataset já
+  no formato delas.
 - **Sem K-fold em detecção e anomalia**, de propósito: o Ultralytics é dono do
   próprio laço de treino, e um fold de validação sem anomalias não mede nada.
 
