@@ -7787,3 +7787,19 @@ differently now. Each fix has a test that failed before it
 
 - *Keep re-exports in `routes.py`.* `routes._JOB_STATES.clear()` would still work, but `monkeypatch.setattr(routes, "_JOB_STATES", {})` would silently patch a name nobody reads.
 - *A class holding the state.* A cleaner interface, but a behaviour-bearing rewrite inside what should be a move; the module boundary already gives the single owner.
+
+## ADR-188 — A public bundle leaves out `weights/*.pt` and rewrites `config.*`
+
+**Date:** 2026-11-11
+**Status:** Accepted
+**Amends:** ADR-174 (public run.json), ADR-175 (no local path leaves the computer)
+
+**Context:** ADR-174 cleaned only run.json in a public bundle. Ultralytics pickles its `train_args` (`data`, `project`, absolute paths) into `weights/best.pt` and `weights/last.pt`, and `config.json`/`config.yaml` went in as written, so a Zenodo draft could still carry the account name (#164).
+
+**Decision:** `export_experiment_bundle(..., public=True)` leaves out every `.pt` under a `weights/` folder and notes each one in the manifest ("checkpoint left out of a public bundle: it may embed local paths"); run.json then names the model as `null`. A member named `config.json`, `config.yaml` or `config.yml` is parsed and written back through `without_local_paths`, with a manifest note; one that does not parse or exceeds 16 MB is left out with its own note. The files on disk are untouched, the private bundle is unchanged, and the manifest keeps `format_version` 1, so earlier bundles still verify. A test exports a run whose checkpoints and configs name the home folder and greps every member of the zip for it.
+
+**Consequences:** a public bundle of a detection run carries no checkpoint; whoever needs the weights shares the private bundle or the Hub export. State-dict checkpoints (`best_model.pth`, the other tasks) still go: they hold tensors only. History, predictions and other members are not rewritten.
+
+**Alternatives considered:**
+
+- *Rewriting `train_args` and keeping the checkpoint.* Needs unpickling a checkpoint to edit it, and any other path ultralytics adds later would leak again.
