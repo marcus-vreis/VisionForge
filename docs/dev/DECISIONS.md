@@ -7806,3 +7806,20 @@ differently now. Each fix has a test that failed before it
 
 - *Keep re-exports in `routes.py`.* `routes._JOB_STATES.clear()` would still work, but `monkeypatch.setattr(routes, "_JOB_STATES", {})` would silently patch a name nobody reads.
 - *A class holding the state.* A cleaner interface, but a behaviour-bearing rewrite inside what should be a move; the module boundary already gives the single owner.
+
+## ADR-190 — The user-task and user-model extension API is stable within a minor release, and a test pins its signatures
+
+**Date:** 2026-11-11
+**Status:** Accepted
+**Relates to:** ADR-058 (custom tasks), ADR-048/049 (custom models), ADR-039 (config schema versions)
+
+**Context:** `TaskSpec`, `register_task`, `register_model` and the Level 2 `ctx` are the extension points a researcher writes code against (ADR-058, ADR-048). The built-in tests exercise them only through the toy specs in `tests/tasks`, so renaming `compute_loss`'s `model` parameter, or dropping a hook, would keep every built-in test green and break every custom task in the wild. The guides in `docs/custom/` said nothing about how long these names hold.
+
+**Decision:** Before 1.0 the listed names, parameters and defaults may change only in a minor release, with a "Changed" entry in the CHANGELOG, never in a patch. `docs/custom/TASKS.md` and `MODELS.md` get a Stability section that lists them. `tests/tasks/test_task_api_contract.py` locks them with `inspect.signature`, `TaskSpec.__abstractmethods__`, the dataclass fields of `TaskInfo` and `TaskRunContext`, and `BaseTaskConfig.model_fields`; annotations are not locked. Changing the API means editing that test and the guides in the same commit. No `TASK_API_VERSION` constant is added: with one maintainer and a CHANGELOG entry per change, a number would be a second place to forget; it can be added with 1.0 if third-party task packages appear.
+
+**Consequences:** A rename fails CI with the old and new signature side by side. Adding an optional parameter with a default or a new optional hook is still a change to the test, so it is a visible decision. The engine's internals and any name not listed stay free to change.
+
+**Alternatives considered:**
+
+- *A `TASK_API_VERSION` integer checked at load time.* Useful once packages are installed by others; today it only adds a number to bump.
+- *Only the prose promise.* Nothing would fail when the prose and the code drift.
