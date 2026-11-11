@@ -5,7 +5,7 @@
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23425765.svg)](https://doi.org/10.5281/zenodo.23425765)
 
 **Train, compare and defend computer-vision models on your own GPU.**
-Five task families, one interface, no cloud and no notebooks.
+Five task families in one local-first interface, without notebooks — it runs on your machine; nothing leaves it unless you ask for it (datasets, Colab and exporters are opt-in, with a local preview).
 
 > 🇧🇷 **Este README também está em português** — [role até a versão em
 > português](#português-pt-br).
@@ -259,7 +259,7 @@ always points to the latest version; each version also has its own DOI there.
 # Português (pt-BR)
 
 **Treine, compare e defenda modelos de visão computacional na sua própria
-GPU.** Cinco tipos de tarefa, uma interface só, sem nuvem e sem notebooks.
+GPU.** Cinco tipos de tarefa numa interface local-first, sem notebooks — roda na sua máquina; nada sai dela sem você pedir (datasets, Colab e exportadores são opt-in, com prévia local).
 
 ## Instalação
 

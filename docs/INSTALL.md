@@ -25,7 +25,8 @@ NVIDIA e a interface no navegador foram usados no Windows (a partir do código-f
 ainda não no Linux nem no Mac.
 
 **Requisitos:** Python 3.12 ou 3.13, uns 6 GB livres em disco e internet na instalação.
-Depois de instalado, tudo roda na sua máquina, sem nuvem. Uma GPU NVIDIA deixa o treino
+Depois de instalado, roda na sua máquina; nada sai dela sem você pedir (datasets, Colab e
+exportadores são opt-in, com prévia local). Uma GPU NVIDIA deixa o treino
 muito mais rápido, mas não é obrigatória: os datasets de exemplo treinam em segundos na CPU.
 
 ---
