@@ -13,6 +13,8 @@ from datetime import datetime
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import IO, Any
 
+import yaml
+
 from visionforge.core.public_run_record import without_local_paths
 
 SAFETENSORS_SUFFIX = ".safetensors"
@@ -22,6 +24,8 @@ RUN_FILENAME = "run.json"
 MANIFEST_FILENAME = "manifest.json"
 
 _PUBLIC_NOTE = "local paths reduced to their final name"
+_CHECKPOINT_NOTE = "checkpoint left out of a public bundle: it may embed local paths"
+_UNREADABLE_CONFIG_NOTE = "unreadable config left out of a public bundle"
 _MAX_MEMBERS = 4096
 _MAX_MANIFEST_BYTES = 4 * 1024 * 1024
 _MAX_RUN_BYTES = 16 * 1024 * 1024
@@ -126,7 +130,10 @@ def export_experiment_bundle(
 
     ``public`` writes a run.json fit for a public archive (ADR-174): the
     artifacts named as they sit in the bundle, ``run_dir`` as ``.``, and every
-    other local path reduced to its final name. The record on disk is untouched.
+    other local path reduced to its final name. It also leaves out the
+    ``weights/*.pt`` checkpoints, which pickle their training arguments, and
+    reduces the paths of ``config.*`` the same way (ADR-188). The manifest notes
+    each of these. The files on disk are untouched.
 
     Raises:
         FileExistsError: The destination already exists.
@@ -151,7 +158,10 @@ def export_experiment_bundle(
             notes.append({"artifact": name, "reason": "outside run or linked file"})
     if len(files) + 1 > _MAX_MEMBERS:
         raise ValueError("bundle exceeds member limit")
+    rewritten: dict[str, bytes] = {}
     if public:
+        # Before the run record, so a checkpoint left out is named in it as None.
+        rewritten = _public_members(files, notes)
         raw = _public_run_record(root, data, files)
         notes.append({"artifact": RUN_FILENAME, "reason": _PUBLIC_NOTE})
     descriptor, temporary = tempfile.mkstemp(
@@ -160,7 +170,7 @@ def export_experiment_bundle(
     os.close(descriptor)
     temporary_path = Path(temporary)
     try:
-        _write_bundle_archive(temporary_path, raw, files, notes)
+        _write_bundle_archive(temporary_path, raw, files, notes, rewritten)
         # A hard link publishes the completed file atomically without replacing a competitor.
         os.link(temporary_path, destination)
     finally:
@@ -215,6 +225,51 @@ def _public_run_record(
             artifacts[category] = _bundled_name(root, values, files)
     record["artifacts"] = artifacts
     return json.dumps(record, indent=2, ensure_ascii=False).encode()
+
+
+def _public_members(
+    files: dict[str, Path], notes: list[dict[str, str]]
+) -> dict[str, bytes]:
+    """Drop checkpoints that may embed local paths; rewrite configs without them.
+
+    Returns the rewritten contents by member name (ADR-188).
+    """
+    rewritten: dict[str, bytes] = {}
+    for name in sorted(files):
+        member = PurePosixPath(name)
+        suffix = member.suffix.lower()
+        if suffix == ".pt" and "weights" in member.parts[:-1]:
+            del files[name]
+            notes.append({"artifact": name, "reason": _CHECKPOINT_NOTE})
+        elif member.stem.lower() == "config" and suffix in _EXTENSIONS["config"]:
+            try:
+                rewritten[name] = _public_config(files[name])
+            except (ValueError, OSError):
+                del files[name]
+                notes.append({"artifact": name, "reason": _UNREADABLE_CONFIG_NOTE})
+            else:
+                notes.append({"artifact": name, "reason": _PUBLIC_NOTE})
+    return rewritten
+
+
+def _public_config(path: Path) -> bytes:
+    """A JSON or YAML config with every local path reduced to its final name.
+
+    Raises:
+        ValueError: the config is too large or does not parse.
+    """
+    with path.open("rb") as handle:
+        raw = handle.read(_MAX_RUN_BYTES + 1)
+    if len(raw) > _MAX_RUN_BYTES:
+        raise ValueError("config exceeds size limit")
+    if path.suffix.lower() == JSON_SUFFIX:
+        value = without_local_paths(json.loads(raw))
+        return json.dumps(value, indent=2, ensure_ascii=False).encode()
+    try:
+        value = without_local_paths(yaml.safe_load(raw))
+    except yaml.YAMLError as exc:
+        raise ValueError("invalid YAML config") from exc
+    return yaml.safe_dump(value, sort_keys=False, allow_unicode=True).encode()
 
 
 def _bundled_name(root: Path, value: Any, files: dict[str, Path]) -> str | None:
@@ -324,11 +379,13 @@ def _write_bundle_archive(
     raw: bytes,
     files: dict[str, Path],
     notes: list[dict[str, str]],
+    rewritten: dict[str, bytes],
 ) -> None:
-    """Write bounded artifact contents and their integrity manifest to a ZIP."""
-    records: dict[str, dict[str, int | str]] = {
-        RUN_FILENAME: {"size": len(raw), "sha256": hashlib.sha256(raw).hexdigest()}
-    }
+    """Write bounded artifact contents and their integrity manifest to a ZIP.
+
+    A member in ``rewritten`` is written from those bytes instead of its file.
+    """
+    records: dict[str, dict[str, int | str]] = {RUN_FILENAME: _bytes_record(raw)}
     total_size = len(raw)
     with zipfile.ZipFile(
         temporary_path, "w", compression=zipfile.ZIP_DEFLATED
@@ -337,13 +394,11 @@ def _write_bundle_archive(
         for name, source in sorted(files.items()):
             if name == RUN_FILENAME:
                 continue
-            with (
-                source.open("rb") as handle,
-                bundle.open(name, "w", force_zip64=True) as target,
-            ):
-                if not stat.S_ISREG(os.fstat(handle.fileno()).st_mode):
-                    raise ValueError("artifact is not a regular file")
-                records[name] = _copy_and_hash(handle, target)
+            if name in rewritten:
+                bundle.writestr(name, rewritten[name])
+                records[name] = _bytes_record(rewritten[name])
+            else:
+                records[name] = _write_member(bundle, name, source)
             total_size += int(records[name]["size"])
             if total_size > _MAX_TOTAL_BYTES:
                 raise ValueError(BUNDLE_SIZE_LIMIT_ERROR)
@@ -355,6 +410,23 @@ def _write_bundle_archive(
         if total_size + len(manifest) > _MAX_TOTAL_BYTES:
             raise ValueError(BUNDLE_SIZE_LIMIT_ERROR)
         bundle.writestr(MANIFEST_FILENAME, manifest)
+
+
+def _bytes_record(content: bytes) -> dict[str, int | str]:
+    return {"size": len(content), "sha256": hashlib.sha256(content).hexdigest()}
+
+
+def _write_member(
+    bundle: zipfile.ZipFile, name: str, source: Path
+) -> dict[str, int | str]:
+    """Stream one regular file into the ZIP and return its size and SHA256."""
+    with (
+        source.open("rb") as handle,
+        bundle.open(name, "w", force_zip64=True) as target,
+    ):
+        if not stat.S_ISREG(os.fstat(handle.fileno()).st_mode):
+            raise ValueError("artifact is not a regular file")
+        return _copy_and_hash(handle, target)
 
 
 def _validate_bundle_members(bundle: zipfile.ZipFile) -> list[str]:

@@ -25,7 +25,8 @@ NVIDIA e a interface no navegador foram usados no Windows (a partir do código-f
 ainda não no Linux nem no Mac.
 
 **Requisitos:** Python 3.12 ou 3.13, uns 6 GB livres em disco e internet na instalação.
-Depois de instalado, tudo roda na sua máquina, sem nuvem. Uma GPU NVIDIA deixa o treino
+Depois de instalado, roda na sua máquina; nada sai dela sem você pedir (datasets, Colab e
+exportadores são opt-in, com prévia local). Uma GPU NVIDIA deixa o treino
 muito mais rápido, mas não é obrigatória: os datasets de exemplo treinam em segundos na CPU.
 
 ---
@@ -263,6 +264,24 @@ pip install --upgrade visionforge-studio
 
 A atualização mantém o PyTorch que você já tem. Para desinstalar, apague a pasta `.venv`
 (e `outputs/` e `datasets/`, se não quiser os runs e os dados).
+
+## Docker (opcional)
+
+A partir de um clone do repositório, o `Dockerfile` e o `docker-compose.yml` empacotam a
+interface compilada, o Python 3.13, o PyTorch (`CUDA_TAG=cu128` por padrão, ou `VARIANT=cpu`
+sobre `ubuntu:22.04`) e o VisionForge:
+
+```bash
+docker compose up                 # GPU NVIDIA (exige driver + nvidia-container-toolkit no host)
+docker compose --profile cpu up   # imagem só CPU
+```
+
+A pasta `./datasets` entra como somente leitura (`/work/datasets:ro`) e `./outputs`,
+`./user_models` e `./user_tasks` são montadas em `/work`, rodando como usuário sem
+privilégios (`uid 1000`) na porta `8000`. Dentro do container (`VISIONFORGE_CONTAINER=1`)
+não há janela nativa para escolher pasta: digite o caminho montado (por exemplo
+`/work/datasets/meu_dataset`) no campo de dataset. Detalhes e tabela de verificação em
+[`dev/DOCKER.md`](dev/DOCKER.md).
 
 ## Problemas comuns
 

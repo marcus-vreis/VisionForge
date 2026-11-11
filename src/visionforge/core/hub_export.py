@@ -164,27 +164,9 @@ def _prepare(run_dir: Path, staging: Path) -> dict[str, Any]:
     checkpoint_name = f"weights/model{checkpoint.suffix.lower()}"
     target = staging / checkpoint_name
     target.parent.mkdir()
-    # Check the opened object and all path components before and after copying.
-    before = checkpoint.stat()
-    with checkpoint.open("rb") as reader, target.open("xb") as writer:
-        opened = os.fstat(reader.fileno())
-        if (opened.st_dev, opened.st_ino) != (before.st_dev, before.st_ino):
-            raise ValueError("Checkpoint changed while preparing export")
-        _safe_file(root, model)
-        shutil.copyfileobj(reader, writer)
-    after = _safe_file(root, model).stat()
-    if (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns) != (
-        after.st_dev,
-        after.st_ino,
-        after.st_size,
-        after.st_mtime_ns,
-    ):
-        raise ValueError("Checkpoint changed while preparing export")
+    _copy_checkpoint(root, model, checkpoint, target)
     config = data.get("config")
-    task = config.get("task") if isinstance(config, dict) else data.get("task")
-    if isinstance(task, str) and task in {"binary", "multiclass", "multilabel"}:
-        task = "classification"
-    task = task if isinstance(task, str) and task in _TASKS else "unknown"
+    task = _public_task(data, config)
     status = data.get("status")
     status = (
         status
@@ -227,6 +209,34 @@ def _prepare(run_dir: Path, staging: Path) -> dict[str, Any]:
     _write_json(staging / _MANIFEST, manifest)
     digest = _file_digest(staging / _MANIFEST)
     return {"files": sorted([*names, _MANIFEST]), "digest": digest, "card": card}
+
+
+def _copy_checkpoint(root: Path, model: str, checkpoint: Path, target: Path) -> None:
+    """Copy the checkpoint, refusing it if it was swapped or changed meanwhile."""
+    # Check the opened object and all path components before and after copying.
+    before = checkpoint.stat()
+    with checkpoint.open("rb") as reader, target.open("xb") as writer:
+        opened = os.fstat(reader.fileno())
+        if (opened.st_dev, opened.st_ino) != (before.st_dev, before.st_ino):
+            raise ValueError("Checkpoint changed while preparing export")
+        _safe_file(root, model)
+        shutil.copyfileobj(reader, writer)
+    after = _safe_file(root, model).stat()
+    if (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns) != (
+        after.st_dev,
+        after.st_ino,
+        after.st_size,
+        after.st_mtime_ns,
+    ):
+        raise ValueError("Checkpoint changed while preparing export")
+
+
+def _public_task(data: dict[str, Any], config: Any) -> str:
+    """The run's task family, or ``unknown``; classification modes are merged."""
+    task = config.get("task") if isinstance(config, dict) else data.get("task")
+    if isinstance(task, str) and task in {"binary", "multiclass", "multilabel"}:
+        task = "classification"
+    return task if isinstance(task, str) and task in _TASKS else "unknown"
 
 
 def _architecture_line(config: Any) -> str:

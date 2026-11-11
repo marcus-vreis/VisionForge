@@ -312,21 +312,12 @@ class ColabJobs:
         clock = {"last": time.monotonic(), "consent": False}
         killed = {"why": ""}
         done = threading.Event()
-
-        def watch() -> None:
-            while not done.wait(CANCEL_POLL_S):
-                if clock["consent"]:
-                    continue
-                if cancelled():
-                    killed["why"] = "cancelled"
-                elif time.monotonic() - float(clock["last"]) > DRIVE_SILENCE_TIMEOUT_S:
-                    killed["why"] = "silent"
-                else:
-                    continue
-                proc.kill()
-                return
-
-        threading.Thread(target=watch, name=f"colab-drive-{name}", daemon=True).start()
+        threading.Thread(
+            target=_watch_drivemount,
+            args=(proc.kill, done, clock, killed, cancelled),
+            name=f"colab-drive-{name}",
+            daemon=True,
+        ).start()
         mounted, refused, other = False, False, ""
         try:
             assert proc.stdout is not None
@@ -364,15 +355,7 @@ class ColabJobs:
             proc.wait()
         finally:
             done.set()
-        if killed["why"] == "cancelled":
-            return "cancelled", ""
-        if mounted:
-            return "mounted", ""
-        if refused or killed["why"] == "timeout":
-            return "refused", killed["why"] or "400"
-        if killed["why"] == "silent":
-            return "failed", f"no output in {DRIVE_SILENCE_TIMEOUT_S:.0f}s"
-        return "failed", other or f"exit {proc.returncode}"
+        return _drive_outcome(killed["why"], mounted, refused, other, proc.returncode)
 
     def _warm_up(
         self, slug: str, name: str, path: Path, cancelled: Callable[[], bool]
@@ -471,24 +454,12 @@ class ColabJobs:
         started = threading.Event()
         done = threading.Event()
         launched = time.monotonic()
-
-        def watch() -> None:
-            # Stopping means releasing the VM now: the local exec is killed and
-            # the `finally` of run_job stops the session.
-            while not done.wait(CANCEL_POLL_S):
-                if cancelled():
-                    stopped.set()
-                    proc.kill()
-                    return
-                if (
-                    not started.is_set()
-                    and time.monotonic() - launched > STARTUP_TIMEOUT_S
-                ):
-                    stalled.set()
-                    proc.kill()
-                    return
-
-        threading.Thread(target=watch, name=f"colab-watch-{name}", daemon=True).start()
+        threading.Thread(
+            target=_watch_exec,
+            args=(proc.kill, done, cancelled, started, stopped, stalled, launched),
+            name=f"colab-watch-{name}",
+            daemon=True,
+        ).start()
         end: dict[str, Any] | None = None
         other: list[str] = []
         try:
@@ -547,6 +518,67 @@ def needs_drive(payload: dict[str, Any]) -> bool:
     """Whether the job mounts the Drive: a dataset in it, or the run saved to it."""
     source = payload.get("source") or {}
     return source.get("kind") == "drive" or bool(payload.get("drive_export"))
+
+
+def _watch_drivemount(
+    kill: Callable[[], None],
+    done: threading.Event,
+    clock: dict[str, float],
+    killed: dict[str, str],
+    cancelled: Callable[[], bool],
+) -> None:
+    """Kill a ``drivemount`` that is cancelled or silent, never while a consent waits."""
+    while not done.wait(CANCEL_POLL_S):
+        if clock["consent"]:
+            continue
+        if cancelled():
+            killed["why"] = "cancelled"
+        elif time.monotonic() - float(clock["last"]) > DRIVE_SILENCE_TIMEOUT_S:
+            killed["why"] = "silent"
+        else:
+            continue
+        kill()
+        return
+
+
+def _drive_outcome(
+    why: str, mounted: bool, refused: bool, other: str, returncode: int | None
+) -> tuple[str, str]:
+    """``(outcome, detail)`` of one ``drivemount``, from what it printed and why it died."""
+    if why == "cancelled":
+        return "cancelled", ""
+    if mounted:
+        return "mounted", ""
+    if refused or why == "timeout":
+        return "refused", why or "400"
+    if why == "silent":
+        return "failed", f"no output in {DRIVE_SILENCE_TIMEOUT_S:.0f}s"
+    return "failed", other or f"exit {returncode}"
+
+
+def _watch_exec(
+    kill: Callable[[], None],
+    done: threading.Event,
+    cancelled: Callable[[], bool],
+    started: threading.Event,
+    stopped: threading.Event,
+    stalled: threading.Event,
+    launched: float,
+) -> None:
+    """Kill the runner's ``exec`` when stopped, or when it never started.
+
+    Stopping means releasing the VM now: the local exec is killed and the
+    ``finally`` of run_job stops the session.
+    """
+    while not done.wait(CANCEL_POLL_S):
+        if cancelled():
+            stopped.set()
+            kill()
+            return
+        if not started.is_set() and time.monotonic() - launched > STARTUP_TIMEOUT_S:
+            stalled.set()
+            kill()
+            return
 
 
 def _send_enter(proc: Any) -> None:

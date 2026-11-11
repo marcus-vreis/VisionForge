@@ -78,10 +78,11 @@ class TestMetricHelpers:
         labels = torch.tensor([0, 0, 1, 1])
         assert compute_auroc(scores, labels) == 0.0
 
-    def test_auroc_single_class_returns_half(self) -> None:
+    def test_auroc_single_class_is_undefined(self) -> None:
+        # Was 0.5, a chance-level number for a quantity never measured (#170).
         scores = torch.tensor([0.3, 0.6])
         labels = torch.tensor([0, 0])
-        assert compute_auroc(scores, labels) == 0.5
+        assert compute_auroc(scores, labels) is None
 
     def test_threshold_percentile(self) -> None:
         normal = torch.tensor([0.0, 1.0, 2.0, 3.0, 4.0])
@@ -269,6 +270,9 @@ class TestFitPatchCore:
         auroc, threshold, f1 = trainer.evaluate(
             model, dm.train_loader(), dm.test_loader()
         )
+        # Both classes are in the test split, so both metrics are defined.
+        assert auroc is not None
+        assert f1 is not None
         assert 0.0 <= auroc <= 1.0
         assert 0.0 <= f1 <= 1.0
         assert isinstance(threshold, float)
@@ -405,3 +409,73 @@ class TestTensorBoardTracking:
 
         assert "auroc/val" in {t for t, _, _ in calls}
         assert all(step == 1 for _, _, step in calls)
+
+
+class _NormalOnlyTestSplit(FakeAnomalyDataModule):
+    """A test/ folder with only normal images: AUROC has nothing to rank."""
+
+    def test_loader(self) -> list[tuple[torch.Tensor, torch.Tensor]]:
+        return [
+            (torch.randn(2, 3, self._s, self._s), torch.zeros(2, dtype=torch.long))
+            for _ in range(self._n)
+        ]
+
+
+def _patchcore_config(tmp_path: Path) -> AnomalyConfig:
+    return _config(
+        tmp_path,
+        {
+            "model": {
+                "name": "patchcore",
+                "backbone": "resnet18",
+                "pretrained": False,
+                "coreset_ratio": 0.5,
+            },
+            "data": {"base_dir": str(tmp_path), "image_size": 32},
+        },
+    )
+
+
+class TestSingleClassTestSplit:
+    """AUROC on a one-class test split is undefined, not 0.5 (#170)."""
+
+    def test_auroc_is_none_with_one_class(self) -> None:
+        assert compute_auroc(torch.rand(5), torch.zeros(5)) is None
+
+    def test_auroc_is_none_with_only_anomalies(self) -> None:
+        assert compute_auroc(torch.rand(4), torch.ones(4)) is None
+
+    def test_auroc_still_measured_with_both_classes(self) -> None:
+        scores = torch.tensor([0.1, 0.2, 0.8, 0.9])
+        labels = torch.tensor([0, 0, 1, 1])
+        assert compute_auroc(scores, labels) == pytest.approx(1.0)
+
+    def test_patchcore_records_null_instead_of_chance(self, tmp_path: Path) -> None:
+        trainer = AnomalyTrainer(_patchcore_config(tmp_path))
+        model = PatchCore(backbone="resnet18", pretrained=False, coreset_ratio=0.5)
+
+        result = trainer.fit(model, _NormalOnlyTestSplit(size=32))
+
+        assert result.best_auroc is None
+        assert result.history[0].val_auroc is None
+        assert result.history[0].val_image_f1 is None
+        data = json.loads(
+            (result.model_path.parent / "run.json").read_text(encoding="utf-8")
+        )
+        assert data["metrics"]["best_auroc"] is None
+        assert data["history"][0]["val_auroc"] is None
+
+    def test_autoencoder_epochs_log_without_a_number(self, tmp_path: Path) -> None:
+        trainer = AnomalyTrainer(_config(tmp_path))
+        events: list[dict[str, object]] = []
+
+        result = trainer.fit(
+            ConvAutoencoder(latent_dim=8),
+            _NormalOnlyTestSplit(size=32),
+            progress_callback=events.append,
+        )
+
+        assert [h.val_auroc for h in result.history] == [None] * result.total_epochs
+        epochs = [e for e in events if e["event"] == "epoch_end"]
+        assert epochs
+        assert all(e["val_auroc"] is None for e in epochs)
