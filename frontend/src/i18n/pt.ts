@@ -1420,6 +1420,9 @@ export const pt = {
       title: "Modelo · detecção",
       backend: "Backend",
       backendHint: "origem do modelo",
+      noAgplBadge: "sem AGPL",
+      ultralyticsMissing: (command: string) =>
+        `O Ultralytics (AGPL-3.0) não está instalado, e um treino com ele será recusado. Instale com \`${command}\` e reinicie o VisionForge, ou escolha Torchvision.`,
       architecture: "Arquitetura",
       architectureHint: "detector",
       pretrained: "Pesos pré-treinados",

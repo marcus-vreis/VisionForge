@@ -6,6 +6,7 @@ treino e a pessoa lia uma exceção crua em inglês no log.
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -153,6 +154,52 @@ class TestDetectionSubmit:
         for img in [p for p in train.iterdir() if p.is_file()]:
             img.rename(nested / f"{img.stem}.tif")
         resp = client.post("/api/detection/run", json=_detection(tmp_path, base))
+        assert resp.status_code == 200, resp.text
+
+
+def _without_ultralytics(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Every ``import ultralytics...`` raises ImportError, as in a plain install."""
+    for name in [m for m in sys.modules if m.split(".")[0] == "ultralytics"]:
+        monkeypatch.setitem(sys.modules, name, None)
+    monkeypatch.setitem(sys.modules, "ultralytics", None)
+
+
+@pytest.mark.usefixtures("busy_queue")
+class TestDetectionSubmitWithoutUltralytics:
+    """A plain install has no `detection` extra (ADR-195)."""
+
+    def test_ultralytics_backend_is_refused_with_the_install_line(
+        self,
+        client_and_routes: tuple,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        _without_ultralytics(monkeypatch)
+        client, _ = client_and_routes
+        base = build_detection_dataset(tmp_path / "ds")
+        resp = client.post("/api/detection/run", json=_detection(tmp_path, base))
+        assert resp.status_code == 422
+        assert "[detection]" in resp.json()["detail"]
+
+    def test_torchvision_backend_is_accepted(
+        self,
+        client_and_routes: tuple,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        # The train-image probe used ultralytics' format list; without it, the
+        # torchvision reader's extensions decide.
+        _without_ultralytics(monkeypatch)
+        client, _ = client_and_routes
+        base = build_detection_dataset(tmp_path / "ds")
+        payload = _detection(tmp_path, base)
+        payload["model"] = {
+            "backend": "torchvision",
+            "name": "fasterrcnn_mobilenet_v3_large_fpn",
+            "num_classes": 1,
+            "pretrained": False,
+        }
+        resp = client.post("/api/detection/run", json=payload)
         assert resp.status_code == 200, resp.text
 
 

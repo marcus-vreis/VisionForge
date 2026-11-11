@@ -901,6 +901,10 @@ class SystemInfo(BaseModel):
     platform: str
     # Shown in the header so a screenshot of a bug carries its own version.
     version: str
+    # The `detection` extra (ADR-195): the form shows the install line when the
+    # Ultralytics backend is chosen and this is False.
+    ultralytics_installed: bool
+    detection_install_command: str
 
 
 class DatasetStatsRequest(BaseModel):

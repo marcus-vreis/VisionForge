@@ -108,7 +108,7 @@ Imports `utils/`, plus `models/` from the four non-classification trainers (see 
 | `resume_provenance.py` | Compare a resumed run's recorded dataset fingerprint before native training; reject confirmed changes and warn when legacy identity cannot be verified (ADR-134). |
 | `preprocessing.py` | The filter pipeline (blur, edges, wavelet, CLAHE…) shared by every task, applied before augmentation and normalization. |
 | `gradcam.py` · `onnx_export.py` · `batch_predict.py` | Post-training tooling: explainability heatmaps, ONNX export with a latency benchmark, and batch inference to CSV. |
-| `<task>_data.py` · `<task>_trainer.py` | One pair per standalone task per ADR-033/036/037/038: `regression_data.py`, `segmentation_data.py` and `segmentation_trainer.py`, `anomaly_data.py` and `anomaly_trainer.py`, and for detection `detection_data.py` (Ultralytics `data.yaml`), `detection_dataset.py` (YOLO-format adapter for torchvision), `detection_metrics.py` (mAP@0.5) and `detection_trainer.py`. A new task adds files here and never edits existing ones. |
+| `<task>_data.py` · `<task>_trainer.py` | One pair per standalone task per ADR-033/036/037/038: `regression_data.py`, `segmentation_data.py` and `segmentation_trainer.py`, `anomaly_data.py` and `anomaly_trainer.py`, and for detection `detection_data.py` (Ultralytics `data.yaml`), `detection_dataset.py` (YOLO-format adapter for torchvision), `detection_images.py` (whether a split has an image the trainer reads, ADR-195), `detection_metrics.py` (mAP@0.5) and `detection_trainer.py`. A new task adds files here and never edits existing ones. |
 | `run_groups.py` | Replicate sets, K-folds, sweeps and comparisons as History groups (ADR-113, ADR-123, ADR-124): one group `run.json` per job in `<models_dir>/<name>_<suffix>/<group_id>/`, children tagged with `group_id`. |
 | `training_loop.py` · `trial_name.py` | Shared training lifecycle helpers with explicit task-specific inputs; per-trial experiment names for sweeps that carry the value each trial varies (for example `_lr0.002`). |
 | `live_confusion.py` · `live_insights.py` | Live "Results" tab while a classifier trains: the validation confusion of each epoch (ADR-161) and Grad-CAM of a few fixed validation images that leaves the training history unchanged (ADR-162). |
@@ -247,7 +247,7 @@ multi_cuda  → torch.nn.DataParallel over gpu_ids (classification, regression, 
 
 ## Dependency policy
 
-`pyproject.toml` is canonical. Base dependencies include `ultralytics`, `timm`, `optuna`, `tensorboard`, `roboflow`, `kaggle` and `datasets` (ADR-106). The extras `detection`, `timm`, `optuna`, `tensorboard`, `roboflow`, `kaggle` and `huggingface` are empty and exist only so saved install lines keep resolving. The extras that install something are the hardware extras (`cpu`, `cu118`, `cu121`, `cu124`, `cu126`, `cu128`), the optional exporters `mlflow`, `wandb`, `dvc` and `hub` (ADR-170, ADR-171, ADR-172, ADR-176), and `dev`.
+`pyproject.toml` is canonical. Base dependencies include `timm`, `optuna`, `tensorboard`, `roboflow`, `kaggle` and `datasets` (ADR-106). The extras `timm`, `optuna`, `tensorboard`, `roboflow`, `kaggle` and `huggingface` are empty and exist only so saved install lines keep resolving. The extras that install something are the hardware extras (`cpu`, `cu118`, `cu121`, `cu124`, `cu126`, `cu128`), `detection` (`ultralytics`, AGPL-3.0, ADR-195), the optional exporters `mlflow`, `wandb`, `dvc` and `hub` (ADR-170, ADR-171, ADR-172, ADR-176), and `dev`.
 
 ## Task expansion model
 

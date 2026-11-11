@@ -59,7 +59,8 @@ dependencies = [
   # were optional extras, and the split cost more than it saved: the detection
   # tab shipped without a backend until you found the right install line. They
   # add ~83 MB, against the 2-3 GB a CUDA torch already pulls.
-    "ultralytics>=8.3",      # YOLO / RT-DETR backends
+  # Except ultralytics (AGPL-3.0): it is the `detection` extra (ADR-195), and
+  # detection trains with the torchvision backend without it.
     "timm>=1.0",             # extra backbones via model.timm_model
     "optuna>=3.0",           # TPE-guided sweeps
     "tensorboard>=2.0",      # per-epoch scalars under <run_dir>/tensorboard/
@@ -92,14 +93,16 @@ cu124 = ["torch>=2.3", "torchvision>=0.18"]
 cu126 = ["torch>=2.3", "torchvision>=0.18"]
 cu128 = ["torch>=2.3", "torchvision>=0.18"]
 # mlflow, wandb, dvc and hub are optional exporters (ADR-170, ADR-171, ADR-172,
-# ADR-176): they install something. detection, timm, optuna, tensorboard,
-# roboflow, kaggle and huggingface are empty: everything they used to install
-# ships with the package (ADR-106). Those names stay so an install line saved
-# in a requirements file or a README elsewhere keeps resolving instead of failing.
+# ADR-176): they install something. detection installs ultralytics, the AGPL-3.0
+# YOLO / RT-DETR backend (ADR-195): pip install "visionforge-studio[detection]".
+# timm, optuna, tensorboard, roboflow, kaggle and huggingface are empty:
+# everything they used to install ships with the package (ADR-106). Those names
+# stay so an install line saved in a requirements file or a README elsewhere
+# keeps resolving instead of failing.
 mlflow = ["mlflow==3.18.0"]
 wandb = ["wandb==0.31.0"]
 dvc = ["dvc==3.67.1"]
-detection = []
+detection = ["ultralytics>=8.3"]
 timm = []
 optuna = []
 tensorboard = []

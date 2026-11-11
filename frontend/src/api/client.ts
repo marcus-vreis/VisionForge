@@ -1038,6 +1038,10 @@ export interface SystemInfo {
   suggested_workers: number;
   platform: string;
   version: string;
+  /** The optional `detection` extra (ultralytics, AGPL-3.0) is importable (ADR-195). */
+  ultralytics_installed: boolean;
+  /** The line that installs that extra for this kind of install. */
+  detection_install_command: string;
 }
 
 /** What was measured for an architecture's family at Adam 1e-3 (ADR-099/100):

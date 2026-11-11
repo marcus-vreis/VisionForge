@@ -282,8 +282,15 @@ O VisionForge é MIT, mas o `pip install` também traz pacotes com outras licen�
 listados em [`THIRD_PARTY_NOTICES.md`](https://github.com/marcus-vreis/VisionForge/blob/main/THIRD_PARTY_NOTICES.md). O principal é o **Ultralytics, sob
 AGPL-3.0**, o backend de detecção YOLO / RT-DETR: quem distribui um programa feito
 sobre ele, ou deixa usuários acessarem uma versão modificada pela rede, precisa
-publicar o código desse programa sob a mesma licença. O backend de detecção
-`torchvision` não usa o Ultralytics.
+publicar o código desse programa sob a mesma licença. Por isso ele não vem no passo 3:
+para treinar YOLO ou RT-DETR, instale o extra `detection` com o ambiente ativado.
+
+```bash
+pip install "visionforge-studio[detection]"
+```
+
+Sem ele, a detecção treina com o backend `torchvision` (Faster R-CNN, RetinaNet, SSD),
+marcado "sem AGPL" no formulário.
 
 ## Rede e privacidade
 

@@ -11,11 +11,12 @@ legal advice; the license each package ships with is the one that applies.
 
 `pip` installs these from PyPI as dependencies; VisionForge's wheel does not
 contain their code. The license column is what each package declares in its
-own metadata.
+own metadata. `ultralytics` and `ultralytics-thop` come only with the optional
+`detection` extra (`pip install "visionforge-studio[detection]"`).
 
 | Package | License | Why it is installed |
 |---|---|---|
-| `ultralytics` | AGPL-3.0 | YOLO / RT-DETR detection backend |
+| `ultralytics` | AGPL-3.0 | YOLO / RT-DETR detection backend (`detection` extra) |
 | `ultralytics-thop` | AGPL-3.0 | required by `ultralytics` |
 | `pi-heif` | BSD-3-Clause; its binary wheels bundle libheif and libde265 (LGPL-3.0) | required by `roboflow` |
 | `text-unidecode` | Artistic License or GPL-2.0-or-later, at your choice | required by `python-slugify` (via `kaggle`) |
@@ -25,11 +26,13 @@ own metadata.
 ### Ultralytics (AGPL-3.0)
 
 `ultralytics` and `ultralytics-thop` are licensed under the GNU Affero General
-Public License v3.0. VisionForge imports `ultralytics` in its own process when
-you train, test or export a detection model with the `ultralytics` backend
-(YOLO, RT-DETR). The AGPL-3.0 requires that whoever distributes a program
-built on it, or lets users interact with a modified version over a network,
-offers that program's source code under the same license. Ultralytics offers an
+Public License v3.0. A plain `pip install visionforge-studio` does not install
+them; the `detection` extra does. VisionForge then imports `ultralytics` in its
+own process when you train, test or export a detection model with the
+`ultralytics` backend (YOLO, RT-DETR). The AGPL-3.0 requires that whoever
+distributes a program built on it, or lets users interact with a modified
+version over a network, offers that program's source code under the same
+license. Ultralytics offers an
 Enterprise License for uses that cannot meet those terms
 (<https://www.ultralytics.com/license>).
 

@@ -673,6 +673,18 @@ CATALOG: dict[str, dict[Lang, str]] = {
             "{train_dir}/{normal_dir}/ and the test folder under the same parent)."
         ),
     },
+    "detection.ultralytics_missing": {
+        "pt": (
+            "O backend Ultralytics (YOLO / RT-DETR) não está instalado: ele é "
+            "opcional porque tem licença AGPL-3.0. Instale com {command} e reinicie "
+            "o VisionForge, ou escolha o backend torchvision."
+        ),
+        "en": (
+            "The Ultralytics backend (YOLO / RT-DETR) is not installed: it is "
+            "optional because it is licensed AGPL-3.0. Install it with {command} "
+            "and restart VisionForge, or pick the torchvision backend."
+        ),
+    },
     "export.torchvision_detection": {
         "pt": (
             "Export ONNX para detectores torchvision ainda não é suportado; "

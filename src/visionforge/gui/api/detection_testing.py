@@ -20,6 +20,7 @@ from typing import Any
 
 from visionforge.gui.api.schemas import RunTestRequest, RunTestResponse
 from visionforge.utils.detection_config import DetectionConfig
+from visionforge.utils.doctor import ultralytics_missing_message
 from visionforge.utils.messages import tr
 
 # Preferred evaluation split order: a held-out split first, train last.
@@ -153,10 +154,7 @@ def _evaluate_ultralytics(
     from visionforge.core.detection_data import DetectionDataModule
 
     if detection_trainer.YOLO is None:
-        raise RuntimeError(
-            "ultralytics ships with VisionForge and is missing — the install "
-            "looks damaged: pip install --force-reinstall 'visionforge-studio'."
-        )
+        raise RuntimeError(ultralytics_missing_message())
 
     data_yaml = DetectionDataModule(config).resolve_data_yaml(out_dir=run_dir / "tests")
     model = detection_trainer.YOLO(str(checkpoint))

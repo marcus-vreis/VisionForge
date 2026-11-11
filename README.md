@@ -83,11 +83,13 @@ project itself are still `visionforge`.
 <details>
 <summary>What comes with it</summary>
 
-Everything the five tasks need is in that one install — the YOLO and RT-DETR
-detection backends, the extra `timm` backbones, Optuna-guided sweeps,
+Everything the five tasks need is in that one install — the torchvision
+detection backend, the extra `timm` backbones, Optuna-guided sweeps,
 TensorBoard scalars, and the Roboflow / Kaggle / Hugging Face dataset
 downloaders. They used to be optional extras; the split cost more than it
 saved, and they add about 83 MB against the gigabytes PyTorch already pulls.
+The one exception is the YOLO / RT-DETR backend, Ultralytics, licensed
+AGPL-3.0: `pip install "visionforge-studio[detection]"` adds it.
 
 Choose the PyTorch build for your hardware. For local MLflow tracking, install
 `visionforge-studio[mlflow]` and enable MLflow in the profile picker. From the
@@ -259,11 +261,13 @@ always points to the latest version; each version also has its own DOI there.
 VisionForge is MIT, but some of what it installs is not.
 [`THIRD_PARTY_NOTICES.md`](https://github.com/marcus-vreis/VisionForge/blob/main/THIRD_PARTY_NOTICES.md) lists them; the main one:
 
-- **Ultralytics (AGPL-3.0)** is the YOLO / RT-DETR detection backend. If you
-  distribute a program built on it, or let users reach a modified version over
-  a network, the AGPL-3.0 asks you to publish that program's source under the
-  same license; Ultralytics offers an Enterprise License otherwise. The
-  `torchvision` detection backend does not use it.
+- **Ultralytics (AGPL-3.0)** is the YOLO / RT-DETR detection backend, and it
+  is installed only with the `detection` extra
+  (`pip install "visionforge-studio[detection]"`). If you distribute a program
+  built on it, or let users reach a modified version over a network, the
+  AGPL-3.0 asks you to publish that program's source under the same license;
+  Ultralytics offers an Enterprise License otherwise. The `torchvision`
+  detection backend, marked "no AGPL" in the form, does not use it.
 - Smaller cases: `pi-heif` (bundles LGPL-3.0 libraries), `text-unidecode`
   (Artistic or GPL-2.0+), `certifi` and `tqdm` (MPL-2.0).
 - The GUI bundles three fonts under the SIL Open Font License 1.1.
@@ -366,11 +370,13 @@ o projeto continuam sendo `visionforge`.
 <details>
 <summary>O que já vem junto</summary>
 
-Tudo que as cinco tarefas precisam está naquela instalação: os backends de
-detecção YOLO e RT-DETR, os backbones extras do `timm`, as buscas guiadas por
+Tudo que as cinco tarefas precisam está naquela instalação: o backend de
+detecção torchvision, os backbones extras do `timm`, as buscas guiadas por
 Optuna, os escalares do TensorBoard e os downloaders de dataset do Roboflow,
 Kaggle e Hugging Face. Eram extras opcionais; a separação custava mais do que
 economizava, e eles somam uns 83 MB contra os gigabytes que o PyTorch já baixa.
+A exceção é o backend YOLO / RT-DETR, o Ultralytics, com licença AGPL-3.0:
+`pip install "visionforge-studio[detection]"` o adiciona.
 
 Escolha a versão do PyTorch compatível com o seu hardware. Para acompanhar
 treinos de classificação, instale `visionforge-studio[mlflow]` e ative
@@ -528,11 +534,13 @@ Achou algum problema?
 O VisionForge é MIT, mas parte do que ele instala não é.
 [`THIRD_PARTY_NOTICES.md`](https://github.com/marcus-vreis/VisionForge/blob/main/THIRD_PARTY_NOTICES.md) lista esses pacotes; o principal:
 
-- **Ultralytics (AGPL-3.0)** é o backend de detecção YOLO / RT-DETR. Quem
-  distribui um programa feito sobre ele, ou deixa usuários acessarem uma versão
-  modificada pela rede, precisa publicar o código desse programa sob a mesma
-  licença; fora disso, a Ultralytics oferece uma Enterprise License. O backend
-  de detecção `torchvision` não usa o Ultralytics.
+- **Ultralytics (AGPL-3.0)** é o backend de detecção YOLO / RT-DETR, e só é
+  instalado com o extra `detection`
+  (`pip install "visionforge-studio[detection]"`). Quem distribui um programa
+  feito sobre ele, ou deixa usuários acessarem uma versão modificada pela rede,
+  precisa publicar o código desse programa sob a mesma licença; fora disso, a
+  Ultralytics oferece uma Enterprise License. O backend de detecção
+  `torchvision`, marcado "sem AGPL" no formulário, não usa o Ultralytics.
 - Casos menores: `pi-heif` (traz bibliotecas LGPL-3.0), `text-unidecode`
   (Artistic ou GPL-2.0+), `certifi` e `tqdm` (MPL-2.0).
 - A interface traz três fontes sob a SIL Open Font License 1.1.

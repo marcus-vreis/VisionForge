@@ -1360,6 +1360,9 @@ export const en: Dict = {
       title: "Model · detection",
       backend: "Backend",
       backendHint: "where the model comes from",
+      noAgplBadge: "no AGPL",
+      ultralyticsMissing: (command: string) =>
+        `Ultralytics (AGPL-3.0) is not installed, so a run with it will be refused. Install it with \`${command}\` and restart VisionForge, or pick Torchvision.`,
       architecture: "Architecture",
       architectureHint: "detector",
       pretrained: "Pretrained weights",

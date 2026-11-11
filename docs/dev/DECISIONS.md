@@ -3689,6 +3689,7 @@ implying the backbone is untouched — the distinction matters in a paper, where
 **Status:** Accepted
 **Supersedes:** the per-feature extras of ADR-005 (the hardware extras stay)
 **Amended by:** ADR-170/171/172/176 (`mlflow`, `hub`, `wandb` and `dvc` are optional extras that install something; the seven extras named here stay empty)
+**Superseded in part by:** ADR-195 (`ultralytics`, AGPL-3.0, is again the `detection` extra; the other six stay in `dependencies`)
 
 **Context:** seven capabilities were optional extras — `detection`, `timm`,
 `optuna`, `tensorboard`, `roboflow`, `kaggle`, `huggingface`. The reasoning was
@@ -7787,3 +7788,51 @@ differently now. Each fix has a test that failed before it
 
 - *Keep re-exports in `routes.py`.* `routes._JOB_STATES.clear()` would still work, but `monkeypatch.setattr(routes, "_JOB_STATES", {})` would silently patch a name nobody reads.
 - *A class holding the state.* A cleaner interface, but a behaviour-bearing rewrite inside what should be a move; the module boundary already gives the single owner.
+
+## ADR-195 — Ultralytics (AGPL-3.0) is the optional `detection` extra
+
+**Date:** 2026-11-11
+**Status:** Accepted
+**Supersedes in part:** ADR-106 (for `ultralytics` only; the other six stay in `dependencies`)
+
+**Context:** ADR-106 made `ultralytics` a base dependency of an MIT package. It
+and `ultralytics-thop` are AGPL-3.0, so every `pip install visionforge-studio`
+installed AGPL code, and an organisation that does not accept the AGPL could
+not adopt VisionForge at all, even for classification, without buying
+Ultralytics' Enterprise License (#223). The code already tolerated its absence:
+`detection_trainer` binds `YOLO = None` when the import fails, and the
+`torchvision` detection backend (Faster R-CNN, RetinaNet, SSD, SSDlite) uses no
+AGPL code. The maintainer chose option B+C of #223.
+
+**Decision:**
+
+- `ultralytics>=8.3` leaves `dependencies` and becomes the only content of the
+  `detection` extra: `pip install "visionforge-studio[detection]"` (from a
+  checkout, `pip install -e ".[detection]"`).
+- Every path that needs it fails with one message (`detection.ultralytics_missing`,
+  pt/en) naming that install line and the `torchvision` alternative: training,
+  testing and ONNX export of an Ultralytics run, and the submit of a detection
+  config with `backend: ultralytics`, which is refused with 422 before it enters
+  the queue. The dataset check at submit no longer needs `ultralytics` for its
+  list of image formats.
+- `GET /api/system/info` reports `ultralytics_installed` and
+  `detection_install_command`. The detection form shows the install line under
+  the backend choice when Ultralytics is selected and absent, and the
+  `torchvision` option carries a "sem AGPL" / "no AGPL" badge.
+- The install smoke installs both variants (plain and `[detection]`) and checks
+  that only the second brings `ultralytics`; the wheel smoke checks the plain
+  wheel does not. The CI jobs that run the test suite install `[detection]`, as
+  they had `ultralytics` before.
+
+**Consequences:** the default backend in the detection form stays `ultralytics`
+(its configs and run records are unchanged), so a plain install sees the install
+line until the user picks `torchvision` or installs the extra. A plain install
+still brings torch, through `timm`, so `doctor --fix` keeps swapping an existing
+torch as ADR-107 describes.
+
+**Alternatives considered:**
+
+- *A: keep it a base dependency and only document the AGPL.* Leaves the
+  adoption problem in place.
+- *B without the badge.* The GUI would not tell which detection backend is free
+  of the AGPL; the badge costs one label.
