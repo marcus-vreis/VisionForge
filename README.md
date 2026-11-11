@@ -195,6 +195,10 @@ my-research/            ← run `visionforge gui` from here
 Run it from a different folder and it looks there instead — so keep one folder
 per project. `visionforge doctor` always prints the paths it resolved.
 
+To keep everything on this computer, start with `visionforge gui --offline`
+(or set `VISIONFORGE_OFFLINE=1`): any connection to another host fails, weight
+downloads and the update check included.
+
 ## Checking the install
 
 ```bash
@@ -442,6 +446,10 @@ minha-pesquisa/         ← rode `visionforge gui` daqui
 
 Se rodar de outra pasta, ele procura lá — então mantenha uma pasta por projeto.
 O `visionforge doctor` sempre imprime os caminhos que resolveu.
+
+Para manter tudo neste computador, use `visionforge gui --offline` (ou
+`VISIONFORGE_OFFLINE=1`): qualquer conexão com outro host falha, inclusive o
+download de pesos e a busca por atualização.
 
 ## Conferindo a instalação
 

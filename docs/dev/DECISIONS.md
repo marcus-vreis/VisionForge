@@ -7803,3 +7803,20 @@ differently now. Each fix has a test that failed before it
 **Alternatives considered:**
 
 - *Rewriting `train_args` and keeping the checkpoint.* Needs unpickling a checkpoint to edit it, and any other path ultralytics adds later would leak again.
+
+## ADR-189 — Offline mode refuses every non-loopback socket
+
+**Date:** 2026-11-11
+**Status:** Accepted
+**Extends:** ADR-120 (update check), ADR-180 (third-party telemetry in one module)
+
+**Context:** the README promises that nothing leaves the computer unless the researcher asks, but that held only by reading the code: no switch made it a guarantee and no test trained a model with the network cut off (#226).
+
+**Decision:** `visionforge gui --offline`, `visionforge run --offline` or `VISIONFORGE_OFFLINE=1` (any value but empty or `0`) call `third_party_privacy.enable_offline_mode()` right after parsing, before `apply_opt_outs` imports ultralytics. It sets `HF_HUB_OFFLINE`, `YOLO_OFFLINE` and `VISIONFORGE_NO_UPDATE_CHECK` to `1`, overriding the user (a guarantee, not a default), sets `VISIONFORGE_OFFLINE=1` for child processes, and installs a socket guard: `socket.socket.connect`, `connect_ex` and `sendto` refuse an `AF_INET`/`AF_INET6` destination that is not a loopback address or `localhost`, and `getaddrinfo`, `gethostbyname` and `gethostbyname_ex` refuse a name other than an IP literal, `localhost` or this machine's own name, so no DNS query leaves either. A refusal raises `NetworkBlockedError`, a `ConnectionRefusedError`, so network clients handle it as any failed connection. `tests/integration/test_offline_guard.py` trains one epoch of classification on CPU (resnet18 without pretrained weights, a synthetic dataset) under the guard, checks that external connections fail and loopback works, and starts `visionforge gui --offline` and reads `/api/health`.
+
+**Consequences:** with offline mode on, downloads of weights or datasets fail at once with a connection error instead of hanging. The guard covers this Python process; a child process inherits the environment switches and, if it is VisionForge's CLI, turns the guard on itself, but a native library that opens its own sockets, or asyncio's Windows proactor connecting to an IP literal, is not intercepted.
+
+**Alternatives considered:**
+
+- *Only the environment switches.* Each SDK honours its own, and a new dependency would reach the network unnoticed; the guard makes the promise checkable.
+- *A firewall rule.* Stronger, but needs administrator rights and differs per OS.
