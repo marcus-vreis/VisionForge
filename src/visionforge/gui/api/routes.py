@@ -5,8 +5,10 @@ from __future__ import annotations
 import asyncio
 import csv
 import dataclasses
+import importlib
 import json
 import os
+import sys
 import uuid
 from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import asdict, dataclass
@@ -219,6 +221,45 @@ def _generic_task_engine() -> type[_GenericTaskEngine]:
     from visionforge.tasks.engine import GenericTaskEngine as engine
 
     return engine
+
+
+# What every trainer imports first: torch, torchvision and the plotter (with
+# matplotlib, scipy and sklearn), ~3 s in a fresh process. Imported in the
+# event loop, it froze every open SSE stream for that long, once per process
+# (#258). Detection also loads Ultralytics through its trainer, which switches
+# Ultralytics' events off on import (ADR-180).
+_TRAINING_STACK: tuple[str, ...] = ("torch", "torchvision", "visionforge.core.plotter")
+_DETECTION_STACK: tuple[str, ...] = ("visionforge.core.detection_trainer",)
+_TASK_STACK: dict[str, tuple[str, ...]] = {"detection": _DETECTION_STACK}
+
+
+def _missing_training_stack(*extra: str) -> tuple[str, ...]:
+    """The modules of the training stack (plus ``extra``) not imported yet."""
+    return tuple(name for name in (*_TRAINING_STACK, *extra) if name not in sys.modules)
+
+
+def _import_modules(names: tuple[str, ...]) -> None:
+    """Import ``names`` in order; stop quietly at the first that fails.
+
+    The run that needs it imports it again and reports the error as its own.
+    """
+    for name in names:
+        try:
+            importlib.import_module(name)
+        except Exception as exc:  # noqa: BLE001 - the run reports it
+            logger.warning("GUI: could not preload {}: {}", name, exc)
+            return
+
+
+async def load_training_stack(*extra: str) -> None:
+    """Import the training stack in a worker thread, so the event loop never waits.
+
+    Call it before importing a block, runner or trainer from a handler: once the
+    stack is in ``sys.modules`` that import takes milliseconds.
+    """
+    missing = _missing_training_stack(*extra)
+    if missing:
+        await asyncio.to_thread(_import_modules, missing)
 
 
 def run_regression_cross_validation(
@@ -484,6 +525,10 @@ def _submit_job(
     lang = current_lang()
 
     async def start_in_lang() -> None:
+        if lane == LOCAL_LANE:
+            # The executor imports its block on the loop; load what that pulls
+            # in first, off the loop (#258). A Colab job trains elsewhere.
+            await load_training_stack(*_TASK_STACK.get(task, ()))
         # The queue starts the job from its own task, long after this request's
         # language is gone; the messages the trainer writes (health warnings, the
         # paging-file hint) are for the person who pressed the button.
@@ -1396,6 +1441,7 @@ async def compare_regression(
     req: ComparisonRequest, profile: ProfileDep
 ) -> RunResponse:
     """Train N regression backbones on the same dataset and rank them (ADR-044)."""
+    await load_training_stack()
     from visionforge.blocks.regression_runner import RegressionRunner
 
     return _start_comparison(req, RegressionConfig, RegressionRunner(), profile)
@@ -1408,6 +1454,7 @@ async def compare_segmentation(
     req: ComparisonRequest, profile: ProfileDep
 ) -> RunResponse:
     """Train N segmentation backbones on the same dataset and rank them (ADR-044)."""
+    await load_training_stack()
     from visionforge.blocks.segmentation_runner import SegmentationRunner
 
     return _start_comparison(req, SegmentationConfig, SegmentationRunner(), profile)
@@ -1419,6 +1466,7 @@ async def compare_segmentation(
 )
 async def sweep_regression(req: SweepRequest, profile: ProfileDep) -> RunResponse:
     """Run a grid/random hyperparameter sweep for regression (ADR-045)."""
+    await load_training_stack()
     from visionforge.blocks.regression_runner import RegressionRunner
 
     return _start_sweep(req, RegressionConfig, RegressionRunner(), profile)
@@ -1430,6 +1478,7 @@ async def sweep_regression(req: SweepRequest, profile: ProfileDep) -> RunRespons
 )
 async def sweep_segmentation(req: SweepRequest, profile: ProfileDep) -> RunResponse:
     """Run a grid/random hyperparameter sweep for segmentation (ADR-045)."""
+    await load_training_stack()
     from visionforge.blocks.segmentation_runner import SegmentationRunner
 
     return _start_sweep(req, SegmentationConfig, SegmentationRunner(), profile)
@@ -1440,6 +1489,7 @@ async def sweep_segmentation(req: SweepRequest, profile: ProfileDep) -> RunRespo
 )
 async def compare_detection(req: ComparisonRequest, profile: ProfileDep) -> RunResponse:
     """Train N detectors on the same dataset and rank them (ADR-044)."""
+    await load_training_stack(*_DETECTION_STACK)
     from visionforge.blocks.detection_runner import DetectionRunner
 
     return _start_comparison(req, DetectionConfig, DetectionRunner(), profile)
@@ -1451,6 +1501,7 @@ async def compare_detection(req: ComparisonRequest, profile: ProfileDep) -> RunR
 )
 async def sweep_detection(req: SweepRequest, profile: ProfileDep) -> RunResponse:
     """Run a grid/random hyperparameter sweep for detection (ADR-045)."""
+    await load_training_stack(*_DETECTION_STACK)
     from visionforge.blocks.detection_runner import DetectionRunner
 
     return _start_sweep(req, DetectionConfig, DetectionRunner(), profile)
@@ -1461,6 +1512,7 @@ async def sweep_detection(req: SweepRequest, profile: ProfileDep) -> RunResponse
 )
 async def compare_anomaly(req: ComparisonRequest, profile: ProfileDep) -> RunResponse:
     """Train N anomaly models on the same dataset and rank them (ADR-044)."""
+    await load_training_stack()
     from visionforge.blocks.anomaly_runner import AnomalyRunner
 
     return _start_comparison(req, AnomalyConfig, AnomalyRunner(), profile)
@@ -1472,6 +1524,7 @@ async def compare_anomaly(req: ComparisonRequest, profile: ProfileDep) -> RunRes
 )
 async def sweep_anomaly(req: SweepRequest, profile: ProfileDep) -> RunResponse:
     """Run a grid/random hyperparameter sweep for anomaly detection (ADR-045)."""
+    await load_training_stack()
     from visionforge.blocks.anomaly_runner import AnomalyRunner
 
     return _start_sweep(req, AnomalyConfig, AnomalyRunner(), profile)
@@ -1731,6 +1784,7 @@ async def sweep_custom_task(
     ``model.name``, which ``BaseTaskConfig`` does not guarantee — a one-axis
     sweep over whichever field the task declares covers that use case.
     """
+    await load_training_stack()
     from visionforge.tasks.runner import CustomTaskRunner
 
     info = _get_custom_task_or_404(key)
@@ -1745,6 +1799,7 @@ async def replicates_custom_task(
     key: str, req: ReplicatesRequest, profile: ProfileDep
 ) -> RunResponse:
     """Train one custom-task config N times under different seeds (ADR-056/058)."""
+    await load_training_stack()
     from visionforge.tasks.runner import CustomTaskRunner
 
     info = _get_custom_task_or_404(key)
@@ -1781,6 +1836,7 @@ async def replicates_classification(
     req: ReplicatesRequest, profile: ProfileDep
 ) -> RunResponse:
     """Train one classification config N times under different seeds (ADR-056)."""
+    await load_training_stack()
     from visionforge.blocks.classification_runner import ClassificationRunner
 
     return _start_replicates(req, ExperimentConfig, ClassificationRunner(), profile)
@@ -1794,6 +1850,7 @@ async def replicates_regression(
     req: ReplicatesRequest, profile: ProfileDep
 ) -> RunResponse:
     """Train one regression config N times under different seeds (ADR-056)."""
+    await load_training_stack()
     from visionforge.blocks.regression_runner import RegressionRunner
 
     return _start_replicates(req, RegressionConfig, RegressionRunner(), profile)
@@ -1807,6 +1864,7 @@ async def replicates_segmentation(
     req: ReplicatesRequest, profile: ProfileDep
 ) -> RunResponse:
     """Train one segmentation config N times under different seeds (ADR-056)."""
+    await load_training_stack()
     from visionforge.blocks.segmentation_runner import SegmentationRunner
 
     return _start_replicates(req, SegmentationConfig, SegmentationRunner(), profile)
@@ -1820,6 +1878,7 @@ async def replicates_detection(
     req: ReplicatesRequest, profile: ProfileDep
 ) -> RunResponse:
     """Train one detection config N times under different seeds (ADR-056)."""
+    await load_training_stack(*_DETECTION_STACK)
     from visionforge.blocks.detection_runner import DetectionRunner
 
     return _start_replicates(req, DetectionConfig, DetectionRunner(), profile)
@@ -1833,6 +1892,7 @@ async def replicates_anomaly(
     req: ReplicatesRequest, profile: ProfileDep
 ) -> RunResponse:
     """Train one anomaly config N times under different seeds (ADR-056)."""
+    await load_training_stack()
     from visionforge.blocks.anomaly_runner import AnomalyRunner
 
     return _start_replicates(req, AnomalyConfig, AnomalyRunner(), profile)
@@ -1846,6 +1906,7 @@ async def replicated_comparison_classification(
     req: ReplicatedComparisonRequest, profile: ProfileDep
 ) -> RunResponse:
     """Compare classification variants over shared seeds with a paired test."""
+    await load_training_stack()
     from visionforge.blocks.classification_runner import ClassificationRunner
 
     return _start_replicated_comparison(
@@ -1861,6 +1922,7 @@ async def replicated_comparison_regression(
     req: ReplicatedComparisonRequest, profile: ProfileDep
 ) -> RunResponse:
     """Compare regression variants over shared seeds with a paired test."""
+    await load_training_stack()
     from visionforge.blocks.regression_runner import RegressionRunner
 
     return _start_replicated_comparison(
@@ -1876,6 +1938,7 @@ async def replicated_comparison_segmentation(
     req: ReplicatedComparisonRequest, profile: ProfileDep
 ) -> RunResponse:
     """Compare segmentation variants over shared seeds with a paired test."""
+    await load_training_stack()
     from visionforge.blocks.segmentation_runner import SegmentationRunner
 
     return _start_replicated_comparison(
@@ -1891,6 +1954,7 @@ async def replicated_comparison_detection(
     req: ReplicatedComparisonRequest, profile: ProfileDep
 ) -> RunResponse:
     """Compare detection variants over shared seeds with a paired test."""
+    await load_training_stack(*_DETECTION_STACK)
     from visionforge.blocks.detection_runner import DetectionRunner
 
     return _start_replicated_comparison(
@@ -1906,6 +1970,7 @@ async def replicated_comparison_anomaly(
     req: ReplicatedComparisonRequest, profile: ProfileDep
 ) -> RunResponse:
     """Compare anomaly variants over shared seeds with a paired test."""
+    await load_training_stack()
     from visionforge.blocks.anomaly_runner import AnomalyRunner
 
     return _start_replicated_comparison(req, AnomalyConfig, AnomalyRunner(), profile)
@@ -1919,6 +1984,7 @@ async def replicated_comparison_custom(
     key: str, req: ReplicatedComparisonRequest, profile: ProfileDep
 ) -> RunResponse:
     """Compare a custom task's variants over shared seeds (ADR-058 + ADR-061)."""
+    await load_training_stack()
     from visionforge.tasks.runner import CustomTaskRunner
 
     info = _get_custom_task_or_404(key)
@@ -2306,6 +2372,9 @@ def _has_detection_image(directory: Path) -> bool:
     walks subfolders and reads formats (``.tif``, ``.avif``...) the stats probe
     does not count.
     """
+    from visionforge.utils.third_party_privacy import apply_opt_outs
+
+    apply_opt_outs()  # before ultralytics' first import in a `visionforge gui`
     from ultralytics.data.utils import IMG_FORMATS
 
     return any(
