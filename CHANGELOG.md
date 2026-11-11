@@ -151,6 +151,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 - `THIRD_PARTY_NOTICES.md` lista as dependências copyleft (Ultralytics AGPL-3.0, pi-heif, text-unidecode, certifi, tqdm) e as fontes OFL da interface, e vai no wheel; README e `docs/INSTALL.md` ganham as seções de licenças de terceiros e de rede e privacidade, com cada conexão de saída e `VISIONFORGE_NO_UPDATE_CHECK` (#176).
 - O Ultralytics (AGPL-3.0) sai da instalação padrão e vira o extra `detection` (`pip install "visionforge-studio[detection]"`): sem ele, treinar, testar ou exportar YOLO/RT-DETR e o submit com backend `ultralytics` param com a linha de instalação, o formulário de detecção mostra essa linha e o backend torchvision ganha o selo "sem AGPL"; o install-smoke instala as duas variantes (ADR-195) (#223).
 - `scripts/check_licenses.py` e o job `licenses` do CI falham quando uma dependência de runtime declara licença copyleft fora de `scripts/license_allowlist.toml`, quando a licença de uma delas ganha outra família, ou quando a tabela de `THIRD_PARTY_NOTICES.md` não bate com a lista (`--write` a refaz) (#225).
+- A aba **Código** da detecção com Ultralytics deixa de dizer só que o laço é da biblioteca: mostra a camada do VisionForge (parâmetros do `YOLO.train`, augmentation, o callback por época) com notas testadas e, em seguida, o `BaseTrainer._do_train` do Ultralytics instalado, com versão, aviso de licença AGPL-3.0 e notas tolerantes (`notes_resolved`/`notes_total`); sem o extra `detection`, só a camada do VisionForge (ADR-194) (#224).
 
 ### Fixed
 

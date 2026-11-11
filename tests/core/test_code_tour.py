@@ -2,18 +2,22 @@
 
 from __future__ import annotations
 
+import dataclasses
+import sys
+
 import pytest
 
+from visionforge.core import code_tour as tour_mod
 from visionforge.core.code_tour import (
     TOUR_SETTINGS,
     TOURS,
+    ULTRALYTICS_DETECTION,
     Note,
     code_tour,
     detection_arch,
     model_family,
     note_span,
     tour_settings,
-    unavailable_reason,
 )
 from visionforge.utils.messages import message
 
@@ -37,9 +41,10 @@ def test_every_note_still_finds_its_lines(task: str) -> None:
             assert 0 <= note["first"] <= note["last"] < len(section["lines"])
 
 
-@pytest.mark.parametrize("task", sorted(TOURS))
+@pytest.mark.parametrize("task", [*sorted(TOURS), "detection-ultralytics"])
 def test_every_note_has_text_in_both_languages(task: str) -> None:
-    for section in TOURS[task]:
+    sections = ULTRALYTICS_DETECTION if task == "detection-ultralytics" else TOURS[task]
+    for section in sections:
         for note in section.notes:
             family = dict(note.when).get("family")
             params = {"family": family} if family else {}
@@ -329,9 +334,82 @@ def test_detection_arch(name: str, arch: str | None) -> None:
     assert detection_arch(name) == arch
 
 
-def test_only_the_torchvision_backend_has_a_detection_tour() -> None:
-    assert unavailable_reason("detection", {"backend": "torchvision"}) is None
-    assert unavailable_reason("detection", {"backend": "ultralytics"})
-    # Ultralytics is the default backend, so an undecided one says why too.
-    assert unavailable_reason("detection", {})
-    assert unavailable_reason("regression", {}) is None
+# ── detection on Ultralytics (ADR-194) ───────────────────────────────────────
+_LAYER = ["yolo_args", "yolo_augment", "yolo_fit", "yolo_epoch"]
+
+
+def _ultralytics_sections() -> dict[str, dict]:  # type: ignore[type-arg]
+    return {s["id"]: s for s in code_tour("detection", {"backend": "ultralytics"})}
+
+
+def test_the_ultralytics_tour_resolves_every_visionforge_note() -> None:
+    sections = code_tour("detection", {"backend": "ultralytics"})
+    assert [s["id"] for s in sections] == [*_LAYER, "yolo_loop"]
+    for section in sections[:4]:
+        assert section["file"] == "visionforge/core/detection_trainer.py"
+        assert "library" not in section
+        assert section["notes_resolved"] == section["notes_total"] > 0
+
+
+def test_the_library_section_names_its_version_and_license() -> None:
+    import ultralytics
+
+    loop = _ultralytics_sections()["yolo_loop"]
+    assert loop["library"] == {
+        "name": "ultralytics",
+        "version": ultralytics.__version__,
+        "license": "AGPL-3.0",
+    }
+    assert loop["name"] == "BaseTrainer._do_train"
+    assert loop["file"] == "ultralytics/engine/trainer.py"
+    # With the installed version every note of the library finds its line.
+    assert loop["notes_resolved"] == loop["notes_total"] == len(loop["notes"])
+
+
+def test_a_broken_library_anchor_drops_the_note_not_the_section(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    *layer, loop = ULTRALYTICS_DETECTION
+    broken = dataclasses.replace(
+        loop,
+        notes=(*loop.notes, Note("a line no version has", "code.yolo.loop.epochs")),
+    )
+    monkeypatch.setattr(tour_mod, "ULTRALYTICS_DETECTION", (*layer, broken))
+    section = _ultralytics_sections()["yolo_loop"]
+    assert section["notes_total"] == len(loop.notes) + 1
+    assert section["notes_resolved"] == len(loop.notes)
+
+
+def test_a_broken_visionforge_anchor_still_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    first, *rest = ULTRALYTICS_DETECTION
+    broken = dataclasses.replace(first, notes=(Note("not in the trainer", "x"),))
+    monkeypatch.setattr(tour_mod, "ULTRALYTICS_DETECTION", (broken, *rest))
+    settings = {"backend": "ultralytics"}
+    with pytest.raises(ValueError, match="not in the trainer"):
+        code_tour("detection", settings)
+
+
+def test_without_the_extra_only_the_visionforge_layer_is_shown(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    for name in [m for m in sys.modules if m.split(".")[0] == "ultralytics"]:
+        monkeypatch.setitem(sys.modules, name, None)
+    monkeypatch.setitem(sys.modules, "ultralytics", None)
+    assert list(_ultralytics_sections()) == _LAYER
+
+
+def test_detection_without_a_backend_is_the_ultralytics_tour() -> None:
+    # Ultralytics is the default backend, so an undecided run gets its tour.
+    assert [s["id"] for s in code_tour("detection", {})][:4] == _LAYER
+    torchvision = code_tour("detection", {"backend": "torchvision"})
+    assert torchvision[0]["id"] == "data"
+    assert all("library" not in s for s in torchvision)
+
+
+def test_the_ultralytics_tour_declares_its_settings() -> None:
+    for section in ULTRALYTICS_DETECTION:
+        for note in section.notes:
+            for key, value in note.when:
+                assert value in TOUR_SETTINGS["detection"][key], note.key

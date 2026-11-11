@@ -4,7 +4,7 @@ import { ApiError } from "../api/client";
 import { LanguageContext } from "../i18n/context";
 import { en } from "../i18n/en";
 import { pt } from "../i18n/pt";
-import { tourStatus, unavailableReason } from "../lib/code-tour";
+import { libraryNotice, tourStatus, unavailableReason } from "../lib/code-tour";
 import { SHEET_TABS } from "../lib/training-story";
 import { CodeTour } from "./CodeTour";
 
@@ -35,6 +35,26 @@ describe("CodeTour", () => {
   it("words line ranges", () => {
     expect(pt.codeTour.lines(10, 10)).toBe("linha 10");
     expect(pt.codeTour.lines(10, 14)).toBe("linhas 10–14");
+  });
+  it("marks a library's code with its version, license and resolved notes", () => {
+    const section = {
+      id: "yolo_loop", name: "BaseTrainer._do_train", file: "ultralytics/engine/trainer.py",
+      first_line: 376, lines: ["def _do_train(self):"], notes: [],
+      notes_resolved: 9, notes_total: 10,
+      library: { name: "ultralytics", version: "8.4.60", license: "AGPL-3.0" },
+    };
+    const notice = libraryNotice(section, pt.codeTour);
+    expect(notice).toContain("ultralytics 8.4.60");
+    expect(notice).toContain("AGPL-3.0");
+    expect(notice).toContain("9 de 10");
+    expect(libraryNotice({ ...section, library: null }, pt.codeTour)).toBeNull();
+    expect(libraryNotice(section, en.codeTour)).toContain("9 of 10");
+  });
+  it("titles the Ultralytics sections in both languages", () => {
+    for (const id of ["yolo_args", "yolo_augment", "yolo_fit", "yolo_epoch", "yolo_loop"]) {
+      expect(pt.codeTour.sections[id]).toBeTruthy();
+      expect(en.codeTour.sections[id]).toBeTruthy();
+    }
   });
   it("names the missing tour in both languages", () => {
     expect(pt.codeTour.missing).not.toBe(en.codeTour.missing);

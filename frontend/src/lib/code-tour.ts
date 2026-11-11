@@ -1,4 +1,4 @@
-import { ApiError, fetchCodeTourTasks } from "../api/client";
+import { ApiError, fetchCodeTourTasks, type CodeSection } from "../api/client";
 
 let tourTasks: Promise<string[]> | null = null;
 
@@ -30,4 +30,21 @@ export function tourStatus(taskKey: string, tasks: string[] | null): "loading" |
  */
 export function unavailableReason(error: unknown): string | null {
   return error instanceof ApiError && error.status === 404 && error.message ? error.message : null;
+}
+
+/** The words the library notice is made of (the `codeTour` dictionary). */
+export interface LibraryWords {
+  library: (name: string, version: string, license: string) => string;
+  notesResolved: (resolved: number, total: number) => string;
+}
+
+/**
+ * The line above a section whose code is a library's (ADR-194): which library,
+ * the installed version, its license, and how many notes still found their
+ * line in that version. Null for VisionForge's own code.
+ */
+export function libraryNotice(section: CodeSection, words: LibraryWords): string | null {
+  if (!section.library) return null;
+  const { name, version, license } = section.library;
+  return `${words.library(name, version, license)} ${words.notesResolved(section.notes_resolved, section.notes_total)}`;
 }

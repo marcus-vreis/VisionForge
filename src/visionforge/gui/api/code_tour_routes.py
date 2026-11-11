@@ -14,7 +14,6 @@ from visionforge.core.code_tour import (
     TOURS,
     code_tour,
     tour_settings,
-    unavailable_reason,
 )
 from visionforge.gui.api.http_responses import NOT_FOUND_TEXT, TAG_SYSTEM
 from visionforge.utils.messages import tr
@@ -35,8 +34,20 @@ class CodeNote(BaseModel):
     active: bool | None
 
 
+class CodeLibrary(BaseModel):
+    """The third-party library a section's code belongs to (ADR-194)."""
+
+    name: str
+    version: str
+    license: str
+
+
 class CodeSection(BaseModel):
-    """One function of the training, as it is in the installed package."""
+    """One function of the training, as it is in the installed package.
+
+    ``notes_resolved`` of ``notes_total`` found their line: always all of them
+    for VisionForge's code, possibly fewer in a library's other version.
+    """
 
     id: str
     name: str
@@ -44,6 +55,9 @@ class CodeSection(BaseModel):
     first_line: int
     lines: list[str]
     notes: list[CodeNote]
+    notes_resolved: int
+    notes_total: int
+    library: CodeLibrary | None = None
 
 
 class CodeTourTask(BaseModel):
@@ -76,13 +90,10 @@ def get_code_tour(task: str, request: Request) -> list[CodeSection]:
     setting is optional: one left out, or with a value the task does not take,
     leaves its notes undecided instead of guessing which branch the run takes.
 
-    A run whose training is not this project's code (detection on the
-    Ultralytics backend) is a 404 whose detail says why, for the page to show.
+    Detection on Ultralytics shows VisionForge's layer, then the library's
+    installed loop with its version and license (ADR-194).
     """
     if task not in TOURS:
         raise HTTPException(404, tr("code.tour_missing"))
     settings = tour_settings(task, request.query_params)
-    reason = unavailable_reason(task, settings)
-    if reason is not None:
-        raise HTTPException(404, reason)
     return [CodeSection.model_validate(item) for item in code_tour(task, settings)]

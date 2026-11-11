@@ -57,10 +57,11 @@ def test_the_notes_follow_the_language() -> None:
     assert "image" in en
 
 
-def test_a_task_without_a_tour_is_404() -> None:
+def test_detection_without_a_backend_gets_the_ultralytics_tour() -> None:
+    # Ultralytics is the default backend; it has a tour since ADR-194.
     response = TestClient(app).get("/api/code-tour/detection")
-    assert response.status_code == 404
-    assert response.json()["detail"]
+    assert response.status_code == 200
+    assert response.json()[0]["id"] == "yolo_args"
 
 
 def test_the_regression_tour_marks_the_loss_of_the_query() -> None:
@@ -119,18 +120,24 @@ def test_the_torchvision_detection_tour_marks_the_detector() -> None:
     assert all(n["active"] is False for n in sections["ssd"]["notes"])
 
 
-def test_ultralytics_detection_says_why_there_is_no_tour() -> None:
-    client = TestClient(app)
-    pt = client.get(
+def test_ultralytics_detection_shows_the_layer_and_the_library() -> None:
+    import ultralytics
+
+    response = TestClient(app).get(
         "/api/code-tour/detection?backend=ultralytics&model=yolo11n",
-        headers={"X-VF-Lang": "pt"},
-    )
-    en = client.get(
-        "/api/code-tour/detection?backend=ultralytics",
         headers={"X-VF-Lang": "en"},
     )
-    assert pt.status_code == en.status_code == 404
-    assert "Ultralytics" in en.json()["detail"]
-    assert pt.json()["detail"] != en.json()["detail"]
-    tasks = [item["task"] for item in client.get("/api/code-tour").json()]
-    assert "detection" in tasks
+    assert response.status_code == 200
+    sections = response.json()
+    assert [s["id"] for s in sections] == [
+        "yolo_args",
+        "yolo_augment",
+        "yolo_fit",
+        "yolo_epoch",
+        "yolo_loop",
+    ]
+    assert sections[0]["library"] is None
+    loop = sections[-1]
+    assert loop["library"]["version"] == ultralytics.__version__
+    assert loop["library"]["license"] == "AGPL-3.0"
+    assert loop["notes_resolved"] == loop["notes_total"]

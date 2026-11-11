@@ -7836,3 +7836,50 @@ torch as ADR-107 describes.
   adoption problem in place.
 - *B without the badge.* The GUI would not tell which detection backend is free
   of the AGPL; the badge costs one label.
+
+## ADR-194 — The "Code" tab for Ultralytics detection: our layer, then the library's loop (amends ADR-173)
+
+**Date:** 2026-11-11
+**Status:** Accepted
+**Amends:** ADR-173 (and ADR-181, which left detection on Ultralytics without a tour)
+
+**Context:** YOLO / RT-DETR is the default detection backend, and its "Code" tab
+said only that the loop is the library's. VisionForge still writes real code
+around it: the form becomes `YOLO.train` arguments, augmentation is switched
+off with neutral values, a callback records each epoch and honours the stop
+button. The library's own loop (`BaseTrainer._do_train`) is readable with
+`inspect`, but it is AGPL-3.0 code (ADR-195) and Ultralytics has no upper
+version bound here, so a release can move any line a note points at (#224,
+option b).
+
+**Decision:**
+
+- `GET /api/code-tour/detection` with `backend=ultralytics`, or no backend
+  (Ultralytics is the default), returns the tour `ULTRALYTICS_DETECTION`:
+  four sections of VisionForge's layer (`_ultralytics_train_kwargs`,
+  `_augmentation_kwargs`, `_fit_ultralytics`, `_record_ultralytics_epoch`)
+  whose notes are tested like every other tour, then `BaseTrainer._do_train`
+  of the installed Ultralytics.
+- A `Section` can name a `library`. Such a section carries
+  `library: {name, version, license}` (version from `ultralytics.__version__`,
+  license as its metadata declares it), and its notes are tolerant: a note
+  whose line this version lacks is dropped instead of failing. Every section
+  reports `notes_resolved` and `notes_total`. Without the `detection` extra the
+  library section is left out and the layer is still shown.
+- The page shows, above a library section, whose code it is, the version, the
+  license and how many notes found their line. The "only torchvision" reason
+  (`code.detection.only_torchvision`) is gone.
+
+**Consequences:** a test pins that every library note resolves on the installed
+version, so a bump that moves a line fails CI and names the note to fix, while
+users on another version still get the section with fewer notes. The source
+shown is read from the user's own install, so nothing of Ultralytics is
+redistributed.
+
+**Alternatives considered:**
+
+- *(a) Only VisionForge's layer.* Hides the loop where the epoch actually
+  happens, which is what the tab exists to show.
+- *(c) (b) plus an upper version bound on `ultralytics`.* Ties every user to
+  one release for the sake of the notes; the tolerant notes already degrade
+  gracefully.

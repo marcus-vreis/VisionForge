@@ -1191,6 +1191,13 @@ export interface CodeNote {
   active: boolean | null;
 }
 
+/** The third-party library a section's code belongs to (ADR-194). */
+export interface CodeLibrary {
+  name: string;
+  version: string;
+  license: string;
+}
+
 /** One real function of the training, read from the installed package. */
 export interface CodeSection {
   id: string;
@@ -1199,6 +1206,11 @@ export interface CodeSection {
   first_line: number;
   lines: string[];
   notes: CodeNote[];
+  /** Notes that found their line, out of those written for this section. */
+  notes_resolved: number;
+  notes_total: number;
+  /** Set when the code is a library's, not VisionForge's. */
+  library?: CodeLibrary | null;
 }
 
 /** The annotated training code of `task`, with this run's branches marked. */

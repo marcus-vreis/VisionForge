@@ -348,7 +348,16 @@ export const pt = {
       retinanet: "RetinaNet",
       map: "mAP (validação)",
       metric: "AP por classe",
+      yolo_args: "Parâmetros do YOLO",
+      yolo_augment: "Augmentation (YOLO)",
+      yolo_fit: "Treino (VisionForge)",
+      yolo_epoch: "Época registrada",
+      yolo_loop: "Dentro do Ultralytics",
     } as Record<string, string>,
+    library: (name: string, version: string, license: string) =>
+      `Código do ${name} ${version}, como está instalado no seu ambiente, sob licença ${license}: não é código do VisionForge, só é mostrado aqui.`,
+    notesResolved: (resolved: number, total: number) =>
+      `${resolved} de ${total} notas acharam a linha nesta versão.`,
     where: (file: string, name: string, line: number) => `${file} · ${name} · linha ${line}`,
     lines: (first: number, last: number) => (first === last ? `linha ${first}` : `linhas ${first}–${last}`),
     active: "o caminho deste treino",
