@@ -7788,6 +7788,43 @@ differently now. Each fix has a test that failed before it
 - *Keep re-exports in `routes.py`.* `routes._JOB_STATES.clear()` would still work, but `monkeypatch.setattr(routes, "_JOB_STATES", {})` would silently patch a name nobody reads.
 - *A class holding the state.* A cleaner interface, but a behaviour-bearing rewrite inside what should be a move; the module boundary already gives the single owner.
 
+## ADR-191 — Unexpected 500s and validation 422s carry the page's language; what stays English on purpose
+
+**Date:** 2026-11-11
+**Status:** Accepted
+**Amends:** ADR-116 ("Still as written, on purpose or not yet")
+
+**Context:** after the four slices of ADR-116, two kinds of error still reached the page in a language nobody chose: the `500` of an action that failed unexpectedly (testing a run, Grad-CAM, batch prediction, ONNX export, a dataset download) was the bare `RuntimeError: x`, and every `422` carried Pydantic's English sentence. ADR-116 also left a list whose items were a mix of "on purpose" and "not yet".
+
+**Decision:** `gui/api/error_messages.py` owns both frames. `unexpected_error(exc, detail=None)` words a `500` as `errors.unexpected` (a sentence in the page's language ending in `Type: message`, or in the caller's already-redacted detail); the two remaining `HTTPException(500, f"...")` sites use it. An app-level handler for `RequestValidationError` reads `X-VF-Lang` from the request itself (a body that fails validation may never reach the router dependency that binds the language) and, for Portuguese, replaces the `msg` of 14 common Pydantic error types with a catalog sentence (`validation.<type>`) filled from the error's `ctx`; `type`, `loc` and `input` are unchanged, and a type not listed, or a `ctx` missing a value the sentence needs, keeps Pydantic's text. English keeps Pydantic's text as is. The response shape is FastAPI's, so the OpenAPI document does not change.
+
+**Closes the ADR-116 list.** Stay in English on purpose, with no further slice planned: the trainers' `logger.*` lines, the epoch and trial lines of the sheet, `STOPPED_NOTE`, the `description` of the schema fields, and the text of an exception raised by a library (it is the technical part of the `500` frame and of a failed run's `error`). Pydantic's messages outside the 14 types stay English too. The LaTeX captions and the Markdown export already follow `tr_artifact` (fourth slice).
+
+**Consequences:** a test that compared a `500` detail to `Type: message` now compares it to the framed sentence. A script without the header reads the Portuguese frame and Portuguese 422 messages; one that parses `msg` should send `X-VF-Lang: en` or read `type`.
+
+**Alternatives considered:**
+
+- *Translate every Pydantic error type.* Around a hundred, most of which no form in the page can produce; an untranslated `msg` is still correct English and its `type` is stable.
+- *Let the page word the 422 from `type` and `ctx`.* Every client of the API would need its own table; the catalog already exists on the server.
+
+## ADR-192 — Apple's GPU (MPS) is an experimental device
+
+**Date:** 2026-11-11
+**Status:** Accepted (experimental, not announced)
+**Relates to:** ADR-098 (determinism cost), ADR-099 (training-health warnings), ADR-107 (doctor never swaps a working torch)
+
+**Context:** on a Mac with Apple Silicon, PyPI's torch drives the GPU through Metal (MPS), but `DeviceConfig.kind` only knew `cpu`, `cuda` and `multi_cuda`: every Mac run trained on the CPU, and `visionforge doctor` recommended the CPU build of torch. Nobody on the project has a Mac to validate a run end to end.
+
+**Decision:** `DeviceConfig.kind` gains `"mps"`, probed by `utils.cuda.mps_available()` (never raises; only a real `True` counts, so a mocked torch never reads as a Mac). `resolve_device` honours it (`mps (Apple GPU)`, or `cpu (fallback: MPS unavailable)`), and `cuda`/`multi_cuda` on a machine without CUDA now fall back to MPS before the CPU, with the label `mps (fallback: CUDA unavailable)`. Detection uses the same order through one `DetectionTrainer._effective_kind()` for both backends; this also fixes `kind: cuda` on a CPU-only machine reaching Ultralytics as GPU `0`. `deterministic: true` on MPS adds the `mps_not_deterministic` warning to `run.json`, because the switch configures cuDNN and MPS kernels have no deterministic mode. `/api/device/info` reports `mps_available` (a flag, not an entry in `gpus`: no index or memory to show), the device selector offers "Apple GPU (MPS)" marked experimental, and the doctor counts MPS as a working GPU; its `--fix` no longer offers to replace a torch that already runs on the GPU (CUDA or MPS).
+
+Not done, on purpose: AMP stays CUDA-only; `pin_memory` stays as configured (MPS ignores it with a warning); `PYTORCH_ENABLE_MPS_FALLBACK` is not set, so an operator without an MPS kernel raises instead of running silently on the CPU; no MPS cache release between sweep runs. Regression, segmentation and anomaly runs pick the device through `resolve_device` but do not carry the determinism warning yet.
+
+**Consequences:** verified only with mocks (`torch.backends.mps.is_available`, `mps_available`, `torch.cuda.is_available`) on Windows; CI has no Mac. The feature is experimental and stays out of the README and the site until a run on a real Apple Silicon Mac is recorded here. A config that asked for `cuda` on a Mac now trains on the GPU instead of the CPU, and its numbers may differ between runs.
+
+**Alternatives considered:**
+
+- *Map `cuda` to `mps` silently.* The label would claim a device the run did not get; the `fallback` wording keeps `run.json` honest.
+- *Wait for a tester before merging.* The code paths are testable without a Mac, and keeping the feature unannounced costs nothing to people without one.
 ## ADR-187 — The interval of a paired difference inverts the test beside it
 
 **Date:** 2026-11-11

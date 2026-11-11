@@ -20,6 +20,7 @@ from pydantic import SecretStr
 
 from visionforge.core.detection_data import resolve_yolo_split
 from visionforge.gui.api.dataset_download import credentials_in_play, download_dataset
+from visionforge.gui.api.error_messages import unexpected_error
 from visionforge.gui.api.http_responses import (
     BAD_REQUEST_TEXT,
     FORBIDDEN_TEXT,
@@ -226,7 +227,7 @@ async def dataset_download(req: DatasetDownloadRequest) -> DatasetDownloadRespon
         logger.error(
             "Dataset download ({}) failed: {}\n{}", req.provider, detail, trace
         )
-        raise HTTPException(500, detail) from None
+        raise HTTPException(500, unexpected_error(exc, detail=detail)) from None
 
 
 def _reveal(secret: SecretStr | None) -> str | None:

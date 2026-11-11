@@ -332,12 +332,14 @@ class DeviceConfig(BaseModel):
     """Compute device selection for training and evaluation.
 
     ``kind`` chooses the broad category:
-    - ``cpu``: force CPU even when CUDA is available
-    - ``cuda``: single GPU (``gpu_ids[0]`` if given, otherwise GPU 0)
+    - ``cpu``: force CPU even when an accelerator is available
+    - ``cuda``: single GPU (``gpu_ids[0]`` if given, otherwise GPU 0); on a
+      machine without CUDA this falls back to MPS, then CPU
     - ``multi_cuda``: DataParallel across ``gpu_ids`` (or all visible GPUs)
+    - ``mps``: Apple's Metal GPU, experimental (ADR-192); ``gpu_ids`` is ignored
     """
 
-    kind: Literal["cpu", "cuda", "multi_cuda"] = "cuda"
+    kind: Literal["cpu", "cuda", "multi_cuda", "mps"] = "cuda"
     gpu_ids: list[int] | None = None
 
     @field_validator("gpu_ids")

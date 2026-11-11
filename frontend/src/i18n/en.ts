@@ -260,6 +260,11 @@ export const en: Dict = {
     errorPrefix: (message: string) => `error: ${message}`,
     cudaNotDetected: "cuda not detected",
     cpuSubtitle: "Train on the CPU",
+    // Apple's GPU is experimental until it is checked on a real Mac (ADR-192).
+    mpsTitle: "Apple GPU (MPS) · experimental",
+    mpsSummary: "apple gpu (mps)",
+    mpsOption: "Apple GPU (MPS)",
+    mpsSubtitle: "Train on the Mac's GPU · experimental",
   },
   welcome: {
     askName: "What's your name?",

@@ -27,11 +27,12 @@ from visionforge.core.run_trackers import RunTracker, TrackerFactory
 from visionforge.core.tracking import TensorBoardLogger
 from visionforge.core.training_health import (
     collapsed_predictions,
+    mps_not_deterministic,
     stagnant_loss,
     summarize,
 )
 from visionforge.utils.config import DeviceConfig, ExperimentConfig
-from visionforge.utils.cuda import check_cuda
+from visionforge.utils.cuda import check_cuda, mps_available
 
 
 @dataclass
@@ -132,7 +133,22 @@ def resolve_device(device_cfg: DeviceConfig) -> tuple[torch.device, list[int], s
     if device_cfg.kind == "cpu":
         return torch.device("cpu"), [], "cpu"
 
+    if device_cfg.kind == "mps":
+        if mps_available():
+            return torch.device("mps"), [], "mps (Apple GPU)"
+        logger.warning("Device requested 'mps' but MPS unavailable — using the CPU.")
+        return torch.device("cpu"), [], "cpu (fallback: MPS unavailable)"
+
     if not info.available:
+        # "cuda" is the default and means "the accelerator": on a Mac that is
+        # the Apple GPU (ADR-192). The label keeps the word fallback so run.json
+        # shows the run did not get the device its config names.
+        if mps_available():
+            logger.warning(
+                "Device requested '{}' but CUDA unavailable — using the Apple GPU (MPS).",
+                device_cfg.kind,
+            )
+            return torch.device("mps"), [], "mps (fallback: CUDA unavailable)"
         logger.warning(
             "Device requested '{}' but CUDA unavailable — falling back to CPU.",
             device_cfg.kind,
@@ -495,6 +511,26 @@ class Trainer:
             patience_counter, self._config.training.early_stopping_patience
         )
 
+    def _health_warnings(self, history: list[EpochResult]) -> list[dict[str, str]]:
+        """What run.json must say about this run besides its numbers."""
+        # A run that collapsed still reports an accuracy, so say so out loud
+        # rather than letting the number stand on its own (ADR-099).
+        return summarize(
+            [
+                collapsed_predictions(
+                    self._last_val_preds,
+                    2
+                    if self._config.task == "binary"
+                    else self._config.model.num_classes,
+                ),
+                stagnant_loss([h.train_loss for h in history]),
+                # Apple's GPU has no deterministic kernels (ADR-192).
+                mps_not_deterministic(
+                    self._device.type, self._config.training.deterministic
+                ),
+            ]
+        )
+
     def _finish_training(
         self,
         train_result: TrainResult,
@@ -506,19 +542,7 @@ class Trainer:
         progress_callback: Callable[[dict[str, Any]], None] | None,
     ) -> TrainResult:
         """Summarize health, finish checkpoint writes and publish the run."""
-        # A run that collapsed still reports an accuracy, so say so out loud
-        # rather than letting the number stand on its own (ADR-099).
-        health = summarize(
-            [
-                collapsed_predictions(
-                    self._last_val_preds,
-                    2
-                    if self._config.task == "binary"
-                    else self._config.model.num_classes,
-                ),
-                stagnant_loss([h.train_loss for h in train_result.history]),
-            ]
-        )
+        health = self._health_warnings(train_result.history)
         train_result.warnings = health
         for warning in health:
             logger.warning("{}", warning["message"])

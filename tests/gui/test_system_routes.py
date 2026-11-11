@@ -13,7 +13,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from visionforge import __version__
-from visionforge.gui.api import routes
+from visionforge.gui.api import routes, system_service
 from visionforge.gui.server import app
 from visionforge.utils.cuda import CUDAInfo
 
@@ -55,6 +55,7 @@ def test_device_info_cpu_name_fallbacks(
     monkeypatch.setattr(platform, "processor", lambda: processor)
     monkeypatch.setattr(platform, "machine", lambda: machine)
     monkeypatch.setattr(routes, "check_cuda", lambda: CUDAInfo(available=False))
+    monkeypatch.setattr(system_service, "mps_available", lambda: False)
 
     response = TestClient(app).get("/api/device/info")
 
@@ -62,6 +63,7 @@ def test_device_info_cpu_name_fallbacks(
     assert response.json() == {
         "cuda_available": False,
         "cuda_version": None,
+        "mps_available": False,
         "cpu_name": expected,
         "gpus": [],
     }

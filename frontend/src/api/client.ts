@@ -960,6 +960,8 @@ export interface GPUInfo {
 export interface DeviceInfoResponse {
   cuda_available: boolean;
   cuda_version: string | null;
+  // Apple's Metal GPU, experimental (ADR-192).
+  mps_available: boolean;
   cpu_name: string;
   gpus: GPUInfo[];
 }

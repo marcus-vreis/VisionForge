@@ -856,7 +856,9 @@ class TestADownloadErrorDoesNotLeakTheCredential:
         )
 
         detail = resp.json()["detail"]
-        assert detail.startswith("ConnectionError: ")
+        assert detail.startswith(
+            "Algo deu errado no servidor. Detalhe técnico: ConnectionError: "
+        )
         assert "api.roboflow.com" in detail
         assert "Max retries exceeded" in detail
         # The operator still gets the failure, with provider and cause.
