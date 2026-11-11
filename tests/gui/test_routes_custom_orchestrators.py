@@ -17,6 +17,7 @@ from pydantic import Field
 from torch import nn
 
 import visionforge.gui.api.execution as execution_mod
+import visionforge.gui.api.strategies as strategies
 from tests.helpers import wait_experiment_done
 from visionforge.tasks import (
     BaseTaskConfig,
@@ -26,6 +27,9 @@ from visionforge.tasks import (
 )
 
 from .conftest import occupy_queue, release_queue
+
+# Any: the tests swap its orchestrators and executors for fakes.
+strategies_mod: Any = strategies
 
 
 @pytest.fixture(autouse=True)
@@ -126,8 +130,8 @@ class TestCustomReplicates:
                 ReplicateTrial(seeds[1], "success", {"mae": 0.6}, 0.1),
             ]
 
-        orig = routes_mod.run_replicates
-        routes_mod.run_replicates = fake_replicates
+        orig = strategies_mod.run_replicates
+        strategies_mod.run_replicates = fake_replicates
         try:
             client = live_client
             resp = client.post(
@@ -148,7 +152,7 @@ class TestCustomReplicates:
             assert report["metric"] == "mae"
             assert report["total_replicates"] == 2
         finally:
-            routes_mod.run_replicates = orig
+            strategies_mod.run_replicates = orig
             execution_mod._JOB_STATES.clear()
 
     def test_unknown_key_404(self, app_and_routes: tuple, tmp_path: Path) -> None:
@@ -215,8 +219,8 @@ class TestCustomSweep:
                 SweepTrial(1, {"scale": 2.0}, "success", {"mae": 0.8}),
             ]
 
-        orig = routes_mod.run_sweep
-        routes_mod.run_sweep = fake_sweep
+        orig = strategies_mod.run_sweep
+        strategies_mod.run_sweep = fake_sweep
         try:
             client = live_client
             resp = client.post(
@@ -243,7 +247,7 @@ class TestCustomSweep:
             assert report["mode"] == "grid"
             assert report["total_trials"] == 2
         finally:
-            routes_mod.run_sweep = orig
+            strategies_mod.run_sweep = orig
             execution_mod._JOB_STATES.clear()
 
     def test_sweep_rejects_path_unknown_to_the_task(

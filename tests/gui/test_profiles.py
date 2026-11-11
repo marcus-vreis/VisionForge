@@ -28,6 +28,7 @@ from pydantic import BaseModel
 
 import visionforge.gui.api.custom_task_routes as custom_tasks_mod
 import visionforge.gui.api.execution as execution_mod
+import visionforge.gui.api.strategies as strategies_mod
 import visionforge.gui.api.submission as submission_mod
 import visionforge.gui.api.training_routes as training_mod
 from tests.helpers import wait_experiment_done
@@ -1221,7 +1222,7 @@ class TestEverySubmissionIsScoped:
 
             return fake
 
-        async def fake_cv(config, req, run_id, cv_fn, task_label):  # type: ignore[no-untyped-def]
+        async def fake_cv(config, req, run_id, cv_fn, task_label, *, models_dir):  # type: ignore[no-untyped-def]
             outputs.append(paths(config.output))
             outputs.append(paths(req.config["output"]))
 
@@ -1235,11 +1236,11 @@ class TestEverySubmissionIsScoped:
         ):
             monkeypatch.setattr(training_mod, name, single(0))
         monkeypatch.setattr(custom_tasks_mod, "_execute_custom_task", single(1))
-        monkeypatch.setattr(routes_mod, "_execute_comparison", single(1))
-        monkeypatch.setattr(routes_mod, "_execute_sweep", single(1))
-        monkeypatch.setattr(routes_mod, "_execute_replicated_comparison", single(1))
-        monkeypatch.setattr(routes_mod, "_execute_replicates", single(1))
-        monkeypatch.setattr(routes_mod, "_execute_task_cv", fake_cv)
+        monkeypatch.setattr(strategies_mod, "_execute_comparison", single(1))
+        monkeypatch.setattr(strategies_mod, "_execute_sweep", single(1))
+        monkeypatch.setattr(strategies_mod, "_execute_replicated_comparison", single(1))
+        monkeypatch.setattr(strategies_mod, "_execute_replicates", single(1))
+        monkeypatch.setattr(strategies_mod, "_execute_task_cv", fake_cv)
         yield jobs, outputs
         clear_task_registry()
 

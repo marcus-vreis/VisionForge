@@ -4,8 +4,8 @@
 ``/api/custom/{key}/...`` hides, restores and deletes a custom task, serves its
 form schema and starts a run of it. The run goes to the queue through
 ``submission._submit_job`` and runs in ``_execute_custom_task``, which writes
-only its own job's state (ADR-185). A custom task's sweep and replicates stay
-with the other strategies in ``routes.py`` for now.
+only its own job's state (ADR-185). A custom task's sweep, replicates and
+paired comparison are with the other strategies in ``strategy_routes.py``.
 
 ``routes.py`` includes ``router`` and the run router where these routes used to
 be defined, so the OpenAPI document and the route order do not change. A test

@@ -15,9 +15,13 @@ import pytest
 from fastapi.testclient import TestClient
 
 import visionforge.gui.api.execution as execution_mod
+import visionforge.gui.api.strategies as strategies
 from tests.helpers import wait_experiment_done
 
 from .conftest import occupy_queue, release_queue
+
+# Any: the tests swap its orchestrators and executors for fakes.
+strategies_mod: Any = strategies
 
 
 @pytest.fixture
@@ -111,8 +115,8 @@ class TestDispatch:
                 "power_note": "",
             }
 
-        orig = routes_mod.run_replicated_comparison
-        routes_mod.run_replicated_comparison = fake_comparison
+        orig = strategies_mod.run_replicated_comparison
+        strategies_mod.run_replicated_comparison = fake_comparison
         try:
             client = live_client
             resp = client.post(
@@ -141,7 +145,7 @@ class TestDispatch:
             assert (report_dir / "comparison_summary.json").exists()
             assert (report_dir / "comparison_table.tex").exists()
         finally:
-            routes_mod.run_replicated_comparison = orig
+            strategies_mod.run_replicated_comparison = orig
             execution_mod._JOB_STATES.clear()
 
     def test_seeds_derived_from_the_config_when_omitted(
@@ -157,8 +161,8 @@ class TestDispatch:
             captured["seeds"] = seeds
             return {"comparisons": [{"x": 1}], "skipped_variants": []}
 
-        orig = routes_mod.run_replicated_comparison
-        routes_mod.run_replicated_comparison = fake_comparison
+        orig = strategies_mod.run_replicated_comparison
+        strategies_mod.run_replicated_comparison = fake_comparison
         try:
             client = live_client
             resp = client.post(
@@ -174,7 +178,7 @@ class TestDispatch:
             # RegressionConfig defaults training.seed to 42 -> 42, 43, 44
             assert captured["seeds"] == [42, 43, 44]
         finally:
-            routes_mod.run_replicated_comparison = orig
+            strategies_mod.run_replicated_comparison = orig
             execution_mod._JOB_STATES.clear()
 
 
@@ -253,8 +257,8 @@ class TestGuards:
         ):
             return {"comparisons": [], "skipped_variants": list(variants)}
 
-        orig = routes_mod.run_replicated_comparison
-        routes_mod.run_replicated_comparison = fake_comparison
+        orig = strategies_mod.run_replicated_comparison
+        strategies_mod.run_replicated_comparison = fake_comparison
         try:
             client = live_client
             resp = client.post(
@@ -271,5 +275,5 @@ class TestGuards:
             # The error names what was skipped instead of a bare traceback.
             assert "baseline" in status["error"]
         finally:
-            routes_mod.run_replicated_comparison = orig
+            strategies_mod.run_replicated_comparison = orig
             execution_mod._JOB_STATES.clear()

@@ -12,7 +12,8 @@ from pathlib import Path
 from typing import Any
 
 from visionforge.core.latex_export import cv_to_latex, replicates_to_latex
-from visionforge.gui.api.routes import _render_run_markdown, _write_advanced_summary
+from visionforge.gui.api.routes import _render_run_markdown
+from visionforge.gui.api.strategies import _write_advanced_summary
 
 
 def _rows(path: Path) -> list[dict[str, str]]:
