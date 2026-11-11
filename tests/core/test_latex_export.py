@@ -224,7 +224,23 @@ class TestStoppedRunsInTheTables:
             }
         )
 
-        assert r"\caption{Experiment: 2-fold cross-validation.}" in tex
+        assert r"\caption{Experiment: 2-fold cross-validation." in tex
+
+    def test_cv_caption_declares_the_per_fold_epoch_selection(self) -> None:
+        caption = _caption(cv_to_latex(TestCvTable()._report()))
+
+        assert "selected on its own fold's validation split" in caption
+        assert "optimistic" in caption
+
+    def test_partial_cv_caption_declares_it_too(self) -> None:
+        report = TestCvTable()._report()
+        report["stopped"] = True
+        report["n_folds"] = 5
+
+        caption = _caption(cv_to_latex(report))
+
+        assert "folds finished" in caption
+        assert "selected on its own fold's validation split" in caption
 
     def test_replicates_list_only_the_seeds_that_finished(self) -> None:
         report = _replicates_report()

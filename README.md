@@ -153,7 +153,9 @@ without touching the package.
 - **Replicates** — the same config over N seeds, reported as
   `mean ± 95% CI` instead of one lucky number.
 - **K-fold cross-validation** — per-fold metrics plus mean ± std, with
-  fold-safe transforms.
+  fold-safe transforms. Each fold keeps the epoch that did best on its own fold,
+  and that same fold scores it: the mean is optimistic (there is no nested
+  split), and the LaTeX caption says so.
 - **Sweeps** — grid, random or Optuna over any config field.
 - **Paired significance tests** — compare configurations over the *same* seeds,
   with a paired t or Wilcoxon test and the interval of the difference that
@@ -403,7 +405,9 @@ sem tocar no pacote.
 - **Réplicas** — o mesmo config em N sementes, reportado como
   `média ± IC 95%` em vez de um número de sorte.
 - **Validação cruzada K-fold** — métrica por fold mais média ± desvio, com
-  transformações que não vazam entre folds.
+  transformações que não vazam entre folds. Cada fold guarda a época que foi
+  melhor no próprio fold, e esse mesmo fold a avalia: a média é otimista (não há
+  divisão aninhada), e a legenda do LaTeX diz isso.
 - **Buscas** — grid, aleatória ou Optuna sobre qualquer campo do config.
 - **Testes de significância pareados** — compare configurações nas *mesmas*
   sementes, com teste t pareado ou Wilcoxon e o IC da diferença que inverte

@@ -2674,17 +2674,29 @@ CATALOG: dict[str, dict[Lang, str]] = {
         ),
     },
     "latex.cv_caption": {
-        "pt": "{experiment}: validação cruzada com {n_folds} folds.",
-        "en": "{experiment}: {n_folds}-fold cross-validation.",
+        "pt": (
+            "{experiment}: validação cruzada com {n_folds} folds. A época de cada "
+            "fold é escolhida no próprio fold de validação, que também a avalia: "
+            "estimativa otimista, sem divisão aninhada."
+        ),
+        "en": (
+            "{experiment}: {n_folds}-fold cross-validation. Each fold's epoch is "
+            "selected on its own fold's validation split, which also scores it: "
+            "an optimistic estimate, with no nested split."
+        ),
     },
     "latex.cv_caption_partial": {
         "pt": (
             "{experiment}: validação cruzada com {n_folds} folds, {finished} de "
-            "{n_folds} folds concluídos ({detail})."
+            "{n_folds} folds concluídos ({detail}). A época de cada fold é "
+            "escolhida no próprio fold de validação, que também a avalia: "
+            "estimativa otimista, sem divisão aninhada."
         ),
         "en": (
             "{experiment}: {n_folds}-fold cross-validation, {finished} of "
-            "{n_folds} folds finished ({detail})."
+            "{n_folds} folds finished ({detail}). Each fold's epoch is selected "
+            "on its own fold's validation split, which also scores it: an "
+            "optimistic estimate, with no nested split."
         ),
     },
     "latex.cv_mean_sd": {
