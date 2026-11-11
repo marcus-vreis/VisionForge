@@ -1,11 +1,18 @@
 """HTTP integration checks for profile-owned private Hub exports."""
 
 from pathlib import Path
+from typing import Any
 
+import pytest
 from fastapi.testclient import TestClient
 
-from visionforge.gui.api import profile_tokens, routes
+from visionforge.core.hub_export import (
+    PreviewMismatchError,
+    PrivateRepositoryRequiredError,
+)
+from visionforge.gui.api import hub_routes, profile_tokens, routes
 from visionforge.gui.server import app
+from visionforge.utils.messages import tr
 
 
 def test_credentials_are_private_to_workspace_and_profile(tmp_path, monkeypatch):
@@ -53,3 +60,111 @@ def test_malformed_token_payload_never_echoes_secret():
         response = client.put("/api/hub/token", json=body)
         assert response.status_code == 422
         assert "canary-secret" not in response.text
+
+
+def _client_with_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
+    monkeypatch.setenv("VISIONFORGE_HOME", str(tmp_path / "home"))
+    monkeypatch.setattr(routes, "_MODELS_DIR", tmp_path / "models")
+    directory = tmp_path / "models" / "run"
+    directory.mkdir(parents=True)
+    (directory / "run.json").write_text("{}", encoding="utf-8")
+    return TestClient(app)
+
+
+@pytest.mark.parametrize(
+    ("error", "status", "detail"),
+    [
+        (FileNotFoundError("model.pt"), 404, tr("hub.artifact_missing")),
+        (ValueError("no card"), 422, tr("hub.package_invalid", reason="no card")),
+    ],
+)
+def test_preview_failures_map_to_statuses(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    error: Exception,
+    status: int,
+    detail: str,
+) -> None:
+    client = _client_with_run(tmp_path, monkeypatch)
+
+    def fail(directory: Path) -> dict[str, Any]:
+        raise error
+
+    monkeypatch.setattr(hub_routes, "preview_run", fail)
+    response = client.get("/api/hub/preview", params={"run_id": "run"})
+    assert response.status_code == status
+    assert response.json()["detail"] == detail
+
+
+def test_preview_returns_the_package(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    client = _client_with_run(tmp_path, monkeypatch)
+    seen: list[Path] = []
+
+    def preview(directory: Path) -> dict[str, Any]:
+        seen.append(directory)
+        return {"digest": "abc"}
+
+    monkeypatch.setattr(hub_routes, "preview_run", preview)
+    response = client.get("/api/hub/preview", params={"run_id": "run"})
+    assert response.json() == {"digest": "abc"}
+    assert seen == [tmp_path / "models" / "run"]
+
+
+def test_an_invalid_repo_id_is_refused_before_the_lookup(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client = _client_with_run(tmp_path, monkeypatch)
+    payload = {"run_id": "missing", "repo_id": "not a repo", "digest": "d"}
+    response = client.post("/api/hub/export", json=payload)
+    assert response.status_code == 422
+    assert response.json()["detail"] == tr("hub.repo_invalid")
+
+
+@pytest.mark.parametrize(
+    ("error", "status", "detail"),
+    [
+        (FileNotFoundError("model.pt"), 404, tr("hub.artifact_missing")),
+        (PreviewMismatchError("changed"), 409, tr("hub.preview_changed")),
+        (PrivateRepositoryRequiredError("public"), 409, tr("hub.private_required")),
+        (ValueError("no card"), 422, tr("hub.package_invalid", reason="no card")),
+        (RuntimeError("network"), 502, tr("hub.export_failed")),
+    ],
+)
+def test_export_failures_map_to_statuses(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    error: Exception,
+    status: int,
+    detail: str,
+) -> None:
+    client = _client_with_run(tmp_path, monkeypatch)
+    monkeypatch.setattr(hub_routes, "read_token", lambda kind, profile: "profile-tok")
+
+    def fail(directory: Path, repo_id: str, token: str, digest: str) -> dict[str, Any]:
+        raise error
+
+    monkeypatch.setattr(hub_routes, "export_run", fail)
+    payload = {"run_id": "run", "repo_id": "owner/model", "digest": "d"}
+    response = client.post("/api/hub/export", json=payload)
+    assert response.status_code == status
+    assert response.json()["detail"] == detail
+
+
+def test_export_sends_with_the_profile_token(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client = _client_with_run(tmp_path, monkeypatch)
+    monkeypatch.setattr(hub_routes, "read_token", lambda kind, profile: "profile-tok")
+    sent: list[tuple[Path, str, str, str]] = []
+
+    def export(
+        directory: Path, repo_id: str, token: str, digest: str
+    ) -> dict[str, Any]:
+        sent.append((directory, repo_id, token, digest))
+        return {"url": "https://huggingface.co/owner/model"}
+
+    monkeypatch.setattr(hub_routes, "export_run", export)
+    payload = {"run_id": "run", "repo_id": "owner/model", "digest": "d"}
+    response = client.post("/api/hub/export", json=payload)
+    assert response.json() == {"url": "https://huggingface.co/owner/model"}
+    assert sent == [(tmp_path / "models" / "run", "owner/model", "profile-tok", "d")]

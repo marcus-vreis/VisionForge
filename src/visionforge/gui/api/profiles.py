@@ -433,6 +433,21 @@ def create_profile(
     return _build(slug, folder, profiles_dir)
 
 
+def _merged_settings(old: Any, settings: ProfileSettingsUpdate) -> dict[str, Any]:
+    """The saved ``settings`` block with the blocks the request sent merged in."""
+    old_settings = dict(old) if isinstance(old, dict) else {}
+    for key in ("mlflow", "wandb"):
+        new = getattr(settings, key)
+        if new is not None:
+            old_block = old_settings.get(key)
+            old_settings[key] = {
+                **(old_block if isinstance(old_block, dict) else {}),
+                # Only the fields the request named: the rest stay saved.
+                **new.model_dump(exclude_unset=True),
+            }
+    return old_settings
+
+
 def update_profile(
     slug: str,
     profiles_dir: Path,
@@ -460,18 +475,7 @@ def update_profile(
     )
     meta = _read_meta(path)
     if settings is not None:
-        old = meta.get("settings")
-        old_settings = dict(old) if isinstance(old, dict) else {}
-        for key in ("mlflow", "wandb"):
-            new = getattr(settings, key)
-            if new is not None:
-                old_block = old_settings.get(key)
-                old_settings[key] = {
-                    **(old_block if isinstance(old_block, dict) else {}),
-                    # Only the fields the request named: the rest stay saved.
-                    **new.model_dump(exclude_unset=True),
-                }
-        meta["settings"] = old_settings
+        meta["settings"] = _merged_settings(meta.get("settings"), settings)
     if name is not None:
         display = normalize_display_name(name)
         if not display:

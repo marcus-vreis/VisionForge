@@ -42,6 +42,7 @@ from visionforge.gui.api.profiles import (
     normalize_display_name,
     resolve_profile,
     slugify,
+    update_profile,
 )
 from visionforge.gui.api.schemas import RunResponse
 from visionforge.utils.config import OutputConfig
@@ -616,6 +617,24 @@ class TestIdentity:
         default = client.get("/api/profiles").json()["profiles"][0]
 
         assert (default["name"], default["pronoun"]) == ("default", None)
+
+    def test_a_new_name_that_tidies_to_nothing_is_refused(self, tmp_path: Path) -> None:
+        with pytest.raises(ProfileNameError):
+            update_profile("default", tmp_path / "p", tmp_path / "m", name="   ")
+
+        assert not (tmp_path / "p").exists()
+
+    def test_a_file_the_os_refuses_to_write_is_a_clear_error(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        create_profile("Ana", tmp_path / "p")
+
+        def full(self: Path, *args: Any, **kwargs: Any) -> int:
+            raise OSError(28, "No space left on device")
+
+        monkeypatch.setattr(Path, "write_text", full)
+        with pytest.raises(ProfileCreateError, match="No space left"):
+            update_profile("ana", tmp_path / "p", tmp_path / "m", name="Ana Lima")
 
 
 class TestHeaderValidation:
