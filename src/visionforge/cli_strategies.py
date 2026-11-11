@@ -155,10 +155,16 @@ def _run_replicated_comparison(
         run_replicated_comparison,
         validate_variants,
     )
-    from visionforge.core.run_groups import finish_replicated_comparison, resolve_seeds
+    from visionforge.core.run_groups import (
+        finish_replicated_comparison,
+        refuse_output_paths,
+        resolve_seeds,
+    )
     from visionforge.gui.api.schemas import ReplicatedComparisonRequest
 
     req = ReplicatedComparisonRequest.model_validate({**options, "config": config})
+    for overrides in req.variants.values():
+        refuse_output_paths(overrides, "profile.where_comparison")
     runner = runner_for(_task_of(config))
     complete = _complete(runner, req.config)
     try:
@@ -184,7 +190,7 @@ def _run_replicated_comparison(
 def _run_sweep(
     options: dict[str, Any], config: dict[str, Any], models_dir: Path
 ) -> dict[str, Any]:
-    from visionforge.core.run_groups import finish_sweep
+    from visionforge.core.run_groups import finish_sweep, refuse_output_paths
     from visionforge.core.sweep import run_sweep, validate_sweep_space
     from visionforge.core.task_runner import require_validation_selection
     from visionforge.gui.api.schemas import SweepRequest
@@ -194,6 +200,7 @@ def _run_sweep(
         # The GUI sweeps classification through these blocks too.
         raise ValueError(tr("cli.sweep_classification"))
     req = SweepRequest.model_validate({**options, "config": config})
+    refuse_output_paths(req.search_space, "profile.where_sweep")
     runner = runner_for(task)
     # Ranking on test is never an option (ADR-131): refused before training.
     require_validation_selection(runner)

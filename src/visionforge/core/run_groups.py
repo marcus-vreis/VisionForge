@@ -35,6 +35,7 @@ import csv
 import json
 import math
 import os
+from collections.abc import Iterable
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
@@ -460,6 +461,26 @@ def _copy_group_metrics(
 
 _SUCCESS = "success"
 _REPORTS_DIR = "outputs/reports"
+
+
+def refuse_output_paths(paths: Iterable[str], where: str) -> None:
+    """Reject a dot-path that would move a trial's output folders.
+
+    ``Profile.scope_dict`` points ``output`` at the profile before a sweep or a
+    comparison starts, but both apply their dot-paths to that dict once per
+    trial. A path under ``output`` would therefore undo the scoping (ADR-114),
+    and no experiment legitimately varies where its files go. The GUI routes and
+    ``visionforge run`` (ADR-184) share this check.
+
+    ``where`` is the catalog key of the phrase that ends the sentence ("in a
+    sweep"), because that phrase differs between languages.
+
+    Raises:
+        ValueError: naming the first offending path.
+    """
+    for path in paths:
+        if str(path).split(".", 1)[0] == "output":
+            raise ValueError(tr("profile.output_locked", where=tr(where), path=path))
 
 
 def resolve_seeds(

@@ -24,6 +24,7 @@ from visionforge.utils.regression_config import RegressionConfig
 
 R2 = "r2"
 LEARNING_RATE = "training.learning_rate"
+OUTPUT_MODELS_DIR = "output.models_dir"
 
 
 class FakeRunner:
@@ -217,6 +218,32 @@ class TestReplicatedComparison:
         with pytest.raises(ValueError, match="seeds"):
             cli.run_strategy(strategy, config)
 
+    def test_a_variant_moving_the_output_folders_exits_with_status_2(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        fake_runner: FakeRunner,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        path = _write(
+            tmp_path,
+            {
+                "strategy": {
+                    "kind": "replicated_comparison",
+                    "seeds": [0, 1],
+                    "variants": {"a": {}, "b": {OUTPUT_MODELS_DIR: "elsewhere"}},
+                },
+                "config": _task_config(tmp_path),
+            },
+        )
+        with pytest.raises(SystemExit) as exit_info:
+            _run_main(monkeypatch, path)
+        assert exit_info.value.code == 2
+        err = capsys.readouterr().err
+        assert OUTPUT_MODELS_DIR in err
+        assert "comparison" in err or "comparação" in err
+        assert fake_runner.calls == []
+
 
 class TestSweep:
     def test_a_standalone_sweep_calls_run_sweep(
@@ -261,6 +288,31 @@ class TestSweep:
         config = _task_config(tmp_path)
         with pytest.raises(ValueError, match="nope"):
             cli.run_strategy(strategy, config)
+        assert fake_runner.calls == []
+
+    def test_a_sweep_space_moving_the_output_folders_exits_with_status_2(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        fake_runner: FakeRunner,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        path = _write(
+            tmp_path,
+            {
+                "strategy": {
+                    "kind": "sweep",
+                    "search_space": {OUTPUT_MODELS_DIR: ["a", "b"]},
+                },
+                "config": _task_config(tmp_path),
+            },
+        )
+        with pytest.raises(SystemExit) as exit_info:
+            _run_main(monkeypatch, path)
+        assert exit_info.value.code == 2
+        err = capsys.readouterr().err
+        assert OUTPUT_MODELS_DIR in err
+        assert "sweep" in err or "varredura" in err
         assert fake_runner.calls == []
 
 
