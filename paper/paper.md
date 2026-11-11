@@ -32,7 +32,7 @@ detection, image regression, semantic segmentation and anomaly detection, plus
 task families a researcher defines in a Python file. Beyond training one model,
 the interface runs the experiments a result needs before it can be reported:
 the same configuration repeated over several seeds with 95% confidence
-intervals, paired comparisons between variants with Holm-corrected tests,
+intervals, paired comparisons between variants with Holm-corrected tests [@holm1979simple],
 K-fold cross-validation and hyperparameter sweeps. Every run writes a versioned
 `run.json` that records its configuration, seeds, library versions, hardware
 and dataset fingerprint, so a number in a paper can be traced to the run that
@@ -49,8 +49,10 @@ choice being tested: seed variance in deep learning is documented
 single-seed ablation remains the default way to decide whether a change helps.
 
 We measured how much this matters in small-data fine-tuning with VisionForge
-itself, in a pre-registered study (`research/seed_variance/`): three datasets,
-three architectures, two common ablations, ten paired seeds each, 270 training
+itself, in a pre-registered study (`research/seed_variance/`): three datasets
+(USK-Coffee [@febriana2022usk], a 10% subset of it, and Beans
+[@makerere2020beans]), three architectures [@he2016resnet; @liu2022convnext;
+@liu2021swin], two common ablations, ten paired seeds each, 270 training
 runs. In all 18 cells the seed standard deviation was at least half the ablation
 effect, and in 15 it exceeded the effect. Concluding from one seed would have
 pointed the wrong way (a difference of opposite sign to the ten-seed mean, or
@@ -79,7 +81,14 @@ data off the machine. Hyperparameter optimisers such as Optuna
 [@akiba2019optuna], which VisionForge uses for its sweeps, search for the best
 configuration but report it from one evaluation per trial. No-code tools such as
 Teachable Machine [@carney2020teachable] lower the entry barrier furthest, but
-keep no provenance and offer no statistics.
+keep no provenance and offer no statistics. Three other tools overlap with parts
+of VisionForge. Ultralytics Platform [@ultralytics2026platform] adds dataset
+management, cloud or local training and experiment comparison around the
+Ultralytics models; FiftyOne [@moore2020fiftyone] curates datasets and evaluates
+model predictions; deep-significance [@ulmer2022deep] offers significance tests
+and Bonferroni correction as a library called from the researcher's own code.
+VisionForge's paired tests overlap with the last; it differs in running the
+training and the multi-seed design behind one interface.
 
 We built VisionForge rather than contributing to one of these because the gap
 is in how the pieces are joined, not in any one of them: a local graphical
