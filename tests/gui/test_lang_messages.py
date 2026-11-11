@@ -643,7 +643,7 @@ class TestRunRoutesOwnRefusals:
     ) -> None:
         from fastapi import HTTPException
 
-        from visionforge.gui.api.routes import _reject_custom_task_action
+        from visionforge.gui.api.evaluation_routes import _reject_custom_task_action
 
         run_id = _run_with(tmp_path, {"task": "custom:vlm"})
         run_dir = tmp_path / "outputs" / "models" / "e" / run_id

@@ -1,8 +1,9 @@
 """Per-model test for detection runs: evaluate a saved checkpoint on a new set.
 
-The detection analogue of ``routes._execute_run_test`` (classification): it loads
-the run's best checkpoint, runs it over a new YOLO dataset, computes mAP@0.5, and
-appends the result to ``run.json``'s ``tests[]`` (ADR-013 test-history contract).
+The detection analogue of ``evaluation_routes._execute_run_test``
+(classification): it loads the run's best checkpoint, runs it over a new YOLO
+dataset, computes mAP@0.5, and appends the result to ``run.json``'s ``tests[]``
+(ADR-013 test-history contract).
 
 Backend split mirrors the trainer (ADR-033/034): the torchvision path rebuilds
 the detector + DataLoader and reuses ``detection_metrics`` (CPU, dependency-light);
