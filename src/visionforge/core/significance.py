@@ -28,6 +28,13 @@ from scipy import stats
 from visionforge.core.metric_vocabulary import is_lower_is_better
 
 TestKind = Literal["paired_t", "wilcoxon"]
+# How the interval of the paired difference was built: the dual of the test that
+# produced the p-value next to it (ADR-187), so the two cannot disagree.
+CiMethod = Literal["t", "hodges_lehmann"]
+
+# Confidence of the paired-difference interval: dual to a two-sided test at
+# alpha = 0.05, the comparison's significance level.
+_CI_CONFIDENCE = 0.95
 
 # Below this many pairs a normality check is meaningless, so the rank-based
 # test is the honest default.
@@ -67,14 +74,27 @@ class PairedComparison:
     p_value: float
     effect_size: float  # Cohen's d_z (paired)
     effect_label: str
-    ci_low: float  # bootstrap CI of the paired difference
-    ci_high: float
+    # 95% interval of the paired difference, built by inverting the test that
+    # gave ``p_value`` (``ci_method``). None at an end the data cannot bound:
+    # below 6 pairs no Hodges-Lehmann interval reaches 95% (ADR-187).
+    ci_low: float | None
+    ci_high: float | None
     # Smallest p the chosen test could possibly return with this many pairs.
     min_achievable_p: float = 0.0
     # True when that floor is above alpha: no result, however consistent, can
     # reach significance — "not significant" then means "not enough seeds".
     underpowered: bool = False
     significant: bool = False  # set by holm_correct over a family of tests
+    # "t": Student-t interval of the mean difference (dual of the paired t).
+    # "hodges_lehmann": Walsh-average interval with the exact signed-rank
+    # critical value (dual of the Wilcoxon); it brackets the pseudo-median.
+    ci_method: CiMethod = "t"
+    # The point the interval brackets: the mean difference for "t", the
+    # Hodges-Lehmann estimate (median of the Walsh averages) otherwise.
+    ci_estimate: float | None = None
+    # Coverage the interval actually has: the exact signed-rank distribution is
+    # discrete, so the Hodges-Lehmann one is at least 95%, rarely exactly.
+    ci_confidence: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """JSON-ready form for the run report."""
@@ -119,6 +139,109 @@ def bootstrap_ci(
         n_resamples=n_resamples,
         n=int(sample.size),
     )
+
+
+def paired_t_ci(
+    differences: list[float], *, confidence: float = _CI_CONFIDENCE
+) -> tuple[float, float]:
+    """Student-t interval of the mean paired difference.
+
+    ``mean +- t(1 - (1 - confidence)/2, n - 1) * sd / sqrt(n)``: the set of
+    shifts a two-sided paired t test at ``1 - confidence`` does not reject, so
+    it excludes zero exactly when that test's p is below ``1 - confidence``.
+
+    Raises:
+        ValueError: with fewer than two differences (no spread to scale by).
+    """
+    n = len(differences)
+    if n < 2:
+        raise ValueError(f"a t interval needs at least 2 differences, got {n}")
+    mean = statistics.fmean(differences)
+    critical = float(stats.t.ppf(0.5 + confidence / 2.0, n - 1))
+    half_width = critical * statistics.stdev(differences) / math.sqrt(n)
+    return mean - half_width, mean + half_width
+
+
+def signed_rank_cdf(n: int) -> np.ndarray:
+    """``P(T+ <= t)`` for ``t = 0 .. n(n+1)/2`` under the null, without ties.
+
+    Under the null each rank 1..n enters ``T+`` with probability 1/2,
+    independently, so the distribution is the convolution of n two-point laws;
+    built here rank by rank (exact up to float rounding).
+    """
+    total = n * (n + 1) // 2
+    pmf = np.zeros(total + 1)
+    pmf[0] = 1.0
+    for rank in range(1, n + 1):
+        shifted = np.zeros_like(pmf)
+        shifted[rank:] = pmf[:-rank]
+        pmf = 0.5 * (pmf + shifted)
+    return np.cumsum(pmf)
+
+
+@dataclass(frozen=True)
+class HodgesLehmannCI:
+    """Hodges-Lehmann estimate and its distribution-free interval."""
+
+    estimate: float
+    ci_low: float | None  # None when no interval reaches the confidence
+    ci_high: float | None
+    confidence: float  # coverage actually attained (>= the requested one)
+
+
+def hodges_lehmann_ci(
+    differences: list[float], *, confidence: float = _CI_CONFIDENCE
+) -> HodgesLehmannCI:
+    """Interval of the pseudo-median from the Walsh averages (Hollander & Wolfe).
+
+    With the ``M = n(n+1)/2`` Walsh averages ``(d_i + d_j)/2, i <= j`` sorted,
+    the interval is ``[W_(k), W_(M+1-k)]`` where ``k`` is the largest integer
+    with ``P(T+ <= k-1) <= (1 - confidence)/2`` under the exact null
+    distribution of the signed-rank statistic. A shift is inside it exactly
+    when the exact two-sided Wilcoxon test of ``d - shift`` does not reject, so
+    it excludes zero exactly when that test's p is below ``1 - confidence``.
+
+    Exact without ties or zero differences. With them scipy's p switches to
+    the normal approximation while this interval keeps the exact critical
+    value, so at the boundary the two can disagree (rarely; ADR-187).
+
+    Below 6 differences even the most extreme ranks have probability above
+    2.5% (``2/2**n > 0.05``): no finite interval reaches 95%, and both ends
+    come back ``None`` (the test is underpowered for the same reason).
+
+    Raises:
+        ValueError: when ``differences`` is empty.
+    """
+    n = len(differences)
+    if n == 0:
+        raise ValueError("a Hodges-Lehmann interval needs at least 1 difference")
+    values = np.asarray(differences, dtype=float)
+    rows, cols = np.triu_indices(n)
+    walsh = np.sort((values[rows] + values[cols]) / 2.0)
+    estimate = float(np.median(walsh))
+    cdf = signed_rank_cdf(n)
+    tail = (1.0 - confidence) / 2.0
+    # Number of t with P(T+ <= t) <= tail, i.e. the largest admissible k.
+    k = int(np.searchsorted(cdf, tail, side="right"))
+    if k == 0:
+        return HodgesLehmannCI(estimate, None, None, 1.0)
+    return HodgesLehmannCI(
+        estimate=estimate,
+        ci_low=float(walsh[k - 1]),
+        ci_high=float(walsh[walsh.size - k]),
+        confidence=float(1.0 - 2.0 * cdf[k - 1]),
+    )
+
+
+def _difference_interval(
+    kind: TestKind, differences: list[float]
+) -> tuple[CiMethod, float | None, float | None, float, float]:
+    """The interval dual to ``kind``: method, low, high, estimate, coverage."""
+    if kind == "paired_t":
+        low, high = paired_t_ci(differences)
+        return "t", low, high, statistics.fmean(differences), _CI_CONFIDENCE
+    hl = hodges_lehmann_ci(differences)
+    return "hodges_lehmann", hl.ci_low, hl.ci_high, hl.estimate, hl.confidence
 
 
 def cohens_dz(differences: list[float]) -> float:
@@ -210,7 +333,6 @@ def paired_comparison(
     label_b: str = "B",
     test: TestKind | Literal["auto"] = "auto",
     alpha: float = 0.05,
-    seed: int = 0,
 ) -> PairedComparison:
     """Compare two configs over their shared seeds.
 
@@ -247,7 +369,11 @@ def paired_comparison(
         statistic, p_value = float(result.statistic), float(result.pvalue)
 
     dz = cohens_dz(differences)
-    ci = bootstrap_ci(differences, seed=seed)
+    # The interval inverts the same test as the p-value (ADR-187): a percentile
+    # bootstrap here once excluded zero beside p > 0.05 with ten seeds.
+    ci_method, ci_low, ci_high, ci_estimate, ci_confidence = _difference_interval(
+        kind, differences
+    )
     # scipy's Wilcoxon drops zero differences (zero_method="wilcox"), so a tied
     # pair adds nothing to the test and the floor is set by the others.
     tested = (
@@ -268,10 +394,13 @@ def paired_comparison(
         p_value=p_value,
         effect_size=dz,
         effect_label=_effect_label(dz),
-        ci_low=ci.ci_low if ci else math.nan,
-        ci_high=ci.ci_high if ci else math.nan,
+        ci_low=ci_low,
+        ci_high=ci_high,
         min_achievable_p=floor,
         underpowered=floor > alpha,
+        ci_method=ci_method,
+        ci_estimate=ci_estimate,
+        ci_confidence=ci_confidence,
     )
 
 
@@ -308,7 +437,6 @@ def comparison_matrix(
     groups: dict[str, dict[int, float]],
     *,
     alpha: float = 0.05,
-    seed: int = 0,
 ) -> list[PairedComparison]:
     """Every pairwise paired comparison between groups, Holm-corrected.
 
@@ -328,7 +456,6 @@ def comparison_matrix(
                         label_a=label_a,
                         label_b=label_b,
                         alpha=alpha,
-                        seed=seed,
                     )
                 )
             except ValueError:
@@ -338,11 +465,16 @@ def comparison_matrix(
 
 __all__ = [
     "BootstrapCI",
+    "CiMethod",
+    "HodgesLehmannCI",
     "PairedComparison",
     "TestKind",
     "bootstrap_ci",
     "cohens_dz",
     "comparison_matrix",
+    "hodges_lehmann_ci",
     "holm_correct",
     "paired_comparison",
+    "paired_t_ci",
+    "signed_rank_cdf",
 ]

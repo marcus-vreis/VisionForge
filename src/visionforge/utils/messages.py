@@ -2681,6 +2681,36 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "pt": "{experiment}: comparação pareada nas seeds compartilhadas.",
         "en": "{experiment}: paired comparison over shared seeds.",
     },
+    "latex.comparison_ci": {
+        "pt": r"IC 95\% da diferença: {methods}.",
+        "en": r"95\% CI of the difference: {methods}.",
+    },
+    "latex.ci_method_t": {
+        "pt": r"$t$ de Student da média (dual do teste $t$ pareado)",
+        "en": r"Student $t$ of the mean (dual of the paired $t$ test)",
+    },
+    "latex.ci_method_hodges_lehmann": {
+        "pt": (
+            "Hodges-Lehmann sobre as médias de Walsh com valor crítico exato "
+            "(dual do teste de Wilcoxon, cobre a pseudomediana e não a média, "
+            "--- com menos de 6 pares)"
+        ),
+        "en": (
+            "Hodges-Lehmann over the Walsh averages with the exact critical "
+            "value (dual of the Wilcoxon test, brackets the pseudo-median rather "
+            "than the mean, --- below 6 pairs)"
+        ),
+    },
+    "latex.ci_method_bootstrap": {
+        "pt": (
+            "bootstrap percentil (relatório anterior à ADR-187, subcobre com "
+            "poucas seeds)"
+        ),
+        "en": (
+            "percentile bootstrap (report predating ADR-187, under-covers with "
+            "few seeds)"
+        ),
+    },
     "latex.comparison_note": {
         "pt": (
             r"$^{{*}}$ significativo a $\alpha={alpha}$ após a correção de "

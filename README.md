@@ -156,7 +156,8 @@ without touching the package.
   fold-safe transforms.
 - **Sweeps** — grid, random or Optuna over any config field.
 - **Paired significance tests** — compare configurations over the *same* seeds,
-  with bootstrap CIs, a paired t or Wilcoxon test, Cohen's `d_z` and
+  with a paired t or Wilcoxon test and the interval of the difference that
+  inverts it (t or Hodges-Lehmann), Cohen's `d_z` and
   Holm-Bonferroni correction. It refuses to compare runs whose seeds do not
   line up, and says when the seed count makes significance unreachable — so
   "not significant" is never mistaken for "no effect".
@@ -405,7 +406,8 @@ sem tocar no pacote.
   transformações que não vazam entre folds.
 - **Buscas** — grid, aleatória ou Optuna sobre qualquer campo do config.
 - **Testes de significância pareados** — compare configurações nas *mesmas*
-  sementes, com IC por bootstrap, teste t pareado ou Wilcoxon, `d_z` de Cohen e
+  sementes, com teste t pareado ou Wilcoxon e o IC da diferença que inverte
+  esse teste (t ou Hodges-Lehmann), `d_z` de Cohen e
   correção de Holm-Bonferroni. Ele se recusa a comparar execuções cujas
   sementes não batem, e avisa quando o número de sementes torna a significância
   inalcançável — para que "não significativo" nunca seja lido como "sem

@@ -5,8 +5,10 @@ and pin the honesty guards (paired-only, Holm correction, refusals).
 
 from __future__ import annotations
 
+import itertools
 import math
 
+import numpy as np
 import pytest
 from scipy import stats
 
@@ -15,10 +17,13 @@ from visionforge.core.significance import (
     bootstrap_ci,
     cohens_dz,
     comparison_matrix,
+    hodges_lehmann_ci,
     holm_correct,
     infer_direction,
     min_achievable_p,
     paired_comparison,
+    paired_t_ci,
+    signed_rank_cdf,
 )
 
 
@@ -123,8 +128,12 @@ class TestPairedComparison:
         assert result.label_b == "baseline"
 
     def test_difference_ci_excludes_zero_for_a_consistent_win(self) -> None:
-        a, b = self._groups()
+        # Eight pairs: with five the Wilcoxon cannot reach p < 0.05, so its
+        # dual interval cannot exclude zero either (ADR-187).
+        a = {i: 0.90 + 0.01 * (i % 3) for i in range(8)}
+        b = {i: 0.85 + 0.007 * (i % 4) for i in range(8)}
         result = paired_comparison("accuracy", a, b)
+        assert result.ci_low is not None
         assert result.ci_low > 0
 
     def test_identical_results_cannot_be_significant(self) -> None:
@@ -330,3 +339,228 @@ class TestFloorWithTiedPairs:
         result = paired_comparison("accuracy", a, b, test="paired_t")
 
         assert result.min_achievable_p == 0.0
+
+
+# Ten seeds whose differences pass Shapiro-Wilk (auto picks the paired t) with
+# p = 0.069: the percentile bootstrap of the old code gave [0.0017, 0.0263],
+# excluding zero beside a non-significant p (STAT-3, ADR-187).
+_BORDERLINE = [
+    0.0287,
+    0.0078,
+    0.0046,
+    0.0101,
+    0.0135,
+    -0.0133,
+    0.0267,
+    0.0538,
+    0.0263,
+    -0.019,
+]
+
+# Hollander & Wolfe's Hamilton depression scores (also R's ?wilcox.test
+# example): first and second visit of nine patients.
+_HAMILTON_X = [1.83, 0.50, 1.62, 2.48, 1.68, 1.88, 1.55, 3.06, 1.30]
+_HAMILTON_Y = [0.878, 0.647, 0.598, 2.05, 1.06, 1.29, 1.06, 3.14, 1.29]
+
+
+def _pairs(differences: list[float]) -> tuple[dict[int, float], dict[int, float]]:
+    base = 0.8
+    return (
+        {i: base + d for i, d in enumerate(differences)},
+        dict.fromkeys(range(len(differences)), base),
+    )
+
+
+def _walsh(differences: np.ndarray) -> np.ndarray:
+    rows, cols = np.triu_indices(differences.size)
+    return np.sort((differences[rows] + differences[cols]) / 2.0)
+
+
+def _excludes_zero(result: PairedComparison) -> bool:
+    low, high = result.ci_low, result.ci_high
+    assert low is not None
+    assert high is not None
+    return low > 0 or high < 0
+
+
+class TestDifferenceIntervalMatchesTheTest:
+    """The interval of the difference inverts the test beside it (ADR-187)."""
+
+    def test_borderline_t_interval_contains_zero(self) -> None:
+        a, b = _pairs(_BORDERLINE)
+        result = paired_comparison("accuracy", a, b)
+
+        assert result.test == "paired_t"
+        assert 0.05 < result.p_value < 0.10
+        assert result.ci_method == "t"
+        assert not _excludes_zero(result)
+
+    def test_t_interval_matches_scipy(self) -> None:
+        a, b = _pairs(_BORDERLINE)
+        expected = stats.ttest_rel(list(a.values()), list(b.values()))
+        interval = expected.confidence_interval(0.95)
+
+        result = paired_comparison("accuracy", a, b, test="paired_t")
+
+        assert result.ci_low == pytest.approx(float(interval.low))
+        assert result.ci_high == pytest.approx(float(interval.high))
+        assert result.ci_estimate == pytest.approx(result.mean_difference)
+        assert result.ci_confidence == 0.95
+
+    def test_t_interval_formula(self) -> None:
+        d = [0.2, -0.1, 0.4, 0.3]
+        half = float(stats.t.ppf(0.975, 3)) * float(np.std(d, ddof=1)) / 2.0
+
+        low, high = paired_t_ci(d)
+
+        assert low == pytest.approx(0.2 - half)
+        assert high == pytest.approx(0.2 + half)
+
+    def test_t_interval_needs_two_differences(self) -> None:
+        with pytest.raises(ValueError, match="at least 2"):
+            paired_t_ci([0.1])
+
+    @pytest.mark.parametrize("sample", range(30))
+    def test_t_interval_is_dual_to_the_t_test(self, sample: int) -> None:
+        rng = np.random.default_rng(1000 + sample)
+        n = int(rng.integers(6, 16))
+        d = rng.normal(rng.normal(0.0, 0.6), 1.0, n).tolist()
+        a, b = _pairs(d)
+
+        result = paired_comparison("accuracy", a, b, test="paired_t")
+
+        assert _excludes_zero(result) == (result.p_value < 0.05)
+
+    @pytest.mark.parametrize("sample", range(30))
+    def test_hodges_lehmann_is_dual_to_the_exact_wilcoxon(self, sample: int) -> None:
+        # Continuous draws: no ties and no zero difference, so scipy's p is the
+        # exact one and the duality is exact.
+        rng = np.random.default_rng(2000 + sample)
+        n = int(rng.integers(6, 16))
+        d = rng.normal(rng.normal(0.0, 0.6), 1.0, n).tolist()
+        a, b = _pairs(d)
+
+        result = paired_comparison("accuracy", a, b, test="wilcoxon")
+
+        assert result.ci_method == "hodges_lehmann"
+        assert _excludes_zero(result) == (result.p_value < 0.05)
+
+    def test_with_ties_the_duality_holds_up_to_a_documented_tolerance(self) -> None:
+        # Ties and zero differences send scipy's p to the normal approximation
+        # while the interval keeps the exact critical value: ADR-187 accepts
+        # disagreement in at most 5% of such cases (1.7% measured at 1 decimal).
+        rng = np.random.default_rng(7)
+        disagreements = 0
+        cases = 0
+        for _ in range(300):
+            n = int(rng.integers(6, 16))
+            d = np.round(rng.normal(rng.normal(0.0, 0.5), 1.0, n), 1)
+            if not np.any(d):
+                continue
+            a, b = _pairs(d.tolist())
+            result = paired_comparison("accuracy", a, b, test="wilcoxon")
+            cases += 1
+            disagreements += _excludes_zero(result) != (result.p_value < 0.05)
+
+        assert cases > 250
+        assert disagreements <= 0.05 * cases
+
+
+class TestHodgesLehmann:
+    """Interval of the pseudo-median from Walsh averages, exact critical value."""
+
+    def test_textbook_example(self) -> None:
+        d = [x - y for x, y in zip(_HAMILTON_X, _HAMILTON_Y, strict=True)]
+        walsh = _walsh(np.asarray(d))
+
+        hl = hodges_lehmann_ci(d)
+
+        # Hollander & Wolfe: estimate 0.46; for n = 9 the exact lower critical
+        # count is P(T+ <= 5) = 10/512, so the interval is [W(6), W(40)] with
+        # coverage 1 - 20/512.
+        assert hl.estimate == pytest.approx(0.46)
+        assert hl.ci_low == pytest.approx(walsh[5])
+        assert hl.ci_high == pytest.approx(walsh[39])
+        assert hl.confidence == pytest.approx(1 - 20 / 512)
+
+    @pytest.mark.parametrize("sample", range(10))
+    def test_matches_brute_force_inversion_of_the_exact_test(self, sample: int) -> None:
+        # A shift is in the interval iff the exact two-sided Wilcoxon of
+        # d - shift does not reject at 0.05. Probe between consecutive Walsh
+        # averages (and beyond both ends) where the test is well defined.
+        rng = np.random.default_rng(3000 + sample)
+        d = rng.normal(0.3, 1.0, int(rng.integers(6, 13)))
+        walsh = np.unique(_walsh(d))
+        probes = np.concatenate(
+            [[walsh[0] - 1.0], (walsh[:-1] + walsh[1:]) / 2.0, [walsh[-1] + 1.0]]
+        )
+        kept = [
+            float(t)
+            for t in probes
+            if stats.wilcoxon(d - t, method="exact").pvalue > 0.05
+        ]
+
+        hl = hodges_lehmann_ci(d.tolist())
+
+        assert hl.ci_low is not None
+        assert hl.ci_high is not None
+        inside = [float(t) for t in probes if hl.ci_low < t < hl.ci_high]
+        assert inside == kept
+
+    def test_signed_rank_distribution_matches_enumeration(self) -> None:
+        n = 8
+        totals = [
+            sum(rank for rank, bit in enumerate(bits, start=1) if bit)
+            for bits in itertools.product((0, 1), repeat=n)
+        ]
+        expected = np.cumsum(np.bincount(totals, minlength=37)) / 2**n
+
+        np.testing.assert_allclose(signed_rank_cdf(n), expected)
+
+    @pytest.mark.parametrize("n", [1, 2, 5])
+    def test_no_finite_interval_below_six_pairs(self, n: int) -> None:
+        # 2 / 2**n > 0.05: the most extreme sign pattern is not rare enough.
+        hl = hodges_lehmann_ci([0.1 * (i + 1) for i in range(n)])
+
+        assert hl.ci_low is None
+        assert hl.ci_high is None
+
+    def test_six_pairs_reach_the_extremes(self) -> None:
+        d = [0.3, -0.1, 0.5, 0.2, 0.9, 0.4]
+
+        hl = hodges_lehmann_ci(d)
+
+        assert hl.ci_low == pytest.approx(-0.1)
+        assert hl.ci_high == pytest.approx(0.9)
+        assert hl.confidence == pytest.approx(1 - 2 / 64)
+
+    def test_all_zero_differences_give_a_point_at_zero(self) -> None:
+        hl = hodges_lehmann_ci([0.0] * 7)
+
+        assert hl.ci_low == 0.0
+        assert hl.ci_high == 0.0
+        assert hl.estimate == 0.0
+
+    def test_needs_a_difference(self) -> None:
+        with pytest.raises(ValueError, match="at least 1"):
+            hodges_lehmann_ci([])
+
+    def test_small_comparison_reports_no_interval_and_says_why(self) -> None:
+        a, b = _pairs([0.02, 0.03, 0.01, 0.04, 0.02])
+
+        result = paired_comparison("accuracy", a, b)
+
+        assert result.test == "wilcoxon"
+        assert result.underpowered
+        assert result.ci_low is None
+        assert result.ci_high is None
+        assert result.ci_method == "hodges_lehmann"
+
+    def test_identical_configs_get_a_zero_interval(self) -> None:
+        same = {i: 0.8 + 0.01 * i for i in range(8)}
+
+        result = paired_comparison("accuracy", same, dict(same))
+
+        assert result.p_value == 1.0
+        assert result.ci_low == 0.0
+        assert result.ci_high == 0.0

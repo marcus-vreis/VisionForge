@@ -183,6 +183,16 @@ class TestPortuguese:
         _assert_braces_render(tex)
         assert tex.count(r"$^{*}$") == 2  # the row star and the note, single braces
 
+    def test_comparison_names_the_interval_method(self) -> None:
+        rows = _comparisons()
+        rows[0]["ci_method"] = "hodges_lehmann"
+        with using_lang("pt"):
+            tex = comparison_to_latex(rows)
+
+        assert r"IC 95\% da diferença: Hodges-Lehmann" in tex
+        assert "pseudomediana" in tex
+        assert "Walsh averages" not in tex
+
     def test_underpowered_comparison(self) -> None:
         with using_lang("pt"):
             tex = comparison_to_latex(_comparisons(underpowered=True))
