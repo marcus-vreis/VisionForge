@@ -18,6 +18,7 @@ import { CompareRunsPanel } from "./CompareRunsPanel";
 import { MenuSelect } from "./controls";
 import { LeaderboardView } from "./LeaderboardView";
 import { RunDetailPanel } from "./RunDetailPanel";
+import type { RerunHandle } from "./RerunActions";
 
 interface HistoryOverlayProps {
   onClose: () => void;
@@ -27,6 +28,8 @@ interface HistoryOverlayProps {
    * making you click again is a step nobody wants. Falls back to "all" when
    * the active task has no runs yet, so the sheet is never empty on open. */
   initialTask?: string;
+  /** Sends a run back to its task's form (#200). */
+  rerun?: RerunHandle;
 }
 
 /** Inline caption preceding a filter control. */
@@ -781,6 +784,7 @@ export function HistoryOverlay({
   onClose,
   onCountChange,
   initialTask,
+  rerun,
 }: HistoryOverlayProps) {
   const t = useT();
   const [runs, setRuns] = useState<RunSummary[]>([]);
@@ -1354,6 +1358,7 @@ export function HistoryOverlay({
                 setSelectedRunId(id);
               }}
               knownRunIds={knownRunIds}
+              rerun={rerun}
             />
           )}
 

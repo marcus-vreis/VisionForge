@@ -32,6 +32,12 @@ import { WelcomeOverlay } from "./components/WelcomeOverlay";
 import { GuidedTour } from "./components/GuidedTour";
 import { readTourSeen } from "./lib/tour";
 import { StepNavContext, type StepId, type StepNav } from "./lib/steps";
+import {
+  planRerun,
+  takePendingImport,
+  type PendingImport,
+  type RerunRequest,
+} from "./lib/history-rerun";
 import type { GuideContext, GuideId, GuideTask } from "./lib/guides";
 import {
   sampleAnomalyForm,
@@ -299,6 +305,12 @@ export default function App() {
     }),
     [stepByTask],
   );
+  // A run History sent back to a form (#200), one per task until that task's
+  // panel has applied it through its own YAML import.
+  const [pendingImports, setPendingImports] = useState<
+    Readonly<Record<string, PendingImport>>
+  >({});
+  const rerunCount = useRef(0);
 
   // What the guides read and change (ADR-115, ADR-117). Each task keeps its
   // dataset folder in its own form, so the "dataset set" gate follows what the
@@ -560,6 +572,23 @@ export default function App() {
       { run: run ?? ((p) => runCustomTask(key, p)) },
     );
   };
+
+  // The task families History can send a run back to: the tabs there are now.
+  const rerunFamilies = useMemo(
+    () => tasks.map((task) => (isCustomTask(task) ? `custom:${task.key}` : task.key)),
+    [tasks],
+  );
+  const openRerun = (request: RerunRequest) => {
+    rerunCount.current += 1;
+    const plan = planRerun(request, rerunFamilies, rerunCount.current);
+    if (!plan) return;
+    setShowHistory(false);
+    setResultsVisible(false);
+    setActiveKey(plan.tab);
+    setPendingImports((prev) => ({ ...prev, [plan.tab]: plan.pending }));
+  };
+  const takeImport = (id: number) =>
+    setPendingImports((prev) => takePendingImport(prev, activeKey, id));
 
   const activeStrategy = strategyByTask[activeKey] ?? "simple";
   const setActiveStrategy = (s: PanelStrategy) =>
@@ -979,6 +1008,8 @@ export default function App() {
             }
             onStrategyChange={setActiveStrategy}
             runSignal={runSignal}
+            pendingImport={pendingImports[activeKey]}
+            onImportApplied={takeImport}
             onRemoved={reloadTasks}
           />
         ) : activeKey === "detection" ? (
@@ -994,6 +1025,8 @@ export default function App() {
             }
             onStrategyChange={setActiveStrategy}
             runSignal={runSignal}
+            pendingImport={pendingImports[activeKey]}
+            onImportApplied={takeImport}
           />
         ) : activeKey === "regression" ? (
           <RegressionPanel
@@ -1009,6 +1042,8 @@ export default function App() {
             onCv={(payload) => void handleTaskCv("regression", payload)}
             onStrategyChange={setActiveStrategy}
             runSignal={runSignal}
+            pendingImport={pendingImports[activeKey]}
+            onImportApplied={takeImport}
           />
         ) : activeKey === "segmentation" ? (
           <SegmentationPanel
@@ -1024,6 +1059,8 @@ export default function App() {
             onCv={(payload) => void handleTaskCv("segmentation", payload)}
             onStrategyChange={setActiveStrategy}
             runSignal={runSignal}
+            pendingImport={pendingImports[activeKey]}
+            onImportApplied={takeImport}
           />
         ) : activeKey === "anomaly" ? (
           <AnomalyPanel
@@ -1038,6 +1075,8 @@ export default function App() {
             onCompare={(payload) => void handleCompare("anomaly", payload)}
             onStrategyChange={setActiveStrategy}
             runSignal={runSignal}
+            pendingImport={pendingImports[activeKey]}
+            onImportApplied={takeImport}
           />
         ) : (
           <ParamPanel
@@ -1053,6 +1092,8 @@ export default function App() {
               void handleReplicates("classification", payload)
             }
             runSignal={runSignal}
+            pendingImport={pendingImports[activeKey]}
+            onImportApplied={takeImport}
           />
         )}
         </StepNavContext.Provider>
@@ -1112,6 +1153,7 @@ export default function App() {
         initialTask={
           isCustomTask(activeTask) ? `custom:${activeKey}` : activeKey
         }
+        rerun={{ families: rerunFamilies, onRerun: openRerun }}
       />
       </LazySurface>
       </CustomAccentsContext.Provider>

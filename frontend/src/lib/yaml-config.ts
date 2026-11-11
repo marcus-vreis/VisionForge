@@ -1,7 +1,7 @@
 import * as jsyaml from "js-yaml";
 import type { Dict } from "../i18n/pt";
 import type { JsonSchema } from "../types/schema";
-import type { ValidationError } from "../hooks/useExperiment";
+import { humanizeFieldPath, type ValidationError } from "../hooks/useExperiment";
 
 /**
  * Serialize formData to YAML and trigger a browser file download.
@@ -376,6 +376,46 @@ export function reviewImportedConfig(
     ignored: omitted.filter((path) => !noValue.has(path.join("\0"))).length,
     missing: stillMissing.length,
   };
+}
+
+/**
+ * The warning the classification form shows after an import: the first five
+ * issues, then what dropping them leaves to do, each line only when it is so.
+ * Null when the file had nothing to report. Shared by the YAML button and a
+ * config loaded from History, so both say the same thing about the same file.
+ */
+export function importReviewMessage(t: Dict, review: ImportReview): string | null {
+  const { issues, ignored, missing } = review;
+  if (issues.length === 0) return null;
+  const summary = issues
+    .slice(0, 5)
+    .map((iss) => `· ${humanizeFieldPath(t, iss.field)} — ${iss.message}`)
+    .join("\n");
+  const lines = [t.paramPanel.importWarnings(issues.length, summary, Math.max(0, issues.length - 5))];
+  if (ignored > 0) lines.push(t.paramPanel.importDropped(ignored));
+  if (missing > 0) lines.push(t.paramPanel.importMissing(missing));
+  return lines.join("\n\n");
+}
+
+/**
+ * The import of the panels that refuse a file with problems (detection,
+ * regression, segmentation, anomaly): checked against the task's schema, then
+ * rebuilt into the form by the task's adapter. Without a schema (the server did
+ * not send it) the file is taken as it is and the submit's 422 covers it.
+ */
+export function importIntoForm<F>(
+  t: Dict,
+  data: Record<string, unknown>,
+  schema: JsonSchema | null,
+  fromPayload: (payload: Record<string, unknown>) => F,
+): { form: F } | { problem: string } {
+  let payload = data;
+  if (schema) {
+    const checked = checkImportedConfig(t, data, schema, schema.$defs ?? {});
+    if ("problem" in checked) return checked;
+    payload = checked.data;
+  }
+  return { form: fromPayload(payload) };
 }
 
 interface PathNode {

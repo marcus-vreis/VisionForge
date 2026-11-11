@@ -1186,6 +1186,18 @@ export const en: Dict = {
       queued: "Queued: starts when the current run finishes.",
       failed: "Failed to resume.",
     },
+    rerun: {
+      load: "↺ load into the form",
+      loadTitle:
+        "Opens the task's tab with this run's configuration, the same way Import YAML does",
+      replicates: (n: number) => `⟳ repeat with ${n} seeds`,
+      replicatesTitle: (seeds: string) =>
+        `Opens the Replicates strategy with seeds ${seeds}, none of which this run used`,
+      customRemoved: (key: string) =>
+        `The task "${key}" is no longer registered: register it again to load this run into the form.`,
+      noTab: (task: string) => `This version has no ${task} tab.`,
+      noConfig: "This run's run.json did not keep its configuration.",
+    },
     picker: {
       opening: "Opening the folder picker…",
       cancelled: "Canceled.",
