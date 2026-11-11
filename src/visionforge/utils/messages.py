@@ -298,6 +298,20 @@ CATALOG: dict[str, dict[Lang, str]] = {
             "that, the learning rate."
         ),
     },
+    "health.single_class_test_split": {
+        "pt": (
+            "As {n} imagens de teste são todas {kind}: a AUROC precisa das duas "
+            "classes para ordenar e fica indefinida (null), não 0,5. Coloque "
+            "imagens normais e anômalas em test/ para medir o detector."
+        ),
+        "en": (
+            "All {n} test images are {kind}: AUROC needs both classes to rank "
+            "and is undefined (null), not 0.5. Put normal and anomalous images "
+            "in test/ to measure the detector."
+        ),
+    },
+    "health.single_class_normal": {"pt": "normais", "en": "normal"},
+    "health.single_class_anomalous": {"pt": "anômalas", "en": "anomalous"},
     "health.non_finite_metric": {
         "pt": (
             "A métrica {metric} ficou não finita ({value}) na época {epoch}, e o "
@@ -2660,17 +2674,29 @@ CATALOG: dict[str, dict[Lang, str]] = {
         ),
     },
     "latex.cv_caption": {
-        "pt": "{experiment}: validação cruzada com {n_folds} folds.",
-        "en": "{experiment}: {n_folds}-fold cross-validation.",
+        "pt": (
+            "{experiment}: validação cruzada com {n_folds} folds. A época de cada "
+            "fold é escolhida no próprio fold de validação, que também a avalia: "
+            "estimativa otimista, sem divisão aninhada."
+        ),
+        "en": (
+            "{experiment}: {n_folds}-fold cross-validation. Each fold's epoch is "
+            "selected on its own fold's validation split, which also scores it: "
+            "an optimistic estimate, with no nested split."
+        ),
     },
     "latex.cv_caption_partial": {
         "pt": (
             "{experiment}: validação cruzada com {n_folds} folds, {finished} de "
-            "{n_folds} folds concluídos ({detail})."
+            "{n_folds} folds concluídos ({detail}). A época de cada fold é "
+            "escolhida no próprio fold de validação, que também a avalia: "
+            "estimativa otimista, sem divisão aninhada."
         ),
         "en": (
             "{experiment}: {n_folds}-fold cross-validation, {finished} of "
-            "{n_folds} folds finished ({detail})."
+            "{n_folds} folds finished ({detail}). Each fold's epoch is selected "
+            "on its own fold's validation split, which also scores it: an "
+            "optimistic estimate, with no nested split."
         ),
     },
     "latex.cv_mean_sd": {
@@ -2680,6 +2706,36 @@ CATALOG: dict[str, dict[Lang, str]] = {
     "latex.comparison_caption": {
         "pt": "{experiment}: comparação pareada nas seeds compartilhadas.",
         "en": "{experiment}: paired comparison over shared seeds.",
+    },
+    "latex.comparison_ci": {
+        "pt": r"IC 95\% da diferença: {methods}.",
+        "en": r"95\% CI of the difference: {methods}.",
+    },
+    "latex.ci_method_t": {
+        "pt": r"$t$ de Student da média (dual do teste $t$ pareado)",
+        "en": r"Student $t$ of the mean (dual of the paired $t$ test)",
+    },
+    "latex.ci_method_hodges_lehmann": {
+        "pt": (
+            "Hodges-Lehmann sobre as médias de Walsh com valor crítico exato "
+            "(dual do teste de Wilcoxon, cobre a pseudomediana e não a média, "
+            "--- com menos de 6 pares)"
+        ),
+        "en": (
+            "Hodges-Lehmann over the Walsh averages with the exact critical "
+            "value (dual of the Wilcoxon test, brackets the pseudo-median rather "
+            "than the mean, --- below 6 pairs)"
+        ),
+    },
+    "latex.ci_method_bootstrap": {
+        "pt": (
+            "bootstrap percentil (relatório anterior à ADR-187, subcobre com "
+            "poucas seeds)"
+        ),
+        "en": (
+            "percentile bootstrap (report predating ADR-187, under-covers with "
+            "few seeds)"
+        ),
     },
     "latex.comparison_note": {
         "pt": (

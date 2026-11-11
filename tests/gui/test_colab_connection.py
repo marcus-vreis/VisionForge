@@ -13,9 +13,10 @@ from fastapi.testclient import TestClient
 
 from tests.helpers import wait_until
 from visionforge.gui.api import colab_connection as cc
-from visionforge.gui.api.colab_jobs import ColabJobs
+from visionforge.gui.api.colab_jobs import ColabJobs, RemoteSession
 from visionforge.gui.api.colab_routes import build_colab_router
 from visionforge.gui.api.profiles import Profile
+from visionforge.utils.messages import tr
 
 AUTH_URL = "https://accounts.google.com/o/oauth2/auth?response_type=code&state=xyz"
 USAGE_IDLE = "Current balance: 381.93 compute units\nUsage rate: 0.00/hr\nActive assignments: 0\n"
@@ -144,14 +145,34 @@ def _installed(fake: FakeColabCli) -> cc.ColabCli:
     return cli
 
 
-def _client(cli: cc.ColabCli, logins: cc.LoginFlows) -> TestClient:
+class FakeJobs(ColabJobs):
+    """Runtimes alive on the account, without a CLI; ``stuck`` ones refuse to stop."""
+
+    def __init__(self, alive: list[str], stuck: frozenset[str] = frozenset()) -> None:
+        super().__init__()
+        self.alive = list(alive)
+        self.stuck = stuck
+
+    def sessions(self, slug: str) -> list[RemoteSession]:
+        return [RemoteSession(name, "T4") for name in self.alive]
+
+    def stop_session(self, slug: str, name: str) -> bool:
+        if name in self.stuck:
+            return False
+        self.alive.remove(name)
+        return True
+
+
+def _client(
+    cli: cc.ColabCli, logins: cc.LoginFlows, jobs: ColabJobs | None = None
+) -> TestClient:
     def resolve(header: str | None) -> Profile:
         slug = header or "default"
         return Profile(slug=slug, name=slug, models_dir=Path("models"))
 
     app = FastAPI()
     app.include_router(
-        build_colab_router(resolve, cli, logins, ColabJobs()), prefix="/api"
+        build_colab_router(resolve, cli, logins, jobs or ColabJobs()), prefix="/api"
     )
     return TestClient(app)
 
@@ -401,3 +422,74 @@ def test_usage_route_reports_hours_left() -> None:
     assert body["rate_per_hour"] == 1.15
     assert body["active_assignments"] == 1
     assert body["hours_left"] == pytest.approx(332.1, abs=0.1)
+
+
+def test_a_login_that_never_shows_a_url_is_a_502(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(cc, "LOGIN_URL_TIMEOUT_S", 0.5)
+    client = _client(
+        _installed(FakeColabCli()), cc.LoginFlows(popen=FakePopen(prints_url=False))
+    )
+    assert client.post("/api/colab/login/start").status_code == 502
+
+
+def test_cancel_route_drops_the_waiting_login() -> None:
+    popen = FakePopen()
+    client = _client(_installed(FakeColabCli()), cc.LoginFlows(popen=popen))
+    client.post("/api/colab/login/start")
+    assert client.get("/api/colab/status").json()["login_pending"] is True
+    body = client.post("/api/colab/login/cancel").json()
+    assert body["login_pending"] is False
+    assert popen.started[0].killed
+
+
+def test_usage_needs_the_cli_installed() -> None:
+    client = _client(
+        cc.ColabCli(run=FakeColabCli(), python="p"), cc.LoginFlows(popen=FakePopen())
+    )
+    response = client.get("/api/colab/usage")
+    assert response.status_code == 409
+    assert response.json()["detail"] == tr("colab.not_installed")
+
+
+def test_a_usage_the_cli_refuses_is_a_502(monkeypatch: pytest.MonkeyPatch) -> None:
+    cli = _installed(FakeColabCli())
+    _write_token("default")
+
+    def refuse(slug: str) -> cc.Usage:
+        raise cc.ColabError("usage refused")
+
+    monkeypatch.setattr(cli, "usage", refuse)
+    response = _client(cli, cc.LoginFlows(popen=FakePopen())).get("/api/colab/usage")
+    assert response.status_code == 502
+    assert response.json()["detail"] == "usage refused"
+
+
+def test_sessions_need_a_logged_in_profile_then_list_the_runtimes() -> None:
+    jobs = FakeJobs(["vf-20261105-101010", "someone-else"])
+    client = _client(_installed(FakeColabCli()), cc.LoginFlows(popen=FakePopen()), jobs)
+    refused = client.get("/api/colab/sessions")
+    assert refused.status_code == 409
+    assert refused.json()["detail"] == tr("colab.not_logged_in")
+    _write_token("default")
+    assert client.get("/api/colab/sessions").json() == [
+        {"name": "vf-20261105-101010", "hardware": "T4", "ours": True},
+        {"name": "someone-else", "hardware": "T4", "ours": False},
+    ]
+
+
+def test_stopping_a_session_returns_what_is_still_alive() -> None:
+    jobs = FakeJobs(["vf-a", "vf-b"], stuck=frozenset({"vf-b"}))
+    client = _client(_installed(FakeColabCli()), cc.LoginFlows(popen=FakePopen()), jobs)
+    url = "/api/colab/sessions/stop"
+    assert client.post(url, json={"name": "vf-a"}).status_code == 409
+    _write_token("default")
+    assert client.post(url, json={"name": "vf-a"}).json() == [
+        {"name": "vf-b", "hardware": "T4", "ours": True}
+    ]
+    stuck = client.post(url, json={"name": "vf-b"})
+    assert stuck.status_code == 502
+    assert stuck.json()["detail"] == tr(
+        "colab.cli_failed", command="stop", detail="vf-b"
+    )

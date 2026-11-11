@@ -350,10 +350,10 @@ def test_source_manifest_cannot_shadow_generated_manifest(tmp_path: Path) -> Non
     ]
 
 
-def _public_run(tmp_path: Path) -> Path:
+def _public_run(tmp_path: Path, model: str = "weights/best.pt") -> Path:
     run_dir = tmp_path / "run"
     (run_dir / "weights").mkdir(parents=True)
-    (run_dir / "weights/best.pt").write_bytes(b"weights")
+    (run_dir / model).write_bytes(b"weights")
     (run_dir / "curve.png").write_bytes(b"png")
     dataset = r"C:\Users\ana\Documents\VisionForge\datasets\gatos"
     record = {
@@ -366,7 +366,7 @@ def _public_run(tmp_path: Path) -> Path:
         "timestamp": "2026-11-08T10:00:00",
         "metrics": {"total_epochs": 1, "accuracy": 0.9},
         "artifacts": {
-            "model": str(run_dir / "weights/best.pt"),
+            "model": str(run_dir / model),
             "graphics": [str(run_dir / "curve.png"), str(tmp_path / "outside.png")],
             "report": None,
         },
@@ -389,12 +389,18 @@ def test_a_public_bundle_has_no_local_path_and_leaves_the_run_alone(
         text = bundle.read("run.json").decode()
     record = json.loads(text)
     assert record["run_dir"] == "."
-    # Graphics are not bundle members (ADR-135), so the record lists none.
+    # Graphics are not bundle members (ADR-135), and a weights/*.pt checkpoint
+    # stays out of a public bundle (ADR-188), so the record lists neither.
     assert record["artifacts"] == {
-        "model": "weights/best.pt",
+        "model": None,
         "graphics": [],
         "report": None,
     }
+    assert "weights/best.pt" not in manifest["files"]
+    assert {
+        "artifact": "weights/best.pt",
+        "reason": "checkpoint left out of a public bundle: it may embed local paths",
+    } in manifest["notes"]
     assert record["config"]["data"]["base_dir"] == "gatos"
     assert record["dataset_fingerprint"] == {"root": "gatos", "sha256": "abc"}
     assert "ana" not in text
@@ -410,10 +416,134 @@ def test_a_public_bundle_imports_with_its_model(tmp_path: Path) -> None:
     from visionforge.core.experiment_bundle import import_experiment_bundle
 
     destination = tmp_path / "public.zip"
-    export_experiment_bundle(_public_run(tmp_path), destination, public=True)
+    run_dir = _public_run(tmp_path, model="best_model.pth")
+    export_experiment_bundle(run_dir, destination, public=True)
 
     imported = import_experiment_bundle(destination, tmp_path / "models")
 
     record = json.loads((imported / "run.json").read_text(encoding="utf-8"))
-    assert Path(record["artifacts"]["model"]) == imported / "weights" / "best.pt"
-    assert (imported / "weights" / "best.pt").read_bytes() == b"weights"
+    assert Path(record["artifacts"]["model"]) == imported / "best_model.pth"
+    assert (imported / "best_model.pth").read_bytes() == b"weights"
+
+
+_HOME_MARKER = "vfhomemarker"
+
+
+def _run_with_home_paths(tmp_path: Path) -> Path:
+    """A detection-like run whose checkpoint and configs name the home folder."""
+    import torch
+    import yaml
+
+    run_dir = tmp_path / "run"
+    (run_dir / "weights").mkdir(parents=True)
+    windows = rf"C:\Users\{_HOME_MARKER}\Documents\VisionForge\datasets\gatos"
+    posix = f"/home/{_HOME_MARKER}/VisionForge/outputs/detection"
+    # Ultralytics pickles its train_args, with absolute paths, into each checkpoint.
+    for name in ("best.pt", "last.pt"):
+        torch.save(
+            {"train_args": {"data": windows, "project": posix}},
+            run_dir / "weights" / name,
+        )
+    torch.save({"weight": torch.zeros(2)}, run_dir / "best_model.pth")
+    config = {"seed": 42, "data": {"base_dir": windows}, "output": {"dir": posix}}
+    (run_dir / "config.json").write_text(json.dumps(config), encoding="utf-8")
+    (run_dir / "config.yaml").write_text(yaml.safe_dump(config), encoding="utf-8")
+    record = {
+        "run_dir": str(run_dir),
+        "config": config,
+        "history": [],
+        "artifacts": {"model": str(run_dir / "weights/best.pt")},
+    }
+    (run_dir / "run.json").write_text(json.dumps(record), encoding="utf-8")
+    return run_dir
+
+
+def test_no_member_of_a_public_bundle_names_the_home_folder(tmp_path: Path) -> None:
+    destination = tmp_path / "public.zip"
+
+    export_experiment_bundle(_run_with_home_paths(tmp_path), destination, public=True)
+
+    verify_experiment_bundle(destination)
+    marker = _HOME_MARKER.encode()
+    with zipfile.ZipFile(destination) as bundle:
+        leaking = [
+            info.filename
+            for info in bundle.infolist()
+            if marker in info.filename.encode() or marker in bundle.read(info)
+        ]
+    assert leaking == []
+
+
+def test_a_public_bundle_rewrites_configs_and_declares_what_it_left_out(
+    tmp_path: Path,
+) -> None:
+    import yaml
+
+    run_dir = _run_with_home_paths(tmp_path)
+    on_disk = (run_dir / "config.yaml").read_bytes()
+    destination = tmp_path / "public.zip"
+
+    export_experiment_bundle(run_dir, destination, public=True)
+
+    manifest = verify_experiment_bundle(destination)
+    with zipfile.ZipFile(destination) as bundle:
+        from_yaml = yaml.safe_load(bundle.read("config.yaml"))
+        from_json = json.loads(bundle.read("config.json"))
+        record = json.loads(bundle.read("run.json"))
+    expected = {
+        "seed": 42,
+        "data": {"base_dir": "gatos"},
+        "output": {"dir": "detection"},
+    }
+    assert from_yaml == expected
+    assert from_json == expected
+    assert record["artifacts"]["model"] is None
+    assert set(manifest["files"]) == {
+        "run.json",
+        "config.json",
+        "config.yaml",
+        "best_model.pth",
+    }
+    omitted = {
+        note["artifact"]
+        for note in manifest["notes"]
+        if note["reason"].startswith("checkpoint left out")
+    }
+    assert omitted == {"weights/best.pt", "weights/last.pt"}
+    assert (run_dir / "config.yaml").read_bytes() == on_disk
+
+
+def test_a_private_bundle_keeps_checkpoints_and_configs_as_they_are(
+    tmp_path: Path,
+) -> None:
+    run_dir = _run_with_home_paths(tmp_path)
+    destination = tmp_path / "private.zip"
+
+    export_experiment_bundle(run_dir, destination)
+
+    manifest = verify_experiment_bundle(destination)
+    assert {"weights/best.pt", "weights/last.pt"} <= set(manifest["files"])
+    with zipfile.ZipFile(destination) as bundle:
+        config = bundle.read("config.yaml")
+    assert config == (run_dir / "config.yaml").read_bytes()
+
+
+@pytest.mark.parametrize(
+    ("name", "content"),
+    [("config.yaml", "seed: [unclosed"), ("config.json", "{not json")],
+)
+def test_a_public_bundle_leaves_out_an_unreadable_config(
+    tmp_path: Path, name: str, content: str
+) -> None:
+    run_dir = _run(tmp_path)
+    (run_dir / name).write_text(content, encoding="utf-8")
+    destination = tmp_path / "public.zip"
+
+    export_experiment_bundle(run_dir, destination, public=True)
+
+    manifest = verify_experiment_bundle(destination)
+    assert name not in manifest["files"]
+    assert {
+        "artifact": name,
+        "reason": "unreadable config left out of a public bundle",
+    } in manifest["notes"]
