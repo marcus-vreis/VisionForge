@@ -80,13 +80,14 @@ the model held fixed, so it says how much the number depends on which images
 you happened to test on. It says nothing about whether retraining would land in
 the same place.
 
-For that, a single run is one sample from a noisy distribution. On a
-standalone-task panel (e.g. **Regression**), the strategy selector has
-**Replicates**: same config, N seeds, and the report gives you
-`metric = mean ± 95% CI` plus the per-seed table — the citable version of your
-result. For classification, use **K-fold (CV)** in the strategy selector, or
-sweep architectures with **Grid search** (add values to the *Architecture*
-field with “+ add to grid”) and compare runs in the **History** overlay.
+For that, a single run is one sample from a noisy distribution. On every
+task tab, **Classification** included, the strategy step has **Replicates**:
+same config, N seeds, and the report gives you `metric = mean ± 95% CI` plus
+the per-seed table — the citable version of your result. Classification ranks
+the seeds on accuracy. Replicates run on this computer only: the Colab button
+stays off, with the reason, while Replicates is picked. **K-fold (CV)** and
+**Grid search** (add values to the *Architecture* field with “+ add to grid”)
+sit on the same step, and the **History** overlay compares the runs.
 
 ## 5. Reproduce it anywhere
 

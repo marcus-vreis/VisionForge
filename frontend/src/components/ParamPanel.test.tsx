@@ -1,5 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import type { PanelStrategy } from "./ExperimentHeader";
 import { LanguageContext } from "../i18n/context";
 import { pt } from "../i18n/pt";
 import { taskDefinitions } from "../types/tasks";
@@ -165,5 +166,52 @@ describe("classification steps (ADR-156)", () => {
     const model = section(html, "model");
     expect(model).toMatch(/<fieldset disabled=""/);
     expect(model).toContain("um bloco por vez");
+  });
+});
+
+function renderWithReplicates(
+  data: Record<string, unknown>,
+  strategy: PanelStrategy,
+  onReplicates: ((payload: unknown) => void) | null = () => {},
+): string {
+  return renderToStaticMarkup(
+    <LanguageContext.Provider value={{ lang: "pt", t: pt, locale: "pt-BR", setLang: () => {} }}>
+      <ParamPanel
+        task={taskDefinitions(pt)[0]}
+        schema={stepSchema}
+        formData={data}
+        setFormData={() => {}}
+        validationErrors={[]}
+        strategy={strategy}
+        onReplicates={onReplicates ?? undefined}
+      />
+    </LanguageContext.Provider>,
+  );
+}
+
+describe("classification Réplicas (ADR-056)", () => {
+  it("lists Réplicas on the strategy step", () => {
+    const strategy = section(renderWithReplicates(baseForm, "simple"), "strategy");
+    expect(strategy).toContain(`>${pt.taskPanel.replicates}</button>`);
+    expect(strategy).not.toContain(pt.replicatesCard.title);
+  });
+
+  it("renders the replicates card with accuracy once Réplicas is picked", () => {
+    const strategy = section(renderWithReplicates(baseForm, "replicates"), "strategy");
+    // The picked option is the one drawn with the accent.
+    expect(strategy).toMatch(/background:var\(--accent-soft\)[^>]*>Réplicas</);
+    expect(strategy).toContain(pt.replicatesCard.title);
+    expect(strategy).toContain(pt.runDetail.metrics.labels.accuracy);
+  });
+
+  it("locks transfer learning while Réplicas is picked", () => {
+    const model = section(renderWithReplicates(baseForm, "replicates"), "model");
+    expect(model).toMatch(/<fieldset disabled=""/);
+  });
+
+  it("offers no Réplicas when nothing can launch it", () => {
+    const strategy = section(renderWithReplicates(baseForm, "replicates", null), "strategy");
+    expect(strategy).not.toContain(`>${pt.taskPanel.replicates}</button>`);
+    expect(strategy).not.toContain(pt.replicatesCard.title);
   });
 });

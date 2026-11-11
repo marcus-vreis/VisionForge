@@ -6,7 +6,6 @@ import {
   runCustomReplicates,
   runCustomSweep,
   runCustomTask,
-  runReplicates,
   runCompare,
   runSweep,
   runTaskCv,
@@ -17,6 +16,7 @@ import type { CvPayload } from "./components/CvCard";
 import type { PanelStrategy } from "./components/ExperimentHeader";
 import type { SweepPayload } from "./components/SweepCard";
 import type { ReplicatesPayload } from "./lib/replicates-form";
+import { replicatesLaunch } from "./lib/replicates-launch";
 import type { ComparePayload } from "./lib/compare-form";
 import { announce, requestPermission, resetTitle } from "./lib/run-notify";
 import { runIdentityFromJob, serverRunning } from "./lib/run-control";
@@ -568,10 +568,13 @@ export default function App() {
   const handleTrain = async (colab?: ColabLaunch) => {
     // A Colab run (ADR-163) is a classification payload sent to another route.
     if (colab && (activeKey !== "classification" || isCustomTask(activeTask))) return;
-    // Classification encodes its strategy in config.block, so its payload
-    // already carries it; the standalone panels keep theirs in cards, which
-    // this signal triggers.
-    if (activeStrategy !== "simple" && activeKey !== "classification") {
+    // Colab trains one config.block; a replicate set is not one (ADR-056).
+    if (colab && activeStrategy === "replicates") return;
+    // Classification encodes most strategies in config.block, so its payload
+    // already carries them, and its panel only reports "replicates", which is
+    // not a block. That one, like the standalone panels' strategies, lives in
+    // a card this signal triggers.
+    if (activeStrategy !== "simple") {
       setRunSignal((n) => n + 1);
       return;
     }
@@ -755,14 +758,17 @@ export default function App() {
 
   // Multi-seed replicates (ADR-056): same config, N seeds, mean ± CI report.
   // Same overlay/results flow as sweeps; one trial trains at a time.
+  // Classification's form is the config itself; its block goes as
+  // "classification" (replicatesLaunch).
   const handleReplicates = async (
-    task: AdvancedTask,
+    task: AdvancedTask | "classification",
     payload: ReplicatesPayload,
   ) => {
     const config = {
-      ...buildTaskBase(task),
+      ...(task === "classification" ? formData : buildTaskBase(task)),
       device: { kind: device.kind, gpu_ids: device.gpu_ids },
     };
+    const { body, run } = replicatesLaunch(task, config, payload);
     await launch(
       {
         custom: false,
@@ -772,8 +778,8 @@ export default function App() {
         queueSize: payload.seeds?.length ?? payload.n_replicates ?? undefined,
         story: storySpecFor(task, config),
       },
-      { config, ...payload },
-      { run: (p) => runReplicates(task, p) },
+      body,
+      { run },
     );
   };
 
@@ -880,6 +886,11 @@ export default function App() {
         onTrainColab={
           activeKey === "classification" && !isCustomTask(activeTask)
             ? (launch) => void handleTrain(launch)
+            : undefined
+        }
+        colabTrainBlocked={
+          activeKey === "classification" && activeStrategy === "replicates"
+            ? t.colab.replicatesBlocked
             : undefined
         }
         taskColor={
@@ -1035,6 +1046,13 @@ export default function App() {
             formData={formData}
             setFormData={setFormData}
             validationErrors={validationErrors}
+            busy={submitting}
+            strategy={activeStrategy}
+            onStrategyChange={setActiveStrategy}
+            onReplicates={(payload) =>
+              void handleReplicates("classification", payload)
+            }
+            runSignal={runSignal}
           />
         )}
         </StepNavContext.Provider>

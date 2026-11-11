@@ -68,6 +68,7 @@ export function Header({
   onChangeProfile,
   profileSlug,
   onTrainColab,
+  colabTrainBlocked,
   taskColor,
 }: {
   userName?: string;
@@ -78,6 +79,8 @@ export function Header({
   profileSlug?: string;
   /** Treina o experimento aberto no Colab (ADR-163); só vem na classificação. */
   onTrainColab?: (launch: ColabLaunch) => void;
+  /** Por que o experimento aberto não treina no Colab agora (Réplicas, ADR-056). */
+  colabTrainBlocked?: string;
   /** Abre um guia escolhido no menu (ADR-104, ADR-115). */
   onGuide?: (id: GuideId) => void;
   /** Perfil em uso (ADR-114). Só vem num servidor que tem perfis: sem ele o chip
@@ -174,7 +177,11 @@ export function Header({
 
       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
         {taskColor && <TaskColorDot {...taskColor} />}
-        <ColabConnection key={profileSlug ?? "default"} onTrain={onTrainColab} />
+        <ColabConnection
+          key={profileSlug ?? "default"}
+          onTrain={onTrainColab}
+          trainBlocked={colabTrainBlocked}
+        />
         {/* Two real buttons rather than one that flips: each language is a
             target of its own, and aria-pressed says which one is on. */}
         <div

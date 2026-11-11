@@ -146,6 +146,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 - `paper/check_submission.py` lista placeholders (`<...>`, `TODO`) e `\todo{}` pendentes no paper; com `--strict` falha apontando arquivo:linha. O workflow Draft PDF o roda só em branches `submission/**`; o desenvolvimento normal não é bloqueado (#228).
 - A SPA sai dividida em chunks: Histórico (com detalhe e exportações), conteúdo de Datasets, aba **Código** e "Como funciona" carregam na primeira abertura, e React e js-yaml ficam em chunks próprios; o entry cai de 1 074 390 para 378 062 bytes e nenhum chunk passa de 500 kB (#203)
 - `visionforge run` aceita um YAML com `strategy:` + `config:` e roda réplicas, comparação pareada, sweep e K-fold como a GUI, gravando o relatório com a tabela `.tex` e a entrada no Histórico; sem `strategy` nada muda (ADR-184) (#199).
+- A aba **Classificação** ganha **Réplicas** na estratégia: a mesma config com N seeds pela rota de réplicas que já existia, média ± IC 95% com acurácia como métrica destaque e `block` mantido em `classification`. Transfer learning fica travado enquanto Réplicas está escolhida, e o botão do Colab fica desligado com o motivo (ADR-056) (#190).
 
 ### Fixed
 

@@ -151,6 +151,9 @@ export const en: Dict = {
     train: "train on Colab",
     trainNote:
       "It enters the same queue as local training. The live tab follows it; the trained files stay on the VM until the import of the next phase.",
+    // The strategy step has Replicates on (ADR-056): Colab trains one run.
+    replicatesBlocked:
+      "Replicates run on this computer only: Colab trains one run at a time. Set the strategy back to Single run to train on Colab.",
     sessionsTitle: "Runtimes alive on this account",
     sessionsNone: "No runtime is alive.",
     stopSession: "stop",
@@ -2849,7 +2852,7 @@ export const en: Dict = {
       resultWaiting: "Waiting for the training to finish…",
       history: {
         title: "Everything was saved",
-        body: "The run is already in the History, under outputs/models/<name>/<date> (in your profile's folder, if you use one). The run.json holds the configuration and the metrics of every epoch; to see the effect of chance, run again with another seed and compare the two there.",
+        body: "The run is already in the History, under outputs/models/<name>/<date> (in your profile's folder, if you use one). The run.json holds the configuration and the metrics of every epoch; to see the effect of chance, pick Replicates as the strategy: the same configuration trains under several seeds and the report gives each metric's mean ± 95% CI.",
       },
       // Each task's script (ADR-117): what the data is, the parameters that
       // matter, what to watch while it trains and the result metric.

@@ -94,9 +94,11 @@ export interface ColabPanelProps {
   onStopSession: (name: string) => void;
   /** Present only when the open task can train on Colab (classification). */
   onTrain?: (launch: ColabLaunch) => void;
+  /** Why the open experiment cannot train on Colab now: the button is off. */
+  trainBlocked?: string;
 }
 
-function TrainOnColab({ busy, onTrain }: ColabPanelProps) {
+function TrainOnColab({ busy, onTrain, trainBlocked }: ColabPanelProps) {
   const t = useT();
   const c = t.colab;
   const [source, setSource] = useState("");
@@ -190,10 +192,20 @@ function TrainOnColab({ busy, onTrain }: ColabPanelProps) {
             </option>
           ))}
         </select>
-        <button type="button" style={ACTION} disabled={busy} onClick={submit}>
+        <button
+          type="button"
+          style={ACTION}
+          disabled={busy || trainBlocked !== undefined}
+          onClick={submit}
+        >
           {c.train}
         </button>
       </div>
+      {trainBlocked !== undefined && (
+        <div style={TEXT} data-colab-train-blocked>
+          {trainBlocked}
+        </div>
+      )}
       <div style={{ ...TEXT, color: "var(--vf-text-dim)" }}>{c.trainNote}</div>
     </div>
   );
@@ -358,7 +370,13 @@ function Connected({ status, usage, usageError, busy, onSwitch }: ColabPanelProp
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 /** The header chip and its panel; one instance per profile (keyed by the header). */
-export function ColabConnection({ onTrain }: { onTrain?: (launch: ColabLaunch) => void } = {}) {
+export function ColabConnection({
+  onTrain,
+  trainBlocked,
+}: {
+  onTrain?: (launch: ColabLaunch) => void;
+  trainBlocked?: string;
+} = {}) {
   const t = useT();
   const [status, setStatus] = useState<ColabStatus | null>(null);
   const [usage, setUsage] = useState<ColabUsage | null>(null);
@@ -466,6 +484,7 @@ export function ColabConnection({ onTrain }: { onTrain?: (launch: ColabLaunch) =
           onTrain(launch);
         }
       : undefined,
+    trainBlocked,
   };
   const leftovers = sessions?.filter((s) => s.ours).length ?? 0;
 
