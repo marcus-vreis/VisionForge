@@ -42,3 +42,6 @@ repos:
         language: system
         pass_filenames: false
         always_run: true
+        # The whole suite takes 5-8 minutes, so it runs on `git push`, not on every
+        # commit (ADR-186). Install both stages: see CONTRIBUTING.md.
+        stages: [pre-push]

@@ -152,24 +152,28 @@ Docs and comments describe the **current state and its rationale**, never the ed
 
 ## Pre-commit hooks
 
-Install once after cloning:
+Install once after cloning, and again in every new clone or `git worktree`
+(hooks live in each checkout's `.git`, not in the repository):
 
 ```bash
-pre-commit install
+pre-commit install --hook-type pre-commit --hook-type pre-push
 ```
 
-Hooks that run on every `git commit`:
+Plain `pre-commit install` sets up only the commit stage, so the `pytest` hook
+would never run.
 
-| Hook | Action |
-|---|---|
-| ruff | Lints and auto-fixes code |
-| ruff-format | Auto-formats code |
-| codespell | Fixes spelling mistakes in place |
-| mypy | Fails on type errors |
-| pytest | Fails if any test breaks |
+| Hook | Stage | Action |
+|---|---|---|
+| ruff | `git commit` | Lints and auto-fixes code |
+| ruff-format | `git commit` | Auto-formats code |
+| codespell | `git commit` | Fixes spelling mistakes in place |
+| mypy | `git commit` | Fails on type errors |
+| pytest | `git push` | Fails if any test breaks |
 
-`pytest` here runs the fast suite: cases marked `slow` (real trainings behind
-a live server, ADR-060) are deselected by `addopts` so committing stays quick.
+`pytest` runs the fast suite, 5 to 8 minutes: cases marked `slow` (real
+trainings behind a live server, ADR-060) are deselected by `addopts`. It runs on
+push, not on commit, so a commit takes seconds (ADR-186). To run it by hand:
+`pre-commit run pytest --hook-stage pre-push --all-files`.
 The coverage gate is `--cov-fail-under=93` in the `tests` job of
 `.github/workflows/ci.yml`, the only place it is set (measured 95% on the full
 fast suite). It lives there and not in `.coveragerc` on purpose: `pytest` always

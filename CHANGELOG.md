@@ -155,6 +155,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 - `frontend/README.md` descreve pré-requisitos, `visionforge gui --no-browser` + `npm run dev`, e2e e o rebuild do SPA; `package.json` declara `engines.node`, e o proxy do Vite lê `VF_API_URL` (#215).
 - `scripts/sync_site_release.py --dry-run` consulta PyPI, GitHub Release e Zenodo e imprime a versão que falta no site, no `CITATION.cff` e no `docs/INSTALL.md`, sem escrever nada; o RELEASING.md ganha a checklist pós-release com um comando por item e o `cd.yml` o passo não bloqueante `site-version-check`, que só emite `::warning::` (#189).
 - Os guias `docs/custom/TASKS.md` e `MODELS.md` ganham a seção **Stability**: os hooks de `TaskSpec`, `register_task`, `register_model` e o `ctx` do Nível 2 só mudam numa versão minor, com entrada no CHANGELOG. `tests/tasks/test_task_api_contract.py` trava as assinaturas (ADR-190) (#216).
+- O hook `pytest` do pre-commit passa para o estágio `pre-push` (a suíte leva de 5 a 8 min por commit); o CONTRIBUTING documenta `pre-commit install --hook-type pre-commit --hook-type pre-push` e a tabela de hooks mostra o estágio de cada um (ADR-186) (#173).
 
 ### Fixed
 

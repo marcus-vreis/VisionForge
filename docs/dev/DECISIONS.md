@@ -7823,3 +7823,20 @@ differently now. Each fix has a test that failed before it
 
 - *A `TASK_API_VERSION` integer checked at load time.* Useful once packages are installed by others; today it only adds a number to bump.
 - *Only the prose promise.* Nothing would fail when the prose and the code drift.
+
+## ADR-186 — The pytest hook runs on `git push`, not on every commit
+
+**Date:** 2026-11-11
+**Status:** Accepted
+**Relates to:** ADR-060 (the `slow` marker and the fast suite kept "seconds-fast" for the pre-commit hook)
+
+**Context:** The local `pytest` hook in `.pre-commit-config.yaml` has `always_run: true` and no `stages`, so every `git commit`, including a docs-only one, ran the whole fast suite: 329 s in the 2026-11-09 audit, 5 to 8 minutes in practice. ADR-060 assumed that suite stayed seconds-fast. The cost pushes contributors to `--no-verify`, which skips ruff, codespell and mypy as well. CI already skips the hook (`SKIP: pytest`) and runs the suite in its own job.
+
+**Decision:** The `pytest` hook gets `stages: [pre-push]`. ruff, ruff-format, codespell and mypy stay on `pre-commit`. This supersedes in part ADR-060: the fast suite is still the one the hook runs, but it runs on push, not on commit. CONTRIBUTING documents `pre-commit install --hook-type pre-commit --hook-type pre-push`, to be run in every clone and worktree, because hooks are installed per checkout.
+
+**Consequences:** A commit takes seconds and a push takes the suite's time. A clone that ran only `pre-commit install` never runs the tests locally; CI still does. The release bump (`bump-my-version`) commits through the commit stage only, so it no longer waits for the suite.
+
+**Alternatives considered:**
+
+- *Keep the hook on commit but filter by changed files.* A change to any `src/` file still runs everything, and the filter has to track which paths affect which tests.
+- *Remove the hook and rely on CI.* The suite would then run first on GitHub, after a push, which is a slower loop than a local one.

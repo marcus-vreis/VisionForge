@@ -36,3 +36,28 @@ def test_every_precommit_hook_is_in_the_contributing_table() -> None:
 
 def test_configured_hooks_are_found() -> None:
     assert "codespell" in _configured_hook_ids()
+
+
+def _hook_stages(hook_id: str) -> list[str] | None:
+    config = yaml.safe_load(
+        (ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8")
+    )
+    for repo in config["repos"]:
+        for hook in repo["hooks"]:
+            if hook["id"] == hook_id:
+                stages: list[str] | None = hook.get("stages")
+                return stages
+    raise AssertionError(f"hook {hook_id} not configured")
+
+
+def test_pytest_runs_on_push_and_the_quick_hooks_on_commit() -> None:
+    assert _hook_stages("pytest") == ["pre-push"]
+    for quick in ("ruff", "ruff-format", "codespell", "mypy"):
+        assert _hook_stages(quick) is None
+
+
+def test_contributing_documents_installing_both_stages() -> None:
+    text = (ROOT / "CONTRIBUTING.md").read_text(encoding="utf-8")
+    assert "pre-commit install --hook-type pre-commit --hook-type pre-push" in text
+    assert "stays quick" not in text
+    assert "(ADR-186)" in text
