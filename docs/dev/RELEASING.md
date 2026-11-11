@@ -9,11 +9,21 @@ bump-my-version bump major     # 0.1.0 -> 1.0.0   breaking changes
 ```
 
 That single command rewrites every place a version literal lives, adds the
-changelog heading, commits, and tags — all atomically. Then:
+changelog heading, commits, and tags — all atomically. `main` and `development`
+are protected (see [Branch protection](#branch-protection-and-repository-settings)),
+so the bump runs on a release branch and reaches them through pull requests:
 
 ```bash
-git push && git push --tags
+git switch -c release/0.2.0 development
+bump-my-version bump minor              # commit + local tag v0.2.0 on this branch
+git push -u origin release/0.2.0        # the branch only, not the tag yet
 ```
+
+1. Open a PR from `release/0.2.0` into `development` and merge it with a merge
+   commit (not squash or rebase), so the tagged bump commit stays in history.
+2. Promote: open a PR from `development` into `main` and merge it with a merge
+   commit as well.
+3. Push the tag: `git push origin v0.2.0`.
 
 The `v*.*.*` tag triggers `.github/workflows/cd.yml`, which builds the wheel
 and sdist and publishes to PyPI via Trusted Publishing (OIDC — no token in the
@@ -79,6 +89,28 @@ visionforge selftest --quick
 Install the published artifact in a throwaway environment and run it. The
 package index is the only place a packaging mistake shows up, and it shows up
 to users first otherwise.
+
+## Branch protection and repository settings
+
+`main` holds released code and `development` is the integration branch
+(CONTRIBUTING, "Branch model"). The repository ruleset `pr-before-merge` is
+**active** on both:
+
+- a pull request is required to change either branch;
+- force-push and branch deletion are blocked;
+- required status checks: `pre-commit`, `frontend`,
+  `tests (ubuntu-latest, py3.13)` and `tests (windows-latest, py3.13)`;
+- the repository admin may bypass the ruleset only through a pull request, never
+  by pushing directly.
+
+Other repository settings that are on:
+
+- secret scanning and push protection (the product handles third-party tokens);
+- Dependabot security updates, plus the version updates configured in
+  `.github/dependabot.yml`;
+- the repository homepage and topics are set.
+
+`delete_branch_on_merge` stays off on purpose, so delete merged branches by hand.
 
 ## CI action runtimes
 

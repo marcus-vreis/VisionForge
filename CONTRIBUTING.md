@@ -112,6 +112,18 @@ ci: add SonarCloud scan on pull requests
 docs: update ARCHITECTURE with task expansion model
 ```
 
+## Branch model
+
+`main` holds what was released; `development` is the integration branch for the
+next release. Both are protected: nothing is pushed to them directly, every change
+arrives through a pull request.
+
+- Branch from `development` and open the PR against `development`.
+- Releases are promoted from `development` to `main` by a pull request, then
+  tagged (see [`docs/dev/RELEASING.md`](docs/dev/RELEASING.md)).
+- Settings of the protection (required checks, bypass) are documented in
+  `docs/dev/RELEASING.md`.
+
 ## Branch conventions
 
 ```
@@ -123,11 +135,12 @@ chore/<description>             # tooling / config
 
 ## Pull Requests
 
-- One PR per issue.
+- One PR per issue, against `development`.
 - PR title follows the same Conventional Commits format.
 - Merge only when CI is green (ruff, mypy, codespell, pytest all passing).
-- Branches are deleted automatically after merging (configured in GitHub settings).
-- Version bump is checked on every PR — run `bump-my-version bump patch` if needed.
+- Delete your branch after merge; GitHub does not do it for you.
+- CI warns when the version was not bumped, but the warning does not block the
+  PR. Releases are cut with `bump-my-version` (see `docs/dev/RELEASING.md`).
 
 ## Documentation
 
@@ -149,6 +162,7 @@ Hooks that run on every `git commit`:
 |---|---|
 | ruff | Lints and auto-fixes code |
 | ruff-format | Auto-formats code |
+| codespell | Fixes spelling mistakes in place |
 | mypy | Fails on type errors |
 | pytest | Fails if any test breaks |
 
@@ -176,7 +190,12 @@ next run catches a regression the mocked route tests cannot.
 1. Create `src/visionforge/blocks/<your_block>.py`
 2. Implement `ExperimentBlock` ABC (`setup`, `run`, `report`)
 3. Add tests in `tests/blocks/test_<your_block>.py`
-4. The `BlockRegistry` and GUI pick it up automatically — no other changes needed
+4. `BlockRegistry` discovers the subclass by itself, but the GUI does not: it
+   dispatches on `config.block`. Add the new name to the `block` `Literal` in
+   `ExperimentConfig` (`src/visionforge/utils/config.py`) and to `_block_types()`
+   in `src/visionforge/gui/api/execution.py` (the Colab runner has the same table in
+   `colab_remote_runner.py`). Without that step the GUI runs a classification.
+5. If the block needs a form in the GUI, add it under `frontend/` and rebuild the SPA.
 
 ## Adding a new task (Detection, Segmentation, etc.)
 
@@ -203,7 +222,7 @@ new modules and never edits an existing task's code or folds into
 
 The frontend lives in `frontend/` and is built with React + TypeScript + Vite + shadcn/ui.
 
-**Prerequisites:** Node.js >= 18 (dev-time only — users never need Node.js).
+**Prerequisites:** Node.js >= 22.12 (or 20.19, the range Vite 8 requires; dev-time only — users never need Node.js).
 
 **Development workflow:**
 1. Start the API server: `python -m visionforge gui`
