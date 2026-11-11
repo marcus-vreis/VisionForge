@@ -1,15 +1,20 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
 
 import visionforge.gui.api.execution as execution_mod
+import visionforge.gui.api.strategies as strategies
 from tests.helpers import wait_experiment_done, wait_until
 from visionforge.utils.messages import using_lang
 
 from .conftest import occupy_queue, release_queue
+
+# Any: the tests swap its orchestrators and executors for fakes.
+strategies_mod: Any = strategies
 
 
 @pytest.fixture
@@ -136,8 +141,8 @@ class TestAnomalyCompareSweep:
                 ComparisonTrial("autoencoder", "success", {"auroc": 0.88}),
             ]
 
-        orig = routes_mod.run_model_comparison
-        routes_mod.run_model_comparison = fake_compare
+        orig = strategies_mod.run_model_comparison
+        strategies_mod.run_model_comparison = fake_compare
         try:
             client = live_client
             payload = {
@@ -155,7 +160,7 @@ class TestAnomalyCompareSweep:
             assert report["metric"] == "auroc"  # defaulted from primary_metric
             assert report["top_3"][0]["model_arch"] == "patchcore"
         finally:
-            routes_mod.run_model_comparison = orig
+            strategies_mod.run_model_comparison = orig
             execution_mod._JOB_STATES.clear()
 
     def test_sweep_is_refused_before_queueing(
@@ -171,8 +176,8 @@ class TestAnomalyCompareSweep:
             called.append(args)
             return []
 
-        orig = routes_mod.run_sweep
-        routes_mod.run_sweep = fake_sweep
+        orig = strategies_mod.run_sweep
+        strategies_mod.run_sweep = fake_sweep
         try:
             client = TestClient(app, raise_server_exceptions=True)
             payload = {
@@ -189,5 +194,5 @@ class TestAnomalyCompareSweep:
             assert called == []
             assert execution_mod._JOB_STATES == {}
         finally:
-            routes_mod.run_sweep = orig
+            strategies_mod.run_sweep = orig
             execution_mod._JOB_STATES.clear()
