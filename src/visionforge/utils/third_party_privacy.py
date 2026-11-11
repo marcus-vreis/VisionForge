@@ -14,7 +14,9 @@ how it is covered. ``tests/utils/test_third_party_privacy.py`` fails when
 
 from __future__ import annotations
 
+import contextlib
 import os
+import sys
 
 # Environment switches honoured by the SDKs, set only when the user did not.
 _ENV_OPT_OUTS: dict[str, str] = {
@@ -62,9 +64,14 @@ def _disable_ultralytics_sync() -> None:
     on the machine too. The events go through one ``Events`` instance whose
     ``enabled`` flag is read on each call, so turning that off here keeps the
     choice inside VisionForge.
+
+    The import goes with stdout pointed at stderr: on a machine without its
+    settings file, ultralytics prints "Creating new Ultralytics Settings" on
+    stdout, which broke the JSON that ``audit-data`` and ``bundle`` print there.
     """
     try:
-        from ultralytics.utils.events import events
+        with contextlib.redirect_stdout(sys.stderr):
+            from ultralytics.utils.events import events
 
         events.enabled = False
     except Exception:  # noqa: BLE001 - absent or broken SDK must not stop the app

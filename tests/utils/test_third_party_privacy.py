@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import ast
+import os
 import re
+import subprocess
 import sys
 import tomllib
 import types
@@ -212,3 +214,28 @@ def test_every_ultralytics_import_switches_its_events_off_first() -> None:
         for where in _unguarded_ultralytics_imports(path)
     ]
     assert offenders == []
+
+
+def test_the_opt_out_prints_nothing_on_stdout(tmp_path: Path) -> None:
+    # On a machine without an ultralytics settings file, importing it prints
+    # "Creating new Ultralytics Settings ..." on stdout. The opt-out runs before
+    # commands whose stdout is JSON (`audit-data`, `bundle`), so that line broke
+    # their output in a fresh environment (#258, the wheel smoke in CI).
+    pytest.importorskip("ultralytics")
+    env = {**os.environ, "YOLO_CONFIG_DIR": str(tmp_path), "PYTHONIOENCODING": "utf-8"}
+    code = (
+        "from visionforge.utils.third_party_privacy import apply_opt_outs;"
+        "apply_opt_outs()"
+    )
+    done = subprocess.run(
+        [sys.executable, "-c", code],
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=120,
+        check=True,
+    )
+
+    assert done.stdout == ""
+    assert list(tmp_path.rglob("settings.json")), "ultralytics did not start fresh"
