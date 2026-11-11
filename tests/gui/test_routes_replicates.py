@@ -43,12 +43,11 @@ class TestReplicatesEndpoints:
     def test_all_five_tasks_expose_a_replicates_route(
         self, app_and_routes: tuple
     ) -> None:
-        # Probe the APIRouter directly: depending on the Starlette version,
-        # app.routes may hide included-router children entirely.
-        _, routes_mod = app_and_routes
-        # getattr: newer FastAPI keeps an included router (profiles, ADR-132) as an
-        # entry without a path of its own.
-        paths = {getattr(route, "path", None) for route in routes_mod.router.routes}
+        # The OpenAPI document of the served app lists every route however the
+        # routers are split (ADR-132); router.routes hides an included router's
+        # children on newer FastAPI versions, and CI installs the newest one.
+        app, _ = app_and_routes
+        paths = set(app.openapi()["paths"])
         for task in (
             "classification",
             "regression",
