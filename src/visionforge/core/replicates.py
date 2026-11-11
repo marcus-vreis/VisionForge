@@ -149,7 +149,11 @@ def aggregate_replicates(
 
     aggregates: dict[str, dict[str, float | int | bool | None]] = {}
     for key in keys:
-        values = [t.metrics[key] for t in successful if key in t.metrics]
+        # An undefined metric (an anomaly AUROC on a one-class test split,
+        # #170) is null: it stays out of the mean and the interval.
+        values = [t.metrics[key] for t in successful if t.metrics.get(key) is not None]
+        if not values:
+            continue
         n = len(values)
         mean = statistics.fmean(values)
         boot_low: float | None = None

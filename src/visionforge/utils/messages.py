@@ -298,6 +298,20 @@ CATALOG: dict[str, dict[Lang, str]] = {
             "that, the learning rate."
         ),
     },
+    "health.single_class_test_split": {
+        "pt": (
+            "As {n} imagens de teste são todas {kind}: a AUROC precisa das duas "
+            "classes para ordenar e fica indefinida (null), não 0,5. Coloque "
+            "imagens normais e anômalas em test/ para medir o detector."
+        ),
+        "en": (
+            "All {n} test images are {kind}: AUROC needs both classes to rank "
+            "and is undefined (null), not 0.5. Put normal and anomalous images "
+            "in test/ to measure the detector."
+        ),
+    },
+    "health.single_class_normal": {"pt": "normais", "en": "normal"},
+    "health.single_class_anomalous": {"pt": "anômalas", "en": "anomalous"},
     "health.non_finite_metric": {
         "pt": (
             "A métrica {metric} ficou não finita ({value}) na época {epoch}, e o "
