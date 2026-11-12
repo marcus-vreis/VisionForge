@@ -1,3 +1,7 @@
+# Published benchmark artifacts (#181): recipe scripts and records kept
+# verbatim as they ran, so no hook rewrites or lints them.
+exclude: ^research/workflow_benchmark/results/
+
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.15.10
@@ -42,3 +46,6 @@ repos:
         language: system
         pass_filenames: false
         always_run: true
+        # The whole suite takes 5-8 minutes, so it runs on `git push`, not on every
+        # commit (ADR-186). Install both stages: see CONTRIBUTING.md.
+        stages: [pre-push]

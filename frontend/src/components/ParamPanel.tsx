@@ -33,8 +33,10 @@ import { AdvancedFields } from "./AdvancedFields";
 import { ModelAdvice } from "./ModelAdvice";
 import { ReviewStep, type ReviewRow, type ReviewSection } from "./ReviewStep";
 import { ReplicatesCard } from "./ReplicatesCard";
+import { ReplicatedComparisonCard } from "./ReplicatedComparisonCard";
 import type { PanelStrategy } from "./ExperimentHeader";
 import type { ReplicatesPayload } from "../lib/replicates-form";
+import type { ReplicatedComparisonPayload } from "../lib/replicated-comparison-form";
 import { Rich } from "./Rich";
 import { StepShell, type StepDef } from "./StepShell";
 import {
@@ -65,12 +67,15 @@ interface ParamPanelProps extends PendingImportProps {
   validationErrors: ValidationError[];
   /** A run is being submitted: the replicates card waits. */
   busy?: boolean;
-  /** The strategy App mirrors for Treinar. Only "replicates" is read here:
-   *  every other strategy is `config.block` (ADR-056 amendment). */
+  /** The strategy App mirrors for Treinar. Only "replicates" and
+   *  "replicatedComparison" are read here: every other strategy is
+   *  `config.block` (ADR-056 amendment, ADR-193). */
   strategy?: PanelStrategy;
   onStrategyChange?: (strategy: PanelStrategy) => void;
   /** Launches a replicate set; without it, Réplicas is not offered. */
   onReplicates?: (payload: ReplicatesPayload) => void;
+  /** Launches the paired comparison (ADR-193); without it, it is not offered. */
+  onReplicatedComparison?: (payload: ReplicatedComparisonPayload) => void;
   /** Incremented by Treinar so the replicates card runs. */
   runSignal?: number;
 }
@@ -445,11 +450,14 @@ function BlockSelector({
   value,
   onChange,
   replicates,
+  comparison,
 }: {
   value: string;
   onChange: (v: string) => void;
   /** Offers Réplicas, a strategy of the GUI and not a block (ADR-056). */
   replicates?: boolean;
+  /** Offers the replicated comparison, also a strategy of the GUI (ADR-193). */
+  comparison?: boolean;
 }) {
   // "Comparar modelos" saiu do seletor (ADR-059): comparar arquiteturas
   // é um grid de um eixo só sobre "Arquitetura" (+ valor ao grid) — um conceito,
@@ -463,6 +471,9 @@ function BlockSelector({
     { value: "random_search", label: t.paramPanel.blocks.randomSearch },
     ...(replicates
       ? [{ value: REPLICATES, label: t.taskPanel.replicates }]
+      : []),
+    ...(comparison
+      ? [{ value: REPLICATED_COMPARISON, label: t.taskPanel.replicatedComparison }]
       : []),
   ];
   return (
@@ -1813,6 +1824,15 @@ const STRATEGY_BLOCKS = [
 
 // Réplicas on the strategy step: a value of the selector, never of `block`.
 const REPLICATES = "replicates";
+// The paired comparison, likewise a value of the selector (ADR-193).
+const REPLICATED_COMPARISON = "replicatedComparison";
+
+// Suggested axes for the classification comparison.
+const CLASSIFICATION_PATH_HINTS = [
+  "training.learning_rate",
+  "training.batch_size",
+  "model.name",
+];
 
 const NAME_STRATEGY: Record<string, NameStrategy> = {
   classification: "simple",
@@ -1899,6 +1919,7 @@ export function ParamPanel({
   strategy,
   onStrategyChange,
   onReplicates,
+  onReplicatedComparison,
   runSignal,
   pendingImport,
   onImportApplied,
@@ -1909,6 +1930,11 @@ export function ParamPanel({
   const block = String(formData["block"] ?? "classification");
   // The replicate set trains `block: "classification"` once per seed.
   const replicatesOn = strategy === REPLICATES && onReplicates !== undefined;
+  // So does each (variant, seed) of the paired comparison.
+  const comparisonOn =
+    strategy === REPLICATED_COMPARISON && onReplicatedComparison !== undefined;
+  // Either one: a strategy of the GUI, not a `block`.
+  const guiStrategyOn = replicatesOn || comparisonOn;
   const modelData = (formData["model"] ?? {}) as Record<string, unknown>;
   const trainingData = (formData["training"] ?? {}) as Record<string, unknown>;
   const dataData = (formData["data"] ?? {}) as Record<string, unknown>;
@@ -1935,7 +1961,11 @@ export function ParamPanel({
     model: String(modelData["name"] ?? "") || undefined,
     epochs: asNumber(trainingData["epochs"]),
     learningRate: asNumber(trainingData["learning_rate"]),
-    strategy: replicatesOn ? REPLICATES : (NAME_STRATEGY[block] ?? "simple"),
+    strategy: replicatesOn
+      ? REPLICATES
+      : comparisonOn
+        ? REPLICATED_COMPARISON
+        : (NAME_STRATEGY[block] ?? "simple"),
     sweepKeys,
     folds:
       block === "cross_validation" ? asNumber(cvData["n_folds"]) : undefined,
@@ -1978,8 +2008,9 @@ export function ParamPanel({
     // left out (as if the YAML had not set it) and reported below.
     const review = reviewImportedConfig(t, raw, schema, schema.$defs ?? {});
     setFormData(review.data);
-    // The file's `block` is its strategy; Réplicas is not one it can name.
-    if (replicatesOn) onStrategyChange?.("simple");
+    // The file's `block` is its strategy; Réplicas and the replicated
+    // comparison are not ones it can name.
+    if (guiStrategyOn) onStrategyChange?.("simple");
     return importReviewMessage(t, review);
   };
   // A run sent from History goes through the same import (#200); this form
@@ -2121,7 +2152,7 @@ export function ParamPanel({
   const tlOn = block === "transfer_learning";
   // The replicate runner trains each seed with the plain classification
   // block, which has no frozen backbone: transfer learning waits too.
-  const tlLocked = replicatesOn || STRATEGY_BLOCKS.includes(block);
+  const tlLocked = guiStrategyOn || STRATEGY_BLOCKS.includes(block);
 
   const changed = (paths: readonly string[]) =>
     countChanged(formData, defaults, paths);
@@ -2148,6 +2179,8 @@ export function ParamPanel({
 
   const strategyLabel = replicatesOn
     ? t.taskPanel.replicates
+    : comparisonOn
+      ? t.taskPanel.replicatedComparison
     : block === "cross_validation"
       ? t.paramPanel.blocks.crossValidation
       : block === "grid_search"
@@ -2193,7 +2226,7 @@ export function ParamPanel({
       rows: [
         {
           ...row(t.experimentHeader.strategyTitle, strategyLabel, tlLocked ? "block" : undefined),
-          ...(replicatesOn ? { changed: true } : {}),
+          ...(guiStrategyOn ? { changed: true } : {}),
         },
         ...(block === "cross_validation"
           ? [row(labels.n_folds, cvData["n_folds"], "cross_validation.n_folds")]
@@ -2354,18 +2387,33 @@ export function ParamPanel({
     {
       id: "strategy",
       summary: strategyLabel,
-      changes: replicatesOn ? 1 : tlLocked ? changed(["block", block]) : 0,
+      changes: guiStrategyOn ? 1 : tlLocked ? changed(["block", block]) : 0,
       errors: errorsIn(["block", ...STRATEGY_BLOCKS]),
       content: (
         <div style={stepStack}>
           <BlockSelector
             // Transfer learning is a single run switched on in Modelo.
-            value={replicatesOn ? REPLICATES : tlOn ? "classification" : block}
+            value={
+              replicatesOn
+                ? REPLICATES
+                : comparisonOn
+                  ? REPLICATED_COMPARISON
+                  : tlOn
+                    ? "classification"
+                    : block
+            }
             replicates={onReplicates !== undefined}
+            comparison={onReplicatedComparison !== undefined}
             onChange={(v) => {
-              onStrategyChange?.(v === REPLICATES ? "replicates" : "simple");
-              setFormData((prev) =>
+              onStrategyChange?.(
                 v === REPLICATES
+                  ? "replicates"
+                  : v === REPLICATED_COMPARISON
+                    ? "replicatedComparison"
+                    : "simple",
+              );
+              setFormData((prev) =>
+                v === REPLICATES || v === REPLICATED_COMPARISON
                   ? withBlock(prev, "classification")
                   : // "Treino simples" already shows as active with transfer
                     // learning on; picking it again must not switch that off.
@@ -2386,6 +2434,19 @@ export function ParamPanel({
               onReplicates={onReplicates}
               runSignal={runSignal}
               preset={replicatesPreset}
+            />
+          )}
+
+          {comparisonOn && onReplicatedComparison && (
+            <ReplicatedComparisonCard
+              metrics={[
+                { value: "accuracy", label: t.runDetail.metrics.labels.accuracy },
+              ]}
+              pathHints={CLASSIFICATION_PATH_HINTS}
+              accent={task.accent}
+              disabled={busy}
+              onReplicatedComparison={onReplicatedComparison}
+              runSignal={runSignal}
             />
           )}
 

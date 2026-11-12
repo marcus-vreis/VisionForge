@@ -18,7 +18,9 @@ import torch
 from fastapi.testclient import TestClient
 from torch import nn
 
+import visionforge.gui.api.custom_task_routes as custom_tasks_mod
 import visionforge.gui.api.execution as execution_mod
+import visionforge.gui.api.strategies as strategies
 from visionforge.core.cancellation import STOPPED, CancellationToken
 from visionforge.core.comparison import ComparisonTrial
 from visionforge.core.replicates import ReplicateTrial
@@ -39,6 +41,9 @@ from visionforge.utils.selftest_data import (
 )
 
 from .conftest import fake_run, job_run, occupy_queue, release_queue, start_job
+
+# Any: the tests swap its orchestrators and executors for fakes.
+strategies_mod: Any = strategies
 
 
 @pytest.fixture
@@ -439,15 +444,16 @@ class TestExecutorsHandTheTokenOn:
                 ComparisonTrial("b", STOPPED, {"r2": 0.1}),
             ]
 
-        monkeypatch.setattr(routes_mod, "run_model_comparison", fake)
+        monkeypatch.setattr(strategies_mod, "run_model_comparison", fake)
         state = _run_executor(
             routes_mod,
-            routes_mod._execute_comparison(
+            strategies_mod._execute_comparison(
                 runner,
                 {"name": "c", "output": _output(tmp_path)},
                 ["a", "b"],
                 "r2",
                 "r",
+                models_dir=tmp_path,
             ),
             token,
         )
@@ -470,12 +476,17 @@ class TestExecutorsHandTheTokenOn:
             seen["token"] = runner_arg._cancel_token
             return [SweepTrial(0, {}, "success", {"r2": 0.5})]
 
-        monkeypatch.setattr(routes_mod, "run_sweep", fake)
+        monkeypatch.setattr(strategies_mod, "run_sweep", fake)
         req = SweepRequest(config={"name": "s"}, search_space={"x": [1, 2, 3]})
         state = _run_executor(
             routes_mod,
-            routes_mod._execute_sweep(
-                runner, {"name": "s", "output": _output(tmp_path)}, req, "r2", "r"
+            strategies_mod._execute_sweep(
+                runner,
+                {"name": "s", "output": _output(tmp_path)},
+                req,
+                "r2",
+                "r",
+                models_dir=tmp_path,
             ),
             token,
         )
@@ -517,7 +528,9 @@ class TestExecutorsHandTheTokenOn:
         req = TaskCvRequest(config=raw, n_folds=3)
         state = _run_executor(
             routes_mod,
-            routes_mod._execute_task_cv(config, req, "r", fake_cv, "Regression"),
+            strategies_mod._execute_task_cv(
+                config, req, "r", fake_cv, "Regression", models_dir=tmp_path
+            ),
             token,
         )
 
@@ -557,12 +570,13 @@ class TestExecutorsHandTheTokenOn:
 
         state = _run_executor(
             routes_mod,
-            routes_mod._execute_replicates(
+            strategies_mod._execute_replicates(
                 _OwnsItsLoop(),
                 {"name": "rep", "output": _output(tmp_path)},
                 [1, 2, 3],
                 "r2",
                 "r",
+                models_dir=tmp_path,
             ),
             token,
         )
@@ -603,12 +617,13 @@ class TestExecutorsHandTheTokenOn:
 
         state = _run_executor(
             routes_mod,
-            routes_mod._execute_replicates(
+            strategies_mod._execute_replicates(
                 _LastSeedFinishes(),
                 {"name": "rep", "output": _output(tmp_path)},
                 [1, 2],
                 "r2",
                 "r",
+                models_dir=tmp_path,
             ),
             token,
         )
@@ -661,15 +676,16 @@ class TestExecutorsHandTheTokenOn:
             assert runner_arg._cancel_token is token
             return [ReplicateTrial(seeds[0], STOPPED)]
 
-        monkeypatch.setattr(routes_mod, "run_replicates", fake)
+        monkeypatch.setattr(strategies_mod, "run_replicates", fake)
         state = _run_executor(
             routes_mod,
-            routes_mod._execute_replicates(
+            strategies_mod._execute_replicates(
                 runner,
                 {"name": "rep", "output": _output(tmp_path)},
                 [1, 2, 3],
                 "r2",
                 "r",
+                models_dir=tmp_path,
             ),
             token,
         )
@@ -705,19 +721,20 @@ class TestExecutorsHandTheTokenOn:
                 "skipped_variants": ["a"],
             }
 
-        monkeypatch.setattr(routes_mod, "run_replicated_comparison", fake)
+        monkeypatch.setattr(strategies_mod, "run_replicated_comparison", fake)
         req = ReplicatedComparisonRequest(
             config={"name": "rc"}, variants={"a": {}, "b": {}}
         )
         state = _run_executor(
             routes_mod,
-            routes_mod._execute_replicated_comparison(
+            strategies_mod._execute_replicated_comparison(
                 runner,
                 {"name": "rc", "output": _output(tmp_path)},
                 req,
                 [1, 2],
                 "r2",
                 "r",
+                models_dir=tmp_path,
             ),
             token,
         )
@@ -749,11 +766,11 @@ class TestExecutorsHandTheTokenOn:
                     stopped=True,
                 )
 
-        monkeypatch.setattr(routes_mod, "GenericTaskEngine", _FakeEngine)
+        monkeypatch.setattr(custom_tasks_mod, "GenericTaskEngine", _FakeEngine)
         info = SimpleNamespace(key="toy")
         state = _run_executor(
             routes_mod,
-            routes_mod._execute_custom_task(info, BaseTaskConfig, "r"),
+            custom_tasks_mod._execute_custom_task(info, BaseTaskConfig, "r"),
             token,
         )
 

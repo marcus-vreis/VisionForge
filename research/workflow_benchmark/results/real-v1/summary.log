@@ -1,0 +1,20 @@
+start 2026-10-30 11:07:37 bench2=366c6ab
+cls seed=37 side=vf exit=0 wall=1835s 2026-10-30 11:38:12
+cls seed=37 side=native exit=0 wall=1814s 2026-10-30 12:08:26
+cls seed=38 side=native exit=0 wall=1829s 2026-10-30 12:38:55
+cls seed=38 side=vf exit=0 wall=1961s 2026-10-30 13:11:36
+cls seed=39 side=vf exit=0 wall=2428s 2026-10-30 13:52:04
+cls seed=39 side=native exit=0 wall=2555s 2026-10-30 14:34:39
+seg seed=37 side=vf exit=0 wall=3373s 2026-10-30 15:30:52
+seg seed=37 side=native exit=0 wall=2546s 2026-10-30 16:13:18
+seg seed=38 side=native exit=0 wall=2495s 2026-10-30 16:54:53
+seg seed=38 side=vf exit=0 wall=2459s 2026-10-30 17:35:52
+seg seed=39 side=vf exit=0 wall=2494s 2026-10-30 18:17:26
+seg seed=39 side=native exit=0 wall=2475s 2026-10-30 18:58:41
+det seed=37 side=vf exit=0 wall=2664s 2026-10-30 19:43:43
+det seed=37 side=native exit=0 wall=2667s 2026-10-30 20:28:48
+det seed=38 side=native exit=0 wall=2669s 2026-10-30 21:13:56
+det seed=38 side=vf exit=0 wall=2663s 2026-10-30 21:58:57
+det seed=39 side=vf exit=0 wall=2669s 2026-10-30 22:44:04
+det seed=39 side=native exit=0 wall=2680s 2026-10-30 23:29:22
+done 2026-10-30 23:29:22

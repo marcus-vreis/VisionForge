@@ -14,12 +14,11 @@ from PIL import Image
 def client_and_cache(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> tuple[TestClient, Path]:
-    from visionforge.gui.api import datasets_routes
-    from visionforge.gui.api import routes as routes_mod
+    from visionforge.gui.api import dataset_tools_routes, datasets_routes
     from visionforge.gui.server import app
 
     cache = tmp_path / "preview_cache"
-    monkeypatch.setattr(routes_mod, "_PREVIEW_CACHE_DIR", cache)
+    monkeypatch.setattr(dataset_tools_routes, "_PREVIEW_CACHE_DIR", cache)
     # A preview registers its dataset root in a module-level allow-list; keep
     # that from leaking into the other tests.
     monkeypatch.setattr(datasets_routes, "_ALLOWED_DATASET_ROOTS", set())
@@ -74,7 +73,9 @@ class TestPreprocessPreview:
             assert original.convert("RGB").getpixel((0, 0)) == (200, 30, 30)
         for path in (body["steps"][0]["artifact"], body["final"]):
             with Image.open(path) as rendered:
-                r, g, b = rendered.convert("RGB").getpixel((0, 0))
+                pixel = rendered.convert("RGB").getpixel((0, 0))
+            assert isinstance(pixel, tuple)
+            r, g, b = pixel
             assert r == g == b
 
     def test_the_requested_class_is_used(

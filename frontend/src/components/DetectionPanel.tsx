@@ -46,6 +46,8 @@ import { PreprocessingPanel } from "./PreprocessingPanel";
 import { StrategyCard, type PanelStrategy } from "./ExperimentHeader";
 import { Rich } from "./Rich";
 import { ReplicatesCard } from "./ReplicatesCard";
+import { ReplicatedComparisonCard } from "./ReplicatedComparisonCard";
+import type { ReplicatedComparisonPayload } from "../lib/replicated-comparison-form";
 import { SweepCard, type SweepPayload } from "./SweepCard";
 import type { ReplicatesPayload } from "../lib/replicates-form";
 
@@ -68,6 +70,8 @@ interface DetectionPanelProps extends PendingImportProps {
   busy?: boolean;
   onSweep?: (payload: SweepPayload) => void;
   onReplicates?: (payload: ReplicatesPayload) => void;
+  /** Launches the paired comparison (ADR-193); without it, no card. */
+  onReplicatedComparison?: (payload: ReplicatedComparisonPayload) => void;
   /** Lets App label and route the main Treinar button by the active strategy. */
   onStrategyChange?: (strategy: PanelStrategy) => void;
   /** Incremented by Treinar so the selected strategy's card runs. */
@@ -99,6 +103,7 @@ export function DetectionPanel({
   onSweep,
   onReplicates,
   onStrategyChange,
+  onReplicatedComparison,
   runSignal,
   pendingImport,
   onImportApplied,
@@ -213,6 +218,7 @@ export function DetectionPanel({
     { value: "simple", label: t.paramPanel.blocks.simple },
     { value: "sweep", label: t.taskPanel.sweep },
     { value: "replicates", label: t.taskPanel.replicates },
+    { value: "replicatedComparison", label: t.taskPanel.replicatedComparison },
   ];
   const strategyLabel = strategies.find((s) => s.value === strategy)!.label;
   const suggestion = suggestExperimentName({
@@ -376,7 +382,7 @@ export function DetectionPanel({
           <StrategyCard
             strategy={strategy}
             onStrategyChange={chooseStrategy}
-
+            strategies={strategies}
           />
           {strategy === "sweep" && onSweep && (
             <SweepCard
@@ -397,6 +403,16 @@ export function DetectionPanel({
               onReplicates={onReplicates}
               runSignal={runSignal}
               preset={replicatesPreset}
+            />
+          )}
+          {strategy === "replicatedComparison" && onReplicatedComparison && (
+            <ReplicatedComparisonCard
+              metrics={COMPARE_METRICS}
+              pathHints={SWEEP_PATH_HINTS}
+              accent={accent}
+              disabled={busy}
+              onReplicatedComparison={onReplicatedComparison}
+              runSignal={runSignal}
             />
           )}
 

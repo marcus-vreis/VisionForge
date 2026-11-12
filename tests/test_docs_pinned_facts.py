@@ -9,6 +9,7 @@ import re
 from pathlib import Path
 
 import pytest
+from fastapi import FastAPI
 
 from visionforge.gui.api.dataset_download import download_dataset
 from visionforge.gui.api.routes import router
@@ -76,14 +77,18 @@ def test_models_guide_sends_custom_model_through_yaml():
 
 def _custom_routes() -> set[str]:
     """``METHOD /api/custom/<key>...`` for every route of the custom tasks."""
-    found: set[str] = set()
-    for route in router.routes:
-        path = getattr(route, "path", "")
-        if not path.startswith(_CUSTOM_PREFIX):
-            continue
-        for method in getattr(route, "methods", set()):
-            found.add(f"{method} {path.replace('{key}', '<key>')}")
-    return found
+    # Read from the OpenAPI schema of a mounted app, not ``router.routes``:
+    # newer FastAPI releases no longer copy an included router's routes into
+    # the parent's list, and CI installs the newest one.
+    app = FastAPI()
+    app.include_router(router)
+    paths: dict[str, dict[str, object]] = app.openapi()["paths"]
+    return {
+        f"{method.upper()} {path.replace('{key}', '<key>')}"
+        for path, operations in paths.items()
+        if path.startswith(_CUSTOM_PREFIX)
+        for method in operations
+    }
 
 
 def test_tasks_guide_lists_every_custom_task_endpoint():

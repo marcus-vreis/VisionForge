@@ -30,6 +30,8 @@ interface HistoryOverlayProps {
   initialTask?: string;
   /** Sends a run back to its task's form (#200). */
   rerun?: RerunHandle;
+  /** A run to open on arrival: the results view's "open in History" (ADR-193). */
+  initialRunId?: string | null;
 }
 
 /** Inline caption preceding a filter control. */
@@ -785,13 +787,15 @@ export function HistoryOverlay({
   onCountChange,
   initialTask,
   rerun,
+  initialRunId,
 }: HistoryOverlayProps) {
   const t = useT();
   const [runs, setRuns] = useState<RunSummary[]>([]);
   // Mounted means opening, and opening always fetches.
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+  // Mounted on open, so the run asked for is simply the first one shown.
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(initialRunId ?? null);
   // The run to return to from the one open: a seed opened from its group goes
   // back to the group, not to the list.
   const [backTo, setBackTo] = useState<string | null>(null);
