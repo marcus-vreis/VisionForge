@@ -252,7 +252,7 @@ Itens das fontes que ficaram de fora desta rodada, para a próxima triagem.
 - AUDIT seção 6 ganhos rápidos sem task: 'visionforge gui --check', badge de versão do PyPI no site lido em build time, 'visionforge doctor --json' no bug_report.yml, página /docs/changelog no site gerada do CHANGELOG, 'Cite this repository' com DOI de versão.
 - AUDIT seção 6 apostas maiores sem task: 'visionforge reproduce <bundle>' (re-treina 1 seed e compara com o IC), catálogo de experimentos em SQLite no lugar de varrer outputs/, entry-point visionforge.exporters para exportadores de terceiros, figura 'tempo até o primeiro treino' no paper.
 - reviews product-competitive medium: risco de diluição por sete integrações externas em uma semana (manutenção contra APIs de terceiros) não virou task; é decisão de produto.
-- Tracking (MLflow/W&B) só para classificação: fica como issue de continuação em OPS-12, sem task de código.
+- Tracking (MLflow/W&B) para as demais tarefas: resolvido na #286 (ADR-197); regressão, segmentação, anomalia, detecção e tarefas próprias exportam o `run.json` ao fim do treino.
 - Anomalia: campo val_auroc é calculado no split de teste a cada época (nome engana; sem vazamento de seleção, checkpoint por train_loss): anotar no backlog.
 - Ideia do tema product-gui: tour da aba Código para tarefas custom lendo o código do pesquisador por inspect.
 - Citação do SUS (Brooke) só quando os resultados de usabilidade entrarem no paper, conferida na fonte.
