@@ -986,6 +986,26 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "pt": "O envio ao W&B está indisponível para esta execução ou perfil.",
         "en": "W&B export is unavailable for this run or profile.",
     },
+    "comet.request_invalid": {
+        "pt": "Pedido inválido para o Comet.",
+        "en": "Invalid Comet request.",
+    },
+    "comet.token_invalid": {
+        "pt": "Chave inválida: cole a chave de API inteira, sem espaços.",
+        "en": "Invalid key: paste the whole API key, without spaces.",
+    },
+    "comet.token_missing": {
+        "pt": "Salve uma chave de API do Comet neste perfil antes de enviar.",
+        "en": "Save a Comet API key in this profile before uploading.",
+    },
+    "comet.name_invalid": {
+        "pt": "Use só minúsculas, números, ponto, hífen e sublinhado (até 100).",
+        "en": "Use only lower-case letters, digits, dot, hyphen and underscore (up to 100).",
+    },
+    "comet.retry_unavailable": {
+        "pt": "O envio ao Comet está indisponível para esta execução ou perfil.",
+        "en": "Comet export is unavailable for this run or profile.",
+    },
     "code.tour_missing": {
         "pt": "Ainda não há código comentado para esta tarefa.",
         "en": "There is no annotated code for this task yet.",

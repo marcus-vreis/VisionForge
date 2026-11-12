@@ -60,6 +60,7 @@ Foundational utilities. No module-level import of another VisionForge package; t
 | `workers.py` · `credentials.py` · `redact.py` | DataLoader worker budget; local store for dataset-provider API keys; masking of credentials before text is shown or logged. |
 | `third_party_privacy.py` | Switches off the usage telemetry of the bundled third-party SDKs once, before any of them is imported; never overrides a value the user already set (ADR-120, ADR-170). |
 | `wandb_names.py` | The W&B project and entity name check, kept out of `core/` so the profile settings validate names without importing torch (ADR-172). |
+| `comet_names.py` | The Comet workspace and project name check (lower case only), kept out of `core/` for the same reason (ADR-200). |
 | `selftest.py` · `selftest_data.py` | `visionforge selftest` (ADR-060) — builds tiny synthetic datasets in each task's real on-disk layout, starts the real API on an ephemeral socket, and trains every (task, strategy) pair through the same endpoints the browser uses, checking the report shape and the SSE contract. The answer to "does this install actually train?". |
 
 ### `models/`
@@ -91,6 +92,7 @@ Imports `utils/`, plus `models/` from the four non-classification trainers (see 
 | `run_report.py` | A run as a folder of text shared by the GitHub and DVC exporters: README report from run.json, public run.json, charts (ADR-175, ADR-176). |
 | `public_run_record.py` | Reduces every local path in a run record to its final name, for the public bundle sent to Zenodo (ADR-174). |
 | `wandb_tracking.py` | Optional Weights & Biases exporter of GUI training runs, every task (ADR-197). Confirms or creates a private project over GraphQL with the profile's key, then logs public parameters, epoch metrics and the final public metrics, with git, code, console and machine metadata off (ADR-172). |
+| `comet_tracking.py` | Optional Comet exporter of GUI training runs, every task, on the W&B contract. Confirms or creates a private project with the profile's key, turns off the SDK's auto-logging, Sentry and internal reports before importing it, passes every collector as an explicit `False`, and records the last confirmed epoch so a retry adds only the rest (ADR-200). |
 | `tracking_privacy.py` | The public projection every tracker shares: config parameters without secrets or paths, and the known metric names (ADR-170, ADR-171, ADR-172). |
 | `code_tour.py` | The "Code" tab of the training sheet: the source of the functions a classification training runs, read with `inspect`, with notes anchored on line text and marked by the run's settings (ADR-173). |
 | `run_trackers.py` | `RunTracker` protocol and `TrackerFactory`: how the trainer and the classification block drive any number of exporters. |
@@ -203,9 +205,9 @@ Imports `blocks/`, `tasks/`, `core/`, `models/` and `utils/`. React + shadcn/ui 
 | `api/http_responses.py` | OpenAPI text of the error status codes shared by the routers (ADR-132). |
 | `api/model_card.py` | Pure localized model-card sections read from the `run.json` contract. |
 | `api/code_tour_routes.py` | `GET /api/code-tour` and `/api/code-tour/{task}`: the real code of a training for the "Código" tab (ADR-173). |
-| `api/tracker_exports.py` | The MLflow and W&B trackers a profile turned on, and the export of a finished regression, segmentation, anomaly, detection or custom-task run from its `run.json` once its job ends (ADR-197). |
-| `api/profile_tokens.py` | One private token per profile and service (Hugging Face Hub, Weights & Biases, Zenodo, GitHub), stored where only the server reads it and never sent back to the page. |
-| `api/hub_routes.py` · `api/wandb_routes.py` · `api/zenodo_routes.py` · `api/github_routes.py` · `api/dvc_routes.py` | History export endpoints for the selected profile: private Hugging Face Hub (ADR-171), Weights & Biases (ADR-172), Zenodo drafts (ADR-174), GitHub without weights (ADR-175) and a local DVC repository (ADR-176). |
+| `api/tracker_exports.py` | The MLflow, W&B and Comet trackers a profile turned on, the export of a finished regression, segmentation, anomaly, detection or custom-task run from its `run.json` once its job ends (ADR-197), and the record a History retry sends (ADR-200). |
+| `api/profile_tokens.py` | One private token per profile and service (Hugging Face Hub, Weights & Biases, Comet, Zenodo, GitHub), stored where only the server reads it and never sent back to the page. |
+| `api/hub_routes.py` · `api/wandb_routes.py` · `api/comet_routes.py` · `api/zenodo_routes.py` · `api/github_routes.py` · `api/dvc_routes.py` | History export endpoints for the selected profile: private Hugging Face Hub (ADR-171), Weights & Biases (ADR-172), Comet (ADR-200), Zenodo drafts (ADR-174), GitHub without weights (ADR-175) and a local DVC repository (ADR-176). |
 | `api/evidence_routes.py` | Read-only dataset audits and profile-confined run bundle downloads (ADR-140). A source reservation excludes active/queued training and concurrent resume; cancellation waits for the archive writer before deleting temporary files. |
 | `api/system_routes.py` · `api/system_service.py` | Host/device information and model defaults; thin HTTP handlers delegate to a service with injected runtime probes (ADR-132). |
 | `api/run_queue.py` · `api/profiles.py` · `api/gpu_health.py` | FIFO training queue (ADR-075), and `RunLanes`: the local queue plus one per Google account, running side by side (ADR-163, phase 4); profiles as output folders (ADR-114); whether the CUDA context still works (ADR-122). |
@@ -257,7 +259,7 @@ multi_cuda  → torch.nn.DataParallel over gpu_ids (classification, regression, 
 
 ## Dependency policy
 
-`pyproject.toml` is canonical. Base dependencies include `timm`, `optuna`, `tensorboard`, `roboflow`, `kaggle` and `datasets` (ADR-106). The extras `timm`, `optuna`, `tensorboard`, `roboflow`, `kaggle` and `huggingface` are empty and exist only so saved install lines keep resolving. The extras that install something are the hardware extras (`cpu`, `cu118`, `cu121`, `cu124`, `cu126`, `cu128`, `cu130`), `detection` (`ultralytics`, AGPL-3.0, ADR-195), the optional exporters `mlflow`, `wandb`, `dvc` and `hub` (ADR-170, ADR-171, ADR-172, ADR-176), and `dev`.
+`pyproject.toml` is canonical. Base dependencies include `timm`, `optuna`, `tensorboard`, `roboflow`, `kaggle` and `datasets` (ADR-106). The extras `timm`, `optuna`, `tensorboard`, `roboflow`, `kaggle` and `huggingface` are empty and exist only so saved install lines keep resolving. The extras that install something are the hardware extras (`cpu`, `cu118`, `cu121`, `cu124`, `cu126`, `cu128`, `cu130`), `detection` (`ultralytics`, AGPL-3.0, ADR-195), the optional exporters `mlflow`, `wandb`, `comet`, `dvc` and `hub` (ADR-170, ADR-171, ADR-172, ADR-200, ADR-176), and `dev`.
 
 ## Task expansion model
 

@@ -23,6 +23,7 @@ from visionforge.gui.api.colab_run_routes import (
     _COLAB_LOGINS,
     build_colab_run_router,
 )
+from visionforge.gui.api.comet_routes import build_comet_router
 from visionforge.gui.api.custom_task_routes import build_custom_task_run_router
 from visionforge.gui.api.custom_task_routes import router as custom_tasks_router
 from visionforge.gui.api.dataset_tools_routes import router as dataset_tools_router
@@ -77,14 +78,15 @@ from visionforge.gui.api.run_history import resume_status as _resume_status
 from visionforge.gui.api.run_history import run_task as _run_task
 from visionforge.gui.api.runs_routes import (
     build_runs_router,
+    read_comet_status,
     read_mlflow_status,
     read_wandb_status,
 )
-from visionforge.gui.api.schemas import MlflowStatus, RunResponse, WandbStatus
+from visionforge.gui.api.schemas import MlflowStatus, RunResponse
 from visionforge.gui.api.strategy_routes import build_group_router, build_search_router
 from visionforge.gui.api.submission import _GPU_UNAVAILABLE_TEXT
 from visionforge.gui.api.system_routes import build_system_router
-from visionforge.gui.api.tracker_exports import profile_trackers
+from visionforge.gui.api.tracker_exports import profile_trackers, retry_record
 from visionforge.gui.api.training_routes import (
     build_experiment_run_router,
     build_task_run_router,
@@ -190,10 +192,21 @@ router.include_router(
     build_wandb_router(
         lambda header: current_profile(header),
         lambda run_id, profile: _find_run_dir(run_id, profile),
-        lambda run_dir: _retry_record(
+        lambda run_dir: retry_record(
             run_dir, read_wandb_status(run_dir), "wandb.retry_unavailable"
         ),
         lambda: _PROFILES_DIR.parent.resolve(),
+        _EVIDENCE_EXPORTS,
+    )
+)
+# Comet, on the same contract as W&B (ADR-200).
+router.include_router(
+    build_comet_router(
+        lambda header: current_profile(header),
+        lambda run_id, profile: _find_run_dir(run_id, profile),
+        lambda run_dir: retry_record(
+            run_dir, read_comet_status(run_dir), "comet.retry_unavailable"
+        ),
         _EVIDENCE_EXPORTS,
     )
 )
@@ -319,28 +332,6 @@ async def reveal_run_folder(
 _MLFLOW_UNAVAILABLE = "mlflow.retry_unavailable"
 
 
-def _retry_record(
-    run_dir: Path,
-    status: MlflowStatus | WandbStatus | None,
-    unavailable: str = _MLFLOW_UNAVAILABLE,
-) -> dict[str, Any]:
-    """The run.json of a finished, exported run, or 409/500.
-
-    ``status`` is the exporter's sidecar: a retry needs one that is not still
-    running.
-    """
-    if status is None or status.status == "RUNNING":
-        raise HTTPException(409, tr(unavailable))
-    try:
-        data = json.loads((run_dir / RUN_FILENAME).read_bytes())
-    except (OSError, ValueError) as exc:
-        raise HTTPException(500, tr(RUN_BAD_JSON_KEY, error=exc)) from exc
-    # Any task: the sidecar above proves the run was exported (ADR-197).
-    if not isinstance(data, dict) or not isinstance(data.get("config"), dict):
-        raise HTTPException(409, tr(unavailable))
-    return data
-
-
 @router.post(
     "/runs/{run_id}/mlflow/retry",
     responses={
@@ -364,7 +355,7 @@ def retry_mlflow(run_id: str, profile: ProfileDep) -> MlflowStatus:
     if not profile.settings.mlflow.enabled or not _EVIDENCE_EXPORTS.reserve(run_dir):
         raise HTTPException(409, tr(_MLFLOW_UNAVAILABLE))
     try:
-        data = _retry_record(run_dir, read_mlflow_status(run_dir))
+        data = retry_record(run_dir, read_mlflow_status(run_dir), _MLFLOW_UNAVAILABLE)
         tracker = MlflowTracker(_PROFILES_DIR.parent / "mlflow", profile.slug, run_dir)
         tracker.retry(data)
         result = read_mlflow_status(run_dir)

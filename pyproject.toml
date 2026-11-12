@@ -98,8 +98,8 @@ cu124 = ["torch>=2.3", "torchvision>=0.18"]
 cu126 = ["torch>=2.13", "torchvision>=0.28"]
 cu128 = ["torch>=2.10", "torchvision>=0.25"]
 cu130 = ["torch>=2.13", "torchvision>=0.28"]
-# mlflow, wandb, dvc and hub are optional exporters (ADR-170, ADR-171, ADR-172,
-# ADR-176): they install something. detection installs ultralytics, the AGPL-3.0
+# mlflow, wandb, comet, dvc and hub are optional exporters (ADR-170, ADR-171,
+# ADR-172, ADR-200, ADR-176): they install something. detection installs ultralytics, the AGPL-3.0
 # YOLO / RT-DETR backend (ADR-195): pip install "visionforge-studio[detection]".
 # timm, optuna, tensorboard, roboflow, kaggle and huggingface are empty:
 # everything they used to install ships with the package (ADR-106). Those names
@@ -107,6 +107,7 @@ cu130 = ["torch>=2.13", "torchvision>=0.28"]
 # keeps resolving instead of failing.
 mlflow = ["mlflow==3.18.0"]
 wandb = ["wandb==0.31.0"]
+comet = ["comet-ml==3.58.12"]
 dvc = ["dvc==3.67.1"]
 detection = ["ultralytics>=8.3"]
 timm = []

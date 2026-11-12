@@ -410,6 +410,18 @@ class WandbStatus(BaseModel):
     entity: str | None = None
 
 
+class CometStatus(BaseModel):
+    """Public Comet export diagnostics of one run (ADR-200)."""
+
+    state: Literal["running", "finished", "disabled", "failed"]
+    status: Literal["RUNNING", "FINISHED", "KILLED", "FAILED"]
+    error: str | None = None
+    # Only an https link reaches the page, never a scheme a click would run.
+    url: str | None = Field(default=None, pattern=r"^https://\S+$", max_length=2048)
+    project: str | None = None
+    workspace: str | None = None
+
+
 class RunDetail(BaseModel):
     """Full run record served from /api/runs/{run_id}.
 
@@ -418,6 +430,7 @@ class RunDetail(BaseModel):
 
     tracking: MlflowStatus | None = None
     wandb: WandbStatus | None = None
+    comet: CometStatus | None = None
 
     run_id: str
     experiment_name: str

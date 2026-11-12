@@ -1,9 +1,9 @@
 """The contract every optional experiment tracker of a training follows.
 
-MLflow (ADR-170) and Weights & Biases (ADR-172) are built per run folder, opened
-when it exists, fed each epoch and closed on every exit path. None of the calls
-may raise: a tracker that fails records it beside the run and the training goes
-on. The tasks other than classification send their finished ``run.json`` the
+MLflow (ADR-170), Weights & Biases (ADR-172) and Comet (ADR-200) are built per
+run folder, opened when it exists, fed each epoch and closed on every exit path.
+None of the calls may raise: a tracker that fails records it beside the run and
+the training goes on. The tasks other than classification send their finished ``run.json`` the
 same way, epoch by epoch (ADR-197).
 """
 
