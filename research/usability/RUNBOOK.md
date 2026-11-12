@@ -22,10 +22,16 @@ e das limitações de interpretação.
 O arquivo `session_template.csv` contém apenas o cabeçalho. Repetir uma linha
 por tarefa T1–T5 e manter o mesmo `session_id` aleatório na sessão.
 
-- `outcome`: `completed`, `assisted`, `failed` ou `withdrawn`.
-- `elapsed_seconds`: duração observada, inclusive em falhas; não preencher um
+- `outcome`: `completed` (concluiu com 0 intervenções), `assisted` (concluiu com
+  1 ou mais), `failed` (começou e não concluiu, ou parou) ou `withdrawn` (saiu do
+  estudo antes da tarefa). É o mesmo critério do "Consegui com ajuda" do
+  formulário, que fica como a visão do participante.
+- `elapsed_seconds`: segundos no cronômetro, de quando o participante terminou de
+  ler a tarefa até concluir ou desistir, inclusive em falhas; não preencher um
   tempo estimado para tarefa que não foi medida.
-- `assistance_count`: quantidade de intervenções do facilitador.
+- `assistance_count`: quantidade de intervenções do facilitador, isto é, dicas,
+  respostas, demonstrações ou ações sobre como fazer a tarefa. Reler o enunciado
+  palavra por palavra ou resolver um problema da própria sessão não conta.
 - `issue_category`: instalação, compreensão, dados, configuração, execução,
   resultados ou outra categoria explícita.
 - `notes_redacted`: descrição revisada sem dados identificáveis.
