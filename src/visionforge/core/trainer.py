@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import random
 import time
 from collections.abc import Callable
@@ -119,6 +120,15 @@ def _seed_everything(seed: int, *, deterministic: bool = False) -> None:
     torch.cuda.manual_seed_all(seed)
     torch.backends.cudnn.deterministic = deterministic
     torch.backends.cudnn.benchmark = not deterministic
+    # cuDNN alone left CUDA kernels such as the bilinear upsampling backward of
+    # the segmentation decoder on atomicAdd, so two GPU runs of one seed parted
+    # in the fourth decimal (#305). Strict mode selects their deterministic
+    # versions; warn_only keeps an op that has none running, with a warning,
+    # instead of raising mid-training (ADR-199). cuBLAS reads its workspace
+    # setting when the first handle is made, so it is set before any matmul.
+    if deterministic:
+        os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
+    torch.use_deterministic_algorithms(deterministic, warn_only=True)
 
 
 def seed_before_building(training: Any) -> None:

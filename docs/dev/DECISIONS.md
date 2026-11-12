@@ -8095,3 +8095,20 @@ Not done, on purpose: AMP stays CUDA-only; `pin_memory` stays as configured (MPS
 
 - *Dropping cu118/cu121/cu124.* Clears every alert, but leaves machines whose driver predates CUDA 12.6 with CPU only.
 - *A torch>=2.10 floor for every extra.* Unsatisfiable on the legacy indexes, and it leaves the 2.12.1 advisory open on the indexes that can clear it.
+
+## ADR-199 — `deterministic=True` also turns on PyTorch's deterministic kernels
+
+**Date:** 2026-11-12
+**Status:** Accepted
+**Amends:** ADR-098 (the determinism switch), ADR-121 (rejected strict mode)
+
+**Context:** #305. On the RTX 5060 Ti with torch 2.14.1+cu130, two runs of one segmentation config with seed 0 and `deterministic=True` gave mIoU 0.4779 and 0.4780. `_seed_everything` set only `cudnn.deterministic`; the CUDA backward of bilinear upsampling (the segmentation decoder) accumulates with `atomicAdd`, and five backward passes of the same input gave different gradients. Under `torch.use_deterministic_algorithms(True)` they were identical. ADR-121 rejected strict mode because it raises on operations without a deterministic kernel; it had measured classification only.
+
+**Decision:** with `deterministic=True`, `_seed_everything` also calls `torch.use_deterministic_algorithms(True, warn_only=True)` and sets `CUBLAS_WORKSPACE_CONFIG=:4096:8` unless the user set it; with `False` it turns strict mode off. `warn_only` keeps an op that has no deterministic kernel running, with a PyTorch warning, instead of stopping the run.
+
+**Consequences:** the six tasks trained one epoch on cuda twice gave the same metrics both times (they did not for segmentation before). Two ops still warn: `nll_loss2d_forward` (segmentation's cross-entropy) and torchvision's `roi_align` backward (Faster R-CNN detection); their runs repeated here, but nothing guarantees it, and REPRODUCIBILITY.md says so. Strict mode is process-wide, so the GUI server sets it again at the start of every run. A test fails if the switch stops turning strict mode on or off, and, on a CUDA machine, if bilinear gradients stop repeating.
+
+**Alternatives considered:**
+
+- *Strict mode without `warn_only`.* Detection would stop at the first `roi_align` backward.
+- *Replacing bilinear upsampling with a deterministic layer.* Changes the model, and every past segmentation result with it.
