@@ -44,14 +44,18 @@ Use as perguntas Q1–Q5 do bloco "Quiz" abaixo, nesta ordem: Q1, Q2, Q3, Q4, Q5
 
 ## Seção 3 — Tarefas
 
-Instrução: *Você recebeu só o link do PyPI e o README. Para cada tarefa, anote a
-hora em que começou e a hora em que terminou (ex.: 14:05).*
+Instrução: *Você recebeu só o link do PyPI e o README. O facilitador cronometra
+cada tarefa; anote também a hora em que começou e a hora em que terminou
+(ex.: 14:05), só para conferência.*
 
 Para cada tarefa T1–T5, quatro perguntas:
 
 - Hora de início (resposta curta)
 - Hora de fim (resposta curta)
 - Resultado — Consegui sozinho(a) / Consegui com ajuda / Não consegui
+  ("com ajuda" = o facilitador deu ao menos uma dica, resposta ou demonstração
+  sobre como fazer a tarefa; a análise usa o registro do facilitador, ver
+  `PROTOCOL.md`, *Facilitation and timing*)
 - O que deu errado ou confundiu, se algo? (parágrafo, opcional)
 
 Tarefas:
