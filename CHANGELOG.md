@@ -15,6 +15,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Added
 
+- Guias da interface com prints em `docs/gui/`: um índice por tarefa do usuário, **Primeiro treino**, **Estratégias** e **Depois do treino**. O script `scripts/capture_docs_images.py` passa a gerar dez imagens, seis delas novas (estratégias, menu de guias, revisão, painel de treino, resultados e detalhe da execução).
 - A aba **Código** mostra o código real, lido do pacote instalado, também para regressão, segmentação, anomalia (autoencoder e PatchCore) e detecção torchvision (Faster R-CNN, SSD, RetinaNet), com o caminho de cada execução marcado. A detecção com Ultralytics explica por que não há código do VisionForge para mostrar (ADR-181).
 - Perfis podem ativar o MLflow local para acompanhar treinos de classificação. O Histórico permite repetir uma exportação que falhou (ADR-170).
 - O Histórico envia o checkpoint de uma execução, um model card e as métricas para um repositório privado do Hugging Face Hub, com prévia local antes do envio e token salvo por perfil (ADR-171).

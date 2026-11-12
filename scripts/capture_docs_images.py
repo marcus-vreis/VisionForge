@@ -45,6 +45,12 @@ EXPECTED_IMAGES: dict[str, str] = {
     "vf-replicates.png": "Regressão, etapa Estratégia com Réplicas ligado",
     "vf-code-tab.png": "Aba Código do painel de treino, após 1 época na CPU",
     "vf-colab.png": "Canto do Colab aberto, sem CLI instalado nem conta Google",
+    "vf-strategy.png": "Classificação, etapa Estratégia com as seis estratégias",
+    "vf-guide-menu.png": "Menu de guias do cabeçalho aberto",
+    "vf-review.png": "Classificação, etapa Revisão antes de treinar",
+    "vf-training.png": "Painel de treino na aba Log, após 1 época na CPU",
+    "vf-results.png": "Resultados de uma classificação: métricas e gráficos",
+    "vf-run-detail.png": "Histórico, detalhe de uma execução com as ações de publicação",
 }
 
 

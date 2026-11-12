@@ -303,6 +303,7 @@ epoch on synthetic data says nothing about accuracy.
 - [`docs/INSTALL.md`](https://github.com/marcus-vreis/VisionForge/blob/main/docs/INSTALL.md) — install, step by step, per system (Portuguese)
 - [`docs/QUICKSTART.md`](https://github.com/marcus-vreis/VisionForge/blob/main/docs/QUICKSTART.md) — first run, start to finish
 - [`docs/DATASETS.md`](https://github.com/marcus-vreis/VisionForge/blob/main/docs/DATASETS.md) — dataset layouts and the download providers
+- [`docs/gui/README.md`](https://github.com/marcus-vreis/VisionForge/blob/main/docs/gui/README.md) — index of the GUI guides, with screenshots: first training run, strategies, what to do after a run (Portuguese)
 - [`docs/gui/codigo.md`](https://github.com/marcus-vreis/VisionForge/blob/main/docs/gui/codigo.md) — the Code tab and the functions inspected per task (Portuguese)
 - [`docs/gui/colab.md`](https://github.com/marcus-vreis/VisionForge/blob/main/docs/gui/colab.md) — classification training on Google Colab and Google Drive datasets (Portuguese)
 - [`docs/gui/tokens.md`](https://github.com/marcus-vreis/VisionForge/blob/main/docs/gui/tokens.md) — where tokens and keys are stored and how to remove them (Portuguese)
@@ -690,6 +691,7 @@ navegador usa. Ele confere que o caminho funciona, não que o modelo é bom — 
 - [`docs/INSTALL.md`](https://github.com/marcus-vreis/VisionForge/blob/main/docs/INSTALL.md) — instalação passo a passo, por sistema
 - [`docs/QUICKSTART.md`](https://github.com/marcus-vreis/VisionForge/blob/main/docs/QUICKSTART.md) — o primeiro treino, do início ao fim
 - [`docs/DATASETS.md`](https://github.com/marcus-vreis/VisionForge/blob/main/docs/DATASETS.md) — formatos de dataset e os provedores de download
+- [`docs/gui/README.md`](https://github.com/marcus-vreis/VisionForge/blob/main/docs/gui/README.md) — índice dos guias da interface, com prints: primeiro treino, estratégias e o que fazer depois de um treino
 - [`docs/gui/codigo.md`](https://github.com/marcus-vreis/VisionForge/blob/main/docs/gui/codigo.md) — a aba Código e as funções inspecionadas em cada tarefa
 - [`docs/gui/colab.md`](https://github.com/marcus-vreis/VisionForge/blob/main/docs/gui/colab.md) — treino de classificação no Google Colab e datasets no Google Drive
 - [`docs/gui/tokens.md`](https://github.com/marcus-vreis/VisionForge/blob/main/docs/gui/tokens.md) — onde ficam os tokens e chaves e como removê-los
