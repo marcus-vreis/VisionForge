@@ -171,6 +171,10 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 - O torch sai das faixas com alerta: o lock resolve um torch por extra de hardware (antes era um só, 2.7.1+cu118, para todas), com piso 2.13 em `cpu`, `cu126` e na nova `cu130`, e 2.10 em `cu128`. As extras `cu118`, `cu121` e `cu124` ficam como legado, porque seus índices pararam antes das correções. O `doctor` recomenda `cu130` a drivers com CUDA 13 (ADR-198, #302).
 - Dependências sem as faixas vulneráveis apontadas pelo Dependabot: anyio, datasets, filelock, fsspec, idna, mako, multidict, pydantic-settings, pygments, pytest, setuptools, virtualenv e werkzeug no `uv.lock`; brace-expansion no `package-lock.json` (#300). O torch fica para uma issue própria, porque trocar a versão exige validar a build CUDA na GPU.
 
+### Changed
+
+- Preprint do estudo de variância por seed: o trabalho relacionado ganha a literatura 2023-2026 (11 referências, cada uma conferida na fonte, com a URL e a data no `refs.bib` e em `LITERATURE_2023_2026.md`). Seguem pendentes a data e o DOI do depósito no Zenodo (#230).
+
 ### Fixed
 
 - Com `deterministic=True`, duas execuções na GPU com a mesma seed dão os mesmos números também na segmentação: além do cuDNN, o PyTorch passa a usar seus kernels determinísticos (`use_deterministic_algorithms(True, warn_only=True)`). Antes, o backward da interpolação bilinear variava na 4ª casa decimal do mIoU. Duas operações sem versão determinística (`nll_loss2d` e o `roi_align` da detecção) seguem com aviso (ADR-199, #305).
