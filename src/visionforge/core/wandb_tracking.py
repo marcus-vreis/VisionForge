@@ -15,7 +15,6 @@ import math
 import os
 import re
 import tempfile
-import urllib.error
 import urllib.request
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -114,7 +113,8 @@ def http_graphql(base_url: str, token: str) -> GraphQL:
             with urllib.request.urlopen(request, timeout=_TIMEOUT_S) as response:  # noqa: S310
                 # Same https endpoint as above.
                 payload = json.loads(response.read())
-        except (urllib.error.URLError, OSError, ValueError) as exc:
+        # URLError is an OSError.
+        except (OSError, ValueError) as exc:
             raise WandbRequestError(type(exc).__name__) from None
         if not isinstance(payload, dict) or payload.get("errors"):
             raise WandbRequestError("The W&B API refused the request")
