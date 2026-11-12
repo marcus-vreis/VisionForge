@@ -32,7 +32,9 @@ class TestSelectWheelTag:
             ("12.6", "cu126"),
             ("12.7", "cu126"),  # between 12.6 and 12.8 → cu126
             ("12.8", "cu128"),
-            ("13.3", "cu128"),  # above highest supported → clamp to cu128
+            ("12.9", "cu128"),
+            ("13.0", "cu130"),
+            ("13.3", "cu130"),  # above highest supported → clamp to cu130
             ("12.4", "cu124"),
             ("12.5", "cu124"),  # between 12.4 and 12.6 → cu124
             ("12.1", "cu121"),
@@ -55,7 +57,8 @@ class TestSelectWheelTag:
         to prevent, so the mapping must not stop below cu128.
         """
         assert select_wheel_tag("12.8") == "cu128"
-        assert select_wheel_tag("13.0") == "cu128"
+        assert select_wheel_tag("12.9") == "cu128"
+        assert select_wheel_tag("13.0") == "cu130"
 
 
 # ---------------------------------------------------------------------------
@@ -110,7 +113,7 @@ class TestDetectDriverCuda:
 
     def test_driver_6xx_still_selects_a_cuda_wheel(self) -> None:
         """The bug's real cost: a CUDA machine being told to install cpu torch."""
-        assert select_wheel_tag("13.3") == "cu128"
+        assert select_wheel_tag("13.3") == "cu130"
 
     def test_parses_version_with_single_digit_minor(self) -> None:
         output = (
@@ -460,7 +463,7 @@ class TestRunDoctor:
             patch("subprocess.run", return_value=self._make_smi_output("13.3")),
             patch("importlib.util.find_spec", return_value=MagicMock()),
             patch.dict(
-                sys.modules, {"torch": self._cuda_torch("2.11.0+cu128", "12.8")}
+                sys.modules, {"torch": self._cuda_torch("2.14.1+cu130", "13.0")}
             ),
         ):
             run_doctor(fix=False, confirm_fn=MagicMock())
@@ -482,8 +485,8 @@ class TestRunDoctor:
             run_doctor(fix=False, confirm_fn=MagicMock())
 
         out = capsys.readouterr().out
-        assert "Recommended wheel: cu128" in out
-        assert "--index-url https://download.pytorch.org/whl/cu128" in out
+        assert "Recommended wheel: cu130" in out
+        assert "--index-url https://download.pytorch.org/whl/cu130" in out
 
     def test_all_ok_returns_zero(self) -> None:
         fake_torch = MagicMock()

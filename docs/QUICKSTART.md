@@ -22,8 +22,9 @@ machine needs, and swaps it in once you answer `y`. On Windows the plain install
 always brings a CPU torch first (PyPI has no other there), so on a GPU machine
 that swap is expected. To skip it, install torch before the package:
 `pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128`,
-then `pip install visionforge-studio` (`cu118` · `cu121` · `cu124` · `cu126` ·
-`cpu` also work in place of `cu128`).
+then `pip install visionforge-studio` (`cu130` · `cu126` · `cpu` also work in
+place of `cu128`; the legacy `cu118` · `cu121` · `cu124` miss torch's security
+fixes, ADR-198).
 
 Working from a source checkout instead? That path is in
 [`CONTRIBUTING.md`](../CONTRIBUTING.md) — the rest of this walkthrough is

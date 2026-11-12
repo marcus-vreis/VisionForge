@@ -253,11 +253,11 @@ multi_cuda  → torch.nn.DataParallel over gpu_ids (classification, regression, 
               gpu_ids passed to Ultralytics (detection)
 ```
 
-`DistributedDataParallel` is not implemented (ADR-007). The device actually used is recorded in `run.json` as `device_used`. PyTorch installation is the user's responsibility (ADR-005): `torch`/`torchvision` come from a hardware extra (`cpu`, `cu118` … `cu128`); everything else ships in the base install (ADR-106).
+`DistributedDataParallel` is not implemented (ADR-007). The device actually used is recorded in `run.json` as `device_used`. PyTorch installation is the user's responsibility (ADR-005): `torch`/`torchvision` come from a hardware extra (`cpu`, `cu118` … `cu130`; one lock fork per extra, ADR-198); everything else ships in the base install (ADR-106).
 
 ## Dependency policy
 
-`pyproject.toml` is canonical. Base dependencies include `timm`, `optuna`, `tensorboard`, `roboflow`, `kaggle` and `datasets` (ADR-106). The extras `timm`, `optuna`, `tensorboard`, `roboflow`, `kaggle` and `huggingface` are empty and exist only so saved install lines keep resolving. The extras that install something are the hardware extras (`cpu`, `cu118`, `cu121`, `cu124`, `cu126`, `cu128`), `detection` (`ultralytics`, AGPL-3.0, ADR-195), the optional exporters `mlflow`, `wandb`, `dvc` and `hub` (ADR-170, ADR-171, ADR-172, ADR-176), and `dev`.
+`pyproject.toml` is canonical. Base dependencies include `timm`, `optuna`, `tensorboard`, `roboflow`, `kaggle` and `datasets` (ADR-106). The extras `timm`, `optuna`, `tensorboard`, `roboflow`, `kaggle` and `huggingface` are empty and exist only so saved install lines keep resolving. The extras that install something are the hardware extras (`cpu`, `cu118`, `cu121`, `cu124`, `cu126`, `cu128`, `cu130`), `detection` (`ultralytics`, AGPL-3.0, ADR-195), the optional exporters `mlflow`, `wandb`, `dvc` and `hub` (ADR-170, ADR-171, ADR-172, ADR-176), and `dev`.
 
 ## Task expansion model
 

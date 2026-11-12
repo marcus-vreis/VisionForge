@@ -82,16 +82,22 @@ Issues = "https://github.com/marcus-vreis/VisionForge/issues"
 [project.optional-dependencies]
 # Hardware extras (ADR-005): pick exactly ONE to install torch + torchvision
 # from the matching index configured under [tool.uv.sources] below.
-#   pip install -e ".[cu121]"   # NVIDIA CUDA 12.1   (or cu118 / cu124 / cu126 / cu128)
-#   RTX 50-series (Blackwell, sm_120) needs cu128 — earlier wheels carry no
-#   kernel for it, so they see the GPU and then fail to run on it.
+#   pip install -e ".[cu130]"   # NVIDIA CUDA 13.0   (or cu126 / cu128)
+#   RTX 50-series (Blackwell, sm_120) needs cu128 or cu130 — earlier wheels
+#   carry no kernel for it, so they see the GPU and then fail to run on it.
 #   pip install -e ".[cpu]"     # CPU-only
-cpu = ["torch>=2.3", "torchvision>=0.18"]
+# Floors (ADR-198): torch 2.13 leaves every published torch advisory behind;
+# the cu128 index stops at 2.11, so cu128 gets the 2.10 floor (only a low
+# torch.jit.script advisory remains there). cu118/cu121/cu124 are legacy: their
+# indexes stopped at 2.7.1/2.5.1/2.6.0 and carry the checkpoint-loading RCE
+# fixed in 2.10 — kept only for drivers too old for CUDA 12.6.
+cpu = ["torch>=2.13", "torchvision>=0.28"]
 cu118 = ["torch>=2.3", "torchvision>=0.18"]
 cu121 = ["torch>=2.3", "torchvision>=0.18"]
 cu124 = ["torch>=2.3", "torchvision>=0.18"]
-cu126 = ["torch>=2.3", "torchvision>=0.18"]
-cu128 = ["torch>=2.3", "torchvision>=0.18"]
+cu126 = ["torch>=2.13", "torchvision>=0.28"]
+cu128 = ["torch>=2.10", "torchvision>=0.25"]
+cu130 = ["torch>=2.13", "torchvision>=0.28"]
 # mlflow, wandb, dvc and hub are optional exporters (ADR-170, ADR-171, ADR-172,
 # ADR-176): they install something. detection installs ultralytics, the AGPL-3.0
 # YOLO / RT-DETR backend (ADR-195): pip install "visionforge-studio[detection]".
@@ -237,6 +243,23 @@ exclude_lines = [
     "if __name__ == .__main__.:",
 ]
 
+# The hardware extras pick different builds of the same torch, so the lock
+# resolves one fork per extra instead of a single torch for all (ADR-198).
+[tool.uv]
+# Old torch forks pull an older setuptools; keep it out of the advisories.
+constraint-dependencies = ["setuptools>=84.1"]
+conflicts = [
+  [
+    { extra = "cu118" },
+    { extra = "cu121" },
+    { extra = "cu124" },
+    { extra = "cu126" },
+    { extra = "cu128" },
+    { extra = "cu130" },
+    { extra = "cpu" },
+  ],
+]
+
 [[tool.uv.index]]
 name = "pytorch-cpu"
 url = "https://download.pytorch.org/whl/cpu"
@@ -267,25 +290,29 @@ name = "pytorch-cu128"
 url = "https://download.pytorch.org/whl/cu128"
 explicit = true
 
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true
+
 [tool.uv.sources]
+# One build per hardware extra; CUDA indexes carry no macOS wheels, so a Mac
+# with a CUDA extra falls back to PyPI. With no extra, torch comes from PyPI.
 torch = [
-  { index = "pytorch-cu118", marker = "extra == 'cu118'" },
-  { index = "pytorch-cu121", marker = "extra != 'cu118' and extra == 'cu121'" },
-  { index = "pytorch-cu124", marker = "extra != 'cu118' and extra != 'cu121' and extra == 'cu124'" },
-  { index = "pytorch-cu126", marker = "extra != 'cu118' and extra != 'cu121' and extra != 'cu124' and extra == 'cu126'" },
-  { index = "pytorch-cu128", marker = "extra != 'cu118' and extra != 'cu121' and extra != 'cu124' and extra != 'cu126' and extra == 'cu128'" },
-  { index = "pytorch-cpu", marker = "extra != 'cu118' and extra != 'cu121' and extra != 'cu124' and extra != 'cu126' and extra != 'cu128' and extra == 'cpu'" },
-  # Default when no hardware extra is selected: CPU (wheels exist for every
-  # supported Python incl. 3.13). GPU users opt in explicitly via .[cu121] etc.
-  { index = "pytorch-cpu", marker = "extra != 'cu118' and extra != 'cu121' and extra != 'cu124' and extra != 'cu126' and extra != 'cu128' and extra != 'cpu'" },
+  { index = "pytorch-cu118", extra = "cu118", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+  { index = "pytorch-cu121", extra = "cu121", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+  { index = "pytorch-cu124", extra = "cu124", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+  { index = "pytorch-cu126", extra = "cu126", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+  { index = "pytorch-cu128", extra = "cu128", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+  { index = "pytorch-cu130", extra = "cu130", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+  { index = "pytorch-cpu", extra = "cpu" },
 ]
 torchvision = [
-  { index = "pytorch-cu118", marker = "extra == 'cu118'" },
-  { index = "pytorch-cu121", marker = "extra != 'cu118' and extra == 'cu121'" },
-  { index = "pytorch-cu124", marker = "extra != 'cu118' and extra != 'cu121' and extra == 'cu124'" },
-  { index = "pytorch-cu126", marker = "extra != 'cu118' and extra != 'cu121' and extra != 'cu124' and extra == 'cu126'" },
-  { index = "pytorch-cu128", marker = "extra != 'cu118' and extra != 'cu121' and extra != 'cu124' and extra != 'cu126' and extra == 'cu128'" },
-  { index = "pytorch-cpu", marker = "extra != 'cu118' and extra != 'cu121' and extra != 'cu124' and extra != 'cu126' and extra != 'cu128' and extra == 'cpu'" },
-  # Default when no hardware extra is selected: CPU (see torch block above).
-  { index = "pytorch-cpu", marker = "extra != 'cu118' and extra != 'cu121' and extra != 'cu124' and extra != 'cu126' and extra != 'cu128' and extra != 'cpu'" },
+  { index = "pytorch-cu118", extra = "cu118", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+  { index = "pytorch-cu121", extra = "cu121", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+  { index = "pytorch-cu124", extra = "cu124", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+  { index = "pytorch-cu126", extra = "cu126", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+  { index = "pytorch-cu128", extra = "cu128", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+  { index = "pytorch-cu130", extra = "cu130", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+  { index = "pytorch-cpu", extra = "cpu" },
 ]
