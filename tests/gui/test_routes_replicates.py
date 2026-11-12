@@ -1,14 +1,19 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
 
 import visionforge.gui.api.execution as execution_mod
+import visionforge.gui.api.strategies as strategies
 from tests.helpers import wait_experiment_done, wait_until
 
 from .conftest import occupy_queue, release_queue
+
+# Any: the tests swap its orchestrators and executors for fakes.
+strategies_mod: Any = strategies
 
 
 @pytest.fixture
@@ -38,12 +43,11 @@ class TestReplicatesEndpoints:
     def test_all_five_tasks_expose_a_replicates_route(
         self, app_and_routes: tuple
     ) -> None:
-        # Probe the APIRouter directly: depending on the Starlette version,
-        # app.routes may hide included-router children entirely.
-        _, routes_mod = app_and_routes
-        # getattr: newer FastAPI keeps an included router (profiles, ADR-132) as an
-        # entry without a path of its own.
-        paths = {getattr(route, "path", None) for route in routes_mod.router.routes}
+        # The OpenAPI document of the served app lists every route however the
+        # routers are split (ADR-132); router.routes hides an included router's
+        # children on newer FastAPI versions, and CI installs the newest one.
+        app, _ = app_and_routes
+        paths = set(app.openapi()["paths"])
         for task in (
             "classification",
             "regression",
@@ -56,7 +60,11 @@ class TestReplicatesEndpoints:
 
 class TestRegressionReplicates:
     def test_replicates_dispatch_and_aggregate_report(
-        self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
+        self,
+        app_and_routes: tuple,
+        live_client: TestClient,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         from visionforge.core.replicates import ReplicateTrial
 
@@ -74,8 +82,7 @@ class TestRegressionReplicates:
                 ReplicateTrial(seeds[2], "success", {"r2": 1.00}, 0.1),
             ]
 
-        orig = routes_mod.run_replicates
-        routes_mod.run_replicates = fake_replicates
+        monkeypatch.setattr(strategies_mod, "run_replicates", fake_replicates)
         try:
             client = live_client
             payload = {
@@ -108,11 +115,14 @@ class TestRegressionReplicates:
             assert (Path(report["report_dir"]) / "replicates_summary.json").exists()
             assert (Path(report["report_dir"]) / "replicates_ranking.csv").exists()
         finally:
-            routes_mod.run_replicates = orig
             execution_mod._JOB_STATES.clear()
 
     def test_seeds_derived_from_config_seed_when_omitted(
-        self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
+        self,
+        app_and_routes: tuple,
+        live_client: TestClient,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         from visionforge.core.replicates import ReplicateTrial
 
@@ -125,8 +135,7 @@ class TestRegressionReplicates:
             captured["seeds"] = seeds
             return [ReplicateTrial(s, "success", {"r2": 0.9}, 0.1) for s in seeds]
 
-        orig = routes_mod.run_replicates
-        routes_mod.run_replicates = fake_replicates
+        monkeypatch.setattr(strategies_mod, "run_replicates", fake_replicates)
         try:
             client = live_client
             payload = {"config": _payload(tmp_path), "n_replicates": 3}
@@ -137,7 +146,6 @@ class TestRegressionReplicates:
             # RegressionConfig defaults training.seed to 42 → 42, 43, 44
             assert captured["seeds"] == [42, 43, 44]
         finally:
-            routes_mod.run_replicates = orig
             execution_mod._JOB_STATES.clear()
 
     def test_duplicate_seeds_rejected(
@@ -205,7 +213,11 @@ class TestUnknownMetricGuard:
     """
 
     def test_replicates_reject_metric_nobody_reported(
-        self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
+        self,
+        app_and_routes: tuple,
+        live_client: TestClient,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         from visionforge.core.replicates import ReplicateTrial
 
@@ -216,8 +228,7 @@ class TestUnknownMetricGuard:
             # Trials succeed but report r2 — not the requested metric.
             return [ReplicateTrial(s, "success", {"r2": 0.9}, 0.1) for s in seeds]
 
-        orig = routes_mod.run_replicates
-        routes_mod.run_replicates = fake_replicates
+        monkeypatch.setattr(strategies_mod, "run_replicates", fake_replicates)
         try:
             client = live_client
             resp = client.post(
@@ -235,5 +246,4 @@ class TestUnknownMetricGuard:
             assert "test_accuracy" in status["error"]
             assert "r2" in status["error"]  # names what IS available
         finally:
-            routes_mod.run_replicates = orig
             execution_mod._JOB_STATES.clear()

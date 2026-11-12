@@ -1,15 +1,20 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
 
 import visionforge.gui.api.execution as execution_mod
+import visionforge.gui.api.strategies as strategies
 from tests.helpers import wait_experiment_done, wait_until
 from visionforge.utils.selftest_data import build_detection_dataset
 
 from .conftest import occupy_queue, release_queue
+
+# Any: the tests swap its orchestrators and executors for fakes.
+strategies_mod: Any = strategies
 
 
 @pytest.fixture
@@ -120,7 +125,11 @@ class TestDetectionRun:
 
 class TestDetectionCompareSweep:
     def test_compare_dispatches_and_reports(
-        self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
+        self,
+        app_and_routes: tuple,
+        live_client: TestClient,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         from visionforge.core.comparison import ComparisonTrial
 
@@ -135,8 +144,7 @@ class TestDetectionCompareSweep:
                 ComparisonTrial("yolo11n", "success", {"map50_95": 0.4}),
             ]
 
-        orig = routes_mod.run_model_comparison
-        routes_mod.run_model_comparison = fake_compare
+        monkeypatch.setattr(strategies_mod, "run_model_comparison", fake_compare)
         try:
             client = live_client
             payload = {
@@ -154,11 +162,14 @@ class TestDetectionCompareSweep:
             assert report["metric"] == "map50_95"  # defaulted from primary_metric
             assert report["top_3"][0]["model_arch"] == "yolo11s"
         finally:
-            routes_mod.run_model_comparison = orig
             execution_mod._JOB_STATES.clear()
 
     def test_sweep_dispatches_and_reports(
-        self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
+        self,
+        app_and_routes: tuple,
+        live_client: TestClient,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         from visionforge.core.sweep import SweepTrial
 
@@ -174,8 +185,7 @@ class TestDetectionCompareSweep:
                 )
             ]
 
-        orig = routes_mod.run_sweep
-        routes_mod.run_sweep = fake_sweep
+        monkeypatch.setattr(strategies_mod, "run_sweep", fake_sweep)
         try:
             client = live_client
             payload = {
@@ -194,5 +204,4 @@ class TestDetectionCompareSweep:
             assert report["mode"] == "grid"
             assert report["metric"] == "map50_95"
         finally:
-            routes_mod.run_sweep = orig
             execution_mod._JOB_STATES.clear()

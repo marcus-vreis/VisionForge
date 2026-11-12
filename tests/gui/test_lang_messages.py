@@ -21,7 +21,9 @@ import pytest
 from fastapi.testclient import TestClient
 from matplotlib.figure import Figure
 
+import visionforge.gui.api.custom_task_routes as custom_tasks_mod
 import visionforge.gui.api.execution as execution_mod
+import visionforge.gui.api.submission as submission_mod
 from visionforge.core.plotter import MetricsPlotter
 from visionforge.core.training_health import collapsed_predictions
 from visionforge.gui.api.schemas import RunResponse
@@ -774,7 +776,9 @@ class TestCustomTaskActions:
         import visionforge.tasks.manage as manage_mod
 
         _, routes_mod = env
-        monkeypatch.setattr(routes_mod, "_get_custom_task_or_404", lambda _key: None)
+        monkeypatch.setattr(
+            custom_tasks_mod, "_get_custom_task_or_404", lambda _key: None
+        )
         return manage_mod
 
     def test_hiding_and_restoring(
@@ -880,7 +884,7 @@ class TestMessagesWrittenAfterTheRequestIsOver:
             seen.update(label=label, lang=current_lang())
             return RunResponse(run_id=job_id)
 
-        monkeypatch.setattr(routes_mod, "_submit_job", fake_submit)
+        monkeypatch.setattr(submission_mod, "_submit_job", fake_submit)
 
         assert (
             client.post(f"/api/runs/{run_dir.name}/resume", headers=EN).status_code
@@ -914,11 +918,11 @@ class TestMessagesWrittenAfterTheRequestIsOver:
 
         async def scenario() -> None:
             set_lang("en")
-            routes_mod._submit_job(
+            submission_mod._submit_job(
                 "job-en", "en", "classification", "simple", make_start("en")
             )
             set_lang("pt")
-            routes_mod._submit_job(
+            submission_mod._submit_job(
                 "job-pt", "pt", "classification", "simple", make_start("pt")
             )
             queue = execution_mod._RUN_QUEUE
@@ -956,11 +960,11 @@ class TestMessagesWrittenAfterTheRequestIsOver:
 
         async def scenario() -> None:
             set_lang("en")
-            routes_mod._submit_job(
+            submission_mod._submit_job(
                 "fig-en", "en", "classification", "simple", make_start("en")
             )
             set_lang("pt")
-            routes_mod._submit_job(
+            submission_mod._submit_job(
                 "fig-pt", "pt", "classification", "simple", make_start("pt")
             )
             queue = execution_mod._RUN_QUEUE

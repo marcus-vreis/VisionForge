@@ -9,6 +9,7 @@ from typing import Any
 
 import pytest
 
+import visionforge.gui.api.colab_run_routes as colab_run_mod
 import visionforge.gui.api.execution as execution_mod
 from visionforge.core.experiment_bundle import export_experiment_bundle
 from visionforge.gui.api import colab_jobs as cj
@@ -139,7 +140,6 @@ def test_a_job_without_a_bundle_completes_without_downloading() -> None:
 def _execute(
     monkeypatch: pytest.MonkeyPatch, result: cj.RemoteResult, models: Path
 ) -> list[dict[str, Any]]:
-    import visionforge.gui.api.routes as routes_mod
 
     class Jobs:
         def run_job(
@@ -148,12 +148,12 @@ def _execute(
             on_event({"event": "remote", "stage": "download"})
             return result
 
-    monkeypatch.setattr(routes_mod, "_COLAB_JOBS", Jobs())
+    monkeypatch.setattr(colab_run_mod, "_COLAB_JOBS", Jobs())
     log = RunEventLog("r1")
 
     async def go() -> list[dict[str, Any]]:
         start_job(execution_mod, "r1", log=log)
-        await routes_mod._execute_colab("r1", "default", "T4", PAYLOAD, models)
+        await colab_run_mod._execute_colab("r1", "default", "T4", PAYLOAD, models)
         return [e async for e in log.read()]
 
     return asyncio.run(go())

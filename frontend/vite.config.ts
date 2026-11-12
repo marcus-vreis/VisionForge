@@ -3,6 +3,10 @@ import react from "@vitejs/plugin-react";
 import path from "path";
 import { defineConfig } from "vite";
 
+// Where `npm run dev` forwards `/api`. Set VF_API_URL when `visionforge gui` runs on
+// another host or port (`visionforge gui --port 9000` -> VF_API_URL=http://127.0.0.1:9000).
+const apiUrl = process.env.VF_API_URL ?? "http://localhost:8000";
+
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
@@ -29,7 +33,7 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      "/api": "http://localhost:8000",
+      "/api": apiUrl,
     },
   },
 });

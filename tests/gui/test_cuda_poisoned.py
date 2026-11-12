@@ -16,7 +16,7 @@ import pytest
 from fastapi import HTTPException
 
 import visionforge.gui.api.execution as execution_mod
-from visionforge.gui.api import routes
+import visionforge.gui.api.submission as submission_mod
 from visionforge.utils.messages import using_lang
 
 _SRC = Path(__file__).resolve().parents[2] / "src"
@@ -26,13 +26,13 @@ def _submit() -> object:
     async def start() -> None:
         return None
 
-    return routes._submit_job("r1", "label", "classification", "single", start)
+    return submission_mod._submit_job("r1", "label", "classification", "single", start)
 
 
 def test_a_broken_cuda_context_refuses_new_jobs(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(routes, "cuda_context_broken", lambda: True)
+    monkeypatch.setattr(submission_mod, "cuda_context_broken", lambda: True)
     submitted: list[object] = []
     monkeypatch.setattr(execution_mod._RUN_QUEUE, "submit", submitted.append)
 
@@ -45,7 +45,7 @@ def test_a_broken_cuda_context_refuses_new_jobs(
 
 
 def test_a_healthy_server_queues_as_before(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(routes, "cuda_context_broken", lambda: False)
+    monkeypatch.setattr(submission_mod, "cuda_context_broken", lambda: False)
     monkeypatch.setattr(execution_mod._RUN_QUEUE, "submit", lambda job: "running")
 
     assert _submit().status == "running"  # type: ignore[attr-defined]

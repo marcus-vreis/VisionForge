@@ -215,3 +215,45 @@ describe("classification Réplicas (ADR-056)", () => {
     expect(strategy).not.toContain(pt.replicatesCard.title);
   });
 });
+
+function renderWithComparison(
+  strategy: PanelStrategy,
+  onReplicatedComparison: ((payload: unknown) => void) | null = () => {},
+): string {
+  return renderToStaticMarkup(
+    <LanguageContext.Provider value={{ lang: "pt", t: pt, locale: "pt-BR", setLang: () => {} }}>
+      <ParamPanel
+        task={taskDefinitions(pt)[0]}
+        schema={stepSchema}
+        formData={baseForm}
+        setFormData={() => {}}
+        validationErrors={[]}
+        strategy={strategy}
+        onReplicatedComparison={onReplicatedComparison ?? undefined}
+      />
+    </LanguageContext.Provider>,
+  );
+}
+
+describe("classification replicated comparison (ADR-193)", () => {
+  it("lists the comparison on the strategy step and renders its card once picked", () => {
+    const off = section(renderWithComparison("simple"), "strategy");
+    expect(off).toContain(`>${pt.taskPanel.replicatedComparison}</button>`);
+    expect(off).not.toContain(pt.replicatedComparisonCard.title);
+
+    const on = section(renderWithComparison("replicatedComparison"), "strategy");
+    expect(on).toMatch(/background:var\(--accent-soft\)[^>]*>Comparação replicada</);
+    expect(on).toContain(pt.replicatedComparisonCard.title);
+  });
+
+  it("locks transfer learning while the comparison is picked", () => {
+    const model = section(renderWithComparison("replicatedComparison"), "model");
+    expect(model).toMatch(/<fieldset disabled=""/);
+  });
+
+  it("offers no comparison when nothing can launch it", () => {
+    const strategy = section(renderWithComparison("replicatedComparison", null), "strategy");
+    expect(strategy).not.toContain(`>${pt.taskPanel.replicatedComparison}</button>`);
+    expect(strategy).not.toContain(pt.replicatedComparisonCard.title);
+  });
+});

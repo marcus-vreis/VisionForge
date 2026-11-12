@@ -1,73 +1,54 @@
-# React + TypeScript + Vite
+# VisionForge frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React 19 + TypeScript + Vite + Tailwind v4 + shadcn/ui. The built bundle is
+committed in `../src/visionforge/gui/static` and served by the Python backend, so
+end users never need Node.
 
-Currently, two official plugins are available:
+## Prerequisites
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+Node.js `^20.19.0 || >=22.12.0` (the range Vite 8 requires, also in the `engines`
+field of `package.json`). Then:
 
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm ci
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Develop with hot reload
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+Start the backend without opening a tab, then the Vite dev server:
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+visionforge gui --no-browser          # terminal 1, http://127.0.0.1:8000
+npm run dev                           # terminal 2, in frontend/
 ```
+
+Vite forwards `/api` to `http://localhost:8000`. If the backend runs elsewhere
+(`visionforge gui --port 9000`), set `VF_API_URL` before `npm run dev`:
+
+```bash
+VF_API_URL=http://127.0.0.1:9000 npm run dev                # bash
+$env:VF_API_URL = "http://127.0.0.1:9000"; npm run dev      # PowerShell
+```
+
+## Checks
+
+```bash
+npm run lint            # eslint
+npx tsc -b              # types (npm run typecheck)
+npx vitest run          # unit tests
+npm run e2e             # Playwright against the built bundle (see below)
+```
+
+`npm run e2e` starts a real `visionforge` server and tests the **built** SPA, not
+the dev server: run `npm run build` first or it exercises a stale bundle. Install
+the browser once with `npx playwright install chromium`. `VF_E2E_PORT` and
+`VF_E2E_EXECUTABLE` override the port (8765) and the executable.
+
+## Rebuild the SPA
+
+```bash
+npm run build
+```
+
+Writes to `../src/visionforge/gui/static` (emptied first). Commit the regenerated
+bundle together with the source change that caused it.

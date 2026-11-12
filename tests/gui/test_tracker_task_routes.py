@@ -12,8 +12,9 @@ from typing import Any
 
 import pytest
 
+import visionforge.gui.api.custom_task_routes as custom_mod
 import visionforge.gui.api.execution as execution_mod
-import visionforge.gui.api.routes as routes_mod
+import visionforge.gui.api.training_routes as training_mod
 from visionforge.gui.api.profiles import resolve_profile
 from visionforge.gui.api.tracker_exports import exported, profile_trackers
 
@@ -100,7 +101,7 @@ def test_a_finished_task_run_is_exported(
     module = types.ModuleType(module_name)
     setattr(module, class_name, _fake_block(task, run_dir, report_key))
     monkeypatch.setitem(sys.modules, module_name, module)
-    executor = getattr(routes_mod, f"_execute_{task}")
+    executor = getattr(training_mod, f"_execute_{task}")
     config = types.SimpleNamespace(model=types.SimpleNamespace(name="m"))
 
     state = _run(exported(executor(config, _RUN_ID), _RUN_ID, (_Recorder,)))
@@ -122,7 +123,9 @@ def test_without_trackers_nothing_is_built(
     monkeypatch.setitem(sys.modules, module_name, module)
     config: Any = types.SimpleNamespace(model=types.SimpleNamespace(name="m"))
 
-    state = _run(exported(routes_mod._execute_regression(config, _RUN_ID), _RUN_ID, ()))
+    state = _run(
+        exported(training_mod._execute_regression(config, _RUN_ID), _RUN_ID, ())
+    )
 
     assert state["status"] == "completed"
     assert _Recorder.built == []
@@ -148,10 +151,10 @@ def test_a_custom_task_run_is_exported(
                 stopped=False,
             )
 
-    monkeypatch.setattr(routes_mod, "GenericTaskEngine", _Engine)
+    monkeypatch.setattr(custom_mod, "GenericTaskEngine", _Engine)
     info = types.SimpleNamespace(key="denoise")
 
-    job = routes_mod._execute_custom_task(info, object(), _RUN_ID)
+    job = custom_mod._execute_custom_task(info, object(), _RUN_ID)
     state = _run(exported(job, _RUN_ID, (_Recorder,)))
 
     assert state["status"] == "completed"
@@ -188,7 +191,7 @@ def test_a_failed_run_is_not_exported(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setitem(sys.modules, module_name, module)
     config: Any = types.SimpleNamespace(model=types.SimpleNamespace(name="m"))
 
-    job = routes_mod._execute_anomaly(config, _RUN_ID)
+    job = training_mod._execute_anomaly(config, _RUN_ID)
     state = _run(exported(job, _RUN_ID, (_Recorder,)))
 
     assert state["status"] == "failed"

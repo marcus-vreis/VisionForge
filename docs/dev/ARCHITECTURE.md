@@ -182,12 +182,19 @@ Imports `blocks/`, `tasks/`, `core/`, `models/` and `utils/`. React + shadcn/ui 
 | Module | Responsibility |
 |---|---|
 | `server.py` | FastAPI application. Mounts `api/routes.py` and serves the pre-built SPA from `static/`, confined to the resolved SPA root (ADR-127). Also serves `GET /api/health` and applies `security.py`. Entry point behind `visionforge gui`. |
-| `api/routes.py` | REST router, prefix `/api`, which includes the routers split out of it (ADR-132). Still defines: schema + submission (`GET /api/schema`, `POST /api/experiment/run`); per-task schema, run, sweep, compare, replicates and K-fold (`/api/{detection,regression,segmentation,anomaly}/*`, `/api/classification/{replicates,replicated-comparison}`); researcher tasks (`/api/tasks`, `/api/custom/{key}/*`); per-run actions (`/api/runs/{id}` and `/export_md`, `/resume`, `/reveal`); `/api/sample-dataset`, `/api/update`, `GET /api/artifacts/{file_path}`. |
+| `api/routes.py` | REST router, prefix `/api`, which includes the routers split out of it in the order the routes were defined (ADR-132). Owns the profile lookup (`current_profile`, `_MODELS_DIR`, `_PROFILES_DIR`) and the run lookup (`_find_run_dir`) the routers receive. Still defines: `GET /api/schema`; per-run actions (`/api/runs/{id}/{reveal,mlflow/retry,resume,export_md}`); `GET /api/artifacts/{file_path}`. |
 | `api/schemas.py` | Pydantic request/response models for the routes above. |
 | `api/evaluation_routes.py` | Per-run evaluation split out of `routes.py`: `POST /api/runs/{id}/test`, `/gradcam`, `/batch_predict`, `/export_onnx`, with the run lookup and profile injected (#204). |
 | `api/error_messages.py` | The language frame of errors (ADR-191): `unexpected_error` words an unanticipated 500 as a catalog sentence ending in `Type: message`, and the app's `RequestValidationError` handler translates the `msg` of common Pydantic error types per `X-VF-Lang`. |
 | `api/execution.py` | Sole owner of the run queue's lanes and of every started job's state (event log, stop token, run dict), and the classification executor `_execute_experiment`; no FastAPI import (ADR-185). |
 | `api/execution_routes.py` | Reads that state and commands the lanes: `GET /api/experiment/{status,events,result/{id}}`, `GET /api/queue`, `DELETE /api/queue/{id}` (ADR-185). |
+| `api/submission.py` | `_submit_job`, the one way into the queue (GPU check, the page's language, the training stack loaded off the loop), and the `X-VF-Profile` dependency of the split-out routers; holds no state (ADR-196). |
+| `api/training_routes.py` | Starting one run: `POST /api/experiment/run` and `/api/{detection,regression,segmentation,anomaly}/{schema,run}`, the dataset checks at submit time and the standalone tasks' executors (ADR-196). |
+| `api/colab_run_routes.py` | `POST /api/colab/experiment/run` and `/api/colab/drive/continue`, the Colab executor, and the Colab objects that live as long as the server (CLI, logins, jobs, Drive consents) (ADR-196). |
+| `api/custom_task_routes.py` | `GET /api/tasks` and `/api/custom/{key}` (hide, unhide, delete, schema, run), with the custom-task executor (ADR-196). |
+| `api/strategy_routes.py` · `api/strategies.py` | The strategies: `POST /api/{detection,regression,segmentation,anomaly}/{compare,sweep,replicates,replicated-comparison}`, `/api/{regression,segmentation}/cv`, `/api/classification/{replicates,replicated-comparison}` and `/api/custom/{key}/{sweep,replicates,replicated-comparison}`; `strategies.py` validates and queues each job and runs it (comparison, sweep, K-fold, replicates, paired comparison), writing its History group under the config's or the profile's models folder; holds no state (#204). |
+| `api/update_routes.py` | `GET /api/update` and `POST /api/update/apply`, the HTTP side of `updates.py` (ADR-120). |
+| `api/dataset_tools_routes.py` | `POST /api/dataset/preview_preprocess` (the preprocessing strip, PNGs under `outputs/preview_cache/`) and `POST /api/sample-dataset` (the guide's synthetic datasets) (ADR-115). |
 | `api/profiles_routes.py` | Profile endpoints mounted by the shared router, with output directories resolved per request (ADR-132). |
 | `security.py` | Refuses requests whose `Host` or `Origin` does not name this server (DNS rebinding and cross-site requests to the local server). |
 | `api/datasets_routes.py` | Dataset, picker and credential endpoints split out of `routes.py` (`/api/dataset/*`, `/api/<task>/dataset/*`, `/api/checkpoint/pick`, `/api/credentials`) (ADR-132). |
@@ -266,11 +273,12 @@ src/visionforge/
 ├── models/<task>_factory.py     # model builder (if needed)
 ├── blocks/<task>.py             # standalone block (setup/run/report)
 ├── blocks/<task>_runner.py      # TaskRunner: sweeps, comparison, replicates
-└── gui/api/routes.py            # /api/<task>/* endpoints (shared router, extended)
+├── gui/api/training_routes.py   # /api/<task>/{schema,run} (shared module, extended)
+└── gui/api/strategy_routes.py   # /api/<task>/{sweep,compare,cv,...} (shared module, extended)
 frontend/src/components/<Task>Panel.tsx   # tab panel
 ```
 
-The shared files (`routes.py`, `App.tsx`, `types/tasks.ts`) are extended, not restructured.
+The shared files (`training_routes.py`, `strategy_routes.py`, `App.tsx`, `types/tasks.ts`) are extended, not restructured.
 
 **Researcher task** (ADR-058). One `.py` in `user_tasks/` registered with `@register_task`; no package edit, no React. See `tasks/` above and `docs/custom/TASKS.md`.
 

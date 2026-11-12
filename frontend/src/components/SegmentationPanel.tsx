@@ -29,6 +29,8 @@ import { NumberField, SelectField, Segmented, TextField, Toggle } from "./contro
 import { CvCard, type CvPayload } from "./CvCard";
 import { StrategyCard, type PanelStrategy } from "./ExperimentHeader";
 import { ReplicatesCard } from "./ReplicatesCard";
+import { ReplicatedComparisonCard } from "./ReplicatedComparisonCard";
+import type { ReplicatedComparisonPayload } from "../lib/replicated-comparison-form";
 import { SegmentationDatasetStats } from "./TaskDatasetStats";
 import { SweepCard, type SweepPayload } from "./SweepCard";
 import { TransformsSection } from "./TransformsSection";
@@ -48,6 +50,8 @@ interface SegmentationPanelProps extends PendingImportProps {
   busy?: boolean;
   onSweep?: (payload: SweepPayload) => void;
   onReplicates?: (payload: ReplicatesPayload) => void;
+  /** Launches the paired comparison (ADR-193); without it, no card. */
+  onReplicatedComparison?: (payload: ReplicatedComparisonPayload) => void;
   /** Lets App label and route the main Treinar button by the active strategy. */
   onStrategyChange?: (strategy: PanelStrategy) => void;
   /** Incremented by Treinar so the selected strategy's card runs. */
@@ -80,6 +84,7 @@ export function SegmentationPanel({
   onSweep,
   onReplicates,
   onStrategyChange,
+  onReplicatedComparison,
   runSignal,
   onCv,
   pendingImport,
@@ -170,6 +175,7 @@ export function SegmentationPanel({
     { value: "cv", label: t.paramPanel.blocks.crossValidation },
     { value: "sweep", label: t.taskPanel.sweep },
     { value: "replicates", label: t.taskPanel.replicates },
+    { value: "replicatedComparison", label: t.taskPanel.replicatedComparison },
   ];
   const strategyLabel = strategies.find((s) => s.value === strategy)!.label;
   const suggestion = suggestExperimentName({
@@ -374,6 +380,16 @@ export function SegmentationPanel({
               onReplicates={onReplicates}
               runSignal={runSignal}
               preset={replicatesPreset}
+            />
+          )}
+          {strategy === "replicatedComparison" && onReplicatedComparison && (
+            <ReplicatedComparisonCard
+              metrics={compareMetrics}
+              pathHints={SWEEP_PATH_HINTS}
+              accent={accent}
+              disabled={busy}
+              onReplicatedComparison={onReplicatedComparison}
+              runSignal={runSignal}
             />
           )}
           {strategy === "cv" && onCv && (

@@ -2,14 +2,19 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
 
 import visionforge.gui.api.execution as execution_mod
+import visionforge.gui.api.strategies as strategies
 from tests.helpers import wait_experiment_done
 
 from .conftest import occupy_queue, release_queue
+
+# Any: the tests swap its orchestrators and executors for fakes.
+strategies_mod: Any = strategies
 
 
 @pytest.fixture
@@ -37,7 +42,11 @@ def _payload(tmp_path: Path) -> dict:
 
 class TestRegressionCv:
     def test_cv_dispatches_and_reports_fold_table(
-        self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
+        self,
+        app_and_routes: tuple,
+        live_client: TestClient,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         from visionforge.blocks.regression_cv import (
             CrossValidationReport,
@@ -66,8 +75,7 @@ class TestRegressionCv:
                 aggregate={"r2": {"mean": 0.85, "std": 0.05}},
             )
 
-        orig = routes_mod.run_regression_cross_validation
-        routes_mod.run_regression_cross_validation = fake_cv
+        monkeypatch.setattr(strategies_mod, "run_regression_cross_validation", fake_cv)
         try:
             client = live_client
             resp = client.post(
@@ -103,7 +111,6 @@ class TestRegressionCv:
             assert [c["fold"] for c in group["children"]] == [0, 1]
             assert group["aggregates"]["r2"]["mean"] == 0.85
         finally:
-            routes_mod.run_regression_cross_validation = orig
             execution_mod._JOB_STATES.clear()
 
     def test_queues_behind_a_running_job(

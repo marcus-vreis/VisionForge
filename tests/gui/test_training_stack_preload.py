@@ -24,11 +24,22 @@ from typing import Any
 import pytest
 
 import visionforge.gui.api.execution as execution_mod
+import visionforge.gui.api.submission as submission_mod
 from visionforge.gui.api.run_queue import colab_lane
 
 from .conftest import release_queue
 
-_ROUTES_FILE = Path(__file__).resolve().parents[2] / "src/visionforge/gui/api/routes.py"
+_API_DIR = Path(__file__).resolve().parents[2] / "src/visionforge/gui/api"
+# routes.py and the run endpoints split out of it (#204).
+_ROUTE_FILES = tuple(
+    _API_DIR / name
+    for name in (
+        "routes.py",
+        "training_routes.py",
+        "colab_run_routes.py",
+        "custom_task_routes.py",
+    )
+)
 _LOADER = "load_training_stack"
 _GATE_TIMEOUT = 10
 
@@ -84,10 +95,10 @@ def slow_module(
     sys.modules.pop(name, None)
 
 
-def _use_stack(monkeypatch: pytest.MonkeyPatch, routes: Any, *names: str) -> None:
+def _use_stack(monkeypatch: pytest.MonkeyPatch, *names: str) -> None:
     # raising=False: before #258 there was no stack to replace, and the test must
     # then fail on what the loop does, not on a missing attribute.
-    monkeypatch.setattr(routes, "_TRAINING_STACK", names, raising=False)
+    monkeypatch.setattr(submission_mod, "_TRAINING_STACK", names, raising=False)
 
 
 async def _wait_until_idle(routes: Any) -> None:
@@ -104,7 +115,7 @@ def test_the_first_run_imports_the_stack_while_the_loop_keeps_running(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     name, gate = slow_module
-    _use_stack(monkeypatch, routes_mod, name)
+    _use_stack(monkeypatch, name)
     started: list[str] = []
     progress: dict[str, bool] = {}
 
@@ -122,7 +133,9 @@ def test_the_first_run_imports_the_stack_while_the_loop_keeps_running(
                 await asyncio.sleep(0)
 
         ticker = asyncio.create_task(sse())
-        routes_mod._submit_job("first-run", "first-run", "regression", "simple", start)
+        submission_mod._submit_job(
+            "first-run", "first-run", "regression", "simple", start
+        )
         progress["entered"] = await asyncio.to_thread(gate.entered.wait, _GATE_TIMEOUT)
         seen = len(stream)
         for _ in range(5):
@@ -150,10 +163,10 @@ def test_the_loader_imports_in_a_worker_thread(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     name, gate = slow_module
-    _use_stack(monkeypatch, routes_mod, name)
+    _use_stack(monkeypatch, name)
     gate.release.set()
 
-    asyncio.run(routes_mod.load_training_stack())
+    asyncio.run(submission_mod.load_training_stack())
 
     assert gate.finished.is_set()
     assert gate.thread != threading.get_ident()
@@ -162,27 +175,29 @@ def test_the_loader_imports_in_a_worker_thread(
 def test_a_loaded_stack_needs_no_thread(
     routes_mod: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _use_stack(monkeypatch, routes_mod, "sys", "json")
+    _use_stack(monkeypatch, "sys", "json")
 
     def must_not_run(names: tuple[str, ...]) -> None:
         raise AssertionError(f"re-imported a loaded stack: {names}")
 
-    monkeypatch.setattr(routes_mod, "_import_modules", must_not_run)
+    monkeypatch.setattr(submission_mod, "_import_modules", must_not_run)
 
-    asyncio.run(routes_mod.load_training_stack())
+    asyncio.run(submission_mod.load_training_stack())
 
 
 def test_detection_also_loads_its_trainer(
     routes_mod: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     absent = f"_vf_absent_{uuid.uuid4().hex[:8]}"
-    _use_stack(monkeypatch, routes_mod, "sys", absent)
-    monkeypatch.setattr(routes_mod, "_DETECTION_STACK", ("json", absent + "_det"))
+    _use_stack(monkeypatch, "sys", absent)
+    monkeypatch.setattr(submission_mod, "_DETECTION_STACK", ("json", absent + "_det"))
     monkeypatch.setitem(
-        routes_mod._TASK_STACK, "detection", routes_mod._DETECTION_STACK
+        submission_mod._TASK_STACK, "detection", submission_mod._DETECTION_STACK
     )
 
-    missing = routes_mod._missing_training_stack(*routes_mod._TASK_STACK["detection"])
+    missing = submission_mod._missing_training_stack(
+        *submission_mod._TASK_STACK["detection"]
+    )
 
     assert missing == (absent, absent + "_det")
 
@@ -190,14 +205,14 @@ def test_detection_also_loads_its_trainer(
 def test_a_broken_import_is_left_to_the_job(
     routes_mod: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _use_stack(monkeypatch, routes_mod, f"_vf_missing_{uuid.uuid4().hex[:8]}")
+    _use_stack(monkeypatch, f"_vf_missing_{uuid.uuid4().hex[:8]}")
     started: list[bool] = []
 
     async def start() -> None:
         started.append(True)
 
     async def scenario() -> None:
-        routes_mod._submit_job("broken", "broken", "regression", "simple", start)
+        submission_mod._submit_job("broken", "broken", "regression", "simple", start)
         await _wait_until_idle(routes_mod)
 
     asyncio.run(scenario())
@@ -210,15 +225,15 @@ def test_a_colab_job_does_not_load_the_local_stack(
     routes_mod: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     loaded: list[tuple[str, ...]] = []
-    monkeypatch.setattr(routes_mod, "_import_modules", loaded.append)
-    _use_stack(monkeypatch, routes_mod, f"_vf_never_{uuid.uuid4().hex[:8]}")
+    monkeypatch.setattr(submission_mod, "_import_modules", loaded.append)
+    _use_stack(monkeypatch, f"_vf_never_{uuid.uuid4().hex[:8]}")
     started: list[bool] = []
 
     async def start() -> None:
         started.append(True)
 
     async def scenario() -> None:
-        routes_mod._submit_job(
+        submission_mod._submit_job(
             "remote", "remote", "regression", "simple", start, lane=colab_lane("a")
         )
         await _wait_until_idle(routes_mod)
@@ -252,7 +267,7 @@ def _is_route(fn: ast.AsyncFunctionDef) -> bool:
         isinstance(d, ast.Call)
         and isinstance(d.func, ast.Attribute)
         and isinstance(d.func.value, ast.Name)
-        and d.func.value.id == "router"
+        and d.func.value.id.endswith("router")
         for d in fn.decorator_list
     )
 
@@ -265,9 +280,12 @@ def _line(node: ast.AST) -> int:
 def test_no_route_imports_the_training_code_before_the_loader() -> None:
     # A route that imports a block or runner directly would load torch on the
     # loop again; the queue's executors are covered by the queue itself.
-    tree = ast.parse(_ROUTES_FILE.read_text(encoding="utf-8"))
     offenders: list[str] = []
-    for fn in ast.walk(tree):
+    for fn in (
+        node
+        for path in _ROUTE_FILES
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
+    ):
         if not isinstance(fn, ast.AsyncFunctionDef) or not _is_route(fn):
             continue
         loaded_at = min(

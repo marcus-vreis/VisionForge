@@ -40,11 +40,11 @@ TASKS = ["classification", "detection", "regression", "segmentation", "anomaly"]
 
 @pytest.fixture
 def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
-    import visionforge.gui.api.routes as routes_mod
+    import visionforge.gui.api.dataset_tools_routes as dataset_tools_mod
     from visionforge.gui.server import app
 
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr(routes_mod, "_SAMPLE_DATASETS_DIR", Path("datasets"))
+    monkeypatch.setattr(dataset_tools_mod, "_SAMPLE_DATASETS_DIR", Path("datasets"))
     return TestClient(app, raise_server_exceptions=True, client=("127.0.0.1", 50000))
 
 

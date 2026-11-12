@@ -19,6 +19,8 @@ import { StrategyCard, type PanelStrategy } from "./ExperimentHeader";
 import { CustomTaskManageCard } from "./CustomTaskManageCard";
 import { Rich } from "./Rich";
 import { ReplicatesCard } from "./ReplicatesCard";
+import { ReplicatedComparisonCard } from "./ReplicatedComparisonCard";
+import type { ReplicatedComparisonPayload } from "../lib/replicated-comparison-form";
 import { ReviewStep } from "./ReviewStep";
 import { SchemaForm } from "./SchemaForm";
 import { StepShell, type StepDef } from "./StepShell";
@@ -43,6 +45,8 @@ interface CustomTaskPanelProps extends PendingImportProps {
   busy?: boolean;
   onSweep: (payload: SweepPayload) => void;
   onReplicates: (payload: ReplicatesPayload) => void;
+  /** Launches the paired comparison (ADR-193); without it, no card. */
+  onReplicatedComparison?: (payload: ReplicatedComparisonPayload) => void;
   /** Lets App label and route the main Treinar button by the active strategy. */
   onStrategyChange?: (strategy: PanelStrategy) => void;
   /** Incremented by Treinar so the selected strategy's card runs. */
@@ -96,6 +100,7 @@ export function CustomTaskPanel({
   busy,
   onSweep,
   onReplicates,
+  onReplicatedComparison,
   onStrategyChange,
   runSignal,
   onRemoved,
@@ -158,6 +163,7 @@ export function CustomTaskPanel({
       busy={busy}
       onSweep={onSweep}
       onReplicates={onReplicates}
+      onReplicatedComparison={onReplicatedComparison}
       onStrategyChange={onStrategyChange}
       runSignal={runSignal}
       onRemoved={onRemoved}
@@ -176,6 +182,7 @@ export function CustomTaskSteps({
   busy,
   onSweep,
   onReplicates,
+  onReplicatedComparison,
   onStrategyChange,
   runSignal,
   onRemoved,
@@ -213,6 +220,7 @@ export function CustomTaskSteps({
     { value: "simple", label: t.paramPanel.blocks.simple },
     { value: "sweep", label: t.taskPanel.sweep },
     { value: "replicates", label: t.taskPanel.replicates },
+    { value: "replicatedComparison", label: t.taskPanel.replicatedComparison },
   ];
   const strategyLabel = strategies.find((s) => s.value === strategy)?.label ?? "";
   const metrics = metricOptions(task);
@@ -315,6 +323,16 @@ export function CustomTaskSteps({
             onReplicates={onReplicates}
             runSignal={runSignal}
             preset={replicatesPreset}
+          />
+        )}
+        {strategy === "replicatedComparison" && onReplicatedComparison && (
+          <ReplicatedComparisonCard
+            metrics={metrics}
+            pathHints={["training.learning_rate", "training.batch_size"]}
+            accent={task.accent}
+            disabled={busy}
+            onReplicatedComparison={onReplicatedComparison}
+            runSignal={runSignal}
           />
         )}
       </div>

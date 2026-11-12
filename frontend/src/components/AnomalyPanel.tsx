@@ -22,6 +22,8 @@ import { NumberField, SelectField, Segmented, TextField, Toggle } from "./contro
 import { AdvancedFields } from "./AdvancedFields";
 import { StrategyCard, type PanelStrategy } from "./ExperimentHeader";
 import { ReplicatesCard } from "./ReplicatesCard";
+import { ReplicatedComparisonCard } from "./ReplicatedComparisonCard";
+import type { ReplicatedComparisonPayload } from "../lib/replicated-comparison-form";
 import { ReviewStep } from "./ReviewStep";
 import { StepShell } from "./StepShell";
 import { AnomalyDatasetStats } from "./TaskDatasetStats";
@@ -33,6 +35,13 @@ import { countChanged, errorsUnder } from "../lib/steps";
 import type { ReplicatesPayload } from "../lib/replicates-form";
 import type { ComparePayload } from "../lib/compare-form";
 
+// Anomaly has no sweep: these are the comparison's own suggested axes.
+const ANOMALY_PATH_HINTS = [
+  "training.learning_rate",
+  "model.latent_dim",
+  "training.threshold_percentile",
+];
+
 interface AnomalyPanelProps extends PendingImportProps {
   formData: AnomalyForm;
   setFormData: (updater: (prev: AnomalyForm) => AnomalyForm) => void;
@@ -40,6 +49,8 @@ interface AnomalyPanelProps extends PendingImportProps {
   validationErrors: ValidationError[];
   busy?: boolean;
   onReplicates?: (payload: ReplicatesPayload) => void;
+  /** Launches the paired comparison (ADR-193); without it, no card. */
+  onReplicatedComparison?: (payload: ReplicatedComparisonPayload) => void;
   onCompare?: (payload: ComparePayload) => void;
   /** Lets App label and route the main Treinar button by the active strategy. */
   onStrategyChange?: (strategy: PanelStrategy) => void;
@@ -77,6 +88,7 @@ export function AnomalyPanel({
   busy,
   onReplicates,
   onCompare,
+  onReplicatedComparison,
   onStrategyChange,
   runSignal,
   pendingImport,
@@ -149,6 +161,7 @@ export function AnomalyPanel({
     { value: "simple", label: t.paramPanel.blocks.simple },
     { value: "compare", label: t.anomalyPanel.compareLabel },
     { value: "replicates", label: t.taskPanel.replicates },
+    { value: "replicatedComparison", label: t.taskPanel.replicatedComparison },
   ];
   const strategyLabel = strategies.find((s) => s.value === strategy)?.label ?? "";
 
@@ -289,6 +302,16 @@ export function AnomalyPanel({
           onReplicates={onReplicates}
           runSignal={runSignal}
           preset={replicatesPreset}
+        />
+      )}
+      {strategy === "replicatedComparison" && onReplicatedComparison && (
+        <ReplicatedComparisonCard
+          metrics={compareMetrics}
+          pathHints={ANOMALY_PATH_HINTS}
+          accent={accent}
+          disabled={busy}
+          onReplicatedComparison={onReplicatedComparison}
+          runSignal={runSignal}
         />
       )}
     </div>
