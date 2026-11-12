@@ -6,7 +6,6 @@ import asyncio
 import json
 import os
 from datetime import datetime
-from functools import partial
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -58,7 +57,6 @@ from visionforge.gui.api.incorporate_routes import router as incorporate_router
 from visionforge.gui.api.merge_routes import router as merge_router
 from visionforge.gui.api.model_card import _stopped_extent as _stopped_extent
 from visionforge.gui.api.model_card import render_run_markdown as _render_run_markdown
-from visionforge.gui.api.profile_tokens import read_token
 from visionforge.gui.api.profiles import (
     PROFILE_HEADER,
     InvalidProfileError,
@@ -86,6 +84,7 @@ from visionforge.gui.api.schemas import MlflowStatus, RunResponse, WandbStatus
 from visionforge.gui.api.strategy_routes import build_group_router, build_search_router
 from visionforge.gui.api.submission import _GPU_UNAVAILABLE_TEXT
 from visionforge.gui.api.system_routes import build_system_router
+from visionforge.gui.api.tracker_exports import profile_trackers
 from visionforge.gui.api.training_routes import (
     build_experiment_run_router,
     build_task_run_router,
@@ -325,7 +324,7 @@ def _retry_record(
     status: MlflowStatus | WandbStatus | None,
     unavailable: str = _MLFLOW_UNAVAILABLE,
 ) -> dict[str, Any]:
-    """The run.json of a finished classification run, or 409/500.
+    """The run.json of a finished, exported run, or 409/500.
 
     ``status`` is the exporter's sidecar: a retry needs one that is not still
     running.
@@ -336,11 +335,8 @@ def _retry_record(
         data = json.loads((run_dir / RUN_FILENAME).read_bytes())
     except (OSError, ValueError) as exc:
         raise HTTPException(500, tr(RUN_BAD_JSON_KEY, error=exc)) from exc
-    if (
-        not isinstance(data, dict)
-        or not isinstance(data.get("config"), dict)
-        or _run_task(data) != "classification"
-    ):
+    # Any task: the sidecar above proves the run was exported (ADR-197).
+    if not isinstance(data, dict) or not isinstance(data.get("config"), dict):
         raise HTTPException(409, tr(unavailable))
     return data
 
@@ -499,20 +495,12 @@ def _tracker_factories(
     """The exporters this profile turned on, for a classification training only."""
     if config.block != "classification" or config.classification.mode != "train":
         return ()
-    from visionforge.core.mlflow_tracking import MlflowTracker
-    from visionforge.core.wandb_tracking import WandbTarget, WandbTracker
+    return _profile_trackers(profile)
 
-    outputs = _PROFILES_DIR.parent.resolve()
-    factories: list[TrackerFactory] = []
-    if profile.settings.mlflow.enabled:
-        factories.append(partial(MlflowTracker, outputs / "mlflow", profile.slug))
-    wandb = profile.settings.wandb
-    if wandb.enabled:
-        target = WandbTarget(wandb.project, wandb.entity, read_token("wandb", profile))
-        factories.append(
-            partial(WandbTracker, outputs / "wandb", profile.slug, target=target)
-        )
-    return tuple(factories)
+
+def _profile_trackers(profile: Profile) -> tuple[TrackerFactory, ...]:
+    """The exporters this profile turned on (ADR-170, ADR-172, ADR-197)."""
+    return profile_trackers(profile, _PROFILES_DIR.parent.resolve())
 
 
 # Starting one run: classification here and on Colab, then each standalone
@@ -525,7 +513,9 @@ router.include_router(
     )
 )
 router.include_router(build_colab_run_router(lambda header: current_profile(header)))
-router.include_router(build_task_run_router(lambda header: current_profile(header)))
+router.include_router(
+    build_task_run_router(lambda header: current_profile(header), _profile_trackers)
+)
 
 
 # Compare and sweep of the built-in tasks, the task list and the researcher's
@@ -534,7 +524,9 @@ router.include_router(build_task_run_router(lambda header: current_profile(heade
 router.include_router(build_search_router(lambda header: current_profile(header)))
 router.include_router(custom_tasks_router)
 router.include_router(
-    build_custom_task_run_router(lambda header: current_profile(header))
+    build_custom_task_run_router(
+        lambda header: current_profile(header), _profile_trackers
+    )
 )
 router.include_router(build_group_router(lambda header: current_profile(header)))
 

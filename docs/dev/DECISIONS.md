@@ -7942,6 +7942,26 @@ Not done, on purpose: AMP stays CUDA-only; `pin_memory` stays as configured (MPS
 - *Only the environment switches.* Each SDK honours its own, and a new dependency would reach the network unnoticed; the guard makes the promise checkable.
 - *A firewall rule.* Stronger, but needs administrator rights and differs per OS.
 
+## ADR-197 — MLflow and W&B export every task from its finished run.json
+
+**Date:** 2026-11-11
+**Status:** Accepted
+**Amends:** ADR-170 (MLflow), ADR-172 (Weights & Biases)
+
+**Context:** #286. Both exporters took classification training only. Regression, segmentation, anomaly, detection and custom tasks run their own trainers, which have no tracker hooks, but all of them write the ADR-013 `run.json` with `config`, `metrics` and per-epoch `history`.
+
+**Decision:**
+
+- The profile switches are unchanged. A single training of any other task (`/regression/run`, `/segmentation/run`, `/anomaly/run`, `/detection/run`, `/custom/{key}/run`) is sent once its executor ends (`gui/api/tracker_exports.exported`): `core/run_trackers.export_run_record` opens each tracker on the run folder, replays every `history` row as one epoch with the `run.json` names (`train_loss`/`val_loss` keep the chart keys `loss/train`/`loss/val` of ADR-170) and closes it as `FINISHED`, or `KILLED` when the stop cut it. Classification keeps its live per-epoch export.
+- MLflow attaches the `run.json` as before. The W&B summary is the final `metrics` under their `run.json` names: the shared public list, plus `best_val_miou` and `box_loss`, which only the private trackers show (the Hub card keeps its list), and, for a custom task, every finite number under a plain `[A-Za-z0-9_]` name, since the task's own code names them and the history already carries them.
+- The History retry no longer refuses a non-classification run: the exporter's sidecar already proves it was exported.
+
+**Consequences:** the other tasks reach the trackers after the run, not live; a run that raises is not exported (no sidecar, so nothing to retry); sweeps, K-fold, comparisons and resumed runs of the other tasks are not exported, as for classification. The live events end before the upload, but the next queued job waits for it (a stuck W&B call, up to its timeout).
+
+**Alternatives considered:**
+
+- *Tracker hooks in each task trainer.* Live charts, but five trainers and the custom-task engine change, for the same final record.
+- *Widening the shared public list.* The Hub card would publish `box_loss`, which it leaves out on purpose.
 ## ADR-196 — Starting a run leaves `routes.py`: submission, the single-run endpoints and the Colab objects
 
 **Date:** 2026-11-11

@@ -52,6 +52,7 @@ from visionforge.gui.api.submission import (
     ProfileResolver,
     profile_dependency,
 )
+from visionforge.gui.api.tracker_exports import exported
 from visionforge.utils.anomaly_config import AnomalyConfig
 from visionforge.utils.config import ExperimentConfig
 from visionforge.utils.detection_config import DetectionConfig
@@ -77,6 +78,8 @@ _RUN_RESPONSES: dict[int | str, dict[str, Any]] = {
 
 # The exporters a profile turned on for a classification run (``routes.py``).
 TrackersOf = Callable[[ExperimentConfig, Profile], tuple[TrackerFactory, ...]]
+# The exporters a profile turned on, for any other task (ADR-197).
+ProfileTrackers = Callable[[Profile], tuple[TrackerFactory, ...]]
 
 
 def _new_run_id(name: str) -> str:
@@ -123,22 +126,25 @@ def _submit_task_run(
     config: Any,
     execute: Callable[..., Awaitable[None]],
     profile: Profile,
+    trackers: tuple[TrackerFactory, ...],
     stop_at: StopPoint | Literal["auto"] = "auto",
 ) -> RunResponse:
-    """Queue one standalone-task run of the already profile-scoped ``config``."""
+    """Queue one standalone-task run; its run.json goes to ``trackers`` at the end."""
     run_id = _new_run_id(config.name)
     return submission._submit_job(
         run_id,
         config.name,
         task,
         "simple",
-        lambda: execute(config, run_id),
+        lambda: exported(execute(config, run_id), run_id, trackers),
         stop_at=stop_at,
         profile=profile,
     )
 
 
-def build_task_run_router(resolve_profile: ProfileResolver) -> APIRouter:
+def build_task_run_router(
+    resolve_profile: ProfileResolver, trackers_for: ProfileTrackers
+) -> APIRouter:
     """Mount each standalone task's schema and run endpoints, in their old order."""
     router = APIRouter()
     ProfileDep = Annotated[Profile, Depends(profile_dependency(resolve_profile))]
@@ -160,7 +166,10 @@ def build_task_run_router(resolve_profile: ProfileResolver) -> APIRouter:
         """
         config = profile.scope_model(config)
         await asyncio.to_thread(_check_detection_dataset, config)
-        return _submit_task_run(_DETECTION, config, _execute_detection, profile)
+        trackers = trackers_for(profile)
+        return _submit_task_run(
+            _DETECTION, config, _execute_detection, profile, trackers
+        )
 
     @router.get("/regression/schema", tags=[TAG_REGRESSION])
     async def get_regression_schema() -> dict[str, Any]:
@@ -179,7 +188,10 @@ def build_task_run_router(resolve_profile: ProfileResolver) -> APIRouter:
         """
         config = profile.scope_model(config)
         await asyncio.to_thread(_check_regression_dataset, config)
-        return _submit_task_run(_REGRESSION, config, _execute_regression, profile)
+        trackers = trackers_for(profile)
+        return _submit_task_run(
+            _REGRESSION, config, _execute_regression, profile, trackers
+        )
 
     @router.get("/segmentation/schema", tags=[TAG_SEGMENTATION])
     async def get_segmentation_schema() -> dict[str, Any]:
@@ -198,7 +210,10 @@ def build_task_run_router(resolve_profile: ProfileResolver) -> APIRouter:
         """
         config = profile.scope_model(config)
         await asyncio.to_thread(_check_segmentation_dataset, config)
-        return _submit_task_run(_SEGMENTATION, config, _execute_segmentation, profile)
+        trackers = trackers_for(profile)
+        return _submit_task_run(
+            _SEGMENTATION, config, _execute_segmentation, profile, trackers
+        )
 
     @router.get("/anomaly/schema", tags=[TAG_ANOMALY])
     async def get_anomaly_schema() -> dict[str, Any]:
@@ -227,6 +242,7 @@ def build_task_run_router(resolve_profile: ProfileResolver) -> APIRouter:
             config,
             _execute_anomaly,
             profile,
+            trackers_for(profile),
             # PatchCore has no epochs; it stops between its phases (ADR-111).
             stop_at="phase" if config.model.name == "patchcore" else "epoch",
         )
