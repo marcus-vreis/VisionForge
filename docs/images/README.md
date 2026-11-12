@@ -6,7 +6,7 @@ a 1440×960, tema escuro, pt-BR. A versão do cabeçalho fica oculta na
 captura. Não edite à mão: rode o script de novo e confira com
 `python scripts/capture_docs_images.py --check`.
 
-- Commit: `78f452998a7b8ab94c5255a6d79ccf63ba93f116`
+- Commit: `f120eabf5ab22ade7c45cb3a9e886d7c486cc6be`
 - Versão: `0.21.0`
 - Data: 2026-11-12
 
@@ -22,3 +22,6 @@ captura. Não edite à mão: rode o script de novo e confira com
 | `vf-training.png` | Painel de treino na aba Log, após 1 época na CPU | 1440×960 |
 | `vf-results.png` | Resultados de uma classificação: métricas e gráficos | 1440×960 |
 | `vf-run-detail.png` | Histórico, detalhe de uma execução com as ações de publicação | 1440×960 |
+| `vf-transfer.png` | Classificação, etapa Modelo com transfer learning ligado | 1440×960 |
+| `vf-preprocessing.png` | Etapa Imagem e aumento com um filtro e o preview dele | 1440×960 |
+| `vf-datasets-explorer.png` | Ferramentas de dataset, aba Explorar com o dataset de exemplo | 1440×960 |

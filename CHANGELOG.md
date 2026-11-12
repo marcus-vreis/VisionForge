@@ -15,6 +15,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Added
 
+- Mais três guias com prints em `docs/gui/`: **Datasets na interface** (explorar, auditar, refazer divisão, incorporar, juntar, COCO), **Imagem e aumento** (filtros, normalização, augmentation) e **Modelo e transfer learning**. O script de captura gera treze imagens.
 - Guias da interface com prints em `docs/gui/`: um índice por tarefa do usuário, **Primeiro treino**, **Estratégias** e **Depois do treino**. O script `scripts/capture_docs_images.py` passa a gerar dez imagens, seis delas novas (estratégias, menu de guias, revisão, painel de treino, resultados e detalhe da execução).
 - A aba **Código** mostra o código real, lido do pacote instalado, também para regressão, segmentação, anomalia (autoencoder e PatchCore) e detecção torchvision (Faster R-CNN, SSD, RetinaNet), com o caminho de cada execução marcado. A detecção com Ultralytics explica por que não há código do VisionForge para mostrar (ADR-181).
 - Perfis podem ativar o MLflow local para acompanhar treinos de classificação. O Histórico permite repetir uma exportação que falhou (ADR-170).
@@ -180,6 +181,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Fixed
 
+- Com **Transfer learning** ligado na etapa Modelo, os campos de modo, camada a descongelar e LR do backbone não apareciam: o schema do campo é opcional (`anyOf` com `null`) e o painel só seguia `$ref` direto. Fine-tuning só podia ser escolhido por YAML.
 - Os resultados de um treino ficam na aba da tarefa que o rodou: abrir outra aba mostra o formulário dela, e voltar mostra os resultados de novo. No detalhe de uma execução, os quatro painéis de publicação (Hub, Zenodo, GitHub, DVC) têm aparência de botão; a porcentagem do treino não sai mais do cartão quando o nome é longo; e o botão "···" da barra de tarefas, que não fazia nada, foi removido.
 - Com `deterministic=True`, duas execuções na GPU com a mesma seed dão os mesmos números também na segmentação: além do cuDNN, o PyTorch passa a usar seus kernels determinísticos (`use_deterministic_algorithms(True, warn_only=True)`). Antes, o backward da interpolação bilinear variava na 4ª casa decimal do mIoU. Duas operações sem versão determinística (`nll_loss2d` e o `roi_align` da detecção) seguem com aviso (ADR-199, #305).
 - A tabela de testes pareados de uma comparação mostra o IC 95% da diferença a−b, que o backend já calculava (ADR-187), com o método (t de Student ou Hodges-Lehmann), o ponto central e a cobertura real na dica. Um extremo que os dados não limitam aparece como "aberto".

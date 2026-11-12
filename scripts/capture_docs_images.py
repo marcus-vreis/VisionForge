@@ -51,6 +51,9 @@ EXPECTED_IMAGES: dict[str, str] = {
     "vf-training.png": "Painel de treino na aba Log, após 1 época na CPU",
     "vf-results.png": "Resultados de uma classificação: métricas e gráficos",
     "vf-run-detail.png": "Histórico, detalhe de uma execução com as ações de publicação",
+    "vf-transfer.png": "Classificação, etapa Modelo com transfer learning ligado",
+    "vf-preprocessing.png": "Etapa Imagem e aumento com um filtro e o preview dele",
+    "vf-datasets-explorer.png": "Ferramentas de dataset, aba Explorar com o dataset de exemplo",
 }
 
 

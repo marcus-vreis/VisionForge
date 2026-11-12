@@ -49,7 +49,9 @@ que cada uma vai usar:
 Com pesos pré-treinados ligados, o primeiro treino de cada arquitetura baixa
 os pesos. Sem internet, desligue **Pesos pré-treinados** na etapa Modelo.
 
-Quando o padrão não basta, veja [Estratégias](estrategias.md).
+Quando o padrão não basta: [Estratégias](estrategias.md),
+[Modelo e transfer learning](modelo-e-transfer-learning.md) e
+[Imagem e aumento](imagem-e-aumento.md).
 
 ## 3. Revisão
 

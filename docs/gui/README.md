@@ -10,13 +10,16 @@ refaz; nenhum é editado à mão ([`../images/README.md`](../images/README.md)).
 | --- | --- |
 | instalar | [`../INSTALL.md`](../INSTALL.md) |
 | treinar pela primeira vez, sem ter um dataset | [Primeiro treino](primeiro-treino.md) |
-| preparar ou baixar um dataset | [`../DATASETS.md`](../DATASETS.md) |
+| baixar um dataset de um provedor | [`../DATASETS.md`](../DATASETS.md) |
+| explorar, auditar, redividir, juntar ou converter um dataset | [Datasets na interface](datasets.md) |
 
 ## Treinar com rigor
 
 | Quero... | Página |
 | --- | --- |
 | escolher entre treino simples, K-fold, busca, réplicas e comparação | [Estratégias](estrategias.md) |
+| partir de pesos pré-treinados, congelar o backbone ou fazer fine-tuning | [Modelo e transfer learning](modelo-e-transfer-learning.md) |
+| aplicar filtros, mudar a resolução ou o aumento de dados | [Imagem e aumento](imagem-e-aumento.md) |
 | repetir um resultado e saber o que muda entre máquinas | [`../REPRODUCIBILITY.md`](../REPRODUCIBILITY.md) |
 | entender como o nome de um experimento é montado | [Nomes de experimentos](nomes-de-experimentos.md) |
 | ler o código que treinou o meu modelo | [Aba Código](codigo.md) |

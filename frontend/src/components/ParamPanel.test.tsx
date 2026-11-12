@@ -161,6 +161,34 @@ describe("classification steps (ADR-156)", () => {
     expect(section(html, "strategy")).toMatch(/background:var\(--accent-soft\)[^>]*>Treino simples</);
   });
 
+  it("renders the transfer-learning fields with the real nullable Pydantic schema", () => {
+    // `transfer_learning: TransferLearningConfig | None` reaches the form as anyOf.
+    const nullable: JsonSchema = {
+      ...stepSchema,
+      properties: {
+        ...stepSchema.properties,
+        transfer_learning: {
+          anyOf: [{ $ref: "#/$defs/TransferLearningConfig" }, { type: "null" }],
+          default: null,
+        },
+      },
+    };
+    const html = renderToStaticMarkup(
+      <LanguageContext.Provider value={{ lang: "pt", t: pt, locale: "pt-BR", setLang: () => {} }}>
+        <ParamPanel
+          task={taskDefinitions(pt)[0]}
+          schema={nullable}
+          formData={{ ...baseForm, block: "transfer_learning", transfer_learning: { mode: "fine_tuning", backbone_lr_multiplier: 0.1 } }}
+          setFormData={() => {}}
+          validationErrors={[]}
+        />
+      </LanguageContext.Provider>,
+    );
+    const model = section(html, "model");
+    expect(model).toContain("// transfer learning");
+    expect(model).toContain("LR do backbone");
+  });
+
   it("locks the transfer-learning switch while a multi-run strategy is chosen", () => {
     const html = renderSteps({ ...baseForm, block: "grid_search", grid_search: { hyperparameters: {} } });
     const model = section(html, "model");

@@ -3,6 +3,7 @@ import { pickCheckpointFile } from "../api/client";
 import { humanizeFieldPath, type ValidationError } from "../hooks/useExperiment";
 import { usePendingImport, type PendingImportProps } from "../hooks/usePendingImport";
 import { useT } from "../i18n/useT";
+import { resolveSchema as resolveNullableSchema } from "../lib/schema-form";
 import type { JsonSchema } from "../types/schema";
 import type { TaskDefinition } from "../types/tasks";
 import {
@@ -1424,7 +1425,9 @@ function TransferLearningFields({
   errors: ValidationError[];
 }) {
   const t = useT();
-  const resolved = resolveSchema(schema, defs);
+  // `transfer_learning` is optional in the config, so its schema arrives as
+  // anyOf [$ref, null]: the panel's own resolver follows a bare $ref only.
+  const resolved = resolveNullableSchema(schema, defs);
   if (!resolved.properties) return null;
 
   const setParam = (k: string, v: unknown) => onChange({ ...value, [k]: v });
