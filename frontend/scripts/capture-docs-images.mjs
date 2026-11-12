@@ -129,6 +129,9 @@ function field(page, label) {
   return page.getByLabel(label, { exact: true }).first();
 }
 
+// The sample dataset's folder, read from the form once it is created.
+let sampleDir = "";
+
 async function useSampleDataset(page) {
   await openStep(page, "Dados");
   await expect(async () => {
@@ -140,6 +143,9 @@ async function useSampleDataset(page) {
     );
   }).toPass({ timeout: 30_000 });
   await expect(page.getByText(/Splits detectados/)).toBeVisible({ timeout: 30_000 });
+  sampleDir = await page
+    .locator("input")
+    .evaluateAll((inputs) => inputs.find((i) => i.value.includes("exemplo-classificacao")).value);
 }
 
 async function classification(page) {
@@ -149,6 +155,45 @@ async function classification(page) {
   await openStep(page, "Estratégia");
   await expect(page.getByRole("button", { name: "Comparação replicada" })).toBeVisible();
   await shot(page, "vf-strategy.png");
+  await modelAndImage(page);
+}
+
+/** Transfer learning switched on, then one preprocessing filter with its preview.
+ *  Both are undone, so the run `codeTab` trains later is the default one. */
+async function modelAndImage(page) {
+  await openStep(page, "Modelo");
+  const transfer = page.getByRole("switch", { name: "Transfer learning", exact: true });
+  await transfer.click();
+  await expect(page.getByText("// transfer learning", { exact: true })).toBeVisible();
+  await shot(page, "vf-transfer.png");
+  await transfer.click();
+  await expect(transfer).toHaveText(/desativado/i);
+
+  await openStep(page, "Imagem e aumento");
+  await page.getByText("+ adicionar filtro", { exact: true }).click();
+  await page.getByText("Unsharp mask", { exact: true }).click();
+  await page.getByRole("button", { name: /Ver preview/ }).click();
+  await expect(page.getByText("Original", { exact: true })).toBeVisible({ timeout: 30_000 });
+  await shot(page, "vf-preprocessing.png");
+  await page.getByRole("button", { name: "limpar", exact: true }).click();
+  await expect(page.getByText(/Pipeline vazio/)).toBeVisible();
+}
+
+/** The dataset tools on the sample dataset. Leaves the overlay open: run it last. */
+async function datasetExplorer(page) {
+  // Esc leaves the run detail first, then the history itself.
+  const history = page.getByTestId("history-overlay");
+  await expect(async () => {
+    await page.keyboard.press("Escape");
+    await expect(history).toBeHidden({ timeout: 1_000 });
+  }).toPass({ timeout: 15_000 });
+  await page.locator("[data-tour='datasets']").click();
+  await page.getByRole("tab", { name: "Explorar" }).click();
+  // The same picker as the Dados step: the overlay's is the last in the page.
+  await page.getByPlaceholder("datasets/coffee").last().fill(sampleDir);
+  await page.getByRole("button", { name: "Abrir", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Refazer divisão" })).toBeVisible({ timeout: 30_000 });
+  await shot(page, "vf-datasets-explorer.png");
 }
 
 /** The header's guide menu, open. */
@@ -256,6 +301,7 @@ try {
   await guideMenu(page);
   await codeTab(page);
   await resultsAndHistory(page);
+  await datasetExplorer(page);
   await context.close();
 } finally {
   await browser.close();
