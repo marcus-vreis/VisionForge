@@ -467,7 +467,7 @@ export function TrainingOverlay({
               flexShrink: 0,
             }}
           />
-          <div style={{ flex: 1 }}>
+          <div style={{ flex: 1, minWidth: 0, overflowWrap: "anywhere" }}>
             <div
               style={{
                 fontFamily: "var(--font-mono)",
@@ -547,6 +547,7 @@ export function TrainingOverlay({
               fontFamily: "var(--font-mono)",
               fontSize: 28,
               fontWeight: 600,
+              flexShrink: 0,
               color: hasFailed ? "oklch(calc(0.74 - var(--lt-flip, 0) * 0.18) 0.18 22)" : barColor,
             }}
           >

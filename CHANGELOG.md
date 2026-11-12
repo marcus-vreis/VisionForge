@@ -179,6 +179,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Fixed
 
+- Os resultados de um treino ficam na aba da tarefa que o rodou: abrir outra aba mostra o formulário dela, e voltar mostra os resultados de novo. No detalhe de uma execução, os quatro painéis de publicação (Hub, Zenodo, GitHub, DVC) têm aparência de botão; a porcentagem do treino não sai mais do cartão quando o nome é longo; e o botão "···" da barra de tarefas, que não fazia nada, foi removido.
 - Com `deterministic=True`, duas execuções na GPU com a mesma seed dão os mesmos números também na segmentação: além do cuDNN, o PyTorch passa a usar seus kernels determinísticos (`use_deterministic_algorithms(True, warn_only=True)`). Antes, o backward da interpolação bilinear variava na 4ª casa decimal do mIoU. Duas operações sem versão determinística (`nll_loss2d` e o `roi_align` da detecção) seguem com aviso (ADR-199, #305).
 - A tabela de testes pareados de uma comparação mostra o IC 95% da diferença a−b, que o backend já calculava (ADR-187), com o método (t de Student ou Hodges-Lehmann), o ponto central e a cobertura real na dica. Um extremo que os dados não limitam aparece como "aberto".
 - `docs/custom/TASKS.md` descrevia um `ctx.write_run_json` que não existe; o `CONTRIBUTING.md` mandava pôr as rotas de uma tarefa nova em `routes.py`, que hoje só junta os routers por domínio.

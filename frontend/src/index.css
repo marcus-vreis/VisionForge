@@ -500,6 +500,24 @@ html[data-run-active] *::after {
   cursor: pointer;
 }
 .vf-link-btn:hover { text-decoration: underline; }
+/* The publish panels of a run (Hub, Zenodo, GitHub, DVC): closed, each is one
+   button in a wrapping row; open, a panel takes the row to itself. */
+.vf-export-panels { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.vf-export-panels > section { flex: 1 1 100%; min-width: 0; }
+.vf-export-panels button {
+  padding: 6px 12px;
+  margin: 4px 6px 4px 0;
+  background: rgb(var(--lt-ink, 255 255 255) / 0.03);
+  border: 1px solid var(--vf-panel-stroke);
+  border-radius: 8px;
+  color: var(--vf-text);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.vf-export-panels > button { margin: 0; }
+.vf-export-panels button:hover:not(:disabled) { border-color: var(--accent-vf); }
+.vf-export-panels button:disabled { opacity: 0.5; cursor: not-allowed; }
 .vf-review-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
