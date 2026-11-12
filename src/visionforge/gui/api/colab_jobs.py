@@ -25,7 +25,7 @@ import subprocess
 import threading
 import time
 from collections.abc import Callable
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal
@@ -74,6 +74,7 @@ DRIVE_CONSENT_TIMEOUT_S = 600.0
 DRIVE_SILENCE_TIMEOUT_S = 120.0
 DRIVE_MOUNTED = "Mounted at"
 DRIVE_REFUSED = "Error propagating"
+_RUN_STOPPED = "colab.run_stopped"
 _RUNNER = Path(__file__).with_name("colab_remote_runner.py")
 # Session names VisionForge creates; anything else on the account is the user's.
 SESSION_PREFIX = "vf-"
@@ -249,7 +250,13 @@ class ColabJobs:
             return RemoteResult(
                 "failed", error=tr("colab.download_failed", detail=_tail(proc))
             )
-        return replace(result, bundle=local)
+        return RemoteResult(
+            result.outcome,
+            report=result.report,
+            error=result.error,
+            remote_bundle=result.remote_bundle,
+            bundle=local,
+        )
 
     def _mount_drive(
         self,
@@ -269,7 +276,7 @@ class ColabJobs:
                 on_event({"event": "remote", "stage": "drive_mounted", "session": name})
                 return None
             if outcome == "cancelled":
-                return RemoteResult("stopped", error=tr("colab.run_stopped"))
+                return RemoteResult("stopped", error=tr(_RUN_STOPPED))
             if outcome == "failed":
                 return RemoteResult(
                     "failed", error=tr("colab.drive_mount_failed", detail=detail)
@@ -366,7 +373,7 @@ class ColabJobs:
         path.write_text(f"print({WARMUP_MARKER!r}, flush=True)\n", encoding="utf-8")
         for attempt in range(1, WARMUP_ATTEMPTS + 1):
             if cancelled():
-                return RemoteResult("stopped", error=tr("colab.run_stopped"))
+                return RemoteResult("stopped", error=tr(_RUN_STOPPED))
             proc = self._cli(
                 slug,
                 WARMUP_TIMEOUT_S,
@@ -598,7 +605,7 @@ def _result(
     end: dict[str, Any] | None, stopped: bool, other: list[str]
 ) -> RemoteResult:
     if stopped:
-        return RemoteResult("stopped", error=tr("colab.run_stopped"))
+        return RemoteResult("stopped", error=tr(_RUN_STOPPED))
     if end is None:
         detail = other[-1] if other else ""
         return RemoteResult("failed", error=tr("colab.run_no_end", detail=detail))
