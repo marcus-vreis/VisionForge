@@ -92,8 +92,25 @@ error of the paired tests we run within each dataset--architecture family.
 Closer to our setting, \citet{pereiraneto2023coffee} compared CNNs and training
 strategies, augmentation among them, on green coffee beans; like most applied
 work, the comparison reports one value per configuration.
-\todo{Bring the 2023--2026 search from the private literature notes (B1 step 3):
-seed variance in small-data vision fine-tuning.}
+Recent work keeps finding that seed noise is not removed by a pretrained start.
+\citet{altintas2025butterfly} show that tiny perturbations early in training send
+otherwise identical runs to different solutions, and \citet{bui2025seeds} report
+seed effects on fine-tuned language models both in aggregate scores and in
+which individual predictions change. \citet{jordan2023variance} separates the
+variance of a run on a finite test set from variance on the underlying
+distribution, which matters when test sets are small. For deciding how many
+runs a comparison needs, \citet{colas2018seeds} gave a power-analysis
+treatment, \citet{mathieu2024adastop} a sequential test with family-wise error
+control, and \citet{banerjee2024training} a nonparametric test of training
+variability; \citet{du2025pairedbootstrap} argue that single runs and unpaired
+tests make small gains look significant and propose a paired multi-seed
+bootstrap, and \citet{benavoli2017time} propose Bayesian alternatives to
+null-hypothesis tests. In the small-data regime, \citet{brigato2021tune} found
+that a carefully tuned baseline is hard to beat, and \citet{stevens2025datagap}
+argue that settings with few labelled images deserve more evaluation. To our
+knowledge, none of these measures seed noise against the effect of concrete
+ablations in fine-tuned small-data vision, or the rate at which a $k$-seed
+experiment reaches the wrong conclusion.
 
 What this study adds is the regime (small datasets, ImageNet-pretrained
 fine-tuning, deterministic paired seeds) and the measure (noise relative to

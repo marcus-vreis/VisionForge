@@ -174,6 +174,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Changed
 
+- Preprint do estudo de variância por seed: o trabalho relacionado ganha a literatura 2023-2026 (11 referências, cada uma conferida na fonte, com a URL e a data no `refs.bib` e em `LITERATURE_2023_2026.md`). Seguem pendentes a data e o DOI do depósito no Zenodo (#230).
 - Protocolo de usabilidade, antes do primeiro participante: o facilitador cronometra em segundos; "concluiu com ajuda" passa a ser 1 ou mais intervenções contadas, com a mesma definição no PROTOCOL, no RUNBOOK e no formulário; efeito de prática do quiz e facilitador-autor entram como limitações; as decisões que dependem do orientador ficam listadas (#229).
 
 ### Fixed
