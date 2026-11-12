@@ -42,6 +42,7 @@ NETWORK_SDKS: dict[str, str] = {
     "mlflow": "MLFLOW_DISABLE_TELEMETRY",
     "dvc": "DVC_NO_ANALYTICS",
     "wandb": "opt-in only: sends nothing until the user asks for it",
+    "comet-ml": "opt-in only; auto-logging, Sentry and SDK reports off (ADR-200)",
     "roboflow": "dataset download the user asks for; no telemetry",
     "kaggle": "dataset download the user asks for; no telemetry",
 }

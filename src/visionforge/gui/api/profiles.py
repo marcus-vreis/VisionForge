@@ -44,6 +44,7 @@ from pydantic import (
     field_validator,
 )
 
+from visionforge.utils.comet_names import is_valid_comet_name
 from visionforge.utils.messages import tr
 from visionforge.utils.wandb_names import is_valid_wandb_name
 
@@ -109,12 +110,34 @@ class WandbSettings(BaseModel):
         return value
 
 
+class CometSettings(BaseModel):
+    """Comet export preference for a profile (ADR-200).
+
+    ``workspace`` empty means the saved key's default workspace. The key itself
+    is never here: it lives in a private file of the profile.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    enabled: StrictBool = False
+    project: str = "visionforge"
+    workspace: str = ""
+
+    @field_validator("project", "workspace")
+    @classmethod
+    def _comet_name(cls, value: str, info: Any) -> str:
+        value = value.strip()
+        if (value or info.field_name == "project") and not is_valid_comet_name(value):
+            raise ValueError(tr("comet.name_invalid"))
+        return value
+
+
 class ProfileSettings(BaseModel):
     """Optional exporters enabled for future profile submissions."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
     mlflow: MLflowSettings = Field(default_factory=MLflowSettings)
     wandb: WandbSettings = Field(default_factory=WandbSettings)
+    comet: CometSettings = Field(default_factory=CometSettings)
 
 
 class ProfileSettingsUpdate(BaseModel):
@@ -123,6 +146,7 @@ class ProfileSettingsUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     mlflow: MLflowSettings | None = None
     wandb: WandbSettings | None = None
+    comet: CometSettings | None = None
 
 
 def _saved[M: BaseModel](settings: dict[str, Any], key: str, model: type[M]) -> M:
@@ -147,6 +171,7 @@ def _meta_settings(meta: dict[str, Any]) -> ProfileSettings:
     return ProfileSettings(
         mlflow=_saved(settings, "mlflow", MLflowSettings),
         wandb=_saved(settings, "wandb", WandbSettings),
+        comet=_saved(settings, "comet", CometSettings),
     )
 
 
@@ -436,7 +461,7 @@ def create_profile(
 def _merged_settings(old: Any, settings: ProfileSettingsUpdate) -> dict[str, Any]:
     """The saved ``settings`` block with the blocks the request sent merged in."""
     old_settings = dict(old) if isinstance(old, dict) else {}
-    for key in ("mlflow", "wandb"):
+    for key in ("mlflow", "wandb", "comet"):
         new = getattr(settings, key)
         if new is not None:
             old_block = old_settings.get(key)

@@ -37,6 +37,7 @@ import { RerunActions, type RerunHandle } from "./RerunActions";
 import { DownloadBundleButton } from "./DownloadBundleButton";
 
 import { MLflowExportStatus } from "./MLflowExportStatus";
+import { CometExportStatus } from "./CometExportStatus";
 import { WandbExportStatus } from "./WandbExportStatus";
 import { LazySurface } from "./ErrorBoundary";
 import { activeProfileSlug } from "../lib/profile";
@@ -475,6 +476,8 @@ export function RunDetailPanel({
         onUpdated={(tracking) => setDetail((previous) => previous ? { ...previous, tracking } : previous)} />
       <WandbExportStatus key={`wandb:${runId}`} runId={runId} status={detail?.wandb}
         onUpdated={(wandb) => setDetail((previous) => previous ? { ...previous, wandb } : previous)} />
+      <CometExportStatus key={`comet:${runId}`} runId={runId} status={detail?.comet}
+        onUpdated={(comet) => setDetail((previous) => previous ? { ...previous, comet } : previous)} />
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
         <button
           type="button"

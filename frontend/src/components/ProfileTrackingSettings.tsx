@@ -2,9 +2,10 @@ import { useState } from "react";
 import { updateProfile } from "../api/client";
 import { useT } from "../i18n/useT";
 import type { ProfileInfo } from "../lib/profile";
+import { CometProfileSettings } from "./CometProfileSettings";
 import { WandbProfileSettings } from "./WandbProfileSettings";
 
-/** Edit one profile's exporters: local MLflow and Weights & Biases. */
+/** Edit one profile's exporters: local MLflow, Weights & Biases and Comet. */
 export function ProfileTrackingSettings({ profile, onSaved }: {
   profile: ProfileInfo; onSaved: (profile: ProfileInfo) => void;
 }) {
@@ -23,5 +24,6 @@ export function ProfileTrackingSettings({ profile, onSaved }: {
     <div>{t.mlflow.hint}</div>
     {error && <div role="alert">{t.mlflow.saveFailed}</div>}
     <WandbProfileSettings profile={profile} onSaved={onSaved} />
+    <CometProfileSettings profile={profile} onSaved={onSaved} />
   </div>;
 }

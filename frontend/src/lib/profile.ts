@@ -41,6 +41,7 @@ export interface ProfileInfo {
   settings?: {
     mlflow: { enabled: boolean };
     wandb?: { enabled: boolean; project: string; entity: string };
+    comet?: { enabled: boolean; project: string; workspace: string };
   };
 }
 

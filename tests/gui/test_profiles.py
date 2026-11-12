@@ -66,6 +66,7 @@ from .test_routes_resume import _run as _stopped_run
 _DEFAULT_SETTINGS = {
     "mlflow": {"enabled": False},
     "wandb": {"enabled": False, "project": "visionforge", "entity": ""},
+    "comet": {"enabled": False, "project": "visionforge", "workspace": ""},
 }
 
 HEADER = "X-VF-Profile"

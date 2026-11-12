@@ -9,7 +9,7 @@
 [closure]
 # What the gate walks: [project].dependencies plus these extras and packages.
 # torch and torchvision come from a hardware extra (ADR-005), so they are named
-# directly. Exporter extras (mlflow, wandb, dvc, hub) stay out: they are
+# directly. Exporter extras (mlflow, wandb, comet, dvc, hub) stay out: they are
 # separate tools the user installs on purpose.
 extras = ["detection"]
 extra_packages = ["torch", "torchvision"]

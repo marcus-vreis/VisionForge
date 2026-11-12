@@ -16,6 +16,7 @@ troca essa pasta (útil para isolar testes ou apontar para outro disco).
 | Chaves de datasets: Roboflow, Kaggle, Hugging Face (download) | `credentials.json` | por usuário, não por perfil |
 | Token do Hugging Face Hub (exportar modelo) | `hub-tokens/<sha256>` | por perfil |
 | Chave do Weights & Biases | `wandb-tokens/<sha256>` | por perfil |
+| Chave do Comet | `comet-tokens/<sha256>` | por perfil |
 | Token do Zenodo | `zenodo-tokens/<sha256>` | por perfil |
 | Token do Zenodo Sandbox | `zenodo-sandbox-tokens/<sha256>` | por perfil |
 | Token do GitHub | `github-tokens/<sha256>` | por perfil |
