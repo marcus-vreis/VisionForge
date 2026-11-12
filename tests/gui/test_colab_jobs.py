@@ -231,6 +231,33 @@ def test_the_script_is_written_for_exec_and_removed_after(vf_home: Path) -> None
     assert list((vf_home / "colab" / "ana" / "jobs").glob("*.py")) == []
 
 
+def test_the_script_path_comes_from_the_slug_and_a_timestamp_only(
+    vf_home: Path,
+) -> None:
+    # Sonar S2083 (#67): the runner text and the payload only fill the file.
+    lines = [
+        event_line(
+            {
+                "event": "job_end",
+                "status": "ok",
+                "bundle": {"path": "../../../evil.py", "size": 1},
+            }
+        )
+    ]
+    cli = FakeCli(lines)
+    payload = {**PAYLOAD, "config": {"name": "../../evil"}}
+    jobs = cj.ColabJobs(run=cli.run, popen=cli.popen)
+
+    jobs.run_job("ana", "T4", payload, lambda _: None, lambda: False)
+
+    exec_call = [c for c in cli.calls if c[0] == "exec" and "-f" in c][-1]
+    script = Path(exec_call[exec_call.index("-f") + 1])
+    assert script.parent == vf_home / "colab" / "ana" / "jobs"
+    assert cj.is_session_name(script.stem)
+    assert script.stem.startswith(cj.SESSION_PREFIX)
+    assert "download" not in cli.commands()
+
+
 def test_a_remote_error_fails_the_job_with_its_message() -> None:
     cli = FakeCli(
         [

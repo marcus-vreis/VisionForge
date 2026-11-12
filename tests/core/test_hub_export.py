@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import hashlib
+import itertools
 import json
+import re
 import sys
 import types
 from pathlib import Path
@@ -15,6 +17,7 @@ from visionforge.core.hub_export import (
     HubExportError,
     PreviewMismatchError,
     PrivateRepositoryRequiredError,
+    _is_private,
     export_run,
     preview_run,
 )
@@ -442,3 +445,32 @@ def test_workspace_fallback_cannot_select_another_run(
     (run_dir / "run.json").write_text(json.dumps(record))
     with pytest.raises(ValueError, match="outside"):
         preview_run(run_dir)
+
+
+# The single pattern Sonar S5843 found too complex (#67); the split must match
+# exactly the same names.
+_ONE_PATTERN = re.compile(
+    r"config|secret|credential|token|password|dataset|(?:^|[_-])(?:logs?|data|keys?)(?:$|[_-])",
+    re.I,
+)
+_PIECES = ["", "log", "logs", "Data", "KEY", "keys", "catalog", "token", "best", "x"]
+
+
+def test_private_names_match_the_former_single_pattern() -> None:
+    stems = {
+        "".join(parts)
+        for parts in itertools.product(_PIECES, ["", "_", "-", "."], _PIECES)
+    }
+    stems |= {"metadata", "keystore", "my-Config", "best_model", "dataset_v2"}
+    for stem in sorted(stems):
+        assert _is_private(stem) == bool(_ONE_PATTERN.search(stem)), stem
+
+
+@pytest.mark.parametrize(
+    ("stem", "private"),
+    [("logs", True), ("train-data", True), ("api_key", True), ("catalog", False)],
+)
+def test_short_private_words_count_only_as_whole_parts(
+    stem: str, private: bool
+) -> None:
+    assert _is_private(stem) is private

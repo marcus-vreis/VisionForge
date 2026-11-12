@@ -19,12 +19,12 @@ def _png(path: Path, color: tuple[int, int, int]) -> None:
     Image.new("RGB", (32, 24), color).save(path)
 
 
-@pytest.fixture()
+@pytest.fixture
 def client() -> TestClient:
     return TestClient(app, raise_server_exceptions=True)
 
 
-@pytest.fixture()
+@pytest.fixture
 def dataset(tmp_path: Path) -> Path:
     _png(tmp_path / "train/cat/a.png", (255, 0, 0))
     _png(tmp_path / "train/dog/b.png", (0, 255, 0))
@@ -87,9 +87,9 @@ def test_thumb_serves_a_small_jpeg(client: TestClient, dataset: Path) -> None:
 
 
 def test_thumb_refuses_unopened_root_and_traversal(
-    client: TestClient, dataset: Path, tmp_path_factory: pytest.TempPathFactory
+    client: TestClient, dataset: Path, tmp_path: Path
 ) -> None:
-    other = tmp_path_factory.mktemp("other")
+    other = tmp_path / "other"
     _png(other / "x.png", (1, 1, 1))
     res = client.get(
         "/api/explorer/thumb", params={"root": str(other), "path": "x.png"}
