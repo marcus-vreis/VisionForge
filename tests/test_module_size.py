@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 # Path from the repository root -> the most lines it may have (``wc -l``).
 CEILINGS = {
-    "src/visionforge/gui/api/routes.py": 617,
+    "src/visionforge/gui/api/routes.py": 605,
 }
 
 

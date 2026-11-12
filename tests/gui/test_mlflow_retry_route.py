@@ -103,9 +103,9 @@ def test_unreadable_record_is_500(outputs: Path) -> None:
     assert _retry().status_code == 500
 
 
-def test_other_task_is_409(outputs: Path) -> None:
+def test_record_without_config_is_409(outputs: Path) -> None:
     _enable_mlflow(outputs)
-    _run(outputs, task="detection")
+    (_run(outputs) / "run.json").write_text('{"history": []}', encoding="utf-8")
     assert _retry().status_code == 409
 
 
@@ -134,6 +134,25 @@ def test_retry_exports_a_failed_run(
     assert run.status == "FAILED"
     assert run.artifacts == ["run.json"]
     assert [(m.step, m.value) for m in run.metrics["loss/train"]] == [(1, 0.4)]
+
+
+@pytest.mark.parametrize("task", ["detection", "regression", "segmentation"])
+def test_other_tasks_retry_too(
+    outputs: Path, task: str, fake_mlflow: type[FakeMlflowClient]
+) -> None:
+    # #286: every task exports, so every task can be retried (ADR-197).
+    _enable_mlflow(outputs)
+    run_dir = _run(outputs, task=task)
+    sidecar = json.loads((run_dir / "tracking.json").read_text())
+    sidecar["identity"] = _identity(run_dir)
+    (run_dir / "tracking.json").write_text(json.dumps(sidecar), encoding="utf-8")
+
+    response = _retry()
+
+    assert response.status_code == 200
+    (run,) = fake_mlflow.runs.values()
+    assert run.params["task"] == json.dumps(task)
+    assert run.artifacts == ["run.json"]
 
 
 def test_record_of_another_run_is_not_adopted(

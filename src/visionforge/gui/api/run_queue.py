@@ -282,7 +282,7 @@ class RunLanes:
 
     def cancel(self, run_id: str) -> bool:
         """Stop the job with that id in whichever lane holds it (see RunQueue.cancel)."""
-        return any(queue.cancel(run_id) for queue in list(self._lanes.values()))
+        return any(queue.cancel(run_id) for queue in self._lanes.values())
 
     def is_busy(self) -> bool:
         """True while any lane runs a job or has one waiting."""

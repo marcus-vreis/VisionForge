@@ -281,7 +281,7 @@ export const en: Dict = {
   },
   // Profiles on a shared server (ADR-114): one output folder per person.
   mlflow: {
-    label: "Export classification to local MLflow",
+    label: "Export training runs to local MLflow",
     hint: "Local storage only; requires the mlflow extra. Applies to future runs.",
     saveFailed: "Failed to save MLflow setting.",
     warning: "MLflow export incomplete",
@@ -291,7 +291,7 @@ export const en: Dict = {
     retryFailed: "Failed to retry export.",
   },
   wandb: {
-    label: "Send classification runs to Weights & Biases",
+    label: "Send training runs to Weights & Biases",
     hint: "Goes to a private project of your W&B account: the public config and each epoch's metrics. The dataset, paths, code, git and machine details stay here. Applies to future runs.",
     project: "Project",
     entity: "User or team (optional)",

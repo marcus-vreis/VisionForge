@@ -5,17 +5,31 @@ local e não usa servidor nem conta (ADR-170). Serve para comparar execuções
 na interface do MLflow, sem trocar o TensorBoard nem o `run.json`, que
 continuam existindo por conta própria.
 
-Em **Perfis**, ative o MLflow no perfil. A escolha vale para os treinos de
-**classificação** enviados depois, a partir de um treino local. Outras tarefas
-e outros modos de classificação não são exportados. O ambiente do servidor
-precisa do extra `visionforge-studio[mlflow]`; sem ele o treino roda
-normalmente e o Histórico mostra que a exportação ficou indisponível.
+Em **Perfis**, ative o MLflow no perfil. A escolha vale para os treinos
+locais enviados depois, de qualquer tarefa: classificação, regressão,
+segmentação, anomalia, detecção e tarefas próprias (ADR-197). Sweeps, K-fold,
+comparações, réplicas, continuações e os modos de avaliação e inferência da
+classificação não são exportados. O ambiente do servidor precisa do extra
+`visionforge-studio[mlflow]`; sem ele o treino roda normalmente e o Histórico
+mostra que a exportação ficou indisponível.
+
+## Quando cada tarefa chega
+
+- **Classificação:** época a época, durante o treino, e o `run.json` depois
+  da avaliação.
+- **Regressão, segmentação, anomalia, detecção e tarefas próprias:** de uma
+  vez, quando o treino termina. O VisionForge lê o `run.json` da execução e
+  manda cada linha do `history` como uma época, com os nomes do `run.json`
+  (`val_miou`, `val_rmse`, `map50`, `val_<métrica>` de uma tarefa própria...).
+  `train_loss` e `val_loss` aparecem como `loss/train` e `loss/val`, como na
+  classificação. Um treino interrompido pelo botão de parar vai como `KILLED`;
+  um treino que falhou com erro não é exportado.
 
 ## O que é enviado
 
 - Os parâmetros públicos da config (valores simples, com o nome achatado,
   como `model.name`).
-- As métricas de cada época.
+- As métricas de cada época, com os nomes do `run.json`.
 - O `run.json` final, anexado ao run do MLflow depois da avaliação.
 - Os runs ficam agrupados por perfil, em `outputs/mlflow/mlflow.db`.
 
@@ -42,8 +56,9 @@ Não há token: o MLflow local não pede credencial. A página
 Uma falha no MLflow nunca derruba o treino: o erro é registrado no
 `tracking.json` da execução e o Histórico mostra o estado. O botão de
 **repetir** reconcilia a execução com o banco: reabre o mesmo run e grava só
-as métricas que faltam, sem duplicar o histórico. A repetição só vale para
-uma execução de classificação já terminada, num perfil com o MLflow ativo.
+as métricas que faltam, sem duplicar o histórico. A repetição vale para uma
+execução já terminada de qualquer tarefa que tenha passado pela exportação,
+num perfil com o MLflow ativo.
 
-Decisão e motivos: ADR-170 em
+Decisão e motivos: ADR-170 e ADR-197 em
 [`DECISIONS.md`](https://github.com/marcus-vreis/VisionForge/blob/development/docs/dev/DECISIONS.md).

@@ -49,6 +49,10 @@ _METRIC_NAMES = {
     "epoch",
 }
 _SPLIT_PREFIXES = ("test_", "val_", "best_")
+_METRIC_KEY = re.compile(r"\w+", re.ASCII)
+# Final metrics of the built-in tasks that only the private trackers show; the
+# Hub card keeps to the shorter list (ADR-171, ADR-197).
+_TRACKER_ONLY_METRICS = {"best_val_miou", "box_loss"}
 # run.json history names -> the chart keys the trainer streams to a tracker.
 TRACKER_METRIC_KEYS = {
     "train_loss": "loss/train",
@@ -101,8 +105,38 @@ def public_metrics(data: Any) -> dict[str, int | float]:
     return {
         key: value
         for key, value in sorted(data.items())
-        if is_metric_name(key)
-        and isinstance(value, (int, float))
+        if is_metric_name(key) and _is_finite_number(value)
+    }
+
+
+def tracker_metrics(record: Any) -> dict[str, int | float]:
+    """The final metrics of a run.json that a tracker may show, by their run.json names.
+
+    A built-in task keeps to the public list plus the few task metrics the Hub
+    leaves out. A custom task (``custom:<key>``) names its own metrics in its
+    code, so every finite number under a plain ``[A-Za-z0-9_]`` name goes
+    (ADR-197).
+    """
+    data = record.get("metrics") if isinstance(record, dict) else None
+    if not isinstance(data, dict):
+        return {}
+    task = record.get("task")
+    custom = isinstance(task, str) and task.startswith("custom:")
+    return {
+        key: value
+        for key, value in sorted(data.items())
+        if _is_finite_number(value)
+        and (
+            is_metric_name(key)
+            or key in _TRACKER_ONLY_METRICS
+            or (custom and bool(_METRIC_KEY.fullmatch(key)))
+        )
+    }
+
+
+def _is_finite_number(value: Any) -> bool:
+    return (
+        isinstance(value, (int, float))
         and not isinstance(value, bool)
         and math.isfinite(value)
-    }
+    )

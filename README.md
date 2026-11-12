@@ -96,7 +96,7 @@ export integrations below are on `development` (**next release**): for local
 MLflow tracking, install `visionforge-studio[mlflow]` and enable MLflow in the
 profile picker. From the directory where the GUI started, run
 `mlflow ui --backend-store-uri sqlite:///outputs/mlflow/mlflow.db` to inspect
-classification runs, epoch metrics and the final `run.json`; if an export
+training runs of every task, epoch metrics and the final `run.json`; if an export
 fails, open the run in History to retry it. To follow them on
 Weights & Biases, install `visionforge-studio[wandb]`, turn W&B on in the
 profile picker and save an API key there; runs go to a private project. To push
@@ -476,7 +476,7 @@ A exceção é o backend YOLO / RT-DETR, o Ultralytics, com licença AGPL-3.0:
 Escolha a versão do PyTorch compatível com o seu hardware. As integrações
 opcionais de acompanhamento e exportação abaixo estão na branch `development`
 (**próxima release**): para acompanhar
-treinos de classificação localmente, instale `visionforge-studio[mlflow]` e ative
+treinos de qualquer tarefa localmente, instale `visionforge-studio[mlflow]` e ative
 MLflow no seletor de perfis. Na pasta em que abriu a GUI, execute
 `mlflow ui --backend-store-uri sqlite:///outputs/mlflow/mlflow.db` para ver
 os parâmetros, as métricas por época e o `run.json` final. Se a exportação

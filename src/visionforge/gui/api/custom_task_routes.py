@@ -19,6 +19,7 @@ The engine is imported when a run starts, so importing this module stays light
 """
 
 import asyncio
+from collections.abc import Callable
 from datetime import datetime
 from typing import TYPE_CHECKING, Annotated, Any
 
@@ -27,6 +28,7 @@ from fastapi.exceptions import RequestValidationError
 from loguru import logger
 from pydantic import ValidationError
 
+from visionforge.core.run_trackers import TrackerFactory
 from visionforge.gui.api import submission
 from visionforge.gui.api.execution import _job_state
 from visionforge.gui.api.http_responses import (
@@ -47,6 +49,7 @@ from visionforge.gui.api.submission import (
     ProfileResolver,
     profile_dependency,
 )
+from visionforge.gui.api.tracker_exports import exported
 from visionforge.tasks.base import TaskSpec
 from visionforge.tasks.registry import get_task, registered_tasks
 from visionforge.utils.messages import tr
@@ -237,8 +240,14 @@ def _localize_task_schema(schema: dict[str, Any]) -> dict[str, Any]:
     return schema
 
 
-def build_custom_task_run_router(resolve_profile: ProfileResolver) -> APIRouter:
-    """Mount ``POST /custom/{key}/run``; ``routes.py`` owns the profile lookup."""
+def build_custom_task_run_router(
+    resolve_profile: ProfileResolver,
+    trackers_for: Callable[[Profile], tuple[TrackerFactory, ...]],
+) -> APIRouter:
+    """Mount ``POST /custom/{key}/run``; ``routes.py`` owns the profile lookup.
+
+    The finished run.json goes to the profile's trackers (ADR-197).
+    """
     run_router = APIRouter()
     ProfileDep = Annotated[Profile, Depends(profile_dependency(resolve_profile))]
 
@@ -265,6 +274,7 @@ def build_custom_task_run_router(resolve_profile: ProfileResolver) -> APIRouter:
         """
         info = _get_custom_task_or_404(key)
         cfg = _validated_task_config(info, profile.scope_dict(config))
+        trackers = trackers_for(profile)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
         run_id = f"{cfg.name}_{timestamp}"
 
@@ -273,7 +283,7 @@ def build_custom_task_run_router(resolve_profile: ProfileResolver) -> APIRouter:
             str(cfg.name),
             f"custom:{info.key}",
             "simple",
-            lambda: _execute_custom_task(info, cfg, run_id),
+            lambda: exported(_execute_custom_task(info, cfg, run_id), run_id, trackers),
             stop_at=None if _owns_its_loop(info) else "epoch",
             profile=profile,
         )

@@ -15,7 +15,6 @@ import math
 import os
 import re
 import tempfile
-import urllib.error
 import urllib.request
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -27,8 +26,8 @@ from loguru import logger
 
 from visionforge.core.tracking_privacy import (
     TRACKER_METRIC_KEYS,
-    public_metrics,
     public_parameters,
+    tracker_metrics,
 )
 from visionforge.utils.wandb_names import is_valid_wandb_name
 
@@ -114,7 +113,8 @@ def http_graphql(base_url: str, token: str) -> GraphQL:
             with urllib.request.urlopen(request, timeout=_TIMEOUT_S) as response:  # noqa: S310
                 # Same https endpoint as above.
                 payload = json.loads(response.read())
-        except (urllib.error.URLError, OSError, ValueError) as exc:
+        # URLError is an OSError.
+        except (OSError, ValueError) as exc:
             raise WandbRequestError(type(exc).__name__) from None
         if not isinstance(payload, dict) or payload.get("errors"):
             raise WandbRequestError("The W&B API refused the request")
@@ -287,10 +287,7 @@ class WandbTracker:
         path = self._run_dir / "run.json"
         if path.is_symlink() or not path.is_file():
             return {}
-        record = json.loads(path.read_text("utf-8"))
-        return public_metrics(
-            record.get("metrics") if isinstance(record, dict) else None
-        )
+        return tracker_metrics(json.loads(path.read_text("utf-8")))
 
     def _close(self) -> None:
         run, self._run = self._run, None
