@@ -164,6 +164,19 @@ export function formatP(p: number | null | undefined): string {
   return p < 0.0001 ? "<0.0001" : p.toFixed(4);
 }
 
+/**
+ * The difference interval of a paired test as "[low, high]", an end the data
+ * cannot bound shown as `open`; null when the report predates ADR-187.
+ */
+export function formatDifferenceInterval(
+  test: Pick<PairedTest, "ci_low" | "ci_high" | "ci_method">,
+  open: string,
+): string | null {
+  if (test.ci_method === undefined) return null;
+  const end = (value: number | null | undefined) => fixed(value, 4) ?? open;
+  return `[${end(test.ci_low)}, ${end(test.ci_high)}]`;
+}
+
 /** The verdict column: the server's Holm-corrected flag, read as yes or no. */
 export function holmVerdict(test: Pick<PairedTest, "significant">): "yes" | "no" {
   return test.significant ? "yes" : "no";

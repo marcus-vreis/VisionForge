@@ -64,6 +64,11 @@ const report = {
       min_achievable_p: 0.5,
       underpowered: true,
       significant: false,
+      ci_low: null,
+      ci_high: 0.15,
+      ci_method: "hodges_lehmann",
+      ci_estimate: 0.07,
+      ci_confidence: 0.5,
     },
   ],
   best_by_mean: "baseline",
@@ -121,6 +126,10 @@ describe("ResultsView for a replicated comparison (ADR-193)", () => {
     expect(html).toContain(dict.runGroup.detail.tests.wilcoxon);
     expect(html).toContain(dict.runGroup.detail.underpowered);
     expect(html).toContain(dict.resultsView.openGroupInHistory);
+    // The interval of the difference, with the end 2 pairs cannot bound (ADR-187).
+    expect(html).toContain(dict.runGroup.detail.cols.ci);
+    expect(html).toContain(`[${dict.runGroup.detail.ciOpen}, 0.1500]`);
+    expect(html).toContain(dict.runGroup.detail.ciMethods.hodges_lehmann);
   });
 
   it("offers no History button when nothing can open it", () => {

@@ -1894,6 +1894,7 @@ export const pt = {
         pair: "par",
         pairs: "pares",
         diff: "Δ média (a−b)",
+        ci: "IC 95% da Δ",
         test: "teste",
         p: "p (bruto)",
         holm: "significativo após Holm",
@@ -1944,6 +1945,13 @@ export const pt = {
         medium: "médio",
         large: "grande",
       },
+      ciMethods: {
+        t: "t de Student",
+        hodges_lehmann: "Hodges-Lehmann",
+      },
+      ciTitle: (method: string, coverage: string, estimate: string) =>
+        `Intervalo de ${method} da diferença a−b, centrado em ${estimate}; cobertura real ${coverage}. Um extremo "aberto" é um que os dados não conseguem limitar (com menos de 6 pares, o de Hodges-Lehmann não chega a 95%).`,
+      ciOpen: "aberto",
       underpowered: "poucas seeds",
       underpoweredTitle: (pairs: number, floor: string) =>
         `Com ${pairs} pares o menor p possível é ${floor}, acima de alfa: nenhum resultado, por mais consistente, poderia ser significativo.`,

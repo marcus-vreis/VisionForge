@@ -93,10 +93,11 @@ da tarefa antes de liberar o botão.
 ## Level 2 — training that is not epoch-shaped
 
 GANs, EM-style loops, two-stage pipelines: override `run(cfg, ctx)` instead of
-the four hooks and own the whole loop. `ctx` hands you `run_dir`,
-`emit(event)` (the live stream), `save_checkpoint(model, filename)` and
-`write_run_json(...)`, so your loop still honours every contract. Return the
-final metrics dict.
+the four hooks and own the whole loop. `ctx` hands you `run_dir`, `device`,
+`device_label`, `emit(event)` (the live stream) and
+`save_checkpoint(model, name)`. Return the final metrics dict: the engine
+writes `run.json` from it after your `run` returns, so the run still honours
+every contract.
 
 Treino que não é em épocas (GAN, EM, pipelines de dois estágios)? Implemente
 `run(cfg, ctx)` em vez dos quatro hooks e seja dono do laço inteiro, mantendo

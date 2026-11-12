@@ -1783,6 +1783,7 @@ export const en: Dict = {
         pair: "pair",
         pairs: "pairs",
         diff: "Δ mean (a−b)",
+        ci: "95% CI of Δ",
         test: "test",
         p: "p (raw)",
         holm: "significant after Holm",
@@ -1830,6 +1831,13 @@ export const en: Dict = {
         medium: "medium",
         large: "large",
       },
+      ciMethods: {
+        t: "Student t",
+        hodges_lehmann: "Hodges-Lehmann",
+      },
+      ciTitle: (method: string, coverage: string, estimate: string) =>
+        `${method} interval of the a−b difference, around ${estimate}; actual coverage ${coverage}. An "open" end is one the data cannot bound (below 6 pairs the Hodges-Lehmann interval cannot reach 95%).`,
+      ciOpen: "open",
       underpowered: "few seeds",
       underpoweredTitle: (pairs: number, floor: string) =>
         `With ${pairs} pairs the smallest possible p is ${floor}, above alpha: no result, however consistent, could be significant.`,

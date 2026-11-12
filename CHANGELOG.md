@@ -172,6 +172,8 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Fixed
 
+- A tabela de testes pareados de uma comparação mostra o IC 95% da diferença a−b, que o backend já calculava (ADR-187), com o método (t de Student ou Hodges-Lehmann), o ponto central e a cobertura real na dica. Um extremo que os dados não limitam aparece como "aberto".
+- `docs/custom/TASKS.md` descrevia um `ctx.write_run_json` que não existe; o `CONTRIBUTING.md` mandava pôr as rotas de uma tarefa nova em `routes.py`, que hoje só junta os routers por domínio.
 - `POST /api/credentials` deixa de devolver a chave no corpo do 422 quando o pedido vem malformado; a resposta é uma mensagem fixa em português e inglês (#155).
 - A GUI recusa pedidos cujo `Host` não é um nome deste servidor (400, contra DNS rebinding) e pedidos que mudam estado vindos de página de outro site (`Origin` estrangeiro, 403), em todas as rotas. `visionforge gui --allowed-host NOME` acrescenta um nome; com `--host 0.0.0.0` o nome e os IPs da máquina continuam aceitos (ADR-178).
 - A GUI manda Content-Security-Policy, X-Frame-Options, X-Content-Type-Options e Referrer-Policy em toda resposta e não faz mais preconnect ao Google Fonts. `/docs` e `/redoc` ficam desligados, a menos que `VISIONFORGE_DOCS=1`; `/openapi.json` continua (ADR-179).

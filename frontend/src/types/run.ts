@@ -235,6 +235,18 @@ export interface PairedTest {
   underpowered: boolean;
   /** After the Holm correction over the whole family of tests. */
   significant: boolean;
+  /**
+   * 95% interval of the paired difference, from inverting the test that gave
+   * `p_value` (ADR-187). An end is null when the data cannot bound it (below
+   * 6 pairs for Hodges-Lehmann). Absent in reports written before ADR-187.
+   */
+  ci_low?: number | null;
+  ci_high?: number | null;
+  ci_method?: "t" | "hodges_lehmann";
+  /** The point the interval brackets: mean difference (t) or HL estimate. */
+  ci_estimate?: number | null;
+  /** Coverage the interval actually has (the signed-rank one is discrete). */
+  ci_confidence?: number | null;
 }
 
 export interface GroupVariant {
