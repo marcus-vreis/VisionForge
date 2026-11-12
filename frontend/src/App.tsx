@@ -109,6 +109,7 @@ import { CustomTaskPanel } from "./components/CustomTaskPanel";
 import { ContentBoundary, LazySurface } from "./components/ErrorBoundary";
 import { ResultsView } from "./components/ResultsView";
 import { TabBar } from "./components/TabBar";
+import { resultsOnTab } from "./lib/results-tab";
 import { TaskHero } from "./components/TaskHero";
 import { TrainingOverlay } from "./components/TrainingOverlay";
 import { useExperiment } from "./hooks/useExperiment";
@@ -902,7 +903,14 @@ export default function App() {
     );
   };
 
-  const showResults = resultsVisible && result !== null;
+  // A finished run's results stay on the tab of the task that ran it: another
+  // task's tab shows its own form, and coming back shows the results again.
+  const showResults =
+    resultsVisible && result !== null && resultsOnTab(
+    runTaskKey,
+    activeKey,
+    tasks.map((task) => task.key),
+  );
 
   // Treinar unlocks on the Revisão step once the dataset is set (ADR-156).
   // A researcher's own task has no dataset field App can read: its review is

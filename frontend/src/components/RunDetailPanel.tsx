@@ -611,10 +611,12 @@ export function RunDetailPanel({
         <>
           {!detail.group && (
             <LazySurface>
+              <div className="vf-export-panels">
               <HubExportPanel key={`${activeProfileSlug()}:${runId}`} runId={runId} />
               <ZenodoExportPanel key={`zenodo:${activeProfileSlug()}:${runId}`} runId={runId} />
               <GitHubExportPanel key={`github:${activeProfileSlug()}:${runId}`} runId={runId} />
               <DvcExportPanel key={`dvc:${activeProfileSlug()}:${runId}`} runId={runId} />
+              </div>
             </LazySurface>
           )}
           {/* A replicate group is a job, not a training: its numbers are the
