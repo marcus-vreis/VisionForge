@@ -522,7 +522,11 @@ export async function updateProfile(
   slug: string,
   change: {
     name?: string; pronoun?: Pronoun;
-    settings?: { mlflow?: { enabled: boolean }; wandb?: Partial<WandbSettings> };
+    settings?: {
+      mlflow?: { enabled: boolean };
+      wandb?: Partial<WandbSettings>;
+      comet?: Partial<CometSettings>;
+    };
   },
 ): Promise<ProfileInfo> {
   return request<ProfileInfo>(`/profiles/${encodeURIComponent(slug)}`, {
@@ -1190,6 +1194,46 @@ export async function retryWandbExport(runId: string): Promise<WandbExportStatus
   return request<WandbExportStatus>(`/wandb/runs/${encodeURIComponent(runId)}/retry`, { method: "POST" });
 }
 
+/** A profile's Comet destination (ADR-200); `workspace` empty = the key's default. */
+export interface CometSettings {
+  enabled: boolean;
+  project: string;
+  workspace: string;
+}
+
+/** What the History knows about one run's Comet copy. `url` is always https. */
+export interface CometExportStatus {
+  state: "running" | "finished" | "disabled" | "failed";
+  status: "RUNNING" | "FINISHED" | "KILLED" | "FAILED";
+  error?: string | null;
+  url?: string | null;
+  project?: string | null;
+  workspace?: string | null;
+}
+
+/** Whether `profile` has a saved Comet key; the key itself never comes back. */
+export async function fetchCometToken(profile: string): Promise<HubTokenStatus> {
+  return request<HubTokenStatus>("/comet/token", undefined, profile);
+}
+
+/** Save the Comet API key of `profile` on the server. */
+export async function saveCometToken(profile: string, token: string): Promise<HubTokenStatus> {
+  return request<HubTokenStatus>("/comet/token", {
+    method: "PUT", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token }),
+  }, profile);
+}
+
+/** Forget the Comet API key of `profile`. */
+export async function deleteCometToken(profile: string): Promise<HubTokenStatus> {
+  return request<HubTokenStatus>("/comet/token", { method: "DELETE" }, profile);
+}
+
+/** Send a finished run to its Comet experiment again, with the active profile's key. */
+export async function retryCometExport(runId: string): Promise<CometExportStatus> {
+  return request<CometExportStatus>(`/comet/runs/${encodeURIComponent(runId)}/retry`, { method: "POST" });
+}
+
 /** The settings that pick a branch in a run's code (ADR-173); a missing one is undecided.
  *  Each task reads its own (`GET /api/code-tour` lists them); `model` is a model
  *  name the server turns into the setting it decides. */
@@ -1270,6 +1314,7 @@ export async function retryMLflowExport(runId: string): Promise<MLflowTrackingSt
 export interface RunDetail {
   tracking?: MLflowTrackingStatus | null;
   wandb?: WandbExportStatus | null;
+  comet?: CometExportStatus | null;
   run_id: string;
   experiment_name: string;
   status: string;

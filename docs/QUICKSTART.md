@@ -197,6 +197,7 @@ free. Walkthrough: [`docs/custom/TASKS.md`](custom/TASKS.md).
 - [Export a checkpoint to a private Hugging Face repository](gui/hugging-face-hub.md)
 - [Track training in local MLflow (Portuguese)](gui/mlflow.md)
 - [Send training to Weights & Biases (Portuguese)](gui/wandb.md)
+- [Send training to Comet (Portuguese)](gui/comet.md)
 - [Create a Zenodo draft (Portuguese)](gui/zenodo.md)
 - [Send a run report to GitHub (Portuguese)](gui/github.md)
 - [Version a run with DVC (Portuguese)](gui/dvc.md)

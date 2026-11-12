@@ -36,6 +36,7 @@ from visionforge.gui.api.run_history import (
     run_task,
 )
 from visionforge.gui.api.schemas import (
+    CometStatus,
     DatasetInfo,
     MlflowStatus,
     RunDetail,
@@ -152,6 +153,17 @@ def read_mlflow_status(run_dir: Path) -> MlflowStatus | None:
         return None
 
 
+def read_comet_status(run_dir: Path) -> CometStatus | None:
+    """Read the optional Comet diagnostics from a regular file inside the run."""
+    sidecar = run_dir / "comet.json"
+    if sidecar.is_symlink():
+        return None
+    try:
+        return CometStatus.model_validate_json(sidecar.read_bytes())
+    except (OSError, ValueError):
+        return None
+
+
 def read_wandb_status(run_dir: Path) -> WandbStatus | None:
     """Read the optional W&B diagnostics from a regular file inside the run."""
     sidecar = run_dir / "wandb.json"
@@ -176,6 +188,7 @@ def _build_run_detail(
     return RunDetail(
         tracking=read_mlflow_status(run_dir),
         wandb=read_wandb_status(run_dir),
+        comet=read_comet_status(run_dir),
         run_id=run_dir.name,
         experiment_name=data.get("experiment", run_dir.parent.name),
         status=status,

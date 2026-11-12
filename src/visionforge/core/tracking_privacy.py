@@ -1,7 +1,8 @@
 """What a run may show an experiment tracker: public parameters and metrics.
 
-MLflow, the Hugging Face Hub and Weights & Biases receive the same projection,
-so a key that is private for one is private for all (ADR-170, ADR-171, ADR-172).
+MLflow, the Hugging Face Hub, Weights & Biases and Comet receive the same
+projection, so a key that is private for one is private for all (ADR-170,
+ADR-171, ADR-172, ADR-200).
 """
 
 from __future__ import annotations

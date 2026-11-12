@@ -8112,3 +8112,31 @@ Not done, on purpose: AMP stays CUDA-only; `pin_memory` stays as configured (MPS
 
 - *Strict mode without `warn_only`.* Detection would stop at the first `roi_align` backward.
 - *Replacing bilinear upsampling with a deterministic layer.* Changes the model, and every past segmentation result with it.
+
+## ADR-200 — Private Comet export, on the W&B contract
+
+**Date:** 2026-11-12
+**Status:** Accepted
+**Extends:** ADR-172 (Weights & Biases export), ADR-197 (every task from run.json)
+
+**Context:** #287. Groups that follow their runs on Comet want the same opt-in, private export W&B has. `comet_ml` 3.58.12 collects far more by default than `wandb`: importing it hooks the import of torch and other frameworks, starts Sentry error reports (with `sys.executable` and the installed packages) for half of the processes, and replaces `sys.excepthook`; a new `Experiment` logs code, git metadata and patch, console, CLI arguments, packages, host, user, IP, CPU, GPU, disk and network; its `end()` posts a summary notification titled with `getpass.getuser()`; on comet.com its internal reporting posts SDK tracebacks. A missing project is created with the server's default visibility.
+
+**Decision:**
+
+- A profile setting `comet: {enabled, project, workspace}`, off by default; an empty `workspace` is the key's default one. Names are lower-case `[a-z0-9][a-z0-9._-]{0,99}`, since Comet keeps project names in lower case. The API key is saved like the W&B key (ADR-171/172), in `<config>/comet-tokens/<hash of profile>`; the page only learns whether one exists.
+- Same contract as W&B: classification live per epoch through `core/run_trackers.py`, the other tasks from `run.json` when the job ends (ADR-197), every call a best-effort boundary, failures in `comet.json` beside the run, and the History's retry at `POST /api/comet/runs/{run_id}/retry`.
+- **Private before the first upload.** With `comet_ml.API(api_key=<profile key>, cache=False)`, the project is read with `get_project`, or created with `create_project(..., public=False)` and read again; anything but `isPublic: false` is refused and left as it is.
+- **Nothing ambient.** Before the import the process gets `COMET_DISABLE_AUTO_LOGGING=1`, `COMET_ERROR_TRACKING_ENABLE=false` and `COMET_INTERNAL_REPORTING=false`. `comet_ml.start(api_key=..., workspace=..., project_name=..., experiment_key=..., mode="get_or_create", online=True, experiment_config=ExperimentConfig(...))` gets every collector as an explicit `False` (`log_code`, `log_graph`, `parse_args`, `log_git_metadata`, `log_git_patch`, `log_env_details`, `log_env_gpu/host/cpu/network/disk`, `auto_output_logging`, `auto_param_logging`, `auto_metric_logging`, `auto_log_co2`, the histograms), `display_summary_level=0` and `disabled=False`: an explicit argument wins over `COMET_*` variables and `.comet.config` in the SDK's own precedence. The experiment's `send_notification` is replaced with a no-op before `end()`.
+- **What leaves:** the public parameters, the epoch metrics at `step=epoch`, the final public metrics (the W&B list) and `visionforge_status`. The SDK adds `curr_step`, `curr_epoch` and `process duration`.
+- The experiment key is the first 32 hex digits of the hash of profile and run folder. Comet keeps a repeated step, unlike W&B, so `comet.json` records `synced_epoch`, the last epoch Comet confirmed with `flush()` at the end; a retry sends only later epochs.
+- The SDK keeps one live experiment per process and ends the previous one when another starts, so a second Comet export while one is open fails with `CometBusyError` and waits for the retry.
+- Optional extra `visionforge-studio[comet]`, pinned to `comet-ml==3.58.12`; like the other exporter extras it stays out of the license gate.
+
+**Consequences:** checked with the real `comet_ml` 3.58.12 offline, with the same `ExperimentConfig`: the archive held only the parameters, metrics, name and status, without user, host or path; Sentry was not initialised and no import hook was installed. The online path (account calls, private project, upload, retry) is covered only by an in-memory fake: it needs a real key. If the server dies between an epoch and the final flush, a retry sends those epochs again and Comet shows them twice. The three environment switches stay set for the whole process. The server address is the SDK's (`COMET_URL_OVERRIDE` moves it); a self-hosted Comet was not tried. `comet_ml` pulls `sentry-sdk`, `dulwich` and `everett` (MPL-2.0) into the environment of whoever installs the extra.
+
+**Alternatives considered:**
+
+- *Let `comet_ml.start` create the project.* Its visibility would be the workspace default, which this code cannot see beforehand.
+- *Set an existing public project to private.* It would change a project the user configured on purpose, as in ADR-172.
+- *Ask Comet which steps it already has before a retry.* More of the private REST surface for each retry; the sidecar is local and enough.
+- *`Experiment`/`ExistingExperiment` directly.* `start(mode="get_or_create")` already picks between them by key and passes the same explicit settings to both.

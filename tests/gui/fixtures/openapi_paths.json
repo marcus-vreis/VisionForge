@@ -1,4 +1,23 @@
 {
+  "DELETE /api/comet/token": {
+    "operationId": "forget_api_comet_token_delete",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "integrations"
+    ]
+  },
   "DELETE /api/credentials/{provider}": {
     "operationId": "forget_credential_route_api_credentials__provider__delete",
     "parameters": [
@@ -314,6 +333,25 @@
     },
     "tags": [
       "colab"
+    ]
+  },
+  "GET /api/comet/token": {
+    "operationId": "status_api_comet_token_get",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
+    },
+    "tags": [
+      "integrations"
     ]
   },
   "GET /api/credentials": {
@@ -1438,6 +1476,29 @@
     },
     "tags": [
       "colab"
+    ]
+  },
+  "POST /api/comet/runs/{run_id}/retry": {
+    "operationId": "retry_api_comet_runs__run_id__retry_post",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional",
+      "path:run_id:required"
+    ],
+    "requestBody": {},
+    "responses": {
+      "200": {
+        "application/json": "CometStatus"
+      },
+      "404": {},
+      "409": {},
+      "422": {
+        "application/json": "HTTPValidationError"
+      },
+      "500": {}
+    },
+    "tags": [
+      "integrations"
     ]
   },
   "POST /api/credentials": {
@@ -3245,6 +3306,27 @@
         "application/json": "HTTPValidationError"
       },
       "502": {}
+    },
+    "tags": [
+      "integrations"
+    ]
+  },
+  "PUT /api/comet/token": {
+    "operationId": "save_api_comet_token_put",
+    "parameters": [
+      "header:X-VF-Lang:optional",
+      "header:X-VF-Profile:optional"
+    ],
+    "requestBody": {
+      "application/json": "ProfileToken"
+    },
+    "responses": {
+      "200": {
+        "application/json": "object"
+      },
+      "422": {
+        "application/json": "HTTPValidationError"
+      }
     },
     "tags": [
       "integrations"

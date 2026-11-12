@@ -15,6 +15,7 @@ ROUTES = ROOT / "src" / "visionforge" / "gui" / "api"
 EXPORTERS = {
     "mlflow": ("routes.py", "ADR-170"),
     "wandb": ("wandb_routes.py", "ADR-172"),
+    "comet": ("comet_routes.py", "ADR-200"),
     "zenodo": ("zenodo_routes.py", "ADR-174"),
     "github": ("github_routes.py", "ADR-175"),
     "dvc": ("dvc_routes.py", "ADR-176"),
@@ -58,7 +59,7 @@ def test_page_has_no_relative_link(service: str) -> None:
     assert relative == []
 
 
-@pytest.mark.parametrize("service", ["wandb", "zenodo", "github"])
+@pytest.mark.parametrize("service", ["wandb", "comet", "zenodo", "github"])
 def test_token_page_links_to_tokens_guide(service: str) -> None:
     text = _page(service).read_text(encoding="utf-8")
     assert (
