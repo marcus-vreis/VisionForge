@@ -6,6 +6,7 @@ treino e a pessoa lia uma exceção crua em inglês no log.
 
 from __future__ import annotations
 
+import shutil
 import sys
 from pathlib import Path
 from typing import Any
@@ -14,6 +15,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import visionforge.gui.api.execution as execution_mod
+from visionforge.utils.messages import message
 from visionforge.utils.selftest_data import (
     build_classification_dataset,
     build_detection_dataset,
@@ -123,7 +125,19 @@ class TestDetectionSubmit:
         (base / "images" / "val").mkdir(parents=True)
         resp = client.post("/api/detection/run", json=_detection(tmp_path, base))
         assert resp.status_code == 422
-        assert "treino" in resp.json()["detail"]
+        assert resp.json()["detail"] == message("pt", "submit.detection_empty_train")
+
+    def test_missing_train_split_is_refused(
+        self, client_and_routes: tuple, tmp_path: Path
+    ) -> None:
+        # val and test exist, train does not: the run would start with nothing to fit.
+        client, _ = client_and_routes
+        base = build_detection_dataset(tmp_path / "ds")
+        shutil.rmtree(base / "images" / "train")
+        shutil.rmtree(base / "labels" / "train")
+        resp = client.post("/api/detection/run", json=_detection(tmp_path, base))
+        assert resp.status_code == 422
+        assert resp.json()["detail"] == message("pt", "submit.detection_empty_train")
 
     def test_language_header_selects_english(
         self, client_and_routes: tuple, tmp_path: Path

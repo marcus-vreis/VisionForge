@@ -218,7 +218,8 @@ new modules and never edits an existing task's code or folds into
    `start`/`epoch_end`/`end` SSE events).
 5. `<Task>Block` (`setup`/`run`/`report`) in `src/visionforge/blocks/<task>.py`,
    plus a new ADR for the task.
-6. `/api/<task>/{schema,run}` in `src/visionforge/gui/api/routes.py` (reuse the
+6. `/api/<task>/{schema,run}` in `src/visionforge/gui/api/training_routes.py`
+   (`routes.py` only assembles the domain routers now; reuse the
    shared single-run state + `/experiment/{status,events,result}`).
 7. Frontend `<Task>Panel` + `lib/<task>-models.ts`, wired into `App.tsx` /
    `useExperiment` / `client.ts`.
