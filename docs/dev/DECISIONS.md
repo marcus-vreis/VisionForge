@@ -8073,3 +8073,25 @@ Not done, on purpose: AMP stays CUDA-only; `pin_memory` stays as configured (MPS
 
 - *Keep the Colab run in `routes.py`.* No state would change owner, but `run_experiment` and the task runs sit on both sides of it, so the split would need one more include and the Colab executor would stay behind; the Colab objects belong with the code that drives them.
 - *Keep re-exports in `routes.py`.* As in ADR-185: `monkeypatch.setattr(routes, "_submit_job", ...)` would silently patch a name nobody reads.
+
+## ADR-198 — Torch floors per hardware extra, a cu130 extra, and one lock fork per extra
+
+**Date:** 2026-11-12
+**Status:** Accepted
+**Amends:** ADR-005 (hardware extras)
+
+**Context:** #302. The lock held a single torch, 2.7.1+cu118, for every extra: the extras had no declared conflict, so uv resolved them together and kept the first index. Dependabot flags torch below 2.10 (remote code execution through an untrusted checkpoint, GHSA-63cw-57p8-fm3p), below 2.9.1 and up to 2.12.1 (memory corruption, low). The PyTorch indexes stop at different versions: cu118 at 2.7.1, cu121 at 2.5.1, cu124 at 2.6.0, cu128 at 2.11.0, cu126 and cu130 at 2.14.1, cpu at 2.15.0.
+
+**Decision:**
+
+- `[tool.uv] conflicts` declares the seven hardware extras mutually exclusive, and `[tool.uv.sources]` maps each extra to its index (`extra = "cu130"`), so the lock resolves one torch per extra. CUDA sources apply on Linux and Windows only; a Mac with a CUDA extra, or any install with no extra, takes torch from PyPI.
+- Floors: `cpu`, `cu126` and the new `cu130` require torch>=2.13 (no open advisory); `cu128` requires torch>=2.10, the highest floor its index can meet, leaving only the low `torch.jit.script` advisory. `cu118`, `cu121` and `cu124` keep torch>=2.3: no fixed wheel exists on their indexes, so they stay as legacy extras for drivers too old for CUDA 12.6, and the README says what they miss.
+- `constraint-dependencies = ["setuptools>=84.1"]`: the old torch forks otherwise pull setuptools 81, which has its own advisory.
+- `visionforge doctor` recommends `cu130` for a driver that reports CUDA 13.0 or newer; 12.8 and 12.9 keep `cu128`.
+
+**Consequences:** verified on the RTX 5060 Ti (driver 621.01, sm_120) with torch 2.14.1+cu130: every task trained one epoch on cuda (6/6) and `visionforge selftest` passed every case on CPU. The lock records old torch versions for the legacy extras, so Dependabot keeps those alerts open; they describe what those extras install. Two GPU runs of the same segmentation config differ in the fourth decimal of mIoU even with `deterministic=True`: the project sets `cudnn.deterministic`, not `torch.use_deterministic_algorithms`, and the bilinear upsampling backward is not deterministic on CUDA (tracked separately; REPRODUCIBILITY.md already makes no GPU bit-identity claim).
+
+**Alternatives considered:**
+
+- *Dropping cu118/cu121/cu124.* Clears every alert, but leaves machines whose driver predates CUDA 12.6 with CPU only.
+- *A torch>=2.10 floor for every extra.* Unsatisfiable on the legacy indexes, and it leaves the 2.12.1 advisory open on the indexes that can clear it.

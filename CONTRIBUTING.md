@@ -18,7 +18,7 @@ hardware, and a resolver cannot choose between the CPU and CUDA wheels. Pick
 one through a hardware extra — the right index is already wired up for it:
 
 ```bash
-uv pip install -e ".[cu128,dev]"    # cu118 / cu121 / cu124 / cu126 / cu128 / cpu
+uv pip install -e ".[cu128,dev]"    # cu126 / cu128 / cu130 / cpu (legacy: cu118 / cu121 / cu124)
 ```
 
 Not sure which? `visionforge doctor` reads the driver *and* any torch already

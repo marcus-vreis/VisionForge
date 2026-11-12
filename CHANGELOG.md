@@ -168,6 +168,7 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 
 ### Security
 
+- O torch sai das faixas com alerta: o lock resolve um torch por extra de hardware (antes era um só, 2.7.1+cu118, para todas), com piso 2.13 em `cpu`, `cu126` e na nova `cu130`, e 2.10 em `cu128`. As extras `cu118`, `cu121` e `cu124` ficam como legado, porque seus índices pararam antes das correções. O `doctor` recomenda `cu130` a drivers com CUDA 13 (ADR-198, #302).
 - Dependências sem as faixas vulneráveis apontadas pelo Dependabot: anyio, datasets, filelock, fsspec, idna, mako, multidict, pydantic-settings, pygments, pytest, setuptools, virtualenv e werkzeug no `uv.lock`; brace-expansion no `package-lock.json` (#300). O torch fica para uma issue própria, porque trocar a versão exige validar a build CUDA na GPU.
 
 ### Fixed

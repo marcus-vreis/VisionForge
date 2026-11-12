@@ -67,7 +67,9 @@ pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
 pip install visionforge-studio
 ```
 
-Available in place of `cu128`: `cu118` · `cu121` · `cu124` · `cu126` · `cpu`.
+Available in place of `cu128`: `cu130` (driver 580+) · `cu126` · `cpu`. The legacy
+`cu118` · `cu121` · `cu124` builds stop at torch 2.7 and miss its security fixes
+(ADR-198); use them only with a driver too old for CUDA 12.6.
 `cu128` is the broadest — it spans Turing (sm_75) through Blackwell, and is the
 only one that runs on an RTX 50-series card at all.
 
@@ -449,7 +451,9 @@ pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
 pip install visionforge-studio
 ```
 
-Disponíveis no lugar de `cu128`: `cu118` · `cu121` · `cu124` · `cu126` · `cpu`.
+Disponíveis no lugar de `cu128`: `cu130` (driver 580+) · `cu126` · `cpu`. As builds
+legadas `cu118` · `cu121` · `cu124` param no torch 2.7 e ficam sem as correções de
+segurança (ADR-198); use só com um driver antigo demais para o CUDA 12.6.
 O `cu128` é o mais abrangente — vai de Turing (sm_75) até Blackwell, e é o único
 que roda numa RTX série 50.
 

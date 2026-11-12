@@ -24,7 +24,9 @@ _DIST_NAME = "visionforge-studio"
 # Each entry is (min_driver_major*10 + min_driver_minor, tag).
 # Rule: pick the highest tag whose threshold is <= driver CUDA (in major*10+minor space).
 # driver < 11.8 or None → cpu; 11.8..12.0 → cu118; 12.1..12.3 → cu121;
-# 12.4..12.5 → cu124; 12.6..12.7 → cu126; 12.8+ → cu128.
+# 12.4..12.5 → cu124; 12.6..12.7 → cu126; 12.8..12.9 → cu128; 13.0+ → cu130.
+# cu118/cu121/cu124 stay only for drivers too old for 12.6: their indexes stopped
+# at torch 2.7.1/2.5.1/2.6.0, below every security fix (ADR-198).
 #
 # cu128 matters beyond "newer is nicer": RTX 50-series (Blackwell) is compute
 # capability 12.0, and no wheel before cu128 ships an sm_120 kernel. On those
@@ -37,6 +39,7 @@ _WHEEL_THRESHOLDS: list[tuple[int, str]] = [
     (124, "cu124"),
     (126, "cu126"),
     (128, "cu128"),
+    (130, "cu130"),
 ]
 
 _INDEX_BASE = "https://download.pytorch.org/whl"

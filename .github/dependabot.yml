@@ -2,7 +2,7 @@ version: 2
 
 # Monthly, grouped version updates against `development` (the integration
 # branch). torch and torchvision are excluded: the build has to match the
-# hardware extra (cpu / cu118 ... cu128), so a bump is chosen by hand.
+# hardware extra (cpu / cu118 ... cu130), so a bump is chosen by hand.
 updates:
   - package-ecosystem: github-actions
     directory: /
