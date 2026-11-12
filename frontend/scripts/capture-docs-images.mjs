@@ -146,6 +146,19 @@ async function classification(page) {
   await openTask(page, "Classificação");
   await useSampleDataset(page);
   await shot(page, "vf-classification.png");
+  await openStep(page, "Estratégia");
+  await expect(page.getByRole("button", { name: "Comparação replicada" })).toBeVisible();
+  await shot(page, "vf-strategy.png");
+}
+
+/** The header's guide menu, open. */
+async function guideMenu(page) {
+  const button = page.getByTitle(/Abrir os guias/);
+  await button.click();
+  await expect(page.getByRole("menu")).toBeVisible();
+  await shot(page, "vf-guide-menu.png");
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("menu")).toBeHidden();
 }
 
 /** The Colab corner as a fresh install sees it: no CLI and no Google account. */
@@ -186,6 +199,7 @@ async function codeTab(page) {
   await device.getByRole("button", { name: /Treinar usando processador/ }).click();
   await openStep(page, "Revisão");
   await field(page, "Nome do experimento").fill("docs_code_tab");
+  await shot(page, "vf-review.png");
   await page.locator("[data-tour='train']").click();
   const sheet = page.locator("[data-tour='training-sheet']");
   await expect(sheet).toBeVisible();
@@ -195,6 +209,23 @@ async function codeTab(page) {
   await expect(panel).toBeVisible();
   await expect(panel.getByText(/código real que treina/)).toBeVisible({ timeout: 30_000 });
   await shot(page, "vf-code-tab.png");
+  await sheet.getByRole("tab", { name: "Log" }).click();
+  await shot(page, "vf-training.png");
+}
+
+/** The results of the run `codeTab` trained, then its entry in the history. */
+async function resultsAndHistory(page) {
+  const sheet = page.locator("[data-tour='training-sheet']");
+  await sheet.getByRole("button", { name: /Ver resultados/ }).click();
+  await expect(sheet).toBeHidden();
+  await expect(page.getByText("// resultados", { exact: true })).toBeVisible();
+  await expect(page.getByRole("img").first()).toBeVisible();
+  await shot(page, "vf-results.png");
+  await page.locator("[data-tour='history']").click();
+  await page.getByText("docs_code_tab", { exact: true }).first().click();
+  await expect(page.getByRole("button", { name: "Baixar bundle do experimento" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Versionar com DVC" })).toBeVisible();
+  await shot(page, "vf-run-detail.png");
 }
 
 const browser = await chromium.launch({
@@ -222,7 +253,9 @@ try {
   await classification(page);
   await colabCorner(page);
   await replicates(page);
+  await guideMenu(page);
   await codeTab(page);
+  await resultsAndHistory(page);
   await context.close();
 } finally {
   await browser.close();

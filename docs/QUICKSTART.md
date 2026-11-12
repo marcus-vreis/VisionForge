@@ -106,7 +106,7 @@ warns you of it.
 
 ## 5. Reproduce it anywhere
 
-Every panel's header has **↓ Export YAML** — the exported file is the exact
+The **Review** step has **↓ Export YAML** — the exported file is the exact
 config the API received, so this reruns the experiment identically:
 
 ```bash
