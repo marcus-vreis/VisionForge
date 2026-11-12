@@ -187,7 +187,9 @@ class ColabJobs:
                 }
             )
             script.parent.mkdir(parents=True, exist_ok=True)
-            script.write_text(build_script(payload), encoding="utf-8")
+            text = build_script(payload)
+            # Only the text is tainted; the path is the slug and a timestamp.
+            script.write_text(text, encoding="utf-8")  # NOSONAR pythonsecurity:S2083
             warm = self._warm_up(
                 slug, name, script.with_suffix(".warmup.py"), cancelled
             )
