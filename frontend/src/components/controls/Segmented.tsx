@@ -5,6 +5,8 @@ import { useFieldAccessibility } from "./useFieldAccessibility";
 interface SegmentedOption {
   value: string;
   label: string;
+  /** A short tag drawn after the label (e.g. "no AGPL"). */
+  badge?: string;
 }
 
 interface SegmentedProps {
@@ -59,7 +61,7 @@ export function Segmented({
               key={o.value}
               type="button"
               aria-pressed={active}
-              title={o.label}
+              title={o.badge ? `${o.label} · ${o.badge}` : o.label}
               onClick={() => onChange(o.value)}
               style={{
                 flex: 1,
@@ -95,6 +97,20 @@ export function Segmented({
                 />
               )}
               {o.label}
+              {o.badge && (
+                <span
+                  style={{
+                    marginLeft: 6,
+                    padding: "1px 6px",
+                    borderRadius: 999,
+                    border: "1px solid var(--vf-panel-stroke)",
+                    fontSize: 10,
+                    color: "var(--vf-text-muted)",
+                  }}
+                >
+                  {o.badge}
+                </span>
+              )}
             </button>
           );
         })}

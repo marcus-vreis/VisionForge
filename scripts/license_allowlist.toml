@@ -1,0 +1,53 @@
+# Copyleft licenses VisionForge's runtime dependencies are allowed to carry
+# (#225). scripts/check_licenses.py fails on a copyleft package missing here,
+# on a package whose license gained a family not listed here, and when the
+# table in THIRD_PARTY_NOTICES.md is not what these entries render (fix it
+# with `python scripts/check_licenses.py --write`).
+#
+# Adding an entry is a decision, not a formality: read the license first.
+
+[closure]
+# What the gate walks: [project].dependencies plus these extras and packages.
+# torch and torchvision come from a hardware extra (ADR-005), so they are named
+# directly. Exporter extras (mlflow, wandb, dvc, hub) stay out: they are
+# separate tools the user installs on purpose.
+extras = ["detection"]
+extra_packages = ["torch", "torchvision"]
+
+# families: what the package's metadata declares (AGPL, LGPL, GPL, MPL, ...).
+# license / why: the row this entry renders in THIRD_PARTY_NOTICES.md.
+
+[packages.ultralytics]
+families = ["AGPL"]
+license = "AGPL-3.0"
+why = "YOLO / RT-DETR detection backend (`detection` extra)"
+
+[packages.ultralytics-thop]
+families = ["AGPL"]
+license = "AGPL-3.0"
+why = "required by `ultralytics`"
+
+[packages.ultralytics-platform]
+families = ["AGPL"]
+license = "AGPL-3.0-only"
+why = "required by `ultralytics` (8.4.x and later, Python 3.11+)"
+
+[packages.pi-heif]
+families = ["LGPL"]
+license = "BSD-3-Clause; its binary wheels bundle libheif and libde265 (LGPL-3.0)"
+why = "required by `roboflow`"
+
+[packages.text-unidecode]
+families = ["GPL"]
+license = "Artistic License or GPL-2.0-or-later, at your choice"
+why = "required by `python-slugify` (via `kaggle`)"
+
+[packages.certifi]
+families = ["MPL"]
+license = "MPL-2.0"
+why = "CA certificates for `requests`"
+
+[packages.tqdm]
+families = ["MPL"]
+license = "MPL-2.0 AND MIT"
+why = "progress bars in several dependencies"

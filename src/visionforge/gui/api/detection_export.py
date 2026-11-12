@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from visionforge.gui.api.schemas import ExportOnnxRequest, ExportOnnxResponse
+from visionforge.utils.doctor import ultralytics_missing_message
 from visionforge.utils.messages import tr
 
 
@@ -42,10 +43,7 @@ def export_detection_run(
     from visionforge.core import detection_trainer
 
     if detection_trainer.YOLO is None:
-        raise RuntimeError(
-            "ultralytics ships with VisionForge and is missing — the install "
-            "looks damaged: pip install --force-reinstall 'visionforge-studio'."
-        )
+        raise RuntimeError(ultralytics_missing_message())
 
     model = detection_trainer.YOLO(str(checkpoint))
     # simplify=False: the ultralytics default (True) runs check_requirements(install=True)

@@ -3708,6 +3708,7 @@ implying the backbone is untouched — the distinction matters in a paper, where
 **Status:** Accepted
 **Supersedes:** the per-feature extras of ADR-005 (the hardware extras stay)
 **Amended by:** ADR-170/171/172/176 (`mlflow`, `hub`, `wandb` and `dvc` are optional extras that install something; the seven extras named here stay empty)
+**Superseded in part by:** ADR-195 (`ultralytics`, AGPL-3.0, is again the `detection` extra; the other six stay in `dependencies`)
 
 **Context:** seven capabilities were optional extras — `detection`, `timm`,
 `optuna`, `tensorboard`, `roboflow`, `kaggle`, `huggingface`. The reasoning was
@@ -7807,6 +7808,100 @@ differently now. Each fix has a test that failed before it
 - *Keep re-exports in `routes.py`.* `routes._JOB_STATES.clear()` would still work, but `monkeypatch.setattr(routes, "_JOB_STATES", {})` would silently patch a name nobody reads.
 - *A class holding the state.* A cleaner interface, but a behaviour-bearing rewrite inside what should be a move; the module boundary already gives the single owner.
 
+## ADR-195 — Ultralytics (AGPL-3.0) is the optional `detection` extra
+
+**Date:** 2026-11-11
+**Status:** Accepted
+**Supersedes in part:** ADR-106 (for `ultralytics` only; the other six stay in `dependencies`)
+
+**Context:** ADR-106 made `ultralytics` a base dependency of an MIT package. It
+and `ultralytics-thop` are AGPL-3.0, so every `pip install visionforge-studio`
+installed AGPL code, and an organisation that does not accept the AGPL could
+not adopt VisionForge at all, even for classification, without buying
+Ultralytics' Enterprise License (#223). The code already tolerated its absence:
+`detection_trainer` binds `YOLO = None` when the import fails, and the
+`torchvision` detection backend (Faster R-CNN, RetinaNet, SSD, SSDlite) uses no
+AGPL code. The maintainer chose option B+C of #223.
+
+**Decision:**
+
+- `ultralytics>=8.3` leaves `dependencies` and becomes the only content of the
+  `detection` extra: `pip install "visionforge-studio[detection]"` (from a
+  checkout, `pip install -e ".[detection]"`).
+- Every path that needs it fails with one message (`detection.ultralytics_missing`,
+  pt/en) naming that install line and the `torchvision` alternative: training,
+  testing and ONNX export of an Ultralytics run, and the submit of a detection
+  config with `backend: ultralytics`, which is refused with 422 before it enters
+  the queue. The dataset check at submit no longer needs `ultralytics` for its
+  list of image formats.
+- `GET /api/system/info` reports `ultralytics_installed` and
+  `detection_install_command`. The detection form shows the install line under
+  the backend choice when Ultralytics is selected and absent, and the
+  `torchvision` option carries a "sem AGPL" / "no AGPL" badge.
+- The install smoke installs both variants (plain and `[detection]`) and checks
+  that only the second brings `ultralytics`; the wheel smoke checks the plain
+  wheel does not. The CI jobs that run the test suite install `[detection]`, as
+  they had `ultralytics` before.
+
+**Consequences:** the default backend in the detection form stays `ultralytics`
+(its configs and run records are unchanged), so a plain install sees the install
+line until the user picks `torchvision` or installs the extra. A plain install
+still brings torch, through `timm`, so `doctor --fix` keeps swapping an existing
+torch as ADR-107 describes.
+
+**Alternatives considered:**
+
+- *A: keep it a base dependency and only document the AGPL.* Leaves the
+  adoption problem in place.
+- *B without the badge.* The GUI would not tell which detection backend is free
+  of the AGPL; the badge costs one label.
+
+## ADR-194 — The "Code" tab for Ultralytics detection: our layer, then the library's loop (amends ADR-173)
+
+**Date:** 2026-11-11
+**Status:** Accepted
+**Amends:** ADR-173 (and ADR-181, which left detection on Ultralytics without a tour)
+
+**Context:** YOLO / RT-DETR is the default detection backend, and its "Code" tab
+said only that the loop is the library's. VisionForge still writes real code
+around it: the form becomes `YOLO.train` arguments, augmentation is switched
+off with neutral values, a callback records each epoch and honours the stop
+button. The library's own loop (`BaseTrainer._do_train`) is readable with
+`inspect`, but it is AGPL-3.0 code (ADR-195) and Ultralytics has no upper
+version bound here, so a release can move any line a note points at (#224,
+option b).
+
+**Decision:**
+
+- `GET /api/code-tour/detection` with `backend=ultralytics`, or no backend
+  (Ultralytics is the default), returns the tour `ULTRALYTICS_DETECTION`:
+  four sections of VisionForge's layer (`_ultralytics_train_kwargs`,
+  `_augmentation_kwargs`, `_fit_ultralytics`, `_record_ultralytics_epoch`)
+  whose notes are tested like every other tour, then `BaseTrainer._do_train`
+  of the installed Ultralytics.
+- A `Section` can name a `library`. Such a section carries
+  `library: {name, version, license}` (version from `ultralytics.__version__`,
+  license as its metadata declares it), and its notes are tolerant: a note
+  whose line this version lacks is dropped instead of failing. Every section
+  reports `notes_resolved` and `notes_total`. Without the `detection` extra the
+  library section is left out and the layer is still shown.
+- The page shows, above a library section, whose code it is, the version, the
+  license and how many notes found their line. The "only torchvision" reason
+  (`code.detection.only_torchvision`) is gone.
+
+**Consequences:** a test pins that every library note resolves on the installed
+version, so a bump that moves a line fails CI and names the note to fix, while
+users on another version still get the section with fewer notes. The source
+shown is read from the user's own install, so nothing of Ultralytics is
+redistributed.
+
+**Alternatives considered:**
+
+- *(a) Only VisionForge's layer.* Hides the loop where the epoch actually
+  happens, which is what the tab exists to show.
+- *(c) (b) plus an upper version bound on `ultralytics`.* Ties every user to
+  one release for the sake of the notes; the tolerant notes already degrade
+  gracefully.
 ## ADR-191 — Unexpected 500s and validation 422s carry the page's language; what stays English on purpose
 
 **Date:** 2026-11-11

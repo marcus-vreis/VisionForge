@@ -15,6 +15,7 @@ from fastapi.testclient import TestClient
 from visionforge import __version__
 from visionforge.gui.api import routes, system_service
 from visionforge.gui.server import app
+from visionforge.utils import doctor
 from visionforge.utils.cuda import CUDAInfo
 
 
@@ -32,6 +33,8 @@ def test_system_info_uses_the_current_worker_budget(
         return next(budgets)
 
     monkeypatch.setattr(routes, "worker_budget", budget)
+    monkeypatch.setattr(system_service, "ultralytics_installed", lambda: True)
+    monkeypatch.setattr(doctor, "installed_from_source", lambda: False)
     client = TestClient(app)
     for suggested in (2, 0):
         response = client.get("/api/system/info")
@@ -41,6 +44,8 @@ def test_system_info_uses_the_current_worker_budget(
             "suggested_workers": suggested,
             "platform": "Windows",
             "version": __version__,
+            "ultralytics_installed": True,
+            "detection_install_command": 'pip install "visionforge-studio[detection]"',
         }
     assert pools == [3, 3]
 
@@ -107,3 +112,14 @@ def test_importing_and_building_the_router_has_no_runtime_side_effects(
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert list(tmp_path.iterdir()) == []
+
+
+def test_system_info_reports_a_missing_detection_extra(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A plain install has no ultralytics (ADR-195): the form needs to know.
+    monkeypatch.setitem(sys.modules, "ultralytics", None)
+    monkeypatch.setattr(doctor, "installed_from_source", lambda: True)
+    body = TestClient(app).get("/api/system/info").json()
+    assert body["ultralytics_installed"] is False
+    assert body["detection_install_command"] == 'pip install -e ".[detection]"'

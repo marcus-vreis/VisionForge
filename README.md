@@ -83,11 +83,13 @@ project itself are still `visionforge`.
 <details>
 <summary>What comes with it</summary>
 
-Everything the five tasks need is in that one install — the YOLO and RT-DETR
-detection backends, the extra `timm` backbones, Optuna-guided sweeps,
+Everything the five tasks need is in that one install — the torchvision
+detection backend, the extra `timm` backbones, Optuna-guided sweeps,
 TensorBoard scalars, and the Roboflow / Kaggle / Hugging Face dataset
 downloaders. They used to be optional extras; the split cost more than it
 saved, and they add about 83 MB against the gigabytes PyTorch already pulls.
+The one exception is the YOLO / RT-DETR backend, Ultralytics, licensed
+AGPL-3.0: `pip install "visionforge-studio[detection]"` adds it.
 
 Choose the PyTorch build for your hardware. The optional tracking and
 export integrations below are on `development` (**next release**): for local
@@ -349,6 +351,42 @@ always points to the latest version; each version also has its own DOI there.
 
 [MIT](https://github.com/marcus-vreis/VisionForge/blob/main/LICENSE)
 
+## Third-party licenses
+
+VisionForge is MIT, but some of what it installs is not.
+[`THIRD_PARTY_NOTICES.md`](https://github.com/marcus-vreis/VisionForge/blob/main/THIRD_PARTY_NOTICES.md) lists them; the main one:
+
+- **Ultralytics (AGPL-3.0)** is the YOLO / RT-DETR detection backend, and it
+  is installed only with the `detection` extra
+  (`pip install "visionforge-studio[detection]"`). If you distribute a program
+  built on it, or let users reach a modified version over a network, the
+  AGPL-3.0 asks you to publish that program's source under the same license;
+  Ultralytics offers an Enterprise License otherwise. The `torchvision`
+  detection backend, marked "no AGPL" in the form, does not use it.
+- Smaller cases: `pi-heif` (bundles LGPL-3.0 libraries), `text-unidecode`
+  (Artistic or GPL-2.0+), `certifi` and `tqdm` (MPL-2.0).
+- The GUI bundles three fonts under the SIL Open Font License 1.1.
+
+## Network and privacy
+
+VisionForge has no telemetry of its own. It goes online only for:
+
+| When | Where | Turn it off |
+|---|---|---|
+| The GUI opens: update check | `pypi.org` (short timeout, cached, silent offline) | `VISIONFORGE_NO_UPDATE_CHECK=1` |
+| A model with pretrained weights, first use | `download.pytorch.org`, `huggingface.co` (timm), GitHub releases (Ultralytics) | turn `pretrained` off |
+| You download a dataset | Roboflow, Kaggle, Hugging Face | don't use the download |
+| You export a run | MLflow server you set, Weights & Biases, DVC remote, Hugging Face Hub, GitHub, Zenodo | don't export |
+| You connect Google Colab | PyPI (`google-colab-cli`), Google | don't connect |
+| `visionforge doctor --fix` | `download.pytorch.org` | run `doctor` without `--fix` |
+| `VISIONFORGE_DOCS=1` (API docs pages) | `cdn.jsdelivr.net`, Google Fonts | leave it unset |
+
+Some bundled SDKs report usage on their own. Before importing them,
+VisionForge sets `HF_HUB_DISABLE_TELEMETRY=1`, `DO_NOT_TRACK=1`,
+`MLFLOW_DISABLE_TELEMETRY=true` and `DVC_NO_ANALYTICS=1` (only when you have
+not set them) and switches off Ultralytics' usage events inside its own
+process, without touching your Ultralytics settings file.
+
 ---
 
 # Português (pt-BR)
@@ -427,11 +465,13 @@ o projeto continuam sendo `visionforge`.
 <details>
 <summary>O que já vem junto</summary>
 
-Tudo que as cinco tarefas precisam está naquela instalação: os backends de
-detecção YOLO e RT-DETR, os backbones extras do `timm`, as buscas guiadas por
+Tudo que as cinco tarefas precisam está naquela instalação: o backend de
+detecção torchvision, os backbones extras do `timm`, as buscas guiadas por
 Optuna, os escalares do TensorBoard e os downloaders de dataset do Roboflow,
 Kaggle e Hugging Face. Eram extras opcionais; a separação custava mais do que
 economizava, e eles somam uns 83 MB contra os gigabytes que o PyTorch já baixa.
+A exceção é o backend YOLO / RT-DETR, o Ultralytics, com licença AGPL-3.0:
+`pip install "visionforge-studio[detection]"` o adiciona.
 
 Escolha a versão do PyTorch compatível com o seu hardware. As integrações
 opcionais de acompanhamento e exportação abaixo estão na branch `development`
@@ -697,3 +737,39 @@ DOI lá.
 ## Licença
 
 [MIT](https://github.com/marcus-vreis/VisionForge/blob/main/LICENSE)
+
+## Licenças de terceiros
+
+O VisionForge é MIT, mas parte do que ele instala não é.
+[`THIRD_PARTY_NOTICES.md`](https://github.com/marcus-vreis/VisionForge/blob/main/THIRD_PARTY_NOTICES.md) lista esses pacotes; o principal:
+
+- **Ultralytics (AGPL-3.0)** é o backend de detecção YOLO / RT-DETR, e só é
+  instalado com o extra `detection`
+  (`pip install "visionforge-studio[detection]"`). Quem distribui um programa
+  feito sobre ele, ou deixa usuários acessarem uma versão modificada pela rede,
+  precisa publicar o código desse programa sob a mesma licença; fora disso, a
+  Ultralytics oferece uma Enterprise License. O backend de detecção
+  `torchvision`, marcado "sem AGPL" no formulário, não usa o Ultralytics.
+- Casos menores: `pi-heif` (traz bibliotecas LGPL-3.0), `text-unidecode`
+  (Artistic ou GPL-2.0+), `certifi` e `tqdm` (MPL-2.0).
+- A interface traz três fontes sob a SIL Open Font License 1.1.
+
+## Rede e privacidade
+
+O VisionForge não tem telemetria própria. Ele só acessa a internet em:
+
+| Quando | Para onde | Como desligar |
+|---|---|---|
+| A interface abre: checagem de atualização | `pypi.org` (timeout curto, cache, silenciosa offline) | `VISIONFORGE_NO_UPDATE_CHECK=1` |
+| Modelo com pesos pré-treinados, primeiro uso | `download.pytorch.org`, `huggingface.co` (timm), releases do GitHub (Ultralytics) | desligue `pretrained` |
+| Você baixa um dataset | Roboflow, Kaggle, Hugging Face | não use o download |
+| Você exporta um run | servidor MLflow que você configurou, Weights & Biases, remoto do DVC, Hugging Face Hub, GitHub, Zenodo | não exporte |
+| Você conecta o Google Colab | PyPI (`google-colab-cli`), Google | não conecte |
+| `visionforge doctor --fix` | `download.pytorch.org` | rode o `doctor` sem `--fix` |
+| `VISIONFORGE_DOCS=1` (páginas da documentação da API) | `cdn.jsdelivr.net`, Google Fonts | deixe sem definir |
+
+Alguns SDKs embutidos reportam uso por conta própria. Antes de importá-los, o
+VisionForge define `HF_HUB_DISABLE_TELEMETRY=1`, `DO_NOT_TRACK=1`,
+`MLFLOW_DISABLE_TELEMETRY=true` e `DVC_NO_ANALYTICS=1` (só quando você não
+definiu) e desliga os eventos de uso do Ultralytics dentro do próprio processo,
+sem mexer no arquivo de configurações do Ultralytics.

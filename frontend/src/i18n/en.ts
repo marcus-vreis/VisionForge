@@ -338,7 +338,16 @@ export const en: Dict = {
       retinanet: "RetinaNet",
       map: "mAP (validation)",
       metric: "AP per class",
+      yolo_args: "YOLO arguments",
+      yolo_augment: "Augmentation (YOLO)",
+      yolo_fit: "Training (VisionForge)",
+      yolo_epoch: "Recorded epoch",
+      yolo_loop: "Inside Ultralytics",
     } as Record<string, string>,
+    library: (name: string, version: string, license: string) =>
+      `${name} ${version} code, as installed in your environment, licensed ${license}: it is not VisionForge's code, only shown here.`,
+    notesResolved: (resolved: number, total: number) =>
+      `${resolved} of ${total} notes found their line in this version.`,
     where: (file: string, name: string, line: number) => `${file} · ${name} · line ${line}`,
     lines: (first: number, last: number) => (first === last ? `line ${first}` : `lines ${first}–${last}`),
     active: "this run's path",
@@ -1368,6 +1377,9 @@ export const en: Dict = {
       title: "Model · detection",
       backend: "Backend",
       backendHint: "where the model comes from",
+      noAgplBadge: "no AGPL",
+      ultralyticsMissing: (command: string) =>
+        `Ultralytics (AGPL-3.0) is not installed, so a run with it will be refused. Install it with \`${command}\` and restart VisionForge, or pick Torchvision.`,
       architecture: "Architecture",
       architectureHint: "detector",
       pretrained: "Pretrained weights",

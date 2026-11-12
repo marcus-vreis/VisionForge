@@ -699,6 +699,18 @@ CATALOG: dict[str, dict[Lang, str]] = {
             "{train_dir}/{normal_dir}/ and the test folder under the same parent)."
         ),
     },
+    "detection.ultralytics_missing": {
+        "pt": (
+            "O backend Ultralytics (YOLO / RT-DETR) não está instalado: ele é "
+            "opcional porque tem licença AGPL-3.0. Instale com {command} e reinicie "
+            "o VisionForge, ou escolha o backend torchvision."
+        ),
+        "en": (
+            "The Ultralytics backend (YOLO / RT-DETR) is not installed: it is "
+            "optional because it is licensed AGPL-3.0. Install it with {command} "
+            "and restart VisionForge, or pick the torchvision backend."
+        ),
+    },
     "export.torchvision_detection": {
         "pt": (
             "Export ONNX para detectores torchvision ainda não é suportado; "
@@ -1346,10 +1358,6 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "pt": "Com o limiar, cada imagem de teste vira normal ou anômala, e o F1 mede esse acerto na classe anômala. Ao contrário da AUROC, ele depende do limiar escolhido.",
         "en": "With the threshold, every test image becomes normal or anomalous, and F1 measures that call on the anomalous class. Unlike AUROC, it depends on the chosen threshold.",
     },
-    "code.detection.only_torchvision": {
-        "pt": "A detecção com o backend Ultralytics treina dentro da biblioteca Ultralytics, não no código do VisionForge, por isso não há código comentado para ela. Escolha o backend torchvision (Faster R-CNN, SSD ou RetinaNet) para ver o código real do treino.",
-        "en": "Detection with the Ultralytics backend trains inside the Ultralytics library, not in VisionForge's code, so there is no annotated code for it. Pick the torchvision backend (Faster R-CNN, SSD or RetinaNet) to see the real training code.",
-    },
     "code.detection.data.tensor": {
         "pt": "A imagem vira tensor no tamanho original, sem redimensionar aqui: os detectores do torchvision redimensionam e normalizam por dentro.",
         "en": "The image becomes a tensor at its original size, without resizing here: torchvision detectors resize and normalise internally.",
@@ -1385,6 +1393,98 @@ CATALOG: dict[str, dict[Lang, str]] = {
     "code.detection.model.retinanet": {
         "pt": "RetinaNet: detector de um estágio com focal loss, que dá menos peso às âncoras fáceis de fundo.",
         "en": "RetinaNet: a single-stage detector with focal loss, which gives less weight to easy background anchors.",
+    },
+    "code.yolo.args.core": {
+        "pt": "O formulário vira parâmetros do YOLO.train: épocas, lote, taxa de aprendizado, paciência, seed e workers vão com os nomes que o Ultralytics espera.",
+        "en": "The form becomes YOLO.train arguments: epochs, batch, learning rate, patience, seed and workers go under the names Ultralytics expects.",
+    },
+    "code.yolo.args.gains": {
+        "pt": "Os pesos de cada parte da loss do YOLO: caixa (box), classe (cls) e distribuição das bordas (dfl).",
+        "en": "The weight of each part of the YOLO loss: box, class (cls) and the distribution of the box edges (dfl).",
+    },
+    "code.yolo.args.augmentation": {
+        "pt": "A augmentation entra por último, já com a chave liga/desliga aplicada.",
+        "en": "Augmentation goes in last, with the on/off switch already applied.",
+    },
+    "code.yolo.augment.neutral": {
+        "pt": "Desligada, a augmentation manda valores neutros em vez de omitir as chaves: uma chave omitida o Ultralytics preenche com o próprio padrão, que aumenta os dados.",
+        "en": "Switched off, augmentation sends neutral values instead of leaving the keys out: Ultralytics fills an omitted key with its own default, which augments.",
+    },
+    "code.yolo.augment.config": {
+        "pt": "Ligada, vão os valores do seu config, sem mudar nada.",
+        "en": "Switched on, the values of your config go as they are.",
+    },
+    "code.yolo.fit.missing": {
+        "pt": "Sem o extra detection (o Ultralytics, AGPL-3.0) o treino para aqui, com a linha que o instala.",
+        "en": "Without the detection extra (Ultralytics, AGPL-3.0) training stops here, with the line that installs it.",
+    },
+    "code.yolo.fit.weights": {
+        "pt": "O modelo nasce dos pesos escolhidos: pré-treinados no COCO ou só a arquitetura.",
+        "en": "The model starts from the chosen weights: pretrained on COCO, or the architecture alone.",
+    },
+    "code.yolo.fit.callback": {
+        "pt": "O Ultralytics é dono do laço de treino; o VisionForge só é chamado no fim de cada época, para gravar as métricas e checar o botão de parar.",
+        "en": "Ultralytics owns the training loop; VisionForge is only called at the end of each epoch, to record the metrics and check the stop button.",
+    },
+    "code.yolo.fit.stop": {
+        "pt": "Parar pede ao Ultralytics que saia ao fim da época, pela mesma bandeira que a parada antecipada dele usa.",
+        "en": "Stopping asks Ultralytics to leave at the end of the epoch, through the same flag its own early stopping uses.",
+    },
+    "code.yolo.fit.train": {
+        "pt": "Aqui o treino passa para a biblioteca: a pasta do run é absoluta, para o Ultralytics não gravar em outro lugar.",
+        "en": "Here training hands over to the library: the run folder is absolute, so Ultralytics does not write somewhere else.",
+    },
+    "code.yolo.epoch.metrics": {
+        "pt": "As métricas da época saem de trainer.metrics, que a validação do Ultralytics preenche: mAP@50, mAP@50-95 e as losses de validação.",
+        "en": "The epoch's metrics come from trainer.metrics, which the Ultralytics validator fills: mAP@50, mAP@50-95 and the validation losses.",
+    },
+    "code.yolo.epoch.train_loss": {
+        "pt": "As losses de treino não estão ali: vêm da média que o Ultralytics guarda em trainer.tloss.",
+        "en": "The training losses are not there: they come from the running mean Ultralytics keeps in trainer.tloss.",
+    },
+    "code.yolo.epoch.resume": {
+        "pt": "Num treino retomado, a época substitui o registro dela em vez de aparecer duas vezes.",
+        "en": "In a resumed run, the epoch replaces its own record instead of appearing twice.",
+    },
+    "code.yolo.loop.setup": {
+        "pt": "Prepara dataloaders, otimizador, scheduler e EMA a partir dos parâmetros que o VisionForge passou.",
+        "en": "Builds the dataloaders, optimizer, scheduler and EMA from the arguments VisionForge passed.",
+    },
+    "code.yolo.loop.epochs": {
+        "pt": "O laço das épocas: roda até a última época, a parada antecipada ou o botão de parar.",
+        "en": "The epoch loop: it runs until the last epoch, early stopping or the stop button.",
+    },
+    "code.yolo.loop.scheduler": {
+        "pt": "A taxa de aprendizado da época, pelo scheduler (linear ou cosseno, lrf).",
+        "en": "The epoch's learning rate, from the scheduler (linear or cosine, lrf).",
+    },
+    "code.yolo.loop.warmup": {
+        "pt": "Nas primeiras iterações a taxa de aprendizado e o momentum sobem aos poucos (warmup).",
+        "en": "In the first iterations the learning rate and momentum ramp up (warmup).",
+    },
+    "code.yolo.loop.forward": {
+        "pt": "Forward e loss do lote, em precisão mista quando amp está ligado.",
+        "en": "The batch's forward pass and loss, in mixed precision when amp is on.",
+    },
+    "code.yolo.loop.backward": {
+        "pt": "Backward: os gradientes da loss.",
+        "en": "Backward: the gradients of the loss.",
+    },
+    "code.yolo.loop.step": {
+        "pt": "O otimizador atualiza os pesos depois de acumular gradientes até o lote nominal (nbs).",
+        "en": "The optimizer updates the weights once gradients have accumulated up to the nominal batch (nbs).",
+    },
+    "code.yolo.loop.validate": {
+        "pt": "Validação ao fim da época: mAP e losses no split de validação.",
+        "en": "Validation at the end of the epoch: mAP and losses on the validation split.",
+    },
+    "code.yolo.loop.callback": {
+        "pt": "Aqui roda o callback do VisionForge que grava a época.",
+        "en": "Here VisionForge's callback runs and records the epoch.",
+    },
+    "code.yolo.loop.final_eval": {
+        "pt": "Depois do laço, o Ultralytics mede o best.pt de novo; o VisionForge não conta essa passada como época.",
+        "en": "After the loop, Ultralytics measures best.pt again; VisionForge does not count that pass as an epoch.",
     },
     "code.detection.weights": {
         "pt": "Com pretrained, o detector começa dos pesos treinados no COCO; sem ele, começa do zero, sem baixar nada.",

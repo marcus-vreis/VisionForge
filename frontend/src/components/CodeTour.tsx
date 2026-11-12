@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { fetchCodeTour, type CodeNote, type CodeSection, type CodeSettings } from "../api/client";
 import { useT } from "../i18n/useT";
-import { loadTourTasks, tourStatus, unavailableReason } from "../lib/code-tour";
+import { libraryNotice, loadTourTasks, tourStatus, unavailableReason } from "../lib/code-tour";
 
 const CODE: CSSProperties = {
   margin: 0, padding: "10px 0", overflowX: "auto", maxHeight: 360, overflowY: "auto",
@@ -67,6 +67,7 @@ export function CodeTour({ taskKey, settings, accent }: {
   const sections = current?.sections;
   if (!sections) return <p role="status" style={{ fontSize: 13 }}>{t.codeTour.loading}</p>;
   const section = sections.find((s) => s.id === open) ?? sections[0];
+  const notice = libraryNotice(section, t.codeTour);
 
   return <div style={{ display: "flex", flexDirection: "column", gap: 10, fontSize: 13 }}>
     <p style={{ margin: 0, color: "var(--vf-text-dim)" }}>{t.codeTour.intro}</p>
@@ -85,6 +86,7 @@ export function CodeTour({ taskKey, settings, accent }: {
     <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--vf-text-muted)", overflowWrap: "anywhere" }}>
       {t.codeTour.where(section.file, section.name, section.first_line)}
     </div>
+    {notice && <p role="note" style={{ margin: 0, fontSize: 12, color: "var(--vf-text-dim)" }}>{notice}</p>}
     <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-start" }}>
       <pre aria-label={section.name} style={{ ...CODE, flex: "2 1 420px", minWidth: 0 }}>
         {section.lines.map((line, index) => {

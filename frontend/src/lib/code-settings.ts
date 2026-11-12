@@ -20,8 +20,8 @@ export function codeSettingsFor(taskKey: string, payload: Record<string, unknown
   return {};
 }
 
-/** `model.backend` and `model.name` of a detection run: only the torchvision
- *  backend trains with this project's code, and the name picks its builder. */
+/** `model.backend` and `model.name` of a detection run: the backend picks the
+ *  tour (ADR-194), and on torchvision the name picks its builder. */
 function detectionSettings(payload: Record<string, unknown>): CodeSettings {
   const model = record(payload["model"]);
   const settings: CodeSettings = {};

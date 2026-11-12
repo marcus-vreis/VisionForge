@@ -29,6 +29,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from loguru import logger
 
 from visionforge.core.detection_data import resolve_yolo_split
+from visionforge.core.detection_images import has_detection_image
 from visionforge.core.run_trackers import TrackerFactory
 from visionforge.gui.api import execution, submission
 from visionforge.gui.api.datasets_routes import SCAN_BASE_MISSING_KEY, _image_stems
@@ -56,6 +57,7 @@ from visionforge.gui.api.tracker_exports import exported
 from visionforge.utils.anomaly_config import AnomalyConfig
 from visionforge.utils.config import ExperimentConfig
 from visionforge.utils.detection_config import DetectionConfig
+from visionforge.utils.doctor import ultralytics_installed, ultralytics_missing_message
 from visionforge.utils.messages import tr
 from visionforge.utils.regression_config import RegressionConfig
 from visionforge.utils.segmentation_config import SegmentationConfig
@@ -263,7 +265,10 @@ def _refuse(message: str) -> NoReturn:
 
 
 def _check_detection_dataset(config: DetectionConfig) -> None:
-    """Refuse a YOLO ``base_dir`` with no split or no train images."""
+    """Refuse an Ultralytics run without its extra (ADR-195), or a YOLO
+    ``base_dir`` with no split or no train images."""
+    if config.model.backend == "ultralytics" and not ultralytics_installed():
+        _refuse(ultralytics_missing_message())
     data = config.data
     if data.data_yaml is not None or data.base_dir is None:
         return  # an explicit data.yaml names its own splits; Ultralytics owns them
@@ -274,26 +279,8 @@ def _check_detection_dataset(config: DetectionConfig) -> None:
     if all(resolved is None for resolved in splits.values()):
         _refuse(tr("scan.no_yolo_split"))
     train = splits["train"]
-    if train is None or not _has_detection_image(train[0]):
+    if train is None or not has_detection_image(train[0]):
         _refuse(tr("submit.detection_empty_train"))
-
-
-def _has_detection_image(directory: Path) -> bool:
-    """Any image Ultralytics would read under ``directory``, subfolders included.
-
-    Stricter than this would refuse datasets the trainer accepts: Ultralytics
-    walks subfolders and reads formats (``.tif``, ``.avif``...) the stats probe
-    does not count.
-    """
-    from visionforge.utils.third_party_privacy import apply_opt_outs
-
-    apply_opt_outs()  # before ultralytics' first import in a `visionforge gui`
-    from ultralytics.data.utils import IMG_FORMATS
-
-    return any(
-        p.is_file() and p.suffix.lower().lstrip(".") in IMG_FORMATS
-        for p in directory.rglob("*")
-    )
 
 
 def _check_segmentation_dataset(config: SegmentationConfig) -> None:

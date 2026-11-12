@@ -226,5 +226,5 @@ class TestUltralyticsDetectionTest:
         )
         request = RunTestRequest(data_dir=str(ds))
         with patch("visionforge.core.detection_trainer.YOLO", None):
-            with pytest.raises(RuntimeError, match="ultralytics"):
+            with pytest.raises(RuntimeError, match=r"\[detection\]"):
                 evaluate_detection_run(run_dir, request, data)

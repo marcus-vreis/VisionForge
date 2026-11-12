@@ -8,12 +8,17 @@ conditions marks the branch this run's settings take.
 
 Each task has its own tour and its own settings (``TOURS``, ``TOUR_SETTINGS``);
 ``tour_settings`` reads them from a request's query, keeping only the values
-the task knows.
+the task knows. Detection on the Ultralytics backend has a tour of its own
+(``ULTRALYTICS_DETECTION``, ADR-194): VisionForge's layer, then the library's
+installed training loop, whose notes are tolerant because its code is not ours.
 """
 
 from __future__ import annotations
 
+import contextlib
+import importlib.metadata
 import inspect
+import sys
 import textwrap
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -61,11 +66,18 @@ class Note:
 
 @dataclass(frozen=True)
 class Section:
-    """One function of the training, shown whole, with its notes."""
+    """One function of the training, shown whole, with its notes.
+
+    ``library`` names the distribution the function belongs to when it is not
+    this project's code. Such a section is read from whatever version is
+    installed: a note whose line that version lacks is dropped instead of
+    failing, and the section is left out when the library is absent.
+    """
 
     id: str
     target: Callable[[], Callable[..., Any]]
     notes: tuple[Note, ...]
+    library: str | None = None
 
 
 def _transforms() -> Callable[..., Any]:
@@ -1137,6 +1149,129 @@ TOURS: dict[str, tuple[Section, ...]] = {
     "detection": DETECTION,
 }
 
+
+def _yolo_train_kwargs() -> Callable[..., Any]:
+    from visionforge.core.detection_trainer import DetectionTrainer
+
+    return DetectionTrainer._ultralytics_train_kwargs
+
+
+def _yolo_augmentation() -> Callable[..., Any]:
+    from visionforge.core.detection_trainer import _augmentation_kwargs
+
+    return _augmentation_kwargs
+
+
+def _yolo_fit() -> Callable[..., Any]:
+    from visionforge.core.detection_trainer import DetectionTrainer
+
+    return DetectionTrainer._fit_ultralytics
+
+
+def _yolo_epoch() -> Callable[..., Any]:
+    from visionforge.core.detection_trainer import DetectionTrainer
+
+    return DetectionTrainer._record_ultralytics_epoch
+
+
+def _ultralytics_loop() -> Callable[..., Any]:
+    """``BaseTrainer._do_train`` of the installed Ultralytics (AGPL-3.0)."""
+    from visionforge.utils.third_party_privacy import apply_opt_outs
+
+    apply_opt_outs()  # before ultralytics' first import in a `visionforge gui`
+    with contextlib.redirect_stdout(sys.stderr):
+        from ultralytics.engine.trainer import BaseTrainer
+
+    loop: Callable[..., Any] = BaseTrainer._do_train
+    return loop
+
+
+_YOLO_FINISH = "return self._finish_ultralytics_training("
+
+# What VisionForge does around Ultralytics, then the library's own loop.
+ULTRALYTICS_DETECTION: tuple[Section, ...] = (
+    Section(
+        "yolo_args",
+        _yolo_train_kwargs,
+        (
+            Note('"epochs": cfg.epochs,', "code.yolo.args.core", end="# optimizer"),
+            Note('"box": cfg.box,', "code.yolo.args.gains", end="# regularization"),
+            Note("**_augmentation_kwargs(aug),", "code.yolo.args.augmentation"),
+        ),
+    ),
+    Section(
+        "yolo_augment",
+        _yolo_augmentation,
+        (
+            Note(
+                "if not aug.augment:",
+                "code.yolo.augment.neutral",
+                end="return {key: getattr(aug, key)",
+            ),
+            Note(
+                "return {key: getattr(aug, key)",
+                "code.yolo.augment.config",
+            ),
+        ),
+    ),
+    Section(
+        "yolo_fit",
+        _yolo_fit,
+        (
+            Note("if YOLO is None:", "code.yolo.fit.missing", end="cfg = "),
+            Note("model = YOLO(self._resolve_weights())", "code.yolo.fit.weights"),
+            Note(
+                "def _on_epoch_end(trainer: Any) -> None:",
+                "code.yolo.fit.callback",
+                end="# Ultralytics reads `trainer.stop`",
+            ),
+            Note("trainer.stop = True", "code.yolo.fit.stop"),
+            Note("model.train(", "code.yolo.fit.train", end=_YOLO_FINISH, nth=1),
+        ),
+    ),
+    Section(
+        "yolo_epoch",
+        _yolo_epoch,
+        (
+            Note(
+                "map50 = _extract(metrics, _MAP50_KEY)",
+                "code.yolo.epoch.metrics",
+                end="# `trainer.metrics` only holds",
+            ),
+            Note(
+                "train_metrics = _train_loss_metrics(trainer)",
+                "code.yolo.epoch.train_loss",
+            ),
+            Note(
+                "history[:] = [h for h in history if h.epoch < epoch]",
+                "code.yolo.epoch.resume",
+            ),
+        ),
+    ),
+    Section(
+        "yolo_loop",
+        _ultralytics_loop,
+        (
+            Note("self._setup_train()", "code.yolo.loop.setup"),
+            Note("while True:", "code.yolo.loop.epochs"),
+            Note("self.scheduler.step()", "code.yolo.loop.scheduler"),
+            Note("# Warmup", "code.yolo.loop.warmup", end="# Forward"),
+            Note(
+                "with autocast(self.amp):", "code.yolo.loop.forward", end="# Backward"
+            ),
+            Note("self.scaler.scale(self.loss).backward()", "code.yolo.loop.backward"),
+            Note("self.optimizer_step()", "code.yolo.loop.step"),
+            Note(
+                "self.metrics, self.fitness = self.validate()",
+                "code.yolo.loop.validate",
+            ),
+            Note('self.run_callbacks("on_fit_epoch_end")', "code.yolo.loop.callback"),
+            Note("self.final_eval()", "code.yolo.loop.final_eval"),
+        ),
+        library="ultralytics",
+    ),
+)
+
 # Settings a note can depend on, per task, and their values.
 TOUR_SETTINGS: dict[str, dict[str, frozenset[str]]] = {
     "classification": {
@@ -1198,25 +1333,19 @@ _FROM_MODEL: dict[str, tuple[str, Callable[[str], str | None]]] = {
     "detection": ("arch", detection_arch),
 }
 
-# A tour that shows the project's code only on one path: the setting and value
-# it needs, and the message that says why there is nothing to show otherwise.
-_REQUIRES: dict[str, tuple[str, str, str]] = {
-    "detection": ("backend", "torchvision", "code.detection.only_torchvision"),
-}
 
+def tour_sections(task: str, settings: Mapping[str, str]) -> tuple[Section, ...]:
+    """The sections ``task`` shows for these settings.
 
-def unavailable_reason(task: str, settings: Mapping[str, str]) -> str | None:
-    """Why ``task`` has no tour for these settings, or None when it has one.
+    Detection on Ultralytics, the default backend, shows its own tour: a run
+    that does not say torchvision gets it too (ADR-194).
 
-    Detection trains with the project's code only on the torchvision backend;
-    the Ultralytics loop is the library's. A run that does not say torchvision
-    gets the reason too, since Ultralytics is the default backend.
+    Raises:
+        KeyError: a task without a tour.
     """
-    required = _REQUIRES.get(task)
-    if required is None:
-        return None
-    key, value, message = required
-    return None if settings.get(key) == value else tr(message)
+    if task == "detection" and settings.get("backend") != "torchvision":
+        return ULTRALYTICS_DETECTION
+    return TOURS[task]
 
 
 def tour_settings(task: str, query: Mapping[str, str]) -> dict[str, str]:
@@ -1259,21 +1388,59 @@ def code_tour(task: str, settings: Mapping[str, str]) -> list[dict[str, Any]]:
         for key, value in settings.items()
         if key in allowed and value in allowed[key]
     }
-    return [_section(section, known) for section in TOURS[task]]
+    sections = (_section(s, known) for s in tour_sections(task, known))
+    return [section for section in sections if section is not None]
 
 
-def _section(section: Section, settings: Mapping[str, str]) -> dict[str, Any]:
-    target = section.target()
+def _section(section: Section, settings: Mapping[str, str]) -> dict[str, Any] | None:
+    """The section as the page reads it; None for a library that is not here."""
+    if section.library is None:
+        target = section.target()
+    else:
+        try:
+            target = section.target()
+            library = _library(section.library)
+        except (ImportError, AttributeError):  # PackageNotFoundError is an ImportError
+            return None
     raw, first_line = inspect.getsourcelines(target)
     lines = textwrap.dedent("".join(raw)).rstrip("\n").split("\n")
-    return {
+    if section.library is None:
+        notes = [_note(note, lines, settings) for note in section.notes]
+    else:
+        notes = _tolerant_notes(section.notes, lines, settings)
+    item: dict[str, Any] = {
         "id": section.id,
         "name": target.__qualname__,
         "file": _module_file(target),
         "first_line": first_line,
         "lines": lines,
-        "notes": [_note(note, lines, settings) for note in section.notes],
+        "notes": notes,
+        "notes_resolved": len(notes),
+        "notes_total": len(section.notes),
     }
+    if section.library is not None:
+        item["library"] = library
+    return item
+
+
+def _tolerant_notes(
+    notes: tuple[Note, ...], lines: list[str], settings: Mapping[str, str]
+) -> list[dict[str, Any]]:
+    """The notes that still find their lines in this version of the library."""
+    resolved = []
+    for note in notes:
+        with contextlib.suppress(ValueError):
+            resolved.append(_note(note, lines, settings))
+    return resolved
+
+
+def _library(distribution: str) -> dict[str, str]:
+    """Name, installed version and declared license of a third-party library."""
+    meta = importlib.metadata.metadata(distribution)
+    module = sys.modules.get(distribution.replace("-", "_"))
+    version = getattr(module, "__version__", None) or meta["Version"]
+    declared = meta.get("License-Expression") or meta.get("License") or ""
+    return {"name": meta["Name"], "version": str(version), "license": declared}
 
 
 def _note(note: Note, lines: list[str], settings: Mapping[str, str]) -> dict[str, Any]:

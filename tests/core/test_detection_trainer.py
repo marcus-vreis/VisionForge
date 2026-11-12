@@ -142,7 +142,7 @@ class TestBackendGuards:
     ) -> None:
         monkeypatch.setattr(dt_mod, "YOLO", None)
         trainer = DetectionTrainer(_config(tmp_path))
-        with pytest.raises(RuntimeError, match="ultralytics"):
+        with pytest.raises(RuntimeError, match=r"\[detection\]"):
             trainer.fit()
 
 
