@@ -15,6 +15,7 @@ import {
   fewestSeeds,
   foldGroups,
   formatAggregate,
+  formatDifferenceInterval,
   formatNumber,
   formatOverrides,
   formatP,
@@ -326,5 +327,23 @@ describe("sweepBestLabel", () => {
     expect(sweepBestLabel("grid", {})).toBe("—");
     expect(sweepBestLabel("grid", null)).toBeNull();
     expect(sweepBestLabel("grid", undefined)).toBeNull();
+  });
+});
+
+describe("formatDifferenceInterval (ADR-187)", () => {
+  it("prints both ends to four places", () => {
+    expect(
+      formatDifferenceInterval({ ci_low: 0.01234, ci_high: 0.0987, ci_method: "t" }, "open"),
+    ).toBe("[0.0123, 0.0987]");
+  });
+
+  it("marks an end the data cannot bound as open", () => {
+    expect(
+      formatDifferenceInterval({ ci_low: null, ci_high: 0.2, ci_method: "hodges_lehmann" }, "open"),
+    ).toBe("[open, 0.2000]");
+  });
+
+  it("returns null for a report written before the interval existed", () => {
+    expect(formatDifferenceInterval({}, "open")).toBeNull();
   });
 });
