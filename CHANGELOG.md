@@ -166,6 +166,10 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 - MLflow local e Weights & Biases recebem também regressão, segmentação, anomalia, detecção e tarefas próprias: ao fim do treino, o `run.json` vai com a config pública, o histórico de cada época e as métricas finais com os nomes do `run.json`; o **repetir** do Histórico vale para qualquer tarefa (ADR-197) (#286)
 - As imagens do README saem de `scripts/capture_docs_images.py`: a GUI deste checkout num workspace isolado, `--offline` e sem GPU, com a versão do cabeçalho oculta (checado no DOM), capturando classificação, Réplicas, a aba **Código** e o canto do Colab; `docs/images/README.md` registra commit, versão, data e dimensões, e `--check` falha se faltar imagem (#221).
 
+### Security
+
+- Dependências sem as faixas vulneráveis apontadas pelo Dependabot: anyio, datasets, filelock, fsspec, idna, mako, multidict, pydantic-settings, pygments, pytest, setuptools, virtualenv e werkzeug no `uv.lock`; brace-expansion no `package-lock.json` (#300). O torch fica para uma issue própria, porque trocar a versão exige validar a build CUDA na GPU.
+
 ### Fixed
 
 - `POST /api/credentials` deixa de devolver a chave no corpo do 422 quando o pedido vem malformado; a resposta é uma mensagem fixa em português e inglês (#155).
