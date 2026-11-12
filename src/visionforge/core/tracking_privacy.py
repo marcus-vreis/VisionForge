@@ -15,7 +15,7 @@ Scalar = str | bool | int | float | None
 # Keys never exported: secrets, and anything holding a local path (*_dir too,
 # e.g. data.base_dir carries the user's folder and name).
 _PRIVATE_PARAMETER = re.compile(
-    r"token|password|secret|credential|path|uri|url|(?:^|_)dirs?$", re.I
+    r"(?:token|password|secret|credential|path|uri|url)|(?:(?:^|_)dirs?$)", re.I
 )
 _PARAMETER_NAME = re.compile(r"[\w-]+", re.ASCII)
 _METRIC_NAMES = {
