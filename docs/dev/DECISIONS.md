@@ -1,5 +1,24 @@
 # Architecture Decision Records
 
+How to read and write this file.
+
+**When an ADR is required.** Write one when a change picks between real alternatives that a later reader would otherwise re-debate: a new dependency or a removed one, a public contract (CLI, `run.json`, task or model extension point), a module boundary, a statistical or reproducibility rule, or a change to the repo's own process. A bug fix, a refactor that keeps the boundaries, and a doc edit do not need one.
+
+**Fields.** Copy `docs/dev/ADR-TEMPLATE.md`. Each entry is `## ADR-NNN — Title`, then `**Date:**`, `**Status:**`, optionally `**Relates to:**`, then Context, Decision, Consequences and Alternatives considered (the older entries use Decision and Reason). Numbers are sequential; take the next free one and append at the end of the file.
+
+**Status.** The line after `**Status:**` starts with exactly one of these:
+
+- `Proposed`: written, not yet agreed.
+- `Accepted`: in force. A note after a dash is allowed (`Accepted — shipped 2026-08-05`).
+- `Superseded by ADR-NNN`: replaced as a whole by a later ADR.
+- `Superseded in part by ADR-NNN`: still in force except for the part the later ADR replaces; say which part.
+- `Amended by ADR-NNN`: still in force, with a change recorded in the later ADR.
+- `Rejected`: considered and not adopted; kept so the question is not reopened.
+
+An accepted ADR is not rewritten. To change a decision, add a new ADR and move the old one's status to one of the `Superseded` or `Amended` forms. Older entries are not rewritten to this layout; `tests/test_decisions_format.py` checks the heading and the status prefix of every entry.
+
+---
+
 ## ADR-001 — src/ layout
 
 **Date:** 2026-03  
@@ -7920,6 +7939,55 @@ Not done, on purpose: AMP stays CUDA-only; `pin_memory` stays as configured (MPS
 
 - *Map `cuda` to `mps` silently.* The label would claim a device the run did not get; the `fallback` wording keeps `run.json` honest.
 - *Wait for a tester before merging.* The code paths are testable without a Mac, and keeping the feature unannounced costs nothing to people without one.
+## ADR-193 — The replicated comparison in the GUI: one axis, the form as baseline
+
+**Date:** 2026-11-11
+**Status:** Accepted
+**Relates to:** ADR-061 (replicated comparison), ADR-056 (replicates), ADR-044 (single-seed model comparison), ADR-114 (output paths), ADR-156 (strategy step), ADR-184 (CLI strategies)
+
+**Context:** every task had `POST /api/{task}/replicated-comparison` (and `/api/custom/{key}/replicated-comparison`), and `visionforge run` reached it from YAML, but no panel had a form for it and `frontend/src/api/client.ts` had no function for the route. The Holm-corrected paired matrix could only be started over HTTP or from the CLI. The panels' "compare" strategy is the single-seed model comparison of ADR-044.
+
+**Decision:** the strategy step of the six task panels (classification, detection, regression, segmentation, anomaly and custom tasks) offers **Comparação replicada** (`PanelStrategy` `"replicatedComparison"`), drawn by the reusable `ReplicatedComparisonCard`. The variants lie on one axis: one dot-path and 1 to 3 values besides the form's own, so 2 to 4 variants. The form as it stands is the variant `baseline`, with no overrides; each other variant is named `<last path segment>=<value>`, with characters outside `[A-Za-z0-9._-]` turned into `-`, because the backend suffixes the label to the run name and it becomes a folder. A value that parses as a number is sent as one, otherwise as text (the sweep editor's rule). Seeds are a count (2 to 20) or an explicit list (2 to 20, no repeats); 20 is the backend's `n_replicates` cap, held for the explicit list too since the cost is variants × seeds. The card shows that cost and, when Wilcoxon's floor `2 / 2**n` is above alpha 0.05 (fewer than 6 seeds), says no difference could come out significant: the condition `significance.min_achievable_p` and the report's `underpowered` use. Alpha stays the backend default and the metric list is the one Réplicas offers (accuracy for classification). `buildReplicatedComparisonPayload` validates and shapes the request, mirroring the backend's 422s (fewer than 2 variants, repeated seeds, an `output.*` path); `runReplicatedComparison` and `runCustomReplicatedComparison` post it, and App queues it with `blockKind: "replicated-comparison"`, the strategy name the queue reports. Classification sends `block: "classification"`, as Réplicas does, and Colab stays off with the reason while the comparison is picked. The backend is unchanged.
+
+**Consequences:** when the job ends, the results view reads the report as the History group it becomes (`comparisonGroupFromReport`, a port of `_copy_comparison_group`) and draws it with `RunGroupDetail`, the component of the group's detail in History: variants with mean ± CI95, the paired tests with the Holm verdict and the power flag, and the seeds. Its button opens the group in History (the group's id is the job's run id), and a seed's button opens that seed. A value equal to the form's own is not caught: it trains a copy of the baseline. A path the config lacks is caught only by the backend's 422. Variants that change several fields at once are left to the YAML of `visionforge run` and to HTTP.
+
+**Alternatives considered:**
+
+- *Free variants, several fields each.* More general, but a table of variants × fields is a second editor to validate, and one axis covers the paper's ablations one factor at a time.
+- *Expose alpha.* The report records the alpha used, but a GUI knob invites tuning it after seeing the p-values; 0.05 stays the default of the route.
+## ADR-190 — The user-task and user-model extension API is stable within a minor release, and a test pins its signatures
+
+**Date:** 2026-11-11
+**Status:** Accepted
+**Relates to:** ADR-058 (custom tasks), ADR-048/049 (custom models), ADR-039 (config schema versions)
+
+**Context:** `TaskSpec`, `register_task`, `register_model` and the Level 2 `ctx` are the extension points a researcher writes code against (ADR-058, ADR-048). The built-in tests exercise them only through the toy specs in `tests/tasks`, so renaming `compute_loss`'s `model` parameter, or dropping a hook, would keep every built-in test green and break every custom task in the wild. The guides in `docs/custom/` said nothing about how long these names hold.
+
+**Decision:** Before 1.0 the listed names, parameters and defaults may change only in a minor release, with a "Changed" entry in the CHANGELOG, never in a patch. `docs/custom/TASKS.md` and `MODELS.md` get a Stability section that lists them. `tests/tasks/test_task_api_contract.py` locks them with `inspect.signature`, `TaskSpec.__abstractmethods__`, the dataclass fields of `TaskInfo` and `TaskRunContext`, and `BaseTaskConfig.model_fields`; annotations are not locked. Changing the API means editing that test and the guides in the same commit. No `TASK_API_VERSION` constant is added: with one maintainer and a CHANGELOG entry per change, a number would be a second place to forget; it can be added with 1.0 if third-party task packages appear.
+
+**Consequences:** A rename fails CI with the old and new signature side by side. Adding an optional parameter with a default or a new optional hook is still a change to the test, so it is a visible decision. The engine's internals and any name not listed stay free to change.
+
+**Alternatives considered:**
+
+- *A `TASK_API_VERSION` integer checked at load time.* Useful once packages are installed by others; today it only adds a number to bump.
+- *Only the prose promise.* Nothing would fail when the prose and the code drift.
+
+## ADR-186 — The pytest hook runs on `git push`, not on every commit
+
+**Date:** 2026-11-11
+**Status:** Accepted
+**Relates to:** ADR-060 (the `slow` marker and the fast suite kept "seconds-fast" for the pre-commit hook)
+
+**Context:** The local `pytest` hook in `.pre-commit-config.yaml` has `always_run: true` and no `stages`, so every `git commit`, including a docs-only one, ran the whole fast suite: 329 s in the 2026-11-09 audit, 5 to 8 minutes in practice. ADR-060 assumed that suite stayed seconds-fast. The cost pushes contributors to `--no-verify`, which skips ruff, codespell and mypy as well. CI already skips the hook (`SKIP: pytest`) and runs the suite in its own job.
+
+**Decision:** The `pytest` hook gets `stages: [pre-push]`. ruff, ruff-format, codespell and mypy stay on `pre-commit`. This supersedes in part ADR-060: the fast suite is still the one the hook runs, but it runs on push, not on commit. CONTRIBUTING documents `pre-commit install --hook-type pre-commit --hook-type pre-push`, to be run in every clone and worktree, because hooks are installed per checkout.
+
+**Consequences:** A commit takes seconds and a push takes the suite's time. A clone that ran only `pre-commit install` never runs the tests locally; CI still does. The release bump (`bump-my-version`) commits through the commit stage only, so it no longer waits for the suite.
+
+**Alternatives considered:**
+
+- *Keep the hook on commit but filter by changed files.* A change to any `src/` file still runs everything, and the filter has to track which paths affect which tests.
+- *Remove the hook and rely on CI.* The suite would then run first on GitHub, after a push, which is a slower loop than a local one.
 ## ADR-187 — The interval of a paired difference inverts the test beside it
 
 **Date:** 2026-11-11
@@ -7968,3 +8036,20 @@ Not done, on purpose: AMP stays CUDA-only; `pin_memory` stays as configured (MPS
 
 - *Only the environment switches.* Each SDK honours its own, and a new dependency would reach the network unnoticed; the guard makes the promise checkable.
 - *A firewall rule.* Stronger, but needs administrator rights and differs per OS.
+
+## ADR-196 — Starting a run leaves `routes.py`: submission, the single-run endpoints and the Colab objects
+
+**Date:** 2026-11-11
+**Status:** Accepted
+**Relates to:** ADR-132 (splitting `routes.py`), ADR-185 (queue and job state in `execution.py`), ADR-163 (Colab), ADR-164 (Drive consent), ADR-058 (custom tasks)
+
+**Context:** After ADR-185, `gui/api/routes.py` still held everything that starts one run: `_submit_job` and the training-stack preload, `POST /api/experiment/run`, the standalone tasks' schema and `run` endpoints with their submit-time dataset checks and executors, the Colab run with its executor, and the custom-task endpoints. It also created and owned the Colab objects (`_COLAB_CLI`, `_COLAB_LOGINS`, `_COLAB_JOBS`, `_DRIVE_CONSENTS`). The file was 3202 lines (#204).
+
+**Decision:** `gui/api/submission.py` holds `_submit_job`, `_task_label_from_config`, the training stack (`_TRAINING_STACK`, `_DETECTION_STACK`, `_TASK_STACK`, `load_training_stack`) and `profile_dependency`, which turns the resolver `routes.py` owns into the `X-VF-Profile` dependency of a split-out router; it holds no state. A job submitted without a profile is labelled with the default profile's slug, which is all `default_profile(_MODELS_DIR)` gave it, so `_submit_job` no longer reads `_MODELS_DIR`. `gui/api/training_routes.py` holds `POST /api/experiment/run`, `/api/{detection,regression,segmentation,anomaly}/{schema,run}`, the `_check_*` dataset checks and the four executors, which now share `_execute_block`. `gui/api/colab_run_routes.py` holds `POST /api/colab/experiment/run`, `/api/colab/drive/continue`, `_execute_colab` and becomes the owner of the Colab objects; `routes.py` passes three of them to `build_colab_router`. `gui/api/custom_task_routes.py` holds `GET /api/tasks`, `/api/custom/{key}` (hide, unhide, delete, schema, run), `GenericTaskEngine` and `_execute_custom_task`. `routes.py` includes these routers where the routes used to be defined, so the OpenAPI document and the route order are unchanged; it keeps the profile resolution and `_tracker_factories` (both read `_PROFILES_DIR`/`_MODELS_DIR`) and passes them in.
+
+**Consequences:** `routes.py` drops from 3202 to 2066 lines and keeps the strategies (sweep, compare, K-fold, replicates, replicated comparison) and the per-run actions. Every caller, `routes.py` included, looks `submission._submit_job` up at call time, and `resume_run` looks the executors up in `training_routes`, so a test patches the module that defines a name: `submission` for `_submit_job`, `cuda_context_broken` and the stack; `training_routes` for the executors; `colab_run_routes` for the Colab objects, `_execute_colab`, `_drive_source` and `_colab_lane_of`; `custom_task_routes` for `GenericTaskEngine`, `_execute_custom_task` and `_get_custom_task_or_404`. `routes.py` re-exports none of them. The check that no route imports training code before `load_training_stack` now reads the three new route modules too.
+
+**Alternatives considered:**
+
+- *Keep the Colab run in `routes.py`.* No state would change owner, but `run_experiment` and the task runs sit on both sides of it, so the split would need one more include and the Colab executor would stay behind; the Colab objects belong with the code that drives them.
+- *Keep re-exports in `routes.py`.* As in ADR-185: `monkeypatch.setattr(routes, "_submit_job", ...)` would silently patch a name nobody reads.

@@ -17,6 +17,7 @@ from pydantic import Field
 from torch import nn
 
 import visionforge.gui.api.execution as execution_mod
+import visionforge.gui.api.strategies as strategies
 from tests.helpers import wait_experiment_done
 from visionforge.tasks import (
     BaseTaskConfig,
@@ -26,6 +27,9 @@ from visionforge.tasks import (
 )
 
 from .conftest import occupy_queue, release_queue
+
+# Any: the tests swap its orchestrators and executors for fakes.
+strategies_mod: Any = strategies
 
 
 @pytest.fixture(autouse=True)
@@ -93,12 +97,11 @@ class TestRoutesExist:
     def test_custom_sweep_and_replicates_routes_registered(
         self, app_and_routes: tuple
     ) -> None:
-        # Probe the APIRouter directly: depending on the Starlette version,
-        # app.routes may hide included-router children entirely.
-        _, routes_mod = app_and_routes
-        # getattr: newer FastAPI keeps an included router (profiles, ADR-132) as an
-        # entry without a path of its own.
-        paths = {getattr(route, "path", None) for route in routes_mod.router.routes}
+        # The OpenAPI document of the served app lists every route however the
+        # routers are split (ADR-132); router.routes hides an included router's
+        # children on newer FastAPI versions, and CI installs the newest one.
+        app, _ = app_and_routes
+        paths = set(app.openapi()["paths"])
         assert "/api/custom/{key}/sweep" in paths
         assert "/api/custom/{key}/replicates" in paths
         # deliberately absent — model.name is not guaranteed by BaseTaskConfig
@@ -107,7 +110,11 @@ class TestRoutesExist:
 
 class TestCustomReplicates:
     def test_dispatch_uses_declared_primary_metric(
-        self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
+        self,
+        app_and_routes: tuple,
+        live_client: TestClient,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         from visionforge.core.replicates import ReplicateTrial
 
@@ -126,8 +133,7 @@ class TestCustomReplicates:
                 ReplicateTrial(seeds[1], "success", {"mae": 0.6}, 0.1),
             ]
 
-        orig = routes_mod.run_replicates
-        routes_mod.run_replicates = fake_replicates
+        monkeypatch.setattr(strategies_mod, "run_replicates", fake_replicates)
         try:
             client = live_client
             resp = client.post(
@@ -148,7 +154,6 @@ class TestCustomReplicates:
             assert report["metric"] == "mae"
             assert report["total_replicates"] == 2
         finally:
-            routes_mod.run_replicates = orig
             execution_mod._JOB_STATES.clear()
 
     def test_unknown_key_404(self, app_and_routes: tuple, tmp_path: Path) -> None:
@@ -194,7 +199,11 @@ class TestCustomReplicates:
 
 class TestCustomSweep:
     def test_grid_sweep_over_the_tasks_own_field(
-        self, app_and_routes: tuple, live_client: TestClient, tmp_path: Path
+        self,
+        app_and_routes: tuple,
+        live_client: TestClient,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         from visionforge.core.sweep import SweepTrial
 
@@ -215,8 +224,7 @@ class TestCustomSweep:
                 SweepTrial(1, {"scale": 2.0}, "success", {"mae": 0.8}),
             ]
 
-        orig = routes_mod.run_sweep
-        routes_mod.run_sweep = fake_sweep
+        monkeypatch.setattr(strategies_mod, "run_sweep", fake_sweep)
         try:
             client = live_client
             resp = client.post(
@@ -243,7 +251,6 @@ class TestCustomSweep:
             assert report["mode"] == "grid"
             assert report["total_trials"] == 2
         finally:
-            routes_mod.run_sweep = orig
             execution_mod._JOB_STATES.clear()
 
     def test_sweep_rejects_path_unknown_to_the_task(

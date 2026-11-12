@@ -16,6 +16,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import visionforge.gui.api.execution as execution_mod
+import visionforge.gui.api.strategies as strategies_mod
 from tests.helpers import wait_experiment_done
 from visionforge.utils.selftest_data import build_regression_dataset
 
@@ -171,14 +172,14 @@ class TestReplicates:
         self, client_and_routes: tuple, tmp_path: Path, monkeypatch
     ) -> None:
         client, routes_mod = client_and_routes
-        real = routes_mod.run_replicates
+        real = strategies_mod.run_replicates
 
         def stop_first(runner, base, seeds, metric, progress_callback=None):  # type: ignore[no-untyped-def]
             # The stop pressed while the first seed is still loading its data.
             execution_mod._job_state(execution_mod._latest_run_id).token.cancel()
             return real(runner, base, seeds, metric, progress_callback)
 
-        monkeypatch.setattr(routes_mod, "run_replicates", stop_first)
+        monkeypatch.setattr(strategies_mod, "run_replicates", stop_first)
         run_id = client.post(
             "/api/regression/replicates",
             json={"config": _config(tmp_path), "seeds": [3, 4, 5]},

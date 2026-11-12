@@ -1,0 +1,279 @@
+{
+ "id": "seedvar_beans_swin_t_res160_s6_20261016_163126_491033",
+ "experiment": "seedvar_beans_swin_t_res160_s6",
+ "timestamp": "2026-10-16T16:33:52.152583",
+ "status": "completed",
+ "stopped": false,
+ "device_used": "cuda:0 (NVIDIA GeForce RTX 5060 Ti)",
+ "environment": {
+  "python": "3.13.16",
+  "platform": "Windows-11-10.0.26300-SP0",
+  "torch": "2.7.1+cu128",
+  "torchvision": "0.22.1+cu128",
+  "numpy": "2.4.3",
+  "visionforge": "unknown",
+  "cuda": "12.8",
+  "cudnn": "90701",
+  "gpu": "NVIDIA GeForce RTX 5060 Ti"
+ },
+ "dataset_fingerprint": {
+  "digest": "c02e292ff86a8a1d33a0ef30f5dd5453e8e558db0a1838174af34e2fda24adf4",
+  "method": "manifest",
+  "n_files": 1295,
+  "total_bytes": 662636838,
+  "root": "Classification - beans",
+  "note": "paths+sizes only: a modification that preserves file size is not detected"
+ },
+ "run_dir": ".",
+ "class_names": [
+  "angular_leaf_spot",
+  "bean_rust",
+  "healthy"
+ ],
+ "config": {
+  "name": "seedvar_beans_swin_t_res160_s6",
+  "schema_version": 1,
+  "task": "multiclass",
+  "block": "classification",
+  "model": {
+   "name": "swin_t",
+   "num_classes": 3,
+   "pretrained": true,
+   "weights_path": null,
+   "custom_model": null,
+   "timm_model": null
+  },
+  "training": {
+   "learning_rate": 0.0001,
+   "epochs": 20,
+   "batch_size": 32,
+   "early_stopping_patience": 5,
+   "optimizer": "adamw",
+   "weight_decay": 0.0,
+   "seed": 6,
+   "deterministic": true,
+   "mixed_precision": false,
+   "scheduler": {
+    "kind": "none",
+    "step_size": 10,
+    "gamma": 0.1,
+    "patience": 5,
+    "factor": 0.5,
+    "min_lr": 1e-06
+   }
+  },
+  "data": {
+   "base_dir": "Classification - beans",
+   "train_dir": "train",
+   "val_dir": "validation",
+   "test_dir": "test",
+   "num_workers": 0,
+   "pin_memory": true,
+   "transforms": {
+    "image_size": 160,
+    "augment": true,
+    "horizontal_flip": true,
+    "rotation_degrees": 10,
+    "color_jitter": false,
+    "normalize_mean": [
+     0.485,
+     0.456,
+     0.406
+    ],
+    "normalize_std": [
+     0.229,
+     0.224,
+     0.225
+    ]
+   },
+   "preprocessing": {
+    "steps": []
+   }
+  },
+  "output": {
+   "models_dir": "outputs\\models",
+   "graphics_dir": "outputs\\graphics",
+   "logs_dir": "outputs\\logs",
+   "reports_dir": "outputs\\reports"
+  },
+  "device": {
+   "kind": "cuda",
+   "gpu_ids": null
+  },
+  "classification": {
+   "mode": "train",
+   "checkpoint_path": null
+  },
+  "grid_search": null,
+  "random_search": null,
+  "cross_validation": null,
+  "transfer_learning": null,
+  "model_comparison": null,
+  "batch_prediction": null,
+  "export_onnx": null
+ },
+ "metrics": {
+  "best_val_loss": 0.0017974309448618442,
+  "best_epoch": 8,
+  "total_epochs": 13,
+  "test_accuracy": 0.96875,
+  "test_f1": 0.9689858069004164,
+  "test_precision": 0.9693446088794926,
+  "test_recall": 0.9688076781100037,
+  "test_auc_roc": 0.992795257637939
+ },
+ "history": [
+  {
+   "epoch": 1,
+   "train_loss": 0.4435993822460825,
+   "train_accuracy": 0.8123791102514507,
+   "val_loss": 0.09408649452961981,
+   "val_accuracy": 0.9699248120300752
+  },
+  {
+   "epoch": 2,
+   "train_loss": 0.12051912786608393,
+   "train_accuracy": 0.9593810444874274,
+   "val_loss": 0.019319536701368635,
+   "val_accuracy": 0.9849624060150376
+  },
+  {
+   "epoch": 3,
+   "train_loss": 0.07650186165207715,
+   "train_accuracy": 0.9700193423597679,
+   "val_loss": 0.017569204234314385,
+   "val_accuracy": 0.9924812030075187
+  },
+  {
+   "epoch": 4,
+   "train_loss": 0.04762569727079773,
+   "train_accuracy": 0.9854932301740812,
+   "val_loss": 0.08359627418876699,
+   "val_accuracy": 0.9473684210526315
+  },
+  {
+   "epoch": 5,
+   "train_loss": 0.05406125617269991,
+   "train_accuracy": 0.9816247582205029,
+   "val_loss": 0.01688646908150986,
+   "val_accuracy": 0.9924812030075187
+  },
+  {
+   "epoch": 6,
+   "train_loss": 0.03120063934616293,
+   "train_accuracy": 0.988394584139265,
+   "val_loss": 0.002513742849987466,
+   "val_accuracy": 1.0
+  },
+  {
+   "epoch": 7,
+   "train_loss": 0.03836101181205419,
+   "train_accuracy": 0.9825918762088974,
+   "val_loss": 0.021805154788307846,
+   "val_accuracy": 0.9849624060150376
+  },
+  {
+   "epoch": 8,
+   "train_loss": 0.057354975026100874,
+   "train_accuracy": 0.9758220502901354,
+   "val_loss": 0.0017974309448618442,
+   "val_accuracy": 1.0
+  },
+  {
+   "epoch": 9,
+   "train_loss": 0.019464939430525355,
+   "train_accuracy": 0.9932301740812379,
+   "val_loss": 0.01189516605809331,
+   "val_accuracy": 1.0
+  },
+  {
+   "epoch": 10,
+   "train_loss": 0.01653510792741806,
+   "train_accuracy": 0.9941972920696325,
+   "val_loss": 0.00279484639322618,
+   "val_accuracy": 1.0
+  },
+  {
+   "epoch": 11,
+   "train_loss": 0.04475224290967383,
+   "train_accuracy": 0.9835589941972921,
+   "val_loss": 0.025363488697621506,
+   "val_accuracy": 0.9924812030075187
+  },
+  {
+   "epoch": 12,
+   "train_loss": 0.06107438967393881,
+   "train_accuracy": 0.9806576402321083,
+   "val_loss": 0.0364028015290387,
+   "val_accuracy": 0.9699248120300752
+  },
+  {
+   "epoch": 13,
+   "train_loss": 0.014672302030676015,
+   "train_accuracy": 0.9961315280464217,
+   "val_loss": 0.004438659616425866,
+   "val_accuracy": 1.0
+  }
+ ],
+ "tests": [],
+ "warnings": [],
+ "metric_cis": {
+  "accuracy": {
+   "metric": "accuracy",
+   "value": 0.96875,
+   "ci_low": 0.9375,
+   "ci_high": 0.9921875,
+   "confidence": 0.95,
+   "n_resamples": 1000,
+   "n_samples": 128
+  },
+  "f1": {
+   "metric": "f1",
+   "value": 0.9689858069004164,
+   "ci_low": 0.936518203174157,
+   "ci_high": 0.9927232437468781,
+   "confidence": 0.95,
+   "n_resamples": 1000,
+   "n_samples": 128
+  },
+  "precision": {
+   "metric": "precision",
+   "value": 0.9693446088794926,
+   "ci_low": 0.9371196002578981,
+   "ci_high": 0.9937106918238993,
+   "confidence": 0.95,
+   "n_resamples": 1000,
+   "n_samples": 128
+  },
+  "recall": {
+   "metric": "recall",
+   "value": 0.9688076781100037,
+   "ci_low": 0.9366482640670815,
+   "ci_high": 0.9933333333333333,
+   "confidence": 0.95,
+   "n_resamples": 1000,
+   "n_samples": 128
+  },
+  "auc_roc": {
+   "metric": "auc_roc",
+   "value": 0.992795257637939,
+   "ci_low": 0.9813292123603757,
+   "ci_high": 0.999911730175324,
+   "confidence": 0.95,
+   "n_resamples": 1000,
+   "n_samples": 128
+  }
+ },
+ "artifacts": {
+  "model": "best_model.pth",
+  "graphics": [
+   "loss.png",
+   "accuracy.png",
+   "confusion_matrix.png",
+   "confusion_matrix_normalized.png",
+   "roc_curve.png",
+   "precision_recall_curve.png"
+  ],
+  "report": null
+ }
+}

@@ -7,6 +7,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+import visionforge.gui.api.submission as submission_mod
 from visionforge.gui.api import routes
 
 
@@ -23,7 +24,7 @@ def test_http_rejects_traversal_before_submission(
     def forbidden_submission(*args: Any, **kwargs: Any) -> None:
         pytest.fail("An unsafe experiment name reached job submission")
 
-    monkeypatch.setattr(routes, "_submit_job", forbidden_submission)
+    monkeypatch.setattr(submission_mod, "_submit_job", forbidden_submission)
     app = FastAPI()
     app.include_router(routes.router)
     config = {"name": name, "data": {"base_dir": str(tmp_path)}}

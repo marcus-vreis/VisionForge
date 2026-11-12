@@ -144,7 +144,7 @@ visionforge = ["gui/static/**"]
 [tool.ruff]
 line-length    = 88
 target-version = "py312"
-exclude        = [".venv", "build", "dist", "__pycache__", "outputs"]
+exclude        = [".venv", "build", "dist", "__pycache__", "outputs", "research/workflow_benchmark/results"]
 
 [tool.ruff.lint]
 select = [

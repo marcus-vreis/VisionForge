@@ -9,11 +9,21 @@ bump-my-version bump major     # 0.1.0 -> 1.0.0   breaking changes
 ```
 
 That single command rewrites every place a version literal lives, adds the
-changelog heading, commits, and tags — all atomically. Then:
+changelog heading, commits, and tags — all atomically. `main` and `development`
+are protected (see [Branch protection](#branch-protection-and-repository-settings)),
+so the bump runs on a release branch and reaches them through pull requests:
 
 ```bash
-git push && git push --tags
+git switch -c release/0.2.0 development
+bump-my-version bump minor              # commit + local tag v0.2.0 on this branch
+git push -u origin release/0.2.0        # the branch only, not the tag yet
 ```
+
+1. Open a PR from `release/0.2.0` into `development` and merge it with a merge
+   commit (not squash or rebase), so the tagged bump commit stays in history.
+2. Promote: open a PR from `development` into `main` and merge it with a merge
+   commit as well.
+3. Push the tag: `git push origin v0.2.0`.
 
 The `v*.*.*` tag triggers `.github/workflows/cd.yml`, which builds the wheel
 and sdist and publishes to PyPI via Trusted Publishing (OIDC — no token in the
@@ -70,15 +80,55 @@ python -c "import zipfile,glob; z=zipfile.ZipFile(glob.glob('dist/*.whl')[0]); p
 
 ## After publishing
 
-```bash
-pip install "visionforge-studio[cpu]" --force-reinstall
-visionforge --version
-visionforge selftest --quick
-```
-
 Install the published artifact in a throwaway environment and run it. The
 package index is the only place a packaging mistake shows up, and it shows up
-to users first otherwise.
+to users first otherwise. Then walk the checklist: after 0.21.0 the site kept
+saying 0.20.2 because nothing here asked for it. Replace `X.Y.Z` with the version.
+
+| Item | Command or where | Done when |
+|---|---|---|
+| PyPI | `pip install "visionforge-studio[cpu]==X.Y.Z" --force-reinstall && visionforge --version && visionforge selftest --quick` | the version prints and the selftest passes |
+| GitHub Release | `gh release view vX.Y.Z -R marcus-vreis/VisionForge` | notes are the CHANGELOG section, wheel and sdist attached |
+| Zenodo | `curl -s https://zenodo.org/api/records/23425765/versions/latest` | the record lists X.Y.Z; copy its version DOI |
+| CITATION.cff | `grep -n -e "^version" -e "^date-released" -e "^doi" CITATION.cff` | version and date match the release; `doi` stays the concept DOI |
+| INSTALL | `grep -n "0\.[0-9]*\.[0-9]*" docs/INSTALL.md` | no older version literal is left |
+| Screenshots | `gh issue list -R marcus-vreis/VisionForge -l documentation` and the README and site images | they show the released GUI, or an issue says why not |
+| Site | `python scripts/sync_site_release.py --dry-run` | the site home shows X.Y.Z (open a PR in `visionforge-site` otherwise) |
+| Milestone | `gh api repos/marcus-vreis/VisionForge/milestones` | the milestone is closed, open issues moved to the next one |
+
+`scripts/sync_site_release.py --dry-run` reads PyPI, the latest GitHub Release
+and the Zenodo concept record, counts the `0.x.y` literals in `CITATION.cff`,
+`docs/INSTALL.md` and the site home, and prints which ones should become the new
+version. It writes nothing and calls nothing in the site's repository; `--version
+X.Y.Z` overrides the PyPI lookup and the exit status is 1 while something lags.
+
+`cd.yml` ends with the `site-version-check` job, which runs the script with
+`--warn` after the GitHub Release exists: if the site does not show the tag's
+version it prints a `::warning::` annotation and still succeeds, so a release is
+never blocked by the site. Dispatching a deploy to the site repository from
+`cd.yml` is not set up: it needs a token with write access to that repository.
+
+## Branch protection and repository settings
+
+`main` holds released code and `development` is the integration branch
+(CONTRIBUTING, "Branch model"). The repository ruleset `pr-before-merge` is
+**active** on both:
+
+- a pull request is required to change either branch;
+- force-push and branch deletion are blocked;
+- required status checks: `pre-commit`, `frontend`,
+  `tests (ubuntu-latest, py3.13)` and `tests (windows-latest, py3.13)`;
+- the repository admin may bypass the ruleset only through a pull request, never
+  by pushing directly.
+
+Other repository settings that are on:
+
+- secret scanning and push protection (the product handles third-party tokens);
+- Dependabot security updates, plus the version updates configured in
+  `.github/dependabot.yml`;
+- the repository homepage and topics are set.
+
+`delete_branch_on_merge` stays off on purpose, so delete merged branches by hand.
 
 ## CI action runtimes
 

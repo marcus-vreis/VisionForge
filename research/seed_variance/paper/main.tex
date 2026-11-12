@@ -162,7 +162,9 @@ nothing else in the design changed.
 \begin{table*}[t]
 \centering
 \caption{Per-cell results (test accuracy, ten paired seeds). $\Delta$ is
-variant minus baseline with its bootstrap 95\% CI. Noise/effect is the baseline
+variant minus baseline with its percentile bootstrap 95\% CI, as pre-registered;
+with ten seeds it is narrower than a $t$ interval and tends to under-cover.
+Noise/effect is the baseline
 SD over $|\Delta|$. Reversal is the share of $k$-seed subsets whose mean
 difference has the opposite sign of the ten-seed $\Delta$. $n_{80}$ is the seeds
 needed for 80\% power.}
@@ -209,7 +211,11 @@ cell. The dash-dotted line marks 10\%.}
 correction with ten seeds (\NHolm{} of \NCells{}). The bootstrap CI excluded
 zero in \NCIExcludes{} cells whose paired test did not reach 0.05 even before
 correction; we report the pre-registered test as primary and note that the two
-procedures disagree at this sample size. The seeds needed for 80\% power ranged
+procedures disagree at this sample size. The replicated comparison also tests
+the two ablations against each other, which the protocol did not register: of
+these \NExploratory{} exploratory contrasts, \NExploratoryHolm{} survived Holm
+correction, \ExploratoryPair{} on \ExploratoryCell{}
+($\Delta=\ExploratoryDelta{}$, $p=\ExploratoryP{}$). The seeds needed for 80\% power ranged
 from \PowerMin{} to the hundreds of thousands, with median \PowerMedian{}; no
 cell needed ten or fewer. Reaching a reversal rate of at most 10\% within five
 seeds happened in \NStableCNN{} of \NCellsCNN{} CNN cells and \NStableTr{} of

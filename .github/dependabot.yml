@@ -1,0 +1,44 @@
+version: 2
+
+# Monthly, grouped version updates against `development` (the integration
+# branch). torch and torchvision are excluded: the build has to match the
+# hardware extra (cpu / cu118 ... cu128), so a bump is chosen by hand.
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: development
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: chore(deps)
+    groups:
+      github-actions:
+        patterns: ["*"]
+
+  - package-ecosystem: npm
+    directory: /frontend
+    target-branch: development
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: chore(deps)
+    groups:
+      npm:
+        patterns: ["*"]
+
+  - package-ecosystem: pip
+    directory: /
+    target-branch: development
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: chore(deps)
+    groups:
+      pip:
+        patterns: ["*"]
+    ignore:
+      - dependency-name: torch
+      - dependency-name: torchvision

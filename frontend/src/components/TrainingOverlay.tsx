@@ -114,6 +114,8 @@ export function TrainingOverlay({
     model_comparison: t.trainingOverlay.blocks.modelComparison,
     cross_validation: t.trainingOverlay.blocks.crossValidation,
     replicates: t.trainingOverlay.blocks.replicates,
+    // The queue names it by its route (ADR-193).
+    "replicated-comparison": t.trainingOverlay.blocks.replicatedComparison,
   };
   const queueLabel = blockKind ? queueBlocks[blockKind] : undefined;
   const isRunning = status.status === "running";

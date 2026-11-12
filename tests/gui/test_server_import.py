@@ -104,17 +104,17 @@ def test_lazy_packages_list_and_guard_their_names(package: str) -> None:
 def test_custom_task_engine_resolves_on_first_use(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from visionforge.gui.api import routes
+    from visionforge.gui.api import custom_task_routes as custom_tasks_mod
     from visionforge.tasks.engine import GenericTaskEngine
 
-    monkeypatch.setattr(routes, "GenericTaskEngine", None)
-    assert routes._generic_task_engine() is GenericTaskEngine
+    monkeypatch.setattr(custom_tasks_mod, "GenericTaskEngine", None)
+    assert custom_tasks_mod._generic_task_engine() is GenericTaskEngine
 
     class _Fake:
         pass
 
-    monkeypatch.setattr(routes, "GenericTaskEngine", _Fake)
-    assert routes._generic_task_engine() is _Fake
+    monkeypatch.setattr(custom_tasks_mod, "GenericTaskEngine", _Fake)
+    assert custom_tasks_mod._generic_task_engine() is _Fake
 
 
 @pytest.mark.parametrize(
@@ -127,7 +127,7 @@ def test_custom_task_engine_resolves_on_first_use(
 def test_cv_fronts_delegate_to_the_task_module(
     monkeypatch: pytest.MonkeyPatch, module_name: str, function_name: str
 ) -> None:
-    from visionforge.gui.api import routes
+    from visionforge.gui.api import strategies
 
     calls: list[tuple[object, dict[str, Any]]] = []
 
@@ -138,5 +138,5 @@ def test_cv_fronts_delegate_to_the_task_module(
     monkeypatch.setattr(f"{module_name}.{function_name}", fake)
     config = object()
 
-    assert getattr(routes, function_name)(config, n_folds=3, seed=7) == "report"
+    assert getattr(strategies, function_name)(config, n_folds=3, seed=7) == "report"
     assert calls == [(config, {"n_folds": 3, "seed": 7})]

@@ -17,6 +17,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
+import visionforge.gui.api.colab_run_routes as colab_run_mod
 import visionforge.gui.api.execution as execution_mod
 from visionforge.gui.api import colab_connection as cc
 from visionforge.gui.api import colab_jobs as cj
@@ -433,15 +434,14 @@ def test_colab_run_rejects_a_non_http_url() -> None:
 
 
 def test_colab_run_is_queued_with_a_vm_stop(monkeypatch: pytest.MonkeyPatch) -> None:
-    import visionforge.gui.api.routes as routes_mod
     from visionforge.gui.server import app
 
     monkeypatch.setattr(
-        routes_mod._COLAB_CLI, "installed_version", lambda: cc.PINNED_VERSION
+        colab_run_mod._COLAB_CLI, "installed_version", lambda: cc.PINNED_VERSION
     )
-    monkeypatch.setattr(routes_mod._COLAB_CLI, "logged_in", lambda slug: True)
+    monkeypatch.setattr(colab_run_mod._COLAB_CLI, "logged_in", lambda slug: True)
     monkeypatch.setattr(
-        routes_mod._COLAB_CLI, "account", lambda slug: "Ana@Example.com"
+        colab_run_mod._COLAB_CLI, "account", lambda slug: "Ana@Example.com"
     )
     # The account's queue is the busy one: the job waits there, not locally.
     occupy_queue(execution_mod, lane="colab:ana@example.com")
@@ -473,21 +473,19 @@ def test_colab_run_is_queued_with_a_vm_stop(monkeypatch: pytest.MonkeyPatch) -> 
 def test_two_profiles_on_one_account_share_its_queue(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import visionforge.gui.api.routes as routes_mod
 
     accounts = {"ana": "ana@example.com", "lab": "ANA@example.com", "bob": None}
-    monkeypatch.setattr(routes_mod._COLAB_CLI, "account", accounts.get)
+    monkeypatch.setattr(colab_run_mod._COLAB_CLI, "account", accounts.get)
 
-    assert routes_mod._colab_lane_of("ana") == routes_mod._colab_lane_of("lab")
-    assert routes_mod._colab_lane_of("ana") == "colab:ana@example.com"
+    assert colab_run_mod._colab_lane_of("ana") == colab_run_mod._colab_lane_of("lab")
+    assert colab_run_mod._colab_lane_of("ana") == "colab:ana@example.com"
     # A login whose e-mail was not reported gets a queue of its own.
-    assert routes_mod._colab_lane_of("bob") == "colab:profile:bob"
+    assert colab_run_mod._colab_lane_of("bob") == "colab:profile:bob"
 
 
 def test_execute_colab_records_the_report_and_closes_the_stream(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import visionforge.gui.api.routes as routes_mod
 
     class Jobs:
         def run_job(
@@ -496,11 +494,13 @@ def test_execute_colab_records_the_report_and_closes_the_stream(
             on_event({"event": "epoch_end", "epoch": 1})
             return cj.RemoteResult("completed", report={"accuracy": 0.8})
 
-    monkeypatch.setattr(routes_mod, "_COLAB_JOBS", Jobs())
+    monkeypatch.setattr(colab_run_mod, "_COLAB_JOBS", Jobs())
 
     async def go() -> list[dict[str, Any]]:
         start_job(execution_mod, "r1", log=RunEventLog("r1"))
-        await routes_mod._execute_colab("r1", "default", "T4", PAYLOAD, UNUSED_MODELS)
+        await colab_run_mod._execute_colab(
+            "r1", "default", "T4", PAYLOAD, UNUSED_MODELS
+        )
         await asyncio.sleep(0)
         return [e async for e in execution_mod._job_state("r1").log.read()]
 
@@ -517,13 +517,12 @@ def test_execute_colab_records_the_report_and_closes_the_stream(
 def test_colab_run_still_rejects_a_bad_config_before_paying_for_a_vm(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import visionforge.gui.api.routes as routes_mod
     from visionforge.gui.server import app
 
     monkeypatch.setattr(
-        routes_mod._COLAB_CLI, "installed_version", lambda: cc.PINNED_VERSION
+        colab_run_mod._COLAB_CLI, "installed_version", lambda: cc.PINNED_VERSION
     )
-    monkeypatch.setattr(routes_mod._COLAB_CLI, "logged_in", lambda slug: True)
+    monkeypatch.setattr(colab_run_mod._COLAB_CLI, "logged_in", lambda slug: True)
     client = TestClient(app)
     body = {
         "config": {**_config(), "training": {"epochs": 0}},
@@ -717,7 +716,6 @@ class SlowDeliveryLog(RunEventLog):
 def test_execute_colab_delivers_every_event_before_closing_the_stream(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import visionforge.gui.api.routes as routes_mod
 
     sent = [{"event": "batch", "batch": i} for i in range(20)]
 
@@ -729,11 +727,13 @@ def test_execute_colab_delivers_every_event_before_closing_the_stream(
                 on_event(event)
             return cj.RemoteResult("completed", report={})
 
-    monkeypatch.setattr(routes_mod, "_COLAB_JOBS", Jobs())
+    monkeypatch.setattr(colab_run_mod, "_COLAB_JOBS", Jobs())
 
     async def go() -> list[dict[str, Any]]:
         start_job(execution_mod, "r1", log=SlowDeliveryLog("r1"))
-        await routes_mod._execute_colab("r1", "default", "T4", PAYLOAD, UNUSED_MODELS)
+        await colab_run_mod._execute_colab(
+            "r1", "default", "T4", PAYLOAD, UNUSED_MODELS
+        )
         return [e async for e in execution_mod._job_state("r1").log.read()]
 
     try:
@@ -758,7 +758,6 @@ def test_execute_colab_has_each_event_in_the_log_when_on_event_returns(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Delivery cannot depend on how a loop orders thread callbacks (Linux py3.13 CI)."""
-    import visionforge.gui.api.routes as routes_mod
 
     sent = [{"event": "batch", "batch": i} for i in range(5)]
     log = RecordingLog("r1")
@@ -773,11 +772,13 @@ def test_execute_colab_has_each_event_in_the_log_when_on_event_returns(
                 landed_after_each.append(list(log.landed))
             return cj.RemoteResult("completed", report={})
 
-    monkeypatch.setattr(routes_mod, "_COLAB_JOBS", Jobs())
+    monkeypatch.setattr(colab_run_mod, "_COLAB_JOBS", Jobs())
 
     async def go() -> None:
         start_job(execution_mod, "r1", log=log)
-        await routes_mod._execute_colab("r1", "default", "T4", PAYLOAD, UNUSED_MODELS)
+        await colab_run_mod._execute_colab(
+            "r1", "default", "T4", PAYLOAD, UNUSED_MODELS
+        )
 
     try:
         asyncio.run(go())
@@ -799,7 +800,6 @@ class StalledLog(RunEventLog):
 def test_execute_colab_drops_an_event_the_loop_never_takes_and_finishes(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import visionforge.gui.api.routes as routes_mod
 
     class Jobs:
         def run_job(
@@ -808,12 +808,14 @@ def test_execute_colab_drops_an_event_the_loop_never_takes_and_finishes(
             on_event({"event": "epoch_end", "epoch": 1})
             return cj.RemoteResult("completed", report={"accuracy": 0.8})
 
-    monkeypatch.setattr(routes_mod, "_COLAB_JOBS", Jobs())
-    monkeypatch.setattr(routes_mod, "_COLAB_EVENT_TIMEOUT_S", 0.05)
+    monkeypatch.setattr(colab_run_mod, "_COLAB_JOBS", Jobs())
+    monkeypatch.setattr(colab_run_mod, "_COLAB_EVENT_TIMEOUT_S", 0.05)
 
     async def go() -> list[dict[str, Any]]:
         start_job(execution_mod, "r1", log=StalledLog("r1"))
-        await routes_mod._execute_colab("r1", "default", "T4", PAYLOAD, UNUSED_MODELS)
+        await colab_run_mod._execute_colab(
+            "r1", "default", "T4", PAYLOAD, UNUSED_MODELS
+        )
         return [e async for e in execution_mod._job_state("r1").log.read()]
 
     try:

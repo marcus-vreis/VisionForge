@@ -1,0 +1,258 @@
+{
+ "id": "seedvar_beans_convnext_tiny_res160_s1_20261016_142600_469274",
+ "experiment": "seedvar_beans_convnext_tiny_res160_s1",
+ "timestamp": "2026-10-16T14:28:13.799333",
+ "status": "completed",
+ "stopped": false,
+ "device_used": "cuda:0 (NVIDIA GeForce RTX 5060 Ti)",
+ "environment": {
+  "python": "3.13.16",
+  "platform": "Windows-11-10.0.26300-SP0",
+  "torch": "2.7.1+cu128",
+  "torchvision": "0.22.1+cu128",
+  "numpy": "2.4.3",
+  "visionforge": "unknown",
+  "cuda": "12.8",
+  "cudnn": "90701",
+  "gpu": "NVIDIA GeForce RTX 5060 Ti"
+ },
+ "dataset_fingerprint": {
+  "digest": "c02e292ff86a8a1d33a0ef30f5dd5453e8e558db0a1838174af34e2fda24adf4",
+  "method": "manifest",
+  "n_files": 1295,
+  "total_bytes": 662636838,
+  "root": "Classification - beans",
+  "note": "paths+sizes only: a modification that preserves file size is not detected"
+ },
+ "run_dir": ".",
+ "class_names": [
+  "angular_leaf_spot",
+  "bean_rust",
+  "healthy"
+ ],
+ "config": {
+  "name": "seedvar_beans_convnext_tiny_res160_s1",
+  "schema_version": 1,
+  "task": "multiclass",
+  "block": "classification",
+  "model": {
+   "name": "convnext_tiny",
+   "num_classes": 3,
+   "pretrained": true,
+   "weights_path": null,
+   "custom_model": null,
+   "timm_model": null
+  },
+  "training": {
+   "learning_rate": 0.0001,
+   "epochs": 20,
+   "batch_size": 32,
+   "early_stopping_patience": 5,
+   "optimizer": "adamw",
+   "weight_decay": 0.0,
+   "seed": 1,
+   "deterministic": true,
+   "mixed_precision": false,
+   "scheduler": {
+    "kind": "none",
+    "step_size": 10,
+    "gamma": 0.1,
+    "patience": 5,
+    "factor": 0.5,
+    "min_lr": 1e-06
+   }
+  },
+  "data": {
+   "base_dir": "Classification - beans",
+   "train_dir": "train",
+   "val_dir": "validation",
+   "test_dir": "test",
+   "num_workers": 0,
+   "pin_memory": true,
+   "transforms": {
+    "image_size": 160,
+    "augment": true,
+    "horizontal_flip": true,
+    "rotation_degrees": 10,
+    "color_jitter": false,
+    "normalize_mean": [
+     0.485,
+     0.456,
+     0.406
+    ],
+    "normalize_std": [
+     0.229,
+     0.224,
+     0.225
+    ]
+   },
+   "preprocessing": {
+    "steps": []
+   }
+  },
+  "output": {
+   "models_dir": "outputs\\models",
+   "graphics_dir": "outputs\\graphics",
+   "logs_dir": "outputs\\logs",
+   "reports_dir": "outputs\\reports"
+  },
+  "device": {
+   "kind": "cuda",
+   "gpu_ids": null
+  },
+  "classification": {
+   "mode": "train",
+   "checkpoint_path": null
+  },
+  "grid_search": null,
+  "random_search": null,
+  "cross_validation": null,
+  "transfer_learning": null,
+  "model_comparison": null,
+  "batch_prediction": null,
+  "export_onnx": null
+ },
+ "metrics": {
+  "best_val_loss": 0.005578860407695174,
+  "best_epoch": 5,
+  "total_epochs": 10,
+  "test_accuracy": 0.96875,
+  "test_f1": 0.9689858069004164,
+  "test_precision": 0.9693446088794926,
+  "test_recall": 0.9688076781100037,
+  "test_auc_roc": 0.9973552211582307
+ },
+ "history": [
+  {
+   "epoch": 1,
+   "train_loss": 0.4886589849537069,
+   "train_accuracy": 0.8268858800773694,
+   "val_loss": 0.10678633153438569,
+   "val_accuracy": 0.9624060150375939
+  },
+  {
+   "epoch": 2,
+   "train_loss": 0.09129878062980645,
+   "train_accuracy": 0.971953578336557,
+   "val_loss": 0.01733078113757074,
+   "val_accuracy": 1.0
+  },
+  {
+   "epoch": 3,
+   "train_loss": 0.03050383165563372,
+   "train_accuracy": 0.9912959381044487,
+   "val_loss": 0.018546478217467667,
+   "val_accuracy": 0.9849624060150376
+  },
+  {
+   "epoch": 4,
+   "train_loss": 0.0347599337216128,
+   "train_accuracy": 0.9864603481624759,
+   "val_loss": 0.006716793111991137,
+   "val_accuracy": 1.0
+  },
+  {
+   "epoch": 5,
+   "train_loss": 0.02333569960936791,
+   "train_accuracy": 0.9932301740812379,
+   "val_loss": 0.005578860407695174,
+   "val_accuracy": 1.0
+  },
+  {
+   "epoch": 6,
+   "train_loss": 0.015384862164148328,
+   "train_accuracy": 0.995164410058027,
+   "val_loss": 0.027441802673274653,
+   "val_accuracy": 0.9924812030075187
+  },
+  {
+   "epoch": 7,
+   "train_loss": 0.006885981928049164,
+   "train_accuracy": 0.9980657640232108,
+   "val_loss": 0.01621164525859058,
+   "val_accuracy": 0.9924812030075187
+  },
+  {
+   "epoch": 8,
+   "train_loss": 0.007329212339369185,
+   "train_accuracy": 0.9980657640232108,
+   "val_loss": 0.085721523113898,
+   "val_accuracy": 0.9774436090225563
+  },
+  {
+   "epoch": 9,
+   "train_loss": 0.015799851994608725,
+   "train_accuracy": 0.9932301740812379,
+   "val_loss": 0.01520904033095576,
+   "val_accuracy": 0.9849624060150376
+  },
+  {
+   "epoch": 10,
+   "train_loss": 0.0026474036523282075,
+   "train_accuracy": 1.0,
+   "val_loss": 0.012023361861065496,
+   "val_accuracy": 0.9924812030075187
+  }
+ ],
+ "tests": [],
+ "warnings": [],
+ "metric_cis": {
+  "accuracy": {
+   "metric": "accuracy",
+   "value": 0.96875,
+   "ci_low": 0.9375,
+   "ci_high": 0.9923828124999998,
+   "confidence": 0.95,
+   "n_resamples": 1000,
+   "n_samples": 128
+  },
+  "f1": {
+   "metric": "f1",
+   "value": 0.9689858069004164,
+   "ci_low": 0.9341531678460857,
+   "ci_high": 0.9934236075625957,
+   "confidence": 0.95,
+   "n_resamples": 1000,
+   "n_samples": 128
+  },
+  "precision": {
+   "metric": "precision",
+   "value": 0.9693446088794926,
+   "ci_low": 0.934912518037518,
+   "ci_high": 0.9941964285714284,
+   "confidence": 0.95,
+   "n_resamples": 1000,
+   "n_samples": 128
+  },
+  "recall": {
+   "metric": "recall",
+   "value": 0.9688076781100037,
+   "ci_low": 0.9348715728715729,
+   "ci_high": 0.9937499999999999,
+   "confidence": 0.95,
+   "n_resamples": 1000,
+   "n_samples": 128
+  },
+  "auc_roc": {
+   "metric": "auc_roc",
+   "value": 0.9973552211582307,
+   "ci_low": 0.9922526864898356,
+   "ci_high": 1.0,
+   "confidence": 0.95,
+   "n_resamples": 1000,
+   "n_samples": 128
+  }
+ },
+ "artifacts": {
+  "model": "best_model.pth",
+  "graphics": [
+   "loss.png",
+   "accuracy.png",
+   "confusion_matrix.png",
+   "confusion_matrix_normalized.png",
+   "roc_curve.png",
+   "precision_recall_curve.png"
+  ],
+  "report": null
+ }
+}

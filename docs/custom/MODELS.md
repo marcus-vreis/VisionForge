@@ -58,6 +58,24 @@ Detection and anomaly have their own model paths and do not read
 
 Detecção e anomalia têm caminhos próprios de modelo e não leem `custom_model`.
 
+## Stability · Estabilidade
+
+Before 1.0 the extension API may change, but not by accident. What is stable:
+`@register_model("name")` on a function that takes one `int` (the task's output
+dimension) and returns an `nn.Module`, and `build_custom_model(name, *,
+num_outputs, user_models_dir=None)`. A change to either lands only in a minor
+release, with an entry under "Changed" in the CHANGELOG, never in a patch.
+`tests/tasks/test_task_api_contract.py` pins the signatures (ADR-190). There is
+no API version number to check yet; the release notes are the signal.
+
+Antes da 1.0 a API de extensão pode mudar, mas não por acidente. É estável:
+`@register_model("nome")` numa função que recebe um `int` (a dimensão de saída
+da tarefa) e devolve um `nn.Module`, e `build_custom_model(name, *,
+num_outputs, user_models_dir=None)`. Uma mudança nesses pontos só entra numa
+versão minor, com entrada em "Changed" no CHANGELOG, nunca num patch. O teste
+`tests/tasks/test_task_api_contract.py` trava as assinaturas. Não há número de
+versão da API; as notas de release são o aviso.
+
 ## Notes · Observações
 
 - Files starting with `_` are ignored, so shared helpers can live in the same

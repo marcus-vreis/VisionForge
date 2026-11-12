@@ -120,6 +120,30 @@ todos os contratos através do `ctx`.
 - This runs **your own local Python** on your own machine (ADR-005/048).
   Nothing is fetched from the network — the trust boundary is your filesystem.
 
+## Stability · Estabilidade
+
+Before 1.0 the extension API may change, but not by accident. What is stable:
+the four hooks of `TaskSpec` (`build_model(cfg)`, `build_loaders(cfg)`,
+`compute_loss(model, batch, cfg)`, `compute_metrics(model, loader, cfg)`), the
+optional Level 2 `run(cfg, ctx)`, the `Config` class variable, the fields of
+`BaseTaskConfig`, the keyword-only arguments of `register_task` and the
+attributes `ctx` offers a Level 2 run (`run_dir`, `device`, `device_label`,
+`emit`, `save_checkpoint`). A change to any of them lands only in a minor
+release, with an entry under "Changed" in the CHANGELOG, never in a patch.
+`tests/tasks/test_task_api_contract.py` pins these names, so a rename fails CI
+until the change is made on purpose (ADR-190). There is no API version number
+to check yet; the release notes are the signal. Anything not listed here,
+including the engine's internals, can change at any time.
+
+Antes da 1.0 a API de extensão pode mudar, mas não por acidente. É estável: os
+quatro hooks do `TaskSpec`, o `run(cfg, ctx)` opcional do Nível 2, a variável
+de classe `Config`, os campos de `BaseTaskConfig`, os parâmetros nomeados de
+`register_task` e o que o `ctx` oferece. Uma mudança nesses pontos só entra
+numa versão minor, com entrada em "Changed" no CHANGELOG, nunca num patch. O
+teste `tests/tasks/test_task_api_contract.py` trava esses nomes. Não há número
+de versão da API para consultar; as notas de release são o aviso. O que não
+está listado aqui, incluindo o interior do motor, pode mudar a qualquer momento.
+
 ## Working example · Exemplo funcional
 
 `user_tasks/example_counting/task.py` registers **Contagem (exemplo)**: a tiny

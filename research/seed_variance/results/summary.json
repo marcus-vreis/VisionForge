@@ -519,5 +519,97 @@
       "verdict": "rejected"
     }
   },
+  "exploratory_contrasts": [
+    {
+      "dataset": "usk_full",
+      "architecture": "resnet18",
+      "label_a": "no_aug",
+      "label_b": "res160",
+      "b_minus_a": 0.030000000000000027,
+      "test": "paired_t",
+      "p_value": 0.007164201159908834,
+      "significant_holm": true
+    },
+    {
+      "dataset": "usk_full",
+      "architecture": "convnext_tiny",
+      "label_a": "no_aug",
+      "label_b": "res160",
+      "b_minus_a": -0.007437499999999986,
+      "test": "paired_t",
+      "p_value": 0.3239818148221971,
+      "significant_holm": false
+    },
+    {
+      "dataset": "usk_full",
+      "architecture": "swin_t",
+      "label_a": "no_aug",
+      "label_b": "res160",
+      "b_minus_a": -0.0008750000000000702,
+      "test": "paired_t",
+      "p_value": 0.90344440617544,
+      "significant_holm": false
+    },
+    {
+      "dataset": "usk_10pct",
+      "architecture": "resnet18",
+      "label_a": "no_aug",
+      "label_b": "res160",
+      "b_minus_a": 0.03518749999999993,
+      "test": "paired_t",
+      "p_value": 0.07438017876109988,
+      "significant_holm": false
+    },
+    {
+      "dataset": "usk_10pct",
+      "architecture": "convnext_tiny",
+      "label_a": "no_aug",
+      "label_b": "res160",
+      "b_minus_a": -0.005249999999999977,
+      "test": "paired_t",
+      "p_value": 0.2978896430154928,
+      "significant_holm": false
+    },
+    {
+      "dataset": "usk_10pct",
+      "architecture": "swin_t",
+      "label_a": "no_aug",
+      "label_b": "res160",
+      "b_minus_a": 0.004750000000000143,
+      "test": "paired_t",
+      "p_value": 0.6372910420143499,
+      "significant_holm": false
+    },
+    {
+      "dataset": "beans",
+      "architecture": "resnet18",
+      "label_a": "no_aug",
+      "label_b": "res160",
+      "b_minus_a": -0.0234375,
+      "test": "paired_t",
+      "p_value": 0.08112618884584057,
+      "significant_holm": false
+    },
+    {
+      "dataset": "beans",
+      "architecture": "convnext_tiny",
+      "label_a": "no_aug",
+      "label_b": "res160",
+      "b_minus_a": 0.004687499999999956,
+      "test": "paired_t",
+      "p_value": 0.08112618884584057,
+      "significant_holm": false
+    },
+    {
+      "dataset": "beans",
+      "architecture": "swin_t",
+      "label_a": "no_aug",
+      "label_b": "res160",
+      "b_minus_a": -0.007031250000000044,
+      "test": "paired_t",
+      "p_value": 0.09465570582843714,
+      "significant_holm": false
+    }
+  ],
   "missing": []
 }
