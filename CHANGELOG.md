@@ -166,6 +166,10 @@ reasoning lives in [`docs/dev/DECISIONS.md`](docs/dev/DECISIONS.md).
 - MLflow local e Weights & Biases recebem também regressão, segmentação, anomalia, detecção e tarefas próprias: ao fim do treino, o `run.json` vai com a config pública, o histórico de cada época e as métricas finais com os nomes do `run.json`; o **repetir** do Histórico vale para qualquer tarefa (ADR-197) (#286)
 - As imagens do README saem de `scripts/capture_docs_images.py`: a GUI deste checkout num workspace isolado, `--offline` e sem GPU, com a versão do cabeçalho oculta (checado no DOM), capturando classificação, Réplicas, a aba **Código** e o canto do Colab; `docs/images/README.md` registra commit, versão, data e dimensões, e `--check` falha se faltar imagem (#221).
 
+### Security
+
+- Dependências sem as faixas vulneráveis apontadas pelo Dependabot: anyio, datasets, filelock, fsspec, idna, mako, multidict, pydantic-settings, pygments, pytest, setuptools, virtualenv e werkzeug no `uv.lock`; brace-expansion no `package-lock.json` (#300). O torch fica para uma issue própria, porque trocar a versão exige validar a build CUDA na GPU.
+
 ### Fixed
 
 - A tabela de testes pareados de uma comparação mostra o IC 95% da diferença a−b, que o backend já calculava (ADR-187), com o método (t de Student ou Hodges-Lehmann), o ponto central e a cobertura real na dica. Um extremo que os dados não limitam aparece como "aberto".
