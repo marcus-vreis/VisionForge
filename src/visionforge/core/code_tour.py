@@ -1400,7 +1400,7 @@ def _section(section: Section, settings: Mapping[str, str]) -> dict[str, Any] | 
         try:
             target = section.target()
             library = _library(section.library)
-        except (ImportError, AttributeError, importlib.metadata.PackageNotFoundError):
+        except (ImportError, AttributeError):  # PackageNotFoundError is an ImportError
             return None
     raw, first_line = inspect.getsourcelines(target)
     lines = textwrap.dedent("".join(raw)).rstrip("\n").split("\n")
