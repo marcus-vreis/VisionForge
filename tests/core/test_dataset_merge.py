@@ -318,7 +318,8 @@ class TestSafety:
     ) -> None:
         before = (_tree_hash(ds_a), _tree_hash(ds_b))
         _merge(ds_a, ds_b, {"a": {"cat": "feline"}, "b": {"bird": None}})
-        assert (_tree_hash(ds_a), _tree_hash(ds_b)) == before
+        after = (_tree_hash(ds_a), _tree_hash(ds_b))
+        assert after == before
 
     def test_the_result_is_a_sibling_of_a(
         self, tmp_path: Path, ds_a: Path, ds_b: Path
@@ -656,7 +657,8 @@ class TestDetection:
     def test_both_originals_are_untouched(self, yolo_a: Path, yolo_b: Path) -> None:
         before = (_tree_hash(yolo_a), _tree_hash(yolo_b))
         _merge(yolo_a, yolo_b, {"a": {"apple": "fruit"}}, task="detection")
-        assert (_tree_hash(yolo_a), _tree_hash(yolo_b)) == before
+        after = (_tree_hash(yolo_a), _tree_hash(yolo_b))
+        assert after == before
 
     def test_renamed_class_to_the_same_name_in_both_merges_boxes(
         self, yolo_a: Path, yolo_b: Path

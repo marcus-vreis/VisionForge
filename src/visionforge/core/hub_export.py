@@ -18,11 +18,15 @@ _MAX_RECORD = 16 * 1024 * 1024
 _EXTENSIONS = {".pt", ".pth", ".onnx", ".safetensors"}
 _RECORD = "run.json"
 _MANIFEST = "manifest.json"
-_PRIVATE = re.compile(
-    r"config|secret|credential|token|password|dataset|(?:^|[_-])(?:logs?|data|keys?)(?:$|[_-])",
-    re.I,
-)
+# Two patterns, one condition: a private word anywhere, or a short one as a
+# whole ``_``/``-`` separated part (``logs`` but not ``catalog``).
+_PRIVATE_WORDS = re.compile(r"config|secret|credential|token|password|dataset", re.I)
+_PRIVATE_PARTS = re.compile(r"(?:^|[_-])(?:logs?|data|keys?)(?:$|[_-])", re.I)
 _TASKS = {"classification", "detection", "regression", "segmentation", "anomaly"}
+
+
+def _is_private(stem: str) -> bool:
+    return bool(_PRIVATE_WORDS.search(stem) or _PRIVATE_PARTS.search(stem))
 
 
 class HubExportError(RuntimeError):
@@ -128,7 +132,7 @@ def _safe_file(root: Path, value: str) -> Path:
     except ValueError:
         raise ValueError("Artifact is outside the selected run") from None
     if not relative.parts or any(
-        part in {".", ".."} or part.startswith(".") or _PRIVATE.search(Path(part).stem)
+        part in {".", ".."} or part.startswith(".") or _is_private(Path(part).stem)
         for part in relative.parts
     ):
         raise ValueError("Unsafe artifact path")

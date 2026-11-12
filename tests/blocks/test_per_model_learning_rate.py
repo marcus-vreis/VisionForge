@@ -166,9 +166,11 @@ class TestComparisonPolicy:
         rates = _run_comparison(ExperimentConfig.model_validate(raw))
         assert rates == {"vgg16": 1e-2, "resnet50": 1e-2}
 
-    def test_rate_reaches_every_report_artifact(self, tmp_path: Path) -> None:
+    def test_rate_reaches_every_report_artifact(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         config = _comparison(tmp_path, lr_policy="suggested")
-        _FakeRunner.seen = []
+        monkeypatch.setattr(_FakeRunner, "seen", [], raising=False)
         block = ModelComparisonBlock()
         block.setup(config)
         with (
@@ -196,10 +198,12 @@ class TestComparisonPolicy:
         assert vgg["effective_learning_rate"] == 1e-4
         assert vgg["overrides"][LR_AXIS] == 1e-4
 
-    def test_fixed_history_row_keeps_its_overrides(self, tmp_path: Path) -> None:
+    def test_fixed_history_row_keeps_its_overrides(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         block = ModelComparisonBlock()
         block.setup(_comparison(tmp_path))
-        _FakeRunner.seen = []
+        monkeypatch.setattr(_FakeRunner, "seen", [], raising=False)
         with (
             patch(
                 "visionforge.blocks.model_comparison.ClassificationRunner", _FakeRunner

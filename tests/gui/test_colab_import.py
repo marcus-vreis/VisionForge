@@ -73,6 +73,25 @@ def test_the_bundle_is_downloaded_before_the_vm_stops(tmp_path: Path) -> None:
     assert {"event": "remote", "stage": "download", "session": download[2]} in events
 
 
+def test_the_downloaded_result_keeps_the_report_and_the_remote_bundle(
+    tmp_path: Path,
+) -> None:
+    data = _bundle_bytes(tmp_path)
+    remote = {"path": REMOTE, "size": len(data)}
+    report = {"best_val_loss": 0.4}
+    end = {"event": "job_end", "status": "ok", "report": report, "bundle": remote}
+    cli = FakeCli([event_line(end)])
+    cli.download_bytes = data
+
+    result, _ = run(cli)
+
+    assert result.outcome == "completed"
+    assert result.report == report
+    assert result.error is None
+    assert result.remote_bundle == remote
+    assert result.bundle is not None
+
+
 def test_a_failed_download_fails_the_job_and_still_stops_the_vm(
     tmp_path: Path,
 ) -> None:
