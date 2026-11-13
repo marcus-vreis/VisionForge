@@ -1,15 +1,14 @@
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useState } from "react";
 import {
   deleteCometToken, fetchCometToken, saveCometToken, updateProfile,
   type CometSettings, type HubTokenStatus,
 } from "../api/client";
 import { useT } from "../i18n/useT";
 import type { ProfileInfo } from "../lib/profile";
+import { TRACKER_FIELD as FIELD, TRACKER_HINT, TRACKER_LABEL } from "./trackerStyles";
+import { TrackerSwitch } from "./TrackerSwitch";
+import { CometIcon } from "./ui/BrandIcons";
 
-const FIELD: CSSProperties = {
-  background: "var(--vf-panel)", color: "var(--vf-text)", padding: 6,
-  border: "1px solid var(--vf-panel-stroke)", borderRadius: 6, maxWidth: "100%",
-};
 const DEFAULTS: CometSettings = { enabled: false, project: "visionforge", workspace: "" };
 
 /** One profile's Comet export: on/off, private destination and API key (ADR-200). */
@@ -55,21 +54,21 @@ export function CometProfileSettings({ profile, onSaved }: {
 
   const changed = project.trim() !== saved.project || workspace.trim() !== saved.workspace;
   return <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-    <label><input type="checkbox" checked={saved.enabled} disabled={busy}
-      onChange={(e) => void save({ enabled: e.target.checked })} /> {t.comet.label}</label>
-    <div>{t.comet.hint}</div>
+    <TrackerSwitch icon={<CometIcon size={18} />} label={t.comet.label} checked={saved.enabled}
+      disabled={busy} onChange={(enabled) => void save({ enabled })} />
+    <div style={TRACKER_HINT}>{t.comet.hint}</div>
     {saved.enabled && <>
-      <label>{t.comet.project} <input value={project} disabled={busy} style={FIELD}
+      <label style={TRACKER_LABEL}>{t.comet.project} <input value={project} disabled={busy} style={FIELD}
         onChange={(e) => setProject(e.target.value)} /></label>
-      <label>{t.comet.workspace} <input value={workspace} disabled={busy} style={FIELD}
+      <label style={TRACKER_LABEL}>{t.comet.workspace} <input value={workspace} disabled={busy} style={FIELD}
         placeholder={t.comet.workspaceHint} onChange={(e) => setWorkspace(e.target.value)} /></label>
-      <button type="button" disabled={busy || !changed || !project.trim()}
+      <button type="button" style={{ alignSelf: "flex-start" }} disabled={busy || !changed || !project.trim()}
         onClick={() => void save({ project: project.trim(), workspace: workspace.trim() })}>{t.comet.saveTarget}</button>
       {keyStatus?.shared && <div role="alert">{t.comet.shared}</div>}
       {keyStatus?.configured && <div>{t.comet.configured}</div>}
-      <label>{t.comet.token} <input type="password" autoComplete="new-password" value={token}
+      <label style={TRACKER_LABEL}>{t.comet.token} <input type="password" autoComplete="new-password" value={token}
         disabled={busy} style={FIELD} onChange={(e) => setToken(e.target.value)} /></label>
-      <div>{t.comet.tokenHint}</div>
+      <div style={TRACKER_HINT}>{t.comet.tokenHint}</div>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <button type="button" disabled={busy || !token.trim()}
           onClick={() => void credentials(false)}>{t.comet.saveToken}</button>

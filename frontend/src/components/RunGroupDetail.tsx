@@ -35,7 +35,7 @@ const thStyle: CSSProperties = {
   textAlign: "left",
   padding: "6px 8px",
   borderBottom: "1px solid var(--vf-panel-stroke)",
-  fontSize: 9,
+  fontSize: 11,
   letterSpacing: "0.14em",
   textTransform: "uppercase",
   color: "var(--vf-text-muted)",
@@ -51,7 +51,7 @@ const tdStyle: CSSProperties = {
 const tdLabelStyle: CSSProperties = {
   ...tdStyle,
   color: "var(--vf-text-muted)",
-  fontSize: 10,
+  fontSize: 13,
 };
 
 const tableBoxStyle: CSSProperties = {
@@ -66,12 +66,12 @@ const tableStyle: CSSProperties = {
   width: "100%",
   borderCollapse: "collapse",
   fontFamily: "var(--font-mono)",
-  fontSize: 11,
+  fontSize: 13,
 };
 
 const noteStyle: CSSProperties = {
   fontFamily: "var(--font-mono)",
-  fontSize: 10,
+  fontSize: 13,
   lineHeight: 1.5,
   color: "var(--vf-text-muted)",
 };
@@ -92,7 +92,7 @@ function GroupSection({ title, children }: { title: string; children: ReactNode 
       <div
         style={{
           fontFamily: "var(--font-mono)",
-          fontSize: 10,
+          fontSize: 11,
           letterSpacing: "0.18em",
           textTransform: "uppercase",
           color: "var(--vf-text-muted)",
@@ -118,7 +118,7 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
       <span
         style={{
           fontFamily: "var(--font-mono)",
-          fontSize: 10,
+          fontSize: 11,
           color: "var(--vf-text-muted)",
           letterSpacing: "0.10em",
           textTransform: "uppercase",
@@ -130,7 +130,7 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
       <span
         style={{
           fontFamily: "var(--font-mono)",
-          fontSize: 11,
+          fontSize: 13,
           color: "var(--vf-text)",
           wordBreak: "break-all",
         }}
@@ -191,7 +191,7 @@ function OpenRun({
         borderRadius: 6,
         color: "var(--vf-text)",
         fontFamily: "var(--font-mono)",
-        fontSize: 10,
+        fontSize: 11,
         letterSpacing: "0.10em",
         textTransform: "uppercase",
         cursor: "pointer",

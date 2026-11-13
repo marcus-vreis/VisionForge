@@ -691,13 +691,15 @@ const GridContext = createContext<GridContextValue>({
 
 const gridAddBtnStyle: React.CSSProperties = {
   marginTop: 8,
-  padding: "5px 10px",
+  width: "100%",
+  minHeight: 40,
+  padding: "10px 14px",
   background: "var(--accent-soft)",
   border: "1px solid var(--accent-vf)",
-  borderRadius: 7,
+  borderRadius: 10,
   color: "var(--vf-text)",
   fontFamily: "var(--font-mono)",
-  fontSize: 10.5,
+  fontSize: 11.5,
   letterSpacing: "0.08em",
   textTransform: "uppercase",
   cursor: "pointer",
@@ -705,24 +707,26 @@ const gridAddBtnStyle: React.CSSProperties = {
 
 const gridRowControlStyle: React.CSSProperties = {
   flex: 1,
-  padding: "8px 10px",
+  minWidth: 0,
+  padding: "12px 14px",
   background: "rgb(var(--lt-shade, 0 0 0) / 0.30)",
   border: "1px solid var(--vf-panel-stroke)",
-  borderRadius: 8,
+  borderRadius: 10,
   fontFamily: "var(--font-mono)",
-  fontSize: 12,
+  fontSize: 13,
   color: "var(--vf-text)",
   outline: "none",
 };
 
 const gridRemoveBtnStyle: React.CSSProperties = {
-  width: 30,
-  height: 30,
+  width: 44,
+  alignSelf: "stretch",
+  minHeight: 44,
   flexShrink: 0,
   padding: 0,
   background: "transparent",
   border: "1px solid var(--vf-panel-stroke)",
-  borderRadius: 8,
+  borderRadius: 10,
   color: "var(--vf-text-dim)",
   fontFamily: "var(--font-mono)",
   fontSize: 14,
@@ -738,7 +742,7 @@ const gridErrStyle: React.CSSProperties = {
 
 const gridAxisTagStyle: React.CSSProperties = {
   fontFamily: "var(--font-mono)",
-  fontSize: 10,
+  fontSize: 11,
   letterSpacing: "0.18em",
   textTransform: "uppercase",
   color: "var(--vf-text-muted)",
@@ -808,13 +812,14 @@ function GridAxisExtension({
         const err = validateGridValue(t, name, schema, v);
         return (
           <div key={i}>
-            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            <div style={{ display: "flex", gap: 6, alignItems: "stretch" }}>
               {enumOpts ? (
                 <MenuSelect
                   value={String(v)}
                   onChange={(nv) => setExtra(i, nv)}
                   options={enumOpts.map(String)}
                   minWidth={150}
+                  size="field"
                 />
               ) : (
                 <input
@@ -829,6 +834,7 @@ function GridAxisExtension({
                 type="button"
                 onClick={() => removeExtra(i)}
                 title={t.paramPanel.grid.removeValue}
+                aria-label={t.paramPanel.grid.removeValue}
                 style={gridRemoveBtnStyle}
               >
                 ×

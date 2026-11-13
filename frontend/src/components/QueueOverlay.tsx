@@ -353,7 +353,7 @@ export function JobRow({
         >
           {jobOrigin(t, job)} · {taskLabel(t, job.task)} · {strategyLabel(t, job.strategy)} ·{" "}
           {showProfile && (
-            <>{t.profile.queueOwner(jobProfileLabel(job, t.profile.defaultShort))} · </>
+            <>{t.profile.queueOwner(jobProfileLabel(job, t.profile.unnamed))} · </>
           )}
           {running
             ? t.queueOverlay.running

@@ -8140,3 +8140,100 @@ Not done, on purpose: AMP stays CUDA-only; `pin_memory` stays as configured (MPS
 - *Set an existing public project to private.* It would change a project the user configured on purpose, as in ADR-172.
 - *Ask Comet which steps it already has before a retry.* More of the private REST surface for each retry; the sidecar is local and enough.
 - *`Experiment`/`ExistingExperiment` directly.* `start(mode="get_or_create")` already picks between them by key and passes the same explicit settings to both.
+
+## ADR-201 — A run's History entry is its results page
+
+**Date:** 2026-11-12
+**Status:** Accepted
+**Amends:** ADR-193 (the results view sends to History), ADR-113 (run groups in History)
+
+**Context:** a finished training had two places that showed its numbers: the results view the training sheet opened ("Ver resultados") and the run's detail in History. The first had the numbers and nothing to do with them; the second had every action (rerun, bundle, publish, ONNX, tests) under a wall of paths and library versions, with the metrics at the bottom. Charts were drawn by two separate hand-written SVGs with only the min and max labelled, and no way to read a value.
+
+**Decision:**
+
+- "Ver resultados" opens History on the finished job. `lib/history-target.ts` names the entry from the result the server sent: the folder of `report.train` / `report.detection` / a custom task's `run_dir`; the job id for a strategies job (its report carries `report_dir`); and for classification's K-fold, search and model comparison, whose group id carries a stamp the result does not have, the group of one of its units. History retries the lookup four times, 750 ms apart, since the entry is written as the job closes.
+- A job History cannot name (no folder in the report, a group that was not written, a search run on Colab whose units stayed on the VM) keeps the results view. The view is not removed.
+- The run detail reads as a results page (`lib/run-detail-layout.ts`): header, metrics with the task's headline number first, charts, actions, tests, then the reference blocks folded. Dataset and training start open; location, environment and pipeline wait for a click.
+- Actions are grouped by intent (reuse, download, publish, use the model) and every one has an icon; the publish targets carry their brand marks (`components/ui/BrandIcons.tsx`, paths from simple-icons 16.37.0, CC0; Comet has no mark there and uses a generic one).
+- One line chart (`components/ui/LineChart.tsx`, pure SVG, no dependency) for the live tab, the comparison and the run detail. It joins the measured points as they are, with no smoothing or interpolation, and breaks where a value is missing. Hover, touch or the arrow keys snap to the nearest epoch and show each series' exact value. The run detail charts train against validation for the quantities its task leads with (`lib/run-curves.ts`); the matplotlib figures stay below, as the files a paper uses.
+- A value under 5e-4 is written with an exponent, so a learning rate is not shown as `0.000`.
+- Text in History is at least 13 px, mono labels at least 11 px.
+
+**Consequences:** one place to read a run and act on it. The results view remains for the jobs above and for a server whose History write failed.
+
+**Alternatives considered:**
+
+- *Keep the results view and add the actions to it.* Two copies of the same page to maintain, and History would still open on the old layout.
+- *A charting library.* The charts need lines, a grid and a tooltip; a dependency of several hundred kB for that is not justified in a bundle that is committed.
+- *Smooth the lines.* A smoothed curve shows values the run never measured.
+
+## ADR-202 — Profiles: no "default" in the interface, the picker on every load, integrations inside the profile
+
+**Date:** 2026-11-12
+**Status:** Accepted
+**Amends:** ADR-126 (the picker asks once per session), ADR-114 (profiles are output folders)
+
+**Context:** the welcome showed the legacy-layout profile as "Padrão" / "<name> (padrão)", which read as a profile somebody else had created. The picker asked once per browser tab, so a shared machine reloaded into the last person's profile. Each profile row in the picker carried the MLflow, W&B and Comet checkboxes with their paragraphs, which buried the one question the screen asks. A fresh install creates nothing on disk and reports one unnamed profile; that part was already right.
+
+**Decision:**
+
+- The storage of ADR-114 does not change: the first person's profile is still the legacy layout (`outputs/` itself), which is what lets runs made with the CLI show up in History. `is_default` stays in the API as a storage detail.
+- The interface never says "default". That profile is shown by its name like any other. One with no name beside named profiles (older data) is listed as "Sem nome", and choosing it asks for the name.
+- Entry rules (`entryStep` in `lib/profile.ts`): no profile has a name → name and pronoun, nothing else on the screen; exactly one profile → straight in; more than one → the picker on every page load, with the last one used preselected and focused. The per-tab memory is removed.
+- The picker lists names only. A profile is created from the picker, or from the profile menu when there is only one.
+- The header has one profile chip, present on a single-profile install too. Its menu holds the integrations as switches (MLflow, Weights & Biases, Comet, each with its fields when on), "Trocar nome", and "Trocar de perfil" or "Novo perfil". The settings calls and their validation are the ones of ADR-170, ADR-172 and ADR-200.
+
+**Consequences:** reloading on a shared server costs one click or Enter. A browser that had a name saved and picks an unnamed profile is now asked to confirm the name instead of entering silently.
+
+**Alternatives considered:**
+
+- *Give the first profile its own folder under `outputs/profiles/`.* It would hide every CLI run from the GUI's History and needs a data migration; the request was about what the screen says.
+- *Hide the unnamed profile when others exist.* Its runs would become unreachable from the interface.
+
+## ADR-203 — Colab: the Drive dataset folder is chosen in the panel
+
+**Date:** 2026-11-12
+**Status:** Accepted
+**Extends:** ADR-164 (Colab datasets from the user's Google Drive)
+
+**Context:** in Drive mode the dataset path came from the form's `data.base_dir` and the user had to know how a local Drive for desktop path maps to `/content/drive/MyDrive/...`. The panel explained it in paragraphs. The accelerator was a native `<select>`.
+
+**Decision:**
+
+- `GET /api/colab/drive/folders?rel=&my_drive_root=` lists the sub-folders of a folder inside the local "Meu Drive" root: directory names only, sorted, at most 500 with a `truncated` flag; files, links, junctions, dot-folders and Windows hidden or system folders are left out. The answer carries the local path and the Colab path it translates to (`remote_path`). With no root found it answers `root: null` and an empty list.
+- `rel` is refused when it has `..`, `.`, `:` or is absolute, and the path is resolved before the containment check. Both routes take requests from this machine only, with the Origin check the folder opener uses (403 otherwise). 400 outside the Drive, 404 missing, 409 unreadable.
+- `POST /api/colab/drive/open` opens that folder in the file manager through the existing opener.
+- `ColabDriveSource` gains an optional `path`; empty keeps `data.base_dir`, so older requests behave as before.
+- The panel has three titled sections (account and usage, train on Colab, runtimes), one line per control and the longer explanations behind a closed disclosure. The folder browser is in the panel: breadcrumb from "Meu Drive", click to enter, "Usar esta pasta". With no Drive found it shows three steps and the typed-root fallback of ADR-164.
+- No Google Drive API and no new OAuth scope: browsing Drive on the web would need access the project does not ask for (ADR-164).
+
+**Consequences:** the root search probes `X:\My Drive` and `X:\Meu Drive` on every drive letter, so a disconnected network drive can delay the answer. Detection on a machine with Drive for desktop installed is still not exercised: the browser was checked with a typed root pointing at a local folder. The typed root of ADR-164 is whatever folder the person names, so the listing is confined to that folder, not to a verified Drive; what keeps another site or machine out is the loopback and Origin check, the same trust the dataset picker and explorer already have.
+
+**Alternatives considered:**
+
+- *The native folder dialog (tkinter), as the dataset picker uses.* It opens anywhere on the disk and says nothing about the Colab path; the browser is confined to the Drive and shows the translation.
+
+## ADR-204 — One "live code" tab: the run as steps, with the real code of the step it is in
+
+**Date:** 2026-11-12
+**Status:** Accepted
+**Amends:** ADR-118 (the training story tab), ADR-173 and ADR-181 (the "Code" tab)
+
+**Context:** the training sheet had two tabs for the same question. "Como funciona" drew an illustration with the stage and the live numbers; "Código" listed every function of the training with all its notes open, in a fixed order, with no relation to what the run was doing. A newcomer had to connect the two alone, and a specialist had to scroll to the function that mattered.
+
+**Decision:**
+
+- The two tabs become one ("Código ao vivo"; the tab id stays `story`, so anything that stored it keeps working). Left: the run as steps (data, model, loss, train epoch, validation, test and report), one plain sentence each, with the live figures on the running step. Right: the real code of the selected step, read from the installed package as before (ADR-173).
+- Every tour section declares its `step` and a one-sentence `summary` in both languages (`core/code_tour.py`, `STEPS`); the API sends both, and a test requires every section of every task to have them.
+- **Following.** While the run goes, the running step is selected and its code is marked "trecho em execução". Choosing another step or function pauses following; "voltar ao que está rodando" resumes it. After the run ends nothing is marked.
+- **The position is what the event stream proves** (`lib/run-steps.ts`), as in ADR-118, and never a line: a loop passes its lines thousands of times a second and no tracer runs. Queued, finished, interrupted or failed marks nothing. Before `start`, or between two units of a job, the group data + model + loss is marked, since the stream cannot tell them apart. After `start` or a non-final `epoch_end`, the group train + validation; while `batch` is the newest event, train alone. The last epoch, `end`, or the last unit closed marks test. PatchCore's phases map to train (features, memory bank) and validation (scoring).
+- Notes are closed by default: a quiet marker in the gutter opens the note in place. Branches the run does not take stay dimmed, and the library notice of ADR-194 stays.
+- The illustration of ADR-118 remains as a compact element of the left column on wide screens. The stage strip, the caption and the replay of the old tab are removed; the overfitting hint stays on "Resultados".
+
+**Consequences:** the tab answers "what is running now and what does that code do" on one screen. The granularity is the step: `BatchProgressReporter.batch_done` does not emit the last batch, so after it the tab still says "train" for the rest of the epoch including its validation, and an epoch shorter than the batch reporter's interval (about 2 s) never emits `batch` and shows the train + validation group. Emitting the final batch would let validation be marked on its own; it is not done here because it changes what trainers emit. During PatchCore's feature extraction the code shown is the coreset function, since extraction has no tour section. Checked in the browser with classification only; PatchCore, YOLO, segmentation and detection were not watched live.
+
+**Alternatives considered:**
+
+- *A line pointer driven by a tracer (`sys.settrace` / `sys.monitoring`).* It slows the training it describes, and at loop speed the pointer would be noise.
+- *Animate the pointer through the loop on a timer.* It would look like tracing while being invented, which ADR-118 rules out.
+- *Keep two tabs and link them.* The link is the thing the user had to make; one screen removes it.

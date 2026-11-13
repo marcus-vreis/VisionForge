@@ -18,6 +18,7 @@ describe("W&B profile settings", () => {
   it("shows only the switch while it is off, also for an old profile", () => {
     const markup = wrap(<WandbProfileSettings profile={profile} onSaved={() => {}} />);
     expect(markup).toContain(html(pt.wandb.label));
+    expect(markup).toContain('role="switch"');
     expect(markup).not.toContain('checked=""');
     expect(markup).not.toContain(html(pt.wandb.token));
   });

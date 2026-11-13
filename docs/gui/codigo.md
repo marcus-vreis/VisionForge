@@ -1,8 +1,9 @@
-# A aba Código — o código real de cada treino
+# A aba Código ao vivo — o código real de cada treino
 
-Na tela de treino, a aba **Código** mostra as funções que o VisionForge
-executa para treinar, validar e testar o modelo, com notas em português ao lado
-das linhas. Tudo aqui sai do código atual (`core/code_tour.py` e
+Na tela de treino, a aba **Código ao vivo** mostra o treino em passos (dados,
+modelo, loss, época de treino, validação, teste e relatório) e, ao lado, as
+funções que o VisionForge executa em cada um, com notas em português nas
+linhas. Ela junta as antigas abas "Como funciona" e "Código" (ADR-204). Tudo aqui sai do código atual (`core/code_tour.py` e
 `gui/api/code_tour_routes.py`); o que o código não define está marcado como
 *não verificado*.
 
@@ -18,8 +19,19 @@ das linhas. Tudo aqui sai do código atual (`core/code_tour.py` e
   método de anomalia) aparece como o caminho que o seu treino segue ou como um
   ramo que ele não toma. Uma configuração que o formulário não decide fica sem
   marca, em vez de adivinhada.
-- **Sem acompanhamento linha a linha.** O treino informa uma vez por época; a aba
-  diz que caminho o código toma, não qual linha roda agora.
+- **Acompanha o treino por passo, não por linha.** Enquanto o treino roda, o
+  passo em execução fica marcado e o código dele aparece como "trecho em
+  execução". A posição vem só do que o treino informa (início, lotes, fim de
+  cada época, fim): um laço passa pelas mesmas linhas milhares de vezes por
+  segundo, e nenhum rastreador roda. Quando os eventos não separam dois passos
+  (dados e modelo na preparação; treino e validação dentro de uma época
+  curta), o grupo inteiro fica marcado.
+- **Você pode olhar outro passo.** Clicar em outro passo ou função pausa o
+  acompanhamento; **voltar ao que está rodando** retoma. Depois que o treino
+  termina, nada fica marcado e a navegação é livre.
+- **Uma frase por passo, notas sob demanda.** Cada passo tem uma frase simples
+  do que faz. Uma linha com nota tem uma marca na margem; clicar abre a nota no
+  lugar.
 - **Todas as tarefas.** Classificação, regressão, segmentação, anomalia e
   detecção têm um roteiro cada (ADR-181). A lista vem do servidor, então uma
   tarefa nova com roteiro aparece sem mudança na página.

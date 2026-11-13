@@ -115,8 +115,13 @@ export const en: Dict = {
       login_pending: "colab · waiting for code",
       connected: "colab · connected",
     },
-    intro:
-      "Training on Google Colab uses your Google account and whatever GPU it has. VisionForge talks to Colab through the official CLI, installed in an environment of its own.",
+    intro: "Train on your Google account's GPU.",
+    introMore:
+      "VisionForge talks to Colab through the official CLI, installed in an environment of its own. The run joins the same queue as local ones and comes back to the History when it ends.",
+    howItWorks: "how it works",
+    learnMore: "learn more",
+    sectionConnect: "Connection",
+    sectionAccount: "Account and usage",
     install: (version: string) => `install the Colab CLI (v${version})`,
     installing: "Installing the Colab CLI… this takes a minute or two.",
     installFailed: "The install failed:",
@@ -138,25 +143,44 @@ export const en: Dict = {
     noRate: "No runtime is active now; the hours left depend on the GPU you pick.",
     usageFailed: "Failed to read the balance.",
     loadFailed: "Failed to reach the server.",
-    trainTitle: "Train this experiment on Colab",
-    trainSource: "Dataset on the VM: a zip URL, torchvision:cifar10 or hf:owner/name",
-    driveSource: "Use the form's dataset folder, in Google Drive for desktop",
-    driveRoot: "This computer's \"My Drive\" folder (when it is not found by itself)",
+    trainTitle: "Train on Colab",
+    trainSource: "Dataset: zip URL, torchvision:name or hf:owner/name",
+    driveSource: "Dataset in Google Drive",
+    driveRoot: "This computer's \"My Drive\" folder",
     driveRootPlaceholder: "G:\\My Drive",
-    driveExport: "Also save the run to Drive (MyDrive/VisionForge/runs)",
-    driveNote: "The VM mounts your Drive and copies the dataset before training; Google asks for permission on every runtime.",
+    driveRootOther: "use another \"My Drive\" folder",
+    driveExport: "Also save the run to Drive",
+    driveNote:
+      "The VM mounts your Drive and copies the folder before training; Google asks for permission on every runtime. With no folder chosen, the form's dataset folder is used.",
+    driveChecking: "Looking for Google Drive for desktop…",
+    driveFolder: "Dataset folder",
+    driveFolderPlaceholder: "empty = the form's folder",
+    drivePick: "choose folder in Drive",
+    driveRemote: (path: string) => `On Colab: ${path}`,
+    driveBrowserLabel: "My Drive folders",
+    driveHome: "My Drive",
+    driveLoading: "Reading folders…",
+    driveEmpty: "No sub-folders here.",
+    driveTruncated: (n: number) => `Showing only the first ${n} folders.`,
+    driveUse: "use this folder",
+    driveOpen: "open Drive folder",
+    driveRetry: "look again",
+    driveMissingTitle: "Google Drive for desktop not found",
+    driveStep1: "Install and open Google Drive for desktop.",
+    driveStep2: "Put the dataset inside \"My Drive\".",
+    driveStep3: "Come back here and choose the folder.",
     sourcePlaceholder: "https://…/dataset.zip",
     badSource: "Use an http(s) URL of a zip, torchvision:<name> or hf:<owner/name>.",
     accelerator: "GPU",
     train: "train on Colab",
     trainNote:
-      "It enters the same queue as local training. The live tab follows it; the trained files stay on the VM until the import of the next phase.",
+      "It joins the same queue as local training and the live tab follows it. With \"save to Drive\", the run also goes to MyDrive/VisionForge/runs.",
     // The strategy step has Replicates on (ADR-056): Colab trains one run.
     replicatesBlocked:
       "Replicates run on this computer only: Colab trains one run at a time. Set the strategy back to Single run to train on Colab.",
     comparisonBlocked:
       "The replicated comparison runs on this computer only: Colab trains one run at a time. Set the strategy back to Single run to train on Colab.",
-    sessionsTitle: "Runtimes alive on this account",
+    sessionsTitle: "Active runtimes",
     sessionsNone: "No runtime is alive.",
     stopSession: "stop",
     sessionNotOurs: "started elsewhere; stop it at colab.research.google.com",
@@ -282,7 +306,7 @@ export const en: Dict = {
   // Profiles on a shared server (ADR-114): one output folder per person.
   mlflow: {
     label: "Export training runs to local MLflow",
-    hint: "Local storage only; requires the mlflow extra. Applies to future runs.",
+    hint: "Written on this machine only. Requires the mlflow extra.",
     saveFailed: "Failed to save MLflow setting.",
     warning: "MLflow export incomplete",
     notInstalled: "MLflow is not installed on this computer. Install the VisionForge mlflow extra and retry the export.",
@@ -292,7 +316,7 @@ export const en: Dict = {
   },
   wandb: {
     label: "Send training runs to Weights & Biases",
-    hint: "Goes to a private project of your W&B account: the public config and each epoch's metrics. The dataset, paths, code, git and machine details stay here. Applies to future runs.",
+    hint: "Private project in your account: config and metrics. Dataset, paths and code stay here.",
     project: "Project",
     entity: "User or team (optional)",
     entityHint: "Empty uses the key owner's user.",
@@ -316,7 +340,7 @@ export const en: Dict = {
   },
   comet: {
     label: "Send training runs to Comet",
-    hint: "Goes to a private project of your Comet account: the public config and each epoch's metrics. The dataset, paths, code, git, console and machine details stay here. Applies to future runs.",
+    hint: "Private project in your account: config and metrics. Dataset, paths and code stay here.",
     project: "Project",
     workspace: "Workspace (optional)",
     workspaceHint: "Empty uses the key's default workspace.",
@@ -340,35 +364,26 @@ export const en: Dict = {
     retryFailed: "Failed to retry the Comet upload.",
   },
   codeTour: {
-    tab: "Code",
-    intro: "This is the real code training your model, read from the installed VisionForge: not a summary. The marked parts are the path this run's settings take; the faded ones are branches it does not use.",
-    sectionsLabel: "Parts of the training",
-    sections: {
-      data: "Data",
-      model: "Model",
-      loss: "Loss",
-      train: "Training (one epoch)",
-      validate: "Validation",
-      unet: "U-Net (forward)",
-      test: "Test",
-      metrics: "Metrics",
-      coreset: "Memory bank (PatchCore)",
-      score: "Anomaly score",
-      patch_score: "Nearest neighbour (PatchCore)",
-      threshold: "Threshold",
-      labels: "YOLO labels",
-      collate: "Batch",
-      faster_rcnn: "Faster R-CNN",
-      ssd: "SSD",
-      retinanet: "RetinaNet",
-      map: "mAP (validation)",
-      metric: "AP per class",
-      yolo_args: "YOLO arguments",
-      yolo_augment: "Augmentation (YOLO)",
-      yolo_fit: "Training (VisionForge)",
-      yolo_epoch: "Recorded epoch",
-      yolo_loop: "Inside Ultralytics",
-    } as Record<string, string>,
+    stepsLabel: "Training steps",
+    steps: {
+      data: { title: "Data", text: "Reads the images and prepares them for the network." },
+      model: { title: "Model", text: "Builds the network that will learn." },
+      loss: { title: "Loss", text: "Defines how the error of each prediction is measured." },
+      train: { title: "Training epoch", text: "Goes through every batch and adjusts the weights." },
+      validate: { title: "Validation", text: "Measures the model on images it did not train on." },
+      test: { title: "Test and report", text: "Measures the best model on the test set and writes the report." },
+    },
+    patchcoreSteps: {
+      train: { title: "Memory bank", text: "Extracts features of the normal images and keeps the typical ones." },
+      validate: { title: "Scoring", text: "Measures how far each image is from the bank." },
+    },
+    live: "running now",
+    liveGroup: (steps: string[]) =>
+      `running: ${steps.length > 1 ? `${steps.slice(0, -1).join(", ")} or ${steps[steps.length - 1]}` : steps[0]} (the log does not say which)`,
+    resume: "back to what is running",
+    functionsLabel: "Functions of this step",
+    granularity: "It marks the step that is running, not the line: training reports per epoch and per batch.",
+    noteToggle: (lines: string) => `Note (${lines})`,
     library: (name: string, version: string, license: string) =>
       `${name} ${version} code, as installed in your environment, licensed ${license}: it is not VisionForge's code, only shown here.`,
     notesResolved: (resolved: number, total: number) =>
@@ -380,11 +395,12 @@ export const en: Dict = {
     loading: "Loading the code…",
     failed: "Failed to load the code.",
     missing: "There is no annotated code for this task yet.",
-    perEpoch: "The training reports progress per epoch, not per line: the mark shows which path the code takes, not the line running right now.",
   },
   zenodo: {
     title: "Zenodo draft",
     open: "Create a Zenodo draft",
+    // The service's name on its closed button, beside its mark.
+    service: "Zenodo",
     intro: "Zenodo archives the experiment and, when you publish, mints a DOI to cite in the paper. Only a draft leaves from here: title, authors, license and publishing stay with you, on the Zenodo site.",
     site: "Where to create it",
     production: "Zenodo (zenodo.org)",
@@ -413,6 +429,8 @@ export const en: Dict = {
   github: {
     title: "Send to GitHub",
     open: "Send the report to GitHub",
+    // The service's name on its closed button, beside its mark.
+    service: "GitHub",
     intro: "Keeps this run in a private experiments repository, in a folder of its own: a README with the metrics, the per-epoch table and the charts, plus run.json. The weights do not go: they belong on the Hugging Face Hub or Zenodo.",
     loading: "Building the files…",
     token: "GitHub token",
@@ -437,6 +455,8 @@ export const en: Dict = {
   dvc: {
     title: "Version with DVC",
     open: "Version with DVC",
+    // The service's name on its closed button, beside its mark.
+    service: "DVC",
     intro: "Keeps this run in a git repository with DVC on this computer, in a folder of its own. README, run.json, charts and the files DVC compares (params.yaml, metrics.json, history.csv and dvc.yaml) go to git; the weights go to DVC. Then dvc metrics show, dvc params diff and dvc plots show compare the runs.",
     repo: "Repository folder (full path)",
     repoPlaceholder: "C:\\research\\experiments",
@@ -473,7 +493,9 @@ export const en: Dict = {
   hub: {
     checkpointWarning: "The checkpoint is uploaded as saved and may contain internal metadata, paths and labels. Review the file’s origin before uploading.",
     title: "Send to Hugging Face Hub",
-    open: "Review Hub upload",
+    open: "Review the upload to the Hugging Face Hub",
+    // The service's name on its closed button, beside its mark.
+    service: "Hugging Face Hub",
     loading: "Loading preview…",
     preview: "Files to upload",
     card: "Model card preview",
@@ -493,13 +515,10 @@ export const en: Dict = {
   },
   profile: {
     who: "Who are you?",
-    defaultName: "Default (no profile)",
-    defaultNamed: (name: string) => `${name} (default)`,
-    defaultShort: "Default",
+    unnamed: "Unnamed",
     listLabel: "Profiles",
     create: "create new profile",
     createTitle: "New profile",
-    createLink: "create profile",
     nameLabel: "Profile name",
     namePlaceholder: "e.g. Ana Souza",
     folder: (slug: string) => `folder: outputs/profiles/${slug}`,
@@ -507,10 +526,11 @@ export const en: Dict = {
     submit: "Create ↵",
     creating: "Creating…",
     back: "← back",
-    notice:
-      "Profiles organise training history; they do not protect it. Anyone who can reach this server can pick any profile.",
-    chip: "profile",
-    chipTitle: "Switch profile",
+    notice: "Profiles organise history; they do not restrict access.",
+    menuTitle: "Profile and integrations",
+    integrations: "Integrations",
+    integrationsNote: "apply to future runs",
+    switchProfile: "Switch profile",
     exists: "A profile with that name already exists.",
     invalid:
       "That name cannot become a folder. Use at least one letter (a-z) or a digit.",
@@ -525,6 +545,63 @@ export const en: Dict = {
     tabGet: "Download",
     tabExplore: "Explore",
     tabsLabel: "Dataset tools",
+  },
+  datasetLab: {
+    kicker: "// dataset lab",
+    dialogLabel: (name: string) => `Dataset lab: ${name}`,
+    back: "Back",
+    backTitle: "Closes the lab and goes back to choosing the dataset (Esc)",
+    sectionsLabel: "Lab tools",
+    sections: {
+      overview: "Overview",
+      resplit: "Re-split",
+      incorporate: "Add images",
+      merge: "Merge datasets",
+      coco: "COCO",
+    },
+    typeClassification: "Classification",
+    typeDetection: "Detection (YOLO)",
+    noDataset: "COCO conversion",
+    noDatasetHint: "No dataset open: only converting a COCO folder is available here.",
+    images: (n: number) => `${n} ${n === 1 ? "image" : "images"}`,
+    classes: (n: number) => `${n} ${n === 1 ? "class" : "classes"}`,
+    boxes: (n: number) => `${n} ${n === 1 ? "box" : "boxes"}`,
+    openLab: "Open lab",
+    openLabHint: "Opens this dataset's overview and tools full screen.",
+    cocoEntry: "Convert a COCO folder",
+    cocoEntryHint: "Creates a YOLO dataset from COCO annotations, without opening a dataset first.",
+    summaryLabel: "Chosen dataset",
+    noteMissing: (split: string) => `${split} folder not found.`,
+    noteUnlabeled: (n: number) =>
+      n === 1 ? "1 image without boxes." : `${n} images without boxes.`,
+    cardTotal: "Images",
+    cardClasses: "Classes",
+    cardBoxes: "Boxes",
+    cardMissing: "folder not found",
+    cardUnlabeled: (n: number) => `${n} without boxes`,
+    perClassTitle: "Images per class",
+    boxesPerClassTitle: "Boxes per class",
+    perClassHelp: "Each bar adds up the splits; the number at its end is the class total.",
+    tableToggle: "Show the class by split table",
+    segmentTitle: (split: string, n: number) => `${split}: ${n}`,
+    learnMore: "Learn more",
+    leadResplit:
+      "Pools train and validation and redistributes them by the ratio you choose; the test split stays as it is by default. Writes a new dataset and the original does not change.",
+    leadIncorporate:
+      "Adds a folder of new images to the dataset and writes the result as a new dataset; the original does not change.",
+    leadMerge:
+      "Merges the opened dataset (A) with another of the same type (B) into a new dataset; neither changes.",
+    leadCocoExport:
+      "Writes the opened dataset in COCO format, to a new folder next to it; the original does not change.",
+    leadCocoImport:
+      "Converts a COCO folder into a YOLO detection dataset, in a new folder next to it. Only boxes are imported.",
+    cocoMode: "What to do",
+    cocoExportOnlyDetection: "Export to COCO only applies to detection datasets.",
+    groupLead:
+      "Images from the same source (same patient, slide or video) must land in the same split: give a CSV with the columns path,group.",
+    groupMore: "How to build the CSV",
+    mappingMore: "How the mapping works",
+    resultTitle: "Result",
   },
   datasetExplorer: {
     intro:
@@ -663,7 +740,7 @@ export const en: Dict = {
     done: (n: number, path: string) => `${n} new images in ${path}`,
     linkedCopied: (linked: number, copied: number) =>
       `${linked} files hardlinked, ${copied} copied`,
-    openResult: "Open in the explorer",
+    openResult: "Open in the lab",
   },
   datasetMerge: {
     open: "Merge with another dataset",
@@ -741,7 +818,7 @@ export const en: Dict = {
     done: (n: number, path: string) => `${n} images in ${path}`,
     linkedCopied: (linked: number, copied: number) =>
       `${linked} files hardlinked, ${copied} copied`,
-    openResult: "Open in the explorer",
+    openResult: "Open in the lab",
   },
   datasetResplit: {
     open: "Re-split",
@@ -822,7 +899,7 @@ export const en: Dict = {
       `${n} ${n === 1 ? "image" : "images"} in ${path}; ${moved} changed split`,
     linkedCopied: (linked: number, copied: number) =>
       `${linked} ${linked === 1 ? "file" : "files"} hardlinked, ${copied} copied`,
-    openResult: "Open in the explorer",
+    openResult: "Open in the lab",
   },
   datasetCoco: {
     exportOpen: "Export to COCO",
@@ -926,7 +1003,7 @@ export const en: Dict = {
       `${images} ${images === 1 ? "image" : "images"}, ${boxes} ${boxes === 1 ? "box" : "boxes"} and ${classes} ${classes === 1 ? "class" : "classes"} in ${path}`,
     linkedCopied: (linked: number, copied: number) =>
       `${linked} ${linked === 1 ? "file" : "files"} hardlinked, ${copied} copied`,
-    openResult: "Open in the explorer",
+    openResult: "Open in the lab",
   },
   lightbox: {
     closeTitle: "Close (Esc)",
@@ -1229,10 +1306,10 @@ export const en: Dict = {
       failed: "Failed to resume.",
     },
     rerun: {
-      load: "↺ load into the form",
+      load: "Load into the form",
       loadTitle:
         "Opens the task's tab with this run's configuration, the same way Import YAML does",
-      replicates: (n: number) => `⟳ repeat with ${n} seeds`,
+      replicates: (n: number) => `Repeat with ${n} seeds`,
       replicatesTitle: (seeds: string) =>
         `Opens the Replicates strategy with seeds ${seeds}, none of which this run used`,
       customRemoved: (key: string) =>
@@ -1256,6 +1333,21 @@ export const en: Dict = {
       fingerprint: "Fingerprint",
       noFingerprint: "no fingerprint — run predates 2026-07-26",
     },
+    // The run detail's action groups and their buttons.
+    actions: {
+      reuse: "Reuse",
+      download: "Download",
+      publish: "Publish",
+      useModel: "Use the model",
+      bundle: "Experiment bundle",
+      markdown: "Markdown",
+    },
+    environment: {
+      title: "Environment",
+    },
+    // Beside the status of a run a user stop cut short (ADR-111).
+    stoppedTag: "stopped",
+    runStatus: { completed: "completed", running: "running", failed: "failed" } as Record<string, string>,
     location: {
       title: "Location on disk",
       runFolder: "Run folder",
@@ -1274,7 +1366,8 @@ export const en: Dict = {
     },
     onnx: {
       title: "Export to ONNX",
-      open: "↗ export onnx",
+      open: "Export ONNX",
+      short: "Converts the checkpoint, checks it against PyTorch and times it.",
       hint: "Converts the checkpoint to ONNX, checks its outputs against PyTorch for numerical differences and measures inference latency. The file is saved next to the checkpoint as",
       file: "best_model.onnx",
       opsetVersion: "opset_version",
@@ -1299,7 +1392,8 @@ export const en: Dict = {
     },
     batch: {
       title: "Batch inference (CSV)",
-      open: "+ batch inference",
+      open: "Batch inference",
+      short: "Runs the model over a folder of images and writes a CSV.",
       folderPlaceholder: "e.g. C:/datasets/inbox",
       recursive: "recursive (subfolders)",
       run: "▶ Run inference",
@@ -1321,7 +1415,8 @@ export const en: Dict = {
     },
     gradcam: {
       title: "Grad-CAM (explainability)",
-      open: "🔥 Grad-CAM",
+      open: "Grad-CAM",
+      short: "Heat maps of the regions that weighed most on the output.",
       folderPlaceholder: "e.g. C:/datasets/samples",
       samples: "Number of samples (1–64)",
       run: "▶ Generate Grad-CAM",
@@ -1351,10 +1446,12 @@ export const en: Dict = {
     },
     graphs: {
       title: "Plots (click to expand)",
+      curves: "Curves per epoch",
+      curvesHint: "hover to read the value",
     },
     tests: {
       title: "Tests on this model",
-      open: "+ test",
+      open: "Test on another dataset",
       empty: "No tests run on this model yet.",
       folder: "Test folder",
       manifest: "Test manifest (.csv)",
@@ -2596,7 +2693,7 @@ export const en: Dict = {
       replicate:
         "Stop the replicates? The replicate in progress finishes its current epoch and no other starts. The mean and interval use only the finished replicates; the cut replicate is left out. A stopped set cannot be resumed.",
       phase:
-        "Stop PatchCore? During feature extraction nothing is kept. If it is already building the memory bank, that finishes and is saved, and scoring is skipped — you can score it later with “+ test” in the History.",
+        "Stop PatchCore? During feature extraction nothing is kept. If it is already building the memory bank, that finishes and is saved, and scoring is skipped — you can score it later with “Test on another dataset” in the History.",
       vm: "Stop the training on Colab? The VM is released right away: the epoch in progress is lost, and nothing trained there comes back to this machine yet.",
     },
     stopConfirmCustom: {
@@ -2641,9 +2738,16 @@ export const en: Dict = {
     },
     stoppedPhaseLog: (bankKept: boolean): string =>
       bankKept
-        ? "stopped · memory bank saved, not scored (score it later with “+ test”)"
+        ? "stopped · memory bank saved, not scored (score it later with “Test on another dataset”)"
         : "stopped during extraction · nothing was kept",
     stopTooLate: "> the stop cut nothing: the run finished normally",
+  },
+  chart: {
+    epoch: (n: number) => `Epoch ${n}`,
+    noValue: "—",
+    best: "best",
+    keyboardHint:
+      "Use the left and right arrow keys to read each epoch's value; Home and End jump to the first and last; Esc clears.",
   },
   liveResults: {
     tab: "Results",
@@ -2672,10 +2776,9 @@ export const en: Dict = {
     bestCol: "Best",
   },
   trainingStory: {
-    tab: "How it works",
+    tab: "Live code",
     logTab: "Log",
     tabsLabel: "Training sheet content",
-    stripLabel: "Training stages",
     caption: "illustrative animation, slowed down: only the stage and the numbers are real",
     figure: (family: string) => `Illustrative drawing of a network: ${family}`,
     overfitting: (since: number) =>
@@ -2687,34 +2790,6 @@ export const en: Dict = {
       detector: "detector: backbone, neck and heads that give boxes",
       autoencoder: "autoencoder: compresses and rebuilds",
       patchcore: "PatchCore: extractor, memory bank and scoring",
-    },
-    stageNames: {
-      queued: "queued",
-      preparing: "data",
-      training: "training",
-      testing: "test",
-      done: "done",
-      interrupted: "interrupted",
-      failed: "failed",
-    },
-    stages: {
-      queued: "Queued: training starts by itself when the GPU is free.",
-      preparing: "Loading the data and building the model; no epoch has run yet.",
-      training:
-        "The model sees the data, gets it wrong, and the error flows back adjusting the weights; at the end of each epoch, validation measures how much it learned.",
-      testing:
-        "Training is over: the model is measured on the test split, which it has never seen, and the report is written.",
-      done: "Done: the full results are under “View results”.",
-      interrupted: "Interrupted on request: whatever was already saved is still available.",
-      failed: "Training failed: the error detail is in the box above and in the log.",
-    },
-    phases: {
-      extractingFeatures:
-        "A network that is already trained reads the normal images and extracts their features; nothing is adjusted.",
-      buildingBank:
-        "The most representative features of what is normal are stored in the memory bank.",
-      scoring:
-        "Each test image is compared with the bank: the farther from what is normal, the higher the anomaly score.",
     },
     numbers: {
       epoch: "epoch",
@@ -2737,15 +2812,6 @@ export const en: Dict = {
       fold: (index: number, total: number) => `fold ${index}/${total}`,
       model: (index: number, total: number) => `model ${index}/${total}`,
       replicate: (index: number, total: number) => `replicate ${index}/${total}`,
-    },
-    // A finished run can show its stages again, in slow motion (ADR-118).
-    replay: { button: "replay animation", playing: "replaying…" },
-    legend: {
-      forward: "data and forward pass",
-      backward: "gradient flowing back",
-      validation: "validation",
-      patchForward: "features stored",
-      patchScore: "scoring",
     },
   },
   compareRuns: {
@@ -2969,7 +3035,7 @@ export const en: Dict = {
           },
           watching: {
             title: "What is happening now",
-            body: "The training sheet shows the current epoch and, after each one, the training loss and the validation loss. Loss is the model's error, and both should fall. The training one is measured during the epoch, while the model is still changing; the validation one at its end, on images the model did not learn from. The “How it works” tab, open next to the log, draws what training is doing, with the live numbers.",
+            body: "The training sheet shows the current epoch and, after each one, the training loss and the validation loss. Loss is the model's error, and both should fall. The training one is measured during the epoch, while the model is still changing; the validation one at its end, on images the model did not learn from. The “Live code” tab, open next to the log, shows the step training is in and the real code of that step, with the live numbers.",
           },
           result: {
             title: "The result",
@@ -2999,7 +3065,7 @@ export const en: Dict = {
           },
           watching: {
             title: "What is happening now",
-            body: "The training sheet shows the current epoch and, after each one, the validation mAP, precision, recall and losses. The box loss measures where the model puts the box; the class loss (cls), whether it gets right what is in it. In the first epochs mAP stays near zero and only rises after the warm-up: that is expected. The “How it works” tab, open next to the log, draws what training is doing, with the live numbers.",
+            body: "The training sheet shows the current epoch and, after each one, the validation mAP, precision, recall and losses. The box loss measures where the model puts the box; the class loss (cls), whether it gets right what is in it. In the first epochs mAP stays near zero and only rises after the warm-up: that is expected. The “Live code” tab, open next to the log, shows the step training is in and the real code of that step, with the live numbers.",
           },
           result: {
             title: "The result",
@@ -3029,7 +3095,7 @@ export const en: Dict = {
           },
           watching: {
             title: "What is happening now",
-            body: "The training sheet shows the current epoch and, after each one, the training loss and the validation metrics: RMSE and MAE, the typical error in the target's unit (lower is better), and R², which is 1 for a perfect model and 0 for one that always predicts the mean. R² swings from one epoch to the next and the result keeps the best of them; in the first ones it can be negative, because the model is still worse than the mean. The “How it works” tab, open next to the log, draws what training is doing, with the live numbers.",
+            body: "The training sheet shows the current epoch and, after each one, the training loss and the validation metrics: RMSE and MAE, the typical error in the target's unit (lower is better), and R², which is 1 for a perfect model and 0 for one that always predicts the mean. R² swings from one epoch to the next and the result keeps the best of them; in the first ones it can be negative, because the model is still worse than the mean. The “Live code” tab, open next to the log, shows the step training is in and the real code of that step, with the live numbers.",
           },
           result: {
             title: "The result",
@@ -3059,7 +3125,7 @@ export const en: Dict = {
           },
           watching: {
             title: "What is happening now",
-            body: "The training sheet shows the current epoch and, after each one, the loss and the validation metrics: mIoU (the average overlap between the predicted and the true mask, per class), Dice (similar, more generous) and pixel accuracy. Since the background fills almost everything, pixel accuracy is the most optimistic of the three: trust mIoU. The “How it works” tab, open next to the log, draws what training is doing, with the live numbers.",
+            body: "The training sheet shows the current epoch and, after each one, the loss and the validation metrics: mIoU (the average overlap between the predicted and the true mask, per class), Dice (similar, more generous) and pixel accuracy. Since the background fills almost everything, pixel accuracy is the most optimistic of the three: trust mIoU. The “Live code” tab, open next to the log, shows the step training is in and the real code of that step, with the live numbers.",
           },
           result: {
             title: "The result",
@@ -3089,7 +3155,7 @@ export const en: Dict = {
           },
           watching: {
             title: "What is happening now",
-            body: "The training sheet shows the current epoch and, after each one, the reconstruction loss (the error when rebuilding a normal image, which should fall) and, measured on the test images, the AUROC and the image F1. PatchCore has no epochs: the sheet shows phases (extracting features, building the memory bank and scoring), each with its own progress. The “How it works” tab, open next to the log, draws what training is doing, with the live numbers.",
+            body: "The training sheet shows the current epoch and, after each one, the reconstruction loss (the error when rebuilding a normal image, which should fall) and, measured on the test images, the AUROC and the image F1. PatchCore has no epochs: the sheet shows phases (extracting features, building the memory bank and scoring), each with its own progress. The “Live code” tab, open next to the log, shows the step training is in and the real code of that step, with the live numbers.",
           },
           result: {
             title: "The result",

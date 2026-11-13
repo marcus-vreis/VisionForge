@@ -43,17 +43,17 @@ PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 EXPECTED_IMAGES: dict[str, str] = {
     "vf-classification.png": "Classificação, etapa Dados com o dataset de exemplo",
     "vf-replicates.png": "Regressão, etapa Estratégia com Réplicas ligado",
-    "vf-code-tab.png": "Aba Código do painel de treino, após 1 época na CPU",
+    "vf-code-tab.png": "Aba Código ao vivo do painel de treino, após 1 época na CPU",
     "vf-colab.png": "Canto do Colab aberto, sem CLI instalado nem conta Google",
     "vf-strategy.png": "Classificação, etapa Estratégia com as seis estratégias",
     "vf-guide-menu.png": "Menu de guias do cabeçalho aberto",
     "vf-review.png": "Classificação, etapa Revisão antes de treinar",
     "vf-training.png": "Painel de treino na aba Log, após 1 época na CPU",
-    "vf-results.png": "Resultados de uma classificação: métricas e gráficos",
+    "vf-results.png": "Execução aberta no Histórico por Ver resultados: métricas e curvas",
     "vf-run-detail.png": "Histórico, detalhe de uma execução com as ações de publicação",
     "vf-transfer.png": "Classificação, etapa Modelo com transfer learning ligado",
     "vf-preprocessing.png": "Etapa Imagem e aumento com um filtro e o preview dele",
-    "vf-datasets-explorer.png": "Ferramentas de dataset, aba Explorar com o dataset de exemplo",
+    "vf-datasets-explorer.png": "Laboratório de datasets, Visão geral do dataset de exemplo",
 }
 
 

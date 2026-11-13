@@ -3,9 +3,15 @@ import { updateProfile } from "../api/client";
 import { useT } from "../i18n/useT";
 import type { ProfileInfo } from "../lib/profile";
 import { CometProfileSettings } from "./CometProfileSettings";
+import { TRACKER_HINT } from "./trackerStyles";
+import { TrackerSwitch } from "./TrackerSwitch";
+import { MlflowIcon } from "./ui/BrandIcons";
 import { WandbProfileSettings } from "./WandbProfileSettings";
 
-/** Edit one profile's exporters: local MLflow, Weights & Biases and Comet. */
+/** Edit one profile's exporters: local MLflow, Weights & Biases and Comet.
+ *
+ *  Lives in the header's profile menu: each tracker is a switch, and the ones
+ *  that need a destination show their fields while on. */
 export function ProfileTrackingSettings({ profile, onSaved }: {
   profile: ProfileInfo; onSaved: (profile: ProfileInfo) => void;
 }) {
@@ -18,11 +24,14 @@ export function ProfileTrackingSettings({ profile, onSaved }: {
     catch { setError(true); }
     finally { setSaving(false); }
   };
-  return <div style={{ fontSize: 12, color: "var(--vf-text-dim)", padding: 8 }}>
-    <label><input type="checkbox" checked={profile.settings?.mlflow.enabled ?? false}
-      disabled={saving} onChange={(e) => void change(e.target.checked)} /> {t.mlflow.label}</label>
-    <div>{t.mlflow.hint}</div>
-    {error && <div role="alert">{t.mlflow.saveFailed}</div>}
+  return <div style={{ display: "flex", flexDirection: "column", gap: 16, fontSize: 13, color: "var(--vf-text-dim)" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <TrackerSwitch icon={<MlflowIcon size={18} />} label={t.mlflow.label}
+        checked={profile.settings?.mlflow.enabled ?? false} disabled={saving}
+        onChange={(enabled) => void change(enabled)} />
+      <div style={TRACKER_HINT}>{t.mlflow.hint}</div>
+      {error && <div role="alert">{t.mlflow.saveFailed}</div>}
+    </div>
     <WandbProfileSettings profile={profile} onSaved={onSaved} />
     <CometProfileSettings profile={profile} onSaved={onSaved} />
   </div>;

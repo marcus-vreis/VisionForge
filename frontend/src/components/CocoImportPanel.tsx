@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { FolderOpen } from "lucide-react";
 import {
   cocoImportApply,
   cocoImportCancel,
@@ -34,13 +35,17 @@ import { useT } from "../i18n/useT";
 import { CocoJobBar, DestinationRow, ReasonSummary } from "./CocoParts";
 import { TextField } from "./controls";
 import {
-  button,
   card,
   danger,
   ghostButton,
   mono,
   sectionLabel,
+  stepTitle,
+  text,
+  warn,
 } from "./datasetExplorerStyles";
+import { ActionRow, AnalyzeButton, DataTable, LabStep, LabTool } from "./DatasetLabParts";
+import { ActionButton } from "./ui/ActionButton";
 
 const pollPreview = (id: string) => cocoImportStatus<CocoImportPreview>(id);
 const pollApply = (id: string) => cocoImportStatus<CocoImportResult>(id);
@@ -97,12 +102,12 @@ function SourceCard({
           <option value={SKIP}>{t.splitSkip}</option>
         </select>
       </div>
-      <div style={mono}>
+      <div style={source.detected_split ? text : warn}>
         {source.detected_split
           ? t.detectedHint(ex.splitNames[source.detected_split])
           : t.undetectedHint}
       </div>
-      <div style={mono}>
+      <div style={source.images_dir === null ? warn : mono}>
         {source.images_dir === null
           ? t.imagesFolderMissing
           : t.imagesFolder(source.images_dir)}
@@ -152,16 +157,8 @@ function PlanView({ plan }: { plan: CocoImportPlan }) {
   const ex = useT().datasetExplorer;
   return (
     <>
-      <div style={sectionLabel}>{t.planTitle}</div>
       <div style={mono}>{t.planLine(plan.images, plan.boxes)}</div>
-      <table
-        style={{
-          ...mono,
-          borderCollapse: "collapse",
-          maxWidth: 420,
-          width: "100%",
-        }}
-      >
+      <DataTable maxWidth={420}>
         <thead>
           <tr>
             <th style={{ textAlign: "left" }}>{t.splitColumn}</th>
@@ -178,7 +175,7 @@ function PlanView({ plan }: { plan: CocoImportPlan }) {
             </tr>
           ))}
         </tbody>
-      </table>
+      </DataTable>
       <div style={sectionLabel}>{t.mappingTitle}</div>
       {plan.mapping.map((m) => (
         <div key={m.coco_id} style={mono}>
@@ -200,7 +197,7 @@ export function CocoImportPanel({
 }) {
   const t = useT().datasetCoco;
   const ex = useT().datasetExplorer;
-  const [expanded, setExpanded] = useState(false);
+  const lab = useT().datasetLab;
   const [sourceDir, setSourceDir] = useState("");
   const [pickNote, setPickNote] = useState<string | null>(null);
   const [previewJob, setPreviewJob] =
@@ -336,16 +333,6 @@ export function CocoImportPanel({
     }
   };
 
-  if (!expanded) {
-    return (
-      <div>
-        <button type="button" style={button} onClick={() => setExpanded(true)}>
-          {t.importOpen}
-        </button>
-      </div>
-    );
-  }
-
   const working = previewRunning || applyRunning;
   const active = previewRunning ? previewJob : applyJob;
   const canApply =
@@ -354,28 +341,36 @@ export function CocoImportPanel({
   const pending = undecided(choices);
 
   return (
-    <div style={{ ...card, flexBasis: "100%" }}>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-        }}
-      >
-        <div style={sectionLabel}>{t.importOpen}</div>
-        <button
-          type="button"
-          style={ghostButton}
-          onClick={() => setExpanded(false)}
+    <LabTool title={t.importOpen} lead={lab.leadCocoImport} more={t.importIntro}>
+      <LabStep title={t.importTitle}>
+        <ActionRow
+          actions={
+            <>
+              <button
+                type="button"
+                style={ghostButton}
+                title={t.browseTitle}
+                onClick={() =>
+                  void runPicker(
+                    pickDatasetFolder,
+                    (path) => {
+                      setSourceDir(path);
+                      setPickNote(null);
+                    },
+                    { canceled: t.pickCancelled, failed: t.pickFailed },
+                  ).then(setPickNote)
+                }
+              >
+                {t.browse}
+              </button>
+              <AnalyzeButton
+                label={t.analyze}
+                disabled={working || sourceDir.trim() === ""}
+                onClick={() => void startPreview()}
+              />
+            </>
+          }
         >
-          {t.close}
-        </button>
-      </div>
-      <div style={mono}>{t.importIntro}</div>
-
-      <div style={sectionLabel}>{t.importTitle}</div>
-      <div style={{ display: "flex", alignItems: "flex-end", gap: 12 }}>
-        <div style={{ flex: 1 }}>
           <TextField
             label={t.folder}
             value={sourceDir}
@@ -383,34 +378,9 @@ export function CocoImportPanel({
             placeholder={t.folderPlaceholder}
             mono
           />
-        </div>
-        <button
-          type="button"
-          style={ghostButton}
-          title={t.browseTitle}
-          onClick={() =>
-            void runPicker(
-              pickDatasetFolder,
-              (path) => {
-                setSourceDir(path);
-                setPickNote(null);
-              },
-              { canceled: t.pickCancelled, failed: t.pickFailed },
-            ).then(setPickNote)
-          }
-        >
-          {t.browse}
-        </button>
-        <button
-          type="button"
-          style={button}
-          disabled={working || sourceDir.trim() === ""}
-          onClick={() => void startPreview()}
-        >
-          {t.analyze}
-        </button>
-      </div>
-      {pickNote && <div style={mono}>{pickNote}</div>}
+        </ActionRow>
+        {pickNote && <div style={text}>{pickNote}</div>}
+      </LabStep>
 
       {working && (
         <CocoJobBar
@@ -426,7 +396,7 @@ export function CocoImportPanel({
       )}
       {(previewJob?.state === "cancelled" ||
         applyJob?.state === "cancelled") && (
-        <div style={mono}>{t.cancelled}</div>
+        <div style={text}>{t.cancelled}</div>
       )}
       {previewJob?.state === "failed" && (
         <div style={danger}>{t.failed(previewJob.error ?? "")}</div>
@@ -438,33 +408,40 @@ export function CocoImportPanel({
 
       {preview && (
         <>
-          <div style={sectionLabel}>{t.previewTitle}</div>
-          {preview.sources.map((s) => (
-            <SourceCard
-              key={s.name}
-              source={s}
-              choice={choices[s.name] ?? ""}
-              onChoice={(c) => setChoices((prev) => ({ ...prev, [s.name]: c }))}
-            />
-          ))}
-          {preview.ignored.length > 0 && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <div style={sectionLabel}>{t.ignoredTitle}</div>
-              {preview.ignored.map((i) => (
-                <div key={i.name} style={{ ...mono, wordBreak: "break-all" }}>
-                  {i.name} — {t.ignoredReasons[i.reason] ?? i.reason}
-                </div>
+          <LabStep title={t.previewTitle}>
+            <div className="vf-lab-cards">
+              {preview.sources.map((s) => (
+                <SourceCard
+                  key={s.name}
+                  source={s}
+                  choice={choices[s.name] ?? ""}
+                  onChoice={(c) => setChoices((prev) => ({ ...prev, [s.name]: c }))}
+                />
               ))}
             </div>
+            {preview.ignored.length > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <div style={sectionLabel}>{t.ignoredTitle}</div>
+                {preview.ignored.map((i) => (
+                  <div key={i.name} style={{ ...mono, wordBreak: "break-all" }}>
+                    {i.name} — {t.ignoredReasons[i.reason] ?? i.reason}
+                  </div>
+                ))}
+              </div>
+            )}
+            {conflicts.map((s) => (
+              <div key={s} style={danger}>
+                {t.splitConflict(ex.splitNames[s])}
+              </div>
+            ))}
+            {pending > 0 && <div style={warn}>{t.unassigned(pending)}</div>}
+            {planProblem && <div style={danger}>{t.failed(planProblem)}</div>}
+          </LabStep>
+          {plan && (
+            <LabStep title={t.planTitle}>
+              <PlanView plan={plan} />
+            </LabStep>
           )}
-          {conflicts.map((s) => (
-            <div key={s} style={danger}>
-              {t.splitConflict(ex.splitNames[s])}
-            </div>
-          ))}
-          {pending > 0 && <div style={mono}>{t.unassigned(pending)}</div>}
-          {planProblem && <div style={danger}>{t.failed(planProblem)}</div>}
-          {plan && <PlanView plan={plan} />}
           <DestinationRow
             name={destName}
             onName={setDestName}
@@ -478,8 +455,8 @@ export function CocoImportPanel({
       )}
 
       {result && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <div style={sectionLabel}>{t.doneTitle}</div>
+        <div className="vf-lab-done">
+          <h3 style={{ ...stepTitle, margin: 0 }}>{t.doneTitle}</h3>
           <div style={mono}>
             {t.doneImport(
               result.images,
@@ -492,19 +469,12 @@ export function CocoImportPanel({
             {t.linkedCopied(result.files_linked, result.files_copied)}
           </div>
           <div>
-            <button
-              type="button"
-              style={button}
-              onClick={() => {
-                onOpenResult(result.path);
-                setExpanded(false);
-              }}
-            >
+            <ActionButton icon={<FolderOpen />} onClick={() => onOpenResult(result.path)}>
               {t.openResult}
-            </button>
+            </ActionButton>
           </div>
         </div>
       )}
-    </div>
+    </LabTool>
   );
 }

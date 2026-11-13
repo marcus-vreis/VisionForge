@@ -1570,6 +1570,183 @@ CATALOG: dict[str, dict[Lang, str]] = {
         "pt": "O AP é a área sob essa curva (todos os pontos, como no VOC). O mAP@0.5 é a média do AP entre as classes que têm caixas verdadeiras.",
         "en": "AP is the area under that curve (all points, as in VOC). mAP@0.5 is the mean AP over the classes that have true boxes.",
     },
+    # One plain sentence per function of a tour, for a newcomer (code_tour.Section.summary).
+    "code.summary.train_epoch": {
+        "pt": "Uma época: para cada lote, o modelo prevê, mede o erro e ajusta os pesos.",
+        "en": "One epoch: for each batch, the model predicts, measures its error and adjusts the weights.",
+    },
+    "code.summary.classification.data": {
+        "pt": "Prepara cada imagem: tamanho fixo, aumento de dados no treino e números que a rede entende.",
+        "en": "Prepares each image: a fixed size, augmentation in training, and numbers the network understands.",
+    },
+    "code.summary.classification.model": {
+        "pt": "Troca a última camada da rede pronta por uma com uma saída por classe do seu dataset.",
+        "en": "Swaps the last layer of the ready-made network for one with an output per class of your dataset.",
+    },
+    "code.summary.classification.loss": {
+        "pt": "Escolhe a função que mede o erro de cada previsão.",
+        "en": "Picks the function that measures the error of each prediction.",
+    },
+    "code.summary.classification.train": {
+        "pt": "Uma época: para cada lote, o modelo prevê, mede o erro e ajusta os pesos.",
+        "en": "One epoch: for each batch, the model predicts, measures its error and adjusts the weights.",
+    },
+    "code.summary.classification.validate": {
+        "pt": "Mede o modelo nas imagens de validação, sem mexer nos pesos.",
+        "en": "Measures the model on the validation images, without touching the weights.",
+    },
+    "code.summary.classification.test": {
+        "pt": "Mede o melhor modelo no conjunto de teste, que ele nunca viu.",
+        "en": "Measures the best model on the test set, which it never saw.",
+    },
+    "code.summary.regression.data": {
+        "pt": "Lê uma imagem e os valores-alvo dela na planilha.",
+        "en": "Reads one image and its target values from the spreadsheet.",
+    },
+    "code.summary.regression.model": {
+        "pt": "Monta a rede e troca a última camada por uma saída por alvo.",
+        "en": "Builds the network and swaps its last layer for one output per target.",
+    },
+    "code.summary.regression.loss": {
+        "pt": "Escolhe como medir a distância entre o valor previsto e o real.",
+        "en": "Picks how to measure the distance between the predicted and the true value.",
+    },
+    "code.summary.regression.validate": {
+        "pt": "Mede o erro nas imagens de validação, sem mexer nos pesos.",
+        "en": "Measures the error on the validation images, without touching the weights.",
+    },
+    "code.summary.regression.test": {
+        "pt": "Mede o melhor modelo no teste e guarda cada previsão.",
+        "en": "Measures the best model on the test set and keeps each prediction.",
+    },
+    "code.summary.segmentation.data": {
+        "pt": "Lê a imagem e a máscara, e aplica as mesmas mudanças às duas.",
+        "en": "Reads the image and its mask, and applies the same changes to both.",
+    },
+    "code.summary.segmentation.model": {
+        "pt": "Escolhe a arquitetura: a U-Net do VisionForge ou uma do torchvision.",
+        "en": "Picks the architecture: VisionForge's U-Net or a torchvision one.",
+    },
+    "code.summary.segmentation.unet": {
+        "pt": "O caminho de uma imagem pela U-Net: encolhe, passa pelo gargalo e cresce de volta.",
+        "en": "An image's path through the U-Net: it shrinks, crosses the bottleneck and grows back.",
+    },
+    "code.summary.segmentation.loss": {
+        "pt": "Escolhe como medir o erro de cada pixel.",
+        "en": "Picks how to measure the error of each pixel.",
+    },
+    "code.summary.segmentation.validate": {
+        "pt": "Mede loss e mIoU na validação; o melhor mIoU escolhe o modelo salvo.",
+        "en": "Measures loss and mIoU on validation; the best mIoU picks the saved model.",
+    },
+    "code.summary.segmentation.test": {
+        "pt": "Mede o melhor modelo no teste, imagem por imagem.",
+        "en": "Measures the best model on the test set, image by image.",
+    },
+    "code.summary.segmentation.metrics": {
+        "pt": "Calcula mIoU, Dice e acurácia por pixel a partir da matriz de confusão.",
+        "en": "Computes mIoU, Dice and pixel accuracy from the confusion matrix.",
+    },
+    "code.summary.anomaly.data": {
+        "pt": "Separa as imagens: o treino só tem normais; o teste tem normais e com defeito.",
+        "en": "Splits the images: training has only normal ones; test has normal and defective ones.",
+    },
+    "code.summary.anomaly.model": {
+        "pt": "Monta o método escolhido: autoencoder ou PatchCore.",
+        "en": "Builds the chosen method: autoencoder or PatchCore.",
+    },
+    "code.summary.anomaly.train": {
+        "pt": "Uma época do autoencoder: ele aprende a reconstruir imagens normais.",
+        "en": "One autoencoder epoch: it learns to rebuild normal images.",
+    },
+    "code.summary.anomaly.coreset": {
+        "pt": "PatchCore: escolhe as características mais representativas para o banco de memória.",
+        "en": "PatchCore: picks the most representative features for the memory bank.",
+    },
+    "code.summary.anomaly.score": {
+        "pt": "Dá a cada imagem uma nota de anomalia: quanto maior, mais longe do normal.",
+        "en": "Gives each image an anomaly score: the higher, the further from normal.",
+    },
+    "code.summary.anomaly.patch_score": {
+        "pt": "PatchCore: a nota é a distância ao vizinho mais próximo no banco.",
+        "en": "PatchCore: the score is the distance to the nearest neighbour in the bank.",
+    },
+    "code.summary.anomaly.threshold": {
+        "pt": "Define a partir de que nota uma imagem é chamada de defeituosa.",
+        "en": "Sets the score from which an image is called defective.",
+    },
+    "code.summary.anomaly.test": {
+        "pt": "Pontua as imagens de calibração e de teste com o modelo final.",
+        "en": "Scores the calibration and test images with the final model.",
+    },
+    "code.summary.anomaly.metrics": {
+        "pt": "Calcula AUROC, limiar e F1 a partir das notas.",
+        "en": "Computes AUROC, threshold and F1 from the scores.",
+    },
+    "code.summary.detection.data": {
+        "pt": "Lê uma imagem e as caixas dela.",
+        "en": "Reads an image and its boxes.",
+    },
+    "code.summary.detection.labels": {
+        "pt": "Converte as caixas do formato YOLO para pixels.",
+        "en": "Converts the boxes from YOLO format to pixels.",
+    },
+    "code.summary.detection.collate": {
+        "pt": "Junta imagens de tamanhos diferentes num lote.",
+        "en": "Puts images of different sizes into one batch.",
+    },
+    "code.summary.detection.model": {
+        "pt": "Escolhe o construtor do detector pelo nome do modelo.",
+        "en": "Picks the detector's builder by the model's name.",
+    },
+    "code.summary.detection.faster_rcnn": {
+        "pt": "Monta o Faster R-CNN com uma cabeça para as suas classes.",
+        "en": "Builds Faster R-CNN with a head for your classes.",
+    },
+    "code.summary.detection.ssd": {
+        "pt": "Monta o SSD com uma cabeça para as suas classes.",
+        "en": "Builds SSD with a head for your classes.",
+    },
+    "code.summary.detection.retinanet": {
+        "pt": "Monta o RetinaNet com uma cabeça para as suas classes.",
+        "en": "Builds RetinaNet with a head for your classes.",
+    },
+    "code.summary.detection.train": {
+        "pt": "Uma época: o modelo devolve as losses de cada lote, e o otimizador ajusta os pesos.",
+        "en": "One epoch: the model returns each batch's losses, and the optimiser adjusts the weights.",
+    },
+    "code.summary.detection.validate": {
+        "pt": "Mede a loss na validação, sem mexer nos pesos.",
+        "en": "Measures the loss on validation, without touching the weights.",
+    },
+    "code.summary.detection.map": {
+        "pt": "Mede o mAP@0.5 na validação; o melhor escolhe o modelo salvo.",
+        "en": "Measures mAP@0.5 on validation; the best one picks the saved model.",
+    },
+    "code.summary.detection.metric": {
+        "pt": "Calcula a precisão média (AP) de uma classe.",
+        "en": "Computes the average precision (AP) of one class.",
+    },
+    "code.summary.yolo.yolo_args": {
+        "pt": "Traduz o formulário para os parâmetros de treino do Ultralytics.",
+        "en": "Turns the form into Ultralytics' training arguments.",
+    },
+    "code.summary.yolo.yolo_augment": {
+        "pt": "Liga ou desliga o aumento de dados com os valores da sua configuração.",
+        "en": "Turns augmentation on or off with your config's values.",
+    },
+    "code.summary.yolo.yolo_fit": {
+        "pt": "Carrega o YOLO com os pesos escolhidos e entrega o treino à biblioteca.",
+        "en": "Loads YOLO with the chosen weights and hands training to the library.",
+    },
+    "code.summary.yolo.yolo_epoch": {
+        "pt": "Ao fim de cada época, registra o que a validação do Ultralytics mediu.",
+        "en": "At the end of each epoch, records what Ultralytics' validation measured.",
+    },
+    "code.summary.yolo.yolo_loop": {
+        "pt": "O laço de treino do próprio Ultralytics: épocas, lotes e validação.",
+        "en": "Ultralytics' own training loop: epochs, batches and validation.",
+    },
     "mlflow.retry_unavailable": {
         "pt": "A exportação para MLflow está indisponível para esta execução ou perfil.",
         "en": "MLflow export is unavailable for this run or profile.",
@@ -2361,6 +2538,34 @@ CATALOG: dict[str, dict[Lang, str]] = {
     "colab.drive_empty": {
         "pt": "A pasta do dataset ({path}) não tem arquivos neste computador.",
         "en": "The dataset folder ({path}) has no files on this computer.",
+    },
+    "colab.drive_folder_outside": {
+        "pt": 'Essa pasta fica fora do "Meu Drive" deste computador.',
+        "en": 'That folder is outside this computer\'s "My Drive".',
+    },
+    "colab.drive_folder_missing": {
+        "pt": 'A pasta "{rel}" não existe mais no "Meu Drive".',
+        "en": 'The folder "{rel}" is no longer in "My Drive".',
+    },
+    "colab.drive_folder_unreadable": {
+        "pt": 'Não foi possível ler a pasta "{rel}" do "Meu Drive".',
+        "en": 'Could not read the folder "{rel}" in "My Drive".',
+    },
+    "colab.drive_no_root": {
+        "pt": 'Nenhuma pasta "Meu Drive" do Google Drive para desktop foi achada neste computador.',
+        "en": 'No "My Drive" folder of Google Drive for desktop was found on this computer.',
+    },
+    "colab.drive_foreign_origin": {
+        "pt": "As pastas do Drive só podem ser vistas pela página do próprio VisionForge.",
+        "en": "Drive folders can only be browsed from VisionForge's own page.",
+    },
+    "colab.drive_remote_client": {
+        "pt": "As pastas do Drive só podem ser vistas na máquina que executa o servidor.",
+        "en": "Drive folders can only be browsed on the machine running the server.",
+    },
+    "colab.drive_open_failed": {
+        "pt": "Não foi possível abrir a pasta: {error}",
+        "en": "Could not open the folder: {error}",
     },
     "colab.drive_not_waiting": {
         "pt": "Esse job não está esperando a permissão do Google Drive.",

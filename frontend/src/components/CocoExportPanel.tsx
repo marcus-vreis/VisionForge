@@ -17,14 +17,8 @@ import type { CocoExportPreview, CocoExportResult } from "../lib/dataset-coco";
 import { errorMessage as message, useJobPolling } from "../lib/useJobPolling";
 import { useT } from "../i18n/useT";
 import { CocoJobBar, DestinationRow, ReasonSummary } from "./CocoParts";
-import {
-  button,
-  card,
-  danger,
-  ghostButton,
-  mono,
-  sectionLabel,
-} from "./datasetExplorerStyles";
+import { danger, mono, sectionLabel, stepTitle, text } from "./datasetExplorerStyles";
+import { ActionRow, AnalyzeButton, DataTable, LabStep, LabTool } from "./DatasetLabParts";
 
 const pollPreview = (id: string) => cocoExportStatus<CocoExportPreview>(id);
 const pollApply = (id: string) => cocoExportStatus<CocoExportResult>(id);
@@ -35,7 +29,7 @@ const pollApply = (id: string) => cocoExportStatus<CocoExportResult>(id);
 export function CocoExportPanel({ form }: { form: ExplorerForm }) {
   const t = useT().datasetCoco;
   const ex = useT().datasetExplorer;
-  const [expanded, setExpanded] = useState(false);
+  const lab = useT().datasetLab;
   const [previewJob, setPreviewJob] =
     useState<IncorporateJob<CocoExportPreview> | null>(null);
   const [applyJob, setApplyJob] =
@@ -131,16 +125,6 @@ export function CocoExportPanel({ form }: { form: ExplorerForm }) {
     }
   };
 
-  if (!expanded) {
-    return (
-      <div>
-        <button type="button" style={button} onClick={() => setExpanded(true)}>
-          {t.exportOpen}
-        </button>
-      </div>
-    );
-  }
-
   const canApply =
     preview !== null &&
     destOk &&
@@ -151,35 +135,18 @@ export function CocoExportPanel({ form }: { form: ExplorerForm }) {
   const active = previewRunning ? previewJob : applyJob;
 
   return (
-    <div style={{ ...card, flexBasis: "100%" }}>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-        }}
-      >
-        <div style={sectionLabel}>{t.exportOpen}</div>
-        <button
-          type="button"
-          style={ghostButton}
-          onClick={() => setExpanded(false)}
-        >
-          {t.close}
-        </button>
-      </div>
-      <div style={mono}>{t.exportIntro}</div>
-      <div style={sectionLabel}>{t.exportTitle}</div>
-      <div>
-        <button
-          type="button"
-          style={button}
-          disabled={working}
-          onClick={() => void startPreview()}
-        >
-          {t.analyze}
-        </button>
-      </div>
+    <LabTool title={t.exportOpen} lead={lab.leadCocoExport} more={t.exportIntro}>
+      <LabStep title={t.exportTitle}>
+        <ActionRow
+          actions={
+            <AnalyzeButton
+              label={t.analyze}
+              disabled={working}
+              onClick={() => void startPreview()}
+            />
+          }
+        />
+      </LabStep>
 
       {working && (
         <CocoJobBar
@@ -195,7 +162,7 @@ export function CocoExportPanel({ form }: { form: ExplorerForm }) {
       )}
       {(previewJob?.state === "cancelled" ||
         applyJob?.state === "cancelled") && (
-        <div style={mono}>{t.cancelled}</div>
+        <div style={text}>{t.cancelled}</div>
       )}
       {previewJob?.state === "failed" && (
         <div style={danger}>{t.failed(previewJob.error ?? "")}</div>
@@ -207,66 +174,60 @@ export function CocoExportPanel({ form }: { form: ExplorerForm }) {
 
       {preview && (
         <>
-          <div style={sectionLabel}>{t.previewTitle}</div>
-          <div style={{ display: "flex", gap: 18, flexWrap: "wrap", ...mono }}>
-            <span>{t.imagesLine(preview.images)}</span>
-            <span>{t.boxesLine(preview.boxes)}</span>
-            <span>{t.categoriesLine(preview.categories)}</span>
-          </div>
-          <table
-            style={{
-              ...mono,
-              borderCollapse: "collapse",
-              maxWidth: 420,
-              width: "100%",
-            }}
-          >
-            <thead>
-              <tr>
-                <th style={{ textAlign: "left" }}>{t.splitColumn}</th>
-                <th style={{ textAlign: "right" }}>{t.imagesColumn}</th>
-                <th style={{ textAlign: "right" }}>{t.boxesColumn}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {SPLITS.filter((s) => preview.present[s]).map((s) => (
-                <tr key={s}>
-                  <td>{ex.splitNames[s]}</td>
-                  <td style={{ textAlign: "right" }}>
-                    {preview.per_split[s].images}
-                  </td>
-                  <td style={{ textAlign: "right" }}>
-                    {preview.per_split[s].boxes}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {preview.excluded > 0 && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <div style={sectionLabel}>
-                {t.excludedTitle(preview.excluded)}
-              </div>
-              <div style={mono}>{t.excludedHelp}</div>
-              <ReasonSummary
-                counts={preview.excluded_by_reason}
-                labels={t.exportReasons}
-              />
-              {preview.excluded_listed.map((e) => (
-                <div key={e.path} style={{ ...mono, wordBreak: "break-all" }}>
-                  {e.path} — {t.exportReasons[e.reason] ?? e.reason}
-                  {e.detail ? ` (${e.detail})` : ""}
-                </div>
-              ))}
-              {preview.excluded > preview.excluded_listed.length && (
-                <div style={mono}>
-                  {t.moreNotShown(
-                    preview.excluded - preview.excluded_listed.length,
-                  )}
-                </div>
-              )}
+          <LabStep title={t.previewTitle}>
+            <div style={{ display: "flex", gap: 18, flexWrap: "wrap", ...mono }}>
+              <span>{t.imagesLine(preview.images)}</span>
+              <span>{t.boxesLine(preview.boxes)}</span>
+              <span>{t.categoriesLine(preview.categories)}</span>
             </div>
-          )}
+            <DataTable maxWidth={420}>
+              <thead>
+                <tr>
+                  <th style={{ textAlign: "left" }}>{t.splitColumn}</th>
+                  <th style={{ textAlign: "right" }}>{t.imagesColumn}</th>
+                  <th style={{ textAlign: "right" }}>{t.boxesColumn}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {SPLITS.filter((s) => preview.present[s]).map((s) => (
+                  <tr key={s}>
+                    <td>{ex.splitNames[s]}</td>
+                    <td style={{ textAlign: "right" }}>
+                      {preview.per_split[s].images}
+                    </td>
+                    <td style={{ textAlign: "right" }}>
+                      {preview.per_split[s].boxes}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </DataTable>
+            {preview.excluded > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <div style={sectionLabel}>
+                  {t.excludedTitle(preview.excluded)}
+                </div>
+                <div style={text}>{t.excludedHelp}</div>
+                <ReasonSummary
+                  counts={preview.excluded_by_reason}
+                  labels={t.exportReasons}
+                />
+                {preview.excluded_listed.map((e) => (
+                  <div key={e.path} style={{ ...mono, wordBreak: "break-all" }}>
+                    {e.path} — {t.exportReasons[e.reason] ?? e.reason}
+                    {e.detail ? ` (${e.detail})` : ""}
+                  </div>
+                ))}
+                {preview.excluded > preview.excluded_listed.length && (
+                  <div style={mono}>
+                    {t.moreNotShown(
+                      preview.excluded - preview.excluded_listed.length,
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </LabStep>
           <DestinationRow
             name={destName}
             onName={setDestName}
@@ -280,8 +241,8 @@ export function CocoExportPanel({ form }: { form: ExplorerForm }) {
       )}
 
       {result && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <div style={sectionLabel}>{t.doneTitle}</div>
+        <div className="vf-lab-done">
+          <h3 style={{ ...stepTitle, margin: 0 }}>{t.doneTitle}</h3>
           <div style={mono}>
             {t.doneExport(
               result.images,
@@ -295,6 +256,6 @@ export function CocoExportPanel({ form }: { form: ExplorerForm }) {
           </div>
         </div>
       )}
-    </div>
+    </LabTool>
   );
 }

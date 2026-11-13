@@ -71,19 +71,22 @@ visionforge run meu_experimento.yaml
 ## 4. Treinar
 
 **Treinar** abre o painel de treino. A aba **Log** mostra uma linha por época;
-**Resultados** mostra as curvas enquanto o treino roda; **Como funciona**
-explica o que está acontecendo; [**Código**](codigo.md) mostra as funções que
-estão treinando o modelo. **Minimizar** devolve a tela; o treino continua.
+**Resultados** mostra as curvas enquanto o treino roda;
+[**Código ao vivo**](codigo.md) mostra o passo em que o treino está e o código
+real desse passo. **Minimizar** devolve a tela; o treino continua.
 
 ![Painel de treino na aba Log](../images/vf-training.png)
 
 ## 5. Resultado
 
-**Ver resultados** mostra as métricas e os gráficos: perda e acurácia por
-época, matriz de confusão, curva ROC e curva Precision-Recall. **Markdown**
-baixa o relatório da execução.
+**Ver resultados** abre a execução no Histórico. No topo ficam as métricas,
+com a principal em destaque, e as curvas de treino e validação por época:
+passe o mouse sobre uma linha para ler o valor exato daquela época. Abaixo
+vêm os gráficos gravados em disco (matriz de confusão, curva ROC, curva
+Precision-Recall) e o que dá para fazer com a execução, descrito em
+[Depois do treino](depois-do-treino.md).
 
-![Métricas e gráficos de uma classificação](../images/vf-results.png)
+![A execução aberta no Histórico, com métricas e curvas](../images/vf-results.png)
 
 O print acima vem de um treino de uma época no dataset de exemplo: as curvas
 têm um ponto só. Tudo fica em disco, em `outputs/models/<nome>/<data_hora>/`:

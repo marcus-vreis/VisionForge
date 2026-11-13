@@ -1,11 +1,7 @@
 import { useT } from "../i18n/useT";
 import { reasonRows } from "../lib/dataset-coco";
-import {
-  button,
-  ghostButton,
-  mono,
-  sectionLabel,
-} from "./datasetExplorerStyles";
+import { ghostButton, mono } from "./datasetExplorerStyles";
+import { ActionRow, ApplyButton, LabStep } from "./DatasetLabParts";
 import { TextField } from "./controls";
 import { Progress } from "./JobProgress";
 
@@ -82,28 +78,17 @@ export function DestinationRow({
   const t = useT().datasetCoco;
   const error = name !== "" && !ok ? t.destInvalid : (problem ?? undefined);
   return (
-    <>
-      <div style={sectionLabel}>{t.destTitle}</div>
-      <div style={{ display: "flex", alignItems: "flex-end", gap: 12 }}>
-        <div style={{ flex: 1, maxWidth: 420 }}>
-          <TextField
-            label={t.destName}
-            value={name}
-            onChange={onName}
-            hint={t.destHint}
-            mono
-            error={error}
-          />
-        </div>
-        <button
-          type="button"
-          style={button}
-          disabled={!canApply}
-          onClick={onApply}
-        >
-          {applyLabel}
-        </button>
-      </div>
-    </>
+    <LabStep title={t.destTitle}>
+      <ActionRow actions={<ApplyButton label={applyLabel} disabled={!canApply} onClick={onApply} />}>
+        <TextField
+          label={t.destName}
+          value={name}
+          onChange={onName}
+          hint={t.destHint}
+          mono
+          error={error}
+        />
+      </ActionRow>
+    </LabStep>
   );
 }

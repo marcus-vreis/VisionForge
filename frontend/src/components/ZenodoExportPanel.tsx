@@ -5,6 +5,8 @@ import {
 } from "../api/client";
 import { formatBytes } from "../lib/dataset-identity";
 import { useI18n } from "../i18n/useT";
+import { ActionButton } from "./ui/ActionButton";
+import { ZenodoIcon } from "./ui/BrandIcons";
 
 const FIELD: CSSProperties = {
   background: "var(--vf-panel)", color: "var(--vf-text)", padding: 8,
@@ -72,7 +74,9 @@ export function ZenodoExportPanel({ runId }: { runId: string }) {
 
   const choose = (next: ZenodoSite) => { setSite(next); setToken(""); setUrl(null); setError(null); };
 
-  if (!open) return <button type="button" onClick={() => setOpen(true)}>{z.open}</button>;
+  // Closed: the service's mark and name; the button's name says what opening does.
+  if (!open) return <ActionButton icon={<ZenodoIcon />} aria-label={z.open} title={z.open}
+    onClick={() => setOpen(true)}>{z.service}</ActionButton>;
   const left = preview?.notes.filter((note) => note.artifact !== PATHS_NOTE) ?? [];
   return <section aria-label={z.title} style={{ border: "1px solid var(--vf-panel-stroke)", borderRadius: 10, padding: 16 }}>
     <h3>{z.title}</h3>

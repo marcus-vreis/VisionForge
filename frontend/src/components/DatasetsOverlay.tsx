@@ -49,7 +49,8 @@ export function DatasetsOverlay({ open, onClose }: DatasetsOverlayProps) {
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          width: tab === "explore" ? "min(980px, 100%)" : "min(760px, 100%)",
+          // The explorer here only chooses a dataset; its lab opens full screen.
+          width: "min(760px, 100%)",
           maxHeight: "85vh",
           background: "rgb(var(--lt-surface, 12 14 18) / 0.95)",
           border: "1px solid var(--vf-panel-stroke)",

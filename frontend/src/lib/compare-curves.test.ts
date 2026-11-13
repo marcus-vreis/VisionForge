@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { en } from "../i18n/en";
 import { pt } from "../i18n/pt";
-import { curveSeries, selectedCurves, toggleCurve } from "./compare-curves";
+import { curveSeries, formatCurveValue, selectedCurves, toggleCurve } from "./compare-curves";
 
 type Record1 = Record<string, unknown>;
 
@@ -247,5 +247,20 @@ describe("toggleCurve", () => {
 
   it("keeps the last series: a chart picker that empties the page has nothing left to click", () => {
     expect(toggleCurve(["val_r2"], "val_r2")).toEqual(["val_r2"]);
+  });
+});
+
+describe("formatCurveValue", () => {
+  it("shows three decimals", () => {
+    expect(formatCurveValue(0.31234)).toBe("0.312");
+    expect(formatCurveValue(0)).toBe("0.000");
+  });
+
+  it("does not show a small nonzero value as zero", () => {
+    expect(formatCurveValue(2.73e-6)).toBe("2.73e-6");
+  });
+
+  it("shows a dash for a value that is not a number", () => {
+    expect(formatCurveValue(Number.NaN)).toBe("—");
   });
 });

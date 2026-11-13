@@ -1,19 +1,30 @@
 import { expect, type Locator, type Page } from "@playwright/test";
 
-/** Opens the GUI and gets past the first-visit welcome by typing a name. */
+/** Opens the GUI and gets past the welcome.
+ *
+ * The suite shares one server. The first run asks the name; once its single
+ * profile has one, every later load enters directly (no question), so either
+ * ending counts. The header's profile chip appears only after the welcome.
+ */
 export async function enter(page: Page, name = "E2E"): Promise<void> {
   // The guide offers itself on a first visit and after a first training; it is
   // not what these tests drive, so it is dismissed whenever it covers the page.
   const closeGuide = page.getByRole("button", { name: "Fechar o guia" });
   await page.addLocatorHandler(closeGuide, () => closeGuide.click());
   await page.goto("/");
+  const chip = page.getByTitle("Perfil e integrações");
   // The field exists from the start but stays inert until the intro reaches the question.
-  await expect(page.getByText("Qual é o seu nome?")).toBeVisible();
   const field = page.getByRole("textbox", { name: "Seu nome" });
+  let entered = false;
   await expect(async () => {
+    if (await chip.isVisible()) {
+      entered = true;
+      return;
+    }
     await field.fill(name, { timeout: 1_000 });
     await expect(field).toHaveValue(name, { timeout: 500 });
   }).toPass();
+  if (entered) return;
   await page.getByRole("button", { name: /Entrar/ }).click();
   await expect(field).toBeHidden();
 }

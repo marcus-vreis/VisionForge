@@ -27,6 +27,7 @@ import sys
 import threading
 import time
 from collections.abc import Callable, Iterable
+from dataclasses import dataclass
 from pathlib import Path, PurePath, PurePosixPath, PureWindowsPath
 from typing import Literal
 
@@ -135,6 +136,135 @@ def my_drive_roots(
     return roots
 
 
+def _system_drives() -> list[str]:
+    r"""The drive letters in use, where Drive for desktop puts ``G:\My Drive``."""
+    if sys.platform == "win32":
+        return os.listdrives()
+    return []
+
+
+def _drive_root_candidates(
+    manual: str | None,
+    mount_point: Callable[[], str | None],
+    home: Path,
+    drives: Iterable[str],
+) -> list[Path]:
+    # The manual and registry roots first, then the defaults Drive for desktop
+    # uses: mirror mode under the home folder, stream mode on its own letter.
+    roots = [Path(str(root)) for root in my_drive_roots(manual, mount_point)]
+    roots.extend(home / name for name in MY_DRIVE_NAMES)
+    for drive in drives:
+        roots.extend(Path(drive) / name for name in MY_DRIVE_NAMES)
+    return roots
+
+
+def find_my_drive_root(
+    manual: str | None,
+    mount_point: Callable[[], str | None] = registry_mount_point,
+    home: Path | None = None,
+    drives: Callable[[], Iterable[str]] = _system_drives,
+) -> Path | None:
+    """The first "My Drive" folder that exists on this machine, or None.
+
+    The same folders ``remote_path`` trusts, so a folder picked under the one
+    found here always translates to the VM.
+    """
+    candidates = _drive_root_candidates(
+        manual, mount_point, Path.home() if home is None else home, drives()
+    )
+    for root in candidates:
+        try:
+            if root.is_dir():
+                return root
+        except OSError:
+            continue
+    return None
+
+
+# How many sub-folders one listing returns; a folder with more says so.
+MAX_LISTED_FOLDERS = 500
+# Windows marks its own folders ($RECYCLE.BIN, System Volume Information) so.
+_HIDDEN_ATTRIBUTES = 0x2 | 0x4  # FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM
+
+DriveFolderProblem = Literal["outside", "missing", "unreadable"]
+
+
+class DriveFolderError(ValueError):
+    """A folder the Drive browser does not list, and why."""
+
+    def __init__(self, reason: DriveFolderProblem, rel: str) -> None:
+        super().__init__(f"{reason}: {rel!r}")
+        self.reason: DriveFolderProblem = reason
+        self.rel = rel
+
+
+@dataclass(frozen=True)
+class DriveFolders:
+    """One folder under "My Drive": where it is here and on the VM, and its sub-folders."""
+
+    root: Path
+    parts: tuple[str, ...]
+    path: Path
+    remote: PurePosixPath
+    folders: list[str]
+    truncated: bool
+
+
+def _rel_parts(rel: str) -> tuple[str, ...]:
+    """The folder names of a path relative to "My Drive"; ``..`` and drives refused."""
+    parts = tuple(p for p in re.split(r"[\\/]", rel) if p)
+    if rel.startswith(("/", "\\")) or any(p in (".", "..") or ":" in p for p in parts):
+        raise DriveFolderError("outside", rel)
+    return parts
+
+
+def _listed(entry: os.DirEntry[str]) -> bool:
+    """A real, visible folder: no file, link, junction, dot or system folder."""
+    if entry.name.startswith(".") or entry.is_symlink() or entry.is_junction():
+        return False
+    if not entry.is_dir(follow_symlinks=False):
+        return False
+    attributes = getattr(entry.stat(follow_symlinks=False), "st_file_attributes", 0)
+    return not attributes & _HIDDEN_ATTRIBUTES
+
+
+def list_drive_folders(
+    root: Path, rel: str, limit: int = MAX_LISTED_FOLDERS
+) -> DriveFolders:
+    """The sub-folders of ``root/rel``, by name, sorted, at most ``limit`` of them.
+
+    Both paths are resolved (links, junctions, ``..``) before the containment
+    check, so nothing here reads a folder outside the "My Drive" root.
+    """
+    parts = _rel_parts(rel)
+    path = root.joinpath(*parts)
+    try:
+        inside = path.resolve().is_relative_to(root.resolve())
+    except (OSError, RuntimeError):
+        raise DriveFolderError("missing", rel) from None
+    if not inside:
+        raise DriveFolderError("outside", rel)
+    remote = remote_path(path, [root])
+    if remote is None:
+        raise DriveFolderError("outside", rel)
+    try:
+        with os.scandir(path) as entries:
+            names = [entry.name for entry in entries if _listed(entry)]
+    except (FileNotFoundError, NotADirectoryError):
+        raise DriveFolderError("missing", rel) from None
+    except OSError:
+        raise DriveFolderError("unreadable", rel) from None
+    names.sort(key=lambda name: (name.casefold(), name))
+    return DriveFolders(
+        root=root,
+        parts=parts,
+        path=path,
+        remote=remote,
+        folders=names[:limit],
+        truncated=len(names) > limit,
+    )
+
+
 def count_files(folder: Path) -> int:
     """Files under ``folder``, hidden ones left out, as the VM counts them."""
     total = 0
@@ -192,11 +322,16 @@ class DriveConsent:
 
 
 __all__ = [
+    "MAX_LISTED_FOLDERS",
     "MY_DRIVE_NAMES",
     "REMOTE_MY_DRIVE",
     "DriveConsent",
+    "DriveFolderError",
+    "DriveFolders",
     "consent_url",
     "count_files",
+    "find_my_drive_root",
+    "list_drive_folders",
     "my_drive_roots",
     "registry_mount_point",
     "remote_path",

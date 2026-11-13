@@ -20,6 +20,7 @@ describe("Comet profile settings", () => {
     };
     const markup = wrap(<CometProfileSettings profile={{ ...profile, settings }} onSaved={() => {}} />);
     expect(markup).toContain(pt.comet.label);
+    expect(markup).toContain('role="switch"');
     expect(markup).not.toContain('checked=""');
     expect(markup).not.toContain(pt.comet.token);
   });
